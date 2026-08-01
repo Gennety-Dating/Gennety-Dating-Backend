@@ -1,12 +1,12 @@
 # Gennety — Terms of Service
 
-**Last Updated: 23 July 2026**
+**Last Updated: 1 August 2026**
 
-**Version: 2.0** — this version was rewritten to cover the features that are
-live in production today: dual-track sign-up (university email **or** phone),
-mandatory identity verification, Telegram Stars and Apple In-App Purchases, the
-Gennety Premium subscription, paid venue changes, and the App Store distribution
-of our native app.
+**Version: 3.0** — republished alongside Privacy Policy v4.0 after a full audit
+of the running code, so that both documents carry the same version stamp and we
+can prove which version any given user accepted. The substantive change here is
+Section 4: identity verification now names Amazon Rekognition Face Liveness and
+the separate consent step that precedes it.
 
 These Terms of Service ("**Terms**") are a binding agreement between you and
 Gennety ("**Gennety**", "**we**", "**us**", or "**our**") governing your use of
@@ -85,13 +85,19 @@ Terms (Section 12).
 
 ## 4. Identity Verification Is Mandatory
 
-We use a liveness check (via our verification provider) and a photo-to-selfie
-face comparison to confirm you are a real person and that your photos are of
-you.
+We use a liveness check (**Amazon Rekognition Face Liveness**) and a
+photo-to-selfie face comparison to confirm you are a real person and that your
+photos are of you.
 
 - Verification involves **biometric data** and is processed **only with your
-  explicit consent**, as described in the Privacy Policy. If you do not consent,
-  you cannot be matched — that is the trade-off that keeps the community real.
+  explicit consent**, which we ask for on a dedicated screen before the check
+  starts (Privacy Policy, Sections 6 and 10). If you do not consent, you cannot
+  be matched — that is the trade-off that keeps the community real, and you can
+  delete your account instead.
+- The liveness video streams from your device **directly to Amazon Web
+  Services**; it does not pass through our servers. We store only the single
+  reference still that AWS returns, and we delete it 90 days after
+  verification.
 - **You must pass verification to be matched.** Until you do, you will not be
   shown to other users and no match will be proposed to you. There is no skip.
   (A small legacy group who skipped verification before it became mandatory, and

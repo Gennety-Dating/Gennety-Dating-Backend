@@ -35,7 +35,6 @@ describe("uiHintForQuestion", () => {
       min: 140,
       max: 220,
     });
-    expect(uiHintForQuestion("ethnicity")).toMatchObject({ skippable: true });
     expect(uiHintForQuestion("context_dump")).toEqual({ control: "magic_prompt" });
     expect(uiHintForQuestion("photos")).toEqual({
       control: "photo_upload",

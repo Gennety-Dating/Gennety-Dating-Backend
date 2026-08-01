@@ -151,7 +151,7 @@ describe("onboarding collector parsing", () => {
     expect(
       deterministicCandidates("What do you mean by that?", "partner_preferences"),
     ).toEqual([]);
-    expect(deterministicCandidates("в смысле?", "ethnicity")).toEqual([]);
+    expect(deterministicCandidates("в смысле?", "partner_preferences")).toEqual([]);
     expect(
       deterministicCandidates("зачем тебе это знать?", "hobbies"),
     ).toEqual([]);
@@ -312,11 +312,6 @@ describe("onboarding collector parsing", () => {
     ).toEqual({ reason: "placeholder_answer" });
   });
 
-  it("treats inflected skip phrases as a skip, not an ethnicity answer", () => {
-    expect(deterministicCandidates("пропустить", "ethnicity")).toEqual([]);
-    expect(deterministicCandidates("überspringen", "ethnicity")).toEqual([]);
-    expect(deterministicCandidates("pomiń", "ethnicity")).toEqual([]);
-  });
 });
 
 describe("onboarding extractor request", () => {
@@ -389,7 +384,6 @@ describe("not-understood feedback", () => {
         "height",
         "hobbies",
         "partner_preferences",
-        "ethnicity",
         "ai_memory",
       ] as const) {
         expect(onboardingNotUnderstoodText(language, question)).toBeTruthy();
@@ -414,8 +408,6 @@ describe("onboarding collector routing", () => {
         content: "What kind of person are you looking for in a partner?",
       },
       { role: "user", content: "I'm looking for good humor." },
-      { role: "assistant", content: "What’s your ethnicity or nationality?" },
-      { role: "user", content: "I'm Ukrainian" },
       { role: "user", content: "[Album uploaded: 2 verified photos]" },
     ];
 
@@ -430,7 +422,6 @@ describe("onboarding collector routing", () => {
       preference: "men",
       height: 180,
       partner_preferences: "I'm looking for good humor.",
-      ethnicity: "I'm Ukrainian",
     });
     expect(values).not.toHaveProperty("hobbies");
   });
@@ -443,7 +434,6 @@ describe("onboarding collector routing", () => {
       "preference",
       "height",
       "partner_preferences",
-      "ethnicity",
       "ai_memory",
       "context_dump",
       "photos",
@@ -457,8 +447,8 @@ describe("onboarding collector routing", () => {
     ).toBe("hobbies");
   });
 
-  it("asks the vibe questions after ethnicity and before the Magic Prompt", () => {
-    const completedThroughEthnicity = new Set<OnboardingField>([
+  it("asks the vibe questions after the profile fields and before the Magic Prompt", () => {
+    const completedThroughProfile = new Set<OnboardingField>([
       "first_name",
       "age",
       "gender",
@@ -466,25 +456,24 @@ describe("onboarding collector routing", () => {
       "height",
       "hobbies",
       "partner_preferences",
-      "ethnicity",
     ]);
     expect(
       nextOnboardingQuestion({
-        completed: completedThroughEthnicity,
+        completed: completedThroughProfile,
         skipped: new Set(),
         asked: new Set(),
       }),
     ).toBe("friday_vibe");
     expect(
       nextOnboardingQuestion({
-        completed: new Set([...completedThroughEthnicity, "friday_vibe"]),
+        completed: new Set([...completedThroughProfile, "friday_vibe"]),
         skipped: new Set(),
         asked: new Set(),
       }),
     ).toBe("vibe_focus");
     expect(
       nextOnboardingQuestion({
-        completed: new Set([...completedThroughEthnicity, "friday_vibe", "vibe_focus"]),
+        completed: new Set([...completedThroughProfile, "friday_vibe", "vibe_focus"]),
         skipped: new Set(),
         asked: new Set(),
       }),
@@ -503,7 +492,6 @@ describe("onboarding collector routing", () => {
       "height",
       "hobbies",
       "partner_preferences",
-      "ethnicity",
       "friday_vibe",
       "vibe_focus",
       "ai_memory",
@@ -556,19 +544,9 @@ describe("onboarding collector routing", () => {
     "has server-owned text for every question in %s",
     (language) => {
       expect(onboardingQuestionText(language, "gender")).not.toHaveLength(0);
-      expect(onboardingQuestionText(language, "ethnicity")).not.toHaveLength(0);
       expect(onboardingQuestionText(language, "photos")).not.toHaveLength(0);
     },
   );
-
-  it("uses natural Russian wording for the optional origin question", () => {
-    const text = onboardingQuestionText("ru", "ethnicity");
-
-    expect(text).toBe(
-      "Как ты описываешь своё происхождение или национальность? Можно пропустить",
-    );
-    expect(text).not.toContain("бэкграунд");
-  });
 
   it("explains why the Magic Prompt is needed before asking for the AI response", () => {
     const text = onboardingQuestionText("en", "context_dump");

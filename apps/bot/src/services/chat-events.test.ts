@@ -23,6 +23,7 @@ import {
   invalidateChatTarget,
   recordChatEvent,
   recordChatEventForChat,
+  redactSensitiveSummary,
   resolveChatTarget,
   truncateSummary,
 } from "./chat-events.js";
@@ -52,6 +53,32 @@ describe("truncateSummary", () => {
   });
 });
 
+describe("redactSensitiveSummary", () => {
+  // The timeline records from `/start`, which puts the onboarding OTP reply in
+  // scope. `email_otps` / `phone_otps` store that code bcrypt-hashed, so a
+  // cleartext twin here for 30 days would undo that for no product gain.
+  it.each(["482913", "482 913", "4829-13", "1234", "12345678"])(
+    "masks a bare verification code (%s)",
+    (text) => {
+      expect(redactSensitiveSummary(text)).toBe("(entered a code)");
+    },
+  );
+
+  // Over-masking would make the timeline lie about ordinary conversation, so
+  // the rule is anchored to the WHOLE message rather than scanning for digits.
+  it.each([
+    "мне 22",
+    "180",
+    "I was born in 1998 and moved in 2019",
+    "see you at 19:30",
+    "123456789012",
+    "код 482913",
+    "Kyiv",
+  ])("leaves ordinary text alone (%s)", (text) => {
+    expect(redactSensitiveSummary(text)).toBe(text);
+  });
+});
+
 describe("recordChatEvent", () => {
   it("writes a truncated row", async () => {
     await recordChatEvent({
@@ -75,6 +102,22 @@ describe("recordChatEvent", () => {
     await expect(
       recordChatEvent({ userId: "u1", direction: "out", kind: "text", summary: "hi" }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("recordChatEvent redaction wiring", () => {
+  it("masks a code on the way into the database", async () => {
+    await recordChatEvent({
+      userId: "u1",
+      direction: "in",
+      kind: "user_text",
+      summary: "482913",
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ summary: "(entered a code)" }),
+      }),
+    );
   });
 });
 

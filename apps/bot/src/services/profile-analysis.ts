@@ -315,7 +315,6 @@ export interface FallbackProfileAnalysisInput {
   gender: string;
   preference: string;
   height: number;
-  ethnicity: string | null;
   hobbies: string[];
   partnerPreferences: string;
   homeCityKey: string;
@@ -435,7 +434,13 @@ export function buildVibeBlock(
  * DELIBERATELY excluded: they are already scored by `V_research` and the hard
  * SQL filters, and as near-identical boilerplate they used to wash out the
  * embedding's discriminative power (PRODUCT_SPEC §3.2). What remains is genuine
- * open-ended signal — hobbies, partner preferences, ethnicity, and the vibe.
+ * open-ended signal — hobbies, partner preferences, and the vibe.
+ *
+ * Ethnicity used to be part of that list and was removed 2026-08-01. It is
+ * "racial or ethnic origin" under GDPR Art. 9(1), so feeding it to the
+ * embedding put a special category directly into the automated matching
+ * decision (Art. 22) with no Art. 9 basis behind it. The field is gone from
+ * the product entirely — see `legal/privacy-policy.md` §6.
  */
 export function buildFallbackProfileAnalysis(
   input: FallbackProfileAnalysisInput,
@@ -445,7 +450,6 @@ export function buildFallbackProfileAnalysis(
     source === "no_relevant_ai_memory"
       ? "Profile source: onboarding answers (AI memory contained no supported dating signals)"
       : "Profile source: onboarding answers (AI memory export declined)",
-    `Ethnicity/nationality: ${input.ethnicity?.trim() || "not provided"}`,
     `Hobbies/interests: ${input.hobbies.length ? input.hobbies.join(", ") : "none provided"}`,
     `Partner preferences: ${input.partnerPreferences}`,
   ];

@@ -1,12 +1,14 @@
 # Gennety — Privacy Policy
 
-**Last Updated: 23 July 2026**
+**Last Updated: 1 August 2026**
 
-**Version: 3.0** — this version was rewritten to cover the features that are
-live in production today: dual-track sign-up (university email **or** phone),
-mandatory identity verification, the native iOS app, Telegram Stars and App
-Store payments, the Gennety Premium subscription, the venue-preference
-concierge, and our internal operations feed.
+**Version: 4.0** — this version was rewritten after a full audit of the
+running code. The substantive changes: we no longer collect nationality or
+ethnic origin at all; identity verification moved from Persona to Amazon
+Rekognition Face Liveness; the optional "personal AI export" feature has been
+retired; deleting your account no longer sends anything about you to our
+internal operations feed; and we now disclose the short-lived chat timeline and
+the promo-code attribution that earlier versions did not mention.
 
 This Privacy Policy explains how Gennety ("**Gennety**", "**we**", "**us**", or
 "**our**") collects, uses, shares, and protects your personal data when you use
@@ -41,7 +43,7 @@ below.
 | Do you use biometrics? | Yes — a liveness selfie and face comparison against your photos, only with your explicit consent. The selfie is deleted after 90 days (Sections 6 and 10). |
 | Do you sell my data? | **No.** We never sell personal data and we do not run advertising profiling. |
 | Do you show my data to other users? | Only to the one person you are matched with, in a forward/save-protected form (Section 12). |
-| Does a human see my data? | Yes — a small, named operations team, and an internal founder feed that receives new-profile, weekly-match, and account-closure notifications (Section 12.2). |
+| Does a human see my data? | Yes — the operator of the service, through an internal administration interface and a private operations feed (Section 12.2 and 12.3). |
 | Can I delete everything? | Yes — freeze (reversible) or delete (irreversible cascading erasure). See Sections 16 and 18. |
 | Who do I complain to? | Us first at **legal@gennety.com**; then your data-protection authority (Section 22). |
 
@@ -51,12 +53,17 @@ below.
 
 The data controller responsible for your personal data is:
 
-- **Gennety** — operated by Gleb Gosha, Kyiv, Ukraine.
+- **Gennety**, a service operated by **Gleb Gosha**, an individual established
+  in Kyiv, Ukraine. There is no separate legal entity; the operator is the data
+  controller personally.
+- Postal address: *[to be completed before publication]*
 - Privacy contact: **legal@gennety.com**
 
-> *To be confirmed before publication: full legal entity name, registration
-> number, and registered address. If a separate EU representative is appointed
-> under Article 27 GDPR, their details will be added here.*
+> *Article 27 GDPR representative: not yet appointed. Because we offer the
+> Service in German and Polish and therefore target users in the EEA, a
+> representative in the Union is required, and one will be appointed and named
+> here. Until then, you can reach us directly at legal@gennety.com and we will
+> handle your request under the GDPR exactly as set out in Section 18.*
 
 Although Gennety is established in Ukraine, where we offer the Service to users
 located in the European Economic Area (EEA) or the United Kingdom, we apply the
@@ -75,10 +82,9 @@ This Policy applies to all personal data we process about:
 
 It does **not** cover:
 
-- third-party services you reach through our links or embeds — for example your
-  own personal AI assistant (ChatGPT, Claude, Gemini), the Telegram app itself,
-  the Apple App Store, or the Spotify player embedded on our website. Those
-  services process data under their own privacy policies;
+- third-party services you reach through our links or embeds — for example the
+  Telegram app itself, the Apple App Store, or the Spotify player embedded on
+  our website. Those services process data under their own privacy policies;
 - what another user does with information you choose to share with them.
 
 **Note on the website.** Since 19 July 2026, the website runs **no part of
@@ -103,9 +109,8 @@ the Service, and data we derive or generate to power matchmaking.
 | **Sign-up track** | Which registration track you chose — **student** (university email) or **general** (phone) — and the date you verified it. |
 | **University email (student track)** | The email address you verify and its domain, used to confirm eligibility for the student community and its perks. A one-time passcode (OTP) is sent to verify it; the code is stored hashed, never in plain text. |
 | **Phone number (general track)** | Your phone number in international format. On Telegram you share it in one tap, so we receive it directly from Telegram as trusted contact data; in the mobile app we send you a verification code by SMS (or, where configured, as a Telegram service message). One account per phone number. |
-| **Profile details** | Height, hobbies/interests, nationality/ethnicity (optional), a free-text description of the partner you are looking for, your preferred partner age range, the city where you want to receive matches, and free-text "vibe" answers (for example, your ideal Friday night, and whether the experience or the company matters more to you). |
+| **Profile details** | Height, hobbies/interests, a free-text description of the partner you are looking for, your preferred partner age range, the city where you want to receive matches, and free-text "vibe" answers (for example, your ideal Friday night, and whether the experience or the company matters more to you). **We do not ask for, and do not store, your nationality or ethnic origin.** |
 | **Photos & video** | Profile photos (including the static frame of a Telegram "Live Photo") and an optional short profile video. Images you attach to a chat with our AI concierge, including any you choose to add to your profile. |
-| **AI memory export (optional)** | If you choose to enrich onboarding, the psychological analysis you paste from your own AI assistant (the "Magic Prompt" response). |
 | **Identity verification (biometric)** | A liveness selfie captured by our verification provider, used to confirm you are a real person and that your profile photos are of you. See Section 10. |
 | **Follow-up questionnaire answers** | Short optional questions we send after onboarding ("Profiler") to fuel icebreakers and date hints — you can skip any of them. |
 | **Visual type preference (optional feature)** | Where we offer the visual "type" calibration step, the picks you make from a set of sample portraits, and the compiled preference this produces. |
@@ -127,13 +132,15 @@ the Service, and data we derive or generate to power matchmaking.
 | **Push tokens** | Device push tokens for Apple push notifications and Live Activities (the live "date day" / "decision" widget), so we can notify you. |
 | **Voice & video transcripts** | Text transcriptions of voice notes you send. The audio of a profile video is transcribed **transiently** for a safety check and is not retained. |
 | **Usage metering** | Per-user counters for how many messages and how much AI processing you use, so we can enforce fair-use limits and stop abuse. These are held in memory and are not a long-term profile. |
+| **Chat timeline** | A short-lived record of what happened in your Telegram chat — the messages we sent, the buttons you tapped (by their visible label), what you typed, and actions you took in a Mini App. It lets our assistant answer a follow-up like "why?" against the message directly above it instead of guessing. A verification code you type is masked before storage. Kept **30 days**. |
+| **Promo attribution** | If you arrive through a promo link, a short-lived, hashed device fingerprint (IP + browser + language) and the promo code, so the reward survives an App Store install. Held in memory only, for up to an hour, then discarded. |
 | **Website cookie-consent records** | See Section 5.4. |
 
 ### 4.3 Data we derive or generate
 
 | Category | Examples |
 |---|---|
-| **Psychological summary** | A free-text summary of your personality, values, and preferences, generated from your onboarding answers and/or your AI memory export. |
+| **Psychological summary** | A free-text summary of your personality, values, and preferences, generated from your onboarding answers. |
 | **Vector embedding** | A numeric representation (embedding) of your psychological summary, used to compute compatibility. It is derived from your prose and is not stored as readable text. |
 | **Vibe axes** | Structured scores derived from your free-text vibe answers (a tempo axis, an experience-vs-connection axis, a social role, and short anchor tags). |
 | **Compatibility & rating signals** | A "league"/attractiveness score (Elo) seeded from an automated visual assessment of your photos, match scores, standby/priority counters, and the frozen score breakdown of each match we create. |
@@ -165,9 +172,10 @@ Telegram under **Telegram's own privacy policy**, which we do not control.
 
 ### 5.3 From our providers
 
-Our identity provider returns the verification selfie and the inquiry outcome;
-our face-comparison provider returns similarity scores and safety labels; our
-payment rails return payment confirmations and transaction identifiers.
+Our liveness provider (Amazon Rekognition Face Liveness) returns the
+verification selfie and the liveness result; our face-comparison provider
+(Amazon Rekognition) returns similarity scores and safety labels; our payment
+rails return payment confirmations and transaction identifiers.
 
 ### 5.4 From your browser (website only)
 
@@ -194,13 +202,26 @@ and you can withdraw it at any time (Section 18).
 | **Biometric data** — a liveness selfie and face-comparison scores used to uniquely identify you | When you complete identity verification. Verification is **mandatory** to be matched. | You are not matched. You may delete your account instead. See Section 10. |
 | **Dietary requirements** — if you confirm halal or kosher (which can reveal religious belief), or a medical requirement such as gluten-free | Only if you explicitly confirm one when telling the concierge what kind of date you want. | The concierge simply does not filter venues on that requirement. Nothing else changes. |
 | **Accessibility needs** — a step-free venue requirement, which can reveal health data | Only if you explicitly confirm it in the same flow. | As above. |
-| **Content of your AI memory export** — you may paste text that mentions health, beliefs, sex life, or similar | Only if you choose to paste an export. It is optional. | We build your profile from your ordinary onboarding answers instead. |
 | **Free-text you write** — you may voluntarily reveal special-category information in a vibe answer, a chat message, a report, or feedback | Only if you choose to write it. | We ask you not to share more than you need to. |
 
 Dietary and accessibility requirements are used **only** to filter and rank date
 venues. They are never used to rank you, to score you, or to decide who you are
 matched with, and they are never shown to your match as a category — your match
 sees only the venue we chose.
+
+**Racial and ethnic origin: not collected.** Until 1 August 2026 onboarding
+asked an optional "nationality or ethnic background" question, and the answer
+formed part of the text we turned into your matching profile. That was a
+special category under Article 9 feeding an automated matching decision, and it
+was removed: the question is gone, the stored values were erased, and nothing
+in the product asks for or infers your ethnicity. The visual preference feature
+(Section 8) deliberately uses only hair, build, style and tattoos — never skin
+tone or any proxy for ethnicity.
+
+**Sexual orientation.** Your gender and the gender you want to be matched with
+are, together, capable of revealing sexual orientation. We collect them because
+matchmaking is impossible without them, we use them only to match you, and we
+never share them outside the match itself.
 
 Withdrawing consent for biometric verification does not undo processing that was
 already lawful, but it stops further processing, removes you from matching, and
@@ -221,7 +242,8 @@ data).
 | Identity & anti-impersonation verification (biometric) | Liveness selfie, profile photos, face-match scores | **Explicit consent** (Art. 9(2)(a)); Art. 6(1)(f) for fraud prevention |
 | Validate uploaded photos and video for safety and duplicates | Photos, video frames, audio transcript (transient), perceptual hashes | Legitimate interests in a safe platform; **legal obligation** for illegal content |
 | Match you with compatible people | Profile, psychological summary, embedding, vibe axes, location, rating signals, age-band preference | Contract; legitimate interests in effective matchmaking |
-| Score how well a candidate fits your stated visual preference (where offered) | Your type-preference picks; the candidate's appearance tags | **Consent** — the step is optional and skippable |
+| Score how well a candidate fits your stated visual preference (where offered) | Your type-preference picks | **Consent** — the step is optional and skippable |
+| Derive coarse appearance tags (hair, build, style, tattoos) from your photos so you can be scored against another user's stated visual preference | Your profile photos | Legitimate interests in effective matchmaking. Unlike the picks above this runs for everyone, is not skippable, and produces no special-category data — see Section 8 |
 | Generate pitches, icebreakers, date hints, and venue choices | Profile, follow-up answers, location, vibe, date preferences | Contract; legitimate interests |
 | Arrange and confirm dates; select and change venues | Availability, departure point, date preferences, agreed time | Contract |
 | Filter venues on dietary / alcohol-free / step-free requirements | The requirement you confirmed | **Explicit consent** (Art. 9(2)(a)) where the requirement is special-category; otherwise contract |
@@ -231,7 +253,7 @@ data).
 | Send service messages, reminders, push notifications and Live Activities | Account, usage, push tokens | Contract; legitimate interests |
 | Operate an internal founder/operations feed (Section 12.2) | Profile card, photos, match and date summaries | Legitimate interests in operating and quality-checking a small, early-stage service |
 | Measure onboarding drop-off and product health | Step telemetry, aggregate counters | Legitimate interests in improving the Service |
-| Improve and develop the Service using **anonymised** data | Aggregated / anonymised data | **Consent** (the optional research opt-in) and/or legitimate interests once anonymised |
+| Improve and develop the Service using **anonymised** data | Aggregated / anonymised data | **Consent** (the optional research opt-in). We record your choice at sign-up; today we act on it only by counting how many people opted in, and we will not start any research use of your data without it |
 | Enforce fair-use limits and prevent abuse | Usage counters, IP, technical data | Legitimate interests in service availability and cost control |
 | Comply with law and respond to lawful requests | As required | **Legal obligation** (Art. 6(1)(c)) |
 
@@ -253,7 +275,9 @@ Matchmaking is **automated**. We use algorithms and AI to:
 - estimate an attractiveness / "league" rating from your photos, which strongly
   influences who you are considered compatible with;
 - where the feature is active, derive coarse appearance tags from your photos
-  and score them against another user's stated visual preference;
+  (hair colour and length, build, style, tattoos — **never** skin tone,
+  ethnicity, or any proxy for either) and score them against another user's
+  stated visual preference;
 - decide which person (if any) you are matched with in each weekly round, and in
   what priority order;
 - bucket each of your photos as pass / borderline / fail / no-face during
@@ -280,26 +304,29 @@ we build in the following safeguards:
 
 ---
 
-## 9. AI Processing and Your Personal AI Export
+## 9. AI Processing
 
 To generate your psychological summary and matchmaking signals, we send relevant
-profile text (and, if you provide it, your pasted AI memory export) to our AI
-provider for analysis, embedding, transcription, moderation, and visual scoring.
+profile text to our AI provider for analysis, embedding, transcription,
+moderation, and visual scoring.
 
-- Providing an AI memory export is **optional**. If you decline, we generate a
-  fallback summary from your ordinary onboarding answers and vibe answers
-  instead.
-- **The raw pasted export is transient.** After we parse it, we keep only a
-  redacted, dating-relevant signal summary and its embedding; the raw text is
-  replaced in your conversation history with a non-sensitive marker. If the
-  export contains no supported signal, we fall back to your ordinary answers
-  rather than inventing context.
-- Your export is treated as your personal data and is processed only to build
-  your profile and your matches. It is never shown to another user.
+- Your psychological summary is built from **your ordinary onboarding answers**
+  — your hobbies, what you want in a partner, and your free-text "vibe"
+  answers.
+- The summary and its embedding are treated as your personal data, are used
+  only to build your profile and your matches, and are **never shown to another
+  user**.
 - We use AI providers on terms that **do not permit them to train their public
   models on our API data.**
 - AI outputs can be wrong. Nothing our AI produces is advice; see the
   [Terms of Service](https://gennety.com/terms).
+
+**Retired: the personal AI export.** Earlier versions of the Service invited you
+to paste in a psychological analysis produced by your own AI assistant (the
+"Magic Prompt"). **That feature is no longer offered and we no longer accept
+such an export.** If you provided one while it was available, the raw text was
+never retained — only the redacted signal summary and its embedding, which are
+erased with your account like everything else.
 
 ---
 
@@ -307,14 +334,19 @@ provider for analysis, embedding, transcription, moderation, and visual scoring.
 
 Identity verification and face-matching involve **biometric data** — a special
 category under GDPR Article 9. We process it **only with your explicit
-consent**, which you give when you start verification.
+consent**, which we ask for on a dedicated screen before the check starts. That
+screen tells you what is captured, who processes it (Amazon Web Services, in
+the EU), how long it is kept, and what happens if you say no.
 
 - **Verification is mandatory to be matched.** You cannot be shown to other
   users, or see them, without passing it. (A small legacy group of users who
   skipped verification before it became mandatory, and accepted a rating
   penalty, remain matchable under the terms they agreed to.)
-- **Liveness selfie.** Captured by our identity provider, stored privately as
-  your verification reference, and compared against your profile photos.
+- **Liveness selfie.** Your device streams a short liveness video **directly to
+  Amazon Rekognition Face Liveness** — it does not pass through our servers.
+  AWS returns a single still frame, which we store privately as your
+  verification reference and compare against your profile photos. The AWS
+  session and everything in it expires three minutes after it is created.
 - **Face-match scores.** A similarity score is stored per profile photo to
   decide the verification outcome. Photos where no face is detected (group
   shots, scenery) do not count against you.
@@ -373,7 +405,7 @@ When a match is created, the other person sees: your first name, age, photos
 (and profile video, if you added one), a verification indicator, and
 AI-generated text about you (a pitch, icebreakers, a hint). They do **not** see
 your contact details, your email or phone, your exact location or departure
-point, your psychological summary, your AI export, your ratings or scores, or
+point, your psychological summary, your ratings or scores, or
 your safety history. Telegram contact details are exchanged only if you both
 explicitly choose to, through the pre-date coordination flow (Section 13).
 
@@ -384,40 +416,43 @@ founder receives an internal notification feed through a separate, private
 Telegram bot. It carries:
 
 - **On a new activated profile:** a profile card (first name, age, gender,
-  preference, city, height, hobbies, partner preferences, optional
-  nationality/ethnicity, language, sign-up track, verification status,
-  attractiveness score, Telegram `@username` if any) and your profile photos. It
-  deliberately **excludes your psychological summary and any AI memory export**.
+  preference, city, height, hobbies, partner preferences, language, sign-up
+  track, verification status, attractiveness score, Telegram `@username` if any)
+  and your profile photos. It deliberately **excludes your psychological
+  summary**.
 - **After each weekly matching round:** a link to a private, unlisted,
   search-engine-excluded report page showing that week's pairs with the same
   kind of profile cards and photos. Access to that page is controlled by an
-  unguessable token in the URL.
+  unguessable token in the URL, and the link stops working after 90 days.
 - **When a date is confirmed:** the two date cards and the venue.
-- **When an account is frozen or deleted:** the same kind of profile card
-  described above (first name, age, gender, preference, city, height, hobbies,
-  partner preferences, optional nationality/ethnicity, language, sign-up
-  track, verification status, attractiveness score, Telegram `@username` if
-  any), your phone number, and your profile photos, so the founder can review
-  or personally follow up on a departing account. It still excludes your
-  psychological summary and any AI memory export. This notification goes to
-  the same single, private, founder-only Telegram bot as every other item on
-  this list — it is not published, not shared further, and not retained
-  anywhere beyond that one operator's own chat history with their own bot.
+- **When an account is frozen:** the profile card described above, without your
+  phone number. Freezing is a pause, not an erasure — your account still exists
+  and you can return to it at any time.
+- **When an account is deleted:** an **anonymous** notification only. It carries
+  your city, sign-up track, verification status, how far you got in onboarding,
+  and how many days the account existed. It carries **no name, no phone number,
+  no email, no photos, and no Telegram username** — nothing that identifies you.
 
-We also delete any stored weekly-report snapshot that contains your account when
-you delete your account. Deleting your account erases it from every
-Gennety-operated system other than this one operational notification, which
-exists to let a single founder of a small, early-stage service know a real
-person just left and, when appropriate, reach out.
+**Deleting your account leaves nothing about you in this feed.** Until 1 August
+2026 the delete notification carried a full profile card, your phone number and
+your photos; that was inconsistent with your right to erasure, so it was
+replaced with the anonymous event described above. We also delete any stored
+weekly-report snapshot that contains your account. Earlier notifications sent
+before that date remain in the operator's own chat history and are covered by
+your erasure request — write to **legal@gennety.com** and they will be removed.
 
 ### 12.3 Staff and administrative access
 
-A small number of authorised people can access an internal administration
-interface that includes user profiles, conversation transcripts, photos, and
-verification state, for support, moderation, and investigating abuse. Access is
-protected by a separate authenticated interface with rate limiting, and images
-are streamed through an authenticated proxy rather than published. We limit
-access to what is necessary for the task.
+The operator of the Service can access an internal administration interface
+that includes user profiles, conversation transcripts, photos, and verification
+state, for support, moderation, and investigating abuse. It runs on a separate,
+key-protected, rate-limited interface, and images are streamed through an
+authenticated proxy rather than published.
+
+Being straightforward about the scale: Gennety is run by one person, and that
+interface is protected by a single shared key rather than per-person accounts,
+so it does not currently produce a per-person audit trail of who viewed what.
+We treat that as a limitation to fix as the team grows, not as a feature.
 
 ### 12.4 Processors (sub-processors)
 
@@ -427,9 +462,9 @@ may process data outside Ukraine or your country (see Section 15).
 
 | Processor | Purpose | Data shared |
 |---|---|---|
-| **Persona** | Identity / liveness verification | Verification selfie, basic identity signals |
+| **Amazon Web Services (Rekognition Face Liveness)** | Identity / liveness verification. Your device streams the liveness video directly to AWS; it never passes through our servers | Liveness video and the reference selfie it produces |
 | **Amazon Web Services (Rekognition)** | Face comparison, face detection, and content-safety analysis of photos and video frames | Profile photos, verification selfie, transient video frames |
-| **OpenAI** | Psychological analysis, embeddings, conversational agents, voice and video-audio transcription, content moderation, visual attractiveness scoring and (where active) appearance tagging | Profile text, AI export, voice/video transcripts, chat messages, photos |
+| **OpenAI** | Psychological analysis, embeddings, conversational agents, voice and video-audio transcription, content moderation, visual attractiveness scoring and (where active) appearance tagging | Profile text, voice/video transcripts, chat messages, photos |
 | **Supabase** | PostgreSQL database hosting and private file storage (verification selfies, mobile profile photos, chat images) | Account, profile, photos, embeddings, all relational data |
 | **Resend** | Delivering university-email verification codes | Email address, one-time code |
 | **Twilio** | Delivering phone verification codes by SMS to mobile-app users (primary rail) | Phone number, verification status |
@@ -438,6 +473,7 @@ may process data outside Ukraine or your country (see Section 15).
 | **Apple** | Push notifications and Live Activities (APNs); App Store purchases and subscriptions (App Store Server API) | Device push token and notification content; transaction identifiers and subscription status |
 | **Google (Places)** | Venue search, venue details and venue photos for arranging dates | Approximate meeting-area coordinates of a matched pair (never your identity) |
 | **CARTO** | Base map tiles for the map pickers, proxied through our servers | Tile coordinates only — **not** your IP address |
+| **Open-Meteo** | Weather forecast for the date's city and hour, so an outdoor venue is not suggested into a thunderstorm | Approximate city coordinates and a date — never your identity |
 | **DigitalOcean** | Hosting our application servers | Technical data, all data processed by the application |
 | **Vercel** | Hosting the marketing website | Technical data, website request logs |
 
@@ -533,7 +569,9 @@ We keep personal data only as long as necessary for the purposes above.
 | Email / phone one-time codes | Short-lived; hashed, expire quickly, and are marked consumed after use |
 | Mobile sign-in sessions / refresh tokens | Until they expire, you sign out, or the account is deleted; stored hashed |
 | Push and Live Activity tokens | Until the device unregisters, the token is reported dead, or the account is deleted |
-| Relay-chat message logs | While the related match exists; deleted with the match |
+| Relay-chat message logs | **90 days**, and in any case deleted with the match |
+| Chat timeline | **30 days**, then automatically deleted |
+| Promo attribution fingerprint | Up to **1 hour**, held in memory only |
 | Match records, score breakdowns, venue selection logs | While your account exists; erased on account deletion |
 | Onboarding funnel telemetry | While your account exists; erased on account deletion (it contains no answer text) |
 | Payment and subscription ledger entries | As required by accounting and tax law, typically several years, even after account deletion — kept minimal and separated from your profile |
@@ -560,11 +598,13 @@ the data, including:
 - encrypted transport (TLS) everywhere;
 - private storage buckets with short-lived signed access — media is never
   publicly addressable;
-- cryptographic verification of requests from Telegram Mini Apps, signed
-  webhooks from our identity provider, and signed tokens for the mobile API,
-  with refresh-token rotation and revocation;
+- cryptographic verification of requests from Telegram Mini Apps and signed
+  tokens for the mobile API, with refresh-token rotation and revocation. Our
+  liveness result is read server-to-server from AWS rather than accepted from
+  the client, so a device cannot claim to have passed a check it did not;
 - hashing of one-time codes and refresh tokens; salting and hashing of IP
-  addresses in consent records;
+  addresses in consent records; masking of any verification code you type
+  before it is written to the chat timeline;
 - separate, key-protected, rate-limited administrative interfaces;
 - minimisation of biometric retention (90-day selfie deletion) and non-retention
   of transient media used for safety checks;
@@ -613,6 +653,12 @@ that the request comes from you.
   open the bot or the app;
 - **Delete** your account — permanent and irreversible erasure as described in
   Section 16.
+
+**Withdrawing biometric consent.** There is no self-service button for this yet:
+write to **legal@gennety.com** and we will erase the verification selfie and the
+face-match scores we hold. Because verification is what admits you to matching,
+withdrawing it removes you from the matching pool — you can keep the account and
+re-verify later, or delete it outright.
 
 ---
 

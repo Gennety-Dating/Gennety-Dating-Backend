@@ -34,6 +34,85 @@ The next full deploy reconciles the code — the repo version carries the same f
 
 ---
 
+**PENDING — privacy remediation, 2026-08-01 (ethnicity removed, founder-feed
+delete anonymised, OTP redaction, consent versioning, coordination-card
+protection).** Not deployed yet. **No env change, no flag change, no Mini App
+change** (`apps/webapp` untouched). Ships with the next full deploy — note the
+divergence warning above; none of this is safe to single-file rsync.
+
+**⚠️ This is the first entry in this file that needs a DESTRUCTIVE schema step.**
+It drops `profiles.ethnicity`. That is the *point*: the column holds GDPR Art. 9
+data (racial / ethnic origin) which was being folded into the matching embedding
+with no Art. 9 basis behind it, so the data itself is the liability and erasing
+it IS the remediation. Do not preserve it "just in case".
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+# Read the plan BEFORE running anything. Expect exactly two statements:
+#   ALTER TABLE "users" ADD COLUMN "policy_version" TEXT;
+#   ALTER TABLE "profiles" DROP COLUMN "ethnicity";
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+
+# For the record, before it goes:
+psql "$DATABASE_URL" -c "select count(*) from profiles where ethnicity is not null;"
+
+pnpm --filter @gennety/db db:push --accept-data-loss
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+`--accept-data-loss` is required and correct here. **If the printed plan carries
+any DROP other than `profiles.ethnicity`, STOP** — that is drift from another
+branch, not this change.
+
+What ships:
+
+- **`profiles.ethnicity` is gone end to end** — the onboarding question, the
+  legacy agent's tool field + prompts + context-dump gate, the Aether
+  `update_profile` field, the fallback embedding text (`profile-analysis.ts`),
+  both founder-feed cards, and the admin audience breakdown. PRODUCT_SPEC §1.3
+  records why. Existing `onboarding_progress` rows that list `"ethnicity"` are
+  harmless: `asField()` drops unknown values.
+- **Deleting an account no longer DMs the founder anything personal** — an
+  anonymous lifecycle event instead (city, track, verification status, funnel
+  stage, days in product). Freeze keeps its profile card but drops the phone
+  number. A deletion is an Art. 17 request, and a full profile + phone + photo
+  dump landing in a Telegram chat at that exact moment was the one place the
+  product did not honour it.
+- **A typed verification code is masked in `chat_events`** before the row is
+  written (`redactSensitiveSummary`), matching the bcrypt hashing
+  `email_otps` / `phone_otps` already do.
+- **`users.policy_version`** records WHICH version of the Terms + Privacy Policy
+  a user accepted (`LEGAL_DOCS_VERSION`, currently `2026-08-01`) — GDPR Art.
+  7(1) accountability. Null on all existing rows, by design.
+- **`protect_content` on the coordination cards.** They render the partner's
+  face and shipped without it. `COORDINATION_FEATURE_ENABLED` is already `true`
+  in production, so this would have been live the moment those cards deployed.
+
+Legal documents were rewritten in the same commit (Privacy Policy v4.0, Terms
+v3.0). **They are not live until the website is redeployed** — see
+`legal/README.md`, which also records the two remaining publication blockers
+(controller postal address, Art. 27 EU representative).
+
+**Post-deploy check**, beyond the standard checklist:
+
+```sh
+psql "$DATABASE_URL" -c "\d profiles" | grep -c ethnicity   # expect 0
+curl -sD- -o /dev/null -H "Authorization: Bearer $ADMIN_API_KEY" \
+  https://api-admin.gennety.com/admin/analytics/audience | head -1   # expect 200
+```
+
+Then walk one onboarding as far as the profile questions and confirm it goes
+partner-preferences → vibe with no origin question in between.
+
+**Rollback:** revert the code and restart. The dropped column can be re-added
+empty, but the DATA is gone by design and is not recoverable from the
+application — restore from a Supabase backup only if you genuinely intend to
+reinstate Art. 9 data you just erased.
+
+---
+
 **PENDING — Premium hub stops asking for money up front (PRODUCT_SPEC §3.8).**
 Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change** (`apps/webapp` untouched) — the price still comes

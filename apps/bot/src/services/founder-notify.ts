@@ -21,7 +21,8 @@ import type { Venue } from "./venue.js";
  *   1. `notifyFounderNewUser`      — new registration: full profile + photos.
  *   2. `notifyFounderWeeklyMatches`— weekly matches report link (Thu batch).
  *   3. `notifyFounderDateScheduled`— a date locked in: both date cards + venue.
- *   4. `notifyFounderAccountClosed`— freeze / GDPR delete: profile + phone.
+ *   4. `notifyFounderAccountClosed`— freeze: profile card (no phone);
+ *                                     delete: anonymous lifecycle event only.
  *   5. `notifyFounderPurchase` / `notifyFounderPurchaseRefunded` — every real
  *      money movement (ticket store, date gate, Premium, Rematch, venue
  *      change; Telegram Stars and App Store alike), with who paid and how much.
@@ -294,8 +295,6 @@ function buildNewUserHeader(user: UserWithProfile): string {
   if (hobbies && hobbies.length) lines.push(`Хобби: ${hobbies.join(", ")}`);
   const partnerPrefs = p["partnerPreferences"] as string | null;
   if (partnerPrefs) lines.push(`Хочет в партнёре: ${partnerPrefs}`);
-  const ethnicity = p["ethnicity"] as string | null;
-  if (ethnicity) lines.push(`Национальность/этнос: ${ethnicity}`);
   if (user.language) lines.push(`Язык: ${user.language}`);
   if (user.registrationTrack) lines.push(`Трек: ${user.registrationTrack}`);
   lines.push(`Верификация: ${user.verificationStatus}`);
@@ -325,12 +324,16 @@ export interface FounderAccountUser {
   verificationStatus: string;
   telegramUsername: string | null;
   telegramId: bigint;
+  /** Drives "days in product" on the anonymous delete notification. */
+  createdAt: Date;
+  /** Funnel stage on the anonymous delete notification. */
+  status: string;
+  onboardingStep: string;
   profile: {
     homeCity: string | null;
     height: number | null;
     hobbies: string[];
     partnerPreferences: string | null;
-    ethnicity: string | null;
     photos: string[];
     eloSeedDetails: unknown;
   } | null;
@@ -349,13 +352,15 @@ export const FOUNDER_ACCOUNT_CLOSED_SELECT = {
   verificationStatus: true,
   telegramUsername: true,
   telegramId: true,
+  createdAt: true,
+  status: true,
+  onboardingStep: true,
   profile: {
     select: {
       homeCity: true,
       height: true,
       hobbies: true,
       partnerPreferences: true,
-      ethnicity: true,
       photos: true,
       eloSeedDetails: true,
     },
@@ -364,19 +369,26 @@ export const FOUNDER_ACCOUNT_CLOSED_SELECT = {
 
 /**
  * DM the founder when a user closes their account — freeze (soft) or delete
- * (hard). Includes the full profile, PHONE NUMBER, and photos, so the founder
- * can react to (or personally reach out about) a departing user. This is an
- * internal ops channel to a single trusted operator, not a public/second
- * copy of the data — see `legal/privacy-policy.md` §12.2, which documents
- * this notification alongside the new-registration one it mirrors.
+ * (hard). **The two actions are deliberately asymmetric (2026-08-01):**
  *
- * Because a hard delete cascades the row away and removes Supabase-hosted
- * photos, the CALLER must pre-fetch `user` (with profile) and, for a delete,
- * pass pre-downloaded `photoBuffers` — Telegram `file_id`s stay resolvable
- * after the row is gone, but a Supabase storage path does not survive the
- * cleanup that runs before the delete transaction. When `photoBuffers` is
- * omitted (the freeze path, where the row still exists), photos are
- * downloaded here from `user.profile.photos` directly.
+ *   - `frozen` — the account still EXISTS. Freezing is a pause, not an erasure
+ *     request, so the ordinary profile card is sent, minus the phone number
+ *     (a contact identifier the feed never needed to carry).
+ *   - `deleted` — the user asked to be forgotten. Sending their profile, phone,
+ *     email and photos into a Telegram chat at that exact moment is the one
+ *     place the product did not honour a direct GDPR Art. 17 request: the copy
+ *     would outlive the erasure indefinitely, and "legitimate interest" does
+ *     not survive an explicit erasure request (Art. 21(3)). So the delete
+ *     notification carries NO personal data and NO photos — only the coarse
+ *     lifecycle facts an operator needs to know that a real person left:
+ *     city, track, verification status, funnel stage, and days in product.
+ *
+ * If you want to know WHY someone left, ask them with consent (the Premium
+ * cancellation flow already does exactly that) rather than reconstructing it
+ * from a profile dump.
+ *
+ * `photoBuffers` is only meaningful for `frozen`; the delete path ignores it.
+ * See `legal/privacy-policy.md` §12.2.
  */
 export async function notifyFounderAccountClosed(
   action: "frozen" | "deleted",
@@ -387,7 +399,13 @@ export async function notifyFounderAccountClosed(
   if (!api) return;
 
   try {
-    const header = buildAccountClosedHeader(action, user);
+    if (action === "deleted") {
+      // No profile card, no photos — see the asymmetry note above.
+      await api.sendMessage(founderChatId(), buildAccountDeletedHeader(user));
+      return;
+    }
+
+    const header = buildAccountFrozenHeader(user);
     let buffers = photoBuffers;
     if (!buffers) {
       buffers = [];
@@ -406,18 +424,39 @@ export async function notifyFounderAccountClosed(
   }
 }
 
-function buildAccountClosedHeader(
-  action: "frozen" | "deleted",
-  user: FounderAccountUser,
-): string {
+/**
+ * Anonymous lifecycle event for a hard delete. Every field here is either
+ * coarse (a city, a track) or non-identifying (a count of days), so the
+ * message cannot be traced back to the erased person.
+ */
+function buildAccountDeletedHeader(user: FounderAccountUser): string {
+  const days = Math.max(
+    0,
+    Math.floor((Date.now() - user.createdAt.getTime()) / 86_400_000),
+  );
+  const lines: string[] = [
+    "🗑 Аккаунт УДАЛЁН",
+    "",
+    "Персональные данные не приводятся: пользователь воспользовался правом на удаление.",
+    "",
+    `Город: ${user.profile?.homeCity ?? "—"}`,
+    `Трек: ${user.registrationTrack ?? "—"}`,
+    `Верификация: ${user.verificationStatus}`,
+    `Стадия: ${user.status}/${user.onboardingStep}`,
+    `В продукте: ${days} дн.`,
+  ];
+  return truncateCaption(lines.join("\n"));
+}
+
+/** Ordinary profile card for a FREEZE — the account still exists. */
+function buildAccountFrozenHeader(user: FounderAccountUser): string {
   const p = user.profile;
-  const title = action === "deleted" ? "🗑 Аккаунт УДАЛЁН" : "❄️ Аккаунт ЗАМОРОЖЕН";
-  const lines: string[] = [title];
+  const lines: string[] = ["❄️ Аккаунт ЗАМОРОЖЕН"];
   const name = user.firstName ?? "—";
   const age = user.age != null ? `, ${user.age}` : "";
   lines.push(`👤 ${name}${age}`);
-  // The phone number is the headline datum for this notification.
-  lines.push(`📞 Телефон: ${user.phone ?? "—"}`);
+  // The phone number is deliberately NOT included: it is a contact identifier
+  // the ops feed never needed, and `@username` below already reaches the user.
   if (user.email) lines.push(`✉️ Email: ${user.email}`);
   if (user.gender) lines.push(`Пол: ${user.gender}`);
   if (user.preference) lines.push(`Искал(а): ${user.preference}`);
@@ -425,7 +464,6 @@ function buildAccountClosedHeader(
   if (p?.height) lines.push(`Рост: ${p.height} см`);
   if (p?.hobbies && p.hobbies.length) lines.push(`Хобби: ${p.hobbies.join(", ")}`);
   if (p?.partnerPreferences) lines.push(`Хотел(а) в партнёре: ${p.partnerPreferences}`);
-  if (p?.ethnicity) lines.push(`Национальность/этнос: ${p.ethnicity}`);
   if (user.language) lines.push(`Язык: ${user.language}`);
   if (user.registrationTrack) lines.push(`Трек: ${user.registrationTrack}`);
   lines.push(`Верификация: ${user.verificationStatus}`);

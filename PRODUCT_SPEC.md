@@ -222,8 +222,10 @@ fact collector owns profile capture:
 | `finalize gate` | Activate only after required profile data, AI-memory branch, city, a verified contact rail (email or phone, per track), and minimum photos are complete |
 
 Canonical order: name + age → gender → preference → height → hobbies → partner
-requirements → optional nationality/ethnicity → **vibe (ideal Friday night →
-process-vs-who follow-up)** → AI memory → photos. Questions come from server
+requirements → **vibe (ideal Friday night →
+process-vs-who follow-up)** → AI memory → photos. (An optional
+nationality/ethnicity step used to sit before the vibe questions; it was
+**removed 2026-08-01** — see the note under the hard rules below.) Questions come from server
 templates for `en`, `ru`, `uk`, `de`, and `pl`.
 
 **Vibe questions (matching signal, asked of everyone).** Two short free-text
@@ -352,7 +354,15 @@ Hard rules enforced by the collector:
 - Real user text is distinct from `resume`, `context_dump`, and
   `photos_updated`; synthetic events, assistant text, summaries, and tool
   arguments are never mined as profile facts.
-- Nationality/ethnicity is asked at most once and may be explicitly skipped.
+- **Nationality/ethnicity is not collected at all (removed 2026-08-01).** The
+  question was optional and skippable, but the answer was folded into
+  `psychologicalSummary` → the embedding → `V_explicit`, so ethnic origin
+  materially influenced who a user was paired with. That is GDPR Art. 9(1) data
+  driving an Art. 22 automated decision with no Art. 9 basis available for it.
+  The question, the `Profile.ethnicity` column, the founder-feed line and the
+  admin audience breakdown are all gone. The Type Radar taxonomy was checked at
+  the same time and is clean: it scores hair, build, style and tattoos, never
+  skin tone or any ethnic proxy (`TYPE_RADAR_PRODUCT_SPEC.md`).
 - "No hobbies" / a single hobby is a valid answer; the agent must NOT chain
   "one more, one more" requests.
 - `MIN_PHOTOS` (3, lowered from 4 on 2026-07-27) is a hard floor; anything

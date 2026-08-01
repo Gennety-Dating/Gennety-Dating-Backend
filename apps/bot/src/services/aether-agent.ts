@@ -42,7 +42,6 @@ Your mission is to gather a rich profile of the user through natural, friendly c
    - age (integer ${MIN_AGE}-${MAX_AGE}) — ONLY during onboarding; fixed afterwards
    - gender ("male" | "female") — ONLY during onboarding; fixed afterwards
    - preference ("men" | "women" | "both")
-   - ethnicity (free text)
    - height (integer cm)
    - hobbies (array of short strings)
    - partnerPreferences (one short sentence)
@@ -67,7 +66,6 @@ const TOOLS = [
           age: { type: "integer", minimum: MIN_AGE, maximum: MAX_AGE },
           gender: { type: "string", enum: ["male", "female"] },
           preference: { type: "string", enum: ["men", "women", "both"] },
-          ethnicity: { type: "string", maxLength: 64 },
           height: { type: "integer", minimum: 120, maximum: 230 },
           hobbies: {
             type: "array",

@@ -36,7 +36,7 @@ export interface UiHint {
   /** For wheels/counters: inclusive bounds. */
   min?: number;
   max?: number;
-  /** The question may be explicitly skipped (e.g. ethnicity). */
+  /** The question may be explicitly skipped. */
   skippable?: boolean;
 }
 
@@ -47,7 +47,6 @@ const QUESTION_HINTS: Partial<Record<OnboardingQuestion, UiHint>> = {
   height: { control: "height_wheel", min: MIN_HEIGHT_CM, max: MAX_HEIGHT_CM },
   hobbies: { control: "text" },
   partner_preferences: { control: "multiline_text" },
-  ethnicity: { control: "text", skippable: true },
   friday_vibe: { control: "multiline_text" },
   vibe_focus: { control: "text" },
   ai_memory: { control: "choice_chips", options: ["accepted", "declined"] },

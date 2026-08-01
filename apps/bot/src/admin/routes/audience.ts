@@ -45,7 +45,6 @@ audienceRouter.get(
             isEmailVerified: true,
             profile: {
               select: {
-                ethnicity: true,
                 hobbies: true,
                 psychologicalSummary: true,
                 matchRadius: true,
@@ -64,8 +63,6 @@ audienceRouter.get(
         const majorClusters: Record<MajorCluster, number> = {
           STEM: 0, Humanities: 0, Arts: 0, Business: 0, Health: 0, Other: 0, Unknown: 0,
         };
-        // Ethnicity (raw, free-text)
-        const ethnicity = new Map<string, number>();
         // Hobbies (unnest)
         const hobbies = new Map<string, number>();
         // Psych dimensions
@@ -105,10 +102,6 @@ audienceRouter.get(
 
           const p = u.profile;
           if (p) {
-            if (p.ethnicity && p.ethnicity.trim().length > 0) {
-              const key = p.ethnicity.trim().toLowerCase();
-              ethnicity.set(key, (ethnicity.get(key) ?? 0) + 1);
-            }
             for (const h of p.hobbies ?? []) {
               const key = h.trim().toLowerCase();
               if (!key) continue;
@@ -132,10 +125,6 @@ audienceRouter.get(
           .sort((a, b) => b.count - a.count)
           .slice(0, 20);
 
-        const topEthnicity = Array.from(ethnicity.entries())
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count);
-
         return {
           totalUsers: users.length,
           age: AGE_BUCKETS.map((b) => ({ bucket: b, count: ageBuckets[b] })),
@@ -143,7 +132,6 @@ audienceRouter.get(
             cluster: c, count: majorClusters[c],
           })),
           topHobbies,
-          ethnicity: topEthnicity,
           socialEnergy: SOCIAL_ENERGY_VALUES.map((v) => ({
             value: v, count: socialEnergy[v] ?? 0,
           })),

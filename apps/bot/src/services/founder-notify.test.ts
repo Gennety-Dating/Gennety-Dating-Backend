@@ -77,12 +77,14 @@ function accountUser(over: Partial<FounderAccountUser> = {}): FounderAccountUser
     verificationStatus: "verified",
     telegramUsername: "alice",
     telegramId: 12345n,
+    createdAt: new Date(Date.now() - 5 * 86_400_000),
+    status: "active",
+    onboardingStep: "completed",
     profile: {
       homeCity: "Kyiv",
       height: 170,
       hobbies: ["art"],
       partnerPreferences: "kind",
-      ethnicity: null,
       photos: ["f1"],
       eloSeedDetails: { score: 66 },
     },
@@ -152,7 +154,6 @@ describe("notifyFounderNewUser", () => {
         height: 170,
         hobbies: ["art"],
         partnerPreferences: "kind",
-        ethnicity: null,
         photos: ["f1", "f2"],
         psychologicalSummary: "SECRET AI DUMP",
         eloSeedDetails: { score: 80 },
@@ -194,19 +195,27 @@ describe("notifyFounderAccountClosed", () => {
     expect(sendPhoto).not.toHaveBeenCalled();
   });
 
-  it("DMs the founder the profile + phone with a delete title, using pre-downloaded photo buffers", async () => {
+  // A deletion is an Art. 17 erasure request: nothing personal may outlive it
+  // in the ops chat, so this notification is a coarse lifecycle event only.
+  it("sends an ANONYMOUS lifecycle event on delete — no profile, phone or photos", async () => {
     env.FOUNDER_NOTIFY_ENABLED = true;
     await notifyFounderAccountClosed("deleted", accountUser(), [Buffer.from("img")]);
-    // One buffer → sendPhoto with a caption. The generic download path
-    // (downloadProfileImage) must NOT be used since buffers were supplied.
-    expect(sendPhoto).toHaveBeenCalledTimes(1);
+
+    expect(sendPhoto).not.toHaveBeenCalled();
     expect(downloadProfileImage).not.toHaveBeenCalled();
-    const [chatId, , opts] = sendPhoto.mock.calls[0]!;
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const [chatId, text] = sendMessage.mock.calls[0]!;
     expect(chatId).toBe(999);
-    const caption = (opts as { caption?: string }).caption ?? "";
-    expect(caption).toContain("УДАЛЁН");
-    expect(caption).toContain("+380991234567");
-    expect(caption).toContain("Alice");
+    const body = String(text);
+    expect(body).toContain("УДАЛЁН");
+    // Coarse, non-identifying context the operator still gets.
+    expect(body).toContain("Kyiv");
+    expect(body).toContain("general");
+    expect(body).toContain("5 дн.");
+    // Nothing that identifies the erased person.
+    for (const pii of ["+380991234567", "Alice", "a@uni.edu", "alice", "12345"]) {
+      expect(body).not.toContain(pii);
+    }
   });
 
   it("downloads photos itself when no buffers are supplied (freeze path)", async () => {
@@ -217,7 +226,9 @@ describe("notifyFounderAccountClosed", () => {
     const [, , opts] = sendPhoto.mock.calls[0]!;
     const caption = (opts as { caption?: string }).caption ?? "";
     expect(caption).toContain("ЗАМОРОЖЕН");
-    expect(caption).toContain("+380991234567");
+    expect(caption).toContain("Alice");
+    // The phone is a contact identifier the ops feed never needed.
+    expect(caption).not.toContain("+380991234567");
   });
 
   it("falls back to a plain message when there is no profile", async () => {
@@ -227,7 +238,7 @@ describe("notifyFounderAccountClosed", () => {
     expect(sendMessage).toHaveBeenCalledTimes(1);
     const [, text] = sendMessage.mock.calls[0]!;
     expect(text).toContain("ЗАМОРОЖЕН");
-    expect(text).toContain("+380991234567");
+    expect(text).not.toContain("+380991234567");
   });
 });
 

@@ -54,7 +54,6 @@ vi.mock("./founder-notify.js", () => ({
         height: true,
         hobbies: true,
         partnerPreferences: true,
-        ethnicity: true,
         photos: true,
         eloSeedDetails: true,
       },

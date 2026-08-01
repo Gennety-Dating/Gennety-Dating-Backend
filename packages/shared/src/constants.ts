@@ -136,6 +136,22 @@ export const FAMINE_DISCOUNT_MIN_TIER = 2;
  */
 export const FAMINE_PAUSE_AFTER_DAYS = 28;
 
+/**
+ * Version of the user-facing legal documents in force, stamped onto
+ * `User.policyVersion` at the moment consent is recorded.
+ *
+ * GDPR Art. 7(1) puts the burden on us to demonstrate WHAT a user agreed to,
+ * and `consentedAt` alone cannot do that once the documents change — a
+ * timestamp proves only that something was accepted. The Terms and the Privacy
+ * Policy share one version string because the consent screen accepts them with
+ * a single checkbox; a document set that ever splits needs two columns, not a
+ * looser value here.
+ *
+ * **Bump this whenever `legal/privacy-policy.md` or `legal/terms-of-service.md`
+ * changes materially**, and publish the same version to the website.
+ */
+export const LEGAL_DOCS_VERSION = "2026-08-01";
+
 /** Age boundaries */
 export const MIN_AGE = 18;
 export const MAX_AGE = 55;

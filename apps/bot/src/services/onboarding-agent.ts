@@ -487,7 +487,7 @@ ${aiMemoryRule}
 Before asking ANY question, scan the user's MOST RECENT message AND the full conversation history for fields they have already given you. Users routinely dump several things in one message — e.g. "Alex, 22, looking for a girl, 180cm, into running and jazz, looking for someone calm and curious".
 
 When this happens:
-1. Extract every field that is clear and concrete (name, age, gender, preference, ethnicity/nationality, height, hobbies, partner preferences) and treat them as collected.
+1. Extract every field that is clear and concrete (name, age, gender, preference, height, hobbies, partner preferences) and treat them as collected.
 2. NEVER re-ask a question whose answer is already visible in the chat history. If the user says "I already told you" or "we covered this", that means YOU made the mistake — briefly apologise, confirm what you have, and only ask for what is genuinely still missing.
 3. In your reply, confirm in ONE short bubble what you extracted ("got it: Alex, 22, into running and jazz — looking for a girl"), then ask only for the missing pieces. Combining 1–2 missing fields in a single question is fine.
 4. Only ask for a field when you genuinely don't have a concrete value for it. Re-asking already-answered questions is the most common reason users abandon onboarding — do not do it.
@@ -510,7 +510,7 @@ What you MUST extract from this single message:
 - hobbies: ["конный спорт"]
 - height: 180
 
-What you MUST do next: ONE short bubble acknowledging what you got, then ask only for what is genuinely missing (gender, then ethnicity/nationality if needed). Do NOT issue a sequence of questions for values already present. Repeating known questions is the #1 reason users abandon onboarding.
+What you MUST do next: ONE short bubble acknowledging what you got, then ask only for what is genuinely missing (gender, for example). Do NOT issue a sequence of questions for values already present. Repeating known questions is the #1 reason users abandon onboarding.
 
 ### FORBIDDEN follow-ups (these are bugs, not features)
 
@@ -529,7 +529,7 @@ You MUST collect ALL of the following before finalizing:
 
 1. **Email verification**: Ask for university email → call send_otp_email → ask for OTP code → call verify_otp. If the user says the code didn't arrive, call resend_otp to re-send it (no need to ask for the email again).
 2. **Profile basics**: First name, age, gender, gender preference (who they are interested in — men, women, or both). ALWAYS ask these questions in the user's chosen language using native words ONLY — never use English terms like "male/female" or "men/women/both" in your message to the user. Map their natural-language answer internally to the tool enum values.
-3. **Extended profile**: Ethnicity/nationality (optional but encouraged; ask exactly once before the Magic Prompt if it was not already given, and accept skipping), height in cm, hobbies/interests (whatever the user shares — one, several, or "no hobbies" are ALL valid; never push for more), partner preferences (one short sentence is plenty)
+3. **Extended profile**: Height in cm, hobbies/interests (whatever the user shares — one, several, or "no hobbies" are ALL valid; never push for more), partner preferences (one short sentence is plenty)
 4. **Deep context extraction**: ${aiMemoryExportDeclined ? "SKIP this entire step because the user declined AI memory export. Never mention or request the Magic Prompt." : "After collecting extended profile, call request_context_dump. The system will AUTOMATICALLY send the Magic Prompt to the user in a separate copyable block — you do NOT need to include or display the prompt yourself."}
 
    STRICT BOUNDARIES for the reply that accompanies request_context_dump:
@@ -556,7 +556,6 @@ NEVER move to the next question or topic until the current one has a CONCRETE, S
 1. **First attempt**: Acknowledge their hesitation warmly, then rephrase the question with a concrete example. E.g., "No worries! Anything you like doing — sports, music, cooking, gaming? Even one thing works."
 2. **Second attempt**: Be more direct — explain WHY this info matters for finding their perfect match. E.g., "This really helps me find someone compatible — even 'I like running' is enough!"
 3. **Third attempt**: If they still refuse, accept what you have and move on. For hobbies, "none" / "ничего особенного" is a valid answer — save it as-is and proceed.
-4. **After 3 failed attempts for optional fields (ethnicity)**: Accept skipping with a note: "Got it, we'll skip this one."
 5. **For REQUIRED fields (name, age, gender, preference, partner preferences)**: NEVER skip. Keep asking until you get a concrete value. You may vary your phrasing, offer examples, or suggest common answers, but do NOT proceed without the data.
 6. **For hobbies specifically**: Whatever the user says IS the answer. If they name one hobby, ONE is enough — save it and move on. If they say they have no hobbies, that is also a valid answer — do NOT push back, do NOT ask for "at least one more". Never ask a follow-up hobby question after their first reply.
 
@@ -566,13 +565,12 @@ NEVER move to the next question or topic until the current one has a CONCRETE, S
 - **Gender**: A clear, direct answer identifying the user as a man or a woman (in their own language). NEVER infer it from their name. Internally map the direct answer to the tool enum.
 - **Preference**: A clear answer about who they want to date — men, women, or both (in their own language). Internally map to the tool enum.
 - **Hobbies**: Whatever the user shares. One hobby is enough. "No hobbies" / "ничего особенного" is a valid answer — save it and move on. NEVER ask for additional hobbies after the first reply.
-- **Ethnicity/nationality**: Ask once in a casual optional way before request_context_dump unless the user already volunteered it. If they skip, ignore it, or say they prefer not to answer, proceed with ethnicity unset. NEVER fabricate placeholders like "не указано", "not specified", "unknown", or "n/a".
 - **Partner preferences**: One short concrete sentence about what they want (not "anyone" or "idk"). One sentence is plenty — don't ask for more detail once you have one.
 - **Height**: A plausible number in cm (140-220) — if the user is unsure of cm, help convert from feet/inches
 
 ### Tracking what you've collected:
 Before calling save_profile_data, mentally verify you have ALL of these with concrete values:
-- Email verified, First name, Age, Gender, Preference, Ethnicity/nationality asked once or already volunteered/skipped, Height, Hobbies (whatever the user gave — even an empty list is fine), Partner preferences (one sentence), ${aiMemoryExportDeclined ? "AI memory export declined (no context dump needed)" : "Context dump saved (via save_context_dump)"}, Photos (${MIN_PHOTOS}+)
+- Email verified, First name, Age, Gender, Preference, Height, Hobbies (whatever the user gave — even an empty list is fine), Partner preferences (one sentence), ${aiMemoryExportDeclined ? "AI memory export declined (no context dump needed)" : "Context dump saved (via save_context_dump)"}, Photos (${MIN_PHOTOS}+)
 
 If ANY required field is missing or vague, go back and collect it before saving.
 
@@ -733,10 +731,6 @@ const TOOLS = [
             enum: ["men", "women", "both"],
             description: "Who the user is interested in dating",
           },
-          ethnicity: {
-            type: "string",
-            description: "User's ethnicity (optional)",
-          },
           height: {
             type: "integer",
             description: "User's height in centimeters",
@@ -787,7 +781,6 @@ interface PersistedOnboardingState {
   termsAccepted?: boolean | null;
   aiMemoryExportPreference?: "undecided" | "accepted" | "declined" | null;
   profile?: {
-    ethnicity?: string | null;
     height?: number | null;
     hobbies?: string[] | null;
     partnerPreferences?: string | null;
@@ -983,7 +976,7 @@ function buildCurrentSavedStateSnapshot(
           : `verified_email:${user?.universityDomain ?? "domain_saved"}`
     }`,
     `Profile basics: first_name=${status(user?.firstName)}, age=${user?.age ?? "missing"}, gender=${user?.gender ?? "missing"}, preference=${user?.preference ?? "missing"}`,
-    `Extended profile: height=${profile?.height ?? "missing"}, ethnicity=${status(profile?.ethnicity)}, hobbies_count=${hobbies.length}, partner_preferences=${status(profile?.partnerPreferences)}`,
+    `Extended profile: height=${profile?.height ?? "missing"}, hobbies_count=${hobbies.length}, partner_preferences=${status(profile?.partnerPreferences)}`,
     `Dating city: ${profile?.homeCityKey ? `saved:${profile.homeCityKey}` : "missing"}`,
     `AI memory export: ${effectiveAiMemoryPreference(user?.aiMemoryExportPreference)}`,
     `Context dump: ${contextDumpSaved ? "saved" : aiMemoryExportDeclined ? "skipped_by_user" : "missing"}`,
@@ -991,7 +984,7 @@ function buildCurrentSavedStateSnapshot(
     `Missing next: ${missing.length ? missing.join(", ") : "none"}`,
     aiMemoryExportDeclined
       ? "The user declined AI memory export. Never call request_context_dump or save_context_dump; proceed directly to photos once profile fields are complete."
-      : "Ethnicity is optional, but if it is missing you must ask it once before request_context_dump unless the chat already shows you asked or the user skipped it.",
+      : "",
     aiMemoryExportDeclined
       ? "If Photos are missing, call request_photos. Finalize after profile and photos are complete."
       : "If Missing next is context_dump, call request_context_dump now instead of asking profile questions.",
@@ -1000,7 +993,9 @@ function buildCurrentSavedStateSnapshot(
       : "If Context dump is saved and Photos are missing, call request_photos. Finalize only after profile, context dump, and photos are complete.",
   ];
 
-  return { role: "system", content: lines.join("\n") };
+  // `filter(Boolean)` so a branch that resolves to no instruction contributes
+  // nothing instead of a blank line in the middle of the state snapshot.
+  return { role: "system", content: lines.filter(Boolean).join("\n") };
 }
 
 function withCurrentSavedStateSnapshot(
@@ -1257,14 +1252,6 @@ function extractHeightFromHistory(history: ChatMessage[]): number | null {
   return null;
 }
 
-function hasEthnicityPromptAlreadyHappened(history: ChatMessage[]): boolean {
-  const promptRe =
-    /(ethnicity|nationality|background|origin|национальн|национальность|этнич|этнос|происхождени|по происхождению|корни|етніч|національн|pochodzen|narodowo|herkunft|ethnisch)/i;
-  return history.some(
-    (msg) => msg.role === "assistant" && typeof msg.content === "string" && promptRe.test(msg.content),
-  );
-}
-
 function userTextCorpus(history: ChatMessage[]): string {
   return history
     .filter((message) => message.role === "user" && typeof message.content === "string")
@@ -1331,35 +1318,6 @@ function hasPartnerPreferenceEvidence(value: string, history: ChatMessage[]): bo
   return words.some((word) => corpus.includes(word));
 }
 
-function shouldBlockContextDumpForEthnicity(
-  user: PersistedOnboardingState | null | undefined,
-  history: ChatMessage[],
-): boolean {
-  return !user?.profile?.ethnicity && !hasEthnicityPromptAlreadyHappened(history);
-}
-
-function normalizeOptionalEthnicity(value: string | null | undefined): string | null {
-  if (value === undefined || value === null) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const normalized = trimmed.toLowerCase().replace(/[.\s_-]+/g, " ");
-  const placeholders = new Set([
-    "не указано",
-    "не указан",
-    "неизвестно",
-    "нет данных",
-    "n/a",
-    "na",
-    "not specified",
-    "not provided",
-    "unknown",
-    "unspecified",
-    "none",
-    "null",
-  ]);
-  return placeholders.has(normalized) ? null : trimmed;
-}
-
 function ungroundedProfileFields(
   args: Parameters<typeof execSaveProfileData>[1],
   user: PersistedOnboardingState | null | undefined,
@@ -1412,9 +1370,6 @@ function missingBeforePhoto(
     missing.push("partner_preferences");
   }
   if (!profile?.homeCityKey) missing.push("home_city");
-  if (!profile?.ethnicity && !hasEthnicityPromptAlreadyHappened(history)) {
-    missing.push("ethnicity_question");
-  }
   if (!isAiMemoryExportDeclined(user?.aiMemoryExportPreference) && !contextDumpSaved) {
     missing.push("context_dump");
   }
@@ -1428,7 +1383,6 @@ async function execSaveProfileData(
     age?: number;
     gender?: "male" | "female";
     preference?: "men" | "women" | "both";
-    ethnicity?: string;
     height?: number;
     hobbies?: string[];
     partner_preferences?: string;
@@ -1447,7 +1401,6 @@ async function execSaveProfileData(
       aiMemoryExportPreference: true,
       profile: {
         select: {
-          ethnicity: true,
           height: true,
           hobbies: true,
           partnerPreferences: true,
@@ -1464,10 +1417,6 @@ async function execSaveProfileData(
   const gender = args.gender ?? (user.gender as "male" | "female" | null);
   const preference =
     args.preference ?? (user.preference as "men" | "women" | "both" | null);
-  const ethnicity =
-    args.ethnicity === undefined
-      ? normalizeOptionalEthnicity(user.profile?.ethnicity ?? null)
-      : normalizeOptionalEthnicity(args.ethnicity);
   const height = args.height ?? user.profile?.height ?? null;
   const hobbies =
     args.hobbies === undefined ? (user.profile?.hobbies ?? []) : args.hobbies;
@@ -1542,13 +1491,11 @@ async function execSaveProfileData(
     where: { userId: user.id },
     create: {
       userId: user.id,
-      ethnicity,
       height,
       hobbies,
       partnerPreferences: partnerPreferencesText,
     },
     update: {
-      ethnicity,
       height,
       hobbies,
       partnerPreferences: partnerPreferencesText,
@@ -1563,7 +1510,6 @@ async function execSaveProfileData(
       age,
       gender,
       preference,
-      ethnicity: Boolean(ethnicity),
       height,
       hobbies_count: hobbies.length,
       partner_preferences: true,
@@ -1598,7 +1544,6 @@ async function execFinalizeOnboarding(
       aiMemoryExportPreference: true,
       profile: {
         select: {
-          ethnicity: true,
           height: true,
           hobbies: true,
           partnerPreferences: true,
@@ -1677,7 +1622,6 @@ async function execFinalizeOnboarding(
         gender: user.gender!,
         preference: user.preference!,
         height: user.profile.height!,
-        ethnicity: user.profile.ethnicity ?? null,
         hobbies: user.profile.hobbies ?? [],
         partnerPreferences: user.profile.partnerPreferences!,
         homeCityKey: user.profile.homeCityKey!,
@@ -1964,7 +1908,6 @@ export async function runAgentTurn(
       },
       profile: {
         select: {
-          ethnicity: true,
           height: true,
           hobbies: true,
           partnerPreferences: true,
@@ -2183,14 +2126,6 @@ export async function runAgentTurn(
                   "The user declined AI memory export. Do not show the Magic Prompt. " +
                   "Continue with the remaining profile fields, then call request_photos.",
               });
-            } else if (shouldBlockContextDumpForEthnicity(user, history)) {
-              result = JSON.stringify({
-                success: false,
-                error:
-                  "Before request_context_dump, ask the user ONE short optional ethnicity/nationality question in their language. " +
-                  "Example in Russian: \"Как ты описываешь своё происхождение или национальность? Можно пропустить\" " +
-                  "Do not ask any other profile question in that message. If they skip, ignore it, or answer another field, you may proceed next time.",
-              });
             } else if (typeRadarGatePending(user)) {
               // Visual type picker must come first. The server sends it (web_app
               // button + Skip) and stops; the Magic Prompt follows on resume.
@@ -2295,8 +2230,7 @@ export async function runAgentTurn(
                     aiMemoryExportPreference: true,
                     profile: {
                       select: {
-                        ethnicity: true,
-                        height: true,
+                                      height: true,
                         hobbies: true,
                         partnerPreferences: true,
                         photos: true,
@@ -2316,7 +2250,7 @@ export async function runAgentTurn(
                 success: false,
                 error:
                   `Cannot start photo upload yet — missing or unconfirmed onboarding fields: ${missingForPhotos.join(", ")}. ` +
-                  "Ask only for these fields now. If ethnicity_question is listed, ask one short optional ethnicity/nationality question and allow the user to skip.",
+                  "Ask only for these fields now.",
               });
               break;
             }

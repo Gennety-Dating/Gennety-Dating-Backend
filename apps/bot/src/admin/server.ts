@@ -547,7 +547,6 @@ const USER_DETAIL_SELECT = {
   profile: {
     select: {
       ...USER_SELECT.profile.select,
-      ethnicity: true,
       profileMedia: true,
       eloSeedDetails: true,
       matchRadius: true,

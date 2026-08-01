@@ -70,7 +70,6 @@ vi.mock("./founder-notify.js", () => ({
         height: true,
         hobbies: true,
         partnerPreferences: true,
-        ethnicity: true,
         photos: true,
         eloSeedDetails: true,
       },
@@ -160,7 +159,6 @@ describe("deleteUserAccount", () => {
     expect(mocks.notifyFounder).toHaveBeenCalledWith(
       "deleted",
       expect.objectContaining({ id: USER_ID }),
-      [Buffer.from("img"), Buffer.from("img")],
     );
     expect(result).toEqual({
       deleted: true,
@@ -170,29 +168,24 @@ describe("deleteUserAccount", () => {
     });
   });
 
-  it("downloads the founder-DM photo bytes before storage cleanup deletes them", async () => {
-    await deleteUserAccount(USER_ID, null);
-
-    // profile.photos = [`${USER_ID}/photo.jpg`, "telegram-file-id"] → both
-    // downloaded, and strictly BEFORE any Supabase object is removed.
-    expect(mocks.downloadProfileImage).toHaveBeenCalledTimes(2);
-    const lastDownloadOrder =
-      mocks.downloadProfileImage.mock.invocationCallOrder[1]!;
-    const firstDeleteOrder =
-      mocks.deleteStorageObject.mock.invocationCallOrder[0]!;
-    expect(lastDownloadOrder).toBeLessThan(firstDeleteOrder);
-  });
-
-  it("skips the photo download entirely when the founder feed is off", async () => {
-    testEnv.FOUNDER_NOTIFY_ENABLED = false;
+  // A deletion is an Art. 17 erasure request, so the founder feed gets an
+  // anonymous lifecycle event and no photo bytes are read at all — there is
+  // nothing left for the pre-cleanup download step to exist for.
+  it("never reads profile photo bytes for the founder feed", async () => {
     await deleteUserAccount(USER_ID, null);
 
     expect(mocks.downloadProfileImage).not.toHaveBeenCalled();
     expect(mocks.notifyFounder).toHaveBeenCalledWith(
       "deleted",
       expect.objectContaining({ id: USER_ID }),
-      [],
     );
+  });
+
+  it("reads no photo bytes when the founder feed is off either", async () => {
+    testEnv.FOUNDER_NOTIFY_ENABLED = false;
+    await deleteUserAccount(USER_ID, null);
+
+    expect(mocks.downloadProfileImage).not.toHaveBeenCalled();
   });
 
   it("fails closed and preserves the DB row when storage cannot be erased", async () => {

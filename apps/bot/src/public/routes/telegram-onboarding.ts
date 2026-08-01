@@ -10,6 +10,7 @@ import {
 import {
   ALLOWED_EMAIL_DOMAINS,
   isUniversityEmail,
+  LEGAL_DOCS_VERSION,
   SUPPORTED_LANGUAGES,
   t,
 } from "@gennety/shared";
@@ -123,6 +124,8 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
         consentedAt: new Date(),
         termsAccepted: true,
         termsAcceptedAt: new Date(),
+        // Art. 7(1): record WHAT was accepted, not just when.
+        policyVersion: LEGAL_DOCS_VERSION,
         researchOptIn: Boolean(body.researchOptIn),
         ...(current.onboardingStep === "consent" ? { onboardingStep: "language" as const } : {}),
         ...onboardingActivityPatch(),

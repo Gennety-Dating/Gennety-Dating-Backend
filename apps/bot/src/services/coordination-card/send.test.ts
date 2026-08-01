@@ -53,6 +53,34 @@ describe("sendCoordCard", () => {
     expect(api.sendMessage).not.toHaveBeenCalled();
   });
 
+  // `offer` / `ask` / `shared` render the other person's face. A partner photo
+  // with a clear face must never be forwardable out of the chat — the same rule
+  // the match card and the private date card already enforce at their send site
+  // (PRODUCT_SPEC §3.7a, legal/privacy-policy.md §10). Asserted for EVERY
+  // variant, so a face-carrying card added later cannot ship unprotected.
+  it.each(["offer", "ask", "shared", "declined", "proxy"] as const)(
+    "protects the %s card from forwarding and saving",
+    async (variant) => {
+      const api = makeApi();
+
+      await sendCoordCard(api, 1001n, { ...CARD, variant }, "copy");
+
+      const [, , extra] = api.sendPhoto.mock.calls[0]!;
+      expect(extra).toMatchObject({ protect_content: true });
+    },
+  );
+
+  it("keeps protect_content when the flow also attaches a keyboard", async () => {
+    const api = makeApi();
+    const keyboard = { inline_keyboard: [] } as never;
+
+    await sendCoordCard(api, 1001n, CARD, "copy", { keyboard });
+
+    // The spread of `extra` must not be able to drop the flag.
+    const [, , extra] = api.sendPhoto.mock.calls[0]!;
+    expect(extra).toMatchObject({ protect_content: true, reply_markup: keyboard });
+  });
+
   // Every branch below must still deliver the copy: this DM lands ~1h before
   // the date and is the only way the pair can find each other.
   it("falls back to text when the render returns null", async () => {

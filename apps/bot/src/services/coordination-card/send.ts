@@ -63,6 +63,14 @@ export async function sendCoordCard(
   try {
     await api.sendPhoto(chatId, new InputFile(png, `coord-${card.variant}.png`), {
       caption: text,
+      // The `offer` / `ask` / `shared` cards render the OTHER person's face, so
+      // this send is bound by the same rule as the match card and the private
+      // date card: a partner photo with a clear face never leaves the chat
+      // forwardable (PRODUCT_SPEC §3.7a, `legal/privacy-policy.md` §10). Set
+      // unconditionally rather than per-variant — `declined` / `proxy` render an
+      // emblem instead of a face, but they still name the partner, and a flag
+      // that is always on cannot be forgotten when a sixth variant is added.
+      protect_content: true,
       ...(extra ?? {}),
     });
   } catch (err) {

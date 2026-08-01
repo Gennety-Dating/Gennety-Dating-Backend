@@ -32,7 +32,6 @@ export const ONBOARDING_FIELDS = [
   "height",
   "hobbies",
   "partner_preferences",
-  "ethnicity",
   "friday_vibe",
   "vibe_focus",
   "ai_memory",
@@ -49,7 +48,6 @@ export const ONBOARDING_QUESTIONS = [
   "height",
   "hobbies",
   "partner_preferences",
-  "ethnicity",
   "friday_vibe",
   "vibe_focus",
   "ai_memory",
@@ -148,7 +146,6 @@ interface CollectorUser {
   aiMemoryExportPreference: AiMemoryExportPreference;
   messageHistory: Prisma.JsonValue[];
   profile: {
-    ethnicity: string | null;
     height: number | null;
     hobbies: string[];
     partnerPreferences: string | null;
@@ -188,7 +185,6 @@ const USER_SELECT = {
   messageHistory: true,
   profile: {
     select: {
-      ethnicity: true,
       height: true,
       hobbies: true,
       partnerPreferences: true,
@@ -367,7 +363,6 @@ function progressFromUser(user: CollectorUser): MutableProgress {
     completed.add("height");
   }
   if (user.profile?.partnerPreferences) completed.add("partner_preferences");
-  if (user.profile?.ethnicity) completed.add("ethnicity");
   if (user.profile?.fridayVibeText) completed.add("friday_vibe");
   if (user.profile?.vibeFocusText) completed.add("vibe_focus");
   if ((user.profile?.hobbies.length ?? 0) > 0) completed.add("hobbies");
@@ -401,12 +396,6 @@ export function nextOnboardingQuestion(
   if (!progress.completed.has("partner_preferences")) {
     return "partner_preferences";
   }
-  if (
-    !progress.completed.has("ethnicity") &&
-    !progress.skipped.has("ethnicity")
-  ) {
-    return "ethnicity";
-  }
   // Vibe questions sit right before the Magic Prompt step so every user — even
   // those who decline AI-memory export — supplies the signal (PRODUCT_SPEC §1.3).
   if (!progress.completed.has("friday_vibe")) return "friday_vibe";
@@ -433,13 +422,6 @@ function inferQuestionFromAssistant(text: string): OnboardingQuestion | null {
     /(hobb|interests|увлека|захоп|інтерес|zainteres|freizeit)/iu.test(lower)
   ) {
     return "hobbies";
-  }
-  if (
-    /(nationality|ethnic|background|националь|національ|етніч|narodowo|pochodzen|herkunft)/iu.test(
-      lower,
-    )
-  ) {
-    return "ethnicity";
   }
   if (
     /(friday night|пятниц|п'ятниц|freitagabend|piątkowy wieczór|piątkowy wieczor)/iu.test(
@@ -741,14 +723,6 @@ export function deterministicCandidates(
   ) {
     candidates.push({ field: "vibe_focus", evidence: trimmed, value: trimmed });
   }
-  if (
-    question === "ethnicity" &&
-    !containsOtherExplicitField &&
-    !SKIP_RE.test(trimmed) &&
-    !freeTextLooksLikeQuestion
-  ) {
-    candidates.push({ field: "ethnicity", evidence: trimmed, value: trimmed });
-  }
   return candidates;
 }
 
@@ -943,7 +917,6 @@ export function validateFactCandidate(
       return { candidate: { ...candidate, value } };
     }
     case "partner_preferences":
-    case "ethnicity":
     case "friday_vibe":
     case "vibe_focus": {
       if (typeof candidate.value !== "string") return { reason: "invalid_type" };
@@ -1013,10 +986,6 @@ function updatesForCandidates(
         profileCreate.partnerPreferences = candidate.value as string;
         profileUpdate.partnerPreferences = candidate.value as string;
         break;
-      case "ethnicity":
-        profileCreate.ethnicity = candidate.value as string;
-        profileUpdate.ethnicity = candidate.value as string;
-        break;
       case "friday_vibe":
         profileCreate.fridayVibeText = candidate.value as string;
         profileUpdate.fridayVibeText = candidate.value as string;
@@ -1070,13 +1039,6 @@ export function backfillCandidates(history: Prisma.JsonValue[]): {
     if (message.role !== "user" || typeof message.content !== "string") continue;
     const text = message.content.trim();
     if (!text || text.startsWith("[")) continue;
-
-    if (inferredQuestion === "ethnicity" && SKIP_RE.test(text)) {
-      skipped.add("ethnicity");
-      asked.add("ethnicity");
-      inferredQuestion = "ai_memory";
-      continue;
-    }
 
     for (const candidate of deterministicCandidates(text, inferredQuestion, completed)) {
       const validated = validateFactCandidate(candidate, text);
@@ -1237,10 +1199,6 @@ export async function collectOnboardingInput(
       return refreshCollectorSnapshot(user.id, [], rejected, true);
     }
 
-    if (current === "ethnicity") {
-      progress.asked.add("ethnicity");
-      if (SKIP_RE.test(input.text.trim())) progress.skipped.add("ethnicity");
-    }
     for (const candidate of accepted) {
       progress.completed.add(candidate.field);
       progress.skipped.delete(candidate.field);
@@ -1311,8 +1269,8 @@ export async function collectOnboardingInput(
           platform: platformFromTelegramId(telegramId),
         });
       }
-      // Nothing was saved and the question did not advance (an ethnicity skip
-      // advances `next`, so it is not flagged): the answer went unparsed.
+      // Nothing was saved and the question did not advance: the answer went
+      // unparsed.
       const unparsedAnswer = acceptedFields.length === 0 && next === current;
       return refreshCollectorSnapshot(
         user.id,
@@ -1404,7 +1362,6 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     height: "How tall are you? You can answer in centimeters or feet and inches.",
     hobbies: "What do you enjoy doing? One hobby is enough, and “no hobbies” is a valid answer.",
     partner_preferences: "What matters most to you in a partner? One short sentence is enough.",
-    ethnicity: "Optional: what is your nationality or ethnic background? You can skip this.",
     friday_vibe: "Describe your ideal Friday night — money and logistics no object. Be honest — not what sounds “right”.",
     vibe_focus: "And what matters most in that night — the experience itself, or who's with you?",
     ai_memory: "Would you like to import context from an AI chat? Answer yes or no.",
@@ -1419,7 +1376,6 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     height: "Какой у тебя рост? Можно ответить в сантиметрах.",
     hobbies: "Чем тебе нравится заниматься? Достаточно одного увлечения, а «нет хобби» тоже считается ответом.",
     partner_preferences: "Что для тебя важнее всего в партнёре? Достаточно одного короткого предложения.",
-    ethnicity: "Как ты описываешь своё происхождение или национальность? Можно пропустить",
     friday_vibe: "Опиши идеальный вечер пятницы — без ограничений по деньгам и логистике. Только честно — а не так, как «правильно» звучало бы.",
     vibe_focus: "А что в этом вечере главное — сам процесс или кто рядом?",
     ai_memory: "Хочешь импортировать контекст из AI-чата? Ответь да или нет.",
@@ -1434,7 +1390,6 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     height: "Який у тебе зріст? Можна відповісти в сантиметрах.",
     hobbies: "Чим тобі подобається займатися? Достатньо одного захоплення, а «немає хобі» теж є відповіддю.",
     partner_preferences: "Що для тебе найважливіше в партнері? Достатньо одного короткого речення.",
-    ethnicity: "Необов’язково: яка в тебе національність або етнічне походження? Можна пропустити.",
     friday_vibe: "Опиши ідеальний вечір п’ятниці — без обмежень щодо грошей і логістики. Тільки чесно — а не так, як «правильно» звучало б.",
     vibe_focus: "А що в цьому вечорі головне — сам процес чи хто поруч?",
     ai_memory: "Хочеш імпортувати контекст з AI-чату? Відповідай так або ні.",
@@ -1449,7 +1404,6 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     height: "Wie groß bist du? Du kannst in Zentimetern antworten.",
     hobbies: "Was machst du gern? Ein Hobby reicht, und „keine Hobbys“ ist ebenfalls eine gültige Antwort.",
     partner_preferences: "Was ist dir bei einem Partner am wichtigsten? Ein kurzer Satz reicht.",
-    ethnicity: "Optional: Welche Nationalität oder ethnische Herkunft hast du? Du kannst überspringen.",
     friday_vibe: "Beschreib deinen idealen Freitagabend — ohne Geld- oder Logistikgrenzen. Sei ehrlich — nicht das, was „richtig“ klingt.",
     vibe_focus: "Und was ist an diesem Abend am wichtigsten — das Erlebnis selbst oder wer dabei ist?",
     ai_memory: "Möchtest du Kontext aus einem AI-Chat importieren? Antworte mit Ja oder Nein.",
@@ -1464,7 +1418,6 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     height: "Jaki masz wzrost? Możesz odpowiedzieć w centymetrach.",
     hobbies: "Co lubisz robić? Jedno hobby wystarczy, a „nie mam hobby” też jest poprawną odpowiedzią.",
     partner_preferences: "Co jest dla Ciebie najważniejsze u partnera? Wystarczy jedno krótkie zdanie.",
-    ethnicity: "Opcjonalnie: jaka jest Twoja narodowość lub pochodzenie etniczne? Możesz pominąć.",
     friday_vibe: "Opisz swój idealny piątkowy wieczór — bez ograniczeń finansowych i logistycznych. Szczerze — a nie tak, jak „wypada”.",
     vibe_focus: "A co w tym wieczorze jest najważniejsze — samo przeżycie czy to, kto jest obok?",
     ai_memory: "Chcesz zaimportować kontekst z czatu AI? Odpowiedz tak lub nie.",
@@ -1566,7 +1519,6 @@ const NOT_UNDERSTOOD_HINTS: Record<
     height: "For example: 180 cm or 5'11\".",
     hobbies: "Name one or two things you enjoy — “no hobbies” is fine too.",
     partner_preferences: "One short sentence about what matters to you is enough.",
-    ethnicity: "A short answer is enough — or reply “skip”.",
     friday_vibe: "Tell me in a sentence or two how you'd actually spend it.",
     vibe_focus: "Is it more about the experience itself, or who you're with?",
     ai_memory: "Just a yes or no works.",
@@ -1580,7 +1532,6 @@ const NOT_UNDERSTOOD_HINTS: Record<
     height: "Например: 180 см.",
     hobbies: "Назови одно-два увлечения — «нет хобби» тоже подойдёт.",
     partner_preferences: "Достаточно одного короткого предложения о том, что для тебя важно.",
-    ethnicity: "Достаточно короткого ответа — или напиши «пропустить».",
     friday_vibe: "Опиши в паре предложений, как бы ты его реально провёл.",
     vibe_focus: "Тебе важнее сам процесс или компания рядом?",
     ai_memory: "Ответь, пожалуйста, «да» или «нет».",
@@ -1594,7 +1545,6 @@ const NOT_UNDERSTOOD_HINTS: Record<
     height: "Наприклад: 180 см.",
     hobbies: "Назви одне-два захоплення — «немає хобі» теж підійде.",
     partner_preferences: "Достатньо одного короткого речення про те, що для тебе важливо.",
-    ethnicity: "Достатньо короткої відповіді — або напиши «пропустити».",
     friday_vibe: "Опиши в кількох реченнях, як би ти його реально провів.",
     vibe_focus: "Тобі важливіший сам процес чи компанія поруч?",
     ai_memory: "Відповідай, будь ласка, «так» або «ні».",
@@ -1608,7 +1558,6 @@ const NOT_UNDERSTOOD_HINTS: Record<
     height: "Zum Beispiel: 180 cm.",
     hobbies: "Nenn ein oder zwei Dinge, die du gern machst — „keine Hobbys“ geht auch.",
     partner_preferences: "Ein kurzer Satz darüber, was dir wichtig ist, reicht.",
-    ethnicity: "Eine kurze Antwort reicht — oder schreib „überspringen“.",
     friday_vibe: "Beschreib in ein, zwei Sätzen, wie du ihn wirklich verbringen würdest.",
     vibe_focus: "Geht es dir mehr um das Erlebnis oder um die Leute dabei?",
     ai_memory: "Ein Ja oder Nein reicht.",
@@ -1622,7 +1571,6 @@ const NOT_UNDERSTOOD_HINTS: Record<
     height: "Na przykład: 180 cm.",
     hobbies: "Wymień jedno lub dwa hobby — „nie mam hobby” też jest OK.",
     partner_preferences: "Wystarczy jedno krótkie zdanie o tym, co jest dla Ciebie ważne.",
-    ethnicity: "Wystarczy krótka odpowiedź — możesz też napisać „pomiń”.",
     friday_vibe: "Opisz w jednym–dwóch zdaniach, jak naprawdę byś go spędził.",
     vibe_focus: "Chodzi bardziej o samo przeżycie czy o to, z kim jesteś?",
     ai_memory: "Odpowiedz proszę „tak” lub „nie”.",

@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { prisma } from "@gennety/db";
 import {
+  LEGAL_DOCS_VERSION,
   MAX_DUMP_BUFFER_CHARS,
   SUPPORTED_LANGUAGES,
   type Language,
@@ -156,6 +157,8 @@ onboardingRouter.post("/consent", async (req: Request, res: Response): Promise<v
     data: {
       termsAccepted: true,
       termsAcceptedAt: new Date(),
+      // Art. 7(1): record WHAT was accepted, not just when.
+      policyVersion: LEGAL_DOCS_VERSION,
       researchOptIn: researchOptIn ?? false,
       ...(language !== undefined ? { language: language as Language } : {}),
       ...(nextStep !== current.onboardingStep ? { onboardingStep: nextStep } : {}),

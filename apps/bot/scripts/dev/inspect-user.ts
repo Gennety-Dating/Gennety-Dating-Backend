@@ -68,7 +68,6 @@ if (!user.profile) {
   console.log(`  eloScore=${p.eloScore}`);
   console.log(`  eloMatchesPlayed=${p.eloMatchesPlayed}`);
   console.log(`  height=${p.height ?? "<null>"}`);
-  console.log(`  ethnicity=${p.ethnicity ?? "<null>"}`);
   console.log(`  hobbies=[${p.hobbies.join(", ")}]`);
   console.log(`  partnerPreferences="${(p.partnerPreferences ?? "").slice(0, 80)}"`);
   console.log(`  psychologicalSummary.length=${(p.psychologicalSummary ?? "").length}`);

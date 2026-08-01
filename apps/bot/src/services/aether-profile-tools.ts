@@ -100,9 +100,6 @@ export async function applyAetherProfilePatch(
   if (args.preference === "men" || args.preference === "women" || args.preference === "both") {
     userPatch.preference = args.preference;
   }
-  if (typeof args.ethnicity === "string" && args.ethnicity.trim()) {
-    profilePatch.ethnicity = args.ethnicity.trim().slice(0, 64);
-  }
   if (typeof args.height === "number" && Number.isInteger(args.height)) {
     if (args.height < 120 || args.height > 230) {
       return { ok: false, detail: "Height out of range" };

@@ -4,9 +4,17 @@ Source-of-truth **drafts** for Gennety's user-facing legal documents.
 
 | File | Publish to | Live version to publish |
 |---|---|---|
-| [privacy-policy.md](privacy-policy.md) | `https://gennety.com/privacy` | v3.0 — "Last Updated: 23 July 2026" |
-| [terms-of-service.md](terms-of-service.md) | `https://gennety.com/terms` | v2.0 — "Last Updated: 23 July 2026" |
+| [privacy-policy.md](privacy-policy.md) | `https://gennety.com/privacy` | v4.0 — "Last Updated: 1 August 2026" |
+| [terms-of-service.md](terms-of-service.md) | `https://gennety.com/terms` | v3.0 — "Last Updated: 1 August 2026" |
 | [cookie-policy.md](cookie-policy.md) | `https://gennety.com/cookies` | v1.0 — "Last Updated: 23 July 2026" |
+
+**The Terms and the Privacy Policy share one version stamp**, because the
+consent screen accepts them with a single checkbox. That stamp lives in code as
+`LEGAL_DOCS_VERSION` (`packages/shared/src/constants.ts`, currently
+`"2026-08-01"`) and is written to `User.policyVersion` at the moment of the
+click, so we can demonstrate WHICH text any given user agreed to (GDPR Art.
+7(1)). **Bump the constant in the same commit as any material edit to either
+document.**
 
 These documents are published on the **marketing website** (`gennety.com`,
 hosted separately in `~/Desktop/Gennety dating website`, **not** in this backend
@@ -24,79 +32,71 @@ especially the biometric-data (GDPR Art. 9), dietary/accessibility special-
 category (Art. 9), automated-decision (Art. 22), payment/refund/subscription,
 and Apple App Store sections.
 
-## What changed in this rewrite (2026-07-23)
+## What changed in this rewrite (2026-08-01)
 
-The previous drafts (Privacy 23 June, live site 18 July; Terms 23 June) predated
-several shipped features. This rewrite brings them current with production:
+Driven by a full audit of the running code. Every item below is a change to the
+PRODUCT that the documents now reflect — not a wording pass:
 
-- **Dual-track sign-up** (university email **or** phone; Twilio SMS + Telegram
-  one-tap/Gateway) — previously the docs said email was mandatory for everyone.
-- **Mandatory identity verification** — the old text said verification "may be
-  skipped". It cannot; that section was rewritten.
-- **Native iOS app** distributed via the App Store — added Apple as a processor,
-  App Store payments/subscriptions, APNs/Live Activities, and the required
-  **Apple EULA "Additional Terms"** (ToS §18) that App Review expects.
-- **Payments** — replaced the "planned: Fondy" text with the live rails
-  (**Telegram Stars** + **Apple In-App Purchase**), Ticket bundles, paid venue
-  changes, and the **Gennety Premium** recurring subscription (with the
-  cancellation/refund disclosures a subscription needs).
-- **Venue intent** — added dietary / alcohol-free / step-free requirements as
-  **special-category data** processed on explicit consent.
-- **Internal operations / founder feed** — disclosed the new-profile, weekly-
-  matches, date-locked, and anonymous freeze/delete notifications.
-- **Onboarding funnel telemetry, usage metering, appearance tagging / type
-  radar, map-tile proxy, session/push tokens** — newly disclosed.
-- **Website onboarding removed (2026-07-19)** — the old "verify email on the
-  website" bullet was corrected: the site now only records cookie consent.
-- **New Cookie Policy** — the live site already runs a cookie banner + append-
-  only consent record, but there was no dedicated policy. Added one, and the
-  Privacy Policy now points to it instead of carrying a stub "Cookies" section.
+- **Nationality / ethnic origin is no longer collected.** The optional
+  onboarding question was removed, the stored values erased, and the field
+  dropped from the profile, the matching embedding, the operations feed and the
+  admin analytics. It was Article 9 data feeding an automated matching decision
+  with no Article 9 basis behind it. Privacy §4.1 and §6 now say so explicitly.
+- **Identity verification: Persona → Amazon Rekognition Face Liveness.** The
+  provider changed on 2026-07-26 but the documents still named Persona and
+  still described a provider webhook that no longer exists. Privacy §5.3, §10,
+  §12.4, §17 and ToS §4 are corrected.
+- **The personal AI export ("Magic Prompt") is retired** (founder decision).
+  Privacy §9 no longer describes it; §3, §4.1, §6, §12.1 and §12.4 no longer
+  reference it.
+- **Deleting your account no longer sends your profile, phone, email and photos
+  to the internal operations feed** — it sends an anonymous lifecycle event.
+  Freezing keeps the profile card but drops the phone number. Privacy §12.2.
+- **Newly disclosed:** the 30-day chat timeline, the in-memory promo-code
+  attribution fingerprint, and Open-Meteo as a processor. All three were live
+  (or about to be) and undisclosed.
+- **Corrected claims:** the research opt-in row in §7 no longer implies we
+  already act on it; §12.3 now describes the real single-operator access model
+  instead of implying a staffed team with per-person access control; §7 splits
+  the visual-type feature into the part you consent to (your picks) and the
+  part that runs for everyone (tagging your own photos).
+- **Biometric consent is now a real consent step**, not an inference from
+  tapping "Verify". Privacy §6 and §10, ToS §4.
 
-## Discrepancies found while auditing (2026-07-23)
+## Blockers before these can be published as-is
 
-The task asked to check whether the hosted pages, the links the app points to,
-and the website match. Findings:
+Both are marked inline in Privacy §2 and must be resolved — they are the only
+placeholders left in the text:
 
-1. **Privacy Policy version skew.** The backend draft was "23 June 2026" but the
-   **live website** (`src/app/privacy/page.tsx`) was already a newer "18 July
-   2026" revision (it had a reworked cookies section mentioning the Spotify
-   embed and a shortened deletion paragraph). The two were out of sync. This
-   rewrite supersedes **both**; publish v3.0 to the site.
-2. **Terms links exist — the old README "code gap" is FIXED.** The old README
-   warned the consent screens linked only the Privacy Policy. No longer true:
-   both `apps/bot/src/handlers/onboarding/consent.ts` and
-   `apps/webapp/src/onboarding.tsx` now define **both** `PRIVACY_POLICY_URL`
-   (`/privacy`) and `TERMS_OF_SERVICE_URL` (`/terms`) and surface both.
-3. **iOS consent screen has no policy links.** `App/Features/Onboarding/
-   ConsentView.swift` shows consent copy but links to **neither** `/privacy`
-   nor `/terms`. App Review generally requires reachable Privacy Policy + EULA
-   links in the app. **Action:** add both links to the iOS consent screen (and
-   the App Store Connect metadata). Tracked below.
-4. **No `/cookies` route yet.** The website has a cookie banner and a consent
-   API, but no standalone cookie policy page; the Privacy Policy footnoted
-   cookies instead. **Action:** create `src/app/cookies/page.tsx` from
-   `cookie-policy.md` and link it from the footer + the cookie banner.
-5. **`POLICY_VERSION` on the website is stale.** `src/constants/consent.ts`
-   defaults to `2026-04-01`. When the new Cookie Policy is published, bump
-   `POLICY_VERSION` / `NEXT_PUBLIC_POLICY_VERSION` (e.g. `2026-07-23`) so the
-   banner re-prompts under the new version.
+1. **Postal address of the controller.** Art. 13(1)(a) requires the controller's
+   identity and contact details. There is no legal entity (confirmed
+   2026-08-01: the operator is a natural person), which is lawful, but an
+   address is still required.
+2. **Article 27 EU representative — not appointed.** The Service ships German
+   and Polish, so it targets the EEA, and a non-EU controller in that position
+   must appoint a representative in the Union. Currently disclosed honestly as
+   "not yet appointed"; publishing in that state is a known, recorded gap.
 
-## To confirm before publishing
+## Still open (not blockers for publishing)
 
-- Full legal entity name, registration number, and registered address (drafts
-  currently say "operated by Gleb Gosha, Kyiv, Ukraine").
-- Whether an EU Article 27 representative is appointed.
 - The Apple StoreKit product ids / display prices match what ships (Premium
   price: code default `$9.99`, prod `.env` still shows `$10` — reconcile).
 - Governing law / jurisdiction wording (drafts use Ukraine / Kyiv — confirmed).
-- The current sub-processor list (Privacy §12.4) — keep it in sync as providers
-  change (e.g. FCM/Expo were removed; APNs direct + Twilio + CARTO were added).
+- The sub-processor list (Privacy §12.4) — keep it in sync as providers change.
+- **No DPIA (Art. 35) and no RoPA (Art. 30) exist yet.** Both are mandatory for
+  this processing (biometrics + large-scale profiling + special categories) and
+  are the next deliverables after these documents.
+- **No self-service data export** for Art. 15 / Art. 20 requests; they would be
+  fulfilled by hand today.
 
 ## Follow-up code tasks (separate from these drafts)
 
+- **Bot:** build the dedicated biometric-consent screen the documents now
+  promise (Privacy §6/§10, ToS §4), and record the consent with its
+  `LEGAL_DOCS_VERSION`.
 - **iOS:** add Privacy Policy + Terms links to `ConsentView.swift` and the App
-  Store Connect listing (finding #3).
-- **Website:** add `/cookies` page + footer/banner link; bump `POLICY_VERSION`
-  (findings #4, #5).
+  Store Connect listing.
+- **Website:** add `/cookies` page + footer/banner link; bump `POLICY_VERSION`.
 - **Website:** transcribe the three drafts into the `page.tsx` files (they are
-  hand-written JSX mirrors of this Markdown, not rendered from it).
+  hand-written JSX mirrors of this Markdown, not rendered from it) — v4.0 /
+  v3.0 are NOT live until this is done.

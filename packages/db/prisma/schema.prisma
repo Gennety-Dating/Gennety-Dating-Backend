@@ -134,6 +134,11 @@ model User {
   /// is the legal ToS click and MUST be true to leave the `consent` step.
   termsAccepted              Boolean                  @default(false) @map("terms_accepted")
   termsAcceptedAt            DateTime?                @map("terms_accepted_at")
+  /// Which version of the Terms + Privacy Policy the user actually accepted
+  /// (`LEGAL_DOCS_VERSION` at the moment of the click). GDPR Art. 7(1) requires
+  /// demonstrating WHAT was agreed to; a timestamp alone cannot, once the
+  /// documents change. Null for consents recorded before 2026-08-01.
+  policyVersion              String?                  @map("policy_version")
   /// User opt-in to anonymized research / analytics use of their data.
   /// Defaults to false (opt-in, never opt-out) per GDPR norms.
   researchOptIn              Boolean                  @default(false) @map("research_opt_in")
@@ -688,7 +693,6 @@ model ChatEvent {
 model Profile {
   id                       String                       @id @default(uuid()) @db.Uuid
   userId                   String                       @unique @map("user_id") @db.Uuid
-  ethnicity                String?
   height                   Int?
   hobbies                  String[]                     @default([])
   partnerPreferences       String?                      @map("partner_preferences")

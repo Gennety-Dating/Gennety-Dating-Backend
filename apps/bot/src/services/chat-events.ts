@@ -83,11 +83,40 @@ export function truncateSummary(text: string): string {
 }
 
 /**
+ * A message that is NOTHING BUT a 4–8 digit code, optionally spaced or dashed
+ * ("482913", "482 913", "4829-13").
+ *
+ * Deliberately anchored to the whole message rather than scanning for digit
+ * runs inside prose: a bare code is what an OTP reply looks like and almost
+ * nothing else, while an inline `\d{4}` would also swallow a year, a price or
+ * a house number and make the timeline lie about ordinary conversation.
+ */
+const BARE_CODE_RE = /^\d[\d\s-]{2,10}$/;
+
+/**
+ * Mask a typed verification code before it is stored.
+ *
+ * The timeline began recording from `/start` on 2026-07-31, which put the
+ * onboarding OTP reply in scope. `email_otps` / `phone_otps` deliberately store
+ * that code bcrypt-hashed, so keeping a cleartext copy in a neighbouring table
+ * for 30 days would undo that decision for no product gain — the operator
+ * reading a dialog needs to see THAT a code was entered, never which one.
+ */
+export function redactSensitiveSummary(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (!BARE_CODE_RE.test(flat)) return text;
+  const digits = flat.replace(/\D/g, "");
+  return digits.length >= 4 && digits.length <= 8 ? "(entered a code)" : text;
+}
+
+/**
  * Append one timeline row. Never throws, never blocks the caller's own work —
  * call sites are expected to fire-and-forget it.
  */
 export async function recordChatEvent(input: RecordChatEventInput): Promise<void> {
-  const summary = truncateSummary(input.summary);
+  // Redaction lives here, not at the call sites, so no recorder path (inbound
+  // middleware, outbound transformer, Mini App actions) can forget it.
+  const summary = truncateSummary(redactSensitiveSummary(input.summary));
   if (!summary) return;
   try {
     await prisma.chatEvent.create({
@@ -236,13 +265,15 @@ export function invalidateChatTarget(telegramId: bigint | number): void {
  * dashboard, so the tradeoff was taken deliberately.
  *
  * What that means concretely, since it is not free:
- *   - a typed OTP code lands in `summary` (already expired by the time anyone
- *     reads it, and swept after 30 days by `workers/retention.ts`);
- *   - a pasted AI-memory export lands as a ≤300-char excerpt via
- *     `truncateSummary`, never in full — PRODUCT_SPEC §1.3's "the raw pasted
- *     response is transient" now means "except for that excerpt";
+ *   - a typed OTP code is MASKED before storage by `redactSensitiveSummary`
+ *     (2026-08-01): the operator sees that a code was entered, never which
+ *     one, matching the bcrypt hashing `email_otps` / `phone_otps` already do;
  *   - the phone number itself still never lands here: the contact share is
- *     recorded as the event, not the digits.
+ *     recorded as the event, not the digits;
+ *   - the AI-memory export branch is retired (`AI_MEMORY_EXPORT_ENABLED` is
+ *     off and the feature is not offered), so no pasted export reaches this
+ *     table. If it is ever revived, a ≤300-char excerpt WOULD land here and
+ *     would contradict the transience promise — mask it here first.
  *
  * The rows also reach the menu agent's prompt, where they are already fenced
  * as untrusted data — so onboarding text is subject to the same handling as

@@ -194,7 +194,7 @@ Columns (≈ 35; grouped by purpose):
 | Group | Columns |
 |---|---|
 | Identity | `id`, `telegramId` (unique BigInt — synthetic **negative** id for mobile-only users), `telegramUsername` (public `@handle`, captured opportunistically for `t.me/` coordination links), `email`, `universityDomain`, `firstName`, `surname`, `age`, `gender`, `preference`, `major`, `language`, `platform`. `id` is the only immutable identity: `telegramId` is **re-pointable** by the phone-based login (`services/account-linking.ts`) — a `User.phone` unique collision transfers the sharing Telegram account's id/username onto the row that owns the number, deletes the empty registration row it came from, promotes `platform` `mobile` → `both`, and clears the now-stale `statusMessageId`. Anything caching a `telegramId` must resolve through the DB rather than assume permanence. |
-| Lifecycle | `status` (`UserStatus`), `onboardingStep`, `aiMemoryExportPreference`, `aiMemoryExportPreferenceAt`, `hasConsented`, `consentedAt`, `termsAccepted`, `termsAcceptedAt`, `researchOptIn`, `createdAt`, `updatedAt` |
+| Lifecycle | `status` (`UserStatus`), `onboardingStep`, `aiMemoryExportPreference`, `aiMemoryExportPreferenceAt`, `hasConsented`, `consentedAt`, `termsAccepted`, `termsAcceptedAt`, `policyVersion`, `researchOptIn`, `createdAt`, `updatedAt`. `policyVersion` records WHICH version of the Terms + Privacy Policy was accepted (`LEGAL_DOCS_VERSION` from `packages/shared`), because GDPR Art. 7(1) puts the burden on us to demonstrate what was agreed to and a timestamp alone cannot once the documents change. Null for consents recorded before 2026-08-01. |
 | UI theme | `theme` (`Theme`, default `dark`) — the recipient's chosen app-wide light/dark theme, honored by every Mini App (via the shared `theme.css` tokens) and both server-rendered PNG cards; `themeChosenAt` marks the explicit pick so the onboarding theme step shows once. |
 | Email OTP | `emailOtp`, `emailOtpExpiresAt`, `isEmailVerified` |
 | Registration v2 | `phone` (unique E.164, written from a trusted Telegram `message.contact` or a verified native-app code), `phoneVerifiedAt` (the general-track contact gate), `registrationTrack` (`student`/`general`, null = pre-fork legacy). Matching admits the union of track-valid cohorts: `general + phoneVerifiedAt`, or `student`/legacy + `isEmailVerified` and a stored email. `phone` is also the **cross-rail login key**: both rails resolve an existing account through it — the mobile side in `findOrCreateMobileUserByPhone` (`public/mobile-user.ts`, which also promotes `telegram` → `both`), the Telegram side in `services/account-linking.ts` (PRODUCT_SPEC §1.1). A collision where both the sharing row and the owning row carry real data is the one case neither rail resolves automatically. |
@@ -250,7 +250,7 @@ Columns (≈ 25):
 
 | Group | Columns |
 |---|---|
-| Demographics | `userId` (unique), `ethnicity`, `height`, `hobbies` (`String[]`), `partnerPreferences`, `psychologicalSummary` (redacted signal-only AI-memory summary or onboarding fallback; never the raw pasted export), `negativeConstraints`, `ageRangeMin`, `ageRangeMax` (stated preferred-**partner** age band, user-editable post-onboarding; read by the match engine as the soft `V_agePref` multiplier — see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.2) |
+| Demographics | `userId` (unique), `height`, `hobbies` (`String[]`), `partnerPreferences`, `psychologicalSummary` (redacted signal-only AI-memory summary or onboarding fallback; never the raw pasted export), `negativeConstraints`, `ageRangeMin`, `ageRangeMax` (stated preferred-**partner** age band, user-editable post-onboarding; read by the match engine as the soft `V_agePref` multiplier — see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.2) |
 | Vector | `embedding` (`vector(1536)`), `embeddingDirty`, `embeddingDirtyAt` |
 | Elo | `eloScore` (default 500), seeded from the server-side mean of all per-photo vision scores; `eloMatchesPlayed`; `eloSeededAt`; auditable aggregate/per-photo output in `eloSeedDetails` |
 | Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` legacy self-photo identity-anchor metadata — retained, no longer written by the upload flow since identity moved to liveness-only, 2026-06-23), `uploadedPhotoHashes` (`String[]`, strictly 1:1 with `photos`; perceptual hash or `""` sentinel at every index), `pendingPhotoCandidates` (`Json[]` legacy consensus pool — retained, no longer written), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
@@ -500,10 +500,21 @@ consequences the code depends on:
 
 Every write is fire-and-forget and swallows its errors: the recorder sits in
 the path of every outgoing Telegram call and must never fail a send. Swept
-after 30 days by `workers/retention.ts`, which is also what bounds retention of
-the onboarding-era content this scope now admits (a typed OTP code; a ≤300-char
-excerpt of a pasted AI-memory export — the phone number itself is never stored
-here, only the fact of the contact share).
+after 30 days by `workers/retention.ts`.
+
+**Redaction (`redactSensitiveSummary`, added 2026-08-01).** Widening the scope
+to onboarding put the typed OTP reply in range, and `email_otps` / `phone_otps`
+deliberately store that code bcrypt-hashed — a cleartext twin here for 30 days
+would undo that decision for no product gain. A message that is NOTHING BUT a
+4–8 digit code (optionally spaced or dashed) is therefore replaced with
+`(entered a code)` before the row is written. The rule is anchored to the whole
+message on purpose: an inline `\d{4}` would also swallow a year, a price or a
+house number and make the timeline lie about ordinary conversation. Redaction
+runs inside `recordChatEvent`, not at the call sites, so no recorder path can
+forget it. The phone number is still never stored — the contact share is
+recorded as the event, not the digits. The AI-memory export branch is retired
+(`AI_MEMORY_EXPORT_ENABLED=false` and the feature is not offered), so no pasted
+export reaches this table; if it is ever revived it must be masked here first.
 
 ### `media_validation_rejections`
 
