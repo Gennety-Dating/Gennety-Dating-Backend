@@ -1,5 +1,23 @@
 # Gennety Dating Deploy
 
+**PENDING — Premium hub stops asking for money up front (PRODUCT_SPEC §3.8).**
+Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
+change, no Mini App change** (`apps/webapp` untouched) — the price still comes
+from `PREMIUM_PRICE_USD_DISPLAY`, now rendered only by
+`GET /v1/premium/state` for the Mini App. Copy-only in `packages/shared/src/i18n.ts`
+(all five locales) plus `handlers/menu/premium.ts`: the hub's `Subscribe — $X/mo`
+button becomes a plain "Learn more", the monthly price leaves the chat message,
+and the Telegram → Settings → Subscriptions walkthrough is replaced by "just tell
+me and I'll cancel it after you confirm" — which is what the concierge's
+`offer_cancel_premium` flow actually does. That walkthrough is untouched where it
+is load-bearing (`premiumManageNote`, the honest fallback in `premium-cancel.ts`
+when the Stars API cancel fails), and an App Store subscriber viewing the hub
+gets Apple's steps instead, since the concierge cannot cancel their subscription.
+No post-deploy check beyond the standard checklist. **Rollback:** revert the code
+and restart.
+
+---
+
 **PENDING — purchase notifications + admin revenue ledger.** Not deployed yet.
 **No env change, no flag change, no Mini App change** (`apps/webapp`
 untouched) — but it needs an **additive `db:push` BEFORE the restart**, and it

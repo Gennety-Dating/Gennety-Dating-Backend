@@ -3071,11 +3071,21 @@ user already paid for stays valid regardless of the flag.
   `originalTransactionId` is stored on `User.premiumExternalId` so a renewal
   webhook (which carries no user id) finds the owner.
 - **Purchase surface.** Telegram: a ✨ **Gennety Premium** main-menu row → the
-  Premium hub (benefits + price, or "active until …") → the Premium Mini App
+  Premium hub (benefits, or "active until …") → the Premium Mini App
   (`apps/webapp/premium.html`, `WebApp.openInvoice`). iOS: a native paywall
-  (designed in parallel; `features.premium` in `GET /v1/app/config`). The Premium
-  Mini App and hub deliberately carry **no "how to cancel" instructions** — that
-  lives in the bot conversation (below).
+  (designed in parallel; `features.premium` in `GET /v1/app/config`).
+  **The hub names no price and its button does not ask for the sale**
+  (2026-08-01). It used to open with the monthly price and a `Subscribe — $X/mo`
+  button — a request for money made in the first message after the menu tap,
+  before the product had shown what Premium does. The button is now a plain
+  "Learn more" and the price appears one tap later, inside the Mini App, next to
+  the benefits it buys. The hub's closing line is the reassurance, not a
+  procedure: cancelling is one message to the concierge, which is the real
+  mechanic (below) — the Telegram → Settings → Subscriptions walkthrough is
+  gone from here and survives only where it is load-bearing, as the honest
+  fallback when the Stars API cancel fails. An **App Store** subscriber viewing
+  the hub gets Apple's own steps instead, since the concierge cannot cancel
+  their subscription and must not imply otherwise.
 - **In-chat cancellation (Telegram, agent-driven).** When a user tells the menu
   agent they want to cancel / stop / turn off Premium — or asks how — the agent
   calls the `offer_cancel_premium` tool (`services/menu-agent.ts`); it never

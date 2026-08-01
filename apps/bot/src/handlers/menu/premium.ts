@@ -7,13 +7,21 @@ import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import { getPremiumState, formatPremiumUntil } from "../../services/premium.js";
 
 /**
- * Render the Gennety Premium hub (PRODUCT_SPEC §Premium): benefits + price when
- * inactive, or an "active until …" note when subscribed, with a `web_app` button
- * into the Premium Mini App (which mints the recurring Telegram Stars invoice via
- * `WebApp.openInvoice`). Gated by `PREMIUM_FEATURE_ENABLED` — the menu only shows
- * the entry when the flag is on, and this handler double-checks. As with the
- * other hubs, the `web_app` button is omitted when `WEBAPP_URL` isn't a real
- * HTTPS host (dev without a tunnel), so the copy still renders.
+ * Render the Gennety Premium hub (PRODUCT_SPEC §Premium): benefits when inactive,
+ * or an "active until …" note when subscribed, with a `web_app` button into the
+ * Premium Mini App (which shows the price and mints the recurring Telegram Stars
+ * invoice via `WebApp.openInvoice`).
+ *
+ * The hub deliberately names NO price and its button does not say "subscribe":
+ * this message is the first thing a user sees after tapping the menu row, before
+ * the product has shown what Premium actually does, so asking for money here is
+ * asking before the value has landed. The price lives one tap away, inside the
+ * Mini App, next to the benefits it buys.
+ *
+ * Gated by `PREMIUM_FEATURE_ENABLED` — the menu only shows the entry when the
+ * flag is on, and this handler double-checks. As with the other hubs, the
+ * `web_app` button is omitted when `WEBAPP_URL` isn't a real HTTPS host (dev
+ * without a tunnel), so the copy still renders.
  */
 export async function handlePremiumHub(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery().catch(() => {});
@@ -33,13 +41,21 @@ export async function handlePremiumHub(ctx: BotContext): Promise<void> {
   const keyboard = new InlineKeyboard();
   const url = buildMiniAppUrl("premium", { lang, theme });
   if (url.startsWith("https://")) {
-    keyboard.webApp(t(lang, "premiumSubscribeCta", { price: env.PREMIUM_PRICE_USD_DISPLAY }), url).row();
+    keyboard.webApp(t(lang, "premiumOpenCta"), url).row();
   }
   keyboard.text(t(lang, "menuBack"), "menu:back");
 
+  // How cancellation actually works depends on who owns the subscription. The
+  // in-chat agent can only stop a Telegram Stars renewal (§3.8), so an App Store
+  // subscriber gets Apple's own steps instead of a promise we can't keep.
+  const cancelNote =
+    state.active && state.provider === "app_store"
+      ? t(lang, "premiumCancelAppStore", { date: formatPremiumUntil(state.premiumUntil, lang) })
+      : t(lang, "premiumCancelHint");
+
   const body = state.active
-    ? `${t(lang, "premiumHubActiveNote", { date: formatPremiumUntil(state.premiumUntil, lang) })}\n\n${t(lang, "premiumManageNote")}`
-    : `${t(lang, "premiumHubBody", { price: env.PREMIUM_PRICE_USD_DISPLAY })}\n\n${t(lang, "premiumManageNote")}`;
+    ? `${t(lang, "premiumHubActiveNote", { date: formatPremiumUntil(state.premiumUntil, lang) })}\n\n${cancelNote}`
+    : `${t(lang, "premiumHubBody")}\n\n${cancelNote}`;
 
   await ctx.reply(body, { parse_mode: "Markdown", reply_markup: keyboard });
 }
