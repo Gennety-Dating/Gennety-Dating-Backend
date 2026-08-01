@@ -95,9 +95,6 @@ placeholders left in the text:
 
 ## Follow-up code tasks (separate from these drafts)
 
-- **Bot:** build the dedicated biometric-consent screen the documents now
-  promise (Privacy §6/§10, ToS §4), and record the consent with its
-  `LEGAL_DOCS_VERSION`.
 - **iOS:** add Privacy Policy + Terms links to `ConsentView.swift` and the App
   Store Connect listing.
 - **Website:** add `/cookies` page + footer/banner link; bump `POLICY_VERSION`.
