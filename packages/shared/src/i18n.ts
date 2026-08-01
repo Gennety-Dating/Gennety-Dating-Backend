@@ -933,7 +933,7 @@ const translations = {
     coordPartnerAskApprove:
       "Your date in ~1h would love a way to find you at the spot 💬\n\n" +
       "Share your Telegram with {name}?",
-    coordPartnerBtnApprove: "✨ Share my Telegram",
+    coordPartnerBtnApprove: "✨ Share",
     coordPartnerBtnDecline: "Not now",
     coordRevealToInitiator:
       "{name} shared their Telegram so you can find each other 💬\n\n" +
@@ -1932,7 +1932,7 @@ const translations = {
     coordPartnerAskApprove:
       "Твоему свиданию через ~1ч пригодится способ найти тебя на месте 💬\n\n" +
       "Поделиться своим Telegram с {name}?",
-    coordPartnerBtnApprove: "✨ Поделиться Telegram",
+    coordPartnerBtnApprove: "✨ Поделиться",
     coordPartnerBtnDecline: "Не сейчас",
     coordRevealToInitiator:
       "{name} поделился своим Telegram, чтобы вы нашли друг друга 💬\n\n" +
@@ -2927,7 +2927,7 @@ const translations = {
     coordPartnerAskApprove:
       "Твоєму побаченню за ~1год знадобиться спосіб знайти тебе на місці 💬\n\n" +
       "Поділитися своїм Telegram з {name}?",
-    coordPartnerBtnApprove: "✨ Поділитися Telegram",
+    coordPartnerBtnApprove: "✨ Поділитися",
     coordPartnerBtnDecline: "Не зараз",
     coordRevealToInitiator:
       "{name} поділився своїм Telegram, щоб ви знайшли одне одного 💬\n\n" +
@@ -3898,7 +3898,7 @@ const deTranslations: TranslationTable = {
   coordPartnerAskApprove:
     "Dein Date in ~1 Std. sucht einen Weg, dich am Ort zu finden 💬\n\n" +
     "Dein Telegram mit {name} teilen?",
-  coordPartnerBtnApprove: "✨ Telegram teilen",
+  coordPartnerBtnApprove: "✨ Teilen",
   coordPartnerBtnDecline: "Jetzt nicht",
   coordRevealToInitiator:
     "{name} hat Telegram geteilt, damit ihr euch findet 💬\n\n" +
@@ -4864,7 +4864,7 @@ const plTranslations: TranslationTable = {
   coordPartnerAskApprove:
     "Twoja randka za ~1 godz. — przydałby się sposób, żeby Cię znaleźć na miejscu 💬\n\n" +
     "Udostępnić Twój Telegram dla {name}?",
-  coordPartnerBtnApprove: "✨ Udostępnij Telegram",
+  coordPartnerBtnApprove: "✨ Udostępnij",
   coordPartnerBtnDecline: "Nie teraz",
   coordRevealToInitiator:
     "{name} udostępnia swój Telegram, żebyście się znaleźli 💬\n\n" +

@@ -184,7 +184,9 @@ export async function handleCoordMethod(ctx: BotContext): Promise<void> {
     const partnerLang = langOf(partner);
     const kb = new InlineKeyboard()
       .text(t(partnerLang, "coordPartnerBtnApprove"), `coord:approve:${matchId}`)
-      .text(t(partnerLang, "coordPartnerBtnDecline"), `coord:decline:${matchId}`);
+      .success()
+      .text(t(partnerLang, "coordPartnerBtnDecline"), `coord:decline:${matchId}`)
+      .danger();
     await dmCatch(
       ctx,
       partner.telegramId,
