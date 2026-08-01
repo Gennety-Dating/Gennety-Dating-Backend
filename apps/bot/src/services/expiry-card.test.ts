@@ -15,18 +15,31 @@ const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 
 const VARIANTS: ExpiryCardVariant[] = ["expired", "penalty", "peer_ignored", "missed_date"];
 
+/**
+ * Satori parses the bundled fonts (and resvg rasterizes the motifs) on the
+ * first render. Cold, that is ~5s on its own; under full-suite parallel load it
+ * runs past the 10s global default, so this file went red nondeterministically
+ * while passing in isolation. Every render test here therefore carries the same
+ * generous budget `time-card.test.ts` already uses for the same reason.
+ */
+const RENDER_TIMEOUT_MS = 60_000;
+
 describe("renderExpiryCard", () => {
-  it.each(VARIANTS)("renders %s as a PNG", async (variant) => {
-    const png = await renderExpiryCard({
-      variant,
-      overline: "OVERLINE",
-      headline: "FIRST\nSECOND",
-      subline: "One line.\nAnother line.",
-      theme: "dark",
-    });
-    expect(png).not.toBeNull();
-    expect(png!.subarray(0, 4)).toEqual(PNG_MAGIC);
-  });
+  it.each(VARIANTS)(
+    "renders %s as a PNG",
+    async (variant) => {
+      const png = await renderExpiryCard({
+        variant,
+        overline: "OVERLINE",
+        headline: "FIRST\nSECOND",
+        subline: "One line.\nAnother line.",
+        theme: "dark",
+      });
+      expect(png).not.toBeNull();
+      expect(png!.subarray(0, 4)).toEqual(PNG_MAGIC);
+    },
+    RENDER_TIMEOUT_MS,
+  );
 
   it("renders the light theme too", async () => {
     const png = await renderExpiryCard({
@@ -38,7 +51,7 @@ describe("renderExpiryCard", () => {
     });
     expect(png).not.toBeNull();
     expect(png!.subarray(0, 4)).toEqual(PNG_MAGIC);
-  });
+  }, RENDER_TIMEOUT_MS);
 
   it("never throws on nonsense input — the expiry sweep must not wedge", async () => {
     const png = await renderExpiryCard({
@@ -50,18 +63,19 @@ describe("renderExpiryCard", () => {
     });
     // Either a card or null, but never a rejection.
     expect(png === null || png.subarray(0, 4).equals(PNG_MAGIC)).toBe(true);
-  });
+  }, RENDER_TIMEOUT_MS);
 });
 
 /**
  * Regression guard for the headline font.
  *
- * The other card renderers load Unbounded as the Google Fonts `latin` +
- * `cyrillic` subsets, and Polish is in NEITHER — `latin-ext` carries Ą Ł Ż Ś Ć
- * Ź Ń Ę. Satori does not report a missing glyph; it silently resolves it from
- * another registered family, so "CZAS MINĄŁ" renders with ĄŁ in Roboto
- * mid-word and nothing fails. This card therefore loads the FULL
- * `unbounded-700.woff`, and the check below is what keeps it that way.
+ * Unbounded's Google Fonts `latin` + `cyrillic` subsets do NOT cover Polish —
+ * `latin-ext` carries Ą Ł Ż Ś Ć Ź Ń Ę. Satori does not report a missing glyph;
+ * it silently resolves it from another registered family, so "CZAS MINĄŁ"
+ * renders with ĄŁ in Roboto mid-word and nothing fails. This card therefore
+ * loads the FULL `unbounded-700.woff`, and the check below is what keeps it
+ * that way. (The time and match cards were moved onto the same full file for
+ * the same reason — `card-headline-fonts.test.ts` guards those.)
  *
  * No font parser is available (and adding one for a test isn't worth a new
  * dependency), so coverage is proven by differential render: the same Polish
@@ -110,7 +124,7 @@ describe("headline font coverage", () => {
       rasterize("ŁĄŻŚĆŹŃĘ", roboto()),
     ]);
     expect(withUnbounded.equals(robotoOnly)).toBe(false);
-  });
+  }, RENDER_TIMEOUT_MS);
 
   it("covers Cyrillic (RU + the Ukrainian-only letters)", async () => {
     const [withUnbounded, robotoOnly] = await Promise.all([
@@ -118,7 +132,7 @@ describe("headline font coverage", () => {
       rasterize("ВЫШЛОЇЄҐІ", roboto()),
     ]);
     expect(withUnbounded.equals(robotoOnly)).toBe(false);
-  });
+  }, RENDER_TIMEOUT_MS);
 
   it("covers German umlauts", async () => {
     const [withUnbounded, robotoOnly] = await Promise.all([
@@ -126,7 +140,7 @@ describe("headline font coverage", () => {
       rasterize("ÄÖÜ", roboto()),
     ]);
     expect(withUnbounded.equals(robotoOnly)).toBe(false);
-  });
+  }, RENDER_TIMEOUT_MS);
 
   it("proves the differential actually detects a gap", async () => {
     // Control: the `latin` subset every other renderer uses genuinely lacks
@@ -141,7 +155,7 @@ describe("headline font coverage", () => {
       rasterize("ŁĄŻ", roboto()),
     ]);
     expect(withSubset.equals(robotoOnly)).toBe(true);
-  });
+  }, RENDER_TIMEOUT_MS);
 });
 
 describe("card dimensions", () => {

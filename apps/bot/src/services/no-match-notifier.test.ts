@@ -1,23 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@gennety/db", () => ({
-  prisma: {
-    user: {
-      findMany: vi.fn(),
+vi.mock("@gennety/db", () => {
+  // The D10 pause runs its status CAS and its `starvationPausedAt` stamp inside
+  // one `$transaction`, so the tx client here exposes the SAME mock functions as
+  // the top-level client. That keeps every existing `mProfileUpdateMany`
+  // assertion working whether the call came from `prisma` or from `tx`.
+  const user = { findMany: vi.fn() };
+  const match = { findFirst: vi.fn() };
+  const noMatchNotice = { findFirst: vi.fn(), create: vi.fn(), deleteMany: vi.fn() };
+  const profile = { updateMany: vi.fn() };
+  return {
+    prisma: {
+      user,
+      match,
+      noMatchNotice,
+      profile,
+      $transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
+        fn({ user, match, noMatchNotice, profile }),
+      ),
     },
-    match: {
-      findFirst: vi.fn(),
-    },
-    noMatchNotice: {
-      findFirst: vi.fn(),
-      create: vi.fn(),
-      deleteMany: vi.fn(),
-    },
-    profile: {
-      updateMany: vi.fn(),
-    },
-  },
-}));
+  };
+});
 
 vi.mock("./ticket-discount.js", () => ({
   grantFamineDiscountIfEligible: vi.fn(),
@@ -43,6 +46,7 @@ const mNoticeFindFirst = (prisma.noMatchNotice as unknown as { findFirst: MockFn
 const mNoticeCreate = (prisma.noMatchNotice as unknown as { create: MockFn }).create;
 const mNoticeDeleteMany = (prisma.noMatchNotice as unknown as { deleteMany: MockFn }).deleteMany;
 const mProfileUpdateMany = (prisma.profile as unknown as { updateMany: MockFn }).updateMany;
+const mTransaction = (prisma as unknown as { $transaction: MockFn }).$transaction;
 const mGrant = grantFamineDiscountIfEligible as unknown as MockFn;
 const mTransition = transitionAccountStatus as unknown as MockFn;
 
@@ -266,12 +270,18 @@ describe("sendNoMatchNotices", () => {
       const [, body] = api.sendMessage.mock.calls[0]!;
       expect(body).toMatch(/pausing your search/);
 
-      // The CAS + the profile marker stamp both fired.
-      expect(mTransition).toHaveBeenCalledWith({ id: "u1" }, "pause");
+      // The CAS + the profile marker stamp both fired — and both ran against
+      // the transaction client, not the bare prisma client (NOMATCH-2).
+      expect(mTransition).toHaveBeenCalledWith(
+        { id: "u1" },
+        "pause",
+        expect.anything(),
+      );
       expect(mProfileUpdateMany).toHaveBeenCalledWith({
         where: { userId: "u1" },
         data: { starvationPausedAt: NOW },
       });
+      expect(mTransaction).toHaveBeenCalledTimes(1);
     });
 
     it("does not grant the famine discount or offer Rematch on a pause", async () => {
@@ -308,6 +318,94 @@ describe("sendNoMatchNotices", () => {
       expect(mProfileUpdateMany).not.toHaveBeenCalled();
       // Falls through to the ordinary rich stream, not the plain pause send.
       expect(stream).toHaveBeenCalled();
+    });
+
+    // NOMATCH-2 — the pause must never become a state the product cannot undo.
+    // `autoResumeStarvedUsers` selects `paused AND starvationPausedAt != null`,
+    // and this notifier only ever selects `active`, so a pause that lands
+    // without its marker (or without its DM) is invisible to both sweeps: the
+    // user is silently and permanently out of the pool.
+    describe("NOMATCH-2: the pause is always reversible", () => {
+      it("does not leave the account paused when the marker stamp fails", async () => {
+        mUserFindMany.mockResolvedValueOnce([
+          { id: "u1", telegramId: 111n, language: "en" },
+        ]);
+        mMatchFindFirst.mockResolvedValueOnce({
+          dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
+        });
+        // The status CAS succeeds, the marker write blows up. Both are inside
+        // one transaction, so the CAS must roll back with it.
+        mProfileUpdateMany.mockRejectedValueOnce(new Error("db blip"));
+        const api = makeApi();
+
+        const result = await sendNoMatchNotices(
+          api as never,
+          NOW,
+          0,
+          makeStream() as never,
+        );
+
+        expect(result.paused).toBe(0);
+        expect(result.failed).toBe(1);
+        // Nothing claims the user was notified, and the notice row is undone
+        // so the next run can retry the whole decision.
+        expect(mNoticeDeleteMany).toHaveBeenCalled();
+
+        // The load-bearing assertion. `transitionAccountStatus` is mocked, so
+        // the rollback itself can't be observed here — what CAN be observed is
+        // the property that guarantees it against a real database: the status
+        // CAS ran on the transaction client, in the same transaction as the
+        // marker write that just threw. Against the two-independent-writes
+        // version this fails, because no transaction is opened at all.
+        expect(mTransaction).toHaveBeenCalledTimes(1);
+        expect(mTransition).toHaveBeenCalledWith(
+          { id: "u1" },
+          "pause",
+          expect.anything(),
+        );
+      });
+
+      it("resumes the account when the pause committed but the DM never landed", async () => {
+        mUserFindMany.mockResolvedValueOnce([
+          { id: "u1", telegramId: 111n, language: "en" },
+        ]);
+        mMatchFindFirst.mockResolvedValueOnce({
+          dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
+        });
+        const api = makeApi();
+        // The pause commits, then Telegram refuses the send (blocked bot, etc).
+        api.sendMessage.mockRejectedValueOnce(new Error("bot was blocked"));
+
+        const result = await sendNoMatchNotices(
+          api as never,
+          NOW,
+          0,
+          makeStream() as never,
+        );
+
+        expect(result.paused).toBe(0);
+        expect(result.failed).toBe(1);
+        // The account is put back so the next run re-evaluates and re-sends,
+        // rather than stranding a user who was paused and never told.
+        expect(mTransition).toHaveBeenCalledWith({ id: "u1" }, "resume");
+        expect(mNoticeDeleteMany).toHaveBeenCalled();
+      });
+
+      it("does not attempt a resume when no pause was taken", async () => {
+        mUserFindMany.mockResolvedValueOnce([
+          { id: "u1", telegramId: 111n, language: "en" },
+        ]);
+        // Tier 3, comfortably short of the pause threshold.
+        mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForTier(3) });
+        const api = makeApi();
+        const stream = makeStream();
+        stream.mockRejectedValueOnce(new Error("send failed"));
+
+        const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+        expect(result.failed).toBe(1);
+        expect(mTransition).not.toHaveBeenCalled();
+      });
     });
 
     it("never pauses a market-pending user, however long they've waited", async () => {

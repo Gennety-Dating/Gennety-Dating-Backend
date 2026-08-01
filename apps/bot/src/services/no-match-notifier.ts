@@ -296,21 +296,37 @@ export async function sendNoMatchNotices(
       continue;
     }
 
+    // Hoisted out of the `try` so the catch below can undo a pause whose DM
+    // never landed (see NOMATCH-2 there).
+    let pausedNow = false;
+
     try {
       // Attempt the pause CAS FIRST when applicable — its outcome decides
       // which message actually goes out. A lost race (already not `active`
       // for some other reason — moderation, a manual pause/freeze between
       // candidate selection and here) falls back to the ordinary tier DM
       // rather than sending nothing.
-      let pausedNow = false;
+      //
+      // NOMATCH-2: the status flip and the `starvationPausedAt` marker commit
+      // TOGETHER. They are not two independent facts — the marker is the only
+      // thing that makes this pause reversible, because `autoResumeStarvedUsers`
+      // selects on `paused AND starvationPausedAt != null` while this notifier
+      // only ever selects `active`. A user paused without the marker is
+      // therefore invisible to both sweeps: silently, permanently out of the
+      // pool with nothing in the product able to bring them back.
       if (isPoolExhaustionPause) {
-        const transition = await transitionAccountStatus({ id: u.id }, "pause");
+        const transition = await prisma.$transaction(async (tx) => {
+          const result = await transitionAccountStatus({ id: u.id }, "pause", tx);
+          if (result.kind === "changed") {
+            await tx.profile.updateMany({
+              where: { userId: u.id },
+              data: { starvationPausedAt: now },
+            });
+          }
+          return result;
+        });
         if (transition.kind === "changed") {
           pausedNow = true;
-          await prisma.profile.updateMany({
-            where: { userId: u.id },
-            data: { starvationPausedAt: now },
-          });
         } else {
           body = t(lang, templateKeyForTier(tier), {});
         }
@@ -376,6 +392,24 @@ export async function sendNoMatchNotices(
       await prisma.noMatchNotice
         .deleteMany({ where: { userId: u.id, dropDate } })
         .catch(() => {});
+      // NOMATCH-2: same reasoning, one step further back. If we paused the
+      // account and then failed to tell them, the pause is a state change the
+      // user never consented to and was never informed of — and this notifier
+      // only selects `active`, so it will never revisit them to try the DM
+      // again. Undo it so the next run re-evaluates the whole decision and
+      // re-sends. `resume` also clears `starvationPausedAt`, leaving no marker
+      // behind to confuse the auto-resume sweep.
+      if (pausedNow) {
+        await transitionAccountStatus({ id: u.id }, "resume").catch(
+          (undoErr: unknown) => {
+            console.error(
+              `[no-match-notify] userId=${u.id} left PAUSED after a failed notice — ` +
+                `resume rollback also failed:`,
+              undoErr,
+            );
+          },
+        );
+      }
       const message = err instanceof Error ? err.message : String(err);
       result.errors.push({ userId: u.id, error: message });
       result.failed++;

@@ -20,9 +20,19 @@ function enqueue<T>(key: string, task: () => Promise<T>): Promise<T> {
   const prev = tails.get(key) ?? Promise.resolve();
   const run = prev.catch(() => {}).then(task);
   tails.set(key, run);
-  run.finally(() => {
-    if (tails.get(key) === run) tails.delete(key);
-  });
+  // The cleanup hook is a SEPARATE promise from the `run` we hand back, so it
+  // needs its own rejection handler. Without the `.catch`, a task that throws
+  // rejects this derived promise too — and nothing awaits it, so every handler
+  // error raised one spurious `unhandledRejection` on top of the real error the
+  // caller already caught. That both doubled the noise in the error log and
+  // made "zero unhandled rejections" (a documented post-deploy health signal)
+  // impossible to read. The `.catch` here swallows only this bookkeeping copy;
+  // `run` itself still rejects to the caller exactly as before.
+  void run
+    .finally(() => {
+      if (tails.get(key) === run) tails.delete(key);
+    })
+    .catch(() => {});
   return run;
 }
 

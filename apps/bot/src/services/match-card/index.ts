@@ -45,7 +45,8 @@ export interface MatchCardInput {
 type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
 let cachedFonts: SatoriFonts | null = null;
 
-function loadFonts(): SatoriFonts {
+/** Exported as a test seam: the registration SHAPE is the thing that broke. */
+export function loadFonts(): SatoriFonts {
   if (cachedFonts) return cachedFonts;
   const read = (file: string) =>
     readFileSync(fileURLToPath(new URL(`../../assets/fonts/${file}`, import.meta.url)));
@@ -53,10 +54,22 @@ function loadFonts(): SatoriFonts {
     { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
     { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
     { name: "Roboto", data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
-    // Unbounded ships as cyrillic+latin subset woffs; registering both under
-    // one family lets satori fall through per glyph.
-    { name: "Unbounded", data: read("unbounded-cyr-700.woff"), weight: 700, style: "normal" },
-    { name: "Unbounded", data: read("unbounded-lat-700.woff"), weight: 700, style: "normal" },
+    // The FULL Unbounded, under one family name.
+    //
+    // This used to register the `cyrillic` and `latin` subset woffs BOTH as
+    // "Unbounded", on the belief that one family name lets satori fall through
+    // per glyph. It does not: satori falls through across *families* in
+    // registration order, never within one. The cyrillic subset was listed
+    // first, so it owned the family outright and every Latin glyph — including
+    // the "Gennety" wordmark on every card, and any Latin partner name —
+    // silently resolved to Roboto instead of the display face. Nothing failed;
+    // the brand type just quietly wasn't there.
+    //
+    // One complete file removes the ordering hazard entirely rather than
+    // navigating it, and additionally covers Polish (Ą Ł Ż Ś Ć Ź Ń Ę live in
+    // `latin-ext`, which neither subset carries). Same call, and the same
+    // asset, as `services/expiry-card.ts`.
+    { name: "Unbounded", data: read("unbounded-700.woff"), weight: 700, style: "normal" },
   ];
   return cachedFonts;
 }

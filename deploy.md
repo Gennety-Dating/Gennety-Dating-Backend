@@ -1,5 +1,38 @@
 # Gennety Dating Deploy
 
+**PENDING — audit fixes, 2026-08-01 (NOMATCH-2 + chat-queue + card fonts).**
+Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
+change, no Mini App change.** Ships with whatever restart carries the blocks
+below. Three independent fixes from a full-codebase audit:
+
+- **NOMATCH-2 — the D10 pool-exhaustion pause is now always reversible**
+  (`services/no-match-notifier.ts`). The status CAS and the
+  `starvationPausedAt` marker were two separate writes. That mattered because
+  `autoResumeStarvedUsers` selects `paused AND starvationPausedAt != null` while
+  the notifier itself only ever selects `active` — so a pause that committed
+  without its marker was invisible to BOTH sweeps: silently and permanently out
+  of the matching pool, with nothing in the product able to bring the user back.
+  They now commit in one `$transaction`. Separately, a pause whose DM failed to
+  send left the user paused **and never told**; that path now resumes the
+  account so the next run re-evaluates and re-sends. Inert in production today —
+  `FAMINE_PAUSE_AFTER_DAYS` is 28 days and no account is near it — which is
+  exactly why it was worth fixing before the mechanism starts firing.
+- **The chat queue no longer manufactures unhandled rejections**
+  (`chat-queue.ts`). Its cleanup hook was a promise derived from the one handed
+  to the caller, with no rejection handler of its own, so **every** handler
+  error raised a spurious `unhandledRejection` on top of the real error that was
+  already caught. `index.ts` installs a non-fatal listener so nothing ever
+  crashed — but "zero unhandled rejections" is a post-deploy health signal used
+  further down this file, and it could not mean anything while ordinary errors
+  fabricated them. Expect that log line to get materially quieter after this
+  restart; if it does not, the remaining ones are real.
+- **Card headline fonts** — see the expiry-card block below.
+
+No post-deploy check beyond the standard checklist. **Rollback:** revert the
+code and restart; nothing else to undo.
+
+---
+
 **PENDING — expiry card (PRODUCT_SPEC §3.4).** Not deployed yet. **No Prisma
 schema change, no env change, no flag change, no Mini App change**
 (`apps/webapp` untouched). Always-on — there is no feature flag, because the
@@ -13,10 +46,12 @@ language.
 
 **One new asset rides the ordinary code rsync:**
 `apps/bot/src/assets/fonts/unbounded-700.woff` (144 KB). It is the FULL
-Unbounded, added because the two subset files every other card loads (`latin` +
-`cyrillic`) do not cover Polish — Ą Ł Ż Ś Ć Ź Ń Ę are in Google's separate
-`latin-ext` subset. Nothing is removed: the subsets stay, and the existing
-renderers that load them are untouched by this deploy.
+Unbounded, added because the two subset files (`latin` + `cyrillic`) do not
+cover Polish — Ą Ł Ż Ś Ć Ź Ń Ę are in Google's separate `latin-ext` subset. The
+time card and match card now load this same file too (see the third bullet
+below), so it serves three renderers. Nothing is removed: the subsets stay, and
+the referral + coordination cards still use `unbounded-cyr-700.woff` for their
+Cyrillic-only headline variant.
 
 **Three things worth knowing before the restart:**
 
@@ -26,13 +61,22 @@ renderers that load them are untouched by this deploy.
   and a terminal match must not depend on a download), and takes ~0.4 s. It runs
   inside the existing 2 s-per-side pacing loop, so it adds no new rate-limit
   pressure.
-- **There is a live Polish rendering bug this does NOT fix.** The §3.6
-  locked-time card prints its localized date in Unbounded from the subsets, so
-  Polish months and weekdays (`WRZEŚNIA`, `PAŹDZIERNIKA`, `ŚR`) render with
-  those letters dropping into Roboto mid-word. Same for the match card, the
-  referral card and the coordination card above. Fixing them is a one-line font
-  swap each, deliberately left out so this change does not touch four renderers
-  at once — and it is invisible today because production has **zero** `pl` users.
+- **The sibling font bugs ARE now fixed too (2026-08-01 audit), and one of them
+  was worse than this file previously described.** The §3.6 locked-time card
+  printed Polish months and weekdays (`WRZEŚNIA`, `PAŹDZIERNIKA`, `ŚR`) with
+  those letters dropping into Roboto mid-word — invisible today, since
+  production has **zero** `pl` users. The **match card** was the real one: it
+  registered BOTH Unbounded subsets under the single family name `"Unbounded"`,
+  and satori resolves a family to its first registered font rather than falling
+  through per glyph, so the cyrillic subset owned it and every **Latin** glyph —
+  the `Gennety` wordmark on every card, plus any Latin partner name — rendered
+  in Roboto. That affected `en`/`de`/`pl` recipients on the most prominent card
+  in the product, under a flag that is ON. Both now load the same
+  `unbounded-700.woff` this deploy already ships, so the asset carries three
+  renderers rather than one and no new file is needed.
+  `apps/bot/src/services/card-headline-fonts.test.ts` is the regression guard.
+  The **referral and coordination cards were never affected** — they switch to
+  Archivo Black for non-Cyrillic locales, which covers Latin, Polish and German.
 - **Nothing exercises this until a match actually expires.** Production has 0
   matches ever, so the first real card renders only after a drop pairs someone
   and one side lets the 24h window close. Verify on `@gennetytestbot` first —

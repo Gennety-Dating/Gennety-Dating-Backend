@@ -79,24 +79,31 @@ let cachedFonts: SatoriFonts | null = null;
  * Two font gotchas are baked into this list:
  *
  * 1. Archivo Black (the date-card headline face) is Latin-only, so a Cyrillic
- *    date would fall back mid-word. Unbounded ships cyrillic+latin subsets.
+ *    date would fall back mid-word. Unbounded covers both scripts.
  * 2. Satori does NOT fall through *within* a family — it takes the first font
  *    registered under the requested name and resolves missing glyphs from the
- *    OTHER families, in array order. Registering both subsets as "Unbounded"
- *    therefore breaks every mixed string: a Russian date is Cyrillic words
- *    (cyr subset) plus digits (latin subset only), so half the line silently
- *    dropped to Roboto. Latin keeps the requested family name (it carries the
- *    digits and punctuation every locale needs) and the Cyrillic subset is
- *    registered as its own family, listed before Roboto so it wins the
- *    fallback for Cyrillic letters.
+ *    OTHER families, in array order. Registering the two Unbounded subsets
+ *    under one name therefore breaks every mixed string: a Russian date is
+ *    Cyrillic words (cyr subset) plus digits (latin subset only), so half the
+ *    line silently drops to Roboto.
+ *
+ * This used to navigate (2) by registering `unbounded-lat-700` as "Unbounded"
+ * and `unbounded-cyr-700` as its own family ahead of Roboto — correct for
+ * Latin and Cyrillic, but it left a third script out: Polish's Ą Ł Ż Ś Ć Ź Ń Ę
+ * are in Google's `latin-ext` subset, which NEITHER file carries. A Polish date
+ * ("WRZEŚNIA", "PAŹDZIERNIKA", "ŚR") rendered those letters in Roboto mid-word,
+ * and satori reports nothing when it substitutes a glyph, so it failed silently.
+ * Loading the FULL `unbounded-700.woff` under a single name covers all three
+ * scripts and removes the ordering hazard in (2) altogether — the same call,
+ * and the same asset, as `services/expiry-card.ts`.
  */
-function loadFonts(): SatoriFonts {
+/** Exported as a test seam: the registration SHAPE is the thing that broke. */
+export function loadFonts(): SatoriFonts {
   if (cachedFonts) return cachedFonts;
   const read = (file: string) =>
     readFileSync(fileURLToPath(new URL(`../assets/fonts/${file}`, import.meta.url)));
   cachedFonts = [
-    { name: "Unbounded", data: read("unbounded-lat-700.woff"), weight: 700, style: "normal" },
-    { name: "UnboundedCyr", data: read("unbounded-cyr-700.woff"), weight: 700, style: "normal" },
+    { name: "Unbounded", data: read("unbounded-700.woff"), weight: 700, style: "normal" },
     { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
   ];
   return cachedFonts;
