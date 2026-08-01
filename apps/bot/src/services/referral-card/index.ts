@@ -133,48 +133,73 @@ async function butterflyMark(): Promise<{ uri: string; w: number; h: number } | 
 }
 
 /**
- * The portrait strip: overlapping circular frames, centred. A slot with a photo
- * renders the photo cropped to the circle; an empty one renders a numbered ring
- * so the layout can be reviewed and the slots referred to by number.
+ * Where each portrait tile sits. Absolute, scattered around the card's edges and
+ * corners, most of them running off an edge so the card reads as a window onto a
+ * larger crowd rather than a tidy grid of five. Deliberately NOT symmetrical —
+ * the offsets and angles are hand-placed, and the two low-opacity ones sit
+ * furthest into the text column so the copy always wins.
+ *
+ * Tiles are tall (9:14-ish) because the source photos are full-length shots: a
+ * circular crop reduced them to a torso, which is what this layout replaces.
  */
-function portraitRow(portraits: readonly string[]): Node {
-  const D = 138;
-  const OVERLAP = 30;
-  const slots: Node[] = [];
-  for (let i = 0; i < PORTRAIT_SLOTS; i++) {
+interface PortraitSlot {
+  /** Exactly one horizontal anchor; negative bleeds the tile off that edge. */
+  left?: number;
+  right?: number;
+  top?: number;
+  bottom?: number;
+  w: number;
+  h: number;
+  rotate: number;
+  opacity: number;
+}
+
+const PORTRAIT_LAYOUT: readonly PortraitSlot[] = [
+  { left: -62, top: 54, w: 168, h: 250, rotate: -9, opacity: 0.62 },
+  { right: -70, top: 128, w: 156, h: 232, rotate: 8, opacity: 0.55 },
+  { left: -80, top: 452, w: 162, h: 240, rotate: 7, opacity: 0.42 },
+  { right: -58, top: 566, w: 170, h: 252, rotate: -8, opacity: 0.5 },
+  // Bleeds off the left rather than sitting inside it: the gift chip's fill is
+  // semi-transparent, so a tile under its left end shows through and muddies it.
+  { left: -52, bottom: -86, w: 158, h: 236, rotate: 6, opacity: 0.55 },
+];
+
+/**
+ * The scattered portrait tiles. A slot with a photo renders it cropped to the
+ * tile; an empty one renders a numbered frame, so the layout stays reviewable
+ * (and the slots referable by number) before the photos land.
+ */
+function portraitTiles(portraits: readonly string[]): Node[] {
+  return PORTRAIT_LAYOUT.map((slot, i) => {
     const common = {
-      width: D,
-      height: D,
-      borderRadius: 999,
-      ...(i > 0 ? { marginLeft: -OVERLAP } : {}),
-      // A ring in the card's own background keeps overlapping frames legible
-      // against each other instead of merging into one blob.
-      border: "5px solid #2A0E17",
+      position: "absolute",
+      ...(slot.left !== undefined ? { left: slot.left } : {}),
+      ...(slot.right !== undefined ? { right: slot.right } : {}),
+      ...(slot.top !== undefined ? { top: slot.top } : {}),
+      ...(slot.bottom !== undefined ? { bottom: slot.bottom } : {}),
+      width: slot.w,
+      height: slot.h,
+      borderRadius: 22,
+      opacity: slot.opacity,
+      transform: `rotate(${slot.rotate}deg)`,
     };
     const src = portraits[i];
-    slots.push(
-      src
-        ? {
-            type: "img",
-            props: { src, style: { display: "flex", objectFit: "cover", ...common } },
-          }
-        : box(
-            {
-              ...common,
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(247,236,236,0.10)",
-            },
-            [
-              txt(
-                { fontSize: 34, fontWeight: 700, color: "rgba(247,236,236,0.45)" },
-                String(i + 1),
-              ),
-            ],
-          ),
-    );
-  }
-  return box({ width: "100%", justifyContent: "center", alignItems: "center" }, slots);
+    return src
+      ? {
+          type: "img",
+          props: { src, style: { display: "flex", objectFit: "cover", ...common } },
+        }
+      : box(
+          {
+            ...common,
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(247,236,236,0.10)",
+            border: "2px solid rgba(247,236,236,0.25)",
+          },
+          [txt({ fontSize: 40, fontWeight: 700, color: "rgba(247,236,236,0.5)" }, String(i + 1))],
+        );
+  });
 }
 
 export async function renderReferralCard(input: ReferralCardInput): Promise<Buffer | null> {
@@ -245,6 +270,9 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         fontFamily: "Roboto",
       },
       [
+        // Portraits come FIRST so they paint behind everything else — satori
+        // paints in document order, and the copy must always sit on top.
+        ...portraitTiles(input.portraits ?? bundledPortraits()),
         // Brand lockup: the butterfly mark, tinted to the card's own cream, over
         // the wordmark and tagline.
         butterfly
@@ -283,9 +311,6 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         ),
         headline,
         box({ flex: 1 }, []),
-        // Who's actually on the other side of the invite.
-        portraitRow(input.portraits ?? bundledPortraits()),
-        box({ height: 46 }, []),
         // The Premium gift badge is the bottom element (replaces gennety.com).
         txt(
           {

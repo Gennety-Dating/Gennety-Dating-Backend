@@ -14,11 +14,14 @@ the card:
 
 Notes:
 
-- A missing slot is **not** an error — it renders as a numbered placeholder ring
-  and the remaining photos keep their positions, so slots never shift.
-- Each photo is cropped to a circle (`objectFit: cover`), so the face should sit
-  near the centre of the frame; a full-body shot will crop to the middle of the
-  body, not the head. Pre-crop to a roughly square, face-centred image.
+- A missing slot is **not** an error — it renders as a numbered placeholder
+  frame and the remaining photos keep their positions, so slots never shift.
+- Slots are **tall tiles** (roughly 2:3), scattered around the card's edges and
+  mostly bleeding off one of them, so full-length shots work as-is — that is
+  what this layout is for. Cropping is `objectFit: cover` on a tile taller than
+  it is wide, so a vertical phone photo loses almost nothing.
+- Slot 3 and 4 sit closest to the headline and render at lower opacity; put the
+  least busy photos there if any look noisy behind the copy.
 - These are read once and cached as data URIs at first render (the card renders
   on every share and every public `GET /v1/referral/card` hit), so **changing a
   file needs a process restart** to take effect.
