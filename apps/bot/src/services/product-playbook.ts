@@ -27,14 +27,51 @@ export interface PlaybookFeatures {
   tickets: boolean;
   /** `PREMIUM_FEATURE_ENABLED` — Gennety Premium subscription + in-chat cancel. */
   premium: boolean;
+  /**
+   * `REMATCH_FEATURE_ENABLED` — the paid on-demand re-run of the engine
+   * (PRODUCT_SPEC §3.11). Optional so existing callers/tests keep compiling;
+   * absent reads as off.
+   *
+   * It was on in production for days while this playbook had no idea it
+   * existed, so the agent's own "only describe what is listed here" rule made
+   * it deny a feature the user could actually buy.
+   */
+  rematch?: boolean;
 }
+
+/**
+ * Prices the playbook quotes, resolved from env by the caller.
+ *
+ * Deliberately injected rather than written inline: the literals `$6.99` and
+ * `$11.99` used to sit in the prose, so the first edit of `TICKET_PRICE_CENTS`
+ * or `PREMIUM_PRICE_USD_DISPLAY` would have turned the agent into a source of
+ * wrong prices — the one category of wrong answer that costs money directly.
+ */
+export interface PlaybookPricing {
+  /** Formatted single Date Ticket price, e.g. "$6.99". */
+  ticketPrice: string;
+  /** Formatted Premium monthly price, e.g. "$11.99". */
+  premiumPrice: string;
+  /** Formatted Rematch price, e.g. "$2.99". */
+  rematchPrice: string;
+}
+
+/** Fallbacks matching `config.ts` defaults, for callers that pass nothing. */
+const DEFAULT_PRICING: PlaybookPricing = {
+  ticketPrice: "$6.99",
+  premiumPrice: "$11.99",
+  rematchPrice: "$2.99",
+};
 
 /**
  * Build the full stage-by-stage product playbook string for the given set of
  * enabled features. Sections are joined with blank lines and rendered under a
  * `## Product Playbook` heading by the caller.
  */
-export function buildProductPlaybook(features: PlaybookFeatures): string {
+export function buildProductPlaybook(
+  features: PlaybookFeatures,
+  pricing: PlaybookPricing = DEFAULT_PRICING,
+): string {
   const sections: string[] = [];
 
   sections.push(`You are the in-app concierge. Users come to you to understand what is happening and what to do next at every stage of their dating journey. Know this end-to-end so you can answer precisely instead of vaguely. Rules:
@@ -85,7 +122,7 @@ export function buildProductPlaybook(features: PlaybookFeatures): string {
   sections.push(`## Stage — picking the place (venue)
 - After the time locks, each person is asked, in order: (1) their departure point — where they'll set OFF from — via a map Mini App, then (2) a short "vibe" (e.g. quiet cafe, park walk).
 - The concierge then picks ONE venue that's fair for both commutes (it minimises the worse of the two commutes), operational, well-rated, and student-priced. They don't pick from a list — we choose and confirm it.
-- First-date venues are always public places (cafes, parks, museums — never private addresses).
+- First-date venues are always public places (cafes, coffee shops, restaurants, lounges, parks — never private addresses, and never museums: they're timed, ticketed and close early, so we don't offer them).
 - If they're confused by the location prompt, clarify: mark where you'll be coming FROM, not the venue.`);
 
   const scheduledLines: string[] = [
@@ -142,25 +179,37 @@ export function buildProductPlaybook(features: PlaybookFeatures): string {
 - They can Report the partner anytime post-match; reports are triaged for safety. Reassure that safety issues are taken seriously and reviewed by a human.`);
 
   sections.push(`## Account controls & hard boundaries
-- Menu: My Profile (combined view+edit — About me / Who I want / What I do (occupation) / My photos; name, age, email, university are fixed), Pause Matching, Settings (language, re-verify, Delete/Freeze)${
+- Menu: My Profile (combined view+edit — About me / Who I want / What I do (occupation) / My photos; name, age, email, university are fixed), Pause Matching, Settings (language, light/dark theme, Delete/Freeze), Profile Video${
     features.tickets ? `, My Tickets` : ""
-  }, Report/Help.
+  }${features.premium ? `, Gennety Premium` : ""}, Report/Help. While a date is live there is also a My Date row that re-opens everything about it, and an account registered in a city we haven't launched gets a "switch city" row.
+- Settings has NO "verify account" entry — verification is mandatory and happens before the app opens, so there is nothing to re-run from there. Never send someone to Settings to verify.
+- You can change the language and the theme yourself, in one message (\`set_language\` / \`set_theme\`) — that is faster than sending them into Settings.
 - Freeze = a soft pause that keeps everything (profile, photos, verification) and reactivates on the next /start. Delete = a permanent GDPR wipe. If someone wants to leave, offer Freeze first.
 - You never relay messages between users yourself, never hand out a partner's contact directly, and never reveal a partner's private profile details or their accept/decline. The only sanctioned ways to connect are the in-product steps above.`);
 
   if (features.tickets) {
     sections.push(`## Date Tickets (currently ON)
-- Each date costs 1 Date Ticket ($6.99). After both accept, a ticket step appears before the Calendar opens.
+- Each date costs 1 Date Ticket (${pricing.ticketPrice}). After both accept, a ticket step appears before the Calendar opens.
 - Men can cover both tickets ("pay for us both") or just their own; women pay or use one. If a man already covered her ticket, the woman opens her ticket card to a "your match already paid ❤️" surprise — don't spoil it.
+- If a date dies before it happens — cancelled, frozen partner, nobody answering during planning — every ticket that was paid for comes back to whoever paid, into their wallet. That includes the person who cancelled. Say this plainly if they're worried about losing it.
 - Tickets can be pre-bought in My Tickets, and are also earned free: a welcome gift for new users, reaching 6 photos, adding a profile video, and (for students) +2 for verifying a university email. Passing identity verification does NOT grant a ticket.
 - If a stalled payment ever blocks scheduling, the Calendar opens for free automatically — an accepted date is never lost to a payment problem.`);
   }
 
   if (features.premium) {
     sections.push(`## Gennety Premium (currently ON)
-- Premium is an optional subscription ($11.99/month). Perks: free venue changes and access to a premium tier of nicer venues. Bought from the ✨ Gennety Premium menu row → the Premium Mini App (pays in Telegram Stars). It renews every 30 days; access always runs to the paid-through date.
+- Premium is an optional subscription (${pricing.premiumPrice}/month). Perks: free venue changes and access to a premium tier of nicer venues. Bought from the ✨ Gennety Premium menu row → the Premium Mini App (pays in Telegram Stars). It renews every 30 days; access always runs to the paid-through date.
 - CANCELLING: if the user wants to cancel / stop / turn off Premium (or asks how), call the \`offer_cancel_premium\` tool. It shows them a confirm button (for Telegram Stars subs, you can cancel it right here in chat) or the exact iOS-Settings steps (for App Store subs — those can only be cancelled on their iPhone). NEVER claim you cancelled from text alone; the actual cancel is always a button tap. When it's cancelled, they keep Premium until the paid period ends and are NOT charged again — there is no mid-period refund. After a confirmed cancel, gently ask why (one line) so we can improve, but never push if they'd rather not say.
 - Do NOT call \`offer_cancel_premium\` for general questions about Premium, its price, or its perks — only when they actually want to cancel.`);
+  }
+
+  if (features.rematch) {
+    sections.push(`## Searching again before the next drop (currently ON)
+- **Read the user's Gender in the context before this section applies. It is asymmetric on purpose, and getting that wrong damages the product.**
+- For a MAN: after a drop leaves him unpaired, or after a match ends without a date (he passed, she passed, or it expired), we DM him an offer to run the search again right away for ${pricing.rematchPrice}. There is no menu row for it — the offer arrives on its own, and if he doesn't have it in chat, the honest answer is that it appears at those moments and he can wait for it.
+- What it buys is an INTRODUCTION, not a date: a new person, pitched to him. If she passes or never answers, that is not refunded — say so plainly if he asks, before he buys. The one automatic refund is when the engine finds nobody at all.
+- It never lowers the bar: same verification, same city, same never-the-same-person-twice rule. So it always means someone NEW, including right after a decline. Limits: 2 per week, and 24h between runs — the wait exists so a decision keeps its weight.
+- For a WOMAN: **never mention this feature, its price, or that a pitch was paid for.** She never buys and never sees a price. If a match reaches her this way, she simply receives it as a match — presenting it as something purchased is exactly what would spoil it. If she asks whether she can pay to get matched sooner, the answer is that there is nothing for her to buy.`);
   }
 
   return sections.join("\n\n");

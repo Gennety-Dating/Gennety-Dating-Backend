@@ -153,6 +153,66 @@ describe("fetchKnowledgeBase", () => {
   });
 });
 
+describe("buildSystemPrompt — language, account facts, self-check", () => {
+  const baseUser = {
+    firstName: "Alice",
+    universityDomain: "stanford.edu",
+    status: "active",
+    language: "ru",
+    matchesAsA: [],
+    matchesAsB: [],
+  };
+
+  beforeEach(() => {
+    mockKnowledge.mockResolvedValue([]);
+  });
+
+  // The reported bug: a bare emoji made the bot answer in English. The prompt
+  // used to say "unless they switch", which hands the decision to the model on
+  // a message that carries no language at all.
+  it("forbids treating a language-neutral message as a language switch", async () => {
+    mockUserFind.mockResolvedValue(baseUser);
+    const prompt = await buildSystemPrompt(BigInt(1));
+
+    expect(prompt).toContain("Language — not a judgement call");
+    expect(prompt).toContain("NONE of these is a request to switch");
+    expect(prompt).toContain("emoji");
+    expect(prompt).not.toContain("unless they switch");
+  });
+
+  it("renders wallet and Premium only under their feature flags", async () => {
+    mockUserFind.mockResolvedValue({
+      ...baseUser,
+      ticketBalance: 3,
+      premiumUntil: null,
+      verificationStatus: "verified",
+      profile: { homeCity: "Kyiv" },
+    });
+
+    const prompt = await buildSystemPrompt(BigInt(1));
+    // Flags are off in the mocked env, so the paid surfaces must stay silent —
+    // the agent must never mention a feature the user cannot reach.
+    expect(prompt).not.toContain("Date Tickets in their wallet");
+    expect(prompt).not.toContain("Gennety Premium:");
+    // City and verification are unconditional facts.
+    expect(prompt).toContain("Dating city: Kyiv");
+    expect(prompt).toContain("Identity verification: verified");
+  });
+
+  it("tells the model to check the live context before asserting", async () => {
+    mockUserFind.mockResolvedValue(baseUser);
+    const prompt = await buildSystemPrompt(BigInt(1));
+    expect(prompt).toContain("Check before you assert");
+  });
+
+  it("allows a third bubble for a real catch", async () => {
+    mockUserFind.mockResolvedValue(baseUser);
+    const prompt = await buildSystemPrompt(BigInt(1));
+    expect(prompt).toContain("THIRD bubble");
+    expect(prompt).toContain("Brevity is per bubble");
+  });
+});
+
 describe("buildSystemPrompt", () => {
   it("assembles persona + knowledge + user context with accurate next batch date", async () => {
     mockKnowledge.mockResolvedValue([
@@ -300,7 +360,9 @@ describe("buildSystemPrompt", () => {
 
     const prompt = await buildSystemPrompt(BigInt(22222));
     expect(prompt).toContain("Preferred language: ru");
-    expect(prompt).toContain("Respond in the user's preferred language (ru)");
+    // The instruction is now an unconditional rule rather than the old
+    // "unless they switch", which let a bare emoji flip the reply to English.
+    expect(prompt).toContain("Write EVERY reply in ru");
   });
 
   it("includes pending rejection follow-up for a proposed self-decline", async () => {

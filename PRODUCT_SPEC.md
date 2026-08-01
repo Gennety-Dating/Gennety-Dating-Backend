@@ -1232,6 +1232,42 @@ same `runMenuAgentTurn`, with the same tools, also backs the JWT
 `/v1/assistant/{ask,voice}` routes (corrected 2026-07-29 — the mistake had a
 cost, see the access gate below).
 
+**What the agent is allowed to know, and in which language (2026-08-01).**
+Three corrections, all from an audit of what the concierge could actually see:
+
+- **It knows the account facts users ask about most.** `ticketBalance`,
+  Premium state, dating city and verification status are rendered into the live
+  context (the paid two only under their feature flags). "How many tickets do I
+  have?" previously had no answer path at all — not in the context, not in a
+  tool — so the only honest move was to send the user to a menu screen to read
+  a number one column away. Prices in the playbook are read from
+  `TICKET_PRICE_CENTS` / `PREMIUM_PRICE_USD_DISPLAY` / `REMATCH_PRICE_USD_DISPLAY`
+  rather than written into the prose, where an env change would have left the
+  agent quoting a stale one.
+- **It knows about Rematch (§3.11), including who must never hear about it.**
+  The feature was live in production while the playbook had no entry for it, so
+  the agent's own "only describe what is listed here" rule made it deny a paid
+  feature the user could buy. The section carries the asymmetry as a hard rule:
+  a woman is never told the feature, its price, or that a pitch was paid for —
+  the gift framing is the product, and describing it as a purchase is what
+  would spoil it.
+- **Language is no longer the model's call.** The instruction was "respond in
+  the user's preferred language unless they switch", which on a message
+  carrying no language — an emoji, "ок", a link, digits — handed the decision
+  to the model, and it flipped to English. The rule is now unconditional, with
+  the non-signals named explicitly; the language changes only through an
+  explicit request routed to `set_language`. The turn's fallback line is
+  localized for the same reason: an empty completion used to answer a
+  Russian-speaking user with a hardcoded English sentence, which reads exactly
+  like the bot switching languages on its own.
+
+The agent is also told to **check before it asserts** — read the live match
+block and timeline rather than infer — and a `scheduled` date whose time has
+passed is labelled as already happened, since the row stays `scheduled` until
+the T+24h feedback flow closes it. Brevity remains per bubble (§2.1); a third
+bubble is explicitly allowed for a condition, cost, deadline or next step that
+genuinely applies to this user, so an answer is not left half-given.
+
 **What the agent may do, and what it may only offer (2026-07-29).** Every tool
 carries a class, and the turn loop enforces it, so a tool's blast radius is a
 property of the registry rather than of how carefully its description was

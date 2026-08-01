@@ -18,6 +18,7 @@ import { formatNextBatchDate } from "./next-batch.js";
 import {
   buildProductPlaybook,
   type PlaybookFeatures,
+  type PlaybookPricing,
 } from "./product-playbook.js";
 import { getRecentChatEvents, type ChatEventView } from "./chat-events.js";
 import { stallCheckInPending } from "./match-stall.js";
@@ -39,6 +40,7 @@ ${VOICE_SELF_GENDER}
 - Be honest about what you can and can't do.
 
 ## How You Act
+- **Check before you assert.** Anything about their date, their match, their tickets or their standing is in the live context below — read it and answer from it. If the context is silent or disagrees with what they seem to think, say what you can actually see and ask, rather than filling the gap. \`get_my_standing\` and \`explain_my_match\` exist for exactly the moments where you'd otherwise be guessing; use them instead.
 - **One change per message.** You may save at most one profile change per turn. If they ask for two, make the first and ask about the second.
 - **You never do anything irreversible yourself.** Cancelling a date, closing an account, cancelling a subscription — for those you surface a button and the user taps it. Never say you cancelled, deleted, or closed something; say you've put it in front of them.
 - Never claim an edit landed unless the tool told you it did.
@@ -48,7 +50,8 @@ ${VOICE_SELF_GENDER}
 ## Conversation Style (see VOICE.md — source of truth)
 - ONE voice: young and vibey, but a professional — finding this person a real date IS the job, and you're good at it. Confident, warm, lightly ironic, never cringe, never corporate. Short sentences; fragments are fine; one idea per message.
 - BREVITY IS PER MESSAGE. Each bubble is 1–2 short sentences — never a paragraph. If a bubble reads like a paragraph, cut it in half or move half into the next bubble. No bullet lists unless asked.
-- **Write in chat bubbles, and default to TWO.** Separate thoughts with a BLANK line — each blank-line block is delivered as its own Telegram message, so you are texting, not writing a note. Normal shape: a short first bubble that reacts to what they just said, then the substance in the second. A third only when there is genuinely a third thought. One bubble only when there is nothing to react to (a bare "привет", a one-word answer).
+- **Write in chat bubbles, and default to TWO.** Separate thoughts with a BLANK line — each blank-line block is delivered as its own Telegram message, so you are texting, not writing a note. Normal shape: a short first bubble that reacts to what they just said, then the substance in the second. One bubble only when there is nothing to react to (a bare "привет", a one-word answer).
+- **Use a THIRD bubble when the answer has a real catch — and don't leave the question half-answered.** If there is a condition, a cost, a deadline, or an obvious next step that actually applies to THIS user, it belongs in the reply, not in a follow-up they have to think to ask for. Put it in the third bubble, as one sentence. What doesn't belong there: general theory, features they aren't near, or a caveat you invented to sound thorough. Brevity is per bubble; completeness is per answer.
 - Vary that first bubble. It is a real reaction to THIS message — "ага", "понял", "хороший вопрос", "секунду", "так", or nothing at all when it would be filler. Never open with the same word twice in a row: a fixed "принял" on every reply reads like a stamp, exactly like the ✅ we banned.
 - Because each bubble is small, the whole reply may carry a little more than a single line would — but every message still has to earn its place. Two thin bubbles beat one dense one; three bubbles of filler are worse than one honest sentence.
 - PLAIN TEXT ONLY. Your replies are sent to Telegram without any formatting renderer: markdown symbols show up literally in the chat. Never write **bold**, *italics*, _underscores_, \`backticks\`, # headers, or bullet markers — just plain sentences.
@@ -69,6 +72,22 @@ function playbookFeatures(): PlaybookFeatures {
     venueChange: env.VENUE_CHANGE_FEATURE_ENABLED === true,
     tickets: env.TICKET_FEATURE_ENABLED === true,
     premium: env.PREMIUM_FEATURE_ENABLED === true,
+    rematch: env.REMATCH_FEATURE_ENABLED === true,
+  };
+}
+
+/**
+ * Prices the playbook quotes, read from env rather than written into the prose.
+ *
+ * The literals used to live in the playbook text, so an env price change would
+ * have left the agent quoting the old number — the one kind of wrong answer
+ * that costs money on contact with a user.
+ */
+function playbookPricing(): PlaybookPricing {
+  return {
+    ticketPrice: `$${(env.TICKET_PRICE_CENTS / 100).toFixed(2)}`,
+    premiumPrice: env.PREMIUM_PRICE_USD_DISPLAY,
+    rematchPrice: env.REMATCH_PRICE_USD_DISPLAY,
   };
 }
 
@@ -171,6 +190,19 @@ interface UserContext {
   pendingRejectionHint: string;
   /** Rendered "what just happened in this chat" block — see `renderChatTimeline`. */
   chatTimeline: string;
+  /**
+   * Account facts the user asks about constantly and the agent could not see.
+   *
+   * "How many tickets do I have?" and "am I on Premium?" had no answer path at
+   * all: not in this context, not in any tool. The agent's only honest move was
+   * to send them to a menu screen to read it themselves — for a number that is
+   * one column away. Rendered under the matching feature flag, so a disabled
+   * feature is never mentioned.
+   */
+  ticketBalance: number | null;
+  premiumUntil: Date | null;
+  verificationStatus: string;
+  datingCity: string | null;
 }
 
 /** How far back to look for an un-explained decline (24 hours). */
@@ -213,6 +245,22 @@ export interface ActiveMatchView {
    * agent that has no idea a question is open.
    */
   stallCheckInPending: boolean;
+}
+
+/** Map the user's language onto the Intl locale used for every rendered date. */
+function localeFor(language: string | null): string {
+  switch (language) {
+    case "ru":
+      return "ru-RU";
+    case "uk":
+      return "uk-UA";
+    case "de":
+      return "de-DE";
+    case "pl":
+      return "pl-PL";
+    default:
+      return "en-US";
+  }
 }
 
 /** Compact local clock label ("19:00"). */
@@ -322,7 +370,16 @@ export function describeActiveMatch(
     lines.push(`Date scheduled: ${when} at ${venue}.`);
     lines.push(`Partner: ${partner}.`);
     if (match.agreedTime) {
+      const past = match.agreedTime.getTime() < now.getTime();
       lines.push(`Time until the date: ${humanizeUntil(match.agreedTime, now)}.`);
+      if (past) {
+        // The row stays `scheduled` until the T+24h feedback flow closes it, so
+        // without this the agent reads a finished date as an upcoming one and
+        // tells someone their date "is coming up" hours after they got home.
+        lines.push(
+          "THIS DATE HAS ALREADY HAPPENED — the time above is in the past. Talk about it in the past tense: ask how it went, don't describe it as upcoming and don't re-explain how to find each other. The feedback prompt goes out about 24h after it.",
+        );
+      }
     }
     if (match.venueAddress) lines.push(`Venue address: ${match.venueAddress}.`);
     if (match.venueGoogleMapsUri) {
@@ -539,6 +596,10 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
       universityDomain: true,
       status: true,
       language: true,
+      ticketBalance: true,
+      premiumUntil: true,
+      verificationStatus: true,
+      profile: { select: { homeCity: true } },
       matchesAsA: {
         where: statusFilter,
         orderBy: { createdAt: "desc" },
@@ -574,16 +635,7 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
       .filter(Boolean)
       .join(", ") || "none";
 
-  const locale =
-    user?.language === "ru"
-      ? "ru-RU"
-      : user?.language === "uk"
-        ? "uk-UA"
-        : user?.language === "de"
-          ? "de-DE"
-          : user?.language === "pl"
-            ? "pl-PL"
-            : "en-US";
+  const locale = localeFor(user?.language ?? null);
 
   const activeMatch: ActiveMatchView | null = raw
     ? {
@@ -653,6 +705,10 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
     enabledFeatures,
     pendingRejectionHint,
     chatTimeline,
+    ticketBalance: user?.ticketBalance ?? null,
+    premiumUntil: user?.premiumUntil ?? null,
+    verificationStatus: user?.verificationStatus ?? "unverified",
+    datingCity: user?.profile?.homeCity ?? null,
   };
 }
 
@@ -675,12 +731,28 @@ export async function buildSystemPrompt(telegramId: bigint): Promise<string> {
     fetchUserContext(telegramId),
   ]);
 
-  const playbook = buildProductPlaybook(playbookFeatures());
+  const playbook = buildProductPlaybook(playbookFeatures(), playbookPricing());
 
   const pendingSection = userCtx.pendingRejectionHint
     ? `\n\n## Pending Rejection Follow-up
 The user recently declined match \`${userCtx.pendingRejectionHint}\` and has not yet given a reason. They may answer as typed text or as a voice note transcript. Naturally steer the conversation toward what specifically didn't click: looks, vibe, interests, or lifestyle. Keep it warm and curious, not interrogative. Once the user gives a concrete answer, call \`record_rejection_feedback\` with \`match_id="${userCtx.pendingRejectionHint}"\` and their reason as a full sentence. If the user clearly refuses to explain ("just didn't click, let's move on"), drop the topic — do not call the tool with vague content.`
     : "";
+
+  const features = playbookFeatures();
+  const accountLines = [
+    features.tickets && userCtx.ticketBalance !== null
+      ? `- Date Tickets in their wallet: ${userCtx.ticketBalance}`
+      : null,
+    features.premium
+      ? `- Gennety Premium: ${
+          userCtx.premiumUntil && userCtx.premiumUntil.getTime() > Date.now()
+            ? `active until ${formatWhen(userCtx.premiumUntil, localeFor(userCtx.language))}`
+            : "not subscribed"
+        }`
+      : null,
+    userCtx.datingCity ? `- Dating city: ${userCtx.datingCity}` : null,
+    `- Identity verification: ${userCtx.verificationStatus}`,
+  ].filter(Boolean);
 
   const userSection = `## Current User Context
 - Name: ${userCtx.firstName}
@@ -690,6 +762,7 @@ The user recently declined match \`${userCtx.pendingRejectionHint}\` and has not
 - Preferred language: ${userCtx.language}
 - Next match batch: ${userCtx.nextBatchDate}
 - Optional features enabled: ${userCtx.enabledFeatures}
+${accountLines.join("\n")}
 
 ### Live match status
 ${userCtx.matchSummary}
@@ -719,7 +792,22 @@ follow-ups are sent by the product itself.
   something happened, say plainly what you can see and ask what they mean.
 - Talk about buttons by the label the user actually sees in the timeline.
 
-Respond in the user's preferred language (${userCtx.language}) unless they switch.${pendingSection}`;
+## Language — not a judgement call
+Write EVERY reply in ${userCtx.language}. That is the language stored on their
+account, and it changes in exactly one way: they ask for a different one and you
+call \`set_language\`. Nothing else changes it.
+
+In particular, NONE of these is a request to switch, and you must keep writing
+in ${userCtx.language} after them: an emoji or a sticker-like message, a
+reaction, "ok" / "+" / "да" / "?" / "thx", a link, digits, a name, a place, or
+one or two words that happen to look like another language. A message with no
+language in it is not a language choice — and neither is a person quoting
+something. If they write you a whole message in another language and do NOT ask
+to switch, answer in ${userCtx.language}; you may ask once whether they want the
+bot switched.
+
+This is a real bug being fixed, not a style note: the bot used to flip to
+English on a bare emoji, which reads as it having lost the thread.${pendingSection}`;
 
   // The code-owned playbook is the primary product knowledge; the DB table is
   // optional operator-curated extras, appended only when non-empty.

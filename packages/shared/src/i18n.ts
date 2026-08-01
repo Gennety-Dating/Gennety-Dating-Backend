@@ -309,6 +309,7 @@ const translations = {
     editPrefsDescriptionSaved: "Partner preferences updated",
     editHobbiesSaved: "Interests updated",
     agentEntryPrompt: "Here you go:",
+    agentFallbackError: "Something glitched on my side. Say that again?",
     agentBlockedVerification: "Finish verification first — everything else opens up after that.",
     agentBlockedSuspended:
       "Your account is on hold right now, so I can't help with this. Questions go to @gennetysupport.",
@@ -1409,6 +1410,7 @@ const translations = {
     editPrefsDescriptionSaved: "Предпочтения обновлены",
     editHobbiesSaved: "Интересы обновлены",
     agentEntryPrompt: "Держи:",
+    agentFallbackError: "Что-то у меня сбойнуло. Повтори, пожалуйста?",
     agentBlockedVerification: "Сначала пройди верификацию — дальше откроется всё остальное.",
     agentBlockedSuspended:
       "Аккаунт сейчас на паузе с нашей стороны, так что тут не помогу. Вопросы — в @gennetysupport.",
@@ -2454,6 +2456,7 @@ const translations = {
     editPrefsDescriptionSaved: "Уподобання оновлено",
     editHobbiesSaved: "Інтереси оновлено",
     agentEntryPrompt: "Тримай:",
+    agentFallbackError: "Щось у мене збилося. Повтори, будь ласка?",
     agentBlockedVerification: "Спочатку пройди верифікацію — далі відкриється все інше.",
     agentBlockedSuspended:
       "Акаунт зараз на паузі з нашого боку, тож тут не допоможу. Питання — у @gennetysupport.",
@@ -3491,6 +3494,7 @@ const deTranslations: TranslationTable = {
   editPrefsDescriptionSaved: "Partnerwünsche aktualisiert",
   editHobbiesSaved: "Interessen aktualisiert",
   agentEntryPrompt: "Hier, bitte:",
+  agentFallbackError: "Bei mir ist was schiefgelaufen. Sag das nochmal?",
   agentBlockedVerification: "Mach zuerst die Verifizierung — danach geht alles andere auf.",
   agentBlockedSuspended:
     "Dein Konto ist gerade von unserer Seite pausiert, da kann ich hier nicht helfen. Fragen an @gennetysupport.",
@@ -4502,6 +4506,7 @@ const plTranslations: TranslationTable = {
   editPrefsDescriptionSaved: "Preferencje zaktualizowane",
   editHobbiesSaved: "Zainteresowania zaktualizowane",
   agentEntryPrompt: "Proszę:",
+  agentFallbackError: "Coś mi się wysypało. Powtórzysz?",
   agentBlockedVerification: "Najpierw przejdź weryfikację — potem otworzy się reszta.",
   agentBlockedSuspended:
     "Twoje konto jest teraz wstrzymane po naszej stronie, więc tu nie pomogę. Pytania na @gennetysupport.",

@@ -94,4 +94,56 @@ describe("buildProductPlaybook", () => {
     expect(text).toContain("Change venue");
     expect(text).toContain("Date Tickets (currently ON)");
   });
+
+  describe("rematch flag", () => {
+    // It was ON in production while the playbook had no idea it existed, so the
+    // agent's own "only describe what is listed here" rule made it deny a paid
+    // feature the user could actually buy.
+    it("describes the paid re-run only when ON", () => {
+      const on = buildProductPlaybook({ ...ALL_OFF, rematch: true });
+      expect(on).toContain("Searching again before the next drop");
+      expect(on).toContain("INTRODUCTION, not a date");
+      expect(buildProductPlaybook(ALL_OFF)).not.toContain(
+        "Searching again before the next drop",
+      );
+    });
+
+    // The gift framing is the product. A woman must never learn a pitch was
+    // bought, so the rule has to be in the prompt, not just in our heads.
+    it("forbids ever surfacing it to a woman", () => {
+      const on = buildProductPlaybook({ ...ALL_OFF, rematch: true });
+      expect(on).toContain("never mention this feature");
+      expect(on).toMatch(/Read the user's Gender/);
+    });
+  });
+
+  describe("pricing", () => {
+    it("quotes the injected prices, never a hardcoded literal", () => {
+      const text = buildProductPlaybook(
+        { ...ALL_ON, rematch: true },
+        { ticketPrice: "$4.20", premiumPrice: "$42.00", rematchPrice: "$1.23" },
+      );
+      expect(text).toContain("$4.20");
+      expect(text).toContain("$42.00");
+      expect(text).toContain("$1.23");
+      // The old inline literals must be gone, or an env price change silently
+      // turns the agent into a source of wrong prices.
+      expect(text).not.toContain("$6.99");
+      expect(text).not.toContain("$11.99");
+    });
+  });
+
+  describe("account controls stay in sync with the real menu", () => {
+    it("does not send anyone to Settings to re-verify", () => {
+      const text = buildProductPlaybook(ALL_ON);
+      // The entry was removed 2026-07-24 — verification is mandatory and
+      // happens before the app opens.
+      expect(text).toContain('NO "verify account" entry');
+      expect(text).not.toContain("re-verify");
+    });
+
+    it("never offers a museum as a first-date venue", () => {
+      expect(buildProductPlaybook(ALL_ON)).toContain("never museums");
+    });
+  });
 });

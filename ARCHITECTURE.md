@@ -382,6 +382,26 @@ grammY session adapter persistence (Prisma-backed). Keyed by Telegram chat id.
 Curated knowledge entries surfaced to the menu/onboarding agents. Each row:
 `key` (unique), `title`, `content`, `category`, `priority`, `active`.
 
+**Two namespaces share this table, and only one of them may reach a prompt.**
+`admin/utils/cache.ts` uses it as the JSON cache for the heavy analytics
+queries (`category = 'admin_cache'`, keys prefixed `admin_cache:`).
+`fetchKnowledgeBase` (`services/prompt-builder.ts`) is the single place that
+enforces the split, filtering on **both** markers plus a post-query guard — a
+row carrying only one of them is exactly the shape of the bug this prevents.
+Until 2026-08-01 that query had no filter at all, so every analytics blob
+(user counts, gender funnel, city centroids, growth) was injected into the menu
+agent's system prompt at `priority: 0`, i.e. above the code-owned playbook:
+~23k characters on every turn, for every user. The block is additionally capped
+at 4k characters with a warning, because the failure mode is silent.
+
+**Product rules do NOT live here.** They live in `services/product-playbook.ts`
+— code-owned, flag-aware and unit-tested. The five legacy rule rows
+(`profile_rules`, `emergency_protocol`, `university_verification`,
+`match_timing_faq`, `zero_chat_philosophy`) drifted badly from the product and
+were retired by `packages/db/prisma/seed-knowledge.ts`, which now seeds nothing
+and only deactivates them. What remains is an extension point for genuine
+operator notes.
+
 ### `messages`
 
 Aether concierge multimodal chat history (one row per turn, with optional

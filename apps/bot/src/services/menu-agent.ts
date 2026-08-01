@@ -434,7 +434,7 @@ const TOOLS = [
     function: {
       name: "set_language",
       description:
-        "Switch the language the bot replies in and every screen shows. Call when the user asks to change language — 'switch to Russian', 'переключи на английский', 'parle français' (say it's not supported if the target isn't in the list). After this succeeds, write the REST of your reply in the new language.",
+        "Switch the language the bot replies in and every screen shows. Call ONLY on an explicit request to change it — 'switch to Russian', 'переключи на английский', 'parle français' (say it's not supported if the target isn't in the list). This writes to their account permanently, so the bar is an actual request: a message written in another language, an emoji, a link, a name, or a one-word reply is NOT one, and neither is your own guess about what they'd prefer. If in doubt, ask instead of calling. After this succeeds, write the REST of your reply in the new language.",
       parameters: {
         type: "object",
         properties: {
@@ -563,6 +563,31 @@ export const TOOL_KINDS: Record<string, ToolKind> = {
  * instead of a rewritten profile.
  */
 export const MAX_WRITES_PER_TURN = 1;
+
+/**
+ * Did a tool actually persist something?
+ *
+ * Parsed, not substring-matched. This used to be `result.includes('"success":
+ * true')` on the raw JSON, and `execUpdateBio`'s REFUSAL path returns the
+ * user's existing bio text in the same payload — so a profile whose text
+ * happened to contain that substring turned a refusal into a "success": the
+ * turn's single write budget was spent and the user was shown a code-owned
+ * "✓ About me updated" receipt for a change that was never saved. A receipt
+ * exists precisely so a write is a fact rather than a claim; it must not be
+ * decidable by the contents of a user-supplied string.
+ */
+export function toolReportedSuccess(result: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(result);
+    return (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      (parsed as { success?: unknown }).success === true
+    );
+  } catch {
+    return false;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Tool Executors
@@ -821,6 +846,7 @@ async function execExplainMyMatch(telegramId: bigint): Promise<string> {
     explanation,
     instruction:
       "Explain why these two were put together, in one or two sentences, as a matchmaker would. " +
+      "If `matchStatus` is not a live one (cancelled, expired, completed), this pairing is OVER — talk about it in the past tense and never imply it is still on the table. " +
       "Lead with `synergyReason` if present. The factor words describe the PAIRING, never a rating of the partner — " +
       "never say a partner scored low on anything, and never mention Elo, attractiveness scoring, embeddings or internal numbers. " +
       "`attractivenessBalance` may only be described as how close a fit the two are overall. " +
@@ -921,7 +947,6 @@ async function execGetMyProfile(telegramId: bigint): Promise<string> {
           ageRangeMin: true,
           ageRangeMax: true,
           height: true,
-          ethnicity: true,
           photos: true,
         },
       },
@@ -948,7 +973,6 @@ async function execGetMyProfile(telegramId: bigint): Promise<string> {
         ? `${user.profile.ageRangeMin}-${user.profile.ageRangeMax}`
         : null,
       height: user.profile?.height ?? null,
-      ethnicity: user.profile?.ethnicity ?? null,
       photoCount: user.profile?.photos?.length ?? 0,
     },
   });
@@ -1464,7 +1488,7 @@ export async function runMenuAgentTurn(
 
       // Only count and acknowledge a write that reported success — a rejected
       // edit must neither burn the turn's budget nor tell the user it landed.
-      if (TOOL_KINDS[fnName] === "write" && result.includes('"success":true')) {
+      if (TOOL_KINDS[fnName] === "write" && toolReportedSuccess(result)) {
         writesUsed++;
         if (receiptKey) await receiptLine(receiptKey);
       }
@@ -1495,8 +1519,13 @@ export async function runMenuAgentTurn(
   const lastAssistant = [...history]
     .reverse()
     .find((m) => m.role === "assistant" && m.content);
+  // Localized, because this is reachable on an ordinary turn — an empty
+  // `content` (the model spent its completion budget, or the round limit ran
+  // out mid tool-loop) used to answer a Russian-speaking user with an English
+  // sentence out of nowhere, which reads exactly like the bot switching
+  // languages on its own.
   const reply =
-    lastAssistant?.content ?? "Something went wrong. Try again in a moment.";
+    lastAssistant?.content ?? t(await userLanguage(telegramId), "agentFallbackError");
 
   return {
     reply,
@@ -1525,7 +1554,11 @@ async function callOpenAI(
       tools: TOOLS,
       tool_choice: "auto",
       temperature: 0.5,
-      max_completion_tokens: 512,
+      // Raised from 512. This budget also covers reasoning tokens, and Cyrillic
+      // costs roughly twice as many tokens per character as Latin — so a
+      // three-bubble Russian reply could hit the ceiling, come back with an
+      // empty `content`, and land the user on the fallback line above.
+      max_completion_tokens: 900,
     }),
   });
 
