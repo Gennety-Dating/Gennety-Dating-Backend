@@ -8,6 +8,18 @@ Source-of-truth **drafts** for Gennety's user-facing legal documents.
 | [terms-of-service.md](terms-of-service.md) | `https://gennety.com/terms` | v3.0 — "Last Updated: 1 August 2026" |
 | [cookie-policy.md](cookie-policy.md) | `https://gennety.com/cookies` | v1.0 — "Last Updated: 23 July 2026" |
 
+Two further documents in this directory are **internal** and are never
+published — they are produced to a supervisory authority on request:
+
+| File | What it is |
+|---|---|
+| [ropa.md](ropa.md) | Record of Processing Activities (Art. 30) — the inventory: every purpose, its legal basis, data categories, recipients, transfers and retention |
+| [dpia.md](dpia.md) | Data Protection Impact Assessment (Art. 35) — necessity and proportionality, ten assessed risks with residuals, and the action list |
+
+Both are derived from the code rather than from memory: **update them in the
+same commit as any change to a processing activity, a retention period, or a
+processor**, exactly like the published documents above.
+
 **The Terms and the Privacy Policy share one version stamp**, because the
 consent screen accepts them with a single checkbox. That stamp lives in code as
 `LEGAL_DOCS_VERSION` (`packages/shared/src/constants.ts`, currently
@@ -83,9 +95,6 @@ placeholders left in the text:
   price: code default `$9.99`, prod `.env` still shows `$10` — reconcile).
 - Governing law / jurisdiction wording (drafts use Ukraine / Kyiv — confirmed).
 - The sub-processor list (Privacy §12.4) — keep it in sync as providers change.
-- **No DPIA (Art. 35) and no RoPA (Art. 30) exist yet.** Both are mandatory for
-  this processing (biometrics + large-scale profiling + special categories) and
-  are the next deliverables after these documents.
 - Art. 15 / Art. 20 requests are served by `pnpm gdpr:export -- --telegram=<id>
   --prod` (also `--user` / `--email` / `--phone`). It discovers tables from
   `information_schema` rather than a hand-written list, so a table added later
