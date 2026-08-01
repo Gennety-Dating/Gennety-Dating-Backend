@@ -47,6 +47,8 @@ export type BeginLivenessResult =
     }
   | { ok: false; error: "user_not_found" } // 404
   | { ok: false; error: "already_verified" } // 409
+  /** 409 — no explicit Art. 9 biometric consent on file yet. */
+  | { ok: false; error: "consent_required" }
   | { ok: false; error: "provider" }; // 503, transient
 
 /**
@@ -86,9 +88,18 @@ export async function beginLivenessCheck(
       language: true,
       verificationStatus: true,
       verifiedSelfiePath: true,
+      biometricConsentAt: true,
     },
   });
   if (!user) return { ok: false, error: "user_not_found" };
+  // GDPR Art. 9(2)(a): biometric processing needs an EXPLICIT act of consent
+  // for this processing specifically. Tapping a "Verify" button under copy
+  // that never mentions biometrics is not one, and the general ToS tick at
+  // sign-up is not one either — so the session is refused until the dedicated
+  // consent screen has been through `recordBiometricConsent`. This is the
+  // gate, not the UI: both clients must pass it, and a client that skips its
+  // own screen gets a 409 rather than a session.
+  if (!user.biometricConsentAt) return { ok: false, error: "consent_required" };
   // Re-running liveness on an already-verified user would burn a check and a
   // session for no decision; the client renders a "you're verified" screen.
   //
@@ -157,6 +168,45 @@ export async function beginLivenessCheck(
     credentials: credentials.credentials,
     language: user.language ?? "en",
   };
+}
+
+/**
+ * Record the user's explicit consent to biometric processing (Art. 9(2)(a)),
+ * shared by the Mini App and the native client.
+ *
+ * Idempotent by design: the FIRST consent is the one that counts, so a second
+ * tap (a retry after a failed check, a re-opened Mini App) does not overwrite
+ * the original timestamp. It does refresh the version when the disclosure text
+ * has moved on, so the row always answers "which text did they last agree to".
+ *
+ * Withdrawal is deliberately NOT here — it is a support path today, because
+ * withdrawing also has to erase the reference selfie and pull the user out of
+ * matching (`legal/privacy-policy.md` §18).
+ */
+export async function recordBiometricConsent(
+  userId: string,
+  version: string,
+): Promise<{ ok: boolean }> {
+  try {
+    // Compare-and-set on `biometricConsentAt IS NULL` so the original moment of
+    // consent survives every later tap.
+    const claimed = await prisma.user.updateMany({
+      where: { id: userId, biometricConsentAt: null },
+      data: { biometricConsentAt: new Date(), biometricConsentVersion: version },
+    });
+    if (claimed.count === 0) {
+      // Already consented — keep the first timestamp, record that they have now
+      // also seen the current text.
+      await prisma.user.update({
+        where: { id: userId },
+        data: { biometricConsentVersion: version },
+      });
+    }
+    return { ok: true };
+  } catch (err) {
+    console.warn(`${LOG_PREFIX} recordBiometricConsent failed`, { userId, err });
+    return { ok: false };
+  }
 }
 
 /**

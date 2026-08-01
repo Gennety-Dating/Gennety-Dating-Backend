@@ -562,6 +562,23 @@ Hard rules enforced by the collector:
 
 ### 1.4 Identity verification (Phase 6.3 in code)
 
+**Biometric consent is its own screen (added 2026-08-01).** Before any liveness
+session is minted, the user passes an explicit consent step stating what is
+captured, who processes it (AWS Rekognition Face Liveness, in the EU), how long
+the reference still is kept (90 days), and what declining means (no matching;
+the account can be deleted). GDPR Art. 9(2)(a) requires an explicit act for
+biometric processing *specifically* — the ToS tick at sign-up is not one, and
+neither is tapping a button labelled "Verify now" under copy that never
+mentions biometrics, which is what the flow did until this change. The consent
+is recorded on `User.biometricConsentAt` + `biometricConsentVersion`, and
+**the gate lives in `beginLivenessCheck`, not in the UI**: a client that skips
+its own screen gets `409 consent-required` instead of a session, on both the
+Mini App (`/v1/verification/mini-app/consent`) and the native rail
+(`POST /v1/me/verification/consent`). The first consent's timestamp is
+preserved across retries; only the version is refreshed. Withdrawal is a
+support path (`legal/privacy-policy.md` §18), because it must also erase the
+reference selfie and drop the user out of matching.
+
 After `finalize_onboarding` the bot sends the **verification CTA**
 (`handlers/onboarding/verification.ts`):
 

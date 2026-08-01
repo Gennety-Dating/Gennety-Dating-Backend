@@ -719,6 +719,40 @@ paths:
                   status: { $ref: "#/components/schemas/VerificationStatus" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/me/verification/consent:
+    post:
+      tags: [me]
+      operationId: recordBiometricConsent
+      summary: Record explicit consent to biometric processing
+      description: |
+        GDPR Art. 9(2)(a) requires an **explicit** act of consent for biometric
+        processing specifically — the general Terms tick at sign-up is not one,
+        and neither is tapping a button labelled "Verify".
+
+        Call this when the user confirms on a dedicated consent screen that
+        states what is captured, who processes it (AWS, in the EU), how long the
+        reference still is kept (90 days), and what declining means (they are
+        not matched). `native-init` answers `409` until this has succeeded.
+
+        Idempotent: the first consent's timestamp is preserved on repeat calls,
+        and only the recorded document version is refreshed.
+      responses:
+        "200":
+          description: Consent recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503":
+          description: Consent could not be recorded — do NOT start the check
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/me/verification/native-init:
     get:
       tags: [me]
@@ -772,7 +806,11 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: Already verified — no session is minted
+          description: |
+            Already verified — no session is minted; or `Biometric consent
+            required`, meaning the user has not yet passed through
+            `POST /v1/me/verification/consent`. Show the consent screen, record
+            the consent, then retry this call once.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

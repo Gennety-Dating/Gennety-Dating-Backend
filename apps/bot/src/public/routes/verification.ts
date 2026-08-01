@@ -3,9 +3,11 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { requireAuth } from "../auth-middleware.js";
 import {
   beginLivenessCheck,
+  recordBiometricConsent,
   completeLivenessCheck,
 } from "../../services/liveness-flow.js";
 import { getBotApi } from "../server.js";
+import { LEGAL_DOCS_VERSION } from "@gennety/shared";
 
 /**
  * Native-client identity verification (AWS Rekognition Face Liveness).
@@ -40,6 +42,23 @@ const initLimiter = rateLimit({
  * short-lived, single-action AWS credentials the on-device component uses to
  * stream its video. Flips `verificationStatus` to `pending`.
  */
+/**
+ * POST /v1/me/verification/consent — explicit consent to biometric processing
+ * (GDPR Art. 9(2)(a)), recorded before any liveness session can be minted.
+ * Twin of the Mini App endpoint; `native-init` 409s without it.
+ */
+verificationRouter.post(
+  "/consent",
+  async (req: Request, res: Response): Promise<void> => {
+    const recorded = await recordBiometricConsent(req.userId!, LEGAL_DOCS_VERSION);
+    if (!recorded.ok) {
+      res.status(503).json({ error: "Consent could not be recorded" });
+      return;
+    }
+    res.json({ ok: true });
+  },
+);
+
 verificationRouter.get(
   "/native-init",
   initLimiter,
@@ -52,6 +71,9 @@ verificationRouter.get(
           return;
         case "already_verified":
           res.status(409).json({ error: "Already verified" });
+          return;
+        case "consent_required":
+          res.status(409).json({ error: "Biometric consent required" });
           return;
         case "not_configured":
           res.status(503).json({ error: "Verification feature not configured" });

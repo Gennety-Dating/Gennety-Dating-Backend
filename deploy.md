@@ -35,10 +35,18 @@ The next full deploy reconciles the code — the repo version carries the same f
 ---
 
 **PENDING — privacy remediation, 2026-08-01 (ethnicity removed, founder-feed
-delete anonymised, OTP redaction, consent versioning, coordination-card
-protection).** Not deployed yet. **No env change, no flag change, no Mini App
-change** (`apps/webapp` untouched). Ships with the next full deploy — note the
+delete anonymised, OTP redaction, consent versioning, biometric consent screen,
+coordination-card protection).** Not deployed yet. **No env change, no flag
+change** — but it **DOES need a Mini App redeploy** (`apps/webapp`:
+`verification.html` + `verification.ts` + `i18n.ts` + `api.ts` carry the new
+biometric-consent screen). Ships with the next full deploy — note the
 divergence warning above; none of this is safe to single-file rsync.
+
+**Order matters on this one: server first, then the Mini App.** The server
+starts refusing `/init` with `409 consent-required`, and only the new bundle
+knows how to answer that. A cached old bundle renders its generic error screen
+until the user reloads — verification is briefly unavailable for anyone
+mid-flow, which is why the two steps should be minutes apart, not hours.
 
 **⚠️ This is the first entry in this file that needs a DESTRUCTIVE schema step.**
 It drops `profiles.ethnicity`. That is the *point*: the column holds GDPR Art. 9
@@ -50,6 +58,8 @@ it IS the remediation. Do not preserve it "just in case".
 export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
 # Read the plan BEFORE running anything. Expect exactly two statements:
 #   ALTER TABLE "users" ADD COLUMN "policy_version" TEXT;
+#   ALTER TABLE "users" ADD COLUMN "biometric_consent_at" TIMESTAMP(3);
+#   ALTER TABLE "users" ADD COLUMN "biometric_consent_version" TEXT;
 #   ALTER TABLE "profiles" DROP COLUMN "ethnicity";
 pnpm --filter @gennety/db exec prisma migrate diff \
   --from-schema-datasource prisma/schema.prisma \
@@ -89,6 +99,15 @@ What ships:
 - **`protect_content` on the coordination cards.** They render the partner's
   face and shipped without it. `COORDINATION_FEATURE_ENABLED` is already `true`
   in production, so this would have been live the moment those cards deployed.
+- **A dedicated biometric-consent screen before Face Liveness.** GDPR Art.
+  9(2)(a) needs an explicit act for biometric processing specifically; tapping
+  "Verify now" under copy that never said the word "biometric" was not one. The
+  gate is in `beginLivenessCheck`, so both the Mini App and the native rail are
+  bound by it — a client that skips its screen gets a 409, not a session. Two
+  more additive columns: `users.biometric_consent_at` / `_version`. **Every
+  existing user must consent once** on their next verification attempt; the
+  three currently-`unverified` production accounts are the only ones affected,
+  and nobody loses `verified` status.
 
 Legal documents were rewritten in the same commit (Privacy Policy v4.0, Terms
 v3.0). **They are not live until the website is redeployed** — see
@@ -104,7 +123,14 @@ curl -sD- -o /dev/null -H "Authorization: Bearer $ADMIN_API_KEY" \
 ```
 
 Then walk one onboarding as far as the profile questions and confirm it goes
-partner-preferences → vibe with no origin question in between.
+partner-preferences → vibe with no origin question in between, and open the
+Verify button once to confirm the consent screen appears before the camera and
+that agreeing lands you in the detector:
+
+```sh
+psql "$DATABASE_URL" -c "select count(*) from users where biometric_consent_at is not null;"
+# 0 before anyone verifies; should tick up as accounts pass the new screen.
+```
 
 **Rollback:** revert the code and restart. The dropped column can be re-added
 empty, but the DATA is gone by design and is not recoverable from the

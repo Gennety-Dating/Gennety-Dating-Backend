@@ -1,5 +1,6 @@
 import {
   fetchVerificationInit,
+  postVerificationConsent,
   postVerificationEvent,
   CalendarApiError,
   type VerificationInit,
@@ -33,6 +34,9 @@ import { pickLang, tr, type Lang } from "./i18n.js";
  * HTML, and the Telegram lifecycle (fullscreen, theme, BackButton, closing
  * confirmation) is imperative. Only the detector needs React.
  */
+
+/** Kept in sync with the same constant in `onboarding.tsx`. */
+const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
 
 // ---------------------------------------------------------------------------
 // Pure handlers — exported so verification.test.ts can drive them with
@@ -139,6 +143,7 @@ function showCloseButton(deps: HandlerDeps): void {
 // ---------------------------------------------------------------------------
 
 export type Screen =
+  | "consent"
   | "loading"
   | "finishing"
   | "error"
@@ -186,8 +191,40 @@ function panelScreen(lang: Lang, glyph: string, textKey: Parameters<typeof tr>[1
     </div>`;
 }
 
+/**
+ * Explicit biometric-consent screen (GDPR Art. 9(2)(a)).
+ *
+ * Shown before the detector is ever mounted, and only when the server says
+ * consent is missing. It states the four things a valid explicit consent has
+ * to state — what is captured, who processes it, how long it is kept, and what
+ * happens if you decline — because tapping a button labelled "Verify" under
+ * copy that never mentions biometrics is not consent to biometric processing.
+ */
+function consentScreen(lang: Lang): string {
+  const p = (key: Parameters<typeof tr>[1]): string =>
+    `<p class="consent-text">${escapeHtml(tr(lang, key))}</p>`;
+  return `
+    <div class="screen screen--scroll">
+      <div class="consent">
+        <h1 class="consent-title">${escapeHtml(tr(lang, "verifyConsentTitle"))}</h1>
+        ${p("verifyConsentLead")}
+        ${p("verifyConsentWhat")}
+        ${p("verifyConsentWho")}
+        ${p("verifyConsentKeep")}
+        ${p("verifyConsentRefuse")}
+        <a class="consent-link" href="${PRIVACY_POLICY_URL}" target="_blank" rel="noreferrer">
+          ${escapeHtml(tr(lang, "verifyConsentPolicyLink"))}
+        </a>
+        <p class="consent-error" id="consent-error" hidden></p>
+      </div>
+    </div>`;
+}
+
 export function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): void {
   switch (screen) {
+    case "consent":
+      root.innerHTML = consentScreen(lang);
+      return;
     case "loading":
       root.innerHTML = `
         <div class="screen">
@@ -306,6 +343,48 @@ function boot(): void {
   void bootstrap(app, root, lang);
 }
 
+/**
+ * Show the biometric-consent screen and resolve once the user has agreed AND
+ * the server has recorded it. Rejects only if the user backs out.
+ *
+ * The MainButton carries the action rather than an in-page button so the
+ * affirmative act is unmissable and consistent with every other Mini App here.
+ */
+async function collectConsent(
+  app: NonNullable<typeof window.Telegram>["WebApp"],
+  root: HTMLElement,
+  lang: Lang,
+): Promise<boolean> {
+  renderScreen(root, "consent", lang);
+  const button = app.MainButton;
+  button.setText(tr(lang, "verifyConsentAgreeBtn"));
+  button.show();
+
+  return new Promise<boolean>((resolve) => {
+    button.onClick(() => {
+      button.showProgress?.();
+      void postVerificationConsent(app.initData)
+        .then(() => {
+          button.hideProgress?.();
+          button.hide();
+          resolve(true);
+        })
+        .catch(() => {
+          button.hideProgress?.();
+          const err = document.getElementById("consent-error");
+          if (err) {
+            err.textContent = tr(lang, "verifyConsentFailed");
+            err.hidden = false;
+          }
+          app.HapticFeedback?.notificationOccurred?.("error");
+          // Deliberately NOT resolving: the screen stays up so the user can
+          // tap again. Consent that we failed to record must not become a
+          // session — the server would refuse it anyway.
+        });
+    });
+  });
+}
+
 async function bootstrap(
   app: NonNullable<typeof window.Telegram>["WebApp"],
   root: HTMLElement,
@@ -315,6 +394,26 @@ async function bootstrap(
   try {
     init = await fetchVerificationInit(app.initData);
   } catch (err) {
+    // 409 `consent-required` is not an error state — it is the server telling
+    // us this user has never given explicit biometric consent. Collect it,
+    // then retry exactly once. Any other 409 really is "already verified".
+    if (
+      err instanceof CalendarApiError &&
+      err.status === 409 &&
+      err.reason === "consent-required"
+    ) {
+      const agreed = await collectConsent(app, root, lang);
+      if (!agreed) return;
+      renderScreen(root, "loading", lang);
+      try {
+        init = await fetchVerificationInit(app.initData);
+      } catch {
+        renderScreen(root, "error", lang);
+        return;
+      }
+      await mountDetector(app, root, lang, init);
+      return;
+    }
     if (err instanceof CalendarApiError) {
       if (err.status === 409) {
         renderScreen(root, "already-verified", lang);
@@ -336,6 +435,15 @@ async function bootstrap(
     return;
   }
 
+  await mountDetector(app, root, lang, init);
+}
+
+async function mountDetector(
+  app: NonNullable<typeof window.Telegram>["WebApp"],
+  root: HTMLElement,
+  lang: Lang,
+  init: VerificationInit,
+): Promise<void> {
   const deps = buildDeps(app, root, lang, init.sessionId);
 
   // The detector bundle (Amplify + its Rekognition streaming client) is heavy,

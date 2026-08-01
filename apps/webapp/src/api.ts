@@ -600,6 +600,19 @@ export async function fetchVerificationInit(
   return (await res.json()) as VerificationInit;
 }
 
+/**
+ * Record explicit consent to biometric processing (GDPR Art. 9(2)(a)) before
+ * any liveness session is minted. `/init` answers 409 `consent-required` until
+ * this has succeeded, so the server — not the client — is what enforces it.
+ */
+export async function postVerificationConsent(initData: string): Promise<void> {
+  const res = await fetch(`${apiBase}/v1/verification/mini-app/consent`, {
+    method: "POST",
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok) throw await toError(res);
+}
+
 export async function postVerificationEvent(
   initData: string,
   payload: {

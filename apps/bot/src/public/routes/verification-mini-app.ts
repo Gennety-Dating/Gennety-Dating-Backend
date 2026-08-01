@@ -2,12 +2,13 @@ import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { prisma } from "@gennety/db";
-import type { Language } from "@gennety/shared";
+import { LEGAL_DOCS_VERSION, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import {
   beginLivenessCheck,
   completeLivenessCheck,
+  recordBiometricConsent,
 } from "../../services/liveness-flow.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { verifyAnalysisSteps } from "../../services/analysis-status.js";
@@ -100,6 +101,43 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
         credentials: begun.credentials,
         language: begun.language,
       });
+    },
+  );
+
+  /**
+   * POST /v1/verification/mini-app/consent — the user tapped "I agree" on the
+   * biometric-consent screen (GDPR Art. 9(2)(a)).
+   *
+   * A separate call rather than a flag on `/init` so the consent is recorded
+   * as its own act, on its own screen, before anything is minted — and so a
+   * failure to record it can refuse the session instead of silently running a
+   * biometric check with no basis.
+   */
+  router.post(
+    "/consent",
+    initLimiter,
+    async (req: Request, res: Response): Promise<void> => {
+      const auth = authenticate(req);
+      if (!auth.ok) {
+        res.status(401).json(auth.body);
+        return;
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { telegramId: BigInt(auth.user.id) },
+        select: { id: true },
+      });
+      if (!user) {
+        res.status(404).json({ error: "user-not-found" });
+        return;
+      }
+
+      const recorded = await recordBiometricConsent(user.id, LEGAL_DOCS_VERSION);
+      if (!recorded.ok) {
+        res.status(503).json({ error: "consent-not-recorded" });
+        return;
+      }
+      res.status(200).json({ ok: true });
     },
   );
 
@@ -212,12 +250,18 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
  * screen; a half-configured deploy is a 503 rather than a silent empty session.
  */
 function statusForBeginError(
-  error: "not_configured" | "user_not_found" | "already_verified" | "provider",
+  error:
+    | "not_configured"
+    | "user_not_found"
+    | "already_verified"
+    | "consent_required"
+    | "provider",
 ): number {
   switch (error) {
     case "user_not_found":
       return 404;
     case "already_verified":
+    case "consent_required":
       return 409;
     default:
       return 503;

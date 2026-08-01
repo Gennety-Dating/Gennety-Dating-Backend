@@ -105,6 +105,58 @@
         gap: 16px;
         text-align: center;
       }
+      /* The consent screen is the one view that can overflow a short phone —
+         it carries real disclosure text, so it scrolls and top-aligns instead
+         of centring like the one-line status screens. */
+      .screen--scroll {
+        justify-content: flex-start;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 96px;
+      }
+      .consent {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        width: 100%;
+        max-width: 380px;
+        padding: 28px 24px;
+        border-radius: 28px;
+        text-align: left;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+        backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+      }
+      .consent-title {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .consent-text {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        opacity: 0.85;
+      }
+      .consent-link {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--accent, #8b253b);
+        text-decoration: underline;
+      }
+      .consent-error {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #d2394b;
+      }
+      .consent-error[hidden] {
+        display: none;
+      }
+
       /* Liquid Glass status panel wrapping the spinner / check / message. */
       .screen__panel {
         display: flex;

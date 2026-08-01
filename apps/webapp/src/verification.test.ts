@@ -217,3 +217,38 @@ describe("handleError", () => {
     expect(stub.mainSetText).toHaveBeenCalledWith("Закрыть");
   });
 });
+
+describe("consent screen (GDPR Art. 9(2)(a))", () => {
+  // The screen is the consent. If any of these four disclosures goes missing,
+  // what the user taps stops being informed consent to biometric processing —
+  // which is the whole reason the server refuses to mint a session without it.
+  it("states what is captured, who processes it, how long, and what refusing means", async () => {
+    const mod = await importModule();
+    const root = { innerHTML: "" } as unknown as HTMLElement;
+
+    mod.renderScreen(root, "consent", "en");
+
+    const html = root.innerHTML;
+    expect(html).toContain("biometric data");
+    expect(html).toContain("Amazon Web Services");
+    expect(html).toContain("90 days");
+    expect(html).toContain("You will not be matched");
+    // A reachable full policy, not just the summary on this screen.
+    expect(html).toContain("https://gennety.com/privacy");
+  });
+
+  it("renders the disclosure in every product language, never falling back to English", async () => {
+    const mod = await importModule();
+    const enRoot = { innerHTML: "" } as unknown as HTMLElement;
+    mod.renderScreen(enRoot, "consent", "en");
+
+    for (const lang of ["ru", "uk", "de", "pl"] as const) {
+      const root = { innerHTML: "" } as unknown as HTMLElement;
+      mod.renderScreen(root, "consent", lang);
+      expect(root.innerHTML.length).toBeGreaterThan(200);
+      // A language that silently fell through would be byte-identical to `en`.
+      expect(root.innerHTML).not.toBe(enRoot.innerHTML);
+      expect(root.innerHTML).toContain("Amazon Web Services");
+    }
+  });
+});

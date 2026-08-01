@@ -68,7 +68,16 @@ interface Strings {
   locErrGeoTimeout: string;
   locErrGeoUnsupported: string;
   locErrMapUnavailable: string;
-  // Verification Mini App (Phase 6.3 — Persona embedded flow)
+  // Verification Mini App (AWS Rekognition Face Liveness)
+  verifyConsentTitle: string;
+  verifyConsentLead: string;
+  verifyConsentWhat: string;
+  verifyConsentWho: string;
+  verifyConsentKeep: string;
+  verifyConsentRefuse: string;
+  verifyConsentAgreeBtn: string;
+  verifyConsentPolicyLink: string;
+  verifyConsentFailed: string;
   verifyMiniAppLoading: string;
   verifyMiniAppFinishing: string;
   verifyMiniAppError: string;
@@ -137,6 +146,20 @@ const dict: Record<Lang, Strings> = {
     locErrGeoTimeout: "Location lookup timed out. Try again, or type an address.",
     locErrGeoUnsupported: "Location sharing isn't available in this browser. You can still type an address or tap the map.",
     locErrMapUnavailable: "The map couldn't load. Check your connection and try again.",
+    verifyConsentTitle: "Before we start",
+    verifyConsentLead:
+      "This check records a short video of your face. That is biometric data, so we need your explicit permission first.",
+    verifyConsentWhat:
+      "What happens: you follow an on-screen prompt while your camera records a few seconds. One still frame from it is compared against your profile photos to confirm they are you.",
+    verifyConsentWho:
+      "Who processes it: the video streams from your device straight to Amazon Web Services in the EU — it never passes through our servers. We keep only the single still frame.",
+    verifyConsentKeep:
+      "How long: we delete that frame 90 days after you are verified. You stay verified.",
+    verifyConsentRefuse:
+      "If you would rather not: close this screen. You will not be matched, and you can delete your account at any time.",
+    verifyConsentAgreeBtn: "I agree — start the check",
+    verifyConsentPolicyLink: "Read the full Privacy Policy",
+    verifyConsentFailed: "Couldn't save your consent. Try again.",
     verifyMiniAppLoading: "Opening verification…",
     verifyMiniAppFinishing: "Almost done. Checking results…",
     verifyMiniAppError: "Couldn't start verification. Try again.",
@@ -206,6 +229,20 @@ const dict: Record<Lang, Strings> = {
     locErrGeoTimeout: "Поиск геолокации занял слишком много времени. Попробуй ещё раз или введи адрес.",
     locErrGeoUnsupported: "Геолокация недоступна в этом браузере. Можно ввести адрес или тапнуть по карте.",
     locErrMapUnavailable: "Не удалось загрузить карту. Проверь соединение и попробуй ещё раз.",
+    verifyConsentTitle: "Прежде чем начать",
+    verifyConsentLead:
+      "Проверка записывает короткое видео твоего лица. Это биометрические данные, поэтому нам нужно твоё явное согласие.",
+    verifyConsentWhat:
+      "Что произойдёт: ты выполнишь подсказку на экране, пока камера снимает несколько секунд. Один кадр из этого видео сравнивается с фотографиями в профиле, чтобы подтвердить, что это ты.",
+    verifyConsentWho:
+      "Кто обрабатывает: видео идёт с твоего устройства напрямую в Amazon Web Services в ЕС — оно не проходит через наши серверы. Мы храним только один кадр.",
+    verifyConsentKeep:
+      "Сколько хранится: мы удаляем этот кадр через 90 дней после верификации. Статус «проверен» при этом остаётся.",
+    verifyConsentRefuse:
+      "Если не хочешь: просто закрой этот экран. Подбор пар не начнётся, и аккаунт можно удалить в любой момент.",
+    verifyConsentAgreeBtn: "Согласен — начать проверку",
+    verifyConsentPolicyLink: "Полная политика конфиденциальности",
+    verifyConsentFailed: "Не удалось сохранить согласие. Попробуй ещё раз.",
     verifyMiniAppLoading: "Открываем верификацию…",
     verifyMiniAppFinishing: "Готово. Проверяем результат…",
     verifyMiniAppError: "Не удалось запустить проверку. Попробуйте ещё раз.",
@@ -275,6 +312,20 @@ const dict: Record<Lang, Strings> = {
     locErrGeoTimeout: "Пошук геолокації тривав занадто довго. Спробуй ще раз або введи адресу.",
     locErrGeoUnsupported: "Геолокація недоступна в цьому браузері. Можна ввести адресу або тапнути по карті.",
     locErrMapUnavailable: "Не вдалося завантажити карту. Перевір з'єднання та спробуй ще раз.",
+    verifyConsentTitle: "Перш ніж почати",
+    verifyConsentLead:
+      "Перевірка записує коротке відео твого обличчя. Це біометричні дані, тому нам потрібна твоя явна згода.",
+    verifyConsentWhat:
+      "Що відбудеться: ти виконаєш підказку на екрані, поки камера знімає кілька секунд. Один кадр із цього відео порівнюється з фото у профілі, щоб підтвердити, що це ти.",
+    verifyConsentWho:
+      "Хто обробляє: відео йде з твого пристрою напряму в Amazon Web Services у ЄС — воно не проходить через наші сервери. Ми зберігаємо лише один кадр.",
+    verifyConsentKeep:
+      "Скільки зберігається: ми видаляємо цей кадр через 90 днів після верифікації. Статус «перевірено» залишається.",
+    verifyConsentRefuse:
+      "Якщо не хочеш: просто закрий цей екран. Підбір пар не почнеться, і акаунт можна видалити будь-коли.",
+    verifyConsentAgreeBtn: "Погоджуюсь — почати перевірку",
+    verifyConsentPolicyLink: "Повна політика конфіденційності",
+    verifyConsentFailed: "Не вдалося зберегти згоду. Спробуй ще раз.",
     verifyMiniAppLoading: "Відкриваємо верифікацію…",
     verifyMiniAppFinishing: "Готово. Перевіряємо результат…",
     verifyMiniAppError: "Не вдалося запустити перевірку. Спробуйте ще раз.",
@@ -344,6 +395,20 @@ const dict: Record<Lang, Strings> = {
     locErrGeoTimeout: "Standortsuche ist abgelaufen. Versuch es erneut oder gib eine Adresse ein.",
     locErrGeoUnsupported: "Standortfreigabe ist in diesem Browser nicht verfügbar. Du kannst eine Adresse eingeben oder auf die Karte tippen.",
     locErrMapUnavailable: "Die Karte konnte nicht geladen werden. Prüfe deine Verbindung und versuch es erneut.",
+    verifyConsentTitle: "Bevor wir starten",
+    verifyConsentLead:
+      "Diese Prüfung nimmt ein kurzes Video deines Gesichts auf. Das sind biometrische Daten, deshalb brauchen wir vorher deine ausdrückliche Einwilligung.",
+    verifyConsentWhat:
+      "Was passiert: Du folgst einer Anweisung auf dem Bildschirm, während die Kamera ein paar Sekunden aufnimmt. Ein Einzelbild daraus wird mit deinen Profilfotos verglichen, um zu bestätigen, dass du es bist.",
+    verifyConsentWho:
+      "Wer verarbeitet: Das Video geht von deinem Gerät direkt an Amazon Web Services in der EU — es läuft nie über unsere Server. Wir speichern nur das eine Einzelbild.",
+    verifyConsentKeep:
+      "Wie lange: Wir löschen dieses Bild 90 Tage nach deiner Verifizierung. Verifiziert bleibst du.",
+    verifyConsentRefuse:
+      "Wenn du lieber nicht möchtest: Schließ diesen Bildschirm. Du wirst nicht gematcht und kannst dein Konto jederzeit löschen.",
+    verifyConsentAgreeBtn: "Ich stimme zu — Prüfung starten",
+    verifyConsentPolicyLink: "Vollständige Datenschutzerklärung",
+    verifyConsentFailed: "Einwilligung konnte nicht gespeichert werden. Versuch es nochmal.",
     verifyMiniAppLoading: "Verifizierung wird geöffnet...",
     verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft...",
     verifyMiniAppError:
@@ -414,6 +479,20 @@ const dict: Record<Lang, Strings> = {
     locErrGeoTimeout: "Wyszukiwanie lokalizacji trwało zbyt długo. Spróbuj ponownie albo wpisz adres.",
     locErrGeoUnsupported: "Udostępnianie lokalizacji nie jest dostępne w tej przeglądarce. Możesz wpisać adres albo kliknąć mapę.",
     locErrMapUnavailable: "Nie udało się załadować mapy. Sprawdź połączenie i spróbuj ponownie.",
+    verifyConsentTitle: "Zanim zaczniemy",
+    verifyConsentLead:
+      "Ta weryfikacja nagrywa krótkie wideo twojej twarzy. To dane biometryczne, więc najpierw potrzebujemy twojej wyraźnej zgody.",
+    verifyConsentWhat:
+      "Co się stanie: wykonasz polecenie z ekranu, podczas gdy kamera nagra kilka sekund. Jedna klatka z tego nagrania zostanie porównana ze zdjęciami w profilu, żeby potwierdzić, że to ty.",
+    verifyConsentWho:
+      "Kto przetwarza: wideo idzie z twojego urządzenia prosto do Amazon Web Services w UE — nigdy nie przechodzi przez nasze serwery. Przechowujemy tylko tę jedną klatkę.",
+    verifyConsentKeep:
+      "Jak długo: usuwamy tę klatkę 90 dni po weryfikacji. Status zweryfikowanego zostaje.",
+    verifyConsentRefuse:
+      "Jeśli wolisz nie: zamknij ten ekran. Nie zostaniesz dopasowany i możesz usunąć konto w dowolnym momencie.",
+    verifyConsentAgreeBtn: "Zgadzam się — zacznij weryfikację",
+    verifyConsentPolicyLink: "Pełna polityka prywatności",
+    verifyConsentFailed: "Nie udało się zapisać zgody. Spróbuj ponownie.",
     verifyMiniAppLoading: "Otwieramy weryfikację...",
     verifyMiniAppFinishing: "Już prawie. Sprawdzamy wynik...",
     verifyMiniAppError:

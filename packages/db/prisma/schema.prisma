@@ -139,6 +139,14 @@ model User {
   /// demonstrating WHAT was agreed to; a timestamp alone cannot, once the
   /// documents change. Null for consents recorded before 2026-08-01.
   policyVersion              String?                  @map("policy_version")
+  /// Explicit consent to biometric processing (GDPR Art. 9(2)(a)), captured on
+  /// its own screen before a liveness session is ever minted. Separate from
+  /// `termsAccepted` on purpose: Art. 9 requires an explicit act for THIS
+  /// processing specifically, and a general ToS tick is not one. The version
+  /// records which disclosure text was shown. Null = never consented, which
+  /// the liveness `/init` routes refuse.
+  biometricConsentAt         DateTime?                @map("biometric_consent_at")
+  biometricConsentVersion    String?                  @map("biometric_consent_version")
   /// User opt-in to anonymized research / analytics use of their data.
   /// Defaults to false (opt-in, never opt-out) per GDPR norms.
   researchOptIn              Boolean                  @default(false) @map("research_opt_in")

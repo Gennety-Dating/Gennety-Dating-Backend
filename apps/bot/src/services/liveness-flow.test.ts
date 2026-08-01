@@ -22,8 +22,15 @@ vi.mock("../config.js", () => ({ env }));
 
 const userFindUnique = vi.fn();
 const userUpdate = vi.fn();
+const userUpdateMany = vi.fn();
 vi.mock("@gennety/db", () => ({
-  prisma: { user: { findUnique: userFindUnique, update: userUpdate } },
+  prisma: {
+    user: {
+      findUnique: userFindUnique,
+      update: userUpdate,
+      updateMany: userUpdateMany,
+    },
+  },
 }));
 
 const createLivenessSession = vi.fn();
@@ -39,7 +46,8 @@ vi.mock("./verification-pipeline.js", () => ({ runFaceMatchVerificationDefault }
 const buildVerificationKeyboard = vi.fn().mockResolvedValue({ inline_keyboard: [] });
 vi.mock("./verification-keyboard.js", () => ({ buildVerificationKeyboard }));
 
-const { beginLivenessCheck, completeLivenessCheck } = await import("./liveness-flow.js");
+const { beginLivenessCheck, completeLivenessCheck, recordBiometricConsent } =
+  await import("./liveness-flow.js");
 
 const SESSION_ID = "11111111-2222-3333-4444-555555555555";
 const CREDENTIALS = {
@@ -62,10 +70,14 @@ beforeEach(() => {
     telegramId: 555n,
     language: "en",
     verificationStatus: "unverified",
+    // Explicit Art. 9(2)(a) consent already on file — `beginLivenessCheck`
+    // refuses to mint a session without it.
+    biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
     // The session this user minted at /init. `complete()` refuses anything else.
     pendingLivenessSessionId: SESSION_ID,
   });
   userUpdate.mockResolvedValue({});
+  userUpdateMany.mockResolvedValue({ count: 1 });
   createLivenessSession.mockResolvedValue({ ok: true, sessionId: SESSION_ID });
   mintLivenessCredentials.mockResolvedValue({ ok: true, credentials: CREDENTIALS });
   getLivenessResult.mockResolvedValue({
@@ -112,6 +124,27 @@ describe("beginLivenessCheck", () => {
     expect(result).not.toMatchObject({ region: env.AWS_REGION });
   });
 
+  // GDPR Art. 9(2)(a). The gate lives in the service, not the UI, so a client
+  // that skips its own consent screen still cannot start a biometric check.
+  it("refuses to mint a session without recorded biometric consent", async () => {
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      telegramId: 555n,
+      language: "en",
+      verificationStatus: "unverified",
+      biometricConsentAt: null,
+      pendingLivenessSessionId: null,
+    });
+
+    const result = await beginLivenessCheck("user-1");
+
+    expect(result).toEqual({ ok: false, error: "consent_required" });
+    // Nothing was minted, nothing was charged, nothing was written.
+    expect(createLivenessSession).not.toHaveBeenCalled();
+    expect(mintLivenessCredentials).not.toHaveBeenCalled();
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
   it("refuses when the feature flag is off, before touching AWS", async () => {
     env.FACE_LIVENESS_ENABLED = false;
     const result = await beginLivenessCheck("user-1");
@@ -131,6 +164,7 @@ describe("beginLivenessCheck", () => {
       id: "user-1",
       language: "en",
       verificationStatus: "verified",
+      biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
       verifiedSelfiePath: "selfies/user-1.jpg",
     });
     const result = await beginLivenessCheck("user-1");
@@ -147,6 +181,7 @@ describe("beginLivenessCheck", () => {
       id: "user-1",
       language: "en",
       verificationStatus: "verified",
+      biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
       verifiedSelfiePath: null,
     });
 
@@ -164,6 +199,7 @@ describe("beginLivenessCheck", () => {
       id: "user-1",
       language: "en",
       verificationStatus: "verified",
+      biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
       verifiedSelfiePath: null,
     });
 
@@ -186,6 +222,45 @@ describe("beginLivenessCheck", () => {
     mintLivenessCredentials.mockResolvedValueOnce({ ok: false, error: "api" });
     const result = await beginLivenessCheck("user-1");
     expect(result).toEqual({ ok: false, error: "provider" });
+  });
+});
+
+describe("recordBiometricConsent", () => {
+  it("stamps the consent when there is none yet", async () => {
+    const result = await recordBiometricConsent("user-1", "2026-08-01");
+
+    expect(result).toEqual({ ok: true });
+    expect(userUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user-1", biometricConsentAt: null },
+      data: {
+        biometricConsentAt: expect.any(Date),
+        biometricConsentVersion: "2026-08-01",
+      },
+    });
+    // Nothing else to do — the CAS claimed it.
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  // The FIRST consent is the legally interesting moment, so a retry after a
+  // failed check must not move the timestamp — only note the text they saw.
+  it("keeps the original timestamp on a repeat consent, refreshing the version", async () => {
+    userUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    const result = await recordBiometricConsent("user-1", "2026-09-01");
+
+    expect(result).toEqual({ ok: true });
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { biometricConsentVersion: "2026-09-01" },
+    });
+  });
+
+  it("reports failure instead of throwing, so the route can refuse the session", async () => {
+    userUpdateMany.mockRejectedValueOnce(new Error("db down"));
+
+    await expect(recordBiometricConsent("user-1", "2026-08-01")).resolves.toEqual({
+      ok: false,
+    });
   });
 });
 
