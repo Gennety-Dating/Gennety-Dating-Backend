@@ -468,7 +468,7 @@ const TOOLS = [
     function: {
       name: "get_my_standing",
       description:
-        "Read why the user is or isn't getting matched: how many weekly batches they've missed, whether their profile is still syncing, photo count, verification, account status, and how big the candidate pool is in their city. Call whenever the user asks why they have no matches, why it's taking so long, or what they could improve. Read-only.",
+        "Read why the user is or isn't getting matched: how many drop batches they've missed, whether their profile is still syncing, photo count, verification, account status, and how big the candidate pool is in their city. Call whenever the user asks why they have no matches, why it's taking so long, or what they could improve. Read-only.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },

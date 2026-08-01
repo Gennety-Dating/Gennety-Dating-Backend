@@ -1542,7 +1542,7 @@ describe("matching decision flow", () => {
     const replyTexts = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     expect(replyTexts.some((s: string) => /accepted/i.test(s))).toBe(true);
     expect(replyTexts.some((s: string) => /a no from their side/i.test(s))).toBe(true);
-    expect(replyTexts.some((s: string) => /boosted your priority for next Thursday/i.test(s))).toBe(true);
+    expect(replyTexts.some((s: string) => /boosted your priority for the next drop/i.test(s))).toBe(true);
 
     // The user who accepted despite the peer's earlier decline gets a real
     // priority boost for the next weekly batch.
@@ -1603,7 +1603,7 @@ describe("matching decision flow", () => {
     expect(peerSends).toHaveLength(1);
     expect(peerSends[0]![0]).toBe(1001);
     expect(peerSends[0]![1]).toMatch(/a no from their side/i);
-    expect(peerSends[0]![1]).toMatch(/boosted your priority for next Thursday/i);
+    expect(peerSends[0]![1]).toMatch(/boosted your priority for the next drop/i);
     expect(mProfile.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId: "uid-A" },

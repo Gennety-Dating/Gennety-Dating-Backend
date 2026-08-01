@@ -20,7 +20,7 @@ import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
  *        - silent + repeat (`offenseCount >= 2`) →
  *          `matchExpiredSilentPenalty` ("rating lowered").
  *        - responder → `matchExpiredPeerIgnored` ("your match didn't
- *          reply, see you next week").
+ *          reply, see you in the next drop").
  *
  * Mobile-only sides (synthetic negative `telegramId`) are skipped — the
  * Expo client renders its own state from the `proposalDeadlineAt` API

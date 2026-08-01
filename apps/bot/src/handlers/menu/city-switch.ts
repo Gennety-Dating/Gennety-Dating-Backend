@@ -6,6 +6,25 @@ import {
   homeLocationForMarket,
   saveHomeLocationForUser,
 } from "../../public/home-location.js";
+import { formatNextBatchDate } from "../../services/next-batch.js";
+
+/** `Language` → Intl locale string, for date formatting (mirrors prompt-builder.ts). */
+function intlLocaleFor(lang: Language): string {
+  switch (lang) {
+    case "ru": return "ru-RU";
+    case "uk": return "uk-UA";
+    case "de": return "de-DE";
+    case "pl": return "pl-PL";
+    default: return "en-US";
+  }
+}
+
+/** Human-readable next-drop date, in the user's language — replaces the old
+ *  static "Thursday, 18:00" copy so citySwitchDone stays true under any
+ *  DROP_CADENCE. */
+function nextDropDateFor(lang: Language): string {
+  return formatNextBatchDate(new Date(), undefined, intlLocaleFor(lang));
+}
 
 /**
  * "Switch my city to a launched market" (`menu:city`).
@@ -19,7 +38,7 @@ import {
  *
  * Deliberately non-destructive: only `Profile.home*`/coordinates/`timeZone`
  * change. Status, profile, photos, verification, tickets and Premium are all
- * untouched, so the user lands in the next Thursday drop as they are.
+ * untouched, so the user lands in the next drop as they are.
  */
 
 /** True when this account's dating city is one Gennety has not launched. */
@@ -46,7 +65,7 @@ export async function handleCitySwitchOpen(ctx: BotContext): Promise<void> {
   // Already in a launched market (e.g. a stale keyboard from before a switch):
   // nothing to offer — send them back to the menu rather than a dead card.
   if (!isMarketPending(profile?.homeCityKey)) {
-    await ctx.reply(t(lang, "citySwitchDone"));
+    await ctx.reply(t(lang, "citySwitchDone", { date: nextDropDateFor(lang) }));
     return;
   }
 
@@ -78,7 +97,7 @@ export async function handleCitySwitchConfirm(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   // Drop the confirm keyboard so the card can't be tapped a second time.
   await ctx.editMessageReplyMarkup().catch(() => {});
-  await ctx.reply(t(lang, "citySwitchDone"));
+  await ctx.reply(t(lang, "citySwitchDone", { date: nextDropDateFor(lang) }));
 }
 
 /** Inline keyboard used by both the menu card and the weekly no-match DM. */

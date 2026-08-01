@@ -11,7 +11,7 @@ import { MIN_PHOTOS, PHOTO_BONUS_TICKET_THRESHOLD } from "@gennety/shared";
  *
  * Both answers are already computed and stored; nothing here derives anything
  * new. `standbyCount`, `embeddingDirty` and the photo count decide whether a
- * user even enters the weekly batch, and `match_score_logs` freezes the full
+ * user even enters the drop batch, and `match_score_logs` freezes the full
  * per-pair score breakdown at creation time — until now readable only from the
  * admin dashboard. This module hands those to the agent as plain facts, and
  * nothing in it can write.
@@ -24,7 +24,7 @@ import { MIN_PHOTOS, PHOTO_BONUS_TICKET_THRESHOLD } from "@gennety/shared";
 export interface MatchmakingStanding {
   accountStatus: string;
   verificationStatus: string;
-  /** Consecutive weekly batches this user was eligible for but went unpaired. */
+  /** Consecutive drop batches this user was eligible for but went unpaired. */
   missedBatches: number;
   /** True while the profile is excluded from matching pending an embedding rebuild. */
   profileSyncPending: boolean;

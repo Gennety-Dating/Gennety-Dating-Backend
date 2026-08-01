@@ -167,7 +167,7 @@ describe("sendNoMatchNotices", () => {
     // full empathetic body (no `parse_mode` — the templates carry no Markdown).
     const chunks = stream.mock.calls[0]![2] as string[];
     expect(chunks).toHaveLength(2);
-    expect(chunks[0]).toMatch(/matches/i);
+    expect(chunks[0]).toMatch(/pool/i);
     expect(chunks[1]).toMatch(/quality bar/);
 
     expect(mNoticeCreate).toHaveBeenCalledWith({
@@ -205,7 +205,7 @@ describe("sendNoMatchNotices", () => {
     expect(result.tier1).toBe(0);
 
     const [, body] = api.sendMessage.mock.calls[0]!;
-    expect(body).toMatch(/вторая неделя/i);
+    expect(body).toMatch(/второй раз подряд/i);
 
     expect(mNoticeCreate).toHaveBeenCalledWith({
       data: { userId: "u1", tier: 2, dropDate: getDropDate(NOW) },

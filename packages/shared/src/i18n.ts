@@ -478,7 +478,7 @@ const translations = {
       "I keep looking; the next pick will be closer.",
     matchAcceptedPeerDeclinedPriority:
       "This time it's a no from their side. It happens — here a date only happens when it's mutual.\n\n" +
-      "I've boosted your priority for next Thursday. The next pick will be closer.",
+      "I've boosted your priority for the next drop. The next pick will be closer.",
     matchPhotoCaption: "{name}, {age}",
     matchVerifiedLabel: "Verified",
     matchVerifiedQuote:
@@ -532,42 +532,42 @@ const translations = {
     pitchExpired: "⏳ Time's up — this proposal expired.",
     matchExpiredSilentWarning:
       "Time's up — you didn't reply to your match in 24h. " +
-      "Wait for next Thursday's drop.\n\n" +
+      "Wait for the next drop.\n\n" +
       "Don't ignore proposals — it's disrespectful to your partner. " +
       "Next time we'll lower your rating for this.",
     matchExpiredSilentPenalty:
       "Time's up — you didn't reply to your match in 24h. " +
-      "Wait for next Thursday's drop.\n\n" +
+      "Wait for the next drop.\n\n" +
       "Your rating has been lowered for ignoring the proposal — it's disrespectful to your partner.",
     matchExpiredYouMissedDate:
       "Heads up — your match was actually in. You missed a real date.\n\n",
     matchExpiredPeerIgnored:
       "Your match didn't reply within 24h, so the date won't happen. " +
-      "We'll see you in next week's drop.",
+      "We'll see you in the next drop.",
     noMatchThisWeekTier1:
       "Hey\n\n" +
-      "No match this week. Not because something's off with you — the quality bar just stays where it is, " +
+      "No match this time. Not because something's off with you — the quality bar just stays where it is, " +
       "and I'd rather wait than hand you someone who isn't worth your time.\n\n" +
       "Meanwhile:\n" +
-      "• the community keeps growing, and the matching gets sharper every week.\n" +
-      "• every week you wait raises your priority in the next drop.\n\n" +
-      "Next Thursday, 18:00 ✨",
+      "• the community keeps growing, and the matching gets sharper all the time.\n" +
+      "• the longer you wait, the higher your priority for the next drop.\n\n" +
+      "I'm on it ✨",
     noMatchThisWeekTier2:
       "Hey\n\n" +
-      "Second week running — still no one I'd actually be excited to introduce you to. " +
+      "Still going, still no one I'd actually be excited to introduce you to. " +
       "Thanks for sticking around; that matters.\n\n" +
       "What's happening:\n" +
       "• I'm bringing more people like you in and tuning the algorithm in your favour.\n" +
       "• your priority for the next drop is already raised.\n\n" +
-      "Thursday, 18:00 — I'm on it 🤍",
+      "I'm on it 🤍",
     noMatchThisWeekTier3:
       "Hey\n\n" +
       "Another honest update — still no one truly worth your time. " +
       "I like this even less than you do, and I won't pretend otherwise.\n\n" +
       "On my side:\n" +
       "• I'm personally watching your queue and pushing growth in your area.\n" +
-      "• every week you wait moves you higher up the list for the next drop.\n\n" +
-      "Thanks for trusting me. Thursday, 18:00 🤍",
+      "• the longer you wait, the higher up the list you move for the next drop.\n\n" +
+      "Thanks for trusting me 🤍",
     noMatchDiscountOffer:
       "🎟️ A small thank-you for your patience: your next first date is {pct}% off — one Date Ticket, almost on us. " +
       "We'll apply the discount automatically the next time you get a match or open your tickets.",
@@ -739,7 +739,7 @@ const translations = {
     // Product delivery uses bottom-of-chat message edits; rich drafts are
     // explicit dev-only demos.
     icebreakerStreamStart: "✨ Lining up a few things you two could talk about…",
-    noMatchStreamStart: "💫 Going over this week's matches for you…",
+    noMatchStreamStart: "💫 Going over the pool for you…",
     profilerSkip: "Skip",
     wingmanHintIntro:
       "👋 Insider tip — your date's in 90 minutes:\n\n",
@@ -766,7 +766,7 @@ const translations = {
     emergencyReceivedOtherIntro:
       "Your match cancelled the date. Here's what they wrote:",
     emergencyReceivedOtherSoftNote:
-      "This isn't because of you. Gennety will raise your priority a little for next week.",
+      "This isn't because of you. Gennety will raise your priority a little for the next drop.",
     feedbackInvitation:
       "How did your date go? ✨\n\n" +
       "Tell us a few things — chemistry, vibe, anything you'd change. " +
@@ -873,11 +873,11 @@ const translations = {
       "Gennety is live in Kyiv only for now. Matches are always within one city, " +
       "so until we launch in {city} there's nobody here to introduce you to.\n\n" +
       "If you're ready to go on dates in Kyiv, switch — your profile, photos and " +
-      "verification all stay exactly as they are, and you're in the next Thursday drop.",
+      "verification all stay exactly as they are, and you're in the next drop.",
     citySwitchConfirm: "📍 Yes, match me in Kyiv",
     citySwitchDone:
       "Done — your matching city is Kyiv 🤍\n\n" +
-      "You're in the next drop: Thursday, 18:00.",
+      "You're in the next drop: {date}.",
     citySwitchFailed: "Couldn't switch the city just now. Try again in a moment.",
     noMatchCityNotLaunched:
       "Hey\n\n" +
@@ -1020,7 +1020,7 @@ const translations = {
     // Buyer-facing. The offer must state the honest terms BEFORE payment:
     // it buys an introduction, not a date, and only "found nobody" is refunded.
     rematchOfferFamine:
-      "No match this week — that's the pool, not you.\n\n" +
+      "No match this time — that's the pool, not you.\n\n" +
       "I can run the search again right now, just for you. One new person, picked the same way: {price}.\n\n" +
       "It buys a new introduction, not a guaranteed date. If I find nobody, your Stars come straight back.",
     rematchOfferFailed:
@@ -1038,17 +1038,17 @@ const translations = {
       "I found nobody new, and the refund didn't go through on the first try. I'm on it — your Stars will be back shortly.",
     rematchRefunded: "Your Stars for the rematch are back ✨",
     rematchLimitReached:
-      "You've used your rematches for this week. The next one opens in a few days — your weekly match is still coming.",
+      "You've used your rematches for now. The next one opens in a few days — your next match is still coming.",
     rematchUnavailable:
       "Can't run a rematch right now. If you have a match in progress, finish that one first.",
     // Partner-facing gift framing. NEVER mentions payment, the buyer, or any
     // decision state — it is a prefix on her ordinary pitch.
     rematchGiftFamine:
-      "I know I said there was no match for you this week. I kept looking — and found someone worth your time.",
+      "I know I said there was no match for you last time. I kept looking — and found someone worth your time.",
     rematchGiftFailed:
       "The last one didn't work out. I went back to the search and found someone who fits you better.",
     rematchGiftNeutral:
-      "I kept working this week — and there's someone I'd like you to meet.",
+      "I kept working on it — and there's someone I'd like you to meet.",
   },
   ru: {
     // --- Onboarding ---
@@ -1510,7 +1510,7 @@ const translations = {
       "Ищу дальше — следующий вариант будет ближе.",
     matchAcceptedPeerDeclinedPriority:
       "В этот раз с той стороны — нет. Бывает: здесь свидание случается только при взаимном интересе.\n\n" +
-      "Я поднял твой приоритет на следующий четверг. Следующий вариант будет ближе.",
+      "Я поднял твой приоритет на следующий дроп. Следующий вариант будет ближе.",
     matchPhotoCaption: "{name}, {age}",
     matchVerifiedLabel: "Подтверждён",
     matchVerifiedQuote:
@@ -1559,42 +1559,42 @@ const translations = {
     pitchExpired: "⏳ Время вышло — предложение больше не актуально.",
     matchExpiredSilentWarning:
       "Время вышло — за сутки ты так и не ответил(-а) на мэтч. " +
-      "Жди следующего четверга.\n\n" +
+      "Жди следующего дропа.\n\n" +
       "Не игнорируй предложения — это неуважение к твоему партнёру. " +
       "В следующий раз за такое поведение мы снизим твой рейтинг.",
     matchExpiredSilentPenalty:
       "Время вышло — за сутки ты так и не ответил(-а) на мэтч. " +
-      "Жди следующего четверга.\n\n" +
+      "Жди следующего дропа.\n\n" +
       "Твой рейтинг снижен за игнор — это неуважение к твоему партнёру.",
     matchExpiredYouMissedDate:
       "Важно: твой мэтч был согласен прийти — ты пропустил настоящее свидание.\n\n",
     matchExpiredPeerIgnored:
       "Партнёр не ответил в течение суток — свидание не состоится. " +
-      "Увидимся в дропе на следующей неделе.",
+      "Увидимся в следующем дропе.",
     noMatchThisWeekTier1:
       "Привет\n\n" +
-      "На этой неделе без мэтча. Не потому что с тобой что-то не так — просто планка качества стоит там, где стоит, " +
+      "В этот раз без мэтча. Не потому что с тобой что-то не так — просто планка качества стоит там, где стоит, " +
       "и я лучше подожду, чем предложу «лишь бы было».\n\n" +
       "Тем временем:\n" +
-      "• сообщество растёт, подбор с каждой неделей точнее.\n" +
-      "• каждая неделя ожидания поднимает твой приоритет в следующем дропе.\n\n" +
-      "До четверга, 18:00 ✨",
+      "• сообщество растёт, подбор становится точнее.\n" +
+      "• чем дольше ждёшь, тем выше твой приоритет в следующем дропе.\n\n" +
+      "Я в деле ✨",
     noMatchThisWeekTier2:
       "Привет\n\n" +
-      "Уже вторая неделя подряд — всё ещё нет никого, кого я был бы рад тебе показать. " +
+      "Уже второй раз подряд — всё ещё нет никого, кого я был бы рад тебе показать. " +
       "Спасибо, что остаёшься — это правда важно.\n\n" +
       "Что происходит:\n" +
       "• привожу новых людей и настраиваю алгоритм под твои критерии.\n" +
       "• твой приоритет в следующем дропе уже повышен.\n\n" +
-      "До четверга, 18:00 — я этим занимаюсь 🤍",
+      "Я этим занимаюсь 🤍",
     noMatchThisWeekTier3:
       "Привет\n\n" +
       "Снова честно: пары, которая правда стоит твоего времени, всё ещё нет. " +
       "Мне это нравится даже меньше, чем тебе, и делать вид, что всё ок, я не буду.\n\n" +
       "Что делаю:\n" +
       "• лично слежу за твоей очередью и подталкиваю рост в твоём городе.\n" +
-      "• каждая неделя ожидания двигает тебя выше в приоритете дропа.\n\n" +
-      "Спасибо, что доверяешь. До четверга, 18:00 🤍",
+      "• чем дольше ждёшь, тем выше твой приоритет в дропе.\n\n" +
+      "Спасибо, что доверяешь 🤍",
     noMatchDiscountOffer:
       "🎟️ Небольшая благодарность за терпение: твоё следующее первое свидание — со скидкой {pct}% на один билет. " +
       "Мы применим скидку автоматически, когда тебе выпадет пара или ты откроешь свои билеты.",
@@ -1752,7 +1752,7 @@ const translations = {
     icebreakerIntro:
       "Свидание через 5 часов! Вот темы для разговора:\n\n",
     icebreakerStreamStart: "✨ Подбираю, о чём вам двоим поговорить…",
-    noMatchStreamStart: "💫 Просматриваю кандидатов этой недели для тебя…",
+    noMatchStreamStart: "💫 Просматриваю кандидатов для тебя…",
     profilerSkip: "Пропустить",
     wingmanHintIntro:
       "👋 Маленькая подсказка — свидание через полтора часа:\n\n",
@@ -1779,7 +1779,7 @@ const translations = {
     emergencyReceivedOtherIntro:
       "Мэтч отменил свидание. Вот что написал:",
     emergencyReceivedOtherSoftNote:
-      "Это не из-за тебя. Gennety немного поднимет твой приоритет на следующей неделе.",
+      "Это не из-за тебя. Gennety немного поднимет твой приоритет в следующем дропе.",
     feedbackInvitation:
       "Как прошло свидание? ✨\n\n" +
       "Поделись парой штук — была ли химия, какой был вайб, что бы поменял. " +
@@ -1872,11 +1872,11 @@ const translations = {
       "Пока Gennety работает только в Киеве. Мэтчи всегда внутри одного города, " +
       "поэтому до запуска в городе {city} знакомить тебя здесь не с кем.\n\n" +
       "Если готов ходить на свидания в Киеве — переключись. Анкета, фото и верификация " +
-      "останутся как есть, и ты попадёшь в ближайший четверговый дроп.",
+      "останутся как есть, и ты попадёшь в ближайший дроп.",
     citySwitchConfirm: "📍 Да, ищите мне пару в Киеве",
     citySwitchDone:
       "Готово — твой город для мэтчей теперь Киев 🤍\n\n" +
-      "Ты в ближайшем дропе: четверг, 18:00.",
+      "Ты в ближайшем дропе: {date}.",
     citySwitchFailed: "Не получилось сменить город. Попробуй ещё раз через минуту.",
     noMatchCityNotLaunched:
       "Привет\n\n" +
@@ -2017,7 +2017,7 @@ const translations = {
 
     // --- Rematch ---
     rematchOfferFamine:
-      "На этой неделе пары не нашлось — это про пул, не про тебя.\n\n" +
+      "В этот раз пары не нашлось — это про пул, не про тебя.\n\n" +
       "Могу прогнать поиск заново прямо сейчас, только для тебя. Один новый человек, подбор тот же: {price}.\n\n" +
       "Это новое знакомство, а не гарантия свидания. Если никого не найду — звёзды сразу вернутся.",
     rematchOfferFailed:
@@ -2035,15 +2035,15 @@ const translations = {
       "Никого нового не нашёл, а возврат с первого раза не прошёл. Уже занимаюсь — звёзды вернутся в ближайшее время.",
     rematchRefunded: "Звёзды за реметч вернулись ✨",
     rematchLimitReached:
-      "Реметчи на эту неделю закончились. Следующий откроется через пару дней — недельный мэтч всё равно будет.",
+      "Реметчи на сейчас закончились. Следующий откроется через пару дней — обычный мэтч всё равно будет.",
     rematchUnavailable:
       "Сейчас реметч не сделать. Если у тебя есть мэтч в работе — сначала закончи с ним.",
     rematchGiftFamine:
-      "Я говорил, что на этой неделе пары для тебя нет. Продолжил искать — и нашёл человека, на которого стоит посмотреть.",
+      "Я говорил, что пары для тебя пока нет. Продолжил искать — и нашёл человека, на которого стоит посмотреть.",
     rematchGiftFailed:
       "В прошлый раз не сложилось. Я вернулся к поиску и нашёл того, кто подходит тебе больше.",
     rematchGiftNeutral:
-      "Я продолжал работать на этой неделе — и есть человек, которого хочу тебе показать.",
+      "Я продолжал искать — и есть человек, которого хочу тебе показать.",
   },
   uk: {
     // --- Onboarding ---
@@ -2505,7 +2505,7 @@ const translations = {
       "Шукаю далі — наступний варіант буде ближчим.",
     matchAcceptedPeerDeclinedPriority:
       "Цього разу з того боку — ні. Буває: тут побачення стається лише за взаємного інтересу.\n\n" +
-      "Я підняв твій пріоритет на наступний четвер. Наступний варіант буде ближчим.",
+      "Я підняв твій пріоритет на наступний дроп. Наступний варіант буде ближчим.",
     matchPhotoCaption: "{name}, {age}",
     matchVerifiedLabel: "Підтверджено",
     matchVerifiedQuote:
@@ -2554,42 +2554,42 @@ const translations = {
     pitchExpired: "⏳ Час вийшов — пропозиція більше не актуальна.",
     matchExpiredSilentWarning:
       "Час вийшов — за добу ти так і не відповів(-ла) на метч. " +
-      "Чекай наступного четверга.\n\n" +
+      "Чекай наступного дропу.\n\n" +
       "Не ігноруй пропозиції — це неповага до твого партнера. " +
       "Наступного разу за таку поведінку ми знизимо твій рейтинг.",
     matchExpiredSilentPenalty:
       "Час вийшов — за добу ти так і не відповів(-ла) на метч. " +
-      "Чекай наступного четверга.\n\n" +
+      "Чекай наступного дропу.\n\n" +
       "Твій рейтинг знижено за ігнор — це неповага до твого партнера.",
     matchExpiredYouMissedDate:
       "Важливо: твій метч був згодний прийти — ти пропустив справжнє побачення.\n\n",
     matchExpiredPeerIgnored:
       "Партнер не відповів протягом доби — побачення не відбудеться. " +
-      "Побачимось у дропі наступного тижня.",
+      "Побачимось у наступному дропі.",
     noMatchThisWeekTier1:
       "Привіт\n\n" +
-      "Цього тижня без метчу. Не тому що з тобою щось не так — просто планка якості стоїть там, де стоїть, " +
+      "Цього разу без метчу. Не тому що з тобою щось не так — просто планка якості стоїть там, де стоїть, " +
       "і я краще почекаю, ніж запропоную «аби було».\n\n" +
       "Тим часом:\n" +
-      "• спільнота росте, підбір з кожним тижнем точніший.\n" +
-      "• кожен тиждень очікування піднімає твій пріоритет у наступному дропі.\n\n" +
-      "До четверга, 18:00 ✨",
+      "• спільнота росте, підбір стає точнішим.\n" +
+      "• що довше чекаєш, то вищий твій пріоритет у наступному дропі.\n\n" +
+      "Я в ділі ✨",
     noMatchThisWeekTier2:
       "Привіт\n\n" +
-      "Уже другий тиждень поспіль — досі немає нікого, кого я був би радий тобі показати. " +
+      "Уже другий раз поспіль — досі немає нікого, кого я був би радий тобі показати. " +
       "Дякую, що лишаєшся — це справді важливо.\n\n" +
       "Що відбувається:\n" +
       "• приводжу нових людей і налаштовую алгоритм під твої критерії.\n" +
       "• твій пріоритет у наступному дропі вже підвищено.\n\n" +
-      "До четверга, 18:00 — я цим займаюся 🤍",
+      "Я цим займаюся 🤍",
     noMatchThisWeekTier3:
       "Привіт\n\n" +
       "Знову чесно: пари, яка справді варта твого часу, досі немає. " +
       "Мені це подобається ще менше, ніж тобі, і вдавати, що все ок, я не буду.\n\n" +
       "Що роблю:\n" +
       "• особисто стежу за твоєю чергою і підштовхую ріст у твоєму місті.\n" +
-      "• кожен тиждень очікування рухає тебе вище у пріоритеті дропу.\n\n" +
-      "Дякую, що довіряєш. До четверга, 18:00 🤍",
+      "• що довше чекаєш, то вищий твій пріоритет у дропі.\n\n" +
+      "Дякую, що довіряєш 🤍",
     noMatchDiscountOffer:
       "🎟️ Невелика подяка за терпіння: твоє наступне перше побачення — зі знижкою {pct}% на один квиток. " +
       "Ми застосуємо знижку автоматично, коли тобі випаде пара або ти відкриєш свої квитки.",
@@ -2747,7 +2747,7 @@ const translations = {
     icebreakerIntro:
       "Побачення через 5 годин! Ось теми для розмови:\n\n",
     icebreakerStreamStart: "✨ Добираю, про що вам двом поговорити…",
-    noMatchStreamStart: "💫 Переглядаю кандидатів цього тижня для тебе…",
+    noMatchStreamStart: "💫 Переглядаю кандидатів для тебе…",
     profilerSkip: "Пропустити",
     wingmanHintIntro:
       "👋 Маленька підказка — побачення через півтори години:\n\n",
@@ -2774,7 +2774,7 @@ const translations = {
     emergencyReceivedOtherIntro:
       "Метч скасував побачення. Ось що написав:",
     emergencyReceivedOtherSoftNote:
-      "Це не через тебе. Gennety трохи підніме твій пріоритет наступного тижня.",
+      "Це не через тебе. Gennety трохи підніме твій пріоритет у наступному дропі.",
     feedbackInvitation:
       "Як пройшло побачення? ✨\n\n" +
       "Поділись парою речей — чи була хімія, який був вайб, що б змінив. " +
@@ -2867,11 +2867,11 @@ const translations = {
       "Поки Gennety працює лише в Києві. Метчі завжди в межах одного міста, " +
       "тож до запуску в місті {city} знайомити тебе тут немає з ким.\n\n" +
       "Якщо готовий ходити на побачення в Києві — перемкнись. Анкета, фото та верифікація " +
-      "залишаться як є, і ти потрапиш у найближчий четверговий дроп.",
+      "залишаться як є, і ти потрапиш у найближчий дроп.",
     citySwitchConfirm: "📍 Так, шукайте мені пару в Києві",
     citySwitchDone:
       "Готово — твоє місто для метчів тепер Київ 🤍\n\n" +
-      "Ти в найближчому дропі: четвер, 18:00.",
+      "Ти в найближчому дропі: {date}.",
     citySwitchFailed: "Не вдалося змінити місто. Спробуй ще раз за хвилину.",
     noMatchCityNotLaunched:
       "Привіт\n\n" +
@@ -3012,7 +3012,7 @@ const translations = {
 
     // --- Rematch ---
     rematchOfferFamine:
-      "Цього тижня пари не знайшлося — це про пул, не про тебе.\n\n" +
+      "Цього разу пари не знайшлося — це про пул, не про тебе.\n\n" +
       "Можу запустити пошук заново просто зараз, тільки для тебе. Одна нова людина, добір той самий: {price}.\n\n" +
       "Це нове знайомство, а не гарантія побачення. Якщо нікого не знайду — зірки одразу повернуться.",
     rematchOfferFailed:
@@ -3030,15 +3030,15 @@ const translations = {
       "Нікого нового не знайшов, а повернення з першого разу не пройшло. Уже займаюся — зірки повернуться найближчим часом.",
     rematchRefunded: "Зірки за реметч повернулися ✨",
     rematchLimitReached:
-      "Реметчі на цей тиждень закінчилися. Наступний відкриється за кілька днів — тижневий метч усе одно буде.",
+      "Реметчі на зараз закінчилися. Наступний відкриється за кілька днів — звичайний метч усе одно буде.",
     rematchUnavailable:
       "Зараз реметч не зробити. Якщо в тебе є метч у роботі — спершу заверши його.",
     rematchGiftFamine:
-      "Я казав, що цього тижня пари для тебе немає. Продовжив шукати — і знайшов людину, на яку варто подивитися.",
+      "Я казав, що пари для тебе поки немає. Продовжив шукати — і знайшов людину, на яку варто подивитися.",
     rematchGiftFailed:
       "Минулого разу не склалося. Я повернувся до пошуку і знайшов того, хто підходить тобі більше.",
     rematchGiftNeutral:
-      "Я продовжував працювати цього тижня — і є людина, яку хочу тобі показати.",
+      "Я продовжував шукати — і є людина, яку хочу тобі показати.",
   },
 } as const;
 
@@ -3488,7 +3488,7 @@ const deTranslations: TranslationTable = {
     "Ich suche weiter; der nächste Vorschlag sitzt näher.",
   matchAcceptedPeerDeclinedPriority:
     "Diesmal war es ein Nein von der anderen Seite. Passiert — hier gibt es ein Date nur, wenn es beidseitig ist.\n\n" +
-    "Deine Priorität für nächsten Donnerstag ist erhöht. Der nächste Vorschlag sitzt näher.",
+    "Deine Priorität für den nächsten Drop ist erhöht. Der nächste Vorschlag sitzt näher.",
   matchPhotoCaption: "{name}, {age}",
   matchVerifiedLabel: "Verifiziert",
   matchVerifiedQuote:
@@ -3537,12 +3537,12 @@ const deTranslations: TranslationTable = {
   pitchExpired: "⏳ Zeit abgelaufen - dieser Vorschlag ist verfallen.",
   matchExpiredSilentWarning:
     "Zeit abgelaufen - du hast deinem Match innerhalb von 24h nicht geantwortet. " +
-    "Warte auf den nächsten Donnerstags-Drop.\n\n" +
+    "Warte auf den nächsten Drop.\n\n" +
     "Ignorier Vorschläge nicht - das ist deinem Gegenüber gegenüber unfair. " +
     "Beim nächsten Mal senken wir dafür dein Rating.",
   matchExpiredSilentPenalty:
     "Zeit abgelaufen - du hast deinem Match innerhalb von 24h nicht geantwortet. " +
-    "Warte auf den nächsten Donnerstags-Drop.\n\n" +
+    "Warte auf den nächsten Drop.\n\n" +
     "Dein Rating wurde gesenkt, weil das Ignorieren eines Vorschlags unfair gegenüber deinem Gegenüber ist.",
   matchExpiredYouMissedDate: "Wichtig - dein Match war tatsächlich dabei. Du hast ein echtes Date verpasst.\n\n",
   matchExpiredPeerIgnored:
@@ -3550,28 +3550,28 @@ const deTranslations: TranslationTable = {
     "Wir sehen uns beim nächsten Drop.",
   noMatchThisWeekTier1:
     "Hey\n\n" +
-    "Diese Woche kein Match. Nicht, weil mit dir etwas nicht stimmt — die Qualitätslatte bleibt einfach, wo sie ist, " +
+    "Diesmal kein Match. Nicht, weil mit dir etwas nicht stimmt — die Qualitätslatte bleibt einfach, wo sie ist, " +
     "und ich warte lieber, als dir jemanden zu geben, der deine Zeit nicht wert ist.\n\n" +
     "In der Zwischenzeit:\n" +
-    "• die Community wächst, das Matching wird jede Woche schärfer.\n" +
-    "• jede Woche Wartezeit erhöht deine Priorität im nächsten Drop.\n\n" +
-    "Bis Donnerstag, 18:00 ✨",
+    "• die Community wächst, das Matching wird immer schärfer.\n" +
+    "• je länger du wartest, desto höher deine Priorität im nächsten Drop.\n\n" +
+    "Ich bin dran ✨",
   noMatchThisWeekTier2:
     "Hey\n\n" +
-    "Zweite Woche in Folge — immer noch niemand, den ich dir wirklich gern vorstellen würde. " +
+    "Schon wieder — immer noch niemand, den ich dir wirklich gern vorstellen würde. " +
     "Danke, dass du dranbleibst; das zählt.\n\n" +
     "Was gerade passiert:\n" +
     "• ich hole mehr passende Leute rein und stelle den Algorithmus auf dich ein.\n" +
     "• deine Priorität für den nächsten Drop ist bereits erhöht.\n\n" +
-    "Donnerstag, 18:00 — ich bin dran 🤍",
+    "Ich bin dran 🤍",
   noMatchThisWeekTier3:
     "Hey\n\n" +
     "Wieder ein ehrliches Update — immer noch niemand, der deine Zeit wirklich wert wäre. " +
     "Mich nervt das noch mehr als dich, und ich tue nicht so, als wäre es anders.\n\n" +
     "Auf meiner Seite:\n" +
     "• ich beobachte deine Queue persönlich und pushe das Wachstum in deiner Gegend.\n" +
-    "• jede Woche Wartezeit rückst du in der Priorität weiter nach oben.\n\n" +
-    "Danke für dein Vertrauen. Donnerstag, 18:00 🤍",
+    "• je länger du wartest, desto weiter rückst du in der Priorität nach oben.\n\n" +
+    "Danke für dein Vertrauen 🤍",
   noMatchDiscountOffer:
     "🎟️ Ein kleines Dankeschön für deine Geduld: dein nächstes erstes Date gibt es mit {pct}% Rabatt auf ein Ticket. " +
     "Wir ziehen den Rabatt automatisch ab, sobald du ein Match bekommst oder deine Tickets öffnest.",
@@ -3713,7 +3713,7 @@ const deTranslations: TranslationTable = {
   venueInvoiceLabel: "Ortsänderung",
   icebreakerIntro: "Dein Date ist in 5 Stunden! Ein paar Gesprächsstarter für dich:\n\n",
   icebreakerStreamStart: "✨ Ich stelle ein paar Gesprächsthemen für euch zusammen…",
-  noMatchStreamStart: "💫 Ich gehe die Matches dieser Woche für dich durch…",
+  noMatchStreamStart: "💫 Ich gehe den Pool für dich durch…",
   wingmanHintIntro: "👋 Insider-Tipp - dein Date ist in 90 Minuten:\n\n",
   profilerSkip: "Überspringen",
   emergencyUnlocked:
@@ -3734,7 +3734,7 @@ const deTranslations: TranslationTable = {
   emergencyConfirmed: "Date abgesagt. Deine Nachricht wurde weitergeleitet.",
   emergencyReceivedOther: "Dein Match hat das Date abgesagt. Das wurde geschrieben:\n\n\"{reason}\"",
   emergencyReceivedOtherIntro: "Dein Match hat das Date abgesagt. Das wurde geschrieben:",
-  emergencyReceivedOtherSoftNote: "Das liegt nicht an dir. Gennety erhöht deine Priorität für nächste Woche ein wenig.",
+  emergencyReceivedOtherSoftNote: "Das liegt nicht an dir. Gennety erhöht deine Priorität für den nächsten Drop ein wenig.",
   feedbackInvitation:
     "Wie lief dein Date? ✨\n\n" +
     "Erzähl uns ein paar Dinge - Chemie, Vibe, was du ändern würdest. " +
@@ -3821,11 +3821,11 @@ const deTranslations: TranslationTable = {
     "Gennety ist vorerst nur in Kyjiw am Start. Matches finden immer innerhalb einer Stadt statt — " +
     "bis wir in {city} starten, gibt es hier niemanden, den wir dir vorstellen könnten.\n\n" +
     "Wenn du bereit bist, in Kyjiw auf Dates zu gehen, wechsle einfach: Profil, Fotos und " +
-    "Verifizierung bleiben genau so, und du bist beim nächsten Donnerstags-Drop dabei.",
+    "Verifizierung bleiben genau so, und du bist beim nächsten Drop dabei.",
   citySwitchConfirm: "📍 Ja, matcht mich in Kyjiw",
   citySwitchDone:
     "Erledigt — deine Match-Stadt ist jetzt Kyjiw 🤍\n\n" +
-    "Du bist beim nächsten Drop dabei: Donnerstag, 18:00.",
+    "Du bist beim nächsten Drop dabei: {date}.",
   citySwitchFailed: "Der Stadtwechsel hat gerade nicht geklappt. Versuch es gleich noch einmal.",
   noMatchCityNotLaunched:
     "Hey\n\n" +
@@ -3984,7 +3984,7 @@ const deTranslations: TranslationTable = {
 
   // --- Rematch ---
   rematchOfferFamine:
-    "Diese Woche kein Match — das liegt am Pool, nicht an dir.\n\n" +
+    "Diesmal kein Match — das liegt am Pool, nicht an dir.\n\n" +
     "Ich kann die Suche sofort noch mal starten, nur für dich. Eine neue Person, gleiche Auswahl: {price}.\n\n" +
     "Das kauft ein neues Kennenlernen, kein garantiertes Date. Finde ich niemanden, bekommst du deine Stars direkt zurück.",
   rematchOfferFailed:
@@ -4002,15 +4002,15 @@ const deTranslations: TranslationTable = {
     "Ich habe niemanden Neues gefunden, und die Rückerstattung hat beim ersten Versuch nicht geklappt. Ich kümmere mich — deine Stars sind gleich zurück.",
   rematchRefunded: "Deine Stars für den Rematch sind zurück ✨",
   rematchLimitReached:
-    "Deine Rematches für diese Woche sind aufgebraucht. Der nächste geht in ein paar Tagen — dein wöchentliches Match kommt trotzdem.",
+    "Deine Rematches sind für den Moment aufgebraucht. Der nächste geht in ein paar Tagen — dein nächstes Match kommt trotzdem.",
   rematchUnavailable:
     "Gerade geht kein Rematch. Wenn du ein laufendes Match hast, mach das zuerst zu Ende.",
   rematchGiftFamine:
-    "Ich hatte gesagt, diese Woche gibt es kein Match für dich. Ich habe weitergesucht — und jemanden gefunden, der deine Zeit wert ist.",
+    "Ich hatte gesagt, dass es gerade kein Match für dich gibt. Ich habe weitergesucht — und jemanden gefunden, der deine Zeit wert ist.",
   rematchGiftFailed:
     "Letztes Mal hat es nicht geklappt. Ich bin zurück in die Suche und habe jemanden gefunden, der besser zu dir passt.",
   rematchGiftNeutral:
-    "Ich habe diese Woche weitergearbeitet — und da ist jemand, den du kennenlernen solltest.",
+    "Ich habe weitergesucht — und da ist jemand, den du kennenlernen solltest.",
 };
 
 const plTranslations: TranslationTable = {
@@ -4450,7 +4450,7 @@ const plTranslations: TranslationTable = {
     "Szukam dalej; następna propozycja będzie bliżej.",
   matchAcceptedPeerDeclinedPriority:
     "Tym razem z drugiej strony padło „nie”. Zdarza się — tu randka dzieje się tylko przy wzajemnym zainteresowaniu.\n\n" +
-    "Podniosłem Twój priorytet na kolejny czwartek. Następna propozycja będzie bliżej.",
+    "Podniosłem Twój priorytet na kolejny drop. Następna propozycja będzie bliżej.",
   matchPhotoCaption: "{name}, {age}",
   matchVerifiedLabel: "Zweryfikowano",
   matchVerifiedQuote:
@@ -4499,12 +4499,12 @@ const plTranslations: TranslationTable = {
   pitchExpired: "⏳ Czas minął - ta propozycja wygasła.",
   matchExpiredSilentWarning:
     "Czas minął - nie odpowiedziałeś/odpowiedziałaś na dopasowanie w ciągu 24h. " +
-    "Poczekaj na kolejny czwartkowy drop.\n\n" +
+    "Poczekaj na kolejny drop.\n\n" +
     "Nie ignoruj propozycji - to nie fair wobec drugiej osoby. " +
     "Następnym razem obniżymy za to Twój rating.",
   matchExpiredSilentPenalty:
     "Czas minął - nie odpowiedziałeś/odpowiedziałaś na dopasowanie w ciągu 24h. " +
-    "Poczekaj na kolejny czwartkowy drop.\n\n" +
+    "Poczekaj na kolejny drop.\n\n" +
     "Twój rating został obniżony za ignorowanie propozycji - to nie fair wobec drugiej osoby.",
   matchExpiredYouMissedDate: "Ważne - Twoje dopasowanie było naprawdę na tak. Przegapiłeś/przegapiłaś realną randkę.\n\n",
   matchExpiredPeerIgnored:
@@ -4512,28 +4512,28 @@ const plTranslations: TranslationTable = {
     "Widzimy się przy kolejnym dropie.",
   noMatchThisWeekTier1:
     "Hej\n\n" +
-    "W tym tygodniu bez matcha. Nie dlatego, że coś z Tobą nie tak — po prostu poprzeczka jakości stoi tam, gdzie stoi, " +
+    "Tym razem bez matcha. Nie dlatego, że coś z Tobą nie tak — po prostu poprzeczka jakości stoi tam, gdzie stoi, " +
     "i wolę poczekać, niż podsunąć Ci kogoś niewartego Twojego czasu.\n\n" +
     "Tymczasem:\n" +
-    "• społeczność rośnie, dobór z tygodnia na tydzień jest celniejszy.\n" +
-    "• każdy tydzień czekania podnosi Twój priorytet w kolejnym dropie.\n\n" +
-    "Do czwartku, 18:00 ✨",
+    "• społeczność rośnie, dobór jest coraz celniejszy.\n" +
+    "• im dłużej czekasz, tym wyższy Twój priorytet w kolejnym dropie.\n\n" +
+    "Działam ✨",
   noMatchThisWeekTier2:
     "Hej\n\n" +
-    "Drugi tydzień z rzędu — wciąż nie ma nikogo, kogo naprawdę chciałbym Ci przedstawić. " +
+    "Znowu z rzędu — wciąż nie ma nikogo, kogo naprawdę chciałbym Ci przedstawić. " +
     "Dzięki, że jesteś; to ma znaczenie.\n\n" +
     "Co się dzieje:\n" +
     "• ściągam więcej osób podobnych do Ciebie i stroję algorytm pod Ciebie.\n" +
     "• Twój priorytet w kolejnym dropie jest już podniesiony.\n\n" +
-    "Czwartek, 18:00 — działam 🤍",
+    "Działam 🤍",
   noMatchThisWeekTier3:
     "Hej\n\n" +
     "Znowu szczerze: wciąż nie ma osoby, która naprawdę byłaby warta Twojego czasu. " +
     "Mnie to frustruje jeszcze bardziej niż Ciebie i nie będę udawać inaczej.\n\n" +
     "Po mojej stronie:\n" +
     "• osobiście pilnuję Twojej kolejki i popycham wzrost w Twojej okolicy.\n" +
-    "• każdy tydzień czekania przesuwa Cię wyżej w priorytecie dropu.\n\n" +
-    "Dzięki za zaufanie. Czwartek, 18:00 🤍",
+    "• im dłużej czekasz, tym wyżej przesuwasz się w priorytecie dropu.\n\n" +
+    "Dzięki za zaufanie 🤍",
   noMatchDiscountOffer:
     "🎟️ Małe podziękowanie za cierpliwość: Twoja następna pierwsza randka z rabatem {pct}% na jeden bilet. " +
     "Zastosujemy rabat automatycznie, gdy trafi Ci się para lub otworzysz swoje bilety.",
@@ -4675,7 +4675,7 @@ const plTranslations: TranslationTable = {
   venueInvoiceLabel: "Zmiana miejsca",
   icebreakerIntro: "Twoja randka jest za 5 godzin! Kilka tematów na start:\n\n",
   icebreakerStreamStart: "✨ Dobieram kilka tematów do rozmowy dla was…",
-  noMatchStreamStart: "💫 Przeglądam dla ciebie tegotygodniowe dopasowania…",
+  noMatchStreamStart: "💫 Przeglądam dopasowania dla Ciebie…",
   wingmanHintIntro: "👋 Wskazówka od środka - randka jest za 90 minut:\n\n",
   profilerSkip: "Pomiń",
   emergencyUnlocked:
@@ -4696,7 +4696,7 @@ const plTranslations: TranslationTable = {
   emergencyConfirmed: "Randka odwołana. Twoja wiadomość została przekazana.",
   emergencyReceivedOther: "Twoje dopasowanie odwołało randkę. Oto co napisali:\n\n\"{reason}\"",
   emergencyReceivedOtherIntro: "Twoje dopasowanie odwołało randkę. Oto co napisali:",
-  emergencyReceivedOtherSoftNote: "To nie przez Ciebie. Gennety trochę podniesie Twoją priorytetowość na przyszły tydzień.",
+  emergencyReceivedOtherSoftNote: "To nie przez Ciebie. Gennety trochę podniesie Twój priorytet na kolejny drop.",
   feedbackInvitation:
     "Jak poszła randka? ✨\n\n" +
     "Powiedz nam kilka rzeczy - chemia, vibe, co byś zmienił(a). " +
@@ -4783,11 +4783,11 @@ const plTranslations: TranslationTable = {
     "Na razie Gennety działa tylko w Kijowie. Dopasowania zawsze są w obrębie jednego miasta, " +
     "więc dopóki nie wystartujemy w mieście {city}, nie ma tu kogo Ci przedstawić.\n\n" +
     "Jeśli jesteś gotowy chodzić na randki w Kijowie — przełącz się. Profil, zdjęcia i weryfikacja " +
-    "zostaną bez zmian, a Ty trafisz do najbliższego czwartkowego dropu.",
+    "zostaną bez zmian, a Ty trafisz do najbliższego dropu.",
   citySwitchConfirm: "📍 Tak, szukajcie mi pary w Kijowie",
   citySwitchDone:
     "Gotowe — Twoje miasto dopasowań to teraz Kijów 🤍\n\n" +
-    "Jesteś w najbliższym dropie: czwartek, 18:00.",
+    "Jesteś w najbliższym dropie: {date}.",
   citySwitchFailed: "Nie udało się teraz zmienić miasta. Spróbuj ponownie za chwilę.",
   noMatchCityNotLaunched:
     "Hej\n\n" +
@@ -4950,7 +4950,7 @@ const plTranslations: TranslationTable = {
 
   // --- Rematch ---
   rematchOfferFamine:
-    "W tym tygodniu nie było pary — to kwestia puli, nie ciebie.\n\n" +
+    "Tym razem nie było pary — to kwestia puli, nie ciebie.\n\n" +
     "Mogę puścić wyszukiwanie jeszcze raz, teraz, tylko dla ciebie. Jedna nowa osoba, ten sam dobór: {price}.\n\n" +
     "To nowe poznanie, nie gwarancja randki. Jeśli nikogo nie znajdę — gwiazdki wracają od razu.",
   rematchOfferFailed:
@@ -4968,15 +4968,15 @@ const plTranslations: TranslationTable = {
     "Nie znalazłem nikogo nowego, a zwrot za pierwszym razem nie przeszedł. Zajmuję się tym — gwiazdki wrócą niedługo.",
   rematchRefunded: "Gwiazdki za rematch wróciły ✨",
   rematchLimitReached:
-    "Rematche na ten tydzień się skończyły. Następny otworzy się za kilka dni — tygodniowa para i tak będzie.",
+    "Rematche na teraz się skończyły. Następny otworzy się za kilka dni — kolejna para i tak będzie.",
   rematchUnavailable:
     "Teraz nie zrobię rematchu. Jeśli masz parę w toku — najpierw dokończ tamto.",
   rematchGiftFamine:
-    "Mówiłem, że w tym tygodniu nie ma dla ciebie pary. Szukałem dalej — i znalazłem kogoś, na kogo warto spojrzeć.",
+    "Mówiłem, że na razie nie ma dla ciebie pary. Szukałem dalej — i znalazłem kogoś, na kogo warto spojrzeć.",
   rematchGiftFailed:
     "Ostatnio nie wyszło. Wróciłem do szukania i znalazłem kogoś, kto pasuje ci bardziej.",
   rematchGiftNeutral:
-    "Pracowałem dalej w tym tygodniu — i jest ktoś, kogo chcę ci pokazać.",
+    "Szukałem dalej — i jest ktoś, kogo chcę ci pokazać.",
 };
 
 const translationsByLanguage: Record<Language, TranslationTable> = {

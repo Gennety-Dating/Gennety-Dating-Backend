@@ -218,7 +218,7 @@ export function describeActiveMatch(
   locale: string,
   features: PlaybookFeatures,
 ): string {
-  if (!match) return "No active match. Waiting for the next weekly batch.";
+  if (!match) return "No active match. Waiting for the next batch.";
 
   const partner = match.partnerFirstName ?? "their match";
   const lines: string[] = [];
@@ -234,7 +234,7 @@ export function describeActiveMatch(
       ? "A \"still in?\" check-in is open and waiting for THIS user's answer (they have gone quiet for ~24h). " +
         "If they say they're still in, point them at the green button on that message — text alone does not record it. " +
         "If they say their plans changed, call propose_cancel_date. If nobody answers, the match is cancelled after 48h " +
-        "and both are freed for the next weekly batch."
+        "and both are freed for the next batch."
       : null;
 
   if (match.status === "proposed") {

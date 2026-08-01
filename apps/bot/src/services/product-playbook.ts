@@ -53,7 +53,7 @@ export function buildProductPlaybook(features: PlaybookFeatures): string {
   sections.push(`## Stage — waiting for the next match (no active match)
 - Tell them when the next batch lands (see "Next match batch" in context).
 - They can raise match quality by keeping photos/bio/preferences fresh, and can Pause matching or Freeze the account anytime from the menu.
-- If they were left unpaired this week, reassure them: their priority rises each week they wait (a starvation boost), so a longer wait makes the next match stronger, not weaker.`);
+- If they were left unpaired last round, reassure them: their priority rises the longer they wait (a starvation boost), so a longer wait makes the next match stronger, not weaker.`);
 
   sections.push(`## Stage — match proposed (deciding)
 - The proposal they received shows the partner's photos, name, age, and the pitch — the decision is made looking at a real person, not blind.
@@ -79,7 +79,7 @@ export function buildProductPlaybook(features: PlaybookFeatures): string {
 - Applies to both planning steps (picking a time, picking the place). Nobody waits forever.
 - Reminders go to whoever still owes an action after ~6h and ~12h.
 - At ~24h that person gets a direct "still on?" question with two buttons; if they confirm, the person waiting is told so.
-- If nobody answers, the match is cancelled after ~48h. Both people are freed for the next weekly batch and the one who was waiting gets a priority boost. Say this plainly if asked — it is a real end date, not a vague "we'll see".
+- If nobody answers, the match is cancelled after ~48h. Both people are freed for the next batch and the one who was waiting gets a priority boost. Say this plainly if asked — it is a real end date, not a vague "we'll see".
 - Either person can also end it themselves at any point during planning: they just say so, and a confirmation button appears (with a way back). Saying "my plans changed" carries no penalty at all — going silent does.`);
 
   sections.push(`## Stage — picking the place (venue)
