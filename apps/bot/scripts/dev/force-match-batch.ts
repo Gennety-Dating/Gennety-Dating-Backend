@@ -1,8 +1,12 @@
 /**
- * One-shot: force the weekly matching batch outside its Thursday 18:00 Kyiv
- * cron. Runs `runWeeklyBatch()` and then `dispatchMatches()` against the dev
- * bot's API. Safe to run while `pnpm dev:bot` is up — Telegram long-polling
- * is owned by the dev bot process; we only issue Bot API HTTP calls here.
+ * One-shot: force the drop matching batch outside its cron (Thursday 18:00
+ * Kyiv under the `weekly` DropCadence profile; every day at 18:00 under
+ * `daily` — see packages/shared/src/cadence.ts). Runs `runDropBatch()`,
+ * notifies any proposals its own expiry preflight expired, then
+ * `dispatchMatches()` the new pitches — mirroring `index.ts`'s
+ * `dropMatchingJob`. Safe to run while `pnpm dev:bot` is up — Telegram
+ * long-polling is owned by the dev bot process; we only issue Bot API HTTP
+ * calls here.
  *
  * Usage:
  *   pnpm --filter @gennety/bot exec tsx scripts/dev/force-match-batch.ts
@@ -32,17 +36,26 @@ if (!process.env.BOT_TOKEN) {
 
 const { prisma } = await import("@gennety/db");
 const { Bot } = await import("grammy");
-const { runWeeklyBatch } = await import("../../src/services/match-engine.js");
+const { runDropBatch } = await import("../../src/services/match-engine.js");
 const { dispatchMatches } = await import("../../src/services/dispatch-queue.js");
+const { sendExpiryNotifications } = await import("../../src/services/expiry-notify.js");
 
 const bot = new Bot(process.env.BOT_TOKEN);
 await bot.init(); // populates bot.botInfo so api calls have username context
 
-console.log("[force-match-batch] running weekly batch...");
-const result = await runWeeklyBatch();
+console.log(`[force-match-batch] running drop batch (DROP_CADENCE=${process.env.DROP_CADENCE ?? "weekly"})...`);
+const result = await runDropBatch();
 console.log(
   `[force-match-batch] batch result: eligible=${result.eligible} pairs=${result.pairs} missed=${result.missedUserIds.length}`,
 );
+
+if (result.expiredMatches.length > 0) {
+  console.log(`[force-match-batch] expiry preflight expired ${result.expiredMatches.length} stale match(es)`);
+  const notify = await sendExpiryNotifications(bot.api, result.expiredMatches);
+  console.log(
+    `[force-match-batch] expiry notify: notified=${notify.notified} skipped=${notify.skipped} failed=${notify.failed}`,
+  );
+}
 
 if (result.matchIds.length === 0) {
   console.log("[force-match-batch] no matches to dispatch — done");
