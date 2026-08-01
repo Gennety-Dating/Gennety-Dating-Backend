@@ -1,5 +1,46 @@
 # Gennety Dating Deploy
 
+**PENDING — pre-date coordination PNG cards (PRODUCT_SPEC §Phase 4).** Not
+deployed yet. **Code-only: no Prisma schema change, no env change, no flag
+change, no Mini App change** (`apps/webapp` untouched). Ships with whatever
+restart carries the blocks below.
+
+What ships: the five coordination DMs stop being bare text. Each becomes ONE
+message — a rendered PNG, the SAME localized copy as its caption, the same
+inline keyboard — mirroring the date card and the venue wish card. Uses the
+already-deployed satori/resvg/canvas stack and the already-bundled fonts, so
+`pnpm install` pulls nothing new and there is no system dependency to add.
+
+**Three things worth knowing before the restart:**
+
+- **It is inert in production today.** `COORDINATION_FEATURE_ENABLED` gates the
+  cron sweep that sends the T-60m offer and opens the T-30m window, and it is
+  **off** in `/opt/gennety/.env`. The Variant A/B callback handlers are
+  registered unconditionally, but they can only be reached from an offer that
+  the disabled sweep never sends. Nothing changes for users until that flag is
+  a separate decision.
+- **Fail-open is the load-bearing property, not the cards.** A null render, a
+  caption over Telegram's 1024-char photo limit, or a rejected `sendPhoto` each
+  fall through to the exact plain-text DM the flow sends today. This DM lands
+  ~1h before a date and is the only way the pair can find each other, so a
+  render hiccup must cost a picture, not the message. Watch for the fallback
+  ever firing in production:
+
+```sh
+pm2 logs gennety-bot --lines 200 --nostream | grep '\[coordination-card\]'
+```
+
+- **Verify on the dev bot, not in prod.** Production has 0 dates ever, so
+  nothing will exercise this until a Thursday batch pairs someone AND that pair
+  reaches `scheduled` AND the flag is on. `scripts/dev-coord-cards-demo.mjs`
+  renders and DMs every variant without touching the database, and
+  `scripts/dev-coord-offer-demo.mjs` plays the real flow end to end.
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag, no Mini App state.
+
+---
+
 **PENDING — daily-cadence matching migration groundwork (PRODUCT_SPEC §3.1 /
 §3.1b, `DAILY_MATCHING_MIGRATION_AUDIT.md`, `DAILY_MATCHING_IMPLEMENTATION_PLAN.md`).**
 Not deployed yet. **Code + one additive schema column, no env change required

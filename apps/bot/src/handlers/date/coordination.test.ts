@@ -16,6 +16,17 @@ vi.mock("@gennety/db", () => ({
 
 vi.mock("../../config.js", () => ({ env: { COORDINATION_FEATURE_ENABLED: true } }));
 
+// The coordination DMs ride a rendered PNG (PRODUCT_SPEC §Phase 4). Stub the
+// raster — a real satori render costs seconds per call and says nothing about
+// the flow; `services/coordination-card/send.test.ts` covers the delivery
+// branches, and the demo script covers the layout.
+const { mockRenderCard } = vi.hoisted(() => ({
+  mockRenderCard: vi.fn().mockResolvedValue(Buffer.from("png")),
+}));
+vi.mock("../../services/coordination-card/index.js", () => ({
+  renderCoordinationCard: mockRenderCard,
+}));
+
 import { prisma } from "@gennety/db";
 import {
   handleCoordMethod,
@@ -60,7 +71,10 @@ function createCtx(over: {
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
-    api: { sendMessage: vi.fn().mockResolvedValue(undefined) },
+    api: {
+      sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendPhoto: vi.fn().mockResolvedValue(undefined),
+    },
   } as any;
 }
 
@@ -69,9 +83,11 @@ function coordUser(over: Record<string, unknown> = {}): Record<string, unknown> 
     id: "uid-A",
     telegramId: 1001n,
     language: "en",
+    theme: "dark",
     firstName: "Alice",
     gender: "female",
     telegramUsername: "alice",
+    profile: { photos: ["file-alice-1"] },
     ...over,
   };
 }
@@ -124,10 +140,17 @@ describe("handleCoordMethod", () => {
         data: expect.objectContaining({ coordMethod: "share_self", coordInitiatorId: "uid-A" }),
       }),
     );
-    // Partner (Bob, 1002) receives Alice's link.
-    const dm = ctx.api.sendMessage.mock.calls[0];
+    // Partner (Bob, 1002) receives ONE message: the card, with Alice's link as
+    // its caption. The link has to stay in the caption — nothing on a PNG is
+    // tappable.
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+    const dm = ctx.api.sendPhoto.mock.calls[0];
     expect(dm[0]).toBe(1002);
-    expect(dm[1]).toContain("https://t.me/alice");
+    expect(dm[2].caption).toContain("https://t.me/alice");
+    expect(mockRenderCard).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "shared", personPhotoRef: "file-alice-1" }),
+      expect.anything(),
+    );
     expect(ctx.reply).toHaveBeenCalled();
   });
 
@@ -143,10 +166,17 @@ describe("handleCoordMethod", () => {
         data: expect.objectContaining({ coordMethod: "request_partner", coordPartnerConsent: null }),
       }),
     );
-    const call = ctx.api.sendMessage.mock.calls[0];
+    const call = ctx.api.sendPhoto.mock.calls[0];
     expect(call[0]).toBe(1002);
+    // The keyboard rides the photo, so the consent buttons sit under the card
+    // rather than on a second message.
     const cbs = call[2].reply_markup.inline_keyboard.flat().map((b: any) => b.callback_data);
     expect(cbs).toEqual(["coord:approve:m1", "coord:decline:m1"]);
+    // The face in the frame is the ASKER, so the partner sees who is asking.
+    expect(mockRenderCard).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "ask", personPhotoRef: "file-alice-1" }),
+      expect.anything(),
+    );
   });
 
   it("proxy (C) locks the method with NO partner DM (unconditional open later)", async () => {
@@ -162,6 +192,7 @@ describe("handleCoordMethod", () => {
       }),
     );
     expect(ctx.api.sendMessage).not.toHaveBeenCalled(); // partner is not asked
+    expect(ctx.api.sendPhoto).not.toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalled();
   });
 
@@ -206,10 +237,14 @@ describe("handleCoordConsent", () => {
       where: { id: "m1" },
       data: { coordPartnerConsent: true, coordResolvedAt: expect.any(Date) },
     });
-    // Initiator (Alice, 1001) receives Bob's link.
-    const dm = ctx.api.sendMessage.mock.calls[0];
+    // Initiator (Alice, 1001) receives Bob's link in the card's caption.
+    const dm = ctx.api.sendPhoto.mock.calls[0];
     expect(dm[0]).toBe(1001);
-    expect(dm[1]).toContain("https://t.me/bob");
+    expect(dm[2].caption).toContain("https://t.me/bob");
+    expect(mockRenderCard).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "shared", personPhotoRef: "file-alice-1" }),
+      expect.anything(),
+    );
   });
 
   it("decline notifies the initiator and reveals no contact", async () => {
@@ -223,8 +258,14 @@ describe("handleCoordConsent", () => {
       where: { id: "m1" },
       data: { coordPartnerConsent: false, coordResolvedAt: expect.any(Date) },
     });
-    expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
-    expect(ctx.api.sendMessage.mock.calls[0][1]).not.toContain("t.me");
+    expect(ctx.api.sendPhoto).toHaveBeenCalledTimes(1);
+    expect(ctx.api.sendPhoto.mock.calls[0][2].caption).not.toContain("t.me");
+    // No face on the decline card — it is about the decision, not the person.
+    expect(mockRenderCard).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "declined" }),
+      expect.anything(),
+    );
+    expect(mockRenderCard.mock.calls[0]![0]).not.toHaveProperty("personPhotoRef");
   });
 
   it("rejects the initiator trying to approve on the partner's behalf", async () => {

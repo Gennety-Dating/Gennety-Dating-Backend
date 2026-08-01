@@ -9,6 +9,8 @@ import {
   PROXY_CLOSE_AFTER_HOURS,
 } from "@gennety/shared";
 import { env } from "../config.js";
+import { sendCoordCard } from "./coordination-card/send.js";
+import type { CoordCardTheme } from "./coordination-card/index.js";
 
 /**
  * Pre-date coordination service (PRODUCT_SPEC.md §Phase 4, feature-flagged
@@ -45,9 +47,11 @@ interface CoordParticipant {
   id: string;
   telegramId: bigint;
   language: string | null;
+  theme?: string | null;
   firstName: string | null;
   gender: string | null;
   telegramUsername: string | null;
+  profile?: { photos: string[] } | null;
 }
 
 /**
@@ -112,9 +116,13 @@ const participantSelect = {
   id: true,
   telegramId: true,
   language: true,
+  // Card chrome follows the RECIPIENT's theme; the partner's first photo fills
+  // the offer card's polaroid (PRODUCT_SPEC §Phase 4).
+  theme: true,
   firstName: true,
   gender: true,
   telegramUsername: true,
+  profile: { select: { photos: true } },
 } as const;
 
 /** Single coordination tick. Returns counts for logging / testing. */
@@ -176,14 +184,21 @@ async function sendOffers(api: Api<RawApi>, now: Date, result: CoordinationResul
             recipientHasUsername,
             partnerHasUsername,
           );
-          return api
-            .sendMessage(Number(r.telegramId), intro, { reply_markup: kb })
-            .catch((err: unknown) =>
-              console.warn(
-                `[coordination] offer send failed for ${r.telegramId}:`,
-                err instanceof Error ? err.message : err,
-              ),
-            );
+          // The face in the frame is the PARTNER: an hour out, the card's job
+          // is "this is who you're about to meet", and the choice sits under it.
+          return sendCoordCard(
+            api,
+            r.telegramId,
+            {
+              variant: "offer",
+              personName: partner.firstName ?? "",
+              personPhotoRef: partner.profile?.photos?.[0] ?? null,
+              language: lang,
+              theme: (r.theme ?? "dark") as CoordCardTheme,
+            },
+            intro,
+            { keyboard: kb },
+          );
         }),
       );
       result.offers++;
@@ -210,8 +225,8 @@ async function openProxies(
     select: {
       id: true,
       agreedTime: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
+      userA: { select: { telegramId: true, language: true, theme: true } },
+      userB: { select: { telegramId: true, language: true, theme: true } },
     },
   });
 
@@ -227,16 +242,21 @@ async function openProxies(
         t(lang, "coordEnterBtn"),
         `coord:enter:${match.id}`,
       );
-      await api
-        .sendMessage(Number(u.telegramId), t(lang, "coordProxyOpenedEnterPrompt"), {
-          reply_markup: kb,
-        })
-        .catch((err: unknown) =>
-          console.warn(
-            `[coordination] proxy-open send failed for ${u.telegramId}:`,
-            err instanceof Error ? err.message : err,
-          ),
-        );
+      // No photo by design — the withheld portrait IS the card (PRODUCT_SPEC
+      // §Phase 4), and showing a face on the anonymous-chat card would
+      // contradict the thing it announces.
+      await sendCoordCard(
+        api,
+        u.telegramId,
+        {
+          variant: "proxy",
+          personName: "",
+          language: lang,
+          theme: (u.theme ?? "dark") as CoordCardTheme,
+        },
+        t(lang, "coordProxyOpenedEnterPrompt"),
+        { keyboard: kb },
+      );
     }
 
     await prisma.match.update({

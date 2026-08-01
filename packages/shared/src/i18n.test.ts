@@ -16,6 +16,10 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
   "myProfileBody",
   "matchPhotoCaption",
   "coordProxyRelayNamedPrefix",
+  // A coordination-card headline line that is just the product name plus a
+  // question mark. pl phrases the ask as "Udostępnić / Telegram?", so its
+  // second line lands byte-identical to English — nothing to translate.
+  "coordCardAskHead2",
   // Bare domain on the referral card — a URL, not prose.
   "referralCardFooter",
   // "Gennety Premium" is a fixed brand line — identical across all locales.

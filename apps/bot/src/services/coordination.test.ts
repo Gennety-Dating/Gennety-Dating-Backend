@@ -16,6 +16,14 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
+// The offer and proxy-open DMs ride a rendered PNG (PRODUCT_SPEC §Phase 4).
+// Stub the raster — a real satori render costs seconds per call and says
+// nothing about the sweep; `coordination-card/send.test.ts` covers delivery.
+const { mockRenderCard } = vi.hoisted(() => ({
+  mockRenderCard: vi.fn().mockResolvedValue(Buffer.from("png")),
+}));
+vi.mock("./coordination-card/index.js", () => ({ renderCoordinationCard: mockRenderCard }));
+
 import { prisma } from "@gennety/db";
 import {
   runCoordinationTick,
@@ -28,7 +36,10 @@ type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as { findMany: MockFn; update: MockFn; updateMany: MockFn };
 
 function makeApi() {
-  return { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+  return {
+    sendMessage: vi.fn().mockResolvedValue(undefined),
+    sendPhoto: vi.fn().mockResolvedValue(undefined),
+  } as any;
 }
 
 function user(over: Record<string, unknown> = {}): any {
@@ -36,9 +47,11 @@ function user(over: Record<string, unknown> = {}): any {
     id: "uid-A",
     telegramId: 1001n,
     language: "en",
+    theme: "dark",
     firstName: "Alice",
     gender: "female",
     telegramUsername: "alice",
+    profile: { photos: ["file-alice-1"] },
     ...over,
   };
 }
@@ -159,6 +172,7 @@ describe("runCoordinationTick — feature flag", () => {
     expect(res).toEqual({ offers: 0, opened: 0, closed: 0 });
     expect(mMatch.findMany).not.toHaveBeenCalled();
     expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.sendPhoto).not.toHaveBeenCalled();
   });
 });
 
@@ -169,7 +183,14 @@ describe("runCoordinationTick — offer (T-60m)", () => {
         {
           id: "m1",
           userA: user({ id: "A", gender: "female", telegramId: 1001n, telegramUsername: "alice" }),
-          userB: user({ id: "B", gender: "male", telegramId: 1002n, telegramUsername: "bob" }),
+          userB: user({
+            id: "B",
+            gender: "male",
+            telegramId: 1002n,
+            telegramUsername: "bob",
+            firstName: "Bob",
+            profile: { photos: ["file-bob-1"] },
+          }),
         },
       ])
       .mockResolvedValueOnce([]) // open phase
@@ -179,8 +200,24 @@ describe("runCoordinationTick — offer (T-60m)", () => {
     const res = await runCoordinationTick(api, NOW);
 
     expect(res.offers).toBe(1);
-    expect(api.sendMessage).toHaveBeenCalledTimes(1);
-    expect(api.sendMessage).toHaveBeenCalledWith(1001, expect.any(String), expect.any(Object));
+    // One message: the card with the intro as its caption and the three
+    // coordination options as its keyboard.
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.sendPhoto).toHaveBeenCalledTimes(1);
+    const [chatId, , extra] = api.sendPhoto.mock.calls[0];
+    expect(chatId).toBe(1001);
+    expect(extra.caption).toEqual(expect.any(String));
+    expect(extra.reply_markup).toBeDefined();
+    // The face in the frame is the PARTNER — "this is who you're about to meet".
+    expect(mockRenderCard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variant: "offer",
+        personName: "Bob",
+        personPhotoRef: "file-bob-1",
+        theme: "dark",
+      }),
+      expect.anything(),
+    );
     expect(mMatch.updateMany).toHaveBeenCalledWith({
       where: { id: "m1", status: "scheduled", coordOfferSentAt: null },
       data: { coordOfferSentAt: NOW },
@@ -230,7 +267,15 @@ describe("runCoordinationTick — open proxy (T-30m, unconditional)", () => {
     const res = await runCoordinationTick(api, NOW);
 
     expect(res.opened).toBe(1);
-    expect(api.sendMessage).toHaveBeenCalledTimes(2); // both sides get Enter button
+    // Both sides get the card + Enter button. No photo goes ON this card — the
+    // withheld portrait IS the card, and a face would contradict it.
+    expect(api.sendPhoto).toHaveBeenCalledTimes(2);
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(mockRenderCard).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "proxy" }),
+      expect.anything(),
+    );
+    expect(mockRenderCard.mock.calls[0]![0]).not.toHaveProperty("personPhotoRef");
     expect(mMatch.update).toHaveBeenCalledWith({
       where: { id: "m1" },
       data: {
@@ -258,7 +303,9 @@ describe("runCoordinationTick — close proxy (T+2h)", () => {
     const res = await runCoordinationTick(api, NOW);
 
     expect(res.closed).toBe(1);
+    // The close notice stays plain text — there is no card for "it's over".
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    expect(api.sendPhoto).not.toHaveBeenCalled();
     expect(mMatch.update).toHaveBeenCalledWith({
       where: { id: "m1" },
       data: { proxyClosedAt: NOW },

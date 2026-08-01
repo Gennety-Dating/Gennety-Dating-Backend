@@ -3289,6 +3289,45 @@ on the date-lifecycle tick; handlers in `handlers/date/coordination.ts`.
   bypass). The relay re-checks the window per message, so a stale session
   self-heals after close. See the "NO IN-APP CHAT" carve-out in Core Principles.
 
+**Every step of this flow is a rendered PNG card, not a bare text DM
+(2026-08-01, `services/coordination-card`).** The hour before the date was the
+product's most visually silent stretch, on the one flow that is entirely about
+a next step. Five cards, one per real send — the T-60m offer, the Variant B
+consent ask, a revealed contact (Variant A, or B after approval), a Variant B
+decline, and the Variant C window opening. They ship as ONE message each:
+the card, the existing localized copy as its **caption**, and the step's own
+inline keyboard, exactly like the date card (§3.7a) and the venue wish card
+(§3.7b). The Variant C **close** notice keeps its plain text — there is no card
+for "it's over".
+
+Two rules give the family its meaning:
+
+- **Every variant renders the same white polaroid frame in the same place;
+  only its contents change.** `offer`/`ask`/`shared` hold a real profile photo —
+  the partner on the offer ("this is who you're about to meet"), the *asker* on
+  the consent card (so the partner sees who wants their contact), the contact
+  owner on the reveal. `declined` holds a clock instead of a face, because that
+  card is about a decision rather than a person, and the clock points at the
+  anonymous chat 30 minutes out. `proxy` holds the portrait **withheld** behind
+  a burgundy halftone with the brand mark reading through it — the anonymity of
+  the relay stated in the exact frame the contact cards use for a face, which is
+  also why that one card carries no photo at all.
+- **The card carries the beat; the message carries what you act on.** Nothing on
+  a PNG is tappable, selectable, or reachable by a screen reader, so the `t.me/`
+  link, the instructions and the buttons all stay in the caption and the
+  keyboard. `shared` and `declined` therefore print no sub-line on the card at
+  all — theirs already exists verbatim in `coordRevealToInitiator` /
+  `coordSharedToPartner` and `coordPartnerDeclined` — and the card spends that
+  height on air instead of on a duplicate.
+
+Cards render in the **recipient's** `User.theme` and language, like the other
+PNG cards. Delivery is fail-open by construction (`coordination-card/send.ts`):
+a null render, a caption over Telegram's 1024-char photo limit, or a rejected
+`sendPhoto` all fall through to the plain text DM the flow sent before. This is
+not decoration-grade tolerance — the DM lands ~1h before the date and is the
+only way the pair can find each other, so it must degrade rather than fail.
+Telegram-only, and inert with `COORDINATION_FEATURE_ENABLED` off.
+
 ### Emergency Protocol
 
 `handlers/date/emergency.ts`:

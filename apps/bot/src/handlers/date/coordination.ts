@@ -9,6 +9,8 @@ import {
   type CoordMethod,
 } from "../../services/coordination.js";
 import { InlineKeyboard } from "grammy";
+import { sendCoordCard } from "../../services/coordination-card/send.js";
+import type { CoordCardTheme } from "../../services/coordination-card/index.js";
 
 /**
  * Pre-date coordination handlers (PRODUCT_SPEC.md §Phase 4, feature-flagged).
@@ -47,18 +49,25 @@ interface CoordUser {
   id: string;
   telegramId: bigint;
   language: string | null;
+  theme: string | null;
   firstName: string | null;
   gender: string | null;
   telegramUsername: string | null;
+  profile: { photos: string[] } | null;
 }
 
 const coordUserSelect = {
   id: true,
   telegramId: true,
   language: true,
+  // Card chrome follows the RECIPIENT's theme, and the first profile photo is
+  // what fills the card's polaroid — both only exist for the coordination
+  // cards (PRODUCT_SPEC §Phase 4).
+  theme: true,
   firstName: true,
   gender: true,
   telegramUsername: true,
+  profile: { select: { photos: true } },
 } as const;
 
 function loadCoordMatch(matchId: string): Promise<CoordMatch | null> {
@@ -95,6 +104,15 @@ function telegramLink(username: string): string {
 
 function langOf(u: CoordUser): Language {
   return (u.language ?? "en") as Language;
+}
+
+function themeOf(u: CoordUser): CoordCardTheme {
+  return (u.theme ?? "dark") as CoordCardTheme;
+}
+
+/** First profile photo — the face in the card's polaroid frame. */
+function photoOf(u: CoordUser): string | null {
+  return u.profile?.photos?.[0] ?? null;
 }
 
 async function dmCatch(
@@ -158,9 +176,16 @@ export async function handleCoordMethod(ctx: BotContext): Promise<void> {
       },
     });
     const partnerLang = langOf(partner);
-    await dmCatch(
-      ctx,
+    await sendCoordCard(
+      ctx.api,
       partner.telegramId,
+      {
+        variant: "shared",
+        personName: initiator.firstName ?? "",
+        personPhotoRef: photoOf(initiator),
+        language: partnerLang,
+        theme: themeOf(partner),
+      },
       t(partnerLang, "coordSharedToPartner", {
         name: initiator.firstName ?? "",
         link: telegramLink(initiator.telegramUsername),
@@ -187,11 +212,20 @@ export async function handleCoordMethod(ctx: BotContext): Promise<void> {
       .success()
       .text(t(partnerLang, "coordPartnerBtnDecline"), `coord:decline:${matchId}`)
       .danger();
-    await dmCatch(
-      ctx,
+    await sendCoordCard(
+      ctx.api,
       partner.telegramId,
+      {
+        variant: "ask",
+        // The face in the frame is whoever is ASKING, so the partner sees who
+        // wants their contact before deciding.
+        personName: initiator.firstName ?? "",
+        personPhotoRef: photoOf(initiator),
+        language: partnerLang,
+        theme: themeOf(partner),
+      },
       t(partnerLang, "coordPartnerAskApprove", { name: initiator.firstName ?? "" }),
-      { reply_markup: kb },
+      { keyboard: kb },
     );
     await ctx.reply(t(lang, "coordRequestAck"));
     return;
@@ -247,7 +281,20 @@ export async function handleCoordConsent(ctx: BotContext): Promise<void> {
       where: { id: matchId },
       data: { coordPartnerConsent: false, coordResolvedAt: new Date() },
     });
-    await dmCatch(ctx, initiator.telegramId, t(langOf(initiator), "coordPartnerDeclined"));
+    await sendCoordCard(
+      ctx.api,
+      initiator.telegramId,
+      {
+        // No face here on purpose: the card is about the decision, not the
+        // person who made it. The clock points at the anonymous chat instead,
+        // which the caption spells out.
+        variant: "declined",
+        personName: partner.firstName ?? "",
+        language: langOf(initiator),
+        theme: themeOf(initiator),
+      },
+      t(langOf(initiator), "coordPartnerDeclined"),
+    );
     await ctx.editMessageReplyMarkup().catch(() => {});
     return;
   }
@@ -258,9 +305,16 @@ export async function handleCoordConsent(ctx: BotContext): Promise<void> {
     where: { id: matchId },
     data: { coordPartnerConsent: true, coordResolvedAt: new Date() },
   });
-  await dmCatch(
-    ctx,
+  await sendCoordCard(
+    ctx.api,
     initiator.telegramId,
+    {
+      variant: "shared",
+      personName: partner.firstName ?? "",
+      personPhotoRef: photoOf(partner),
+      language: langOf(initiator),
+      theme: themeOf(initiator),
+    },
     t(langOf(initiator), "coordRevealToInitiator", {
       name: partner.firstName ?? "",
       link: telegramLink(partner.telegramUsername),
