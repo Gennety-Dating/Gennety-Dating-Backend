@@ -1,5 +1,39 @@
 # Gennety Dating Deploy
 
+**⚠️ Production is NOT at repo HEAD, and a single-file rsync from the working
+tree WILL take it down (incident 2026-08-01, ~6 min outage).** Prod runs
+`f9e08eb` (deployed 2026-07-29); everything in the PENDING blocks below is
+missing from it, including `services/match-stall.ts` and the
+`VOICE_SELF_GENDER` export in `@gennety/shared`. The bot runs from source via
+tsx, so a file copied from HEAD that imports either one is not a degraded
+feature — it is `ERR_MODULE_NOT_FOUND` at boot and a PM2 crash loop. That is
+exactly how `services/prompt-builder.ts` was shipped alone and crash-looped
+production before it was restored.
+
+Confirm what prod actually runs before touching it — anchor it by md5 rather
+than by trusting this file:
+
+```sh
+ssh root@167.172.178.229 'md5sum /opt/gennety/packages/shared/src/ai/prompts.ts'
+# then locally, walk recent commits until one matches:
+git show "<sha>:packages/shared/src/ai/prompts.ts" | md5 -q
+```
+
+For a targeted hotfix, patch the version prod actually runs
+(`git show "<prod-sha>:<path>"`), import-test it **in place on the droplet**
+under a temp filename before `mv`-ing it over the live file, then restart and
+watch that the PID holds and the restart count stops climbing. Otherwise do a
+full deploy — but note that rsync copies the **working tree**, not git HEAD, so
+check `git status` first: an unrelated in-progress refactor ships with it.
+
+**Known divergence right now:** prod's `apps/bot/src/services/prompt-builder.ts`
+and `apps/bot/src/admin/utils/cache.ts` are hand-patched with the `admin_cache`
+knowledge-base filter (commit `6e45a70`) on top of the `f9e08eb` base, and the
+five legacy `system_knowledge` product-rule rows are deactivated in the prod DB.
+The next full deploy reconciles the code — the repo version carries the same fix.
+
+---
+
 **PENDING — Premium hub stops asking for money up front (PRODUCT_SPEC §3.8).**
 Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change** (`apps/webapp` untouched) — the price still comes
