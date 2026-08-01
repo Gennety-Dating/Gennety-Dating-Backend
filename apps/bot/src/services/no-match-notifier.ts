@@ -1,11 +1,18 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { CADENCE, t, type Language, type TranslationKey } from "@gennety/shared";
+import {
+  CADENCE,
+  FAMINE_PAUSE_AFTER_DAYS,
+  t,
+  type Language,
+  type TranslationKey,
+} from "@gennety/shared";
 import { streamDraftsToChat } from "./ai-stream.js";
 import { AI_EMOJI } from "./ai-emoji.js";
 import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
 import { isUniqueViolation } from "./ticket-wallet.js";
 import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
+import { transitionAccountStatus } from "./account-status-transitions.js";
 import {
   buildCitySwitchKeyboard,
   isMarketPending,
@@ -58,6 +65,10 @@ export interface NoMatchNotifyResult {
   tier1: number;
   tier2: number;
   tier3plus: number;
+  /** D10: users auto-paused this run because no candidate has existed for
+   *  FAMINE_PAUSE_AFTER_DAYS days running. Counted separately from the tier
+   *  buckets — a paused user gets a distinct message, not another tier DM. */
+  paused: number;
   errors: Array<{ userId: string; error: string }>;
 }
 
@@ -77,6 +88,36 @@ export function getDropDate(now: Date): Date {
   return d;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The anchor every famine calculation (tier, and D10's pause threshold)
+ * measures elapsed time from: the user's most recent dispatched match. For a
+ * user who has NEVER been dispatched a match, anchoring to the Unix epoch
+ * would produce an absurd result on their very first check (tens of
+ * thousands of elapsed days) — so that case anchors to their EARLIEST
+ * `NoMatchNotice` instead (the start of their very first famine streak),
+ * falling back to `dropDate` itself when even that doesn't exist yet.
+ */
+async function resolveSinceDate(userId: string, dropDate: Date): Promise<Date> {
+  const lastMatch = await prisma.match.findFirst({
+    where: {
+      OR: [{ userAId: userId }, { userBId: userId }],
+      dispatchedAt: { not: null },
+    },
+    orderBy: { dispatchedAt: "desc" },
+    select: { dispatchedAt: true },
+  });
+  if (lastMatch?.dispatchedAt) return lastMatch.dispatchedAt;
+
+  const firstNotice = await prisma.noMatchNotice.findFirst({
+    where: { userId },
+    orderBy: { dropDate: "asc" },
+    select: { dropDate: true },
+  });
+  return firstNotice?.dropDate ?? dropDate;
+}
+
 /**
  * Tier = consecutive batch intervals without a match, starting at 1 for the
  * current drop. Denominated in `CADENCE.intervalMs` — under `weekly` that's
@@ -87,36 +128,21 @@ export function getDropDate(now: Date): Date {
  * `FAMINE_DISCOUNT_MIN_TIER`-style day thresholds (D5) mean actual days
  * rather than "number of notices sent" once notices stop firing every drop
  * (D4's whole point).
- *
- * Anchored to the user's most recent dispatched match. For a user who has
- * NEVER been dispatched a match, anchoring to the Unix epoch would produce
- * an absurd tier on their very first check (tens of thousands of elapsed
- * intervals) — so that case anchors to their EARLIEST `NoMatchNotice`
- * instead (the start of their very first famine streak), falling back to
- * `dropDate` itself when even that doesn't exist yet (this literal check).
  */
-async function computeTier(userId: string, dropDate: Date): Promise<number> {
-  const lastMatch = await prisma.match.findFirst({
-    where: {
-      OR: [{ userAId: userId }, { userBId: userId }],
-      dispatchedAt: { not: null },
-    },
-    orderBy: { dispatchedAt: "desc" },
-    select: { dispatchedAt: true },
-  });
-
-  let sinceDate = lastMatch?.dispatchedAt ?? null;
-  if (!sinceDate) {
-    const firstNotice = await prisma.noMatchNotice.findFirst({
-      where: { userId },
-      orderBy: { dropDate: "asc" },
-      select: { dropDate: true },
-    });
-    sinceDate = firstNotice?.dropDate ?? dropDate;
-  }
-
+function computeTier(sinceDate: Date, dropDate: Date): number {
   const elapsedMs = dropDate.getTime() - sinceDate.getTime();
   return Math.max(1, Math.floor(elapsedMs / CADENCE.intervalMs));
+}
+
+/**
+ * D10: raw elapsed CALENDAR DAYS without a match — deliberately NOT the same
+ * unit as `computeTier` (which is cadence-relative: weeks under `weekly`).
+ * `FAMINE_PAUSE_AFTER_DAYS` means 14 actual days regardless of how often the
+ * batch runs, so the pause decision needs its own, cadence-independent
+ * day-count rather than reusing `tier`.
+ */
+function daysWithoutMatch(sinceDate: Date, dropDate: Date): number {
+  return Math.floor((dropDate.getTime() - sinceDate.getTime()) / DAY_MS);
 }
 
 function templateKeyForTier(tier: number): TranslationKey {
@@ -192,6 +218,7 @@ export async function sendNoMatchNotices(
     tier1: 0,
     tier2: 0,
     tier3plus: 0,
+    paused: 0,
     errors: [],
   };
 
@@ -204,7 +231,8 @@ export async function sendNoMatchNotices(
       continue;
     }
 
-    const tier = await computeTier(u.id, dropDate);
+    const sinceDate = await resolveSinceDate(u.id, dropDate);
+    const tier = computeTier(sinceDate, dropDate);
     const lang: Language = u.language ?? "en";
 
     // An account registered in a city we haven't launched (PRODUCT_SPEC §1.1).
@@ -213,16 +241,31 @@ export async function sendNoMatchNotices(
     // market. Escalating famine tiers, granting a discount, or offering a paid
     // Rematch would all sell a drop they cannot be in.
     const marketPending = isMarketPending(u.profile?.homeCityKey);
+
+    // D10: the pool has genuinely had nothing for this user for
+    // FAMINE_PAUSE_AFTER_DAYS running — pause instead of another famine tier.
+    // Not applicable to a market-pending user: their city switch, not a
+    // pause, is the honest fix (and days-without-a-match there measures
+    // nothing meaningful — they were never in a pool to begin with).
+    const daysStarved = daysWithoutMatch(sinceDate, dropDate);
+    const isPoolExhaustionPause = !marketPending && daysStarved >= FAMINE_PAUSE_AFTER_DAYS;
+
     let body = marketPending
       ? t(lang, "noMatchCityNotLaunched", {
           city: u.profile?.homeCity ?? u.profile?.homeCityKey ?? "",
         })
-      : t(lang, templateKeyForTier(tier), {});
+      : isPoolExhaustionPause
+        ? t(lang, "poolExhaustedPauseNotice", {})
+        : t(lang, templateKeyForTier(tier), {});
 
     // 2nd consecutive famine week+ → grant the one-time single-ticket discount
     // and tell them in the same DM. Inert unless TICKET_FEATURE_ENABLED (the
     // grant self-gates), so the flag-off path keeps the plain tier template.
-    if (!marketPending && tier >= CADENCE.famineDiscountMinTier) {
+    // Skipped for a pause: that DM is a different message entirely, and
+    // grafting a discount offer onto "we're pausing your search" reads oddly
+    // — the discount (if already earned from an earlier tier) is unaffected
+    // and stays available for when they resume.
+    if (!marketPending && !isPoolExhaustionPause && tier >= CADENCE.famineDiscountMinTier) {
       const grant = await grantFamineDiscountIfEligible(u.id);
       if (grant.granted && grant.pct) {
         body += `\n\n${t(lang, "noMatchDiscountOffer", { pct: grant.pct })}`;
@@ -254,6 +297,25 @@ export async function sendNoMatchNotices(
     }
 
     try {
+      // Attempt the pause CAS FIRST when applicable — its outcome decides
+      // which message actually goes out. A lost race (already not `active`
+      // for some other reason — moderation, a manual pause/freeze between
+      // candidate selection and here) falls back to the ordinary tier DM
+      // rather than sending nothing.
+      let pausedNow = false;
+      if (isPoolExhaustionPause) {
+        const transition = await transitionAccountStatus({ id: u.id }, "pause");
+        if (transition.kind === "changed") {
+          pausedNow = true;
+          await prisma.profile.updateMany({
+            where: { userId: u.id },
+            data: { starvationPausedAt: now },
+          });
+        } else {
+          body = t(lang, templateKeyForTier(tier), {});
+        }
+      }
+
       if (marketPending) {
         // Plain send, not the rich "we really looked" stream — nothing was
         // searched for this user, so that beat would be a lie. It also carries
@@ -261,6 +323,11 @@ export async function sendNoMatchNotices(
         await api.sendMessage(Number(u.telegramId), body, {
           reply_markup: buildCitySwitchKeyboard(lang),
         });
+      } else if (pausedNow) {
+        // Plain send — this states a fact ("the pool is empty, you're
+        // paused") rather than performing empathy for a search that, this
+        // time, genuinely didn't run. Mirrors the market-pending treatment.
+        await api.sendMessage(Number(u.telegramId), body);
       } else {
         // Deliberately SHORT stream (anti-drumroll): one "thinking" lead beat —
         // "we really looked" — then the full empathetic body as the persisted
@@ -280,7 +347,8 @@ export async function sendNoMatchNotices(
       }
 
       result.notified++;
-      if (tier === 1) result.tier1++;
+      if (pausedNow) result.paused++;
+      else if (tier === 1) result.tier1++;
       else if (tier === 2) result.tier2++;
       else result.tier3plus++;
 
@@ -291,8 +359,10 @@ export async function sendNoMatchNotices(
       // undercut the empathy and complicate a carefully-tuned primitive.
       // Self-gating (flag, male-only, eligibility) lives in the sender, so this
       // is inert for everyone who can't or shouldn't buy. Skipped entirely for
-      // a market-pending user: a paid re-run cannot find them anyone either.
-      if (!marketPending) {
+      // a market-pending user (a paid re-run cannot find them anyone either)
+      // and for a user just paused (same reason — the pool has nothing for
+      // them, paid or not).
+      if (!marketPending && !pausedNow) {
         await sendRematchOfferIfEligible(api, u.id, "famine", now).catch(() => {});
       }
     } catch (err) {

@@ -114,6 +114,28 @@ export const FAMINE_DISCOUNT_PCT = 77;
 export const FAMINE_DISCOUNT_TTL_DAYS = 30;
 export const FAMINE_DISCOUNT_MIN_TIER = 2;
 
+/**
+ * D10 — pool exhaustion. Days without a dispatched match after which the
+ * system pauses matching for a user instead of repeating the same famine DM
+ * forever (`services/pool-exhaustion.ts`). A day-count, not a `CADENCE`
+ * field: this many days means this many days regardless of whether batches
+ * run weekly or daily — see DAILY_MATCHING_IMPLEMENTATION_PLAN.md §D10 for
+ * the reasoning (an honest "the pool is empty right now" message plus a real
+ * pause, not an indefinite escalating famine tier with no way out).
+ *
+ * 28, not the "e.g. 14" originally floated in planning, because `computeTier`
+ * is denominated in CADENCE.intervalMs — under `weekly` that's whole WEEKS,
+ * so tier 2 (the discount threshold) already sits at day 14 and tier 3 at
+ * day 21. A pause threshold at 14 would fire at the exact same instant as
+ * the discount and make tier 3 structurally unreachable (the pause would
+ * always win the race, since it's checked first). 28 days lets weekly users
+ * see the full existing ladder — tier 1 (day 7) -> tier 2 + discount (day
+ * 14) -> tier 3 (day 21) — before the pause takes over where an unbounded
+ * tier-3-forever loop used to be. Under `daily`, tier IS days, so this reads
+ * as a plain 4-week pause threshold with no such collision.
+ */
+export const FAMINE_PAUSE_AFTER_DAYS = 28;
+
 /** Age boundaries */
 export const MIN_AGE = 18;
 export const MAX_AGE = 55;

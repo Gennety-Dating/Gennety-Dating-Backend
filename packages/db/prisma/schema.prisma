@@ -786,6 +786,15 @@ model Profile {
   /// Timestamp of the most recent batch/unresolved accepted-side outcome that
   /// boosted this profile. Drives the "priority boosted" UX ping.
   lastMissedAt             DateTime?                    @map("last_missed_at")
+  /// Set when the system (not the user) paused matching for this profile
+  /// because no candidate has existed for FAMINE_PAUSE_AFTER_DAYS days
+  /// running (D10 — see `services/pool-exhaustion.ts`). Distinguishes a
+  /// system-driven pause (`User.status = 'paused'` + this set) from an
+  /// ordinary user-initiated pause via the menu (status = 'paused', this
+  /// stays null) so the two can be told apart: only a system pause is ever
+  /// auto-resumed once a candidate reappears; a user's own pause is never
+  /// touched by that sweep. Cleared on any resume, manual or automatic.
+  starvationPausedAt       DateTime?                    @map("starvation_paused_at")
   /// Number of times this profile silently let a match proposal expire
   /// (24h passed without Accept/Decline). Counted post-expiry by
   /// `expireStaleMatches`. Forgive-once gate: first offense = warning only,

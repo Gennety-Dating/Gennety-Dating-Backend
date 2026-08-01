@@ -3,6 +3,7 @@ import type { UserStatus } from "@gennety/db";
 
 const userFindUnique = vi.fn();
 const userUpdateMany = vi.fn();
+const profileUpdateMany = vi.fn();
 const transaction = vi.fn();
 
 vi.mock("@gennety/db", async (importOriginal) => {
@@ -13,6 +14,12 @@ vi.mock("@gennety/db", async (importOriginal) => {
       user: {
         findUnique: userFindUnique,
         updateMany: userUpdateMany,
+      },
+      // D10: transitionAccountStatus clears Profile.starvationPausedAt on any
+      // successful "resume", off the global prisma client (not the injected
+      // `db` param — see that function's comment for why).
+      profile: {
+        updateMany: profileUpdateMany,
       },
       $transaction: transaction,
     },
@@ -81,6 +88,7 @@ const BASE_USER = {
 beforeEach(() => {
   vi.clearAllMocks();
   userUpdateMany.mockResolvedValue({ count: 1 });
+  profileUpdateMany.mockResolvedValue({ count: 1 });
   transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
     fn({ user: { findUnique: userFindUnique, updateMany: userUpdateMany } }),
   );
@@ -122,6 +130,38 @@ describe("transitionAccountStatus", () => {
       }
     });
   }
+
+  it("(D10) clears Profile.starvationPausedAt on a successful resume", async () => {
+    userFindUnique.mockResolvedValue({ ...BASE_USER, status: "paused" });
+    userUpdateMany.mockResolvedValue({ count: 1 });
+
+    const result = await transitionAccountStatus({ id: BASE_USER.id }, "resume");
+
+    expect(result.kind).toBe("changed");
+    expect(profileUpdateMany).toHaveBeenCalledWith({
+      where: { userId: BASE_USER.id, starvationPausedAt: { not: null } },
+      data: { starvationPausedAt: null },
+    });
+  });
+
+  it("(D10) does NOT touch starvationPausedAt on pause or return_from_freeze", async () => {
+    userFindUnique.mockResolvedValueOnce({ ...BASE_USER, status: "active" });
+    await transitionAccountStatus({ id: BASE_USER.id }, "pause");
+    expect(profileUpdateMany).not.toHaveBeenCalled();
+
+    userFindUnique.mockResolvedValueOnce({ ...BASE_USER, status: "frozen" });
+    await transitionAccountStatus({ id: BASE_USER.id }, "return_from_freeze");
+    expect(profileUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("(D10) a failed profile-clear does not fail the resume itself", async () => {
+    userFindUnique.mockResolvedValue({ ...BASE_USER, status: "paused" });
+    profileUpdateMany.mockRejectedValueOnce(new Error("db blip"));
+
+    const result = await transitionAccountStatus({ id: BASE_USER.id }, "resume");
+
+    expect(result.kind).toBe("changed");
+  });
 
   it("returns not_found without writing", async () => {
     userFindUnique.mockResolvedValue(null);

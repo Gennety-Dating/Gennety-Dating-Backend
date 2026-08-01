@@ -57,12 +57,13 @@ async function seedFullUser(opts: {
   isEmailVerified?: boolean;
   phoneVerifiedAt?: Date | null;
   registrationTrack?: "student" | "general" | null;
+  status?: "active" | "paused";
 }) {
   const user = await seedUser({
     gender: opts.gender ?? "male",
     preference: opts.preference ?? "women",
     universityDomain: opts.universityDomain ?? "stanford.edu",
-    status: "active",
+    status: opts.status ?? "active",
     onboardingStep: "completed",
     // Spread-conditionally: under exactOptionalPropertyTypes, passing
     // `verificationStatus: undefined` is a type error. Only forward when set.
@@ -263,6 +264,43 @@ describe("match-engine SQL (integration)", () => {
 
     const results = await findCandidatesFor(seeker.id);
     expect(results.map((result) => result.userId)).toContain(candidate.id);
+  });
+
+  // D10 pool-exhaustion (services/pool-exhaustion.ts).
+  it("rejects a `paused` seeker by default", async () => {
+    const seeker = await seedFullUser({
+      gender: "male",
+      preference: "women",
+      status: "paused",
+    });
+    await seedFullUser({ gender: "female", preference: "men" });
+
+    await expect(findCandidatesFor(seeker.id)).resolves.toEqual([]);
+  });
+
+  it("admits a `paused` seeker when allowPausedSeeker is set — the D10 auto-resume probe", async () => {
+    const seeker = await seedFullUser({
+      gender: "male",
+      preference: "women",
+      status: "paused",
+    });
+    const candidate = await seedFullUser({ gender: "female", preference: "men" });
+
+    const results = await findCandidatesFor(seeker.id, 5, { allowPausedSeeker: true });
+    expect(results.map((result) => result.userId)).toContain(candidate.id);
+  });
+
+  it("allowPausedSeeker does not admit any OTHER non-active status", async () => {
+    const seeker = await seedFullUser({ gender: "male", preference: "women" });
+    await integrationPrisma.user.update({
+      where: { id: seeker.id },
+      data: { status: "suspended" },
+    });
+    await seedFullUser({ gender: "female", preference: "men" });
+
+    await expect(
+      findCandidatesFor(seeker.id, 5, { allowPausedSeeker: true }),
+    ).resolves.toEqual([]);
   });
 
   it("applies the same track-aware predicate to batch eligibility", async () => {

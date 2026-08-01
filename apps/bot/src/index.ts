@@ -18,6 +18,7 @@ import {
 import { autoUnsuspendElapsed, runDropBatch } from "./services/match-engine.js";
 import { dispatchMatches } from "./services/dispatch-queue.js";
 import { sendNoMatchNotices } from "./services/no-match-notifier.js";
+import { autoResumeStarvedUsers } from "./services/pool-exhaustion.js";
 import { expireStaleMatches } from "./services/match-expiry.js";
 import { sendExpiryNotifications } from "./services/expiry-notify.js";
 import { runDateLifecycleTick } from "./services/date-lifecycle.js";
@@ -437,18 +438,21 @@ bot.start({
     cron.schedule(EXPIRY_CRON_SCHEDULE, guardedTick("match-expiry", expiryJob));
     console.log(`[cron] Match expiry scheduled: "${EXPIRY_CRON_SCHEDULE}"`);
 
-    // Empathetic "no match this week" DM, 15 min after the Thursday batch.
+    // Empathetic "no match" DM, plus the D10 pool-exhaustion auto-resume
+    // sweep in the same tick (mirrors autoUnsuspendElapsed's shape: a
+    // periodic scan reversing a status this same subsystem set — no
+    // dedicated cron registration needed).
     cron.schedule(
       NO_MATCH_NOTICE_CRON_SCHEDULE,
-      guardedTick("no-match-notice", () =>
-        sendNoMatchNotices(bot.api, new Date(), DISPATCH_DELAY_MS).then((r) => {
-          if (r.notified > 0 || r.failed > 0) {
-            console.log(
-              `[no-match-notice] notified=${r.notified} tier1=${r.tier1} tier2=${r.tier2} tier3plus=${r.tier3plus} skipped=${r.skipped} failed=${r.failed}`,
-            );
-          }
-        }),
-      ),
+      guardedTick("no-match-notice", async () => {
+        const r = await sendNoMatchNotices(bot.api, new Date(), DISPATCH_DELAY_MS);
+        if (r.notified > 0 || r.failed > 0) {
+          console.log(
+            `[no-match-notice] notified=${r.notified} tier1=${r.tier1} tier2=${r.tier2} tier3plus=${r.tier3plus} paused=${r.paused} skipped=${r.skipped} failed=${r.failed}`,
+          );
+        }
+        await autoResumeStarvedUsers(bot.api);
+      }),
       { timezone: CRON_TIMEZONE },
     );
     console.log(

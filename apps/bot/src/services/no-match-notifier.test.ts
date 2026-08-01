@@ -13,6 +13,9 @@ vi.mock("@gennety/db", () => ({
       create: vi.fn(),
       deleteMany: vi.fn(),
     },
+    profile: {
+      updateMany: vi.fn(),
+    },
   },
 }));
 
@@ -20,10 +23,18 @@ vi.mock("./ticket-discount.js", () => ({
   grantFamineDiscountIfEligible: vi.fn(),
 }));
 
+// D10: mocked as an independent collaborator (it has its own test file,
+// account-status-transitions.test.ts) rather than extending the @gennety/db
+// mock with the full CAS machinery it needs.
+vi.mock("./account-status-transitions.js", () => ({
+  transitionAccountStatus: vi.fn(),
+}));
+
 import { prisma } from "@gennety/db";
 import { sendNoMatchNotices, getDropDate } from "./no-match-notifier.js";
 import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
-import { CADENCE } from "@gennety/shared";
+import { transitionAccountStatus } from "./account-status-transitions.js";
+import { CADENCE, FAMINE_PAUSE_AFTER_DAYS } from "@gennety/shared";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mUserFindMany = (prisma.user as unknown as { findMany: MockFn }).findMany;
@@ -31,7 +42,9 @@ const mMatchFindFirst = (prisma.match as unknown as { findFirst: MockFn }).findF
 const mNoticeFindFirst = (prisma.noMatchNotice as unknown as { findFirst: MockFn }).findFirst;
 const mNoticeCreate = (prisma.noMatchNotice as unknown as { create: MockFn }).create;
 const mNoticeDeleteMany = (prisma.noMatchNotice as unknown as { deleteMany: MockFn }).deleteMany;
+const mProfileUpdateMany = (prisma.profile as unknown as { updateMany: MockFn }).updateMany;
 const mGrant = grantFamineDiscountIfEligible as unknown as MockFn;
+const mTransition = transitionAccountStatus as unknown as MockFn;
 
 function makeApi() {
   return {
@@ -88,6 +101,11 @@ describe("sendNoMatchNotices", () => {
     mNoticeFindFirst.mockResolvedValue(null);
     // Default: feature off / not granted (the grant self-gates on the flag).
     mGrant.mockResolvedValue({ granted: false });
+    // D10 defaults: none of the tier-focused tests below reach
+    // FAMINE_PAUSE_AFTER_DAYS, but a default is set anyway so a stray call
+    // never throws "not a function" against an un-primed mock.
+    mTransition.mockResolvedValue({ kind: "changed" });
+    mProfileUpdateMany.mockResolvedValue({ count: 1 });
   });
 
   it("(D4) throttles candidate selection to famineNoticeIntervalMs, not the exact drop day", async () => {
@@ -195,13 +213,16 @@ describe("sendNoMatchNotices", () => {
   });
 
   it("buckets tier 3+ once ~3 or more intervals have elapsed since the last match", async () => {
+    // Both comfortably under FAMINE_PAUSE_AFTER_DAYS (28) so the D10 pause
+    // path doesn't take over — see the dedicated pause tests below for that
+    // boundary specifically.
     mUserFindMany.mockResolvedValueOnce([
       { id: "u1", telegramId: 111n, language: "uk" },
       { id: "u2", telegramId: 222n, language: "en" },
     ]);
     mMatchFindFirst
-      .mockResolvedValueOnce({ dispatchedAt: dispatchedForTier(3) })
-      .mockResolvedValueOnce({ dispatchedAt: new Date(NOW.getTime() - 60 * DAY_MS) }); // far past tier 3
+      .mockResolvedValueOnce({ dispatchedAt: dispatchedForTier(3) }) // 21 days
+      .mockResolvedValueOnce({ dispatchedAt: new Date(getDropDate(NOW).getTime() - 26 * DAY_MS) }); // still tier 3, further along
     const api = makeApi();
     const stream = makeStream();
 
@@ -210,11 +231,106 @@ describe("sendNoMatchNotices", () => {
     expect(result.tier3plus).toBe(2);
     expect(result.tier1).toBe(0);
     expect(result.tier2).toBe(0);
+    expect(result.paused).toBe(0);
 
     const [, body1] = api.sendMessage.mock.calls[0]!;
     const [, body2] = api.sendMessage.mock.calls[1]!;
     expect(body1).toMatch(/Знову чесно/);
     expect(body2).toMatch(/honest update/);
+  });
+
+  describe("D10: pool-exhaustion pause", () => {
+    function dispatchedDaysAgo(days: number, now: Date = NOW): Date {
+      return new Date(getDropDate(now).getTime() - days * DAY_MS);
+    }
+
+    it("pauses instead of sending another tier DM once FAMINE_PAUSE_AFTER_DAYS is reached", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "u1", telegramId: 111n, language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce({
+        dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
+      });
+      const api = makeApi();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
+
+      expect(result.paused).toBe(1);
+      expect(result.tier1).toBe(0);
+      expect(result.tier2).toBe(0);
+      expect(result.tier3plus).toBe(0);
+      expect(result.notified).toBe(1);
+
+      // Pause is a plain send (states a fact), not the rich empathy stream.
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+      const [, body] = api.sendMessage.mock.calls[0]!;
+      expect(body).toMatch(/pausing your search/);
+
+      // The CAS + the profile marker stamp both fired.
+      expect(mTransition).toHaveBeenCalledWith({ id: "u1" }, "pause");
+      expect(mProfileUpdateMany).toHaveBeenCalledWith({
+        where: { userId: "u1" },
+        data: { starvationPausedAt: NOW },
+      });
+    });
+
+    it("does not grant the famine discount or offer Rematch on a pause", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "u1", telegramId: 111n, language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce({
+        dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS + 5),
+      });
+      const api = makeApi();
+
+      await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
+
+      expect(mGrant).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the ordinary tier DM when the pause CAS loses a race", async () => {
+      // Simulates the candidate having moved off `active` (moderation, a
+      // manual pause/freeze) between candidate selection and this point.
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "u1", telegramId: 111n, language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce({
+        dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
+      });
+      mTransition.mockResolvedValueOnce({ kind: "forbidden" });
+      const api = makeApi();
+      const stream = makeStream();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+      expect(result.paused).toBe(0);
+      expect(result.tier3plus).toBe(1);
+      expect(mProfileUpdateMany).not.toHaveBeenCalled();
+      // Falls through to the ordinary rich stream, not the plain pause send.
+      expect(stream).toHaveBeenCalled();
+    });
+
+    it("never pauses a market-pending user, however long they've waited", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        {
+          id: "u1",
+          telegramId: 111n,
+          language: "en",
+          profile: { homeCityKey: "de:berlin", homeCity: "Berlin" },
+        },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce({
+        dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS + 100),
+      });
+      const api = makeApi();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
+
+      expect(result.paused).toBe(0);
+      expect(mTransition).not.toHaveBeenCalled();
+      const [, body] = api.sendMessage.mock.calls[0]!;
+      expect(body).toMatch(/Berlin/);
+    });
   });
 
   it("never-matched user anchors to their earliest NoMatchNotice, not the Unix epoch", async () => {

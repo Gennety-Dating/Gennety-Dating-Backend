@@ -106,6 +106,28 @@ export async function transitionAccountStatus(
     data: { status: rule.to },
   });
   if (changed.count === 1) {
+    if (action === "resume") {
+      // D10: clear the system-pause marker on ANY resume, manual or
+      // automatic. A user-initiated resume already had this at null (only
+      // the pool-exhaustion sweep ever sets it), so this is a harmless no-op
+      // for the common case — it only matters for a user who manually
+      // resumes out of a system-driven pause, so the pool-exhaustion sweep's
+      // periodic re-check doesn't act on a marker that no longer reflects
+      // reality. Best-effort and off the injected `db` (profile isn't part
+      // of `TransitionDb`'s narrow contract): a lagging clear is harmless,
+      // the status transition above is what actually matters.
+      await prisma.profile
+        .updateMany({
+          where: { userId: user.id, starvationPausedAt: { not: null } },
+          data: { starvationPausedAt: null },
+        })
+        .catch((err) => {
+          console.warn(
+            `[account-status] starvationPausedAt clear failed for userId=${user.id}:`,
+            (err as Error).message,
+          );
+        });
+    }
     return {
       kind: "changed",
       previousStatus: user.status,

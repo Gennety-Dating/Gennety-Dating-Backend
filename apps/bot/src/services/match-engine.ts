@@ -978,9 +978,24 @@ export function rankCandidates(
  * Fetch up to `CANDIDATE_POOL_SIZE` candidates from SQL, then re-rank
  * using the multi-factor formula and return the top `limit`.
  */
+export interface FindCandidatesOptions {
+  /**
+   * Accept a `paused` seeker as well as `active` (default: `active` only).
+   * Used exclusively by the D10 pool-exhaustion sweep
+   * (`services/pool-exhaustion.ts`) to probe "does a candidate exist for
+   * this system-paused user now?" without first flipping their status back
+   * to `active` on a guess. Every other eligibility check (onboarding
+   * complete, verified, contact rail, city set, embedding fresh) is
+   * unchanged — this widens only the one gate that a system-driven pause
+   * itself sets.
+   */
+  allowPausedSeeker?: boolean;
+}
+
 export async function findCandidatesFor(
   seekerUserId: string,
   limit: number = DEFAULT_CANDIDATE_LIMIT,
+  options: FindCandidatesOptions = {},
 ): Promise<ScoredCandidate[]> {
   const seeker = await prisma.user.findUnique({
     where: { id: seekerUserId },
@@ -1017,9 +1032,12 @@ export async function findCandidatesFor(
       },
     },
   });
+  const seekerStatusOk = options.allowPausedSeeker
+    ? seeker?.status === "active" || seeker?.status === "paused"
+    : seeker?.status === "active";
   if (
     !seeker ||
-    seeker.status !== "active" ||
+    !seekerStatusOk ||
     seeker.onboardingStep !== "completed" ||
     !seeker.gender ||
     !seeker.preference ||

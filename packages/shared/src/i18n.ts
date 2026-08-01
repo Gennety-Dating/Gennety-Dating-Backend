@@ -571,6 +571,18 @@ const translations = {
     noMatchDiscountOffer:
       "🎟️ A small thank-you for your patience: your next first date is {pct}% off — one Date Ticket, almost on us. " +
       "We'll apply the discount automatically the next time you get a match or open your tickets.",
+    poolExhaustedPauseNotice:
+      "Hey\n\n" +
+      "Straight up: right now there's genuinely no one here for you — I checked, and the pool is empty. " +
+      "That's not about you; there's just no one to introduce you to yet.\n\n" +
+      "I'm pausing your search instead of sending the same message again and again. " +
+      "Nothing else changes — your profile, photos, and verification all stay exactly as they are.\n\n" +
+      "The moment someone who fits shows up, I'll bring you straight back in myself — no need to do anything. " +
+      "You can also resume any time from the menu.",
+    poolExhaustedResumeNotice:
+      "Hey\n\n" +
+      "Good news — someone new showed up who fits, so I've brought you back into the search. " +
+      "You're back in the running for the next drop 🤍",
     matchScheduleProposal:
       "How about one of these? Tap what works:",
     matchScheduleIter3:
@@ -1586,6 +1598,18 @@ const translations = {
     noMatchDiscountOffer:
       "🎟️ Небольшая благодарность за терпение: твоё следующее первое свидание — со скидкой {pct}% на один билет. " +
       "Мы применим скидку автоматически, когда тебе выпадет пара или ты откроешь свои билеты.",
+    poolExhaustedPauseNotice:
+      "Привет\n\n" +
+      "Скажу прямо: сейчас для тебя реально никого нет — я проверил, пул пуст. " +
+      "Дело не в тебе, просто пока некого предложить.\n\n" +
+      "Ставлю твой поиск на паузу вместо того, чтобы слать одно и то же сообщение снова и снова. " +
+      "Всё остальное остаётся как есть — анкета, фото и верификация никуда не денутся.\n\n" +
+      "Как только появится тот, кто подойдёт, я сам верну тебя в поиск — делать ничего не нужно. " +
+      "Возобновить можно и самому, в любой момент, через меню.",
+    poolExhaustedResumeNotice:
+      "Привет\n\n" +
+      "Хорошие новости — появился тот, кто подходит, и я вернул тебя в поиск. " +
+      "Ты снова в игре на следующий дроп 🤍",
     matchSchedulePeerProposed:
       "Твой мэтч уже отметил время в календаре. Открой — согласись или предложи своё:",
     matchSchedulePeerSuggestedAlternative:
@@ -2569,6 +2593,18 @@ const translations = {
     noMatchDiscountOffer:
       "🎟️ Невелика подяка за терпіння: твоє наступне перше побачення — зі знижкою {pct}% на один квиток. " +
       "Ми застосуємо знижку автоматично, коли тобі випаде пара або ти відкриєш свої квитки.",
+    poolExhaustedPauseNotice:
+      "Привіт\n\n" +
+      "Скажу прямо: зараз для тебе реально нікого немає — я перевірив, пул порожній. " +
+      "Це не про тебе, просто поки нема кого запропонувати.\n\n" +
+      "Ставлю твій пошук на паузу замість того, щоб надсилати те саме повідомлення знову й знову. " +
+      "Все інше лишається як є — анкета, фото та верифікація нікуди не дінуться.\n\n" +
+      "Щойно з'явиться той, хто підійде, я сам поверну тебе в пошук — робити нічого не треба. " +
+      "Відновити можна й самостійно, будь-коли, через меню.",
+    poolExhaustedResumeNotice:
+      "Привіт\n\n" +
+      "Гарні новини — з'явився той, хто підходить, і я повернув тебе в пошук. " +
+      "Ти знову в грі на наступний дроп 🤍",
     matchScheduleProposal: "Як тобі ці варіанти? Тисни зручний:",
     matchScheduleIter3:
       "Взаємно 🤍 Відкрий календар і познач зручний час.",
@@ -3539,6 +3575,18 @@ const deTranslations: TranslationTable = {
   noMatchDiscountOffer:
     "🎟️ Ein kleines Dankeschön für deine Geduld: dein nächstes erstes Date gibt es mit {pct}% Rabatt auf ein Ticket. " +
     "Wir ziehen den Rabatt automatisch ab, sobald du ein Match bekommst oder deine Tickets öffnest.",
+  poolExhaustedPauseNotice:
+    "Hey\n\n" +
+    "Ganz ehrlich: Gerade gibt es wirklich niemanden für dich — ich habe nachgesehen, der Pool ist leer. " +
+    "Das liegt nicht an dir, es gibt momentan einfach niemanden, den ich dir vorstellen könnte.\n\n" +
+    "Ich pausiere deine Suche, statt dir immer wieder dieselbe Nachricht zu schicken. " +
+    "Alles andere bleibt wie es ist — dein Profil, deine Fotos und deine Verifizierung ändern sich nicht.\n\n" +
+    "Sobald jemand Passendes auftaucht, hole ich dich selbst zurück — du musst nichts tun. " +
+    "Du kannst die Suche aber auch jederzeit selbst über das Menü fortsetzen.",
+  poolExhaustedResumeNotice:
+    "Hey\n\n" +
+    "Gute Nachrichten — jemand Neues, der passt, ist aufgetaucht, also habe ich dich zurück in die Suche geholt. " +
+    "Du bist wieder im Rennen für den nächsten Drop 🤍",
   matchScheduleProposal: "Wie wäre es mit einer dieser Zeiten? Tipp an, was passt:",
   matchScheduleIter3:
     "Beidseitig 🤍 Öffne den Kalender und markiere passende Zeiten.",
@@ -4489,6 +4537,18 @@ const plTranslations: TranslationTable = {
   noMatchDiscountOffer:
     "🎟️ Małe podziękowanie za cierpliwość: Twoja następna pierwsza randka z rabatem {pct}% na jeden bilet. " +
     "Zastosujemy rabat automatycznie, gdy trafi Ci się para lub otworzysz swoje bilety.",
+  poolExhaustedPauseNotice:
+    "Hej\n\n" +
+    "Szczerze: teraz naprawdę nie ma dla Ciebie nikogo — sprawdziłem, pula jest pusta. " +
+    "To nie o Tobie, po prostu na razie nie mam kogo Ci przedstawić.\n\n" +
+    "Zawieszam Twoje poszukiwania, zamiast wysyłać wciąż tę samą wiadomość. " +
+    "Reszta zostaje bez zmian — Twój profil, zdjęcia i weryfikacja nigdzie nie znikają.\n\n" +
+    "Gdy tylko pojawi się ktoś pasujący, sam przywrócę Cię do poszukiwań — nie musisz nic robić. " +
+    "Możesz też wznowić samodzielnie w dowolnym momencie z menu.",
+  poolExhaustedResumeNotice:
+    "Hej\n\n" +
+    "Dobre wieści — pojawił się ktoś nowy, kto pasuje, więc przywróciłem Cię do poszukiwań. " +
+    "Znów jesteś w grze na następny drop 🤍",
   matchScheduleProposal: "Co powiesz na jedną z tych opcji? Kliknij, co pasuje:",
   matchScheduleIter3:
     "Wzajemnie ✨ Otwórz kalendarz i zaznacz pasujące godziny.",
