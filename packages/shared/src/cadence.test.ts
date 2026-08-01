@@ -50,8 +50,9 @@ describe("CADENCES.weekly reproduces today's hardcoded constants", () => {
   });
 
   it("famine cadence matches today's constants", () => {
+    expect(weekly.noMatchNoticeCron).toBe("15 18 * * 4");
     expect(weekly.famineNoticeIntervalMs).toBe(7 * DAY);
-    expect(weekly.famineDiscountMinDays).toBe(FAMINE_DISCOUNT_MIN_TIER);
+    expect(weekly.famineDiscountMinTier).toBe(FAMINE_DISCOUNT_MIN_TIER);
   });
 
   it("profiler rush window", () => {
@@ -93,6 +94,13 @@ describe("CADENCES.daily", () => {
 
   it("cooldown is 6h, well under the 1-day interval", () => {
     expect(daily.cooldownMs).toBe(6 * HOUR);
+  });
+
+  it("famine notice fires on its own daily cron but throttles to ~every 2-3 days via the interval filter", () => {
+    expect(daily.noMatchNoticeCron).toBe("15 18 * * *");
+    expect(daily.noMatchNoticeCron).not.toBe(daily.cron); // still a distinct constant (D4)
+    expect(daily.famineNoticeIntervalMs).toBeGreaterThan(daily.intervalMs);
+    expect(daily.famineDiscountMinTier).toBe(7);
   });
 
   it("starvation saturates at the same ~35-day point as weekly's ~5 weeks", () => {

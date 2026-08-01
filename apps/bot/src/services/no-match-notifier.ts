@@ -1,11 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import {
-  t,
-  type Language,
-  type TranslationKey,
-  FAMINE_DISCOUNT_MIN_TIER,
-} from "@gennety/shared";
+import { CADENCE, t, type Language, type TranslationKey } from "@gennety/shared";
 import { streamDraftsToChat } from "./ai-stream.js";
 import { AI_EMOJI } from "./ai-emoji.js";
 import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
@@ -17,14 +12,29 @@ import {
 } from "../handlers/menu/city-switch.js";
 
 /**
- * Empathetic "no match this week" DM.
+ * Empathetic "no match" DM.
  *
- * Fires ~15 min after the Thursday batch (`MATCH_CRON_SCHEDULE`) for every
- * `active` user that the matcher couldn't pair. Replaces the old
- * `notifyStarved` flow — we send one well-crafted message instead of the
- * curt "10/10 not found" ping. Tone escalates with consecutive famine
- * weeks (tier 1 → 2 → 3+) using `NoMatchNotice` history as the source of
- * truth for the streak counter.
+ * Fires on its own cron (`CADENCE.noMatchNoticeCron` — 15 min after the
+ * Thursday batch under `weekly`, daily under `daily`) for every `active`
+ * user that the matcher couldn't pair. Replaces the old `notifyStarved` flow
+ * — we send one well-crafted message instead of the curt "10/10 not found"
+ * ping. Tone escalates with consecutive famine cycles (tier 1 → 2 → 3+).
+ *
+ * **The notice cadence is deliberately decoupled from the batch cadence
+ * (D4).** Under `daily`, the notice CRON still fires once a day, but
+ * `CADENCE.famineNoticeIntervalMs` (~2.5 days) throttles actual sends at the
+ * query level — a starved user isn't reconsidered until that gap has passed
+ * since their last notice, so daily drops don't mean daily bad-news DMs.
+ * Under `weekly` this collapses back to exactly today's behavior: the
+ * interval (7 days) and the cron's own weekly firing agree, so every drop
+ * that leaves someone unpaired sends exactly one notice.
+ *
+ * `computeTier` is denominated in `CADENCE.intervalMs` units — weeks under
+ * `weekly` (unchanged from the old `NoMatchNotice`-row-counting logic, which
+ * produced the same number as long as the notice cron fired once per drop),
+ * days under `daily`. This is what makes `FAMINE_DISCOUNT_MIN_TIER`-style
+ * thresholds ("2nd week+", "7 days+") keep meaning the same thing in the
+ * unit that's actually accruing.
  *
  * The query intentionally re-derives "who has no match this drop" from
  * the DB (active users without a `Match.dispatchedAt` in the last hour)
@@ -68,10 +78,22 @@ export function getDropDate(now: Date): Date {
 }
 
 /**
- * Tier = consecutive drops without a match, starting at 1 for the current
- * drop. We count `NoMatchNotice` rows since the user's most recent
- * dispatched match (or since they joined) and add 1 for the in-progress
- * drop. Capped to 3 by the caller when picking a template.
+ * Tier = consecutive batch intervals without a match, starting at 1 for the
+ * current drop. Denominated in `CADENCE.intervalMs` — under `weekly` that's
+ * weeks (unchanged from the historical row-counting logic: counting
+ * `NoMatchNotice` rows since the last match produced the same number as long
+ * as exactly one notice fired per drop, which weekly's unthrottled cadence
+ * guarantees); under `daily` it's literally days, which is what makes
+ * `FAMINE_DISCOUNT_MIN_TIER`-style day thresholds (D5) mean actual days
+ * rather than "number of notices sent" once notices stop firing every drop
+ * (D4's whole point).
+ *
+ * Anchored to the user's most recent dispatched match. For a user who has
+ * NEVER been dispatched a match, anchoring to the Unix epoch would produce
+ * an absurd tier on their very first check (tens of thousands of elapsed
+ * intervals) — so that case anchors to their EARLIEST `NoMatchNotice`
+ * instead (the start of their very first famine streak), falling back to
+ * `dropDate` itself when even that doesn't exist yet (this literal check).
  */
 async function computeTier(userId: string, dropDate: Date): Promise<number> {
   const lastMatch = await prisma.match.findFirst({
@@ -83,15 +105,18 @@ async function computeTier(userId: string, dropDate: Date): Promise<number> {
     select: { dispatchedAt: true },
   });
 
-  const sinceDate = lastMatch?.dispatchedAt ?? new Date(0);
-  const priorNotices = await prisma.noMatchNotice.count({
-    where: {
-      userId,
-      dropDate: { gt: sinceDate, lt: dropDate },
-    },
-  });
+  let sinceDate = lastMatch?.dispatchedAt ?? null;
+  if (!sinceDate) {
+    const firstNotice = await prisma.noMatchNotice.findFirst({
+      where: { userId },
+      orderBy: { dropDate: "asc" },
+      select: { dropDate: true },
+    });
+    sinceDate = firstNotice?.dropDate ?? dropDate;
+  }
 
-  return priorNotices + 1;
+  const elapsedMs = dropDate.getTime() - sinceDate.getTime();
+  return Math.max(1, Math.floor(elapsedMs / CADENCE.intervalMs));
 }
 
 function templateKeyForTier(tier: number): TranslationKey {
@@ -118,6 +143,15 @@ export async function sendNoMatchNotices(
 ): Promise<NoMatchNotifyResult> {
   const dropDate = getDropDate(now);
   const recentSince = new Date(now.getTime() - RECENT_MATCH_WINDOW_MS);
+  // D4: the throttle that decouples notice cadence from batch cadence. Under
+  // `weekly` this equals the notice cron's own firing interval, so it's a
+  // no-op beyond the exact-dropDate check it replaces. Under `daily` it's
+  // wider than the (daily) cron interval, so most daily firings skip most
+  // users — that gap is what makes "every 2-3 days" real. Strictly wider
+  // than a same-day check, so it safely subsumes the old exact-`dropDate`
+  // idempotency filter; the `@@unique([userId, dropDate])` constraint (via
+  // `isUniqueViolation` below) remains the actual DB-level guarantee.
+  const notifyCutoff = new Date(now.getTime() - CADENCE.famineNoticeIntervalMs);
 
   const candidates = await prisma.user.findMany({
     where: {
@@ -135,10 +169,10 @@ export async function sendNoMatchNotices(
             none: { dispatchedAt: { gte: recentSince } },
           },
         },
-        // Idempotency: skip users who already received a notice for this drop
+        // Throttle: skip anyone notified within the last famineNoticeIntervalMs.
         {
           noMatchNotices: {
-            none: { dropDate },
+            none: { dropDate: { gte: notifyCutoff } },
           },
         },
       ],
@@ -188,7 +222,7 @@ export async function sendNoMatchNotices(
     // 2nd consecutive famine week+ → grant the one-time single-ticket discount
     // and tell them in the same DM. Inert unless TICKET_FEATURE_ENABLED (the
     // grant self-gates), so the flag-off path keeps the plain tier template.
-    if (!marketPending && tier >= FAMINE_DISCOUNT_MIN_TIER) {
+    if (!marketPending && tier >= CADENCE.famineDiscountMinTier) {
       const grant = await grantFamineDiscountIfEligible(u.id);
       if (grant.granted && grant.pct) {
         body += `\n\n${t(lang, "noMatchDiscountOffer", { pct: grant.pct })}`;

@@ -7,6 +7,7 @@ import "./config.js";
 
 import cron from "node-cron";
 import { ensureMatchPairIndex } from "@gennety/db";
+import { CADENCE } from "@gennety/shared";
 import { assertIdentityTrustConfiguration, env } from "./config.js";
 import { createBot } from "./bot.js";
 import { setMainBotApi } from "./services/main-bot-api.js";
@@ -131,13 +132,17 @@ const PEER_WAIT_TICK_MS = resolvePeerWaitTickMs(process.env.PEER_WAIT_TICK_MS);
 const EXPIRY_CRON_SCHEDULE = process.env.EXPIRY_CRON_SCHEDULE ?? "*/15 * * * *";
 
 /**
- * "No match this week" empathetic DM. Default: Thursday 18:15 Kyiv —
- * 15 minutes after the matching batch so dispatched users get a moment
- * with their pitch before unmatched users receive the consolation note.
+ * "No match" empathetic DM. Default: `CADENCE.noMatchNoticeCron` (Thursday
+ * 18:15 Kyiv under `weekly` — 15 minutes after the matching batch so
+ * dispatched users get a moment with their pitch before unmatched users
+ * receive the consolation note; daily under `daily`, though the actual send
+ * frequency per user is throttled well below daily by
+ * `CADENCE.famineNoticeIntervalMs` inside `sendNoMatchNotices` — see that
+ * function's header for why the cron firing daily doesn't mean daily DMs).
  * Re-runs are safe (`@@unique([userId, dropDate])` on `NoMatchNotice`).
  */
 const NO_MATCH_NOTICE_CRON_SCHEDULE =
-  process.env.NO_MATCH_NOTICE_CRON_SCHEDULE ?? "15 18 * * 4";
+  process.env.NO_MATCH_NOTICE_CRON_SCHEDULE ?? CADENCE.noMatchNoticeCron;
 
 /**
  * Proposal-countdown cron: every minute (2026-07-25; was every five). The button

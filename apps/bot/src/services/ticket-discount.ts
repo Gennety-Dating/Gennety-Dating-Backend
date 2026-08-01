@@ -4,8 +4,11 @@ import { emitTicketEvent } from "./ticket-analytics.js";
 
 /**
  * Famine single-ticket discount — the one-time loyalty perk handed to a user who
- * was eligible-but-unpaired for a 2nd consecutive weekly batch (no-match tier >=
- * `FAMINE_DISCOUNT_MIN_TIER`). See PRODUCT_SPEC.md §3.5b.
+ * was eligible-but-unpaired for `CADENCE.famineDiscountMinTier` consecutive
+ * batch intervals (no-match tier — weekly: 2 weeks, matching the historical
+ * `FAMINE_DISCOUNT_MIN_TIER`; daily: 7 days, per D5). The threshold check
+ * itself lives in `no-match-notifier.ts`; this module only owns the grant.
+ * See PRODUCT_SPEC.md §3.5b.
  *
  * This module is the ONLY owner of the discount math + lifecycle (parallels
  * `ticket-wallet.ts` for the balance). It discounts a SINGLE ticket purchase —
@@ -90,9 +93,9 @@ export interface GrantResult {
 /**
  * Grant (or refresh) the famine single-ticket discount. Gated on
  * `TICKET_FEATURE_ENABLED`; the CALLER gates eligibility (no-match tier >=
- * `FAMINE_DISCOUNT_MIN_TIER`). Re-granting just slides the TTL and clears any
- * previous `consumedAt`, so a still-starved user who already used one gets a
- * fresh one. Returns the granted percent + deadline.
+ * `CADENCE.famineDiscountMinTier`). Re-granting just slides the TTL and
+ * clears any previous `consumedAt`, so a still-starved user who already used
+ * one gets a fresh one. Returns the granted percent + deadline.
  */
 export async function grantFamineDiscountIfEligible(
   userId: string,

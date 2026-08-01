@@ -46,10 +46,24 @@ export interface DropCadence {
   /** Starvation-bonus slope per missed cycle (`STARVATION_ALPHA`). */
   starvationAlpha: number;
 
-  /** How often the "no match" DM fires — independent of `cron` (D4). */
+  /** node-cron expression for the no-match notice job — a separate constant
+   *  from `cron` (D4), even though weekly's default value still shadows the
+   *  batch's own day/time. The actual "not every drop" throttling is a
+   *  query-level filter (`famineNoticeIntervalMs`), not this schedule. */
+  noMatchNoticeCron: string;
+  /** Minimum gap between two famine notices to the same user — the query-level
+   *  throttle that makes the notice cadence genuinely independent of how often
+   *  the batch (and this cron) actually fires (D4). Weekly: 7 days (one notice
+   *  per weekly drop, unchanged). Daily: ~2.5 days ("every 2-3 days"), even
+   *  though the cron below still ticks daily. */
   famineNoticeIntervalMs: number;
-  /** Days without a match before the famine ticket discount is granted. */
-  famineDiscountMinDays: number;
+  /**
+   * Tier threshold (in units of `intervalMs` — weeks for weekly, days for
+   * daily) at which the famine ticket discount is granted. Compared directly
+   * against `computeTier`'s return value, which is itself denominated in the
+   * same units — see `no-match-notifier.ts`.
+   */
+  famineDiscountMinTier: number;
 
   /** Profiler rush-window threshold before a drop (`PROFILER_RUSH_WINDOW_HOURS`). */
   profilerRushWindowMs: number;
@@ -98,8 +112,9 @@ const WEEKLY: DropCadence = {
   cooldownMs: 24 * HOUR,
   starvationAlpha: 0.05,
 
+  noMatchNoticeCron: "15 18 * * 4",
   famineNoticeIntervalMs: 7 * DAY,
-  famineDiscountMinDays: 2,
+  famineDiscountMinTier: 2,
 
   profilerRushWindowMs: 48 * HOUR,
 
@@ -132,8 +147,9 @@ const DAILY: DropCadence = {
   cooldownMs: 6 * HOUR,
   starvationAlpha: 0.05 / 7,
 
+  noMatchNoticeCron: "15 18 * * *",
   famineNoticeIntervalMs: 2.5 * DAY,
-  famineDiscountMinDays: 7,
+  famineDiscountMinTier: 7,
 
   profilerRushWindowMs: 4 * HOUR,
 
