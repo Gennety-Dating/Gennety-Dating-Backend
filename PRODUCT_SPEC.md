@@ -918,9 +918,11 @@ Telegram-only in v1.
   the user has to think about is better shown at once.
   Between batches the Profiler pauses to the next **morning (09:00) / evening
   (18:00) window in the user's local time** (`Profile.timeZone`, derived from
-  the dating city; `Europe/Kyiv` fallback). When the next weekly drop is within
-  **48 h** (`PROFILER_RUSH_WINDOW_HOURS`) it switches to **rush mode**: batches
-  shrink to **2** to fill the profile before the event.
+  the dating city; `Europe/Kyiv` fallback). When the next drop is within
+  `CADENCE.profilerRushWindowMs` (**48 h** under `weekly`; 4h under the inert
+  `daily` profile — a fixed 48h would be permanently true under a 24h interval,
+  so this value is cadence-sourced rather than a flat constant) it switches to
+  **rush mode**: batches shrink to **2** to fill the profile before the event.
 - **Date-negotiation gate.** The Profiler stays **silent while the user is
   mid date-planning** so its icebreaker questions never interrupt the flow they
   are meant to fuel. A due batch is held (deferred to the user's next local
@@ -1020,6 +1022,12 @@ Telegram-only in v1.
 - **Storage.** One `ProfilerAnswer` row per (user, question): `priority`,
   `answerText`, `skipped`, `skipReturned`, `cycleId`. A refreshed answer
   overwrites the row (only the current snapshot matters for icebreakers).
+  `cycleId` (`profilerCycleId`, `services/profiler.ts`) is an **ISO-8601
+  calendar-week key** ("2026-W31"), deliberately independent of the matching
+  batch date: it used to derive from `getNextBatchDate`, which changes daily
+  under the `daily` cadence profile and would make every situational question
+  eligible to re-ask once a day instead of once a week regardless of how often
+  matching actually runs.
 - **Weighting.** Icebreaker/wingman-hint generation emphasises a partner's
   answers by priority weight (`high 1.0 / medium 0.5 / low 0.2`,
   `PROFILER_PRIORITY_WEIGHTS`). Profiler answers are the **primary** source;
@@ -1430,6 +1438,10 @@ winning:
    body's own first line in it would just print the same phrase twice in the
    pinned bar → My Date hub.
 5. **Drop** — no live match: the original next-batch countdown, unchanged.
+   Cadence-agnostic by construction: it buckets `nextDropAt − now` into
+   days/hours/minutes (`computeStatusSnapshot`), so a same-day next drop under
+   the inert `daily` cadence profile (§3.1) renders correctly without any
+   banner-specific code change.
 
 Three states fall back to mode 5 on purpose. Two because the next drop is
 genuinely the relevant thing again: a `scheduled` date that has already happened
@@ -1519,6 +1531,27 @@ Supported first-class flows:
 
 ### 3.1 Cadence
 
+**The cadence itself is a swappable profile (`packages/shared/src/cadence.ts`),
+not a scattering of hardcoded constants (2026-08-01).** `DropCadence` bundles
+every timing knob the matching engine and its surrounding workers read — the
+batch cron, the proposal-decision deadline strategy, the match cooldown, the
+starvation-bonus rate, nudge offsets, the famine-notice interval, the Profiler
+rush window, and Rematch's blackout/limits — into one object, selected once at
+boot by the `DROP_CADENCE` env var (`weekly` | `daily`, default `weekly`).
+Everything below in this section describes the **`weekly` profile, which is
+what production runs today** — `DROP_CADENCE` is not set in `/opt/gennety/.env`
+and flipping it to `daily` is a separate, later decision gated on pool size,
+not on anything documented here. The `daily` profile exists in code (7-day
+cron `"0 18 * * *"`, a 30-minute-before-next-drop decision deadline instead of
+a flat 24h, a 6h cooldown, day-denominated famine tiers, and the §D10
+pool-exhaustion pause below) but is inert until that env var changes. See
+`DAILY_MATCHING_MIGRATION_AUDIT.md` / `DAILY_MATCHING_IMPLEMENTATION_PLAN.md`
+for the full migration design. Internal names were deliberately NOT renamed to
+track this (`standbyCount`, `Profile.missedWeeks`, `Match.source = "weekly"`,
+`runDropBatch`'s log prefix `[drop-batch]`) — the `/v1/*` API and Prisma schema
+are cadence-agnostic by construction, so a future cadence flip is an env
+change, not a migration.
+
 - **No pre-drop teaser (removed 2026-07-27).** There is no Wednesday "your match
   is coming tomorrow" DM, and no pre-drop notification of any kind — the pitch
   itself is the first thing a user hears about a given cycle. The retired worker
@@ -1561,6 +1594,36 @@ Supported first-class flows:
   launched market. The famine discount and the paid Rematch offer are both
   skipped — a paid re-run cannot find them anyone either. The `NoMatchNotice`
   row is still written, so the drop stays idempotent.
+
+### 3.1b Pool exhaustion: honest pause + auto-resume (2026-08-01, code shipped, inert under `weekly`)
+
+A famine-tier DM is honest about "no match yet" but says nothing once the
+pool has genuinely run dry — under `weekly` cadence that's rare enough not to
+matter, but a faster cadence makes "keep waiting" a promise the product
+increasingly can't keep. Rather than escalate tiers forever, a user whose
+`computeTier` day-count reaches `FAMINE_PAUSE_AFTER_DAYS` (28 —
+`packages/shared/src/constants.ts`, a flat day-count deliberately independent
+of `CADENCE`, chosen so it clears tier 3 under `weekly` before ever firing)
+is transitioned `active → paused` by the SAME compare-and-set the menu's own
+Pause button uses (`services/account-status-transitions.ts`), with
+`Profile.starvationPausedAt` stamped to mark it as system-initiated (distinct
+from an ordinary user-chosen pause, which never sets this column). The user
+gets one honest DM (`poolExhaustedPauseNotice`, all 5 locales) instead of
+another famine tier: the pool is empty right now, the account is paused (not
+broken), and it resumes automatically or via the ordinary Resume button at
+any time. A market-pending user (§1.3) is never a candidate for this — they
+have their own city-switch messaging and were never really "in the pool".
+
+Auto-resume (`services/pool-exhaustion.ts`, `autoResumeStarvedUsers`) runs in
+the same cron tick as the famine-notice sweep: for every system-paused user it
+probes `findCandidatesFor(userId, 1, { allowPausedSeeker: true })` — the exact
+single-seeker check Rematch already uses, widened by one opt-in option so a
+`paused` seeker can be probed without the ordinary `status === "active"` gate
+rejecting it outright. A non-empty result CAS-resumes the account, clears
+`starvationPausedAt`, and sends `poolExhaustedResumeNotice`. An ordinary
+manual Resume (menu button, any reason) also clears the marker, so a user who
+resumes themselves is never later swept up by the auto-resume probe as if
+nothing had happened.
 
 ### 3.2 Scoring (`services/match-engine.ts`)
 
@@ -1632,8 +1695,10 @@ MatchScore = ((w₁·V_explicit) + (w₂·V_research)) · V_league · V_agePref 
   (`AGE_RANGE_PREF_FLOOR` / `AGE_RANGE_PREF_DECAY_PER_YEAR`); set the floor to
   `1.0` to disable.
 - `V_penalty` — negative-constraint penalty (subtracted), weight 0.30.
-- `starvationBonus` — α=0.05 per missed weekly batch, capped at 0.25 (strictly
-  below `V_penalty` so it never overrides a real negative-constraint hit).
+- `starvationBonus` — α = `CADENCE.starvationAlpha` per missed batch (0.05 under
+  `weekly`; `0.05/7` per missed day under `daily`, same ~35-day saturation
+  point either way), capped at 0.25 (strictly below `V_penalty` so it never
+  overrides a real negative-constraint hit).
 
 Hard SQL filters (`buildCandidateSql`):
 1. `status = 'active'` and `onboardingStep = 'completed'`.
@@ -1654,7 +1719,9 @@ Hard SQL filters (`buildCandidateSql`):
 6. **Lifetime ban** — exclude any pair that EVER appeared in a `matches` row,
    regardless of terminal status. Backed by the canonical-pair functional
    index. A user never sees the same partner twice.
-7. Cooldown — `Profile.lastMatchedAt < now − MATCH_COOLDOWN_MS (24 h)`.
+7. Cooldown — `Profile.lastMatchedAt < now − CADENCE.cooldownMs` (24h under
+   `weekly`; 6h under `daily` — see §3.1). Strict `<`, so a candidate matched
+   exactly at the cutoff is still excluded.
 8. **Single-live-match invariant** — exclude anyone participating in
    `proposed`, `negotiating`, `negotiating_venue`, or `scheduled`. Match creation
    locks both user rows in canonical order and re-checks this invariant inside
@@ -1781,7 +1848,7 @@ committed.
   (who only saw their ack earlier) is also DM'd the outcome at this moment.
   Status flips to `cancelled`. In the mixed case, the user who accepted but
   whose peer declined receives a softer, accepted-side-specific reveal and
-  gets a compensating priority boost for the next weekly batch. The terminal
+  gets a compensating priority boost for the next batch. The terminal
   `proposed → cancelled` compare-and-set is the ownership boundary: only its
   winner applies Elo, priority, and final reveal side effects, while each
   successfully claimed decision still records its own event/acknowledgement.
@@ -1801,7 +1868,10 @@ result to the *decliner's* `Profile.negativeConstraints`.
 ### 3.5 Match nudges
 
 `workers/match-nudge.ts` sends two cadence pairs plus a deadline heads-up
-(`MATCH_NUDGE_CRON_SCHEDULE = "0 * * * *"`), all honouring quiet hours:
+(`MATCH_NUDGE_CRON_SCHEDULE = "0 * * * *"`), all honouring quiet hours. The
+offsets below are the `weekly` `DropCadence` profile's values
+(`CADENCE.proposalNudgeOffsetsMs` / `schedNudgeOffsetsMs` — §3.1); the `daily`
+profile halves the proposal/venue offsets and is inert in production:
 
 - **Proposal phase** (status `proposed`, awaiting decision) — ≥3 h after
   `dispatchedAt`, then ≥10 h.
@@ -1818,9 +1888,11 @@ result to the *decliner's* `Profile.negativeConstraints`.
   off, `ticketStatus` never leaves its `pending` default, so an unconditional
   filter would suppress every scheduling nudge.
 - **Deadline nudge** (status `proposed`) — one final "your window closes in
-  about Xh, decide now" DM fired **~2 h before the 24 h TTL expires**
-  (`PROPOSAL_DEADLINE_NUDGE_LEAD_MS`), anchored to the *deadline* rather than
-  dispatch. Sent only to sides still genuinely undecided (`acceptedBy* IS NULL`
+  about Xh, decide now" DM fired **~2 h before the decision deadline
+  (`services/proposal-deadline.ts` `deadlineFor` — a flat 24h TTL from dispatch
+  under `weekly`; see §3.1)** (`PROPOSAL_DEADLINE_NUDGE_LEAD_MS`), anchored to
+  the *deadline* rather than dispatch. Sent only to sides still genuinely
+  undecided (`acceptedBy* IS NULL`
   — a side that already declined committed irreversibly and is never nagged),
   Telegram-only, static i18n copy so the "Xh" stays accurate. Idempotent via
   `Match.proposalDeadlineNudgeSentAt`.
@@ -2072,19 +2144,23 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
 
 ### 3.5c Planning stall: the check-in and the 48h end (always-on, Telegram-only)
 
-The 24 h TTL covers only the pitch decision. Once both sides accept, the
-scheduling (§3.6) and venue (§3.7) steps had **no deadline of any kind** — a
-partner who went quiet left the other person waiting indefinitely, with no chat
-to ask through and, before this, no way to cancel either (the emergency button
-only exists once a date is `scheduled` and within T-5 h).
+The decision deadline (§3.1/§3.5, a flat 24h TTL under `weekly`) covers only
+the pitch decision. Once both sides accept, the scheduling (§3.6) and venue
+(§3.7) steps had **no deadline of any kind** — a partner who went quiet left
+the other person waiting indefinitely, with no chat to ask through and, before
+this, no way to cancel either (the emergency button only exists once a date is
+`scheduled` and within T-5 h).
 
 **The cost was never the silence.** Both sides occupy a live match, and the
-single-live-match invariant (§3.2 filter 8) excludes them from every weekly
+single-live-match invariant (§3.2 filter 8) excludes them from every drop
 batch until it resolves. One ghost therefore cost the other person an entire
 cycle — and nothing in the product could end it. Freeing both sides for the next
 drop is what this section is actually for; the reminders are the polite part.
 
-**The chain**, per side, counted from when the phase opened:
+**The chain below is the `weekly` `DropCadence` profile's values
+(`CADENCE.stallCheckInMs`/`stallTimeoutMs`/`venueNudgeOffsetsMs` — §3.1); the
+`daily` profile halves the check-in to 12h and the end to 24h, and is inert in
+production.** Per side, counted from when the phase opened:
 
 | When | Who | What |
 |---|---|---|
@@ -3126,6 +3202,14 @@ in v1. Full spec: [REMATCH_PRODUCT_SPEC.md](REMATCH_PRODUCT_SPEC.md).
   weekly-optimizer analytics filter to `weekly` so on-demand runs never pollute
   the scoring A/B. The blind-decision, no-in-app-chat, single-live-match, and
   ledger exactly-once invariants are unaffected.
+- **Cadence.** The purchase-count rolling window and the famine gift-framing
+  lookback both read `CADENCE.rematchWindowMs` (7 days under `weekly`). The
+  three env-backed knobs above (`REMATCH_MAX_PER_WEEK`, `REMATCH_COOLDOWN_HOURS`,
+  `REMATCH_PRE_BATCH_BLACKOUT_HOURS`) are deliberately NOT sourced from
+  `CADENCE` — they stay plain env reads in `config.ts` — so they need manual
+  review (and almost certainly new values) before Rematch is ever enabled
+  under a `daily` cadence; `REMATCH_FEATURE_ENABLED` itself was left untouched
+  by the daily-cadence migration and remains **off** in production.
 
 ## Phase 4 — Date Lifecycle
 

@@ -263,6 +263,17 @@ untouched.
 
 ## Env
 
+**Cadence note (2026-08-01).** The 7-day rolling windows below (D3's purchase
+count, the famine gift-framing lookback) are sourced from
+`CADENCE.rematchWindowMs` (`packages/shared/src/cadence.ts`), not a bare
+constant — the `weekly` `DropCadence` profile's value is 7 days, identical to
+today. `REMATCH_MAX_PER_WEEK` / `REMATCH_COOLDOWN_HOURS` /
+`REMATCH_PRE_BATCH_BLACKOUT_HOURS` themselves stay plain env reads and are
+NOT cadence-sourced — they need a deliberate, manual re-tune (almost
+certainly smaller numbers) before this feature is ever enabled under a
+`daily` cadence. `REMATCH_FEATURE_ENABLED` is unaffected by any of this and
+remains the sole master switch.
+
 | Key | Default | Purpose |
 |---|---|---|
 | `REMATCH_FEATURE_ENABLED` | `false` | Master switch; everything inert when off. |

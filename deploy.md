@@ -1,5 +1,88 @@
 # Gennety Dating Deploy
 
+**PENDING — daily-cadence matching migration groundwork (PRODUCT_SPEC §3.1 /
+§3.1b, `DAILY_MATCHING_MIGRATION_AUDIT.md`, `DAILY_MATCHING_IMPLEMENTATION_PLAN.md`).**
+Not deployed yet. **Code + one additive schema column, no env change required
+to keep current behavior, no Mini App change.** `DROP_CADENCE` is unset in
+`/opt/gennety/.env` today and this deploy does not add it — production keeps
+running the `weekly` profile byte-for-byte identical to today (pinned by
+`packages/shared/src/cadence.test.ts`). Ships **inert**: a `daily` profile
+exists in code but nothing switches to it as part of this deploy.
+
+What ships: an internal `DropCadence` abstraction
+(`packages/shared/src/cadence.ts`) that every cadence-dependent constant in
+the matching engine, proposal deadlines, nudges, the famine notifier, the
+Profiler, and Rematch now reads from, selected once at boot by `DROP_CADENCE`
+(`weekly` default | `daily`). Plus a genuinely new mechanism, D10 — an honest
+pause instead of an endless famine-tier ladder: a user whose `computeTier`
+day-count reaches `FAMINE_PAUSE_AFTER_DAYS` (28, a flat code constant —
+`packages/shared/src/constants.ts`) is paused via the same CAS the menu's own
+Pause button uses, gets one honest DM instead of another tier notice, and is
+auto-resumed the moment `findCandidatesFor` would find them a candidate again
+(`services/pool-exhaustion.ts`, `autoResumeStarvedUsers`, same cron tick as the
+famine notifier).
+
+**⚠️ Requires an additive `db:push` before restart.** One new nullable column,
+`profiles.starvation_paused_at`, is read by `services/account-status-transitions.ts`
+on every resume and by `services/pool-exhaustion.ts` on every famine-notice
+tick, so a DB missing it throws `P2022` on the first no-match-notice cron after
+restart — the PM2 crash-loop this file warns about elsewhere. Verify additive
+first (expect one `ADD COLUMN`, zero `DROP`):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+**Three things worth knowing before the restart:**
+
+- **`FAMINE_PAUSE_AFTER_DAYS = 28`, not 14.** `computeTier` is denominated in
+  `CADENCE.intervalMs` units, so under `weekly` (7 days/unit) tier 2 already
+  lands at day 14 — a 14-day pause threshold would fire at the exact same
+  moment as the famine discount and make tier 3 structurally unreachable.  28
+  lets the existing tier 1→2→3 ladder (days 7/14/21) play out before the pause
+  takes over.
+- **Nothing in this deploy changes what any user currently experiences.**
+  Every cadence-dependent constant's `weekly` value is asserted byte-for-byte
+  identical to what it replaces (`cadence.test.ts`); the only genuinely new
+  user-visible surface (D10's pause/resume) is reachable but, per the same
+  tier-2-at-day-14 math above, essentially never fires under `weekly` in
+  practice at current pool sizes — it exists so the mechanism is proven before
+  `daily` cadence (where it fires routinely) is ever turned on.
+- **Rematch's env-backed knobs were deliberately left untouched.**
+  `REMATCH_MAX_PER_WEEK` / `REMATCH_COOLDOWN_HOURS` /
+  `REMATCH_PRE_BATCH_BLACKOUT_HOURS` still read plain `env.*` in `config.ts`,
+  not `CADENCE` — moving them would require `config.ts` to import
+  `@gennety/shared`, which breaks the dotenv-loading order guarantee
+  (`config.ts` must stay the first module evaluated). They need manual review
+  before Rematch is ever enabled under `daily`; `REMATCH_FEATURE_ENABLED`
+  itself is untouched by this deploy and stays whatever it already is in prod.
+
+**Flipping `DROP_CADENCE=daily` in production is explicitly NOT part of this
+deploy** — it is a separate, later decision gated on the founder's judgment
+about pool size, not on anything shipped here. When that day comes: set
+`DROP_CADENCE=daily` in `.env`, `pm2 restart gennety-bot --update-env`, no
+further schema or code change needed (the `daily` profile ships in this
+deploy, dormant).
+
+Post-deploy check — the drop-batch log prefix confirms the new code is live
+without needing to wait for Thursday:
+
+```sh
+pm2 logs gennety-bot --lines 200 --nostream | grep '\[drop-batch\]\|\[pool-exhaustion\]'
+psql "$DATABASE_URL" -c "select count(*) from profiles where starvation_paused_at is not null;"
+```
+
+**Rollback:** revert the code and restart; the additive column can stay
+(nothing reads it if the code is reverted). There is no flag to unset — this
+deploy adds no env var.
+
+---
+
 **PENDING — season + weather venue ranking (PRODUCT_SPEC §3.7,
 VENUE_ENGINE_IMPROVEMENT_PLAN 5.3).** Not deployed yet. **No Prisma schema
 change, no Mini App change** (`apps/webapp` untouched) — but it ships alongside
