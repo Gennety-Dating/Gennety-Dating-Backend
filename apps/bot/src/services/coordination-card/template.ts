@@ -277,8 +277,6 @@ export interface CoordCardElementInput {
   logoCream: LogoMark | null;
   /** Film-grain overlay tile (full-card PNG); dark theme only. */
   grain: Buffer | null;
-  /** `@handle` pill under the headline — the `shared` variant's payload. */
-  handle: string | null;
   /** Display family for the headline (Latin vs Cyrillic — see index.ts). */
   headlineFamily: string;
   theme: CoordCardTheme;
@@ -361,7 +359,10 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
         ),
       ]),
 
-      el("div", { flexGrow: 1, minHeight: "24px" }),
+      // The gap under the lockup carries the most weight of the three, so a
+      // card that drops its sub-line spends the freed height on air above the
+      // frame rather than on a hole under the headline (founder direction).
+      el("div", { flexGrow: 1.7, minHeight: "48px" }),
 
       // --- Polaroid, with a soft burgundy glow behind it. ---
       el(
@@ -383,7 +384,7 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
 
       el("div", { flexGrow: 1, minHeight: "40px" }),
 
-      // --- Kicker → headline → optional handle pill. ---
+      // --- Kicker → headline. ---
       el(
         "div",
         {
@@ -412,40 +413,24 @@ export function buildCoordCardElement(input: CoordCardElementInput): CardNode {
           el("div", { ...centered, color: p.accent }, input.copy.head[1]),
         ],
       ),
-      ...(input.handle
+      // Absent on `shared` / `declined`, whose line lives in the chat message
+      // instead (see copy.ts) — the headline then simply ends the card.
+      ...(input.copy.sub
         ? [
+            el("div", { flexGrow: 1, minHeight: "28px" }),
             el(
               "div",
               {
-                marginTop: "26px",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "16px 34px",
-                borderRadius: "999px",
-                backgroundColor: `${BURGUNDY_LIFTED}2E`,
-                border: `2px solid ${BURGUNDY_LIFTED}73`,
-                fontSize: "32px",
-                fontWeight: 700,
-                color: p.ink,
+                ...centered,
+                maxWidth: "660px",
+                fontSize: "27px",
+                lineHeight: 1.4,
+                color: p.muted,
               },
-              input.handle,
+              input.copy.sub,
             ),
           ]
         : []),
-
-      el("div", { flexGrow: 1, minHeight: "28px" }),
-
-      el(
-        "div",
-        {
-          ...centered,
-          maxWidth: "660px",
-          fontSize: "27px",
-          lineHeight: 1.4,
-          color: p.muted,
-        },
-        input.copy.sub,
-      ),
     ],
   );
 }

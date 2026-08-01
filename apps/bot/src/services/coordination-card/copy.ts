@@ -16,6 +16,14 @@ import type { Language } from "@gennety/shared";
  *    faces are wide and a third wrapped line breaks the vertical rhythm.
  *  - No emoji anywhere: the bundled fonts carry no color-emoji glyphs and
  *    satori silently drops them. Emoji live in the Telegram caption instead.
+ *
+ * The division of labour with the chat message (founder decision 2026-08-01):
+ * **the card carries the beat, the message carries what you act on.** A card
+ * is a picture — nothing on it is tappable, selectable, or readable by a screen
+ * reader — so instructions and links belong in the text beside it, and the two
+ * repeating each other just costs the card its air. That is why `shared` and
+ * `declined` carry NO sub-line: what they used to say already lives verbatim in
+ * `coordRevealToInitiator` / `coordSharedToPartner` and `coordPartnerDeclined`.
  */
 
 /** One card per real send in the coordination flow. */
@@ -36,8 +44,12 @@ export interface CoordCardCopy {
   kicker: string;
   /** Exactly two display lines; the second is accented. */
   head: [string, string];
-  /** One muted sentence under the headline. May carry `{name}`. */
-  sub: string;
+  /**
+   * One muted sentence under the headline. May carry `{name}`. Omitted where
+   * the chat message already says it (see the header note) — the layout then
+   * spends the freed height on the gap under the brand lockup instead.
+   */
+  sub?: string;
 }
 
 type VariantCopy = Record<CoordCardVariant, CoordCardCopy>;
@@ -56,12 +68,10 @@ const en: VariantCopy = {
   shared: {
     kicker: "CONTACT UNLOCKED",
     head: ["You're", "connected."],
-    sub: "Say hi — see you there.",
   },
   declined: {
     kicker: "NO CONTACTS",
     head: ["Not this", "time."],
-    sub: "That's okay. The anonymous chat opens 30 minutes before you meet.",
   },
   proxy: {
     kicker: "ANONYMOUS CHAT",
@@ -84,12 +94,10 @@ const ru: VariantCopy = {
   shared: {
     kicker: "КОНТАКТ ОТКРЫТ",
     head: ["Теперь вы", "на связи."],
-    sub: "Напиши пару слов — и до встречи.",
   },
   declined: {
     kicker: "БЕЗ КОНТАКТОВ",
     head: ["Не в этот", "раз."],
-    sub: "Это окей. За 30 минут до встречи откроется анонимный чат.",
   },
   proxy: {
     kicker: "АНОНИМНЫЙ ЧАТ",
@@ -112,12 +120,10 @@ const uk: VariantCopy = {
   shared: {
     kicker: "КОНТАКТ ВІДКРИТО",
     head: ["Тепер ви", "на звʼязку."],
-    sub: "Напиши пару слів — і до зустрічі.",
   },
   declined: {
     kicker: "БЕЗ КОНТАКТІВ",
     head: ["Не цього", "разу."],
-    sub: "Це нормально. За 30 хвилин до зустрічі відкриється анонімний чат.",
   },
   proxy: {
     kicker: "АНОНІМНИЙ ЧАТ",
@@ -140,12 +146,10 @@ const de: VariantCopy = {
   shared: {
     kicker: "KONTAKT FREI",
     head: ["Ihr seid", "verbunden."],
-    sub: "Schreib kurz Hallo — bis gleich.",
   },
   declined: {
     kicker: "KEINE KONTAKTE",
     head: ["Diesmal", "nicht."],
-    sub: "Alles gut. Der anonyme Chat öffnet 30 Minuten vor dem Treffen.",
   },
   proxy: {
     kicker: "ANONYMER CHAT",
@@ -168,12 +172,10 @@ const pl: VariantCopy = {
   shared: {
     kicker: "KONTAKT OTWARTY",
     head: ["Jesteście", "w kontakcie."],
-    sub: "Napisz kilka słów — do zobaczenia.",
   },
   declined: {
     kicker: "BEZ KONTAKTÓW",
     head: ["Nie tym", "razem."],
-    sub: "W porządku. Anonimowy czat otworzy się 30 minut przed spotkaniem.",
   },
   proxy: {
     kicker: "ANONIMOWY CZAT",
@@ -192,5 +194,9 @@ export function coordCardCopy(
 ): CoordCardCopy {
   const table = COPY[language] ?? en;
   const entry = table[variant];
-  return { ...entry, sub: entry.sub.replace("{name}", name) };
+  // Under `exactOptionalPropertyTypes` a sub-less variant has to OMIT the key
+  // rather than carry an explicit `undefined`.
+  return entry.sub === undefined
+    ? { kicker: entry.kicker, head: entry.head }
+    : { ...entry, sub: entry.sub.replace("{name}", name) };
 }

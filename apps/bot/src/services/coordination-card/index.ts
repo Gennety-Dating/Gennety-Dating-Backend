@@ -47,8 +47,6 @@ export interface CoordCardInput {
   personPhotoRef?: string | null;
   /** Already-decoded photo bytes; skips the download when a caller has them. */
   personPhoto?: Buffer | null;
-  /** `@handle` pill — the `shared` variant's actual payload. */
-  handle?: string | null;
   language: Language;
   /** Recipient's chosen theme, exactly like the date card. */
   theme: CoordCardTheme;
@@ -138,7 +136,6 @@ export async function renderCoordinationCard(
       logoCream,
       // The dark film grain would dirty the light card's cream ground.
       grain: input.theme === "light" ? null : grainTile(),
-      handle: input.handle ?? null,
       headlineFamily: headlineFamily(input.language),
       theme: input.theme,
     });
