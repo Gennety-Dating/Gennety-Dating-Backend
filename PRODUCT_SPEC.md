@@ -3086,25 +3086,36 @@ user already paid for stays valid regardless of the flag.
   fallback when the Stars API cancel fails. An **App Store** subscriber viewing
   the hub gets Apple's own steps instead, since the concierge cannot cancel
   their subscription and must not imply otherwise.
-- **In-chat cancellation (Telegram, agent-driven).** When a user tells the menu
-  agent they want to cancel / stop / turn off Premium — or asks how — the agent
-  calls the `offer_cancel_premium` tool (`services/menu-agent.ts`); it never
-  cancels from raw text. For a **Telegram Stars** sub the bot posts a
-  nonce-bound, one-use confirm card (`❄️ Keep` over `Yes, cancel`, same token
-  mechanics as Freeze/Delete, `handlers/menu/premium-cancel.ts`); tapping
-  confirm calls Bot API `editUserStarSubscription(is_canceled: true)` to stop the
-  renewal at Telegram, then `recordInChatCancellation` flips
+- **In-chat cancellation (Telegram, agent-driven), two-stage confirm
+  (2026-08-01).** When a user tells the menu agent they want to cancel / stop /
+  turn off Premium — or asks how — the agent calls the `offer_cancel_premium`
+  tool (`services/menu-agent.ts`); it never cancels from raw text. For a
+  **Telegram Stars** sub the bot posts a nonce-bound, one-use **offer** card
+  (`❄️ Keep` over `Yes, cancel`). Tapping **Yes, cancel** does **not** cancel
+  anything yet: it burns the offer token and posts a second, freshly
+  nonce-bound **final** card that isolates the destructive option exactly like
+  the Freeze/Delete fork (§2.1) — one red **Yes, I'm 100% sure, cancel**
+  against two green back-out buttons that both just navigate back to the main
+  menu, relying on the router's existing pending-token cross-invalidation to
+  burn the stale card rather than a dedicated decline handler. Only the final
+  card's red button calls Bot API `editUserStarSubscription(is_canceled: true)`
+  to stop the renewal at Telegram, then `recordInChatCancellation` flips
   `premiumAutoRenew=false` and appends a `cancelled` `subscription_ledger` row.
-  Access is **never** revoked early — `premiumUntil` stands, so the user keeps
-  Premium until the paid period ends, and there is no mid-period refund. If the
-  Stars API cancel fails (or no recurring anchor is on file) the bot does NOT
-  claim success — it points the user to Telegram → Settings → Subscriptions. An
-  **App Store** sub can't be cancelled server-side (Apple owns it), so the agent
-  shows the exact iOS-Settings steps instead of a button. After a confirmed
-  cancel the bot politely asks **why** (one line, skippable); the free-text
-  answer is stored on that `cancelled` ledger row's `note` for churn analysis.
-  Telegram-only (the menu agent is Telegram-only); iOS cancels natively via
-  Apple.
+  Both cards share the same token mechanics as Freeze/Delete — a fresh
+  10-minute, single-use nonce bound to its own message
+  (`handlers/menu/premium-cancel.ts`). Access is **never** revoked early —
+  `premiumUntil` stands, so the user keeps Premium until the paid period ends,
+  and there is no mid-period refund. If the Stars API cancel fails (or no
+  recurring anchor is on file) the bot does NOT claim success — it points the
+  user to Telegram → Settings → Subscriptions. An **App Store** sub can't be
+  cancelled server-side (Apple owns it), so the agent shows the exact
+  iOS-Settings steps instead of a button — this can surface at either hop,
+  since Premium state is re-checked both when advancing to the final card and
+  again right before the mutation (it can drift during the up-to-10-minute
+  window between the two cards). After a confirmed cancel the bot politely
+  asks **why** (one line, skippable); the free-text answer is stored on that
+  `cancelled` ledger row's `note` for churn analysis. Telegram-only (the menu
+  agent is Telegram-only); iOS cancels natively via Apple.
 
 **Benefit #1 — venue-change (v1).** Inside the §3.7b board:
 

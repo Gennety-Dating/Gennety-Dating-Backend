@@ -50,6 +50,7 @@ export interface PendingAccountAction {
 /** One-time, expiring confirmation for the in-chat Premium cancel button. */
 export interface PendingPremiumCancel {
   nonce: string;
+  stage: "offer" | "final";
   expiresAtMs: number;
   messageId: number;
 }

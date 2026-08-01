@@ -28,6 +28,7 @@ import {
 export const PREMIUM_CANCEL_TTL_MS = 10 * 60 * 1000;
 export const PREM_CANCEL_YES_PREFIX = "prem:cancel:yes:";
 export const PREM_CANCEL_KEEP_PREFIX = "prem:cancel:keep:";
+export const PREM_CANCEL_FINAL_YES_PREFIX = "prem:cancel:final:yes:";
 export const PREM_CANCEL_REASON_SKIP = "prem:cancel:reason:skip";
 
 function newNonce(): string {
@@ -42,12 +43,14 @@ export async function invalidatePendingPremiumCancel(ctx: BotContext): Promise<v
 }
 
 /**
- * Consume the pending confirm token for a given callback prefix. Any malformed,
- * stale, or replayed tap burns the token and strips the keyboard, returning the
- * matched nonce on success (so the caller can branch confirm vs keep).
+ * Consume the pending confirm token for a given stage + callback prefix. Any
+ * malformed, stale, wrong-stage, or replayed tap burns the token and strips
+ * the keyboard. On success the acted-on message's keyboard is also stripped,
+ * so a stage-1 card can't be re-tapped after its stage-2 follow-up was sent.
  */
 async function consumePremiumCancel(
   ctx: BotContext,
+  stage: "offer" | "final",
   prefix: string,
   now: number = Date.now(),
 ): Promise<boolean> {
@@ -56,6 +59,7 @@ async function consumePremiumCancel(
   const messageId = ctx.callbackQuery?.message?.message_id;
   const valid =
     pending !== null &&
+    pending.stage === stage &&
     pending.expiresAtMs > now &&
     messageId === pending.messageId &&
     data === `${prefix}${pending.nonce}`;
@@ -74,6 +78,7 @@ async function consumePremiumCancel(
 
   ctx.session.pendingPremiumCancel = null;
   await ctx.answerCallbackQuery().catch(() => {});
+  await ctx.editMessageReplyMarkup().catch(() => {});
   return true;
 }
 
@@ -83,6 +88,11 @@ async function consumePremiumCancel(
  * lapsed sub → "no active subscription"; an App Store sub → the iOS guide.
  */
 export async function sendPremiumCancelConfirm(ctx: BotContext): Promise<void> {
+  // Defensive: burn any stale offer/final card before issuing a fresh one, so
+  // a re-offered cancellation (e.g. the user re-asks mid-flow) never leaves
+  // two live keyboards with only the newest nonce actually valid.
+  await invalidatePendingPremiumCancel(ctx);
+
   const lang = ctx.session.language;
   const user = await prisma.user.findUnique({
     where: { telegramId: BigInt(ctx.from!.id) },
@@ -113,6 +123,7 @@ export async function sendPremiumCancelConfirm(ctx: BotContext): Promise<void> {
 
   ctx.session.pendingPremiumCancel = {
     nonce,
+    stage: "offer",
     messageId: sent.message_id,
     expiresAtMs: Date.now() + PREMIUM_CANCEL_TTL_MS,
   };
@@ -139,7 +150,7 @@ export async function sendPremiumCancelAppStoreGuide(
 
 /** "Keep Premium" — burn the token, acknowledge, no state change. */
 export async function handlePremiumCancelKeep(ctx: BotContext): Promise<void> {
-  if (!(await consumePremiumCancel(ctx, PREM_CANCEL_KEEP_PREFIX))) return;
+  if (!(await consumePremiumCancel(ctx, "offer", PREM_CANCEL_KEEP_PREFIX))) return;
   const lang = ctx.session.language;
   const user = await prisma.user.findUnique({
     where: { telegramId: BigInt(ctx.from!.id) },
@@ -154,14 +165,16 @@ export async function handlePremiumCancelKeep(ctx: BotContext): Promise<void> {
 }
 
 /**
- * "Yes, cancel" — cancel the Telegram Stars subscription at the provider, then
- * record the DB cancellation and ask (politely) for the churn reason. If the
- * Stars API cancel fails or there's no recurring anchor, we do NOT claim success
- * (Telegram would still auto-renew); we point the user to Telegram's own
- * Subscriptions settings instead.
+ * "Yes, cancel" (stage 1) — does NOT cancel anything yet. Burns the offer
+ * token, re-checks state (it can drift during the 10-minute window), and — for
+ * a Stars subscriber — sends the isolated final-confirm card: one red button
+ * that actually cancels, against two green back-out buttons that just
+ * navigate to the main menu (the router's existing pending-token
+ * cross-invalidation burns this card's nonce on that tap, so no dedicated
+ * decline handler is needed — mirrors the Freeze/Delete final-confirm step).
  */
 export async function handlePremiumCancelConfirm(ctx: BotContext): Promise<void> {
-  if (!(await consumePremiumCancel(ctx, PREM_CANCEL_YES_PREFIX))) return;
+  if (!(await consumePremiumCancel(ctx, "offer", PREM_CANCEL_YES_PREFIX))) return;
   const lang = ctx.session.language;
 
   const user = await prisma.user.findUnique({
@@ -176,7 +189,58 @@ export async function handlePremiumCancelConfirm(ctx: BotContext): Promise<void>
     return;
   }
   if (cx.provider === "app_store") {
-    await ctx.editMessageReplyMarkup().catch(() => {});
+    await sendPremiumCancelAppStoreGuide(ctx, cx.premiumUntil);
+    return;
+  }
+
+  const nonce = newNonce();
+  const keyboard = new InlineKeyboard()
+    .text(t(lang, "premiumCancelFinalNoSoft"), "menu:back")
+    .success()
+    .row()
+    .text(t(lang, "premiumCancelFinalNoHard"), "menu:back")
+    .success()
+    .row()
+    .text(t(lang, "premiumCancelFinalYes"), `${PREM_CANCEL_FINAL_YES_PREFIX}${nonce}`)
+    .danger();
+
+  const sent = await ctx.reply(
+    t(lang, "premiumCancelFinalConfirm", { date: formatPremiumUntil(cx.premiumUntil, lang) }),
+    { reply_markup: keyboard },
+  );
+
+  ctx.session.pendingPremiumCancel = {
+    nonce,
+    stage: "final",
+    messageId: sent.message_id,
+    expiresAtMs: Date.now() + PREMIUM_CANCEL_TTL_MS,
+  };
+}
+
+/**
+ * "Yes, I'm 100% sure, cancel" (stage 2) — the only tap that actually cancels
+ * the Telegram Stars subscription at the provider, then records the DB
+ * cancellation and asks (politely) for the churn reason. If the Stars API
+ * cancel fails or there's no recurring anchor, we do NOT claim success
+ * (Telegram would still auto-renew); we point the user to Telegram's own
+ * Subscriptions settings instead.
+ */
+export async function handlePremiumCancelFinalConfirm(ctx: BotContext): Promise<void> {
+  if (!(await consumePremiumCancel(ctx, "final", PREM_CANCEL_FINAL_YES_PREFIX))) return;
+  const lang = ctx.session.language;
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: { id: true },
+  });
+  if (!user) return;
+
+  const cx = await getPremiumCancelContext(user.id);
+  if (!cx.active) {
+    await ctx.editMessageText(t(lang, "premiumCancelNotActive")).catch(() => {});
+    return;
+  }
+  if (cx.provider === "app_store") {
     await sendPremiumCancelAppStoreGuide(ctx, cx.premiumUntil);
     return;
   }
@@ -188,13 +252,11 @@ export async function handlePremiumCancelConfirm(ctx: BotContext): Promise<void>
       await ctx.api.editUserStarSubscription(ctx.from!.id, cx.recurringAnchor, true);
     } catch (err) {
       console.error("editUserStarSubscription failed:", err);
-      await ctx.editMessageReplyMarkup().catch(() => {});
       await ctx.reply(t(lang, "premiumManageNote"));
       return;
     }
   } else {
     // Active but no recurring anchor recorded — we can't cancel it for them.
-    await ctx.editMessageReplyMarkup().catch(() => {});
     await ctx.reply(t(lang, "premiumManageNote"));
     return;
   }

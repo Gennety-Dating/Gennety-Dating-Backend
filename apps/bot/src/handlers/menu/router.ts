@@ -49,10 +49,12 @@ import { invalidatePendingAccountAction } from "./account-action.js";
 import {
   PREM_CANCEL_YES_PREFIX,
   PREM_CANCEL_KEEP_PREFIX,
+  PREM_CANCEL_FINAL_YES_PREFIX,
   PREM_CANCEL_REASON_SKIP,
   sendPremiumCancelConfirm,
   sendPremiumCancelAppStoreGuide,
   handlePremiumCancelConfirm,
+  handlePremiumCancelFinalConfirm,
   handlePremiumCancelKeep,
   handlePremiumCancelReasonInput,
   handlePremiumCancelReasonSkip,
@@ -80,7 +82,9 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     await invalidatePendingAccountAction(ctx);
   }
   const isPremiumCancelCallback =
-    data?.startsWith(PREM_CANCEL_YES_PREFIX) || data?.startsWith(PREM_CANCEL_KEEP_PREFIX);
+    data?.startsWith(PREM_CANCEL_YES_PREFIX) ||
+    data?.startsWith(PREM_CANCEL_KEEP_PREFIX) ||
+    data?.startsWith(PREM_CANCEL_FINAL_YES_PREFIX);
   if (ctx.session.pendingPremiumCancel && !isPremiumCancelCallback) {
     await invalidatePendingPremiumCancel(ctx);
   }
@@ -390,7 +394,12 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
         await handleDeleteAccountExecute(ctx);
         return;
       }
-      // In-chat Premium cancellation (nonce-bound confirm / keep / reason skip).
+      // In-chat Premium cancellation — two-stage nonce-bound confirm (offer →
+      // final) / keep / reason skip, mirroring the Freeze/Delete fork.
+      if (data.startsWith(PREM_CANCEL_FINAL_YES_PREFIX)) {
+        await handlePremiumCancelFinalConfirm(ctx);
+        return;
+      }
       if (data.startsWith(PREM_CANCEL_YES_PREFIX)) {
         await handlePremiumCancelConfirm(ctx);
         return;

@@ -1058,6 +1058,11 @@ const translations = {
       "Cancel Gennety Premium?\n\nPremium stays active until {date} — everything keeps working until then. After that it won't renew and nothing else is charged.",
     premiumCancelConfirmYes: "Yes, cancel",
     premiumCancelKeepBtn: "Keep Premium",
+    premiumCancelFinalConfirm:
+      "Last check — cancel Gennety Premium?\n\nPremium stays active until {date}, nothing changes before then. After this, auto-renew is off for good — want it back later, you'll pay again.",
+    premiumCancelFinalYes: "Yes, I'm 100% sure, cancel",
+    premiumCancelFinalNoSoft: "No, keep it",
+    premiumCancelFinalNoHard: "Wait, don't cancel",
     premiumCancelDone:
       "Done — auto-renew is off. Premium stays active until {date}, and nothing else will be charged. You can resubscribe anytime.",
     premiumCancelKept: "Keeping it ✨ Premium is active until {date}.",
@@ -2102,6 +2107,11 @@ const translations = {
       "Отменяем Gennety Premium?\n\nPremium останется активным до {date} — до этой даты всё работает. Дальше подписка не продлится и больше ничего не спишется.",
     premiumCancelConfirmYes: "Да, отменить",
     premiumCancelKeepBtn: "Оставить Premium",
+    premiumCancelFinalConfirm:
+      "Последняя проверка — точно отменяем Gennety Premium?\n\nPremium останется активным до {date}, до этой даты ничего не изменится. После подтверждения автопродление выключится навсегда — захочешь вернуть Premium позже, придётся оплатить заново.",
+    premiumCancelFinalYes: "Да, я уверен на 100%, отменить",
+    premiumCancelFinalNoSoft: "Нет, оставить",
+    premiumCancelFinalNoHard: "Стоп, не отменяй",
     premiumCancelDone:
       "Готово — автопродление отключено. Premium активен до {date}, больше ничего не спишется. Вернуться можно в любой момент.",
     premiumCancelKept: "Оставляем ✨ Premium активен до {date}.",
@@ -3140,6 +3150,11 @@ const translations = {
       "Скасовуємо Gennety Premium?\n\nPremium залишиться активним до {date} — до цієї дати все працює. Далі підписка не подовжиться і більше нічого не спишеться.",
     premiumCancelConfirmYes: "Так, скасувати",
     premiumCancelKeepBtn: "Залишити Premium",
+    premiumCancelFinalConfirm:
+      "Остання перевірка — точно скасовуємо Gennety Premium?\n\nPremium залишиться активним до {date}, до цієї дати нічого не зміниться. Після підтвердження автопродовження вимкнеться назавжди — захочеш повернути Premium пізніше, доведеться оплатити знову.",
+    premiumCancelFinalYes: "Так, я впевнений на 100%, скасувати",
+    premiumCancelFinalNoSoft: "Ні, залишити",
+    premiumCancelFinalNoHard: "Стоп, не скасовуй",
     premiumCancelDone:
       "Готово — автоподовження вимкнено. Premium активний до {date}, більше нічого не спишеться. Повернутися можна будь-коли.",
     premiumCancelKept: "Залишаємо ✨ Premium активний до {date}.",
@@ -4155,6 +4170,11 @@ const deTranslations: TranslationTable = {
     "Gennety Premium kündigen?\n\nPremium bleibt bis {date} aktiv — bis dahin funktioniert alles. Danach verlängert es sich nicht und es wird nichts mehr berechnet.",
   premiumCancelConfirmYes: "Ja, kündigen",
   premiumCancelKeepBtn: "Premium behalten",
+  premiumCancelFinalConfirm:
+    "Letzte Prüfung — Gennety Premium wirklich kündigen?\n\nPremium bleibt bis {date} aktiv, bis dahin ändert sich nichts. Nach der Bestätigung ist die automatische Verlängerung endgültig aus — willst du Premium später zurück, zahlst du erneut.",
+  premiumCancelFinalYes: "Ja, ich bin mir zu 100% sicher, kündigen",
+  premiumCancelFinalNoSoft: "Nein, behalten",
+  premiumCancelFinalNoHard: "Warte, nicht kündigen",
   premiumCancelDone:
     "Erledigt — die automatische Verlängerung ist aus. Premium bleibt bis {date} aktiv, weitere Kosten entstehen nicht. Du kannst jederzeit wieder abonnieren.",
   premiumCancelKept: "Bleibt ✨ Premium ist bis {date} aktiv.",
@@ -5167,6 +5187,11 @@ const plTranslations: TranslationTable = {
     "Anulować Gennety Premium?\n\nPremium pozostanie aktywne do {date} — do tego czasu wszystko działa. Później nie odnowi się i nic więcej nie zostanie pobrane.",
   premiumCancelConfirmYes: "Tak, anuluj",
   premiumCancelKeepBtn: "Zostaw Premium",
+  premiumCancelFinalConfirm:
+    "Ostatnie sprawdzenie — na pewno anulować Gennety Premium?\n\nPremium pozostanie aktywne do {date}, do tego czasu nic się nie zmieni. Po potwierdzeniu automatyczne odnawianie zostanie wyłączone na stałe — jeśli zechcesz wrócić do Premium później, zapłacisz ponownie.",
+  premiumCancelFinalYes: "Tak, jestem pewien na 100%, anuluj",
+  premiumCancelFinalNoSoft: "Nie, zostaw",
+  premiumCancelFinalNoHard: "Czekaj, nie anuluj",
   premiumCancelDone:
     "Gotowe — automatyczne odnawianie wyłączone. Premium jest aktywne do {date}, nic więcej nie zostanie pobrane. Możesz wrócić w każdej chwili.",
   premiumCancelKept: "Zostaje ✨ Premium jest aktywne do {date}.",
