@@ -14,7 +14,7 @@ import {
   notifyFounderStatusTimerHealth,
   notifyFounderWeeklyMatches,
 } from "./services/founder-notify.js";
-import { autoUnsuspendElapsed, runWeeklyBatch } from "./services/match-engine.js";
+import { autoUnsuspendElapsed, runDropBatch } from "./services/match-engine.js";
 import { dispatchMatches } from "./services/dispatch-queue.js";
 import { sendNoMatchNotices } from "./services/no-match-notifier.js";
 import { expireStaleMatches } from "./services/match-expiry.js";
@@ -186,9 +186,10 @@ const MATCH_PREROLL_DELAY_MS = Number(process.env.MATCH_PREROLL_DELAY_MS ?? 2 * 
 
 /**
  * M-6: hourly auto-unsuspend. The expiration check used to live ONLY inside
- * `runWeeklyBatch`, which meant a 14-day suspension that expired on a Friday
- * morning sat for another 6 days until the next Thursday batch. Running it
- * hourly keeps the lag below an hour without thrashing the DB.
+ * `runDropBatch` (née `runWeeklyBatch`), which meant a 14-day suspension that
+ * expired on a Friday morning sat for another 6 days until the next Thursday
+ * batch. Running it hourly keeps the lag below an hour without thrashing the
+ * DB, independent of however often the batch itself now runs.
  */
 const AUTO_UNSUSPEND_CRON_SCHEDULE =
   process.env.AUTO_UNSUSPEND_CRON_SCHEDULE ?? "0 * * * *";
@@ -269,13 +270,14 @@ const PROFILER_CRON_SCHEDULE =
   process.env.PROFILER_CRON_SCHEDULE ?? "*/15 * * * *";
 
 /**
- * Weekly batch: run the global greedy matching algorithm, then dispatch
- * all pitches via the rate-limited queue.
+ * Drop batch: run the global greedy matching algorithm, then dispatch
+ * all pitches via the rate-limited queue. Cadence (weekly/daily) is
+ * whatever MATCH_CRON_SCHEDULE resolves to — see next-batch.ts / cadence.ts.
  */
-async function weeklyMatchingJob(): Promise<void> {
+async function dropMatchingJob(): Promise<void> {
   try {
-    console.log("[cron] Weekly matching batch started");
-    const result = await runWeeklyBatch();
+    console.log("[cron] Drop matching batch started");
+    const result = await runDropBatch();
     console.log(
       `[cron] Batch complete: eligible=${result.eligible} pairs=${result.pairs}`,
     );
@@ -406,10 +408,10 @@ bot.start({
     // otherwise overlap the next one and re-process the same rows (duplicate
     // DMs / pushes — audit H2/M4). `guardedTick` skips a tick while the prior
     // run is still in flight and centralises error logging.
-    cron.schedule(MATCH_CRON_SCHEDULE, guardedTick("weekly-matching", weeklyMatchingJob), {
+    cron.schedule(MATCH_CRON_SCHEDULE, guardedTick("drop-matching", dropMatchingJob), {
       timezone: CRON_TIMEZONE,
     });
-    console.log(`[cron] Weekly matching scheduled: "${MATCH_CRON_SCHEDULE}" (${CRON_TIMEZONE})`);
+    console.log(`[cron] Drop matching scheduled: "${MATCH_CRON_SCHEDULE}" (${CRON_TIMEZONE})`);
 
     // 24h TTL expiry cron.
     cron.schedule(EXPIRY_CRON_SCHEDULE, guardedTick("match-expiry", expiryJob));

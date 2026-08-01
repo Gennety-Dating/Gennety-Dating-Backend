@@ -1,5 +1,6 @@
 import { prisma, type Prisma } from "@gennety/db";
 import {
+  CADENCE,
   typePreferenceMultiplier,
   setForGender,
   type PreferenceVector,
@@ -57,7 +58,14 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-export const MATCH_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
+/**
+ * Candidate re-eligibility cooldown after a match. Sourced from the active
+ * `CADENCE` profile (weekly: 24h, unchanged; daily: 6h — see cadence.ts for
+ * why 24h would silently exclude everyone the day after a daily batch: the
+ * strict `<` comparison below never fires when the cooldown equals the
+ * interval between batches).
+ */
+export const MATCH_COOLDOWN_MS = CADENCE.cooldownMs;
 export const DEFAULT_CANDIDATE_LIMIT = 5;
 
 /** Wider pool fetched from SQL before Node.js re-ranking. */
@@ -324,21 +332,30 @@ export function ageRangePreferenceScore(
 }
 
 // ---------------------------------------------------------------------------
-// Starvation priority — per-missed-week score bonus for unpaired users
+// Starvation priority — per-missed-cycle score bonus for unpaired users
 // ---------------------------------------------------------------------------
 
-/** Score boost per missed weekly batch. */
-export const STARVATION_ALPHA = 0.05;
+/**
+ * Score boost per missed batch. Sourced from `CADENCE.starvationAlpha` —
+ * weekly stays 0.05 (unchanged); daily is 0.05/7 so the bonus saturates at
+ * the same wall-clock point (~35 days) as today's ~5 weeks, rather than
+ * reaching the cap in under a week and making priority a background
+ * condition of the pool instead of a rare escalation.
+ */
+export const STARVATION_ALPHA = CADENCE.starvationAlpha;
 /**
  * Hard cap on the starvation bonus. Strictly below `SCORING_WEIGHTS.penalty`
  * (0.30) so a strong negative-constraint match still outweighs priority —
- * the bonus breaks ties, it doesn't force bad pairings.
+ * the bonus breaks ties, it doesn't force bad pairings. Cadence-independent
+ * by design: whatever the interval, the bonus never outweighs a real
+ * negative-constraint hit.
  */
 export const STARVATION_CAP = 0.25;
 
 /**
  * Priority bonus for a user who has been eligible-but-unpaired for
- * `standbyCount` consecutive batches. Linearly scaled by `STARVATION_ALPHA`,
+ * `standbyCount` consecutive batches (cycles — a batch may be daily or
+ * weekly depending on `CADENCE`). Linearly scaled by `STARVATION_ALPHA`,
  * capped at `STARVATION_CAP`. Non-starved users (0 or negative) return 0.
  */
 export function starvationBonus(standbyCount: number): number {
@@ -1192,10 +1209,10 @@ export async function createProposedMatch(
 }
 
 // ---------------------------------------------------------------------------
-// Orchestration — Weekly Batch (Global Greedy)
+// Orchestration — Drop Batch (Global Greedy)
 // ---------------------------------------------------------------------------
 
-export interface WeeklyBatchResult {
+export interface DropBatchResult {
   eligible: number;
   pairs: number;
   matchIds: string[];
@@ -1204,7 +1221,7 @@ export interface WeeklyBatchResult {
   missedUserIds: string[];
 }
 
-export interface WeeklyBatchPlan {
+export interface DropBatchPlan {
   eligible: number;
   pairs: number;
   finalPairs: ScoredPair[];
@@ -1747,13 +1764,13 @@ async function loadHistoricalMatchPairs(
  *
  * Returns match IDs for the dispatch queue to process.
  */
-export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
+export async function runDropBatch(): Promise<DropBatchResult> {
   await autoUnsuspendElapsed();
   const embeddingPreflight = await refreshAllDirtyEmbeddings();
   console.log(
-    `[weekly-batch] embedding-preflight scanned=${embeddingPreflight.scanned} refreshed=${embeddingPreflight.refreshed} failed=${embeddingPreflight.failed} stillDirty=${embeddingPreflight.stillDirty}`,
+    `[drop-batch] embedding-preflight scanned=${embeddingPreflight.scanned} refreshed=${embeddingPreflight.refreshed} failed=${embeddingPreflight.failed} stillDirty=${embeddingPreflight.stillDirty}`,
   );
-  const plan = await previewWeeklyBatch();
+  const plan = await previewDropBatch();
   if (plan.eligible === 0) {
     return { eligible: 0, pairs: 0, matchIds: [], missedUserIds: [] };
   }
@@ -1812,7 +1829,7 @@ export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
   ]);
 
   console.log(
-    `[weekly-batch] eligible=${plan.eligible} pairs=${matchIds.length} missed=${missedUserIds.length}`,
+    `[drop-batch] eligible=${plan.eligible} pairs=${matchIds.length} missed=${missedUserIds.length}`,
   );
 
   return {
@@ -1823,7 +1840,7 @@ export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
   };
 }
 
-export async function previewWeeklyBatch(): Promise<WeeklyBatchPlan> {
+export async function previewDropBatch(): Promise<DropBatchPlan> {
   const users = await loadEligibleUsers();
   if (users.length === 0) {
     return { eligible: 0, pairs: 0, finalPairs: [], missedUserIds: [] };

@@ -19,7 +19,7 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
-import { runWeeklyBatch } from "./match-engine.js";
+import { runDropBatch } from "./match-engine.js";
 
 describe("weekly embedding preflight", () => {
   beforeEach(() => {
@@ -35,7 +35,7 @@ describe("weekly embedding preflight", () => {
   });
 
   it("refreshes the complete dirty snapshot before loading eligible users", async () => {
-    await expect(runWeeklyBatch()).resolves.toEqual({
+    await expect(runDropBatch()).resolves.toEqual({
       eligible: 0,
       pairs: 0,
       matchIds: [],

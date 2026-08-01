@@ -2304,8 +2304,16 @@ ladders sent to a dev chat and held on screen long enough to actually read.
 Tier 5 also drops the "время поджимает" / "time's running short" tail that the
 2026-07-30 pass added: a founder call that the bare fact ("{name} долго не
 отвечает") carries the urgency on its own without an explicit pressure phrase.
-The no-overlap ladder mirrors the same edit (`peerWaitNoOverlapLate` loses its
-matching tail).
+
+**The no-overlap ladder was reworded a second time the same day, to change what
+it CLAIMS rather than just its length.** The first rewrite still framed it as a
+mismatch — `Ваше время с {name} не совпало` — which reads as a dead end the user
+needs to go fix. It isn't one: both sides already answered, the calendar keeps
+polling, and the state resolves itself the moment either side's next pick lands
+on a slot the other already marked (§3.6). The line now says `Согласовываем
+время с {name}` — mid-negotiation, not broken — and the late variant
+(`peerWaitNoOverlapLate`, past 24 h) is `Всё ещё согласовываем время с {name}`,
+adding duration without implying failure or asking the user to act.
 
 **These lines carry no icon — no leading emoji and no animated `<tg-emoji>`
 glyph** (founder decision 2026-07-30). An intermediate revision gave each tier

@@ -87,7 +87,11 @@ function elapsedMs(startedAt: Date | null | undefined, now: Date): number {
  * The line to show for a wait that started at `startedAt`, personalised with the
  * partner's first name — both ladders name the partner (2026-07-31; the
  * no-overlap lines used to name no one, but the founder-approved rewrite has
- * them state whose calendar it is: "Ваше время с {name} не совпало").
+ * them state whose calendar it is: "Согласовываем время с {name}"). Reworded
+ * again the same day: an earlier pass framed it as "your times didn't
+ * overlap", which read as a dead end needing a fix, when it's actually just
+ * mid-negotiation — the calendar keeps polling and either side widening their
+ * pick resolves it. "Согласовываем" says "in progress", not "broken".
  *
  * `firstName` is a required onboarding field and these waits only happen on a
  * live match, so the anonymous fallback is defensive rather than expected — but

@@ -430,6 +430,55 @@ describe("match-engine SQL (integration)", () => {
     expect(rows.length).toBe(0);
   });
 
+  it("cooldown boundary: a candidate matched EXACTLY at the cutoff is still excluded (strict <)", async () => {
+    // Regression pin for the daily-cadence audit's §4.5 finding: the filter
+    // is `last_matched_at < cutoff`, strict inequality. Under weekly cadence
+    // (7-day interval, 24h cooldown) this boundary is never actually reached
+    // by real traffic. Under daily cadence the batch runs exactly
+    // MATCH_COOLDOWN_MS after the previous one, so a candidate whose
+    // `lastMatchedAt` lands precisely on the cutoff — which happens on every
+    // single cycle, not as an edge case — is silently excluded from the very
+    // next batch with no error anywhere. This test exists so a future change
+    // to the comparison operator is a deliberate decision, not an accident.
+    const seeker = await seedFullUser({ gender: "male", preference: "women" });
+    const cutoff = new Date(Date.now() - MATCH_COOLDOWN_MS);
+    await seedFullUser({
+      gender: "female",
+      preference: "men",
+      lastMatchedAt: cutoff, // exactly on the boundary
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(0.5),
+      "ua:kyiv",
+      "female",
+      cutoff,
+    );
+
+    expect(rows.length).toBe(0);
+  });
+
+  it("cooldown boundary: a candidate matched 1ms before the cutoff IS eligible", async () => {
+    const seeker = await seedFullUser({ gender: "male", preference: "women" });
+    const cutoff = new Date(Date.now() - MATCH_COOLDOWN_MS);
+    await seedFullUser({
+      gender: "female",
+      preference: "men",
+      lastMatchedAt: new Date(cutoff.getTime() - 1), // just older than the boundary
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(0.5),
+      "ua:kyiv",
+      "female",
+      cutoff,
+    );
+
+    expect(rows.length).toBe(1);
+  });
+
   it("excludes candidates with an existing open match against the seeker", async () => {
     const seeker = await seedFullUser({
       gender: "male",

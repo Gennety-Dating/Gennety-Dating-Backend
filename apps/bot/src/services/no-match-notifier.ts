@@ -28,7 +28,7 @@ import {
  *
  * The query intentionally re-derives "who has no match this drop" from
  * the DB (active users without a `Match.dispatchedAt` in the last hour)
- * instead of being handed a list from `runWeeklyBatch` — this keeps the
+ * instead of being handed a list from `runDropBatch` — this keeps the
  * cron safe to re-run / fire late without state coupling.
  */
 
