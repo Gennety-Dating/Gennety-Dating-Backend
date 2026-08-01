@@ -1,6 +1,7 @@
 import type { Api, RawApi } from "grammy";
 import { prisma, type Prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
+import { notifyFounderPurchaseRefunded } from "./founder-notify.js";
 
 /**
  * Venue-change (§3.7b) Stars refunds and their durable retry.
@@ -40,7 +41,9 @@ export const VENUE_PROCESSING_STALE_MS = 5 * 60 * 1000;
 /** The columns the settle path and the sweep both need. */
 export const VENUE_PURCHASE_SELECT = {
   id: true,
+  userId: true,
   status: true,
+  amountStars: true,
   externalPaymentId: true,
 } satisfies Prisma.VenueChangePurchaseSelect;
 
@@ -87,6 +90,15 @@ export async function refundVenueChangePurchase(
       data: { status: targetStatus, resolvedAt: new Date(), refundError: null },
     })
     .catch(() => {});
+  // Founder ops feed — keeps the DM honest: the purchase was announced when
+  // the Stars moved, so the reversal has to be announced too.
+  void notifyFounderPurchaseRefunded({
+    userId: purchase.userId,
+    kind: "venue_change",
+    amountStars: purchase.amountStars,
+    reason: targetStatus,
+    externalPaymentId: purchase.externalPaymentId,
+  });
   return true;
 }
 
@@ -118,7 +130,9 @@ export async function sweepVenueChangeRefunds(
     },
     select: {
       id: true,
+      userId: true,
       status: true,
+      amountStars: true,
       externalPaymentId: true,
       user: { select: { telegramId: true, language: true } },
     },
@@ -142,7 +156,13 @@ export async function sweepVenueChangeRefunds(
         : VENUE_PURCHASE_REFUNDED_RACE;
     const ok = await refundVenueChangePurchase(
       api,
-      { id: row.id, status: row.status, externalPaymentId: row.externalPaymentId },
+      {
+        id: row.id,
+        userId: row.userId,
+        status: row.status,
+        amountStars: row.amountStars,
+        externalPaymentId: row.externalPaymentId,
+      },
       row.user.telegramId,
       target,
     );

@@ -8,6 +8,7 @@ import {
   verifyStorePayment,
 } from "../../services/ticket-payment.js";
 import { grantTickets } from "../../services/ticket-wallet.js";
+import { notifyFounderPurchase } from "../../services/founder-notify.js";
 import {
   getActiveDiscount,
   discountedCents,
@@ -193,6 +194,17 @@ export function createTicketStoreRouter(): Router {
       reason: "store_purchase",
       amountCents,
       bundleSize: bundle.count,
+    });
+    // Founder ops feed. The mock rail moves no real money and 404s while
+    // `TICKET_STARS_ENABLED` is on, so this only ever fires on a mock-config
+    // deployment — the DM says so explicitly rather than reading as a sale.
+    void notifyFounderPurchase({
+      userId: user.id,
+      kind: "tickets",
+      provider: "mock",
+      amountCents,
+      currency: "USD",
+      detail: `${bundle.count} ticket${bundle.count === 1 ? "" : "s"} · баланс ${balance}`,
     });
     // Consume the one-time discount on the purchase that actually used it.
     if (discountedSingle) await consumeActiveDiscount(user.id);

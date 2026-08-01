@@ -55,6 +55,7 @@ import {
 import { fetchPlacePhotoName } from "../../services/venue.js";
 import { isPremiumHeadActive } from "../../services/premium.js";
 import { isUniqueViolation } from "../../services/ticket-wallet.js";
+import { notifyFounderPurchase } from "../../services/founder-notify.js";
 import {
   refundVenueChangePurchase,
   VENUE_PURCHASE_PROCESSING,
@@ -1617,6 +1618,18 @@ export async function settleVenuePayment(
     }
     throw err;
   }
+
+  // Founder ops feed. After the exactly-once row, so a redelivered
+  // `successful_payment` (which returns above) never re-announces the sale.
+  void notifyFounderPurchase({
+    userId: payer.id,
+    kind: "venue_change",
+    provider: "telegram_stars",
+    amountStars: env.VENUE_CHANGE_STARS,
+    detail: match.venueChangeName ? `новое место: ${match.venueChangeName}` : "смена места",
+    matchId,
+    externalPaymentId: telegramChargeId,
+  });
 
   const wasExpress = match.venueChangeExpressAt != null;
   const claim = await prisma.match.updateMany({

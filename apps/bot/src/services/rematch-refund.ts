@@ -16,6 +16,7 @@ import {
   REMATCH_REFUND_FAILED,
   type RematchRunResult,
 } from "./rematch.js";
+import { notifyFounderPurchaseRefunded } from "./founder-notify.js";
 
 /**
  * Rows stuck in `processing` for longer than this are treated as abandoned —
@@ -67,12 +68,25 @@ export async function refundRematchPurchase(
     return false;
   }
 
-  await prisma.rematchPurchase
+  const settled = await prisma.rematchPurchase
     .update({
       where: { id: purchase.id },
       data: { status: targetStatus, resolvedAt: new Date(), refundError: null },
+      select: { userId: true, amountStars: true, externalPaymentId: true },
     })
-    .catch(() => {});
+    .catch(() => null);
+  // Founder ops feed — the purchase was announced the instant the Stars moved
+  // (a Rematch refund can follow seconds later), so the reversal is announced
+  // too rather than leaving a sale in the feed that no longer exists.
+  if (settled) {
+    void notifyFounderPurchaseRefunded({
+      userId: settled.userId,
+      kind: "rematch",
+      amountStars: settled.amountStars,
+      reason: targetStatus,
+      externalPaymentId: settled.externalPaymentId,
+    });
+  }
   return true;
 }
 

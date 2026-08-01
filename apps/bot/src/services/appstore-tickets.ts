@@ -6,6 +6,7 @@ import {
 } from "./appstore.js";
 import { env } from "../config.js";
 import { getBalance, grantTickets, isUniqueViolation } from "./ticket-wallet.js";
+import { notifyFounderPurchase, notifyFounderPurchaseRefunded } from "./founder-notify.js";
 
 /**
  * StoreKit 2 ticket credits + refund claw-backs (IOS_APP_ROADMAP task 0.10).
@@ -56,6 +57,19 @@ export async function creditAppStoreTransaction(
       count: credited,
       reason: "store_purchase",
       bundleSize: perPurchase,
+      ...(tx.priceCents != null ? { amountCents: tx.priceCents } : {}),
+      externalPaymentId: `appstore:${tx.transactionId}`,
+    });
+    // Founder ops feed — the iOS twin of the Telegram Stars store purchase.
+    // After the exactly-once credit, so a re-submitted transaction (the
+    // `already_processed` branch below) never re-announces the sale.
+    void notifyFounderPurchase({
+      userId,
+      kind: "tickets",
+      provider: "app_store",
+      amountCents: tx.priceCents,
+      currency: tx.currency,
+      detail: `${credited} ticket${credited === 1 ? "" : "s"} · ${tx.productId ?? "?"} · баланс ${balance}`,
       externalPaymentId: `appstore:${tx.transactionId}`,
     });
     return { status: "credited", balance, credited };
@@ -106,6 +120,12 @@ export async function refundAppStoreTransaction(
         },
       }),
     ]);
+    void notifyFounderPurchaseRefunded({
+      userId: credit.userId,
+      kind: "tickets",
+      reason: "Apple refunded/revoked the purchase",
+      externalPaymentId: `appstore:${tx.transactionId}`,
+    });
     return { status: "refunded", balance: updated.ticketBalance };
   } catch (err) {
     if (isUniqueViolation(err)) return { status: "already_refunded" };

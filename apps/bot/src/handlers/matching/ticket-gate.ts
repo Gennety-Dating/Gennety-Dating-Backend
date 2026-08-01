@@ -9,10 +9,15 @@ import { startScheduling, sendCalendarCard } from "./scheduler.js";
 import {
   amountForScope,
   ticketsForScope,
+  gateStarsForScope,
   type TicketScope,
   type PaymentMode,
   refundTicketPayment,
 } from "../../services/ticket-payment.js";
+import {
+  notifyFounderPurchase,
+  notifyFounderPurchaseRefunded,
+} from "../../services/founder-notify.js";
 import { spendTickets, grantTickets, isUniqueViolation } from "../../services/ticket-wallet.js";
 import {
   activeDiscountFromColumns,
@@ -799,6 +804,7 @@ async function recordStarsGatePayment(input: {
         reason: GATE_PAYMENT_REASON,
         matchId: input.matchId,
         bundleSize: ticketsForScope(input.scope),
+        amountStars: gateStarsForScope(input.scope),
         externalPaymentId: input.chargeId,
       },
       select: {
@@ -809,6 +815,23 @@ async function recordStarsGatePayment(input: {
         externalPaymentId: true,
         bundleSize: true,
       },
+    });
+    // Founder ops feed. Only a genuinely NEW charge row reaches here — a
+    // redelivery returns the `existing` row above — so the sale is announced
+    // exactly once, at the moment Telegram confirmed the Stars moved.
+    void notifyFounderPurchase({
+      userId: payer.id,
+      kind: "date_ticket",
+      provider: "telegram_stars",
+      amountStars: gateStarsForScope(input.scope),
+      detail:
+        input.scope === "both"
+          ? "оба слота (заплатил за двоих)"
+          : input.scope === "partner"
+            ? "слот партнёра"
+            : "свой слот",
+      matchId: input.matchId,
+      externalPaymentId: input.chargeId,
     });
     return record;
   } catch (error) {
@@ -877,7 +900,7 @@ async function refundStarsLedgerRecord(
     if (!isAlreadyRefundedError(error)) return false;
   }
 
-  await prisma.ticketLedger.updateMany({
+  const settled = await prisma.ticketLedger.updateMany({
     where: {
       id: record.id,
       reason: {
@@ -886,6 +909,16 @@ async function refundStarsLedgerRecord(
     },
     data: { reason: GATE_REFUNDED_REASON },
   });
+  // Founder ops feed. Gated on the CAS actually flipping the row, so a
+  // concurrent retry that lost the race doesn't announce the refund twice.
+  if (settled.count > 0) {
+    void notifyFounderPurchaseRefunded({
+      userId: record.userId,
+      kind: "date_ticket",
+      reason: "гейт не закрылся — Stars вернулись плательщику",
+      externalPaymentId: chargeId,
+    });
+  }
   return true;
 }
 

@@ -206,6 +206,9 @@ describe("handleSuccessfulPayment", () => {
       count: 3,
       reason: "store_purchase",
       bundleSize: 3,
+      // Star prices are env-tunable, so what was actually charged is frozen on
+      // the row rather than re-derived from `bundleSize` by a later reader.
+      amountStars: 830,
       externalPaymentId: "charge_1",
     });
     expect(reply).toHaveBeenCalledTimes(1);

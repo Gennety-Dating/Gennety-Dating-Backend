@@ -412,6 +412,13 @@ model TicketLedger {
   matchId           String?  @map("match_id") @db.Uuid
   /// Money attached to a purchase row (cents) — null for free bonuses/spends.
   amountCents       Int?     @map("amount_cents")
+  /// Telegram Stars charged, frozen at purchase time. Star prices are
+  /// env-tunable (`TICKET_BUNDLE_STARS`), so a paid row must carry what was
+  /// actually charged rather than let a reader re-derive today's price from
+  /// `bundleSize` — the same rule `RematchPurchase`/`VenueChangePurchase`
+  /// already follow. Null for free bonuses/spends and for non-Stars rails
+  /// (App Store rows carry `amountCents` instead).
+  amountStars       Int?     @map("amount_stars")
   /// Bundle size for `store_purchase` rows (1 / 3 / 6).
   bundleSize        Int?     @map("bundle_size")
   /// Unique provider charge id (Telegram Stars `telegram_payment_charge_id`)

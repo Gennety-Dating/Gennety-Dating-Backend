@@ -5,16 +5,26 @@ import { env } from "../config.js";
 import { downloadProfileImage } from "./storage.js";
 import { getMainBotApi } from "./main-bot-api.js";
 import { buildWeeklyMatchesReport } from "./weekly-matches-report.js";
+import {
+  formatPurchaseAmount,
+  purchaseKindLabel,
+  starsToUsdCents,
+  type PurchaseKind,
+} from "./purchases.js";
 import type { Venue } from "./venue.js";
 
 /**
  * Founder-notify feed (private ops feed, gated by `FOUNDER_NOTIFY_ENABLED`).
  *
- * Three one-way notifications to the founder's personal Telegram via a
- * SEPARATE founder bot (`FOUNDER_BOT_TOKEN` → `FOUNDER_TELEGRAM_ID`):
+ * One-way notifications to the founder's personal Telegram via a SEPARATE
+ * founder bot (`FOUNDER_BOT_TOKEN` → `FOUNDER_TELEGRAM_ID`):
  *   1. `notifyFounderNewUser`      — new registration: full profile + photos.
  *   2. `notifyFounderWeeklyMatches`— weekly matches report link (Thu batch).
  *   3. `notifyFounderDateScheduled`— a date locked in: both date cards + venue.
+ *   4. `notifyFounderAccountClosed`— freeze / GDPR delete: profile + phone.
+ *   5. `notifyFounderPurchase` / `notifyFounderPurchaseRefunded` — every real
+ *      money movement (ticket store, date gate, Premium, Rematch, venue
+ *      change; Telegram Stars and App Store alike), with who paid and how much.
  *
  * Everything here is BEST-EFFORT and fire-and-forget: a failure must never
  * touch the user-facing flow. Callers should not await the result on any hot
@@ -424,6 +434,179 @@ function buildAccountClosedHeader(
   if (user.telegramUsername) lines.push(`TG: @${user.telegramUsername}`);
   lines.push(`Telegram ID: ${user.telegramId.toString()}`);
   return truncateCaption(lines.join("\n"));
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Feature 5 — purchases (every real money movement)
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * One purchase, as the call site knows it at the moment money moved. Kept
+ * deliberately small: the notifier resolves the payer's identity itself, so a
+ * caller only has to describe the charge.
+ */
+export interface FounderPurchaseNotice {
+  userId: string;
+  kind: PurchaseKind;
+  provider: "telegram_stars" | "app_store" | "mock";
+  /** Stars charged (Telegram rail). */
+  amountStars?: number | null;
+  /** Exact money in cents (App Store / mock rail). */
+  amountCents?: number | null;
+  currency?: string | null;
+  /** Short human description: "3 tickets", "оба слота", "продление". */
+  detail?: string | null;
+  matchId?: string | null;
+  externalPaymentId?: string | null;
+}
+
+/**
+ * DM the founder that someone paid. Fired from the SETTLEMENT point of each
+ * rail — the same write whose unique provider-charge id makes the purchase
+ * exactly-once — so a redelivered `successful_payment` (Telegram retry, App
+ * Store re-submit) never produces a second message: the caller has already
+ * returned on the duplicate before reaching this.
+ *
+ * Identity is the point of the notification, so it leads with whatever
+ * actually reaches the person: the Telegram `@username` on the Telegram rail,
+ * the phone number on the mobile one (a mobile-only account has a synthetic
+ * negative `telegramId` and no username at all).
+ *
+ * Best-effort like every other notifier here: a failure is logged and never
+ * touches the payment path.
+ */
+export async function notifyFounderPurchase(notice: FounderPurchaseNotice): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: notice.userId },
+      select: FOUNDER_PAYER_SELECT,
+    });
+    if (!user) return;
+
+    const amount = formatPurchaseAmount({
+      amountStars: notice.amountStars ?? null,
+      amountCents: notice.amountCents ?? null,
+      currency: notice.currency ?? null,
+      usdCents:
+        notice.amountCents ??
+        (notice.amountStars != null ? starsToUsdCents(notice.amountStars) : null),
+      amountIsEstimate: notice.amountCents == null && notice.amountStars != null,
+    });
+
+    const lines = [
+      `💰 Покупка — ${purchaseKindLabel(notice.kind)}`,
+      ...payerLines(user),
+      `💵 ${amount}`,
+    ];
+    if (notice.detail) lines.push(`🧾 ${notice.detail}`);
+    lines.push(`🏦 ${providerLabel(notice.provider)}`);
+    if (notice.matchId) lines.push(`Матч: ${notice.matchId}`);
+    if (notice.externalPaymentId) lines.push(`Charge: ${notice.externalPaymentId}`);
+
+    await api.sendMessage(founderChatId(), lines.join("\n"));
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} notifyFounderPurchase failed`, {
+      userId: notice.userId,
+      kind: notice.kind,
+      err,
+    });
+  }
+}
+
+/**
+ * DM the founder that a purchase came back. Without this the feed would carry
+ * a sale that is no longer one — a Rematch refund fires seconds after the
+ * purchase message, and a venue-change race can refund minutes later. The
+ * admin list shows the same fact as a status; this keeps the DM honest.
+ */
+export async function notifyFounderPurchaseRefunded(notice: {
+  userId: string;
+  kind: PurchaseKind;
+  amountStars?: number | null;
+  amountCents?: number | null;
+  /** Why it came back, in the source's own words (`refunded_no_candidate`). */
+  reason?: string | null;
+  externalPaymentId?: string | null;
+}): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: notice.userId },
+      select: FOUNDER_PAYER_SELECT,
+    });
+    if (!user) return;
+
+    const amount = formatPurchaseAmount({
+      amountStars: notice.amountStars ?? null,
+      amountCents: notice.amountCents ?? null,
+      currency: null,
+      usdCents:
+        notice.amountCents ??
+        (notice.amountStars != null ? starsToUsdCents(notice.amountStars) : null),
+      amountIsEstimate: notice.amountCents == null && notice.amountStars != null,
+    });
+
+    const lines = [
+      `↩️ Возврат — ${purchaseKindLabel(notice.kind)}`,
+      ...payerLines(user),
+      `💵 ${amount}`,
+    ];
+    if (notice.reason) lines.push(`Причина: ${notice.reason}`);
+    if (notice.externalPaymentId) lines.push(`Charge: ${notice.externalPaymentId}`);
+
+    await api.sendMessage(founderChatId(), lines.join("\n"));
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} notifyFounderPurchaseRefunded failed`, {
+      userId: notice.userId,
+      err,
+    });
+  }
+}
+
+/** Prisma `select` for the payer identity block shared by both notifiers. */
+const FOUNDER_PAYER_SELECT = {
+  id: true,
+  firstName: true,
+  age: true,
+  telegramId: true,
+  telegramUsername: true,
+  phone: true,
+  email: true,
+  platform: true,
+  ticketBalance: true,
+} satisfies Prisma.UserSelect;
+
+type FounderPayer = Prisma.UserGetPayload<{ select: typeof FOUNDER_PAYER_SELECT }>;
+
+/** Who paid — the block the founder actually reads first. */
+function payerLines(user: FounderPayer): string[] {
+  const name = user.firstName ?? "—";
+  const age = user.age != null ? `, ${user.age}` : "";
+  const lines = [`👤 ${name}${age}`];
+
+  // A mobile-only account carries a synthetic NEGATIVE telegramId and no
+  // username, so the phone is the only handle that exists there.
+  const contact: string[] = [];
+  if (user.telegramUsername) contact.push(`@${user.telegramUsername}`);
+  if (user.phone) contact.push(user.phone);
+  if (contact.length === 0 && user.email) contact.push(user.email);
+  lines.push(`📞 ${contact.length > 0 ? contact.join(" · ") : "контакта нет"}`);
+
+  if (user.telegramId > 0n) lines.push(`Telegram ID: ${user.telegramId.toString()}`);
+  lines.push(`Платформа: ${user.platform} · билетов на счету: ${user.ticketBalance}`);
+  lines.push(`ID: ${user.id}`);
+  return lines;
+}
+
+function providerLabel(provider: "telegram_stars" | "app_store" | "mock"): string {
+  if (provider === "telegram_stars") return "Telegram Stars";
+  if (provider === "app_store") return "App Store";
+  return "mock (деньги не двигались)";
 }
 
 // ───────────────────────────────────────────────────────────────────────────

@@ -61,6 +61,12 @@ export async function grantTickets(args: {
   reason: TicketReason;
   matchId?: string;
   amountCents?: number;
+  /**
+   * Telegram Stars actually charged, frozen on the row. Star prices are
+   * env-tunable, so a reader must never re-derive them from `bundleSize`
+   * later — the admin purchase list and the founder feed both read this.
+   */
+  amountStars?: number;
   bundleSize?: number;
   /**
    * Provider charge id for a paid top-up (Telegram Stars
@@ -73,7 +79,8 @@ export async function grantTickets(args: {
    */
   externalPaymentId?: string;
 }): Promise<number> {
-  const { userId, count, reason, matchId, amountCents, bundleSize, externalPaymentId } = args;
+  const { userId, count, reason, matchId, amountCents, amountStars, bundleSize, externalPaymentId } =
+    args;
   if (count <= 0) return getBalance(userId);
 
   const [updated] = await prisma.$transaction([
@@ -89,6 +96,7 @@ export async function grantTickets(args: {
         reason,
         matchId: matchId ?? null,
         amountCents: amountCents ?? null,
+        amountStars: amountStars ?? null,
         bundleSize: bundleSize ?? null,
         externalPaymentId: externalPaymentId ?? null,
       },

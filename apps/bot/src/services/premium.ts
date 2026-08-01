@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@gennety/db";
 import type { Language } from "@gennety/shared";
 import { isUniqueViolation } from "./ticket-wallet.js";
+import { notifyFounderPurchase } from "./founder-notify.js";
 
 const PREMIUM_LOCALE_TAGS: Record<Language, string> = {
   en: "en-GB",
@@ -196,6 +197,21 @@ export async function activateOrExtendPremium(
         },
       }),
     ]);
+    // Founder ops feed. Placed on the PAID path only — the complimentary
+    // referral/promo grant below has its own function and moves no money — and
+    // after the ledger insert, so the duplicate-charge branch (a provider
+    // redelivery) never announces the same charge twice. Covers both rails:
+    // Telegram Stars settles here, and so does the App Store transaction route.
+    void notifyFounderPurchase({
+      userId,
+      kind: "premium",
+      provider: provider === "app_store" ? "app_store" : "telegram_stars",
+      amountStars: (currency ?? "").toUpperCase() === "XTR" ? (amount ?? null) : null,
+      amountCents: (currency ?? "").toUpperCase() === "XTR" ? null : (amount ?? null),
+      currency: currency ?? null,
+      detail: event === "renewed" ? "продление подписки" : "первый месяц",
+      externalPaymentId,
+    });
     return { applied: true, premiumUntil: updated.premiumUntil };
   } catch (err) {
     if (isUniqueViolation(err)) {

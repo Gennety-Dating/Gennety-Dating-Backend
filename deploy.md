@@ -1,5 +1,72 @@
 # Gennety Dating Deploy
 
+**PENDING — purchase notifications + admin revenue ledger.** Not deployed yet.
+**No env change, no flag change, no Mini App change** (`apps/webapp`
+untouched) — but it needs an **additive `db:push` BEFORE the restart**, and it
+requires a **dashboard redeploy** (separate repo,
+`~/Desktop/gennety-admin-dashboard`, auto-deploys to Vercel on push).
+
+One new nullable `ticket_ledger` column (`amount_stars`) is WRITTEN on every
+Stars store purchase and every date-gate charge, and SELECTED by the admin
+purchase list, so a DB missing it throws `P2022` on the first purchase after
+the restart — the PM2 crash-loop this file warns about. Verify additive first
+(expect one `ADD COLUMN`, zero `DROP`):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+What ships:
+
+- **Every real purchase now DMs the founder ops feed** (ticket store, the
+  §3.5b date-ticket gate, Premium, Rematch, venue change — Telegram Stars AND
+  App Store), carrying who paid (`@username`, or the phone number on the
+  mobile rail where a synthetic negative `telegramId` and no username is
+  normal), what they bought, and how much. **Refunds are announced too**: a
+  Rematch refund can follow its own purchase within seconds, so a
+  purchase-only feed would leave sales in the DM that no longer exist.
+- **`GET /admin/purchases`** — the revenue ledger with filters, pagination and
+  totals; plus a spend column on `/admin/users` and a full purchase block on
+  `/admin/users/:id`. New **Purchases** tab in the dashboard.
+- `ticket_ledger.amount_stars` freezes what was actually charged. Star prices
+  are env-tunable, so a reader must never re-derive a historical price from
+  `bundleSize`; before this a Stars purchase recorded no money figure at all.
+
+**Three things worth knowing before the restart:**
+
+- **The founder DMs ride `FOUNDER_NOTIFY_ENABLED`** (on in production) and the
+  same production-only runtime guard as the rest of the feed, so a local dev
+  purchase can never reach the real ops DM. Nothing new to configure.
+- **Notifications fire from each rail's settlement write** — the same one whose
+  unique provider charge id already makes the purchase exactly-once — so a
+  redelivered `successful_payment` returns on the duplicate branch before the
+  notifier runs. No new idempotency column, and no risk of double-announcing.
+- **Dollar figures derived from Stars are estimates and say so.** Telegram
+  publishes no Stars→USD rate; the code uses the documented $0.02/⭐ ticket
+  rate and marks every such number `≈`. App Store rows carry Apple's real
+  price. Expect the two to disagree slightly with a Telegram payout statement.
+
+Post-deploy check — production has had **0 purchases ever**, so the list will
+legitimately be empty until someone actually pays; the endpoint answering `200`
+with zero totals is the correct result:
+
+```sh
+curl -s -H "Authorization: Bearer $ADMIN_API_KEY" \
+  'https://api-admin.gennety.com/admin/purchases?limit=5' | head -c 400
+psql "$DATABASE_URL" -c "select count(*) from ticket_ledger where amount_stars is not null;"
+```
+
+**Rollback:** revert the code in both repos and restart; the additive column
+can stay (nothing reads it if the code is reverted). There is no flag — the
+notifications follow `FOUNDER_NOTIFY_ENABLED`, which also silences them.
+
+---
+
 **PENDING — audit fixes, 2026-08-01 (NOMATCH-2 + chat-queue + card fonts).**
 Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change.** Ships with whatever restart carries the blocks

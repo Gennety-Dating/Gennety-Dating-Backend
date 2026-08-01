@@ -29,6 +29,9 @@ vi.mock("../../config.js", () => ({
     TICKET_PAYMENT_WINDOW_HOURS: 1,
     TICKET_PRICE_CENTS: 699,
     TICKET_PAYMENT_MODE: "mock",
+    // The gate freezes the Stars price on its ledger row, so the Star bundle
+    // table has to exist here like it does in the real config.
+    TICKET_BUNDLE_STARS: { 1: 350, 3: 830, 6: 1350 },
     MESSAGE_EFFECT_MUTUAL_ID: "fx-hearts",
   },
 }));
@@ -41,6 +44,8 @@ vi.mock("./scheduler.js", () => ({
 vi.mock("../../services/ticket-wallet.js", () => ({
   spendTickets: vi.fn().mockResolvedValue({ ok: true }),
   grantTickets: vi.fn().mockResolvedValue(undefined),
+  isUniqueViolation: (err: unknown) =>
+    typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002",
 }));
 
 import { prisma } from "@gennety/db";

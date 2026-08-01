@@ -47,6 +47,8 @@ const okTx = {
   quantity: 1,
   revocationDate: null,
   expiresDate: null,
+  priceCents: 1647,
+  currency: "USD",
 };
 
 beforeEach(() => {
@@ -72,6 +74,9 @@ describe("creditAppStoreTransaction", () => {
       count: 3,
       reason: "store_purchase",
       bundleSize: 3,
+      // Apple reports the charged price; it is frozen on the row so the admin
+      // purchase list shows a real number rather than a Stars estimate.
+      amountCents: 1647,
       externalPaymentId: "appstore:tx-1",
     });
   });

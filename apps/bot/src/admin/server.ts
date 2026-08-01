@@ -24,6 +24,8 @@ import { onboardingFunnelRouter } from "./routes/onboarding-funnel.js";
 import { venueConcentrationRouter } from "./routes/venue-concentration.js";
 import { dialogsRouter } from "./routes/dialogs.js";
 import { opsRouter } from "./routes/ops.js";
+import { purchasesRouter } from "./routes/purchases.js";
+import { purchaseSummariesForUsers, purchasesForUser } from "../services/purchases.js";
 import { isUuid } from "./utils/uuid.js";
 
 // ---------------------------------------------------------------------------
@@ -175,6 +177,8 @@ app.use(dialogsRouter);
 // plus the match ROW list. Mounted after the analytics routers so a future
 // `/admin/analytics/*` path can never be shadowed by one of these.
 app.use(opsRouter);
+// Revenue surface: every real money movement, newest first, payer inlined.
+app.use(purchasesRouter);
 
 type AdminProfileSnapshot = {
   height: number | null;
@@ -634,8 +638,27 @@ app.get("/admin/users", async (req: Request, res: Response) => {
       prisma.user.count({ where }),
     ]);
 
+    // Spend column. One batched read for the whole page rather than N per row,
+    // so the list gains a revenue column without an N+1.
+    const spend = await purchaseSummariesForUsers(data.map((u) => u.id));
+
     // Serialize BigInt telegramId to string for JSON safety
-    const serialized = data.map((u) => ({ ...u, telegramId: u.telegramId.toString() }));
+    const serialized = data.map((u) => {
+      const summary = spend.get(u.id);
+      return {
+        ...u,
+        telegramId: u.telegramId.toString(),
+        // Same field name as the user card's summary, so a client renders the
+        // spend column and the card's header from one shape.
+        purchaseSummary: {
+          count: summary?.count ?? 0,
+          stars: summary?.stars ?? 0,
+          usdCents: summary?.usdCents ?? 0,
+          refundedCount: summary?.refundedCount ?? 0,
+          lastPurchaseAt: summary?.lastPurchaseAt?.toISOString() ?? null,
+        },
+      };
+    });
 
     res.json({ data: serialized, total, limit, offset });
   } catch (err) {
@@ -725,7 +748,7 @@ app.get("/admin/users/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    const [user, matches, profilerAnswers] = await Promise.all([
+    const [user, matches, profilerAnswers, purchases] = await Promise.all([
       prisma.user.findUnique({ where: { id }, select: USER_DETAIL_SELECT }),
       // Every pairing this person has been in, either side. The card's job is
       // to explain a user's situation, and "has never been matched" vs "was
@@ -754,6 +777,10 @@ app.get("/admin/users/:id", async (req: Request, res: Response) => {
         orderBy: { updatedAt: "desc" },
         select: { questionId: true, priority: true, answerText: true, skipped: true },
       }),
+      // Everything this person has ever paid for, plus their spend summary —
+      // the same read model the `/admin/purchases` list uses, so the card and
+      // the list can never disagree about a charge.
+      purchasesForUser(id),
     ]);
 
     if (!user) {
@@ -785,6 +812,14 @@ app.get("/admin/users/:id", async (req: Request, res: Response) => {
         };
       }),
       profilerAnswers,
+      purchases: purchases.rows.map((row) => ({
+        ...row,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      purchaseSummary: {
+        ...purchases.summary,
+        lastPurchaseAt: purchases.summary.lastPurchaseAt?.toISOString() ?? null,
+      },
     });
   } catch (err) {
     console.error("[admin] user detail error:", err);

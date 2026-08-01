@@ -16,6 +16,7 @@ import { grantTickets, isUniqueViolation } from "../services/ticket-wallet.js";
 import { gateStarsForScope } from "../services/ticket-payment.js";
 import { recordChatEventForChat } from "../services/chat-events.js";
 import { activateOrExtendPremium, formatPremiumUntil } from "../services/premium.js";
+import { notifyFounderPurchase } from "../services/founder-notify.js";
 
 /**
  * Telegram Stars (XTR) payment handlers.
@@ -229,6 +230,7 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
       count,
       reason: "store_purchase",
       bundleSize: count,
+      amountStars: payment.total_amount,
       externalPaymentId: payment.telegram_payment_charge_id,
     });
   } catch (err) {
@@ -241,6 +243,17 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
     }
     throw err;
   }
+
+  // Founder ops feed. Fired after the exactly-once credit landed, so the
+  // duplicate return above means a redelivery never re-announces the sale.
+  void notifyFounderPurchase({
+    userId: user.id,
+    kind: "tickets",
+    provider: "telegram_stars",
+    amountStars: payment.total_amount,
+    detail: `${count} ticket${count === 1 ? "" : "s"} · баланс ${balance}`,
+    externalPaymentId: payment.telegram_payment_charge_id,
+  });
 
   const lang = (user.language ?? "en") as Language;
   const text = t(lang, "ticketStorePurchased", { count, balance });
@@ -418,6 +431,18 @@ async function handleRematchSuccessfulPayment(
     }
     throw err;
   }
+
+  // Founder ops feed. Announced here — after the durable pre-transaction row,
+  // before the engine runs — because THIS is the moment money moved. A run
+  // that delivers nothing is refunded below and announced as a refund, so the
+  // feed never silently carries a sale that came back.
+  void notifyFounderPurchase({
+    userId: user.id,
+    kind: "rematch",
+    provider: "telegram_stars",
+    amountStars: payment.total_amount,
+    externalPaymentId: payment.telegram_payment_charge_id,
+  });
 
   // (2) Re-validate + run. Any throw leaves the row `processing`, which the
   // hourly sweep refunds — never a silent loss.

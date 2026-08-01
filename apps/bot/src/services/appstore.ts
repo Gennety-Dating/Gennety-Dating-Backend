@@ -90,6 +90,16 @@ export interface AppStoreTransaction {
   /** Auto-renewable subscription paid-through instant (ms epoch); null for
    * consumables. Used as the Premium `periodEnd`. */
   expiresDate: number | null;
+  /**
+   * What Apple actually charged, in cents of {@link currency}. Apple reports
+   * `price` in MILLIUNITS (9990 = $9.99) and only on reasonably recent
+   * App Store Server API versions, so both fields are optional and parsed
+   * defensively — an older payload simply yields `null` and the purchase is
+   * still recorded, just without a money figure.
+   */
+  priceCents: number | null;
+  /** ISO currency of {@link priceCents} (`USD`, `EUR`, …). */
+  currency: string | null;
 }
 
 export type TransactionLookup =
@@ -109,6 +119,13 @@ function toTransaction(payload: Record<string, unknown>): AppStoreTransaction | 
     quantity: typeof payload.quantity === "number" && payload.quantity > 0 ? payload.quantity : 1,
     revocationDate: typeof payload.revocationDate === "number" ? payload.revocationDate : null,
     expiresDate: typeof payload.expiresDate === "number" ? payload.expiresDate : null,
+    // Apple reports `price` in milliunits of the currency (9990 = $9.99), so
+    // cents = price / 10.
+    priceCents:
+      typeof payload.price === "number" && payload.price > 0
+        ? Math.round(payload.price / 10)
+        : null,
+    currency: typeof payload.currency === "string" ? payload.currency : null,
   };
 }
 

@@ -27,6 +27,8 @@ function tx(over: Partial<AppStoreTransaction> = {}): AppStoreTransaction {
     quantity: 1,
     revocationDate: null,
     expiresDate: EXPIRES,
+    priceCents: 999,
+    currency: "USD",
     ...over,
   };
 }

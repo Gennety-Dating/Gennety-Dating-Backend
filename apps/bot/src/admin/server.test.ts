@@ -95,6 +95,20 @@ vi.mock("@gennety/db", () => ({
       findUnique: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({}),
     },
+    // The four tables the unified purchase read model (`services/purchases.ts`)
+    // reads for the user list's spend column and the user card's purchase block.
+    ticketLedger: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    subscriptionLedger: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    rematchPurchase: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    venueChangePurchase: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 

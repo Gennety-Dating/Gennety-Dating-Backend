@@ -117,6 +117,8 @@ describe("getVerifiedTransaction", () => {
         quantity: 1,
         revocationDate: null,
         expiresDate: null,
+        priceCents: null,
+        currency: null,
       },
     });
   });

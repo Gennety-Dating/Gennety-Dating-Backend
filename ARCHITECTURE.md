@@ -502,7 +502,8 @@ Append-only audit of every ticket-wallet movement or payment/refund transition
 `gate_refund_pending`/`gate_refunded`, plus the retired legacy
 `verification_bonus` that survives only on historical rows and is never written
 anymore, optional
-`matchId`/`amountCents`/`bundleSize`/`externalPaymentId`, `createdAt`;
+`matchId`/`amountCents`/**`amountStars`**/`bundleSize`/`externalPaymentId`,
+`createdAt`;
 `onDelete: Cascade` from `users`). The running sum of `delta` equals
 `User.ticketBalance`, which is materialized for fast reads; both are written in
 the same transaction by `services/ticket-wallet.ts`. Photo/video onboarding
@@ -528,6 +529,14 @@ settlement reason advances atomically with the match-slot CAS to `gate_settled`
 or a durable refund/surplus state. The hourly worker retries pending provider
 refunds and wallet credits; a `gate_payment` row still unprocessed after five
 minutes is treated as an abandoned pre-transaction charge and safely refunded.
+**`amountStars`** (added 2026-08-01) freezes the Stars actually charged on a
+paid row, exactly as `rematch_purchases` / `venue_change_purchases` already do.
+Star prices are env-tunable (`TICKET_BUNDLE_STARS`), so a reader must never
+re-derive a historical price from `bundleSize`; before it, a Stars purchase
+recorded no money figure at all and the admin revenue view had nothing to show.
+Nullable — free grants, spends, and the App Store rail (which carries
+`amountCents`) leave it null, and rows predating the column keep reading as
+"price unknown" rather than as zero.
 Indexed `(userId, createdAt)`.
 Inert unless `TICKET_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b.
 
@@ -853,8 +862,12 @@ state, the contact rails, the `Profile` columns that decide eligibility
 (`embeddingDirty`, `homeCityKey`, `standbyCount`, `silentIgnoreCount`,
 `lastMatchedAt`), the attractiveness seed and its per-photo audit
 (`eloScore`/`eloSeededAt`/`eloSeedDetails`/`photoFaceScores`), the vibe axes,
-plus every `Match` this user has been in (both decisions inlined) and their
-Profiler answers. The blind-decision invariant is a USER-facing rule, not an
+plus every `Match` this user has been in (both decisions inlined), their
+Profiler answers, and (2026-08-01) their full `purchases[]` + `purchaseSummary`
+— the same read model `/admin/purchases` uses, so the card and the list can
+never disagree about a charge. The paginated `/admin/users` list carries the
+matching `purchaseSummary` per row, batched server-side for the whole page
+rather than N+1'd. The blind-decision invariant is a USER-facing rule, not an
 admin one — "he accepted, she never answered" is the whole answer to most
 support questions, so both sides' decisions are shown here.
 
@@ -867,6 +880,7 @@ external callers kept reaching for:
 | GET | `/admin/health` | Liveness + readiness. Answers **503**, not 200, when the database is unreachable — a health check that reports healthy while Postgres is down silences the one alarm that matters. Carries `uptimeSeconds`, `nodeVersion`, and DB latency. |
 | GET | `/admin/stats` | Headline counters in ONE call: users by status, onboarding by step, verification by status, matches by status (+ `live` = the single-live-match states), reports by tier. Every bucket is zero-filled, so a missing group reads as `0` rather than `undefined`. |
 | GET | `/admin/dashboard` | The `/admin/stats` superset plus derived rates (`signupsLast7Days`, `activeRate`, `verifiedRate`, `matchAcceptanceRate`) and the 10 most recent matches. Shares `collectStats()` with `/admin/stats` so the two can never drift. |
+| GET | `/admin/purchases` | The revenue ledger — every real money movement, newest first, with the payer inlined (`?kind=`, `?status=`, `?userId=`, `?since=`, `?until=`, paginated). Carries `totals` + `byKind` over the WHOLE filtered set, not just the page. Deliberately **uncached**, unlike the analytics tabs: a founder checking whether a payment landed must not be served a ten-minute-old answer. |
 | GET | `/admin/matches` | The match **row** list — the pairs themselves, newest first, both participants inlined, `?status=` filtered and paginated. Distinct from `/admin/analytics/matches`, which is the aggregate funnel and cannot answer "which pairs exist right now". `telegramId` is serialized to a string (BigInt is not JSON-safe). |
 
 Two paths are **aliases**, registered on the same handler as their canonical
@@ -1179,3 +1193,50 @@ precisely why registration has to be gated. Accounts created before the gate
 keep their city and are offered a one-tap move to a launched market
 (`apps/bot/src/handlers/menu/city-switch.ts`, reused by the weekly no-match DM
 and reflected in the pinned status banner).
+
+# Purchase ownership (revenue feed + admin ledger)
+
+`apps/bot/src/services/purchases.ts` owns the **unified purchase read model**:
+one `PurchaseRow` shape over the four tables that already record money
+exactly-once — `ticket_ledger` (store top-ups + the `gate_*` date-gate rows),
+`subscription_ledger` (Premium charges and renewals), `rematch_purchases`, and
+`venue_change_purchases`.
+
+There is deliberately **no `purchases` table**. A fifth table dual-written
+alongside those four would be a second source of truth that can drift from the
+one the refund rails actually read and mutate — and every refund path in the
+product (the hourly rematch/venue sweeps, the gate expiry worker, the App Store
+revoke webhook) writes to the originals. So the founder DM, the admin list, and
+the per-user card are all readers of the same four tables and cannot disagree
+about a charge's status.
+
+Two consumers:
+
+- **Founder feed** (`services/founder-notify.ts` → `notifyFounderPurchase` /
+  `notifyFounderPurchaseRefunded`, gated by `FOUNDER_NOTIFY_ENABLED`). Fired
+  from the settlement point of each rail — the SAME write whose unique provider
+  charge id makes the purchase exactly-once — so a redelivered
+  `successful_payment` or a re-submitted App Store transaction returns on the
+  duplicate branch before ever reaching the notifier, and the sale is never
+  announced twice without a dedicated idempotency column. Call sites:
+  `handlers/payments.ts` (Stars store + Rematch), `handlers/matching/ticket-gate.ts`
+  (date gate + its refunds), `handlers/matching/venue-change.ts`,
+  `services/premium.ts` (`activateOrExtendPremium`, which covers BOTH the Stars
+  and App Store rails in one place), `services/appstore-tickets.ts`,
+  `services/rematch-refund.ts`, `services/venue-change-refund.ts`, and the mock
+  store confirm in `public/routes/tickets.ts`. Refunds are announced as well as
+  purchases: a Rematch refund can follow its own purchase within seconds, so a
+  purchase-only feed would carry sales that no longer exist.
+- **Admin surface** — `GET /admin/purchases` (`admin/routes/purchases.ts`),
+  plus `purchaseSummary` on every `/admin/users` row and `purchases[]` +
+  `purchaseSummary` on `/admin/users/:id`.
+
+Two money rules the readers share. **Stars have no published USD rate**, so any
+dollar figure derived from them is computed at the documented `STAR_USD_CENTS`
+($0.02/⭐, the ticket rate) and is labelled an estimate everywhere it is shown;
+App Store rows carry Apple's real price (`priceCents`, parsed defensively from
+the transaction's milliunit `price`) and are never estimated. And **`refunded`
+rows are excluded from revenue while `refund_failed` rows are counted** — that
+state means a refund is owed and the provider call failed, so the money is
+still with us, which is exactly what makes it an ops alarm rather than a
+completed reversal.
