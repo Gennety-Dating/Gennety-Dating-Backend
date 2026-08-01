@@ -42,6 +42,8 @@ export interface SideClassification {
   userId: string;
   telegramId: bigint;
   language: string | null;
+  /** `User.theme` — the expiry card renders in the recipient's own chrome. */
+  theme: string | null;
   pitchMessageId: number | null;
   role: SideRole;
   /** Only meaningful for `role === 'silent'`: post-increment count. */
@@ -77,8 +79,8 @@ interface CandidateMatch {
   pitchMessageIdA: number | null;
   pitchMessageIdB: number | null;
   dispatchedAt: Date | null;
-  userA: { telegramId: bigint; language: string | null };
-  userB: { telegramId: bigint; language: string | null };
+  userA: { telegramId: bigint; language: string | null; theme: string | null };
+  userB: { telegramId: bigint; language: string | null; theme: string | null };
 }
 
 /**
@@ -123,8 +125,8 @@ export async function expireStaleMatches(now: Date = new Date()): Promise<Expiry
       pitchMessageIdA: true,
       pitchMessageIdB: true,
       dispatchedAt: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
+      userA: { select: { telegramId: true, language: true, theme: true } },
+      userB: { select: { telegramId: true, language: true, theme: true } },
     },
   });
 
@@ -170,6 +172,7 @@ async function classifyAndPenalise(
       userId: match.userAId,
       telegramId: match.userA.telegramId,
       language: match.userA.language,
+      theme: match.userA.theme,
       pitchMessageId: match.pitchMessageIdA,
       accepted: match.acceptedByA,
     },
@@ -178,6 +181,7 @@ async function classifyAndPenalise(
       userId: match.userBId,
       telegramId: match.userB.telegramId,
       language: match.userB.language,
+      theme: match.userB.theme,
       pitchMessageId: match.pitchMessageIdB,
       accepted: match.acceptedByB,
     },
@@ -194,6 +198,7 @@ async function classifyAndPenalise(
         userId: m.userId,
         telegramId: m.telegramId,
         language: m.language,
+        theme: m.theme,
         pitchMessageId: m.pitchMessageId,
         role,
         peerAccepted: peer.accepted,
@@ -229,6 +234,7 @@ async function classifyAndPenalise(
       userId: m.userId,
       telegramId: m.telegramId,
       language: m.language,
+      theme: m.theme,
       pitchMessageId: m.pitchMessageId,
       role,
       offenseCount,

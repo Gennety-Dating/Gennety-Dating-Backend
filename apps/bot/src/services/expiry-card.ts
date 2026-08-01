@@ -230,20 +230,29 @@ let cachedFonts: SatoriFonts | null = null;
  * are localized and Archivo Black is Latin-only, so a Cyrillic headline would
  * fall back mid-word.
  *
- * Registration order is load-bearing. Satori does NOT fall through *within* a
- * family — it takes the first font registered under the requested name and
- * resolves missing glyphs from the OTHER families in array order. So the Latin
- * subset keeps the requested family name (it carries the digits and
- * punctuation every locale needs) and the Cyrillic subset is its own family,
- * listed before Roboto so it wins the fallback for Cyrillic letters.
+ * This uses the FULL Unbounded (`unbounded-700.woff`), not the two subset files
+ * every other card loads. Those are the Google Fonts `latin` + `cyrillic`
+ * subsets, and Polish lives in neither: `latin-ext` carries Ą Ł Ż Ś Ć Ź Ń Ę.
+ * Rendering "CZAS MINĄŁ" against the subsets drops ĄŁ into Roboto *mid-word* —
+ * verified, not theoretical — which is exactly the failure the other card
+ * renderers document and then walk into anyway for `pl`. (German is fine: ÄÖÜ
+ * are Latin-1, inside the `latin` subset.)
+ *
+ * One file also deletes the hazard rather than navigating it: satori does NOT
+ * fall through *within* a family, so the subset setup depends on registration
+ * order — the Latin subset must own the requested family name and the Cyrillic
+ * one must be a separate family listed before Roboto. With full coverage under
+ * a single name there is no fallback to order and no way to get it wrong.
+ *
+ * Costs +144 KB of asset over the 42 KB pair, which is not worth optimizing for
+ * a server-side render that loads it once per process.
  */
 function loadFonts(): SatoriFonts {
   if (cachedFonts) return cachedFonts;
   const read = (file: string) =>
     readFileSync(fileURLToPath(new URL(`../assets/fonts/${file}`, import.meta.url)));
   cachedFonts = [
-    { name: "Unbounded", data: read("unbounded-lat-700.woff"), weight: 700, style: "normal" },
-    { name: "UnboundedCyr", data: read("unbounded-cyr-700.woff"), weight: 700, style: "normal" },
+    { name: "Unbounded", data: read("unbounded-700.woff"), weight: 700, style: "normal" },
     { name: "Roboto", data: read("Roboto-Regular.ttf"), weight: 400, style: "normal" },
     { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
     { name: "Archivo Black", data: read("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },

@@ -1,16 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { sendExpiryNotifications } from "./expiry-notify.js";
+const renderExpiryCard = vi.fn();
+// Mocked so the decision matrix below is tested without paying for a real
+// satori + resvg rasterize per case (and so the null branch — the plain-text
+// fallback — is reachable at all).
+vi.mock("./expiry-card.js", () => ({ renderExpiryCard }));
+
+const { sendExpiryNotifications, buildCard } = await import("./expiry-notify.js");
 import type { MatchExpiry, SideClassification } from "./match-expiry.js";
 
 interface FakeApi {
   sendMessage: ReturnType<typeof vi.fn>;
+  sendPhoto: ReturnType<typeof vi.fn>;
   editMessageText: ReturnType<typeof vi.fn>;
 }
 
 function makeApi(): FakeApi {
   return {
     sendMessage: vi.fn().mockResolvedValue({ message_id: 1 }),
+    sendPhoto: vi.fn().mockResolvedValue({ message_id: 1 }),
     editMessageText: vi.fn().mockResolvedValue({ message_id: 1 }),
   };
 }
@@ -21,6 +29,7 @@ function side(overrides: Partial<SideClassification>): SideClassification {
     userId: "user-a",
     telegramId: 100n,
     language: "en",
+    theme: "dark",
     pitchMessageId: 11,
     role: "silent",
     offenseCount: 1,
@@ -34,12 +43,96 @@ function matchWith(...sides: SideClassification[]): MatchExpiry {
   return { matchId: "m-1", sides };
 }
 
-describe("sendExpiryNotifications", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+/** What `buildCard` handed the renderer for this side. */
+async function cardFor(s: SideClassification, lang: "en" | "ru" = "en") {
+  renderExpiryCard.mockResolvedValue(Buffer.from("png"));
+  const built = await buildCard(s, lang);
+  return { input: renderExpiryCard.mock.calls.at(-1)![0], caption: built!.caption };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  renderExpiryCard.mockResolvedValue(Buffer.from("png"));
+});
+
+describe("expiry card selection (PRODUCT_SPEC §3.4)", () => {
+  it("first-offense silent → `expired` card + warning caption", async () => {
+    const { input, caption } = await cardFor(
+      side({ role: "silent", offenseCount: 1, penalised: false }),
+    );
+    expect(input.variant).toBe("expired");
+    expect(caption).toMatch(/Next time we'll lower your rating/i);
   });
 
-  it("first-offense silent → warning text + clears keyboard", async () => {
+  it("repeat-offense silent → `penalty` card + penalty caption", async () => {
+    const { input, caption } = await cardFor(
+      side({ role: "silent", offenseCount: 3, penalised: true }),
+    );
+    expect(input.variant).toBe("penalty");
+    expect(caption).toMatch(/Ignoring proposals is disrespectful/i);
+  });
+
+  it("responder → `peer_ignored` card, and nothing promises a priority boost", async () => {
+    // `match-expiry.ts` does not call `boostAcceptedSidePriority` (unlike the
+    // decline path and the §3.5c stall chain), so claiming one here would be a
+    // promise the code does not keep.
+    const { input, caption } = await cardFor(side({ role: "responder" }));
+    expect(input.variant).toBe("peer_ignored");
+    expect(caption).toMatch(/next drop/i);
+    expect(caption).not.toMatch(/priority|boost/i);
+    expect(input.subline).not.toMatch(/priority|boost/i);
+  });
+
+  it("silent + peer ACCEPTED → `missed_date` card", async () => {
+    const { input } = await cardFor(
+      side({ role: "silent", offenseCount: 1, penalised: false, peerAccepted: true }),
+    );
+    expect(input.variant).toBe("missed_date");
+    expect(input.headline).toMatch(/MUTUAL/i);
+  });
+
+  it("`missed_date` overrides the card but the caption still carries the penalty", async () => {
+    // The override is visual only: a repeat offender who ghosted an accepting
+    // partner must still be told their rating moved.
+    const { input, caption } = await cardFor(
+      side({ role: "silent", offenseCount: 4, penalised: true, peerAccepted: true }),
+    );
+    expect(input.variant).toBe("missed_date");
+    expect(caption).toMatch(/Ignoring proposals is disrespectful/i);
+  });
+
+  it("silent + peer DECLINED → stays `expired` (blind-decision)", async () => {
+    const { input } = await cardFor(
+      side({ role: "silent", offenseCount: 1, penalised: false, peerAccepted: false }),
+    );
+    expect(input.variant).toBe("expired");
+  });
+
+  it("a failed Elo write keeps the warning card even at a high offense count", async () => {
+    // Defensive: never draw "RATING LOWERED" over a deduction that didn't land.
+    const { input, caption } = await cardFor(
+      side({ role: "silent", offenseCount: 5, penalised: false }),
+    );
+    expect(input.variant).toBe("expired");
+    expect(caption).toMatch(/Next time we'll lower your rating/i);
+    expect(caption).not.toMatch(/has been lowered/i);
+  });
+
+  it("renders in the recipient's own theme", async () => {
+    expect((await cardFor(side({ theme: "light" }))).input.theme).toBe("light");
+    expect((await cardFor(side({ theme: "dark" }))).input.theme).toBe("dark");
+    // `User.theme` defaults to dark, so a legacy null row is dark, not a crash.
+    expect((await cardFor(side({ theme: null }))).input.theme).toBe("dark");
+  });
+
+  it("localizes the card copy, not just the caption", async () => {
+    const { input } = await cardFor(side({ role: "silent", language: "ru" }), "ru");
+    expect(input.headline).toBe("ВРЕМЯ\nВЫШЛО");
+  });
+});
+
+describe("sendExpiryNotifications", () => {
+  it("sends the card as a photo and clears the pitch keyboard", async () => {
     const api = makeApi();
     const m = matchWith(
       side({ side: "A", role: "silent", offenseCount: 1, penalised: false }),
@@ -57,80 +150,48 @@ describe("sendExpiryNotifications", () => {
 
     expect(r.notified).toBe(2);
     expect(r.failed).toBe(0);
+    expect(api.sendPhoto).toHaveBeenCalledTimes(2);
+    expect(api.sendMessage).not.toHaveBeenCalled();
 
     // Keyboard cleared on both sides.
     expect(api.editMessageText).toHaveBeenCalledTimes(2);
-    const editCalls = api.editMessageText.mock.calls.map((c) => c[3]);
-    for (const opts of editCalls) {
+    for (const opts of api.editMessageText.mock.calls.map((c) => c[3])) {
       expect(opts.reply_markup).toEqual({ inline_keyboard: [] });
     }
 
-    // Silent (A) gets the WARNING, not the penalty text.
-    const sentToA = api.sendMessage.mock.calls.find((c) => c[0] === 100)![1];
-    expect(sentToA).toMatch(/Next time we'll lower your rating/i);
-
-    // Responder (B) gets the peer-ignored text.
-    const sentToB = api.sendMessage.mock.calls.find((c) => c[0] === 200)![1];
-    expect(sentToB).toMatch(/не ответил в течение суток/i);
+    const captionToA = api.sendPhoto.mock.calls.find((c) => c[0] === 100)![2].caption;
+    expect(captionToA).toMatch(/Next time we'll lower your rating/i);
+    const captionToB = api.sendPhoto.mock.calls.find((c) => c[0] === 200)![2].caption;
+    expect(captionToB).toMatch(/Увидимся в следующем дропе/i);
   });
 
-  it("repeat-offense silent → penalty text", async () => {
-    const api = makeApi();
-    const m = matchWith(
-      side({ role: "silent", offenseCount: 3, penalised: true }),
-    );
-
-    await sendExpiryNotifications(api as never, [m], 0);
-
-    const sent = api.sendMessage.mock.calls[0]![1];
-    expect(sent).toMatch(/Your rating has been lowered/i);
-  });
-
-  it("silent + peer ACCEPTED → prepends 'you missed a date' on top of warning", async () => {
-    // Product rule: when the silent user ghosted a partner who'd actually
-    // agreed to meet, surface that explicitly. Other silent cases stay
-    // neutral so the blind-decision rule isn't broken.
+  it("degrades to the full plain-text notice when the render fails", async () => {
+    // The fallback must be self-sufficient: everything the card+caption pair
+    // says has to survive on this branch, since it is the whole message.
+    renderExpiryCard.mockResolvedValue(null);
     const api = makeApi();
     const m = matchWith(
       side({ role: "silent", offenseCount: 1, penalised: false, peerAccepted: true }),
     );
 
-    await sendExpiryNotifications(api as never, [m], 0);
+    const r = await sendExpiryNotifications(api as never, [m], 0);
 
+    expect(r.notified).toBe(1);
+    expect(api.sendPhoto).not.toHaveBeenCalled();
     const sent = api.sendMessage.mock.calls[0]![1];
     expect(sent).toMatch(/you missed a real date/i);
-    // Rating warning still rides along — the prefix is additive.
     expect(sent).toMatch(/Next time we'll lower your rating/i);
   });
 
-  it("silent + peer DECLINED → no 'missed a date' prefix (blind-decision)", async () => {
-    // If the peer also bailed, we don't reveal that fact via the
-    // "missed a date" framing — just ship the neutral warning.
+  it("keeps the neutral text on the fallback when the peer declined", async () => {
+    renderExpiryCard.mockResolvedValue(null);
     const api = makeApi();
-    const m = matchWith(
-      side({ role: "silent", offenseCount: 1, penalised: false, peerAccepted: false }),
-    );
+    const m = matchWith(side({ role: "silent", peerAccepted: false }));
 
     await sendExpiryNotifications(api as never, [m], 0);
 
     const sent = api.sendMessage.mock.calls[0]![1];
     expect(sent).not.toMatch(/missed a real date/i);
-    expect(sent).toMatch(/Next time we'll lower your rating/i);
-  });
-
-  it("falls back to warning text if penalised flag is false even at high offenseCount", async () => {
-    // Defensive: a flaky Elo write should never make us claim "rating
-    // lowered" when we didn't actually deduct anything.
-    const api = makeApi();
-    const m = matchWith(
-      side({ role: "silent", offenseCount: 5, penalised: false }),
-    );
-
-    await sendExpiryNotifications(api as never, [m], 0);
-
-    const sent = api.sendMessage.mock.calls[0]![1];
-    expect(sent).toMatch(/Next time we'll lower your rating/i);
-    expect(sent).not.toMatch(/has been lowered/i);
   });
 
   it("skips mobile-only sides (negative telegramId) and continues", async () => {
@@ -151,8 +212,8 @@ describe("sendExpiryNotifications", () => {
 
     expect(r.notified).toBe(1);
     expect(r.skipped).toBe(1);
-    expect(api.sendMessage).toHaveBeenCalledTimes(1);
-    expect(api.sendMessage).toHaveBeenCalledWith(200, expect.any(String));
+    expect(api.sendPhoto).toHaveBeenCalledTimes(1);
+    expect(api.sendPhoto.mock.calls[0]![0]).toBe(200);
   });
 
   it("does not edit pitch when pitchMessageId is null", async () => {
@@ -162,12 +223,12 @@ describe("sendExpiryNotifications", () => {
     await sendExpiryNotifications(api as never, [m], 0);
 
     expect(api.editMessageText).not.toHaveBeenCalled();
-    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendPhoto).toHaveBeenCalledTimes(1);
   });
 
-  it("counts a sendMessage failure without breaking the loop", async () => {
+  it("counts a send failure without breaking the loop", async () => {
     const api = makeApi();
-    api.sendMessage
+    api.sendPhoto
       .mockRejectedValueOnce(new Error("403 blocked"))
       .mockResolvedValueOnce({ message_id: 1 });
 

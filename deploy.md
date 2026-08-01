@@ -1,5 +1,55 @@
 # Gennety Dating Deploy
 
+**PENDING — expiry card (PRODUCT_SPEC §3.4).** Not deployed yet. **No Prisma
+schema change, no env change, no flag change, no Mini App change**
+(`apps/webapp` untouched). Always-on — there is no feature flag, because the
+card degrades to the exact plain text that ships today rather than to nothing.
+
+What ships: the 24h-decision-deadline expiry DM becomes a PNG card plus a short
+caption, instead of the bare `sendMessage` it has always been. Four variants
+(silent-warning / silent-penalty / partner-ghosted-you / you-ghosted-an-accept),
+each with its own vector motif, rendered in the recipient's `User.theme` and
+language.
+
+**One new asset rides the ordinary code rsync:**
+`apps/bot/src/assets/fonts/unbounded-700.woff` (144 KB). It is the FULL
+Unbounded, added because the two subset files every other card loads (`latin` +
+`cyrillic`) do not cover Polish — Ą Ł Ż Ś Ć Ź Ń Ę are in Google's separate
+`latin-ext` subset. Nothing is removed: the subsets stay, and the existing
+renderers that load them are untouched by this deploy.
+
+**Three things worth knowing before the restart:**
+
+- **Send volume per expiry is unchanged** — still one message per side, now a
+  photo instead of text. The render is pure layout + rasterize with no network
+  call and no photo download (deliberately: partner photos are `protect_content`
+  and a terminal match must not depend on a download), and takes ~0.4 s. It runs
+  inside the existing 2 s-per-side pacing loop, so it adds no new rate-limit
+  pressure.
+- **There is a live Polish rendering bug this does NOT fix.** The §3.6
+  locked-time card prints its localized date in Unbounded from the subsets, so
+  Polish months and weekdays (`WRZEŚNIA`, `PAŹDZIERNIKA`, `ŚR`) render with
+  those letters dropping into Roboto mid-word. Same for the match card, the
+  referral card and the coordination card above. Fixing them is a one-line font
+  swap each, deliberately left out so this change does not touch four renderers
+  at once — and it is invisible today because production has **zero** `pl` users.
+- **Nothing exercises this until a match actually expires.** Production has 0
+  matches ever, so the first real card renders only after a drop pairs someone
+  and one side lets the 24h window close. Verify on `@gennetytestbot` first —
+  `scripts/dev-expiry-cards-demo.mjs` renders and sends all four variants in
+  both themes without touching the database.
+
+Post-deploy check — the notify sweep already logs its own totals:
+
+```sh
+pm2 logs gennety-bot --lines 200 --nostream | grep '\[expiry-notify\]'
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag, no Mini App state. The added font file can stay either way.
+
+---
+
 **PENDING — pre-date coordination PNG cards (PRODUCT_SPEC §Phase 4).** Not
 deployed yet. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change** (`apps/webapp` untouched). Ships with whatever

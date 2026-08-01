@@ -1861,6 +1861,54 @@ committed.
   warning only; from the second onwards Elo decrements as if the user had
   declined, and a `EXPIRED_SILENT` `MatchEvent` is logged.
 
+**Expiry card (always-on, Telegram-only, added 2026-08-01).** The expiry notice
+is one of the few genuinely emotional beats in the product — you ghosted
+someone who said yes, or someone ghosted you — and it was the driest surface
+shipped: a bare `sendMessage`. It is now a square PNG
+(`services/expiry-card.ts`, satori + resvg, same design system as the date,
+time and match cards: recipient's `User.theme`, Gennety wordmark, tilted
+butterfly, burgundy accent, film grain on dark only) with one vector motif per
+branch of the asymmetry above — an hourglass with the sand run out, falling
+bars under a descending arrow, one closed circle beside one dashed and empty,
+and a heart split in two.
+
+- **The card says WHAT HAPPENED; the caption adds only the consequence**
+  (founder decision). Nothing is stated twice: the card carries "TIME'S UP /
+  24 hours passed with no answer", the caption carries "next time we'll lower
+  your rating". Same rule the §3.6 locked-time card follows when it refuses to
+  repeat the date phrase its own caption already holds.
+- **Which card**: `expired` (silent, first offence) / `penalty` (silent,
+  repeat, Elo actually deducted) / `peer_ignored` (this side answered, the
+  partner never did) / `missed_date` (silent AND the partner had accepted).
+  The last one is a visual override that replaces either silent card — it is
+  the fact worth a picture — while the **caption still follows the underlying
+  outcome**, so a repeat offender who ghosted an accepting partner is still
+  told their rating moved. The `penalty` card is drawn only when the Elo write
+  actually landed, mirroring the existing text rule: never draw "RATING
+  LOWERED" over a deduction that failed.
+- **Blind-decision safe.** `missed_date` is reachable only from
+  `peerAccepted === true`, which the user has already earned by the window
+  closing; a peer who declined or also went silent produces the neutral card,
+  exactly as the text did.
+- **It claims no priority boost.** Unlike the decline path (§3.4 mixed) and the
+  §3.5c stall chain, the expiry sweep does **not** call
+  `boostAcceptedSidePriority`, so no surface here may promise one.
+- **Photo-free by rule.** Partner photos are `protect_content` wherever they
+  appear with a clear face (§3.7a); a terminal match is the wrong place to
+  re-surface them, and it would put a network dependency on a path that must
+  not fail. The motifs carry the emotion instead.
+- **Never wedges.** The render is pure layout + rasterize (no network, no
+  photos) and returns null rather than throwing; a null render — or a caption
+  over Telegram's 1024-character ceiling — falls back to the plain-text notice
+  that shipped before, which remains self-sufficient. No sentence exists on
+  only one branch.
+- **Headline typography is the full Unbounded, not the subsets the other cards
+  load.** Those are the Google Fonts `latin` + `cyrillic` subsets and Polish is
+  in neither, so `CZAS MINĄŁ` silently renders ĄŁ in Roboto mid-word. Satori
+  reports no error for a missing glyph, which is why this went unnoticed — it
+  is still live in the §3.6 time card's Polish dates (`WRZEŚNIA`,
+  `PAŹDZIERNIKA`, `ŚR`), the match card and the referral card.
+
 After a decline (and once the user has seen the partner's verdict, if any),
 the bot prompts for a free-text reason; the LLM distils it and appends the
 result to the *decliner's* `Profile.negativeConstraints`.

@@ -3,19 +3,26 @@
  * Dev-only helper (local DEV bot only).
  *
  * Renders every variant of the proposal-expiry card (PRODUCT_SPEC §3.4 — the
- * 24h decision window closing) and DMs them so the mockups can be judged in a
- * real Telegram chat at real size, next to the text they'd replace.
+ * 24h decision window closing) and DMs them, so the real thing can be judged
+ * in a real Telegram chat at real size.
+ *
+ * Copy comes from `@gennety/shared` i18n, exactly as production reads it — a
+ * demo with its own hardcoded strings drifts from the product within a week.
+ * Every card here is therefore also a check that its 15 keys exist in the
+ * requested locale.
  *
  * Pure render + send: no database, no match seeding, no state written
- * anywhere. Safe to re-run as often as you like while iterating on the design.
+ * anywhere. Safe to re-run as often as you like.
  *
  * Usage:
  *   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-expiry-cards-demo.mjs
  * Optional:
- *   --tg=782065541      recipient chat id
+ *   --tg=782065541            recipient chat id
+ *   --lang=ru|en|uk|de|pl|all which locale(s) to render (default: ru)
  *   --theme=dark|light|both   (default: both — dark individually, light as an album)
- *   --out=./tmp         also write the PNGs to disk
- *   --force             bypass the dev-bot guard
+ *   --out=./tmp               also write the PNGs to disk
+ *   --no-send                 render only (pairs well with --out)
+ *   --force                   bypass the dev-bot guard
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
@@ -51,64 +58,55 @@ const argv = new Map(
     }),
 );
 const force = argv.get("force") === "true";
+const send = argv.get("no-send") !== "true";
 const chatId = Number(argv.get("tg") ?? "782065541");
 const themeArg = argv.get("theme") ?? "both";
+const langArg = argv.get("lang") ?? "ru";
 const outDir = argv.get("out");
 
+const ALL_LANGS = ["en", "ru", "uk", "de", "pl"];
+const langs = langArg === "all" ? ALL_LANGS : [langArg];
+
 /**
- * Mockup copy. Deliberately NOT wired to i18n yet — the point of this pass is
- * to agree on the visual system and the tone; the strings move into
- * `packages/shared/src/i18n.ts` (all five locales) once the design is signed
- * off. Each entry maps 1:1 onto a branch of §3.4's expiry asymmetry.
+ * The four branches of §3.4's expiry asymmetry. `caption` names the caption key
+ * that production pairs with this card — note `missed_date` takes the warning
+ * or penalty caption underneath it, since the card is a visual override only.
  */
-const CARDS = [
+const VARIANTS = [
   {
-    key: "expired",
     variant: "expired",
-    overline: "ОКНО ЗАКРЫТО",
-    headline: "ВРЕМЯ\nВЫШЛО",
-    subline: "Ты не ответил за 24 часа.\nЖдём тебя в следующем дропе.",
-    caption:
+    suffix: "Expired",
+    caption: "expiryCaptionSilentWarning",
+    note:
       "1/4 — <b>Молчание, первое предупреждение</b>\n" +
-      "Пользователь не ответил на пич за 24 часа, партнёр ответил. " +
-      "Рейтинг пока не тронут — только предупреждение.\n\n" +
-      "<i>Сейчас вместо этого: сухой текст «Time's up — you didn't reply to your match in 24h.»</i>",
+      "Не ответил за 24 часа, партнёр ответил. Рейтинг не тронут.",
   },
   {
-    key: "penalty",
     variant: "penalty",
-    overline: "ВТОРОЙ РАЗ БЕЗ ОТВЕТА",
-    headline: "РЕЙТИНГ\nПОНИЖЕН",
-    subline: "Игнорировать пару — неуважительно.\nМы понизили твой рейтинг.",
-    caption:
+    suffix: "Penalty",
+    caption: "expiryCaptionSilentPenalty",
+    note:
       "2/4 — <b>Молчание повторно, штраф применён</b>\n" +
-      "Второй и последующие разы: Elo реально понижен (forgive-once уже потрачен).\n\n" +
-      "<i>Мотив — падающие столбцы: единственная карточка, где «что-то ушло вниз» показано буквально.</i>",
+      "Elo реально понижен. Карточка рисуется только если списание прошло — " +
+      "иначе остаётся вариант 1.",
   },
   {
-    key: "peer_ignored",
     variant: "peer_ignored",
-    overline: "ЭТО НЕ ПРО ТЕБЯ",
-    headline: "ПАРА НЕ\nОТВЕТИЛА",
-    subline: "Свидание не состоится.\nТвой приоритет в следующем дропе повышен.",
-    caption:
+    suffix: "PeerIgnored",
+    caption: "expiryCaptionPeerIgnored",
+    note:
       "3/4 — <b>Ответил ты, промолчали они</b>\n" +
-      "Единственный сценарий, где пользователь ни в чём не виноват — тон сочувственный, " +
-      "и мы сразу говорим про компенсацию приоритетом.\n\n" +
-      "<i>Мотив: твой круг закрыт галочкой, их — пунктирный и пустой.</i>",
+      "Единственный сценарий без вины пользователя. Приоритет здесь " +
+      "<b>не обещаем</b> — expiry-путь его не начисляет.",
   },
   {
-    key: "missed_date",
     variant: "missed_date",
-    overline: "ТЕБЕ СКАЗАЛИ ДА",
-    headline: "ТЫ УПУСТИЛ\nСВИДАНИЕ",
-    subline: "Пара была готова встретиться.\nТы не ответил за 24 часа.",
-    caption:
+    suffix: "MissedDate",
+    caption: "expiryCaptionSilentWarning",
+    note:
       "4/4 — <b>Ты промолчал, а тебе сказали ДА</b>\n" +
-      "Самый заряженный момент во всём флоу. В коде это приставка " +
-      "<code>matchExpiredYouMissedDate</code> поверх карточки 1 или 2 — " +
-      "то есть эта карточка заменяет собой пару.\n\n" +
-      "<i>Мотив: сердце, разъехавшееся надвое — одна половина сплошная (их «да» было настоящим), вторая пустая.</i>",
+      "Визуально заменяет карточку 1 или 2, но подпись остаётся от них — " +
+      "то есть штраф всё равно проговаривается.",
   },
 ];
 
@@ -118,84 +116,86 @@ async function main() {
       `Refusing: expected BOT_USERNAME=gennetytestbot, got ${process.env.BOT_USERNAME}. Use --force to override.`,
     );
   }
-  if (!process.env.BOT_TOKEN) throw new Error("Missing BOT_TOKEN in local env.");
+  if (send && !process.env.BOT_TOKEN) throw new Error("Missing BOT_TOKEN in local env.");
 
   // Resolve grammy against apps/bot (it's the bot's dep, not the root's) so the
   // InputFile we build shares one module identity with the bot's own.
   const requireFromBot = createRequire(resolve(root, "apps/bot/package.json"));
   const { Bot, InputFile } = await import(requireFromBot.resolve("grammy"));
   const { renderExpiryCard } = await import("../apps/bot/src/services/expiry-card.js");
+  const { t } = await import("@gennety/shared");
 
-  const api = new Bot(process.env.BOT_TOKEN).api;
+  const api = send ? new Bot(process.env.BOT_TOKEN).api : null;
   if (outDir) mkdirSync(resolve(root, outDir), { recursive: true });
 
   const wantDark = themeArg === "dark" || themeArg === "both";
   const wantLight = themeArg === "light" || themeArg === "both";
 
-  if (wantDark) {
-    await api.sendMessage(
-      chatId,
-      "🎴 <b>Карточки истечения дедлайна — макеты</b>\n\n" +
-        "Четыре сценария из PRODUCT_SPEC §3.4. Тёмная тема (дефолт продукта) — " +
-        "по одной, со сценарием в подписи. Ниже придёт та же серия в светлой.",
-      { parse_mode: "HTML" },
-    );
-  }
-
-  for (const card of CARDS) {
-    if (!wantDark) break;
-    const png = await renderExpiryCard({
-      variant: card.variant,
-      overline: card.overline,
-      headline: card.headline,
-      subline: card.subline,
-      theme: "dark",
+  const render = (v, lang, theme) =>
+    renderExpiryCard({
+      variant: v.variant,
+      overline: t(lang, `expiryCardOverline${v.suffix}`),
+      headline: t(lang, `expiryCardHeadline${v.suffix}`),
+      subline: t(lang, `expiryCardSubline${v.suffix}`),
+      theme,
     });
-    if (!png) {
-      console.error(`  ✗ ${card.key} (dark): render returned null`);
-      continue;
+
+  for (const lang of langs) {
+    if (send && wantDark) {
+      await api.sendMessage(
+        chatId,
+        `🎴 <b>Карточки истечения дедлайна — ${lang.toUpperCase()}</b>\n\n` +
+          "Четыре сценария из PRODUCT_SPEC §3.4. Подпись под каждой — настоящая, " +
+          "из i18n: карточка говорит <i>что произошло</i>, подпись добавляет " +
+          "<i>только последствие</i>.",
+        { parse_mode: "HTML" },
+      );
     }
-    if (outDir) writeFileSync(resolve(root, outDir, `expiry-${card.key}-dark.png`), png);
-    await api.sendPhoto(chatId, new InputFile(png, `expiry-${card.key}-dark.png`), {
-      caption: card.caption,
-      parse_mode: "HTML",
-    });
-    console.log(`  ✓ ${card.key} (dark) — ${(png.length / 1024).toFixed(0)} KB`);
-  }
 
-  if (wantLight) {
-    const media = [];
-    for (const card of CARDS) {
-      const png = await renderExpiryCard({
-        variant: card.variant,
-        overline: card.overline,
-        headline: card.headline,
-        subline: card.subline,
-        theme: "light",
-      });
+    for (const v of VARIANTS) {
+      if (!wantDark) break;
+      const png = await render(v, lang, "dark");
       if (!png) {
-        console.error(`  ✗ ${card.key} (light): render returned null`);
+        console.error(`  ✗ ${lang}/${v.variant} (dark): render returned null`);
         continue;
       }
-      if (outDir) writeFileSync(resolve(root, outDir, `expiry-${card.key}-light.png`), png);
+      if (outDir) writeFileSync(resolve(root, outDir, `expiry-${lang}-${v.variant}-dark.png`), png);
+      if (send) {
+        await api.sendPhoto(chatId, new InputFile(png, `expiry-${v.variant}.png`), {
+          caption: `${v.note}\n\n<b>Подпись в проде:</b> <i>${t(lang, v.caption)}</i>`,
+          parse_mode: "HTML",
+        });
+      }
+      console.log(`  ✓ ${lang}/${v.variant} (dark) — ${(png.length / 1024).toFixed(0)} KB`);
+    }
+
+    if (!wantLight) continue;
+    const media = [];
+    for (const v of VARIANTS) {
+      const png = await render(v, lang, "light");
+      if (!png) {
+        console.error(`  ✗ ${lang}/${v.variant} (light): render returned null`);
+        continue;
+      }
+      if (outDir) writeFileSync(resolve(root, outDir, `expiry-${lang}-${v.variant}-light.png`), png);
       media.push({
         type: "photo",
-        media: new InputFile(png, `expiry-${card.key}-light.png`),
+        media: new InputFile(png, `expiry-${v.variant}-light.png`),
         ...(media.length === 0
           ? {
               caption:
-                "☀️ <b>Светлая тема</b> — та же серия, тот же порядок.\n" +
-                "Карточка всегда рендерится в теме получателя (<code>User.theme</code>), как дата-карточка и тайм-карточка.",
+                `☀️ <b>Светлая тема — ${lang.toUpperCase()}</b>, тот же порядок.\n` +
+                "Карточка всегда рендерится в теме получателя (<code>User.theme</code>).",
               parse_mode: "HTML",
             }
           : {}),
       });
-      console.log(`  ✓ ${card.key} (light) — ${(png.length / 1024).toFixed(0)} KB`);
+      console.log(`  ✓ ${lang}/${v.variant} (light) — ${(png.length / 1024).toFixed(0)} KB`);
     }
-    if (media.length) await api.sendMediaGroup(chatId, media);
+    if (send && media.length) await api.sendMediaGroup(chatId, media);
   }
 
-  console.log(`\nSent to chat ${chatId}.`);
+  console.log(send ? `\nSent to chat ${chatId}.` : "\nRendered only (--no-send).");
 }
 
 main().catch((err) => {

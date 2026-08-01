@@ -544,6 +544,33 @@ const translations = {
     matchExpiredPeerIgnored:
       "Your match didn't reply within 24h, so the date won't happen. " +
       "We'll see you in the next drop.",
+    // Expiry card (PRODUCT_SPEC §3.4). The card states WHAT HAPPENED and the
+    // caption adds only the consequence, so nothing is said twice. The
+    // `matchExpired*` strings above stay as the plain-text fallback for when
+    // the render fails — between them no sentence is ever lost.
+    // Headlines are split on "\n"; the last line renders in the accent colour.
+    expiryCardOverlineExpired: "WINDOW CLOSED",
+    expiryCardHeadlineExpired: "TIME'S\nUP",
+    expiryCardSublineExpired:
+      "24 hours passed with no answer.\nSee you in the next drop.",
+    expiryCardOverlinePenalty: "SECOND TIME, NO ANSWER",
+    expiryCardHeadlinePenalty: "RATING\nLOWERED",
+    expiryCardSublinePenalty:
+      "A second match left unanswered.\nSee you in the next drop.",
+    expiryCardOverlinePeerIgnored: "NOT ABOUT YOU",
+    expiryCardHeadlinePeerIgnored: "THEY NEVER\nANSWERED",
+    expiryCardSublinePeerIgnored:
+      "The date won't happen.\nYour part was done on time.",
+    expiryCardOverlineMissedDate: "THEY SAID YES",
+    expiryCardHeadlineMissedDate: "IT WAS\nMUTUAL",
+    expiryCardSublineMissedDate:
+      "They were ready to meet.\n24 hours passed with no answer.",
+    expiryCaptionSilentWarning:
+      "Don't ignore proposals — it's disrespectful to the person waiting on you. " +
+      "Next time we'll lower your rating for it.",
+    expiryCaptionSilentPenalty:
+      "Ignoring proposals is disrespectful to the person waiting on you.",
+    expiryCaptionPeerIgnored: "See you in the next drop.",
     noMatchThisWeekTier1:
       "Hey\n\n" +
       "No match this time. Not because something's off with you — the quality bar just stays where it is, " +
@@ -1595,6 +1622,31 @@ const translations = {
     matchExpiredPeerIgnored:
       "Партнёр не ответил в течение суток — свидание не состоится. " +
       "Увидимся в следующем дропе.",
+    // Карточка истечения (PRODUCT_SPEC §3.4). Заголовки намеренно
+    // гендерно-нейтральны: род пользователя на карточку не подставляется,
+    // а форма «ответил(-а)» в крупном заголовке нечитаема.
+    expiryCardOverlineExpired: "ОКНО ЗАКРЫТО",
+    expiryCardHeadlineExpired: "ВРЕМЯ\nВЫШЛО",
+    expiryCardSublineExpired:
+      "Прошло 24 часа без ответа.\nЖдём тебя в следующем дропе.",
+    expiryCardOverlinePenalty: "ВТОРОЙ РАЗ БЕЗ ОТВЕТА",
+    expiryCardHeadlinePenalty: "РЕЙТИНГ\nПОНИЖЕН",
+    expiryCardSublinePenalty:
+      "Второй мэтч без ответа.\nЖдём тебя в следующем дропе.",
+    expiryCardOverlinePeerIgnored: "ЭТО НЕ ПРО ТЕБЯ",
+    expiryCardHeadlinePeerIgnored: "ПАРА НЕ\nОТВЕТИЛА",
+    expiryCardSublinePeerIgnored:
+      "Свидание не состоится.\nТвоя часть была сделана вовремя.",
+    expiryCardOverlineMissedDate: "ТЕБЕ СКАЗАЛИ ДА",
+    expiryCardHeadlineMissedDate: "ЭТО БЫЛО\nВЗАИМНО",
+    expiryCardSublineMissedDate:
+      "Пара была готова встретиться.\nЗа 24 часа ответа не было.",
+    expiryCaptionSilentWarning:
+      "Не игнорируй предложения — это неуважение к тому, кто ждал ответа. " +
+      "В следующий раз за это мы снизим твой рейтинг.",
+    expiryCaptionSilentPenalty:
+      "Игнорировать предложения — это неуважение к тому, кто ждал ответа.",
+    expiryCaptionPeerIgnored: "Увидимся в следующем дропе.",
     noMatchThisWeekTier1:
       "Привет\n\n" +
       "В этот раз без мэтча. Не потому что с тобой что-то не так — просто планка качества стоит там, где стоит, " +
@@ -2608,6 +2660,29 @@ const translations = {
     matchExpiredPeerIgnored:
       "Партнер не відповів протягом доби — побачення не відбудеться. " +
       "Побачимось у наступному дропі.",
+    // Картка спливання (PRODUCT_SPEC §3.4) — заголовки гендерно-нейтральні.
+    expiryCardOverlineExpired: "ВІКНО ЗАЧИНЕНО",
+    expiryCardHeadlineExpired: "ЧАС\nВИЙШОВ",
+    expiryCardSublineExpired:
+      "Минуло 24 години без відповіді.\nЧекаємо на тебе в наступному дропі.",
+    expiryCardOverlinePenalty: "ВДРУГЕ БЕЗ ВІДПОВІДІ",
+    expiryCardHeadlinePenalty: "РЕЙТИНГ\nЗНИЖЕНО",
+    expiryCardSublinePenalty:
+      "Другий метч без відповіді.\nЧекаємо на тебе в наступному дропі.",
+    expiryCardOverlinePeerIgnored: "ЦЕ НЕ ПРО ТЕБЕ",
+    expiryCardHeadlinePeerIgnored: "ПАРА НЕ\nВІДПОВІЛА",
+    expiryCardSublinePeerIgnored:
+      "Побачення не відбудеться.\nТвою частину було зроблено вчасно.",
+    expiryCardOverlineMissedDate: "ТОБІ СКАЗАЛИ ТАК",
+    expiryCardHeadlineMissedDate: "ЦЕ БУЛО\nВЗАЄМНО",
+    expiryCardSublineMissedDate:
+      "Пара була готова зустрітися.\nЗа 24 години відповіді не було.",
+    expiryCaptionSilentWarning:
+      "Не ігноруй пропозиції — це неповага до того, хто чекав на відповідь. " +
+      "Наступного разу за це ми знизимо твій рейтинг.",
+    expiryCaptionSilentPenalty:
+      "Ігнорувати пропозиції — це неповага до того, хто чекав на відповідь.",
+    expiryCaptionPeerIgnored: "Побачимось у наступному дропі.",
     noMatchThisWeekTier1:
       "Привіт\n\n" +
       "Цього разу без метчу. Не тому що з тобою щось не так — просто планка якості стоїть там, де стоїть, " +
@@ -3608,6 +3683,29 @@ const deTranslations: TranslationTable = {
   matchExpiredPeerIgnored:
     "Dein Match hat innerhalb von 24h nicht geantwortet, also findet das Date nicht statt. " +
     "Wir sehen uns beim nächsten Drop.",
+  // Ablauf-Karte (PRODUCT_SPEC §3.4) — Überschriften bewusst geschlechtsneutral.
+  expiryCardOverlineExpired: "FENSTER GESCHLOSSEN",
+  expiryCardHeadlineExpired: "ZEIT\nABGELAUFEN",
+  expiryCardSublineExpired:
+    "24 Stunden ohne Antwort.\nWir sehen uns beim nächsten Drop.",
+  expiryCardOverlinePenalty: "ZWEITES MAL OHNE ANTWORT",
+  expiryCardHeadlinePenalty: "RATING\nGESENKT",
+  expiryCardSublinePenalty:
+    "Ein zweites Match ohne Antwort.\nWir sehen uns beim nächsten Drop.",
+  expiryCardOverlinePeerIgnored: "NICHT DEINE SCHULD",
+  expiryCardHeadlinePeerIgnored: "KEINE\nANTWORT",
+  expiryCardSublinePeerIgnored:
+    "Das Date findet nicht statt.\nDein Teil war rechtzeitig erledigt.",
+  expiryCardOverlineMissedDate: "DU HATTEST EIN JA",
+  expiryCardHeadlineMissedDate: "ES WAR\nGEGENSEITIG",
+  expiryCardSublineMissedDate:
+    "Dein Match wollte sich treffen.\n24 Stunden ohne Antwort.",
+  expiryCaptionSilentWarning:
+    "Ignoriere Vorschläge nicht - das ist respektlos gegenüber der Person, die auf dich gewartet hat. " +
+    "Beim nächsten Mal senken wir dafür dein Rating.",
+  expiryCaptionSilentPenalty:
+    "Vorschläge zu ignorieren ist respektlos gegenüber der Person, die auf dich gewartet hat.",
+  expiryCaptionPeerIgnored: "Wir sehen uns beim nächsten Drop.",
   noMatchThisWeekTier1:
     "Hey\n\n" +
     "Diesmal kein Match. Nicht, weil mit dir etwas nicht stimmt — die Qualitätslatte bleibt einfach, wo sie ist, " +
@@ -4588,6 +4686,32 @@ const plTranslations: TranslationTable = {
   matchExpiredPeerIgnored:
     "Twoje dopasowanie nie odpowiedziało w ciągu 24h, więc randka się nie odbędzie. " +
     "Widzimy się przy kolejnym dropie.",
+  // Karta wygaśnięcia (PRODUCT_SPEC §3.4). Nagłówki są neutralne płciowo —
+  // forma "odpuściłeś/odpuściłaś" jest nieczytelna w dużym stopniu pisma.
+  // Polskie znaki diakrytyczne wymagają PEŁNEGO Unbounded (`unbounded-700.woff`),
+  // nie podzbiorów `latin`/`cyrillic` — patrz `services/expiry-card.ts`.
+  expiryCardOverlineExpired: "OKNO ZAMKNIĘTE",
+  expiryCardHeadlineExpired: "CZAS\nMINĄŁ",
+  expiryCardSublineExpired:
+    "Minęły 24 godziny bez odpowiedzi.\nDo zobaczenia w kolejnym dropie.",
+  expiryCardOverlinePenalty: "DRUGI RAZ BEZ ODPOWIEDZI",
+  expiryCardHeadlinePenalty: "RATING\nOBNIŻONY",
+  expiryCardSublinePenalty:
+    "Drugie dopasowanie bez odpowiedzi.\nDo zobaczenia w kolejnym dropie.",
+  expiryCardOverlinePeerIgnored: "TO NIE O TOBIE",
+  expiryCardHeadlinePeerIgnored: "BRAK\nODPOWIEDZI",
+  expiryCardSublinePeerIgnored:
+    "Randka się nie odbędzie.\nTwoja część została zrobiona na czas.",
+  expiryCardOverlineMissedDate: "TO BYŁO NA TAK",
+  expiryCardHeadlineMissedDate: "TO BYŁO\nWZAJEMNE",
+  expiryCardSublineMissedDate:
+    "Twoje dopasowanie chciało się spotkać.\n24 godziny bez odpowiedzi.",
+  expiryCaptionSilentWarning:
+    "Nie ignoruj propozycji - to brak szacunku wobec osoby, która na ciebie czekała. " +
+    "Następnym razem obniżymy za to twój rating.",
+  expiryCaptionSilentPenalty:
+    "Ignorowanie propozycji to brak szacunku wobec osoby, która na ciebie czekała.",
+  expiryCaptionPeerIgnored: "Do zobaczenia w kolejnym dropie.",
   noMatchThisWeekTier1:
     "Hej\n\n" +
     "Tym razem bez matcha. Nie dlatego, że coś z Tobą nie tak — po prostu poprzeczka jakości stoi tam, gdzie stoi, " +
