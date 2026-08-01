@@ -1,48 +1,72 @@
 /**
- * Compute the next weekly match batch date from the MATCH_CRON_SCHEDULE.
+ * Compute the next/previous match batch date from `MATCH_CRON_SCHEDULE`.
  *
- * Default schedule: "0 18 * * 4" → every Thursday at 18:00 Europe/Kyiv.
- * This is a pure function (accepts `now` for testability) that never
- * hallucinates dates — it deterministically calculates the next occurrence
+ * Supports two cron shapes in the day-of-week field:
+ *   - a single weekday or comma-list (`4` or `1,3,5`) — "next batch is the
+ *     next occurrence of one of these weekdays";
+ *   - `*` (every day) — "next batch is the next occurrence of this
+ *     hour:minute, today or tomorrow".
+ *
+ * Both are pure functions (accept `now` for testability) that never
+ * hallucinate dates — they deterministically calculate the occurrence
  * anchored to Europe/Kyiv wall-clock time (DST-aware via Intl API).
+ *
+ * `MATCH_CRON_SCHEDULE`'s default tracks the active `CADENCE` profile (see
+ * `@gennety/shared`), so switching `DROP_CADENCE` also switches which cron
+ * this file (and the `index.ts` registration that imports it) resolves to.
+ * `MATCH_CRON_SCHEDULE` itself remains available as a manual override on top
+ * of that default, matching every other `*_CRON_SCHEDULE` in this codebase.
  */
 
-/** Canonical weekly schedule shared by node-cron, Telegram and /v1/countdown. */
+import { CADENCE } from "@gennety/shared";
+
+/** Canonical schedule shared by node-cron, Telegram and /v1/countdown. */
 export const MATCH_CRON_SCHEDULE =
-  process.env.MATCH_CRON_SCHEDULE ?? "0 18 * * 4";
+  process.env.MATCH_CRON_SCHEDULE ?? CADENCE.cron;
 
 /** Timezone for batch scheduling — matches node-cron `timezone` option. */
 export const CRON_TIMEZONE = process.env.CRON_TIMEZONE ?? "Europe/Kyiv";
 
-interface ParsedWeeklyCron {
+interface ParsedDropCron {
   minute: number;
   hour: number;
-  dayOfWeek: number; // 0 = Sunday, 6 = Saturday
+  /** `null` means "every day" (the cron's day-of-week field was `*`). */
+  daysOfWeek: number[] | null; // 0 = Sunday, 6 = Saturday
 }
 
 /**
- * Parse a simple weekly cron expression (minute hour * * dayOfWeek).
- * Only supports the subset used by our match scheduler.
+ * Parse a cron expression of the shape `minute hour * * dow`, where `dow` is
+ * either `*` (every day), a single weekday (`0`-`7`, `7` normalised to `0`),
+ * or a comma-separated list of weekdays (`1,3,5`). Day-of-month and month
+ * fields are always `*` in this codebase and are not interpreted.
  */
-export function parseWeeklyCron(expression: string): ParsedWeeklyCron {
+export function parseDropCron(expression: string): ParsedDropCron {
   const parts = expression.trim().split(/\s+/);
   if (parts.length < 5) {
     throw new Error(`Invalid cron expression: "${expression}"`);
   }
   const minute = Number(parts[0]);
   const hour = Number(parts[1]);
-  const dayOfWeek = Number(parts[4]);
+  const dowField = parts[4]!;
 
   if (
     Number.isNaN(minute) || minute < 0 || minute > 59 ||
-    Number.isNaN(hour) || hour < 0 || hour > 23 ||
-    Number.isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 7
+    Number.isNaN(hour) || hour < 0 || hour > 23
   ) {
-    throw new Error(`Cannot parse weekly cron: "${expression}"`);
+    throw new Error(`Cannot parse drop cron: "${expression}"`);
   }
 
-  // cron allows 7 for Sunday — normalise to 0
-  return { minute, hour, dayOfWeek: dayOfWeek === 7 ? 0 : dayOfWeek };
+  if (dowField === "*") {
+    return { minute, hour, daysOfWeek: null };
+  }
+
+  const rawDays = dowField.split(",").map((token) => Number(token.trim()));
+  if (rawDays.some((d) => Number.isNaN(d) || d < 0 || d > 7)) {
+    throw new Error(`Cannot parse drop cron: "${expression}"`);
+  }
+  // cron allows 7 for Sunday — normalise to 0, then dedupe.
+  const daysOfWeek = [...new Set(rawDays.map((d) => (d === 7 ? 0 : d)))];
+  return { minute, hour, daysOfWeek };
 }
 
 interface ZonedParts {
@@ -111,63 +135,137 @@ function zonedWallToUtc(
 }
 
 /**
- * Get the next occurrence of the weekly batch cron, relative to `now`,
- * anchored in Europe/Kyiv wall time. If `now` is exactly on the cron time,
- * returns the *next* week.
+ * Get the next occurrence of the drop cron, relative to `now`, anchored in
+ * Europe/Kyiv wall time. If `now` is exactly on the cron time, returns the
+ * *next* occurrence (today never re-fires on its own instant).
  */
 export function getNextBatchDate(
   now: Date = new Date(),
   cronExpression?: string,
 ): Date {
-  const cron = parseWeeklyCron(cronExpression ?? MATCH_CRON_SCHEDULE);
-
+  const cron = parseDropCron(cronExpression ?? MATCH_CRON_SCHEDULE);
   const kyivNow = getZonedParts(now, CRON_TIMEZONE);
-  const daysUntil = (cron.dayOfWeek - kyivNow.dayOfWeek + 7) % 7;
 
-  let candidate = zonedWallToUtc(
-    kyivNow.year,
-    kyivNow.month,
-    kyivNow.day + daysUntil,
-    cron.hour,
-    cron.minute,
-    CRON_TIMEZONE,
-  );
-
-  if (daysUntil === 0 && candidate.getTime() <= now.getTime()) {
-    candidate = zonedWallToUtc(
+  if (cron.daysOfWeek === null) {
+    // Every day at hour:minute — try today first, else tomorrow.
+    let candidate = zonedWallToUtc(
       kyivNow.year,
       kyivNow.month,
-      kyivNow.day + 7,
+      kyivNow.day,
       cron.hour,
       cron.minute,
       CRON_TIMEZONE,
     );
+    if (candidate.getTime() <= now.getTime()) {
+      candidate = zonedWallToUtc(
+        kyivNow.year,
+        kyivNow.month,
+        kyivNow.day + 1,
+        cron.hour,
+        cron.minute,
+        CRON_TIMEZONE,
+      );
+    }
+    return candidate;
   }
 
-  return candidate;
+  // One or more explicit weekdays — find the earliest qualifying occurrence
+  // strictly after `now` across all of them.
+  let best: Date | null = null;
+  for (const dow of cron.daysOfWeek) {
+    const daysUntil = (dow - kyivNow.dayOfWeek + 7) % 7;
+    let candidate = zonedWallToUtc(
+      kyivNow.year,
+      kyivNow.month,
+      kyivNow.day + daysUntil,
+      cron.hour,
+      cron.minute,
+      CRON_TIMEZONE,
+    );
+    if (candidate.getTime() <= now.getTime()) {
+      candidate = zonedWallToUtc(
+        kyivNow.year,
+        kyivNow.month,
+        kyivNow.day + daysUntil + 7,
+        cron.hour,
+        cron.minute,
+        CRON_TIMEZONE,
+      );
+    }
+    if (!best || candidate.getTime() < best.getTime()) best = candidate;
+  }
+  return best!;
 }
 
 /**
- * Get the previous occurrence of the weekly batch cron, relative to `now`,
- * anchored in Europe/Kyiv wall time.
+ * Get the previous occurrence of the drop cron, relative to `now`, anchored
+ * in Europe/Kyiv wall time. Self-contained (mirrors `getNextBatchDate`'s own
+ * search rather than subtracting a fixed interval), so it stays correct for
+ * every cadence — daily, weekly, or an arbitrary explicit weekday list —
+ * without depending on `CADENCE.intervalMs` matching whatever `cronExpression`
+ * override a caller passed in.
  */
 export function getPreviousBatchDate(
   now: Date = new Date(),
   cronExpression?: string,
 ): Date {
-  const next = getNextBatchDate(now, cronExpression);
-  return getNextBatchDate(
-    new Date(next.getTime() - 8 * 24 * 60 * 60 * 1000),
-    cronExpression,
-  );
+  const cron = parseDropCron(cronExpression ?? MATCH_CRON_SCHEDULE);
+  const kyivNow = getZonedParts(now, CRON_TIMEZONE);
+
+  if (cron.daysOfWeek === null) {
+    let candidate = zonedWallToUtc(
+      kyivNow.year,
+      kyivNow.month,
+      kyivNow.day,
+      cron.hour,
+      cron.minute,
+      CRON_TIMEZONE,
+    );
+    if (candidate.getTime() > now.getTime()) {
+      candidate = zonedWallToUtc(
+        kyivNow.year,
+        kyivNow.month,
+        kyivNow.day - 1,
+        cron.hour,
+        cron.minute,
+        CRON_TIMEZONE,
+      );
+    }
+    return candidate;
+  }
+
+  let best: Date | null = null;
+  for (const dow of cron.daysOfWeek) {
+    const daysSince = (kyivNow.dayOfWeek - dow + 7) % 7;
+    let candidate = zonedWallToUtc(
+      kyivNow.year,
+      kyivNow.month,
+      kyivNow.day - daysSince,
+      cron.hour,
+      cron.minute,
+      CRON_TIMEZONE,
+    );
+    if (candidate.getTime() > now.getTime()) {
+      candidate = zonedWallToUtc(
+        kyivNow.year,
+        kyivNow.month,
+        kyivNow.day - daysSince - 7,
+        cron.hour,
+        cron.minute,
+        CRON_TIMEZONE,
+      );
+    }
+    if (!best || candidate.getTime() > best.getTime()) best = candidate;
+  }
+  return best!;
 }
 
 /**
- * True while the most recent configured weekly batch is expected to be
- * processing. Unlike the legacy shared helper, this follows the exact same
- * MATCH_CRON_SCHEDULE + CRON_TIMEZONE inputs as node-cron and /v1/countdown.
+ * True while the most recently configured batch is expected to be
+ * processing. Follows the exact same `MATCH_CRON_SCHEDULE` + `CRON_TIMEZONE`
+ * inputs as node-cron and `/v1/countdown`.
  */
-export function isWeeklyBatchProcessing(
+export function isBatchProcessing(
   now: Date = new Date(),
   windowMinutes = 10,
   cronExpression?: string,
@@ -179,7 +277,11 @@ export function isWeeklyBatchProcessing(
 
 /**
  * Human-readable string for the next batch date, formatted in Europe/Kyiv.
- * Example: "Thursday, April 16 at 18:00"
+ * Weekly-shaped cron (explicit weekday list): "Thursday, April 16 at 18:00".
+ * Daily-shaped cron (`*` weekday): "today/tomorrow at 18:00" is a Phase 6
+ * copy concern (this function keeps rendering the full date, which reads
+ * correctly either way — "Friday, April 17 at 18:00" is true regardless of
+ * whether the batch runs every day or only on Fridays).
  */
 export function formatNextBatchDate(
   now: Date = new Date(),

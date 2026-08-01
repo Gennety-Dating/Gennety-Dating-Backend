@@ -4,7 +4,7 @@ import type { Language } from "@gennety/shared";
 import {
   CRON_TIMEZONE,
   getNextBatchDate,
-  isWeeklyBatchProcessing,
+  isBatchProcessing,
 } from "./next-batch.js";
 import {
   renderStatusBanner,
@@ -58,7 +58,7 @@ export function buildStatusBannerView(
   return renderStatusBanner({
     now,
     nextDropAt: getNextBatchDate(now),
-    isProcessing: isWeeklyBatchProcessing(now),
+    isProcessing: isBatchProcessing(now),
     language,
     timeZone: CRON_TIMEZONE,
     ...(options.stage ? { stage: options.stage } : {}),

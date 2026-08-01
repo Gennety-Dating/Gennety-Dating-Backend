@@ -16,6 +16,7 @@ vi.mock("@gennety/db", () => ({
 }));
 
 import { resolveWeeklyStatusForUser } from "./weekly-status.js";
+import { getNextBatchDate, getPreviousBatchDate } from "./next-batch.js";
 
 describe("resolveWeeklyStatusForUser", () => {
   beforeEach(() => {
@@ -78,5 +79,38 @@ describe("resolveWeeklyStatusForUser", () => {
       priorityBoosted: false,
       resolvedAt: null,
     });
+  });
+
+  // Regression coverage for the daily-cadence next-batch.ts rewrite: this
+  // function's `priorityBoosted` window is entirely derived from
+  // getPreviousBatchDate/getNextBatchDate, so it inherits whatever those two
+  // functions compute — these two tests pin the inclusive/exclusive boundary
+  // explicitly rather than relying on incidental dates elsewhere in this file.
+  it("priorityBoosted is true when lastMissedAt is exactly on the previous-batch boundary (inclusive)", async () => {
+    const now = new Date("2026-04-26T09:00:00Z");
+    const previousBatchAt = getPreviousBatchDate(now);
+
+    mockPrisma.profile.findUnique.mockResolvedValue({
+      standbyCount: 1,
+      lastMissedAt: previousBatchAt,
+    });
+    mockPrisma.match.findFirst.mockResolvedValue(null);
+
+    const result = await resolveWeeklyStatusForUser("user-boundary-lo", now);
+    expect(result.priorityBoosted).toBe(true);
+  });
+
+  it("priorityBoosted is false when lastMissedAt is exactly on the next-batch boundary (exclusive)", async () => {
+    const now = new Date("2026-04-26T09:00:00Z");
+    const nextBatchAt = getNextBatchDate(now);
+
+    mockPrisma.profile.findUnique.mockResolvedValue({
+      standbyCount: 1,
+      lastMissedAt: nextBatchAt,
+    });
+    mockPrisma.match.findFirst.mockResolvedValue(null);
+
+    const result = await resolveWeeklyStatusForUser("user-boundary-hi", now);
+    expect(result.priorityBoosted).toBe(false);
   });
 });
