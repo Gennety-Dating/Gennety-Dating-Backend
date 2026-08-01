@@ -24,6 +24,7 @@ import {
 import {
   batchSizeFor,
   isRushMode,
+  isoWeekKey,
   nextWindowAt,
   resolveZone,
   selectNextProfilerQuestion,
@@ -86,9 +87,18 @@ export function shouldReactToProfilerAnswer(questionId: string): boolean {
   return PROFILER_REACTION_QUESTION_IDS.has(questionId);
 }
 
-/** Drop cycle id = ISO date (UTC day) of the next weekly batch. */
+/**
+ * Drop cycle id for `refresh: "cycle"` situational Profiler questions —
+ * calendar week (`isoWeekKey`), deliberately independent of the matching
+ * batch's own cadence. Used to be `getNextBatchDate(now)` (the next batch
+ * date), which was fine under `weekly` (the batch date already changes
+ * exactly once a week) but broke under `daily`: the next-batch date changes
+ * every single day, which would make every situational question ("what are
+ * you watching this week") eligible to re-ask daily instead of weekly,
+ * regardless of what the matching cadence actually is.
+ */
 export function profilerCycleId(now: Date): string {
-  return getNextBatchDate(now).toISOString().slice(0, 10);
+  return isoWeekKey(now);
 }
 
 interface ProfilerUserState {

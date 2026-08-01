@@ -9,12 +9,12 @@
  */
 
 import {
+  CADENCE,
   DEFAULT_TIME_ZONE,
   PROFILER_BATCH_SIZE_NORMAL,
   PROFILER_BATCH_SIZE_RUSH,
   PROFILER_EVENING_HOUR,
   PROFILER_MORNING_HOUR,
-  PROFILER_RUSH_WINDOW_HOURS,
   isRefreshableProfilerQuestion,
   profilerQuestionBank,
   type ProfilerQuestion,
@@ -101,13 +101,15 @@ export function isQuietHourLocal(date: Date, timeZone: string | null | undefined
 }
 
 /**
- * Rush mode: a drop is imminent (< PROFILER_RUSH_WINDOW_HOURS away), so the
- * Profiler shrinks batches but keeps using both daily windows to fill the
- * profile before the event.
+ * Rush mode: a drop is imminent (within `CADENCE.profilerRushWindowMs`), so
+ * the Profiler shrinks batches but keeps using both daily windows to fill the
+ * profile before the event. Weekly: 48h (unchanged). Daily: 4h — at 48h under
+ * a 24h interval this would be permanently true (the "next drop" is always
+ * under 48h away), which is exactly the bug the daily-cadence audit found.
  */
 export function isRushMode(now: Date, nextDrop: Date): boolean {
-  const hoursUntil = (nextDrop.getTime() - now.getTime()) / (60 * 60 * 1000);
-  return hoursUntil > 0 && hoursUntil <= PROFILER_RUSH_WINDOW_HOURS;
+  const msUntil = nextDrop.getTime() - now.getTime();
+  return msUntil > 0 && msUntil <= CADENCE.profilerRushWindowMs;
 }
 
 /** Questions to send in one batch given the current mode. */
@@ -150,6 +152,26 @@ export function nextWindowAt(after: Date, timeZone: string | null | undefined): 
 export function firstQuestionAt(entryAt: Date, timeZone: string | null | undefined): Date {
   if (!isQuietHourLocal(entryAt, timeZone)) return entryAt;
   return nextWindowAt(entryAt, timeZone);
+}
+
+/**
+ * ISO-8601 week key ("2026-W31", UTC-based — a few hours off calendar-week-in-
+ * Kyiv at the boundary, which doesn't matter for this use). Used as the
+ * Profiler's drop-cycle id (`profilerCycleId` in `profiler.ts`) instead of
+ * `getNextBatchDate(now).toISOString().slice(0, 10)`, which used to change
+ * every single day once `DROP_CADENCE=daily` — making every `refresh: "cycle"`
+ * situational question (PRODUCT_SPEC §Phase 1b) eligible to re-ask daily
+ * instead of weekly, regardless of how often the matching batch itself runs.
+ * A calendar week is deliberately cadence-INDEPENDENT: nothing about "what are
+ * you watching this week" should change just because the batch got faster.
+ */
+export function isoWeekKey(date: Date): string {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 }
 
 // ---------------------------------------------------------------------------

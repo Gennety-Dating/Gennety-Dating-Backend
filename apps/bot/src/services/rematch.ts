@@ -20,6 +20,7 @@
  */
 
 import { prisma } from "@gennety/db";
+import { CADENCE } from "@gennety/shared";
 import { env } from "../config.js";
 import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
 import {
@@ -133,13 +134,24 @@ export async function checkRematchEligibility(
   if (liveMatch) return { ok: false, reason: "live_match" };
 
   // D3 limits. Only `settled` purchases consume quota — a refunded run delivered
-  // nothing, so it must not cost him an attempt.
-  const windowStart = new Date(now.getTime() - 7 * DAY_MS);
+  // nothing, so it must not cost him an attempt. The rolling window itself is
+  // CADENCE.rematchWindowMs (7 days on both profiles today) rather than a
+  // second, independently-hardcoded `7 * DAY_MS` literal — this is the one the
+  // original audit missed, found while wiring this file up for Phase 5.
+  const windowStart = new Date(now.getTime() - CADENCE.rematchWindowMs);
   const recent = await prisma.rematchPurchase.findMany({
     where: { userId, status: REMATCH_SETTLED, createdAt: { gte: windowStart } },
     select: { createdAt: true },
     orderBy: { createdAt: "desc" },
   });
+  // env.REMATCH_MAX_PER_WEEK / COOLDOWN_HOURS / PRE_BATCH_BLACKOUT_HOURS below
+  // are weekly-tuned ops defaults (config.ts) — deliberately NOT sourced from
+  // CADENCE (config.ts loads before dotenv would populate DROP_CADENCE, so it
+  // can never safely import @gennety/shared; see cadence.ts's own header).
+  // D8: Rematch ships OFF for the daily-cadence pilot, so this isn't live
+  // today — but if it's ever re-enabled under DROP_CADENCE=daily, these three
+  // env vars MUST be reviewed first (a 6h blackout is 25% of a 1-day interval,
+  // not ~3.5% of a 7-day one). See REMATCH_PRODUCT_SPEC.md.
   if (recent.length >= env.REMATCH_MAX_PER_WEEK) {
     // The window frees up when the OLDEST purchase in it ages out.
     const oldest = recent[recent.length - 1];
@@ -147,7 +159,7 @@ export async function checkRematchEligibility(
       ? {
           ok: false,
           reason: "weekly_limit",
-          retryAt: new Date(oldest.createdAt.getTime() + 7 * DAY_MS),
+          retryAt: new Date(oldest.createdAt.getTime() + CADENCE.rematchWindowMs),
         }
       : { ok: false, reason: "weekly_limit" };
   }
@@ -161,8 +173,8 @@ export async function checkRematchEligibility(
     }
   }
 
-  // Blackout: the Thursday batch is globally greedy-optimal, so a single-seeker
-  // run just before it can take a candidate the optimal pairing needed.
+  // Blackout: the batch is globally greedy-optimal, so a single-seeker run
+  // just before it can take a candidate the optimal pairing needed.
   if (env.REMATCH_PRE_BATCH_BLACKOUT_HOURS > 0) {
     const nextBatch = getNextBatchDate(now);
     const blackoutStart = new Date(
@@ -239,9 +251,10 @@ export async function pickGiftFraming(
   now: Date = new Date(),
   excludeMatchId?: string,
 ): Promise<RematchFraming> {
-  // `famine` takes precedence: being told "no match this week" is the sharper
-  // recent experience, so answering it directly is what makes the gift land.
-  const dropCutoff = new Date(now.getTime() - 7 * DAY_MS);
+  // `famine` takes precedence: being told "no match" is the sharper recent
+  // experience, so answering it directly is what makes the gift land. Same
+  // rolling window as the D3 purchase-count limit above.
+  const dropCutoff = new Date(now.getTime() - CADENCE.rematchWindowMs);
   const famine = await prisma.noMatchNotice.findFirst({
     where: { userId: partnerId, dropDate: { gte: dropCutoff } },
     select: { id: true },
