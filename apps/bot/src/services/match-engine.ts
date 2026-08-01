@@ -15,6 +15,7 @@ import {
 export type TypePrefTags = Partial<Record<RadarSet, PreferenceVector>>;
 import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
 import { refreshAllDirtyEmbeddings } from "../workers/embedding-refresh.js";
+import { expireStaleMatches, type MatchExpiry } from "./match-expiry.js";
 import {
   hasTrackVerifiedContact,
   TRACK_VERIFIED_CONTACT_SQL,
@@ -1219,6 +1220,13 @@ export interface DropBatchResult {
   /** Users who were eligible for this batch but left unpaired — their
    *  `Profile.standbyCount` was just incremented. Consumed by the standby UX. */
   missedUserIds: string[];
+  /**
+   * Proposals expired by this batch's own expiry preflight (see
+   * `runDropBatch`'s header comment). The caller (`index.ts`'s drop-matching
+   * job) is responsible for dispatching `sendExpiryNotifications` on these —
+   * this service layer stays Telegram-free by design.
+   */
+  expiredMatches: MatchExpiry[];
 }
 
 export interface DropBatchPlan {
@@ -1754,8 +1762,9 @@ async function loadHistoricalMatchPairs(
 }
 
 /**
- * Weekly batch: global greedy matching algorithm.
+ * Drop batch: global greedy matching algorithm.
  *
+ * 0. Expire stale proposals (preflight — see below).
  * 1. Load all eligible users with embeddings in one batch.
  * 2. Compute pairwise embedding distances via SQL.
  * 3. Score all compatible pairs using the multi-factor formula.
@@ -1763,8 +1772,24 @@ async function loadHistoricalMatchPairs(
  * 5. Create Match rows for all pairs.
  *
  * Returns match IDs for the dispatch queue to process.
+ *
+ * **Expiry runs as a preflight, not just the standalone every-15-minutes cron.**
+ * Under the `daily` cadence profile, a proposal's deadline lands close to the
+ * NEXT batch (`services/proposal-deadline.ts`'s "anchored" strategy) — close
+ * enough that whether the standalone expiry sweep or this batch fires first
+ * would otherwise decide whether a freed user makes today's drop or has to
+ * wait for tomorrow's. Running `expireStaleMatches` here, before
+ * `previewDropBatch` snapshots eligibility, makes that ordering deterministic
+ * instead of a race. The standalone cron remains as a safety net between
+ * batches; the atomic `proposed → expired` CAS in `expireStaleMatches` makes
+ * running it from both places idempotent (whichever gets there first wins,
+ * the other sees `count === 0` and moves on).
  */
 export async function runDropBatch(): Promise<DropBatchResult> {
+  const expiry = await expireStaleMatches();
+  if (expiry.expired > 0) {
+    console.log(`[drop-batch] expiry-preflight expired=${expiry.expired}`);
+  }
   await autoUnsuspendElapsed();
   const embeddingPreflight = await refreshAllDirtyEmbeddings();
   console.log(
@@ -1772,7 +1797,13 @@ export async function runDropBatch(): Promise<DropBatchResult> {
   );
   const plan = await previewDropBatch();
   if (plan.eligible === 0) {
-    return { eligible: 0, pairs: 0, matchIds: [], missedUserIds: [] };
+    return {
+      eligible: 0,
+      pairs: 0,
+      matchIds: [],
+      missedUserIds: [],
+      expiredMatches: expiry.matches,
+    };
   }
 
   // Create match rows.
@@ -1837,6 +1868,7 @@ export async function runDropBatch(): Promise<DropBatchResult> {
     pairs: matchIds.length,
     matchIds,
     missedUserIds,
+    expiredMatches: expiry.matches,
   };
 }
 

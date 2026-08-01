@@ -20,7 +20,12 @@ import {
   seedProfile,
 } from "../../../../packages/db/src/test-integration.js";
 import { PAIR_NOT_BOTH_ACCEPTED } from "./match-filters.js";
-import { expireStaleMatches, MATCH_TTL_MS } from "../services/match-expiry.js";
+import { expireStaleMatches } from "../services/match-expiry.js";
+
+// Weekly profile's flat TTL (default cadence for this test run) — past-deadline
+// dispatch times are computed relative to this, matching what
+// services/proposal-deadline.ts's deadlineFor() would produce under "fixed".
+const MATCH_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Seed a `proposed` match with an explicit decision state per side. */
 async function seedProposal(opts: {

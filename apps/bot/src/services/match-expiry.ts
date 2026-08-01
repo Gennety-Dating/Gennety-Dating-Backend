@@ -2,13 +2,15 @@ import { prisma } from "@gennety/db";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
 import { createMatchEvent } from "./match-events.js";
+import { deadlineFor } from "./proposal-deadline.js";
 
 /**
- * 24-hour TTL expiration for dispatched match proposals.
+ * Reply-deadline expiration for dispatched match proposals.
  *
- * Marks `proposed` matches as `expired` once 24h elapsed since
- * `dispatchedAt` without both sides accepting, and classifies each side
- * for the notification layer:
+ * Marks `proposed` matches as `expired` once their deadline
+ * (`services/proposal-deadline.ts` — a flat 24h TTL under the weekly cadence
+ * profile, anchored to the next batch under daily) passes without both sides
+ * accepting, and classifies each side for the notification layer:
  *
  *   - "silent": user never responded (`accepted{A|B} == null`).
  *   - "responder": user nailed an Accept or Decline within the window.
@@ -32,8 +34,6 @@ import { createMatchEvent } from "./match-events.js";
  *   - `silentIgnoreCount` is incremented via Prisma's `{ increment: 1 }`
  *     so two parallel expiry ticks can't double-count.
  */
-
-export const MATCH_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export type SideRole = "silent" | "responder";
 
@@ -76,32 +76,41 @@ interface CandidateMatch {
   acceptedByB: boolean | null;
   pitchMessageIdA: number | null;
   pitchMessageIdB: number | null;
+  dispatchedAt: Date | null;
   userA: { telegramId: bigint; language: string | null };
   userB: { telegramId: bigint; language: string | null };
 }
 
 /**
- * Find and expire all proposed matches that have exceeded the TTL.
+ * Find and expire all proposed matches whose reply deadline has passed.
  *
  * Returns a structured record per expired match for the notify layer to
  * dispatch the right text per side and clear the Telegram pitch
  * keyboard. Failures during Elo updates / event writes are logged and
  * skipped — the match stays expired even if downstream side effects
  * fail, so a flaky DB write can't leave a row stuck in `proposed`.
+ *
+ * The deadline is `deadlineFor(dispatchedAt)` (`services/proposal-deadline.ts`),
+ * which under the `daily` cadence profile is NOT a fixed offset from
+ * `dispatchedAt` — it's anchored to the next batch. That means it can't be
+ * pushed into a single SQL range filter the way the old `dispatchedAt < cutoff`
+ * could. The SQL filter here is deliberately widened to `status: "proposed"`
+ * only (a `proposed` row is by definition not yet expired, and the
+ * single-live-match invariant keeps this set bounded to the current live
+ * pool, not the whole historical table), and the deadline check happens in
+ * memory per candidate. Acceptable at today's volumes; if the live pool ever
+ * grows large enough for this to matter, the fix is a stored
+ * `proposalDeadlineAt` column, not a change to this function's shape.
  */
-export async function expireStaleMatches(
-  ttlMs: number = MATCH_TTL_MS,
-): Promise<ExpiryResult> {
-  const cutoff = new Date(Date.now() - ttlMs);
-
+export async function expireStaleMatches(now: Date = new Date()): Promise<ExpiryResult> {
   const candidates: CandidateMatch[] = await prisma.match.findMany({
     where: {
       status: "proposed",
-      dispatchedAt: { not: null, lt: cutoff },
+      dispatchedAt: { not: null },
       // Null-safe "not both accepted". The old `NOT: { AND: [...] }` excluded
       // every double-silent pair, so a proposal both sides ignored was never
       // expired — it sat in `proposed` forever and, via the single-live-match
-      // invariant, locked both users out of all future weekly batches. See
+      // invariant, locked both users out of all future batches. See
       // `utils/match-filters.ts`.
       ...PAIR_NOT_BOTH_ACCEPTED,
     },
@@ -113,6 +122,7 @@ export async function expireStaleMatches(
       acceptedByB: true,
       pitchMessageIdA: true,
       pitchMessageIdB: true,
+      dispatchedAt: true,
       userA: { select: { telegramId: true, language: true } },
       userB: { select: { telegramId: true, language: true } },
     },
@@ -121,6 +131,7 @@ export async function expireStaleMatches(
   const matches: MatchExpiry[] = [];
 
   for (const candidate of candidates) {
+    if (deadlineFor(candidate.dispatchedAt!).getTime() > now.getTime()) continue;
     // Atomic flip — if a concurrent decision-handler already moved the
     // row to `cancelled` / `negotiating`, this updates 0 rows and we
     // skip the match entirely.
@@ -136,7 +147,7 @@ export async function expireStaleMatches(
 
   if (matches.length > 0) {
     console.log(
-      `[expiry] expired ${matches.length} stale match(es) (TTL=${ttlMs}ms)`,
+      `[expiry] expired ${matches.length} stale match(es)`,
     );
   }
 

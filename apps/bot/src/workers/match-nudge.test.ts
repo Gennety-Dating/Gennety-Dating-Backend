@@ -49,7 +49,9 @@ import {
   PROPOSAL_DEADLINE_NUDGE_LEAD_MS,
 } from "./match-nudge.js";
 
-// 24h TTL — kept in sync with PROPOSAL_TTL_MS in countdown-plate.ts.
+// 24h TTL — the active (weekly, "fixed") cadence profile's flat proposal
+// window. Matches services/proposal-deadline.ts's deadlineFor() under
+// DROP_CADENCE=weekly (the default, and what this test suite runs under).
 const TTL_MS = 24 * 60 * 60 * 1000;
 
 // 2024-06-15 — Kyiv summer time (UTC+3). C-8 anchored quiet hours to Kyiv,

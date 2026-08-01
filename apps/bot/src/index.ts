@@ -282,6 +282,21 @@ async function dropMatchingJob(): Promise<void> {
       `[cron] Batch complete: eligible=${result.eligible} pairs=${result.pairs}`,
     );
 
+    // Notify sides of any proposal the batch's own expiry preflight expired
+    // (see runDropBatch's header comment — this is what makes the ordering
+    // between the standalone expiry sweep and the batch deterministic under
+    // a daily cadence). The standalone `*/15 * * * *` expiryJob below still
+    // runs independently as a safety net between batches; the atomic CAS in
+    // expireStaleMatches makes catching the same row from both places a safe
+    // no-op for whichever runs second.
+    if (result.expiredMatches.length > 0) {
+      console.log(`[cron] Batch expiry-preflight expired ${result.expiredMatches.length} stale match(es)`);
+      const notify = await sendExpiryNotifications(bot.api, result.expiredMatches);
+      console.log(
+        `[cron] Batch expiry notify: notified=${notify.notified} skipped=${notify.skipped} failed=${notify.failed}`,
+      );
+    }
+
     if (result.matchIds.length > 0) {
       console.log(`[cron] Dispatching ${result.matchIds.length} pitches...`);
       const dispatch = await dispatchMatches(

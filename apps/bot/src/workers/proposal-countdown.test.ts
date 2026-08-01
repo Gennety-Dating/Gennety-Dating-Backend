@@ -24,7 +24,6 @@ vi.mock("../config.js", () => ({
 
 import { prisma } from "@gennety/db";
 import { proposalCountdownTick } from "./proposal-countdown.js";
-import { PROPOSAL_TTL_MS } from "../utils/countdown-plate.js";
 
 const NOW = new Date("2024-06-15T12:00:00Z");
 
@@ -135,7 +134,9 @@ describe("proposalCountdownTick", () => {
 
   it("leaves an expired proposal to the expiry job (no edits past TTL)", async () => {
     (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      makeMatch({ dispatchedAt: new Date(NOW.getTime() - PROPOSAL_TTL_MS - 60_000) }),
+      // Dispatched 25h ago: under the active (weekly, flat-24h) cadence
+      // profile its deadline (deadlineFor) is already 1h in the past.
+      makeMatch({ dispatchedAt: new Date(NOW.getTime() - 25 * 60 * 60 * 1000) }),
     ]);
     const api = createApi();
 

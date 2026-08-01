@@ -37,7 +37,7 @@ import {
 } from "../services/match-decision-shared.js";
 import { getBotApi } from "./server.js";
 import { offerRematchAfterCancellation } from "../handlers/matching/rematch.js";
-import { PROPOSAL_TTL_MS } from "../utils/countdown-plate.js";
+import { deadlineFor } from "../services/proposal-deadline.js";
 import { PRE_DATE_WINGMAN_HOURS } from "@gennety/shared";
 import {
   ACTIVE_MATCH_STATUSES,
@@ -308,15 +308,17 @@ export async function getCurrentMatchForUser(
     ? (side === "A" ? match.wingmanHintA : match.wingmanHintB) ?? null
     : null;
 
-  // 24h response deadline. Only meaningful while the proposal is still
-  // open — once we transition to `negotiating`/`scheduled`/etc. there's
-  // nothing left to count down to. The expiry job overwrites `status`
-  // to `expired` once the deadline passes, so a `proposed` row with a
-  // past deadline is a brief race window the client should treat as
-  // "expiring imminently" rather than "still valid".
+  // Response deadline (services/proposal-deadline.ts — flat 24h under the
+  // weekly cadence profile, anchored to the next batch under daily). Only
+  // meaningful while the proposal is still open — once we transition to
+  // `negotiating`/`scheduled`/etc. there's nothing left to count down to.
+  // The expiry job overwrites `status` to `expired` once the deadline
+  // passes, so a `proposed` row with a past deadline is a brief race window
+  // the client should treat as "expiring imminently" rather than "still
+  // valid". Field name/shape unchanged — only how the value is derived.
   const proposalDeadlineAt =
     match.status === "proposed" && match.dispatchedAt
-      ? new Date(match.dispatchedAt.getTime() + PROPOSAL_TTL_MS).toISOString()
+      ? deadlineFor(match.dispatchedAt).toISOString()
       : null;
 
   return {

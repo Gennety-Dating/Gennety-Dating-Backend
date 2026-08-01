@@ -1,7 +1,7 @@
 import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { prisma } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { CADENCE, t, type Language } from "@gennety/shared";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { boostAcceptedSidePriority } from "./match-decision-shared.js";
 import { refundMatchTickets, ticketRefundNoticeKey } from "./ticket-refund.js";
@@ -34,19 +34,24 @@ import { sendPushToUser } from "./push.js";
  * simply left alone (see `stallReachableFor`).
  */
 
-/** First venue-phase reminder — mirrors the scheduling phase's 6h. */
-export const VENUE_NUDGE1_MS = 6 * 60 * 60 * 1000;
-/** Second venue-phase reminder — mirrors the scheduling phase's 12h. */
-export const VENUE_NUDGE2_MS = 12 * 60 * 60 * 1000;
-/** When the "still in?" question goes out to a side that still owes an action. */
-export const STALL_CHECK_IN_MS = 24 * 60 * 60 * 1000;
 /**
- * When an unanswered stall cancels the match. 48h from the phase opening (or
- * from a 🟢 tap) lands two days later, comfortably before the next weekly drop,
- * so the freed users make the very next batch. Even the maximum chain — two
- * check-ins, each answered green — resolves inside four days.
+ * Venue/stall timing, sourced from the active `CADENCE` profile. Weekly
+ * values are unchanged from the old hardcoded constants (6h/12h venue nudges,
+ * 24h check-in, 48h timeout); daily halves the check-in/timeout (12h/24h) so
+ * one ghost doesn't cost a partner two full drop cycles — see the
+ * implementation plan's Phase 3 note.
  */
-export const STALL_TIMEOUT_MS = 48 * 60 * 60 * 1000;
+/** First venue-phase reminder — mirrors the scheduling phase's first nudge. */
+export const VENUE_NUDGE1_MS = CADENCE.venueNudgeOffsetsMs[0];
+/** Second venue-phase reminder — mirrors the scheduling phase's second nudge. */
+export const VENUE_NUDGE2_MS = CADENCE.venueNudgeOffsetsMs[1];
+/** When the "still in?" question goes out to a side that still owes an action. */
+export const STALL_CHECK_IN_MS = CADENCE.stallCheckInMs;
+/**
+ * When an unanswered stall cancels the match — comfortably before the next
+ * drop, so the freed users make the very next batch regardless of cadence.
+ */
+export const STALL_TIMEOUT_MS = CADENCE.stallTimeoutMs;
 
 export type StallPhase = "scheduling" | "venue";
 export type MatchSide = "A" | "B";

@@ -22,7 +22,8 @@ vi.mock("../utils/elo-calculator.js", () => ({
 
 import { prisma } from "@gennety/db";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
-import { expireStaleMatches, MATCH_TTL_MS } from "./match-expiry.js";
+import { expireStaleMatches } from "./match-expiry.js";
+import { deadlineFor } from "./proposal-deadline.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 
@@ -47,6 +48,7 @@ function buildCandidate(overrides: Partial<{
   acceptedByB: boolean | null;
   pitchMessageIdA: number | null;
   pitchMessageIdB: number | null;
+  dispatchedAt: Date;
 }> = {}) {
   return {
     id: overrides.id ?? "match-1",
@@ -56,6 +58,12 @@ function buildCandidate(overrides: Partial<{
     acceptedByB: overrides.acceptedByB ?? null,
     pitchMessageIdA: overrides.pitchMessageIdA ?? 11,
     pitchMessageIdB: overrides.pitchMessageIdB ?? 22,
+    // Default: dispatched well before its deadline has passed relative to
+    // "now" (the caller almost always wants this candidate to be treated as
+    // already-expired, since expireStaleMatches filters status only and
+    // checks the deadline in memory — see the dedicated deadline tests below
+    // for the not-yet-expired case).
+    dispatchedAt: overrides.dispatchedAt ?? new Date(Date.now() - 25 * 60 * 60 * 1000),
     userA: sideA,
     userB: sideB,
   };
@@ -68,28 +76,56 @@ describe("expireStaleMatches", () => {
     mMatchFindMany.mockResolvedValue([]);
   });
 
-  it("uses the 24h cutoff and the right filter shape", async () => {
+  it("filters candidates by status only — the deadline check happens in memory, not SQL", async () => {
+    // Since deadlineFor() isn't a fixed offset under every cadence profile
+    // (see proposal-deadline.ts), the query can no longer push "past the
+    // deadline" into a single dispatchedAt range filter. It must still
+    // exclude undecided-but-live rows the same way as before (status +
+    // PAIR_NOT_BOTH_ACCEPTED), just without a dispatchedAt cutoff.
     await expireStaleMatches();
 
     expect(mMatchFindMany).toHaveBeenCalledTimes(1);
     const arg = mMatchFindMany.mock.calls[0]![0] as {
       where: {
         status: string;
-        dispatchedAt: { not: null; lt: Date };
-        NOT: { AND: Array<{ acceptedByA?: boolean; acceptedByB?: boolean }> };
+        dispatchedAt: { not: null };
       };
     };
     expect(arg.where.status).toBe("proposed");
-    expect(arg.where.dispatchedAt.lt).toBeInstanceOf(Date);
-    const expected = Date.now() - MATCH_TTL_MS;
-    expect(Math.abs(arg.where.dispatchedAt.lt.getTime() - expected)).toBeLessThan(1000);
+    expect(arg.where.dispatchedAt).toEqual({ not: null });
+    expect("lt" in arg.where.dispatchedAt).toBe(false);
   });
 
-  it("returns no matches when nothing is past TTL", async () => {
+  it("returns no matches when the candidate set is empty", async () => {
     const result = await expireStaleMatches();
     expect(result.expired).toBe(0);
     expect(result.matches).toEqual([]);
     expect(mMatchUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("skips a candidate whose deadline has NOT yet passed (in-memory filter)", async () => {
+    mMatchFindMany.mockResolvedValueOnce([
+      buildCandidate({ dispatchedAt: new Date() }), // just dispatched — nowhere near its deadline
+    ]);
+
+    const result = await expireStaleMatches();
+
+    expect(result.expired).toBe(0);
+    expect(result.matches).toEqual([]);
+    expect(mMatchUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("expires a candidate exactly at its deadline, using the shared deadlineFor()", async () => {
+    const dispatchedAt = new Date("2026-04-16T18:00:05Z");
+    const now = deadlineFor(dispatchedAt);
+    mMatchFindMany.mockResolvedValueOnce([buildCandidate({ dispatchedAt })]);
+    mProfileUpdate
+      .mockResolvedValueOnce({ silentIgnoreCount: 1 })
+      .mockResolvedValueOnce({ silentIgnoreCount: 1 });
+
+    const result = await expireStaleMatches(now);
+
+    expect(result.expired).toBe(1);
   });
 
   it("flips proposed → expired atomically and skips when the row was already moved", async () => {

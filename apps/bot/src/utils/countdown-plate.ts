@@ -1,4 +1,5 @@
 import { t, type Language } from "@gennety/shared";
+import { minutesLeftUntilDeadline } from "../services/proposal-deadline.js";
 
 /**
  * Helpers for the reply-deadline countdown on match-proposal pitches.
@@ -21,19 +22,21 @@ import { t, type Language } from "@gennety/shared";
  * Both callers (dispatch & worker) must render byte-identical strings so
  * the worker's no-op cache can skip unchanged Telegram edits — keep the
  * format here, not duplicated at call sites.
+ *
+ * The deadline itself (was a locally-declared `PROPOSAL_TTL_MS` constant,
+ * independently duplicating `match-expiry.ts`'s `MATCH_TTL_MS`) now lives in
+ * `services/proposal-deadline.ts` — see that module's header for why the
+ * weekly/daily formulas are genuinely different shapes, not just different
+ * numbers.
  */
 
-export const PROPOSAL_TTL_MS = 24 * 60 * 60 * 1000;
-
-/** Compute minutes remaining (may be negative if past TTL). */
+/** Compute minutes remaining until the reply deadline (may be negative once
+ *  it has passed). */
 export function minutesLeftFromDispatch(
   dispatchedAt: Date,
   now: Date = new Date(),
-  ttlMs: number = PROPOSAL_TTL_MS,
 ): number {
-  const elapsedMs = now.getTime() - dispatchedAt.getTime();
-  const remainingMs = ttlMs - elapsedMs;
-  return Math.floor(remainingMs / 60_000);
+  return minutesLeftUntilDeadline(dispatchedAt, now);
 }
 
 /** Render the plate text for a given language and minutes-left value. */

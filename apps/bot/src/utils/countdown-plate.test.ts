@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 
 import {
-  PROPOSAL_TTL_MS,
   appendCountdownPlate,
   minutesLeftFromDispatch,
   renderCountdownPlate,
 } from "./countdown-plate.js";
+import { deadlineFor } from "../services/proposal-deadline.js";
 
 describe("renderCountdownPlate", () => {
   it("at T+0 (1440 min left) shows 24h", () => {
@@ -47,13 +47,13 @@ describe("minutesLeftFromDispatch", () => {
 
   it("returns 0 at exactly the deadline", () => {
     const dispatched = new Date("2026-04-30T12:00:00Z");
-    const now = new Date(dispatched.getTime() + PROPOSAL_TTL_MS);
+    const now = deadlineFor(dispatched);
     expect(minutesLeftFromDispatch(dispatched, now)).toBe(0);
   });
 
   it("returns negative past the deadline", () => {
     const dispatched = new Date("2026-04-30T12:00:00Z");
-    const now = new Date(dispatched.getTime() + PROPOSAL_TTL_MS + 60_000);
+    const now = new Date(deadlineFor(dispatched).getTime() + 60_000);
     expect(minutesLeftFromDispatch(dispatched, now)).toBe(-1);
   });
 

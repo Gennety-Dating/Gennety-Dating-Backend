@@ -16,6 +16,12 @@ vi.mock("@gennety/db", () => ({
       updateMany: mocks.userUpdateMany,
       findMany: mocks.userFindMany,
     },
+    // runDropBatch now runs expireStaleMatches() as a preflight before the
+    // embedding refresh — an empty candidate set means it's a no-op here.
+    match: {
+      findMany: vi.fn().mockResolvedValue([]),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
   },
 }));
 
@@ -40,6 +46,7 @@ describe("weekly embedding preflight", () => {
       pairs: 0,
       matchIds: [],
       missedUserIds: [],
+      expiredMatches: [],
     });
 
     expect(mocks.refreshAllDirtyEmbeddings).toHaveBeenCalledTimes(1);

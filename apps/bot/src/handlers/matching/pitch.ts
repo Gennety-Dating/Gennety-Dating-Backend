@@ -14,10 +14,8 @@ import {
   type PitchResult,
 } from "../../services/pitch-generator.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
-import {
-  renderCountdownButtonLabel,
-  PROPOSAL_TTL_MS,
-} from "../../utils/countdown-plate.js";
+import { renderCountdownButtonLabel } from "../../utils/countdown-plate.js";
+import { minutesLeftUntilDeadline } from "../../services/proposal-deadline.js";
 import {
   sendMotionProfileMedia,
   sendProfileMediaCard,
@@ -494,7 +492,14 @@ export async function sendMatchProposal(
   // pitch keyboard (below), NOT the message body — the proposal-countdown
   // worker re-renders only that button via `editMessageReplyMarkup`, so the
   // synergy header + streamed pitch text are never rewritten.
-  const initialMinutes = Math.floor(PROPOSAL_TTL_MS / 60_000);
+  // Starting value shown before the real `dispatchedAt` timestamp lands and
+  // the proposal-countdown worker takes over (it re-renders every minute
+  // from the real value) — computed as "if dispatch happens right now".
+  const dispatchingNow = new Date();
+  const initialMinutes = Math.max(
+    0,
+    minutesLeftUntilDeadline(dispatchingNow, dispatchingNow),
+  );
   const chunksA = splitPitchIntoDrafts(pitchForA);
   const chunksB = splitPitchIntoDrafts(pitchForB);
   const lastA = chunksA.pop() ?? "";

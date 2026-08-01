@@ -1,10 +1,10 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { VOICE_CORE, t, type Language } from "@gennety/shared";
+import { CADENCE, VOICE_CORE, t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { openaiFetch } from "../services/openai-fetch.js";
-import { PROPOSAL_TTL_MS } from "../utils/countdown-plate.js";
+import { deadlineFor } from "../services/proposal-deadline.js";
 import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
 import { buildLocationMapKeyboard } from "../handlers/matching/venue-negotiation.js";
 import {
@@ -41,17 +41,23 @@ import { isQuietHours } from "./quiet-hours.js";
  * Quiet hours (23:00–09:00 Europe/Kyiv) block all sends.
  */
 
-export const PROPOSAL_NUDGE1_MS = 3 * 60 * 60 * 1000;   //  3 hours
-export const PROPOSAL_NUDGE2_MS = 10 * 60 * 60 * 1000;  // 10 hours
-export const SCHED_NUDGE1_MS   = 6 * 60 * 60 * 1000;   //  6 hours
-export const SCHED_NUDGE2_MS   = 12 * 60 * 60 * 1000;  // 12 hours
 /**
- * Lead time before the 24h proposal TTL at which the deadline nudge fires.
- * With the hourly cron this 2h window guarantees at least one tick lands
- * inside `[deadline - 2h, deadline)`, so the "window closing" heads-up
+ * Nudge offsets, sourced from the active `CADENCE` profile (weekly values
+ * below are unchanged from the old hardcoded constants: 3h/10h proposal,
+ * 6h/12h scheduling; daily halves both to keep the same "roughly a third and
+ * two-thirds of the way to the deadline" shape over a shorter window).
+ */
+export const PROPOSAL_NUDGE1_MS = CADENCE.proposalNudgeOffsetsMs[0];
+export const PROPOSAL_NUDGE2_MS = CADENCE.proposalNudgeOffsetsMs[1];
+export const SCHED_NUDGE1_MS = CADENCE.schedNudgeOffsetsMs[0];
+export const SCHED_NUDGE2_MS = CADENCE.schedNudgeOffsetsMs[1];
+/**
+ * Lead time before the reply deadline at which the deadline nudge fires.
+ * With the hourly cron this window guarantees at least one tick lands
+ * inside `[deadline - lead, deadline)`, so the "window closing" heads-up
  * always goes out to a still-undecided side before the row expires.
  */
-export const PROPOSAL_DEADLINE_NUDGE_LEAD_MS = 2 * 60 * 60 * 1000; // 2 hours
+export const PROPOSAL_DEADLINE_NUDGE_LEAD_MS = CADENCE.proposalDeadlineNudgeLeadMs;
 
 export interface NudgeOptions {
   fetchFn?: typeof fetch;
@@ -121,19 +127,17 @@ async function handleDeadlineNudges(
   now: Date,
   batchSize: number,
 ): Promise<number> {
-  // dispatchedAt must sit in (now - TTL, now - TTL + lead]: newer than that
-  // and the deadline is still >lead away; older and the row has expired (left
-  // to the expiry job, which owns the terminal state + message overwrite).
-  const earliestDispatch = new Date(now.getTime() - PROPOSAL_TTL_MS);
-  const latestDispatch = new Date(
-    now.getTime() - PROPOSAL_TTL_MS + PROPOSAL_DEADLINE_NUDGE_LEAD_MS,
-  );
-
+  // Deadline isn't a fixed offset from dispatchedAt under every cadence
+  // profile (services/proposal-deadline.ts), so it can't be pushed into a
+  // single dispatchedAt range filter the way "TTL - lead .. TTL" could. Filter
+  // by status only (a `proposed` row is naturally bounded by the live pool —
+  // see the identical reasoning in match-expiry.ts's expireStaleMatches) and
+  // check `deadlineFor` per candidate in memory.
   const matches = await prisma.match.findMany({
     where: {
       status: "proposed",
       proposalDeadlineNudgeSentAt: null,
-      dispatchedAt: { gt: earliestDispatch, lte: latestDispatch },
+      dispatchedAt: { not: null },
       // Null-safe "not both accepted" — a `NOT: { AND: [...] }` here would
       // drop precisely the silent pairs this nudge exists for. See
       // `utils/match-filters.ts`.
@@ -147,12 +151,22 @@ async function handleDeadlineNudges(
       userA: { select: { telegramId: true, language: true } },
       userB: { select: { telegramId: true, language: true } },
     },
-    take: batchSize,
   });
 
   let count = 0;
+  let matchesProcessed = 0;
 
   for (const match of matches) {
+    const deadline = deadlineFor(match.dispatchedAt!);
+    // Due when the deadline is still ahead but within the lead window —
+    // newer (>lead away) is too early; already past is the expiry job's job.
+    const dueSoon =
+      deadline.getTime() > now.getTime() &&
+      deadline.getTime() <= now.getTime() + PROPOSAL_DEADLINE_NUDGE_LEAD_MS;
+    if (!dueSoon) continue;
+    if (matchesProcessed >= batchSize) break;
+    matchesProcessed++;
+
     // One-shot claim so overlapping ticks can't double-send.
     const claim = await prisma.match.updateMany({
       where: {
@@ -164,7 +178,6 @@ async function handleDeadlineNudges(
     });
     if (claim.count === 0) continue;
 
-    const deadline = new Date(match.dispatchedAt!.getTime() + PROPOSAL_TTL_MS);
     const hoursLeft = Math.max(
       1,
       Math.round((deadline.getTime() - now.getTime()) / (60 * 60 * 1000)),
