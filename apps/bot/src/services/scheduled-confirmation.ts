@@ -41,7 +41,7 @@ import {
   buildVenueChangeButton,
 } from "../handlers/matching/venue-change.js";
 import { isTelegramTarget } from "../utils/telegram-target.js";
-import { runStatusSequence } from "./ai-stream.js";
+import { runStatusSequence, NEVER_CUT_SHORT } from "./ai-stream.js";
 import { dateCardSteps } from "./analysis-status.js";
 
 export function buildScheduledMapsKeyboard(venue: Venue, lang: Language): InlineKeyboardMarkup {
@@ -95,6 +95,16 @@ async function sendScheduledConfirmation(
     // the real unit of work and broadcast a live "shine" status that is HELD
     // until the render actually resolves, so the chat never looks frozen. The
     // status is cosmetic — any failure inside it must not block the card.
+    //
+    // `NEVER_CUT_SHORT`: the render time varies from well under a second (a
+    // cached photo, a venue with no Places image) to several seconds, and with
+    // the default cut-short the beats the user actually saw varied with it —
+    // often just the first one, for a couple of hundred milliseconds. What that
+    // looked like in the chat was the PRECEDING venue-search shimmer hanging on
+    // its final "matching your vibe" beat (a rich draft lingers on its own ~30s
+    // TTL, with nothing between the two sequences to replace it) and the
+    // card beats never arriving at all. The script now always plays through, so
+    // the narration is continuous from venue lookup to card.
     const renderWork = renderDateCard(
       {
         partnerFirstName: input.partnerFirstName,
@@ -112,6 +122,7 @@ async function sendScheduledConfirmation(
 
     await runStatusSequence(api, chatId, dateCardSteps(input.language), {
       until: renderWork,
+      untilFromStepIndex: NEVER_CUT_SHORT,
       rich: true,
     }).catch(() => undefined);
 

@@ -21,6 +21,7 @@ import {
   streamDraftsToChat,
   runStatusSequence,
   runThinkingStatusSequence,
+  NEVER_CUT_SHORT,
 } from "./ai-stream.js";
 import { thinkingHtml } from "./telegram-rich.js";
 
@@ -429,6 +430,28 @@ describe("runStatusSequence (until: tracked work)", () => {
     expect(waited).toEqual([100, 200, 300, 0]);
     expect(api.editMessageText).toHaveBeenCalledTimes(3);
     expect(api.editMessageText).toHaveBeenNthCalledWith(3, 5, 7, "Ready when work is");
+    expect(api.deleteMessage).toHaveBeenCalledWith(5, 7);
+  });
+
+  it("never cuts the script short with NEVER_CUT_SHORT, even on instant work", async () => {
+    const api = createApi();
+    const waited: number[] = [];
+    const wait = async (ms: number) => {
+      waited.push(ms);
+    };
+
+    // Work that is already done before the first beat is even drawn — the case
+    // that used to collapse the date-card status to a sub-second flash of its
+    // first line while the previous flow's shimmer sat above it.
+    await runStatusSequence(api, 5, steps, {
+      wait,
+      until: Promise.resolve(),
+      untilFromStepIndex: NEVER_CUT_SHORT,
+    });
+
+    expect(waited).toEqual([100, 200, 300]);
+    expect(api.editMessageText).toHaveBeenCalledTimes(2);
+    expect(api.editMessageText).toHaveBeenNthCalledWith(2, 5, 7, "Step 3");
     expect(api.deleteMessage).toHaveBeenCalledWith(5, 7);
   });
 

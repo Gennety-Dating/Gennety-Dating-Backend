@@ -14,6 +14,7 @@ import {
 } from "./identity-selfie.js";
 import { pinStatusBanner } from "./status-banner.js";
 import { downloadProfileImage, uploadSelfie } from "./storage.js";
+import type { OutcomeGate } from "./outcome-gate.js";
 import { notifyFounderNewUser } from "./founder-notify.js";
 import { settleReferralOnVerified } from "./referral-notify.js";
 import {
@@ -1021,6 +1022,16 @@ export interface DefaultPipelineOptions extends PipelineRunOptions {
    * Absent on every rerun, which reads the stored copy instead.
    */
   capturedSelfie?: CapturedSelfie;
+  /**
+   * Hold every user-facing message until the caller's "analysing your check"
+   * status has been torn down (`services/outcome-gate.ts`). Only the fresh
+   * liveness path passes one, because it is the only caller that narrates the
+   * run: without it the run's own speed decided the ordering, and a fast one
+   * dropped the verdict on screen *underneath* a shimmer still claiming the
+   * check was in progress. Absent on reruns and the admin recheck, where
+   * nothing is narrated and messages go out immediately.
+   */
+  outcomeGate?: OutcomeGate;
 }
 
 /**
@@ -1065,6 +1076,12 @@ export async function runFaceMatchVerificationDefault(
           }
         : {}),
       notify: async (telegramId, message, kind) => {
+        // Wait for the caller's status shimmer to leave the screen (no-op when
+        // nothing is narrating this run). This is the ONLY thing enforcing that
+        // "we're finishing your check" is torn down before the verdict lands
+        // in its place — the pipeline and the status run in parallel, so
+        // without it the ordering was decided by whichever finished first.
+        await options.outcomeGate?.hold();
         // `rejected` and `retry` are the outcomes the user can act on, so they
         // carry the recoveries inline instead of sending them hunting through
         // menus: swap the photos (the pipeline then re-scores them against the
@@ -1113,6 +1130,10 @@ export async function runFaceMatchVerificationDefault(
         });
       },
       surfaceVerifiedActivation: async (input) => {
+        // Same gate as `notify`: the menu + pinned banner are the landing the
+        // user reads after the success DM, so they must not appear over a
+        // status that is still running either.
+        await options.outcomeGate?.hold();
         await surfaceVerifiedActivationDefault(api, input.userId, input.telegramId);
       },
       ...(env.REFERRAL_FEATURE_ENABLED

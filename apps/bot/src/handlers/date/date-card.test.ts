@@ -16,6 +16,7 @@ vi.mock("../../services/date-card/index.js", () => ({
 
 vi.mock("../../services/ai-stream.js", () => ({
   runStatusSequence: vi.fn().mockResolvedValue(undefined),
+  NEVER_CUT_SHORT: Number.POSITIVE_INFINITY,
 }));
 
 import { prisma } from "@gennety/db";

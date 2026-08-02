@@ -1,5 +1,85 @@
 # Gennety Dating Deploy
 
+**PENDING — status shimmers stop being overtaken by their own results
+(PRODUCT_SPEC §1.3 / §1.4 / §3.7a).** Not deployed yet. **Code-only: no Prisma
+schema change, no env change, no flag change, no Mini App change**
+(`apps/webapp` untouched). Two user-reported bugs, one shared cause — a status
+sequence and the work it narrates were independent async chains, so the work's
+speed decided what the user saw.
+
+- **Verification.** A liveness pass starts the face-match pipeline and the ~7s
+  "analysing your check" shimmer side by side. AWS answers fast, so the verdict
+  — usually *"the photos on your profile don't match your verification selfie"*
+  — routinely landed **underneath** a shimmer still saying the check was being
+  completed. A gate (`services/outcome-gate.ts`) now holds every user-facing
+  message from that run until the shimmer is torn down, and tells the shimmer
+  when the pipeline is ready to speak so a slow run holds its last beat instead
+  of ending in silence. Scoped to the fresh-liveness path only: photo-edit
+  reruns, the admin recheck and the native rail DM immediately as before.
+- **Date planning.** `runStatusSequence`'s `until` cut the narration short the
+  moment the work settled — from the FIRST beat, at the three date-card call
+  sites. The render ranges from well under a second to several seconds, so the
+  card beats a user actually saw varied run to run, often collapsing to a
+  sub-second flash of the first line. What that looked like in the chat is
+  exactly what was reported: the venue-search shimmer appearing to hang on
+  *"подбираю по атмосфере"* (a rich draft lingers on its own ~30s TTL and
+  nothing replaced it) with the card beats never arriving. `NEVER_CUT_SHORT`
+  makes `until` extend a script, never truncate it.
+
+**Worth knowing before the restart:** the date card now lands ~6s after the
+venue is picked even when the render was instant — that is the fix, not a
+regression (the beats are a script the user is meant to read). Production has
+**0 matches ever**, so nothing exercises the date-card half until a Thursday
+batch pairs someone; verify it on `@gennetytestbot`. The verification half is
+live for anyone who runs a check.
+
+**Rollback:** revert the code and restart. Nothing else to undo.
+
+---
+
+**PENDING — "Continue with Telegram" on iOS (`POST /v1/auth/telegram`).** Not
+deployed yet. **No Prisma schema change, no Mini App change, no flag change** —
+but it needs **one new env var**, and it is inert until that var is set.
+
+```
+TELEGRAM_LOGIN_CLIENT_ID=8707759133
+```
+
+That is the bot's Client ID from @BotFather → Bot Settings → Login Widget →
+*Switch to OpenID Connect Login* (founder, 2026-08-02). It is the `aud` every ID
+token is checked against, so an empty value is fail-closed: the endpoint answers
+503 and `/v1/app/config` reports `features.telegramAuth: false`, which is what
+tells the client to hide the button. **There is deliberately no client secret**
+— we verify an already-issued ID token against Telegram's public keys and never
+exchange an authorization code, so no secret needs to exist on the droplet.
+
+The matching iOS redirect URI is `https://app3059503520-login.tg.dev`; it lives
+in the app's Associated Domains, not in server config.
+
+**One behaviour change that is NOT about Telegram login**, shipped with it
+because Telegram login is what makes it wrong: `workers/profiler.ts` and
+`workers/re-engagement.ts` filtered eligible users on `telegramId > 0` alone. A
+Telegram-login account carries a real positive id while being reachable only by
+push (a bot cannot message someone who never pressed Start), so both now also
+require `platform in ('telegram','both')`. Nobody is in that state until the env
+var above is set, so the fix lands ahead of the cohort it protects.
+
+Post-deploy check:
+
+```sh
+curl -s https://dating-api.gennety.com/v1/app/config | grep -o '"telegramAuth":[a-z]*'
+# 503 until the env var is set, then 400 for a missing token — never 404.
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://dating-api.gennety.com/v1/auth/telegram \
+  -H 'content-type: application/json' -d '{}'
+```
+
+**Rollback:** remove `TELEGRAM_LOGIN_CLIENT_ID` and
+`pm2 restart gennety-bot --update-env`. The endpoint goes inert and the client
+hides the button; no data written by a Telegram login is undone by that (those
+accounts keep working through their phone rail).
+
+---
+
 **⚠️ Production is NOT at repo HEAD, and a single-file rsync from the working
 tree WILL take it down (incident 2026-08-01, ~6 min outage).** Prod runs
 `f9e08eb` (deployed 2026-07-29); everything in the PENDING blocks below is

@@ -4,7 +4,7 @@ import { t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { renderDateCard } from "../../services/date-card/index.js";
-import { runStatusSequence } from "../../services/ai-stream.js";
+import { runStatusSequence, NEVER_CUT_SHORT } from "../../services/ai-stream.js";
 import { dateCardShareSteps } from "../../services/analysis-status.js";
 
 /**
@@ -90,6 +90,10 @@ export async function handleDateCardShare(ctx: BotContext): Promise<void> {
 
   await runStatusSequence(ctx.api, ctx.from.id, dateCardShareSteps(lang as Language), {
     until: renderWork,
+    // The blur re-render can hit a warm cache and return in well under a
+    // second; without this the Share tap's only feedback was a beat that
+    // flashed and vanished. The script plays in full, `until` only extends it.
+    untilFromStepIndex: NEVER_CUT_SHORT,
     rich: true,
   }).catch(() => undefined);
 

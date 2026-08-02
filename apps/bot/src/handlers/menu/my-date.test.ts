@@ -32,6 +32,7 @@ vi.mock("../../services/analysis-status.js", () => ({
 
 vi.mock("../../services/ai-stream.js", () => ({
   runStatusSequence: vi.fn().mockResolvedValue(undefined),
+  NEVER_CUT_SHORT: Number.POSITIVE_INFINITY,
 }));
 
 vi.mock("../../services/coordination.js", () => ({

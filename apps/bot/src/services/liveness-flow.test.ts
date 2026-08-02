@@ -48,6 +48,7 @@ vi.mock("./verification-keyboard.js", () => ({ buildVerificationKeyboard }));
 
 const { beginLivenessCheck, completeLivenessCheck, recordBiometricConsent } =
   await import("./liveness-flow.js");
+const { createOutcomeGate } = await import("./outcome-gate.js");
 
 const SESSION_ID = "11111111-2222-3333-4444-555555555555";
 const CREDENTIALS = {
@@ -275,6 +276,49 @@ describe("completeLivenessCheck", () => {
       api,
       { capturedSelfie: { buffer: REFERENCE, mime: "image/jpeg" } },
     );
+  });
+
+  it("hands the caller's outcome gate to the pipeline and closes it when the run ends", async () => {
+    // The pipeline is fire-and-forget, so its own speed used to decide whether
+    // the verdict DM landed before or *underneath* the caller's "analysing
+    // your check" shimmer. The gate is what makes that ordering deterministic;
+    // `finish()` is what stops a silent run (a rerun that only re-confirms an
+    // already-verified user) from leaving the shimmer holding.
+    let resolvePipeline!: () => void;
+    runFaceMatchVerificationDefault.mockImplementationOnce(
+      () => new Promise<void>((r) => (resolvePipeline = r)),
+    );
+    const gate = createOutcomeGate();
+
+    await completeLivenessCheck("user-1", SESSION_ID, apiArg, { outcomeGate: gate });
+
+    expect(runFaceMatchVerificationDefault).toHaveBeenCalledWith(
+      "user-1",
+      SESSION_ID,
+      api,
+      { capturedSelfie: { buffer: REFERENCE, mime: "image/jpeg" }, outcomeGate: gate },
+    );
+
+    let settled = false;
+    void gate.settled.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    resolvePipeline();
+    await gate.settled;
+    expect(settled).toBe(true);
+  });
+
+  it("closes the outcome gate even when the pipeline throws", async () => {
+    runFaceMatchVerificationDefault.mockRejectedValueOnce(new Error("rekognition down"));
+    const gate = createOutcomeGate();
+
+    await completeLivenessCheck("user-1", SESSION_ID, apiArg, { outcomeGate: gate });
+
+    // A crashed run must not strand the shimmer on screen either.
+    await expect(gate.settled).resolves.toBeUndefined();
   });
 
   it.each(["not_live", "expired", "in_progress", "no_reference"] as const)(

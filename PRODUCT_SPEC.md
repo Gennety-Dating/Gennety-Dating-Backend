@@ -527,7 +527,23 @@ Hard rules enforced by the collector:
   **date-card render** remains the genuinely slow render
   wait: its status is passed a `until: <render promise>` and the last step is
   **held on screen until the PNG is actually ready** (then torn down before the
-  card is sent), rather than running on a timer. The **profile-video upload
+  card is sent), rather than running on a timer.
+
+  **A tracked `until` may EXTEND a script, never truncate it
+  (`NEVER_CUT_SHORT`, 2026-08-02).** The primitive's default is to cut the
+  narration short the moment the work settles — right for a burst check whose
+  per-frame verdicts must land immediately, wrong for every beat above that the
+  user is meant to read. The date-card render takes anywhere from a fraction of
+  a second (a cached photo, a venue with no Places image) to several seconds,
+  so under the default the beats a user actually saw varied with it: often only
+  the first line, for a couple of hundred milliseconds. On screen that read as
+  the flow *stalling* rather than finishing early — the preceding venue-search
+  shimmer sat on its final "matching your vibe" beat (a rich draft lingers on
+  its own ~30s TTL, and nothing between the two sequences replaces it) and the
+  card beats appeared never to arrive at all. The date card (scheduled DM, My
+  Date hub, and the blurred Share copy) and the verification check now always
+  play their script in full; `until` only ever holds the last beat longer.
+  The **profile-video upload
   check** is the other genuinely-slow held wait: while it runs (frame sampling +
   Rekognition face/identity + image/audio moderation + Whisper transcript) its
   first two beats play as pacing and the final "last checks" beat tracks
@@ -854,6 +870,24 @@ live" every time they opened their photos. The suppression is scoped to
 `pending_review`) is always announced, including on a rerun. Mirrors the
 existing `statusMessageId` guard that already stops the menu + pinned banner
 from being re-sent on a rerun.
+
+**The DM waits for the "analysing your check" status to leave the screen
+(2026-08-02).** Passing liveness starts two independent async chains — the
+face-match pipeline, and the ~7s shimmer narrating it — and nothing connected
+them, so whichever finished first decided what the user read. AWS answers fast
+and `CompareFaces` over three photos is often faster than the script, so the
+common case was the verdict ("the photos on your profile don't match your
+verification selfie") landing *underneath* a shimmer still saying the check was
+being completed: the bot contradicting itself on the one screen where the user
+is being told they failed. A gate (`services/outcome-gate.ts`) now carries both
+signals — the pipeline holds every user-facing message (the outcome DM, the
+dropped-photo notice, the menu + pinned banner) until the status is torn down,
+and tells the status when it is ready to speak so a *slow* run holds its last
+beat instead of ending in silence. It is scoped to the fresh-liveness path,
+the only caller that narrates: photo-edit reruns, the admin recheck and the
+native rail are unchanged and DM immediately. Both directions are bounded, so
+a status that dies before its teardown can never swallow a verdict and a run
+that hangs can never keep a shimmer alive forever.
 
 **Verification gate (the app stays locked).** `status='onboarding'` with
 `onboardingStep='completed'` means the profile is finished but liveness is not,
@@ -2950,6 +2984,10 @@ live only in the Telegram caption.
   fixed-duration stub — it is held on screen until the PNG is actually ready,
   then torn down before the card lands, so the chat never looks frozen. It is a
   normal edited status line; the render itself never depends on it (§1.3).
+  The three beats always play through even when the render beats them to it
+  (`NEVER_CUT_SHORT`, §1.3) — a fast render used to collapse the status to a
+  sub-second flash of its first line, leaving the venue-search shimmer above it
+  as the last thing visibly on screen.
 
 - **Two renders, one layout.** The **private** card is sent with
   `protect_content: true` (blocks forwarding / saving / download) and carries

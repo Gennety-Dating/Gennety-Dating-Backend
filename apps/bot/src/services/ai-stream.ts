@@ -131,7 +131,8 @@ export interface StatusSequenceOptions {
    * Ignore `until` until this zero-based step index. Useful when early beats
    * are intentional pacing but the final beat should be held for real work.
    * Defaults to 0, so existing `until` behaviour can cut narration short from
-   * the first step.
+   * the first step. Pass {@link NEVER_CUT_SHORT} when the script must always
+   * play in full.
    */
   untilFromStepIndex?: number;
   /**
@@ -144,6 +145,19 @@ export interface StatusSequenceOptions {
 
 /** Default wall-clock interval for refreshing a held rich `<tg-thinking>` draft. */
 const DEFAULT_KEEPALIVE_MS = 20_000;
+
+/**
+ * `untilFromStepIndex` value meaning "the tracked work may never cut the
+ * narration short": every scripted beat plays for its full `holdMs`, and
+ * `until` can only ever EXTEND the last one.
+ *
+ * Use it wherever the beats are a *script the user is meant to read* rather
+ * than a progress bar. With the default (0) a fast unit of work collapses the
+ * sequence to whatever beat happened to be on screen when it settled — so the
+ * same flow shows three beats on a slow run and half of one on a fast run,
+ * which reads as the status having broken rather than as work finishing early.
+ */
+export const NEVER_CUT_SHORT = Number.POSITIVE_INFINITY;
 
 interface SettleTracker {
   /** Resolves when `until` settles (fulfilled OR rejected); undefined without `until`. */

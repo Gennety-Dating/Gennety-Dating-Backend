@@ -15,7 +15,7 @@ import {
   type CardTheme,
 } from "../../services/date-card/index.js";
 import { dateCardSteps } from "../../services/analysis-status.js";
-import { runStatusSequence } from "../../services/ai-stream.js";
+import { runStatusSequence, NEVER_CUT_SHORT } from "../../services/ai-stream.js";
 import { isProxyOpen } from "../../services/coordination.js";
 import { evaluateVenueBoardEligibility } from "../../services/venue-change.js";
 import {
@@ -135,8 +135,11 @@ async function renderAndSendCard(
 
   // Held "shine" status while the multi-second render runs (same primitive as
   // the scheduled-DM path). Purely cosmetic — never blocks the card.
+  // `NEVER_CUT_SHORT` for the same reason as there: a fast render must not
+  // collapse the script to whichever beat happened to be on screen.
   await runStatusSequence(ctx.api, chatId, dateCardSteps(lang), {
     until: renderWork,
+    untilFromStepIndex: NEVER_CUT_SHORT,
     rich: true,
   }).catch(() => undefined);
 

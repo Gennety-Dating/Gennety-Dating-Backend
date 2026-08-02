@@ -8,6 +8,7 @@ import {
   type LivenessRetryOutcome,
 } from "./face-liveness.js";
 import { mintLivenessCredentials, type LivenessCredentials } from "./liveness-credentials.js";
+import type { OutcomeGate } from "./outcome-gate.js";
 import { runFaceMatchVerificationDefault } from "./verification-pipeline.js";
 import { buildVerificationKeyboard } from "./verification-keyboard.js";
 import { livenessRetryMessage } from "./verification-messages.js";
@@ -68,6 +69,18 @@ export type CompleteLivenessResult =
    * session it does not own. Neither is a verdict, so nothing is written.
    */
   | { ok: false; error: "user_not_found" | "provider" | "session_mismatch" };
+
+export interface CompleteLivenessOptions {
+  /**
+   * Handshake with a caller-owned "analysing your check" status
+   * (`services/outcome-gate.ts`). When present, the face-match pipeline holds
+   * its outcome DM until the caller releases the gate, and signals the gate
+   * when it is ready to speak (or has finished silently) so the status can end
+   * on cue. Omit on surfaces that narrate nothing — the native client renders
+   * its own progress screen.
+   */
+  outcomeGate?: OutcomeGate;
+}
 
 /**
  * Step 1 — mint a session and the credentials that let the device stream to
@@ -222,6 +235,7 @@ export async function completeLivenessCheck(
   userId: string,
   sessionId: string,
   api: Api<RawApi>,
+  options: CompleteLivenessOptions = {},
 ): Promise<CompleteLivenessResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -289,9 +303,16 @@ export async function completeLivenessCheck(
   // re-check reads that stored copy.
   void runFaceMatchVerificationDefault(userId, sessionId, api, {
     capturedSelfie: { buffer: result.referenceImage, mime: "image/jpeg" },
-  }).catch((err) => {
-    console.error(`${LOG_PREFIX} face-match pipeline threw`, { userId, sessionId, err });
-  });
+    ...(options.outcomeGate ? { outcomeGate: options.outcomeGate } : {}),
+  })
+    .catch((err) => {
+      console.error(`${LOG_PREFIX} face-match pipeline threw`, { userId, sessionId, err });
+    })
+    // Whatever happened, the run is over — tell the caller's status it can
+    // stop holding. Without this a run that says nothing (a rerun that merely
+    // re-confirms an already-verified user) or one that threw would leave the
+    // shimmer holding its last beat until the gate's safety cap.
+    .finally(() => options.outcomeGate?.finish());
 
   return { ok: true, outcome: "processing" };
 }

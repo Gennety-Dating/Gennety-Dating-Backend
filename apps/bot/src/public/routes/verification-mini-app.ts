@@ -10,8 +10,9 @@ import {
   completeLivenessCheck,
   recordBiometricConsent,
 } from "../../services/liveness-flow.js";
-import { runStatusSequence } from "../../services/ai-stream.js";
+import { runStatusSequence, NEVER_CUT_SHORT } from "../../services/ai-stream.js";
 import { verifyAnalysisSteps } from "../../services/analysis-status.js";
+import { createOutcomeGate } from "../../services/outcome-gate.js";
 
 /**
  * Verification Mini App endpoints (AWS Rekognition Face Liveness).
@@ -210,8 +211,19 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
         return;
       }
 
-      const completed = await completeLivenessCheck(user.id, sessionId, api);
+      // Handshake between the "analysing your check" shimmer below and the
+      // face-match pipeline's outcome DM. The pipeline runs in the background
+      // and is often faster than the ~7s script, so before this the verdict
+      // ("these photos don't match your selfie") landed while the status was
+      // still saying the check was in progress. The gate holds the DM until
+      // the shimmer is torn down; a `finish()` from the pipeline (or the gate's
+      // own safety cap) makes sure the shimmer can never outlive the run.
+      const outcomeGate = createOutcomeGate();
+      const completed = await completeLivenessCheck(user.id, sessionId, api, {
+        outcomeGate,
+      });
       if (!completed.ok) {
+        outcomeGate.release();
         // `session_mismatch` is a 409, not a 503: nothing is wrong with the
         // deploy, the reported session simply isn't this user's (a stale tab,
         // or a client reporting a session it doesn't own). The Mini App's
@@ -234,8 +246,21 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
           api,
           auth.user.id,
           verifyAnalysisSteps((user.language ?? "en") as Language),
-          { rich: true },
-        ).catch(() => {});
+          {
+            rich: true,
+            // Every beat plays in full, and the last one is held if the
+            // pipeline is still working — this is a short script the user is
+            // meant to read, not a progress bar over a variable-length job.
+            until: outcomeGate.settled,
+            untilFromStepIndex: NEVER_CUT_SHORT,
+          },
+        )
+          .catch(() => {})
+          .finally(() => outcomeGate.release());
+      } else {
+        // Retry: no shimmer runs, and the nudge DM has already gone out from
+        // inside `completeLivenessCheck`. Nothing to hold.
+        outcomeGate.release();
       }
 
       res.status(200).json({ ok: true, outcome: completed.outcome });

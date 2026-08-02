@@ -39,7 +39,8 @@ vi.mock("../services/liveness-flow.js", () => ({
 }));
 
 const runStatusSequence = vi.fn().mockResolvedValue(undefined);
-vi.mock("../services/ai-stream.js", () => ({ runStatusSequence }));
+const NEVER_CUT_SHORT = Number.POSITIVE_INFINITY;
+vi.mock("../services/ai-stream.js", () => ({ runStatusSequence, NEVER_CUT_SHORT }));
 
 const { createVerificationMiniAppRouter } = await import(
   "./routes/verification-mini-app.js"
@@ -224,8 +225,24 @@ describe("POST /v1/verification/mini-app/event", () => {
     expect(res.body).toEqual({ ok: true, outcome: "processing" });
     // Awaited, not fire-and-forget: the AWS session (and its reference image)
     // expires 3 minutes after /init, so the verdict must be read now.
-    expect(completeLivenessCheck).toHaveBeenCalledWith("uid-1", SESSION_ID, fakeApi);
+    expect(completeLivenessCheck).toHaveBeenCalledWith(
+      "uid-1",
+      SESSION_ID,
+      fakeApi,
+      // The SAME gate goes to the pipeline and to the status below: it is the
+      // only thing keeping a fast face-match run from dropping its verdict on
+      // screen underneath a shimmer still narrating the check.
+      { outcomeGate: expect.objectContaining({ hold: expect.any(Function) }) },
+    );
     expect(runStatusSequence).toHaveBeenCalledTimes(1);
+    const [, , , statusOptions] = runStatusSequence.mock.calls[0];
+    const gate = completeLivenessCheck.mock.calls[0][3].outcomeGate;
+    expect(statusOptions).toMatchObject({
+      rich: true,
+      until: gate.settled,
+      // Never truncated by a fast run — the beats are a script, not a bar.
+      untilFromStepIndex: NEVER_CUT_SHORT,
+    });
   });
 
   it("`complete` reports `retry` without narrating face-match work", async () => {
