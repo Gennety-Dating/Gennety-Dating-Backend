@@ -303,4 +303,49 @@ describe("onboarding photo editor — leaving", () => {
     expect(ctx.api.editMessageReplyMarkup).not.toHaveBeenCalled();
     expect(ctx.session.onboardingPhotoEdit).toBe(true);
   });
+
+  // The exit this function exists for, and the one a flag-only guard missed.
+  // `markOnboardingComplete` clears `onboardingPhotoEdit` synchronously the
+  // moment the agent finalizes — which happens BEFORE the next outgoing
+  // message, i.e. before this ever runs. Reachable by opening the editor and
+  // then tapping an older Continue button (or typing "done").
+  it("retires the cards even when the flag was already cleared by finalize", async () => {
+    const ctx = createCtx({
+      // Exactly the post-`markOnboardingComplete` shape: stage over, flag
+      // already false, pendingPhotos emptied — but the cards still on screen.
+      expectingPhoto: false,
+      onboardingPhotoEdit: false,
+      pendingPhotos: [],
+      photoCards: [
+        { msgId: 700, ref: "p1" },
+        { msgId: 701, ref: "p2" },
+      ],
+      photoManagerMsgId: 800,
+    });
+
+    await closeStalePhotoEditor(ctx.api, 4242, ctx.session);
+
+    // Every card loses its button, and so does the bottom panel — otherwise the
+    // user ends onboarding with 🗑 buttons that resolve to nothing.
+    expect(ctx.api.editMessageReplyMarkup).toHaveBeenCalledWith(4242, 700);
+    expect(ctx.api.editMessageReplyMarkup).toHaveBeenCalledWith(4242, 701);
+    expect(ctx.api.editMessageReplyMarkup).toHaveBeenCalledWith(4242, 800);
+    expect(ctx.session.photoCards).toEqual([]);
+    expect(ctx.session.photoManagerMsgId).toBeNull();
+  });
+
+  it("stays a no-op once there is no live surface left to retire", async () => {
+    // The ordinary case: the stage ended and the editor was never opened, so
+    // every subsequent agent message must not pay for a pointless sweep.
+    const ctx = createCtx({
+      expectingPhoto: false,
+      onboardingPhotoEdit: false,
+      photoCards: [],
+      photoManagerMsgId: null,
+    });
+
+    await closeStalePhotoEditor(ctx.api, 4242, ctx.session);
+
+    expect(ctx.api.editMessageReplyMarkup).not.toHaveBeenCalled();
+  });
 });

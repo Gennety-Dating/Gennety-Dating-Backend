@@ -225,9 +225,6 @@ const PLACEHOLDERS = new Set([
   "nie wiem",
 ]);
 
-const SKIP_RE =
-  /^(?:skip|pass|prefer not|rather not|no answer|пропуст[\p{L}]*|не хочу отвечать|не хочу відповідати|без ответа|без відповіді|überspring[\p{L}]*|möchte ich nicht|pomi(?:ń|jam)|nie chcę odpowiadać)[\s.!?]*$/iu;
-
 // Bare one-word replies to the name+age question are usually the name itself
 // ("Максим"), but greetings and interjections must never be saved as a name.
 // Deliberately small — the LLM extractor remains the primary path for

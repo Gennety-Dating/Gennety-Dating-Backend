@@ -1,3 +1,4 @@
+import { apiFetch } from "./api.js";
 import "./theme.css";
 import "./referral.css";
 import { icon, type IconName } from "./icons";
@@ -285,7 +286,7 @@ async function onShare(btn: HTMLButtonElement): Promise<void> {
     return;
   }
   try {
-    const res = await fetch(`${apiBase}/v1/referral/share-message`, {
+    const res = await apiFetch(`${apiBase}/v1/referral/share-message`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `tma ${getInitData()}` },
       body: "{}",
@@ -333,7 +334,7 @@ async function boot(): Promise<void> {
     return;
   }
   try {
-    const res = await fetch(`${apiBase}/v1/referral/state`, {
+    const res = await apiFetch(`${apiBase}/v1/referral/state`, {
       headers: { Authorization: `tma ${getInitData()}` },
     });
     if (!res.ok) throw new Error(String(res.status));

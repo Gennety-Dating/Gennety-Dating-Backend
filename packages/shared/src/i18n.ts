@@ -545,6 +545,15 @@ const translations = {
     matchExpiredPeerIgnored:
       "Your match didn't reply within 24h, so the date won't happen. " +
       "We'll see you in the next drop.",
+    // §3.4 — this side PASSED, and the partner then went silent. A first
+    // decision leaves the row `proposed` either way, so a decliner reaches
+    // expiry classified as a `responder` exactly like someone who accepted
+    // and got stood up. They already got their "you passed" ack, so this is
+    // deliberately a bare fact with no consolation and no card: it exists
+    // only so the match doesn't vanish from the menu and banner unexplained.
+    matchExpiredSelfDeclined:
+      "That match is closed — you passed, and the 24h window is up. " +
+      "See you in the next drop.",
     // Expiry card (PRODUCT_SPEC §3.4). The card states WHAT HAPPENED and the
     // caption adds only the consequence, so nothing is said twice. The
     // `matchExpired*` strings above stay as the plain-text fallback for when
@@ -1631,6 +1640,15 @@ const translations = {
     matchExpiredPeerIgnored:
       "Партнёр не ответил в течение суток — свидание не состоится. " +
       "Увидимся в следующем дропе.",
+    // §3.4 — this side PASSED, and the partner then went silent. A first
+    // decision leaves the row `proposed` either way, so a decliner reaches
+    // expiry classified as a `responder` exactly like someone who accepted
+    // and got stood up. They already got their "you passed" ack, so this is
+    // deliberately a bare fact with no consolation and no card: it exists
+    // only so the match doesn't vanish from the menu and banner unexplained.
+    matchExpiredSelfDeclined:
+      "Этот матч закрыт — ты отказался, и сутки на ответ истекли. " +
+      "Увидимся в следующем дропе.",
     // Карточка истечения (PRODUCT_SPEC §3.4). Заголовки намеренно
     // гендерно-нейтральны: род пользователя на карточку не подставляется,
     // а форма «ответил(-а)» в крупном заголовке нечитаема.
@@ -2677,6 +2695,15 @@ const translations = {
     matchExpiredPeerIgnored:
       "Партнер не відповів протягом доби — побачення не відбудеться. " +
       "Побачимось у наступному дропі.",
+    // §3.4 — this side PASSED, and the partner then went silent. A first
+    // decision leaves the row `proposed` either way, so a decliner reaches
+    // expiry classified as a `responder` exactly like someone who accepted
+    // and got stood up. They already got their "you passed" ack, so this is
+    // deliberately a bare fact with no consolation and no card: it exists
+    // only so the match doesn't vanish from the menu and banner unexplained.
+    matchExpiredSelfDeclined:
+      "Цей метч закрито — ти відмовився, і доба на відповідь минула. " +
+      "Побачимось у наступному дропі.",
     // Картка спливання (PRODUCT_SPEC §3.4) — заголовки гендерно-нейтральні.
     expiryCardOverlineExpired: "ВІКНО ЗАЧИНЕНО",
     expiryCardHeadlineExpired: "ЧАС\nВИЙШОВ",
@@ -3708,6 +3735,15 @@ const deTranslations: TranslationTable = {
   matchExpiredPeerIgnored:
     "Dein Match hat innerhalb von 24h nicht geantwortet, also findet das Date nicht statt. " +
     "Wir sehen uns beim nächsten Drop.",
+  // §3.4 — this side PASSED, and the partner then went silent. A first
+  // decision leaves the row `proposed` either way, so a decliner reaches
+  // expiry classified as a `responder` exactly like someone who accepted
+  // and got stood up. They already got their "you passed" ack, so this is
+  // deliberately a bare fact with no consolation and no card: it exists
+  // only so the match doesn't vanish from the menu and banner unexplained.
+  matchExpiredSelfDeclined:
+    "Dieses Match ist geschlossen — du hast abgelehnt, und die 24h sind um. " +
+    "Wir sehen uns beim nächsten Drop.",
   // Ablauf-Karte (PRODUCT_SPEC §3.4) — Überschriften bewusst geschlechtsneutral.
   expiryCardOverlineExpired: "FENSTER GESCHLOSSEN",
   expiryCardHeadlineExpired: "ZEIT\nABGELAUFEN",
@@ -4718,6 +4754,15 @@ const plTranslations: TranslationTable = {
   matchExpiredYouMissedDate: "Ważne - Twoje dopasowanie było naprawdę na tak. Przegapiłeś/przegapiłaś realną randkę.\n\n",
   matchExpiredPeerIgnored:
     "Twoje dopasowanie nie odpowiedziało w ciągu 24h, więc randka się nie odbędzie. " +
+    "Widzimy się przy kolejnym dropie.",
+  // §3.4 — this side PASSED, and the partner then went silent. A first
+  // decision leaves the row `proposed` either way, so a decliner reaches
+  // expiry classified as a `responder` exactly like someone who accepted
+  // and got stood up. They already got their "you passed" ack, so this is
+  // deliberately a bare fact with no consolation and no card: it exists
+  // only so the match doesn't vanish from the menu and banner unexplained.
+  matchExpiredSelfDeclined:
+    "To dopasowanie jest zamknięte — odmówiłeś, a 24h minęły. " +
     "Widzimy się przy kolejnym dropie.",
   // Karta wygaśnięcia (PRODUCT_SPEC §3.4). Nagłówki są neutralne płciowo —
   // forma "odpuściłeś/odpuściłaś" jest nieczytelna w dużym stopniu pisma.

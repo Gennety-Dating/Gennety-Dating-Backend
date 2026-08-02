@@ -1356,7 +1356,6 @@ function ungroundedProfileFields(
 function missingBeforePhoto(
   user: PersistedOnboardingState | null | undefined,
   contextDumpSaved: boolean,
-  history: ChatMessage[],
 ): string[] {
   const missing: string[] = [];
   const profile = user?.profile ?? null;
@@ -2243,7 +2242,6 @@ export async function runAgentTurn(
             const missingForPhotos = missingBeforePhoto(
               photoGateUser,
               contextDumpAlreadySaved,
-              history,
             );
             if (missingForPhotos.length > 0) {
               result = JSON.stringify({

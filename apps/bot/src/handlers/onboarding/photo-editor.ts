@@ -205,18 +205,32 @@ export async function handleOnboardingPhotoDelete(ctx: BotContext): Promise<void
  * Retire the editor if the upload stage has ended underneath it.
  *
  * The stage can end while the editor is open through paths that never touch it
- * — a typed "done", the agent deciding onboarding is finished, hitting
- * `MAX_PHOTOS`. Their cards would then keep showing live 🗑 buttons that the
- * session can no longer resolve. Called from the same two message senders that
- * own the bottom panel's teardown, so every stage exit is covered by one rule
- * rather than a check per transition.
+ * — a typed "done", a tap on an older Continue button, the agent deciding
+ * onboarding is finished. Their cards would then keep showing live 🗑 buttons
+ * that the session can no longer resolve. Called from the same two message
+ * senders that own the bottom panel's teardown, so every stage exit is covered
+ * by one rule rather than a check per transition.
+ *
+ * The trigger is deliberately "the stage is over and cards are still tracked",
+ * NOT the `onboardingPhotoEdit` flag alone. `markOnboardingComplete` clears
+ * that flag synchronously when the agent finalizes, and it runs BEFORE the next
+ * outgoing message — so a flag-only guard returned early on exactly the exit it
+ * exists to handle, and the user finished onboarding staring at a stack of
+ * photo cards whose 🗑 buttons silently did nothing (`pendingPhotos` is cleared
+ * by then, so every tap resolves to a stale no-op). Keying off the tracked
+ * cards makes the teardown independent of who clears the flag first.
  */
 export async function closeStalePhotoEditor(
   api: BotContext["api"],
   chatId: number,
   session: SessionData,
 ): Promise<void> {
-  if (!session.onboardingPhotoEdit || session.expectingPhoto) return;
+  if (session.expectingPhoto) return;
+  const hasLiveSurface =
+    session.onboardingPhotoEdit ||
+    session.photoCards.length > 0 ||
+    session.photoManagerMsgId != null;
+  if (!hasLiveSurface) return;
   await retirePhotoCards(api, chatId, session);
   session.onboardingPhotoEdit = false;
 }

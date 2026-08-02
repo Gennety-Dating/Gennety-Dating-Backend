@@ -1,3 +1,4 @@
+import { apiFetch } from "./api.js";
 import "./theme.css";
 import "./premium.css";
 import { icon, type IconName } from "./icons";
@@ -194,7 +195,7 @@ function fmtDateNumeric(iso: string | null): string {
 }
 
 async function fetchState(): Promise<PremiumState> {
-  const res = await fetch(`${apiBase}/v1/premium/state`, {
+  const res = await apiFetch(`${apiBase}/v1/premium/state`, {
     method: "GET",
     headers: { Authorization: `tma ${getInitData()}` },
   });
@@ -203,7 +204,7 @@ async function fetchState(): Promise<PremiumState> {
 }
 
 async function mintInvoice(): Promise<string> {
-  const res = await fetch(`${apiBase}/v1/premium/stars-invoice`, {
+  const res = await apiFetch(`${apiBase}/v1/premium/stars-invoice`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

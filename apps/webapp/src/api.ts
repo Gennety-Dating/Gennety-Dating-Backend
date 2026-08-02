@@ -51,12 +51,52 @@ export class CalendarApiError extends Error {
 
 export const apiBase = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
+/**
+ * Upper bound on any single Mini App request.
+ *
+ * Generous on purpose: the slowest legitimate calls here do real work behind
+ * the API (the venue catalog hits Google Places, the liveness init mints STS
+ * credentials), and a timeout that fires on a merely-slow network would be
+ * worse than none. This exists for the request that never settles at all.
+ */
+const API_TIMEOUT_MS = 20_000;
+
+/**
+ * `fetch` with a deadline. EVERY Mini App request goes through this.
+ *
+ * Without it a stalled mobile connection hangs the whole screen: each flow sets
+ * a `saving`/busy flag, disables its button, and clears the flag only when the
+ * promise settles — so a request that never settles leaves the user staring at
+ * a disabled "Saving…" with every further tap swallowed by the busy guard. The
+ * only way out was to kill the Mini App. That is the one class of dead end the
+ * bot side never had: all of its outbound calls already carry an `AbortSignal`.
+ *
+ * An abort rejects with a plain `DOMException`, NOT a `CalendarApiError`, which
+ * is exactly what the callers' existing
+ * `err instanceof CalendarApiError ? … : tr(lang, "errNetwork")` branch already
+ * handles — so this needs no change at any call site: the user gets the network
+ * error they'd get from any other connection failure, and the button comes back.
+ *
+ * Uses `AbortController` + `setTimeout` rather than `AbortSignal.timeout()`,
+ * which needs iOS 16+ — this runs inside whatever WebView the user's Telegram
+ * ships, so the universally-supported form is the right trade.
+ */
+export async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchCalendarState(
   initData: string,
   matchId: string,
 ): Promise<CalendarState> {
   const url = `${apiBase}/v1/calendar/state?matchId=${encodeURIComponent(matchId)}`;
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
   });
@@ -70,7 +110,7 @@ export async function postCalendarPicks(
   matchId: string,
   pickedIsos: string[],
 ): Promise<PickResponse> {
-  const res = await fetch(`${apiBase}/v1/calendar/pick`, {
+  const res = await apiFetch(`${apiBase}/v1/calendar/pick`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -104,7 +144,7 @@ export async function searchLocations(
     params.set("lat", bias.lat.toString());
     params.set("lng", bias.lng.toString());
   }
-  const res = await fetch(`${apiBase}/v1/location/search?${params.toString()}`, {
+  const res = await apiFetch(`${apiBase}/v1/location/search?${params.toString()}`, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
   });
@@ -120,7 +160,7 @@ export async function selectLocation(
   lng: number,
   address: string | null,
 ): Promise<void> {
-  const res = await fetch(`${apiBase}/v1/location/select`, {
+  const res = await apiFetch(`${apiBase}/v1/location/select`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -165,7 +205,7 @@ export interface VenueIntentTmaState {
 
 export async function fetchVenueIntentState(initData: string, matchId: string): Promise<VenueIntentTmaState> {
   const params = new URLSearchParams({ matchId });
-  const res = await fetch(`${apiBase}/v1/location/venue-intent/state?${params}`, {
+  const res = await apiFetch(`${apiBase}/v1/location/venue-intent/state?${params}`, {
     headers: { Authorization: `tma ${initData}` },
   });
   if (!res.ok) throw await toError(res);
@@ -178,7 +218,7 @@ export async function interpretVenueIntentTma(
   text: string,
   origin: { lat: number; lng: number; address: string | null },
 ): Promise<VenueIntentDraft> {
-  const res = await fetch(`${apiBase}/v1/location/venue-intent/interpret`, {
+  const res = await apiFetch(`${apiBase}/v1/location/venue-intent/interpret`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify({ matchId, text, origin }),
@@ -195,7 +235,7 @@ export async function confirmVenueIntentTma(
     origin: { lat: number; lng: number; address: string | null };
   },
 ): Promise<VenueIntentTmaState> {
-  const res = await fetch(`${apiBase}/v1/location/venue-intent/confirm`, {
+  const res = await apiFetch(`${apiBase}/v1/location/venue-intent/confirm`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify({ matchId, intent }),
@@ -305,7 +345,7 @@ export async function fetchTelegramOnboardingState(
   const params = new URLSearchParams();
   if (source) params.set("source", source);
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/state${suffix}`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/state${suffix}`, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
   });
@@ -317,7 +357,7 @@ export async function acceptTelegramOnboardingConsent(
   initData: string,
   researchOptIn: boolean,
 ): Promise<TelegramOnboardingState> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/consent`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/consent`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -333,7 +373,7 @@ export async function setTelegramOnboardingTrack(
   initData: string,
   track: RegistrationTrack,
 ): Promise<TelegramOnboardingState> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/track`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/track`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -349,7 +389,7 @@ export async function setTelegramOnboardingLanguage(
   initData: string,
   language: OnboardingLanguage,
 ): Promise<TelegramOnboardingState> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/language`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/language`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -365,7 +405,7 @@ export async function setTelegramOnboardingTheme(
   initData: string,
   theme: OnboardingTheme,
 ): Promise<TelegramOnboardingState> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/theme`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/theme`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -381,7 +421,7 @@ export async function setTelegramOnboardingTheme(
 export async function claimTelegramOnboardingReferralGift(
   initData: string,
 ): Promise<TelegramOnboardingState> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/referral-gift`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/referral-gift`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -400,7 +440,7 @@ export async function claimTelegramOnboardingReferralGift(
 export async function claimTelegramOnboardingPromoGift(
   initData: string,
 ): Promise<TelegramOnboardingState> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/promo-gift`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/promo-gift`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -420,7 +460,7 @@ export async function requestTelegramOnboardingOtp(
   alreadyVerified: boolean;
   emailVerification?: EmailVerificationState;
 }> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/email/request`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/email/request`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -440,7 +480,7 @@ export async function verifyTelegramOnboardingOtp(
   initData: string,
   code: string,
 ): Promise<TelegramOnboardingState> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/email/verify`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/email/verify`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -457,7 +497,7 @@ export async function searchTelegramOnboardingCities(
   query: string,
 ): Promise<TelegramCityHit[]> {
   const params = new URLSearchParams({ q: query });
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/city/search?${params.toString()}`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/city/search?${params.toString()}`, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
   });
@@ -481,7 +521,7 @@ export async function resolveTelegramOnboardingCity(
   latitude: number,
   longitude: number,
 ): Promise<TelegramCityResolution> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/city/resolve`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/city/resolve`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -502,7 +542,7 @@ export async function selectTelegramOnboardingCity(
   initData: string,
   city: TelegramCityHit,
 ): Promise<TelegramOnboardingState> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/city/select`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/city/select`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -525,7 +565,7 @@ export async function setTelegramOnboardingAiMemoryPreference(
   initData: string,
   preference: Exclude<AiMemoryExportPreference, "undecided">,
 ): Promise<TelegramOnboardingState> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/ai-memory`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/ai-memory`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -541,7 +581,7 @@ export async function completeTelegramOnboardingGate(
   initData: string,
   flowToken: string,
 ): Promise<TelegramOnboardingCompleteResponse> {
-  const res = await fetch(`${apiBase}/v1/telegram-onboarding/complete`, {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/complete`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -592,7 +632,7 @@ export type VerificationEventOutcome = "processing" | "retry";
 export async function fetchVerificationInit(
   initData: string,
 ): Promise<VerificationInit> {
-  const res = await fetch(`${apiBase}/v1/verification/mini-app/init`, {
+  const res = await apiFetch(`${apiBase}/v1/verification/mini-app/init`, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
   });
@@ -606,7 +646,7 @@ export async function fetchVerificationInit(
  * this has succeeded, so the server — not the client — is what enforces it.
  */
 export async function postVerificationConsent(initData: string): Promise<void> {
-  const res = await fetch(`${apiBase}/v1/verification/mini-app/consent`, {
+  const res = await apiFetch(`${apiBase}/v1/verification/mini-app/consent`, {
     method: "POST",
     headers: { Authorization: `tma ${initData}` },
   });
@@ -628,7 +668,7 @@ export async function postVerificationEvent(
     detail?: string | null;
   },
 ): Promise<{ ok: boolean; outcome?: VerificationEventOutcome }> {
-  const res = await fetch(`${apiBase}/v1/verification/mini-app/event`, {
+  const res = await apiFetch(`${apiBase}/v1/verification/mini-app/event`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -709,7 +749,7 @@ export async function fetchTicketState(
   initData: string,
   matchId: string,
 ): Promise<TicketState> {
-  const res = await fetch(`${ticketBase(matchId)}/state`, {
+  const res = await apiFetch(`${ticketBase(matchId)}/state`, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
   });
@@ -722,7 +762,7 @@ export async function createTicketIntent(
   matchId: string,
   scope: TicketScope,
 ): Promise<TicketIntent> {
-  const res = await fetch(`${ticketBase(matchId)}/intent`, {
+  const res = await apiFetch(`${ticketBase(matchId)}/intent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify({ scope }),
@@ -737,7 +777,7 @@ export async function confirmTicketPayment(
   scope: TicketScope,
   clientSecret: string,
 ): Promise<TicketState> {
-  const res = await fetch(`${ticketBase(matchId)}/confirm`, {
+  const res = await apiFetch(`${ticketBase(matchId)}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify({ scope, clientSecret }),
@@ -752,7 +792,7 @@ export async function useTicketFromWallet(
   matchId: string,
   scope: TicketScope,
 ): Promise<TicketState> {
-  const res = await fetch(`${ticketBase(matchId)}/use`, {
+  const res = await apiFetch(`${ticketBase(matchId)}/use`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify({ scope }),
@@ -772,7 +812,7 @@ export async function createTicketStarsInvoice(
   matchId: string,
   scope: TicketScope,
 ): Promise<{ link: string; stars: number }> {
-  const res = await fetch(`${ticketBase(matchId)}/stars-invoice`, {
+  const res = await apiFetch(`${ticketBase(matchId)}/stars-invoice`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify({ scope }),
@@ -815,7 +855,7 @@ export interface StoreIntent {
 const storeBase = `${apiBase}/v1/tickets`;
 
 export async function fetchWalletState(initData: string): Promise<WalletState> {
-  const res = await fetch(`${storeBase}/wallet`, {
+  const res = await apiFetch(`${storeBase}/wallet`, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
   });
@@ -827,7 +867,7 @@ export async function createStoreIntent(
   initData: string,
   count: number,
 ): Promise<StoreIntent> {
-  const res = await fetch(`${storeBase}/store/intent`, {
+  const res = await apiFetch(`${storeBase}/store/intent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify({ count }),
@@ -841,7 +881,7 @@ export async function confirmStorePurchase(
   count: number,
   clientSecret: string,
 ): Promise<WalletState> {
-  const res = await fetch(`${storeBase}/store/confirm`, {
+  const res = await apiFetch(`${storeBase}/store/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify({ count, clientSecret }),
@@ -859,7 +899,7 @@ export async function createStoreStarsInvoice(
   initData: string,
   count: number,
 ): Promise<{ link: string; stars: number }> {
-  const res = await fetch(`${storeBase}/store/stars-invoice`, {
+  const res = await apiFetch(`${storeBase}/store/stars-invoice`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify({ count }),
@@ -948,7 +988,7 @@ export async function fetchVenueBoardState(
   initData: string,
   matchId: string,
 ): Promise<VenueBoardState> {
-  const res = await fetch(`${venueChangeBase}/state?match=${encodeURIComponent(matchId)}`, {
+  const res = await apiFetch(`${venueChangeBase}/state?match=${encodeURIComponent(matchId)}`, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
   });
@@ -960,7 +1000,7 @@ export async function fetchVenueChangeCatalog(
   initData: string,
   matchId: string,
 ): Promise<VenueChangeCatalogItem[]> {
-  const res = await fetch(`${venueChangeBase}/catalog?match=${encodeURIComponent(matchId)}`, {
+  const res = await apiFetch(`${venueChangeBase}/catalog?match=${encodeURIComponent(matchId)}`, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
   });
@@ -974,7 +1014,7 @@ async function venuePost(
   path: string,
   body: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const res = await fetch(`${venueChangeBase}/${path}`, {
+  const res = await apiFetch(`${venueChangeBase}/${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify(body),
@@ -1047,7 +1087,7 @@ export async function venueStarsInvoice(
 export async function premiumStarsInvoice(
   initData: string,
 ): Promise<{ link: string; stars: number }> {
-  const res = await fetch(`${apiBase}/v1/premium/stars-invoice`, {
+  const res = await apiFetch(`${apiBase}/v1/premium/stars-invoice`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1090,7 +1130,7 @@ export interface RadarAnswerInput {
 }
 
 export async function fetchRadarDeck(initData: string): Promise<RadarDeck> {
-  const res = await fetch(`${apiBase}/v1/radar/deck`, {
+  const res = await apiFetch(`${apiBase}/v1/radar/deck`, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
   });
@@ -1102,7 +1142,7 @@ export async function submitRadar(
   initData: string,
   answers: RadarAnswerInput[],
 ): Promise<{ ok: true; counted: number }> {
-  const res = await fetch(`${apiBase}/v1/radar/submit`, {
+  const res = await apiFetch(`${apiBase}/v1/radar/submit`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

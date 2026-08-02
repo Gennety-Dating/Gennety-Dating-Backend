@@ -57,9 +57,25 @@ function delay(ms: number): Promise<void> {
 type ExpiryKey =
   | "matchExpiredSilentWarning"
   | "matchExpiredSilentPenalty"
-  | "matchExpiredPeerIgnored";
+  | "matchExpiredPeerIgnored"
+  | "matchExpiredSelfDeclined";
+
+/**
+ * A responder who PASSED is not the same person as a responder who accepted
+ * and got stood up, and §3.4 hands both to this layer identically — a first
+ * decision leaves the row `proposed` whichever way it went, so a decliner
+ * whose partner then went silent arrives here as an ordinary `responder`.
+ *
+ * `matchExpiredPeerIgnored` ("they never answered, your part was done on
+ * time") is written for the second case. Delivered to the first it consoles
+ * someone for losing a date they turned down.
+ */
+function isSelfDecliner(side: SideClassification): boolean {
+  return side.role === "responder" && side.accepted === false;
+}
 
 function pickText(side: SideClassification): { key: ExpiryKey } {
+  if (isSelfDecliner(side)) return { key: "matchExpiredSelfDeclined" };
   if (side.role === "responder") return { key: "matchExpiredPeerIgnored" };
   // First offense (offenseCount === 1) → warning. Anything beyond is the
   // penalty round. We trust the `penalised` flag rather than re-deriving
@@ -162,6 +178,13 @@ export async function buildCard(
   side: SideClassification,
   lang: Language,
 ): Promise<{ png: Buffer; caption: string } | null> {
+  // A decliner gets NO card. The card family exists for the emotional beats of
+  // §3.4 — you ghosted someone, someone ghosted you — and none of them is what
+  // happened here: this user made their call on time and the row simply timed
+  // out around them. A picture would give the moment a weight it doesn't have.
+  // They fall through to the plain one-line `sendMessage` below.
+  if (isSelfDecliner(side)) return null;
+
   const caption = captionFor(side, lang);
   if (caption.length > MAX_CAPTION_CHARS) return null;
 

@@ -235,6 +235,59 @@ notifications follow `FOUNDER_NOTIFY_ENABLED`, which also silences them.
 
 ---
 
+**PENDING — audit fixes round 2, 2026-08-02 (Mini App timeouts + two dead ends).**
+Not deployed yet. **No Prisma schema change, no env change, no flag change** —
+but this one **DOES require a Mini App redeploy** (`apps/webapp` changed), so the
+sequence is Deploy Full Server Code → `pnpm db:drift-check` → `pm2 restart` →
+`./scripts/deploy-webapp.sh`.
+
+- **Every Mini App request now has a 20s deadline** (`apps/webapp/src/api.ts`,
+  new `apiFetch`). All 44 `fetch` calls across the 12 pages had none. Each flow
+  sets a `saving`/busy flag, disables its button and clears the flag only when
+  the promise settles, so a request that never settles (a stalled mobile
+  connection, not a slow one) left the user on a dead disabled "Saving…" with
+  every further tap swallowed by the busy guard — the only way out was killing
+  the Mini App. An abort surfaces as a plain `DOMException`, which is exactly
+  what every caller's existing "not a `CalendarApiError` → show the network
+  error" branch already handles, so no call site changed. The bot side has
+  carried `AbortSignal` on all of its outbound calls for a long time; this
+  closes the gap on the client.
+- **The onboarding photo editor now always retires its cards**
+  (`handlers/onboarding/photo-editor.ts`). `markOnboardingComplete` clears
+  `session.onboardingPhotoEdit` synchronously, and it runs BEFORE the next
+  outgoing message — so `closeStalePhotoEditor`'s flag-only guard returned early
+  on exactly the exit it exists to handle. A user who opened the editor and then
+  finished onboarding (tapping an older Continue button, or typing "done") was
+  left with a stack of photo cards whose 🗑 buttons silently did nothing.
+- **A user who DECLINED no longer gets consoled at expiry** (§3.4). A first
+  decision leaves the row `proposed` either way, so a decliner whose partner
+  then went silent reached the 24h expiry classified as an ordinary
+  `responder` — and got "they never answered, your part was done on time",
+  written for the person who accepted and was stood up. They now get one bare
+  neutral line (`matchExpiredSelfDeclined`, all 5 locales) and **no card**: the
+  card family is for §3.4's emotional beats and this is not one of them.
+
+Also folded in: two dead symbols left over from the ethnicity removal in
+`91a6d6a` (`SKIP_RE` in `onboarding-collector.ts`, an unused `history` param in
+`onboarding-agent.ts`) had `main`'s `pnpm lint` gate red. Both were verified
+orphans of that completed removal — deleted, no behaviour change.
+
+**Known pre-existing flake, NOT caused by this change:**
+`services/date-card/render.test.ts` times out nondeterministically in the full
+suite even at its existing 60s budget. Measured standalone, one `renderDateCard`
+costs ~4–5s of CPU warm or cold (satori + resvg + the canvas duotone and grain
+on a 1350px card), and with 201 test files running in parallel that stretches
+past 60s wall-clock. It is unrelated to anything here — date-card imports none
+of the changed modules — and it reproduces on `main`. The fix is contention, not
+another timeout bump: give the heavy PNG renderers their own low-concurrency
+vitest project (or cap `maxThreads`). Deliberately left alone because retuning
+suite-wide parallelism is a workflow decision, not an audit fix.
+
+**Rollback:** revert the code, restart, and redeploy the Mini App from the
+previous checkout. Nothing else to undo.
+
+---
+
 **PENDING — audit fixes, 2026-08-01 (NOMATCH-2 + chat-queue + card fonts).**
 Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change.** Ships with whatever restart carries the blocks

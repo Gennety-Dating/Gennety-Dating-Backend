@@ -1,3 +1,4 @@
+import { apiFetch } from "./api.js";
 /**
  * Post-date feedback Mini App entry point.
  *
@@ -359,7 +360,7 @@ interface PostError {
 async function submitFeedback(initData: string, body: PostBody): Promise<PostError | null> {
   let res: Response;
   try {
-    res = await fetch(`${apiBase}/v1/feedback/post-date`, {
+    res = await apiFetch(`${apiBase}/v1/feedback/post-date`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

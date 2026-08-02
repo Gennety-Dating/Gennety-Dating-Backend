@@ -24,7 +24,7 @@ function makeApi(): FakeApi {
 }
 
 function side(overrides: Partial<SideClassification>): SideClassification {
-  return {
+  const base: SideClassification = {
     side: "A",
     userId: "user-a",
     telegramId: 100n,
@@ -35,8 +35,17 @@ function side(overrides: Partial<SideClassification>): SideClassification {
     offenseCount: 1,
     penalised: false,
     peerAccepted: null,
+    accepted: null,
     ...overrides,
   };
+  // `accepted` and `role` are two views of the same fact, so the factory keeps
+  // them consistent unless a case sets `accepted` explicitly: a silent side
+  // decided nothing, a responder decided something (defaulting to the accepted
+  // side, which is what every pre-existing responder case here means).
+  if (overrides.accepted === undefined) {
+    base.accepted = base.role === "responder" ? true : null;
+  }
+  return base;
 }
 
 function matchWith(...sides: SideClassification[]): MatchExpiry {
@@ -81,6 +90,62 @@ describe("expiry card selection (PRODUCT_SPEC §3.4)", () => {
     expect(caption).toMatch(/next drop/i);
     expect(caption).not.toMatch(/priority|boost/i);
     expect(input.subline).not.toMatch(/priority|boost/i);
+  });
+
+  // EXPIRY-COPY-1. A first decision leaves the row `proposed` whichever way it
+  // went (§3.4), so someone who PASSED and whose partner then went silent
+  // arrives here as an ordinary `responder` — indistinguishable, before this,
+  // from someone who accepted and got stood up. They were consoled for losing
+  // a date they had turned down.
+  describe("a side that declined", () => {
+    const decliner = () => side({ role: "responder", accepted: false });
+
+    it("gets no card at all", async () => {
+      renderExpiryCard.mockResolvedValue(Buffer.from("png"));
+      const built = await buildCard(decliner(), "en");
+      expect(built).toBeNull();
+      // Not merely discarded — never rendered. The card family is for §3.4's
+      // emotional beats and this is not one of them.
+      expect(renderExpiryCard).not.toHaveBeenCalled();
+    });
+
+    it("gets the bare closing line, with no consolation and no blame", async () => {
+      const api = makeApi();
+      await sendExpiryNotifications(api as never, [matchWith(decliner())], 0);
+
+      expect(api.sendPhoto).not.toHaveBeenCalled();
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+      const [, body] = api.sendMessage.mock.calls[0]!;
+      expect(body).toMatch(/you passed/i);
+      expect(body).toMatch(/next drop/i);
+      // The peer-ignored copy is written for the opposite person.
+      expect(body).not.toMatch(/didn't reply|never answered|done on time/i);
+    });
+
+    it("still leaves the accepted side its own peer_ignored card", async () => {
+      // Both sides of one match: A passed, B accepted and was ghosted by
+      // nobody — B is the silent one here. The point is only that the
+      // decliner's branch does not swallow the other side's treatment.
+      const api = makeApi();
+      await sendExpiryNotifications(
+        api as never,
+        [
+          matchWith(
+            decliner(),
+            side({
+              side: "B",
+              userId: "user-b",
+              telegramId: 200n,
+              role: "responder",
+              accepted: true,
+            }),
+          ),
+        ],
+        0,
+      );
+      expect(api.sendMessage).toHaveBeenCalledTimes(1); // the decliner
+      expect(api.sendPhoto).toHaveBeenCalledTimes(1); // the accepted responder
+    });
   });
 
   it("silent + peer ACCEPTED → `missed_date` card", async () => {

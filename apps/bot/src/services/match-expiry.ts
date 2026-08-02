@@ -58,6 +58,20 @@ export interface SideClassification {
    * same as ghosting a no-show, which the product wants distinguished.
    */
   peerAccepted: boolean | null;
+  /**
+   * This side's OWN decision. `null` is the silent side (identical to
+   * `role === 'silent'`); `true`/`false` distinguish the two kinds of
+   * responder, which the notify layer must not conflate.
+   *
+   * A first decision leaves the row `proposed` whichever way it went (§3.4 —
+   * cancelling on a lone decline was an earlier bug that broke the
+   * blind-decision invariant), so a user who PASSED and whose partner then
+   * went silent reaches expiry classified exactly like a user who accepted and
+   * got stood up. Without this field both were told "they never answered, your
+   * part was done on time" — a consolation written for someone who wanted the
+   * date, delivered to someone who turned it down.
+   */
+  accepted: boolean | null;
 }
 
 export interface MatchExpiry {
@@ -202,6 +216,7 @@ async function classifyAndPenalise(
         pitchMessageId: m.pitchMessageId,
         role,
         peerAccepted: peer.accepted,
+        accepted: m.accepted,
       });
       continue;
     }
@@ -240,6 +255,7 @@ async function classifyAndPenalise(
       offenseCount,
       penalised,
       peerAccepted: peer.accepted,
+      accepted: m.accepted,
     });
   }
 
