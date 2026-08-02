@@ -515,14 +515,30 @@ pnpm --filter @gennety/db db:push
 pnpm db:drift-check   # must exit 0 before pm2 restart
 ```
 
-**Three things worth knowing before the restart:**
+**Four things worth knowing before the restart:**
 
+- **Match daily, apologise weekly (founder decision 2026-08-02, folded into
+  this same unshipped block).** The `daily` profile's notice throttle was
+  retuned from ~2.5 days to **7 days**, and `famineDiscountMinTier` from 7 to
+  **2**, so flipping the cadence later changes how often we *look*, never how
+  often we *write*: a nightly drop that finds nobody sends **nothing at all**,
+  and the empathetic check-in keeps today's weekly rhythm, tier ladder and
+  second-notice discount. Two supporting changes ship with it — `computeTier`
+  is now denominated in the NOTICE interval (a tier is "which message in the
+  streak", so the tier-2 copy and the discount threshold mean the same thing
+  under any cadence; the old batch-denominated version would have made a
+  `daily` user's second-ever notice arrive as tier 7 and skip tier 2 entirely),
+  and the pinned banner drops its countdown whenever drops outpace notices
+  (`dropOutpacesNotices`) so the timer never ticks to zero into deliberate
+  silence. **All of it is inert under `weekly`** — `cadence.test.ts` pins both
+  profiles and `status-banner-view.test.ts` pins the banner's off state.
 - **`FAMINE_PAUSE_AFTER_DAYS = 28`, not 14.** `computeTier` is denominated in
-  `CADENCE.intervalMs` units, so under `weekly` (7 days/unit) tier 2 already
-  lands at day 14 — a 14-day pause threshold would fire at the exact same
-  moment as the famine discount and make tier 3 structurally unreachable.  28
-  lets the existing tier 1→2→3 ladder (days 7/14/21) play out before the pause
-  takes over.
+  `CADENCE.famineNoticeIntervalMs` (7 days in both profiles), so tier 2 lands
+  at day 14 — a 14-day pause threshold would fire at the exact same moment as
+  the famine discount and make tier 3 structurally unreachable. 28 lets the
+  tier 1→2→3 ladder (days 7/14/21) play out before the pause takes over, and
+  because the interval no longer varies by profile, that ladder now sits at the
+  same wall-clock days under `daily` too.
 - **Nothing in this deploy changes what any user currently experiences.**
   Every cadence-dependent constant's `weekly` value is asserted byte-for-byte
   identical to what it replaces (`cadence.test.ts`); the only genuinely new
@@ -545,6 +561,17 @@ about pool size, not on anything shipped here. When that day comes: set
 `DROP_CADENCE=daily` in `.env`, `pm2 restart gennety-bot --update-env`, no
 further schema or code change needed (the `daily` profile ships in this
 deploy, dormant).
+
+What that flip will visibly change, so it isn't discovered live: the pinned
+banner loses its drop countdown for everyone without a live match (steady
+"I'm looking — I check every evening" instead), most evenings send no message
+at all, and the agent starts quoting the shorter planning deadlines. What it
+will NOT change: how often a starved user hears from us, the tier ladder, or
+when the discount lands. Two things to watch on the first days —
+`FAMINE_PAUSE_AFTER_DAYS` (28) stops being theoretical and will start firing
+routinely at small pool sizes, which is intended (an honest pause plus
+auto-resume beats a fourth tier of apology), and the Rematch knobs above still
+need their manual review first.
 
 Post-deploy check — the drop-batch log prefix confirms the new code is live
 without needing to wait for Thursday:

@@ -828,7 +828,9 @@ async function execGetMyStanding(telegramId: bigint): Promise<string> {
       "`profileSyncPending` true means their profile is temporarily out of the pool until sync finishes — say so honestly, it resolves by itself. " +
       "`cityPool` describes local supply: 'none'/'very_small' means the honest answer is that their city is still filling up, not that something is wrong with them. " +
       "`photosForBonusTicket` is how many more photos would earn a free Date Ticket. " +
-      "Never invent a reason that isn't in this data, and never promise a match next week.",
+      "Speak about waiting time using `daysWaiting` (days). NEVER quote `missedBatches` or phrase it as a number of drops/rounds — it is an internal cycle count whose scale changes with how often we run, so it reads as a verdict while describing very little. " +
+      "If they are asking why it has been quiet: a search that finds nobody sends nothing at all — silence means no one cleared the bar, not that anything is broken or that they were skipped. " +
+      "Never invent a reason that isn't in this data, and never promise a match by any particular date.",
   });
 }
 

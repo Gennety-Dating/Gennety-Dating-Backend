@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CADENCES, resolveCadence } from "./cadence.js";
+import { CADENCES, dropOutpacesNotices, resolveCadence } from "./cadence.js";
 import {
   FAMINE_DISCOUNT_MIN_TIER,
   PROFILER_RUSH_WINDOW_HOURS,
@@ -96,11 +96,22 @@ describe("CADENCES.daily", () => {
     expect(daily.cooldownMs).toBe(6 * HOUR);
   });
 
-  it("famine notice fires on its own daily cron but throttles to ~every 2-3 days via the interval filter", () => {
+  it("match daily, apologise weekly: the notice cron ticks nightly but the throttle stays at 7 days", () => {
     expect(daily.noMatchNoticeCron).toBe("15 18 * * *");
     expect(daily.noMatchNoticeCron).not.toBe(daily.cron); // still a distinct constant (D4)
+    // The whole point: strictly wider than the drop interval, so most evenings
+    // a starved user is not reconsidered at all and simply hears nothing.
     expect(daily.famineNoticeIntervalMs).toBeGreaterThan(daily.intervalMs);
-    expect(daily.famineDiscountMinTier).toBe(7);
+    expect(daily.famineNoticeIntervalMs).toBe(CADENCES.weekly.famineNoticeIntervalMs);
+  });
+
+  it("the discount threshold is cadence-independent — tier counts notices, not batches", () => {
+    // `computeTier` divides by `famineNoticeIntervalMs`, so a tier is "which
+    // message in the streak is this" under any cadence and `2` means the same
+    // second notice in both profiles. Denominating in `intervalMs` instead
+    // would have made the 2nd notice under `daily` arrive as tier 7.
+    expect(daily.famineDiscountMinTier).toBe(CADENCES.weekly.famineDiscountMinTier);
+    expect(daily.famineDiscountMinTier).toBe(2);
   });
 
   it("starvation saturates at the same ~35-day point as weekly's ~5 weeks", () => {
@@ -138,5 +149,36 @@ describe("DROP_CADENCE resolution", () => {
   it("resolves each valid key to its matching profile", () => {
     expect(resolveCadence("weekly")).toBe(CADENCES.weekly);
     expect(resolveCadence("daily")).toBe(CADENCES.daily);
+  });
+});
+
+/**
+ * The condition the pinned status banner reads to decide whether a countdown
+ * to the next drop is an honest thing to show (PRODUCT_SPEC §2.1 / §3.1).
+ */
+describe("dropOutpacesNotices", () => {
+  it("is false under weekly — the timer always resolves into a match or a notice", () => {
+    expect(dropOutpacesNotices(CADENCES.weekly)).toBe(false);
+  });
+
+  it("is true under daily — six evenings out of seven the timer hits zero into silence", () => {
+    expect(dropOutpacesNotices(CADENCES.daily)).toBe(true);
+  });
+
+  it("is derived, so a cadence cannot acquire a silent-drop regime unnoticed", () => {
+    // Same intervals => nothing goes unexplained, whatever the numbers are.
+    expect(
+      dropOutpacesNotices({
+        ...CADENCES.daily,
+        famineNoticeIntervalMs: CADENCES.daily.intervalMs,
+      }),
+    ).toBe(false);
+    // Widen the notice gap by a single hour and the banner must react.
+    expect(
+      dropOutpacesNotices({
+        ...CADENCES.daily,
+        famineNoticeIntervalMs: CADENCES.daily.intervalMs + HOUR,
+      }),
+    ).toBe(true);
   });
 });

@@ -39,6 +39,19 @@ export interface StatusBannerViewInput {
    * they cannot be in is a promise we can't keep — the banner says so instead.
    */
   marketPending?: { city: string | null };
+  /**
+   * True when drops run more often than the famine notices that explain them
+   * (`dropOutpacesNotices`, PRODUCT_SPEC §3.1) — i.e. a drop can pass in
+   * complete silence by design.
+   *
+   * The countdown is only honest when reaching zero resolves into something.
+   * Under `weekly` it always does: a match, or the famine DM fifteen minutes
+   * later. Under `daily` the notice is throttled to one a week, so six evenings
+   * out of seven the timer would hit zero and nothing would arrive — the timer
+   * turning an intentional silence into what reads as a broken promise. The
+   * banner then states a steady search with no deadline attached.
+   */
+  silentDrops?: boolean;
 }
 
 export interface StatusBannerView {
@@ -77,6 +90,25 @@ export function renderStatusBanner(input: StatusBannerViewInput): StatusBannerVi
   // heading naming what that countdown is for.
   if (input.stage) {
     const view = { ...renderStage(input.stage, input), buttonStyle: "primary" as const };
+    return { ...view, signature: JSON.stringify(view) };
+  }
+
+  // No live match, and drops outpace the notices that explain them: state the
+  // search, not a deadline. Deliberately placed AFTER the stage check — a live
+  // match's countdowns (reply window, time to the date) are to real, known
+  // events and stay honest at any cadence; it is only the next-DROP timer that
+  // this regime invalidates.
+  if (input.silentDrops) {
+    const view = {
+      text: [
+        "✦ GENNETY",
+        "",
+        t(input.language, "statusBannerSearching"),
+      ].join("\n"),
+      buttonText: t(input.language, "statusButtonMenu"),
+      callbackData: "menu:open" as const,
+      buttonStyle: "primary" as const,
+    };
     return { ...view, signature: JSON.stringify(view) };
   }
 

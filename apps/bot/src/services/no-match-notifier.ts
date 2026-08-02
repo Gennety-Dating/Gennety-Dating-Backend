@@ -28,20 +28,26 @@ import {
  * ping. Tone escalates with consecutive famine cycles (tier 1 → 2 → 3+).
  *
  * **The notice cadence is deliberately decoupled from the batch cadence
- * (D4).** Under `daily`, the notice CRON still fires once a day, but
- * `CADENCE.famineNoticeIntervalMs` (~2.5 days) throttles actual sends at the
- * query level — a starved user isn't reconsidered until that gap has passed
- * since their last notice, so daily drops don't mean daily bad-news DMs.
- * Under `weekly` this collapses back to exactly today's behavior: the
- * interval (7 days) and the cron's own weekly firing agree, so every drop
- * that leaves someone unpaired sends exactly one notice.
+ * (D4).** `CADENCE.famineNoticeIntervalMs` is 7 days in BOTH profiles: match
+ * daily, apologise weekly (founder decision 2026-08-02). Under `daily` the
+ * notice CRON still fires every evening, but the throttle is a query-level
+ * filter, so a starved user simply isn't reconsidered until a week has passed
+ * since their last notice — which means **a drop that finds them nobody sends
+ * nothing at all**. That silence is the product: at small pool sizes most
+ * evenings genuinely have nothing to report, and a nightly "sorry, no one
+ * again" would turn a background search into a daily reminder of failure.
+ * Under `weekly` this collapses back to exactly today's behavior: the interval
+ * (7 days) and the cron's own weekly firing agree, so every drop that leaves
+ * someone unpaired sends exactly one notice.
  *
- * `computeTier` is denominated in `CADENCE.intervalMs` units — weeks under
- * `weekly` (unchanged from the old `NoMatchNotice`-row-counting logic, which
- * produced the same number as long as the notice cron fired once per drop),
- * days under `daily`. This is what makes `FAMINE_DISCOUNT_MIN_TIER`-style
- * thresholds ("2nd week+", "7 days+") keep meaning the same thing in the
- * unit that's actually accruing.
+ * The user-visible consequence of that silence — a pinned banner counting down
+ * to a drop that will not announce itself — is handled separately by
+ * `dropOutpacesNotices` (`@gennety/shared`), which the status banner reads to
+ * drop its timer rather than let it reach zero into nothing.
+ *
+ * `computeTier` is denominated in that same notice interval, so a tier is
+ * "which message in the streak is this" under any cadence — see the function
+ * for why counting batches instead breaks the tier copy outright.
  *
  * The query intentionally re-derives "who has no match this drop" from
  * the DB (active users without a `Match.dispatchedAt` in the last hour)
@@ -119,19 +125,25 @@ async function resolveSinceDate(userId: string, dropDate: Date): Promise<Date> {
 }
 
 /**
- * Tier = consecutive batch intervals without a match, starting at 1 for the
- * current drop. Denominated in `CADENCE.intervalMs` — under `weekly` that's
- * weeks (unchanged from the historical row-counting logic: counting
- * `NoMatchNotice` rows since the last match produced the same number as long
- * as exactly one notice fired per drop, which weekly's unthrottled cadence
- * guarantees); under `daily` it's literally days, which is what makes
- * `FAMINE_DISCOUNT_MIN_TIER`-style day thresholds (D5) mean actual days
- * rather than "number of notices sent" once notices stop firing every drop
- * (D4's whole point).
+ * Tier = which notice in this famine streak is being sent, starting at 1.
+ *
+ * **Denominated in `CADENCE.famineNoticeIntervalMs`, not `intervalMs`.** The
+ * tier only ever selects the tone of a message and the discount threshold, and
+ * both of those are claims about the CONVERSATION ("second time in a row"), not
+ * about how many batches happened to run in between. Under `weekly` the two
+ * intervals are equal so this is byte-for-byte today's behavior; under `daily`
+ * using `intervalMs` would have counted days, so the second notice a user ever
+ * received — sent a week after the first — would arrive as tier 7 and select
+ * the most apologetic tier-3 copy, skipping tier 2 entirely, while the copy
+ * itself was describing exactly the second message.
+ *
+ * The knock-on benefit is that `famineDiscountMinTier` becomes cadence-
+ * independent: `2` means "the second notice" under any cadence, which is what
+ * PRODUCT_SPEC §3.5b says it means.
  */
 function computeTier(sinceDate: Date, dropDate: Date): number {
   const elapsedMs = dropDate.getTime() - sinceDate.getTime();
-  return Math.max(1, Math.floor(elapsedMs / CADENCE.intervalMs));
+  return Math.max(1, Math.floor(elapsedMs / CADENCE.famineNoticeIntervalMs));
 }
 
 /**

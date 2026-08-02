@@ -53,15 +53,26 @@ export interface DropCadence {
   noMatchNoticeCron: string;
   /** Minimum gap between two famine notices to the same user — the query-level
    *  throttle that makes the notice cadence genuinely independent of how often
-   *  the batch (and this cron) actually fires (D4). Weekly: 7 days (one notice
-   *  per weekly drop, unchanged). Daily: ~2.5 days ("every 2-3 days"), even
-   *  though the cron below still ticks daily. */
+   *  the batch (and this cron) actually fires (D4).
+   *
+   *  **Both profiles use 7 days** (founder decision 2026-08-02): match daily,
+   *  apologise weekly. A drop that finds nobody says NOTHING — the user simply
+   *  doesn't hear from us that evening — and the empathetic check-in arrives at
+   *  the same weekly rhythm it has always had. Daily drops with daily bad-news
+   *  DMs would turn a background process into a nightly reminder of failure,
+   *  and at small pool sizes most evenings genuinely have nothing to report.
+   *  Under `weekly` the interval and the cron's own firing agree, so every drop
+   *  that leaves someone unpaired sends exactly one notice (unchanged). */
   famineNoticeIntervalMs: number;
   /**
-   * Tier threshold (in units of `intervalMs` — weeks for weekly, days for
-   * daily) at which the famine ticket discount is granted. Compared directly
-   * against `computeTier`'s return value, which is itself denominated in the
-   * same units — see `no-match-notifier.ts`.
+   * Tier threshold at which the famine ticket discount is granted, compared
+   * directly against `computeTier`'s return value.
+   *
+   * `computeTier` is denominated in `famineNoticeIntervalMs` — i.e. the tier IS
+   * "which notice in the streak is this", not "how many batches ran". That is
+   * what makes this threshold cadence-independent: `2` means the second notice
+   * a starved user receives, under any drop cadence, which is exactly what the
+   * tier-2 copy ("second time in a row") claims. See `no-match-notifier.ts`.
    */
   famineDiscountMinTier: number;
 
@@ -148,8 +159,10 @@ const DAILY: DropCadence = {
   starvationAlpha: 0.05 / 7,
 
   noMatchNoticeCron: "15 18 * * *",
-  famineNoticeIntervalMs: 2.5 * DAY,
-  famineDiscountMinTier: 7,
+  // Same 7 days as weekly, and the same tier threshold: the drop runs nightly,
+  // the apology stays weekly. See the field docs above.
+  famineNoticeIntervalMs: 7 * DAY,
+  famineDiscountMinTier: 2,
 
   profilerRushWindowMs: 4 * HOUR,
 
@@ -194,3 +207,23 @@ export function resolveCadence(key: string | undefined): DropCadence {
 
 /** The active cadence profile, resolved once at module load from `DROP_CADENCE`. */
 export const CADENCE: DropCadence = resolveCadence(process.env.DROP_CADENCE);
+
+/**
+ * True when drops run more often than the notices that explain them — i.e. a
+ * drop can, by design, pass in complete silence.
+ *
+ * This is the precise condition under which a countdown to the next drop stops
+ * being an honest thing to show. Under `weekly` the two intervals coincide: the
+ * pinned banner's timer reaches zero and, fifteen minutes later, either a match
+ * or a famine notice arrives, so the countdown always resolves into something.
+ * Under `daily` the notice is throttled to one a week, so six evenings out of
+ * seven the timer hits zero and nothing lands — a promise the product
+ * deliberately does not keep (PRODUCT_SPEC §3.1). The banner reads that as a
+ * cue to state a steady search instead of a deadline.
+ *
+ * Derived rather than hardcoded per profile so a future cadence can't acquire a
+ * silent-drop regime without the banner noticing.
+ */
+export function dropOutpacesNotices(cadence: DropCadence = CADENCE): boolean {
+  return cadence.famineNoticeIntervalMs > cadence.intervalMs;
+}

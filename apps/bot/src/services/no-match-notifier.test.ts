@@ -74,11 +74,19 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /**
  * `computeTier` measures elapsed time from `dispatchedAt` to `dropDate`
  * (`getDropDate(now)` — floored to UTC midnight, NOT `now` itself), in units
- * of `CADENCE.intervalMs` (7 days under the active `weekly` profile these
- * tests run under — see cadence.ts). These helpers anchor to `getDropDate`
- * to match that exactly, and pick a `dispatchedAt` comfortably inside the
- * target bucket (not right on a boundary, which the flooring above would
- * otherwise nudge into the bucket below):
+ * of `CADENCE.famineNoticeIntervalMs` — the gap between NOTICES, not between
+ * batches. A tier is therefore "which message in this streak is this", which
+ * is what the tier copy claims ("second time in a row") and what makes
+ * `famineDiscountMinTier` mean the same thing under any cadence.
+ *
+ * The interval is read from `CADENCE` rather than hardcoded so these anchors
+ * stay correct if a run ever selects a different profile. It is 7 days in both
+ * profiles today, so every expectation below holds under `daily` too — which is
+ * precisely the property being protected.
+ *
+ * Each helper picks a `dispatchedAt` comfortably inside the target bucket (not
+ * right on a boundary, which the flooring above would otherwise nudge into the
+ * bucket below):
  *   tier 1 → elapsed ~1 interval
  *   tier 2 → elapsed ~2 intervals
  *   tier 3 → elapsed ~3 intervals
@@ -86,7 +94,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 function dispatchedForTier(tier: 1 | 2 | 3, now: Date = NOW): Date {
   const dropDate = getDropDate(now);
   const intervalsAgo = tier; // comfortably mid-bucket: exactly N intervals back
-  return new Date(dropDate.getTime() - intervalsAgo * 7 * DAY_MS);
+  return new Date(dropDate.getTime() - intervalsAgo * CADENCE.famineNoticeIntervalMs);
 }
 
 describe("getDropDate", () => {

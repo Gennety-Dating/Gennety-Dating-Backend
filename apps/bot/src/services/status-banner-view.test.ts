@@ -224,4 +224,68 @@ describe("renderStatusBanner", () => {
       },
     );
   });
+
+  /**
+   * Under a cadence where drops outpace the notices explaining them
+   * (`dropOutpacesNotices`), a countdown to the next drop is a promise the
+   * product deliberately does not keep: the timer reaches zero and, most
+   * evenings, nothing arrives — because a search that finds nobody sends
+   * nothing at all (PRODUCT_SPEC §3.1).
+   */
+  describe("silentDrops — no countdown when a drop can pass in silence", () => {
+    const base = {
+      now: new Date("2026-07-21T09:00:00.000Z"),
+      nextDropAt: NEXT_DROP,
+      isProcessing: false,
+      timeZone: "Europe/Kyiv",
+      silentDrops: true,
+    } as const;
+
+    it.each(["en", "ru", "uk", "de", "pl"] as const)(
+      "states a steady search with no timer, in %s",
+      (language) => {
+        const view = renderStatusBanner({ ...base, language });
+
+        // No deadline anywhere: not in the badge, not in the body.
+        expect(view.buttonText).not.toMatch(/\d/);
+        expect(view.text).not.toMatch(/\d/);
+        // And not the drop-schedule headline either — that names a date.
+        expect(view.text).not.toContain("GENNETY DROP");
+        expect(view.text.split("\n")[0]).toBe("✦ GENNETY");
+        expect(view.text.length).toBeGreaterThan("✦ GENNETY".length);
+        expect(view.callbackData).toBe("menu:open");
+        expect(view.buttonStyle).toBe("primary");
+      },
+    );
+
+    it("is inert when the flag is off — the ordinary countdown still renders", () => {
+      const view = renderStatusBanner({ ...base, silentDrops: false, language: "ru" });
+      expect(view.text).toContain("GENNETY DROP");
+      expect(view.buttonText).toMatch(/\d/);
+    });
+
+    it("never suppresses a live match's own countdowns", () => {
+      // Those count down to real, known events (the reply window, the date
+      // itself) and stay honest at any cadence — only the next-DROP timer is
+      // invalidated by silent drops, so the stage must still win.
+      for (const stage of [
+        { kind: "date", at: NEXT_DROP, venueName: null },
+        { kind: "decision", minutesLeft: 90 },
+      ] as const) {
+        const view = renderStatusBanner({ ...base, language: "ru", stage });
+        expect(view.buttonText).toMatch(/\d/);
+        expect(view.callbackData).toBe("menu:date");
+      }
+    });
+
+    it("still yields to the market-pending waitlist banner", () => {
+      const view = renderStatusBanner({
+        ...base,
+        language: "ru",
+        marketPending: { city: "Львів" },
+      });
+      expect(view.text).toContain("Львів");
+      expect(view.buttonText).not.toMatch(/\d/);
+    });
+  });
 });

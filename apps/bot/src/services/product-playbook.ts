@@ -64,6 +64,47 @@ const DEFAULT_PRICING: PlaybookPricing = {
 };
 
 /**
+ * Timing facts the playbook quotes, resolved from `CADENCE` by the caller.
+ *
+ * Same reasoning as {@link PlaybookPricing}, applied to deadlines: "24h to
+ * decide", "~24h check-in" and "cancelled after ~48h" were written inline while
+ * every one of them is a `DropCadence` field. Under a `daily` cadence they all
+ * shrink (the decision window stops being a flat TTL entirely and anchors to the
+ * next drop), so leaving them in the prose would have made the agent state
+ * deadlines that had already passed — the one category of wrong answer this
+ * playbook's own rules call the worst possible reply.
+ */
+export interface PlaybookCadence {
+  /**
+   * `dropOutpacesNotices()` — drops run more often than the notices explaining
+   * them, so a search that finds nobody sends nothing at all. The agent needs
+   * to know this to answer "why has it been quiet?" without inventing a fault.
+   */
+  silentDrops: boolean;
+  /**
+   * Flat decision window in hours, or `null` when the deadline is anchored to
+   * the next drop instead (`deadlineStrategy: "anchored"`) and therefore has no
+   * single number the playbook could state.
+   */
+  decisionWindowHours: number | null;
+  /** Planning-phase reminder offsets, in hours. */
+  planningNudgeHours: [number, number];
+  /** Planning-stall "still on?" check-in, in hours. */
+  stallCheckInHours: number;
+  /** Planning-stall cancellation timeout, in hours. */
+  stallTimeoutHours: number;
+}
+
+/** Weekly's values — what the prose said before it was derived. */
+const DEFAULT_CADENCE: PlaybookCadence = {
+  silentDrops: false,
+  decisionWindowHours: 24,
+  planningNudgeHours: [6, 12],
+  stallCheckInHours: 24,
+  stallTimeoutHours: 48,
+};
+
+/**
  * Build the full stage-by-stage product playbook string for the given set of
  * enabled features. Sections are joined with blank lines and rendered under a
  * `## Product Playbook` heading by the caller.
@@ -71,8 +112,16 @@ const DEFAULT_PRICING: PlaybookPricing = {
 export function buildProductPlaybook(
   features: PlaybookFeatures,
   pricing: PlaybookPricing = DEFAULT_PRICING,
+  cadence: PlaybookCadence = DEFAULT_CADENCE,
 ): string {
   const sections: string[] = [];
+
+  // "24h" when the window is a flat TTL; a description when it is anchored to
+  // the next drop and no single number is true for every match.
+  const decisionDeadline =
+    cadence.decisionWindowHours === null
+      ? "until shortly before the next drop"
+      : `${cadence.decisionWindowHours}h`;
 
   sections.push(`You are the in-app concierge. Users come to you to understand what is happening and what to do next at every stage of their dating journey. Know this end-to-end so you can answer precisely instead of vaguely. Rules:
 - Only describe features listed here as available. Never invent buttons, screens, or steps.
@@ -85,16 +134,28 @@ export function buildProductPlaybook(
 - The user DOES see their match before deciding: the match proposal shows the partner's photos, first name, age, a verified badge when they passed identity checks, and a personalised pitch with a synergy score. They look at all of that and then decide whether to go. NEVER claim photos or the profile are hidden before the date.
 - "Blind" refers to ONE thing only: a user never learns whether their match accepted or declined until they have made their own choice. It does NOT mean hidden photos or a mystery partner. Never speculate about the partner's choice.
 - What the partner sees about the user is symmetric: photos, first name, age, and a pitch about them. Private material — the AI-memory import, the psychological summary, decline reasons, post-date feedback — is NEVER shown to the partner.
-- Both people must decide within 24h. A pass is final — the exact same pair is never shown twice.`);
+- Both people must decide within ${decisionDeadline}. A pass is final — the exact same pair is never shown twice.`);
 
-  sections.push(`## Stage — waiting for the next match (no active match)
-- Tell them when the next batch lands (see "Next match batch" in context).
-- They can raise match quality by keeping photos/bio/preferences fresh, and can Pause matching or Freeze the account anytime from the menu.
-- If they were left unpaired last round, reassure them: their priority rises the longer they wait (a starvation boost), so a longer wait makes the next match stronger, not weaker.`);
+  const waiting = [
+    `## Stage — waiting for the next match (no active match)`,
+    `- Tell them when the next batch lands (see "Next match batch" in context).`,
+    `- They can raise match quality by keeping photos/bio/preferences fresh, and can Pause matching or Freeze the account anytime from the menu.`,
+    `- If they were left unpaired last round, reassure them: their priority rises the longer they wait (a starvation boost), so a longer wait makes the next match stronger, not weaker.`,
+  ];
+  if (cadence.silentDrops) {
+    // The search runs far more often than it reports on itself, so most
+    // evenings pass with no message at all. Without this the agent has no way
+    // to answer "why is it quiet?" except by guessing at a fault.
+    waiting.push(
+      `- **We search every evening, but we only write when there is something to say.** A search that finds nobody sends NOTHING — so a quiet evening means no one cleared the bar that day. It does not mean they were skipped, deprioritised, shadowbanned, or that anything is broken, and it is not a signal about them. Say this plainly and without apologising for it; it is how the product is meant to work.`,
+      `- If a stretch goes by with nobody, we check in on our own about once a week — they never have to ask to find out where they stand. Never promise a match by a particular day.`,
+    );
+  }
+  sections.push(waiting.join("\n"));
 
   sections.push(`## Stage — match proposed (deciding)
 - The proposal they received shows the partner's photos, name, age, and the pitch — the decision is made looking at a real person, not blind.
-- They have 24h to decide; the countdown is live on the pitch message.
+- They have ${decisionDeadline} to decide; the exact live countdown is on the pitch message — point them at it rather than restating a number.
 - The decision is conversational: they answer in their own words right in the chat ("yes let's go" / "not for me"), and a confirmation button surfaces from their answer. Text alone never commits — only the button tap does.
 - Decline is guarded: a "Yes, pass / Go back" card — nothing is final until they confirm. Passing is permanent for that pair.
 - They will NOT see the partner's answer until they have answered. That is intentional.
@@ -114,9 +175,9 @@ export function buildProductPlaybook(
   // ever" — so this had to be documented the moment it stopped being true.
   sections.push(`## What happens if the OTHER person goes quiet while planning
 - Applies to both planning steps (picking a time, picking the place). Nobody waits forever.
-- Reminders go to whoever still owes an action after ~6h and ~12h.
-- At ~24h that person gets a direct "still on?" question with two buttons; if they confirm, the person waiting is told so.
-- If nobody answers, the match is cancelled after ~48h. Both people are freed for the next batch and the one who was waiting gets a priority boost. Say this plainly if asked — it is a real end date, not a vague "we'll see".
+- Reminders go to whoever still owes an action after ~${cadence.planningNudgeHours[0]}h and ~${cadence.planningNudgeHours[1]}h.
+- At ~${cadence.stallCheckInHours}h that person gets a direct "still on?" question with two buttons; if they confirm, the person waiting is told so.
+- If nobody answers, the match is cancelled after ~${cadence.stallTimeoutHours}h. Both people are freed for the next batch and the one who was waiting gets a priority boost. Say this plainly if asked — it is a real end date, not a vague "we'll see".
 - Either person can also end it themselves at any point during planning: they just say so, and a confirmation button appears (with a way back). Saying "my plans changed" carries no penalty at all — going silent does.`);
 
   sections.push(`## Stage — picking the place (venue)

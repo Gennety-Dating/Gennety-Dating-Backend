@@ -8,7 +8,7 @@
  */
 
 import { prisma } from "@gennety/db";
-import { VOICE_SELF_GENDER } from "@gennety/shared";
+import { CADENCE, dropOutpacesNotices, VOICE_SELF_GENDER } from "@gennety/shared";
 import {
   ADMIN_CACHE_CATEGORY,
   ADMIN_CACHE_KEY_PREFIX,
@@ -17,6 +17,7 @@ import { env } from "../config.js";
 import { formatNextBatchDate } from "./next-batch.js";
 import {
   buildProductPlaybook,
+  type PlaybookCadence,
   type PlaybookFeatures,
   type PlaybookPricing,
 } from "./product-playbook.js";
@@ -88,6 +89,29 @@ function playbookPricing(): PlaybookPricing {
     ticketPrice: `$${(env.TICKET_PRICE_CENTS / 100).toFixed(2)}`,
     premiumPrice: env.PREMIUM_PRICE_USD_DISPLAY,
     rematchPrice: env.REMATCH_PRICE_USD_DISPLAY,
+  };
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+const asHours = (ms: number): number => Math.round(ms / HOUR_MS);
+
+/**
+ * Every deadline the playbook states, derived from the live cadence profile
+ * rather than written into the prose — see {@link PlaybookCadence}.
+ */
+function playbookCadence(): PlaybookCadence {
+  return {
+    silentDrops: dropOutpacesNotices(),
+    decisionWindowHours:
+      CADENCE.deadlineStrategy === "fixed" && CADENCE.decisionWindowMs
+        ? asHours(CADENCE.decisionWindowMs)
+        : null,
+    planningNudgeHours: [
+      asHours(CADENCE.schedNudgeOffsetsMs[0]),
+      asHours(CADENCE.schedNudgeOffsetsMs[1]),
+    ],
+    stallCheckInHours: asHours(CADENCE.stallCheckInMs),
+    stallTimeoutHours: asHours(CADENCE.stallTimeoutMs),
   };
 }
 
@@ -731,7 +755,11 @@ export async function buildSystemPrompt(telegramId: bigint): Promise<string> {
     fetchUserContext(telegramId),
   ]);
 
-  const playbook = buildProductPlaybook(playbookFeatures(), playbookPricing());
+  const playbook = buildProductPlaybook(
+    playbookFeatures(),
+    playbookPricing(),
+    playbookCadence(),
+  );
 
   const pendingSection = userCtx.pendingRejectionHint
     ? `\n\n## Pending Rejection Follow-up

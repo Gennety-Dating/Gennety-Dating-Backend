@@ -1,5 +1,5 @@
 import { prisma } from "@gennety/db";
-import { MIN_PHOTOS, PHOTO_BONUS_TICKET_THRESHOLD } from "@gennety/shared";
+import { CADENCE, MIN_PHOTOS, PHOTO_BONUS_TICKET_THRESHOLD } from "@gennety/shared";
 
 /**
  * Read-only matchmaking insight for the menu agent.
@@ -26,6 +26,17 @@ export interface MatchmakingStanding {
   verificationStatus: string;
   /** Consecutive drop batches this user was eligible for but went unpaired. */
   missedBatches: number;
+  /**
+   * The same standby streak in wall-clock days — the only unit that means
+   * anything to a user, and the one the agent must speak in.
+   *
+   * `missedBatches` is a count of CYCLES, so its scale moves with the cadence:
+   * under `weekly` "2" is a fortnight, under `daily` "5" is five evenings. An
+   * agent handed the raw count says "five drops in a row without a match",
+   * which sounds like a verdict and describes less than a week of ordinary
+   * waiting.
+   */
+  daysWaiting: number;
   /** True while the profile is excluded from matching pending an embedding rebuild. */
   profileSyncPending: boolean;
   photoCount: number;
@@ -106,10 +117,13 @@ export async function getMatchmakingStanding(
     cityPool = bucketPool(count);
   }
 
+  const missedBatches = profile?.standbyCount ?? profile?.missedWeeks ?? 0;
+
   return {
     accountStatus: user.status,
     verificationStatus: user.verificationStatus,
-    missedBatches: profile?.standbyCount ?? profile?.missedWeeks ?? 0,
+    missedBatches,
+    daysWaiting: Math.round((missedBatches * CADENCE.intervalMs) / 86_400_000),
     profileSyncPending: profile?.embeddingDirty === true,
     photoCount,
     minPhotos: MIN_PHOTOS,

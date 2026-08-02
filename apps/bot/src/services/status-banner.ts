@@ -1,6 +1,6 @@
 import { InlineKeyboard, GrammyError, type Api, type RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import type { Language } from "@gennety/shared";
+import { dropOutpacesNotices, type Language } from "@gennety/shared";
 import {
   CRON_TIMEZONE,
   getNextBatchDate,
@@ -61,6 +61,11 @@ export function buildStatusBannerView(
     isProcessing: isBatchProcessing(now),
     language,
     timeZone: CRON_TIMEZONE,
+    // Resolved here rather than threaded through every caller: this function
+    // already owns the other cadence-derived facts the view can't work out for
+    // itself (next drop, processing window, timezone), and every banner in the
+    // product goes through it.
+    silentDrops: dropOutpacesNotices(),
     ...(options.stage ? { stage: options.stage } : {}),
     ...(options.marketPending ? { marketPending: options.marketPending } : {}),
   });

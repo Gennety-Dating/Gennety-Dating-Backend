@@ -1500,11 +1500,22 @@ winning:
    all, so the badge is an action ("Details") rather than a status: repeating the
    body's own first line in it would just print the same phrase twice in the
    pinned bar → My Date hub.
-5. **Drop** — no live match: the original next-batch countdown, unchanged.
-   Cadence-agnostic by construction: it buckets `nextDropAt − now` into
-   days/hours/minutes (`computeStatusSnapshot`), so a same-day next drop under
-   the inert `daily` cadence profile (§3.1) renders correctly without any
-   banner-specific code change.
+5. **Drop** — no live match: the original next-batch countdown. It buckets
+   `nextDropAt − now` into days/hours/minutes (`computeStatusSnapshot`), so a
+   same-day next drop renders correctly with no banner-specific change.
+   **But the countdown itself is withheld when drops outpace the notices that
+   explain them** (`dropOutpacesNotices`, §3.1): the banner then states a steady
+   search ("I'm looking — I check every evening") with a plain "open menu"
+   button and no timer anywhere. A countdown is only honest if reaching zero
+   resolves into something — under `weekly` it always does (a match, or the
+   famine DM fifteen minutes later), but under `daily` the famine notice stays
+   throttled to one a week, so six evenings out of seven the timer would hit
+   zero and nothing would arrive. That silence is deliberate; a timer counting
+   down to it is what would turn it into a broken promise. The condition is
+   *derived* from the two intervals rather than hardcoded per profile, so a
+   future cadence cannot acquire a silent-drop regime without the banner
+   noticing. Live-match modes 2–4 are untouched — their countdowns run to real,
+   known events and stay honest at any cadence.
 
 Three states fall back to mode 5 on purpose. Two because the next drop is
 genuinely the relevant thing again: a `scheduled` date that has already happened
@@ -1604,10 +1615,36 @@ boot by the `DROP_CADENCE` env var (`weekly` | `daily`, default `weekly`).
 Everything below in this section describes the **`weekly` profile, which is
 what production runs today** — `DROP_CADENCE` is not set in `/opt/gennety/.env`
 and flipping it to `daily` is a separate, later decision gated on pool size,
-not on anything documented here. The `daily` profile exists in code (7-day
+not on anything documented here. The `daily` profile exists in code (nightly
 cron `"0 18 * * *"`, a 30-minute-before-next-drop decision deadline instead of
-a flat 24h, a 6h cooldown, day-denominated famine tiers, and the §D10
-pool-exhaustion pause below) but is inert until that env var changes. See
+a flat 24h, a 6h cooldown, and the §D10 pool-exhaustion pause below) but is
+inert until that env var changes.
+
+**Match daily, apologise weekly (founder decision 2026-08-02).** The notice
+cadence is deliberately NOT tied to the drop cadence: `famineNoticeIntervalMs`
+is **7 days in both profiles**, so switching to `daily` changes how often we
+*look*, not how often we *write*. A drop that finds nobody sends **nothing at
+all** — the user simply doesn't hear from us that evening — and the empathetic
+check-in keeps the weekly rhythm and the same tier ladder it has today, with
+the discount still landing on the second notice. At small pool sizes most
+evenings genuinely have nothing to report, and a nightly "sorry, still no one"
+would turn a background search into a daily reminder of failure. Two
+consequences follow, and both are load-bearing:
+
+- **Tiers count notices, not batches.** `computeTier` is denominated in
+  `famineNoticeIntervalMs`, so a tier is "which message in this streak is
+  this" — which is exactly what the tier-2 copy ("second time in a row")
+  claims, and what makes `famineDiscountMinTier = 2` mean the same thing under
+  any cadence. Denominating it in the batch interval instead (the original
+  `daily` draft) would have made the second notice a user ever received arrive
+  as tier 7 and select the most apologetic tier-3 copy, skipping tier 2
+  entirely.
+- **The pinned banner drops its countdown** whenever drops outpace the notices
+  explaining them (`dropOutpacesNotices`) — see §2.1 mode 5. A timer is only
+  honest if reaching zero resolves into something; under `daily` it would hit
+  zero into deliberate silence six evenings out of seven.
+
+See
 `DAILY_MATCHING_MIGRATION_AUDIT.md` / `DAILY_MATCHING_IMPLEMENTATION_PLAN.md`
 for the full migration design. Internal names were deliberately NOT renamed to
 track this (`standbyCount`, `Profile.missedWeeks`, `Match.source = "weekly"`,
@@ -1636,7 +1673,12 @@ change, not a migration.
 - **No-match notice** — Thursday 18:15 Kyiv (`NO_MATCH_NOTICE_CRON_SCHEDULE = "15 18 * * 4"`).
   An empathetic DM goes to every eligible-but-unpaired user. Tier escalates
   with consecutive famine count (1 / 2 / 3+); idempotent via
-  `NoMatchNotice@@unique([userId, dropDate])`. The DM is delivered through the
+  `NoMatchNotice@@unique([userId, dropDate])`. **The cron is not the throttle**
+  — `CADENCE.famineNoticeIntervalMs` (7 days, both profiles) is a query-level
+  filter, so the real guarantee is at most one notice a week per user however
+  often this schedule fires. Under `weekly` the two coincide and every drop
+  that leaves someone unpaired sends exactly one notice; under `daily` the cron
+  ticks nightly and most evenings send nothing (§3.1). The DM is delivered through the
   native rich AI-compose draft stream (`streamDraftsToChat(..., { rich: true })`,
   the same primitive as the match pitch), so it reads as personally composed
   rather than a mass-blast template. It is a deliberately **short** 2-chunk

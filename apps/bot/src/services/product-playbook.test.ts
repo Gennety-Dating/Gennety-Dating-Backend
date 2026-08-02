@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { buildProductPlaybook, type PlaybookFeatures } from "./product-playbook.js";
+import {
+  buildProductPlaybook,
+  type PlaybookCadence,
+  type PlaybookFeatures,
+} from "./product-playbook.js";
 
 const ALL_OFF: PlaybookFeatures = {
   coordination: false,
@@ -144,6 +148,70 @@ describe("buildProductPlaybook", () => {
 
     it("never offers a museum as a first-date venue", () => {
       expect(buildProductPlaybook(ALL_ON)).toContain("never museums");
+    });
+  });
+
+  /**
+   * Every deadline the playbook states is a `DropCadence` field. Written into
+   * the prose they would silently become false the moment the cadence changes —
+   * and a confidently wrong deadline is the single worst answer this agent can
+   * give (its own rules say so).
+   */
+  describe("deadlines are derived from the cadence, not written into the prose", () => {
+    const DAILY_ISH: PlaybookCadence = {
+      silentDrops: true,
+      decisionWindowHours: null, // anchored to the next drop
+      planningNudgeHours: [3, 6],
+      stallCheckInHours: 12,
+      stallTimeoutHours: 24,
+    };
+
+    it("defaults to weekly's numbers when no cadence is passed", () => {
+      const text = buildProductPlaybook(ALL_ON);
+      expect(text).toContain("decide within 24h");
+      expect(text).toContain("~6h and ~12h");
+      expect(text).toContain("At ~24h");
+      expect(text).toContain("cancelled after ~48h");
+    });
+
+    it("states none of weekly's hours under a faster cadence", () => {
+      const text = buildProductPlaybook(ALL_ON, undefined, DAILY_ISH);
+      expect(text).toContain("~3h and ~6h");
+      expect(text).toContain("At ~12h");
+      expect(text).toContain("cancelled after ~24h");
+      expect(text).not.toContain("~48h");
+      expect(text).not.toContain("At ~24h");
+    });
+
+    it("describes an anchored decision window instead of inventing a number", () => {
+      const text = buildProductPlaybook(ALL_ON, undefined, DAILY_ISH);
+      expect(text).toContain("decide within until shortly before the next drop");
+      expect(text).not.toContain("24h to decide");
+    });
+  });
+
+  describe("silent drops", () => {
+    const SILENT: PlaybookCadence = {
+      silentDrops: true,
+      decisionWindowHours: null,
+      planningNudgeHours: [3, 6],
+      stallCheckInHours: 12,
+      stallTimeoutHours: 24,
+    };
+
+    it("explains that a search finding nobody sends nothing at all", () => {
+      const text = buildProductPlaybook(ALL_ON, undefined, SILENT);
+      expect(text).toContain("only write when there is something to say");
+      expect(text).toContain("sends NOTHING");
+      // The agent must not reach for a fault to explain the quiet.
+      expect(text).toContain("does not mean they were skipped");
+    });
+
+    it("says nothing about silence when every drop reports on itself", () => {
+      // Under weekly the timer always resolves into a match or a famine DM, so
+      // this guidance would describe a state the user cannot be in.
+      const text = buildProductPlaybook(ALL_ON);
+      expect(text).not.toContain("sends NOTHING");
     });
   });
 });

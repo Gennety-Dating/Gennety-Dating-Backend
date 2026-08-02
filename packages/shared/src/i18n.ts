@@ -866,6 +866,9 @@ const translations = {
     statusProcessing: "✨ Analyzing your city… Check back shortly.",
     statusBannerSchedule: "Next drop: {date}, {time}",
     statusBannerActive: "We're already looking for your person ✦",
+    statusBannerSearching:
+      "I'm looking for your person — I check every evening.\n" +
+      "The moment there's someone worth your time, you'll hear from me.",
     statusButtonDaysHours: "Drop in {d}d {h}h",
     statusButtonHoursMinutes: "Drop in {h}h {m}m",
     statusButtonMinutes: "✨ Drop in {m}m",
@@ -1945,6 +1948,9 @@ const translations = {
     statusProcessing: "✨ Сканируем твой город… Загляни чуть позже.",
     statusBannerSchedule: "Следующий дроп: {date}, {time}",
     statusBannerActive: "Мы уже ищем твоего человека ✦",
+    statusBannerSearching:
+      "Ищу твоего человека — проверяю каждый вечер.\n" +
+      "Как только появится кто-то, кто правда стоит твоего времени, я напишу.",
     statusButtonDaysHours: "До дропа: {d}д {h}ч",
     statusButtonHoursMinutes: "До дропа: {h}ч {m}мин",
     statusButtonMinutes: "✨ До дропа: {m}мин",
@@ -2998,6 +3004,9 @@ const translations = {
     statusProcessing: "✨ Скануємо твоє місто… Зазирни трохи згодом.",
     statusBannerSchedule: "Наступний дроп: {date}, {time}",
     statusBannerActive: "Ми вже шукаємо твою людину ✦",
+    statusBannerSearching:
+      "Шукаю твою людину — перевіряю щовечора.\n" +
+      "Щойно з'явиться хтось, хто справді вартий твого часу, я напишу.",
     statusButtonDaysHours: "До дропу: {d}д {h}г",
     statusButtonHoursMinutes: "До дропу: {h}г {m}хв",
     statusButtonMinutes: "✨ До дропу: {m}хв",
@@ -4010,6 +4019,9 @@ const deTranslations: TranslationTable = {
   statusProcessing: "✨ Analysiere deine Stadt... Schau später nochmal rein.",
   statusBannerSchedule: "Nächster Drop: {date}, {time}",
   statusBannerActive: "Wir suchen bereits nach deinem Menschen ✦",
+  statusBannerSearching:
+    "Ich suche deinen Menschen — ich schaue jeden Abend nach.\n" +
+    "Sobald jemand da ist, der deine Zeit wirklich wert ist, melde ich mich.",
   statusButtonDaysHours: "Drop in {d}T {h}Std",
   statusButtonHoursMinutes: "Drop in {h}Std {m}Min",
   statusButtonMinutes: "✨ Drop in {m}Min",
@@ -5033,6 +5045,9 @@ const plTranslations: TranslationTable = {
   statusProcessing: "✨ Analizujemy Twoje miasto... Zajrzyj trochę później.",
   statusBannerSchedule: "Następny drop: {date}, {time}",
   statusBannerActive: "Już szukamy Twojej osoby ✦",
+  statusBannerSearching:
+    "Szukam Twojej osoby — sprawdzam każdego wieczoru.\n" +
+    "Gdy tylko pojawi się ktoś naprawdę wart Twojego czasu, odezwę się.",
   statusButtonDaysHours: "Do dropu: {d}d {h}h",
   statusButtonHoursMinutes: "Do dropu: {h}h {m}min",
   statusButtonMinutes: "✨ Do dropu: {m}min",
