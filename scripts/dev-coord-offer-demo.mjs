@@ -40,6 +40,22 @@
  * (e.g. to inspect a clean row, or before triggering the offer some other way):
  *   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-coord-offer-demo.mjs --reset --apply
  *
+ * If the match (or one of the two accounts) got wiped out from under you —
+ * e.g. by another script/session touching the same two canonical dev
+ * accounts, or by `dev-trigger-scheduling.mjs`/`createProposedMatch` refusing
+ * because the accounts don't carry a full embedding/verification/email (the
+ * real matching-engine eligibility gate, which a bare dev account rarely
+ * satisfies) — `--rebuild` gets you straight back to a clean, valid
+ * `scheduled` match WITHOUT going through the real match engine at all
+ * (coordination only needs userA/userB/status/agreedTime, so this bypasses
+ * `createProposedMatch`'s eligibility re-check entirely): it creates the two
+ * accounts if missing (status=active/onboardingStep=completed/Kyiv, mirroring
+ * `dev-prep-calendar-accounts.mjs`), deletes EVERY prior match between them
+ * (dev-only — this pair is reserved for this playground, so the lifetime-pair
+ * ban never gets a chance to block a rebuild), and creates one fresh `Match`
+ * row. Combine with `--send-offer` to rebuild AND immediately DM the offer:
+ *   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-coord-offer-demo.mjs --rebuild --send-offer --apply
+ *
  * Options:
  *   --primary-tg=782065541 --secondary-tg=5986970093
  *   --minutes-until-date=25   how far out to set agreedTime (default 25 min —
@@ -92,6 +108,7 @@ const apply = args.get("apply") === "true";
 const force = args.get("force") === "true";
 const doReset = args.get("reset") === "true";
 const doSendOffer = args.get("send-offer") === "true";
+const doRebuild = args.get("rebuild") === "true";
 const primaryTg = BigInt(args.get("primary-tg") ?? "782065541");
 const secondaryTg = BigInt(args.get("secondary-tg") ?? "5986970093");
 const minutesUntilDate = Number(args.get("minutes-until-date") ?? "25");
@@ -137,6 +154,46 @@ async function loadUser(telegramId) {
   });
 }
 
+const KYIV = {
+  homeCityKey: "ua:kyiv",
+  homeCity: "Kyiv",
+  homeCountryCode: "UA",
+  latitude: 50.4501,
+  longitude: 30.5234,
+  timeZone: "Europe/Kyiv",
+};
+
+// Mirrors dev-prep-calendar-accounts.mjs: creates the row if the Telegram
+// touch never left one behind, otherwise just makes sure it's match-flow
+// ready. Deliberately does NOT set embedding/verification — createProposedMatch
+// would still refuse these accounts; --rebuild sidesteps that by writing the
+// Match row directly instead of going through the engine.
+async function ensureUser(telegramId, fallbackGender, fallbackName) {
+  let u = await prisma.user.findUnique({ where: { telegramId }, select: { id: true, firstName: true } });
+  if (!u) {
+    u = await prisma.user.create({
+      data: { telegramId, status: "onboarding", onboardingStep: "consent", language: "en" },
+      select: { id: true, firstName: true },
+    });
+  }
+  await prisma.user.update({
+    where: { id: u.id },
+    data: {
+      status: "active",
+      onboardingStep: "completed",
+      gender: fallbackGender,
+      language: "en",
+      firstName: u.firstName ?? fallbackName,
+    },
+  });
+  await prisma.profile.upsert({
+    where: { userId: u.id },
+    create: { userId: u.id, ...KYIV, height: 175, hobbies: [], partnerPreferences: "" },
+    update: { ...KYIV },
+  });
+  return u.id;
+}
+
 // Mirrors resolveCoordRecipients() in apps/bot/src/services/coordination.ts:
 // the female participant gets the offer; a same-sex pair with no female gets
 // both (first-tap-wins).
@@ -168,6 +225,38 @@ async function main() {
   ({ t } = await import("@gennety/shared"));
 
   const api = createTelegramApi(process.env.BOT_TOKEN);
+
+  if (doRebuild) {
+    if (!apply) {
+      console.log(`[DRY RUN] Would ensure both accounts exist + are active/completed/Kyiv,`);
+      console.log(`  delete EVERY prior match between tg=${primaryTg} and tg=${secondaryTg}, then create a fresh scheduled Match row.`);
+      console.log(`Re-run with --apply to do it.`);
+      return;
+    }
+    const primaryId = await ensureUser(primaryTg, "female", "Test A");
+    const secondaryId = await ensureUser(secondaryTg, "male", "Test B");
+    const delMatches = await prisma.match.deleteMany({
+      where: {
+        OR: [
+          { userAId: primaryId, userBId: secondaryId },
+          { userAId: secondaryId, userBId: primaryId },
+        ],
+      },
+    });
+    const now = new Date();
+    const agreedTime = new Date(now.getTime() + minutesUntilDate * 60 * 1000);
+    const created = await prisma.match.create({
+      data: { userAId: primaryId, userBId: secondaryId, status: "scheduled", agreedTime, dispatchedAt: now },
+      select: { id: true },
+    });
+    console.log(`✅ Rebuilt: deleted ${delMatches.count} prior match(es), created fresh match ${created.id} (status=scheduled, agreedTime=${agreedTime.toISOString()}).`);
+    if (!doSendOffer && !doReset) {
+      console.log(`\nSend the offer with:`);
+      console.log(`  pnpm --filter @gennety/bot exec tsx ../../scripts/dev-coord-offer-demo.mjs --send-offer --apply`);
+      return;
+    }
+  }
+
   const primary = await loadUser(primaryTg);
   const secondary = await loadUser(secondaryTg);
   if (!primary) throw new Error(`Primary account telegramId=${primaryTg} not found in dev DB.`);
@@ -196,9 +285,9 @@ async function main() {
   });
   if (!match) {
     throw new Error(
-      "No in-flight match between the two accounts. Create + advance one first:\n" +
-      "  pnpm dev:trigger-test-match\n" +
-      "  node scripts/dev-continue-date.mjs -- --stop-at=scheduled",
+      "No in-flight match between the two accounts. Fastest fix:\n" +
+      "  pnpm --filter @gennety/bot exec tsx ../../scripts/dev-coord-offer-demo.mjs --rebuild --send-offer --apply\n" +
+      "(or walk a real match through the engine: dev:trigger-test-match + dev-continue-date.mjs -- --stop-at=scheduled)",
     );
   }
 
