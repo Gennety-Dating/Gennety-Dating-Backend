@@ -1,5 +1,44 @@
 # Gennety Dating Deploy
 
+**PENDING — StoreKit 2 credentials are in hand (2026-08-02), env not yet set.**
+App Store Connect was configured by a browser agent; these are identifiers, not
+secrets (they are useless without the `.p8`, which lives only on the droplet and
+in the founder's password manager).
+
+```
+APPSTORE_KEY_PATH=/opt/gennety/keys/SubscriptionKey_5UCTX65L56.p8
+APPSTORE_KEY_ID=5UCTX65L56
+APPSTORE_ISSUER_ID=49fd72b2-faf4-4673-a9b4-50e6027c46a8
+APPSTORE_ENVIRONMENT=sandbox
+```
+
+App record: Apple ID `6797330919`, bundle `com.gennety.ios`, SKU `gennety-ios`.
+Products created and matching `APPSTORE_TICKET_PRODUCTS` /
+`PREMIUM_APPSTORE_PRODUCT_ID` exactly: `ticket_1`, `ticket_3`, `ticket_6`,
+`premium_monthly`. Server Notifications point at
+`https://dating-api.gennety.com/v1/webhooks/appstore` on both Production and
+Sandbox.
+
+**⚠️ Do NOT flip this on until the prices are reconciled.** Apple's chosen price
+points do not match `TICKET_BUNDLES` (`packages/shared/src/constants.ts`):
+Apple has `ticket_3` at $16.99 vs our $16.47 and `ticket_6` at $29.99 vs our
+$26.94, and **`ticket_1` was not reported at all** — if it inherited $16.99 then
+one ticket costs the same as three, which is both a real overcharge and a review
+risk. Confirm every price in App Store Connect, then either move Apple to the
+nearest available point or move the constants; the iOS client must in any case
+render StoreKit's own `displayPrice` rather than a hardcoded number.
+
+**Also unconfirmed:** the agent reported that App Store Connect no longer shows a
+V1/V2 selector for Server Notifications and that new apps are V2 by default.
+Plausible, but not verified by us — the first sandbox purchase settles it, since
+our handler only parses the V2 `signedPayload` shape.
+
+**Still missing on the droplet:** the APNs `.p8`
+(`/opt/gennety/keys/AuthKey_JTLFAQ8RM2.p8`), deleted by the 2026-07-25 rsync.
+The file survives locally; upload it in the same pass as the new key.
+
+---
+
 **PENDING — status shimmers stop being overtaken by their own results
 (PRODUCT_SPEC §1.3 / §1.4 / §3.7a).** Not deployed yet. **Code-only: no Prisma
 schema change, no env change, no flag change, no Mini App change**
