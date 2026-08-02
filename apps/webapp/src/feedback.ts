@@ -288,23 +288,52 @@ function clampInt(n: number, min: number, max: number): number {
 
 // ── DeviceStorage helpers (same fallback-to-localStorage pattern as the calendar)
 
+/** Belt-and-suspenders read deadline — see `readKey`. */
+const DEVICE_STORAGE_TIMEOUT_MS = 2000;
+
 function deviceStorage(): TelegramWebAppDeviceStorage | null {
-  return window.Telegram?.WebApp?.DeviceStorage ?? null;
+  const tg = window.Telegram?.WebApp;
+  if (!tg?.DeviceStorage) return null;
+  // DeviceStorage is Bot API 9.0. Older clients expose the namespace but throw
+  // (or silently never call back) — and the whole form is wired up *after*
+  // `await loadDraft`, so a read that never settles leaves a rendered but
+  // completely inert page. Same gate the shared device-storage.ts learned.
+  if (typeof tg.isVersionAtLeast === "function" && !tg.isVersionAtLeast("9.0")) {
+    return null;
+  }
+  return tg.DeviceStorage;
+}
+function localRead(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
 }
 function readKey(key: string): Promise<string | null> {
   const ds = deviceStorage();
-  if (!ds) {
-    try {
-      return Promise.resolve(window.localStorage.getItem(key));
-    } catch {
-      return Promise.resolve(null);
-    }
-  }
+  if (!ds) return Promise.resolve(localRead(key));
   return new Promise((resolve) => {
-    ds.getItem(key, (err, value) => {
-      if (err) console.warn("DeviceStorage getItem failed:", err);
-      resolve(value ?? null);
-    });
+    let settled = false;
+    const finish = (value: string | null): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    // Even a client reporting >= 9.0 can fail to invoke the callback. A restored
+    // draft is a nice-to-have; the form loading is not.
+    const timer = window.setTimeout(() => finish(null), DEVICE_STORAGE_TIMEOUT_MS);
+    try {
+      ds.getItem(key, (err, value) => {
+        window.clearTimeout(timer);
+        if (err) console.warn("DeviceStorage getItem failed:", err);
+        finish(value ?? null);
+      });
+    } catch (err) {
+      window.clearTimeout(timer);
+      console.warn("DeviceStorage getItem threw:", err);
+      finish(localRead(key));
+    }
   });
 }
 function writeKey(key: string, value: string): Promise<void> {
@@ -318,10 +347,15 @@ function writeKey(key: string, value: string): Promise<void> {
     return Promise.resolve();
   }
   return new Promise((resolve) => {
-    ds.setItem(key, value, (err) => {
-      if (err) console.warn("DeviceStorage setItem failed:", err);
+    try {
+      ds.setItem(key, value, (err) => {
+        if (err) console.warn("DeviceStorage setItem failed:", err);
+        resolve();
+      });
+    } catch (err) {
+      console.warn("DeviceStorage setItem threw:", err);
       resolve();
-    });
+    }
   });
 }
 function removeKey(key: string): Promise<void> {
@@ -335,7 +369,12 @@ function removeKey(key: string): Promise<void> {
     return Promise.resolve();
   }
   return new Promise((resolve) => {
-    ds.removeItem(key, () => resolve());
+    try {
+      ds.removeItem(key, () => resolve());
+    } catch (err) {
+      console.warn("DeviceStorage removeItem threw:", err);
+      resolve();
+    }
   });
 }
 

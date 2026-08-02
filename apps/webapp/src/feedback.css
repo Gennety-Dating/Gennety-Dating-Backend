@@ -33,6 +33,16 @@
   box-sizing: border-box;
 }
 
+/* The `hidden` attribute loses to any class that sets `display` (a class
+   selector outranks the UA `[hidden] { display: none }`), and every hideable
+   block here is a flex container: `.page`, `.fallback`, `.reason-chips` and
+   `.submit-bar`. Without this the fallback rendered its full-viewport panel
+   under the finished form — the dead band at the end of the page — and the
+   venue-reason chips stayed on screen after answering "Yes". */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -72,22 +82,27 @@ body::before {
   margin: 0 auto;
   /* Clear Telegram's floating back / ⋯ controls with room to spare: a generous
      90px floor (even if the content-safe-area event never fires) plus breathing
-     room, more when a real inset is reported. */
+     room, more when a real inset is reported.
+
+     The bottom is measured, not guessed: the fixed submit bar is 14 + 54 + 14 =
+     82px plus the same insets, so 96px leaves exactly one comfortable gap under
+     the last card. An over-generous figure here reads as a dead band at the end
+     of the form. */
   padding:
-    calc(max(var(--tg-content-top, 0px), 90px) + var(--space-lg))
+    calc(max(var(--tg-content-top, 0px), 90px) + var(--space-md))
     var(--space-lg)
-    calc(var(--tg-content-bottom, 0px) + 128px);
+    calc(var(--tg-content-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 96px);
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
+  gap: var(--space-md);
 }
 
 .hero {
   padding: var(--space-xs) var(--space-xs) 0;
 }
 .hero h1 {
-  margin: 0 0 8px;
-  font-size: 28px;
+  margin: 0 0 6px;
+  font-size: 25px;
   line-height: 1.15;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -95,8 +110,8 @@ body::before {
 .hero-sub {
   margin: 0;
   color: var(--text-muted);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 /* ── Liquid Glass card ─────────────────────────────────────────── */
@@ -104,10 +119,10 @@ body::before {
 .card {
   position: relative;
   border-radius: var(--radius-card);
-  padding: var(--space-lg);
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: 12px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
@@ -124,8 +139,9 @@ body::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  flex: none;
+  width: 23px;
+  height: 23px;
   border-radius: 50%;
   background: linear-gradient(160deg, var(--accent-bright), var(--accent));
   color: #fff;
@@ -138,7 +154,7 @@ body::before {
 }
 .card-header h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -149,10 +165,13 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  /* The rail's expanded hit band (see below) reaches 14px past its own box; keep
+     it inside the card so it never overlaps the header or the readout row. */
+  padding: 2px 0;
 }
 .slider-track {
   position: relative;
-  height: 38px;
+  height: 20px;
   border-radius: var(--radius-pill);
   background: var(--fill);
   box-shadow:
@@ -162,6 +181,14 @@ body::before {
   user-select: none;
   -webkit-user-select: none;
 }
+/* The rail is deliberately thin, but it is also the pointer target (the thumb
+   is visual only — see feedback.ts). Extend the hit area vertically so the
+   whole control stays a comfortable ~48px tall band to grab. */
+.slider-track::before {
+  content: "";
+  position: absolute;
+  inset: -14px 0;
+}
 .slider-fill {
   position: absolute;
   inset: 0 auto 0 0;
@@ -169,7 +196,7 @@ body::before {
   border-radius: var(--radius-pill);
   background: linear-gradient(90deg, var(--accent), var(--accent-bright));
   box-shadow:
-    0 0 18px rgba(139, 37, 59, 0.5),
+    0 0 13px rgba(139, 37, 59, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.25);
   transition: width 120ms ease-out;
 }
@@ -177,15 +204,15 @@ body::before {
   position: absolute;
   top: 50%;
   left: 50%;
-  /* Deliberately larger than the 38px track so the knob overhangs the rail
-     (no gap between the circle and the line ends). */
-  width: 44px;
-  height: 44px;
+  /* Deliberately larger than the 20px rail so the knob overhangs it (no gap
+     between the circle and the line ends); scaled with the thinner rail. */
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   border: none;
   background: linear-gradient(160deg, #ffffff, #efedf1);
   box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.3),
+    0 2px 7px rgba(0, 0, 0, 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.95);
   transform: translate(-50%, -50%);
   cursor: grab;
@@ -221,9 +248,9 @@ body::before {
 }
 .slider-value {
   display: inline-flex;
-  min-width: 40px;
-  height: 30px;
-  padding: 0 12px;
+  min-width: 38px;
+  height: 27px;
+  padding: 0 11px;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-pill);
@@ -288,7 +315,7 @@ body::before {
   font: inherit;
   font-size: 15px;
   font-weight: 600;
-  padding: 11px 0;
+  padding: 10px 0;
   border-radius: var(--radius-pill);
   cursor: pointer;
   transition:
@@ -302,9 +329,39 @@ body::before {
   color: #fff;
 }
 
-.reason-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.reason-chip { border: 1px solid var(--glass-border); border-radius: var(--radius-pill); padding: 8px 11px; color: var(--text); background: var(--fill); font: inherit; font-size: 13px; }
-.reason-chip[aria-pressed="true"] { border-color: var(--accent-bright); background: color-mix(in srgb, var(--accent) 28%, transparent); }
+/* Borderless chips: the fill alone carries the shape, and a selected chip
+   inverts to the same burgundy the segmented indicator uses — so "picked" reads
+   from color, never from an outline. */
+.reason-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.reason-chip {
+  appearance: none;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 8px 12px;
+  color: var(--text-muted);
+  background: var(--fill);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    transform 120ms ease;
+}
+.reason-chip:active {
+  transform: scale(0.97);
+}
+.reason-chip[aria-pressed="true"] {
+  background: linear-gradient(160deg, var(--accent-bright), var(--accent));
+  color: #fff;
+  font-weight: 600;
+}
 
 /* ── Textarea ──────────────────────────────────────────────────── */
 
@@ -319,8 +376,8 @@ body::before {
   font-family: inherit;
   font-size: 15px;
   line-height: 1.5;
-  padding: 14px 16px;
-  min-height: 118px;
+  padding: 13px 15px;
+  min-height: 88px;
   outline: none;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.18);
   transition:
@@ -357,7 +414,10 @@ body::before {
 }
 
 .footer-note {
-  margin: 4px var(--space-xs) 0;
+  /* `auto` absorbs whatever vertical slack is left on a tall screen, so the note
+     anchors just above the submit bar instead of leaving a dangling empty band
+     under the last card. In an overflowing column it collapses to 0. */
+  margin: auto var(--space-xs) 0;
   font-size: 12px;
   color: var(--text-faint);
   text-align: center;

@@ -806,8 +806,8 @@ const translations = {
       "This isn't because of you. Gennety will raise your priority a little for the next drop.",
     feedbackInvitation:
       "How did your date go? ✨\n\n" +
-      "Tell us a few things — chemistry, vibe, anything you'd change. " +
-      "We'll use it to find someone even better for you next time.",
+      "Share a couple of details: was there chemistry, what was the vibe, did you like the place?\n" +
+      "We'll take it into account to match your expectations even better next time.",
     feedbackBtnForm: "✍️ Open feedback form",
     feedbackBtnVoice: "🎤 Send voice instead",
     feedbackVoiceAsk:
@@ -1888,8 +1888,8 @@ const translations = {
       "Это не из-за тебя. Gennety немного поднимет твой приоритет в следующем дропе.",
     feedbackInvitation:
       "Как прошло свидание? ✨\n\n" +
-      "Поделись парой штук — была ли химия, какой был вайб, что бы поменял. " +
-      "Используем, чтобы в следующий раз найти кого-то ещё точнее.",
+      "Поделись парой деталей: была ли химия, какой был вайб, понравилось ли место?\n" +
+      "Учтём, чтобы в следующий раз лучше соответствовать твоим ожиданиям.",
     feedbackBtnForm: "✍️ Открыть форму",
     feedbackBtnVoice: "🎤 Записать голосом",
     feedbackVoiceAsk:
@@ -2944,8 +2944,8 @@ const translations = {
       "Це не через тебе. Gennety трохи підніме твій пріоритет у наступному дропі.",
     feedbackInvitation:
       "Як пройшло побачення? ✨\n\n" +
-      "Поділись парою речей — чи була хімія, який був вайб, що б змінив. " +
-      "Використаємо, щоб наступного разу знайти когось ще точніше.",
+      "Поділись парою деталей: чи була хімія, який був вайб, чи сподобалось місце?\n" +
+      "Врахуємо, щоб наступного разу краще відповідати твоїм очікуванням.",
     feedbackBtnForm: "✍️ Відкрити форму",
     feedbackBtnVoice: "🎤 Записати голосом",
     feedbackVoiceAsk:
@@ -3965,8 +3965,8 @@ const deTranslations: TranslationTable = {
   emergencyReceivedOtherSoftNote: "Das liegt nicht an dir. Gennety erhöht deine Priorität für den nächsten Drop ein wenig.",
   feedbackInvitation:
     "Wie lief dein Date? ✨\n\n" +
-    "Erzähl uns ein paar Dinge - Chemie, Vibe, was du ändern würdest. " +
-    "Wir nutzen es, um nächstes Mal jemanden noch besseren zu finden.",
+    "Teil ein paar Details: gab es Chemie, wie war der Vibe, hat dir der Ort gefallen?\n" +
+    "Wir berücksichtigen das, um nächstes Mal noch besser zu deinen Erwartungen zu passen.",
   feedbackBtnForm: "✍️ Feedback-Formular öffnen",
   feedbackBtnVoice: "🎤 Stattdessen Sprachnachricht senden",
   feedbackVoiceAsk:
@@ -4991,8 +4991,8 @@ const plTranslations: TranslationTable = {
   emergencyReceivedOtherSoftNote: "To nie przez Ciebie. Gennety trochę podniesie Twój priorytet na kolejny drop.",
   feedbackInvitation:
     "Jak poszła randka? ✨\n\n" +
-    "Powiedz nam kilka rzeczy - chemia, vibe, co byś zmienił(a). " +
-    "Użyjemy tego, żeby następnym razem znaleźć kogoś jeszcze lepszego.",
+    "Podziel się kilkoma szczegółami: była chemia, jaki był vibe, czy miejsce się podobało?\n" +
+    "Weźmiemy to pod uwagę, żeby następnym razem lepiej trafić w Twoje oczekiwania.",
   feedbackBtnForm: "✍️ Otwórz formularz feedbacku",
   feedbackBtnVoice: "🎤 Wyślij głosówkę zamiast tego",
   feedbackVoiceAsk:
