@@ -26,11 +26,65 @@ watch that the PID holds and the restart count stops climbing. Otherwise do a
 full deploy — but note that rsync copies the **working tree**, not git HEAD, so
 check `git status` first: an unrelated in-progress refactor ships with it.
 
-**Known divergence right now:** prod's `apps/bot/src/services/prompt-builder.ts`
-and `apps/bot/src/admin/utils/cache.ts` are hand-patched with the `admin_cache`
-knowledge-base filter (commit `6e45a70`) on top of the `f9e08eb` base, and the
-five legacy `system_knowledge` product-rule rows are deactivated in the prod DB.
-The next full deploy reconciles the code — the repo version carries the same fix.
+**Prod is now at `HEAD` as of the 2026-08-02 deploy below** — the hand-patched
+divergence that used to be recorded here is reconciled. Re-anchor the md5 after
+every deploy rather than trusting this line.
+
+---
+
+**Deployed 2026-08-02 — the 104-commit catch-up: every block below that was
+marked PENDING shipped in one deploy.** Full server code + Mini App + one
+`db:push`. This is the release that brought prod from `f9e08eb` (2026-07-29) up
+to HEAD, so the concierge audit fixes, the planning-stall chain (§3.5c), the
+stage-aware pinned banner, peer-wait shimmer v2, the expiry + coordination
+cards, the daily-cadence groundwork, venue observability, season/weather
+ranking, the admin dialog media column and the `reference_expired` fix all went
+live together.
+
+**⚠️ One DESTRUCTIVE schema change, taken deliberately:** `profiles.ethnicity`
+was dropped (the onboarding step was removed). 8 of 9 production profiles held
+a value. **A backup was captured first** and lives on the droplet next to the
+logical DB dump:
+
+```
+/opt/gennety/ethnicity-backup-2026-08-02T08-26-08-301Z.json   (9 rows, 8 filled)
+```
+
+Add `--exclude '*-backup-*.json'` to the deploy rsync — the documented flag set
+does NOT cover this name and `--delete` would erase it. The full plan was
+verified before running: 17 × `ADD COLUMN`, 1 × `CREATE INDEX`, exactly one
+`DROP`. `db:drift-check` OK afterwards.
+
+Preflight green: typecheck clean, **3378 tests** (bot 2957 / shared 264 /
+webapp 157), `pnpm build`, `security:secrets` (947 files), `security:audit`
+0 advisories, working tree clean. rsync dry-run listed exactly **1** deletion
+(`services/delete-freeze-video.ts`, genuinely removed in `29db1d9`).
+
+Post-deploy verified: `Bot @gennetybot started`, all 16 crons registered
+**plus `[worker] Peer-wait shimmer every 20000ms`** (that line is the proof the
+new code is live — it did not exist on the old build), `:3100`/`:3101`
+listening, `/v1/ping` ok, admin `401`, **all 11 Mini App pages 200**,
+`supportedCities` still Kyiv-only, restart count frozen (no crash loop), and
+zero `P2022` / `P2023` / unhandled rejections. The concierge knowledge block
+measures **0 characters** (was 22,988 — see the `admin_cache` fix).
+
+**🔴 Pre-existing production issue found during this deploy, NOT caused by it:
+`PLACES_API_KEY` is dead.** Both `places/{id}` details and `places:searchNearby`
+answer `403 PERMISSION_DENIED` with the key from `/opt/gennety/.env` (the key is
+present and 39 chars, so it is rejected rather than missing — billing disabled,
+API disabled, or a key restriction/rotation in Google Cloud). The
+`venue-revalidation` cron has been logging it. What degrades while it is down:
+every date-card venue photo (Google Places is the single source since
+2026-07-25 → cards fall back to the branded gradient), the Places fallback when
+no curated venue is in commute range, the Location Mini App autocomplete
+(`/v1/location/search`), the venue-change catalog beyond curated rows and its
+photo proxy, and the daily venue re-validation sweep. The curated Kyiv catalog
+is first-party and still works, so scheduling degrades rather than dies. Fix in
+the Google Cloud console; re-verify with the `searchNearby` probe above.
+
+**Rollback:** re-sync a checkout at `f9e08eb` and redeploy the Mini App from it.
+The additive columns can stay; `profiles.ethnicity` would have to be restored
+from the JSON backup above.
 
 ---
 
