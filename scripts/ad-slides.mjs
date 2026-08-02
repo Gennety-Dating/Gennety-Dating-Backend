@@ -265,18 +265,32 @@ const checkUri = (color) =>
 // ---------------------------------------------------------------------------
 
 /**
- * NOTE ON THE CADENCE CLAIM (slide 3).
+ * THE CADENCE CLAIM (slides 3 and 6) — read before changing.
  *
- * Production runs `DROP_CADENCE=weekly` — one drop, Thursday 18:00 Kyiv
- * (PRODUCT_SPEC §3.1). The `daily` profile exists in code but is INERT and
- * turning it on is a separate founder decision gated on pool size. So the copy
- * says "one pair a week", not "a day": advertising a daily pair would be the
- * same category of promise the unlaunched-city gate exists to stop us making.
+ * Set to `daily` by founder decision 2026-08-02: the plan is to ship the
+ * pending cadence groundwork and run `DROP_CADENCE=daily` in production.
  *
- * If `DROP_CADENCE=daily` is ever flipped in `/opt/gennety/.env`, swap
- * `cadence: "weekly"` → `"daily"` below and re-render. Nothing else changes.
+ * The copy this selects states a specific, checkable fact — "18:00, every
+ * day" — which matches `DAILY.cron = "0 18 * * *"` in
+ * `packages/shared/src/cadence.ts`. That is the only reason it is safe to
+ * print a time at all, so if that expression ever moves, this moves with it.
+ *
+ * IT IS NOT TRUE YET. Production runs the weekly profile right now (verified
+ * 2026-08-02 on the droplet: `[cron] Weekly matching scheduled: "0 18 * * 4"`,
+ * and `DROP_CADENCE` is unset in `/opt/gennety/.env`). Two things must both
+ * land before this creative is honest, in order:
+ *
+ *   1. Deploy the pending cadence groundwork — it needs the additive
+ *      `profiles.starvation_paused_at` `db:push` FIRST, or the famine cron
+ *      throws P2022 and PM2 crash-loops (see deploy.md).
+ *   2. `DROP_CADENCE=daily` + `pm2 restart gennety-bot --update-env`, then
+ *      confirm the boot log reads `[drop-batch]` on a `"0 18 * * *"` schedule.
+ *
+ * Until step 2 is confirmed live, running these slides advertises a drop the
+ * product does not perform. Set this back to `"weekly"` to re-render honest
+ * creative in the meantime — every cadence-dependent line is keyed off it.
  */
-const CADENCE = "weekly";
+const CADENCE = "daily";
 
 /** The one thing every slide has to leave behind. */
 const HANDLE = "@gennetybot";
@@ -343,7 +357,10 @@ const COPY = {
       {
         n: 6,
         kicker: "ПОЧНИ ЗАРАЗ",
-        head: { weekly: ["КОЖНОГО", "ЧЕТВЕРГА"], daily: ["КОЖНОГО", "ДНЯ"] },
+        // Daily names the hour rather than the weekday: "ДНЯ" alone is a
+        // 3-character orphan line, and the headline is sized to its LONGEST
+        // line, so a short line does not grow — it just sits there ragged.
+        head: { weekly: ["КОЖНОГО", "ЧЕТВЕРГА"], daily: ["ЩОДНЯ", "О 18:00"] },
         headAccent: ["МИ ЗНАХОДИМО", "ТВОЮ ПАРУ."],
         cta: "@gennetybot",
         sub: "Квиток на перше побачення — у подарунок новим учасницям. Реєстрація в Telegram.",
@@ -412,7 +429,7 @@ const COPY = {
       {
         n: 6,
         kicker: "НАЧНИ СЕЙЧАС",
-        head: { weekly: ["КАЖДЫЙ", "ЧЕТВЕРГ"], daily: ["КАЖДЫЙ", "ДЕНЬ"] },
+        head: { weekly: ["КАЖДЫЙ", "ЧЕТВЕРГ"], daily: ["КАЖДЫЙ ДЕНЬ", "В 18:00"] },
         headAccent: ["МЫ НАХОДИМ", "ТВОЮ ПАРУ."],
         cta: "@gennetybot",
         sub: "Билет на первое свидание — в подарок новым участницам. Регистрация в Telegram.",
