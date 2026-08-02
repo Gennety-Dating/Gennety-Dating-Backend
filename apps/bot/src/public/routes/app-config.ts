@@ -34,6 +34,9 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
     })),
     features: {
       phoneAuth: env.PHONE_AUTH_ENABLED,
+      // The client hides "Continue with Telegram" when this is false, rather
+      // than rendering a button that can only answer 503.
+      telegramAuth: env.TELEGRAM_LOGIN_CLIENT_ID.length > 0,
       tickets: env.TICKET_FEATURE_ENABLED,
       coordination: env.COORDINATION_FEATURE_ENABLED,
       premium: env.PREMIUM_FEATURE_ENABLED,

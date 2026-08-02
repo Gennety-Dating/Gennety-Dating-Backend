@@ -16,6 +16,7 @@ import { matchesRouter } from "./routes/matches.js";
 import { countdownRouter } from "./routes/countdown.js";
 import { appConfigRouter } from "./routes/app-config.js";
 import { phoneAuthRouter } from "./routes/phone-auth.js";
+import { telegramAuthRouter } from "./routes/telegram-auth.js";
 import { liveActivityRouter } from "./routes/live-activity.js";
 import { accountStatusRouter } from "./routes/account-status.js";
 import { ticketsAppStoreRouter } from "./routes/tickets-appstore.js";
@@ -332,6 +333,8 @@ app.use("/v1/promo", createPromoRouter());
 // fork, 404 while PHONE_AUTH_ENABLED is off. Mounted before the generic
 // /v1/auth router so the more-specific prefix wins.
 app.use("/v1/auth/phone", phoneAuthRouter);
+// Mounted before the generic auth router so `/v1/auth/telegram` resolves here.
+app.use("/v1/auth", telegramAuthRouter);
 app.use("/v1/auth", authRouter);
 // Mount /v1/me/verification BEFORE /v1/me so Express tries the more-specific
 // prefix first — both routers match `/v1/me/verification/*` otherwise.

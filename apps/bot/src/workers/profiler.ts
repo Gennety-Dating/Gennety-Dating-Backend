@@ -66,7 +66,12 @@ export async function profilerTick(
       user: {
         status: "active",
         onboardingStep: "completed",
+        // A positive telegramId no longer means the bot can reach them:
+        // "Continue with Telegram" (services/telegram-login.ts) stores the REAL
+        // Telegram id on an app-only account, and a bot cannot message someone
+        // who never pressed Start. `platform` is the canonical check.
         telegramId: { gt: 0 },
+        platform: { in: ["telegram", "both"] },
         gender: { not: null },
       },
     },
@@ -100,7 +105,12 @@ export async function profilerTick(
       user: {
         status: "active",
         onboardingStep: "completed",
+        // A positive telegramId no longer means the bot can reach them:
+        // "Continue with Telegram" (services/telegram-login.ts) stores the REAL
+        // Telegram id on an app-only account, and a bot cannot message someone
+        // who never pressed Start. `platform` is the canonical check.
         telegramId: { gt: 0 },
+        platform: { in: ["telegram", "both"] },
       },
     },
     select: { userId: true },
@@ -123,7 +133,12 @@ export async function profilerTick(
       user: {
         status: "active",
         onboardingStep: "completed",
+        // A positive telegramId no longer means the bot can reach them:
+        // "Continue with Telegram" (services/telegram-login.ts) stores the REAL
+        // Telegram id on an app-only account, and a bot cannot message someone
+        // who never pressed Start. `platform` is the canonical check.
         telegramId: { gt: 0 },
+        platform: { in: ["telegram", "both"] },
         gender: { not: null },
       },
     },

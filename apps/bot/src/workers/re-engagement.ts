@@ -69,8 +69,12 @@ export async function reEngagementTick(
       onboardingStep: { not: "completed" },
       reEngagementNextAt: { not: null, lte: now },
       // M-17: synthetic mobile users (negative telegramId) get re-engagement
-      // pushes via Expo, not Telegram DMs.
+      // pushes, not Telegram DMs. `platform` is checked too because a positive
+      // telegramId stopped implying reachability once "Continue with Telegram"
+      // began storing real ids on app-only accounts — a bot cannot message
+      // someone who never pressed Start.
       telegramId: { gt: 0n },
+      platform: { in: ["telegram", "both"] },
     },
     select: {
       telegramId: true,
@@ -154,6 +158,9 @@ export async function reEngagementTick(
         verificationStatus: { in: ["pending", "unverified"] },
         reEngagementNextAt: { not: null, lte: now },
         telegramId: { gt: 0n },
+        // See above: a Telegram-login account carries a real id but is only
+        // reachable via push until it starts the bot.
+        platform: { in: ["telegram", "both"] },
       },
       select: {
         id: true,

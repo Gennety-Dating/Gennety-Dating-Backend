@@ -51,6 +51,22 @@ out of Telegram-only workers.
   the shared identity across both rails, **verifying it is also the login**: a
   uniqueness collision resolves to the existing account rather than a refusal
   (§1.1).
+  **Third rail on iOS: "Continue with Telegram" (2026-08-02).** Telegram's
+  official native Login SDK returns a signed OIDC ID token; the server verifies
+  it against Telegram's public keys (`POST /v1/auth/telegram`). With the `phone`
+  scope the token carries an already-**verified** `phone_number`, which is
+  accepted as the general track's contact rail — so this login satisfies the
+  same gate as an SMS code while costing nothing. It is not a fourth kind of
+  account: the token's subject IS `User.telegramId`, so a bot user who installs
+  the app lands in their existing profile, and an app user who verified by SMS
+  is matched by that same number. A collision where the number and the Telegram
+  identity belong to two different real accounts is refused (`account_conflict`)
+  and routed to support, exactly like the Telegram-side `manual-merge`. Gated by
+  `TELEGRAM_LOGIN_CLIENT_ID` (empty → the client hides the button).
+  **One consequence to hold onto:** such an account carries a REAL positive
+  `telegramId` while being reachable only by push, because a bot cannot message
+  someone who never pressed Start. `platform` is the canonical reachability
+  check; the id alone is not (ARCHITECTURE.md → `users`).
   Matching admits the union of the two valid cohorts (student + verified email,
   or general + verified phone); a credential from the other track never
   satisfies an individual's gate. The student

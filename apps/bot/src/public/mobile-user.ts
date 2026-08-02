@@ -103,6 +103,113 @@ export async function findOrCreateMobileUserByPhone(phone: string): Promise<User
   });
 }
 
+export type TelegramLoginResolution =
+  | { kind: "resolved"; user: User }
+  /**
+   * The verified number belongs to one account and this Telegram id to
+   * another. Both are real people's rows; merging them is a support decision,
+   * exactly like the Telegram-side `manual-merge` (services/account-linking.ts).
+   */
+  | { kind: "conflict" };
+
+/**
+ * Find or create the account behind a verified Telegram ID token.
+ *
+ * This is the join that makes the bot and the app ONE product: someone who has
+ * been talking to @gennetybot for months and then installs the app must land in
+ * their own profile, not an empty registration.
+ *
+ * Resolution order, strictest evidence first:
+ *   1. `telegramId` — the identity Telegram just proved. Exact, so it wins.
+ *   2. The verified phone — the cross-rail login key (`User.phone` is unique
+ *      and PRODUCT_SPEC §1.1 already treats it as identity on both rails).
+ *      Matching here is what links an app account created by SMS to the same
+ *      human's Telegram identity.
+ *   3. Otherwise a new account.
+ *
+ * `platform` is handled conservatively and deliberately: a brand-new row stays
+ * `mobile` even though we know a REAL Telegram id for it. A bot cannot message
+ * someone who never pressed Start, so promoting them to `both` would aim
+ * notifications at a channel that silently 403s. `/start` promotes them later,
+ * when the bot genuinely can reach them.
+ */
+export async function findOrCreateUserByTelegramLogin(params: {
+  telegramId: bigint;
+  phone: string | null;
+  username: string | null;
+}): Promise<TelegramLoginResolution> {
+  const { telegramId, phone, username } = params;
+
+  const byTelegram = await prisma.user.findUnique({ where: { telegramId } });
+  if (byTelegram) {
+    if (phone && byTelegram.phone && byTelegram.phone !== phone) {
+      // The number moved to a different Telegram account (recycled carrier
+      // number, or a re-registered account). Not ours to guess.
+      const phoneOwner = await prisma.user.findUnique({ where: { phone } });
+      if (phoneOwner && phoneOwner.id !== byTelegram.id) return { kind: "conflict" };
+    }
+    const user = await prisma.user.update({
+      where: { id: byTelegram.id },
+      data: {
+        // A Telegram-registered account now also using the app is reachable on
+        // both surfaces — the mirror of `findOrCreateMobileUserByPhone`.
+        ...(byTelegram.platform === "telegram" ? { platform: "both" as const } : {}),
+        ...(username && byTelegram.telegramUsername !== username
+          ? { telegramUsername: username }
+          : {}),
+        // Telegram vouched for the number, so it satisfies the general track's
+        // contact gate — but never overwrite a number already on file.
+        ...(phone && !byTelegram.phone
+          ? {
+              phone,
+              phoneVerifiedAt: new Date(),
+              ...(byTelegram.registrationTrack ? {} : { registrationTrack: "general" }),
+            }
+          : {}),
+      },
+    });
+    return { kind: "resolved", user };
+  }
+
+  if (phone) {
+    const byPhone = await prisma.user.findUnique({ where: { phone } });
+    if (byPhone) {
+      // The row holds a synthetic negative id (app-first) or a real one that
+      // is NOT this token's — the latter was already claimed by step 1, so it
+      // can only be the synthetic case. Take the real identity.
+      if (byPhone.telegramId > 0n) return { kind: "conflict" };
+      const user = await prisma.user.update({
+        where: { id: byPhone.id },
+        data: {
+          telegramId,
+          ...(username ? { telegramUsername: username } : {}),
+          ...(byPhone.phoneVerifiedAt ? {} : { phoneVerifiedAt: new Date() }),
+          ...(byPhone.registrationTrack ? {} : { registrationTrack: "general" as const }),
+        },
+      });
+      return { kind: "resolved", user };
+    }
+  }
+
+  const user = await prisma.user.create({
+    data: {
+      telegramId,
+      platform: "mobile",
+      status: "onboarding",
+      onboardingStep: "consent",
+      ...(username ? { telegramUsername: username } : {}),
+      ...(phone
+        ? {
+            phone,
+            phoneVerifiedAt: new Date(),
+            registrationTrack: "general" as const,
+          }
+        : {}),
+    },
+  });
+  return { kind: "resolved", user };
+}
+
 /**
  * Create a mobile-platform user with a synthetic negative `telegramId`,
  * retrying on the (practically impossible) id collision. Shared by the

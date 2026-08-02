@@ -53,6 +53,14 @@ export const env = {
   /// registration path and the bot ignores `message.contact` shares, exactly
   /// as before. Ship dark; flip at launch together with the fork Mini App.
   PHONE_AUTH_ENABLED: process.env.PHONE_AUTH_ENABLED === "true",
+  /// "Continue with Telegram" in the native app (Telegram's official OIDC
+  /// Login SDK). This is the bot's Client ID from @BotFather → Web Login, and
+  /// it is the `aud` every ID token is checked against — a token minted for
+  /// another bot must never authenticate here. Empty → the endpoint answers
+  /// 503 and the client hides the button (`features.telegramAuth`).
+  /// Deliberately NOT paired with a client secret: we verify an already-issued
+  /// ID token against Telegram's public keys and never exchange a code.
+  TELEGRAM_LOGIN_CLIENT_ID: process.env.TELEGRAM_LOGIN_CLIENT_ID ?? "",
   /// Which rail tries first for the native app's phone codes. Founder
   /// decision 2026-07-18: **twilio** (SMS) is the primary; "telegram" flips
   /// back to Gateway-first. Whichever is primary, the other configured rail

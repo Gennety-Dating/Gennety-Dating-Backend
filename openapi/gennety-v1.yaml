@@ -234,6 +234,89 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/auth/telegram:
+    post:
+      tags: [auth]
+      operationId: loginWithTelegram
+      summary: Exchange a Telegram OIDC ID token for our session
+      security: []
+      description: |
+        "Continue with Telegram". The client runs Telegram's official iOS Login
+        SDK, which hands control to the installed Telegram app and returns a
+        signed OpenID Connect ID token; this endpoint verifies that token
+        against Telegram's published keys (RS256, issuer
+        `https://oauth.telegram.org`, audience = our bot's Client ID) and mints
+        our own access/refresh pair.
+
+        No client secret is involved anywhere: we verify an already-issued ID
+        token and never exchange an authorization code.
+
+        Account resolution is what makes the bot and the app one product. The
+        token's subject IS `User.telegramId`, so someone who has been talking to
+        the bot lands in their existing profile. Failing that, a **verified**
+        `phone_number` claim matches the same human's app account (`User.phone`
+        is the cross-rail login key). Otherwise a new account is created.
+
+        The number is trusted only when `phone_number_verified` is true, and it
+        satisfies the general track's contact gate — a Telegram login therefore
+        costs no SMS.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idToken]
+              properties:
+                idToken:
+                  type: string
+                  description: The ID token returned by the Telegram Login SDK.
+      responses:
+        "200":
+          description: Tokens + serialized user (created on first login)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthTokens" }
+        "400":
+          description: Missing `idToken`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: |
+            Signature, issuer, audience, expiry or subject is not acceptable.
+            Terminal — retrying the same token cannot help.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: |
+            `code: "account_conflict"` — the verified number belongs to one
+            account and this Telegram identity to another. Both are real; the
+            merge is a support decision, so the client points the user at
+            @gennetysupport rather than choosing for them.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, code]
+                properties:
+                  error: { type: string }
+                  code: { type: string, enum: [account_conflict] }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502":
+          description: |
+            Telegram's key set could not be reached. **Retryable** — this is our
+            outage, not a bad login, and the client must say so.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: Telegram login not configured (`TELEGRAM_LOGIN_CLIENT_ID` empty)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/auth/refresh:
     post:
       tags: [auth]
@@ -1683,6 +1766,11 @@ components:
           required: [phoneAuth, tickets, coordination]
           properties:
             phoneAuth: { type: boolean }
+            telegramAuth:
+              type: boolean
+              description: >-
+                `POST /v1/auth/telegram` is configured. False → hide "Continue
+                with Telegram" rather than render a button that can only 503.
             tickets: { type: boolean }
             coordination: { type: boolean }
             premium: { type: boolean }
