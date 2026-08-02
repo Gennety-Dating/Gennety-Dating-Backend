@@ -76,6 +76,11 @@ describe("GET /v1/me/verification/native-init", () => {
       (await request(buildApp()).get("/v1/me/verification/native-init")).status,
     ).toBe(409);
 
+    beginLivenessCheck.mockResolvedValueOnce({ ok: false, error: "consent_required" });
+    expect(
+      (await request(buildApp()).get("/v1/me/verification/native-init")).status,
+    ).toBe(409);
+
     beginLivenessCheck.mockResolvedValueOnce({ ok: false, error: "not_configured" });
     expect(
       (await request(buildApp()).get("/v1/me/verification/native-init")).status,
@@ -85,6 +90,19 @@ describe("GET /v1/me/verification/native-init", () => {
     expect(
       (await request(buildApp()).get("/v1/me/verification/native-init")).status,
     ).toBe(404);
+  });
+
+  // Both 409s carry a machine-readable `code`, because one ends the flow and
+  // the other is a step the user can complete. Without it the iOS client read
+  // every 409 as "already verified" and its Verify button silently did nothing.
+  it("distinguishes the two 409s by code, not by prose", async () => {
+    beginLivenessCheck.mockResolvedValueOnce({ ok: false, error: "already_verified" });
+    const verified = await request(buildApp()).get("/v1/me/verification/native-init");
+    expect(verified.body).toMatchObject({ code: "already_verified" });
+
+    beginLivenessCheck.mockResolvedValueOnce({ ok: false, error: "consent_required" });
+    const consent = await request(buildApp()).get("/v1/me/verification/native-init");
+    expect(consent.body).toMatchObject({ code: "consent_required" });
   });
 });
 

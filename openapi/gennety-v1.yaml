@@ -807,13 +807,28 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            Already verified — no session is minted; or `Biometric consent
-            required`, meaning the user has not yet passed through
-            `POST /v1/me/verification/consent`. Show the consent screen, record
-            the consent, then retry this call once.
+            Two different situations, told apart by `code` — never by the
+            human-readable `error` string:
+
+            - `already_verified` — no session is minted; the client shows a
+              "you're verified" state.
+            - `consent_required` — the user has not yet passed through
+              `POST /v1/me/verification/consent`. Show the consent screen,
+              record the consent, then retry this call once.
+
+            A client that treats every `409` as "verified" leaves the user
+            tapping a button that silently does nothing, which is exactly what
+            happened before `code` existed.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+              schema:
+                type: object
+                required: [error, code]
+                properties:
+                  error: { type: string }
+                  code:
+                    type: string
+                    enum: [already_verified, consent_required]
         "429": { $ref: "#/components/responses/RateLimited" }
         "503":
           description: Liveness not configured, or the provider is unavailable

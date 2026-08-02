@@ -69,11 +69,18 @@ verificationRouter.get(
         case "user_not_found":
           res.status(404).json({ error: "User not found" });
           return;
+        // Both are 409, so the client needs `code` to tell them apart — one
+        // ends the flow, the other is a step the user can complete. Matching on
+        // the prose would be a trap, and matching on nothing at all was the bug:
+        // the iOS client read every 409 as "verified" and the Verify button
+        // silently did nothing.
         case "already_verified":
-          res.status(409).json({ error: "Already verified" });
+          res.status(409).json({ error: "Already verified", code: "already_verified" });
           return;
         case "consent_required":
-          res.status(409).json({ error: "Biometric consent required" });
+          res
+            .status(409)
+            .json({ error: "Biometric consent required", code: "consent_required" });
           return;
         case "not_configured":
           res.status(503).json({ error: "Verification feature not configured" });
