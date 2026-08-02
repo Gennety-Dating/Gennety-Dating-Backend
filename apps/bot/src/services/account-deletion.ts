@@ -32,17 +32,19 @@ export interface DeleteUserAccountResult {
  * mobile API. The sequence is intentionally ordered so nothing is lost before
  * it is captured, and nothing external happens before the DB state is final:
  *
- * 0. snapshot the coarse lifecycle fields the founder feed reports, since the
- *    row is about to be erased;
+ * 0. snapshot the founder-DM profile fields and download any profile-photo
+ *    bytes, since both the row and any Supabase-hosted photos are about to
+ *    be erased;
  * 1. remove every known user-owned Supabase object, failing closed so a retry
  *    remains possible while the DB references still exist;
  * 2. claim live-match cancellation, remove founder report snapshots, and
  *    delete the User row (all relational data cascades) in one DB transaction;
  * 3. after commit only, deliver partner notifications/compensation and DM the
- *    founder feed an ANONYMOUS lifecycle event — no profile, no phone, no
- *    photos. A deletion is an Art. 17 erasure request, so nothing personal may
- *    outlive it in an ops chat (see `services/founder-notify.ts` and
- *    `legal/privacy-policy.md` §12.2).
+ *    founder feed the full profile + phone + photos of the departing user — an
+ *    internal ops channel to one trusted operator, restored by an explicit
+ *    founder decision on 2026-08-02 (see `services/founder-notify.ts` for the
+ *    tradeoff it commits us to, and `legal/privacy-policy.md` §12.2, which
+ *    discloses it).
  */
 export async function deleteUserAccount(
   userId: string,
@@ -82,6 +84,14 @@ export async function deleteUserAccount(
       deletedStorageObjects: 0,
     };
   }
+
+  // Snapshot the founder-DM photo bytes BEFORE storage cleanup below removes
+  // the Supabase objects. Telegram file_ids stay resolvable after the row and
+  // its storage objects are gone, but a Supabase path does not — so the only
+  // safe moment to read either kind is right now, before anything is erased.
+  const founderPhotoBuffers = env.FOUNDER_NOTIFY_ENABLED
+    ? await downloadFounderPhotoBuffers(user.profile?.photos ?? [])
+    : [];
 
   const selfiePaths = collectOwnedPaths(
     [user.selfiePath, user.verifiedSelfiePath],
@@ -145,9 +155,11 @@ export async function deleteUserAccount(
   // both the account and every in-flight match untouched for a safe retry.
   await deliverCancelledPartnerEffects(cancelled, api);
 
-  // Anonymous lifecycle event only — the snapshot above carries no personal
-  // data into this call's output (see `notifyFounderAccountClosed`).
-  void notifyFounderAccountClosed("deleted", user).catch(() => {});
+  // Full profile + phone + photos, using the snapshot and photo bytes
+  // captured before the row/storage objects were erased above.
+  void notifyFounderAccountClosed("deleted", user, founderPhotoBuffers).catch(
+    () => {},
+  );
 
   return {
     deleted: true,
@@ -156,6 +168,19 @@ export async function deleteUserAccount(
     deletedStorageObjects:
       selfiePaths.length + profilePaths.length + chatPaths.length,
   };
+}
+
+async function downloadFounderPhotoBuffers(
+  photoRefs: readonly string[],
+): Promise<Buffer[]> {
+  const botApi = getMainBotApi();
+  if (!botApi) return [];
+  const buffers: Buffer[] = [];
+  for (const ref of photoRefs.slice(0, FOUNDER_MEDIA_GROUP_MAX)) {
+    const buf = await downloadProfileImage(ref, botApi);
+    if (buf) buffers.push(buf);
+  }
+  return buffers;
 }
 
 function collectOwnedPaths(values: unknown, userId: string): string[] {

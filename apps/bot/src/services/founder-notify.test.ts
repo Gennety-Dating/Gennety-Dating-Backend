@@ -195,27 +195,27 @@ describe("notifyFounderAccountClosed", () => {
     expect(sendPhoto).not.toHaveBeenCalled();
   });
 
-  // A deletion is an Art. 17 erasure request: nothing personal may outlive it
-  // in the ops chat, so this notification is a coarse lifecycle event only.
-  it("sends an ANONYMOUS lifecycle event on delete — no profile, phone or photos", async () => {
+  // Founder decision 2026-08-02: the delete notification carries the full
+  // profile, phone and photos. Disclosed in legal/privacy-policy.md §12.2 and
+  // accepted as a residual risk in legal/dpia.md R9 — if this test is changed,
+  // those documents change with it.
+  it("DMs the founder the profile + phone with a delete title, using pre-downloaded photo buffers", async () => {
     env.FOUNDER_NOTIFY_ENABLED = true;
     await notifyFounderAccountClosed("deleted", accountUser(), [Buffer.from("img")]);
 
-    expect(sendPhoto).not.toHaveBeenCalled();
+    // One buffer → sendPhoto with a caption. The generic download path
+    // (downloadProfileImage) must NOT be used since buffers were supplied.
+    expect(sendPhoto).toHaveBeenCalledTimes(1);
     expect(downloadProfileImage).not.toHaveBeenCalled();
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-    const [chatId, text] = sendMessage.mock.calls[0]!;
+    const [chatId, , opts] = sendPhoto.mock.calls[0]!;
     expect(chatId).toBe(999);
-    const body = String(text);
-    expect(body).toContain("УДАЛЁН");
-    // Coarse, non-identifying context the operator still gets.
-    expect(body).toContain("Kyiv");
-    expect(body).toContain("general");
-    expect(body).toContain("5 дн.");
-    // Nothing that identifies the erased person.
-    for (const pii of ["+380991234567", "Alice", "a@uni.edu", "alice", "12345"]) {
-      expect(body).not.toContain(pii);
-    }
+    const caption = (opts as { caption?: string }).caption ?? "";
+    expect(caption).toContain("УДАЛЁН");
+    expect(caption).toContain("+380991234567");
+    expect(caption).toContain("Alice");
+    // Days-in-product survived from the anonymous version — the single most
+    // useful number for reading early churn.
+    expect(caption).toContain("5 дн.");
   });
 
   it("downloads photos itself when no buffers are supplied (freeze path)", async () => {
@@ -226,9 +226,7 @@ describe("notifyFounderAccountClosed", () => {
     const [, , opts] = sendPhoto.mock.calls[0]!;
     const caption = (opts as { caption?: string }).caption ?? "";
     expect(caption).toContain("ЗАМОРОЖЕН");
-    expect(caption).toContain("Alice");
-    // The phone is a contact identifier the ops feed never needed.
-    expect(caption).not.toContain("+380991234567");
+    expect(caption).toContain("+380991234567");
   });
 
   it("falls back to a plain message when there is no profile", async () => {
@@ -238,7 +236,7 @@ describe("notifyFounderAccountClosed", () => {
     expect(sendMessage).toHaveBeenCalledTimes(1);
     const [, text] = sendMessage.mock.calls[0]!;
     expect(text).toContain("ЗАМОРОЖЕН");
-    expect(text).not.toContain("+380991234567");
+    expect(text).toContain("+380991234567");
   });
 });
 

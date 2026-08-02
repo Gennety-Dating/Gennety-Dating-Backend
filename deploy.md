@@ -84,12 +84,17 @@ What ships:
   both founder-feed cards, and the admin audience breakdown. PRODUCT_SPEC §1.3
   records why. Existing `onboarding_progress` rows that list `"ethnicity"` are
   harmless: `asField()` drops unknown values.
-- **Deleting an account no longer DMs the founder anything personal** — an
-  anonymous lifecycle event instead (city, track, verification status, funnel
-  stage, days in product). Freeze keeps its profile card but drops the phone
-  number. A deletion is an Art. 17 request, and a full profile + phone + photo
-  dump landing in a Telegram chat at that exact moment was the one place the
-  product did not honour it.
+- **Founder feed on account close is UNCHANGED from what production does
+  today.** It was briefly reduced to an anonymous lifecycle event on
+  2026-08-01 and **restored by founder decision on 2026-08-02** — the delete
+  notification still carries the full profile card, phone number and photos,
+  because at this stage knowing exactly who left is treated as the main source
+  of churn understanding. The only visible difference is one added line,
+  `В продукте: N дн.`. Privacy §12.2 now discloses this prominently and
+  commits to deleting those messages on request; `legal/dpia.md` R9 records it
+  as a knowingly accepted residual risk. **Operational duty this creates: an
+  erasure request extends to the founder-bot chat and must be executed by
+  hand — nothing automates it.**
 - **A typed verification code is masked in `chat_events`** before the row is
   written (`redactSensitiveSummary`), matching the bcrypt hashing
   `email_otps` / `phone_otps` already do.

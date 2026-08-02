@@ -211,11 +211,28 @@ improvement.
 *Mitigations.* Deletion erases storage objects first and **fails closed** — a
 storage outage aborts the deletion rather than producing a half-deleted account.
 It then cancels live matches, removes founder-report snapshots containing the
-subject, and cascades the database delete. Since 2026-08-01 the founder
-notification on deletion carries no personal data.
-**Residual: low.** Two honest limits: financial records are retained under
-accounting law, and photos uploaded through Telegram remain on Telegram's
-infrastructure as `file_id`s, which we do not control and cannot delete.
+subject, and cascades the database delete.
+
+**Accepted exception (founder decision, 2026-08-02).** The operations feed
+receives the departing user's profile card, phone number and photos at the
+moment of deletion, and that message stays in the operator's private Telegram
+chat. This was briefly removed on 2026-08-01 and deliberately restored: at the
+current stage, seeing exactly who leaves — with enough context to recognise and
+contact them — is treated as the main way early churn is understood, and the
+controller accepts the tradeoff knowingly.
+
+It is a genuine limit on Art. 17, not a technicality, so it is mitigated by
+transparency rather than argued away: Privacy §12.2 states it prominently under
+its own heading, §16 cross-references it, and both commit to removing those
+messages on request. The duty that creates is **manual** — nothing deletes them
+automatically — and is tracked as RoPA §6 item 8.
+
+**Residual: moderate, and knowingly accepted.** Three honest limits beyond it:
+financial records are retained under accounting law; photos uploaded through
+Telegram remain on Telegram's infrastructure as `file_id`s we do not control;
+and this exception depends on one person executing a manual step correctly.
+**Re-assess before the user base grows** — the reasoning that supports it is
+explicitly about scale, and it stops holding as the service gets larger.
 
 ### R10 — Processor concentration *(medium · low)*
 
@@ -233,9 +250,11 @@ coordinates but never identity; CARTO never receives the user's IP.
 
 No supervisory-authority prior consultation under Art. 36 is considered
 necessary: after mitigation, no residual risk is assessed as "high" in the sense
-that triggers it. The two moderate residuals that come closest — appearance
-scoring (R3) and operator access (R7) — are respectively inherent-and-disclosed
-and a governance gap with a known fix.
+that triggers it. The three moderate residuals that come closest — appearance
+scoring (R3), operator access (R7), and the founder-feed deletion exception
+(R9) — are respectively inherent-and-disclosed, a governance gap with a known
+fix, and a knowingly accepted tradeoff that is disclosed to users, removable on
+request, and scheduled for re-assessment at growth.
 
 Data subjects have not been formally consulted (Art. 35(9)). At the current
 scale this would not be meaningful; the Privacy Policy is written to be readable
@@ -262,6 +281,7 @@ at any meaningful scale, not for the current handful of accounts.
 | 5 | Capture dietary / step-free consent as a distinct act | High | RoPA §5 |
 | 6 | Per-person admin accounts + access audit log | High | R7 |
 | 7 | Retention ceiling on conversation history | Medium | R8 |
+| 7a | Re-assess the founder-feed deletion exception as the user base grows | At growth | R9 |
 | 8 | Re-assess the DPO requirement | At growth | RoPA §6 |
 | 9 | Disparate-impact analysis of matching outcomes | At scale | R4 |
 | 10 | Re-run this DPIA on any material change to matching or verification | Ongoing | — |

@@ -6,9 +6,10 @@
 running code. The substantive changes: we no longer collect nationality or
 ethnic origin at all; identity verification moved from Persona to Amazon
 Rekognition Face Liveness; the optional "personal AI export" feature has been
-retired; deleting your account no longer sends anything about you to our
-internal operations feed; and we now disclose the short-lived chat timeline and
-the promo-code attribution that earlier versions did not mention.
+retired; and we now disclose the short-lived chat timeline and the promo-code
+attribution that earlier versions did not mention. Section 12.2 has also been
+rewritten to state far more directly what our internal operations feed receives
+when an account is deleted, and what you can do about it.
 
 This Privacy Policy explains how Gennety ("**Gennety**", "**we**", "**us**", or
 "**our**") collects, uses, shares, and protects your personal data when you use
@@ -44,7 +45,7 @@ below.
 | Do you sell my data? | **No.** We never sell personal data and we do not run advertising profiling. |
 | Do you show my data to other users? | Only to the one person you are matched with, in a forward/save-protected form (Section 12). |
 | Does a human see my data? | Yes — the operator of the service, through an internal administration interface and a private operations feed (Section 12.2 and 12.3). |
-| Can I delete everything? | Yes — freeze (reversible) or delete (irreversible cascading erasure). See Sections 16 and 18. |
+| Can I delete everything? | Yes — freeze (reversible) or delete (irreversible cascading erasure), with one disclosed exception: an internal operational notification (Section 12.2). |
 | Who do I complain to? | Us first at **legal@gennety.com**; then your data-protection authority (Section 22). |
 
 ---
@@ -425,21 +426,32 @@ Telegram bot. It carries:
   kind of profile cards and photos. Access to that page is controlled by an
   unguessable token in the URL, and the link stops working after 90 days.
 - **When a date is confirmed:** the two date cards and the venue.
-- **When an account is frozen:** the profile card described above, without your
-  phone number. Freezing is a pause, not an erasure — your account still exists
-  and you can return to it at any time.
-- **When an account is deleted:** an **anonymous** notification only. It carries
-  your city, sign-up track, verification status, how far you got in onboarding,
-  and how many days the account existed. It carries **no name, no phone number,
-  no email, no photos, and no Telegram username** — nothing that identifies you.
+- **When an account is frozen or deleted:** the profile card described above,
+  **your phone number**, and **your profile photos**, so the operator can see
+  who left and, where appropriate, follow up personally. It still excludes your
+  psychological summary. This goes to the same single, private, founder-only
+  Telegram bot as every other item on this list — it is not published, not
+  shared onward, and not held anywhere beyond that one operator's own chat with
+  their own bot.
 
-**Deleting your account leaves nothing about you in this feed.** Until 1 August
-2026 the delete notification carried a full profile card, your phone number and
-your photos; that was inconsistent with your right to erasure, so it was
-replaced with the anonymous event described above. We also delete any stored
-weekly-report snapshot that contains your account. Earlier notifications sent
-before that date remain in the operator's own chat history and are covered by
-your erasure request — write to **legal@gennety.com** and they will be removed.
+**Please read this part carefully, because it is the one place where deleting
+your account does not erase everything.** When you delete your account we erase
+your data from every Gennety-operated system — the database, our file storage,
+and any stored weekly-report snapshot containing you. The operational
+notification above is the exception: it is sent at the moment of deletion and
+remains in the operator's private chat afterwards.
+
+We disclose this plainly rather than bury it, because it is a real limit on your
+right to erasure. Two things follow from that:
+
+- **You can ask for it to be removed too.** Write to **legal@gennety.com** and
+  the corresponding messages will be deleted from that chat. We treat that as
+  part of an erasure request, not as a separate favour.
+- **It is a deliberate, time-limited choice.** Gennety is at an early stage and
+  run by one person, for whom understanding exactly who leaves is currently the
+  main way the service improves. We have recorded this internally as an
+  accepted risk with a named tradeoff, and we review it as the service grows —
+  it is not intended to be permanent.
 
 ### 12.3 Staff and administrative access
 
@@ -587,6 +599,11 @@ does **not** report success and you can retry — we never leave a half-deleted
 account. Some records may be retained where required by law (for example,
 financial records), where a processor keeps them under its own disclosed legal
 duties, or in anonymised form that can no longer identify you.
+
+One further exception is disclosed in **Section 12.2**: the internal
+operational notification sent at the moment of deletion remains in the
+operator's private chat. You can ask for that to be removed as part of your
+erasure request.
 
 ---
 

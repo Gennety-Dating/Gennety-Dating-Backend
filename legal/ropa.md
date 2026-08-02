@@ -140,10 +140,10 @@ enforced at onboarding) — so it is stated once here rather than repeated.
 |---|---|
 | **Purpose** | Let the sole operator see new registrations, weekly matches, confirmed dates and departures |
 | **Legal basis** | Art. 6(1)(f) legitimate interest in operating and quality-checking an early-stage service |
-| **Data categories** | Profile card + photos on activation and on freeze; weekly pair report behind an unguessable, 90-day-expiring token. **On deletion: an anonymous lifecycle event only** — city, track, verification status, funnel stage, days in product. |
+| **Data categories** | Profile card + photos on activation, on freeze **and on deletion**, including the phone number; weekly pair report behind an unguessable, 90-day-expiring token |
 | **Recipients** | Telegram (a separate, private, founder-only bot) |
-| **Retention** | Report snapshots deleted when the subject deletes their account; the chat history is the operator's own |
-| **Balancing note** | Recorded 2026-08-01: a deletion is an Art. 17 request and Art. 21(3) leaves no legitimate interest to weigh against it, which is why that branch carries no personal data at all |
+| **Retention** | Report snapshots deleted when the subject deletes their account; the notification messages persist in the operator's own chat until deleted by hand |
+| **Balancing note** | The delete branch was reduced to an anonymous event on 2026-08-01 and **restored by explicit founder decision on 2026-08-02**: at this stage, knowing who left with enough context to follow up is treated as the primary source of churn understanding. Recorded as an accepted residual risk in `dpia.md` R9. Art. 21(3) means this cannot be defended purely on legitimate interest once erasure is requested, so the mitigation is transparency plus an on-request removal: Privacy §12.2 discloses it prominently and commits to deleting the messages on request. **Operational duty: an erasure request extends to this chat and must be executed by hand.** Review on growth. |
 
 ### 2.11 Analytics and product measurement
 
@@ -229,6 +229,7 @@ opinions, trade-union membership, genetic data.
 | 5 | Explicit consent act for dietary / step-free requirements | Not yet distinct from the chip UI |
 | 6 | Per-person admin access + audit trail | Single shared key today; no record of who viewed what |
 | 7 | Breach response procedure (Art. 33, 72 hours) | Not written |
+| 8 | Manual deletion of founder-feed messages on an erasure request | No tooling; operator must do it by hand (see §2.10) |
 
 **DPO assessment (Art. 37).** A DPO is required where core activities involve
 regular and systematic monitoring of data subjects **on a large scale**, or

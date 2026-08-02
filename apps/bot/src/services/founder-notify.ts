@@ -21,8 +21,7 @@ import type { Venue } from "./venue.js";
  *   1. `notifyFounderNewUser`      — new registration: full profile + photos.
  *   2. `notifyFounderWeeklyMatches`— weekly matches report link (Thu batch).
  *   3. `notifyFounderDateScheduled`— a date locked in: both date cards + venue.
- *   4. `notifyFounderAccountClosed`— freeze: profile card (no phone);
- *                                     delete: anonymous lifecycle event only.
+ *   4. `notifyFounderAccountClosed`— freeze / GDPR delete: profile + phone.
  *   5. `notifyFounderPurchase` / `notifyFounderPurchaseRefunded` — every real
  *      money movement (ticket store, date gate, Premium, Rematch, venue
  *      change; Telegram Stars and App Store alike), with who paid and how much.
@@ -369,26 +368,34 @@ export const FOUNDER_ACCOUNT_CLOSED_SELECT = {
 
 /**
  * DM the founder when a user closes their account — freeze (soft) or delete
- * (hard). **The two actions are deliberately asymmetric (2026-08-01):**
+ * (hard). Both carry the full profile card, the phone number and the photos.
  *
- *   - `frozen` — the account still EXISTS. Freezing is a pause, not an erasure
- *     request, so the ordinary profile card is sent, minus the phone number
- *     (a contact identifier the feed never needed to carry).
- *   - `deleted` — the user asked to be forgotten. Sending their profile, phone,
- *     email and photos into a Telegram chat at that exact moment is the one
- *     place the product did not honour a direct GDPR Art. 17 request: the copy
- *     would outlive the erasure indefinitely, and "legitimate interest" does
- *     not survive an explicit erasure request (Art. 21(3)). So the delete
- *     notification carries NO personal data and NO photos — only the coarse
- *     lifecycle facts an operator needs to know that a real person left:
- *     city, track, verification status, funnel stage, and days in product.
+ * **History, because this branch has moved twice and will be questioned again.**
+ * The delete path was reduced to an anonymous lifecycle event on 2026-08-01,
+ * on the reasoning that a deletion is a GDPR Art. 17 erasure request and a
+ * profile dump landing in a Telegram chat at that moment outlives the erasure.
+ * It was **restored by an explicit founder decision on 2026-08-02**: at this
+ * stage of the product, knowing exactly who left — with enough context to
+ * recognise them and follow up personally — is treated as load-bearing for
+ * understanding early churn, and the operator accepts the tradeoff knowingly.
  *
- * If you want to know WHY someone left, ask them with consent (the Premium
- * cancellation flow already does exactly that) rather than reconstructing it
- * from a profile dump.
+ * What that decision commits us to, and what must NOT quietly rot:
+ *   - `legal/privacy-policy.md` §12.2 discloses this notification explicitly,
+ *     including the phone number and the photos. If this code changes, that
+ *     section changes in the same commit.
+ *   - It is recorded as an accepted residual risk in `legal/dpia.md` (R9) and
+ *     as a processing activity in `legal/ropa.md` §2.10.
+ *   - An erasure request extends to this chat: when a user asks to be
+ *     forgotten, the operator must delete the corresponding messages from the
+ *     founder-bot conversation. Nothing automates that.
  *
- * `photoBuffers` is only meaningful for `frozen`; the delete path ignores it.
- * See `legal/privacy-policy.md` §12.2.
+ * Because a hard delete cascades the row away and removes Supabase-hosted
+ * photos, the CALLER must pre-fetch `user` (with profile) and, for a delete,
+ * pass pre-downloaded `photoBuffers` — Telegram `file_id`s stay resolvable
+ * after the row is gone, but a Supabase storage path does not survive the
+ * cleanup that runs before the delete transaction. When `photoBuffers` is
+ * omitted (the freeze path, where the row still exists), photos are downloaded
+ * here from `user.profile.photos` directly.
  */
 export async function notifyFounderAccountClosed(
   action: "frozen" | "deleted",
@@ -399,13 +406,7 @@ export async function notifyFounderAccountClosed(
   if (!api) return;
 
   try {
-    if (action === "deleted") {
-      // No profile card, no photos — see the asymmetry note above.
-      await api.sendMessage(founderChatId(), buildAccountDeletedHeader(user));
-      return;
-    }
-
-    const header = buildAccountFrozenHeader(user);
+    const header = buildAccountClosedHeader(action, user);
     let buffers = photoBuffers;
     if (!buffers) {
       buffers = [];
@@ -425,38 +426,25 @@ export async function notifyFounderAccountClosed(
 }
 
 /**
- * Anonymous lifecycle event for a hard delete. Every field here is either
- * coarse (a city, a track) or non-identifying (a count of days), so the
- * message cannot be traced back to the erased person.
+ * Profile card for a closed account, freeze or delete alike.
+ *
+ * Carries the phone number by design — see the founder decision recorded on
+ * `notifyFounderAccountClosed`. The one addition kept from the anonymous
+ * version is `В продукте: N дн.`, which costs nothing and is the single most
+ * useful number for reading early churn.
  */
-function buildAccountDeletedHeader(user: FounderAccountUser): string {
-  const days = Math.max(
-    0,
-    Math.floor((Date.now() - user.createdAt.getTime()) / 86_400_000),
-  );
-  const lines: string[] = [
-    "🗑 Аккаунт УДАЛЁН",
-    "",
-    "Персональные данные не приводятся: пользователь воспользовался правом на удаление.",
-    "",
-    `Город: ${user.profile?.homeCity ?? "—"}`,
-    `Трек: ${user.registrationTrack ?? "—"}`,
-    `Верификация: ${user.verificationStatus}`,
-    `Стадия: ${user.status}/${user.onboardingStep}`,
-    `В продукте: ${days} дн.`,
-  ];
-  return truncateCaption(lines.join("\n"));
-}
-
-/** Ordinary profile card for a FREEZE — the account still exists. */
-function buildAccountFrozenHeader(user: FounderAccountUser): string {
+function buildAccountClosedHeader(
+  action: "frozen" | "deleted",
+  user: FounderAccountUser,
+): string {
   const p = user.profile;
-  const lines: string[] = ["❄️ Аккаунт ЗАМОРОЖЕН"];
+  const title = action === "deleted" ? "🗑 Аккаунт УДАЛЁН" : "❄️ Аккаунт ЗАМОРОЖЕН";
+  const lines: string[] = [title];
   const name = user.firstName ?? "—";
   const age = user.age != null ? `, ${user.age}` : "";
   lines.push(`👤 ${name}${age}`);
-  // The phone number is deliberately NOT included: it is a contact identifier
-  // the ops feed never needed, and `@username` below already reaches the user.
+  // The phone number is the headline datum for this notification.
+  lines.push(`📞 Телефон: ${user.phone ?? "—"}`);
   if (user.email) lines.push(`✉️ Email: ${user.email}`);
   if (user.gender) lines.push(`Пол: ${user.gender}`);
   if (user.preference) lines.push(`Искал(а): ${user.preference}`);
@@ -471,6 +459,11 @@ function buildAccountFrozenHeader(user: FounderAccountUser): string {
   if (score != null) lines.push(`⭐ Attractiveness: ${score}/100`);
   if (user.telegramUsername) lines.push(`TG: @${user.telegramUsername}`);
   lines.push(`Telegram ID: ${user.telegramId.toString()}`);
+  const days = Math.max(
+    0,
+    Math.floor((Date.now() - user.createdAt.getTime()) / 86_400_000),
+  );
+  lines.push(`В продукте: ${days} дн.`);
   return truncateCaption(lines.join("\n"));
 }
 
