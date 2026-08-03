@@ -54,10 +54,11 @@ App state to undo.
 
 ---
 
-**PENDING — StoreKit 2 is configured and verified (2026-08-03), env not yet set.**
-App Store Connect was set up via a browser agent and every value below was
-cross-checked. These are identifiers, not secrets — they are inert without the
-`.p8`, which lives only on the droplet and in the founder's password manager.
+**DONE — StoreKit 2 is live-configured on the droplet (2026-08-03) and proven
+against Apple's real API.** App Store Connect was set up via a browser agent,
+every value cross-checked, then the key was uploaded and the env set. These are
+identifiers, not secrets — they are inert without the `.p8`, which lives only on
+the droplet and in the founder's password manager.
 
 ```
 APPSTORE_KEY_PATH=/opt/gennety/keys/SubscriptionKey_5UCTX65L56.p8
@@ -65,6 +66,43 @@ APPSTORE_KEY_ID=5UCTX65L56
 APPSTORE_ISSUER_ID=49fd72b2-faf4-4673-a9b4-50e6027c46a8
 APPSTORE_ENVIRONMENT=sandbox
 ```
+
+**Proof, not inference.** `POST /inApps/v1/notifications/test` against
+`api.storekit-sandbox.itunes.apple.com` answered **200** — so the key, `kid`,
+issuer and `bid` are all accepted by Apple. Reading the delivery record back
+settles the two things that were previously assumed:
+
+- `sendAttempts: [{ sendAttemptResult: "SUCCESS" }]` on the first attempt — our
+  webhook is reachable at the saved URL and answered Apple acceptably.
+- `version: "2.0"`, `notificationType: "TEST"`, `bundleId: com.gennety.ios`,
+  `environment: "Sandbox"` — **the notifications are V2**, which App Store
+  Connect's UI could not confirm (it shows no version selector at all). The
+  benign-either-way argument below is retained as history, not as a live risk.
+
+The webhook logs nothing for a `TEST`: it carries no `signedTransactionInfo`,
+so `transactionId` is empty and the handler acks in the "shape we don't consume"
+branch (`res.json({ ok: true })`). Silence in `pm2 logs` after a test
+notification is the correct behaviour, not a missed delivery — re-verify with
+Apple's delivery record, not with our logs.
+
+Re-run the check any time (10-minute JWT, no state written):
+
+```sh
+ssh root@167.172.178.229 'cd /opt/gennety && node -e "
+const jwt=require(\"./apps/bot/node_modules/jsonwebtoken\"),fs=require(\"fs\");
+const now=Math.floor(Date.now()/1000);
+const t=jwt.sign({iss:\"49fd72b2-faf4-4673-a9b4-50e6027c46a8\",iat:now,exp:now+600,
+  aud:\"appstoreconnect-v1\",bid:\"com.gennety.ios\"},
+  fs.readFileSync(\"/opt/gennety/keys/SubscriptionKey_5UCTX65L56.p8\"),
+  {algorithm:\"ES256\",header:{alg:\"ES256\",kid:\"5UCTX65L56\",typ:\"JWT\"}});
+fetch(\"https://api.storekit-sandbox.itunes.apple.com/inApps/v1/notifications/test\",
+  {method:\"POST\",headers:{Authorization:\"Bearer \"+t}})
+  .then(r=>r.text()).then(console.log);"'
+```
+
+Flip `APPSTORE_ENVIRONMENT` to `production` at release, and re-run the same
+probe against `api.storekit.itunes.apple.com` — a key that works in sandbox is
+not evidence that the production host is reachable.
 
 App record: Apple ID `6797330919`, bundle `com.gennety.ios`, SKU `gennety-ios`,
 **Team ID `ADWPKD5WZ7`** — which matters beyond bookkeeping: it is the same team
@@ -100,9 +138,29 @@ visible: our handler requires `signedPayload` and answers **400**, so V1
 notifications would simply not apply and would show up as 400s in the log rather
 than corrupting anything.
 
-**Still missing on the droplet:** the APNs `.p8`
-(`/opt/gennety/keys/AuthKey_JTLFAQ8RM2.p8`), deleted by the 2026-07-25 rsync.
-The file survives locally; upload it in the same pass as the new key.
+**APNs was broken for nine days and is fixed in the same pass (2026-08-03).**
+The 2026-07-25 rsync did not just delete `AuthKey_JTLFAQ8RM2.p8` — it removed
+`/opt/gennety/keys/` **entirely**, while `APNS_KEY_PATH` kept pointing into it.
+So every push since then failed at key load, silently: the `APNS_*` env was all
+present and correct (`APNS_TEAM_ID=ADWPKD5WZ7` matches App Store Connect), which
+is exactly why a config check would have said everything was fine. Both `.p8`
+files are now uploaded `0600` into a `0700` directory and verified loadable —
+`crypto.createPrivateKey` reads each as `ec / prime256v1`, which is what ES256
+signing in `services/apns.ts` and `services/appstore.ts` needs.
+
+**Check the directory, not just the env, after any rsync-based deploy.** The
+failure mode here is a valid path to a file that no longer exists, and nothing
+in the boot sequence fails closed on it:
+
+```sh
+ssh root@167.172.178.229 'ls -l /opt/gennety/keys/'   # expect two 0600 .p8 files
+```
+
+**`TELEGRAM_LOGIN_CLIENT_ID=8707759133` is also set now, and is deliberately
+inert.** The Telegram-login code is on `main` and NOT deployed — the running
+`config.ts` has no such key, and `/v1/app/config` still returns no
+`features.telegramAuth`. The variable simply waits for the deploy; nothing about
+setting it early changes current behaviour.
 
 ---
 
