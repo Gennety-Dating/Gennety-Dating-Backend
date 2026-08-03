@@ -1,5 +1,55 @@
 # Gennety Dating Deploy
 
+**PENDING — referral share card arrives whole (REFERRAL_PRODUCT_SPEC → Surfaces).**
+Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
+change, no Mini App change** (`apps/webapp` untouched).
+
+Sharing an invite delivered a *sliver* of the card — the top ~20%, blank
+beneath. That is a partially decoded image, and the endpoint Telegram fetches
+had two independent reasons to produce one. It **re-rendered the PNG on every
+request** (~2.5 s cold on a Mac, worse on a 1–2 vCPU droplet — satori fonts +
+five portraits + the butterfly), and then pushed **453 KB** of it. Telegram
+downloads `photo_url` on its own servers under its own deadline and keeps
+whatever arrived; a PNG decodes top-down, so a cut-short download *is* a strip
+of the top. Now: JPEG (**93 KB**, and what the Bot API actually requires),
+pre-rendered and memoized by `POST /share-message` so the fetch is a memory read
+(**33 ms** measured end to end), with `photo_width`/`photo_height` stated so
+Telegram never probes the file.
+
+**Three things worth knowing before the restart:**
+
+- **It is inert in production.** `REFERRAL_FEATURE_ENABLED=false` in
+  `/opt/gennety/.env`, so `/v1/referral/*` 404s and nothing here can run. This
+  reproduced on **dev**, where the flag is on and `PUBLIC_BASE_URL` is a **free
+  ngrok tunnel** — exactly the slow link that turns "render then push 453 KB"
+  into a truncated fetch. The weaknesses were real regardless of tunnel, so this
+  lands before referral is ever switched on.
+- **The card URL now carries a content version (`v`), and that is the part that
+  actually reaches already-affected users.** Telegram caches fetched media **by
+  URL**, and the old URL (`?u=&sig=`) was stable forever per referrer — so one
+  bad fetch was permanent for that person, which is why it never self-healed.
+  The version is inside the signed payload, so the HMAC binding is unchanged.
+  Pre-versioning signatures are still accepted, so an in-flight share and
+  `scripts/dev-stage-referral.mjs` both keep working untouched.
+- **Messages already sent stay broken.** They carry a `file_id` Telegram
+  resolved at send time; nothing server-side can rewrite them. Re-share to get a
+  good card.
+
+Post-deploy check — referral is off in prod, so verify on `@gennetytestbot`:
+share an invite to Saved Messages and confirm the full card arrives. The
+endpoint itself can be checked directly (referral must be enabled, else 404):
+
+```sh
+curl -sD- -o /dev/null "$PUBLIC_BASE_URL/v1/referral/card?u=<id>&v=<v>&sig=<sig>"
+# expect: 200, content-type: image/jpeg, and a content-length that matches the
+# bytes actually received — a mismatch is the truncation this change fixes.
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag, no Mini App state.
+
+---
+
 **PENDING — Premium screen gets a way back to the board (PRODUCT_SPEC §3.8).**
 Not deployed yet. **No Prisma schema change, no env change, no flag change** —
 but this one is **client-side and therefore DOES need a Mini App redeploy**

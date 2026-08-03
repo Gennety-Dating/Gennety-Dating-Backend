@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { createCanvas } from "@napi-rs/canvas";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import type { Language } from "@gennety/shared";
@@ -23,6 +25,36 @@ const CARD_H = 1000;
 
 /** Cream the brand mark is tinted to — the card's own body-text colour. */
 const CREAM = "#F7ECEC";
+
+/**
+ * JPEG quality for the shared card. Bot API requires `photo_url` to serve
+ * JPEG, and the size difference is the whole point: the same card is ~453 KB
+ * as PNG and ~93 KB at q88, visually indistinguishable. Telegram downloads
+ * `photo_url` server-side under its own deadline and keeps whatever arrived, so
+ * a body five times smaller is what stops a slow link from producing a
+ * half-decoded card (see `referralCardImage`).
+ */
+const CARD_JPEG_QUALITY = 88;
+
+/**
+ * Bump when the card's design changes. It rides in the share URL's `v`
+ * parameter, and Telegram caches downloaded media **by URL** — so without a
+ * changed URL a recipient keeps getting the previously fetched bytes, which is
+ * also why a single failed fetch used to be permanent for a given referrer.
+ */
+export const CARD_REVISION = "2";
+
+/**
+ * Encoded cards, keyed by `contentVersion`. The card is a pure function of
+ * (name, language, gift months, revision), so the version IS the cache key —
+ * a rename or a language switch simply misses and renders a new entry instead
+ * of needing invalidation.
+ *
+ * Bounded and FIFO-evicted because the key space is per-referrer: without a cap
+ * a long-lived process would pin one ~93 KB buffer per person who ever shared.
+ */
+const CARD_CACHE_MAX = 64;
+const cardCache = new Map<string, ReferralCardImage>();
 
 /** How many portrait slots the card lays out. */
 const PORTRAIT_SLOTS = 5;
@@ -70,6 +102,35 @@ export interface ReferralCardInput {
    * founder reviews the layout against before supplying the real photos.
    */
   portraits?: readonly string[];
+}
+
+/** A share-ready card: JPEG bytes plus the facts the Bot API result needs. */
+export interface ReferralCardImage {
+  jpeg: Buffer;
+  width: number;
+  height: number;
+  /** Opaque cache-busting token for the share URL — see `CARD_REVISION`. */
+  version: string;
+}
+
+/**
+ * Short fingerprint of everything the card renders from. Two calls with the
+ * same inputs produce the same bytes, so this doubles as the cache key and as
+ * the share URL's `v` parameter.
+ */
+export function referralCardContentVersion(input: ReferralCardInput): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        CARD_REVISION,
+        input.referrerName ?? "",
+        input.lang,
+        input.giftMonths,
+        input.portraits ?? null,
+      ]),
+    )
+    .digest("hex")
+    .slice(0, 12);
 }
 
 /** The brand wordmark, set in the logo's own typeface (title-case, not caps). */
@@ -202,7 +263,8 @@ function portraitTiles(portraits: readonly string[]): Node[] {
   });
 }
 
-export async function renderReferralCard(input: ReferralCardInput): Promise<Buffer | null> {
+/** Lay the card out and return its SVG, or null if anything failed. */
+async function buildCardSvg(input: ReferralCardInput): Promise<string | null> {
   try {
     const kicker = input.referrerName
       ? t(input.lang, "referralCardInvitedBy", { name: input.referrerName })
@@ -327,20 +389,88 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
       ],
     );
 
-    const svg = await satori(tree as unknown as Parameters<typeof satori>[0], {
+    return await satori(tree as unknown as Parameters<typeof satori>[0], {
       width: CARD_W,
       height: CARD_H,
       fonts: loadFonts(),
     });
-    const png = new Resvg(svg, {
-      fitTo: { mode: "width", value: CARD_W },
-      background: "#17090D",
-    })
-      .render()
-      .asPng();
-    return Buffer.from(png);
   } catch (err) {
     console.warn("[referral-card] render failed", err);
+    return null;
+  }
+}
+
+/** Rasterize the card SVG. Opaque background — the card has no transparency. */
+function rasterize(svg: string) {
+  return new Resvg(svg, {
+    fitTo: { mode: "width", value: CARD_W },
+    background: "#17090D",
+  }).render();
+}
+
+/**
+ * The card as PNG. Kept for previews and tests; the share path wants
+ * `referralCardImage` instead (JPEG, cached).
+ */
+export async function renderReferralCard(input: ReferralCardInput): Promise<Buffer | null> {
+  const svg = await buildCardSvg(input);
+  if (!svg) return null;
+  try {
+    return Buffer.from(rasterize(svg).asPng());
+  } catch (err) {
+    console.warn("[referral-card] rasterize failed", err);
+    return null;
+  }
+}
+
+/**
+ * The card as the share flow needs it: JPEG bytes, dimensions, and a version
+ * token — memoized, so the public `GET /v1/referral/card` that Telegram fetches
+ * never renders on the request path.
+ *
+ * Both of those matter for the same reason. Telegram downloads `photo_url`
+ * server-side under its own deadline and keeps whatever bytes arrived, so a
+ * render on the critical path (up to seconds when the font/portrait/butterfly
+ * caches are cold) followed by a large body over a slow link yields a
+ * *partially decoded* card — a PNG decodes top-down, so the recipient gets a
+ * strip of the top and blank underneath. Serving pre-encoded JPEG from memory
+ * removes both halves of that: no render latency, and ~5× fewer bytes.
+ */
+export async function referralCardImage(
+  input: ReferralCardInput,
+): Promise<ReferralCardImage | null> {
+  const version = referralCardContentVersion(input);
+  const cached = cardCache.get(version);
+  if (cached) return cached;
+
+  const svg = await buildCardSvg(input);
+  if (!svg) return null;
+  try {
+    const rendered = rasterize(svg);
+    const { width, height } = rendered;
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+    // Straight from resvg's RGBA buffer — no PNG round-trip just to re-encode.
+    // Every pixel is opaque (resvg composites onto the background above), so
+    // dropping the alpha channel for JPEG loses nothing.
+    const pixels = ctx.createImageData(width, height);
+    pixels.data.set(rendered.pixels);
+    ctx.putImageData(pixels, 0, 0);
+
+    const image: ReferralCardImage = {
+      jpeg: canvas.toBuffer("image/jpeg", CARD_JPEG_QUALITY),
+      width,
+      height,
+      version,
+    };
+    if (cardCache.size >= CARD_CACHE_MAX) {
+      const oldest = cardCache.keys().next().value;
+      if (oldest !== undefined) cardCache.delete(oldest);
+    }
+    cardCache.set(version, image);
+    return image;
+  } catch (err) {
+    console.warn("[referral-card] encode failed", err);
     return null;
   }
 }

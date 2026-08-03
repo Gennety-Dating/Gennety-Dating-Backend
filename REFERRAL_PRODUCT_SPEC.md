@@ -94,9 +94,22 @@ real face passing liveness per invitee.
   → the referral Mini App (`referral.html`): the milestone ladder with $ values,
   and a one-tap **share** (`POST /v1/referral/share-message` mints a
   `savePreparedInlineMessage` → `WebApp.shareMessage`) that forwards a branded
-  PNG invite card (`services/referral-card`, satori→resvg; degrades to a rich
+  invite card (`services/referral-card`, satori→resvg→JPEG; degrades to a rich
   text article if the render fails). The public HMAC-signed
-  `GET /v1/referral/card` renders the card Telegram fetches.
+  `GET /v1/referral/card` serves the card Telegram fetches.
+
+  **The share hands Telegram bytes that already exist.** Telegram downloads
+  `photo_url` on its own servers, under its own deadline, and keeps whatever
+  arrived — so `/share-message` renders and caches the exact JPEG *before*
+  minting the URL, and only offers the photo result once those bytes exist
+  (otherwise the text-article fallback). The card is JPEG rather than PNG both
+  because the Bot API requires it and because it is ~5× smaller, and the URL
+  carries a content fingerprint (`v`) because Telegram caches media by URL.
+  Until 2026-08-03 none of that held: the endpoint re-rendered per request
+  (seconds, cold) and pushed a ~453 KB PNG down a stable URL, so a slow fetch
+  delivered a *partially decoded* card — a PNG decodes top-down, so the
+  recipient saw a strip of the top and blank beneath — and Telegram's per-URL
+  cache made that permanent for that referrer.
 - **iOS.** `GET /v1/me/referral` (ladder state) + `POST /v1/me/referral/claim`
   (enter a referral code), JWT-authed; `features.referral` in `GET /v1/app/config`.
   Reward-on-verify is platform-agnostic.
