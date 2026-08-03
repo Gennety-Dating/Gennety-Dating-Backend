@@ -351,6 +351,52 @@ describe("buildVenueChangeCatalog", () => {
     expect(out).toEqual(places);
   });
 
+  it("drops the currently-assigned venue — it is the pinned KEEP card", async () => {
+    // Otherwise the same place shows twice, and the two cards do different
+    // things: KEEP_KEY keeps it for free, its own key takes the PAID path and
+    // charges to "change" to the venue the pair already has.
+    const out = await buildVenueChangeCatalog(
+      { ...input, excludeVenue: { placeId: "c1", name: "Curated Cafe", address: "1 St" } },
+      { listCurated: async () => curated },
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("falls back to name + address when the assigned venue has no placeId", async () => {
+    const out = await buildVenueChangeCatalog(
+      { ...input, excludeVenue: { placeId: null, name: "Curated Cafe", address: "1 St" } },
+      { listCurated: async () => curated },
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("keeps a different venue that merely shares a name", async () => {
+    const out = await buildVenueChangeCatalog(
+      { ...input, excludeVenue: { placeId: "other", name: "Curated Cafe", address: "1 St" } },
+      { listCurated: async () => curated },
+    );
+    expect(out.map((v) => v.placeId)).toEqual(["c1"]);
+  });
+
+  it("excludes before the cap, so the freed slot goes to a real alternative", async () => {
+    const many: CatalogVenue[] = Array.from({ length: 13 }, (_, i) => ({
+      ...curated[0]!,
+      placeId: `c${i}`,
+      name: `Venue ${i}`,
+      distanceKm: i * 0.1,
+    }));
+
+    const out = await buildVenueChangeCatalog(
+      { ...input, excludeVenue: { placeId: "c0", name: "Venue 0", address: "1 St" } },
+      { listCurated: async () => many },
+    );
+
+    expect(out).toHaveLength(12);
+    expect(out.map((v) => v.placeId)).not.toContain("c0");
+    // c12 would have been cut by the cap had c0 taken a slot.
+    expect(out.map((v) => v.placeId)).toContain("c12");
+  });
+
   it("caps the list length", async () => {
     const many: CatalogVenue[] = Array.from({ length: 30 }, (_, i) => ({
       ...curated[0],

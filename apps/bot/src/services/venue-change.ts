@@ -224,6 +224,20 @@ export interface BuildCatalogInput {
    * Places lookups would buy them nothing.
    */
   withPhotos?: boolean;
+  /**
+   * The currently-assigned venue, which is dropped from the alternatives.
+   *
+   * The board already offers it as the pinned "keep this place" card under the
+   * `KEEP_KEY` sentinel, and it is usually a curated row in its own city — so
+   * without this it appears TWICE on screen, once pinned and once as an
+   * ordinary alternative. That is not only visual noise: the two cards do
+   * different things. Agreeing on `KEEP_KEY` keeps the venue for free and
+   * closes the session, while agreeing on the same place under its own key
+   * takes the paid path — charging `VENUE_CHANGE_STARS` to "change" to the
+   * venue the pair already has. Excluding it here (rather than in the client)
+   * also means the like/confirm rebuilds refuse that key as `invalid-venue`.
+   */
+  excludeVenue?: { placeId: string | null; name: string; address: string } | null;
 }
 
 export interface BuildCatalogDeps {
@@ -550,8 +564,25 @@ export async function buildVenueChangeCatalog(
 
   const curated = await listCurated(input);
   const chosen = curated.length > 0 ? curated : await listPlaces(input);
-  const capped = capCatalog(chosen, input.seed);
+  // Before the cap, so dropping it frees a slot for a real alternative rather
+  // than spending one on the venue the pair already has.
+  const alternatives = withoutCurrentVenue(chosen, input.excludeVenue);
+  const capped = capCatalog(alternatives, input.seed);
   return input.withPhotos ? withCuratedPhotos(capped) : capped;
+}
+
+/** Drop the currently-assigned venue — see `BuildCatalogInput.excludeVenue`. */
+function withoutCurrentVenue(
+  venues: CatalogVenue[],
+  current: BuildCatalogInput["excludeVenue"],
+): CatalogVenue[] {
+  if (!current) return venues;
+  return venues.filter((v) => {
+    // A place id is authoritative when both sides have one. Otherwise fall back
+    // to name + address, the same identity `venueKeyOf` uses.
+    if (current.placeId && v.placeId) return v.placeId !== current.placeId;
+    return !(v.name === current.name && v.address === current.address);
+  });
 }
 
 /** FNV-1a → 32-bit seed. Small, stable, and dependency-free. */

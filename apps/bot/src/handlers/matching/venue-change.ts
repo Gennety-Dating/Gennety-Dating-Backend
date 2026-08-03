@@ -81,6 +81,9 @@ const VC_SELECT = {
   venueLat: true,
   venueLng: true,
   venueGoogleMapsUri: true,
+  // Identifies the currently-assigned venue so the catalog can leave it out of
+  // the alternatives (`venueCatalogScope`).
+  venuePlaceId: true,
   venueChangeStatus: true,
   venueChangeProposerId: true,
   venueChangeProposedAt: true,
@@ -169,10 +172,24 @@ function otherSide(side: Side): Side {
  * silently emptied the whole curated catalog (base + premium + alternative)
  * for that pair, same bug shape venue-intent-v2.ts already avoids.
  */
-function venueCatalogScope(match: VcMatch): { cityKey: string | null; universityDomain: string | null } {
+function venueCatalogScope(match: VcMatch): {
+  cityKey: string | null;
+  universityDomain: string | null;
+  excludeVenue: { placeId: string | null; name: string; address: string } | null;
+} {
   return {
     cityKey: match.userA.profile?.homeCityKey ?? match.userB.profile?.homeCityKey ?? null,
     universityDomain: match.userA.universityDomain ?? match.userB.universityDomain ?? null,
+    // The assigned venue is already on the board as the pinned "keep this
+    // place" card (KEEP_KEY), so it must not also appear among the
+    // alternatives — see `BuildCatalogInput.excludeVenue`.
+    excludeVenue: match.venueName
+      ? {
+          placeId: match.venuePlaceId,
+          name: match.venueName,
+          address: match.venueAddress ?? "",
+        }
+      : null,
   };
 }
 
@@ -604,6 +621,8 @@ type LoadVenueChangeCatalog = (args: {
   seed?: string;
   /** Resolve curated cover photos — board reads only, never the write paths. */
   withPhotos?: boolean;
+  /** The assigned venue, dropped from the alternatives (it is the KEEP card). */
+  excludeVenue?: { placeId: string | null; name: string; address: string } | null;
 }) => Promise<CatalogVenue[]>;
 
 export async function getVenueChangeCatalog(

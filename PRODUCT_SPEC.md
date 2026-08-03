@@ -3102,6 +3102,15 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   resolves picks by (`placeId`, falling back to name+address), keeping the
   copy the re-validation cron confirmed most recently. The automatic assignment
   has deduped by place id since it shipped; this is the board catching up.
+  **The assigned venue is not among the alternatives (2026-08-03).** It is
+  already the pinned "keep this place" card, and it is normally a curated row in
+  its own city, so it used to render twice — and the two cards did different
+  things. Agreeing on the pinned one (`KEEP_KEY`) keeps the venue for free and
+  closes the session; agreeing on the identical place under its own key took the
+  **paid** path, charging `VENUE_CHANGE_STARS` to "change" to the venue the pair
+  already had. The exclusion is server-side and applied before the 12-card cap,
+  so the freed slot goes to a real alternative and the like/confirm calls refuse
+  that key as `invalid-venue` rather than trusting the client to hide it.
   **The premium tier searches a wider radius** than the rest of the board,
   because the pinned slots must hold *different* venues and the premium pool is
   small and hand-picked: from Podil only 10 of Kyiv's 18 premium venues sit
