@@ -190,6 +190,18 @@ export const PROXY_MAX_MESSAGE_LEN = 1000;
  */
 export const VENUE_CHANGE_RADIUS_KM = 3;
 /**
+ * Wider radius (km) used for `premium`-tier venues only. The premium pool is
+ * small and hand-picked — 18 distinct venues in Kyiv against 109 base — so a
+ * flat 3 km leaves whole districts with only a handful of them in range (10 of
+ * 18 from Podil, measured). The board pins `VENUE_CHANGE_PREMIUM_PINNED` + a
+ * couple more, and it must fill those slots with DIFFERENT places; reaching a
+ * little further is the honest way to do that. Base and `alternative` stay at
+ * `VENUE_CHANGE_RADIUS_KM` — a slightly longer trip is a fair trade for the
+ * nicer venue a user is deliberately choosing, not something to impose on the
+ * default. See PRODUCT_SPEC.md §3.7b / §3.8.
+ */
+export const VENUE_CHANGE_PREMIUM_RADIUS_KM = 5;
+/**
  * Hours the male has to accept/decline a proposed venue change before it
  * auto-expires. The effective deadline is `min(now + this, agreedTime -
  * DATE_ALERT_HOURS)` — the change must always resolve before the T-5h

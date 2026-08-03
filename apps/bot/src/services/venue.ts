@@ -505,7 +505,27 @@ export async function fetchPlacePhotoName(
   apiKey: string | null | undefined,
   placeId: string | null | undefined,
 ): Promise<string | null> {
-  if (!apiKey || !placeId) return null;
+  return (await fetchPlacePhotoNames(apiKey, placeId, 1))?.[0] ?? null;
+}
+
+/**
+ * The same single Place Details request as `fetchPlacePhotoName`, but keeping
+ * up to `limit` photo resource names instead of only the cover. Google returns
+ * ten for a typical venue in that one response, so a gallery costs exactly what
+ * a cover does — which is what lets the venue-change board show a curated
+ * venue's photos at all (`services/venue-change.ts`), not just its first frame.
+ *
+ * Returns **null** when the lookup itself failed and an **array** (possibly
+ * empty) when Google answered authoritatively. Callers that cache need that
+ * distinction: "this place has no photos" is worth remembering for a day, while
+ * "the request timed out" must be retried soon.
+ */
+export async function fetchPlacePhotoNames(
+  apiKey: string | null | undefined,
+  placeId: string | null | undefined,
+  limit: number,
+): Promise<string[] | null> {
+  if (!apiKey || !placeId || limit < 1) return null;
   try {
     const res = await fetch(
       `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
@@ -516,13 +536,16 @@ export async function fetchPlacePhotoName(
       },
     );
     if (!res.ok) {
-      console.warn(`[venue] cover photo lookup for ${placeId} failed: ${res.status}`);
+      console.warn(`[venue] photo lookup for ${placeId} failed: ${res.status}`);
       return null;
     }
     const p = (await res.json()) as PlaceV1;
-    return p.photos?.[0]?.name ?? null;
+    return (p.photos ?? [])
+      .map((photo) => photo.name)
+      .filter((name): name is string => typeof name === "string" && name.length > 0)
+      .slice(0, limit);
   } catch (err) {
-    console.warn(`[venue] cover photo lookup for ${placeId} failed:`, err);
+    console.warn(`[venue] photo lookup for ${placeId} failed:`, err);
     return null;
   }
 }

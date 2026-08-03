@@ -3044,6 +3044,20 @@ live only in the Telegram caption.
   path always fell through to a photo-less card. Operator-supplied photos are
   not part of the product today; if reintroduced they must be an explicit
   override with a seeding path, never a silently-null field.
+  **The §3.7b board resolves them the same way, per board open (2026-08-03).**
+  A curated venue's board card and its detail gallery were blank for the same
+  structural reason as the date card once was — curated rows carry no imagery —
+  and it went unnoticed because until the catalog was scoped by `cityKey` the
+  curated branch never ran in production at all, so every board fell through to
+  the Places sweep, whose search response already carries photos. The board now
+  resolves each curated card's photos from its `placeId` in one Place Details
+  request (which returns the whole gallery, not just a cover), after the 12-card
+  cap and cached in-process by place id — a day for a real answer, minutes for a
+  failed lookup, so an outage costs pictures rather than becoming a retry storm.
+  Best-effort by rule: an unresolved photo leaves the category glyph the client
+  already draws, and a board is never held up or failed for imagery. Only the
+  board *read* pays for this; the like/confirm calls rebuild the same catalog
+  purely to re-resolve a submitted key and skip the lookups entirely.
 - **Never wedges.** Any render/send failure degrades per-side to the existing
   plain-text scheduled card, so one side's hiccup never denies the other their
   card and scheduling always completes.
@@ -3069,12 +3083,31 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   (`apps/webapp/venue-change.html`, Liquid Glass tokens) opens straight into
   the catalog: the **current venue pinned on top** ("Picked for you" — the
   eternal default that stands whenever nothing settles), then alternatives
-  within **`VENUE_CHANGE_RADIUS_KM` (3 km)** of the original venue center,
-  **curated-first** with the Places fallback under the production quality gate.
+  within **`VENUE_CHANGE_RADIUS_KM` (3 km)** of the original venue center —
+  **except `premium`, which reaches `VENUE_CHANGE_PREMIUM_RADIUS_KM` (5 km)**
+  (below) — **curated-first** with the Places fallback under the production
+  quality gate.
   This board is the ONLY place `alternative`-tier venues (§3.7 — the operator's
   heavier-cuisine pool) ever appear: they are always included, unlocked, and
   priced like base, independent of `PREMIUM_FEATURE_ENABLED` and of whether
   either side subscribes. Only `premium` venues are shown-locked (§3.8).
+  **One card per real venue (2026-08-03).** The curated base stores one row per
+  university domain, so a city holds several identical copies of each place —
+  Kyiv: 538 active rows for 127 actual venues, 90 premium rows for 18. While the
+  catalog was scoped by `universityDomain` that was invisible (the scope took
+  exactly one copy); scoping it by `cityKey` took all five, and since copies
+  share coordinates they sort adjacently — the board became the same three
+  places repeated four times each, with the pinned premium slots all holding one
+  venue. The catalog now collapses rows on the same key the board already
+  resolves picks by (`placeId`, falling back to name+address), keeping the
+  copy the re-validation cron confirmed most recently. The automatic assignment
+  has deduped by place id since it shipped; this is the board catching up.
+  **The premium tier searches a wider radius** than the rest of the board,
+  because the pinned slots must hold *different* venues and the premium pool is
+  small and hand-picked: from Podil only 10 of Kyiv's 18 premium venues sit
+  inside 3 km, while all 18 sit inside 5 km. A slightly longer trip is a fair
+  trade for a nicer venue someone is deliberately choosing; it is never imposed
+  on the automatic assignment, which keeps its own commute rules (§3.7).
   **Board ordering is pin-then-scatter** (deliberate conversion mechanic): the
   `VENUE_CHANGE_PREMIUM_PINNED` (3) nearest `premium` venues lead the list
   unconditionally, so a non-subscriber meets the locked tier before anything

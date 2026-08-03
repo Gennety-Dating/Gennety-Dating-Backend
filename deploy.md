@@ -1,5 +1,59 @@
 # Gennety Dating Deploy
 
+**PENDING — venue-change board: photos back, duplicates gone, premium reaches
+5 km (PRODUCT_SPEC §3.7b).** Not deployed yet. **Code-only: no Prisma schema
+change, no env change, no flag change, no Mini App change** (`apps/webapp`
+untouched — the client already renders `photoRefs`).
+
+Three user-reported symptoms, one cause. The 2026-07-30 commit `9df3a39` moved
+the board's curated catalog from a `universityDomain` scope to a `cityKey` one.
+That fixed a real bug (general/phone-track pairs, which is **every production
+user** — all 20 have `universityDomain = NULL` — got an empty curated catalog
+and never saw the premium tier at all). Its unrecorded side effect: the curated
+branch started winning `curated.length > 0 ? curated : places`, and curated rows
+are both photo-less and stored one-per-university-domain.
+
+- **Photos never came from our base.** `photoRefs: []` for curated rows has been
+  in the code since the feature shipped. Until `9df3a39` it did not matter,
+  because every board fell through to the live Places sweep, whose search
+  response carries photos — that fallback is also where the old "lots of variety,
+  parks and cafés" came from (`FALLBACK_CATEGORIES = cafe, restaurant, park`).
+  Curated cards now resolve their photos from `placeId` in one Place Details
+  call each, cached in-process, best-effort.
+- **Duplicates are data, not display logic.** Kyiv holds **538 active rows for
+  127 real venues** (premium: **90 rows for 18**), five copies each — one per
+  university domain, at identical coordinates, so they sort adjacently and the
+  three pinned premium slots all held the same place. Deduped by the same key
+  the board already resolves picks with.
+- **Premium now searches `VENUE_CHANGE_PREMIUM_RADIUS_KM` (5 km)**, base and
+  alternative stay at 3 km. From Podil only 10 of 18 premium venues are inside
+  3 km; all 18 are inside 5.
+
+**Two things worth knowing before the restart:**
+
+- **Board opens now make Places calls where they made none.** Bounded by the
+  12-card cap and 4-way concurrency, cached by `placeId` for a day (failures for
+  5 minutes, so an outage cannot become a retry storm). Worst case is ≤12 Place
+  Details requests on the first board open after a PM2 restart; Kyiv's whole
+  catalog warms in ~113. Only the board *read* pays — the like/confirm calls
+  rebuild the same catalog to re-resolve a key and skip lookups entirely.
+- **Nothing exercises this until a pair reaches `scheduled`.** Production has
+  **0 matches ever**, and `VENUE_CHANGE_FEATURE_ENABLED` gates the entry button.
+  Verify on `@gennetytestbot`.
+
+Post-deploy check — the board should show distinct venues with photos, and three
+*different* locked premium cards on top:
+
+```sh
+pm2 logs gennety-bot --lines 200 --nostream | grep '\[venue\] photo lookup'
+# Empty is the good case: that line only prints when a lookup fails.
+```
+
+**Rollback:** revert the code and restart. No schema, no env, no flag, no Mini
+App state to undo.
+
+---
+
 **PENDING — StoreKit 2 credentials are in hand (2026-08-02), env not yet set.**
 App Store Connect was configured by a browser agent; these are identifiers, not
 secrets (they are useless without the `.p8`, which lives only on the droplet and
@@ -187,19 +241,39 @@ listening, `/v1/ping` ok, admin `401`, **all 11 Mini App pages 200**,
 zero `P2022` / `P2023` / unhandled rejections. The concierge knowledge block
 measures **0 characters** (was 22,988 — see the `admin_cache` fix).
 
-**🔴 Pre-existing production issue found during this deploy, NOT caused by it:
-`PLACES_API_KEY` is dead.** Both `places/{id}` details and `places:searchNearby`
-answer `403 PERMISSION_DENIED` with the key from `/opt/gennety/.env` (the key is
-present and 39 chars, so it is rejected rather than missing — billing disabled,
-API disabled, or a key restriction/rotation in Google Cloud). The
-`venue-revalidation` cron has been logging it. What degrades while it is down:
-every date-card venue photo (Google Places is the single source since
-2026-07-25 → cards fall back to the branded gradient), the Places fallback when
-no curated venue is in commute range, the Location Mini App autocomplete
-(`/v1/location/search`), the venue-change catalog beyond curated rows and its
-photo proxy, and the daily venue re-validation sweep. The curated Kyiv catalog
-is first-party and still works, so scheduling degrades rather than dies. Fix in
-the Google Cloud console; re-verify with the `searchNearby` probe above.
+**🟢 RESOLVED 2026-08-03 — `PLACES_API_KEY` works. Do not act on the paragraph
+below.** Re-probed with the key from `/opt/gennety/.env`: `places:searchNearby`
+and `places/{id}` (field mask `photos`) both answer **200**. The droplet's key
+and the local `.env` key are the same (md5 match), so whatever broke it —
+billing, an API toggle, a restriction — was fixed on the Google Cloud side and
+nobody recorded it here. Everything listed as degraded below is working. Kept
+for the record, and as a reminder to re-probe before trusting an old incident
+note:
+
+> **🔴 Pre-existing production issue found during this deploy, NOT caused by it:
+> `PLACES_API_KEY` is dead.** Both `places/{id}` details and `places:searchNearby`
+> answer `403 PERMISSION_DENIED` with the key from `/opt/gennety/.env` (the key is
+> present and 39 chars, so it is rejected rather than missing — billing disabled,
+> API disabled, or a key restriction/rotation in Google Cloud). The
+> `venue-revalidation` cron has been logging it. What degrades while it is down:
+> every date-card venue photo (Google Places is the single source since
+> 2026-07-25 → cards fall back to the branded gradient), the Places fallback when
+> no curated venue is in commute range, the Location Mini App autocomplete
+> (`/v1/location/search`), the venue-change catalog beyond curated rows and its
+> photo proxy, and the daily venue re-validation sweep. The curated Kyiv catalog
+> is first-party and still works, so scheduling degrades rather than dies. Fix in
+> the Google Cloud console; re-verify with the `searchNearby` probe above.
+
+Re-probe (safe, read-only, one request):
+
+```sh
+KEY=$(ssh root@167.172.178.229 "sed -n 's/^PLACES_API_KEY=//p' /opt/gennety/.env | tail -1 | tr -d '\"'")
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  'https://places.googleapis.com/v1/places:searchNearby' \
+  -H 'Content-Type: application/json' -H "X-Goog-Api-Key: $KEY" \
+  -H 'X-Goog-FieldMask: places.id' \
+  -d '{"includedTypes":["cafe"],"maxResultCount":1,"locationRestriction":{"circle":{"center":{"latitude":50.45,"longitude":30.52},"radius":1000.0}}}'
+```
 
 **Rollback:** re-sync a checkout at `f9e08eb` and redeploy the Mini App from it.
 The additive columns can stay; `profiles.ethnicity` would have to be restored

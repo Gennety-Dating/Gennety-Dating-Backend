@@ -602,6 +602,8 @@ type LoadVenueChangeCatalog = (args: {
   includePremium?: boolean;
   /** Match id — seeds the stable tail scatter in `capCatalog`. */
   seed?: string;
+  /** Resolve curated cover photos — board reads only, never the write paths. */
+  withPhotos?: boolean;
 }) => Promise<CatalogVenue[]>;
 
 export async function getVenueChangeCatalog(
@@ -639,6 +641,10 @@ export async function getVenueChangeCatalog(
     seed: match.id,
     // §Premium: surface premium venues (locked) whenever the feature is on.
     includePremium: env.PREMIUM_FEATURE_ENABLED,
+    // This is the one call whose result is actually rendered, so it is the one
+    // that pays for curated cover photos. The like/confirm rebuilds below only
+    // re-resolve a key and would gain nothing but latency.
+    withPhotos: true,
   });
   return { ok: true, venues };
 }

@@ -1,8 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DATE_ALERT_HOURS,
   VENUE_CHANGE_TTL_HOURS,
 } from "@gennety/shared";
+
+vi.mock("@gennety/db", () => ({
+  prisma: { curatedVenue: { findMany: vi.fn(async () => [] as unknown[]) } },
+}));
+
+vi.mock("./venue.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./venue.js")>()),
+  fetchPlacePhotoNames: vi.fn(async () => [] as string[] | null),
+}));
+
+import { prisma } from "@gennety/db";
+import { fetchPlacePhotoNames } from "./venue.js";
 import {
   evaluateVenueBoardEligibility,
   venueChangeCutoff,
@@ -13,9 +25,13 @@ import {
   VENUE_CHANGE_PREMIUM_PINNED,
   VENUE_CHANGE_PREMIUM_MAX,
   isWithinRadius,
+  __resetVenuePhotoCacheForTests,
   type CatalogVenue,
   type VenueBoardEligibilityInput,
 } from "./venue-change.js";
+
+const findMany = prisma.curatedVenue.findMany as ReturnType<typeof vi.fn>;
+const photoLookup = fetchPlacePhotoNames as ReturnType<typeof vi.fn>;
 
 const HOUR = 60 * 60 * 1000;
 
@@ -155,6 +171,117 @@ describe("listCuratedVenuesNear", () => {
       agreedTime: new Date("2026-06-10T16:00:00Z"),
     });
     expect(out).toEqual([]);
+  });
+});
+
+describe("listCuratedVenuesNear — dedup + per-tier radius", () => {
+  const CENTER = { lat: 50.45, lng: 30.52 };
+
+  /** A curated row as Prisma hands it back, at `km` due north of CENTER. */
+  function row(
+    over: Partial<{
+      placeId: string | null;
+      name: string;
+      address: string;
+      tier: string;
+      km: number;
+      universityDomain: string;
+    }> = {},
+  ) {
+    const km = over.km ?? 0.5;
+    return {
+      name: over.name ?? "Kava",
+      address: over.address ?? "1 St",
+      // ~111 km per degree of latitude — close enough for a radius assertion.
+      lat: CENTER.lat + km / 111,
+      lng: CENTER.lng,
+      googleMapsUri: null,
+      category: "cafe",
+      tier: over.tier ?? "base",
+      utcOffsetMinutes: 180,
+      openingHours: null, // unknown hours are treated as open, never filtered
+      placeId: over.placeId === undefined ? "place-1" : over.placeId,
+      rating: 4.6,
+      userRatingCount: 200,
+      universityDomain: over.universityDomain ?? "knu.ua",
+    };
+  }
+
+  const scope = {
+    cityKey: "ua:kyiv",
+    universityDomain: null,
+    center: CENTER,
+    agreedTime: new Date("2026-06-10T16:00:00Z"),
+  };
+
+  beforeEach(() => {
+    findMany.mockReset();
+  });
+
+  it("collapses the per-university-domain copies of one venue into one card", async () => {
+    // The production shape: Kyiv stores 538 active rows for 127 real venues,
+    // five copies each. Before the dedup these sorted adjacently (identical
+    // coordinates) and filled the pinned premium slots with the same place.
+    findMany.mockResolvedValue(
+      ["kneu.edu.ua", "knu.ua", "kpi.ua", "stud.nau.edu.ua", "ukma.edu.ua"].map((d) =>
+        row({ universityDomain: d }),
+      ),
+    );
+
+    const out = await listCuratedVenuesNear(scope);
+
+    expect(out).toHaveLength(1);
+    expect(out[0]!.placeId).toBe("place-1");
+  });
+
+  it("dedupes rows with no placeId by name + address, the board's own key", async () => {
+    findMany.mockResolvedValue([
+      row({ placeId: null, name: "Hand Entered", address: "9 St" }),
+      row({ placeId: null, name: "Hand Entered", address: "9 St" }),
+      row({ placeId: null, name: "Hand Entered", address: "11 St" }),
+    ]);
+
+    const out = await listCuratedVenuesNear(scope);
+
+    expect(out.map((v) => v.address)).toEqual(["9 St", "11 St"]);
+  });
+
+  it("reaches further for premium than for base", async () => {
+    findMany.mockResolvedValue([
+      row({ placeId: "base-far", tier: "base", km: 4.2 }),
+      row({ placeId: "prem-far", tier: "premium", km: 4.2 }),
+      row({ placeId: "prem-too-far", tier: "premium", km: 5.4 }),
+      row({ placeId: "alt-far", tier: "alternative", km: 4.2 }),
+    ]);
+
+    const out = await listCuratedVenuesNear(scope);
+
+    // 4.2 km: inside the 5 km premium radius, outside the 3 km base one.
+    expect(out.map((v) => v.placeId)).toEqual(["prem-far"]);
+  });
+
+  it("keeps every tier that is inside its own radius", async () => {
+    findMany.mockResolvedValue([
+      row({ placeId: "base-near", tier: "base", km: 2 }),
+      row({ placeId: "prem-near", tier: "premium", km: 2.5 }),
+      row({ placeId: "alt-near", tier: "alternative", km: 1 }),
+    ]);
+
+    const out = await listCuratedVenuesNear(scope);
+
+    expect(out.map((v) => v.placeId)).toEqual(["alt-near", "base-near", "prem-near"]);
+  });
+
+  it("asks the database for the most recently verified copy first", async () => {
+    // Which duplicate survives the dedup should be a decision, not an accident
+    // of insertion order — the re-validation cron refreshes copies one by one.
+    findMany.mockResolvedValue([]);
+
+    await listCuratedVenuesNear(scope);
+
+    expect(findMany.mock.calls[0]![0]).toMatchObject({
+      orderBy: { lastVerifiedAt: { sort: "desc", nulls: "last" } },
+    });
   });
 });
 
@@ -341,5 +468,164 @@ describe("capCatalog (§Premium pin + scatter)", () => {
     const capped = capCatalog(alternative);
     expect(capped).toHaveLength(12);
     expect(capped.every((v) => v.tier === "alternative")).toBe(true);
+  });
+});
+
+describe("buildVenueChangeCatalog — curated cover photos", () => {
+  const input = {
+    cityKey: "ua:kyiv",
+    universityDomain: null,
+    center: { lat: 50.45, lng: 30.52 },
+    agreedTime: new Date("2026-06-10T16:00:00Z"),
+    withPhotos: true,
+  };
+
+  const curatedNoPhotos = (placeId: string | null): CatalogVenue => ({
+    source: "curated",
+    placeId,
+    name: `Venue ${placeId ?? "x"}`,
+    address: "1 St",
+    lat: 50.451,
+    lng: 30.521,
+    mapsUri: null,
+    category: "cafe",
+    tier: "base",
+    distanceKm: 0.2,
+    photoRefs: [],
+    rating: null,
+    userRatingCount: null,
+    editorialSummary: null,
+  });
+
+  beforeEach(() => {
+    __resetVenuePhotoCacheForTests();
+    photoLookup.mockReset();
+    photoLookup.mockResolvedValue(["places/p/photos/a", "places/p/photos/b"]);
+    process.env.PLACES_API_KEY = "test-places-key";
+  });
+
+  it("fills in photos for curated rows, which store none of their own", async () => {
+    // The regression this exists for: once the catalog was scoped by cityKey the
+    // curated branch started winning, and curated rows hardcode `photoRefs: []`
+    // — so every board went photo-less by construction.
+    const out = await buildVenueChangeCatalog(input, {
+      listCurated: async () => [curatedNoPhotos("c1")],
+    });
+
+    expect(out[0]!.photoRefs).toEqual(["places/p/photos/a", "places/p/photos/b"]);
+  });
+
+  it("looks a place up once, however many boards ask for it", async () => {
+    const deps = { listCurated: async () => [curatedNoPhotos("c1")] };
+
+    await buildVenueChangeCatalog(input, deps);
+    await buildVenueChangeCatalog(input, deps);
+
+    expect(photoLookup).toHaveBeenCalledTimes(1);
+  });
+
+  it("never lets a failed lookup cost the board a card", async () => {
+    photoLookup.mockResolvedValue(null);
+
+    const out = await buildVenueChangeCatalog(input, {
+      listCurated: async () => [curatedNoPhotos("c1")],
+    });
+
+    expect(out).toHaveLength(1);
+    expect(out[0]!.photoRefs).toEqual([]);
+  });
+
+  it("does not hammer Places while a lookup is failing", async () => {
+    // A Places outage must not turn every board open into another request at a
+    // service that is already struggling.
+    photoLookup.mockResolvedValue(null);
+    const deps = { listCurated: async () => [curatedNoPhotos("c1")] };
+
+    await buildVenueChangeCatalog(input, deps);
+    await buildVenueChangeCatalog(input, deps);
+
+    expect(photoLookup).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a failure minutes later, not a day later like a success", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-10T12:00:00Z"));
+      photoLookup.mockResolvedValueOnce(null).mockResolvedValueOnce(["places/p/photos/a"]);
+      const deps = { listCurated: async () => [curatedNoPhotos("c1")] };
+
+      await buildVenueChangeCatalog(input, deps);
+
+      // Past the short failure window, well inside the day-long success one.
+      vi.setSystemTime(new Date("2026-06-10T12:10:00Z"));
+      const second = await buildVenueChangeCatalog(input, deps);
+      expect(photoLookup).toHaveBeenCalledTimes(2);
+      expect(second[0]!.photoRefs).toEqual(["places/p/photos/a"]);
+
+      // The success that just landed is now cached for a day.
+      vi.setSystemTime(new Date("2026-06-10T18:00:00Z"));
+      await buildVenueChangeCatalog(input, deps);
+      expect(photoLookup).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves rows that already carry photos alone (the Places fallback path)", async () => {
+    const fromPlaces: CatalogVenue = {
+      ...curatedNoPhotos("p1"),
+      source: "places",
+      photoRefs: ["places/p1/photos/original"],
+    };
+
+    const out = await buildVenueChangeCatalog(input, {
+      listCurated: async () => [],
+      listPlaces: async () => [fromPlaces],
+    });
+
+    expect(out[0]!.photoRefs).toEqual(["places/p1/photos/original"]);
+    expect(photoLookup).not.toHaveBeenCalled();
+  });
+
+  it("skips a row with no placeId instead of guessing", async () => {
+    const out = await buildVenueChangeCatalog(input, {
+      listCurated: async () => [curatedNoPhotos(null)],
+    });
+
+    expect(out[0]!.photoRefs).toEqual([]);
+    expect(photoLookup).not.toHaveBeenCalled();
+  });
+
+  it("makes no lookups at all without withPhotos — the like/confirm rebuilds", async () => {
+    // Those paths only re-resolve a submitted key against the server's catalog.
+    // They render nothing, so a Places round-trip would be pure added latency
+    // on a user's tap.
+    const out = await buildVenueChangeCatalog(
+      { ...input, withPhotos: false },
+      { listCurated: async () => [curatedNoPhotos("c1")] },
+    );
+
+    expect(out[0]!.photoRefs).toEqual([]);
+    expect(photoLookup).not.toHaveBeenCalled();
+  });
+
+  it("degrades quietly when no Places key is configured", async () => {
+    delete process.env.PLACES_API_KEY;
+
+    const out = await buildVenueChangeCatalog(input, {
+      listCurated: async () => [curatedNoPhotos("c1")],
+    });
+
+    expect(out).toHaveLength(1);
+    expect(photoLookup).not.toHaveBeenCalled();
+  });
+
+  it("resolves photos only for the capped list, not the whole city catalog", async () => {
+    const many = Array.from({ length: 30 }, (_, i) => curatedNoPhotos(`c${i}`));
+
+    const out = await buildVenueChangeCatalog(input, { listCurated: async () => many });
+
+    expect(out).toHaveLength(12);
+    expect(photoLookup).toHaveBeenCalledTimes(12);
   });
 });

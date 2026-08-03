@@ -18,6 +18,7 @@
 import { prisma } from "@gennety/db";
 import {
   DATE_ALERT_HOURS,
+  VENUE_CHANGE_PREMIUM_RADIUS_KM,
   VENUE_CHANGE_RADIUS_KM,
   VENUE_CHANGE_TTL_HOURS,
 } from "@gennety/shared";
@@ -25,6 +26,7 @@ import { haversineDistanceKm, type LatLng } from "./geo.js";
 import { isVenueOpenAt, OFFERABLE_CATEGORY_FILTER } from "./curated-venue.js";
 import { meetsVenueQualityFloor } from "./initial-venue-policy.js";
 import {
+  fetchPlacePhotoNames,
   searchVenueCandidates,
   type RegularOpeningHours,
 } from "./venue.js";
@@ -189,8 +191,14 @@ export interface BuildCatalogInput {
   universityDomain: string | null;
   center: LatLng;
   agreedTime: Date;
-  /** Radius cap; defaults to the product 3 km. */
+  /** Radius cap for base/alternative venues; defaults to the product 3 km. */
   radiusKm?: number;
+  /**
+   * Radius cap for `premium` venues only; defaults to
+   * `VENUE_CHANGE_PREMIUM_RADIUS_KM` (5 km). See that constant for why the
+   * premium tier reaches further than the rest of the board.
+   */
+  premiumRadiusKm?: number;
   /**
    * Include `premium`-tier curated venues in the catalog (shown but locked in
    * the board). Pass `PREMIUM_FEATURE_ENABLED`; when false the catalog is
@@ -208,6 +216,14 @@ export interface BuildCatalogInput {
    * user. Omitted → stable distance order, no scatter.
    */
   seed?: string;
+  /**
+   * Resolve missing cover photos for curated rows (see `withCuratedPhotos`).
+   * Set ONLY by the board read (`getVenueChangeCatalog`). The like and confirm
+   * paths rebuild the same catalog purely to re-resolve a submitted key against
+   * the server's own list — they render nothing, so making a user's tap wait on
+   * Places lookups would buy them nothing.
+   */
+  withPhotos?: boolean;
 }
 
 export interface BuildCatalogDeps {
@@ -220,14 +236,38 @@ function round1(n: number): number {
 }
 
 /**
- * Curated rows for the pair's city/domain that sit within `radiusKm` of
- * `center` and are open at `agreedTime`. Sorted nearest-first.
+ * The identity of a venue on this board — the SAME key `venueKeyOf`
+ * (`handlers/matching/venue-change.ts`) uses to resolve a client's pick, so a
+ * row deduped here is a row that was already collapsing into one like anyway.
+ */
+function curatedKeyOf(row: { placeId: string | null; name: string; address: string }): string {
+  return row.placeId ?? `${row.name}|${row.address}`;
+}
+
+/**
+ * Curated rows for the pair's city/domain that sit within range of `center` and
+ * are open at `agreedTime`. Sorted nearest-first, one card per real venue.
+ *
+ * Two things here are load-bearing:
+ *
+ * **Dedup.** The catalog is scoped by `cityKey`, and the curated base stores one
+ * ROW PER UNIVERSITY DOMAIN — in Kyiv that is 538 active rows for 127 actual
+ * venues, every one of them five-fold (90 premium rows = 18 venues). The copies
+ * share coordinates, so they sort adjacently and a distance-ordered board became
+ * the same three places repeated four times each. The old `universityDomain`
+ * scope hid this by accident, taking exactly one copy; `cityKey` takes all five.
+ * The auto-assign selector has always deduped by place id
+ * (`venue-intent-v2.ts`) — this brings the board onto the same footing.
+ *
+ * **Per-tier radius.** Premium venues are matched against `premiumRadiusKm`
+ * rather than `radiusKm`; see `VENUE_CHANGE_PREMIUM_RADIUS_KM`.
  */
 export async function listCuratedVenuesNear(
   input: BuildCatalogInput,
 ): Promise<CatalogVenue[]> {
   if (!input.cityKey && !input.universityDomain) return [];
   const radiusKm = input.radiusKm ?? VENUE_CHANGE_RADIUS_KM;
+  const premiumRadiusKm = input.premiumRadiusKm ?? VENUE_CHANGE_PREMIUM_RADIUS_KM;
 
   const rows = await prisma.curatedVenue.findMany({
     where: {
@@ -262,12 +302,24 @@ export async function listCuratedVenuesNear(
       rating: true,
       userRatingCount: true,
     },
+    // Freshest copy first, so the dedup below keeps the one the re-validation
+    // cron confirmed most recently. The per-domain copies are identical today
+    // in every field this function reads (verified against production: 0 drift
+    // across 111 duplicated Kyiv venues), but the cron refreshes them one by
+    // one, so which copy survives should be a decision rather than an accident.
+    orderBy: { lastVerifiedAt: { sort: "desc", nulls: "last" } },
   });
 
   const out: CatalogVenue[] = [];
+  const seen = new Set<string>();
   for (const r of rows) {
+    // One card per real venue — the per-university-domain copies are the same
+    // place. First copy wins; they are identical apart from the domain.
+    const key = curatedKeyOf(r);
+    if (seen.has(key)) continue;
+    seen.add(key);
     const distanceKm = haversineDistanceKm(input.center, { lat: r.lat, lng: r.lng });
-    if (distanceKm > radiusKm) continue;
+    if (distanceKm > (r.tier === "premium" ? premiumRadiusKm : radiusKm)) continue;
     // Quality floor — the board had none, so a row the auto-assign picker would
     // refuse (and one the nightly revalidation had already deactivated, until
     // the importer stopped resurrecting them) was still offered here as a
@@ -380,6 +432,111 @@ export const VENUE_CHANGE_PREMIUM_PINNED = 3;
 export const VENUE_CHANGE_PREMIUM_MAX = 5;
 
 /**
+ * How long a resolved photo set is trusted. Places photo names can rotate, so
+ * this is a freshness bound, not just a cost one. A day is comfortably shorter
+ * than that rotation and long enough that a city warms up once per process.
+ */
+const PHOTO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How long a FAILED lookup is remembered. Deliberately short: a timeout or a
+ * Places outage must not cost the board its photos for a whole day, but it also
+ * must not turn every board open into a retry storm against a service that is
+ * already struggling.
+ */
+const PHOTO_CACHE_FAILURE_TTL_MS = 5 * 60 * 1000;
+
+/** Parallel Place Details lookups per board build. */
+const PHOTO_LOOKUP_CONCURRENCY = 4;
+
+interface PhotoCacheEntry {
+  refs: string[];
+  expiresAt: number;
+}
+
+/**
+ * `placeId` → its photo refs. In-process and unbounded-by-design: the whole
+ * curated catalog of a launched market is ~130 venues, so this tops out at a
+ * few hundred short strings even with every city loaded. Same single-process
+ * assumption as `services/usage-limiter.ts` — a PM2 restart simply re-warms it.
+ */
+const photoCache = new Map<string, PhotoCacheEntry>();
+
+/** Test seam — the cache is module state, so a test must be able to reset it. */
+export function __resetVenuePhotoCacheForTests(): void {
+  photoCache.clear();
+}
+
+/**
+ * Fill in `photoRefs` for curated rows, which store no imagery of their own.
+ *
+ * This is what puts pictures back on the board. Curated rows have always
+ * carried `photoRefs: []`, and it went unnoticed because until the catalog was
+ * scoped by `cityKey` the curated branch never matched in production at all —
+ * every board fell through to the Places sweep, which carries photos in its
+ * search response. Once curated started winning, the board lost its imagery by
+ * construction. Every curated row does hold a stable `placeId`, so the photos
+ * are one Place Details request away (verified: 127/127 Kyiv venues have one).
+ *
+ * Runs AFTER the cap, so it is bounded by `VENUE_CHANGE_CATALOG_LIMIT` rather
+ * than by the size of the city's catalog, and every result is cached by place
+ * id — a second board open, for this pair or any other, costs nothing.
+ *
+ * Best-effort throughout: a venue whose lookup fails keeps its empty array and
+ * the Mini App draws the category glyph it already draws today. Photos are
+ * decoration; they must never be able to fail a board.
+ */
+async function withCuratedPhotos(venues: CatalogVenue[]): Promise<CatalogVenue[]> {
+  const apiKey = process.env.PLACES_API_KEY;
+  if (!apiKey) return venues;
+
+  const now = Date.now();
+  const pending = venues.filter(
+    (v) => v.photoRefs.length === 0 && v.placeId && !isFreshInPhotoCache(v.placeId, now),
+  );
+
+  // Distinct ids only — the same place can legitimately appear once per board,
+  // but this also protects against a future caller passing an un-deduped list.
+  const ids = [...new Set(pending.map((v) => v.placeId as string))];
+  await mapWithConcurrency(ids, PHOTO_LOOKUP_CONCURRENCY, async (placeId) => {
+    const refs = await fetchPlacePhotoNames(apiKey, placeId, VENUE_CHANGE_PHOTOS_PER_VENUE);
+    photoCache.set(placeId, {
+      // A null answer means the lookup failed, not that the place has no
+      // photos — cache it briefly so we retry, rather than for a day.
+      refs: refs ?? [],
+      expiresAt: Date.now() + (refs ? PHOTO_CACHE_TTL_MS : PHOTO_CACHE_FAILURE_TTL_MS),
+    });
+  });
+
+  return venues.map((v) => {
+    if (v.photoRefs.length > 0 || !v.placeId) return v;
+    const hit = photoCache.get(v.placeId);
+    return hit && hit.refs.length > 0 ? { ...v, photoRefs: hit.refs } : v;
+  });
+}
+
+function isFreshInPhotoCache(placeId: string, now: number): boolean {
+  const hit = photoCache.get(placeId);
+  return hit != null && hit.expiresAt > now;
+}
+
+/** Bounded parallel map — same shape as `workers/embedding-refresh.ts`. */
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  run: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++] as T;
+      await run(item);
+    }
+  });
+  await Promise.all(workers);
+}
+
+/**
  * Build the venue-change catalog: curated rows within range win; only when
  * none qualify do we sweep Google Places. Capped to keep the card list short.
  * `deps` is injectable for tests (no DB / network).
@@ -393,7 +550,8 @@ export async function buildVenueChangeCatalog(
 
   const curated = await listCurated(input);
   const chosen = curated.length > 0 ? curated : await listPlaces(input);
-  return capCatalog(chosen, input.seed);
+  const capped = capCatalog(chosen, input.seed);
+  return input.withPhotos ? withCuratedPhotos(capped) : capped;
 }
 
 /** FNV-1a → 32-bit seed. Small, stable, and dependency-free. */
