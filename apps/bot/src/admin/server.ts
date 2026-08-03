@@ -25,6 +25,9 @@ import { venueConcentrationRouter } from "./routes/venue-concentration.js";
 import { dialogsRouter } from "./routes/dialogs.js";
 import { opsRouter } from "./routes/ops.js";
 import { purchasesRouter } from "./routes/purchases.js";
+import { userHealthRouter } from "./routes/user-health.js";
+import { classifyAllUsers } from "./utils/user-health-source.js";
+import { USER_HEALTH_CLASSES, type UserHealthClass } from "./utils/user-health.js";
 import { purchaseSummariesForUsers, purchasesForUser } from "../services/purchases.js";
 import { isUuid } from "./utils/uuid.js";
 
@@ -179,6 +182,9 @@ app.use(dialogsRouter);
 app.use(opsRouter);
 // Revenue surface: every real money movement, newest first, payer inlined.
 app.use(purchasesRouter);
+// Диагностика одного аккаунта: класс здоровья + какое правило сработало.
+// Путь длиннее, чем `/admin/users/:id`, поэтому затенить его не может.
+app.use(userHealthRouter);
 
 type AdminProfileSnapshot = {
   height: number | null;
@@ -610,6 +616,24 @@ const VERIFICATION_STATUS_FILTER = new Set([
   "rejected",
 ] as const);
 
+/**
+ * Короткие имена классов здоровья для вкладок в админке — чтобы UI не
+ * приходилось знать полные идентификаторы (`cold_open_unengaged`).
+ */
+const HEALTH_FILTER_ALIASES: Record<string, UserHealthClass> = {
+  cold_open: "cold_open_unengaged",
+  stuck: "stuck_onboarding",
+};
+
+function parseHealthFilter(raw: unknown): UserHealthClass | "all" | null {
+  const value = String(raw ?? "all").trim();
+  if (value === "" || value === "all") return "all";
+  const resolved = HEALTH_FILTER_ALIASES[value] ?? value;
+  return USER_HEALTH_CLASSES.includes(resolved as UserHealthClass)
+    ? (resolved as UserHealthClass)
+    : null;
+}
+
 app.get("/admin/users", async (req: Request, res: Response) => {
   try {
     const page = parsePagination(req.query.limit, req.query.offset);
@@ -620,11 +644,43 @@ app.get("/admin/users", async (req: Request, res: Response) => {
     const { limit, offset } = page;
 
     const verificationStatus = String(req.query.verificationStatus ?? "");
-    const where =
+    const baseWhere =
       verificationStatus &&
       VERIFICATION_STATUS_FILTER.has(verificationStatus as never)
         ? { verificationStatus: verificationStatus as never }
         : {};
+
+    // Класс здоровья не лежит в базе — он вычисляется, поэтому фильтр по нему
+    // применяется в приложении. Неизвестное значение отклоняем, а не
+    // игнорируем молча: иначе вкладка с опечаткой выглядит как «пусто».
+    const healthFilter = parseHealthFilter(req.query.health);
+    if (healthFilter === null) {
+      res.status(400).json({
+        error: `health must be one of: all, ${USER_HEALTH_CLASSES.join(", ")}`,
+      });
+      return;
+    }
+    // По умолчанию тестовые аккаунты остаются в выдаче: этот эндпоинт читают
+    // не только вкладки админки. Прятать их — решение клиента.
+    const includeTest = String(req.query.includeTest ?? "true") !== "false";
+
+    // Классификация всей базы нужна и для бейджей в списке, и для фильтра.
+    // Скан ограничен `HEALTH_CONFIG.max_scan_users`.
+    const classified = await classifyAllUsers();
+    const verdicts = new Map(classified.users.map((u) => [u.id, u.verdict]));
+
+    const filtered = classified.users.filter((u) => {
+      if (!includeTest && u.verdict.classification === "test") return false;
+      if (healthFilter !== "all" && u.verdict.classification !== healthFilter) return false;
+      return true;
+    });
+
+    // Без фильтров запрос к базе остаётся ровно прежним — никакого `IN` на
+    // всю базу там, где он не нужен.
+    const narrowed = healthFilter !== "all" || !includeTest;
+    const where = narrowed
+      ? { ...baseWhere, id: { in: filtered.map((u) => u.id) } }
+      : baseWhere;
 
     const [data, total] = await Promise.all([
       prisma.user.findMany({
@@ -644,9 +700,17 @@ app.get("/admin/users", async (req: Request, res: Response) => {
     // Serialize BigInt telegramId to string for JSON safety
     const serialized = data.map((u) => {
       const summary = spend.get(u.id);
+      const verdict = verdicts.get(u.id);
       return {
         ...u,
         telegramId: u.telegramId.toString(),
+        // Бейдж класса в списке. Причина здесь намеренно короткая — полное
+        // объяснение живёт в `/admin/users/:id/health`.
+        health: {
+          classification: verdict?.classification ?? null,
+          subclass: verdict?.subclass ?? null,
+          matchmaking_eligible: verdict?.matchmaking_eligible ?? false,
+        },
         // Same field name as the user card's summary, so a client renders the
         // spend column and the card's header from one shape.
         purchaseSummary: {

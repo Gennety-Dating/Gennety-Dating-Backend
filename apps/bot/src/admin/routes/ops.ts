@@ -1,5 +1,13 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
+import { classifyAllUsers } from "../utils/user-health-source.js";
+import {
+  computeFunnel,
+  rate,
+  summarizeHealth,
+  type OnboardingFunnel,
+  type UserHealthSummary,
+} from "../utils/user-health.js";
 
 /**
  * Operational + top-level resource endpoints for the admin surface.
@@ -64,6 +72,14 @@ export interface AdminStats {
   verification: { byStatus: Record<string, number> };
   matches: { total: number; byStatus: Record<string, number>; live: number };
   reports: { total: number; byTier: Record<number, number>; unreviewedTier3: number };
+  /**
+   * Здоровье базы: живые / застрявшие / холодные / подозрительные / тестовые
+   * (`admin/utils/user-health.ts`). Существующие секции выше НЕ трогаются —
+   * это дополнение, а не замена.
+   */
+  userHealth: UserHealthSummary & { verified_real: number; scanned: number; truncated: boolean };
+  /** Воронка онбординга. Все знаменатели — без тестовых аккаунтов. */
+  funnel: OnboardingFunnel;
   generatedAt: string;
 }
 
@@ -82,6 +98,7 @@ async function collectStats(): Promise<AdminStats> {
     matchGroups,
     tierGroups,
     unreviewedTier3,
+    health,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -91,6 +108,7 @@ async function collectStats(): Promise<AdminStats> {
     prisma.match.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.report.groupBy({ by: ["tier"], _count: { _all: true } }),
     prisma.report.count({ where: { tier: 3, adminReviewed: false } }),
+    classifyAllUsers(),
   ]);
 
   const byStatus = tally(
@@ -125,12 +143,26 @@ async function collectStats(): Promise<AdminStats> {
     (byMatchStatus.negotiating_venue ?? 0) +
     (byMatchStatus.scheduled ?? 0);
 
+  // Верифицированные СРЕДИ реальных: `verification.byStatus.verified` считает
+  // и тестовые аккаунты, а любая конверсия должна делиться на реальных.
+  const verifiedReal = health.users.filter(
+    (u) => u.verdict.classification !== "test" && u.verificationStatus === "verified",
+  ).length;
+
   return {
     users: { total: userTotal, byStatus },
     onboarding: { byStep },
     verification: { byStatus: byVerification },
     matches: { total: matchTotal, byStatus: byMatchStatus, live },
     reports: { total: byTier[1] + byTier[2] + byTier[3], byTier, unreviewedTier3 },
+    userHealth: {
+      ...summarizeHealth(health.users),
+      verified_real: verifiedReal,
+      scanned: health.scanned,
+      // true = база больше потолка скана, цифры по классам частичные.
+      truncated: health.truncated,
+    },
+    funnel: computeFunnel(health.users),
     generatedAt: new Date().toISOString(),
   };
 }
@@ -216,7 +248,7 @@ opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
       }),
     ]);
 
-    const { users, matches } = stats;
+    const { matches, userHealth, funnel } = stats;
     // Progressed past `proposed` — the same definition the analytics funnel
     // uses, kept here so the two dashboards agree.
     const accepted =
@@ -229,10 +261,16 @@ opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
       ...stats,
       derived: {
         signupsLast7Days: recentUsers,
-        activeRate: users.total > 0 ? +(users.byStatus.active / users.total).toFixed(4) : 0,
-        verifiedRate:
-          users.total > 0 ? +(stats.verification.byStatus.verified / users.total).toFixed(4) : 0,
-        matchAcceptanceRate: matches.total > 0 ? +(accepted / matches.total).toFixed(4) : 0,
+        // ИСПРАВЛЕНО: раньше делилось на users.total, т.е. вместе с тестовыми
+        // аккаунтами (5/19 вместо 5/16). Знаменатель — реальные пользователи,
+        // числитель — активные И верифицированные, т.е. те, кто действительно
+        // дошёл до рабочего состояния.
+        activeRate: rate(funnel.active_verified, funnel.registered_real),
+        verifiedRate: rate(userHealth.verified_real, funnel.registered_real),
+        matchAcceptanceRate: rate(accepted, matches.total),
+        conversionConsentToActivePct: funnel.conversion_consent_to_active_pct,
+        conversionRegisteredToActivePct: funnel.conversion_registered_to_active_pct,
+        matchmakingEligibleCount: userHealth.matchmaking_eligible.count,
       },
       recentMatches: recentMatches.map((m) => ({
         ...m,
