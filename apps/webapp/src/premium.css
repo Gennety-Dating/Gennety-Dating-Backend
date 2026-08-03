@@ -326,10 +326,7 @@ body {
   text-align: left;
   font-family: inherit;
   color: var(--text);
-  transition: background 0.15s ease;
-}
-.pm-benefit-row:active {
-  background: var(--fill);
+  -webkit-tap-highlight-color: transparent;
 }
 .pm-benefit-tile {
   flex: none;
@@ -382,7 +379,7 @@ body {
   transition: transform 0.3s ease;
 }
 .pm-benefit-wrap.is-open .pm-benefit-chevron {
-  transform: rotate(180deg);
+  transform: rotate(90deg);
 }
 /* Expanding explanation — grid-rows 0fr→1fr gives a smooth height reveal. */
 .pm-benefit-panel {
