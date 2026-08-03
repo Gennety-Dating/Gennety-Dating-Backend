@@ -71,34 +71,17 @@ body {
   flex: none;
 }
 
-/* ── Hero — one borderless symbol, no frame, no glow ──────────────────── */
+/* ── Hero — the wordmark alone: no symbol, no tagline ─────────────────── */
 .ref-hero {
   text-align: center;
   padding: 0.25rem 0 0.4rem;
 }
-.ref-badge {
-  display: flex;
-  justify-content: center;
-  margin: 0 auto 0.9rem;
-  color: var(--text);
-}
-.ref-badge-ic {
-  width: 44px;
-  height: 44px;
-}
 .ref-title {
   font-size: 1.5rem;
-  margin: 0 0 0.4rem;
+  margin: 0;
   font-weight: 700;
   letter-spacing: -0.01em;
   text-wrap: balance;
-}
-.ref-tag {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  margin: 0 auto;
-  max-width: 32ch;
-  line-height: 1.45;
 }
 
 /* ── Stats — borderless neutral cards: fill alone draws the shape ──────── */

@@ -72,8 +72,6 @@ interface ReferralState {
 }
 
 interface Copy {
-  title: string;
-  tagline: string;
   statFriends: string;
   statEarned: string;
   statValue: string;
@@ -93,9 +91,6 @@ interface Copy {
 
 const COPY: Record<Lang, Copy> = {
   en: {
-    title: "Give a date, get a date",
-    tagline:
-      "Every friend who joins and gets verified grows your matching pool — and earns you free dates & Premium.",
     statFriends: "VERIFIED",
     statEarned: "EARNED",
     statValue: "VALUE",
@@ -113,9 +108,6 @@ const COPY: Record<Lang, Copy> = {
     loadFail: "Couldn't load your referrals — try again.",
   },
   ru: {
-    title: "Подари свидание — получи своё",
-    tagline:
-      "Каждый друг, который присоединился и прошёл верификацию, расширяет твой пул матчей — и приносит тебе бесплатные свидания и Premium.",
     statFriends: "ВЕРИФИЦ.",
     statEarned: "ЗАРАБОТАНО",
     statValue: "НА СУММУ",
@@ -133,9 +125,6 @@ const COPY: Record<Lang, Copy> = {
     loadFail: "Не удалось загрузить рефералов — попробуй ещё раз.",
   },
   uk: {
-    title: "Подаруй побачення — отримай своє",
-    tagline:
-      "Кожен друг, який приєднався та пройшов верифікацію, розширює твій пул матчів — і приносить тобі безкоштовні побачення та Premium.",
     statFriends: "ВЕРИФІК.",
     statEarned: "ЗАРОБЛЕНО",
     statValue: "НА СУМУ",
@@ -153,9 +142,6 @@ const COPY: Record<Lang, Copy> = {
     loadFail: "Не вдалося завантажити рефералів — спробуй ще раз.",
   },
   de: {
-    title: "Schenk ein Date, bekomm ein Date",
-    tagline:
-      "Jeder Freund, der beitritt und verifiziert wird, vergrößert deinen Match-Pool — und bringt dir kostenlose Dates & Premium.",
     statFriends: "VERIFIZIERT",
     statEarned: "VERDIENT",
     statValue: "WERT",
@@ -173,9 +159,6 @@ const COPY: Record<Lang, Copy> = {
     loadFail: "Empfehlungen konnten nicht geladen werden — versuch es erneut.",
   },
   pl: {
-    title: "Podaruj randkę — zdobądź swoją",
-    tagline:
-      "Każdy znajomy, który dołączy i przejdzie weryfikację, powiększa twoją pulę dopasowań — i daje ci darmowe randki oraz Premium.",
     statFriends: "ZWERYFIK.",
     statEarned: "ZDOBYTO",
     statValue: "WARTOŚĆ",
@@ -243,9 +226,7 @@ function render(state: ReferralState): void {
   root.innerHTML = `
     <div class="ref-wrap">
       <div class="ref-hero">
-        <div class="ref-badge">${glyph("spark", "ref-ic ref-badge-ic")}</div>
-        <h1 class="ref-title">${esc(s.title)}</h1>
-        <p class="ref-tag">${esc(s.tagline)}</p>
+        <h1 class="ref-title">Gennety Referral</h1>
       </div>
       <div class="ref-stats">
         <div class="ref-stat"><b>${state.verifiedCount}</b><span>${esc(s.statFriends)}</span></div>
