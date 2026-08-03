@@ -173,6 +173,25 @@ export interface SessionData {
   premiumCancelLedgerId: string | null;
   /** Sub-state for the matching / scheduling flow (Phase 3) */
   matchFlow: MatchFlowState;
+  /**
+   * Deadline (epoch ms) of the CURRENT free-text claim on this chat — the
+   * `awaiting_*` states above that consume a plain message as their answer.
+   *
+   * An open question is not a standing claim on everything the user ever types
+   * (the same rule the Profiler states for `profilerAnswerWindowUntil`). Without
+   * a bound, a user who tapped "🚨 Report" or confirmed an emergency
+   * cancellation and then simply walked away left the claim live forever: the
+   * next unrelated message — hours or days later — was consumed as the report
+   * body, or as the reason that CANCELS a scheduled date. Nothing else in the
+   * product ever released it.
+   *
+   * `null` (including on every session written before this field existed) means
+   * "no live claim", so a stale state fails closed: the message falls through to
+   * the concierge agent, which can see the live match and offer the real action.
+   * Owned by `services/match-flow-claim.ts`; `coordination_chat` is deliberately
+   * outside it (explicitly entered, and bounded by the proxy window instead).
+   */
+  matchFlowClaimUntil: number | null;
   /** Match id currently awaiting this user's text input (rejection reason / calendar) */
   activeMatchId: string | null;
   /** Selected structured report category while waiting for optional details */
@@ -212,6 +231,7 @@ export const DEFAULT_SESSION: SessionData = {
   pendingPremiumCancel: null,
   premiumCancelLedgerId: null,
   matchFlow: "idle",
+  matchFlowClaimUntil: null,
   activeMatchId: null,
   pendingReportCategory: null,
   awaitingContextDump: false,

@@ -1,5 +1,60 @@
 # Gennety Dating Deploy
 
+**PENDING — an abandoned question stops owning the chat (PRODUCT_SPEC §Phase 4 →
+Emergency Protocol, §Phase 5, §2.1).** Not deployed yet. **Code-only: no Prisma
+schema change, no env change, no flag change, no Mini App change**
+(`apps/webapp` untouched). From a full-codebase audit; three flows, one root
+cause.
+
+Three steps asked the user to TYPE something and then read the next plain
+message as the answer — the emergency cancellation reason, the report details,
+and the post-date feedback text. None of the three had a deadline, and nothing
+in the product ever released the state: not `/menu`, not a menu tap, not time.
+So the question kept owning the chat indefinitely.
+
+- **The one that matters: an abandoned "Yes, cancel the date" cancelled it
+  anyway.** Confirm, change your mind, close the chat — and your next unrelated
+  message, days later, flipped a `scheduled` match to `cancelled`, was quoted
+  verbatim to your partner as the reason, and refunded both tickets.
+  Irreversible. That step also had no way back, the only irreversible confirm in
+  the product without one.
+- The report details step did the same thing at lower stakes: an unrelated line
+  became a filed report on the partner, LLM-triaged up to a strike or a
+  suspension. Its **Other** category showed no buttons at all, so there was no
+  exit that wasn't filing something.
+- Feedback recorded an unrelated line as post-date feedback into the answerer's
+  own `negativeConstraints`.
+
+Now: the claim carries a deadline sized to what the answer costs to get wrong
+(30 min / 1 h / 24 h), any non-own-button tap or command releases it, and the
+emergency + report steps carry a real back-out. Past the window the message
+falls through to the concierge agent, which sees the live match and can still
+offer the genuine cancel card. `services/match-flow-claim.ts` is the one place
+this rule lives.
+
+**Two things worth knowing before the restart:**
+
+- **In-flight answers across the restart are dropped, deliberately.** The
+  session field is new, so every existing `bot_sessions` row reads `null` and
+  fails closed. A user mid-"type your reason" at deploy time has their message
+  answered by the agent instead of cancelling the date — which is the safe
+  direction, and they can re-tap Cancel from the My Date hub.
+- **The same commit fixes two smaller things** found in the same pass:
+  abandoning the photo manager by tapping another menu button now strips the
+  cards' 🗑 buttons instead of orphaning them live-but-dead forever, and
+  `startPeerWaitShimmer` resolves side B positively (it read "not A, therefore
+  B", so a user id belonging to neither participant aimed the shimmer at B).
+
+Post-deploy check — nothing new is logged, so verify by walking it on
+`@gennetytestbot`: tap Cancel date → "Yes, cancel" → confirm the prompt now
+carries "Keep the date" → tap it → send a message → the date must still be on.
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag, no Mini App state (the extra session field is ignored by the old
+code).
+
+---
+
 **PENDING — referral share card arrives whole (REFERRAL_PRODUCT_SPEC → Surfaces).**
 Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change** (`apps/webapp` untouched).

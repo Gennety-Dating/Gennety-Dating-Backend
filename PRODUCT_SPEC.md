@@ -1197,11 +1197,16 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   whenever new cards were just sent **or the panel carries a burst summary**,
   since Telegram cannot move a message below newer ones and a summary the user
   must read may not stay quietly above their own uploads and rejection replies.
-  Closing the manager (✅ Done, or reopening it) leaves the cards in the chat as
+  Closing the manager (✅ Done, or reopening it, **or abandoning it by tapping
+  any other menu button** — corrected 2026-08-03) leaves the cards in the chat as
   the reviewed gallery but **strips their delete buttons** — nothing tracks what
   they point at once the session ends, and a button that does nothing is its own
-  bug. A card whose message can no longer be deleted (Telegram allows that for
-  48 h only) is instead captioned as deleted and loses its button.
+  bug. The abandon path used to only clear the tracking, which lost the message
+  ids for good: every card kept a live-looking 🗑, the panel kept its ➕ / ✅, all
+  of them silently no-ops, and no later reopen could retire them because there
+  was nothing left to retire. A card whose message can no longer be deleted
+  (Telegram allows that for 48 h only) is instead captioned as deleted and loses
+  its button.
   (Replaced 2026-07-26: the previous design put a numbered
   delete button per photo under one shared album, which required counting
   positions in a Telegram-arranged grid — a wrong tap was easy — and re-sent
@@ -3642,6 +3647,27 @@ Telegram-only, and inert with `COORDINATION_FEATURE_ENABLED` off.
   stripping) and appends a short Gennety soft note. Match flips to
   `cancelled`, `emergencyCancelledBy` records the actor, the verbatim text
   lands in `emergencyReason`.
+- **The reason step keeps its own way back, and its claim on the chat expires
+  (2026-08-03).** It used to have neither, which made it the one irreversible
+  confirm in the product with no escape *and* the one that could fire by
+  accident. `awaiting_emergency_reason` read the next plain message as the
+  reason with no deadline and nothing that ever released it — not `/menu`, not a
+  menu tap, not time — so a user who tapped "Yes, cancel", thought better of it
+  and simply closed the chat had their **next unrelated message, days later,
+  cancel a scheduled date and be quoted verbatim to their partner**. Two fixes,
+  one shape (`services/match-flow-claim.ts`): the prompt now carries the same
+  green `[Keep the date]` the previous screen offers (same `emerg:abort:`
+  handler, which releases the claim), and the claim itself is bounded — 30
+  minutes here, the shortest window in the product because this is the only text
+  state that destroys something. A callback tap that isn't one of the step's own
+  buttons, or any command, releases it immediately (the rule §Phase 1b already
+  states for the Profiler: an open question is not a standing claim on
+  everything the user types). Past the window the message falls through to the
+  concierge agent, which sees the live match and can still offer the real cancel
+  card (§3.5c) — so nothing is lost, it just stops happening by itself. The same
+  bound covers the post-date feedback text path (24 h — invited a day after the
+  date, and it only writes to the answerer's own profile) and the report details
+  step (§Phase 5).
 - The partner who was cancelled on receives a very small Elo/priority bump
   (`EMERGENCY_CANCEL_PEER_ELO_BOOST = 5`). The canceller is not penalised
   because emergency reasons may be legitimate; `eloMatchesPlayed` is not
@@ -3681,6 +3707,20 @@ safety reports filed under a mild category: Tier 2 already suspends at strike
 ≥2, and the row reaches the moderation queue either way. The report text is
 additionally fenced as untrusted data in the triage prompt, but the clamp — not
 the prompt — is what bounds the outcome.
+
+**Every step of the report flow can be backed out of, and the details step stops
+owning the chat (2026-08-03).** Choosing a category put the session into
+`awaiting_report_details`, where the next plain message became the report body —
+with no deadline, and nothing that ever released the state. Two consequences,
+both real: an abandoned report turned a user's **next unrelated message, days
+later, into a filed report** on their partner (LLM-triaged, up to a strike or a
+suspension); and the step offered no way out at all — the category screen has a
+"← Back" (`rb:`), but the details screen had only "send without details", and
+for **Other** literally no button, so the only exits were filing something or
+walking away and leaving the claim open. The details prompt now carries that
+same cancel on every category, and the claim expires after an hour or the moment
+the user taps anything that isn't one of its own buttons (shared with the
+emergency-reason and feedback paths — see §Phase 4 → Emergency Protocol).
 
 Other safeguards:
 - `(reporterId, matchId)` is unique — duplicate reports rejected at write

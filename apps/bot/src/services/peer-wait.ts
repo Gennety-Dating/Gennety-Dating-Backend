@@ -194,6 +194,10 @@ export function startPeerWaitShimmer(
       where: { id: matchId },
       select: {
         userAId: true,
+        // Selected so the `userId` branch below can resolve side B POSITIVELY.
+        // Without it the only available test was "not A", which is exactly the
+        // degenerate rule this resolution exists to avoid.
+        userBId: true,
         userA: { select: { telegramId: true, language: true, firstName: true } },
         userB: { select: { telegramId: true, language: true, firstName: true } },
       },
@@ -201,14 +205,14 @@ export function startPeerWaitShimmer(
     if (!match) return;
     // Resolve the side explicitly rather than "A if it matches, else B": an id
     // belonging to NEITHER participant must be a no-op, not a shimmer aimed at
-    // side B.
+    // side B. Both branches now test each side on its own.
     const isA =
       "userId" in actor
         ? match.userAId === actor.userId
         : match.userA.telegramId === actor.telegramId;
     const isB =
       "userId" in actor
-        ? match.userAId !== actor.userId
+        ? match.userBId === actor.userId
         : match.userB.telegramId === actor.telegramId;
     if (!isA && !isB) return;
     const me = isA ? match.userA : match.userB;

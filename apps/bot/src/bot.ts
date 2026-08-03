@@ -13,6 +13,10 @@ import { voiceHandler } from "./handlers/voice.js";
 import { interactionRecorder } from "./handlers/interaction-recorder.js";
 import { outboundRecorder } from "./services/outbound-recorder.js";
 import { invalidatePendingAccountAction } from "./handlers/menu/account-action.js";
+import {
+  releaseMatchFlowClaim,
+  updateReleasesMatchFlowClaim,
+} from "./services/match-flow-claim.js";
 
 function isPendingAccountActionCallback(data: string | undefined): boolean {
   return Boolean(
@@ -56,6 +60,20 @@ export function createBot(token: string): Bot<BotContext> {
       !isPendingAccountActionCallback(ctx.callbackQuery?.data)
     ) {
       await invalidatePendingAccountAction(ctx);
+    }
+    // Same rule, applied to the three flows that read the next plain message as
+    // an answer (report details, emergency reason, post-date feedback): a tap on
+    // anything that isn't one of that question's own buttons — or a command —
+    // means the user moved on, so the question stops owning the chat. Plain text
+    // is deliberately not a release; that IS the answer, and its deadline bounds
+    // it. See services/match-flow-claim.ts.
+    if (
+      updateReleasesMatchFlowClaim(ctx.session, {
+        callbackData: ctx.callbackQuery?.data,
+        text: ctx.message?.text,
+      })
+    ) {
+      releaseMatchFlowClaim(ctx.session);
     }
     await next();
   });

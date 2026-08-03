@@ -35,6 +35,10 @@ import {
   STALL_OK_PREFIX,
 } from "../../services/match-stall.js";
 import { handleRematchBuyCallback, REMATCH_BUY_CALLBACK } from "./rematch.js";
+import {
+  matchFlowClaimIsLive,
+  releaseMatchFlowClaim,
+} from "../../services/match-flow-claim.js";
 
 /**
  * Matching router — activates only for users who have already completed
@@ -193,13 +197,17 @@ matchingRouter.use(async (ctx, next) => {
   // (it sees a pending-rejection hint in the system prompt and calls
   // `record_rejection_feedback`). No router branch needed.
 
-  // Free-form report body after tapping 🚨 Report on the match card
-  if (
-    ctx.session.matchFlow === "awaiting_report_details" &&
-    ctx.message?.text
-  ) {
-    await handleReportText(ctx);
-    return;
+  // Free-form report body after tapping 🚨 Report on the match card — but only
+  // while that question still owns the chat. An abandoned report step used to
+  // hold the claim forever, so an unrelated message sent days later was filed as
+  // the report body and triaged into a strike against the partner. Past the
+  // deadline the claim is dropped and the message falls through to the agent.
+  if (ctx.session.matchFlow === "awaiting_report_details" && ctx.message?.text) {
+    if (matchFlowClaimIsLive(ctx.session, "awaiting_report_details")) {
+      await handleReportText(ctx);
+      return;
+    }
+    releaseMatchFlowClaim(ctx.session);
   }
 
   // Conversational proposal reply: plain text while a pitch awaits this

@@ -14,6 +14,10 @@ import {
   deliverCancelledPartnerEffects,
   type CancelledPartner,
 } from "../../services/cancel-in-flight-matches.js";
+import {
+  claimMatchFlow,
+  releaseMatchFlowClaim,
+} from "../../services/match-flow-claim.js";
 
 /**
  * Post-match Report flow (PRODUCT_SPEC extension — Reporting & Moderation).
@@ -183,9 +187,7 @@ export async function handleReportOpen(ctx: BotContext): Promise<void> {
     return;
   }
 
-  ctx.session.matchFlow = "idle";
-  ctx.session.activeMatchId = null;
-  ctx.session.pendingReportCategory = null;
+  releaseMatchFlowClaim(ctx.session);
 
   await ctx.reply(t(lang, "reportAsk"), {
     reply_markup: buildReportCategoryKeyboard(matchId, lang),
@@ -243,16 +245,20 @@ export async function handleReportCategory(ctx: BotContext): Promise<void> {
     return;
   }
 
-  ctx.session.matchFlow = "awaiting_report_details";
-  ctx.session.activeMatchId = matchId;
+  claimMatchFlow(ctx.session, "awaiting_report_details", matchId);
   ctx.session.pendingReportCategory = category;
 
-  const replyMarkup =
-    category === "other"
-      ? undefined
-      : { reply_markup: buildReportSkipKeyboard(matchId, lang) };
   const askKey = category === "other" ? "reportDetailAskOther" : "reportDetailAsk";
-  await ctx.reply(t(lang, askKey), replyMarkup);
+  await ctx.reply(t(lang, askKey), {
+    // The details step keeps the same back-out the category screen offers. It
+    // used to have none — and for "Other" no button at all — so a user who
+    // opened Report by accident, or picked a category and thought better of it,
+    // had no way to leave: the only exits were filing the report or walking
+    // away and leaving the question holding the chat.
+    reply_markup: buildReportDetailKeyboard(matchId, lang, {
+      skip: category !== "other",
+    }),
+  });
 }
 
 export async function handleReportSkip(ctx: BotContext): Promise<void> {
@@ -332,20 +338,32 @@ function buildReportCategoryKeyboard(
   return { inline_keyboard: buttons };
 }
 
-function buildReportSkipKeyboard(
+/**
+ * The details step's keyboard: "send without details" (only where a
+ * category-only report is meaningful — never for `other`, which IS the details),
+ * and always the same cancel the category screen offers.
+ */
+function buildReportDetailKeyboard(
   matchId: string,
   lang: Language,
+  opts: { skip: boolean },
 ): InlineKeyboardMarkup {
-  return {
-    inline_keyboard: [
-      [
-        {
-          text: t(lang, "reportSkipBtn"),
-          callback_data: `${REPORT_SKIP_CALLBACK_PREFIX}${matchId}`,
-        },
-      ],
-    ],
-  };
+  const rows: InlineKeyboardButton[][] = [];
+  if (opts.skip) {
+    rows.push([
+      {
+        text: t(lang, "reportSkipBtn"),
+        callback_data: `${REPORT_SKIP_CALLBACK_PREFIX}${matchId}`,
+      },
+    ]);
+  }
+  rows.push([
+    {
+      text: t(lang, "reportBackBtn"),
+      callback_data: `${REPORT_CANCEL_CALLBACK_PREFIX}${matchId}`,
+    },
+  ]);
+  return { inline_keyboard: rows };
 }
 
 function parseReportCategoryCallback(
@@ -378,9 +396,7 @@ function parseReportSkipCallback(data: string): string | null {
 }
 
 async function resetReportSession(ctx: BotContext): Promise<void> {
-  ctx.session.matchFlow = "idle";
-  ctx.session.activeMatchId = null;
-  ctx.session.pendingReportCategory = null;
+  releaseMatchFlowClaim(ctx.session);
 }
 
 async function submitStructuredReport(

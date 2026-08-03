@@ -45,6 +45,7 @@ import { handleMyTickets } from "./tickets.js";
 import { handlePremiumHub } from "./premium.js";
 import { handleReferralHub } from "./referral.js";
 import { runMenuAgentTurn, splitReplyIntoBubbles } from "../../services/menu-agent.js";
+import { retirePhotoCards } from "../../services/photo-cards.js";
 import { invalidatePendingAccountAction } from "./account-action.js";
 import {
   PREM_CANCEL_YES_PREFIX,
@@ -108,6 +109,17 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       return;
     }
     // If the user taps another menu action mid-upload, fall through and reset state.
+    // Retire the surface FIRST: this is the manager closing, exactly like ✅ Done
+    // and like reopening it, so its buttons have to go with it. Clearing the
+    // tracking on its own loses the message ids forever, which left every card's
+    // 🗑 and the panel's ➕ / ✅ sitting in the chat looking live and doing
+    // nothing — permanently, since a later reopen has nothing left to retire.
+    if (ctx.chat) {
+      await retirePhotoCards(ctx.api, ctx.chat.id, ctx.session);
+    } else {
+      ctx.session.photoCards = [];
+      ctx.session.photoManagerMsgId = null;
+    }
     ctx.session.menuState = "idle";
     ctx.session.verifyPhotoRedo = false;
     ctx.session.pendingPhotos = [];
@@ -115,10 +127,6 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     ctx.session.pendingPhotoUniqueIds = [];
     ctx.session.pendingPhotoHashes = [];
     ctx.session.pendingPhotoScores = [];
-    ctx.session.photoManagerMsgId = null;
-    // Stale card-delete taps become no-ops naturally once this is cleared —
-    // there's nothing to look up their message id against.
-    ctx.session.photoCards = [];
   }
 
   // Edit video: consumes a raw video message; Remove/Back are callbacks.

@@ -3,6 +3,10 @@ import { t, parsePostDateFeedbackPrompt, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { callOpenAIJson } from "../../services/openai.js";
 import { appendNegativeConstraint } from "../matching/negative-constraints.js";
+import {
+  claimMatchFlow,
+  releaseMatchFlowClaim,
+} from "../../services/match-flow-claim.js";
 
 /**
  * Post-date feedback flow (PRODUCT_SPEC.md §Phase 4.3).
@@ -119,8 +123,7 @@ export async function handleFeedbackVoiceStart(ctx: BotContext): Promise<void> {
 
   if (user.id !== match.userAId && user.id !== match.userBId) return;
 
-  ctx.session.matchFlow = "awaiting_feedback";
-  ctx.session.activeMatchId = matchId;
+  claimMatchFlow(ctx.session, "awaiting_feedback", matchId);
 
   const lang = ctx.session.language;
   // Best-effort `record_voice` so the client shows "bot is recording…" before
@@ -145,8 +148,7 @@ export async function handleFeedbackVoiceText(ctx: BotContext): Promise<void> {
   const matchId = ctx.session.activeMatchId;
   if (!matchId) return;
 
-  ctx.session.matchFlow = "idle";
-  ctx.session.activeMatchId = null;
+  releaseMatchFlowClaim(ctx.session);
 
   const user = await prisma.user.findUnique({
     where: { telegramId: BigInt(ctx.from!.id) },

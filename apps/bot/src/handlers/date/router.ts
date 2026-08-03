@@ -15,6 +15,10 @@ import {
   handleProxyRelay,
 } from "./coordination.js";
 import { handleDateCardShare } from "./date-card.js";
+import {
+  matchFlowClaimIsLive,
+  releaseMatchFlowClaim,
+} from "../../services/match-flow-claim.js";
 
 /**
  * Date-lifecycle router (Phase 4) — handles:
@@ -86,16 +90,29 @@ dateRouter.use(async (ctx, next) => {
     return;
   }
 
-  // Free-text: emergency reason
+  // Free-text: emergency reason. Gated on the claim still being live — this is
+  // the one text state that DESTROYS something (a `scheduled` date, quoted
+  // verbatim to the partner, irreversible). An abandoned "yes, cancel" used to
+  // leave the claim open indefinitely, so the user's next unrelated message
+  // cancelled their date for them. Past the deadline it falls through to the
+  // agent, which can still offer the real cancel card.
   if (ctx.session.matchFlow === "awaiting_emergency_reason" && ctx.message?.text) {
-    await handleEmergencyReason(ctx);
-    return;
+    if (matchFlowClaimIsLive(ctx.session, "awaiting_emergency_reason")) {
+      await handleEmergencyReason(ctx);
+      return;
+    }
+    releaseMatchFlowClaim(ctx.session);
   }
 
-  // Free-text or transcribed voice: feedback (shared with the form pipeline)
+  // Free-text or transcribed voice: feedback (shared with the form pipeline).
+  // Same bound, generous window — the prompt lands a day after the date and
+  // invites a later reply.
   if (ctx.session.matchFlow === "awaiting_feedback" && ctx.message?.text) {
-    await handleFeedbackVoiceText(ctx);
-    return;
+    if (matchFlowClaimIsLive(ctx.session, "awaiting_feedback")) {
+      await handleFeedbackVoiceText(ctx);
+      return;
+    }
+    releaseMatchFlowClaim(ctx.session);
   }
 
   // Anonymous proxy chat relay (Variant C). Commands (/menu, /start, …) are

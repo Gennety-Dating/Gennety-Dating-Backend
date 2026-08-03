@@ -198,6 +198,41 @@ describe("emergency cancellation", () => {
     expect(ctx.session.activeMatchId).toBe("match-1");
     expect(ctx.editMessageReplyMarkup).toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalled();
+    // The question owns the chat for a bounded window, not forever. Unbounded,
+    // an abandoned "yes, cancel" turned the user's next unrelated message —
+    // days later — into the reason that killed a scheduled date.
+    expect(ctx.session.matchFlowClaimUntil).toBeGreaterThan(Date.now());
+  });
+
+  it("handleEmergencyConfirm keeps a way back on the reason step", async () => {
+    // Every other irreversible confirm in the product has one; this step had
+    // none, so changing your mind meant walking away with the claim still open.
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+
+    const ctx = createCtx({ callbackData: "emerg:confirm:match-1", fromId: 1001 });
+    await handleEmergencyConfirm(ctx);
+
+    const [, opts] = ctx.reply.mock.calls.at(-1)!;
+    expect(JSON.stringify(opts.reply_markup)).toContain("emerg:abort:match-1");
+  });
+
+  it("handleEmergencyAbort releases an open reason claim", async () => {
+    const ctx = createCtx({
+      callbackData: "emerg:abort:match-1",
+      fromId: 1001,
+      session: {
+        matchFlow: "awaiting_emergency_reason",
+        matchFlowClaimUntil: Date.now() + 60_000,
+        activeMatchId: "match-1",
+      },
+    });
+    await handleEmergencyAbort(ctx);
+
+    expect(ctx.session.matchFlow).toBe("idle");
+    expect(ctx.session.matchFlowClaimUntil).toBeNull();
+    expect(ctx.session.activeMatchId).toBeNull();
+    expect(mMatch.update).not.toHaveBeenCalled();
   });
 
   it("handleEmergencyConfirm ignores a match that was cancelled meanwhile", async () => {

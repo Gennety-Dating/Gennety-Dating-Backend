@@ -227,6 +227,7 @@ describe("startPeerWaitShimmer", () => {
     const { api, drafts } = createApi();
     mMatch.findUnique.mockResolvedValue({
       userAId: "uid-A",
+      userBId: "uid-B",
       userA: { telegramId: 111n, language: "ru", firstName: "Глеб" },
       userB: { telegramId: 222n, language: "en", firstName: "Anna" },
     });
@@ -246,6 +247,7 @@ describe("startPeerWaitShimmer", () => {
     const { api, drafts } = createApi();
     mMatch.findUnique.mockResolvedValue({
       userAId: "uid-A",
+      userBId: "uid-B",
       userA: { telegramId: 111n, language: "en", firstName: "Gleb" },
       userB: { telegramId: 222n, language: "en", firstName: "Anna" },
     });
@@ -263,6 +265,7 @@ describe("startPeerWaitShimmer", () => {
     const { api, drafts } = createApi();
     mMatch.findUnique.mockResolvedValue({
       userAId: "uid-A",
+      userBId: "uid-B",
       userA: { telegramId: 111n, language: "en", firstName: "Gleb" },
       userB: { telegramId: 222n, language: "en", firstName: "Anna" },
     });
@@ -273,10 +276,30 @@ describe("startPeerWaitShimmer", () => {
     expect(drafts).toHaveLength(0);
   });
 
+  it("no-ops on a USER id belonging to neither participant", async () => {
+    // The twin of the case above, for the branch the bot handlers use. It used
+    // to resolve side B from `userAId !== actor.userId` — literally the "not A,
+    // therefore B" rule the sibling test forbids — so a stray user id put the
+    // shimmer in participant B's chat.
+    const { api, drafts } = createApi();
+    mMatch.findUnique.mockResolvedValue({
+      userAId: "uid-A",
+      userBId: "uid-B",
+      userA: { telegramId: 111n, language: "en", firstName: "Gleb" },
+      userB: { telegramId: 222n, language: "en", firstName: "Anna" },
+    });
+
+    startPeerWaitShimmer(api, "m1", { userId: "uid-stranger" });
+    await flush();
+
+    expect(drafts).toHaveLength(0);
+  });
+
   it("flips sides correctly for user B", async () => {
     const { api, drafts } = createApi();
     mMatch.findUnique.mockResolvedValue({
       userAId: "uid-A",
+      userBId: "uid-B",
       userA: { telegramId: 111n, language: "en", firstName: "Gleb" },
       userB: { telegramId: 222n, language: "en", firstName: "Anna" },
     });
@@ -292,6 +315,7 @@ describe("startPeerWaitShimmer", () => {
     const { api, drafts } = createApi();
     mMatch.findUnique.mockResolvedValue({
       userAId: "uid-A",
+      userBId: "uid-B",
       userA: { telegramId: -42n, language: "en", firstName: "Gleb" },
       userB: { telegramId: 222n, language: "en", firstName: "Anna" },
     });
@@ -308,6 +332,7 @@ describe("startPeerWaitShimmer", () => {
     } as never;
     mMatch.findUnique.mockResolvedValue({
       userAId: "uid-A",
+      userBId: "uid-B",
       userA: { telegramId: 111n, language: "en", firstName: "Gleb" },
       userB: { telegramId: 222n, language: "en", firstName: "Anna" },
     });

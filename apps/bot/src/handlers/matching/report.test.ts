@@ -100,10 +100,66 @@ describe("structured report flow", () => {
       "reportDetailAsk",
       expect.objectContaining({
         reply_markup: expect.objectContaining({
-          inline_keyboard: [[expect.objectContaining({ callback_data: "rs:match-1" })]],
+          inline_keyboard: [
+            [expect.objectContaining({ callback_data: "rs:match-1" })],
+            // The details step keeps a way out, like the category screen it
+            // came from — this used to be the one confirm step with none.
+            [expect.objectContaining({ callback_data: "rb:match-1" })],
+          ],
         }),
       }),
     );
+  });
+
+  it('offers a cancel on "Other", where there is no skip', async () => {
+    // Regression: "Other" showed NO buttons at all, so the only exits were
+    // filing a report or abandoning the step — which left the question holding
+    // the chat and turned the next unrelated message into the report body.
+    const ctx = {
+      from: { id: 12345 },
+      callbackQuery: { data: "rc:match-1:other" },
+      session: {
+        language: "en",
+        matchFlow: "idle",
+        matchFlowClaimUntil: null,
+        activeMatchId: null,
+        pendingReportCategory: null,
+      },
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      reply: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    await handleReportCategory(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledWith(
+      "reportDetailAskOther",
+      expect.objectContaining({
+        reply_markup: expect.objectContaining({
+          inline_keyboard: [[expect.objectContaining({ callback_data: "rb:match-1" })]],
+        }),
+      }),
+    );
+  });
+
+  it("bounds the free-text claim in time when the details step opens", async () => {
+    const ctx = {
+      from: { id: 12345 },
+      callbackQuery: { data: "rc:match-1:spam_or_fraud" },
+      session: {
+        language: "en",
+        matchFlow: "idle",
+        matchFlowClaimUntil: null,
+        activeMatchId: null,
+        pendingReportCategory: null,
+      },
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      reply: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    await handleReportCategory(ctx);
+
+    // Without a deadline the question owned every later message forever.
+    expect(ctx.session.matchFlowClaimUntil).toBeGreaterThan(Date.now());
   });
 
   it("keeps report category callback_data under Telegram's 64-byte limit with UUID ids", async () => {

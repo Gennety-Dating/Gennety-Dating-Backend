@@ -9,6 +9,10 @@ import {
   refundMatchTickets,
   ticketRefundNoticeKey,
 } from "../../services/ticket-refund.js";
+import {
+  claimMatchFlow,
+  releaseMatchFlowClaim,
+} from "../../services/match-flow-claim.js";
 
 /**
  * Emergency cancellation flow (PRODUCT_SPEC.md §Phase 4.2).
@@ -122,13 +126,22 @@ export async function handleEmergencyConfirm(ctx: BotContext): Promise<void> {
   const participantId = await loadCancellableParticipant(ctx, matchId);
   if (!participantId) return;
 
-  ctx.session.matchFlow = "awaiting_emergency_reason";
-  ctx.session.activeMatchId = matchId;
+  claimMatchFlow(ctx.session, "awaiting_emergency_reason", matchId);
 
   const lang = ctx.session.language;
   // Drop the confirm/back buttons so the prompt can't be tapped twice.
   await ctx.editMessageReplyMarkup().catch(() => {});
-  await ctx.reply(t(lang, "emergencyAskReason"), { parse_mode: "Markdown" });
+  // The reason step keeps a way out. Every other irreversible confirm in this
+  // product has one (the pass card's "← Go back", the freeze/delete fork, the
+  // stall cancel card) — this one had none, so a user who confirmed and then
+  // changed their mind could only walk away, leaving the question holding the
+  // chat. Reuses the same `emerg:abort:` handler as the previous screen.
+  await ctx.reply(t(lang, "emergencyAskReason"), {
+    parse_mode: "Markdown",
+    reply_markup: new InlineKeyboard()
+      .text(t(lang, "emergencyBtnBack"), `emerg:abort:${matchId}`)
+      .success(),
+  });
 }
 
 /** Step 1b (alt): User backed out → dismiss, the date stays on. */
@@ -139,6 +152,10 @@ export async function handleEmergencyAbort(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
 
   const lang = ctx.session.language;
+  // Also reached from the reason step's own back button, where a claim IS open —
+  // dropping it here is what makes backing out actually back out, rather than
+  // leaving the question silently waiting for the next thing the user types.
+  releaseMatchFlowClaim(ctx.session);
   await ctx.editMessageReplyMarkup().catch(() => {});
   await ctx.reply(t(lang, "emergencyAborted"));
 }
@@ -155,8 +172,7 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
   if (!matchId) return;
 
   // Reset session state immediately.
-  ctx.session.matchFlow = "idle";
-  ctx.session.activeMatchId = null;
+  releaseMatchFlowClaim(ctx.session);
 
   const user = await prisma.user.findUnique({
     where: { telegramId: BigInt(ctx.from!.id) },

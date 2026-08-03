@@ -1819,6 +1819,33 @@ describe("Menu — verification photo redo", () => {
     expect(ctx.session.photoCards).toEqual([]);
     expect(ctx.session.photoManagerMsgId).toBeNull();
   });
+
+  it("abandoning the manager for another menu action strips them too", async () => {
+    // Tapping any other menu button closes the manager just as Done does. The
+    // router used to only CLEAR the tracking, which lost the message ids
+    // forever — every card kept a live-looking 🗑 that resolved to nothing, and
+    // no later reopen could ever retire them.
+    const cards = ["p0", "p1"].map((ref, i) => ({ msgId: 100 + i, ref }));
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        pendingPhotos: ["p0", "p1"],
+        photoCards: [...cards],
+        photoManagerMsgId: 999,
+      },
+      callbackData: "menu:settings",
+    });
+
+    await menuRouter.middleware()(ctx, vi.fn());
+
+    for (const card of cards) {
+      expect(ctx.api.editMessageReplyMarkup).toHaveBeenCalledWith(12345, card.msgId);
+    }
+    expect(ctx.api.editMessageReplyMarkup).toHaveBeenCalledWith(12345, 999);
+    expect(ctx.session.photoCards).toEqual([]);
+    expect(ctx.session.photoManagerMsgId).toBeNull();
+    expect(ctx.session.menuState).toBe("idle");
+  });
 });
 
 describe("Menu — photo upload burst coalescing", () => {
