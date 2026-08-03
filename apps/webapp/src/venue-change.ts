@@ -997,7 +997,7 @@ function renderBoard(): void {
   if (catalog.length === 0) {
     nodes.push(el("p", { class: "vc-lead", text: s.catalogEmpty }));
   } else {
-    nodes.push(el("div", { class: "vc-list" }, catalog.map((v) => renderVenueCard(v))));
+    nodes.push(el("div", { class: "vc-list" }, renderCatalogRows(catalog)));
   }
 
   // The CTA bar lives in the DOM permanently and slides in/out — creating and
@@ -1254,6 +1254,74 @@ async function refreshAfterPremiumUnlock(): Promise<void> {
 }
 
 /**
+ * The brand butterfly, drawn in the same metallic vertical gradient the Premium
+ * Mini App gives its crest (theme-aware through the .vc-bf-a / .vc-bf-b stops)
+ * so the two surfaces say "premium" in one voice. Static trusted markup.
+ *
+ * The gradient id is per-instance: several slabs can be on one board, and SVG
+ * ids are document-global — duplicates make every later crest resolve its fill
+ * to the FIRST definition, which is fine today but silently breaks the moment
+ * the stops ever differ per slab.
+ */
+let crestSeq = 0;
+function premiumCrest(): HTMLElement {
+  const id = `vc-bf-grad-${++crestSeq}`;
+  const svg = el("div", { class: "vc-premium-crest" });
+  svg.innerHTML = `
+    <svg viewBox="-12 -10 124 120" role="img" aria-label="Gennety">
+      <defs>
+        <linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+          <stop class="vc-bf-a" offset="0" />
+          <stop class="vc-bf-b" offset="1" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M 50 35 C 20 0, -10 30, 15 55 C -5 75, 25 100, 48 65 L 52 65 C 75 100, 105 75, 85 55 C 110 30, 80 0, 50 35 Z"
+        fill="url(#${id})"
+      />
+    </svg>`;
+  return svg;
+}
+
+/**
+ * The board, with premium venues lifted onto their own layer.
+ *
+ * §Premium / §3.7b: the server orders the catalog pin-then-scatter — the nearest
+ * few premium venues lead, the rest are shuffled into the remainder — so a RUN
+ * of consecutive premium entries is exactly the grouping the ordering already
+ * intends. The leading run becomes the big slab (1–3 venues, however many the
+ * city actually has); each scattered one is the same slab sized to a single
+ * slot. Nothing here re-sorts: the run boundaries are read off the server's
+ * order, so the conversion mechanic that ordering exists for is untouched.
+ */
+function renderCatalogRows(items: VenueChangeCatalogItem[]): Node[] {
+  const rows: Node[] = [];
+  for (let i = 0; i < items.length; ) {
+    if (items[i]!.tier !== "premium") {
+      rows.push(renderVenueCard(items[i]!));
+      i += 1;
+      continue;
+    }
+    let end = i;
+    while (end < items.length && items[end]!.tier === "premium") end += 1;
+    const run = items.slice(i, end).map((v) => renderVenueCard(v));
+    rows.push(
+      // A run of one is deliberately NOT a different component — same slab,
+      // same header, just one slot tall.
+      el("section", { class: "vc-premium-group" }, [
+        el("div", { class: "vc-premium-head" }, [
+          premiumCrest(),
+          el("span", { class: "vc-premium-word", text: s.premiumPlate }),
+        ]),
+        el("div", { class: "vc-premium-rows" }, run),
+      ]),
+    );
+    i = end;
+  }
+  return rows;
+}
+
+/**
  * One venue row. The frame + caption band are ALWAYS in the DOM — bare cards
  * simply keep the frame transparent and the band collapsed — so marking a place
  * expands them through a CSS transition instead of rebuilding the list.
@@ -1286,13 +1354,12 @@ function renderVenueCard(v: VenueChangeCatalogItem): HTMLElement {
   ]);
 
   const heart = heartButton(v);
+  // §Premium: the tier is no longer stated on the card face at all — the slab
+  // around it says it once, in silver, above however many venues it holds. A
+  // per-card plate under that header just repeated the same word down the
+  // column, and the padlock it used to carry lives on the heart button, which
+  // is the thing that is actually locked.
   const cardKids: Node[] = [venueThumb(v), meta, heart];
-  // §Premium: a plate on the card face so the tier is obvious without opening.
-  // Word only — the padlock lives on the heart button, which is the thing that
-  // is actually locked; on the plate it read as a refusal rather than a tier.
-  if (v.tier === "premium") {
-    cardKids.push(el("div", { class: "vc-premium-plate", text: s.premiumPlate }));
-  }
   const card = el(
     "div",
     {
@@ -2249,6 +2316,7 @@ function mockCatalog(): VenueChangeCatalogItem[] {
     rating: number,
     count: number,
     summary: string,
+    tier?: string,
   ): VenueChangeCatalogItem => ({
     source: "curated",
     placeId,
@@ -2263,10 +2331,21 @@ function mockCatalog(): VenueChangeCatalogItem[] {
     rating,
     userRatingCount: count,
     editorialSummary: summary,
+    // `exactOptionalPropertyTypes` — an absent tier and `tier: undefined` are
+    // not the same type here, so the key is spread in only when there is one.
+    ...(tier != null ? { tier } : {}),
   });
+  // Ordered the way the server orders a real board (§3.7b pin-then-scatter):
+  // the nearest premium venues lead, the rest are shuffled into the remainder.
+  // Both shapes are represented on purpose — the leading RUN (the shared slab)
+  // and a lone scattered one (the single-slot slab) — so `?preview=board`
+  // actually exercises the premium layer instead of only the plain rows.
   return [
+    mk("q1", "Chef's Table", "ул. Рейтарская, 22", "restaurant", 1.1, 4.9, 410, "Авторская кухня, шеф у стойки.", "premium"),
+    mk("q2", "Terrace 41", "ул. Институтская, 41", "lounge", 1.6, 4.8, 260, "Панорамная терраса над городом.", "premium"),
     mk("p1", "Кофейня «Молоко»", "ул. Крещатик, 14", "cafe", 0.4, 4.7, 320, "Уютная спешелти-кофейня с видом на бульвар."),
     mk("p2", "Bar Chill", "ул. Лютеранская, 3", "lounge", 0.9, 4.5, 210, "Тихий коктейльный бар с мягким светом."),
+    mk("q3", "Winehouse", "ул. Ярославов Вал, 9", "restaurant", 2.2, 4.7, 180, "Винная карта на две сотни позиций.", "premium"),
     mk("p3", "Парк «Владимирская горка»", "Владимирский спуск", "park", 1.3, 4.8, 540, "Панорама Днепра и тенистые аллеи."),
   ];
 }

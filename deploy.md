@@ -54,10 +54,10 @@ App state to undo.
 
 ---
 
-**PENDING — StoreKit 2 credentials are in hand (2026-08-02), env not yet set.**
-App Store Connect was configured by a browser agent; these are identifiers, not
-secrets (they are useless without the `.p8`, which lives only on the droplet and
-in the founder's password manager).
+**PENDING — StoreKit 2 is configured and verified (2026-08-03), env not yet set.**
+App Store Connect was set up via a browser agent and every value below was
+cross-checked. These are identifiers, not secrets — they are inert without the
+`.p8`, which lives only on the droplet and in the founder's password manager.
 
 ```
 APPSTORE_KEY_PATH=/opt/gennety/keys/SubscriptionKey_5UCTX65L56.p8
@@ -66,26 +66,39 @@ APPSTORE_ISSUER_ID=49fd72b2-faf4-4673-a9b4-50e6027c46a8
 APPSTORE_ENVIRONMENT=sandbox
 ```
 
-App record: Apple ID `6797330919`, bundle `com.gennety.ios`, SKU `gennety-ios`.
-Products created and matching `APPSTORE_TICKET_PRODUCTS` /
-`PREMIUM_APPSTORE_PRODUCT_ID` exactly: `ticket_1`, `ticket_3`, `ticket_6`,
-`premium_monthly`. Server Notifications point at
-`https://dating-api.gennety.com/v1/webhooks/appstore` on both Production and
-Sandbox.
+App record: Apple ID `6797330919`, bundle `com.gennety.ios`, SKU `gennety-ios`,
+**Team ID `ADWPKD5WZ7`** — which matters beyond bookkeeping: it is the same team
+the founder registered with BotFather for Telegram login, so that integration is
+bound to the right account.
 
-**⚠️ Do NOT flip this on until the prices are reconciled.** Apple's chosen price
-points do not match `TICKET_BUNDLES` (`packages/shared/src/constants.ts`):
-Apple has `ticket_3` at $16.99 vs our $16.47 and `ticket_6` at $29.99 vs our
-$26.94, and **`ticket_1` was not reported at all** — if it inherited $16.99 then
-one ticket costs the same as three, which is both a real overcharge and a review
-risk. Confirm every price in App Store Connect, then either move Apple to the
-nearest available point or move the constants; the iOS client must in any case
-render StoreKit's own `displayPrice` rather than a hardcoded number.
+Product ids match `APPSTORE_TICKET_PRODUCTS` / `PREMIUM_APPSTORE_PRODUCT_ID`
+exactly. Verified US base prices, and the per-ticket ladder they produce:
 
-**Also unconfirmed:** the agent reported that App Store Connect no longer shows a
-V1/V2 selector for Server Notifications and that new apps are V2 by default.
-Plausible, but not verified by us — the first sandbox purchase settles it, since
-our handler only parses the V2 `signedPayload` shape.
+| product | price | per ticket |
+|---|---|---|
+| `ticket_1` | $6.99 | $6.99 |
+| `ticket_3` | $16.99 | $5.66 |
+| `ticket_6` | $29.99 | $5.00 |
+| `premium_monthly` | $9.99/mo | — |
+
+An earlier agent report suggested `ticket_1` might have inherited $16.99, which
+would have charged one ticket the price of three; direct inspection shows $6.99.
+The ladder is strictly decreasing, so nothing blocks enabling the rail.
+
+**These differ from `TICKET_BUNDLES` (`packages/shared/src/constants.ts`:
+$7.00 / $16.47 / $26.94), and that is tolerated, not an oversight.** Apple owns
+its price points and re-derives them per storefront, so the iOS client must
+render StoreKit's own `displayPrice` and never a number of ours. The constants
+remain the anchor for the Telegram rail, which charges Stars anyway. Worth a
+founder decision later whether the two surfaces should quote one USD ladder.
+
+**Server Notifications** point at `https://dating-api.gennety.com/v1/webhooks/appstore`
+on both Production and Sandbox. App Store Connect shows **no V1/V2 selector at
+all** — only the two URL fields — which is consistent with new apps being V2
+only, though we have not proven it. The failure mode if it were V1 is benign and
+visible: our handler requires `signedPayload` and answers **400**, so V1
+notifications would simply not apply and would show up as 400s in the log rather
+than corrupting anything.
 
 **Still missing on the droplet:** the APNs `.p8`
 (`/opt/gennety/keys/AuthKey_JTLFAQ8RM2.p8`), deleted by the 2026-07-25 rsync.
