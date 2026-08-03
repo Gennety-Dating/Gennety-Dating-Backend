@@ -15,7 +15,7 @@ import {
   type CardTheme,
 } from "../../services/date-card/index.js";
 import { dateCardSteps } from "../../services/analysis-status.js";
-import { runStatusSequence, NEVER_CUT_SHORT } from "../../services/ai-stream.js";
+import { runStatusSequence } from "../../services/ai-stream.js";
 import { isProxyOpen } from "../../services/coordination.js";
 import { evaluateVenueBoardEligibility } from "../../services/venue-change.js";
 import {
@@ -133,13 +133,14 @@ async function renderAndSendCard(
     ctx.api,
   );
 
-  // Held "shine" status while the multi-second render runs (same primitive as
-  // the scheduled-DM path). Purely cosmetic — never blocks the card.
-  // `NEVER_CUT_SHORT` for the same reason as there: a fast render must not
-  // collapse the script to whichever beat happened to be on screen.
-  await runStatusSequence(ctx.api, chatId, dateCardSteps(lang), {
+  // Unlike the first-time scheduling DM (which plays the full 3-beat script
+  // regardless of render speed), the hub re-open is the user re-checking a
+  // date that already exists — there's nothing to narrate at length. One short
+  // "confirming details" beat, cut short the instant the render settles, held
+  // no longer than that if the render genuinely takes longer. Purely cosmetic
+  // — never blocks the card.
+  await runStatusSequence(ctx.api, chatId, dateCardSteps(lang).slice(0, 1), {
     until: renderWork,
-    untilFromStepIndex: NEVER_CUT_SHORT,
     rich: true,
   }).catch(() => undefined);
 
