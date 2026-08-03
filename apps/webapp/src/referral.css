@@ -54,13 +54,23 @@ body {
   overflow-x: hidden;
 }
 
+/* The page is a full-height column so the single action can sit at the BOTTOM
+   of the screen rather than wherever the ladder happens to end (`.ref-foot`
+   takes the slack via `margin-top: auto`). On a short ladder that fills the
+   screen instead of leaving it half empty; on a long one the auto margin
+   collapses to 0 and `.ref-foot`'s own padding keeps the button off the last
+   rung, so it degrades to ordinary flow instead of overlapping. */
 .ref-wrap {
   max-width: 30rem;
   margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   padding:
-    calc(1.5rem + var(--tg-content-top, env(safe-area-inset-top, 0)))
+    calc(2.4rem + var(--tg-content-top, env(safe-area-inset-top, 0)))
     max(1.1rem, env(safe-area-inset-right, 0))
-    calc(1.9rem + env(safe-area-inset-bottom, 0))
+    calc(2.6rem + env(safe-area-inset-bottom, 0))
     max(1.1rem, env(safe-area-inset-left, 0));
 }
 
@@ -74,7 +84,7 @@ body {
 /* ── Hero — the wordmark alone: no symbol, no tagline ─────────────────── */
 .ref-hero {
   text-align: center;
-  padding: 0.25rem 0 0.4rem;
+  padding: 0.9rem 0 1rem;
 }
 .ref-title {
   font-size: 1.5rem;
@@ -85,10 +95,12 @@ body {
 }
 
 /* ── Stats — borderless neutral cards: fill alone draws the shape ──────── */
+/* Flex children do NOT collapse margins with the hero's padding, so this is the
+   gap on top of `.ref-hero`'s own 1rem — kept short for that reason. */
 .ref-stats {
   display: flex;
   gap: 0.6rem;
-  margin: 1.3rem 0 0.3rem;
+  margin: 0.6rem 0 0.3rem;
 }
 .ref-stat {
   flex: 1;
@@ -234,12 +246,15 @@ body {
    outward bloom and no drop shadow: the light must stay inside the shape, which
    is what makes it soft on the page instead of neon. Same treatment as the
    university-email option on the sign-up fork. */
+.ref-foot {
+  margin-top: auto;
+  padding-top: 1.9rem;
+}
 .ref-share {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
-  margin-top: 1.6rem;
   width: 100%;
   border: 0;
   cursor: pointer;

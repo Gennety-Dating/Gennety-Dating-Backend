@@ -239,10 +239,13 @@ function render(state: ReferralState): void {
       </div>
       ${progressLine}
       <ol class="ref-ladder">${rungs}</ol>
-      <button class="ref-share" id="ref-share">${glyph("letter", "ref-ic ref-share-ic")}<span>${esc(
-        s.share,
-      )}</span></button>
-      <p class="ref-share-hint">${esc(s.shareHint)}</p>
+      <div class="ref-foot">
+        <button class="ref-share" id="ref-share">${glyph(
+          "letter",
+          "ref-ic ref-share-ic",
+        )}<span>${esc(s.share)}</span></button>
+        <p class="ref-share-hint">${esc(s.shareHint)}</p>
+      </div>
     </div>`;
 
   const btn = document.getElementById("ref-share") as HTMLButtonElement;
