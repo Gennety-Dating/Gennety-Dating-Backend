@@ -54,12 +54,13 @@ body {
   overflow-x: hidden;
 }
 
-/* The page is a full-height column so the single action can sit at the BOTTOM
-   of the screen rather than wherever the ladder happens to end (`.ref-foot`
-   takes the slack via `margin-top: auto`). On a short ladder that fills the
-   screen instead of leaving it half empty; on a long one the auto margin
-   collapses to 0 and `.ref-foot`'s own padding keeps the button off the last
-   rung, so it degrades to ordinary flow instead of overlapping. */
+/* The page is a full-height column split in two: the wordmark alone at the very
+   top, then everything else — stats, progress, ladder, button — sitting as one
+   block at the BOTTOM. The slack between them is a single `margin-top: auto` on
+   `.ref-stats` (the first element of the bottom block), so the gap lands under
+   the title rather than being sprinkled between sections. On a viewport too
+   short to hold it all, that auto margin collapses to 0 and the page falls back
+   to ordinary flow — nothing overlaps. */
 .ref-wrap {
   max-width: 30rem;
   margin: 0 auto;
@@ -81,26 +82,35 @@ body {
   flex: none;
 }
 
-/* ── Hero — the wordmark alone: no symbol, no tagline ─────────────────── */
+/* ── Hero — the wordmark alone: no symbol, no tagline ──────────────────────
+   Typography deliberately matches the Premium Mini App's wordmark
+   (`.pm-title`, premium.css): 30px / 900 / -0.035em. The two screens are the
+   same kind of surface — one bold brand line over a single action — so they
+   should read as the same family. */
+/* The bottom padding is the FLOOR under the title: on a viewport too short for
+   the auto margin below, that margin collapses to 0 and this is the only thing
+   left between the wordmark and the stats. */
 .ref-hero {
   text-align: center;
-  padding: 0.9rem 0 1rem;
+  padding: 0.6rem 0 1.15rem;
 }
 .ref-title {
-  font-size: 1.5rem;
+  font-size: 30px;
+  line-height: 1.05;
   margin: 0;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: 900;
+  letter-spacing: -0.035em;
   text-wrap: balance;
 }
 
 /* ── Stats — borderless neutral cards: fill alone draws the shape ──────── */
-/* Flex children do NOT collapse margins with the hero's padding, so this is the
-   gap on top of `.ref-hero`'s own 1rem — kept short for that reason. */
+/* `margin-top: auto` is the whole layout: it absorbs every spare pixel between
+   the wordmark and this block, which is what pins the stats/ladder/button group
+   to the bottom of the screen. */
 .ref-stats {
   display: flex;
   gap: 0.6rem;
-  margin: 0.6rem 0 0.3rem;
+  margin: auto 0 0.3rem;
 }
 .ref-stat {
   flex: 1;
@@ -247,8 +257,7 @@ body {
    is what makes it soft on the page instead of neon. Same treatment as the
    university-email option on the sign-up fork. */
 .ref-foot {
-  margin-top: auto;
-  padding-top: 1.9rem;
+  padding-top: 1.25rem;
 }
 .ref-share {
   display: flex;
