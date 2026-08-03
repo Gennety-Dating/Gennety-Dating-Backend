@@ -237,13 +237,16 @@ describe("handleStallCancelConfirm", () => {
     expect(String(c.reply.mock.calls[0][0])).toContain("Bob");
   });
 
-  it("says nothing when the cancellation didn't land", async () => {
+  it("says the match already moved on when the cancellation didn't land", async () => {
+    // The user just tapped a red irreversible button and watched its keyboard
+    // vanish. Silence there reads as the tap having quietly worked, on the one
+    // screen where being wrong about that matters most.
     (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
 
     const c = ctx("stall:kill:match-1");
     await handleStallCancelConfirm(c);
 
-    expect(c.reply).not.toHaveBeenCalled();
+    expect(c.reply).toHaveBeenCalledWith(t("en", "stallActionExpired"));
   });
 });
 

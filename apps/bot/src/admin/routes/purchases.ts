@@ -6,6 +6,7 @@ import {
   type PurchaseRow,
   type PurchaseStatus,
 } from "../../services/purchases.js";
+import { isUuid } from "../utils/uuid.js";
 
 /**
  * `GET /admin/purchases` — every real money movement in the product, newest
@@ -78,9 +79,18 @@ purchasesRouter.get("/admin/purchases", async (req: Request, res: Response) => {
 
     const kindParam = String(req.query.kind ?? "");
     const statusParam = String(req.query.status ?? "");
-    const userId = String(req.query.userId ?? "");
     const since = parseDate(req.query.since);
     const until = parseDate(req.query.until);
+
+    // Same rule as every `:id` on this surface (`utils/uuid.ts`): a non-UUID
+    // reaches Prisma as `P2023`, not as "no rows", and the catch below would
+    // report a mistyped filter as "Internal server error". `?userId=` is a
+    // query param rather than a path segment, which is how it escaped the guard.
+    const userId = String(req.query.userId ?? "");
+    if (userId && !isUuid(userId)) {
+      res.status(400).json({ error: "userId must be a UUID" });
+      return;
+    }
 
     const page = await listPurchases(
       {

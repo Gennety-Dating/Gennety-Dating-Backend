@@ -226,7 +226,14 @@ export async function handleStallCancelConfirm(ctx: BotContext): Promise<void> {
   await ctx.editMessageReplyMarkup().catch(() => {});
 
   const outcome = await cancelPlanningByUser(ctx.api, matchId, actor.userId);
-  if (!outcome.cancelled || !outcome.ackText) return;
+  if (!outcome.cancelled || !outcome.ackText) {
+    // The match moved on between the guard's read and the CAS (the partner
+    // answered, the 48h timeout fired, moderation stepped in). Rare, but the
+    // user just tapped a red irreversible button and watched its keyboard
+    // vanish — saying nothing reads as the tap having silently worked.
+    await ctx.reply(t(actor.lang, "stallActionExpired"));
+    return;
+  }
 
   await ctx.reply(outcome.ackText);
 }
