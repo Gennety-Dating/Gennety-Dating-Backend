@@ -1288,13 +1288,10 @@ function renderVenueCard(v: VenueChangeCatalogItem): HTMLElement {
   const heart = heartButton(v);
   const cardKids: Node[] = [venueThumb(v), meta, heart];
   // §Premium: a plate on the card face so the tier is obvious without opening.
+  // Word only — the padlock lives on the heart button, which is the thing that
+  // is actually locked; on the plate it read as a refusal rather than a tier.
   if (v.tier === "premium") {
-    cardKids.push(
-      el("div", { class: "vc-premium-plate" + (isVenueLocked(v) ? " is-locked" : "") }, [
-        icon("lock", "icon vc-premium-plate-ico"),
-        el("span", { text: s.premiumPlate }),
-      ]),
-    );
+    cardKids.push(el("div", { class: "vc-premium-plate", text: s.premiumPlate }));
   }
   const card = el(
     "div",

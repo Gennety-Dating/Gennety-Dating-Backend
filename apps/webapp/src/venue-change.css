@@ -37,10 +37,18 @@
      dark stage, darker on the cream one. Same ~0.25 delta either way, and
      well clear of the burgundy --accent the current dot wears. */
   --dot-idle: rgba(244, 236, 255, 0.25);
+
+  /* Outline of the Premium plate. Deliberately NOT the burgundy it sits on —
+     a plate ringed in its own fill has no edge at all. It is the one place on
+     the board that borrows the page's own extreme (white on the dark stage,
+     ink on the cream one), so the badge reads as a stamped mark rather than a
+     tinted chip. */
+  --plate-outline: #ffffff;
 }
 :root[data-theme="light"] {
   --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --photo-sheen: rgba(0, 0, 0, 0.05);
+  --plate-outline: #000000;
   --shot-shadow: 0 12px 26px -10px rgba(0, 0, 0, 0.24);
   /* A near-white dot at 25% is invisible on #f5f5f5 — the count of photos
      simply did not exist until you started swiping. Flip it to ink. */
@@ -1681,13 +1689,14 @@ a.vc-info-row .vc-info-text {
   .vc-card.is-match,
   .vc-heart.is-mine .vc-heart-glyph,
   .vc-heart.is-theirs::after,
-  .vc-settled-check .icon {
-  width: 34px;
-  height: 34px;
-  stroke-width: 2;
-}
-.vc-settled-check {
+  .vc-settled-check {
     animation: none;
+  }
+  /* The plate keeps its outline and fill; only the sweep goes. */
+  .vc-premium-plate::after,
+  .btn-express::after {
+    animation: none;
+    opacity: 0;
   }
 }
 
@@ -1879,14 +1888,18 @@ a.vc-info-row .vc-info-text {
   border: 1px solid var(--accent);
   box-shadow: 0 0 0 1px var(--accent-soft), var(--glass-edge);
 }
+/* Word only — no padlock. The lock lives on the heart button, which is the
+   thing that is actually locked; on the plate it turned a tier label into a
+   refusal, and the tier is worth naming on its own. */
 .vc-premium-plate {
   position: absolute;
   top: -9px;
   left: 12px;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
+  padding: 3px 11px;
+  border: 1px solid var(--plate-outline);
   border-radius: 999px;
   background: var(--accent);
   color: var(--on-accent);
@@ -1896,9 +1909,19 @@ a.vc-info-row .vc-info-text {
   text-transform: uppercase;
   box-shadow: 0 4px 12px var(--shadow);
 }
-.vc-premium-plate-ico {
-  width: 12px;
-  height: 12px;
+/* Same slow specular sweep as the express button — the board's one shimmer
+   language, reused so "premium" reads as the same thing in both places. */
+.vc-premium-plate::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: skewX(-18deg);
+  animation: sheen 3.4s ease-in-out infinite;
+  pointer-events: none;
 }
 .vc-heart.is-locked {
   background: var(--accent-soft);
