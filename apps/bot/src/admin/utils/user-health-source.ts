@@ -5,6 +5,7 @@
  * проверяться юнит-тестами без базы, а здесь живёт всё, что знает про Prisma.
  */
 import { prisma } from "@gennety/db";
+import { env } from "../../config.js";
 import {
   HEALTH_CONFIG,
   classifyUser,
@@ -14,6 +15,21 @@ import {
   type HealthConfig,
   type HealthUserInput,
 } from "./user-health.js";
+
+/**
+ * Конфиг с подмешанным списком тестовых аккаунтов из окружения.
+ *
+ * Список живёт в env, а не в коде: он у каждого свой (аккаунт фаундера, QA,
+ * демо), и добавление нового тестового аккаунта не должно быть деплоем.
+ * Считается один раз при загрузке модуля — env за время процесса не меняется.
+ */
+const TEST_IDS = (env.ADMIN_TEST_TELEGRAM_IDS ?? "").split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+export function effectiveHealthConfig(base: HealthConfig = HEALTH_CONFIG): HealthConfig {
+  return TEST_IDS.length > 0 ? { ...base, test_telegram_ids: TEST_IDS } : base;
+}
 
 /** Поля, которых хватает на все правила. Эмбеддинг и переписку не трогаем. */
 const HEALTH_USER_SELECT = {
@@ -163,7 +179,7 @@ function toInput(
  */
 export async function classifyAllUsers(
   now: Date = new Date(),
-  cfg: HealthConfig = HEALTH_CONFIG,
+  cfg: HealthConfig = effectiveHealthConfig(),
 ): Promise<{ users: ClassifiedUser[]; scanned: number; truncated: boolean }> {
   const [rows, total, inbound] = await Promise.all([
     prisma.user.findMany({
@@ -203,7 +219,7 @@ export async function classifyAllUsers(
 export async function classifyOneUser(
   userId: string,
   now: Date = new Date(),
-  cfg: HealthConfig = HEALTH_CONFIG,
+  cfg: HealthConfig = effectiveHealthConfig(),
 ): Promise<{ input: HealthUserInput; verdict: ClassifiedUser["verdict"] } | null> {
   const row = (await prisma.user.findUnique({
     where: { id: userId },

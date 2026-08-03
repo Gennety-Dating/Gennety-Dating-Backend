@@ -185,6 +185,12 @@ export const env = {
   /// wildcard from an authenticated admin surface (audit M3). Set this to
   /// the concrete dashboard origin in production.
   ADMIN_DASHBOARD_ORIGIN: process.env.ADMIN_DASHBOARD_ORIGIN ?? "",
+  /// Telegram id тестовых аккаунтов через запятую (свой, QA, демо).
+  /// Классификатор здоровья базы исключает их из ВСЕХ знаменателей, поэтому
+  /// незаполненное значение тихо завышает конверсию — ровно тот баг, из-за
+  /// которого activeRate делился на всех подряд. Только чтение/аналитика:
+  /// на продукт, матчинг и рассылки не влияет.
+  ADMIN_TEST_TELEGRAM_IDS: process.env.ADMIN_TEST_TELEGRAM_IDS ?? "",
 
   // ── Public `/v1/*` API for the mobile app ─────────────────────
   JWT_SECRET: process.env.JWT_SECRET ?? "",

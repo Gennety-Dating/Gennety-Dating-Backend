@@ -383,6 +383,66 @@ from the JSON backup above.
 
 ---
 
+**PENDING — account-health classification + fixed conversions (admin only).**
+Not deployed yet. **No Prisma schema change, no flag change, no Mini App
+change** (`apps/webapp` untouched) — but it adds **one optional env var** and
+requires a **dashboard redeploy** (separate repo,
+`~/Desktop/gennety-admin-dashboard`, auto-deploys to Vercel on push).
+
+```
+ADMIN_TEST_TELEGRAM_IDS=-153639032722566
+```
+
+That is the founder's own mobile-rail account (`Глеб`, synthetic negative id —
+verified against the live DB on 2026-08-03). **Leaving this empty is not
+neutral:** the classifier then finds zero test accounts and every conversion is
+divided by 20 instead of 19. It is analytics-only — nothing in matching,
+workers or notifications reads it.
+
+What ships: `/admin/stats` and `/admin/dashboard` gain a `userHealth` section
+(seven mutually exclusive classes, summing to the scan) and a `funnel` whose
+denominators exclude test accounts; `GET /admin/users/:id/health` explains ONE
+account; `/admin/users` gains a health badge per row plus `?health=` and
+`?includeTest=false`. Existing response sections are untouched.
+
+**One number changes meaning, and the dashboard reads it:**
+`derived.activeRate` was `active / users.total`; it is now
+`active+verified / real users`. Against production today that is 5/19 = 0.2632
+rather than 5/20 = 0.25. Anyone comparing week over week will see a step — it
+is the fix, not a regression.
+
+Measured against the live database before deploying (read-only probe, 20
+accounts): live 5, stuck_onboarding 5, cold_open_unengaged 8, test 1, other 1,
+suspicious 0, `matchmaking_eligible` 5 of 19, consent→active 55.6%,
+registered→active 26.3%.
+
+**Two things worth knowing before the restart:**
+
+- **`/admin/stats` and `/admin/users` now scan the user table** (bounded by
+  `HEALTH_CONFIG.max_scan_users`, 20000) on every call, because the class is
+  computed rather than stored. At 20 users that is milliseconds; revisit it if
+  the base reaches five figures — the fix is a short cache, not a schema
+  column.
+- **`bot_batch_min_users` is 3.** Three signups inside ten minutes is a
+  registration burst — normal during an ad push. Verified accounts are exempt,
+  so a real user who passed liveness can never be flagged this way, but
+  unverified signups in a burst will be. Raise it in
+  `admin/utils/user-health.ts` before a large campaign.
+
+Post-deploy check:
+
+```sh
+curl -s -H "Authorization: Bearer $ADMIN_API_KEY" \
+  https://api-admin.gennety.com/admin/stats | python3 -m json.tool | head -60
+# userHealth.byClass.test must be 1, not 0 — 0 means the env var did not land.
+```
+
+**Rollback:** revert the code in both repos and restart. Nothing else to undo —
+no schema, no flag. Removing `ADMIN_TEST_TELEGRAM_IDS` alone does not roll the
+feature back; it just stops excluding the test account.
+
+---
+
 **PENDING — privacy remediation, 2026-08-01 (ethnicity removed, founder-feed
 delete anonymised, OTP redaction, consent versioning, biometric consent screen,
 coordination-card protection).** Not deployed yet. **No env change, no flag

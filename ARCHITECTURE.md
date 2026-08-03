@@ -928,7 +928,38 @@ external callers kept reaching for:
 | GET | `/admin/stats` | Headline counters in ONE call: users by status, onboarding by step, verification by status, matches by status (+ `live` = the single-live-match states), reports by tier. Every bucket is zero-filled, so a missing group reads as `0` rather than `undefined`. |
 | GET | `/admin/dashboard` | The `/admin/stats` superset plus derived rates (`signupsLast7Days`, `activeRate`, `verifiedRate`, `matchAcceptanceRate`) and the 10 most recent matches. Shares `collectStats()` with `/admin/stats` so the two can never drift. |
 | GET | `/admin/purchases` | The revenue ledger — every real money movement, newest first, with the payer inlined (`?kind=`, `?status=`, `?userId=`, `?since=`, `?until=`, paginated). Carries `totals` + `byKind` over the WHOLE filtered set, not just the page. Deliberately **uncached**, unlike the analytics tabs: a founder checking whether a payment landed must not be served a ten-minute-old answer. |
+| GET | `/admin/users/:id/health` | One account's health class plus the RULE that produced it (`reason`, `rules_fired`, `signals`). Counters and metadata only — never conversation content. |
 | GET | `/admin/matches` | The match **row** list — the pairs themselves, newest first, both participants inlined, `?status=` filtered and paginated. Distinct from `/admin/analytics/matches`, which is the aggregate funnel and cannot answer "which pairs exist right now". `telegramId` is serialized to a string (BigInt is not JSON-safe). |
+
+**Account health is computed, not stored** (`admin/utils/user-health.ts`,
+added 2026-08-03). Every account resolves to exactly one of `live`,
+`stuck_onboarding`, `cold_open_unengaged`, `inactive`, `suspicious`, `test`, or
+`other` — the last exists so the class counts always sum to the scan rather
+than quietly dropping paused/frozen/banned rows and sub-24h registrations. The
+rules are pure and unit-tested; `user-health-source.ts` is the only part that
+touches Prisma, and its `chat_events` reads are guarded exactly like
+`dialogs.ts` so a database predating that table degrades to zero counts instead
+of failing the endpoint.
+
+Three consequences worth holding onto:
+
+- **`users.total` is not a denominator.** `test` accounts (configured by
+  Telegram id in `ADMIN_TEST_TELEGRAM_IDS`) are excluded from every conversion
+  in `funnel` and from `matchmaking_eligible.of_total`. `derived.activeRate` on
+  `/admin/dashboard` used to divide by `users.total` and read 5/20 where the
+  honest answer was 5/19; it is now active+verified over real users. A reader
+  comparing to a pre-2026-08-03 number will see it move.
+- **`message_count_in` comes from `chat_events`, never `messageHistory`.** The
+  timeline is the only store with timestamps, so it is also the only one that
+  can measure reply latency — and accounts predating it legitimately read as 0,
+  which is why `lastMessageAt` (not the counter) is what proves someone talked.
+- **Nothing here writes.** No bans, no deletions, no effect on the matching
+  engine, which still filters on `status`/`verificationStatus` itself.
+  `isMatchmakingEligible` is a diagnostic flag for the dashboard, not a gate.
+  The registration-burst rule deliberately skips verified accounts: a liveness
+  pass outweighs a shared signup minute, and without that carve-out an ad burst
+  would flag real users and deflate the liquidity number the feature exists to
+  report.
 
 Two paths are **aliases**, registered on the same handler as their canonical
 route rather than reimplemented, so they cannot drift: `/admin/conversations`
