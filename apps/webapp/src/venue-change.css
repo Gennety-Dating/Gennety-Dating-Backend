@@ -38,17 +38,18 @@
      well clear of the burgundy --accent the current dot wears. */
   --dot-idle: rgba(244, 236, 255, 0.25);
 
-  /* Outline of the Premium plate. Deliberately NOT the burgundy it sits on —
-     a plate ringed in its own fill has no edge at all. It is the one place on
-     the board that borrows the page's own extreme (white on the dark stage,
-     ink on the cream one), so the badge reads as a stamped mark rather than a
-     tinted chip. */
-  --plate-outline: #ffffff;
+  /* The hard slab a premium row casts below itself. Deliberately NOT burgundy:
+     the card's own accent ringed around the card gave it no edge at all. This
+     borrows the page's own extreme instead — white on the dark stage, ink on
+     the cream one — so a premium row reads as physically lifted off the page
+     rather than tinted. It is the one loud thing on the board, which is the
+     point: the locked tier has to keep catching the eye as you scroll. */
+  --premium-proj: rgba(255, 255, 255, 0.82);
 }
 :root[data-theme="light"] {
   --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --photo-sheen: rgba(0, 0, 0, 0.05);
-  --plate-outline: #000000;
+  --premium-proj: rgba(0, 0, 0, 0.78);
   --shot-shadow: 0 12px 26px -10px rgba(0, 0, 0, 0.24);
   /* A near-white dot at 25% is invisible on #f5f5f5 — the count of photos
      simply did not exist until you started swiping. Flip it to ink. */
@@ -236,7 +237,9 @@ body {
   text-align: left;
   font-family: inherit;
   cursor: pointer;
-  transition: transform 0.15s ease, background 0.15s ease;
+  /* box-shadow is in here for the premium projection, which retracts when the
+     row gets marked — it should fade with the frame, not snap. */
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.35s ease;
 }
 .vc-card:active {
   transform: scale(0.985);
@@ -1882,24 +1885,33 @@ a.vc-info-row .vc-info-text {
 }
 
 /* ── §Premium: locked premium venues + counterfactual ─────────────── */
+/* A premium row is LIFTED, not outlined: one hard-edged slab in the page's own
+   extreme, offset straight down, with a hair of negative spread so it reads as
+   a projection under the card rather than a second card. */
 .vc-card.is-premium {
   position: relative;
   overflow: visible;
-  border: 1px solid var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-soft), var(--glass-edge);
+  border: none;
 }
-/* Word only — no padlock. The lock lives on the heart button, which is the
-   thing that is actually locked; on the plate it turned a tier label into a
-   refusal, and the tier is worth naming on its own. */
+.vc-frame:not(.is-marked) > .vc-card.is-premium {
+  box-shadow: 0 5px 0 -1px var(--premium-proj), var(--glass-edge);
+}
+/* Once someone hearts it, the frame's identity edge (white = you, burgundy =
+   them) owns the card's outside — two competing edges on one row is exactly
+   the mush the frame language was built to avoid. The plate still says
+   "premium", so nothing is lost by letting the projection go. */
+
+/* Word only — no padlock, no frame. The lock lives on the heart button, which
+   is the thing that is actually locked; on the plate it turned a tier label
+   into a refusal, and the tier is worth naming on its own. */
 .vc-premium-plate {
   position: absolute;
-  top: -9px;
+  top: -8px;
   left: 12px;
   overflow: hidden;
   display: inline-flex;
   align-items: center;
   padding: 3px 11px;
-  border: 1px solid var(--plate-outline);
   border-radius: 999px;
   background: var(--accent);
   color: var(--on-accent);
