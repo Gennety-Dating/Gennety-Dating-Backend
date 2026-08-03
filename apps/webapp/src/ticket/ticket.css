@@ -761,6 +761,34 @@ body {
   margin: 0;
 }
 
+/* Referral cross-promo — a quiet secondary link, never another filled button,
+   so it reads as an alternative to paying rather than a third payment option. */
+.tkt-referral-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin: 14px 0 0;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+.tkt-referral-hint:active {
+  opacity: 0.6;
+}
+.tkt-referral-hint svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
 /* Wallet balance — a soft glass pill chip under the ticket. */
 .ticket-balance-note {
   display: inline-flex;

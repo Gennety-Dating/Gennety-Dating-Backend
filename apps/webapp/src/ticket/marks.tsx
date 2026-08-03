@@ -24,6 +24,41 @@ export function HeartMark(): ReactElement {
   );
 }
 
+/**
+ * Envelope with a heart seal — the "invite a friend instead" referral
+ * cross-promo link (React twin of `icons.ts`'s `letter`, same path data).
+ */
+export function LetterMark(): ReactElement {
+  return (
+    <svg viewBox={BOX} aria-hidden="true" focusable="false" shapeRendering="geometricPrecision">
+      <path
+        d="M3.6 6.8h16.8v10.4H3.6V6.8Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3.6 7.2 12 13l8.4-5.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 18.6c-1.6-1-2.6-1.9-2.6-3 0-.8.6-1.4 1.4-1.4.5 0 .9.2 1.2.6.3-.4.7-.6 1.2-.6.8 0 1.4.6 1.4 1.4 0 1.1-1 2-2.6 3Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** Check — the "paid" seal. */
 export function CheckMark(): ReactElement {
   return (

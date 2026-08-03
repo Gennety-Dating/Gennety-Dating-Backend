@@ -49,6 +49,9 @@ export function createPremiumRouter(): Router {
       provider: state.provider,
       priceStars: env.PREMIUM_STARS,
       priceDisplay: env.PREMIUM_PRICE_USD_DISPLAY,
+      // Drives the "invite a friend instead" referral cross-promo link, shown
+      // client-side only on the sales screen (never once already subscribed).
+      referralEnabled: env.REFERRAL_FEATURE_ENABLED,
     });
   });
 

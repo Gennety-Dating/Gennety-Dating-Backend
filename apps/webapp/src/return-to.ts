@@ -3,9 +3,12 @@
  *
  * Some pages hand off to another page of the SAME Mini App with an ordinary
  * same-origin navigation (`location.href = "premium.html?…"`). The board's
- * premium CTA is the case this exists for: it left the user on the Premium
- * screen with no way back, so someone who looked at the price and decided
- * against it had to close the Mini App and reopen "Change venue" from the chat.
+ * premium CTA was the original case this exists for: it left the user on the
+ * Premium screen with no way back, so someone who looked at the price and
+ * decided against it had to close the Mini App and reopen "Change venue" from
+ * the chat. The same shape now also carries the referral cross-promo link
+ * ("invite a friend instead") from the Ticket Store, the Date Ticket gate, and
+ * Premium into `referral.html`.
  *
  * The rule this module encodes is the one that makes that safe to fix: a back
  * affordance appears **only when the page was actually navigated to from
@@ -28,6 +31,9 @@
  */
 const RETURN_PAGES = {
   "venue-change": "venue-change.html",
+  "ticket-store": "tickets.html",
+  "ticket-gate": "ticket.html",
+  "premium": "premium.html",
 } as const;
 
 export type ReturnPage = keyof typeof RETURN_PAGES;

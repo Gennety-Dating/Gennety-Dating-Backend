@@ -11,6 +11,36 @@
   max-width: 360px;
 }
 
+/* Referral cross-promo — a quiet secondary link below the bundle grid, never
+   another filled card, so it reads as an alternative rather than a fourth
+   bundle to buy. */
+.store-referral-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 360px;
+  margin: 16px auto 0;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+.store-referral-hint:active {
+  opacity: 0.6;
+}
+.store-referral-hint svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
 .store-bundle {
   position: relative;
   display: flex;

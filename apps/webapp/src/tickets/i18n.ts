@@ -28,6 +28,8 @@ export interface StoreStrings {
   /** Anonymized holder names printed on the store ticket card. */
   anonHolderA: string;
   anonHolderB: string;
+  /** Referral cross-promo — shown only when the wallet is empty. */
+  referralHint: string;
 }
 
 const en: StoreStrings = {
@@ -48,6 +50,7 @@ const en: StoreStrings = {
   errGeneric: "Something went wrong. Reopen this from the bot.",
   anonHolderA: "Member",
   anonHolderB: "Your date",
+  referralHint: "Short on tickets? Invite a friend instead",
 };
 
 const ru: StoreStrings = {
@@ -68,6 +71,7 @@ const ru: StoreStrings = {
   errGeneric: "Что-то пошло не так. Открой заново из бота.",
   anonHolderA: "Участник",
   anonHolderB: "Твоя пара",
+  referralHint: "Не хватает билетов? Пригласи друга вместо оплаты",
 };
 
 const uk: StoreStrings = {
@@ -88,6 +92,7 @@ const uk: StoreStrings = {
   errGeneric: "Щось пішло не так. Відкрий знову з бота.",
   anonHolderA: "Учасник",
   anonHolderB: "Твоя пара",
+  referralHint: "Не вистачає квитків? Запроси друга замість оплати",
 };
 
 const de: StoreStrings = {
@@ -108,6 +113,7 @@ const de: StoreStrings = {
   errGeneric: "Etwas ist schiefgelaufen. Öffne dies erneut aus dem Bot.",
   anonHolderA: "Mitglied",
   anonHolderB: "Dein Date",
+  referralHint: "Zu wenig Tickets? Lade stattdessen einen Freund ein",
 };
 
 const pl: StoreStrings = {
@@ -128,6 +134,7 @@ const pl: StoreStrings = {
   errGeneric: "Coś poszło nie tak. Otwórz to ponownie z bota.",
   anonHolderA: "Członek",
   anonHolderB: "Twoja randka",
+  referralHint: "Brakuje biletów? Zaproś znajomego zamiast płacić",
 };
 
 const dict: Record<Lang, StoreStrings> = { en, ru, uk, de, pl };

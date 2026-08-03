@@ -182,6 +182,8 @@ interface Strings {
   premiumPlate: string;
   premiumUnlockConfirm: string;
   premiumFreeWithSub: string;
+  /** Referral cross-promo — reused on both the pay step and a locked venue. */
+  referralHint: string;
 }
 
 const T: Record<Lang, Strings> = {
@@ -271,6 +273,7 @@ const T: Record<Lang, Strings> = {
     premiumUnlockConfirm:
       "This is a Premium venue. Gennety Premium unlocks it — and makes your venue changes free.",
     premiumFreeWithSub: "Free with Gennety Premium",
+    referralHint: "Invite a friend — get Premium free",
   },
   ru: {
     boardTitle: "Место свидания",
@@ -359,6 +362,7 @@ const T: Record<Lang, Strings> = {
     premiumUnlockConfirm:
       "Это премиум-место. Gennety Premium открывает его — и делает смену места бесплатной.",
     premiumFreeWithSub: "Бесплатно с Gennety Premium",
+    referralHint: "Пригласи друга — получи Premium бесплатно",
   },
   uk: {
     boardTitle: "Місце побачення",
@@ -447,6 +451,7 @@ const T: Record<Lang, Strings> = {
     premiumUnlockConfirm:
       "Це преміум-місце. Gennety Premium відкриває його — і робить зміну місця безкоштовною.",
     premiumFreeWithSub: "Безкоштовно з Gennety Premium",
+    referralHint: "Запроси друга — отримай Premium безкоштовно",
   },
   de: {
     boardTitle: "Euer Date-Ort",
@@ -536,6 +541,7 @@ const T: Record<Lang, Strings> = {
     premiumUnlockConfirm:
       "Das ist ein Premium-Ort. Gennety Premium schaltet ihn frei — und Ortswechsel werden kostenlos.",
     premiumFreeWithSub: "Gratis mit Gennety Premium",
+    referralHint: "Freund einladen — Premium gratis erhalten",
   },
   pl: {
     boardTitle: "Miejsce randki",
@@ -623,6 +629,7 @@ const T: Record<Lang, Strings> = {
     premiumUnlockConfirm:
       "To miejsce premium. Gennety Premium je odblokowuje — a zmiany miejsca stają się darmowe.",
     premiumFreeWithSub: "Za darmo z Gennety Premium",
+    referralHint: "Zaproś znajomego — odbierz Premium za darmo",
   },
 };
 const s = T[lang];
@@ -1206,6 +1213,27 @@ function openPremiumMiniApp(): void {
   location.href = `premium.html?${returnParams("venue-change", { match: matchId, lang })}`;
 }
 
+/** Same hand-off as `openPremiumMiniApp`, but into the referral Mini App. */
+function openReferralMiniApp(): void {
+  haptic("light");
+  location.href = `referral.html?${returnParams("venue-change", { match: matchId, lang })}`;
+}
+
+/**
+ * Referral cross-promo — a quiet secondary way to get Premium's perks without
+ * paying. Reused at both spots where a non-premium user is asked to pay:
+ * the agreed-venue pay step (`renderAgreed`) and a locked premium venue's
+ * detail page (`renderDetail`). Deliberately its own plain-text row rather
+ * than a filled/bordered button, so it never competes with the real CTA.
+ */
+function referralHintNode(): HTMLElement {
+  return el(
+    "button",
+    { class: "vc-referral-hint", type: "button", onClick: () => openReferralMiniApp() },
+    [icon("letter", "icon vc-referral-hint-ico"), el("span", { text: s.referralHint })],
+  );
+}
+
 /**
  * The brand butterfly, drawn in the same metallic vertical gradient the Premium
  * Mini App gives its crest (theme-aware through the .vc-bf-a / .vc-bf-b stops)
@@ -1600,6 +1628,9 @@ function renderDetail(v: VenueChangeCatalogItem): void {
       }),
     );
     bar.push(el("p", { class: "vc-note", text: s.premiumUnlockConfirm }));
+    // Referral cross-promo lives in the scrollable content, not the sticky
+    // bar, so it never competes with the "Unlock Premium" CTA above it.
+    if (boardState?.referralEnabled) nodes.push(referralHintNode());
     mount(page([el("div", { class: "vc-detail" }, nodes)], bar));
     return;
   }
@@ -2076,6 +2107,7 @@ function renderAgreed(st: VenueBoardState): void {
         [icon("lock", "icon vc-premium-hint-ico"), el("span", { text: s.premiumFreeWithSub })],
       ),
     );
+    if (st.referralEnabled) nodes.push(referralHintNode());
   }
 
   // The way back: call the agreement off and keep the assigned venue. Available

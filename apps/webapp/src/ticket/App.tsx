@@ -29,7 +29,8 @@ import { Confetti } from "./Confetti.js";
 import { PartialTimer } from "./PartialTimer.js";
 import { PartnerPaidCard } from "./PartnerPaidCard.js";
 import { Avatar } from "./Avatar.js";
-import { HeartMark } from "./marks.js";
+import { HeartMark, LetterMark } from "./marks.js";
+import { returnParams } from "../return-to.js";
 
 const app = window.Telegram?.WebApp;
 const params = new URLSearchParams(location.search);
@@ -354,6 +355,26 @@ export function App(): ReactElement {
 
             {(sc === "offer" || sc === "cover-partner") && state.myBalance > 0 && (
               <p className="ticket-balance-note">{fill(s.balanceNote, { n: String(state.myBalance) })}</p>
+            )}
+
+            {/* Referral cross-promo: a quiet secondary way to get a ticket
+                without paying, shown only while the wallet is genuinely empty
+                and only at the offer step — by "cover-partner" he already
+                secured his own ticket, so the pitch no longer applies. It
+                lives here (scroll content), never in the sticky action bar,
+                so it can't compete with the pay/use buttons below. */}
+            {sc === "offer" && state.myBalance === 0 && state.referralEnabled && (
+              <button
+                type="button"
+                className="tkt-referral-hint"
+                onClick={() => {
+                  haptic("light");
+                  location.href = `referral.html?${returnParams("ticket-gate", { match: matchId, lang })}`;
+                }}
+              >
+                <LetterMark />
+                <span>{s.referralHint}</span>
+              </button>
             )}
 
             {(sc === "waiting" || sc === "cover-partner") && (

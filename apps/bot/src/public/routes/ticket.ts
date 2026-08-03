@@ -49,7 +49,15 @@ function gateStarsView(): { self: number; both: number; partner: number } | null
  * generic error.
  */
 function stateResponse(state: TicketStateView): Record<string, unknown> {
-  return { ok: true, ...state, starsEnabled: env.TICKET_STARS_ENABLED, stars: gateStarsView() };
+  return {
+    ok: true,
+    ...state,
+    starsEnabled: env.TICKET_STARS_ENABLED,
+    stars: gateStarsView(),
+    // Drives the "invite a friend instead" referral cross-promo link, shown
+    // client-side only on the offer screen when the wallet balance is 0.
+    referralEnabled: env.REFERRAL_FEATURE_ENABLED,
+  };
 }
 
 /**

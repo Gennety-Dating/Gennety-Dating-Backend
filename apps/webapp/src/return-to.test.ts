@@ -35,7 +35,17 @@ describe("returnHref", () => {
     // be an open redirect inside the WebView.
     expect(returnHref("?backTo=https://evil.example/x")).toBeNull();
     expect(returnHref("?backTo=../../etc/passwd")).toBeNull();
-    expect(returnHref("?backTo=premium")).toBeNull();
+    expect(returnHref("?backTo=onboarding")).toBeNull();
+  });
+
+  it("rebuilds the ticket store, date-ticket gate, and Premium pages", () => {
+    // The referral cross-promo link ("invite a friend instead") sends the user
+    // here from three more screens; the store and Premium carry no match id.
+    expect(returnHref("?backTo=ticket-store&lang=ru")).toBe("tickets.html?lang=ru");
+    expect(returnHref("?backTo=ticket-gate&backMatch=m1&lang=ru")).toBe(
+      "ticket.html?match=m1&lang=ru",
+    );
+    expect(returnHref("?backTo=premium&lang=ru")).toBe("premium.html?lang=ru");
   });
 
   it("is not fooled by a prototype key", () => {

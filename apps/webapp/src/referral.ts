@@ -3,6 +3,7 @@ import "./theme.css";
 import "./referral.css";
 import { icon, type IconName } from "./icons";
 import { wireContentInsets } from "./telegram-insets";
+import { wireReturnBackButton } from "./return-to.js";
 
 /**
  * Referral Mini App (§Referral) — "Give a date, get a date". A small vanilla-TS
@@ -312,6 +313,11 @@ async function boot(): Promise<void> {
     // Best-effort cosmetic boot — never crash over chrome theming.
   }
   wireContentInsets(app);
+  // A way back to whichever paying screen sent the user here (the ticket
+  // store, the date-ticket gate, or Premium) instead of pitching the referral
+  // program as-if-first-class. Deliberately does nothing when this page was
+  // opened cold from the bot menu — there is no previous screen then.
+  wireReturnBackButton(app?.BackButton);
   renderLoading();
   if (PREVIEW) {
     render(PREVIEW_STATE);

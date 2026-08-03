@@ -3,7 +3,7 @@ import "./theme.css";
 import "./premium.css";
 import { icon, type IconName } from "./icons";
 import { wireContentInsets } from "./telegram-insets";
-import { wireReturnBackButton } from "./return-to.js";
+import { wireReturnBackButton, returnParams } from "./return-to.js";
 
 /**
  * Gennety Premium Mini App (PRODUCT_SPEC §Premium). A small vanilla-TS page that
@@ -59,6 +59,8 @@ interface Copy {
   activePlateUntil: (d: string) => string;
   manage: string;
   payFailed: string;
+  /** Referral cross-promo — quiet secondary link under the price/terms line. */
+  referralHint: string;
 }
 
 const COPY: Record<Lang, Copy> = {
@@ -80,6 +82,7 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `until ${d}`,
     manage: "Manage or cancel anytime in Telegram → Settings → Subscriptions.",
     payFailed: "That didn't go through. Try again in a moment.",
+    referralHint: "Not ready to pay? Invite a friend — get Premium free",
   },
   ru: {
     crest: "✨",
@@ -99,6 +102,7 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `до ${d}`,
     manage: "Управлять и отменить — в Telegram → Настройки → Подписки.",
     payFailed: "Не прошло. Попробуй ещё раз через минуту.",
+    referralHint: "Не готов платить? Пригласи друга — получи Premium бесплатно",
   },
   uk: {
     crest: "✨",
@@ -118,6 +122,7 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `до ${d}`,
     manage: "Керувати та скасувати — у Telegram → Налаштування → Підписки.",
     payFailed: "Не вдалося. Спробуй ще раз за хвилину.",
+    referralHint: "Не готовий платити? Запроси друга — отримай Premium безкоштовно",
   },
   de: {
     crest: "✨",
@@ -137,6 +142,7 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `bis ${d}`,
     manage: "Verwalten oder kündigen in Telegram → Einstellungen → Abos.",
     payFailed: "Das hat nicht geklappt. Bitte gleich nochmal.",
+    referralHint: "Noch nicht bereit zu zahlen? Freund einladen — Premium gratis erhalten",
   },
   pl: {
     crest: "✨",
@@ -156,6 +162,7 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `do ${d}`,
     manage: "Zarządzaj lub anuluj w Telegram → Ustawienia → Subskrypcje.",
     payFailed: "Nie udało się. Spróbuj ponownie za chwilę.",
+    referralHint: "Nie gotów płacić? Zaproś znajomego — odbierz Premium za darmo",
   },
 };
 
@@ -169,6 +176,8 @@ interface PremiumState {
   autoRenew: boolean;
   priceStars: number;
   priceDisplay: string;
+  /** Drives the "invite a friend instead" referral cross-promo link. */
+  referralEnabled?: boolean;
 }
 
 const root = document.getElementById("root")!;
@@ -395,6 +404,22 @@ function renderOffer(state: PremiumState): void {
   // bot conversation (the agent can explain it and cancel on request), not here.
   action.append(el("p", "pm-price", s.price(state.priceDisplay)));
 
+  // Referral cross-promo: a quiet secondary way to get Premium without paying,
+  // shown only on the sales screen (never once already subscribed) and only
+  // while the program is actually live. Deliberately a plain text link below
+  // the price line, never another `pm-cta`-styled button, so it can't compete
+  // with the real subscribe action above it.
+  if (state.referralEnabled) {
+    const referralBtn = el("button", "pm-referral-link") as HTMLButtonElement;
+    referralBtn.type = "button";
+    referralBtn.append(icon("letter", "icon pm-referral-ico"), el("span", undefined, s.referralHint));
+    referralBtn.addEventListener("click", () => {
+      haptic("success");
+      location.href = `referral.html?${returnParams("premium", { lang })}`;
+    });
+    action.append(referralBtn);
+  }
+
   page.append(scroll, action);
   root.replaceChildren(page);
 }
@@ -467,6 +492,7 @@ async function load(): Promise<void> {
       autoRenew: true,
       priceStars: 500,
       priceDisplay: "$11.99",
+      referralEnabled: true,
     };
     if (preview === "active") renderActive(mock);
     else renderOffer(mock);

@@ -723,6 +723,8 @@ export interface TicketState {
   starsEnabled?: boolean;
   /** Per-scope Star (XTR) prices when `starsEnabled` (null otherwise). */
   stars?: { self: number; both: number; partner: number } | null;
+  /** Drives the "invite a friend instead" referral cross-promo link. */
+  referralEnabled?: boolean;
 }
 
 /**
@@ -838,6 +840,8 @@ export interface WalletState {
   /** Star (XTR) price per bundle count (`{ "1": 350, "3": 830, "6": 1350 }`)
    *  when `starsEnabled`; null otherwise. */
   bundleStars?: Record<string, number> | null;
+  /** Drives the "invite a friend instead" referral cross-promo link. */
+  referralEnabled?: boolean;
 }
 
 export interface StoreBundle {
@@ -942,6 +946,8 @@ export interface VenueBoardState {
   /** §Premium: caller has a paying action but isn't premium → show the "free with
    * Premium" counterfactual at the pay step. */
   premiumWouldWaive?: boolean;
+  /** Drives the "invite a friend instead" referral cross-promo link. */
+  referralEnabled?: boolean;
 }
 
 export interface VenueChangeCatalogItem {

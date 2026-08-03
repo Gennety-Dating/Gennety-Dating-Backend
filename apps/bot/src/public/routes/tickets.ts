@@ -53,6 +53,9 @@ export function createTicketStoreRouter(): Router {
       // famine discount is USD-only and never applies to a Stars purchase.
       starsEnabled: env.TICKET_STARS_ENABLED,
       bundleStars: env.TICKET_STARS_ENABLED ? env.TICKET_BUNDLE_STARS : null,
+      // Drives the "invite a friend instead" referral cross-promo link, shown
+      // client-side only when the wallet is actually empty.
+      referralEnabled: env.REFERRAL_FEATURE_ENABLED,
     });
   });
 

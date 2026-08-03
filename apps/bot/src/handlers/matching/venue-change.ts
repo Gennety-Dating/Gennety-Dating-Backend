@@ -483,6 +483,11 @@ export interface VenueBoardStateView {
    * reaching a paying state.)
    */
   premiumWouldWaive: boolean;
+  /**
+   * Drives the "invite a friend instead" referral cross-promo link, shown
+   * client-side only at a paying step / on a locked premium venue.
+   */
+  referralEnabled: boolean;
 }
 
 export type VenueBoardStateResult =
@@ -598,6 +603,7 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
         : null,
     pairPremiumActive: pairPremiumActive(match, now),
     premiumWouldWaive: paying && !callerPremium,
+    referralEnabled: env.REFERRAL_FEATURE_ENABLED,
   };
 }
 

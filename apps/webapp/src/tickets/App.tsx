@@ -29,6 +29,8 @@ import {
 import { Ticket3D } from "../ticket/Ticket3D.js";
 import { MockPayment } from "../ticket/MockPayment.js";
 import { Confetti } from "../ticket/Confetti.js";
+import { LetterMark } from "../ticket/marks.js";
+import { returnParams } from "../return-to.js";
 
 const app = window.Telegram?.WebApp;
 const params = new URLSearchParams(location.search);
@@ -70,10 +72,15 @@ export function App(): ReactElement {
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const phaseRef = useRef<Phase>(phase);
   phaseRef.current = phase;
+  // Kept separate from `Phase` (rather than threaded through every `setPhase`
+  // call site) since it never changes what screen is shown, only whether a
+  // quiet secondary link appears on it.
+  const [referralEnabled, setReferralEnabled] = useState(false);
 
   const load = useCallback(async (): Promise<void> => {
     try {
       const wallet = await fetchWalletState(initData);
+      setReferralEnabled(Boolean(wallet.referralEnabled));
       setPhase({
         kind: "view",
         balance: wallet.balance,
@@ -156,6 +163,7 @@ export function App(): ReactElement {
     try {
       const wallet = await confirmStorePurchase(initData, current.bundle.count, current.intent.clientSecret);
       haptic("success");
+      setReferralEnabled(Boolean(wallet.referralEnabled));
       setPhase({
         kind: "view",
         balance: wallet.balance,
@@ -300,6 +308,23 @@ export function App(): ReactElement {
             </button>
           ))}
         </div>
+
+        {/* Referral cross-promo: a quiet secondary way to get tickets without
+            paying, shown only while the wallet is genuinely empty — never
+            competing with the bundle buttons above it. */}
+        {!bought && phase.balance === 0 && referralEnabled && (
+          <button
+            type="button"
+            className="store-referral-hint"
+            onClick={() => {
+              haptic("light");
+              location.href = `referral.html?${returnParams("ticket-store", { lang })}`;
+            }}
+          >
+            <LetterMark />
+            <span>{s.referralHint}</span>
+          </button>
+        )}
       </div>
 
       {bought && (
