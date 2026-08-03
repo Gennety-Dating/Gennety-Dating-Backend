@@ -3336,6 +3336,22 @@ user already paid for stays valid regardless of the flag.
   `premium-locked` (HTTP 402), which the Mini App turns into a subscribe-in-place
   CTA. Tapping the locked button opens the subscription flow; the card is still
   tappable to view details / open in Maps.
+  **The Premium screen has a way back when it was reached from the board
+  (2026-08-03).** Every premium affordance on the board hands off to
+  `premium.html` with an ordinary same-origin navigation, and Premium used to be
+  a one-way door: someone who read the price and decided against it had to close
+  the Mini App entirely and reopen "Change venue" from the chat. It now carries
+  a return target (`services`-free, client-side: `apps/webapp/src/return-to.ts`)
+  and shows Telegram's native BackButton, which reopens the exact board they
+  left. The button appears **only** on that arrival — a Premium screen opened
+  cold from the main menu is the first screen of its session and has nowhere to
+  go back to, so it shows none, and any BackButton the previous page left
+  visible is explicitly hidden rather than left dead. The return is a fresh
+  navigation rather than a history entry, which is what makes a *successful*
+  subscription land correctly too: the board re-reads `pairPremiumActive` on
+  open, so the premium cards come back unlocked. The return target is validated
+  against an allowlist of known pages, never taken as a URL from the query
+  string.
 - **Fee waiver + counterfactual.** A settled change normally costs
   `VENUE_CHANGE_STARS` (§3.7b). With Premium it is **free**: a premium venue is
   always free (the pair has premium), and a base venue is free when the settling

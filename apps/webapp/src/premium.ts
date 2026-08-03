@@ -3,6 +3,7 @@ import "./theme.css";
 import "./premium.css";
 import { icon, type IconName } from "./icons";
 import { wireContentInsets } from "./telegram-insets";
+import { wireReturnBackButton } from "./return-to.js";
 
 /**
  * Gennety Premium Mini App (PRODUCT_SPEC §Premium). A small vanilla-TS page that
@@ -507,5 +508,12 @@ try {
 }
 // Reserve room for Telegram's floating close × / menu ⋯ in fullscreen.
 wireContentInsets(app);
+
+// A way back to whichever page handed off to this one (today: the venue-change
+// board's premium CTA). Deliberately does nothing when this page was opened
+// cold from the chat menu — there is no previous screen then. Always called,
+// including in the no-return case, so a BackButton the previous page left
+// showing cannot linger here with no handler behind it.
+wireReturnBackButton(app?.BackButton);
 
 void load();

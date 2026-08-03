@@ -1,5 +1,36 @@
 # Gennety Dating Deploy
 
+**PENDING — Premium screen gets a way back to the board (PRODUCT_SPEC §3.8).**
+Not deployed yet. **No Prisma schema change, no env change, no flag change** —
+but this one is **client-side and therefore DOES need a Mini App redeploy**
+(`apps/webapp`: new `return-to.ts`, plus `premium.ts` / `venue-change.ts`).
+Sequence: Deploy Full Server Code → `pnpm db:drift-check` → `pm2 restart` →
+`./scripts/deploy-webapp.sh`. (The server half is a no-op for this change alone;
+it matters only because the block below ships in the same release.)
+
+The board's premium CTA navigates to `premium.html` in the same WebView, and
+that was a one-way door — a user who read the price and passed had to close the
+Mini App and reopen "Change venue" from chat. Premium now shows Telegram's
+native BackButton when (and only when) it was reached from another page, and it
+reopens the exact board. Opened cold from the main menu it shows none, because
+there is nowhere to go back to.
+
+Two details worth knowing:
+
+- **The return is a fresh navigation, not `history.back()`.** That is deliberate
+  and load-bearing for the *successful* case: the board re-reads
+  `pairPremiumActive` on open, so a user who actually subscribed comes back to
+  unlocked premium cards. A bfcached history entry would show them still locked.
+- **The target is validated against an allowlist**, never taken as a URL from
+  the query string — it arrives in a parameter the user can edit.
+
+No post-deploy check beyond loading `premium.html` once from the board and once
+from the menu row and confirming the back arrow appears in the first case only.
+**Rollback:** revert the code and redeploy the Mini App from the previous
+checkout.
+
+---
+
 **PENDING — venue-change board: photos back, duplicates gone, premium reaches
 5 km (PRODUCT_SPEC §3.7b).** Not deployed yet. **Code-only: no Prisma schema
 change, no env change, no flag change, no Mini App change** (`apps/webapp`

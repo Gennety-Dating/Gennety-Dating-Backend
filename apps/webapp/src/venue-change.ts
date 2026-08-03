@@ -45,6 +45,7 @@ import {
 } from "./api.js";
 import { icon, categoryIcon, type IconName } from "./icons.js";
 import { wireContentInsets } from "./telegram-insets.js";
+import { returnParams } from "./return-to.js";
 
 const app = window.Telegram?.WebApp;
 app?.ready();
@@ -1193,13 +1194,16 @@ function heartButton(v: VenueChangeCatalogItem): HTMLElement {
  * `theme` rides along via localStorage (`gennety-theme`, already set at this
  * page's own boot), so only `lang` needs to be carried explicitly.
  *
- * One consequence, accepted: this leaves the board. Premium has no way back,
- * so a user who subscribes reopens "Change venue" from chat — where the same
- * cards are simply unlocked, since `pairPremiumActive` is re-read on open.
+ * The board hands Premium a way back (`returnParams`), so someone who reads the
+ * price and decides against it returns to the exact board they left instead of
+ * having to close the Mini App and reopen "Change venue" from chat. It is a
+ * fresh load rather than a history entry, which is also what makes a successful
+ * subscription land correctly: the board re-reads `pairPremiumActive` on open
+ * and the premium cards come back unlocked.
  */
 function openPremiumMiniApp(): void {
   haptic("light");
-  location.href = `premium.html?lang=${lang}`;
+  location.href = `premium.html?${returnParams("venue-change", { match: matchId, lang })}`;
 }
 
 /**
