@@ -1079,26 +1079,10 @@ export async function venueStarsInvoice(
   return { link: String(body.link), stars: Number(body.stars) };
 }
 
-/**
- * §Premium: mint the recurring Telegram Stars subscription invoice from inside a
- * Mini App (opened with WebApp.openInvoice). Used by the venue-change board's
- * locked premium cards to unlock the tier in place.
- */
-export async function premiumStarsInvoice(
-  initData: string,
-): Promise<{ link: string; stars: number }> {
-  const res = await apiFetch(`${apiBase}/v1/premium/stars-invoice`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `tma ${initData}`,
-    },
-    body: JSON.stringify({ product: "premium" }),
-  });
-  if (!res.ok) throw await toError(res);
-  const body = (await res.json()) as { link: string; stars: number };
-  return { link: String(body.link), stars: Number(body.stars) };
-}
+// §Premium: there is deliberately no subscription-invoice helper here. The
+// venue-change board used to mint one for its locked cards; it now hands off to
+// premium.html, which mints its own (`mintInvoice`, premium.ts) — so the only
+// place that can charge for a subscription is the screen that sells it.
 
 // ---------------------------------------------------------------------------
 // Type Radar Mini App API

@@ -38,7 +38,6 @@ import {
   declineVenuePayApi,
   keepOriginalVenue,
   venueStarsInvoice,
-  premiumStarsInvoice,
   venueChangePhotoUrl,
   CalendarApiError,
   type VenueBoardState,
@@ -182,7 +181,6 @@ interface Strings {
   premiumPlate: string;
   premiumUnlockConfirm: string;
   premiumFreeWithSub: string;
-  premiumUnlocked: string;
 }
 
 const T: Record<Lang, Strings> = {
@@ -269,9 +267,9 @@ const T: Record<Lang, Strings> = {
     errNetwork: "Network error. Check your connection and try again.",
     payFailed: "The payment didn't go through. Nothing was charged — try again.",
     premiumPlate: "Premium",
-    premiumUnlockConfirm: "This is a Premium venue. Unlock Premium to pick it — and your venue changes become free. Subscribe now?",
+    premiumUnlockConfirm:
+      "This is a Premium venue. Gennety Premium unlocks it — and makes your venue changes free.",
     premiumFreeWithSub: "Free with Gennety Premium",
-    premiumUnlocked: "Premium unlocked ✨ Pick your spot.",
   },
   ru: {
     boardTitle: "Место свидания",
@@ -357,9 +355,9 @@ const T: Record<Lang, Strings> = {
     errNetwork: "Ошибка сети. Проверьте соединение и попробуйте снова.",
     payFailed: "Оплата не прошла. Ничего не списано — попробуйте ещё раз.",
     premiumPlate: "Premium",
-    premiumUnlockConfirm: "Это премиум-место. Оформи Premium, чтобы выбрать его — и смена места станет бесплатной. Оформить сейчас?",
+    premiumUnlockConfirm:
+      "Это премиум-место. Gennety Premium открывает его — и делает смену места бесплатной.",
     premiumFreeWithSub: "Бесплатно с Gennety Premium",
-    premiumUnlocked: "Premium открыт ✨ Выбирай место.",
   },
   uk: {
     boardTitle: "Місце побачення",
@@ -445,9 +443,9 @@ const T: Record<Lang, Strings> = {
     errNetwork: "Помилка мережі. Перевірте з'єднання та спробуйте ще раз.",
     payFailed: "Оплата не пройшла. Нічого не списано — спробуйте ще раз.",
     premiumPlate: "Premium",
-    premiumUnlockConfirm: "Це преміум-місце. Оформи Premium, щоб обрати його — і зміна місця стане безкоштовною. Оформити зараз?",
+    premiumUnlockConfirm:
+      "Це преміум-місце. Gennety Premium відкриває його — і робить зміну місця безкоштовною.",
     premiumFreeWithSub: "Безкоштовно з Gennety Premium",
-    premiumUnlocked: "Premium відкрито ✨ Обирай місце.",
   },
   de: {
     boardTitle: "Euer Date-Ort",
@@ -534,9 +532,9 @@ const T: Record<Lang, Strings> = {
     errNetwork: "Netzwerkfehler. Prüfe deine Verbindung und versuch es erneut.",
     payFailed: "Die Zahlung ging nicht durch. Nichts wurde abgebucht — versuch es erneut.",
     premiumPlate: "Premium",
-    premiumUnlockConfirm: "Das ist ein Premium-Ort. Schalte Premium frei, um ihn zu wählen — und Ortswechsel werden kostenlos. Jetzt abonnieren?",
+    premiumUnlockConfirm:
+      "Das ist ein Premium-Ort. Gennety Premium schaltet ihn frei — und Ortswechsel werden kostenlos.",
     premiumFreeWithSub: "Gratis mit Gennety Premium",
-    premiumUnlocked: "Premium freigeschaltet ✨ Wähl deinen Ort.",
   },
   pl: {
     boardTitle: "Miejsce randki",
@@ -621,9 +619,9 @@ const T: Record<Lang, Strings> = {
     errNetwork: "Błąd sieci. Sprawdź połączenie i spróbuj ponownie.",
     payFailed: "Płatność nie przeszła. Nic nie pobrano — spróbuj ponownie.",
     premiumPlate: "Premium",
-    premiumUnlockConfirm: "To miejsce premium. Odblokuj Premium, aby je wybrać — a zmiany miejsca będą darmowe. Subskrybować teraz?",
+    premiumUnlockConfirm:
+      "To miejsce premium. Gennety Premium je odblokowuje — a zmiany miejsca stają się darmowe.",
     premiumFreeWithSub: "Za darmo z Gennety Premium",
-    premiumUnlocked: "Premium odblokowane ✨ Wybierz miejsce.",
   },
 };
 const s = T[lang];
@@ -1148,8 +1146,8 @@ function heartButton(v: VenueChangeCatalogItem): HTMLElement {
   const key = keyOf(v);
   const mine = selection.has(key);
   const theirs = boardState?.peerLikes.includes(key) ?? false;
-  // Locked premium venue → a padlock button that opens the subscribe flow
-  // instead of marking (the card itself still opens the detail page).
+  // Locked premium venue → a padlock button that hands off to our own Premium
+  // Mini App instead of marking (the card itself still opens the detail page).
   if (isVenueLocked(v)) {
     return el(
       "button",
@@ -1158,7 +1156,7 @@ function heartButton(v: VenueChangeCatalogItem): HTMLElement {
         type: "button",
         onClick: (e) => {
           e.stopPropagation();
-          void promptPremiumUnlock();
+          openPremiumMiniApp();
         },
       },
       [icon("lock", "icon vc-heart-icon")],
@@ -1179,78 +1177,29 @@ function heartButton(v: VenueChangeCatalogItem): HTMLElement {
 }
 
 /**
- * §Premium: ask to unlock Premium (a native confirm), then mint the recurring
- * Stars subscription invoice and open it. On payment we re-fetch the board (now
- * `pairPremiumActive`) and repaint so the same premium cards unlock in place.
- */
-async function promptPremiumUnlock(): Promise<void> {
-  if (busy) return;
-  const go = await confirmNative(s.premiumUnlockConfirm);
-  if (!go) return;
-  busy = true;
-  let link: string;
-  try {
-    ({ link } = await premiumStarsInvoice(getInitData()));
-  } catch {
-    busy = false;
-    app?.showAlert(s.errNetwork);
-    return;
-  }
-  const open = app?.openInvoice;
-  if (!open) {
-    busy = false;
-    if (!openExternal(link)) window.open(link, "_blank");
-    return;
-  }
-  open.call(app, link, (status) => {
-    busy = false;
-    if (status === "paid") {
-      haptic("success");
-      void refreshAfterPremiumUnlock();
-    } else if (status === "failed") {
-      haptic("error");
-      app?.showAlert(s.payFailed);
-    }
-  });
-}
-
-/**
- * §Premium: hand off the "free with Premium" hint to our own Premium Mini App
- * (`premium.html`) instead of minting a Stars invoice in place — the founder
- * wants the subscribe decision made on our sales screen, not a bare native
- * Telegram payment sheet. Same-origin navigation within the Telegram WebView
- * (mirrors the ticket Mini App's `location.href` handoff to the calendar).
+ * §Premium: the ONE way this board ever asks for a subscription — hand off to
+ * our own Premium Mini App (`premium.html`) rather than deciding it here.
+ *
+ * Every premium affordance funnels through this: the card padlock, the detail
+ * page's CTA, and the "free with Premium" hint at the pay step. It used to be
+ * two different answers — the padlock raised a native confirm popup and then a
+ * bare Telegram payment sheet, so the one screen that actually SELLS Premium
+ * (benefits, price, what it unlocks) was the one screen a locked venue never
+ * showed you. Founder decision: the subscribe decision is made on our sales
+ * screen, never in a system dialog.
+ *
+ * Same-origin navigation inside the Telegram WebView (the ticket Mini App
+ * hands off to the calendar the same way); the SDK keeps `initData` across it.
  * `theme` rides along via localStorage (`gennety-theme`, already set at this
  * page's own boot), so only `lang` needs to be carried explicitly.
+ *
+ * One consequence, accepted: this leaves the board. Premium has no way back,
+ * so a user who subscribes reopens "Change venue" from chat — where the same
+ * cards are simply unlocked, since `pairPremiumActive` is re-read on open.
  */
 function openPremiumMiniApp(): void {
   haptic("light");
   location.href = `premium.html?lang=${lang}`;
-}
-
-/** Native confirm popup with a graceful fallback for old clients. */
-function confirmNative(message: string): Promise<boolean> {
-  const showConfirm = app?.showConfirm;
-  if (!showConfirm) return Promise.resolve(window.confirm(message));
-  return new Promise((resolve) => {
-    try {
-      showConfirm.call(app, message, (ok: boolean) => resolve(ok));
-    } catch {
-      resolve(window.confirm(message));
-    }
-  });
-}
-
-/** After a Premium unlock, reload the board + catalog so premium cards open. */
-async function refreshAfterPremiumUnlock(): Promise<void> {
-  try {
-    boardState = await fetchVenueBoardState(getInitData(), matchId);
-    catalog = await fetchVenueChangeCatalog(getInitData(), matchId);
-  } catch {
-    /* the next poll will catch up */
-  }
-  app?.showAlert(s.premiumUnlocked);
-  route();
 }
 
 /**
@@ -1639,10 +1588,12 @@ function renderDetail(v: VenueChangeCatalogItem): void {
   // §Premium: a locked premium venue shows a single "unlock Premium" CTA instead
   // of the mark/express actions — the detail (photos, map) is still fully open.
   if (isVenueLocked(v)) {
+    // No ⭐ on this button any more: the tap opens our Premium screen, it does
+    // not charge anything, and a Stars glyph would promise a payment sheet.
     bar.push(
       iconBtn("btn-primary", "lock", s.premiumPlate + " · " + s.heartAdd, () => {
-        void promptPremiumUnlock();
-      }, true),
+        openPremiumMiniApp();
+      }),
     );
     bar.push(el("p", { class: "vc-note", text: s.premiumUnlockConfirm }));
     mount(page([el("div", { class: "vc-detail" }, nodes)], bar));
