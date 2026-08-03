@@ -3404,6 +3404,16 @@ AND complimentary Premium months, so it rides the already-on
   `grantComplimentaryPremiumMonths` (extends `premiumUntil` additively without
   clobbering a real recurring anchor). No new tables; the blind-decision,
   no-in-app-chat, and ledger exactly-once invariants are unaffected.
+- **Cross-promo entry points (paying screens → referral.html).** The Ticket
+  Store, the Date Ticket gate, Premium, and the Venue Change board each show a
+  quiet, secondary "invite a friend instead" link — never a button competing
+  with the real pay/subscribe CTA — only when the user is genuinely short
+  (empty ticket wallet, not subscribed, or paying Stars for a venue swap) and
+  only while `REFERRAL_FEATURE_ENABLED` is on (mirrors `starsEnabled`, exposed
+  per-screen as `referralEnabled` on the wallet/ticket-gate/premium/
+  venue-change state endpoints). Tapping it opens `referral.html`, which
+  carries a native Telegram BackButton back to the exact screen the user came
+  from (`apps/webapp/src/return-to.ts`) — no dead end, no lost payment context.
 
 ### 3.10 Promo Codes (feature-flagged, independent campaign links)
 
