@@ -453,6 +453,12 @@ bot.start({
       { command: "edit", description: "Edit your profile" },
       { command: "profile", description: "View your profile" },
       { command: "settings", description: "Settings" },
+      // Demo mode's escape hatch. Listed here or it is undiscoverable: a
+      // visitor who wants to see the flow again as the other gender has no
+      // other way to know it exists (DEMO_MODE.md → Recovery).
+      ...(DEMO_MODE_ENABLED
+        ? [{ command: "restart", description: "Start the demo over from scratch" }]
+        : []),
     ]);
     if (env.ADMIN_API_KEY) {
       startAdminServer(bot.api);
