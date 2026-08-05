@@ -92,8 +92,10 @@ function readImages(dir) {
  * one case worth naming rather than swallowing.
  */
 async function resolveUploadChat(token) {
-  const explicit = process.env.DEMO_SEED_CHAT_ID || process.env.FOUNDER_TELEGRAM_ID;
-  if (explicit) return explicit;
+  // Deliberately NOT falling back to FOUNDER_TELEGRAM_ID: that chat belongs to
+  // the production bot, so it both fails here ("chat not found") and, if it
+  // ever did resolve, would drop fictional profiles into the real ops feed.
+  if (process.env.DEMO_SEED_CHAT_ID) return process.env.DEMO_SEED_CHAT_ID;
 
   const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=100`);
   const body = await res.json().catch(() => ({}));
