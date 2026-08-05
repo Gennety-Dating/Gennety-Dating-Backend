@@ -1,5 +1,56 @@
 # Gennety Dating Deploy
 
+**PENDING — venue photos open full-screen (PRODUCT_SPEC §3.7b).** Not deployed
+yet. **No Prisma schema change, no env change, no flag change, no server
+behaviour change** — but it is client-side, so it **DOES need a Mini App
+redeploy** (`apps/webapp`: `venue-change.ts` / `venue-change.css` / `icons.ts` /
+`telegram.d.ts`). The server half is a no-op for this change alone; sequence is
+still Deploy Full Server Code → `pnpm db:drift-check` → `pm2 restart` →
+`./scripts/deploy-webapp.sh`.
+
+Tapping a photo on a venue's detail card now opens the ordinary lightbox —
+full-screen, swipeable, `n / N` counter, its own ×, BackButton bound to closing
+it. The board asks the couple to *choose* a place and the largest a venue was
+ever shown was a 340px rail tile.
+
+**Three things worth knowing before the redeploy:**
+
+- **It asks the photo proxy for `w=1600` where it previously only ever asked for
+  1000.** That is already the proxy's own ceiling (`clampWidth`,
+  `public/routes/venue-change.ts`) so there is nothing to change server-side, but
+  it is a **new cache key**: the first user to enlarge a given photo pays one
+  fresh Google Places fetch, and the day-long `Cache-Control` then covers it. The
+  upgrade is per slide being viewed, never the whole set, so a 10-photo venue
+  costs at most one extra fetch per photo actually looked at. `PLACES_API_KEY`
+  was re-verified working 2026-08-03; with it down the viewer degrades to the
+  category glyph exactly like the rail does.
+- **The dev preview now renders synthetic photos.** `?preview` had
+  `photoRefs: []` for every mock venue, so the galleries were a wall of category
+  glyphs and this feature would have been unreviewable without a live match —
+  and production has **0 matches ever** with `VENUE_CHANGE_FEATURE_ENABLED` off.
+  The mock now carries 0/1/4/7-photo venues backed by generated SVG data-URIs, so
+  `http://localhost:5173/venue-change.html?preview=board` exercises every gallery
+  shape. `import.meta.env.DEV`-gated — unreachable in production.
+- **`.vc-shot` is now a `<button>` when it opens the viewer**, not a div. Its
+  button chrome is stripped in a rule at the END of `venue-change.css`, which
+  matters because that file carries a pre-existing duplicated block (`.vc-shot`
+  is defined twice, lines ~382 and ~745) — anything added to only the first copy
+  would be a coin flip. Do not "tidy" that duplication as part of this deploy.
+
+Post-deploy check — nothing new is logged, so verify by opening the board on
+`@gennetytestbot` (needs a `scheduled` match) and tapping a venue photo. The
+proxy can be exercised directly instead:
+
+```sh
+# 1600 is accepted and cached; anything above is clamped, not rejected.
+curl -sD- -o /dev/null "https://dating-api.gennety.com/v1/venue-change/photo?ref=<ref>&w=1600&tma=<initData>" | head -1
+```
+
+**Rollback:** revert the code and redeploy the Mini App from the previous
+checkout. Nothing else to undo — no schema, no env, no flag, no server state.
+
+---
+
 **PENDING — a status is never shown on a step the user owes (PRODUCT_SPEC §3.6b,
 §3.5, §3.5c).** Not deployed yet. **Code-only: no Prisma schema change, no env
 change, no flag change, no Mini App change** (`apps/webapp` untouched).

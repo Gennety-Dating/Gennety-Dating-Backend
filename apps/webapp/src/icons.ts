@@ -31,7 +31,8 @@ export type IconName =
   | "check"
   | "chevron"
   | "lock"
-  | "ticket";
+  | "ticket"
+  | "close";
 
 /**
  * Path data per icon. `solid: true` icons paint with `fill: currentColor` and
@@ -146,6 +147,12 @@ const ICONS: Record<IconName, { d: string[]; solid?: boolean }> = {
       "M6 10.5h12a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 18 19.5H6A1.5 1.5 0 0 1 4.5 18v-6A1.5 1.5 0 0 1 6 10.5Z",
       "M8 10.5V8a4 4 0 0 1 8 0v2.5",
     ],
+  },
+  // Dismiss — the fullscreen photo viewer's own close control. Distinct from
+  // Telegram's floating × (which closes the whole Mini App), so it sits inside
+  // its own tinted disc rather than floating bare on the photo.
+  close: {
+    d: ["M6.6 6.6 17.4 17.4", "M17.4 6.6 6.6 17.4"],
   },
 };
 

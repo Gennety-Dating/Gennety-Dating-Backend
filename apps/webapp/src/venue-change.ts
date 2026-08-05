@@ -143,6 +143,10 @@ interface Strings {
   detailFallbackSummary: string;
   openMaps: string;
   back: string;
+  /** Accessible label + tooltip on the fullscreen photo viewer's own ×. */
+  photosClose: string;
+  /** Accessible label on a gallery tile: tapping it opens the photo full-screen. */
+  photosOpen: string;
   heartAdd: string;
   heartRemove: string;
   expressBtn: (stars: number) => string;
@@ -239,6 +243,8 @@ const T: Record<Lang, Strings> = {
     detailFallbackSummary: "A relaxed spot for a first date.",
     openMaps: "Open in Google Maps",
     back: "Back",
+    photosClose: "Close photo",
+    photosOpen: "Open photo full screen",
     heartAdd: "Suggest together",
     heartRemove: "Remove my mark",
     expressBtn: (stars) => `Change right now — ${stars}`,
@@ -327,6 +333,8 @@ const T: Record<Lang, Strings> = {
     detailFallbackSummary: "Спокойное место для первого свидания.",
     openMaps: "Открыть в Google Maps",
     back: "Назад",
+    photosClose: "Закрыть фото",
+    photosOpen: "Открыть фото на весь экран",
     heartAdd: "Предложить вместе",
     heartRemove: "Убрать отметку",
     expressBtn: (stars) => `Поменять сразу — ${stars}`,
@@ -416,6 +424,8 @@ const T: Record<Lang, Strings> = {
     detailFallbackSummary: "Спокійне місце для першого побачення.",
     openMaps: "Відкрити в Google Maps",
     back: "Назад",
+    photosClose: "Закрити фото",
+    photosOpen: "Відкрити фото на весь екран",
     heartAdd: "Запропонувати разом",
     heartRemove: "Прибрати позначку",
     expressBtn: (stars) => `Змінити одразу — ${stars}`,
@@ -505,6 +515,8 @@ const T: Record<Lang, Strings> = {
     detailFallbackSummary: "Ein entspannter Ort für ein erstes Date.",
     openMaps: "In Google Maps öffnen",
     back: "Zurück",
+    photosClose: "Foto schließen",
+    photosOpen: "Foto im Vollbild öffnen",
     heartAdd: "Gemeinsam vorschlagen",
     heartRemove: "Markierung entfernen",
     expressBtn: (stars) => `Sofort ändern — ${stars}`,
@@ -595,6 +607,8 @@ const T: Record<Lang, Strings> = {
     detailFallbackSummary: "Spokojne miejsce na pierwszą randkę.",
     openMaps: "Otwórz w Google Maps",
     back: "Wstecz",
+    photosClose: "Zamknij zdjęcie",
+    photosOpen: "Otwórz zdjęcie na pełnym ekranie",
     heartAdd: "Zaproponuj razem",
     heartRemove: "Usuń zaznaczenie",
     expressBtn: (stars) => `Zmień od razu — ${stars}`,
@@ -663,6 +677,7 @@ interface ElAttrs {
   type?: string;
   disabled?: boolean;
   ariaHidden?: boolean;
+  ariaLabel?: string;
   onClick?: (e: Event) => void;
 }
 function el(tag: string, attrs: ElAttrs = {}, children: Array<Node | string> = []): HTMLElement {
@@ -675,6 +690,7 @@ function el(tag: string, attrs: ElAttrs = {}, children: Array<Node | string> = [
   if (attrs.type) node.setAttribute("type", attrs.type);
   if (attrs.disabled != null) (node as HTMLButtonElement).disabled = attrs.disabled;
   if (attrs.ariaHidden) node.setAttribute("aria-hidden", "true");
+  if (attrs.ariaLabel) node.setAttribute("aria-label", attrs.ariaLabel);
   if (attrs.onClick) node.addEventListener("click", attrs.onClick);
   for (const c of children) node.append(c);
   return node;
@@ -682,6 +698,11 @@ function el(tag: string, attrs: ElAttrs = {}, children: Array<Node | string> = [
 
 const root = document.getElementById("root");
 function mount(node: Node): void {
+  // The photo viewer is an overlay on <body>, OUTSIDE this root — a repaint
+  // would leave it floating above a screen it no longer belongs to. Closing it
+  // here means every navigation path is covered by one line instead of each
+  // render function having to remember.
+  closePhotoViewer();
   if (root) root.replaceChildren(node);
 }
 
@@ -708,12 +729,50 @@ function setBack(handler: (() => void) | null): void {
 }
 
 // ── Photo helpers ──
+/**
+ * Dev preview (`?preview`) has no photo proxy behind it, so every ref would 404
+ * and the galleries would be a wall of category glyphs — which is precisely the
+ * part of these screens worth reviewing, and the fullscreen viewer would have
+ * nothing to show at all. Synthesise a photo-shaped image instead. The aspect
+ * ratio deliberately varies per ref so the viewer's letterboxing is reviewable.
+ * Unreachable in production (`previewMode` is `import.meta.env.DEV`-gated).
+ */
+function previewPhotoUrl(ref: string): string {
+  const seed = [...ref].reduce((a, c) => a + c.charCodeAt(0), 0);
+  const hue = (seed * 47) % 360;
+  const portrait = seed % 3 === 0;
+  const w = portrait ? 900 : 1200;
+  const h = portrait ? 1200 : 800;
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'>` +
+    `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
+    `<stop offset='0' stop-color='hsl(${hue} 45% 38%)'/>` +
+    `<stop offset='1' stop-color='hsl(${(hue + 40) % 360} 55% 16%)'/>` +
+    `</linearGradient></defs><rect width='100%' height='100%' fill='url(#g)'/>` +
+    `<text x='50%' y='52%' fill='rgba(255,255,255,.72)' font-family='sans-serif' ` +
+    `font-size='${Math.round(w / 7)}' text-anchor='middle'>${w}×${h}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+function photoUrl(ref: string, width: number): string {
+  return previewMode ? previewPhotoUrl(ref) : venueChangePhotoUrl(getInitData(), ref, width);
+}
 function thumbUrl(v: VenueChangeCatalogItem): string | null {
-  if (v.photoRefs[0]) return venueChangePhotoUrl(getInitData(), v.photoRefs[0], 240);
+  if (v.photoRefs[0]) return photoUrl(v.photoRefs[0], 240);
   return null;
 }
 function galleryUrls(v: VenueChangeCatalogItem): string[] {
-  return v.photoRefs.map((ref) => venueChangePhotoUrl(getInitData(), ref, 1000));
+  return v.photoRefs.map((ref) => photoUrl(ref, 1000));
+}
+/**
+ * Width the fullscreen viewer asks the proxy for. The rail behind it runs at
+ * 1000, which is already under a modern phone's PHYSICAL width once DPR is
+ * applied — so a "fullscreen" copy of that same bitmap would be no easier to
+ * read than the 340px tile the user just tapped, and the feature would be
+ * pointless. 1600 is the proxy's own ceiling (`clampWidth`, routes/venue-change.ts).
+ */
+const VIEWER_PHOTO_WIDTH = 1600;
+function viewerUrls(v: VenueChangeCatalogItem): string[] {
+  return v.photoRefs.map((ref) => photoUrl(ref, VIEWER_PHOTO_WIDTH));
 }
 /**
  * A photo tile that says "loading" instead of looking empty.
@@ -726,10 +785,20 @@ function galleryUrls(v: VenueChangeCatalogItem): string[] {
  * photo). A failed load drops the shimmer and falls back to the category glyph,
  * so a dead ref can never leave a tile shimmering forever.
  */
-function photoTile(url: string | null, className: string, fallback: () => Node): HTMLElement {
-  if (!url) return el("div", { class: className }, [fallback()]);
+function photoTile(
+  url: string | null,
+  className: string,
+  fallback: () => Node,
+  extra: ElAttrs = {},
+): HTMLElement {
+  // A tile that does something on tap renders as a real <button> rather than a
+  // div wearing a listener, so it gets the tap target, keyboard activation and
+  // focus ring for free.
+  const attrs: ElAttrs = extra.onClick ? { ...extra, type: "button" } : extra;
+  const tag = extra.onClick ? "button" : "div";
+  if (!url) return el(tag, { ...attrs, class: className }, [fallback()]);
 
-  const node = el("div", { class: `${className} is-loading` });
+  const node = el(tag, { ...attrs, class: `${className} is-loading` });
   let settled = false;
   const settle = (ok: boolean): void => {
     if (settled) return;
@@ -1374,10 +1443,216 @@ function venueThumb(v: VenueChangeCatalogItem, className = "vc-thumb"): HTMLElem
 }
 
 /** One gallery frame (detail + preview), skeleton-shimmering until it decodes. */
-function venueShot(v: VenueChangeCatalogItem, url: string, single: boolean): HTMLElement {
-  return photoTile(url, `vc-shot${single ? " is-single" : ""}`, () =>
-    categoryIcon(v.category, "icon vc-shot-icon"),
+function venueShot(
+  v: VenueChangeCatalogItem,
+  url: string,
+  single: boolean,
+  onOpen?: () => void,
+): HTMLElement {
+  return photoTile(
+    url,
+    `vc-shot${single ? " is-single" : ""}${onOpen ? " is-tappable" : ""}`,
+    () => categoryIcon(v.category, "icon vc-shot-icon"),
+    onOpen ? { ariaLabel: s.photosOpen, onClick: onOpen } : {},
   );
+}
+
+/**
+ * The venue gallery: a scroll-snap photo rail, its dot indicator, and the tap
+ * target that opens each shot in the fullscreen viewer.
+ *
+ * Shared by the detail page and the read-only preview — they render the same
+ * card and had drifted (the preview was missing the dots entirely), which is
+ * exactly how one of the two would have ended up without the viewer too.
+ */
+function venueGallery(v: VenueChangeCatalogItem): Node[] {
+  const urls = galleryUrls(v);
+  if (urls.length === 0) {
+    // No photos at all: the category glyph is the whole tile, and there is
+    // nothing to enlarge — so it is deliberately not tappable.
+    return [
+      el("div", { class: "vc-gallery" }, [
+        el("div", { class: "vc-shot is-single" }, [categoryIcon(v.category, "icon vc-shot-icon")]),
+      ]),
+    ];
+  }
+
+  const single = urls.length === 1;
+  const shots = urls.map((u, i) =>
+    venueShot(v, u, single, () => {
+      haptic("light");
+      openPhotoViewer(v, i);
+    }),
+  );
+  const gallery = el("div", { class: "vc-gallery" }, shots);
+  const nodes: Node[] = [gallery];
+
+  if (!single) {
+    const dots = el(
+      "div",
+      { class: "vc-dots" },
+      shots.map((_, i) => el("div", { class: `vc-dot${i === 0 ? " is-active" : ""}` })),
+    );
+    nodes.push(dots);
+    gallery.addEventListener(
+      "scroll",
+      () => {
+        const idx = railIndex(gallery, 10);
+        const children = dots.children;
+        for (let i = 0; i < children.length; i++) {
+          children[i].classList.toggle("is-active", i === idx);
+        }
+      },
+      { passive: true },
+    );
+  }
+
+  return nodes;
+}
+
+/** Which slide a scroll-snap rail is currently showing (`gap` in px). */
+function railIndex(rail: HTMLElement, gap: number): number {
+  const w = (rail.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
+  return Math.round(rail.scrollLeft / (w + gap));
+}
+
+// ---------------------------------------------------------------------------
+// Fullscreen photo viewer
+// ---------------------------------------------------------------------------
+
+/**
+ * Tap a gallery photo → it opens edge-to-edge over the app, swipeable, with a
+ * counter and its own ×. The familiar lightbox, and the only place in this Mini
+ * App where a venue photo is shown large enough to actually judge the place by.
+ *
+ * Three things are deliberate:
+ *
+ *  - **It opens instantly, then sharpens.** The tile behind it already decoded
+ *    the 1000px copy, so the viewer paints that from cache and only then swaps
+ *    in the 1600px one (`VIEWER_PHOTO_WIDTH`) for the slide being looked at.
+ *    Opening straight onto the big file would put a spinner in front of a photo
+ *    the user can already see.
+ *  - **The upgrade is per slide, never the whole set.** A 10-photo venue would
+ *    otherwise pull ten full-size images on a tap.
+ *  - **Vertical swipes are turned off while it is open.** A fixed overlay has
+ *    no vertical scroll of its own, which is precisely when Telegram reads a
+ *    downward drag as "close the Mini App" — dragging a photo would drop the
+ *    user out of the app entirely.
+ *
+ * Backdrop is dark in BOTH themes: it is the neutral surround a photo is judged
+ * against, and the light theme's cream would wash the photo out.
+ */
+let closeViewer: (() => void) | null = null;
+
+function closePhotoViewer(): void {
+  closeViewer?.();
+}
+
+function openPhotoViewer(v: VenueChangeCatalogItem, start: number): void {
+  closePhotoViewer();
+
+  const low = galleryUrls(v);
+  const high = viewerUrls(v);
+  if (low.length === 0) return;
+  const index = Math.min(Math.max(start, 0), low.length - 1);
+
+  const upgraded = new Set<number>();
+  const slides = low.map((u) =>
+    photoTile(u, "vc-viewer-shot", () => categoryIcon(v.category, "icon vc-viewer-glyph")),
+  );
+  const rail = el("div", { class: "vc-viewer-rail" }, slides);
+
+  const counter = el("div", { class: "vc-viewer-count" });
+  const paintCounter = (i: number): void => {
+    counter.textContent = `${i + 1} / ${low.length}`;
+  };
+  paintCounter(index);
+  if (low.length === 1) counter.style.display = "none";
+
+  /** Swap slide `i` up to the sharper copy once it decodes. Once per slide. */
+  const sharpen = (i: number): void => {
+    const url = high[i];
+    const node = slides[i];
+    if (!url || !node || upgraded.has(i)) return;
+    upgraded.add(i);
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => {
+      // Only ever replace a photo with a photo. If the 1000px copy failed the
+      // tile is showing the category glyph, and painting a background behind
+      // that glyph would look broken rather than better.
+      if (node.classList.contains("is-loaded")) node.style.backgroundImage = `url("${url}")`;
+    };
+    img.src = url;
+  };
+
+  const closeBtn = el(
+    "button",
+    {
+      class: "vc-viewer-close",
+      type: "button",
+      ariaLabel: s.photosClose,
+      onClick: () => {
+        haptic("light");
+        closePhotoViewer();
+      },
+    },
+    [icon("close", "icon vc-viewer-close-glyph")],
+  );
+
+  const overlay = el("div", { class: "vc-viewer" }, [rail, closeBtn, counter]);
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === "Escape") closePhotoViewer();
+  };
+  const viewerBack = (): void => {
+    closePhotoViewer();
+  };
+  const prevBack = backHandler;
+
+  let done = false;
+  closeViewer = (): void => {
+    if (done) return;
+    done = true;
+    closeViewer = null;
+    document.removeEventListener("keydown", onKey);
+    overlay.remove();
+    // Only hand the back button back if it is still OURS. A repaint (`mount`)
+    // installs the new screen's handler BEFORE tearing us down, so restoring
+    // unconditionally would clobber it and strand the user.
+    if (backHandler === viewerBack) setBack(prevBack);
+    try {
+      app?.enableVerticalSwipes?.();
+    } catch {
+      /* best-effort */
+    }
+  };
+
+  document.body.append(overlay);
+  // Reading clientWidth forces layout, so the rail is measurable already —
+  // the viewer must open ON the tapped photo, never scrolled back to the first.
+  rail.scrollLeft = index * rail.clientWidth;
+  sharpen(index);
+
+  rail.addEventListener(
+    "scroll",
+    () => {
+      const i = Math.min(Math.max(railIndex(rail, 0), 0), low.length - 1);
+      paintCounter(i);
+      sharpen(i);
+    },
+    { passive: true },
+  );
+
+  document.addEventListener("keydown", onKey);
+  setBack(viewerBack);
+  try {
+    app?.disableVerticalSwipes?.();
+  } catch {
+    /* best-effort — an older client simply keeps its swipe-to-close */
+  }
 }
 
 /**
@@ -1551,35 +1826,7 @@ function renderDetail(v: VenueChangeCatalogItem): void {
     renderBoard();
   });
 
-  const urls = galleryUrls(v);
-  const shots =
-    urls.length > 0
-      ? urls.map((u) => venueShot(v, u, urls.length === 1))
-      : [el("div", { class: "vc-shot is-single" }, [categoryIcon(v.category, "icon vc-shot-icon")])];
-  const gallery = el("div", { class: "vc-gallery" }, shots);
-
-  const nodes: Node[] = [gallery];
-
-  if (shots.length > 1) {
-    const dots = el(
-      "div",
-      { class: "vc-dots" },
-      shots.map((_, i) => el("div", { class: `vc-dot${i === 0 ? " is-active" : ""}` })),
-    );
-    nodes.push(dots);
-    gallery.addEventListener(
-      "scroll",
-      () => {
-        const w = (gallery.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
-        const idx = Math.round(gallery.scrollLeft / (w + 10));
-        const children = dots.children;
-        for (let i = 0; i < children.length; i++) {
-          children[i].classList.toggle("is-active", i === idx);
-        }
-      },
-      { passive: true },
-    );
-  }
+  const nodes: Node[] = [...venueGallery(v)];
 
   nodes.push(el("div", { class: "vc-detail-name", text: v.name }));
 
@@ -1704,14 +1951,7 @@ function renderVenuePreview(ref: VenueRef, back: () => void): void {
   const item = ref.key ? catalogByKey(ref.key) : null;
   const nodes: Node[] = [];
 
-  if (item) {
-    const urls = galleryUrls(item);
-    const shots =
-      urls.length > 0
-        ? urls.map((u) => venueShot(item, u, urls.length === 1))
-        : [el("div", { class: "vc-shot is-single" }, [categoryIcon(item.category, "icon vc-shot-icon")])];
-    nodes.push(el("div", { class: "vc-gallery" }, shots));
-  }
+  if (item) nodes.push(...venueGallery(item));
 
   nodes.push(el("div", { class: "vc-detail-name", text: ref.name }));
 
@@ -2304,6 +2544,13 @@ function mockCatalog(): VenueChangeCatalogItem[] {
     count: number,
     summary: string,
     tier?: string,
+    /**
+     * How many photos this mock venue has. Varied on purpose so the preview
+     * covers all three gallery shapes: none (category glyph, not tappable),
+     * one (`is-single`, no dots), and several (dots + the fullscreen viewer's
+     * swipe and counter).
+     */
+    photos = 4,
   ): VenueChangeCatalogItem => ({
     source: "curated",
     placeId,
@@ -2314,7 +2561,7 @@ function mockCatalog(): VenueChangeCatalogItem[] {
     mapsUri: null,
     category,
     distanceKm,
-    photoRefs: [],
+    photoRefs: Array.from({ length: photos }, (_, i) => `${placeId}-photo-${i}`),
     rating,
     userRatingCount: count,
     editorialSummary: summary,
@@ -2331,9 +2578,9 @@ function mockCatalog(): VenueChangeCatalogItem[] {
     mk("q1", "Chef's Table", "ул. Рейтарская, 22", "restaurant", 1.1, 4.9, 410, "Авторская кухня, шеф у стойки.", "premium"),
     mk("q2", "Terrace 41", "ул. Институтская, 41", "lounge", 1.6, 4.8, 260, "Панорамная терраса над городом.", "premium"),
     mk("p1", "Кофейня «Молоко»", "ул. Крещатик, 14", "cafe", 0.4, 4.7, 320, "Уютная спешелти-кофейня с видом на бульвар."),
-    mk("p2", "Bar Chill", "ул. Лютеранская, 3", "lounge", 0.9, 4.5, 210, "Тихий коктейльный бар с мягким светом."),
-    mk("q3", "Winehouse", "ул. Ярославов Вал, 9", "restaurant", 2.2, 4.7, 180, "Винная карта на две сотни позиций.", "premium"),
-    mk("p3", "Парк «Владимирская горка»", "Владимирский спуск", "park", 1.3, 4.8, 540, "Панорама Днепра и тенистые аллеи."),
+    mk("p2", "Bar Chill", "ул. Лютеранская, 3", "lounge", 0.9, 4.5, 210, "Тихий коктейльный бар с мягким светом.", undefined, 1),
+    mk("q3", "Winehouse", "ул. Ярославов Вал, 9", "restaurant", 2.2, 4.7, 180, "Винная карта на две сотни позиций.", "premium", 7),
+    mk("p3", "Парк «Владимирская горка»", "Владимирский спуск", "park", 1.3, 4.8, 540, "Панорама Днепра и тенистые аллеи.", undefined, 0),
   ];
 }
 

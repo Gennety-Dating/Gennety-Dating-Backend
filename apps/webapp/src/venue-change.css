@@ -2200,3 +2200,150 @@ a.vc-info-row .vc-info-text {
   box-shadow: none;
   color: var(--on-accent);
 }
+
+/* ── Fullscreen photo viewer ──────────────────────────────────────────── */
+/* Tap a gallery photo and it opens edge-to-edge, swipeable — the only place in
+   this Mini App where a venue photo is large enough to actually judge the place
+   by. Everything here is deliberately theme-INDEPENDENT: a photo is judged
+   against a neutral dark surround, and the light theme's cream would wash it
+   out, so the scrim and its chrome stay dark in both themes. */
+
+/* A gallery tile that opens the viewer is a real <button>, so its chrome has to
+   be stripped back to exactly what `.vc-shot` already draws. */
+.vc-shot.is-tappable {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: zoom-in;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.18s ease;
+}
+.vc-shot.is-tappable:active {
+  transform: scale(0.985);
+}
+
+.vc-viewer {
+  position: fixed;
+  inset: 0;
+  /* Nothing else in this app sets a stacking order, so one layer above the
+     document flow is enough — and stays legible if anything ever joins it. */
+  z-index: 60;
+  /* Fully opaque, not a translucent scrim: at 0.97 the burgundy CTA and the
+     gallery tile behind it still read through the letterboxing, which looks
+     like a half-drawn overlay rather than a photo you stepped into. The
+     fade-in below is what makes it feel like a layer. */
+  background: #050505;
+  animation: viewer-in 0.22s ease both;
+}
+@keyframes viewer-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* One slide per photo, snapped — same mechanic as the rail it was opened from,
+   so the swipe feels identical in both places. */
+.vc-viewer-rail {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  /* The overlay has no scroll of its own to absorb an overscroll, so without
+     this a horizontal fling at either end chains to the page behind it. */
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.vc-viewer-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.vc-viewer-shot {
+  flex: 0 0 100%;
+  height: 100%;
+  scroll-snap-align: center;
+  /* `contain` (not the rail's `cover`): enlarging a photo to then crop it is
+     the opposite of what this screen is for. */
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  /* Keeps the photo clear of Telegram's floating × / ⋯, our own close button
+     and the counter. `background-origin` is load-bearing, not decoration: it
+     defaults to `padding-box`, which means `contain` would size against the
+     box INCLUDING this padding and a tall portrait shot would run straight
+     under that chrome. `content-box` is what makes the padding count. */
+  padding: calc(env(safe-area-inset-top) + var(--tg-content-top) + 8px) 12px
+    calc(env(safe-area-inset-bottom) + var(--tg-content-bottom) + 56px);
+  background-origin: content-box;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+.vc-viewer-glyph {
+  width: 48px;
+  height: 48px;
+  opacity: 0.5;
+}
+
+.vc-viewer-close {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + var(--tg-content-top) + 8px);
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+.vc-viewer-close:active {
+  background: rgba(255, 255, 255, 0.24);
+  transform: scale(0.92);
+}
+.vc-viewer-close-glyph {
+  width: 19px;
+  height: 19px;
+  stroke-width: 2;
+}
+
+.vc-viewer-count {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + var(--tg-content-bottom) + 16px);
+  padding: 6px 13px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-viewer {
+    animation: none;
+  }
+  .vc-shot.is-tappable,
+  .vc-viewer-close {
+    transition: none;
+  }
+}

@@ -3176,6 +3176,24 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   `overlapCandidates` list and the actor picks one (initiator-offers /
   responder-decides, exactly like the Calendar §3.6). No free text anywhere —
   no comment channel, so NO IN-APP CHAT needs no carve-out here.
+
+  **A venue's photos open full-screen (2026-08-05).** Tapping any photo in a
+  venue's detail gallery opens the ordinary lightbox — edge-to-edge on an opaque
+  dark backdrop in both themes, swipeable across the whole set, with a `n / N`
+  counter, its own ×, and Telegram's BackButton bound to closing it rather than
+  leaving the venue. It exists because this board asks the couple to *choose* a
+  place, and until now the largest a venue was ever shown was a 340px rail tile
+  — you could not actually see the room you were agreeing to meet in. It opens
+  on the tapped photo (never rewound to the first) and paints instantly from the
+  copy the rail already decoded, then sharpens the slide being looked at to the
+  photo proxy's 1600px ceiling; the upgrade is per slide, so a 10-photo venue
+  never pulls ten full-size images on one tap. Vertical swipes are disabled
+  while it is open — a fixed overlay has no scroll of its own, which is exactly
+  when Telegram reads a downward drag as "close the Mini App", so dragging a
+  photo would otherwise drop the user out of the app. A venue with no photos
+  shows the category glyph and is deliberately not tappable: there is nothing to
+  enlarge. Telegram-only; the same gallery (and viewer) backs both the detail
+  page and the read-only venue preview reached from the agreed/settled screens.
 - **Payment (150⭐, `VENUE_CHANGE_STARS`).** A settled change costs one flat
   Telegram Stars price; browsing/liking/agreeing are free and no one pays
   before an agreement, so **no refund path is needed** (the only refund is the

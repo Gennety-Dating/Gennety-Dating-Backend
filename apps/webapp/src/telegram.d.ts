@@ -110,6 +110,15 @@ interface TelegramWebApp {
   setBottomBarColor?(color: string): void;
   requestFullscreen?(): void;
   exitFullscreen?(): void;
+  /**
+   * Bot API 7.7+ — stop a vertical drag from minimising/closing the Web App.
+   * Telegram reads a downward drag as "close me" precisely when the page has no
+   * vertical scroll of its own, which is exactly the state a fullscreen photo
+   * viewer is in: swiping around a photo would dismiss the whole Mini App. Such
+   * a viewer turns swipes off while it is open and back on when it closes.
+   */
+  disableVerticalSwipes?(): void;
+  enableVerticalSwipes?(): void;
   lockOrientation?(): void;
   unlockOrientation?(): void;
   close(): void;
