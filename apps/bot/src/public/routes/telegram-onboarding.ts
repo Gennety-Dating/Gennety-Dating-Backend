@@ -15,6 +15,7 @@ import {
   t,
 } from "@gennety/shared";
 import { env } from "../../config.js";
+import { DEMO_MODE_ENABLED } from "../../demo/config.js";
 import { effectiveAiMemoryPreference } from "../../services/ai-memory-export.js";
 import { validateInitData, type TelegramInitDataUser } from "../init-data.js";
 import {
@@ -199,7 +200,19 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
 
     const user = await prisma.user.update({
       where: { id: current.id },
-      data: { registrationTrack: track, ...onboardingActivityPatch() },
+      data: {
+        registrationTrack: track,
+        // Demo mode (DEMO_MODE.md): the general track's rail is a trusted
+        // Telegram contact share, i.e. a real phone number. Asking an investor
+        // for their number to look at a demo is both friction and a data
+        // liability, so the rail is satisfied here instead and `User.phone`
+        // stays null — the visitor still sees the fork and the phone screen,
+        // the screen simply resolves itself on its next poll.
+        ...(DEMO_MODE_ENABLED && track === "general"
+          ? { phoneVerifiedAt: new Date() }
+          : {}),
+        ...onboardingActivityPatch(),
+      },
       select: miniUserSelect,
     });
 
@@ -316,11 +329,18 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
         return;
       }
 
-      const result = await verifyOtp(user.email, code);
-      if (!result.ok) {
-        const status = result.reason === "mismatch" ? 401 : 400;
-        res.status(status).json({ error: result.reason });
-        return;
+      // Demo mode (DEMO_MODE.md): any well-formed code is accepted. The
+      // visitor still types an address and still sees the OTP screen — what
+      // they don't have to do is go and find a real inbox, which for a
+      // university-domain address they usually don't have anyway. The demo
+      // process also runs with OTP_LOG_TO_CONSOLE=true, so no mail is sent.
+      if (!DEMO_MODE_ENABLED) {
+        const result = await verifyOtp(user.email, code);
+        if (!result.ok) {
+          const status = result.reason === "mismatch" ? 401 : 400;
+          res.status(status).json({ error: result.reason });
+          return;
+        }
       }
 
       const updated = await prisma.user.update({

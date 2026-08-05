@@ -684,6 +684,34 @@ export const env = {
     process.env.LLM_GLOBAL_HOURLY_TOKEN_BUDGET ?? "0",
   ),
 
+  // ── Demo mode (DEMO_MODE.md) ────────────────────────────────
+  /// Master switch for the investor/friends demo runtime. **Production never
+  /// sets this.** It is not a feature flag in the ordinary sense — it declares
+  /// that this whole PROCESS is a demo: a separate bot token, a separate
+  /// database, a separate port, a separate Mini App host. Every demo behavior
+  /// in the codebase is gated on it, and `assertDemoIsolation()`
+  /// (`demo/config.ts`) refuses to boot a demo process that is configured in a
+  /// way which could reach real people or real money.
+  ///
+  /// It also makes this a non-production runtime for
+  /// `identityTrustConfigurationErrors` below — demo deliberately waves the
+  /// liveness verdict through, so it must be honest about that rather than
+  /// pretending to satisfy the production identity gate.
+  DEMO_MODE_ENABLED: process.env.DEMO_MODE_ENABLED === "true",
+  /// How long the puppet partner "thinks" before answering, per step. Sized so
+  /// the peer-wait shimmer (PRODUCT_SPEC §3.6b) is genuinely on screen and read
+  /// — the action handlers start it immediately, so a visitor sees the real
+  /// "waiting on your partner" beat rather than an instant robotic reply.
+  DEMO_PEER_DELAY_MS: Math.max(
+    1_000,
+    Number(process.env.DEMO_PEER_DELAY_MS ?? "12000"),
+  ),
+  /// Driver poll interval. The driver re-derives whose turn it is from the match
+  /// row on every tick rather than tracking state, so this is a pure latency
+  /// knob. `0` disables the driver (the demo bot then behaves like a normal
+  /// bot with no partner, useful for debugging onboarding alone).
+  DEMO_TICK_MS: Math.max(0, Number(process.env.DEMO_TICK_MS ?? "3000")),
+
   // ── Dev-only: skip corporate-email OTP for specific Telegram IDs ──
   /// Comma-separated list of Telegram IDs that get a synthetic verified email
   /// at /start time, so the agent skips the email step entirely. Lets the
@@ -697,6 +725,7 @@ export const env = {
 export interface IdentityTrustConfiguration {
   OTP_LOG_TO_CONSOLE: boolean;
   DEV_OTP_BYPASS_TELEGRAM_IDS: ReadonlySet<bigint>;
+  DEMO_MODE_ENABLED: boolean;
   MANDATORY_VERIFICATION_ENABLED: boolean;
   FACE_LIVENESS_ENABLED: boolean;
   LIVENESS_STS_ROLE_ARN: string;
@@ -712,6 +741,15 @@ export interface IdentityTrustConfiguration {
  * explicitly sets NODE_ENV=development and OTP_LOG_TO_CONSOLE=true. Every
  * other runtime is treated as production-like so a debug env flag or missing
  * NODE_ENV cannot silently disable the identity trust boundary.
+ *
+ * Demo mode (DEMO_MODE.md) is the third recognised non-production runtime. It
+ * deliberately waves the liveness verdict through, so it must declare itself a
+ * non-production runtime rather than pretend to satisfy this gate. That is only
+ * safe because the exemption is not self-certifying: `assertDemoIsolation()`
+ * (`demo/config.ts`) runs FIRST at boot and refuses a demo-flagged process that
+ * still carries production's own settings. So flipping `DEMO_MODE_ENABLED=true`
+ * in the production `.env` does not quietly disable identity verification — it
+ * stops the process from starting at all, which is the failure mode we want.
  */
 export function identityTrustConfigurationErrors(
   config: IdentityTrustConfiguration = env,
@@ -719,6 +757,7 @@ export function identityTrustConfigurationErrors(
 ): string[] {
   if (runtime === "test") return [];
   if (runtime === "development" && config.OTP_LOG_TO_CONSOLE) return [];
+  if (config.DEMO_MODE_ENABLED) return [];
 
   const errors: string[] = [];
   if (config.OTP_LOG_TO_CONSOLE) {

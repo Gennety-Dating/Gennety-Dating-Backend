@@ -28,6 +28,8 @@
     "dev:align-email-bypass": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-align-email-bypass.mjs --apply",
     "dev:trigger-test-match": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-trigger-test-match.mjs --apply",
     "dev:e2e-full-flow": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-e2e-full-flow.mjs",
+    "demo:seed": "pnpm --filter @gennety/bot exec tsx ../../scripts/seed-demo-partners.mjs",
+    "demo:deploy": "./scripts/deploy-demo.sh",
     "dev:reset-onboarding": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-reset-onboarding.mjs",
     "dev:reset-onboarding:apply": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-reset-onboarding.mjs --apply",
     "dev:reset-verification": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-reset-verification.mjs",

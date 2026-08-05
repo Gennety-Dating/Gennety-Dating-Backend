@@ -9,6 +9,12 @@ import cron from "node-cron";
 import { ensureMatchPairIndex } from "@gennety/db";
 import { CADENCE } from "@gennety/shared";
 import { assertIdentityTrustConfiguration, env } from "./config.js";
+import {
+  DEMO_MODE_ENABLED,
+  assertDemoIsolation,
+  logDemoBanner,
+} from "./demo/config.js";
+import { demoDriverTick } from "./demo/driver.js";
 import { createBot } from "./bot.js";
 import { setMainBotApi } from "./services/main-bot-api.js";
 import {
@@ -66,6 +72,16 @@ process.on("unhandledRejection", (reason) => {
   console.error("[bot] unhandledRejection (non-fatal, continuing):", reason);
 });
 
+// Demo mode is a runtime, not a feature (DEMO_MODE.md). It is checked FIRST
+// and on purpose: `identityTrustConfigurationErrors` treats a demo process as
+// non-production and therefore stops enforcing the identity gate, so the flag
+// must not be self-certifying. `assertDemoIsolation` refuses to start a
+// demo-flagged process that still carries production's own settings — which is
+// what makes DEMO_MODE_ENABLED=true in the production .env a loud boot failure
+// rather than a silent disabling of verification for real users.
+if (DEMO_MODE_ENABLED) {
+  assertDemoIsolation();
+}
 assertIdentityTrustConfiguration();
 
 const bot = createBot(env.BOT_TOKEN);
@@ -391,6 +407,27 @@ bot.start({
   onStart: async (info) => {
     console.log(`Bot @${info.username} started`);
 
+    if (DEMO_MODE_ENABLED) {
+      // The two things no automated check can verify — which bot and which
+      // database — printed where they cannot be missed.
+      logDemoBanner(info.username);
+      if (env.DEMO_TICK_MS > 0) {
+        setInterval(
+          guardedTick("demo-driver", () =>
+            demoDriverTick(bot.api).then((r) => {
+              if (r.acted > 0 || r.errors > 0) {
+                console.log(`[demo] scanned=${r.scanned} acted=${r.acted} errors=${r.errors}`);
+              }
+            }),
+          ),
+          env.DEMO_TICK_MS,
+        );
+        console.log(`[worker] Demo driver every ${env.DEMO_TICK_MS}ms`);
+      } else {
+        console.log("[worker] Demo driver disabled (DEMO_TICK_MS=0)");
+      }
+    }
+
     if (env.DEV_OTP_BYPASS_TELEGRAM_IDS.size > 0) {
       const ids = [...env.DEV_OTP_BYPASS_TELEGRAM_IDS].map((id) => id.toString()).join(", ");
       console.warn(
@@ -429,10 +466,19 @@ bot.start({
     // otherwise overlap the next one and re-process the same rows (duplicate
     // DMs / pushes — audit H2/M4). `guardedTick` skips a tick while the prior
     // run is still in flight and centralises error logging.
-    cron.schedule(MATCH_CRON_SCHEDULE, guardedTick("drop-matching", dropMatchingJob), {
-      timezone: CRON_TIMEZONE,
-    });
-    console.log(`[cron] Drop matching scheduled: "${MATCH_CRON_SCHEDULE}" (${CRON_TIMEZONE})`);
+    // Demo mode owns match creation itself (`demo/driver.ts`). The global
+    // matchmaker must NOT run there: every demo visitor is an active, verified
+    // Kyiv account, so the real engine would cheerfully pair two investors with
+    // each other. Code-owned rather than an env schedule, because "the demo
+    // must never pair two visitors" is an invariant, not a setting.
+    if (DEMO_MODE_ENABLED) {
+      console.log("[cron] Drop matching NOT scheduled (demo mode owns matching)");
+    } else {
+      cron.schedule(MATCH_CRON_SCHEDULE, guardedTick("drop-matching", dropMatchingJob), {
+        timezone: CRON_TIMEZONE,
+      });
+      console.log(`[cron] Drop matching scheduled: "${MATCH_CRON_SCHEDULE}" (${CRON_TIMEZONE})`);
+    }
 
     // 24h TTL expiry cron.
     cron.schedule(EXPIRY_CRON_SCHEDULE, guardedTick("match-expiry", expiryJob));
@@ -442,6 +488,12 @@ bot.start({
     // sweep in the same tick (mirrors autoUnsuspendElapsed's shape: a
     // periodic scan reversing a status this same subsystem set — no
     // dedicated cron registration needed).
+    // Skipped in demo for the same reason: a visitor who is about to be handed
+    // a match must never receive "we couldn't find anyone this week", and the
+    // pool-exhaustion sweep would eventually pause their account mid-demo.
+    if (DEMO_MODE_ENABLED) {
+      console.log("[cron] No-match notice NOT scheduled (demo mode)");
+    } else {
     cron.schedule(
       NO_MATCH_NOTICE_CRON_SCHEDULE,
       guardedTick("no-match-notice", async () => {
@@ -458,6 +510,7 @@ bot.start({
     console.log(
       `[cron] No-match notice scheduled: "${NO_MATCH_NOTICE_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
     );
+    }
 
     // Live "⏳ Xh left" countdown plate on proposal pitches.
     cron.schedule(

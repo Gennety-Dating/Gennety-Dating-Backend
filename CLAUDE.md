@@ -5,6 +5,7 @@ Claude Code should load and follow these root documents:
 @AGENTS.md
 @PRODUCT_SPEC.md
 @ARCHITECTURE.md
+@DEMO_MODE.md
 @deploy.md
 
 Document roles:
@@ -14,6 +15,8 @@ Document roles:
 - **PRODUCT_SPEC.md** — product invariants and major user flows.
 - **ARCHITECTURE.md** — durable architecture boundaries, topology, data
   ownership, API surface, background jobs, external integrations.
+- **DEMO_MODE.md** — the second (demo) bot: what it fakes, how it stays
+  isolated from production, and the impact check every product change owes it.
 - **deploy.md** — production runbook for DigitalOcean, PM2, Caddy, env,
   validation, rollback.
 
@@ -21,6 +24,13 @@ Claude-specific rule: for complex behavior changes, start in Plan Mode with a
 short plan and wait for confirmation before editing. For deploy requests,
 `deploy.md` is canonical; do not ask for documented hostnames, paths, service
 names, or credential locations unless access is blocked or data is missing.
+
+Claude-specific rule — **demo mode**: this repo ships a second, isolated demo
+bot (DEMO_MODE.md). When a change touches a product flow, a Mini App screen, a
+gate, or a paid step, say how it behaves in demo mode as part of the change. If
+the answer is not obvious, **ask the user** instead of assuming — a demo that
+silently dead-ends is worse than one that lags. See AGENTS.md → "Demo Mode
+Impact Check".
 
 ## Git Journal Workflow (single-branch, commit after every change)
 

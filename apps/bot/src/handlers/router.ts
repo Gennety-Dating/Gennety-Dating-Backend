@@ -35,8 +35,18 @@ import {
   handleOnboardingPhotoDelete,
 } from "./onboarding/photo-editor.js";
 import { menuRouter } from "./menu/router.js";
+import { DEMO_MODE_ENABLED } from "../demo/config.js";
+import { demoRouter } from "../demo/commands.js";
 
 const router = new Composer<BotContext>();
+
+// Demo mode (DEMO_MODE.md): `/restart` and the post-decline "show me that
+// profile again" button. Mounted first so they work from any state — a demo
+// visitor stuck behind the verification gate or mid-negotiation must always
+// have a way out. Not mounted at all in production.
+if (DEMO_MODE_ENABLED) {
+  router.use(demoRouter);
+}
 
 router.use(async (ctx, next) => {
   if (!ctx.from?.id) {

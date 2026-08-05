@@ -1,5 +1,6 @@
 > **Product invariants and user flow** live in [PRODUCT_SPEC.md](PRODUCT_SPEC.md).
 > **System architecture, data ownership, and API topology** live in [ARCHITECTURE.md](ARCHITECTURE.md).
+> **The isolated demo bot** lives in [DEMO_MODE.md](DEMO_MODE.md).
 > **Production deploy/runbook** lives in [deploy.md](deploy.md).
 
 ## Obsidian Memory Protocol
@@ -198,6 +199,41 @@ Ask first before:
 - Changing Prisma schema, vector indexes, or destructive DB behavior.
 - Switching workspace/build systems.
 - Touching production secrets or irreversible deploy steps.
+
+## Demo Mode Impact Check
+
+This backend runs a **second, isolated deployment**: the demo bot
+([DEMO_MODE.md](DEMO_MODE.md)), which walks investors and friends through the
+whole product from one account — no real partner, no real identity check, no
+real money, no waiting. It is the same source tree behind one flag
+(`DEMO_MODE_ENABLED`) that production never sets.
+
+Most changes need nothing. The demo driver re-derives state on every tick
+instead of hooking into the matching handlers, so ordinary flow changes are
+picked up for free. Ask the question only when a change adds or moves one of:
+
+1. **A gate** — anything a user must pass (verification, a contact rail, a
+   validation step). Does demo wave it through, and where?
+2. **A paid step** — demo cannot charge. Is there a mock rail, is it free, or
+   is the screen skipped? Say which, because "skipped" means an investor never
+   sees that surface.
+3. **A two-sided negotiation step** — the puppet needs a branch in
+   `apps/bot/src/demo/decide.ts`, or the demo dead-ends there.
+4. **How a match is created or advanced** — re-check the driver's state table
+   in DEMO_MODE.md still describes reality.
+
+When the answer is not obvious from the change itself, **ask the user how it
+should behave in demo mode** rather than assuming. Same shape as the "Two
+Clients, One Backend" rule above, which forces the equivalent question for iOS.
+
+Two hard rules, not judgment calls:
+
+- **No demo-only table or column in `packages/db/prisma/schema.prisma`.** The
+  schema is shared, so it would ship to the production database. Demo
+  bookkeeping that cannot be derived from real product state lives in memory.
+- **Demo behavior stays inside `apps/bot/src/demo/`**, reached from production
+  modules only through a single commented `if (DEMO_MODE_ENABLED)`. If a change
+  needs more than that, it needs a design conversation first.
 
 ## Documentation Impact Check
 

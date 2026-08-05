@@ -1,5 +1,83 @@
 # Gennety Dating Deploy
 
+**PENDING — demo mode: a second, isolated bot that walks one person through the
+whole product (DEMO_MODE.md).** Not deployed yet. **No Prisma schema change, no
+production env change, no production flag change** — production behaviour is
+byte-identical with `DEMO_MODE_ENABLED` unset, which is how it ships. What it
+adds is a SECOND deployment of the same source tree.
+
+For an investor or a friend, the only way to see the product end to end today is
+to actually register, wait for a Thursday drop, and hope someone matches — i.e.
+there is no way. `scripts/dev-e2e-full-flow.mjs` drives both sides from a
+terminal, which is useful for engineering and useless as a demo. This is the
+demo: same screens, same cards, same Mini Apps, but the partner is a puppet, the
+gates wave you through, and twelve seconds stands in for two days.
+
+**The safety property worth reading before anything else.** `DEMO_MODE_ENABLED`
+makes `identityTrustConfigurationErrors` treat the process as non-production, so
+it stops enforcing the liveness gate. That is why the flag is not
+self-certifying: `assertDemoIsolation()` runs first at boot and refuses a
+demo-flagged process that still carries production's own settings (founder
+notifications on, Stars on, an admin key present). **So setting
+`DEMO_MODE_ENABLED=true` in `/opt/gennety/.env` does not silently disable
+verification for real users — it stops the bot from booting**, naming the
+setting that gave it away. Production is unaffected either way; there is nothing
+to undo on the production side.
+
+One-time setup before the first demo deploy (all of it outside `/opt/gennety`):
+
+1. BotFather: create the demo bot, then `/setdomain demo-app.gennety.com` —
+   without it the liveness Mini App cannot ask for camera permission.
+2. A **second Supabase project** (demo data is disposable; pgvector is created
+   by `db:push` because the datasource declares the extension), plus three
+   `…-demo` storage buckets.
+3. Hostinger DNS: `demo-app` and `demo-api` A records → `167.172.178.229`.
+4. Two Caddy blocks — `demo-api.gennety.com` → `localhost:3102`, and
+   `demo-app.gennety.com` serving `/var/www/demo-app` (copy the
+   `dating-calendar` block's headers/caching verbatim).
+5. `/opt/gennety-demo/.env` — the full list is in DEMO_MODE.md → Setup.
+6. Seed: `pnpm --filter @gennety/db db:push`, then the Kyiv venue catalog
+   (`pnpm seed-venues:import --apply`), then `pnpm demo:seed -- --photos=<dir>`.
+7. `pm2 start bash --name gennety-demo -- -c "cd /opt/gennety-demo && ./apps/bot/node_modules/.bin/tsx apps/bot/src/index.ts"` then `pm2 save`.
+
+Thereafter it is one command per release, run **after** production is verified:
+
+```sh
+./scripts/deploy-demo.sh      # or: pnpm demo:deploy
+```
+
+It syncs the same working tree to `/opt/gennety-demo`, installs, builds, pushes
+the schema to the demo database with a `db:drift-check` gate, restarts
+`gennety-demo`, and builds a second Mini App bundle pointed at `demo-api` into
+`/var/www/demo-app` — then rebuilds `dist/` back to the production API base so a
+later `deploy-webapp.sh` can never ship a demo-pointed bundle to the real host.
+
+**Three things worth knowing before the first run:**
+
+- **A schema change now needs `db:push` against TWO databases.** The demo deploy
+  script does it and fails on drift; skipping it surfaces as a `P2022` crash
+  loop on `gennety-demo` exactly as it would in production.
+- **Memory.** The droplet has 2 GB with ~1.4 GB free and `gennety-bot` sits at
+  ~45 MB RSS, so a second process fits — but the demo is the one to kill first
+  if memory ever gets tight. It has no users to lose.
+- **The demo spends real OpenAI, Places and AWS budget** (a liveness session is
+  still minted, ~$0.015, even though its verdict is ignored). Small, not zero.
+
+Post-deploy check — the banner is the proof the right process came up:
+
+```sh
+ssh root@167.172.178.229 'pm2 logs gennety-demo --lines 40 --nostream' | head -20
+# Must name the DEMO bot and the DEMO database. If it names production, stop.
+curl -s https://demo-api.gennety.com/v1/ping
+curl -sI https://demo-app.gennety.com/onboarding.html | head -1
+```
+
+**Rollback:** `pm2 delete gennety-demo`. Production is untouched by anything in
+this block — no shared database, no shared token, no shared port, no shared
+bundle.
+
+---
+
 **PENDING — venue photos open full-screen (PRODUCT_SPEC §3.7b).** Not deployed
 yet. **No Prisma schema change, no env change, no flag change, no server
 behaviour change** — but it is client-side, so it **DOES need a Mini App

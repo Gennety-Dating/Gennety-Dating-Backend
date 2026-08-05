@@ -10,6 +10,7 @@ function productionReady(
   return {
     OTP_LOG_TO_CONSOLE: false,
     DEV_OTP_BYPASS_TELEGRAM_IDS: new Set(),
+    DEMO_MODE_ENABLED: false,
     MANDATORY_VERIFICATION_ENABLED: true,
     FACE_LIVENESS_ENABLED: true,
     LIVENESS_STS_ROLE_ARN: "arn:aws:iam::147010141827:role/GennetyLivenessClient",

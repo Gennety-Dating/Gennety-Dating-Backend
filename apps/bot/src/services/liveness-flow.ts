@@ -10,6 +10,8 @@ import {
 import { mintLivenessCredentials, type LivenessCredentials } from "./liveness-credentials.js";
 import type { OutcomeGate } from "./outcome-gate.js";
 import { runFaceMatchVerificationDefault } from "./verification-pipeline.js";
+import { DEMO_MODE_ENABLED } from "../demo/config.js";
+import { releaseDemoLivenessSession, runDemoVerification } from "../demo/verification.js";
 import { buildVerificationKeyboard } from "./verification-keyboard.js";
 import { livenessRetryMessage } from "./verification-messages.js";
 
@@ -261,6 +263,20 @@ export async function completeLivenessCheck(
       expected: user.pendingLivenessSessionId,
     });
     return { ok: false, error: "session_mismatch" };
+  }
+
+  // Demo mode (DEMO_MODE.md): the visitor just ran the genuine camera flow,
+  // but the demo does not ask AWS what it thought and does not compare any
+  // faces — the whole point is that a visitor who uploaded three pictures of a
+  // cat still gets through. Everything downstream is the untouched pipeline.
+  if (DEMO_MODE_ENABLED) {
+    await releaseDemoLivenessSession(user.id);
+    void runDemoVerification(user.id, sessionId, api, options.outcomeGate)
+      .catch((err) => {
+        console.error(`${LOG_PREFIX} demo verification threw`, { userId, err });
+      })
+      .finally(() => options.outcomeGate?.finish());
+    return { ok: true, outcome: "processing" };
   }
 
   const result = await getLivenessResult(sessionId);

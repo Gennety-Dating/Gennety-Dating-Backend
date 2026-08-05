@@ -40,6 +40,7 @@ import {
   type VenueInvoiceMode,
 } from "@gennety/shared";
 import { env } from "../../config.js";
+import { DEMO_MODE_ENABLED } from "../../demo/config.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import type { BotContext } from "../../session.js";
 import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
@@ -253,6 +254,14 @@ function pairPremiumActive(match: VcMatch, now: Date = new Date()): boolean {
  * VENUE_CHANGE_STARS and the non-premium payer sees the counterfactual upsell.
  */
 function changeIsFree(agreedTier: string | null, settler: { premiumUntil: Date | null }, now: Date): boolean {
+  // Demo mode (DEMO_MODE.md): a venue change costs real Telegram Stars, and
+  // Stars has no mock rail the way the Date Ticket gate does — so the only way
+  // to show this flow without charging a visitor is to settle it for free.
+  // Reuses the Premium waiver path exactly, including the `settled: true`
+  // response the Mini App already understands. Documented consequence: the demo
+  // shows the whole likes board but not the venue-change payment screen (the
+  // ticket gate is where a demo visitor sees a real price and a real receipt).
+  if (DEMO_MODE_ENABLED) return true;
   if (agreedTier === "premium") return true;
   return isPremiumHeadActive(settler, now);
 }

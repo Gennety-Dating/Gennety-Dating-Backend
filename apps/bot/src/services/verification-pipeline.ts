@@ -1032,6 +1032,22 @@ export interface DefaultPipelineOptions extends PipelineRunOptions {
    * nothing is narrated and messages go out immediately.
    */
   outcomeGate?: OutcomeGate;
+  /**
+   * Replace individual production dependencies, leaving the rest of the wiring
+   * (notify, activation surface, Elo seed, DB access) exactly as built below.
+   *
+   * The only caller is demo mode (`demo/verification.ts`, DEMO_MODE.md), which
+   * substitutes the four deps that carry identity *evidence* so a demo visitor
+   * always passes. Scoped to those four on purpose: the decision itself, the
+   * quorum rule, the photo-drop rule and the activation gate all still run for
+   * real, so the demo exercises this pipeline rather than bypassing it.
+   */
+  depsOverride?: Partial<
+    Pick<
+      PipelineDeps,
+      "fetchReferenceSelfie" | "uploadSelfie" | "downloadProfileImage" | "compareFaces"
+    >
+  >;
 }
 
 /**
@@ -1322,6 +1338,9 @@ export async function runFaceMatchVerificationDefault(
           }
         },
       },
+      // Last, so a caller-supplied dep wins over the default built above.
+      // Empty in production — only demo mode passes anything here.
+      ...(options.depsOverride ?? {}),
     },
     {
       thresholdVerify: env.FACE_MATCH_THRESHOLD_VERIFY,

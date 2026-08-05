@@ -4,6 +4,7 @@ out/
 apps/video/build/
 .env
 .env.local
+.env.demo
 .env.*.local
 *.pem
 *.key
