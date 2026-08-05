@@ -82,6 +82,41 @@ function readImages(dir) {
     .map((name) => join(dir, name));
 }
 
+/**
+ * Find a chat the demo bot may post into, so minting `file_id`s needs no manual
+ * step. Any chat works — this is a scratch surface for the upload, not a
+ * permission: the demo bot is open to whoever opens it.
+ *
+ * `getUpdates` is read without an offset, so nothing is confirmed and a running
+ * bot loses no updates. It does 409 while long polling is active, which is the
+ * one case worth naming rather than swallowing.
+ */
+async function resolveUploadChat(token) {
+  const explicit = process.env.DEMO_SEED_CHAT_ID || process.env.FOUNDER_TELEGRAM_ID;
+  if (explicit) return explicit;
+
+  const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=100`);
+  const body = await res.json().catch(() => ({}));
+  if (!body.ok) {
+    if (res.status === 409) {
+      console.error(
+        "   … the demo bot is currently polling, so its update queue can't be read.\n" +
+          "     Stop it, or set DEMO_SEED_CHAT_ID.",
+      );
+    }
+    return null;
+  }
+
+  for (const update of body.result ?? []) {
+    const chat = update.message?.chat ?? update.callback_query?.message?.chat;
+    if (chat?.type === "private") {
+      console.log(`   … uploading through chat ${chat.id} (${chat.first_name ?? "?"})`);
+      return String(chat.id);
+    }
+  }
+  return null;
+}
+
 /** Send a photo through the demo bot and return the `file_id` Telegram assigns. */
 async function uploadPhoto(token, chatId, path) {
   const form = new FormData();
@@ -122,11 +157,20 @@ async function main() {
   }
 
   const token = process.env.BOT_TOKEN;
-  const chatId = process.env.DEMO_SEED_CHAT_ID ?? process.env.FOUNDER_TELEGRAM_ID;
-  if (!token || !chatId) {
+  if (!token) {
+    console.error("Photo upload needs BOT_TOKEN (the demo bot).");
+    process.exit(1);
+  }
+
+  const chatId = await resolveUploadChat(token);
+  if (!chatId) {
     console.error(
-      "Photo upload needs BOT_TOKEN (the demo bot) and DEMO_SEED_CHAT_ID —\n" +
-        "a chat that has pressed Start with the demo bot, so it can send there.",
+      "No chat to upload through.\n" +
+        "  A Telegram `file_id` is minted by SENDING the image, and file_ids are\n" +
+        "  per-bot, so production's cannot be reused. This is a build-time step,\n" +
+        "  not access control — the demo itself is open to anyone.\n\n" +
+        "  Press Start on the demo bot once, then run this again. (Or set\n" +
+        "  DEMO_SEED_CHAT_ID explicitly if the bot's update queue is empty.)",
     );
     process.exit(1);
   }

@@ -45,6 +45,14 @@ import { isAbsolute, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 
+// Whatever the operator exported on the command line wins over every dotenv
+// file. `.env.local` still beats `.env` — that is what `override` is for — but
+// neither may clobber an explicit `DATABASE_URL=… pnpm seed-venues:import`,
+// which is how deploy.md and DEMO_MODE.md tell you to target a database that
+// is not your dev one. Without this the export was silently ignored and the
+// import landed in the dev DB while reporting success.
+const SHELL_ENV = new Set(Object.keys(process.env));
+
 function loadEnvFile(path, override) {
   if (!existsSync(path)) return;
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
@@ -61,7 +69,7 @@ function loadEnvFile(path, override) {
     ) {
       value = value.slice(1, -1);
     }
-    if (override || process.env[key] === undefined) {
+    if ((override && !SHELL_ENV.has(key)) || process.env[key] === undefined) {
       process.env[key] = value;
     }
   }
