@@ -3155,6 +3155,32 @@ Required/high-impact env keys:
   answer 503 and the Telegram one-tap flow is unaffected. Twilio gotchas:
   a trial account only texts numbers verified in the console, and Geo
   Permissions must allow the target countries.
+  **An upgraded account is not immediately a sending account (2026-08-05).**
+  The founder upgraded off trial and the REST API reported `type: "Full"`,
+  `status: "active"`, `$20.00` balance within seconds — while a real send to a
+  Ukrainian number was refused with **`403 / code 60238` "Verification Creation
+  Attempt blocked by Twilio"**, which Twilio documents as the upgrade being
+  under review (its only other cause is Iran/Syria/Cuba). Account type and
+  sending permission are separate states, so **`type: Full` is not evidence
+  that SMS works** — only a real send is. Twilio's guidance is to wait and to
+  contact support if it persists past **72 hours**. Our side degrades
+  correctly: `twilioStartVerification` returns null on the 403, the Gateway
+  fallback is unconfigured, and the route answers a visible
+  `503 "Code delivery unavailable"` rather than a phantom code-entry screen.
+  Re-test with one command — no `verify` call, so no account is resolved,
+  created or logged in:
+
+```sh
+curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
+  -H 'Content-Type: application/json' \
+  -d '{"phone":"+380XXXXXXXXX","channel":"sms"}' -w '\n%{http_code}\n'
+# 200 + deliveredVia:"sms" = the rail is open. 503 = still blocked;
+# read the exact Twilio code from: pm2 logs gennety-bot --nostream | grep twilio
+```
+
+  A 60238 that outlives the review window is NOT the same failure as Geo
+  Permissions (which must separately allow +380) — check the returned code
+  before changing any console setting.
   **Requires `db:push` of the additive `phone_otps` table first**
   (non-destructive). Anti-SMS-pumping: per-phone+IP express limits plus a
   durable per-phone cooldown (60 s) and daily cap (6/day) in the table.
