@@ -14,6 +14,14 @@ import { sendRichMessageDraft, thinkingHtml } from "./telegram-rich.js";
  * than stuck. Instead of that line, a `<tg-thinking>` shimmer now plays for the
  * WHOLE wait, its text rotating, and disappears when the partner answers.
  *
+ * **The invariant the whole feature lives under: a status is only ever shown to
+ * someone who has nothing left to do.** It exists so a WAIT doesn't read as a
+ * dead product — "we haven't forgotten you". The moment the next move is the
+ * user's own (pick a time, settle the ticket, mark the departure point), a line
+ * saying work is under way is actively misleading: it tells them to sit still
+ * while the flow is blocked on them. Those states get a REMINDER instead
+ * (`workers/match-nudge.ts`), never a shimmer.
+ *
  * A rich draft is ephemeral (~30s), so "for the whole wait" means it has to be
  * re-issued on a wall-clock interval. That is what `workers/peer-wait-shimmer.ts`
  * does; this module owns the two primitives it and the action handlers share:
@@ -66,16 +74,6 @@ const TIERS = [
   { afterMs: 0, key: "peerWaitT1Sent" },
 ] as const;
 
-/**
- * What KIND of wait this is. The default ladder assumes the partner simply
- * hasn't acted; `no_overlap` is the calendar state where they DID act and the
- * two selections just don't intersect, which makes "no word from them yet" and
- * "nudged them" both false — the scheduling nudge deliberately skips a pair
- * where both sides have picked (`workers/match-nudge.ts`). It therefore gets its
- * own two-step ladder rather than a mislabelled five.
- */
-export type PeerWaitVariant = "default" | "no_overlap";
-
 /** Wall-clock tiers are only meaningful against a real anchor; guard the maths. */
 function elapsedMs(startedAt: Date | null | undefined, now: Date): number {
   if (!startedAt) return 0;
@@ -85,36 +83,27 @@ function elapsedMs(startedAt: Date | null | undefined, now: Date): number {
 
 /**
  * The line to show for a wait that started at `startedAt`, personalised with the
- * partner's first name — both ladders name the partner (2026-07-31; the
- * no-overlap lines used to name no one, but the founder-approved rewrite has
- * them state whose calendar it is: "Согласовываем время с {name}"). Reworded
- * again the same day: an earlier pass framed it as "your times didn't
- * overlap", which read as a dead end needing a fix, when it's actually just
- * mid-negotiation — the calendar keeps polling and either side widening their
- * pick resolves it. "Согласовываем" says "in progress", not "broken".
+ * partner's first name.
+ *
+ * Every line here describes the PARTNER not having answered — which is the only
+ * thing this shimmer is ever allowed to say. A state where the user themselves
+ * still owes the next move is not a wait and gets no status at all, only a
+ * reminder (see `isSideWaitingOnPeer`).
  *
  * `firstName` is a required onboarding field and these waits only happen on a
  * live match, so the anonymous fallback is defensive rather than expected — but
  * it exists because substituting a generic noun into the personalised templates
- * breaks case agreement in German and Polish. Both variants share ONE fallback
- * (`peerWaitAnon`) for that edge case rather than each carrying its own, since
- * it is never meant to actually render.
+ * breaks case agreement in German and Polish.
  */
 export function peerWaitLabel(
   lang: Language,
   partnerName: string | null | undefined,
   startedAt: Date | null | undefined,
   now: Date = new Date(),
-  variant: PeerWaitVariant = "default",
 ): string {
   const elapsed = elapsedMs(startedAt, now);
   const name = partnerName?.trim();
   if (!name) return t(lang, "peerWaitAnon");
-
-  if (variant === "no_overlap") {
-    const key = elapsed >= TIERS[0].afterMs ? "peerWaitNoOverlapLate" : "peerWaitNoOverlap";
-    return t(lang, key, { name });
-  }
 
   const tier = TIERS.find((candidate) => elapsed >= candidate.afterMs) ?? TIERS[TIERS.length - 1]!;
   return t(lang, tier.key, { name });
@@ -130,7 +119,6 @@ export interface PeerWaitDraftInput {
   /** When this side started waiting; null renders tier 1. */
   startedAt: Date | null | undefined;
   now?: Date;
-  variant?: PeerWaitVariant;
 }
 
 /**
@@ -151,7 +139,6 @@ export async function issuePeerWaitDraft(
     input.partnerName,
     input.startedAt,
     input.now ?? new Date(),
-    input.variant ?? "default",
   );
   // No `emojiId`: these lines carry no glyph at all (see the TIERS comment).
   await sendRichMessageDraft(api, {

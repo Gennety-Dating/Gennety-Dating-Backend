@@ -2084,17 +2084,29 @@ profile halves the proposal/venue offsets and is inert in production:
 - **Proposal phase** (status `proposed`, awaiting decision) — ≥3 h after
   `dispatchedAt`, then ≥10 h.
 - **Scheduling phase** (status `negotiating`, both accepted, no agreed slot)
-  — ≥6 h since last update, then ≥12 h. Two corrections, 2026-07-29:
-  it is sent **only to a side that has actually marked no availability**
-  (it keyed off `pickedTimeA/B`, the deprecated pre-2026-05 columns nothing
-  writes any more, so it always nagged BOTH sides — including one who had
-  already picked their slots); and while the §3.5b Date Ticket gate is open
-  (`ticketStatus ∈ pending | partial | refund_pending`) it does not fire at
-  all, because `negotiating` also covers the gate and the Calendar has not
-  been sent yet — "pick a time" pointed at a screen the user did not have.
-  That exclusion is conditional on `TICKET_FEATURE_ENABLED`: with the gate
-  off, `ticketStatus` never leaves its `pending` default, so an unconditional
-  filter would suppress every scheduling nudge.
+  — ≥6 h after the Calendar opened, then ≥12 h. It goes to **whichever side
+  still owes the move**, and there are two ways to owe it (`schedulingOwedKind`,
+  the same predicate §3.5c's check-in and cancellation read, so all three agree
+  on whose turn it is):
+  - **never opened the calendar** → the ordinary generated "pick a time" line.
+  - **both picked and nothing overlaps** (added 2026-08-05) → static copy
+    (`matchScheduleNoOverlapYet`) **plus the Calendar button**. A generated
+    "pick a time" would be flatly wrong — this person did pick; what they need
+    is to widen the selection or take one of the partner's slots, and the
+    Calendar card scrolled away hours ago. This state used to match neither
+    branch of the old "has this side marked anything" rule, so it received no
+    reminder, no check-in and no cancellation at all — see §3.5c.
+
+  Sent only to a side that has actually marked no availability *for the first
+  case* (corrected 2026-07-29: it keyed off `pickedTimeA/B`, the deprecated
+  pre-2026-05 columns nothing writes any more, so it nagged BOTH sides). A pair
+  still inside the §3.5b Date Ticket gate is excluded, because `negotiating`
+  also covers the gate and the Calendar has not been sent yet — "pick a time"
+  pointed at a screen the user did not have. The discriminator is an empty
+  `proposedTimes` (written by `startScheduling` when and only when the Calendar
+  opens), **not** `ticketStatus`, which keeps its `pending` default even with
+  tickets switched off entirely and so needed a flag-conditional filter to avoid
+  suppressing every scheduling nudge. Same rule the stall chain already ran on.
 - **Deadline nudge** (status `proposed`) — one final "your window closes in
   about Xh, decide now" DM fired **~2 h before the decision deadline
   (`services/proposal-deadline.ts` `deadlineFor` — a flat 24h TTL from dispatch
@@ -2388,6 +2400,18 @@ production.** Per side, counted from when the phase opened:
   worker. `proposedTimes` is the honest discriminator because `startScheduling`
   writes it when (and only when) the Calendar opens; `ticketStatus` cannot be
   used — it defaults to `pending` even with tickets switched off entirely.
+- **"Both picked, nothing overlaps" IS a stall, on both sides (2026-08-05).**
+  `sideOwesAction` used to ask only whether a side had marked *anything*, so
+  once both had, neither owed an action — and the whole chain keys off that
+  predicate. The consequence was not a cosmetic gap: the pair got no 6 h/12 h
+  reminder, were never asked "still on?", and **the 48 h cancellation never
+  fired**, so two people whose calendars simply didn't line up sat in a live
+  match indefinitely — held out of every drop by the single-live-match rule
+  (§3.2 filter 8), which is the exact failure this whole section exists to
+  prevent. The state was reachable in one ordinary move: pick a slot, have your
+  partner counter with a different one. Both sides owe it now, because either
+  of them can end it alone (widen, or take one of the other's slots — a shared
+  slot auto-locks the date). It is also the reason §3.6b shows no status there.
 - **🟢 commits instantly, 🔴 always confirms.** Green needs no confirmation:
   it changes nothing the user could regret, pushes that side's 48 h out from now,
   and re-arms the question **once** (gated on it being the first confirmation, so
@@ -2560,6 +2584,17 @@ time ladder, and it disappears when the partner answers and the flow moves on. O
 the calendar and venue steps it *replaces* the waiting message entirely — nothing
 is sent to the chat at all.
 
+**A status is shown ONLY to someone with nothing left to do (founder decision
+2026-08-05).** This is the invariant the whole feature lives under, and it is
+what decides every predicate below. The shimmer exists so a *wait* doesn't read
+as a dead product — "we haven't forgotten you, the work is happening". The
+moment the next move is the user's own — pick a time, settle the ticket, mark
+the departure point — a line saying work is under way is not reassurance, it is
+misdirection: it tells them to sit still while the flow is blocked on them.
+Those states get a **reminder** instead (§3.5, and the §3.5c check-in), which
+says whose move it is and carries the way back into the screen. Nothing in
+between: never a status on a step the user owes.
+
 `services/peer-wait.ts` owns the two primitives: which line to show
 (`peerWaitLabel`) and how to put it on screen once (`issuePeerWaitDraft`).
 `workers/peer-wait-shimmer.ts` keeps it there.
@@ -2589,15 +2624,18 @@ Tier 5 also drops the "время поджимает" / "time's running short" t
 2026-07-30 pass added: a founder call that the bare fact ("{name} долго не
 отвечает") carries the urgency on its own without an explicit pressure phrase.
 
-**The no-overlap ladder was reworded a second time the same day, to change what
-it CLAIMS rather than just its length.** The first rewrite still framed it as a
-mismatch — `Ваше время с {name} не совпало` — which reads as a dead end the user
-needs to go fix. It isn't one: both sides already answered, the calendar keeps
-polling, and the state resolves itself the moment either side's next pick lands
-on a slot the other already marked (§3.6). The line now says `Согласовываем
-время с {name}` — mid-negotiation, not broken — and the late variant
-(`peerWaitNoOverlapLate`, past 24 h) is `Всё ещё согласовываем время с {name}`,
-adding duration without implying failure or asking the user to act.
+**The separate "no-overlap" ladder is gone (2026-08-05) — that state was never a
+wait.** Between 2026-07-30 and this change, a calendar where both sides had
+picked and nothing intersected showed BOTH of them a second two-step ladder
+(`Согласовываем время с {name}` → `Всё ещё согласовываем…`). The wording was
+accurate about the machinery and wrong about the person: whoever countered had
+just acted and was told their answer was being processed, while the side that
+received the counter — the one message in the flow that exists to say *your
+turn* — got a status telling them work was under way. Two people each waiting
+for a matchmaker that was, in fact, waiting for them. It also skipped the
+reminder that would have said so, because the whole state fell outside
+`sideOwesAction` (below). Both sides now get **no status at all** there, and the
+§3.5 scheduling reminder covers them instead.
 
 **These lines carry no icon — no leading emoji and no animated `<tg-emoji>`
 glyph** (founder decision 2026-07-30). An intermediate revision gave each tier
@@ -2643,12 +2681,12 @@ throttling.**
 Each tick re-derives who is waiting rather than tracking it, so there is no state
 to leak and nothing to "stop": when the partner answers, the side stops matching
 the predicate, the draft stops being re-issued, and it expires on its own. Per
-side (`resolvePeerWaitVariant`):
+side (`isSideWaitingOnPeer`):
 
 | Step | Waiting when |
 |---|---|
 | Pitch decision | `proposed`, this side accepted, peer hasn't answered |
-| Calendar | `negotiating`, `proposedTimes` non-empty, this side marked slots, and either the peer hasn't **or** both did and nothing overlaps |
+| Calendar | `negotiating`, `proposedTimes` non-empty, this side marked slots, peer hasn't opened it |
 | Venue | `negotiating_venue`, this side submitted, peer hasn't |
 | Venue change — board | `scheduled` + `liking`, this side hearted places, peer has none |
 | Venue change — payment | `scheduled` + `agreed`, this side is not the payer |
@@ -2657,20 +2695,17 @@ side (`resolvePeerWaitVariant`):
 Notes on the edges, each of which is a real trap:
 - **Only an accept waits.** A decline is irreversible (§3.2 lifetime pair ban)
   and the decliner's next screen is the "what was the main reason?" prompt.
-- **Both picked and nothing overlaps is a wait for BOTH sides (2026-07-30).**
-  The predicate used to read "waiting" as *the peer's slot array is empty*, so
-  when A picked Monday and B picked Tuesday the shimmer vanished for A and never
-  appeared for B — and `handleSchedulingNudges` filters the same way, so no 6 h /
-  12 h nudge fired either. That state was completely silent until the §3.5c 24 h
-  check-in, on the one screen where a negotiation is actually happening. It is a
-  wait for both because each is genuinely blocked on the other widening their
-  selection, and each keeps its own anchor, so the side that submitted first
-  legitimately sits higher on the ladder. It renders a **separate two-step
-  ladder** (`peerWaitNoOverlap` → `peerWaitNoOverlapLate` past 24 h), because the
-  default tiers 3 and 4 would both be lies here: the partner DID answer, and no
-  nudge is going to be sent. That ladder names nobody, so it needs no partner
-  name. A shared slot auto-locks the date (§3.6), so "still here" means "no
-  overlap" without a second check.
+- **Both picked and nothing overlaps is a wait for NEITHER side (2026-08-05).**
+  A picks Monday, B counters with Tuesday. Each of them can now end it alone —
+  widen the selection, or tap one of the other's slots, which auto-locks the
+  date (§3.6). That is the definition of "your move", so it gets the §3.5
+  reminder and never a status. The 2026-07-30 revision had it the other way
+  round (a dedicated ladder shown to both), reading the state off the machinery
+  — each side is technically blocked on the other — rather than off what the
+  person can do; the result was a status contradicting the very message that had
+  just told them their partner countered. The predicate is now simply *the peer
+  hasn't opened the calendar yet*, which is the only calendar state where a user
+  genuinely has nothing left to try.
 - **The calendar gate is `proposedTimes`, not `ticketStatus`.** `negotiating`
   also covers the Date Ticket gate, whose waiting state its Mini App owns by
   design. `proposedTimes` is written by `startScheduling`, which runs only once

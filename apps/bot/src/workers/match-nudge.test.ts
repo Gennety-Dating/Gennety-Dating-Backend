@@ -22,10 +22,9 @@ vi.mock("../utils/elo-calculator.js", () => ({
   applySilentIgnorePenalty: vi.fn().mockResolvedValue(495),
 }));
 
-// Mutable so a test can flip the Date Ticket gate — the scheduling query only
-// filters on `ticketStatus` while that feature is on (see the worker's comment:
-// with it off, `ticketStatus` never leaves its "pending" default and an
-// unconditional filter would suppress every scheduling nudge).
+// Mutable so a test can flip the Date Ticket gate. The scheduling reminder is
+// deliberately blind to it — a pair still inside the gate is recognised by an
+// empty `proposedTimes`, which holds under either flag (see the worker).
 const { mockEnv } = vi.hoisted(() => ({
   mockEnv: {
     OPENAI_API_KEY: "test-key",
@@ -42,6 +41,7 @@ const { mockEnv } = vi.hoisted(() => ({
 vi.mock("../config.js", () => ({ env: mockEnv }));
 
 import { prisma } from "@gennety/db";
+import { t } from "@gennety/shared";
 import {
   matchNudgeTick,
   PROPOSAL_NUDGE1_MS,
@@ -87,20 +87,59 @@ function makeProposedMatch(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const SCHED_SLOT = new Date("2024-06-20T16:00:00Z");
+const SCHED_SLOT_2 = new Date("2024-06-21T16:00:00Z");
+
 function makeNegotiatingMatch(overrides: Record<string, unknown> = {}) {
   // Both accepted, neither has marked availability. Anchor `dispatchedAt` 6h+1m
   // ago to clear the scheduling-phase nudge1 cutoff (SCHED_NUDGE1_MS = 6h).
+  // The row carries the full STALL_MATCH_SELECT shape: "whose move is it" is
+  // now one shared predicate across the reminder, the check-in and the 48h
+  // cancellation, so the reminder reads the same columns they do.
   const dispatched = new Date(DAY_TIME.getTime() - 6 * 60 * 60_000 - 60_000);
   return {
     id: "match-2",
+    status: "negotiating",
+    userAId: "user-a",
+    userBId: "user-b",
     dispatchedAt: dispatched,
+    schedulingOpenedAt: dispatched,
+    venuePromptAskedAt: null,
+    // Non-empty = the Calendar actually opened (the ticket gate has settled, or
+    // was never on). This is what tells a stalled pair apart from one still
+    // inside the §3.5b gate.
+    proposedTimes: [SCHED_SLOT, SCHED_SLOT_2],
     schedNudge1SentAt: null,
     schedNudge2SentAt: null,
     availableTimesA: [],
     availableTimesB: [],
+    vibeTextA: null,
+    vibeLatA: null,
+    vibeLngA: null,
+    vibeTextB: null,
+    vibeLatB: null,
+    vibeLngB: null,
+    stallCheckInSentAtA: null,
+    stallCheckInSentAtB: null,
+    stallConfirmedAtA: null,
+    stallConfirmedAtB: null,
+    venueNudge1SentAt: null,
+    venueNudge2SentAt: null,
     schedulingIteration: 1,
-    userA: { telegramId: BigInt(11), language: "en", firstName: "Carol" },
-    userB: { telegramId: BigInt(12), language: "en", firstName: "Dan" },
+    userA: {
+      id: "user-a",
+      telegramId: BigInt(11),
+      language: "en",
+      firstName: "Carol",
+      theme: "dark",
+    },
+    userB: {
+      id: "user-b",
+      telegramId: BigInt(12),
+      language: "en",
+      firstName: "Dan",
+      theme: "dark",
+    },
     ...overrides,
   };
 }
@@ -238,31 +277,80 @@ describe("matchNudgeTick", () => {
     expect(api.sendMessage).toHaveBeenCalledWith(12, expect.any(String), expect.anything());
   });
 
-  it("excludes matches still on the Date Ticket gate when the gate is on", async () => {
+  it("says nothing while the Date Ticket gate is still open — under either flag", async () => {
     // `negotiating` also covers the §3.5b ticket gate, where the Calendar has
     // not been sent — "pick a time" there points at a screen the user lacks.
-    mockEnv.TICKET_FEATURE_ENABLED = true;
+    // The discriminator is `proposedTimes` (written by `startScheduling` when
+    // and only when the Calendar opens), NOT `ticketStatus`: that column keeps
+    // its "pending" default even with the feature switched off entirely, so a
+    // filter on it would have to be flag-conditional to avoid suppressing every
+    // scheduling nudge. Same rule the stall chain already runs on.
+    for (const gateOn of [true, false]) {
+      vi.clearAllMocks();
+      (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+      mockEnv.TICKET_FEATURE_ENABLED = gateOn;
 
-    const api = createMockApi();
-    await matchNudgeTick(api, { fetchFn: vi.fn(), now: DAY_TIME });
+      (prisma.match.findMany as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([makeNegotiatingMatch({ proposedTimes: [] })])
+        .mockResolvedValue([]);
 
-    const schedWhere = (prisma.match.findMany as ReturnType<typeof vi.fn>).mock.calls[1]![0].where;
-    expect(schedWhere.ticketStatus).toEqual({
-      notIn: ["pending", "partial", "refund_pending"],
-    });
+      const api = createMockApi();
+      const result = await matchNudgeTick(api, { fetchFn: vi.fn(), now: DAY_TIME });
+
+      expect(result.schedNudges).toBe(0);
+      expect(api.sendMessage).not.toHaveBeenCalled();
+    }
   });
 
-  it("does NOT filter on ticketStatus when the gate is off", async () => {
-    // With the feature off nothing ever advances `ticketStatus` past its
-    // "pending" schema default, so an unconditional filter would silently
-    // suppress EVERY scheduling nudge.
-    mockEnv.TICKET_FEATURE_ENABLED = false;
+  it("reminds BOTH sides — with the calendar button — when their picks don't overlap", async () => {
+    // The state the §3.6b shimmer used to cover with a "we're coordinating a
+    // time" status for both sides. It is not a wait: each of them has to widen
+    // their selection or take one of the other's slots, so it gets a reminder.
+    // Static copy, because a generated "pick a time" line would be wrong — they
+    // did pick — and because the useful part is the way back into the Mini App,
+    // the Calendar card having scrolled away hours ago.
+    const match = makeNegotiatingMatch({
+      availableTimesA: [SCHED_SLOT],
+      availableTimesB: [SCHED_SLOT_2],
+    });
+
+    (prisma.match.findMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([match]);
+
+    const mockFetch = vi.fn();
+    const api = createMockApi();
+    const result = await matchNudgeTick(api, { fetchFn: mockFetch, now: DAY_TIME });
+
+    expect(result.schedNudges).toBe(2);
+    expect(mockFetch).not.toHaveBeenCalled();
+    for (const chatId of [11, 12]) {
+      expect(api.sendMessage).toHaveBeenCalledWith(
+        chatId,
+        t("en", "matchScheduleNoOverlapYet"),
+        expect.objectContaining({
+          reply_markup: expect.objectContaining({ inline_keyboard: expect.anything() }),
+        }),
+      );
+    }
+  });
+
+  it("stays silent once a shared slot exists (the date auto-locks)", async () => {
+    const match = makeNegotiatingMatch({
+      availableTimesA: [SCHED_SLOT, SCHED_SLOT_2],
+      availableTimesB: [new Date(SCHED_SLOT.getTime())],
+    });
+
+    (prisma.match.findMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([match]);
 
     const api = createMockApi();
-    await matchNudgeTick(api, { fetchFn: vi.fn(), now: DAY_TIME });
+    const result = await matchNudgeTick(api, { fetchFn: vi.fn(), now: DAY_TIME });
 
-    const schedWhere = (prisma.match.findMany as ReturnType<typeof vi.fn>).mock.calls[1]![0].where;
-    expect(schedWhere.ticketStatus).toBeUndefined();
+    expect(result.schedNudges).toBe(0);
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 
   it("C-6: scheduling phase skips mobile-only users (telegramId <= 0n)", async () => {

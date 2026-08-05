@@ -7,12 +7,14 @@ import { openaiFetch } from "../services/openai-fetch.js";
 import { deadlineFor } from "../services/proposal-deadline.js";
 import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
 import { buildLocationMapKeyboard } from "../handlers/matching/venue-negotiation.js";
+import { buildCalendarCta } from "../handlers/matching/scheduler.js";
 import {
   STALL_MATCH_SELECT,
   VENUE_NUDGE1_MS,
   VENUE_NUDGE2_MS,
   buildStallCheckInKeyboard,
   cancelStalledMatch,
+  schedulingOwedKind,
   sideOwesAction,
   stallCheckInAskedAt,
   stallCheckInDueAt,
@@ -20,6 +22,7 @@ import {
   stallPhaseOf,
   stallReachableFor,
   type MatchSide,
+  type SchedulingOwed,
 } from "../services/match-stall.js";
 import { isQuietHours } from "./quiet-hours.js";
 
@@ -35,8 +38,13 @@ import { isQuietHours } from "./quiet-hours.js";
  *    The pitch they received is passed as context to OpenAI.
  *
  * B) SCHEDULING nudges (status = 'negotiating', both accepted, slot not yet agreed):
- *    - Nudge 1: ≥6h since last update, nudge1SentAt is null.
- *    - Nudge 2: ≥12h since last update, nudge2SentAt is null.
+ *    - Nudge 1: ≥6h after the Calendar opened, schedNudge1SentAt is null.
+ *    - Nudge 2: ≥12h after it, schedNudge2SentAt is null.
+ *    Sent to whichever side still owes the move — either it never opened the
+ *    calendar, or both picked and nothing lines up (`schedulingOwedKind`). The
+ *    second case is why this is a reminder rather than the §3.6b shimmer: when
+ *    the next move is the user's own, a "we're coordinating" status tells them
+ *    to sit still while the flow is blocked on them.
  *
  * Quiet hours (23:00–09:00 Europe/Kyiv) block all sends.
  */
@@ -426,59 +434,32 @@ async function handleSchedulingNudges(
   const nudge1Cutoff = new Date(now.getTime() - SCHED_NUDGE1_MS);
   const nudge2Cutoff = new Date(now.getTime() - SCHED_NUDGE2_MS);
 
-  // C-6 changes:
-  //   1. Use phase-specific schedNudge*SentAt columns so proposal-phase
-  //      stamps (now in proposalNudge*SentAt) don't gate us.
-  //   2. Anchor on `dispatchedAt` instead of `updatedAt`. `updatedAt` was
-  //      bumped each time we wrote a nudge stamp, which reset the 12h cutoff
-  //      and broke the documented 6h/12h cadence.
+  // C-6: phase-specific schedNudge*SentAt columns, so a proposal-phase stamp
+  // (now in proposalNudge*SentAt) can't gate us. The anchor moved off
+  // `updatedAt` in the same pass — writing a nudge stamp bumped it, which reset
+  // the 12h cutoff and broke the documented 6h/12h cadence.
   const matches = await prisma.match.findMany({
     where: {
       status: "negotiating",
       schedNudge2SentAt: null,
-      // `negotiating` also covers the §3.5b Date Ticket gate, where the
-      // Calendar has NOT been sent yet — nudging "pick a time" there points at
-      // a screen the user doesn't have. Only `completed`/`refunded`/`expired`
-      // mean scheduling is actually open.
-      //
-      // The flag guard is load-bearing, not defensive: `ticketStatus` defaults
-      // to "pending" in the schema, and with TICKET_FEATURE_ENABLED off
-      // `decision.ts` calls startScheduling directly and never advances it — so
-      // an unconditional filter here would silently kill EVERY scheduling nudge.
-      ...(env.TICKET_FEATURE_ENABLED
-        ? { ticketStatus: { notIn: ["pending", "partial", "refund_pending"] } }
-        : {}),
-      // Two independent OR groups (availability + anchor), so they have to be
-      // AND-ed explicitly — a second bare `OR` key would overwrite the first.
-      AND: [
-        // At least one side hasn't marked any availability yet. (`pickedTime*` is
-        // the dead pre-2026-05 column — nothing writes it, so keying off it made
-        // this always fire at BOTH sides, including one who had already picked.)
-        { OR: [{ availableTimesA: { isEmpty: true } }, { availableTimesB: { isEmpty: true } }] },
-        // Anchor on when the Calendar actually opened, not on dispatch. A pair
-        // that accepted at hour 23 of the 24h decision window was already "6h
-        // past dispatch", so the first nudge could land right behind the
-        // Calendar card itself. Rows predating `schedulingOpenedAt` keep the old
-        // dispatch anchor — a slightly early nudge beats none at all.
-        {
-          OR: [
-            { schedulingOpenedAt: { lt: nudge1Cutoff } },
-            { schedulingOpenedAt: null, dispatchedAt: { not: null, lt: nudge1Cutoff } },
-          ],
-        },
+      // Anchor on when the Calendar actually opened, not on dispatch. A pair
+      // that accepted at hour 23 of the 24h decision window was already "6h
+      // past dispatch", so the first nudge could land right behind the
+      // Calendar card itself. Rows predating `schedulingOpenedAt` keep the old
+      // dispatch anchor — a slightly early nudge beats none at all.
+      OR: [
+        { schedulingOpenedAt: { lt: nudge1Cutoff } },
+        { schedulingOpenedAt: null, dispatchedAt: { not: null, lt: nudge1Cutoff } },
       ],
     },
+    // Same select the stall chain uses, so "whose move is it" is answered by
+    // ONE predicate (`sideOwesAction`) across the reminder, the check-in and
+    // the cancellation instead of three queries with three ideas about it.
     select: {
-      id: true,
-      dispatchedAt: true,
-      schedulingOpenedAt: true,
+      ...STALL_MATCH_SELECT,
+      schedulingIteration: true,
       schedNudge1SentAt: true,
       schedNudge2SentAt: true,
-      availableTimesA: true,
-      availableTimesB: true,
-      schedulingIteration: true,
-      userA: { select: { telegramId: true, language: true, firstName: true } },
-      userB: { select: { telegramId: true, language: true, firstName: true } },
     },
     take: batchSize,
   });
@@ -486,6 +467,21 @@ async function handleSchedulingNudges(
   let count = 0;
 
   for (const match of matches) {
+    // `negotiating` also covers the §3.5b Date Ticket gate, where the Calendar
+    // has NOT been sent yet — nudging "pick a time" there points at a screen
+    // the user doesn't have. `stallPhaseOf` discriminates on `proposedTimes`,
+    // which `startScheduling` writes when (and only when) the Calendar opens;
+    // `ticketStatus` cannot be used, since it defaults to "pending" even with
+    // the ticket feature switched off entirely.
+    if (stallPhaseOf(match) !== "scheduling") continue;
+
+    const owing = (["A", "B"] as MatchSide[])
+      .map((side) => ({ side, owed: schedulingOwedKind(match, side) }))
+      .filter((entry): entry is { side: MatchSide; owed: SchedulingOwed } => entry.owed !== null)
+      .map((entry) => ({ ...entry, user: entry.side === "A" ? match.userA : match.userB }))
+      .filter((entry) => stallReachableFor(entry.user.telegramId));
+    if (owing.length === 0) continue;
+
     const anchor = match.schedulingOpenedAt ?? match.dispatchedAt!;
     const isNudge2 = anchor <= nudge2Cutoff && !match.schedNudge2SentAt;
     const isNudge1 = !match.schedNudge1SentAt;
@@ -507,29 +503,32 @@ async function handleSchedulingNudges(
     });
     if (claim.count === 0) continue;
 
-    const targets = [
-      ...(match.availableTimesA.length === 0 && match.userA.telegramId > 0n ? [match.userA] : []),
-      ...(match.availableTimesB.length === 0 && match.userB.telegramId > 0n ? [match.userB] : []),
-    ];
-
-    for (const target of targets) {
+    for (const { owed, user } of owing) {
+      const lang = (user.language ?? "en") as Language;
       try {
-        const text = await generateSchedulingNudge(
-          { ...target, nudgeIndex, iteration: match.schedulingIteration },
-          fetchFn,
-        );
-        await api.sendMessage(Number(target.telegramId), text, {
-          parse_mode: "Markdown",
-        });
+        if (owed === "no-overlap") {
+          // Static copy + the way in, exactly like the venue nudge. A generated
+          // "pick a time" line would be flatly wrong here — this person DID
+          // pick; what they need is to widen the selection or take one of the
+          // partner's slots, and the Calendar card scrolled away hours ago.
+          await api.sendMessage(Number(user.telegramId), t(lang, "matchScheduleNoOverlapYet"), {
+            reply_markup: buildCalendarCta(match.id, lang, user.theme),
+          });
+        } else {
+          const text = await generateSchedulingNudge(
+            { ...user, nudgeIndex, iteration: match.schedulingIteration },
+            fetchFn,
+          );
+          await api.sendMessage(Number(user.telegramId), text, { parse_mode: "Markdown" });
+        }
         count++;
       } catch (err) {
         console.warn(
-          `[match-nudge] scheduling send failed for ${target.telegramId}:`,
+          `[match-nudge] scheduling send failed for ${user.telegramId}:`,
           (err as Error).message,
         );
       }
     }
-
   }
 
   return count;

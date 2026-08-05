@@ -12,7 +12,6 @@ import { prisma } from "@gennety/db";
 import {
   isSideWaitingOnPeer,
   peerWaitShimmerTick,
-  resolvePeerWaitVariant,
   PEER_WAIT_FALLBACK_EDIT_MS,
   type PeerWaitMatchRow,
 } from "./peer-wait-shimmer.js";
@@ -181,11 +180,12 @@ describe("isSideWaitingOnPeer — calendar", () => {
     expect(isSideWaitingOnPeer(m, "B")).toBe(false);
   });
 
-  it("keeps BOTH sides waiting when both picked and nothing overlaps", () => {
-    // The regression this rewrite exists for. A picks Monday, B picks Tuesday:
-    // the shimmer used to vanish for A and never appear for B, while
-    // `handleSchedulingNudges` skips a pair where both have picked — so the
-    // state was silent until the §3.5c 24h check-in.
+  it("shows NEITHER side a status when both picked and nothing overlaps", () => {
+    // A picks Monday, B picks Tuesday. Both of them now owe the next move —
+    // widen the selection, or take one of the other's slots — so a "we're
+    // coordinating a time" status would tell each of them to sit still while
+    // the flow is blocked on them. They get the scheduling reminder instead
+    // (`schedulingOwedKind` → "no-overlap" in `workers/match-nudge.ts`).
     const other = new Date("2026-08-02T16:00:00.000Z");
     const m = row({
       status: "negotiating",
@@ -193,28 +193,22 @@ describe("isSideWaitingOnPeer — calendar", () => {
       availableTimesA: [slot],
       availableTimesB: [other],
     });
-    expect(resolvePeerWaitVariant(m, "A")).toBe("no_overlap");
-    expect(resolvePeerWaitVariant(m, "B")).toBe("no_overlap");
+    expect(isSideWaitingOnPeer(m, "A")).toBe(false);
+    expect(isSideWaitingOnPeer(m, "B")).toBe(false);
   });
 
-  it("detects overlap by instant, not by array identity", () => {
-    const m = row({
+  it("stops the first mover's shimmer the moment the partner answers", () => {
+    // The same row a beat earlier: A alone had picked and WAS waiting. What
+    // ends that wait is the partner answering at all, overlap or not.
+    const other = new Date("2026-08-02T16:00:00.000Z");
+    const before = row({
       status: "negotiating",
-      proposedTimes: [slot],
-      availableTimesA: [new Date(slot.getTime())],
-      availableTimesB: [new Date(slot.getTime())],
-    });
-    expect(resolvePeerWaitVariant(m, "A")).toBeNull();
-  });
-
-  it("labels the one-sided calendar wait as the default ladder", () => {
-    const m = row({
-      status: "negotiating",
-      proposedTimes: [slot],
+      proposedTimes: [slot, other],
       availableTimesA: [slot],
       availableTimesB: [],
     });
-    expect(resolvePeerWaitVariant(m, "A")).toBe("default");
+    expect(isSideWaitingOnPeer(before, "A")).toBe(true);
+    expect(isSideWaitingOnPeer({ ...before, availableTimesB: [other] }, "A")).toBe(false);
   });
 });
 

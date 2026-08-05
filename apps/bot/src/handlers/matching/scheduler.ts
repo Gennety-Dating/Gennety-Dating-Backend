@@ -264,6 +264,20 @@ function calendarUrl(matchId: string, lang: Language, theme: Theme): string {
 }
 
 /**
+ * The Calendar entry point as a standalone keyboard, for a message that isn't
+ * the tracked post-accept card — the scheduling reminder (`workers/match-nudge.ts`).
+ * A reminder to go do something in the Mini App is useless without the way in,
+ * and the card itself has long since scrolled away by the time it fires.
+ */
+export function buildCalendarCta(
+  matchId: string,
+  lang: Language,
+  theme: Theme,
+): InlineKeyboardMarkup {
+  return buildCalendarKeyboard(calendarUrl(matchId, lang, theme), lang);
+}
+
+/**
  * Keep one live post-accept CTA card per participant. The same message can
  * move from "accepted, waiting" → ticket gate → Calendar instead of stacking
  * separate status DMs in the chat.

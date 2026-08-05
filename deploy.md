@@ -1,5 +1,56 @@
 # Gennety Dating Deploy
 
+**PENDING — a status is never shown on a step the user owes (PRODUCT_SPEC §3.6b,
+§3.5, §3.5c).** Not deployed yet. **Code-only: no Prisma schema change, no env
+change, no flag change, no Mini App change** (`apps/webapp` untouched).
+
+A user picks a time, their partner counters with a different one — and both of
+them were then shown a `<tg-thinking>` status saying the time was being
+coordinated for them. Nobody was coordinating anything: each of them had to
+widen their selection or tap one of the other's slots. The person who received
+the counter got that status *directly under* the message telling them their
+partner had suggested another time, which is the one message in the flow whose
+whole job is to say **your turn**.
+
+The invariant it now runs under: a status is only ever shown to someone with
+nothing left to do. When the next move is the user's own, they get a reminder
+that names it — never a "we're working on it" line.
+
+**The part worth knowing before the restart is not the shimmer, it's what the
+shimmer was hiding.** That state matched neither branch of `sideOwesAction`
+("has this side marked anything?" — both had), and the entire §3.5c chain keys
+off that predicate. So a pair whose calendars simply didn't line up got **no 6h
+/12h reminder, no 24h "still on?" check-in, and no 48h cancellation** — they sat
+in a live match indefinitely, held out of every drop by the single-live-match
+rule. Reachable in one ordinary move. Both sides now owe the action, so all
+three fire; the reminder carries static copy (`matchScheduleNoOverlapYet`) plus
+the Calendar button, because a generated "pick a time" line is wrong for someone
+who did pick.
+
+Two smaller things ride along, both consequences of the same consolidation:
+- The scheduling reminder now recognises a pair still inside the §3.5b Date
+  Ticket gate by an empty `proposedTimes` rather than by a flag-conditional
+  `ticketStatus` filter — the same discriminator the stall chain already used.
+  Behaviour is identical under either flag; there is one less way for the two to
+  disagree.
+- Two i18n keys are deleted (`peerWaitNoOverlap`, `peerWaitNoOverlapLate`, ×5
+  locales). Nothing else read them.
+
+Post-deploy check — production has **0 matches ever**, so nothing exercises this
+until a Thursday batch pairs someone. Walk it on `@gennetytestbot`: pick a slot
+from one account, counter with a different one from the other, and confirm both
+chats show no shimmer. The reminder is hourly, so verify it from the log rather
+than by waiting:
+
+```sh
+pm2 logs gennety-bot --lines 200 --nostream | grep '\[match-nudge\]'
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag, no Mini App state.
+
+---
+
 **PENDING — an abandoned question stops owning the chat (PRODUCT_SPEC §Phase 4 →
 Emergency Protocol, §Phase 5, §2.1).** Not deployed yet. **Code-only: no Prisma
 schema change, no env change, no flag change, no Mini App change**

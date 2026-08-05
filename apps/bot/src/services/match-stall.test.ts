@@ -33,6 +33,7 @@ import {
   STALL_TIMEOUT_MS,
   cancelPlanningByUser,
   cancelStalledMatch,
+  schedulingOwedKind,
   sideOwesAction,
   stallBaseFor,
   stallCheckInDueAt,
@@ -106,10 +107,56 @@ describe("stallPhaseOf", () => {
   });
 });
 
+describe("schedulingOwedKind", () => {
+  const OTHER = new Date("2026-08-02T16:00:00Z");
+
+  it("a side that never opened the calendar owes the plain pick", () => {
+    const row = schedulingRow({ availableTimesA: [SLOT] });
+    expect(schedulingOwedKind(row, "A")).toBeNull();
+    expect(schedulingOwedKind(row, "B")).toBe("no-picks");
+  });
+
+  it("both sides owe when both picked and nothing lines up", () => {
+    // The hole this discriminator was added for: with the old "has this side
+    // marked anything" rule, once BOTH had picked nobody owed anything — so no
+    // reminder went out, no "still on?" check-in was ever asked, and the 48h
+    // cancellation never fired. The pair sat in a live match indefinitely,
+    // excluded from every drop, while §3.6b told each of them a time was being
+    // coordinated on their behalf.
+    const row = schedulingRow({ availableTimesA: [SLOT], availableTimesB: [OTHER] });
+    expect(schedulingOwedKind(row, "A")).toBe("no-overlap");
+    expect(schedulingOwedKind(row, "B")).toBe("no-overlap");
+  });
+
+  it("nobody owes anything once a slot is shared (the date auto-locks)", () => {
+    // Compared by instant, not by array identity.
+    const row = schedulingRow({
+      availableTimesA: [SLOT, OTHER],
+      availableTimesB: [new Date(SLOT.getTime())],
+    });
+    expect(schedulingOwedKind(row, "A")).toBeNull();
+    expect(schedulingOwedKind(row, "B")).toBeNull();
+  });
+
+  it("is null outside the scheduling phase", () => {
+    expect(schedulingOwedKind(venueRow(), "B")).toBeNull();
+    expect(schedulingOwedKind(schedulingRow({ proposedTimes: [] }), "A")).toBeNull();
+  });
+});
+
 describe("sideOwesAction", () => {
   it("scheduling: a side owes until it marks availability", () => {
     const row = schedulingRow({ availableTimesA: [SLOT] });
     expect(sideOwesAction(row, "A")).toBe(false);
+    expect(sideOwesAction(row, "B")).toBe(true);
+  });
+
+  it("scheduling: both owe when their picks don't intersect", () => {
+    const row = schedulingRow({
+      availableTimesA: [SLOT],
+      availableTimesB: [new Date("2026-08-02T16:00:00Z")],
+    });
+    expect(sideOwesAction(row, "A")).toBe(true);
     expect(sideOwesAction(row, "B")).toBe(true);
   });
 

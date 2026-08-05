@@ -3,11 +3,7 @@ import { GrammyError } from "grammy";
 import { prisma } from "@gennety/db";
 import type { Language } from "@gennety/shared";
 import { isTelegramTarget, toTelegramChatId } from "../utils/telegram-target.js";
-import {
-  issuePeerWaitDraft,
-  peerWaitLabel,
-  type PeerWaitVariant,
-} from "../services/peer-wait.js";
+import { issuePeerWaitDraft, peerWaitLabel } from "../services/peer-wait.js";
 import { venueChangeSideWaiting, type VenueChangeWaitRow } from "./peer-wait-venue-change.js";
 
 /**
@@ -90,23 +86,18 @@ function venueSideSubmitted(match: PeerWaitMatchRow, side: WaitSide): boolean {
   return Boolean(text) && lat != null && lng != null;
 }
 
-/** Do two slot selections share at least one instant? */
-function hasOverlap(mine: Date[], theirs: Date[]): boolean {
-  const peerSet = new Set(theirs.map((d) => d.getTime()));
-  return mine.some((d) => peerSet.has(d.getTime()));
-}
-
 /**
- * Is this side done with its part and now blocked on the partner — and if so,
- * which kind of wait is it? `null` means "not waiting".
+ * Is this side done with its part and now blocked on the partner?
+ *
+ * The bar is strict on purpose: waiting means there is genuinely nothing this
+ * user can do next. A state where they still owe the move — even one where the
+ * partner has also answered — is NOT a wait, and gets a reminder rather than a
+ * status (see the invariant in `services/peer-wait.ts`).
  *
  * Exported because it is the whole product decision of this worker and deserves
  * to be tested directly rather than through Prisma.
  */
-export function resolvePeerWaitVariant(
-  match: PeerWaitMatchRow,
-  side: WaitSide,
-): PeerWaitVariant | null {
+export function isSideWaitingOnPeer(match: PeerWaitMatchRow, side: WaitSide): boolean {
   const isA = side === "A";
   switch (match.status) {
     case "proposed": {
@@ -115,44 +106,36 @@ export function resolvePeerWaitVariant(
       // prompt, so they are not waiting on anything they can act on.
       const mine = isA ? match.acceptedByA : match.acceptedByB;
       const theirs = isA ? match.acceptedByB : match.acceptedByA;
-      return mine === true && theirs === null ? "default" : null;
+      return mine === true && theirs === null;
     }
     case "negotiating": {
-      // `negotiating` also covers the Date Ticket gate, whose live waiting state
-      // is owned by its Mini App by design. `proposedTimes` is written by
-      // `startScheduling`, which runs only once the gate has settled (or is off
-      // entirely) — so a non-empty grid is exactly "the calendar is open".
-      // NB: deliberately not gated on `ticketStatus`, which defaults to
-      // "pending" even when the ticket feature is disabled.
-      if (match.proposedTimes.length === 0) return null;
+      // `negotiating` also covers the Date Ticket gate — a step the user PAYS
+      // for, i.e. their own move, and one whose Mini App owns its state anyway.
+      // `proposedTimes` is written by `startScheduling`, which runs only once
+      // the gate has settled (or is off entirely), so a non-empty grid is
+      // exactly "the calendar is open". NB: deliberately not gated on
+      // `ticketStatus`, which defaults to "pending" even with tickets disabled.
+      if (match.proposedTimes.length === 0) return false;
       const mine = isA ? match.availableTimesA : match.availableTimesB;
       const theirs = isA ? match.availableTimesB : match.availableTimesA;
-      if (mine.length === 0) return null;
-      if (theirs.length === 0) return "default";
-      // Both picked. A shared slot auto-locks the date (`scheduler.ts`), so if
-      // we are still here there is none — and BOTH sides are genuinely blocked
-      // on the other widening their selection. This used to read as "nobody is
-      // waiting": the shimmer vanished for whoever picked first and never
-      // appeared for whoever picked second, while `handleSchedulingNudges`
-      // skips a pair where both have picked, leaving the state completely
-      // silent until the §3.5c 24h check-in.
-      return hasOverlap(mine, theirs) ? null : "no_overlap";
+      // Marked nothing → the calendar is my move, not a wait.
+      if (mine.length === 0) return false;
+      // I picked, they haven't opened it yet: the only real wait on this step.
+      // Once they DO pick and nothing lines up, the ball is back with both of
+      // us — each has to widen their selection or take one of the other's
+      // slots — so neither side is waiting and neither gets a status. That
+      // case is owned by the scheduling reminder + the §3.5c stall chain
+      // (`sideOwesAction`), which is the honest way to say "your move".
+      return theirs.length === 0;
     }
     case "negotiating_venue":
-      return venueSideSubmitted(match, side) && !venueSideSubmitted(match, isA ? "B" : "A")
-        ? "default"
-        : null;
+      return venueSideSubmitted(match, side) && !venueSideSubmitted(match, isA ? "B" : "A");
     case "scheduled":
       // The §3.7b venue-change board — see `peer-wait-venue-change.ts`.
-      return venueChangeSideWaiting(match, side) ? "default" : null;
+      return venueChangeSideWaiting(match, side);
     default:
-      return null;
+      return false;
   }
-}
-
-/** Boolean view of {@link resolvePeerWaitVariant}. */
-export function isSideWaitingOnPeer(match: PeerWaitMatchRow, side: WaitSide): boolean {
-  return resolvePeerWaitVariant(match, side) !== null;
 }
 
 export interface PeerWaitTickOptions {
@@ -171,8 +154,7 @@ interface SideWork {
   partnerName: string | null;
   fallbackMessageId: number | null;
   fallbackEditedAt: Date | null;
-  /** Null when this side is not waiting; otherwise which ladder to render. */
-  variant: PeerWaitVariant | null;
+  waiting: boolean;
   /** Anchor the tier is measured from; null until this tick stamps it. */
   startedAt: Date | null;
 }
@@ -249,9 +231,9 @@ export async function peerWaitShimmerTick(
       const peer = isA ? match.userB : match.userA;
       const fallbackMessageId = isA ? match.peerWaitMessageIdA : match.peerWaitMessageIdB;
       const startedAt = isA ? match.peerWaitStartedAtA : match.peerWaitStartedAtB;
-      const variant = resolvePeerWaitVariant(match as PeerWaitMatchRow, side);
+      const waiting = isSideWaitingOnPeer(match as PeerWaitMatchRow, side);
 
-      if (variant === null && fallbackMessageId === null && startedAt === null) continue;
+      if (!waiting && fallbackMessageId === null && startedAt === null) continue;
       if (!isTelegramTarget(me.telegramId)) continue;
 
       work.push({
@@ -262,7 +244,7 @@ export async function peerWaitShimmerTick(
         partnerName: peer.firstName,
         fallbackMessageId,
         fallbackEditedAt: isA ? match.peerWaitEditedAtA : match.peerWaitEditedAtB,
-        variant,
+        waiting,
         startedAt,
       });
     }
@@ -282,7 +264,7 @@ export async function peerWaitShimmerTick(
 
   for (const item of work) {
     try {
-      if (item.variant === null) {
+      if (!item.waiting) {
         await endWait(api, item, result);
         continue;
       }
@@ -319,7 +301,6 @@ export async function peerWaitShimmerTick(
           partnerName: item.partnerName,
           startedAt: item.startedAt,
           now,
-          variant: item.variant,
         });
         result.refreshed++;
       } catch (err) {
@@ -372,7 +353,7 @@ async function sendFallback(
 ): Promise<void> {
   const sent = await api.sendMessage(
     item.chatId,
-    peerWaitLabel(item.lang, item.partnerName, item.startedAt, now, item.variant ?? "default"),
+    peerWaitLabel(item.lang, item.partnerName, item.startedAt, now),
   );
   await prisma.match.update({
     where: { id: item.matchId },
@@ -394,7 +375,7 @@ async function editFallback(
     await api.editMessageText(
       item.chatId,
       item.fallbackMessageId!,
-      peerWaitLabel(item.lang, item.partnerName, item.startedAt, now, item.variant ?? "default"),
+      peerWaitLabel(item.lang, item.partnerName, item.startedAt, now),
     );
     result.fallbackEdited++;
   } catch (err) {

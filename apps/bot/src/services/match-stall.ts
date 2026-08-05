@@ -143,11 +143,53 @@ export function stallAnchorAt(row: StallMatchRow): Date | null {
   return null;
 }
 
-/** Does this side still owe the action its phase is waiting on? */
+/** Do two slot selections share at least one instant? */
+function sharesASlot(mine: Date[], theirs: Date[]): boolean {
+  const peerSet = new Set(theirs.map((d) => d.getTime()));
+  return mine.some((d) => peerSet.has(d.getTime()));
+}
+
+/**
+ * WHY this side owes the scheduling step something, or null when it doesn't.
+ *
+ * Two shapes, and they need different words:
+ *   - `no-picks`   — never opened the calendar. "Pick a time."
+ *   - `no-overlap` — both picked and nothing lines up. Telling this person to
+ *                    "pick a time" is wrong; they did. Their move is to widen
+ *                    the selection or take one of the partner's slots.
+ *
+ * `no-overlap` used to be neither: `sideOwesAction` only asked whether a side
+ * had marked anything, so once BOTH had, nobody owed anything. No nudge, no
+ * "still on?" check-in, and no 48h cancellation — the pair sat in a live match
+ * indefinitely, excluded from every drop by the single-live-match rule, with a
+ * shimmer telling both of them the time was being coordinated for them.
+ */
+export type SchedulingOwed = "no-picks" | "no-overlap";
+
+export function schedulingOwedKind(row: StallMatchRow, side: MatchSide): SchedulingOwed | null {
+  if (stallPhaseOf(row) !== "scheduling") return null;
+  const mine = side === "A" ? row.availableTimesA : row.availableTimesB;
+  const theirs = side === "A" ? row.availableTimesB : row.availableTimesA;
+  if (mine.length === 0) return "no-picks";
+  // I picked, they haven't opened the calendar yet: their move, not mine. (This
+  // is the one calendar state that gets the §3.6b waiting shimmer.)
+  if (theirs.length === 0) return null;
+  // A shared slot auto-locks the date (`scheduler.ts`), so if the row is still
+  // here there is none — and the next move belongs to both sides again.
+  return sharesASlot(mine, theirs) ? null : "no-overlap";
+}
+
+/**
+ * Does this side still owe the action its phase is waiting on?
+ *
+ * This is also the product's definition of "whose move is it", which is why the
+ * §3.6b shimmer is its complement: a side that owes an action is told so
+ * (reminder, then check-in), never shown a "we're working on it" status.
+ */
 export function sideOwesAction(row: StallMatchRow, side: MatchSide): boolean {
   const phase = stallPhaseOf(row);
   if (phase === "scheduling") {
-    return (side === "A" ? row.availableTimesA : row.availableTimesB).length === 0;
+    return schedulingOwedKind(row, side) !== null;
   }
   if (phase === "venue") {
     // Read off the legacy vibe columns on purpose: both write paths land there
