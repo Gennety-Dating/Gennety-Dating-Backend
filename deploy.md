@@ -222,7 +222,7 @@ native BackButton when (and only when) it was reached from another page, and it
 reopens the exact board. Opened cold from the main menu it shows none, because
 there is nowhere to go back to.
 
-Two details worth knowing:
+Three details worth knowing:
 
 - **The return is a fresh navigation, not `history.back()`.** That is deliberate
   and load-bearing for the *successful* case: the board re-reads
@@ -230,9 +230,21 @@ Two details worth knowing:
   unlocked premium cards. A bfcached history entry would show them still locked.
 - **The target is validated against an allowlist**, never taken as a URL from
   the query string — it arrives in a parameter the user can edit.
+- **Back walks the whole chain, not one hop (folded in 2026-08-05, before this
+  block ever shipped).** The first cut of `return-to.ts` stored a single target,
+  so each hand-off overwrote the last: board → Premium → referral erased the
+  board, and back landed on a Premium screen that believed it was opened cold —
+  no button, close-the-Mini-App the only way out. It is a stack now, bounded in
+  depth, collapsing a revisit instead of stacking it. The top of the trail stays
+  in the original query keys, so a client still on an older bundle keeps its one
+  working level rather than losing back entirely.
 
-No post-deploy check beyond loading `premium.html` once from the board and once
-from the menu row and confirming the back arrow appears in the first case only.
+Post-deploy check: load `premium.html` once from the board and once from the
+menu row, confirming the back arrow appears in the first case only — then walk
+board → Premium → "invite a friend instead" and press back twice, which must
+land back on the board rather than stopping on Premium. (The referral leg needs
+`REFERRAL_FEATURE_ENABLED`, which is **false** in production, so that half is
+verifiable only on `@gennetytestbot` until referral launches.)
 **Rollback:** revert the code and redeploy the Mini App from the previous
 checkout.
 

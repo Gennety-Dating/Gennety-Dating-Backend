@@ -3410,6 +3410,23 @@ user already paid for stays valid regardless of the flag.
   open, so the premium cards come back unlocked. The return target is validated
   against an allowlist of known pages, never taken as a URL from the query
   string.
+  **Back walks the whole chain, not one hop (2026-08-05).** The first version
+  stored a single target, so each hand-off overwrote the previous one: board →
+  Premium → referral (the referral cross-promo link, §3.9) left only
+  "referral came from Premium", and the board was erased. Back therefore worked
+  exactly once at any depth — the user landed on a Premium screen that now
+  believed it had been opened cold, showed no button, and the only way out was
+  to close the Mini App and reopen "Change venue" from chat. The trail is now a
+  stack: every screen returns to the one that actually sent the user there, all
+  the way down to the page opened from a chat button, which correctly has no
+  back. Three rules keep it honest — a page already in the trail is treated as
+  a **return** to it rather than a new level (so a loop between two screens
+  cannot grow the URL forever or make back replay a path never walked), the
+  depth is bounded, and every entry is re-validated against the same allowlist
+  on the way out, so a hand-edited trail degrades to a shorter one instead of
+  becoming a redirect. The top of the trail stays in the original query keys,
+  so a client still running the previous bundle keeps its one working level
+  rather than losing back entirely.
 - **Fee waiver + counterfactual.** A settled change normally costs
   `VENUE_CHANGE_STARS` (§3.7b). With Premium it is **free**: a premium venue is
   always free (the pair has premium), and a base venue is free when the settling
@@ -3472,6 +3489,9 @@ AND complimentary Premium months, so it rides the already-on
   venue-change state endpoints). Tapping it opens `referral.html`, which
   carries a native Telegram BackButton back to the exact screen the user came
   from (`apps/webapp/src/return-to.ts`) — no dead end, no lost payment context.
+  When that screen was itself reached from another (board → Premium → here),
+  back keeps walking rather than stopping one hop up; see §3.8 for the trail
+  and its bounds.
 
 ### 3.10 Promo Codes (feature-flagged, independent campaign links)
 

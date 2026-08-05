@@ -14,6 +14,51 @@ describe("returnParams", () => {
   it("omits what it does not have rather than emitting empty values", () => {
     expect(returnParams("venue-change", {})).toBe("backTo=venue-change");
   });
+
+  it("appends to the trail instead of overwriting it", () => {
+    // The bug this fixes: Premium handing off to referral used to emit only
+    // `backTo=premium`, discarding the board that sent the user to Premium —
+    // so back worked exactly once and the board became unreachable.
+    const params = new URLSearchParams(
+      returnParams("premium", { lang: "ru" }, "?backTo=venue-change&backMatch=m1&lang=ru"),
+    );
+    expect(params.get("backTo")).toBe("premium");
+    expect(params.get("backStack")).toBe("venue-change:m1");
+  });
+
+  it("collapses a revisit rather than stacking it", () => {
+    // Returning to a page already in the trail is a return, not a new level;
+    // stacking it would grow the URL forever on a two-screen loop and make
+    // back replay a path the user never walked.
+    const params = new URLSearchParams(
+      returnParams(
+        "venue-change",
+        { match: "m1", lang: "ru" },
+        "?backTo=premium&backStack=venue-change:m1&lang=ru",
+      ),
+    );
+    expect(params.get("backTo")).toBe("venue-change");
+    expect(params.get("backStack")).toBeNull();
+  });
+
+  it("bounds the trail, dropping the oldest entries", () => {
+    let search = "";
+    for (let i = 0; i < 40; i++) {
+      // Alternating pages would collapse, so walk all four repeatedly.
+      const page = (["venue-change", "premium", "ticket-store", "ticket-gate"] as const)[i % 4]!;
+      search = `?${returnParams(page, {}, search)}`;
+    }
+    const stack = new URLSearchParams(search).get("backStack") ?? "";
+    expect(stack.split(",").filter(Boolean).length).toBeLessThanOrEqual(5);
+  });
+
+  it("drops a match id that could corrupt the encoding", () => {
+    const params = new URLSearchParams(
+      returnParams("venue-change", { match: "a,b:premium" }),
+    );
+    expect(params.get("backTo")).toBe("venue-change");
+    expect(params.get("backMatch")).toBeNull();
+  });
 });
 
 describe("returnHref", () => {
@@ -51,6 +96,42 @@ describe("returnHref", () => {
   it("is not fooled by a prototype key", () => {
     expect(returnHref("?backTo=constructor")).toBeNull();
     expect(returnHref("?backTo=__proto__")).toBeNull();
+  });
+
+  it("hands the page it returns to the rest of the trail", () => {
+    // Otherwise the returned-to page believes it was opened cold and hides its
+    // own back button — which is exactly how the chain used to die at depth 2.
+    expect(returnHref("?backTo=premium&backStack=venue-change:m1&lang=ru")).toBe(
+      "premium.html?backTo=venue-change&backMatch=m1&lang=ru",
+    );
+  });
+
+  it("walks a three-screen chain all the way home", () => {
+    // The reported scenario: board → Premium → referral, then back twice.
+    const toPremium = returnParams("venue-change", { match: "m1", lang: "ru" }, "?match=m1&lang=ru");
+    const toReferral = returnParams("premium", { lang: "ru" }, `?${toPremium}`);
+
+    const back1 = returnHref(`?${toReferral}`);
+    expect(back1).toBe("premium.html?backTo=venue-change&backMatch=m1&lang=ru");
+
+    const back2 = returnHref(`?${back1!.split("?")[1]}`);
+    expect(back2).toBe("venue-change.html?match=m1&lang=ru");
+
+    // …and the board is the bottom: nothing left to go back to.
+    expect(returnHref("?match=m1&lang=ru")).toBeNull();
+  });
+
+  it("keeps a deeper trail intact through the middle hops", () => {
+    const search = "?backTo=premium&backStack=ticket-gate:m1,venue-change:m2&lang=ru";
+    expect(returnHref(search)).toBe(
+      "premium.html?backTo=venue-change&backMatch=m2&backStack=ticket-gate%3Am1&lang=ru",
+    );
+  });
+
+  it("drops a trail entry that is not on the allowlist instead of failing the parse", () => {
+    expect(returnHref("?backTo=premium&backStack=evil.example,venue-change:m1&lang=ru")).toBe(
+      "premium.html?backTo=venue-change&backMatch=m1&lang=ru",
+    );
   });
 });
 
