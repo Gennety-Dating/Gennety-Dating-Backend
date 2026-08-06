@@ -45,9 +45,17 @@ Mini App's calls — and `apps/webapp/src/api.ts` bakes `VITE_API_BASE_URL` at
 build time, so the demo needs its own build of the same source.
 
 Deliberately **shared**: the source tree, and the stateless third-party
-credentials (OpenAI, Google Places, AWS, Supabase Storage). Demo spend is real
-but negligible. Storage buckets should still be demo-specific
-(`SUPABASE_*_BUCKET=…-demo`) so nothing lands next to production objects.
+credentials (OpenAI, Google Places, AWS). Demo spend is real but negligible.
+
+**Supabase Storage is NOT in that list** — it holds user media, so the demo
+points at its own project with its own `service_role` key and its own private
+`…-demo` buckets. Naming only the buckets is not enough, and that is the trap
+worth stating: the droplet's env is generated as production's `.env` plus
+`.env.demo`, so `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` must appear
+there explicitly or they inherit production's — which is what happened on day
+one (deploy.md, 2026-08-06). Demo-only bucket names meant nothing could land
+beside real objects, but the demo process was carrying a production credential
+with full access to real user media for no reason at all.
 
 ### `DEMO_MODE_ENABLED` is not self-certifying
 

@@ -213,15 +213,31 @@ Production carries no such cap.
   resolved it would have posted fictional profiles into the real founder ops
   feed. It now resolves the chat from the demo DB, falling back to `getUpdates`.
 
-**One open item.** `SUPABASE_URL` in the demo `.env` still points at the
-production Supabase project (the demo project's service-role key was never
-supplied), with `…-demo` bucket names. In the Telegram demo path this is inert:
-the only write, the liveness reference selfie, is stubbed by `demo/verification.ts`,
-Telegram profile photos are `file_id`s, and the mobile/Aether upload paths are
-not reachable. If a write ever does occur it targets buckets that do not exist
-in the production project, so it fails loudly rather than polluting anything.
-Close it by putting the demo project's `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
-into `/opt/gennety-demo/.env`.
+**Storage isolation — closed 2026-08-06.** For the first day the demo's
+`SUPABASE_URL` pointed at the **production** Supabase project (the demo
+project's service-role key had not been supplied yet), with `…-demo` bucket
+names. Nothing leaked, and it is worth recording why rather than just that: the
+only storage write on the Telegram demo path — the liveness reference selfie —
+is stubbed by `demo/verification.ts`; Telegram profile photos are `file_id`s
+that never reach Supabase; the mobile/Aether upload routes are JWT-only and
+unreachable from a bot chat; and `/restart` calls the real `deleteUserAccount`,
+whose `collectOwnedPaths` keeps only paths prefixed `${userId}/`, so the stub
+selfie path was filtered out and no storage call was made at all. A write that
+did slip through would have hit a bucket that does not exist in the production
+project — a loud failure, not a silent object beside real user media.
+
+What it actually cost was the credential: the demo process held **production's
+`service_role` key** for no reason. Now closed — `/opt/gennety-demo/.env`
+carries the demo project's own `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`,
+the three `…-demo` buckets exist there as **private**, and a real
+upload → download → delete round-trip was verified against `selfies-demo`.
+`SUPABASE_ANON_KEY` is read by nothing in this codebase and was blanked rather
+than left holding production's value.
+
+**Both keys belong in `.env.demo`, not only on the droplet.** The droplet's env
+is generated as production's `.env` plus that file, so any key it does not name
+silently inherits production's value — which is exactly how `SUPABASE_URL`
+became production's in the first place.
 
 Thereafter it is one command per release, run **after** production is verified:
 
