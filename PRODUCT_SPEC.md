@@ -2221,8 +2221,31 @@ scheduling-phase or deadline cadence.
 
 An optional premium step sits between mutual accept and the Calendar. It is
 gated by `TICKET_FEATURE_ENABLED` (default **off** → the bot hands off straight
-to the Calendar exactly as documented in §3.6). Telegram-only in v1: the mobile
-mutual-accept path (`POST /v1/matches/:id/decision`) still schedules directly.
+to the Calendar exactly as documented in §3.6).
+
+**Both surfaces, since 2026-08-06.** This section used to say the gate was
+Telegram-only and that the mobile mutual-accept path scheduled directly. The
+second half had not been true for some time — `matches-service.ts` calls
+`sendTicketOffer` whenever the flag is on, whichever client committed the
+decision — so an iOS-only pair *did* enter the gate and then found nothing on
+`/v1/*` able to read or settle it: the Mini App routes below are `initData`-
+authed, and an app user has no Telegram session to sign with. They sat in
+`negotiating` with no Calendar until the partial window lapsed and the expiry
+cron opened scheduling for free. The native surface is
+`/v1/matches/{id}/ticket-gate[/use|/seen]` (JWT), and
+`SerializedMatch.ticketGate` is what tells the client to route there.
+
+**On iOS the wallet is the only rail.** StoreKit credits it
+(`POST /v1/tickets/appstore/transaction`, three consumables) and the gate spends
+from it; there is no per-scope charge. An App Store consumable is a fixed-price
+SKU, so charging per scope would need a product per scope and another per
+discount state, each created by hand in App Store Connect and impossible to
+re-price server-side. With the wallet in between, every gate action is
+expressible with the products that already exist, and a settle that loses its
+race refunds a ticket rather than a dollar. The famine single-ticket discount is
+USD-only and so does not apply on iOS at all — the same rule Stars already
+follows. The welcome gift, the store bundles and the wallet bonuses below stay
+Telegram-only in v1.
 
 When enabled, mutual accept creates one live **post-accept status/CTA** per
 Telegram side (tracked in `Match.calendarMessageIdA/B`): accepted/waiting →
@@ -2324,9 +2347,10 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   `welcome_gift`
   `TicketLedger` row is the claim marker, so the FIRST qualifying pitch becomes
   the gift moment automatically (no separate "first match" detection) and
-  retries/subsequent pitches never re-gift. Telegram-only in v1 (the mobile
-  mutual-accept path bypasses the ticket gate) and inert unless
-  `TICKET_FEATURE_ENABLED`.
+  retries/subsequent pitches never re-gift. Telegram-only in v1 — the gift is a
+  video note plus a DM, neither of which has a mobile surface — and inert unless
+  `TICKET_FEATURE_ENABLED`. (The gate itself is NOT Telegram-only; see the head
+  of this section.)
 - **Ticket wallet (pre-purchase + bonuses).** Users carry a `User.ticketBalance`
   topped up by onboarding bonuses (§1.3: 6+ photos, adding a video;
   Registration v2: the one-time
