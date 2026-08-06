@@ -1,6 +1,7 @@
 import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { prisma } from "@gennety/db";
+import type { MatchStatus } from "@gennety/db";
 import type { Language } from "@gennety/shared";
 
 import { env } from "../config.js";
@@ -35,7 +36,14 @@ import {
   seedDemoPartners,
 } from "./partners.js";
 import { decideDemoAction, type DemoAction, type DemoMatchSnapshot, type DemoSnapshot } from "./decide.js";
-import { demoContinueLabel, demoText, type DemoBeat } from "./script.js";
+import {
+  DEMO_CONTINUE_CALLBACK,
+  DEMO_PREDATE_CALLBACK,
+  demoContinueLabel,
+  demoPredateLabel,
+  demoText,
+  type DemoBeat,
+} from "./script.js";
 
 const LOG = "[demo]";
 
@@ -60,15 +68,37 @@ const LOG = "[demo]";
  *   - `inFlight` — a visitor is never acted on twice concurrently. Actions here
  *     are multi-second (an LLM call, a venue selection, a card render) and the
  *     tick is 3s.
+ *   - `redoOffered` — the finished match a visitor has already been offered a
+ *     way back from, so the offer is made once per ending rather than once per
+ *     tick. Keyed by match id, so a later ending gets its own offer with no
+ *     bookkeeping to reset.
  */
 const spokenBeats = new Map<string, Set<DemoBeat>>();
 const pendingSince = new Map<string, { key: string; at: number }>();
 const inFlight = new Set<string>();
+const redoOffered = new Map<string, string>();
 
 /** Reset a visitor's in-memory bookkeeping (used by `/restart`). */
 export function forgetDemoVisitor(userId: string): void {
   spokenBeats.delete(userId);
   pendingSince.delete(userId);
+  redoOffered.delete(userId);
+}
+
+/**
+ * Forget the beats that belong to ONE run through the flow.
+ *
+ * Called whenever a new match is created, so a second pass (after "show me
+ * another profile") gets its own date-card handover and its own pre-date
+ * replay. The beats that explain the product rather than a match — the intro,
+ * the photo and verification notes, how matchmaking works — are deliberately
+ * left alone: they were true the first time and repeating them is noise.
+ */
+function forgetMatchBeats(userId: string): void {
+  const set = spokenBeats.get(userId);
+  if (!set) return;
+  set.delete("date_ready");
+  set.delete("predate");
 }
 
 export interface DemoTickResult {
@@ -180,6 +210,7 @@ async function buildSnapshot(
   });
 
   const match = await loadDemoMatch(userId, partnerTelegramIds);
+  const alreadyOffered = redoOffered.get(userId);
 
   return {
     language: user.language,
@@ -189,16 +220,28 @@ async function buildSnapshot(
     currentQuestion: progress?.currentQuestion ?? null,
     spokenBeats: spokenBeats.get(userId) ?? new Set<DemoBeat>(),
     match: match.live,
-    awaitingContinueOffer: match.awaitingContinueOffer,
+    finishedMatch:
+      match.finished && match.finished.id !== alreadyOffered ? match.finished : null,
+    hasEverMatched: match.hasEverMatched,
   };
 }
 
 const LIVE_STATUSES = ["proposed", "negotiating", "negotiating_venue", "scheduled"] as const;
 
+interface DemoMatchLookup {
+  live: DemoMatchSnapshot | null;
+  /** The most recent puppet match, once it is terminal. */
+  finished: { id: string; status: MatchStatus } | null;
+  /** Any puppet match at all — see `DemoSnapshot.hasEverMatched`. */
+  hasEverMatched: boolean;
+}
+
+const NO_MATCH: DemoMatchLookup = { live: null, finished: null, hasEverMatched: false };
+
 async function loadDemoMatch(
   userId: string,
   partnerTelegramIds: readonly bigint[],
-): Promise<{ live: DemoMatchSnapshot | null; awaitingContinueOffer: boolean }> {
+): Promise<DemoMatchLookup> {
   const row = await prisma.match.findFirst({
     where: {
       OR: [{ userAId: userId }, { userBId: userId }],
@@ -229,22 +272,26 @@ async function loadDemoMatch(
       userB: { select: { id: true, telegramId: true, gender: true } },
     },
   });
-  if (!row) return { live: null, awaitingContinueOffer: false };
+  if (!row) return NO_MATCH;
 
   const visitorSide = row.userAId === userId ? "A" : "B";
   const partner = visitorSide === "A" ? row.userB : row.userA;
   // Only pairs with a puppet are the demo's business. A demo database should
   // contain nothing else, but two visitors could in principle be paired by a
   // stray batch run, and the driver must not start puppeteering a real person.
-  if (!partnerTelegramIds.includes(partner.telegramId)) {
-    return { live: null, awaitingContinueOffer: false };
-  }
+  if (!partnerTelegramIds.includes(partner.telegramId)) return NO_MATCH;
 
   const isLive = (LIVE_STATUSES as readonly string[]).includes(row.status);
   if (!isLive) {
-    // A finished match with a puppet means the visitor passed (or it expired).
-    // Offer the way back rather than leaving the demo at a dead end.
-    return { live: null, awaitingContinueOffer: true };
+    // Terminal: the visitor passed, the window expired, or the demo ran all the
+    // way through to the post-date feedback (which is what flips a `scheduled`
+    // row to `completed`). Which of those it was decides what the demo says
+    // next, so the status travels with it.
+    return {
+      live: null,
+      finished: { id: row.id, status: row.status },
+      hasEverMatched: true,
+    };
   }
 
   const own = <T>(a: T, b: T): T => (visitorSide === "A" ? a : b);
@@ -255,7 +302,8 @@ async function loadDemoMatch(
   });
 
   return {
-    awaitingContinueOffer: false,
+    finished: null,
+    hasEverMatched: true,
     live: {
       id: row.id,
       status: row.status,
@@ -321,7 +369,19 @@ async function performAction(
 
   switch (action.kind) {
     case "narrate":
-      await say(api, telegramId, demoText(action.beat, lang));
+      await say(api, telegramId, demoText(action.beat, lang), {
+        // The date-card handover is the one beat that carries an action: it
+        // ends with "tap when you're done", and the tap is the intended way
+        // into the pre-date replay (the timer is only the floor under it).
+        ...(action.beat === "date_ready"
+          ? {
+              reply_markup: new InlineKeyboard().text(
+                demoPredateLabel(lang),
+                DEMO_PREDATE_CALLBACK,
+              ),
+            }
+          : {}),
+      });
       markSpoken(userId, action.beat);
       return;
 
@@ -330,16 +390,19 @@ async function performAction(
       return;
 
     case "offer_continue": {
-      await say(api, telegramId, demoText("declined", lang), {
+      await say(api, telegramId, demoText(action.beat, lang), {
         reply_markup: new InlineKeyboard().text(
-          demoContinueLabel(lang),
-          "demo:continue",
+          demoContinueLabel(action.beat, lang),
+          DEMO_CONTINUE_CALLBACK,
         ),
       });
-      // The offer is a one-shot: clear the finished rows so the next tick sees
-      // "no match" rather than re-offering every 3 seconds. The visitor's tap
-      // is what creates the new pitch (`handleDemoContinue`).
-      await clearDemoMatches(userId);
+      // Record the ending rather than deleting it. Deleting was how the demo
+      // used to make the offer one-shot, and it also erased the only evidence
+      // that this visitor had ever matched — so the next tick read the empty
+      // state as "the demo has not started" and pitched a fresh profile twelve
+      // seconds later, whether or not the button was touched. The rows now stay
+      // until the tap, which is the only thing that may start a second run.
+      redoOffered.set(userId, action.matchId);
       return;
     }
 
@@ -400,11 +463,33 @@ async function performAction(
     }
 
     case "run_predate": {
-      await say(api, telegramId, demoText("predate", lang));
-      await replayDateLifecycle(api, snapshot.match!.agreedTime);
+      await runDemoPredate(api, userId, telegramId, lang, snapshot.match!.agreedTime);
       return;
     }
   }
+}
+
+/**
+ * Explain the days before the date, then play them out.
+ *
+ * Reached two ways — the visitor taps «Что происходит дальше», or the
+ * exploration window runs out — so the beat marker is claimed BEFORE any of it
+ * runs. The lifecycle steps are individually idempotent, but the narration is
+ * an ordinary message and a tap landing a moment before the timer would
+ * otherwise send it twice.
+ */
+export async function runDemoPredate(
+  api: Api<RawApi>,
+  userId: string,
+  telegramId: bigint,
+  lang: Language | null,
+  agreedTime: Date | null,
+): Promise<void> {
+  if (spokenBeats.get(userId)?.has("predate")) return;
+  markSpoken(userId, "predate");
+
+  await say(api, telegramId, demoText("predate", lang));
+  await replayDateLifecycle(api, agreedTime);
 }
 
 /**
@@ -439,6 +524,9 @@ async function startDemoMatch(
   }
 
   await releaseMatchCooldown([userId, partner.id]);
+  // A second pass through the flow gets its own date-card handover and its own
+  // pre-date replay; without this it would land on a scheduled date in silence.
+  forgetMatchBeats(userId);
 
   // Marked the moment it is sent, not after the pitch lands. This beat is the
   // one piece of narration delivered from inside an action rather than through

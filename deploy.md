@@ -381,6 +381,29 @@ needs one real chat to mint per-bot `file_id`s. The profiles themselves (Арт�
 29, Ева 25) are seeded and the demo runs; the pitch just has no images until
 that step.
 
+**Follow-up 2026-08-06 — the scheduled date gets minutes, and the demo stops
+looping (`apps/bot/src/demo/` only, DEMO_MODE.md).** Ships with
+`pnpm demo:deploy`; **production is not restarted for it** and nothing outside
+`apps/bot/src/demo/` changed. Three defects from one walkthrough, all in the
+same stretch of the flow:
+
+- The pre-date replay fired **12 s** after the date locked in, burying the date
+  card — the venue-change board, Open in Maps, the blurred share copy — under
+  five more messages. It now hands the card over with a note plus a **«Что
+  происходит дальше»** button and continues on the tap, or after 7 minutes.
+- The post-date feedback flips `scheduled` to `completed`, which is terminal
+  exactly like a pass — so finishing the demo produced the **decline** copy
+  ("a pass is final, this pair will never be shown again"). The two endings now
+  have their own copy.
+- The "show me the profile again" button was decorative: the offer deleted the
+  finished rows to make itself one-shot, the next tick could not tell that from
+  "the demo has not started", and a fresh profile arrived 12 s later whether or
+  not anyone tapped. The rows now stay until the tap.
+
+Post-deploy check: walk one demo to a scheduled date and confirm the card sits
+alone until the button, and that finishing the feedback form ends with the
+🎬 closing message and nothing else.
+
 **Rollback:** `pm2 delete gennety-demo`. Production is untouched by anything in
 this block — no shared database, no shared token, no shared port, no shared
 bundle.

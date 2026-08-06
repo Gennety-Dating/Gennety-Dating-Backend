@@ -40,8 +40,12 @@ export type DemoAction =
   | { kind: "partner_settle_venue_change" }
   /** Explain the pre-date days, then play them out immediately. */
   | { kind: "run_predate" }
-  /** The visitor passed. Explain that it is final, offer the demo way back. */
-  | { kind: "offer_continue" }
+  /**
+   * The match is over — the visitor passed, or the demo ran all the way to the
+   * post-date feedback. Say which, and offer the way back. `matchId` is what
+   * makes the offer one-shot per ending rather than per process.
+   */
+  | { kind: "offer_continue"; matchId: string; beat: "declined" | "finale" }
   | { kind: "none" };
 
 export interface DemoDecision {
@@ -93,8 +97,24 @@ export interface DemoSnapshot {
   spokenBeats: ReadonlySet<DemoBeat>;
   /** The live match with the puppet, if any. */
   match: DemoMatchSnapshot | null;
-  /** A finished match with the puppet the visitor has not been offered a redo on. */
-  awaitingContinueOffer: boolean;
+  /**
+   * A finished match with the puppet the visitor has NOT yet been offered a way
+   * back from. The driver filters out endings it has already spoken to, so this
+   * going null is what makes the offer one-shot.
+   */
+  finishedMatch: { id: string; status: MatchStatus } | null;
+  /**
+   * Whether this visitor has any match with a puppet at all, live or finished.
+   *
+   * Load-bearing, and the least obvious field here. Without it the driver
+   * re-pitched by itself the moment a match ended: `offer_continue` deleted the
+   * rows, the next tick saw "no match" and could not tell that apart from "the
+   * demo has not started", and pitched. The «показать анкету снова» button was
+   * decorative — a new profile arrived twelve seconds later whether or not
+   * anyone touched it, which is exactly what a visitor reported after finishing
+   * the post-date feedback form.
+   */
+  hasEverMatched: boolean;
 }
 
 /** A beat, so the shimmer and the "waiting on your partner" copy are readable. */
@@ -106,26 +126,57 @@ export const DEMO_STEP_WAIT_MS = 12_000;
  * the puppet eventually takes one of their slots and the date locks.
  */
 export const DEMO_CONVERGE_WAIT_MS = 90_000;
+/**
+ * How long the date card is left alone before the demo speaks over it.
+ *
+ * Long enough that the scheduled confirmation, its render shimmer and the card
+ * itself have all landed — the card is the last of the three and takes seconds
+ * to rasterize, so a shorter beat lands on top of it.
+ */
+export const DEMO_DATE_CARD_WAIT_MS = 25_000;
+/**
+ * How long the visitor gets with a scheduled date before the pre-date content
+ * arrives by itself.
+ *
+ * The date card carries the three affordances most worth showing — the venue
+ * change board, Open in Maps, and the blurred share copy — and the pre-date
+ * replay buries it under five more messages. Twelve seconds was not a demo of
+ * those affordances, it was a slideshow past them. The button in the
+ * `date_ready` beat is the intended path; this is only the floor under a
+ * visitor who never taps it, so the demo cannot stall in front of an audience.
+ */
+export const DEMO_EXPLORE_WAIT_MS = 7 * 60_000;
 
 export function decideDemoAction(snapshot: DemoSnapshot): DemoDecision {
   const narration = decideNarration(snapshot);
   if (narration) return { action: narration, waitMs: 0 };
 
-  if (snapshot.awaitingContinueOffer) {
-    return { action: { kind: "offer_continue" }, waitMs: DEMO_STEP_WAIT_MS };
+  const finished = snapshot.finishedMatch;
+  if (finished) {
+    return {
+      action: {
+        kind: "offer_continue",
+        matchId: finished.id,
+        // `completed` is the demo running all the way through to the post-date
+        // feedback; anything else (cancelled by a pass, expired) is a pass.
+        beat: finished.status === "completed" ? "finale" : "declined",
+      },
+      waitMs: DEMO_STEP_WAIT_MS,
+    };
   }
 
   const match = snapshot.match;
   if (!match) {
-    // Verified and active with nothing in flight: this is the first pitch.
-    // `awaitingContinueOffer` above already caught the post-decline case, so
-    // reaching here with no match at all means the demo has not started.
+    // A visitor who has already had a match and has no live one is waiting on
+    // their own tap — the offer above has been made and the driver is done.
+    // Only a visitor who has never matched gets an unprompted first pitch.
+    if (snapshot.hasEverMatched) return { action: { kind: "none" }, waitMs: 0 };
     return isLive(snapshot)
       ? { action: { kind: "pitch" }, waitMs: DEMO_STEP_WAIT_MS }
       : { action: { kind: "none" }, waitMs: 0 };
   }
 
-  return decideMatchAction(match);
+  return decideMatchAction(match, snapshot.spokenBeats);
 }
 
 function isLive(snapshot: DemoSnapshot): boolean {
@@ -191,7 +242,10 @@ function decideNarration(snapshot: DemoSnapshot): DemoAction | null {
   return null;
 }
 
-function decideMatchAction(match: DemoMatchSnapshot): DemoDecision {
+function decideMatchAction(
+  match: DemoMatchSnapshot,
+  spoken: ReadonlySet<DemoBeat>,
+): DemoDecision {
   const wait = (action: DemoAction, waitMs = DEMO_STEP_WAIT_MS): DemoDecision => ({
     action,
     waitMs,
@@ -207,7 +261,7 @@ function decideMatchAction(match: DemoMatchSnapshot): DemoDecision {
       // decider leaves it `proposed` regardless of their answer; it only
       // resolves once the second side decides, or at the 24h TTL. So a puppet
       // that waited for `visitorAccepted === true` sat idle forever after a
-      // "no": the match never went terminal, `awaitingContinueOffer` never
+      // "no": the match never went terminal, `finishedMatch` never
       // flipped, and the "continue the demo" button never arrived. The one
       // path the demo has for its most likely misstep dead-ended for a day.
       //
@@ -268,10 +322,18 @@ function decideMatchAction(match: DemoMatchSnapshot): DemoDecision {
       const board = decideVenueChangeAction(match);
       if (board) return wait(board);
 
-      if (match.icebreakersSentAt === null) {
-        return wait({ kind: "run_predate" });
+      // The lifecycle claimed its marker: the pre-date content has played.
+      if (match.icebreakersSentAt !== null) return idle;
+
+      // Hand over the card and say what is worth touching, then get out of the
+      // way. Both waits are measured from when the action becomes owed, and an
+      // action change resets that clock — so a visitor who spends the interval
+      // on the venue-change board gets their exploration time back afterwards
+      // rather than being cut off mid-board.
+      if (!spoken.has("date_ready")) {
+        return wait({ kind: "narrate", beat: "date_ready" }, DEMO_DATE_CARD_WAIT_MS);
       }
-      return idle;
+      return wait({ kind: "run_predate" }, DEMO_EXPLORE_WAIT_MS);
     }
 
     default:

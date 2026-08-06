@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   DEMO_CONVERGE_WAIT_MS,
+  DEMO_DATE_CARD_WAIT_MS,
+  DEMO_EXPLORE_WAIT_MS,
   DEMO_STEP_WAIT_MS,
   decideDemoAction,
   pickCounterSlots,
@@ -18,7 +20,8 @@ function snapshot(overrides: Partial<DemoSnapshot> = {}): DemoSnapshot {
     currentQuestion: null,
     spokenBeats: new Set<DemoBeat>(["intro"]),
     match: null,
-    awaitingContinueOffer: false,
+    finishedMatch: null,
+    hasEverMatched: false,
     ...overrides,
   };
 }
@@ -173,7 +176,7 @@ describe("blind decision invariant", () => {
   it("also answers after the visitor DECLINED, so the row can terminate", () => {
     // §3.4: a first decider leaves the match `proposed` whichever way they
     // went. A puppet that only answered a "yes" left a declined match live
-    // until its 24h TTL, so `awaitingContinueOffer` never flipped and the
+    // until its 24h TTL, so `finishedMatch` never appeared and the
     // "continue the demo" button never arrived.
     expect(
       decideDemoAction(snapshot({ match: match({ visitorAccepted: false }) })).action,
@@ -349,25 +352,87 @@ describe("venue change board", () => {
 });
 
 describe("pre-date replay", () => {
-  it("runs once the date is scheduled", () => {
-    expect(
-      decideDemoAction(snapshot({ match: match({ status: "scheduled" }) })).action,
-    ).toEqual({ kind: "run_predate" });
+  const scheduled = (over: Partial<DemoMatchSnapshot> = {}) =>
+    match({ status: "scheduled", ...over });
+
+  it("hands the date card over first, and leaves it alone for a beat", () => {
+    // The replay buries the card under five more messages, and the card is
+    // where the venue-change board, Maps and the share copy live.
+    const decision = decideDemoAction(snapshot({ match: scheduled() }));
+    expect(decision.action).toEqual({ kind: "narrate", beat: "date_ready" });
+    expect(decision.waitMs).toBe(DEMO_DATE_CARD_WAIT_MS);
+  });
+
+  it("gives the visitor minutes with the card before continuing by itself", () => {
+    const decision = decideDemoAction(
+      snapshot({
+        match: scheduled(),
+        spokenBeats: new Set<DemoBeat>(["intro", "date_ready"]),
+      }),
+    );
+    expect(decision.action).toEqual({ kind: "run_predate" });
+    expect(decision.waitMs).toBe(DEMO_EXPLORE_WAIT_MS);
+    // The button in the beat is the intended path; this is only the floor.
+    expect(DEMO_EXPLORE_WAIT_MS).toBeGreaterThan(5 * 60_000);
   });
 
   it("does not repeat after the lifecycle has claimed its marker", () => {
     expect(
       decideDemoAction(
-        snapshot({ match: match({ status: "scheduled", icebreakersSentAt: new Date() }) }),
+        snapshot({
+          match: scheduled({ icebreakersSentAt: new Date() }),
+          spokenBeats: new Set<DemoBeat>(["intro", "date_ready"]),
+        }),
       ).action,
     ).toEqual({ kind: "none" });
   });
 });
 
-describe("decline recovery", () => {
-  it("offers the way back, and does so before trying to pitch again", () => {
-    const decision = decideDemoAction(snapshot({ awaitingContinueOffer: true }));
-    expect(decision.action).toEqual({ kind: "offer_continue" });
+describe("endings", () => {
+  it("offers the way back after a pass, before trying to pitch again", () => {
+    const decision = decideDemoAction(
+      snapshot({
+        hasEverMatched: true,
+        finishedMatch: { id: "m1", status: "cancelled" },
+      }),
+    );
+    expect(decision.action).toEqual({
+      kind: "offer_continue",
+      matchId: "m1",
+      beat: "declined",
+    });
+  });
+
+  it("closes a demo that ran all the way through with its own copy", () => {
+    // The post-date feedback flips `scheduled` to `completed`. Both endings
+    // leave a terminal row, and telling someone who just finished a successful
+    // date that "a pass is final" is the wrong message entirely.
+    const decision = decideDemoAction(
+      snapshot({
+        hasEverMatched: true,
+        finishedMatch: { id: "m1", status: "completed" },
+      }),
+    );
+    expect(decision.action).toEqual({
+      kind: "offer_continue",
+      matchId: "m1",
+      beat: "finale",
+    });
+  });
+
+  it("never re-pitches on its own once the offer has been made", () => {
+    // The driver clears `finishedMatch` after speaking, and the terminal rows
+    // stay. Without `hasEverMatched` this state was indistinguishable from a
+    // fresh visitor and produced an unasked-for second profile.
+    expect(
+      decideDemoAction(snapshot({ hasEverMatched: true, finishedMatch: null })).action,
+    ).toEqual({ kind: "none" });
+  });
+
+  it("still pitches unprompted to a visitor who has never matched", () => {
+    expect(decideDemoAction(snapshot({ hasEverMatched: false })).action).toEqual({
+      kind: "pitch",
+    });
   });
 });
 

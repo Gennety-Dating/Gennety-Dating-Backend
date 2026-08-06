@@ -103,11 +103,24 @@ different snapshot, not as a broken hook.
 | board `liking`, visitor hearted | heart a **different** venue | `submitVenueLikes` |
 | board, still no overlap | heart one of theirs → agreement | `submitVenueLikes` |
 | board `agreed`, puppet is payer | settle | `settleFreeVenueChange` |
-| `scheduled` | explain the wait, then replay it | `runDateLifecycleTick` ×3 |
+| `scheduled` | hand over the date card, then wait | — |
+| `scheduled`, visitor tapped / 7 min | explain the wait, then replay it | `runDateLifecycleTick` ×3 |
+| terminal | say which ending it was, offer the way back | — |
 
 The two "different first" steps matter: they are what make the negotiation read
 like a person with their own calendar and their own taste, rather than a bot
 that says yes. The 90-second give-in exists so a demo can never dead-end.
+
+**The scheduled date is left alone for minutes, not seconds.** The date card is
+the one screen in the demo whose interesting parts are *on it* — the
+venue-change board, Open in Maps, the blurred share copy — and the pre-date
+replay puts five more messages underneath it. Firing that replay twelve seconds
+after the date locked in was not a demo of those affordances, it was a slideshow
+past them. The driver now hands the card over with a short note naming what is
+worth touching plus a **«Что происходит дальше»** button, and only continues on
+the tap or after `DEMO_EXPLORE_WAIT_MS` (7 min), whichever comes first. The
+timer is the floor under a visitor who never taps, so the demo cannot stall in
+front of an audience; the button is the intended path.
 
 **Every pitch releases the match cooldown on BOTH participants, not just the
 puppet.** `createProposedMatch` enforces `lastMatchedAt < now − 24h` on each id
@@ -137,8 +150,9 @@ window, safety brief, wingman hint and feedback prompt fire in order.
 
 ### What is held in memory (and why nothing is in the schema)
 
-Three maps in `driver.ts`: which narration beats a visitor has read, when the
-currently-owed action was first observed, and which visitors are being acted on.
+Four maps in `driver.ts`: which narration beats a visitor has read, when the
+currently-owed action was first observed, which visitors are being acted on, and
+which finished match a visitor has already been offered a way back from.
 
 **No table was added to `packages/db/prisma/schema.prisma` for demo mode**, and
 none should be — the schema is shared with production, and a demo-only table
@@ -151,7 +165,7 @@ idempotency columns.
 
 ## The narration
 
-Five moments where the demo speaks as itself (`demo/script.ts`), each triggered
+Seven moments where the demo speaks as itself (`demo/script.ts`), each triggered
 by a state the product itself owns:
 
 1. **`/start`** — what the demo is; and that the bot is a conversational agent
@@ -162,8 +176,11 @@ by a state the product itself owns:
    always passes.
 4. **Verified** — how matching actually works, then the first profile with an
    invitation to reply in plain text.
-5. **`scheduled`** — what normally happens over the following days, immediately
-   followed by it happening.
+5. **`scheduled`** — the date card is yours; here is what on it is live, tap when
+   you're done looking.
+6. **The tap, or 7 minutes** — what normally happens over the following days,
+   immediately followed by it happening.
+7. **Terminal** — which ending this was, and the way back.
 
 Languages: `ru`, `uk`, `en` are written out; `de` and `pl` fall back to `en`.
 A deliberate scope call for long explanatory prose; adding the two blocks is the
@@ -180,6 +197,20 @@ only change needed if a demo in those languages is ever required.
   offers a button that deletes its own match history and re-pitches. The
   lifetime pair ban (§3.2 filter 6) is not bypassed in the allocator; the demo
   removes its own rows instead.
+
+  **The button is the only thing that starts a second run.** It used to be
+  decorative: the offer deleted the finished rows to make itself one-shot, which
+  also erased the only evidence that this visitor had ever matched — so the next
+  tick read the empty state as "the demo has not started" and pitched a fresh
+  profile twelve seconds later whether or not anyone pressed anything. The rows
+  now stay, `hasEverMatched` keeps the driver quiet, and the offer is made once
+  per ending (`redoOffered`, keyed by match id).
+
+  **A finished demo is not a decline.** The post-date feedback flips `scheduled`
+  to `completed`, which is terminal exactly like a pass — so for the first day of
+  demo mode a visitor who had just been walked from pitch to post-date feedback
+  was told "a pass is final, this pair will never be shown again". The two
+  endings now carry their own copy, chosen from the terminal status.
 
   **The puppet has to answer a "no" for any of that to happen.** A first
   decider leaves the row `proposed` whichever way they went (§3.4) — it goes

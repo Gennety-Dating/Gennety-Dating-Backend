@@ -5,21 +5,28 @@ import type { Language } from "@gennety/shared";
 import type { BotContext } from "../session.js";
 import { deleteUserAccount } from "../services/account-deletion.js";
 import { DEMO_MODE_ENABLED } from "./config.js";
-import { clearDemoMatches, forgetDemoVisitor, restartDemoPitch } from "./driver.js";
-import { demoText } from "./script.js";
+import {
+  clearDemoMatches,
+  forgetDemoVisitor,
+  restartDemoPitch,
+  runDemoPredate,
+} from "./driver.js";
+import {
+  DEMO_CONTINUE_CALLBACK,
+  DEMO_PREDATE_CALLBACK,
+  demoText,
+} from "./script.js";
 
 /**
- * The two affordances that exist only in demo mode.
+ * The affordances that exist only in demo mode.
  *
  * Registered ahead of every other handler so they work from any state — a demo
  * visitor who has wandered into a Mini App flow, a stalled negotiation or the
- * verification gate must always be able to get out. Both are inert when
+ * verification gate must always be able to get out. All are inert when
  * `DEMO_MODE_ENABLED` is false: the composer below is only mounted by
  * `handlers/router.ts` under that flag, and each handler re-checks it, so a
  * stray callback in production can never reach this code.
  */
-
-export const DEMO_CONTINUE_CALLBACK = "demo:continue";
 
 export const demoRouter = new Composer<BotContext>();
 
@@ -79,4 +86,43 @@ demoRouter.callbackQuery(DEMO_CONTINUE_CALLBACK, async (ctx) => {
   await ctx.editMessageReplyMarkup().catch(() => undefined);
 
   await restartDemoPitch(ctx.api, user.id, BigInt(telegramId), user.language);
+});
+
+/**
+ * "Show me what happens next" — the visitor is done with the date card.
+ *
+ * The scheduled date is the one place in the demo where the interesting things
+ * are on a card rather than in the next message: the venue-change board, Open
+ * in Maps, the blurred share copy. The driver hands the card over and then
+ * waits, and this is how a visitor says they are finished looking. Tapping it
+ * is strictly a way to skip the wait — the pre-date content arrives either way
+ * (`DEMO_EXPLORE_WAIT_MS`), so a demo can never stall on a button nobody
+ * presses.
+ */
+demoRouter.callbackQuery(DEMO_PREDATE_CALLBACK, async (ctx) => {
+  if (!DEMO_MODE_ENABLED) return;
+  await ctx.answerCallbackQuery();
+  const telegramId = ctx.from?.id;
+  if (telegramId === undefined) return;
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(telegramId) },
+    select: { id: true, language: true },
+  });
+  if (!user) return;
+
+  // The replay needs the agreed time to shift its clock to; read it from the
+  // live scheduled row rather than trusting anything in the callback.
+  const match = await prisma.match.findFirst({
+    where: {
+      status: "scheduled",
+      OR: [{ userAId: user.id }, { userBId: user.id }],
+    },
+    orderBy: { createdAt: "desc" },
+    select: { agreedTime: true },
+  });
+  if (!match) return;
+
+  await ctx.editMessageReplyMarkup().catch(() => undefined);
+  await runDemoPredate(ctx.api, user.id, BigInt(telegramId), user.language, match.agreedTime);
 });

@@ -26,8 +26,10 @@ export type DemoBeat =
   | "photos"
   | "verification"
   | "matchmaking"
+  | "date_ready"
   | "predate"
   | "declined"
+  | "finale"
   | "restarted";
 
 type BeatCopy = Partial<Record<Language, string>> & { en: string };
@@ -190,7 +192,50 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
       "through the rest. 👇",
   },
 
-  // ── 5. Date is scheduled. Explain the wait, then compress it ────────────
+  // ── 5. Date is scheduled. Hand the visitor the card and get out of the way ─
+  //
+  // This beat exists because the demo used to skip it: twelve seconds after the
+  // date locked in, the pre-date replay buried the date card under ice-breakers,
+  // a safety brief and a feedback form. The card is the centrepiece of the whole
+  // product and it carries three live affordances (venue change, Maps, the
+  // blurred share copy) that a visitor never got to touch.
+  date_ready: {
+    ru:
+      "📍 Свидание назначено — карточка выше.\n\n" +
+      "Прежде чем я покажу, что происходит дальше, потыкайте её. Всё рабочее:\n\n" +
+      "• «Сменить место» — общая доска с вариантами рядом. Вы отмечаете, что " +
+      "нравится, партнёр видит это вживую, совпало — место меняется. В " +
+      "продакшене шаг платный, здесь бесплатный;\n" +
+      "• «Открыть в картах» — заведение настоящее, можно проверить;\n" +
+      "• «Поделиться» — та же карточка для друзей, но лицо пары размыто;\n" +
+      "• и спросите агента что угодно про свидание — текстом или голосом.\n\n" +
+      "Как наиграетесь — жмите кнопку. Если не нажмёте, я сам продолжу через " +
+      "несколько минут.",
+    uk:
+      "📍 Побачення призначено — картка вище.\n\n" +
+      "Перш ніж я покажу, що відбувається далі, потикайте її. Усе робоче:\n\n" +
+      "• «Змінити місце» — спільна дошка з варіантами поруч. Ви позначаєте, що " +
+      "подобається, партнер бачить це наживо, збіглося — місце змінюється. У " +
+      "продакшені крок платний, тут безкоштовний;\n" +
+      "• «Відкрити в картах» — заклад справжній, можна перевірити;\n" +
+      "• «Поділитися» — та сама картка для друзів, але обличчя пари розмите;\n" +
+      "• і запитайте агента будь-що про побачення — текстом або голосом.\n\n" +
+      "Як награєтеся — тисніть кнопку. Якщо не натиснете, я сам продовжу за " +
+      "кілька хвилин.",
+    en:
+      "📍 The date is set — the card is above.\n\n" +
+      "Before I show you what happens next, play with it. All of it is live:\n\n" +
+      "• \"Change venue\" — a shared board of alternatives nearby. You heart what " +
+      "you like, your match sees it in real time, an overlap changes the place. " +
+      "In production this step is paid; here it's free;\n" +
+      "• \"Open in Maps\" — the venue is real, go check;\n" +
+      "• \"Share\" — the same card for friends, with your match's face blurred;\n" +
+      "• and ask the agent anything about the date — by text or voice.\n\n" +
+      "Tap the button when you're done. If you don't, I'll carry on by myself in " +
+      "a few minutes.",
+  },
+
+  // ── 6. The days before the date, compressed ─────────────────────────────
   predate: {
     ru:
       "📅 Свидание назначено — и в настоящем продукте на этом моменте " +
@@ -249,6 +294,39 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
       "But we're here for the demo — I can show you the same path again.",
   },
 
+  // ── The demo ran all the way through ────────────────────────────────────
+  //
+  // Deliberately NOT the `declined` copy. Both endings leave a terminal match
+  // row, and for the first day of demo mode both produced "you passed on this
+  // person, in production that's final" — told to someone who had just been
+  // walked through a successful date from pitch to post-date feedback.
+  finale: {
+    ru:
+      "🎬 Вот и весь продукт — от регистрации до отзыва после свидания.\n\n" +
+      "В жизни этот путь занял бы полторы недели: подбор по расписанию, сутки " +
+      "на решение, переписка о времени, выбор места, ожидание до встречи и " +
+      "вопрос на следующий день. Здесь всё это уложилось в несколько минут, но " +
+      "экраны, карточки и логика были ровно те же.\n\n" +
+      "Хотите пройти заново с чистого листа — /restart. Или могу показать ещё " +
+      "одну анкету и второй заход по флоу.",
+    uk:
+      "🎬 Ось і весь продукт — від реєстрації до відгуку після побачення.\n\n" +
+      "У житті цей шлях зайняв би півтора тижня: підбір за розкладом, доба на " +
+      "рішення, узгодження часу, вибір місця, очікування до зустрічі й " +
+      "запитання наступного дня. Тут усе це вклалося в кілька хвилин, але " +
+      "екрани, картки й логіка були рівно ті самі.\n\n" +
+      "Хочете пройти заново з чистого аркуша — /restart. Або можу показати ще " +
+      "одну анкету й другий захід по флоу.",
+    en:
+      "🎬 That's the whole product — from sign-up to the post-date feedback.\n\n" +
+      "In real life this path takes about a week and a half: a match on a " +
+      "schedule, a day to decide, agreeing a time, choosing a place, the wait " +
+      "until you meet, and the question the day after. Here it took minutes — " +
+      "but the screens, the cards and the logic were exactly the same.\n\n" +
+      "Want to run it again from scratch? /restart. Or I can show you another " +
+      "profile and a second pass through the flow.",
+  },
+
   restarted: {
     ru:
       "🔄 Демо сброшено. Профиль, фотографии и свидание удалены — начинаем с " +
@@ -262,19 +340,54 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
   },
 };
 
-/** Button label for the post-decline recovery. */
+/**
+ * Callback data for the demo's own two buttons.
+ *
+ * They live beside the labels rather than in the router: the driver builds the
+ * keyboards and the router answers the taps, so a constant owned by either one
+ * would make the other import it and close a cycle.
+ */
+export const DEMO_CONTINUE_CALLBACK = "demo:continue";
+export const DEMO_PREDATE_CALLBACK = "demo:predate";
+
+/**
+ * Button labels.
+ *
+ * The two "show me a profile again" endings read differently on purpose: after
+ * a pass the visitor is being offered the SAME path back, after a finished demo
+ * they are being offered a second run. Same handler, different promise.
+ */
 const CONTINUE_LABEL: BeatCopy = {
   ru: "▶️ Показать анкету снова",
   uk: "▶️ Показати анкету знову",
   en: "▶️ Show me the profile again",
 };
 
+const ANOTHER_LABEL: BeatCopy = {
+  ru: "▶️ Показать ещё одну анкету",
+  uk: "▶️ Показати ще одну анкету",
+  en: "▶️ Show me another profile",
+};
+
+const PREDATE_LABEL: BeatCopy = {
+  ru: "▶️ Что происходит дальше",
+  uk: "▶️ Що відбувається далі",
+  en: "▶️ What happens next",
+};
+
 export function demoText(beat: DemoBeat, language: Language | null): string {
   return resolve(SCRIPT[beat], language);
 }
 
-export function demoContinueLabel(language: Language | null): string {
-  return resolve(CONTINUE_LABEL, language);
+export function demoContinueLabel(
+  beat: "declined" | "finale",
+  language: Language | null,
+): string {
+  return resolve(beat === "finale" ? ANOTHER_LABEL : CONTINUE_LABEL, language);
+}
+
+export function demoPredateLabel(language: Language | null): string {
+  return resolve(PREDATE_LABEL, language);
 }
 
 function resolve(copy: BeatCopy, language: Language | null): string {
