@@ -2,6 +2,7 @@ import express from "express";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { appConfigRouter } from "./routes/app-config.js";
+import { ticketProducts } from "../services/appstore.js";
 
 function buildApp() {
   const app = express();
@@ -48,6 +49,19 @@ describe("GET /v1/app/config", () => {
       "minSupportedIosVersion",
       "serverNow",
       "supportedCities",
+      "ticketProducts",
+    ]);
+  });
+
+  // The app must load exactly the consumables this server will credit: a
+  // StoreKit id that only exists in the client is a purchase that takes money
+  // and then 422s on report.
+  it("serves the StoreKit consumable ladder in ladder order", () => {
+    const products = ticketProducts();
+    expect(products).toEqual([
+      { productId: "ticket_1", tickets: 1 },
+      { productId: "ticket_3", tickets: 3 },
+      { productId: "ticket_6", tickets: 6 },
     ]);
   });
 });

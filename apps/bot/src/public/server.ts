@@ -31,6 +31,7 @@ import { createLocationRouter } from "./routes/location.js";
 import { createTelegramOnboardingRouter } from "./routes/telegram-onboarding.js";
 import { createVerificationMiniAppRouter } from "./routes/verification-mini-app.js";
 import { createTicketRouter } from "./routes/ticket.js";
+import { createNativeTicketGateRouter } from "./routes/ticket-gate.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createRadarRouter } from "./routes/radar.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
@@ -99,6 +100,7 @@ let locationRouter: ReturnType<typeof createLocationRouter> | null = null;
 let telegramOnboardingRouter: ReturnType<typeof createTelegramOnboardingRouter> | null = null;
 let verificationMiniAppRouter: ReturnType<typeof createVerificationMiniAppRouter> | null = null;
 let ticketRouter: ReturnType<typeof createTicketRouter> | null = null;
+let nativeTicketGateRouter: ReturnType<typeof createNativeTicketGateRouter> | null = null;
 let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
@@ -250,6 +252,23 @@ app.use("/v1/telegram-onboarding", (req, res, next) => {
     telegramOnboardingRouter = createTelegramOnboardingRouter(injectedBotApi);
   }
   telegramOnboardingRouter(req, res, next);
+});
+
+// Date Ticket gate for the NATIVE client — same match, JWT auth instead of
+// initData, and a wallet-only rail (see routes/ticket-gate.ts). Mounted before
+// the Mini App's `/ticket` prefix so route resolution is unambiguous rather
+// than a question about how path-to-regexp treats `ticket-gate`.
+app.use("/v1/matches/:matchId/ticket-gate", (req, res, next) => {
+  if (!env.TICKET_FEATURE_ENABLED) {
+    res.status(404).json({ error: "tickets-disabled" });
+    return;
+  }
+  if (!injectedBotApi) {
+    res.status(503).json({ error: "Ticket endpoint not ready" });
+    return;
+  }
+  if (!nativeTicketGateRouter) nativeTicketGateRouter = createNativeTicketGateRouter(injectedBotApi);
+  nativeTicketGateRouter(req, res, next);
 });
 
 // Date Ticket Mini App — REST-nested under the match but TMA-authed (same

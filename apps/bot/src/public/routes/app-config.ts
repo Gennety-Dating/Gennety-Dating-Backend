@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { SUPPORTED_MARKETS } from "@gennety/shared";
 import { env } from "../../config.js";
+import { ticketProducts } from "../../services/appstore.js";
 
 /**
  * GET /v1/app/config — pre-auth bootstrap for the native mobile client.
@@ -43,6 +44,12 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       referral: env.REFERRAL_FEATURE_ENABLED,
       promo: env.PROMO_FEATURE_ENABLED,
     },
+    // The StoreKit consumable ladder, in ladder order. Sent from here rather
+    // than hard-coded in the app because the server is the side that decides
+    // how many tickets a product credits (`APPSTORE_TICKET_PRODUCTS`); an id
+    // the app knows and the server doesn't is a purchase that takes money and
+    // then fails to report. Empty while tickets are off.
+    ticketProducts: env.TICKET_FEATURE_ENABLED ? ticketProducts() : [],
     serverNow: new Date().toISOString(),
   });
 });

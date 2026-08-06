@@ -1459,6 +1459,135 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/matches/{id}/ticket-gate:
+    get:
+      tags: [matches]
+      operationId: getTicketGate
+      summary: Date Ticket gate state for this side
+      description: |
+        PRODUCT_SPEC §3.5b. Between mutual accept and the Calendar sits an
+        optional paid step; `SerializedMatch.ticketGate` says whether this side
+        owes it, and this endpoint is the screen behind it.
+
+        **The wallet is the only rail on iOS.** On Telegram the gate is charged
+        directly in Stars, per scope. An App Store consumable is a fixed-price
+        SKU, so a per-scope charge would need a product per scope and another
+        per discount state, each created by hand in App Store Connect and
+        impossible to re-price server-side. StoreKit therefore only credits the
+        wallet (`POST /v1/tickets/appstore/transaction`), and the gate only
+        spends from it — every gate action is expressible with the three
+        consumables that already exist, and a settle that loses its race
+        refunds a ticket rather than a dollar. The famine single-ticket
+        discount is USD-only and does not apply here, the same way it never
+        applied to Stars.
+
+        Fetching this also fires the cover read-receipt when the caller is the
+        covered side, which releases the Calendar the server held back for
+        exactly that moment. `POST /seen` exists for clients that want to stamp
+        it after the reveal animation instead.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      responses:
+        "200":
+          description: Gate state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketGateState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant of this match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Tickets disabled, or no such match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: Gate not ready (bot API unavailable)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/matches/{id}/ticket-gate/use:
+    post:
+      tags: [matches]
+      operationId: useTicketForGate
+      summary: Spend wallet ticket(s) on this gate
+      description: |
+        Settles one or both slots from the caller's wallet balance and returns
+        the new gate state (no re-fetch needed).
+
+        `partner` and `both` are male-only; the rule is enforced here and
+        surfaced as `canCoverPartner` so the client never encodes it. A `both`
+        spend that only manages to claim one slot — because the partner paid in
+        the meantime — refunds the surplus ticket instead of burning it.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope]
+              properties:
+                scope:
+                  type: string
+                  enum: [self, partner, both]
+      responses:
+        "200":
+          description: Settled; the new state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketGateState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant, or scope not allowed for this caller
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Tickets disabled, or no such match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Not enough tickets in the wallet
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/matches/{id}/ticket-gate/seen:
+    post:
+      tags: [matches]
+      operationId: markTicketRevealSeen
+      summary: Read-receipt for the "your match covered you" reveal
+      description: |
+        Idempotent. Stamps the receipt, tells the payer once that his gesture
+        landed, and releases the covered side's Calendar. Safe to call even
+        when the caller was not covered — it is then a no-op.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      responses:
+        "200":
+          description: Receipted (or already was)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean, const: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Tickets disabled, or no such match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/matches/{id}/decision-intent:
     post:
       tags: [matches]
@@ -1837,6 +1966,22 @@ components:
             premium: { type: boolean }
             referral: { type: boolean }
             promo: { type: boolean }
+        ticketProducts:
+          type: array
+          description: |
+            The StoreKit consumable ladder, in ladder order. Served from here
+            rather than hard-coded in the app because the server decides how
+            many tickets a product credits; a product id the app knows and the
+            server does not is a purchase that takes money and then 422s on
+            report. Empty while tickets are off.
+          items:
+            type: object
+            required: [productId, tickets]
+            properties:
+              productId:
+                type: string
+                description: Matches the full App Store id or its last dot-segment.
+              tickets: { type: integer, minimum: 1 }
         serverNow: { type: string, format: date-time }
 
     ReferralState:
@@ -1924,7 +2069,8 @@ components:
       description: Mirrors `serializeUser` in `public/routes/serializers.ts`
       required:
         [id, email, universityDomain, firstName, surname, age, gender, preference,
-         major, language, status, onboardingStep, termsAccepted, researchOptIn]
+         major, language, status, onboardingStep, termsAccepted, researchOptIn,
+         ticketBalance]
       properties:
         id: { type: string, format: uuid }
         email: { type: [string, "null"] }
@@ -1949,6 +2095,62 @@ components:
         onboardingStep: { $ref: "#/components/schemas/OnboardingStep" }
         termsAccepted: { type: boolean }
         researchOptIn: { type: boolean }
+        ticketBalance:
+          type: integer
+          description: |
+            Date Ticket wallet balance (§3.5b). On the user rather than behind a
+            wallet route: the store screen and the gate both need it and the app
+            already refetches `/v1/me`. Simply 0 while tickets are off.
+
+    TicketGateState:
+      type: object
+      description: Mirrors `nativeState` in `public/routes/ticket-gate.ts`
+      required:
+        [status, iPaid, partnerPaid, bothPaid, partnerPaidForMe, iCoveredPartner,
+         canCoverPartner, partnerFirstName, partnerPhotoUrl, balance, priceCents,
+         expiresAt, serverNow]
+      properties:
+        status:
+          type: string
+          enum: [pending, partial, completed, expired, refunded]
+          description: |
+            `partial` = exactly one slot settled. `expired`/`refunded` mean the
+            window lapsed and the Calendar opened for free — anything paid came
+            back.
+        iPaid: { type: boolean }
+        partnerPaid: { type: boolean }
+        bothPaid: { type: boolean }
+        partnerPaidForMe:
+          type: boolean
+          description: The partner covered THIS caller's ticket — the surprise reveal.
+        iCoveredPartner:
+          type: boolean
+          description: THIS caller covered the partner's ticket.
+        canCoverPartner:
+          type: boolean
+          description: |
+            Whether `partner`/`both` are offered. Computed server-side on
+            purpose: deriving it client-side means hard-coding "men may cover"
+            into the app, and the rule is re-validated on `/use` regardless.
+        partnerFirstName: { type: [string, "null"] }
+        partnerPhotoUrl:
+          type: [string, "null"]
+          format: uri
+          description: Signed, short-lived; same proxy as the pitch photos.
+        balance:
+          type: integer
+          description: The caller's wallet balance — the only rail the gate spends from.
+        priceCents:
+          type: integer
+          description: |
+            Per-ticket value anchor for the copy ("your match paid $6.99 for
+            you"). NOT a price to charge — iOS charges App Store prices, which
+            only StoreKit knows.
+        expiresAt: { type: [string, "null"], format: date-time }
+        serverNow:
+          type: string
+          format: date-time
+          description: For the same clock-skew correction as `SerializedMatch.serverTimeAt`.
 
     SerializedProfile:
       type: object
@@ -2257,7 +2459,8 @@ components:
          venueGoogleMapsUri, venueSelectionReason, myVenueIntentStatus,
          partnerVenueIntentSubmitted, venueIntentMode,
          mapPreviewUrl, transitHint, partnerFirstName, partnerAge,
-         partnerGender, myDecision, partnerUniversityDomain, myVibeSubmitted, partnerVibeSubmitted,
+         partnerGender, myDecision, ticketGate, partnerUniversityDomain,
+         myVibeSubmitted, partnerVibeSubmitted,
          safetyBriefAck, proposalDeadlineAt, serverTimeAt]
       properties:
         id: { type: string, format: uuid }
@@ -2313,6 +2516,24 @@ components:
             silently, which is how `SerializedUser.language` ended up missing
             from the generated client. A nullable scalar is the shape that
             actually reaches iOS.
+        ticketGate:
+          type: string
+          enum: [none, open, reveal]
+          description: |
+            Which §3.5b Date Ticket screen this side owes.
+
+            - `open`   — the gate is blocking the pair's Calendar. Route to the
+                         ticket gate, not to planning.
+            - `reveal` — settled, and the partner covered THIS side's ticket
+                         without them having seen it. The server is deliberately
+                         holding this side's Calendar back until they open the
+                         reveal, so routing straight to planning strands them on
+                         an empty screen.
+            - `none`   — feature off, never armed, or already done.
+
+            `Match.ticketStatus` is NOT exposed and must not be inferred: it
+            defaults to `pending` on every row ever created, so a match from
+            before the feature existed is indistinguishable from an open gate.
         partnerUniversityDomain: { type: [string, "null"] }
         myVibeSubmitted: { type: boolean }
         partnerVibeSubmitted: { type: boolean }

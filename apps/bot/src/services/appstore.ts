@@ -182,12 +182,26 @@ export async function getVerifiedTransaction(
  */
 export function ticketCountForProduct(productId: string | null): number | null {
   if (!productId) return null;
-  const map = new Map<string, number>();
+  const map = new Map(ticketProducts().map((p) => [p.productId, p.tickets]));
+  const suffix = productId.split(".").pop() ?? productId;
+  return map.get(productId) ?? map.get(suffix) ?? null;
+}
+
+/**
+ * The configured consumable ladder, in declaration order. Served by
+ * `GET /v1/app/config` so the native client loads exactly the products this
+ * server will credit: a StoreKit id that only exists in the app is a purchase
+ * that takes money and then 422s on report, and the two lists are otherwise
+ * maintained in different repositories by hand.
+ */
+export function ticketProducts(): Array<{ productId: string; tickets: number }> {
+  const products: Array<{ productId: string; tickets: number }> = [];
   for (const pair of env.APPSTORE_TICKET_PRODUCTS.split(",")) {
     const [key, raw] = pair.split(":");
     const count = Number(raw);
-    if (key && Number.isInteger(count) && count > 0) map.set(key.trim(), count);
+    if (key && Number.isInteger(count) && count > 0) {
+      products.push({ productId: key.trim(), tickets: count });
+    }
   }
-  const suffix = productId.split(".").pop() ?? productId;
-  return map.get(productId) ?? map.get(suffix) ?? null;
+  return products;
 }

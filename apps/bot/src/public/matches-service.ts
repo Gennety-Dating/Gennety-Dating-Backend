@@ -43,6 +43,7 @@ import {
   ACTIVE_MATCH_STATUSES,
   pickCurrentMatch,
 } from "../services/active-match-priority.js";
+import { ticketGateFor } from "./ticket-gate-state.js";
 
 /**
  * Mobile-only wrappers around the existing match-engine pipeline. These
@@ -123,6 +124,12 @@ export interface SerializedMatch {
    * re-open the pitch over a decision the user already made.
    */
   myDecision: "accept" | "decline" | null;
+  /**
+   * Which §3.5b ticket-gate screen this side owes, if any. See `ticketGateFor`
+   * — `Match.ticketStatus` is NOT usable for this on its own, because it
+   * defaults to `"pending"` on every row in the table.
+   */
+  ticketGate: "none" | "open" | "reveal";
   partnerUniversityDomain: string | null;
   myVibeSubmitted: boolean;
   partnerVibeSubmitted: boolean;
@@ -281,6 +288,11 @@ export async function getCurrentMatchForUser(
       acceptedByA: true,
       acceptedByB: true,
       dispatchedAt: true,
+      ticketStatus: true,
+      ticketExpiresAt: true,
+      paidForPartnerByA: true,
+      paidForPartnerByB: true,
+      partnerPaidSeenAt: true,
       userA: { select: { firstName: true, age: true, gender: true, universityDomain: true } },
       userB: { select: { firstName: true, age: true, gender: true, universityDomain: true } },
     },
@@ -374,6 +386,7 @@ export async function getCurrentMatchForUser(
     partnerAge: partner.age,
     partnerGender: partner.gender,
     myDecision: myAccepted === null ? null : myAccepted ? "accept" : "decline",
+    ticketGate: ticketGateFor(match, side),
     partnerUniversityDomain: partner.universityDomain,
     myVibeSubmitted,
     partnerVibeSubmitted,

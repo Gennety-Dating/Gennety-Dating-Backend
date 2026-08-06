@@ -22,6 +22,13 @@ export interface SerializedUser {
   onboardingStep: User["onboardingStep"];
   termsAccepted: boolean;
   researchOptIn: boolean;
+  /**
+   * Date Ticket wallet balance (§3.5b). Lives on the user rather than behind a
+   * wallet route because the native store and the gate both need it and the
+   * app already refetches `/v1/me`; a separate endpoint would be a third call
+   * for one integer. Always present — it is simply 0 while tickets are off.
+   */
+  ticketBalance: number;
 }
 
 export interface SerializedProfile {
@@ -58,6 +65,7 @@ export function serializeUser(user: User): SerializedUser {
     onboardingStep: user.onboardingStep,
     termsAccepted: user.termsAccepted,
     researchOptIn: user.researchOptIn,
+    ticketBalance: user.ticketBalance,
   };
 }
 
