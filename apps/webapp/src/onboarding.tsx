@@ -542,7 +542,11 @@ function App(): ReactElement {
     if (phase.kind === "visual" && phase.index === 6) setLogoRisen(false);
   }, [phase]);
 
-  const chrome = canGoBack ? <TopChrome onBack={goBack} /> : null;
+  // The basics screens (name/age/gender/preference/height) already have
+  // Telegram's own native BackButton showing (below) and run fullscreen, where
+  // that native arrow floats over the same top-left corner as our in-content
+  // one — so ours was just a redundant, overlapping duplicate there.
+  const chrome = canGoBack && phase.kind !== "basics" ? <TopChrome onBack={goBack} /> : null;
 
   return (
     <OnboardingI18nContext.Provider value={strings}>
