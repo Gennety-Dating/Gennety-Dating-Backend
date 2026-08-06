@@ -2606,7 +2606,19 @@ production.** Per side, counted from when the phase opened:
 
 After mutual accept (or, when the Date Ticket gate of §3.5b is enabled, after
 both tickets are paid) the bot DMs both users a button that opens the
-**Calendar Mini App** (`apps/webapp`, Vite + Telegram Web Apps SDK). The
+**Calendar Mini App** (`apps/webapp`, Vite + Telegram Web Apps SDK).
+
+**The native client has the same grid on `/v1/matches/{id}/calendar` (JWT,
+2026-08-06).** `startScheduling` has always written `proposedTimes` for every
+`negotiating` match whichever client accepted, but the only way to read or
+answer it was the `initData`-authed routes below — so an iOS-only pair reached
+scheduling with no calendar at all. Everything in this section applies to both
+surfaces unchanged: the mechanics are the same `processCalendarSlotsUpdate` /
+`getCalendarState`, so the two clients cannot drift on when a date locks in.
+The native response additionally carries the pair's city `timeZone`, because
+the grid is a set of instants and a device drawing them on its own wall clock
+would let a traveller agree to a time neither side meant — the same reasoning
+behind the canonical-Kyiv locked-time card below. The
 legacy three-iteration flow (two rounds of "pick one of three slots"
 inline keyboards before falling back to the calendar) was removed
 2026-05-07 — landing straight on a peer-aware calendar is strictly
