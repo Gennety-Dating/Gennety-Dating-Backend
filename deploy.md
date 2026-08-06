@@ -179,6 +179,30 @@ this change where a user gets stuck at the handoff.
   `./scripts/deploy-webapp.sh` step above is the whole deploy for it, and
   skipping that step is what would ship the screens without it. Review it with
   `?preview=basics:gender` (or `basics:preference`) on the same dev-only route.
+- **So does the preference photo fork** (added 2026-08-06, PRODUCT_SPEC §1.3).
+  "Who do you want to meet?" becomes two tall photo columns over a smaller,
+  quieter "both". Also client-only — no server change, no env, no schema — but
+  it carries three things the burst did not:
+  - **Photos ship inside the bundle.** They live in
+    `apps/webapp/src/preference/{photo,cutout}/{men,women}/` and are enumerated
+    by `import.meta.glob`, so adding one is dropping a file in (the drop box is
+    `~/Desktop/gennety-preference-photos/`, `sync.sh` copies them across).
+    Those folders are **empty today** and the screen falls back to the demo deck
+    in `public/profiles/` — which is why the deploy is safe either way, and why
+    it will ship placeholder faces if the real photos are not synced first.
+    Keep an eye on the bundle: ~250KB per photo, up to 7 per column.
+  - **`onboarding.html` now requests Inter 800** for variant 2's heavy word
+    (the Google Fonts URL previously stopped at 700). One extra font file for
+    every onboarding user. If variant 1 wins, drop `;800` again — it is the only
+    line of this change that costs anything to a user who never sees variant 2.
+  - **Two designs exist behind `LIVE_VARIANT`** (`preference-variant.ts`), which
+    is `1`. The `?v=` override and the on-screen toggle are
+    `import.meta.env.DEV`-gated and verified absent from the built bundle;
+    switching the live one is a one-line code change, not an env flag.
+- **Demo mode picks all of it up for free.** The screens are the same source
+  behind the same Mini App build, so `pnpm demo:deploy` (which builds its own
+  bundle) is the whole story — no gate, no paid step, no negotiation branch, so
+  `apps/bot/src/demo/decide.ts` is untouched.
 
 Post-deploy check — the route logs its own line on every screen, so one walk
 through onboarding on the dev bot should print five of them:
