@@ -154,9 +154,13 @@ out of Telegram-only workers.
   sit on their own screens between the welcome-gift screen and the AI-memory
   choice — one bold question, one control (a text field, a slider, tinted choice
   buttons, a scroll-snap drum), nothing else — and the chat resumes at
-  `hobbies`. The native iOS client already had purpose-built controls here via
-  the `ui_hint` contract; this is Telegram catching up, and the `/v1/*` surface
-  is untouched.
+  `hobbies`. **The name screen carries no question at all** (founder decision
+  2026-08-06): it is a single empty field labelled "Твоё имя", which already
+  says everything the heading did, so the heading was the one line on these
+  screens that added nothing. The question survives as the input's accessible
+  name for a screen reader. The native iOS client already had purpose-built
+  controls here via the `ui_hint` contract; this is Telegram catching up, and
+  the `/v1/*` surface is untouched.
   **The screens write through the collector** (`applyOnboardingFacts`,
   `POST /v1/telegram-onboarding/profile`), not straight to Prisma, so the
   canonical columns, `onboarding_progress.currentQuestion` and the funnel

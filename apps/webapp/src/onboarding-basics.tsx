@@ -142,7 +142,8 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
 
 /** The shared frame: question up top, control in the middle, pill at the foot. */
 function BasicsShell(props: {
-  title: string;
+  /** Omitted on the name screen, where the field's placeholder is the ask. */
+  title?: string;
   error: ReactNode;
   children: ReactNode;
   /** Omitted on the tap-to-answer screens, where the option IS the action. */
@@ -151,7 +152,7 @@ function BasicsShell(props: {
 }): ReactElement {
   return (
     <main className={`ob-basics ${props.modifier ?? ""}`}>
-      <h1 className="ob-basics-title">{props.title}</h1>
+      {props.title ? <h1 className="ob-basics-title">{props.title}</h1> : null}
       <div className="ob-basics-body">{props.children}</div>
       {props.error}
       {props.action ? <div className="ob-basics-foot">{props.action}</div> : null}
@@ -197,7 +198,6 @@ function NameScreen(props: {
 
   return (
     <BasicsShell
-      title={props.strings.basicsNameTitle}
       error={props.error}
       modifier="ob-basics--name"
       action={
@@ -218,6 +218,9 @@ function NameScreen(props: {
         spellCheck={false}
         enterKeyHint="done"
         maxLength={40}
+        // The visible question is gone from this screen; the field is the whole
+        // ask. Keep it as the accessible name so a screen reader still says it.
+        aria-label={props.strings.basicsNameTitle}
         placeholder={props.strings.basicsNamePlaceholder}
         value={name}
         onChange={(event) => setName(event.currentTarget.value)}
