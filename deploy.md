@@ -1,5 +1,63 @@
 # Gennety Dating Deploy
 
+**PENDING — the Date Ticket gate becomes reachable from the native client
+(PRODUCT_SPEC §3.5b).** Not deployed yet. **No Prisma schema change, no env
+change, no flag change, no Mini App change** (`apps/webapp` untouched) — but it
+is half client, so the iOS app must ship with it (separate repo, `368918b`).
+
+The gate has been arming on the mobile mutual-accept path for a while:
+`matches-service.ts` calls `sendTicketOffer` whenever `TICKET_FEATURE_ENABLED`,
+whichever client committed the decision. What did not exist was any way to
+*read* or *settle* it from `/v1/*` — the Mini App's `/v1/matches/:id/ticket`
+routes are `initData`-authed, and an app user has no Telegram session to sign
+with. So an iOS-only pair sat in a `negotiating` match with no Calendar and no
+way to pay until the partial window lapsed and the expiry cron opened
+scheduling for free. **Inert in production today** (`TICKET_FEATURE_ENABLED` is
+the gate on all of it), which is why this shipped as a hole rather than as an
+outage.
+
+**Four things worth knowing before the restart:**
+
+- **`SerializedMatch` grows one field, and it is deliberately NOT `ticketStatus`.**
+  That column defaults to `"pending"` on every row the table has ever held, so a
+  match from before the feature existed is indistinguishable from an open gate.
+  `ticketGate` (`none|open|reveal`) is derived from `ticketExpiresAt`, which is
+  what `sendTicketOffer` actually stamps and what both completion and expiry
+  clear. `reveal` is load-bearing: the server holds the covered side's Calendar
+  back until she opens the surprise, so a client routing her to planning would
+  strand her on an empty screen.
+- **`/v1/app/config` now serves `ticketProducts`** (from
+  `APPSTORE_TICKET_PRODUCTS`, empty while tickets are off) and `/v1/me` serves
+  `ticketBalance`. Both additive. The product list is served rather than
+  hard-coded because a StoreKit id the app knows and this server does not is a
+  purchase that takes money and then 422s on report.
+- **On iOS the wallet is the only rail.** StoreKit credits it through the
+  already-deployed `/v1/tickets/appstore/transaction`; the gate only spends from
+  it. No new payment path, no new provider, no new refund surface — a settle
+  that loses its race returns a ticket to the wallet exactly as the Stars gate
+  already does. The famine discount is USD-only and does not apply.
+- **Demo mode is unaffected.** The demo bot walks the gate on the shipped mock
+  rail through the Telegram Mini App; the new routes are JWT-only and
+  unreachable from a bot chat, and the puppet still settles its half with
+  `useTicketFromBalance`. No branch needed in `demo/decide.ts`.
+
+Post-deploy check — the routes 404 while tickets are off, which is the correct
+answer and also the proof they are mounted (an unmounted path answers 404 from
+the JWT `matches` router with a different body):
+
+```sh
+curl -s https://dating-api.gennety.com/v1/app/config | python3 -m json.tool | grep -A4 ticketProducts
+# With TICKET_FEATURE_ENABLED off: [] — and the gate route is unreachable.
+curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/matches/00000000-0000-4000-8000-000000000000/ticket-gate
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag. `SerializedMatch.ticketGate` simply stops being sent; the iOS
+build treats a missing gate as `none`, which is what it already does with
+tickets switched off.
+
+---
+
 **PENDING — the departure point must be in a launched city, and the venue
 engine stops failing on geometry (PRODUCT_SPEC §3.7).** Not deployed yet. **No
 Prisma schema change, no env change, no flag change** — but it is half client,
