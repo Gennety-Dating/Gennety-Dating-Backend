@@ -2,6 +2,7 @@ import { apiFetch } from "./api.js";
 import "./theme.css";
 import "./referral.css";
 import { icon, type IconName } from "./icons";
+import { butterflyLoaderMarkup } from "./butterfly-loader";
 import { wireContentInsets } from "./telegram-insets";
 import { wireReturnBackButton } from "./return-to.js";
 
@@ -191,7 +192,7 @@ function glyph(name: IconName, cls = "ref-ic"): string {
 }
 
 function renderLoading(): void {
-  root.innerHTML = `<div class="ref-wrap"><div class="ref-skeleton"></div></div>`;
+  root.innerHTML = `<div class="ref-wrap"><div class="ref-loading">${butterflyLoaderMarkup()}</div></div>`;
 }
 
 function renderError(msg: string): void {

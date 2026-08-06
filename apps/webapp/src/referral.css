@@ -361,11 +361,13 @@ body {
   margin: 0.65rem 0 0;
 }
 
-.ref-skeleton {
-  height: 60vh;
-  border-radius: 16px;
-  background: var(--ref-card);
-  opacity: 0.7;
+/* The loading state centres the shared butterfly mark in whatever height the
+   wrap has left. It replaced a plain 60vh grey block, which said "something is
+   coming" and nothing else. */
+.ref-loading {
+  flex: 1;
+  display: grid;
+  place-items: center;
 }
 .ref-error {
   color: var(--text-muted);

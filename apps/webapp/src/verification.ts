@@ -6,6 +6,7 @@ import {
   type VerificationInit,
 } from "./api.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
+import { butterflyLoaderMarkup } from "./butterfly-loader.js";
 import { wireContentInsets } from "./telegram-insets.js";
 
 /**
@@ -230,10 +231,13 @@ export function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): voi
       root.innerHTML = consentScreen(lang);
       return;
     case "loading":
+      // Markup deliberately identical to the inline pre-paint shell in
+      // verification.html, so the bundle taking over the #root is invisible
+      // rather than a ring→butterfly swap. `butterfly-loader.test.ts` pins the
+      // two together.
       root.innerHTML = `
         <div class="screen">
-          <div class="spinner" aria-hidden="true"></div>
-          <p class="screen-text">${escapeHtml(tr(lang, "verifyMiniAppLoading"))}</p>
+          ${butterflyLoaderMarkup({ label: tr(lang, "verifyMiniAppLoading") })}
         </div>`;
       return;
     case "finishing":

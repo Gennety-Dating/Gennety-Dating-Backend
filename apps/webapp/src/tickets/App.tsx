@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
+import { ButterflyLoader } from "../butterfly-loader-react.js";
 import {
   fetchWalletState,
   createStoreIntent,
@@ -180,7 +181,11 @@ export function App(): ReactElement {
   }, [s]);
 
   if (phase.kind === "loading") {
-    return <div className="ticket-page ticket-center"><div className="spinner" /><p>{s.loading}</p></div>;
+    return (
+      <div className="ticket-page ticket-center">
+        <ButterflyLoader label={s.loading} />
+      </div>
+    );
   }
   if (phase.kind === "error") {
     return <div className="ticket-page ticket-center"><p className="ticket-error">{phase.message}</p></div>;

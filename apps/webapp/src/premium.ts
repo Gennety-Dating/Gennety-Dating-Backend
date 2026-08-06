@@ -2,6 +2,7 @@ import { apiFetch } from "./api.js";
 import "./theme.css";
 import "./premium.css";
 import { icon, type IconName } from "./icons";
+import { butterflyLoader } from "./butterfly-loader";
 import { wireContentInsets } from "./telegram-insets";
 import { wireReturnBackButton, returnParams } from "./return-to.js";
 
@@ -340,7 +341,7 @@ function benefitCard(
 function renderLoading(): void {
   const page = el("div", "pm-page");
   const center = el("div", "pm-center");
-  center.append(el("div", "pm-spinner"));
+  center.append(butterflyLoader());
   page.append(center);
   root.replaceChildren(page);
 }

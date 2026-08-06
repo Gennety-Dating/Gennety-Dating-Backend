@@ -37,6 +37,7 @@
         --bg: #030303;
         --text: #e9e6e5;
         --text-muted: #8e8895;
+        --text-faint: #6a656b;
         --accent: #8b253b;
         --accent-bright: #b6304f;
         --glass-bg: rgba(255, 255, 255, 0.055);
@@ -58,6 +59,7 @@
         --bg: #f5f5f5;
         --text: #1d1d1d;
         --text-muted: #6b6670;
+        --text-faint: #9a949c;
         --glass-bg: rgba(255, 255, 255, 0.55);
         --glass-border: rgba(0, 0, 0, 0.06);
         --glass-highlight: rgba(255, 255, 255, 0.9);
@@ -279,17 +281,191 @@
         position: relative;
         width: 100%;
       }
-      .spinner {
-        width: 40px;
-        height: 40px;
-        border: 3px solid var(--glass-border);
-        border-top-color: var(--accent-bright);
-        border-radius: 50%;
-        animation: spin 0.9s linear infinite;
+      /* ── Butterflies-in-the-stomach loading mark ──────────────────────────
+         A COPY of src/butterfly-loader.css, inlined because this shell paints
+         before the bundle exists. verification.ts renders the identical markup
+         for its own `loading` screen, so the handover is invisible instead of a
+         ring→butterfly swap. `butterfly-loader.test.ts` fails if the two ever
+         drift. Source of truth is the module — edit there first. */
+      .bfl {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        text-align: center;
+        --bfl-glow: rgba(139, 37, 59, 0.34);
+        --bfl-line: var(--text-faint, #6a656b);
       }
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
+      :root[data-theme="light"] .bfl {
+        --bfl-glow: rgba(139, 37, 59, 0.08);
+        --bfl-line: var(--text-faint, #9a949c);
+      }
+      .bfl-mark {
+        position: relative;
+        width: 128px;
+        height: 141px;
+        display: grid;
+        place-items: center;
+      }
+      .bfl-mark::before {
+        content: "";
+        position: absolute;
+        inset: 6% 13%;
+        border-radius: 50%;
+        background: radial-gradient(closest-side, var(--bfl-glow), rgba(139, 37, 59, 0) 76%);
+        animation: bfl-bloom 4.2s ease-in-out infinite;
+      }
+      .bfl-svg {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .bfl-belly {
+        fill: none;
+        stroke: var(--bfl-line);
+        stroke-width: 3.2;
+        stroke-linecap: round;
+        animation: bfl-breathe 4.2s ease-in-out infinite;
+      }
+      .bfl-label {
+        margin: 0;
+        max-width: 260px;
+        font-size: 15px;
+        line-height: 1.45;
+        color: var(--text-muted);
+      }
+      .bfl-fly--1 {
+        animation: bfl-drift-1 9s ease-in-out infinite;
+      }
+      .bfl-fly--2 {
+        animation: bfl-drift-2 7.4s ease-in-out infinite;
+      }
+      .bfl-fly--3 {
+        animation: bfl-drift-3 11.2s ease-in-out infinite;
+      }
+      .bfl-wing {
+        animation: bfl-flap var(--bfl-flap, 0.72s) ease-in-out infinite;
+      }
+      .bfl-fly--1 .bfl-wing {
+        --bfl-flap: 0.72s;
+      }
+      .bfl-fly--2 .bfl-wing {
+        --bfl-flap: 0.6s;
+      }
+      .bfl-fly--3 .bfl-wing {
+        --bfl-flap: 0.86s;
+      }
+      @keyframes bfl-drift-1 {
+        0% {
+          transform: translate(48px, 46px) rotate(-12deg) scale(0.36);
+        }
+        25% {
+          transform: translate(60px, 38px) rotate(6deg) scale(0.39);
+        }
+        50% {
+          transform: translate(66px, 52px) rotate(14deg) scale(0.34);
+        }
+        75% {
+          transform: translate(52px, 60px) rotate(-6deg) scale(0.38);
+        }
+        100% {
+          transform: translate(48px, 46px) rotate(-12deg) scale(0.36);
+        }
+      }
+      @keyframes bfl-drift-2 {
+        0% {
+          transform: translate(76px, 66px) rotate(10deg) scale(0.29);
+        }
+        30% {
+          transform: translate(68px, 76px) rotate(-8deg) scale(0.31);
+        }
+        60% {
+          transform: translate(80px, 80px) rotate(16deg) scale(0.27);
+        }
+        100% {
+          transform: translate(76px, 66px) rotate(10deg) scale(0.29);
+        }
+      }
+      @keyframes bfl-drift-3 {
+        0% {
+          transform: translate(58px, 86px) rotate(-4deg) scale(0.43);
+        }
+        28% {
+          transform: translate(48px, 96px) rotate(-12deg) scale(0.41);
+        }
+        55% {
+          transform: translate(64px, 100px) rotate(8deg) scale(0.45);
+        }
+        80% {
+          transform: translate(70px, 84px) rotate(4deg) scale(0.41);
+        }
+        100% {
+          transform: translate(58px, 86px) rotate(-4deg) scale(0.43);
+        }
+      }
+      @keyframes bfl-flap {
+        0%,
+        8% {
+          transform: scaleX(1);
+        }
+        30% {
+          transform: scaleX(0.44);
+        }
+        52%,
+        100% {
+          transform: scaleX(1);
+        }
+      }
+      @keyframes bfl-breathe {
+        0%,
+        100% {
+          transform: translate(60px, 66px) scale(1) translate(-60px, -66px);
+        }
+        50% {
+          transform: translate(60px, 66px) scale(1.022) translate(-60px, -66px);
+        }
+      }
+      @keyframes bfl-bloom {
+        0%,
+        100% {
+          opacity: 0.75;
+          transform: scale(0.97);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.03);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .bfl-fly--1,
+        .bfl-fly--2,
+        .bfl-fly--3,
+        .bfl-wing,
+        .bfl-belly,
+        .bfl-mark::before {
+          animation: none;
+        }
+        .bfl-fly--1 {
+          transform: translate(48px, 46px) rotate(-12deg) scale(0.36);
+        }
+        .bfl-fly--2 {
+          transform: translate(76px, 66px) rotate(10deg) scale(0.29);
+        }
+        .bfl-fly--3 {
+          transform: translate(58px, 86px) rotate(-4deg) scale(0.43);
+        }
+        .bfl-mark {
+          animation: bfl-fade 2.4s ease-in-out infinite;
+        }
+      }
+      @keyframes bfl-fade {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.55;
         }
       }
       .error-glyph {
@@ -407,8 +583,7 @@
         user never sees a blank flash while verification.ts boots.
       -->
       <div class="screen" id="loading-screen">
-        <div class="spinner" aria-hidden="true"></div>
-        <p class="screen-text" id="loading-text"></p>
+        <div class="bfl" role="status"><div class="bfl-mark"><svg class="bfl-svg" viewBox="0 0 120 132" aria-hidden="true" focusable="false"><defs><radialGradient id="gnt-bfl-wing" gradientUnits="userSpaceOnUse" cx="-17.73" cy="32.51" r="88.63"><stop offset="0%" stop-color="#FF00FF"/><stop offset="30%" stop-color="#C82356"/><stop offset="70%" stop-color="#8B253B"/><stop offset="100%" stop-color="#3B0B1E"/></radialGradient></defs><g class="bfl-belly"><path d="M 46 4 C 40 12, 28 16, 26 30 C 24 42, 29 48, 29 58 C 29 76, 17 86, 17 102 C 17 114, 19 122, 22 128"/><path d="M 74 4 C 80 12, 92 16, 94 30 C 96 42, 91 48, 91 58 C 91 76, 103 86, 103 102 C 103 114, 101 122, 98 128"/></g><g class="bfl-fly bfl-fly--1"><g class="bfl-wing"><path d="M 0 -15 C -30 -50, -60 -20, -35 5 C -55 25, -25 50, -2 15 L 0 15 Z" fill="url(#gnt-bfl-wing)"/></g><g class="bfl-wing"><path d="M 0 -15 L 0 15 L 2 15 C 25 50, 55 25, 35 5 C 60 -20, 30 -50, 0 -15 Z" fill="url(#gnt-bfl-wing)"/></g></g><g class="bfl-fly bfl-fly--2"><g class="bfl-wing"><path d="M 0 -15 C -30 -50, -60 -20, -35 5 C -55 25, -25 50, -2 15 L 0 15 Z" fill="url(#gnt-bfl-wing)"/></g><g class="bfl-wing"><path d="M 0 -15 L 0 15 L 2 15 C 25 50, 55 25, 35 5 C 60 -20, 30 -50, 0 -15 Z" fill="url(#gnt-bfl-wing)"/></g></g><g class="bfl-fly bfl-fly--3"><g class="bfl-wing"><path d="M 0 -15 C -30 -50, -60 -20, -35 5 C -55 25, -25 50, -2 15 L 0 15 Z" fill="url(#gnt-bfl-wing)"/></g><g class="bfl-wing"><path d="M 0 -15 L 0 15 L 2 15 C 25 50, 55 25, 35 5 C 60 -20, 30 -50, 0 -15 Z" fill="url(#gnt-bfl-wing)"/></g></g></svg></div></div>
       </div>
     </div>
     <script type="module" src="/src/verification.ts"></script>

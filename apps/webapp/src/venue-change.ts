@@ -29,6 +29,7 @@
  */
 
 import "./venue-change.css";
+import { butterflyLoader } from "./butterfly-loader";
 import {
   fetchVenueBoardState,
   fetchVenueChangeCatalog,
@@ -842,7 +843,7 @@ function showLoading(text = s.loading): void {
   setBack(null);
   mount(
     el("div", { class: "vc-page" }, [
-      el("div", { class: "vc-center" }, [el("div", { class: "spinner" }), el("p", { text })]),
+      el("div", { class: "vc-center" }, [butterflyLoader({ label: text })]),
     ]),
   );
 }

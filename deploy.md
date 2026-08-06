@@ -1,5 +1,57 @@
 # Gennety Dating Deploy
 
+**PENDING — the Mini App loading screens become the brand mark: butterflies in
+the stomach (PRODUCT_SPEC → Cross-Cutting Concerns).** Not deployed yet.
+**No Prisma schema change, no env change, no flag change, and NO SERVER CODE
+CHANGE AT ALL** — the diff is `apps/webapp/**` plus this file and
+PRODUCT_SPEC.md. So this is the **Deploy Mini App Only** path
+(`./scripts/deploy-webapp.sh`); there is nothing to rsync to `/opt/gennety` and
+**no `pm2 restart`**. Running the full server deploy for it would only risk
+shipping whatever else is in the working tree.
+
+The generic spinning ring is replaced on the seven full-screen waits that had
+one — Verification, the Date Ticket gate, the Ticket Store, Premium, Referral,
+Venue Change, and the Type Radar submit — by a faint line-drawn waist with three
+of the logo's own butterflies flying inside it. The contextual boot screens that
+already say something the generic mark cannot are deliberately untouched (the
+Location map pin, the radar card-stack skeleton, the onboarding orb), as are the
+16px in-button spinners.
+
+**Three things worth knowing before the redeploy:**
+
+- **`verification.html` carries a hand-inlined COPY of the mark** (markup + the
+  animation CSS), because that shell paints before the bundle exists and
+  verification.ts renders the identical mark once it loads — otherwise the
+  handover is a visible ring→butterfly swap on the one screen a user is already
+  nervous on. `butterfly-loader.test.ts` fails if the two drift, including if a
+  keyframe or custom property is added to the module and not to the shell.
+- **That same file was missing `--text-faint`.** Its theme tokens are inlined by
+  hand and are supposed to mirror theme.css; the gap was invisible until the
+  belly stroke resolved through it, and an unresolvable `var()` on `stroke`
+  means NO stroke, so the torso vanished and left three butterflies floating on
+  a blank screen. Found by screenshotting the real `?screen=loading` preview.
+  Both the token and a themed fallback in the shared CSS are in.
+- **Demo mode needs `pnpm demo:deploy`** to pick it up (it builds its own bundle
+  from the same source). No gate, no paid step, no negotiation step, so
+  `apps/bot/src/demo/decide.ts` is untouched.
+
+Post-deploy check — the loading states are transient, so verify through the
+dev-only preview and by eye rather than from logs:
+
+```sh
+./scripts/deploy-webapp.sh
+for p in verification premium referral radar ticket tickets venue-change; do
+  curl -sI "https://dating-calendar.gennety.com/$p.html" | head -1
+done
+# The real loading screen, both themes (this route is import.meta.env.DEV-gated
+# in verification.ts, so use the dev server / dev bot for it):
+#   http://localhost:5173/verification.html?screen=loading&lang=ru&theme=dark
+```
+
+**Rollback:** redeploy the Mini App from the previous checkout. Nothing else to
+undo — no schema, no env, no flag, no server state.
+
+
 **PENDING — the slot calendar becomes reachable from the native client
 (PRODUCT_SPEC §3.6).** Not deployed yet. **No Prisma schema change, no env
 change, no flag change, no Mini App change** (`apps/webapp` untouched) — it is

@@ -321,24 +321,9 @@ body {
   }
 }
 
-/* Loading / status */
-.radar-spinner {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 3px solid var(--fill-strong, rgba(128, 128, 128, 0.3));
-  border-top-color: var(--text);
-  animation: radar-spin 0.8s linear infinite;
-}
-@keyframes radar-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.radar-finishing {
-  font-size: 14px;
-  color: var(--text-muted);
-}
+/* Loading / status. The "submitting" wait is the shared butterfly mark
+   (butterfly-loader.css), which brings its own caption styling — hence no
+   spinner or caption rule of our own here any more. */
 .radar-error {
   font-size: 15px;
   color: var(--text);

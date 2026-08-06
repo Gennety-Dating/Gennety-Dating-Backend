@@ -158,15 +158,6 @@ body {
   padding: 28px 24px calc(28px + env(safe-area-inset-bottom));
 }
 
-.pm-spinner {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 3px solid var(--pm-glow-soft);
-  border-top-color: var(--pm-ink);
-  animation: pm-spin 0.8s linear infinite;
-}
-
 /* ── Hero — brand butterfly crest ─────────────────────────────────────── */
 .pm-hero {
   display: flex;
@@ -575,11 +566,6 @@ body {
 }
 
 /* ── Keyframes ────────────────────────────────────────────────────────── */
-@keyframes pm-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 @keyframes pm-rise {
   from {
     opacity: 0;

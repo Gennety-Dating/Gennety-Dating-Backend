@@ -4048,6 +4048,45 @@ Other safeguards:
 
 ## Cross-Cutting Concerns
 
+### The loading mark: butterflies in the stomach (2026-08-06)
+
+Every Mini App full-screen wait renders one shared mark
+(`apps/webapp/src/butterfly-loader.ts` + `.css`): a faint line-drawn waist with
+three of the brand's own logo butterflies flying inside it. It replaced the
+generic spinning ring on the Verification, Date Ticket, Ticket Store, Premium,
+Referral, Venue Change and Type Radar screens. The idiom is the product — no
+chat, one real date, the nerves before it — so the wait is the one moment that
+can say something instead of only measuring time.
+
+Three decisions are load-bearing rather than decorative:
+
+- **The butterfly is the logo's path** (`assets/brand/butterfly-logo.svg`),
+  split once down the body axis so the wings flap independently. The split
+  forces the gradient to `userSpaceOnUse` over the whole-butterfly bbox: an
+  `objectBoundingBox` gradient restarts at each wing and quietly turns the mark
+  symmetric, losing the logo's off-centre magenta glow.
+- **Structure stays neutral, colour is spent only on the butterflies** — the
+  same rule the two-party palette follows (ARCHITECTURE.md → theme tokens). The
+  torso is a grey hairline; the butterflies are the only saturated thing on
+  screen. The bloom sits INSIDE the outline, so the warmth reads as coming from
+  inside the belly rather than as a halo around a figure, and light gets its own
+  much weaker alpha (the dark value reads as a pink smudge on cream).
+- **The wings hold open for about half of each beat.** A butterfly beats and
+  glides; an evenly-eased fold spends most of its time half-closed, which at
+  128px reads as a flickering sliver. The mark is read at a glance, so the pose
+  it is usually caught in has to be the recognisable one.
+
+`prefers-reduced-motion` keeps the mark and drops all travel and wingbeat,
+leaving a slow fade — still "working", with nothing moving across the screen.
+Telegram-only: the native iOS client draws its own loading states and no
+`/v1/*` shape changed. Demo mode (DEMO_MODE.md) builds the same bundle, so it
+inherits this for free — no gate, no paid step, no puppet branch.
+
+Deliberately NOT replaced: the contextual boot screens that say something the
+generic mark cannot — the Location Mini App's map pin with its sonar pings, the
+Type Radar deck's card-stack skeleton, and the onboarding orb — plus the 16px
+in-button spinners, where a butterfly is unreadable.
+
 ### Quiet Hours
 
 23:00–09:00 Europe/Kyiv. Enforced inside the **re-engagement** and

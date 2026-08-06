@@ -7,6 +7,7 @@ import {
   type RadarVerdict,
 } from "../api.js";
 import { pickLang } from "../i18n.js";
+import { ButterflyLoader } from "../butterfly-loader-react.js";
 import { radarStrings } from "./i18n.js";
 
 const app = window.Telegram?.WebApp;
@@ -203,8 +204,7 @@ export function App() {
   if (status === "submitting") {
     return (
       <div className="radar-screen radar-center">
-        <div className="radar-spinner" />
-        <p className="radar-finishing">{s.finishing}</p>
+        <ButterflyLoader label={s.finishing} />
       </div>
     );
   }

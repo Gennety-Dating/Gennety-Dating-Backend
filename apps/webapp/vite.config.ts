@@ -31,12 +31,16 @@ export default defineConfig({
   },
   test: {
     /// Vitest stubs every CSS import to an empty string by default, which also
-    /// swallows an explicit `?raw` one. `liveness-theme.test.ts` reads the Face
-    /// Liveness brand stylesheet as text to assert it never restyles the
-    /// biometric capture surface (oval, light challenge, recording indicator),
-    /// so that one file has to come through for real. Scoped rather than
-    /// `css: true` so no other test starts paying for CSS processing.
-    css: { include: [/liveness-theme\.css/] },
+    /// swallows an explicit `?raw` one. Two stylesheets are asserted on as
+    /// text, so they have to come through for real:
+    ///   - `liveness-theme.css` — that it never restyles the biometric capture
+    ///     surface (oval, light challenge, recording indicator).
+    ///   - `butterfly-loader.css` — that the shared loading mark's keyframes
+    ///     exist and that verification.html's inlined pre-paint copy of them
+    ///     hasn't drifted from this one.
+    /// Scoped rather than `css: true` so no other test starts paying for CSS
+    /// processing.
+    css: { include: [/liveness-theme\.css/, /butterfly-loader\.css/] },
   },
   server: {
     host: "0.0.0.0",

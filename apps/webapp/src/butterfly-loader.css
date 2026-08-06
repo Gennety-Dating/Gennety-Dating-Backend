@@ -1,0 +1,262 @@
+/**
+ * "Butterflies in the stomach" — the shared Mini App loading mark.
+ *
+ * Replaces the generic spinning ring that every paid/branded screen used to
+ * show. The idiom IS the product (no chat, one real date, the nerves before
+ * it), so the wait is the one moment where the brand can say something instead
+ * of just measuring time.
+ *
+ * Structure stays NEUTRAL and colour is spent only on the butterflies — the
+ * same rule theme.css states for the two-party palette. The torso is a faint
+ * grey line drawing; the three butterflies carry the logo's own magenta→
+ * burgundy gradient, so the only saturated thing on screen is the brand mark.
+ *
+ * Motion notes (why it is built this way):
+ *  - Every transform is written as explicit `translate(...) rotate(...)
+ *    scale(...)`, composed left-to-right from the SVG user-space origin. That
+ *    deliberately avoids `transform-box` / `transform-origin`, which default
+ *    differently on SVG than on HTML and whose failure mode here is not a
+ *    subtle shift but a butterfly flung out of the frame.
+ *  - The wing paths are authored around x=0 (the body axis) rather than the
+ *    logo's x=50, so a bare `scaleX()` folds them about the body with no
+ *    origin declaration at all. That is the whole trick behind the flap.
+ *  - The drift loops are hand-placed to stay inside the torso at the height
+ *    they pass through — the waist is much narrower than the hips, so the big
+ *    butterfly lives low and the small one keeps to the flank.
+ */
+
+.bfl {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+
+  /* The bloom inside the silhouette. Dark carries it easily; on the cream page
+     the same value reads as a pink smudge sitting over the line drawing, so
+     light gets its own much weaker value rather than a shared one. */
+  --bfl-glow: rgba(139, 37, 59, 0.34);
+
+  /* The torso line falls back to theme.css's own value rather than depending on
+     the token being there. This mark is shared across seven surfaces, one of
+     which (verification.html) carries hand-inlined tokens — it was missing
+     `--text-faint`, and an unresolvable var() on `stroke` is not a wrong colour
+     but NO STROKE, so the belly silently vanished and left three butterflies
+     floating on a blank screen. A shared component cannot fail that way over a
+     token a page forgot to declare. */
+  --bfl-line: var(--text-faint, #6a656b);
+}
+
+:root[data-theme="light"] .bfl {
+  --bfl-glow: rgba(139, 37, 59, 0.08);
+  --bfl-line: var(--text-faint, #9a949c);
+}
+
+.bfl-mark {
+  position: relative;
+  width: 128px;
+  height: 141px;
+  display: grid;
+  place-items: center;
+}
+
+/* Warmth behind the silhouette — the same soft burgundy bloom the location
+   boot screen uses, so the loading beat feels like one family across apps. */
+/* Kept INSIDE the outline rather than wrapped around it: the warmth is supposed
+   to be coming from inside the belly, and a bloom that spills past the flanks
+   reads as a halo around the figure instead. The fade lands on the same hue at
+   zero alpha, not on `transparent` — several engines interpolate that keyword
+   through transparent BLACK, which greyed the edge on the cream page. */
+.bfl-mark::before {
+  content: "";
+  position: absolute;
+  inset: 6% 13%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--bfl-glow), rgba(139, 37, 59, 0) 76%);
+  animation: bfl-bloom 4.2s ease-in-out infinite;
+}
+
+.bfl-svg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.bfl-belly {
+  fill: none;
+  stroke: var(--bfl-line);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  animation: bfl-breathe 4.2s ease-in-out infinite;
+}
+
+.bfl-label {
+  margin: 0;
+  max-width: 260px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+/* ── Drift ────────────────────────────────────────────────────────────────
+   One loop per butterfly, each returning exactly to its 0% pose so the repeat
+   is seamless, at durations with no common multiple so the three never fall
+   into a visible shared rhythm. */
+
+.bfl-fly--1 {
+  animation: bfl-drift-1 9s ease-in-out infinite;
+}
+.bfl-fly--2 {
+  animation: bfl-drift-2 7.4s ease-in-out infinite;
+}
+.bfl-fly--3 {
+  animation: bfl-drift-3 11.2s ease-in-out infinite;
+}
+
+@keyframes bfl-drift-1 {
+  0% {
+    transform: translate(48px, 46px) rotate(-12deg) scale(0.36);
+  }
+  25% {
+    transform: translate(60px, 38px) rotate(6deg) scale(0.39);
+  }
+  50% {
+    transform: translate(66px, 52px) rotate(14deg) scale(0.34);
+  }
+  75% {
+    transform: translate(52px, 60px) rotate(-6deg) scale(0.38);
+  }
+  100% {
+    transform: translate(48px, 46px) rotate(-12deg) scale(0.36);
+  }
+}
+
+@keyframes bfl-drift-2 {
+  0% {
+    transform: translate(76px, 66px) rotate(10deg) scale(0.29);
+  }
+  30% {
+    transform: translate(68px, 76px) rotate(-8deg) scale(0.31);
+  }
+  60% {
+    transform: translate(80px, 80px) rotate(16deg) scale(0.27);
+  }
+  100% {
+    transform: translate(76px, 66px) rotate(10deg) scale(0.29);
+  }
+}
+
+@keyframes bfl-drift-3 {
+  0% {
+    transform: translate(58px, 86px) rotate(-4deg) scale(0.43);
+  }
+  28% {
+    transform: translate(48px, 96px) rotate(-12deg) scale(0.41);
+  }
+  55% {
+    transform: translate(64px, 100px) rotate(8deg) scale(0.45);
+  }
+  80% {
+    transform: translate(70px, 84px) rotate(4deg) scale(0.41);
+  }
+  100% {
+    transform: translate(58px, 86px) rotate(-4deg) scale(0.43);
+  }
+}
+
+/* ── Flap ─────────────────────────────────────────────────────────────────
+   Wings hold open and snap closed, rather than easing symmetrically — that
+   asymmetry is what separates a wingbeat from a pulsing shape. Both wings of
+   one butterfly share a phase (they do in life); the three butterflies do
+   not. */
+
+.bfl-wing {
+  animation: bfl-flap var(--bfl-flap, 0.72s) ease-in-out infinite;
+}
+.bfl-fly--1 .bfl-wing {
+  --bfl-flap: 0.72s;
+}
+.bfl-fly--2 .bfl-wing {
+  --bfl-flap: 0.6s;
+}
+.bfl-fly--3 .bfl-wing {
+  --bfl-flap: 0.86s;
+}
+
+/* Roughly half the cycle is a hold at fully open — a butterfly beats and then
+   glides, and the mark is read at a glance, so the pose it is caught in has to
+   be the recognisable one. An evenly-eased fold spent most of its time
+   half-closed, which at 128px read as a flickering sliver rather than wings. */
+@keyframes bfl-flap {
+  0%,
+  8% {
+    transform: scaleX(1);
+  }
+  30% {
+    transform: scaleX(0.44);
+  }
+  52%,
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes bfl-breathe {
+  0%,
+  100% {
+    transform: translate(60px, 66px) scale(1) translate(-60px, -66px);
+  }
+  50% {
+    transform: translate(60px, 66px) scale(1.022) translate(-60px, -66px);
+  }
+}
+
+@keyframes bfl-bloom {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+}
+
+/* Reduced motion keeps the mark — it is the brand, and a static one still says
+   "loading" next to its label — but drops all travel and wingbeat. What is
+   left is a slow fade, which carries "still working" without any movement
+   across the screen. */
+@media (prefers-reduced-motion: reduce) {
+  .bfl-fly--1,
+  .bfl-fly--2,
+  .bfl-fly--3,
+  .bfl-wing,
+  .bfl-belly,
+  .bfl-mark::before {
+    animation: none;
+  }
+  .bfl-fly--1 {
+    transform: translate(48px, 46px) rotate(-12deg) scale(0.36);
+  }
+  .bfl-fly--2 {
+    transform: translate(76px, 66px) rotate(10deg) scale(0.29);
+  }
+  .bfl-fly--3 {
+    transform: translate(58px, 86px) rotate(-4deg) scale(0.43);
+  }
+  .bfl-mark {
+    animation: bfl-fade 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes bfl-fade {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
