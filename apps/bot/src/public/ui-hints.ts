@@ -1,4 +1,11 @@
-import { MIN_AGE, MAX_AGE, MIN_PHOTOS, MAX_PHOTOS } from "@gennety/shared";
+import {
+  MIN_AGE,
+  MAX_AGE,
+  MIN_HEIGHT_CM,
+  MAX_HEIGHT_CM,
+  MIN_PHOTOS,
+  MAX_PHOTOS,
+} from "@gennety/shared";
 import type { OnboardingQuestion } from "../services/onboarding-collector.js";
 
 /**
@@ -15,10 +22,6 @@ import type { OnboardingQuestion } from "../services/onboarding-collector.js";
  *    for the same answer, and the client MUST fall back to a plain text
  *    field for `null` or any unknown `control` value (forward compat).
  */
-
-/** Height bounds mirror the collector's `height_out_of_range` validation. */
-const MIN_HEIGHT_CM = 140;
-const MAX_HEIGHT_CM = 220;
 
 export type UiHintControl =
   | "name_age" // text name field + age wheel accessory

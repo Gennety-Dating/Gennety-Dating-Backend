@@ -12,11 +12,11 @@ import {
   setTelegramOnboardingAiMemoryPreference,
   claimTelegramOnboardingReferralGift,
   claimTelegramOnboardingPromoGift,
+  saveTelegramOnboardingProfile,
   setTelegramOnboardingLanguage,
   setTelegramOnboardingTheme,
   setTelegramOnboardingTrack,
   verifyTelegramOnboardingOtp,
-  CalendarApiError,
   type AiMemoryExportPreference,
   type EmailVerificationState,
   type OnboardingLanguage,
@@ -24,8 +24,13 @@ import {
   type RegistrationTrack,
   type TelegramCityHit,
   type TelegramOnboardingState,
+  type TelegramProfileBasics,
+  type TelegramProfileLimits,
+  type TelegramProfilePatch,
 } from "./api.js";
 import { reconcileTheme, setTheme } from "./theme.js";
+import { wireContentInsets } from "./telegram-insets.js";
+import { errorCopy } from "./onboarding-errors.js";
 import {
   bootPhaseFromRemote,
   postVisualPhaseFromRemote,
@@ -34,6 +39,12 @@ import {
   VISUAL_LAST_INDEX,
   type OnboardingPhase,
 } from "./onboarding-route.js";
+import { BasicsGate } from "./onboarding-basics.js";
+import {
+  BASICS_STEPS,
+  nextBasicsStep,
+  previousBasicsStep,
+} from "./onboarding-basics-route.js";
 import {
   clearOnboardingProgress,
   loadOnboardingProgress,
@@ -66,6 +77,19 @@ const source = params.get("source") ?? app?.initDataUnsafe?.start_param ?? null;
  * button still requires real initData to actually claim.
  */
 const PREVIEW_REFERRAL_GIFT = params.get("preview") === "referral-gift";
+
+/**
+ * Dev-QA standalone preview of the five profile screens
+ * (`?preview=basics[:step]`). They sit deep behind the initData gate, the city
+ * gate and the whole visual intro, so reviewing their design otherwise means
+ * re-registering an account per iteration.
+ *
+ * `import.meta.env.DEV`-gated, so it does not exist in the production bundle at
+ * all — unlike the referral-gift preview above, whose Claim button still needs
+ * real initData. Saves are no-ops here; the flow just walks forward.
+ */
+const PREVIEW_BASICS =
+  import.meta.env.DEV && (params.get("preview") ?? "").startsWith("basics");
 
 const TRAP_BACKGROUND =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDT22v5JOFjqN2g1VkI86PnzZJ_vTS3whfVoE4pTqZMVY_zqEjFKQf0fGlab3jjVTIxx1gKK5zx4u10XcEtFiFDqeEsGaLjoNTdZMWbR46RULeC47iOvuiqYHU8PJrKZ9kQVqufAHWY-pv_0RSTu1V7cSz_tLD89uoBf8RE9OxG9ZhXIGcEKvxkjcwB3oa3Kf9KjRlxyoUZcBMol4eX5hJ6Oh2_fhyciV6tYxlSEoexfNp4Pr7iGISmsLdSC0fp35_bW0OO_cj0xmGN";
@@ -179,6 +203,27 @@ const LANGUAGE_OPTIONS: Array<{ value: OnboardingLanguage; label: string; sub: s
   { value: "pl", label: "Polski", sub: "Kontynuuj po polsku" },
 ];
 
+/**
+ * Fallbacks for the profile screens. Only reachable if a client renders the
+ * phase without server data — the phase itself is derived from `profileBasics`,
+ * so in practice both are always present. The limits mirror the server's
+ * `MIN_AGE`/`MAX_AGE`/`MIN_HEIGHT_CM`/`MAX_HEIGHT_CM`; the server re-validates
+ * regardless, so these can only ever narrow what the control offers.
+ */
+const EMPTY_BASICS: TelegramProfileBasics = {
+  firstName: null,
+  age: null,
+  gender: null,
+  preference: null,
+  height: null,
+};
+const FALLBACK_LIMITS: TelegramProfileLimits = {
+  minAge: 18,
+  maxAge: 55,
+  minHeightCm: 140,
+  maxHeightCm: 220,
+};
+
 const OnboardingI18nContext = createContext<OnboardingStrings>(onboardingStrings("en"));
 
 function useOnboardingStrings(): OnboardingStrings {
@@ -188,6 +233,10 @@ function useOnboardingStrings(): OnboardingStrings {
 function configureTelegramChrome(): void {
   app?.ready();
   app?.expand();
+  // Mirror Telegram's floating close × / menu ⋯ reserve into `--tg-content-top`.
+  // Only the profile screens consume it; every other scene here is full-bleed
+  // and unaffected.
+  wireContentInsets(app);
   try {
     app?.setHeaderColor?.("#000000");
     app?.setBackgroundColor?.("#000000");
@@ -246,6 +295,18 @@ function App(): ReactElement {
     if (PREVIEW_REFERRAL_GIFT) {
       setRemoteUser({ referrerFirstName: "Anna", referralGiftMonths: 1 } as unknown as RemoteUser);
       setPhase({ kind: "referralGift" });
+      return;
+    }
+    if (PREVIEW_BASICS) {
+      const step = (params.get("preview") ?? "").split(":")[1] ?? "name";
+      setRemoteUser({
+        profileBasics: EMPTY_BASICS,
+        profileLimits: FALLBACK_LIMITS,
+      } as unknown as RemoteUser);
+      setPhase({
+        kind: "basics",
+        step: (BASICS_STEPS.find((value) => value === step) ?? "name"),
+      });
       return;
     }
     if (!app?.initData) {
@@ -315,6 +376,7 @@ function App(): ReactElement {
       phase.kind === "detail" ||
       phase.kind === "promoGift" ||
       phase.kind === "referralGift" ||
+      phase.kind === "basics" ||
       phase.kind === "aiMemoryExport" ||
       phase.kind === "loading" ||
       phase.kind === "done"
@@ -363,7 +425,22 @@ function App(): ReactElement {
           ? { kind: "phone" }
           : { kind: "email" };
       }
-      if (current.kind === "aiMemoryExport") return { kind: "visual", index: VISUAL_LAST_INDEX };
+      // Profile screens page back through themselves; from the first one, out
+      // to the last intro scene — the welcome-gift screen in between is a
+      // one-time claim and must never be re-entered.
+      if (current.kind === "basics") {
+        const previous = previousBasicsStep(current.step);
+        return previous
+          ? { kind: "basics", step: previous }
+          : { kind: "visual", index: VISUAL_LAST_INDEX };
+      }
+      if (current.kind === "aiMemoryExport") {
+        // Back into the last profile screen once those exist; otherwise the
+        // intro, exactly as before.
+        return remoteUser?.profileBasics
+          ? { kind: "basics", step: BASICS_STEPS[BASICS_STEPS.length - 1]! }
+          : { kind: "visual", index: VISUAL_LAST_INDEX };
+      }
       return current;
     });
   }, [remoteUser]);
@@ -381,6 +458,7 @@ function App(): ReactElement {
         phase.kind === "phone" ||
         phase.kind === "city" ||
         phase.kind === "theme" ||
+        phase.kind === "basics" ||
         phase.kind === "aiMemoryExport" ||
         phase.kind === "detail";
 
@@ -396,6 +474,38 @@ function App(): ReactElement {
   const routeFromRemote = useCallback((user: RemoteUser | null): void => {
     setPhase(preVisualPhaseFromRemote(user));
   }, []);
+
+  /**
+   * Persist one profile screen's answer, then let the server decide what comes
+   * next: `postVisualPhaseFromRemote` re-derives the phase from the fresh
+   * `profileBasics`, so it lands on the next unanswered screen — or past the
+   * set entirely — without the client tracking an index of its own. Rejections
+   * propagate to the screen, which shows the reason and does NOT advance.
+   */
+  const saveBasics = useCallback(
+    async (patch: TelegramProfilePatch): Promise<void> => {
+      // Dev-QA preview: no server, so keep the answers in memory and let the
+      // same routing walk to the next screen.
+      if (PREVIEW_BASICS) {
+        setRemoteUser((current) => {
+          const merged = {
+            ...(current ?? ({} as RemoteUser)),
+            profileBasics: { ...EMPTY_BASICS, ...current?.profileBasics, ...patch },
+          } as RemoteUser;
+          const step = nextBasicsStep(merged.profileBasics);
+          setPhase(step ? { kind: "basics", step } : { kind: "done" });
+          return merged;
+        });
+        return;
+      }
+      if (!app?.initData) throw new Error(strings.genericError);
+      const state = await saveTelegramOnboardingProfile(app.initData, patch);
+      setRemoteUser(state.user);
+      setFlowToken(state.flowToken);
+      setPhase(postVisualPhaseFromRemote(state.user));
+    },
+    [strings.genericError],
+  );
 
   const nextVisual = useCallback((withHaptic = true) => {
     if (withHaptic) app?.HapticFeedback?.selectionChanged();
@@ -605,6 +715,17 @@ function App(): ReactElement {
             setPhase(postVisualPhaseFromRemote(state.user));
           }}
         />
+      </Scene>
+      <Scene active={phase.kind === "basics"}>
+        {phase.kind === "basics" ? (
+          <BasicsGate
+            step={phase.step}
+            basics={remoteUser?.profileBasics ?? EMPTY_BASICS}
+            limits={remoteUser?.profileLimits ?? FALLBACK_LIMITS}
+            strings={strings}
+            onSave={saveBasics}
+          />
+        ) : null}
       </Scene>
       <Scene active={phase.kind === "aiMemoryExport"}>
         <AiMemoryExportGate
@@ -2564,14 +2685,6 @@ function GateShell(props: { children: ReactNode }): ReactElement {
       <section className="gate-card">{props.children}</section>
     </main>
   );
-}
-
-function errorCopy(err: unknown, strings: OnboardingStrings): string {
-  if (err instanceof CalendarApiError) {
-    if (err.reason && strings.errors[err.reason]) return strings.errors[err.reason];
-    return err.reason ?? err.message;
-  }
-  return err instanceof Error ? err.message : strings.genericError;
 }
 
 const root = document.getElementById("root");

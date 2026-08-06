@@ -143,8 +143,32 @@ out of Telegram-only workers.
   city (a **launched market** only — Kyiv today, mirrored to the client as
   `supportedCities` in `/state`; see §1.3), a **light/dark theme picker** (right after the city gate, before the
   visual intro; default `dark`, changeable later in Settings — `POST /theme`
-  records it), and the final AI memory export choice, using Telegram `initData`
-  HMAC auth for all writes (`POST /track` persists the re-choosable fork pick).
+  records it), the **five profile screens** (name / age / gender / who you're
+  looking for / height — §1.3), and the final AI memory export choice, using
+  Telegram `initData` HMAC auth for all writes (`POST /track` persists the
+  re-choosable fork pick).
+- **The Mini App collects the first five profile facts itself (2026-08-05).**
+  Name, age, gender, preference and height each have ONE correct answer out of a
+  finite set, and a Telegram chat has no way to ask for that: the bot asked in
+  prose and then recovered the value with a regex or an LLM classifier. They now
+  sit on their own screens between the welcome-gift screen and the AI-memory
+  choice — one bold question, one control (a text field, a slider, tinted choice
+  buttons, a scroll-snap drum), nothing else — and the chat resumes at
+  `hobbies`. The native iOS client already had purpose-built controls here via
+  the `ui_hint` contract; this is Telegram catching up, and the `/v1/*` surface
+  is untouched.
+  **The screens write through the collector** (`applyOnboardingFacts`,
+  `POST /v1/telegram-onboarding/profile`), not straight to Prisma, so the
+  canonical columns, `onboarding_progress.currentQuestion` and the funnel
+  telemetry stay identical to a chat answer. One screen = one request, so
+  closing the Mini App mid-way loses nothing and reopening resumes on the first
+  unanswered screen (routed from `/state.profileBasics`, never from local
+  storage). Values are re-validated server-side against the same
+  `validateFactValue` rules the chat uses.
+  **`/complete` deliberately does NOT require them.** Whatever the Mini App
+  didn't deliver, the chat asks for — which is what keeps a cached older bundle,
+  the iOS rail and a legacy mid-flight account from dead-ending at the handoff.
+  The change is additive by construction.
 - **The phone gate is also the LOGIN (2026-07-25).** A trusted `message.contact`
   is Telegram vouching that the number belongs to the current Telegram account,
   and Telegram allows one active account per number — so a `User.phone` unique
@@ -243,6 +267,25 @@ process-vs-who follow-up)** → AI memory → photos. (An optional
 nationality/ethnicity step used to sit before the vibe questions; it was
 **removed 2026-08-01** — see the note under the hard rules below.) Questions come from server
 templates for `en`, `ru`, `uk`, `de`, and `pl`.
+
+**On Telegram the first five of those are collected in the Mini App, not the
+chat (2026-08-05).** `nextOnboardingQuestion` is unchanged and still owns the
+order; the difference is only WHERE the answer comes from, so the chat opens on
+`hobbies` for a user who completed the Mini App screens and on whatever is
+actually missing for anyone who didn't. That fallback is load-bearing, not a
+nicety — see the `/complete` note in §1.1. Each screen posts one field to
+`POST /v1/telegram-onboarding/profile`, which goes through the collector's own
+save path (`applyOnboardingFacts`): canonical columns, `onboarding_progress`
+under its revision guard, one `onboarding_step_events` row per real transition.
+So `first_name_age` still resolves only when BOTH name and age are in, exactly
+as it does when someone types "Максим, 24" into the chat. The controls mirror
+the `ui_hint` contract the native client already renders
+(`apps/bot/src/public/ui-hints.ts`): a name field, an age slider, choice
+buttons, a height drum. The bounds behind them (`MIN_AGE`/`MAX_AGE`,
+`MIN_HEIGHT_CM`/`MAX_HEIGHT_CM`) are served from `/state.profileLimits` rather
+than inlined in the bundle, because `apps/webapp` deliberately does not depend
+on `@gennety/shared` and a bound in two places eventually disagrees with
+itself.
 
 **Vibe questions (matching signal, asked of everyone).** Two short free-text
 questions sit right before the Magic Prompt step so *every* user — including

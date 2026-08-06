@@ -156,6 +156,18 @@ export const LEGAL_DOCS_VERSION = "2026-08-01";
 export const MIN_AGE = 18;
 export const MAX_AGE = 55;
 
+/**
+ * Height boundaries, in centimetres.
+ *
+ * One source of truth for three readers that must agree or the product
+ * contradicts itself: the collector's `height_out_of_range` validation, the
+ * native client's `height_wheel` `ui_hint` bounds, and the Telegram Mini App's
+ * height drum (which reads them from `/v1/telegram-onboarding/state`). They
+ * used to be literals in the collector and a private copy in `ui-hints.ts`.
+ */
+export const MIN_HEIGHT_CM = 140;
+export const MAX_HEIGHT_CM = 220;
+
 /** Edit profile length limits */
 export const MAX_BIO_LENGTH = 500;
 export const MAX_PARTNER_PREFERENCES_LENGTH = 500;

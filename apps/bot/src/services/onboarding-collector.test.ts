@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   contextDumpInstruction,
   MAX_AGE,
@@ -9,7 +9,27 @@ vi.mock("../config.js", () => ({
   env: { OPENAI_API_KEY: "test-key" },
 }));
 
+// `vi.hoisted` because the mock factory below is lifted above ordinary consts.
+const db = vi.hoisted(() => ({
+  user: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
+  profile: { upsert: vi.fn() },
+  onboardingProgress: { upsert: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+  $transaction: vi.fn(),
+}));
+
+vi.mock("@gennety/db", () => ({
+  prisma: db,
+  Prisma: {},
+}));
+
+// Funnel telemetry is best-effort and has its own tests; keep it out of the way.
+vi.mock("./onboarding-analytics.js", () => ({
+  platformFromTelegramId: () => "telegram",
+  recordStepTransition: vi.fn(),
+}));
+
 import {
+  applyOnboardingFacts,
   backfillCandidates,
   deterministicCandidates,
   extractWithOpenAI,
@@ -19,8 +39,10 @@ import {
   onboardingQuestionText,
   onboardingValidationText,
   validateFactCandidate,
+  validateFactValue,
   type OnboardingField,
 } from "./onboarding-collector.js";
+import { recordStepTransition } from "./onboarding-analytics.js";
 
 function valueFor(text: string, field: OnboardingField, question = "height") {
   return deterministicCandidates(
@@ -564,4 +586,233 @@ describe("onboarding collector routing", () => {
       );
     },
   );
+});
+
+/**
+ * `applyOnboardingFacts` — the structured save path used by the Telegram
+ * Onboarding Mini App's own profile screens (PRODUCT_SPEC §1.3). The point of
+ * the tests below is that it goes through the SAME machinery as a chat answer:
+ * canonical columns, `onboarding_progress` under its revision guard, and the
+ * funnel row — so the chat picks up on the first field it never delivered.
+ */
+describe("applyOnboardingFacts", () => {
+  const TELEGRAM_ID = 5986970093n;
+
+  function collectorUser(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "11111111-1111-4111-8111-111111111111",
+      telegramId: TELEGRAM_ID,
+      language: "en",
+      firstName: null,
+      age: null,
+      gender: null,
+      preference: null,
+      aiMemoryExportPreference: "declined",
+      messageHistory: [],
+      profile: {
+        height: null,
+        hobbies: [],
+        partnerPreferences: null,
+        fridayVibeText: null,
+        vibeFocusText: null,
+        psychologicalSummary: null,
+        photos: [],
+      },
+      onboardingProgress: {
+        completedFields: [],
+        skippedFields: [],
+        askedFields: [],
+        currentQuestion: "first_name_age",
+        collectorVersion: 1,
+        revision: 4,
+        // Already backfilled, so `ensureProgress` is a no-op read.
+        backfilledAt: new Date("2026-08-01T00:00:00.000Z"),
+      },
+      ...overrides,
+    };
+  }
+
+  /** Stand up the fake DB and return the row the write path ends up seeing. */
+  function primeDb(user: ReturnType<typeof collectorUser>) {
+    const state = { user, progressWrite: null as Record<string, unknown> | null };
+    db.user.findUniqueOrThrow.mockImplementation(async () => state.user);
+    db.user.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      state.user = { ...state.user, ...data };
+      return state.user;
+    });
+    db.profile.upsert.mockImplementation(
+      async ({ update }: { update: Record<string, unknown> }) => {
+        state.user = {
+          ...state.user,
+          profile: { ...(state.user.profile ?? {}), ...update },
+        } as typeof state.user;
+        return state.user.profile;
+      },
+    );
+    db.onboardingProgress.updateMany.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => {
+        state.progressWrite = data;
+        state.user = {
+          ...state.user,
+          onboardingProgress: {
+            ...(state.user.onboardingProgress ?? {}),
+            ...data,
+            revision: 5,
+          },
+        } as typeof state.user;
+        return { count: 1 };
+      },
+    );
+    db.$transaction.mockImplementation(async (fn: (tx: typeof db) => Promise<void>) => fn(db));
+    return state;
+  }
+
+  beforeEach(() => {
+    db.user.findUniqueOrThrow.mockReset();
+    db.user.update.mockReset();
+    db.profile.upsert.mockReset();
+    db.onboardingProgress.updateMany.mockReset();
+    db.$transaction.mockReset();
+    vi.mocked(recordStepTransition).mockClear();
+  });
+
+  it("writes the canonical columns and advances the question", async () => {
+    const state = primeDb(collectorUser({ firstName: "Alice" }));
+
+    const snapshot = await applyOnboardingFacts(TELEGRAM_ID, { age: 24 });
+
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ age: 24 }) }),
+    );
+    // Name + age complete `first_name_age`, so the next question is gender.
+    expect(state.progressWrite?.currentQuestion).toBe("gender");
+    expect(snapshot.acceptedFields).toEqual(["age"]);
+    expect(snapshot.rejectedFields).toEqual([]);
+  });
+
+  it("writes height onto the profile row and leaves the chat starting at hobbies", async () => {
+    const state = primeDb(
+      collectorUser({
+        firstName: "Alice",
+        age: 24,
+        gender: "female",
+        preference: "men",
+      }),
+    );
+
+    const snapshot = await applyOnboardingFacts(TELEGRAM_ID, { height: 170 });
+
+    expect(db.profile.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ height: 170 }) }),
+    );
+    expect(state.progressWrite?.currentQuestion).toBe("hobbies");
+    expect(snapshot.currentQuestion).toBe("hobbies");
+  });
+
+  it("accepts a whole screen set at once", async () => {
+    const state = primeDb(collectorUser());
+
+    await applyOnboardingFacts(TELEGRAM_ID, {
+      first_name: "Alice",
+      age: 24,
+      gender: "female",
+      preference: "men",
+      height: 170,
+    });
+
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          firstName: "Alice",
+          age: 24,
+          gender: "female",
+          preference: "men",
+        }),
+      }),
+    );
+    expect(state.progressWrite?.currentQuestion).toBe("hobbies");
+  });
+
+  it.each([
+    ["age below the floor", { age: 12 }, "age_out_of_range"],
+    ["age above the ceiling", { age: 99 }, "age_out_of_range"],
+    ["height off the scale", { height: 300 }, "height_out_of_range"],
+    ["a name that is not one", { first_name: "A1" }, "invalid_name"],
+    ["a gender outside the enum", { gender: "other" }, "invalid_gender"],
+    ["a preference outside the enum", { preference: "everyone" }, "invalid_preference"],
+  ])("rejects %s and writes nothing", async (_label, facts, reason) => {
+    primeDb(collectorUser());
+
+    const snapshot = await applyOnboardingFacts(TELEGRAM_ID, facts);
+
+    expect(snapshot.rejectedFields[0]?.reason).toBe(reason);
+    expect(snapshot.acceptedFields).toEqual([]);
+    expect(db.user.update).not.toHaveBeenCalled();
+    expect(db.profile.upsert).not.toHaveBeenCalled();
+    expect(db.onboardingProgress.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("is all-or-nothing: one bad value blocks the good ones beside it", async () => {
+    primeDb(collectorUser());
+
+    const snapshot = await applyOnboardingFacts(TELEGRAM_ID, {
+      first_name: "Alice",
+      age: 7,
+    });
+
+    expect(snapshot.rejectedFields).toHaveLength(1);
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
+
+  it("retries a revision conflict instead of losing the answer", async () => {
+    const state = primeDb(collectorUser({ firstName: "Alice" }));
+    let attempts = 0;
+    db.onboardingProgress.updateMany.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => {
+        attempts += 1;
+        if (attempts === 1) return { count: 0 }; // someone else moved the row
+        state.progressWrite = data;
+        return { count: 1 };
+      },
+    );
+
+    const snapshot = await applyOnboardingFacts(TELEGRAM_ID, { age: 24 });
+
+    expect(attempts).toBe(2);
+    expect(snapshot.acceptedFields).toEqual(["age"]);
+  });
+
+  it("records one funnel row per real step transition", async () => {
+    primeDb(collectorUser());
+
+    // Name alone leaves `first_name_age` current — nothing resolved yet.
+    await applyOnboardingFacts(TELEGRAM_ID, { first_name: "Alice" });
+    expect(recordStepTransition).not.toHaveBeenCalled();
+
+    await applyOnboardingFacts(TELEGRAM_ID, { age: 24 });
+    expect(recordStepTransition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resolved: { step: "first_name_age", kind: "answered" },
+        askedNext: "gender",
+        platform: "telegram",
+      }),
+    );
+  });
+});
+
+describe("validateFactValue", () => {
+  it("applies the same bounds the free-text path uses, without needing evidence", () => {
+    expect(validateFactValue("age", MIN_AGE - 1).reason).toBe("age_out_of_range");
+    expect(validateFactValue("age", MAX_AGE).value).toBe(MAX_AGE);
+    expect(validateFactValue("height", 139).reason).toBe("height_out_of_range");
+    expect(validateFactValue("height", 170.4).value).toBe(170);
+    expect(validateFactValue("first_name", "  Alice  ").value).toBe("Alice");
+  });
+
+  it("refuses the synthetic fields a client must never set directly", () => {
+    expect(validateFactValue("photos", 3).reason).toBe("synthetic_field_not_extractable");
+    expect(validateFactValue("context_dump", "x").reason).toBe(
+      "synthetic_field_not_extractable",
+    );
+  });
 });

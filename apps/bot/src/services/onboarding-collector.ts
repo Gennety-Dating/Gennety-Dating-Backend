@@ -15,7 +15,9 @@ import {
 import {
   contextDumpInstruction,
   MAX_AGE,
+  MAX_HEIGHT_CM,
   MIN_AGE,
+  MIN_HEIGHT_CM,
   MIN_PHOTOS,
 } from "@gennety/shared";
 import { env } from "../config.js";
@@ -857,82 +859,106 @@ export async function extractWithOpenAI(
   }
 }
 
+/**
+ * Value rules for one canonical field: ranges, enum whitelists, normalization.
+ *
+ * Deliberately split from `validateFactCandidate` (which additionally requires
+ * the value to appear verbatim in the user's message) so that STRUCTURED input
+ * — the Telegram Mini App's profile screens, which have no message text at all
+ * — is bounded by exactly the same rules as an extracted one. A range that
+ * lives in two places is a range that eventually disagrees with itself.
+ */
+export function validateFactValue(
+  field: OnboardingField,
+  raw: CandidateValue,
+): { value?: CandidateValue; reason?: string } {
+  switch (field) {
+    case "first_name": {
+      if (typeof raw !== "string") return { reason: "invalid_type" };
+      const value = normalizeText(raw);
+      if (normalizedPlaceholder(value) || !/^[\p{L}'-]{2,40}$/u.test(value)) {
+        return { reason: "invalid_name" };
+      }
+      return { value };
+    }
+    case "age": {
+      if (typeof raw !== "number" || !Number.isFinite(raw)) {
+        return { reason: "invalid_type" };
+      }
+      const value = Math.round(raw);
+      if (value < MIN_AGE || value > MAX_AGE) return { reason: "age_out_of_range" };
+      return { value };
+    }
+    case "gender":
+      if (raw !== "male" && raw !== "female") return { reason: "invalid_gender" };
+      return { value: raw };
+    case "preference":
+      if (raw !== "men" && raw !== "women" && raw !== "both") {
+        return { reason: "invalid_preference" };
+      }
+      return { value: raw };
+    case "height": {
+      if (typeof raw !== "number" || !Number.isFinite(raw)) {
+        return { reason: "invalid_type" };
+      }
+      const value = Math.round(raw);
+      if (value < MIN_HEIGHT_CM || value > MAX_HEIGHT_CM) {
+        return { reason: "height_out_of_range" };
+      }
+      return { value };
+    }
+    case "hobbies": {
+      if (!Array.isArray(raw)) return { reason: "invalid_type" };
+      const value = raw
+        .map(normalizeText)
+        .filter((item) => item && !normalizedPlaceholder(item))
+        .slice(0, 20);
+      return { value };
+    }
+    case "partner_preferences":
+    case "friday_vibe":
+    case "vibe_focus": {
+      if (typeof raw !== "string") return { reason: "invalid_type" };
+      const value = normalizeText(raw);
+      if (normalizedPlaceholder(value) || value.length < 2 || value.length > 500) {
+        return { reason: "placeholder_or_invalid" };
+      }
+      return { value };
+    }
+    case "ai_memory":
+      if (raw !== "accepted" && raw !== "declined") {
+        return { reason: "invalid_ai_memory_preference" };
+      }
+      return { value: raw };
+    case "context_dump":
+    case "photos":
+      return { reason: "synthetic_field_not_extractable" };
+  }
+}
+
 export function validateFactCandidate(
   candidate: FactCandidate,
   text: string,
 ): { candidate?: FactCandidate; reason?: string } {
   if (!exactEvidence(text, candidate.evidence)) return { reason: "evidence_not_exact" };
 
-  switch (candidate.field) {
-    case "first_name": {
-      if (typeof candidate.value !== "string") return { reason: "invalid_type" };
-      const value = normalizeText(candidate.value);
-      if (
-        normalizedPlaceholder(value) ||
-        !/^[\p{L}'-]{2,40}$/u.test(value)
-      ) {
-        return { reason: "invalid_name" };
-      }
-      return { candidate: { ...candidate, value } };
-    }
-    case "age": {
-      if (typeof candidate.value !== "number") return { reason: "invalid_type" };
-      const value = Math.round(candidate.value);
-      if (value < MIN_AGE || value > MAX_AGE) return { reason: "age_out_of_range" };
-      return { candidate: { ...candidate, value } };
-    }
-    case "gender":
-      // A whole-message placeholder ("не знаю") must never be mapped to an
-      // enum value, even if an over-helpful extractor tries.
-      if (normalizedPlaceholder(text)) return { reason: "placeholder_answer" };
-      if (candidate.value !== "male" && candidate.value !== "female") {
-        return { reason: "invalid_gender" };
-      }
-      return { candidate };
-    case "preference":
-      if (normalizedPlaceholder(text)) return { reason: "placeholder_answer" };
-      if (
-        candidate.value !== "men" &&
-        candidate.value !== "women" &&
-        candidate.value !== "both"
-      ) {
-        return { reason: "invalid_preference" };
-      }
-      return { candidate };
-    case "height": {
-      if (typeof candidate.value !== "number") return { reason: "invalid_type" };
-      const value = Math.round(candidate.value);
-      if (value < 140 || value > 220) return { reason: "height_out_of_range" };
-      return { candidate: { ...candidate, value } };
-    }
-    case "hobbies": {
-      if (!Array.isArray(candidate.value)) return { reason: "invalid_type" };
-      const value = candidate.value
-        .map(normalizeText)
-        .filter((item) => item && !normalizedPlaceholder(item))
-        .slice(0, 20);
-      return { candidate: { ...candidate, value } };
-    }
-    case "partner_preferences":
-    case "friday_vibe":
-    case "vibe_focus": {
-      if (typeof candidate.value !== "string") return { reason: "invalid_type" };
-      const value = normalizeText(candidate.value);
-      if (normalizedPlaceholder(value) || value.length < 2 || value.length > 500) {
-        return { reason: "placeholder_or_invalid" };
-      }
-      return { candidate: { ...candidate, value } };
-    }
-    case "ai_memory":
-      if (normalizedPlaceholder(text)) return { reason: "placeholder_answer" };
-      if (candidate.value !== "accepted" && candidate.value !== "declined") {
-        return { reason: "invalid_ai_memory_preference" };
-      }
-      return { candidate };
-    case "context_dump":
-    case "photos":
-      return { reason: "synthetic_field_not_extractable" };
+  // A whole-message placeholder ("не знаю") must never be mapped to an enum
+  // value, even if an over-helpful extractor tries. Only applies to the free-text
+  // path: a structured pick can't be a placeholder by construction.
+  if (
+    (candidate.field === "gender" ||
+      candidate.field === "preference" ||
+      candidate.field === "ai_memory") &&
+    normalizedPlaceholder(text)
+  ) {
+    return { reason: "placeholder_answer" };
   }
+
+  const validated = validateFactValue(candidate.field, candidate.value);
+  if (validated.value === undefined) {
+    return { reason: validated.reason ?? "invalid" };
+  }
+  return { candidate: { ...candidate, value: validated.value } };
 }
 
 function mergeCandidates(
@@ -1276,6 +1302,149 @@ export async function collectOnboardingInput(
         false,
         unparsedAnswer,
       );
+    } catch (error) {
+      if (error instanceof RevisionConflict && attempt < 2) continue;
+      throw error;
+    }
+  }
+  throw new Error("Onboarding progress revision conflict");
+}
+
+/**
+ * The fields a client may set as STRUCTURED input rather than as free text.
+ *
+ * Deliberately only the five the Telegram Onboarding Mini App collects on its
+ * own screens (PRODUCT_SPEC §1.3): each has one correct answer from a finite
+ * set, which is exactly what a native control captures better than a sentence.
+ * Everything after `height` — hobbies, partner preferences, the vibe answers —
+ * is open prose and stays chat-owned, so it is not accepted here.
+ */
+export const STRUCTURED_ONBOARDING_FIELDS = [
+  "first_name",
+  "age",
+  "gender",
+  "preference",
+  "height",
+] as const;
+
+export type StructuredOnboardingField = (typeof STRUCTURED_ONBOARDING_FIELDS)[number];
+
+export type StructuredOnboardingFacts = Partial<
+  Record<StructuredOnboardingField, CandidateValue>
+>;
+
+/**
+ * Persist structured facts the client picked with a native control.
+ *
+ * This is the collector's own save path (`collectOnboardingInput`) minus the
+ * LLM: same canonical-column writes, same `onboarding_progress` update under the
+ * same `revision` compare-and-set, same funnel telemetry. Going through here
+ * rather than writing `prisma.user.update` from the route is what keeps
+ * `currentQuestion` honest — `collectOnboardingInput` reads it as the context
+ * for its deterministic extractors, so a Mini App that wrote the name while the
+ * stored question still said `first_name_age` would quietly mis-parse the next
+ * chat message.
+ *
+ * All-or-nothing: if any value fails validation nothing is written and the
+ * snapshot comes back with `rejectedFields` populated, so a client can never
+ * half-save a screen and advance past it.
+ */
+export async function applyOnboardingFacts(
+  telegramId: bigint,
+  facts: StructuredOnboardingFacts,
+): Promise<CollectorSnapshot> {
+  const accepted: FactCandidate[] = [];
+  const rejected: RejectedCandidate[] = [];
+
+  for (const field of STRUCTURED_ONBOARDING_FIELDS) {
+    const raw = facts[field];
+    if (raw === undefined) continue;
+    const validated = validateFactValue(field, raw);
+    if (validated.value === undefined) {
+      rejected.push({ field, reason: validated.reason ?? "invalid" });
+      continue;
+    }
+    // Structured input has no message to quote, so evidence is the value itself
+    // — `updatesForCandidates` only ever reads `field` and `value`.
+    accepted.push({ field, evidence: String(validated.value), value: validated.value });
+  }
+
+  let initial = (await prisma.user.findUniqueOrThrow({
+    where: { telegramId },
+    select: USER_SELECT,
+  })) as CollectorUser;
+  initial = await ensureProgress(initial);
+
+  if (rejected.length > 0 || accepted.length === 0) {
+    return refreshCollectorSnapshot(initial.id, [], rejected);
+  }
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const user = (attempt === 0
+      ? initial
+      : ((await prisma.user.findUniqueOrThrow({
+          where: { telegramId },
+          select: USER_SELECT,
+        })) as CollectorUser));
+    const progress = progressFromUser(user);
+    const current =
+      asQuestion(user.onboardingProgress?.currentQuestion ?? null) ??
+      nextOnboardingQuestion(progress);
+
+    for (const candidate of accepted) {
+      progress.completed.add(candidate.field);
+      progress.skipped.delete(candidate.field);
+    }
+    const updates = updatesForCandidates(accepted);
+    const next = nextOnboardingQuestion(progress);
+    const nextField = questionField(next);
+    if (nextField) progress.asked.add(nextField);
+    const expectedRevision = user.onboardingProgress?.revision ?? 0;
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        if (Object.keys(updates.user).length > 0) {
+          await tx.user.update({ where: { id: user.id }, data: updates.user });
+        }
+        if (
+          Object.keys(updates.profileCreate).length > 0 ||
+          Object.keys(updates.profileUpdate).length > 0
+        ) {
+          await tx.profile.upsert({
+            where: { userId: user.id },
+            create: { userId: user.id, ...updates.profileCreate },
+            update: updates.profileUpdate,
+          });
+        }
+        const result = await tx.onboardingProgress.updateMany({
+          where: { userId: user.id, revision: expectedRevision },
+          data: {
+            completedFields: uniqueFields(progress.completed),
+            skippedFields: uniqueFields(progress.skipped),
+            askedFields: uniqueFields(progress.asked),
+            currentQuestion: next,
+            collectorVersion: ONBOARDING_COLLECTOR_VERSION,
+            revision: { increment: 1 },
+          },
+        });
+        if (result.count !== 1) throw new RevisionConflict();
+      });
+
+      const acceptedFields = uniqueFields(accepted.map(({ field }) => field));
+      logCollector(telegramId, acceptedFields, [], next);
+      // Same rule as the chat path: one funnel row per real step transition.
+      // Saving only the name leaves `first_name_age` current and records
+      // nothing; the age that completes it is what advances to `gender`.
+      if (next !== current) {
+        await recordStepTransition({
+          userId: user.id,
+          resolved: { step: current, kind: "answered" },
+          askedNext: next,
+          language: languageOf(user),
+          platform: platformFromTelegramId(telegramId),
+        });
+      }
+      return refreshCollectorSnapshot(user.id, acceptedFields, []);
     } catch (error) {
       if (error instanceof RevisionConflict && attempt < 2) continue;
       throw error;

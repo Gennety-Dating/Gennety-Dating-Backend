@@ -48,6 +48,16 @@ vi.mock("../../services/onboarding-agent.js", () => ({
   runAgentTurn: vi.fn(),
 }));
 
+// The collector owns the actual write + progress advance (its own test covers
+// that); here we only care that the route authenticates, gates, shape-checks,
+// and maps a rejection onto a 400.
+// NB: `vi.mock` paths resolve relative to THIS file, not to the module doing
+// the importing — so it is `../services/…` even though the route says `../../`.
+const applyOnboardingFacts = vi.fn();
+vi.mock("../services/onboarding-collector.js", () => ({
+  applyOnboardingFacts,
+}));
+
 vi.mock("../../workers/re-engagement-schedule.js", () => ({
   onboardingActivityPatch: () => ({}),
 }));
@@ -84,7 +94,46 @@ function miniUser(overrides: Record<string, unknown> = {}) {
     researchOptIn: false,
     isEmailVerified: true,
     messageHistory: [],
+    firstName: null,
+    age: null,
+    gender: null,
+    preference: null,
     profile: null,
+    ...overrides,
+  };
+}
+
+/** A user who has cleared every gate the profile screens sit behind. */
+function profileReadyUser(overrides: Record<string, unknown> = {}) {
+  return miniUser({
+    onboardingStep: "conversational",
+    profile: {
+      height: null,
+      homeCity: "Kyiv",
+      homeCountryCode: "UA",
+      homeCityKey: "ua:kyiv",
+      homePlaceId: null,
+      latitude: 50.45,
+      longitude: 30.52,
+      locationUpdatedAt: new Date("2026-08-05T10:00:00.000Z"),
+    },
+    ...overrides,
+  });
+}
+
+function collectorSnapshot(overrides: Record<string, unknown> = {}) {
+  return {
+    userId: "11111111-1111-4111-8111-111111111111",
+    language: "en",
+    completedFields: [],
+    skippedFields: [],
+    askedFields: [],
+    currentQuestion: "gender",
+    revision: 2,
+    acceptedFields: ["first_name"],
+    rejectedFields: [],
+    needsClarification: false,
+    unparsedAnswer: false,
     ...overrides,
   };
 }
@@ -111,6 +160,8 @@ beforeEach(() => {
   createAndSendOtp.mockReset();
   getOtpChallengeState.mockReset();
   verifyOtp.mockReset();
+  applyOnboardingFacts.mockReset();
+  applyOnboardingFacts.mockResolvedValue(collectorSnapshot());
   getOtpChallengeState.mockResolvedValue({
     status: "none",
     expiresAt: null,
@@ -638,5 +689,127 @@ describe("Registration v2 sign-up fork", () => {
     // Contact gate passes; the next unmet gate is the home city.
     expect(res.status).toBe(409);
     expect(res.body.error).toBe("location-required");
+  });
+});
+
+describe("Telegram onboarding profile screens", () => {
+  it("rejects an unauthenticated save", async () => {
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/profile")
+      .send({ firstName: "Alice" });
+
+    expect(res.status).toBe(401);
+    expect(applyOnboardingFacts).not.toHaveBeenCalled();
+  });
+
+  it("refuses to save before the dating city is set", async () => {
+    userFindUnique.mockResolvedValue(miniUser({ profile: null }));
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/profile")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ firstName: "Alice" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("location-required");
+    expect(applyOnboardingFacts).not.toHaveBeenCalled();
+  });
+
+  it("saves one field per screen and mirrors it back in state", async () => {
+    userFindUnique.mockResolvedValue(profileReadyUser());
+    userFindUniqueOrThrow.mockResolvedValue(profileReadyUser({ firstName: "Alice" }));
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/profile")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ firstName: "Alice" });
+
+    expect(res.status).toBe(200);
+    expect(applyOnboardingFacts).toHaveBeenCalledWith(BigInt(TELEGRAM_ID), {
+      first_name: "Alice",
+    });
+    expect(res.body.user.profileBasics.firstName).toBe("Alice");
+    expect(res.body.user.profileBasics.height).toBeNull();
+  });
+
+  it("maps a value the collector rejected onto a 400 naming the field", async () => {
+    userFindUnique.mockResolvedValue(profileReadyUser());
+    applyOnboardingFacts.mockResolvedValue(
+      collectorSnapshot({
+        acceptedFields: [],
+        rejectedFields: [{ field: "age", reason: "age_out_of_range" }],
+      }),
+    );
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/profile")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ age: 12 });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "age_out_of_range", field: "age" });
+  });
+
+  it("shape-checks before the collector sees anything", async () => {
+    userFindUnique.mockResolvedValue(profileReadyUser());
+
+    const bad = await request(buildApp())
+      .post("/v1/telegram-onboarding/profile")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ age: "twenty" });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error).toBe("invalid-age");
+
+    const empty = await request(buildApp())
+      .post("/v1/telegram-onboarding/profile")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({});
+    expect(empty.status).toBe(400);
+    expect(empty.body.error).toBe("no-fields");
+
+    expect(applyOnboardingFacts).not.toHaveBeenCalled();
+  });
+
+  it("serves the age and height bounds so the bundle never inlines them", async () => {
+    userFindUnique.mockResolvedValue(profileReadyUser());
+
+    const res = await request(buildApp())
+      .get("/v1/telegram-onboarding/state")
+      .set("Authorization", `tma ${signInitData()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.profileLimits).toEqual({
+      minAge: 18,
+      maxAge: 55,
+      minHeightCm: 140,
+      maxHeightCm: 220,
+    });
+  });
+
+  it("hands off to the chat even with every profile field still empty", async () => {
+    // Fail-open by design (PRODUCT_SPEC §1.3): a cached older bundle, the iOS
+    // rail and a legacy mid-flight user must not dead-end at the handoff — the
+    // chat asks for whatever the Mini App never delivered.
+    const user = profileReadyUser({
+      onboardingStep: "conversational",
+      aiMemoryExportPreference: "declined",
+      messageHistory: [{ role: "assistant", content: "What are you into?" }],
+    });
+    userFindUnique.mockResolvedValue(user);
+    userUpdate.mockResolvedValue(user);
+    const initData = signInitData();
+
+    const state = await request(buildApp())
+      .get("/v1/telegram-onboarding/state")
+      .set("Authorization", `tma ${initData}`);
+    expect(state.body.user.profileBasics.firstName).toBeNull();
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/complete")
+      .set("Authorization", `tma ${initData}`)
+      .send({ completedVisualIntro: true, flowToken: state.body.flowToken });
+
+    expect(res.status).toBe(200);
+    expect(res.body.botTookOver).toBe(true);
   });
 });

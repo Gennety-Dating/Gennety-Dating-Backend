@@ -3049,3 +3049,402 @@ button {
   cursor: default;
   opacity: 0.5;
 }
+
+/* ==========================================================================
+   Profile screens — name / age / gender / preference / height
+   (PRODUCT_SPEC §1.3). Appended as one block; do not interleave with the
+   sections above.
+
+   The look is deliberately bare: one bold question, one control, one floating
+   action. No card, no border, no helper line — anything else on screen is a
+   thing the user has to read before they can answer a question they already
+   understood. Every colour comes from theme.css, except the one blue below.
+   ========================================================================== */
+
+.ob-basics {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  /* Shrink by the soft keyboard (`--kb-height`, set from visualViewport in
+     onboarding.tsx) so the floating pill never ends up underneath it, and by
+     Telegram's floating close × / menu ⋯ reserve (`--tg-content-top`). */
+  height: calc(100% - var(--kb-height, 0px));
+  padding:
+    calc(var(--tg-content-top, 0px) + 4.5rem)
+    1.5rem
+    calc(var(--tg-content-bottom, 0px) + 1.75rem);
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.ob-basics-title {
+  margin: 0;
+  width: min(100%, 22rem);
+  color: var(--text);
+  font-size: clamp(1.75rem, 4.6dvh, 2.5rem);
+  line-height: 1.14;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  animation: hookTitleIn 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* The control owns the middle of the screen and is vertically centred within
+   whatever is left between the question and the action. */
+.ob-basics-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  width: 100%;
+  min-height: 0;
+}
+
+.ob-basics-foot {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding-top: 1rem;
+}
+
+.ob-basics-error {
+  width: min(100%, 22rem);
+  margin: 0 auto;
+  color: #ff6b6b;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+/* ── The action pill ─────────────────────────────────────────────────────
+   Burgundy with the house inner-edge sheen: four inset shadows pulled back
+   past the border by a negative spread, so only the soft falloff survives just
+   inside the edge and the light reads as coming FROM the border INWARD. Same
+   recipe as `.choice-button.is-priority` and referral's `.ref-share`; no outer
+   bloom, deliberately, or it turns neon on the dark theme. */
+.ob-basics-pill {
+  min-width: 12rem;
+  padding: 1rem 2.75rem;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  color: #fff;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.26),
+      rgba(255, 255, 255, 0) 16%,
+      rgba(255, 255, 255, 0) 84%,
+      rgba(255, 255, 255, 0.2)
+    ),
+    linear-gradient(160deg, #a23350 0%, #8b253b 55%, #6f1c2f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 10px 20px -14px rgba(255, 255, 255, 0.62),
+    inset 0 -10px 20px -14px rgba(255, 255, 255, 0.48),
+    inset 9px 0 20px -13px rgba(255, 255, 255, 0.55),
+    inset -9px 0 20px -13px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 6px rgba(74, 16, 31, 0.18);
+  transition: transform 140ms ease, opacity 160ms ease;
+}
+
+.ob-basics-pill:active {
+  transform: scale(0.98);
+}
+
+.ob-basics-pill:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ── Name ──────────────────────────────────────────────────────────────── */
+.ob-basics-input {
+  width: min(100%, 20rem);
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  text-align: center;
+  font-family: inherit;
+  font-size: clamp(2rem, 6.5dvh, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  caret-color: var(--accent-bright);
+}
+
+.ob-basics-input::placeholder {
+  color: var(--text-faint);
+  font-weight: 700;
+}
+
+/* ── Age ───────────────────────────────────────────────────────────────── */
+.ob-basics-readout {
+  color: var(--text);
+  font-size: clamp(3.5rem, 11dvh, 5.5rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: min(100%, 20rem);
+  height: 34px; /* touch target; the visible track is drawn on the thumb rules */
+  background: transparent;
+  cursor: pointer;
+}
+
+.ob-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--accent-bright) 0 var(--filled, 0%),
+    var(--fill-strong) var(--filled, 0%) 100%
+  );
+}
+
+.ob-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--accent-bright) 0 var(--filled, 0%),
+    var(--fill-strong) var(--filled, 0%) 100%
+  );
+}
+
+.ob-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  margin-top: -11px;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(160deg, #a23350 0%, #8b253b 55%, #6f1c2f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 6px 12px -9px rgba(255, 255, 255, 0.7),
+    inset 0 -6px 12px -9px rgba(255, 255, 255, 0.5),
+    0 4px 14px -4px rgba(139, 37, 59, 0.6);
+}
+
+.ob-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(160deg, #a23350 0%, #8b253b 55%, #6f1c2f 100%);
+  box-shadow: 0 4px 14px -4px rgba(139, 37, 59, 0.6);
+}
+
+.ob-slider-ends {
+  display: flex;
+  justify-content: space-between;
+  width: min(100%, 20rem);
+  margin-top: -0.5rem;
+  color: var(--text-faint);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Gender / preference ────────────────────────────────────────────────
+   Blue is the one colour here that is NOT in the shared brand palette
+   (theme.css is burgundy / black / white). It is scoped to these two screens
+   and kept muted so it reads as a pair with the burgundy rather than competing
+   with it — the point is that neither option looks like the "right" one. */
+/* The options ARE the action on these two screens, so they sit where the
+   Continue pill sits on the other three — low, in thumb reach — instead of
+   floating in the middle of an otherwise empty screen. */
+.ob-basics--choice .ob-basics-body {
+  justify-content: flex-end;
+  padding-bottom: 2.25rem;
+}
+
+.ob-choice-stack {
+  display: grid;
+  gap: 0.875rem;
+  width: min(100%, 20rem);
+}
+
+.ob-choice {
+  --tone-a: #a23350;
+  --tone-b: #8b253b;
+  --tone-c: #6f1c2f;
+  min-height: 4.25rem;
+  padding: 1rem 1.5rem;
+  border: 0;
+  border-radius: 20px;
+  cursor: pointer;
+  color: #fff;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.26),
+      rgba(255, 255, 255, 0) 16%,
+      rgba(255, 255, 255, 0) 84%,
+      rgba(255, 255, 255, 0.2)
+    ),
+    linear-gradient(160deg, var(--tone-a) 0%, var(--tone-b) 55%, var(--tone-c) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 10px 22px -15px rgba(255, 255, 255, 0.62),
+    inset 0 -10px 22px -15px rgba(255, 255, 255, 0.48),
+    inset 10px 0 22px -14px rgba(255, 255, 255, 0.55),
+    inset -10px 0 22px -14px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.18);
+  transition: transform 140ms ease, opacity 160ms ease;
+}
+
+.ob-choice--male {
+  --tone-a: #3a6ea6;
+  --tone-b: #2e5c8c;
+  --tone-c: #23486e;
+}
+
+/* "Both" is the neutral option, so it takes the theme's high-contrast
+   primary — white on the dark page, ink on the cream one. A literal white
+   button would vanish on the light theme. */
+.ob-choice--neutral {
+  color: var(--btn-primary-fg);
+  background: var(--btn-primary-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 10px 22px -15px rgba(255, 255, 255, 0.5),
+    inset 0 -10px 22px -15px rgba(0, 0, 0, 0.12),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.ob-choice:active {
+  transform: scale(0.985);
+}
+
+.ob-choice.is-selected {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 3px;
+}
+
+.ob-choice:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ── Height drum ────────────────────────────────────────────────────────
+   Scroll-snap rather than a pointer-drag simulation, so momentum and snap come
+   from the browser. `mask-image` fades the numbers out toward both edges — they
+   should drift in and out of the frame, never be sliced off at a hard line. */
+.ob-wheel {
+  position: relative;
+  width: min(100%, 16rem);
+  height: 280px;
+}
+
+.ob-wheel-list {
+  height: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  outline: none;
+  -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 26%,
+    #000 74%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 26%,
+    #000 74%,
+    transparent 100%
+  );
+}
+
+.ob-wheel-list::-webkit-scrollbar {
+  display: none;
+}
+
+/* Half the frame minus half a row, so the first and last values can sit dead
+   centre under the capsule. Height must match WHEEL_ITEM_H in the TSX. */
+.ob-wheel-pad {
+  height: 112px;
+}
+
+.ob-wheel-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  scroll-snap-align: center;
+  color: var(--text-muted);
+  font-size: 1.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.ob-wheel-item.is-active {
+  color: var(--text);
+  font-weight: 700;
+  transform: scale(1.14);
+}
+
+/* The capsule is a frame, not a button — same inner-edge light, no fill of its
+   own beyond a faint frost, so the number scrolling under it stays readable. */
+.ob-wheel-capsule {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 56px;
+  transform: translateY(-50%);
+  border-radius: 16px;
+  /* The hairline is what makes the capsule read on the light theme, where a
+     frosted white pane sits on a cream page and the inner sheen alone is too
+     quiet. Same reason theme.css defines `--glass-border` at all. */
+  border: 1px solid var(--glass-border);
+  pointer-events: none;
+  background: var(--glass-bg);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 10px 20px -15px rgba(255, 255, 255, 0.5),
+    inset 0 -10px 20px -15px rgba(255, 255, 255, 0.35),
+    inset 9px 0 20px -14px rgba(255, 255, 255, 0.45),
+    inset -9px 0 20px -14px rgba(255, 255, 255, 0.45);
+}
+
+.ob-wheel-unit {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-basics-title {
+    animation: none;
+  }
+
+  .ob-wheel-item {
+    transition: none;
+  }
+}

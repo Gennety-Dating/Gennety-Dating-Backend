@@ -4,6 +4,8 @@ import type { Api, RawApi } from "grammy";
 import {
   prisma,
   type AiMemoryExportPreference,
+  type Gender,
+  type GenderPreference,
   type Language,
   type Theme,
 } from "@gennety/db";
@@ -11,6 +13,10 @@ import {
   ALLOWED_EMAIL_DOMAINS,
   isUniversityEmail,
   LEGAL_DOCS_VERSION,
+  MAX_AGE,
+  MAX_HEIGHT_CM,
+  MIN_AGE,
+  MIN_HEIGHT_CM,
   SUPPORTED_LANGUAGES,
   t,
 } from "@gennety/shared";
@@ -26,6 +32,10 @@ import {
 } from "../otp.js";
 import { otpRequestLimiter, otpVerifyLimiter } from "../rate-limit.js";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
+import {
+  applyOnboardingFacts,
+  type StructuredOnboardingFacts,
+} from "../../services/onboarding-collector.js";
 import { grantStudentBonusIfEligible } from "../../services/ticket-wallet.js";
 import { onboardingActivityPatch } from "../../workers/re-engagement-schedule.js";
 import {
@@ -59,6 +69,10 @@ type MiniUser = {
   telegramId: bigint;
   email: string | null;
   language: Language | null;
+  firstName: string | null;
+  age: number | null;
+  gender: Gender | null;
+  preference: GenderPreference | null;
   theme: Theme;
   themeChosenAt: Date | null;
   onboardingStep: "consent" | "language" | "conversational" | "completed";
@@ -75,6 +89,7 @@ type MiniUser = {
   promoRedeemedAt: Date | null;
   messageHistory: unknown[];
   profile: {
+    height: number | null;
     homeCity: string | null;
     homeCountryCode: string | null;
     homeCityKey: string | null;
@@ -470,6 +485,72 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     res.json(await serializeState(updated));
   });
 
+  /**
+   * The five profile facts the Mini App collects on its own screens — name,
+   * age, gender, who you're looking for, height (PRODUCT_SPEC §1.3).
+   *
+   * A partial patch, called once per screen rather than as one batch at the
+   * end: closing the Mini App mid-way must not lose the answers already given,
+   * and re-opening must resume on the first screen still unanswered.
+   *
+   * Writes go through the collector (`applyOnboardingFacts`), never straight to
+   * Prisma, so `onboarding_progress` and the funnel telemetry stay consistent
+   * with the chat path — and the chat then resumes on the first field this
+   * never delivered. That fallback is the whole reason `/complete` does NOT
+   * require these fields: a cached older bundle, the iOS rail and a legacy
+   * mid-flight user all keep working unchanged.
+   */
+  router.post("/profile", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+
+    const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
+    // Same readiness the screens themselves sit behind: terms, language, a
+    // verified contact rail, and a launched dating city.
+    const gate = ensureReadyForAiMemoryChoice(user);
+    if (gate) {
+      res.status(409).json({ error: gate });
+      return;
+    }
+    if (user.onboardingStep === "completed") {
+      res.status(409).json({ error: "already-complete" });
+      return;
+    }
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const parsed = parseProfileBasicsPatch(body);
+    if ("error" in parsed) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    if (Object.keys(parsed.facts).length === 0) {
+      res.status(400).json({ error: "no-fields" });
+      return;
+    }
+
+    // All-or-nothing: a rejected value writes nothing, so a client can never
+    // half-save a screen and advance past it.
+    const snapshot = await applyOnboardingFacts(auth.telegramId, parsed.facts);
+    const rejection = snapshot.rejectedFields[0];
+    if (rejection) {
+      res.status(400).json({ error: rejection.reason, field: rejection.field });
+      return;
+    }
+
+    const updated = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: miniUserSelect,
+    });
+    logTelegramOnboarding("profile-saved", updated, {
+      fields: snapshot.acceptedFields,
+      next: snapshot.currentQuestion,
+    });
+    res.json(await serializeState(updated));
+  });
+
   router.post("/ai-memory", async (req: Request, res: Response): Promise<void> => {
     // AI-memory export kill switch: with the feature off the Mini App never
     // renders the choice screen, so a request here is a stale client. 404 the
@@ -686,6 +767,13 @@ const miniUserSelect = {
   telegramId: true,
   email: true,
   language: true,
+  // The five profile facts the Mini App collects on its own screens
+  // (PRODUCT_SPEC §1.3). Mirrored back in `/state.profileBasics` so the client
+  // resumes on the first unanswered screen instead of replaying the set.
+  firstName: true,
+  age: true,
+  gender: true,
+  preference: true,
   theme: true,
   themeChosenAt: true,
   onboardingStep: true,
@@ -703,6 +791,7 @@ const miniUserSelect = {
   messageHistory: true,
   profile: {
     select: {
+      height: true,
       homeCity: true,
       homeCountryCode: true,
       homeCityKey: true,
@@ -838,6 +927,27 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       // them as one-tap options and never has to hardcode a city list, so a new
       // market goes live with the server rather than a bundle redeploy.
       supportedCities: supportedCityHits(),
+      // The Mini App's own profile screens (PRODUCT_SPEC §1.3). The client
+      // routes to the first `null` here, so server state — not DeviceStorage —
+      // is what decides where a reopened session resumes, and a user who
+      // already answered in chat skips the screens entirely.
+      profileBasics: {
+        firstName: user.firstName,
+        age: user.age,
+        gender: user.gender,
+        preference: user.preference,
+        height: user.profile?.height ?? null,
+      },
+      // Served rather than inlined in the bundle: `apps/webapp` deliberately
+      // does not depend on `@gennety/shared`, and a bound that lives in two
+      // places eventually disagrees with itself. Same precedent as
+      // `supportedCities`.
+      profileLimits: {
+        minAge: MIN_AGE,
+        maxAge: MAX_AGE,
+        minHeightCm: MIN_HEIGHT_CM,
+        maxHeightCm: MAX_HEIGHT_CM,
+      },
       homeLocation: user.profile?.homeCityKey
         ? {
             homeCity: user.profile.homeCity,
@@ -897,6 +1007,21 @@ interface TelegramOnboardingStateDto {
     promoMonths: number;
     /** Every city registration currently accepts (Kyiv-only at launch). */
     supportedCities: CitySearchHit[];
+    /** The five facts the Mini App's own profile screens collect. */
+    profileBasics: {
+      firstName: string | null;
+      age: number | null;
+      gender: Gender | null;
+      preference: GenderPreference | null;
+      height: number | null;
+    };
+    /** Server-owned bounds for the age slider and the height drum. */
+    profileLimits: {
+      minAge: number;
+      maxAge: number;
+      minHeightCm: number;
+      maxHeightCm: number;
+    };
     homeLocation: {
       homeCity: string | null;
       homeCountryCode: string | null;
@@ -964,6 +1089,45 @@ function ensureReadyForAiMemoryChoice(
   if (locationGate) return locationGate;
   if (!hasHomeLocation(user)) return "location-required";
   return null;
+}
+
+/**
+ * Shape-check the profile patch and map it onto the collector's canonical field
+ * names. Only shape lives here — ranges, enum whitelists and name normalization
+ * are `validateFactValue`'s job, so the Mini App, the chat and the iOS rail all
+ * answer to one set of rules.
+ */
+function parseProfileBasicsPatch(
+  body: Record<string, unknown>,
+): { facts: StructuredOnboardingFacts } | { error: string } {
+  const facts: StructuredOnboardingFacts = {};
+
+  if (body.firstName !== undefined) {
+    if (typeof body.firstName !== "string") return { error: "invalid-first-name" };
+    facts.first_name = body.firstName;
+  }
+  if (body.age !== undefined) {
+    if (typeof body.age !== "number" || !Number.isFinite(body.age)) {
+      return { error: "invalid-age" };
+    }
+    facts.age = body.age;
+  }
+  if (body.gender !== undefined) {
+    if (typeof body.gender !== "string") return { error: "invalid-gender" };
+    facts.gender = body.gender;
+  }
+  if (body.preference !== undefined) {
+    if (typeof body.preference !== "string") return { error: "invalid-preference" };
+    facts.preference = body.preference;
+  }
+  if (body.height !== undefined) {
+    if (typeof body.height !== "number" || !Number.isFinite(body.height)) {
+      return { error: "invalid-height" };
+    }
+    facts.height = body.height;
+  }
+
+  return { facts };
 }
 
 function hasHomeLocation(user: MiniUser): boolean {

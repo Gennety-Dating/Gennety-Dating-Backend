@@ -1,4 +1,5 @@
 import type { TelegramOnboardingState } from "./api.js";
+import { nextBasicsStep, type BasicsStep } from "./onboarding-basics-route.js";
 
 type RemoteUser = TelegramOnboardingState["user"];
 
@@ -55,6 +56,11 @@ export type OnboardingPhase =
   // shown once as the second-to-last screen (right before the AI-memory
   // choice). Skipped entirely for non-referred users.
   | { kind: "referralGift" }
+  // The Mini App's own profile screens — name / age / gender / preference /
+  // height (PRODUCT_SPEC §1.3). Placed after the welcome-gift screen so the
+  // gift stays the arrival reward, and before the AI-memory choice, which is
+  // the last thing the Mini App asks.
+  | { kind: "basics"; step: BasicsStep }
   | { kind: "aiMemoryExport" }
   | { kind: "loading" }
   | { kind: "done" };
@@ -96,6 +102,10 @@ export function postVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPh
   if (!user.themeChosen) return { kind: "theme" };
   if (user.invitedByPromo && !user.promoGiftSeen) return { kind: "promoGift" };
   if (user.invitedByReferral && !user.referralGiftSeen) return { kind: "referralGift" };
+  // First profile screen still unanswered. Derived from server state, so a
+  // reopened session resumes in place and an already-answered set is skipped.
+  const basicsStep = nextBasicsStep(user.profileBasics);
+  if (basicsStep) return { kind: "basics", step: basicsStep };
   // `aiMemoryExportEnabled === false` is the server kill switch: skip the
   // choice screen entirely (an older server omits the field → treat as on).
   if (

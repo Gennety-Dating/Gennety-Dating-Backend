@@ -1,5 +1,70 @@
 # Gennety Dating Deploy
 
+**PENDING — the first five profile questions move from the chat into the Mini
+App (PRODUCT_SPEC §1.1 / §1.3).** Not deployed yet. **No Prisma schema change,
+no env change, no flag change** — every column it writes (`users.first_name`,
+`age`, `gender`, `preference`, `profiles.height`) already exists. But it is
+half client, so it **DOES need a Mini App redeploy**, and the order matters:
+Deploy Full Server Code → `pnpm db:drift-check` → `pm2 restart` →
+`./scripts/deploy-webapp.sh`.
+
+Name, age, gender, who-you're-looking-for and height now have their own screens
+in the onboarding Mini App — a text field, an age slider, tinted choice buttons
+and a scroll-snap height drum — sitting between the welcome-gift screen and the
+AI-memory choice. The chat then opens on `hobbies` instead of "как тебя зовут?".
+These are the five questions with exactly one correct answer out of a finite
+set, which a Telegram chat cannot ask for: the bot asked in prose and recovered
+the value with a regex or an LLM. iOS already had the right controls here
+(`ui-hints.ts`); its `/v1/*` contract is untouched.
+
+**Server first is safe, and that is the point.** The new
+`POST /v1/telegram-onboarding/profile` simply has no callers until the bundle
+ships, and a cached older bundle keeps working on the old path: `/complete`
+deliberately does NOT require the five fields, so anything the Mini App did not
+deliver is asked for in the chat exactly as it is today. There is no version of
+this change where a user gets stuck at the handoff.
+
+**Three things worth knowing before the restart:**
+
+- **It writes through the collector, not through Prisma.** `applyOnboardingFacts`
+  reuses `collectOnboardingInput`'s save block, so `onboarding_progress`
+  advances under the same revision compare-and-set and the funnel keeps getting
+  one `onboarding_step_events` row per real transition. Expect the funnel's
+  `first_name_age` / `gender` / `preference` / `height` rows to start arriving
+  with `platform: "telegram"` seconds after the Mini App opens rather than
+  minutes into a chat — the numbers move, the meaning does not.
+- **`MIN_HEIGHT_CM` / `MAX_HEIGHT_CM` moved into `@gennety/shared`.** They were
+  literals in the collector and a private copy in `ui-hints.ts`; both now read
+  the shared constant, and `/state.profileLimits` serves the same values to the
+  Mini App. Values are unchanged (140/220), so nothing shifts — this only
+  removes the second place a bound could drift.
+- **Nothing exercises the drum until someone registers.** Production onboarding
+  is low-volume, so verify on `@gennetytestbot` first (needs an HTTPS tunnel and
+  `WEBAPP_URL` pointed at it). For design review alone there is now a preview
+  that needs no Telegram and no account:
+  `http://localhost:5173/onboarding.html?preview=basics:height&lang=ru&theme=light`
+  — `import.meta.env.DEV`-gated, so it does not exist in the production bundle.
+
+Post-deploy check — the route logs its own line on every screen, so one walk
+through onboarding on the dev bot should print five of them:
+
+```sh
+pm2 logs gennety-bot --lines 200 --nostream | grep 'profile-saved'
+# And the state the chat reads from, for one test account:
+psql "$DATABASE_URL" -c "select first_name, age, gender, preference from users order by created_at desc limit 3;"
+psql "$DATABASE_URL" -c "select current_question from onboarding_progress order by updated_at desc limit 3;"
+```
+
+`current_question = 'hobbies'` on a fresh account is the proof the handoff
+landed where it should.
+
+**Rollback:** revert the code, restart, and redeploy the Mini App from the
+previous checkout. Nothing else to undo — no schema, no env, no flag. Any
+profile data already written by the screens stays valid; it is the same columns
+the chat writes.
+
+---
+
 **PENDING — the Type Radar stops gating a client that cannot open it.** Not
 deployed yet. **No Prisma schema change, no env change, no flag change** —
 code-only, and Telegram behaviour is unchanged by construction

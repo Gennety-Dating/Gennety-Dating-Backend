@@ -62,11 +62,29 @@ function user(
         longitude: 30.5234,
       },
     ],
+    // Profile-screen defaults: already answered, so the five Mini App screens
+    // are skipped and pre-existing post-visual routing tests are unaffected.
+    profileBasics: {
+      firstName: "Alice",
+      age: 24,
+      gender: "female",
+      preference: "men",
+      height: 170,
+    },
+    profileLimits: { minAge: 18, maxAge: 55, minHeightCm: 140, maxHeightCm: 220 },
     homeLocation: null,
     completed: false,
     ...overrides,
   };
 }
+
+const NO_BASICS = {
+  firstName: null,
+  age: null,
+  gender: null,
+  preference: null,
+  height: null,
+} as const;
 
 describe("Telegram onboarding route restoration", () => {
   it("shows language before consent for a new user", () => {
@@ -373,5 +391,100 @@ describe("optional 'Подробнее' date-flow walkthrough", () => {
     expect(postVisualPhaseFromRemote(visualReadyUser())).toEqual({
       kind: "aiMemoryExport",
     });
+  });
+});
+
+describe("Telegram onboarding profile screens", () => {
+  const ready = {
+    homeLocation: {
+      homeCity: "Kyiv",
+      homeCountryCode: "UA",
+      homeCityKey: "ua:kyiv",
+      homePlaceId: null,
+      latitude: 50.4501,
+      longitude: 30.5234,
+      locationUpdatedAt: null,
+    },
+    isEmailVerified: true,
+    aiMemoryExportPreference: "declined" as const,
+  };
+
+  it("asks the first unanswered profile question after the intro", () => {
+    expect(
+      postVisualPhaseFromRemote(user({ ...ready, profileBasics: { ...NO_BASICS } })),
+    ).toEqual({ kind: "basics", step: "name" });
+  });
+
+  it("resumes on the screen the user stopped at", () => {
+    expect(
+      postVisualPhaseFromRemote(
+        user({
+          ...ready,
+          profileBasics: { ...NO_BASICS, firstName: "Alice", age: 24 },
+        }),
+      ),
+    ).toEqual({ kind: "basics", step: "gender" });
+
+    expect(
+      postVisualPhaseFromRemote(
+        user({
+          ...ready,
+          profileBasics: {
+            firstName: "Alice",
+            age: 24,
+            gender: "female",
+            preference: "men",
+            height: null,
+          },
+        }),
+      ),
+    ).toEqual({ kind: "basics", step: "height" });
+  });
+
+  it("skips the screens once every field is answered", () => {
+    expect(postVisualPhaseFromRemote(user(ready))).toEqual({ kind: "loading" });
+  });
+
+  it("sits after the welcome gift and before the AI-memory choice", () => {
+    const invited = user({
+      ...ready,
+      aiMemoryExportPreference: "undecided",
+      aiMemoryExportEnabled: true,
+      invitedByReferral: true,
+      referralGiftSeen: false,
+      profileBasics: { ...NO_BASICS },
+    });
+    // Gift first…
+    expect(postVisualPhaseFromRemote(invited)).toEqual({ kind: "referralGift" });
+    // …then the profile screens…
+    expect(
+      postVisualPhaseFromRemote({ ...invited, referralGiftSeen: true }),
+    ).toEqual({ kind: "basics", step: "name" });
+    // …and the AI-memory choice is still the last thing the Mini App asks.
+    expect(
+      postVisualPhaseFromRemote(
+        user({
+          ...ready,
+          aiMemoryExportPreference: "undecided",
+          aiMemoryExportEnabled: true,
+          invitedByReferral: true,
+          referralGiftSeen: true,
+        }),
+      ),
+    ).toEqual({ kind: "aiMemoryExport" });
+  });
+
+  it("routes past the screens against a server that predates them", () => {
+    const legacy = user(ready);
+    delete (legacy as { profileBasics?: unknown }).profileBasics;
+    expect(postVisualPhaseFromRemote(legacy)).toEqual({ kind: "loading" });
+  });
+
+  it("never shows a profile screen before the city gate", () => {
+    expect(
+      preVisualPhaseFromRemote(
+        user({ ...ready, homeLocation: null, profileBasics: { ...NO_BASICS } }),
+      ),
+    ).toEqual({ kind: "city" });
   });
 });

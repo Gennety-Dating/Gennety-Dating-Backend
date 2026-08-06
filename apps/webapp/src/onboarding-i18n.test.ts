@@ -60,11 +60,41 @@ describe("onboarding i18n", () => {
       expect(s.aiMemoryTitle.length).toBeGreaterThan(0);
       expect(s.doneTitle.length).toBeGreaterThan(0);
       expect(s.errors["invalid-email"]?.length).toBeGreaterThan(0);
+      // Profile screens (PRODUCT_SPEC §1.3). Key parity is enforced by the
+      // `OnboardingStrings` type on each locale block; this catches an empty
+      // placeholder left behind in one of them.
+      for (const value of [
+        s.basicsNameTitle,
+        s.basicsNamePlaceholder,
+        s.basicsAgeTitle,
+        s.basicsGenderTitle,
+        s.basicsGenderMale,
+        s.basicsGenderFemale,
+        s.basicsPreferenceTitle,
+        s.basicsPreferenceMen,
+        s.basicsPreferenceWomen,
+        s.basicsPreferenceBoth,
+        s.basicsHeightTitle,
+        s.basicsHeightUnit,
+      ]) {
+        expect(value.length).toBeGreaterThan(0);
+      }
+      // The server answers a bad value with its machine reason, so the client
+      // must be able to translate the three a user can actually trigger.
+      for (const reason of ["invalid_name", "age_out_of_range", "height_out_of_range"]) {
+        expect(s.errors[reason]?.length).toBeGreaterThan(0);
+      }
     }
   });
 
   it("does not fall back to English for German and Polish core copy", () => {
     expect(onboardingStrings("de").consentTitle).not.toBe(onboardingStrings("en").consentTitle);
     expect(onboardingStrings("pl").aiMemoryTitle).not.toBe(onboardingStrings("en").aiMemoryTitle);
+    expect(onboardingStrings("de").basicsAgeTitle).not.toBe(
+      onboardingStrings("en").basicsAgeTitle,
+    );
+    expect(onboardingStrings("pl").basicsHeightTitle).not.toBe(
+      onboardingStrings("en").basicsHeightTitle,
+    );
   });
 });

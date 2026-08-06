@@ -305,10 +305,46 @@ export interface TelegramOnboardingState {
      * without a bundle redeploy.
      */
     supportedCities: TelegramCityHit[];
+    /**
+     * The five facts the Mini App's own profile screens collect. The client
+     * routes to the first `null`, so a reopened session resumes exactly where
+     * it stopped and a user who already answered in chat skips the screens.
+     *
+     * Optional so an older cached bundle keeps working against a new server and
+     * vice versa (same rule as `aiMemoryExportEnabled`); absent is read as
+     * "server doesn't know about these screens", which routes straight past them.
+     */
+    profileBasics?: TelegramProfileBasics;
+    /** Server-owned bounds for the age slider and the height drum. */
+    profileLimits?: TelegramProfileLimits;
     homeLocation: TelegramHomeLocation | null;
     completed: boolean;
   };
 }
+
+export interface TelegramProfileBasics {
+  firstName: string | null;
+  age: number | null;
+  gender: "male" | "female" | null;
+  preference: "men" | "women" | "both" | null;
+  height: number | null;
+}
+
+export interface TelegramProfileLimits {
+  minAge: number;
+  maxAge: number;
+  minHeightCm: number;
+  maxHeightCm: number;
+}
+
+/** One screen's worth of profile answer — sent as it is given, never batched. */
+export type TelegramProfilePatch = Partial<{
+  firstName: string;
+  age: number;
+  gender: "male" | "female";
+  preference: "men" | "women" | "both";
+  height: number;
+}>;
 
 export type RegistrationTrack = "student" | "general";
 
@@ -412,6 +448,30 @@ export async function setTelegramOnboardingTheme(
       Authorization: `tma ${initData}`,
     },
     body: JSON.stringify({ theme }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TelegramOnboardingState;
+}
+
+/**
+ * Save one profile screen's answer (PRODUCT_SPEC §1.3).
+ *
+ * Called per screen rather than as one batch at the end: closing the Mini App
+ * mid-way must not lose what was already answered. The server re-validates
+ * every value, so a rejection here is authoritative — the screen shows it and
+ * does not advance.
+ */
+export async function saveTelegramOnboardingProfile(
+  initData: string,
+  patch: TelegramProfilePatch,
+): Promise<TelegramOnboardingState> {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/profile`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: JSON.stringify(patch),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TelegramOnboardingState;
