@@ -3354,6 +3354,16 @@ button {
 .ob-wheel-list {
   height: 100%;
   overflow-y: scroll;
+  /* The drum turns on ONE axis. `overflow-y: scroll` alone does not give that:
+     per the spec a `visible` overflow-x computes to `auto` next to a scrolling
+     sibling axis, so the list quietly became a horizontally pannable box and a
+     diagonal drag slid the numbers sideways out from under the capsule. Pinning
+     overflow-x removes the scrollport; `touch-action: pan-y` is what actually
+     stops the gesture, since a touch pan can otherwise still be started on a
+     box whose overflow is hidden. */
+  overflow-x: hidden;
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
   scroll-snap-type: y mandatory;
   scrollbar-width: none;
   outline: none;
