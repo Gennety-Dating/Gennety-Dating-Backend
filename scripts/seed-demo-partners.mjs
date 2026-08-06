@@ -87,23 +87,39 @@ function readImages(dir) {
  * step. Any chat works — this is a scratch surface for the upload, not a
  * permission: the demo bot is open to whoever opens it.
  *
- * `getUpdates` is read without an offset, so nothing is confirmed and a running
- * bot loses no updates. It does 409 while long polling is active, which is the
- * one case worth naming rather than swallowing.
+ * Two sources, in the order that survives the bot being live. The demo DB is
+ * tried FIRST because it keeps working once `gennety-demo` is polling — anyone
+ * who has opened the bot has a row with their real `telegramId`. `getUpdates`
+ * only covers the other case: nobody has opened the bot yet, so the queue still
+ * holds the raw update. It 409s while long polling is active, which is exactly
+ * when the DB path has already answered.
  */
-async function resolveUploadChat(token) {
+async function resolveUploadChat(token, prisma) {
   // Deliberately NOT falling back to FOUNDER_TELEGRAM_ID: that chat belongs to
   // the production bot, so it both fails here ("chat not found") and, if it
   // ever did resolve, would drop fictional profiles into the real ops feed.
   if (process.env.DEMO_SEED_CHAT_ID) return process.env.DEMO_SEED_CHAT_ID;
+
+  // A real visitor: positive telegramId (the synthetic partners are negative).
+  const visitor = await prisma.user.findFirst({
+    where: { telegramId: { gt: 0 } },
+    orderBy: { createdAt: "desc" },
+    select: { telegramId: true, firstName: true },
+  });
+  if (visitor) {
+    console.log(
+      `   … uploading through chat ${visitor.telegramId} (${visitor.firstName ?? "?"}, from the demo DB)`,
+    );
+    return String(visitor.telegramId);
+  }
 
   const res = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=100`);
   const body = await res.json().catch(() => ({}));
   if (!body.ok) {
     if (res.status === 409) {
       console.error(
-        "   … the demo bot is currently polling, so its update queue can't be read.\n" +
-          "     Stop it, or set DEMO_SEED_CHAT_ID.",
+        "   … the demo bot is polling and nobody has opened it yet, so there is\n" +
+          "     no chat on either rail. Press Start on it, then re-run.",
       );
     }
     return null;
@@ -164,15 +180,14 @@ async function main() {
     process.exit(1);
   }
 
-  const chatId = await resolveUploadChat(token);
+  const chatId = await resolveUploadChat(token, prisma);
   if (!chatId) {
     console.error(
       "No chat to upload through.\n" +
         "  A Telegram `file_id` is minted by SENDING the image, and file_ids are\n" +
         "  per-bot, so production's cannot be reused. This is a build-time step,\n" +
         "  not access control — the demo itself is open to anyone.\n\n" +
-        "  Press Start on the demo bot once, then run this again. (Or set\n" +
-        "  DEMO_SEED_CHAT_ID explicitly if the bot's update queue is empty.)",
+        "  Press Start on the demo bot once, then run this again.",
     );
     process.exit(1);
   }
