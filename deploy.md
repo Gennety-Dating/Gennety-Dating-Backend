@@ -1,5 +1,71 @@
 # Gennety Dating Deploy
 
+**PENDING — the departure point must be in a launched city, and the venue
+engine stops failing on geometry (PRODUCT_SPEC §3.7).** Not deployed yet. **No
+Prisma schema change, no env change, no flag change** — but it is half client,
+so it **DOES need a Mini App redeploy**: Deploy Full Server Code →
+`pnpm db:drift-check` → `pm2 restart` → `./scripts/deploy-webapp.sh` →
+`pnpm demo:deploy`.
+
+The venue step asked "where are you setting off from?" and accepted **any point
+on Earth** — the only check was that the coordinates were numbers. Registration's
+city has had a real gate since the Kyiv-only launch; this one had none, on the
+same data. Nothing fake was ever assigned (the ranker discards anything past the
+commute cap), which is exactly why it was invisible: the run found nothing, the
+pair sat in `negotiating_venue`, and 48 h later the §3.5c chain cancelled them
+with a lifetime pair ban. The one message they got told them to "relax the
+suggested condition" — a condition they never set, on a screen with nothing to
+relax, and with no button to reopen it.
+
+**Server first is safe and the order matters.** The gate lives in
+`services/venue-origin.ts` and every write path goes through it, so a cached
+older bundle keeps working — it just discovers the refusal as a `400` instead of
+on-screen. The reverse order would ship a client gating against a `market` field
+the server does not yet send, which degrades to no gate at all.
+
+**Four things worth knowing before the restart:**
+
+- **`GET /v1/location/search` now resolves the DB user** (it restricts Places to
+  the caller's own market instead of merely biasing toward it, so "Berlin
+  Hauptbahnhof" is not in the list at all). A caller with no `User` row now gets
+  `404` where it used to search. Unreachable in practice — the route is
+  initData-authed from inside a match — but it is a real contract change.
+- **The engine now retries with wider geometry instead of failing.** Rung 1 is
+  today's behaviour and covers the ordinary case; rungs 2 (12 km) and 3 (the
+  market radius) exist because two people at opposite ends of Kyiv — Troieshchyna
+  ↔ Vyshneve is ~30 km — could not be served at all. **Only the two distance caps
+  move**; quality, hours, price policy and hard constraints are identical on
+  every rung. Watch how often it fires: a rung above 1 is normal occasionally and
+  means a thin catalog if it is routine.
+- **The no-candidates failure now also DMs the founder ops feed** (it schedules
+  no retry, so it is a live match about to be lost) and carries a button back
+  into the venue screen. Expect ops-feed traffic that did not exist before —
+  `FOUNDER_NOTIFY_ENABLED` is on in production.
+- **Nothing exercises any of this until a pair reaches `negotiating_venue`.**
+  Production has **0 matches ever**, so verify on `@gennetytestbot` (needs an
+  HTTPS tunnel and `WEBAPP_URL` pointed at it) via
+  `scripts/dev-e2e-full-flow.mjs`.
+
+Post-deploy check — the gate refuses server-side even with the client bypassed,
+and the ladder names itself in the selection reason when it fires:
+
+```sh
+# Berlin coordinates from a Kyiv account must be refused, not saved.
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$PUBLIC_BASE_URL/v1/location/select" \
+  -H 'content-type: application/json' \
+  -d '{"matchId":"<uuid>","lat":52.525,"lng":13.369}'   # expect 400
+pm2 logs gennety-bot --lines 200 --nostream | grep 'widened to rung'
+psql "$DATABASE_URL" -c "select top_candidates->'poolSizes'->>'geoRung' rung, count(*) from venue_selection_logs group by 1;"
+```
+
+`rung = 1` for essentially every row is the healthy state.
+
+**Rollback:** revert the code, restart, and redeploy the Mini App from the
+previous checkout. Nothing else to undo — no schema, no env, no flag. Departure
+points already saved stay valid; they are the same columns as before.
+
+---
+
 **PENDING — Premium is $17.99/mo = 750⭐ (PRODUCT_SPEC §3.8).** Not deployed
 yet. **No Prisma schema change, no flag change** — but it needs a **two-line
 `.env` edit** and a **Mini App redeploy**, and one step of it is not in this

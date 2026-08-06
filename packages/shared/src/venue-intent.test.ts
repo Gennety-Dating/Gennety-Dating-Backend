@@ -3,6 +3,8 @@ import {
   VENUE_CONTEXT_MULTIPLIER_MAX,
   VENUE_CONTEXT_MULTIPLIER_MIN,
   VENUE_INTENT_PARSER_VERSION,
+  VENUE_FAIRNESS_DELTA_KM,
+  defaultVenueGeoTolerance,
   defaultVenueHardConstraints,
   mapVibeTagsToFacets,
   normalizeVenueIntent,
@@ -397,5 +399,64 @@ describe("venueContextMultiplier", () => {
     const worst = venueContextMultiplier("outdoor", [], 1, FREEZING_STORM);
     const best = venueContextMultiplier("indoor", [], 7, CLEAR_MILD);
     expect(strongIndoor * best).toBeGreaterThan(weakOutdoor * worst);
+  });
+});
+
+describe("geo tolerance ladder (PRODUCT_SPEC §3.7)", () => {
+  const A = intent(["coffee_treats"]);
+  const B = intent(["coffee_treats"]);
+
+  it("defaults to the pair's own stated tolerance", () => {
+    expect(defaultVenueGeoTolerance(A, B)).toEqual({
+      commuteLimitKm: 8,
+      fairnessDeltaKm: VENUE_FAIRNESS_DELTA_KM,
+    });
+  });
+
+  it("rejects a venue past the default commute limit, and accepts it once widened", () => {
+    // 10 km from both: too far at rung 1 (8 km), fine at rung 2 (12 km). This
+    // is the pair that used to get no date at all.
+    const far = candidate({ distanceA: 10, distanceB: 10 });
+
+    expect(rankVenueCandidates([far], A, B)).toHaveLength(0);
+    expect(
+      rankVenueCandidates([far], A, B, { commuteLimitKm: 12, fairnessDeltaKm: 5 }),
+    ).toHaveLength(1);
+  });
+
+  it("rejects a lopsided venue on fairness alone, independently of the commute cap", () => {
+    // Inside 8 km for both, but 4 km apart — over the 3 km fairness delta.
+    const lopsided = candidate({ distanceA: 1, distanceB: 5 });
+
+    expect(rankVenueCandidates([lopsided], A, B)).toHaveLength(0);
+    expect(
+      rankVenueCandidates([lopsided], A, B, { commuteLimitKm: 12, fairnessDeltaKm: 5 }),
+    ).toHaveLength(1);
+  });
+
+  it("still prefers the closer, fairer venue at the widest rung", () => {
+    // The reason the score scales follow the tolerance: at a 60 km limit a
+    // frozen 8 km scale would flatten both of these to the proximity floor and
+    // let fit alone decide, which is precisely when commute matters most.
+    const citywide = { commuteLimitKm: 60, fairnessDeltaKm: 60 };
+    const near = candidate({ id: "near", placeId: "near", distanceA: 5, distanceB: 5 });
+    const far = candidate({ id: "far", placeId: "far", distanceA: 40, distanceB: 5 });
+
+    const ranked = rankVenueCandidates([far, near], A, B, citywide);
+
+    expect(ranked.map((row) => row.candidate.id)).toEqual(["near", "far"]);
+  });
+
+  it("widening never admits a venue that fails a NON-geographic constraint", () => {
+    // The ladder relaxes geometry and nothing else: an outdoor-only pair must
+    // not be handed an indoor venue just because the search had to stretch.
+    const outdoorOnly = intent(["walk_view"], {
+      hardConstraints: { ...defaultVenueHardConstraints(), setting: "outdoor" },
+    });
+    const indoor = candidate({ distanceA: 10, distanceB: 10 });
+
+    expect(
+      rankVenueCandidates([indoor], outdoorOnly, B, { commuteLimitKm: 60, fairnessDeltaKm: 60 }),
+    ).toHaveLength(0);
   });
 });

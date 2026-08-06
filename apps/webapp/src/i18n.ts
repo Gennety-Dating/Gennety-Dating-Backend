@@ -56,6 +56,10 @@ interface Strings {
   locEmptyHint: string;
   locSelectedPrefix: string;
   locCustomPoint: string;
+  /** Departure-point gate (PRODUCT_SPEC §3.7). `{city}` = the launched market. */
+  locOutsideMarket: string;
+  /** Demo-only shortcut on the block card (DEMO_MODE.md). */
+  locJumpToCity: string;
   locShareCurrent: string;
   locSharingCurrent: string;
   locCurrentLocation: string;
@@ -134,6 +138,9 @@ const dict: Record<Lang, Strings> = {
     locEmptyHint: "Type an address or tap on the map.",
     locSelectedPrefix: "Selected: ",
     locCustomPoint: "Custom point on map",
+    locOutsideMarket:
+      "Gennety only works in {city} for now. Mark the spot in {city} you'll be setting off from — I look for a place within a short trip of you both.",
+    locJumpToCity: "Drop the pin in {city}",
     locShareCurrent: "Share my location",
     locSharingCurrent: "Locating…",
     locCurrentLocation: "My current location",
@@ -217,6 +224,9 @@ const dict: Record<Lang, Strings> = {
     locEmptyHint: "Введи адрес или тапни по карте.",
     locSelectedPrefix: "Выбрано: ",
     locCustomPoint: "Точка на карте",
+    locOutsideMarket:
+      "Gennety пока работает только в {city}. Отметь точку в {city}, откуда будешь выезжать — я ищу место недалеко от вас обоих.",
+    locJumpToCity: "Поставить точку в {city}",
     locShareCurrent: "Поделиться геолокацией",
     locSharingCurrent: "Ищем геолокацию…",
     locCurrentLocation: "Моя текущая геолокация",
@@ -300,6 +310,9 @@ const dict: Record<Lang, Strings> = {
     locEmptyHint: "Введи адресу або тапни по карті.",
     locSelectedPrefix: "Обрано: ",
     locCustomPoint: "Точка на карті",
+    locOutsideMarket:
+      "Gennety поки працює лише в {city}. Познач точку в {city}, звідки будеш виїжджати — я шукаю місце неподалік від вас обох.",
+    locJumpToCity: "Поставити точку в {city}",
     locShareCurrent: "Поділитися геолокацією",
     locSharingCurrent: "Шукаємо геолокацію…",
     locCurrentLocation: "Моя поточна геолокація",
@@ -383,6 +396,9 @@ const dict: Record<Lang, Strings> = {
     locEmptyHint: "Gib eine Adresse ein oder tippe auf die Karte.",
     locSelectedPrefix: "Ausgewählt: ",
     locCustomPoint: "Eigener Punkt auf der Karte",
+    locOutsideMarket:
+      "Gennety ist vorerst nur in {city} aktiv. Markiere den Punkt in {city}, von dem du losfährst - ich suche einen Ort in kurzer Entfernung für euch beide.",
+    locJumpToCity: "Punkt in {city} setzen",
     locShareCurrent: "Meinen Standort teilen",
     locSharingCurrent: "Standort wird gesucht...",
     locCurrentLocation: "Mein aktueller Standort",
@@ -467,6 +483,9 @@ const dict: Record<Lang, Strings> = {
     locEmptyHint: "Wpisz adres albo kliknij na mapie.",
     locSelectedPrefix: "Wybrano: ",
     locCustomPoint: "Własny punkt na mapie",
+    locOutsideMarket:
+      "Gennety działa na razie tylko w {city}. Zaznacz punkt w {city}, z którego wyruszysz - szukam miejsca blisko was obojga.",
+    locJumpToCity: "Zaznacz punkt w {city}",
     locShareCurrent: "Udostępnij lokalizację",
     locSharingCurrent: "Szukamy lokalizacji...",
     locCurrentLocation: "Moja aktualna lokalizacja",

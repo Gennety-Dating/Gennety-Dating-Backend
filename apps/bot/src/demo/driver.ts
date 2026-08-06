@@ -15,6 +15,7 @@ import {
   venueIntentMode,
 } from "../services/venue-intent-v2.js";
 import { tryFinalize } from "../handlers/matching/venue-negotiation.js";
+import { isVenueOriginRefusal } from "../services/venue-origin.js";
 import { useTicketFromBalance } from "../handlers/matching/ticket-gate.js";
 import {
   getVenueChangeCatalog,
@@ -598,6 +599,13 @@ async function submitPuppetVenue(
 
   if (venueIntentMode(match.id) === "live") {
     const draft = await interpretVenueIntent(match.id, partnerId, vibe, origin);
+    // The puppet's origin is hardcoded inside Kyiv, so the departure-point gate
+    // (PRODUCT_SPEC §3.7) can only refuse it if the seeded partner's dating city
+    // ever drifts — worth naming in the log rather than failing as "nothing".
+    if (isVenueOriginRefusal(draft)) {
+      console.warn(`${LOG} puppet venue origin refused: outside ${draft.market.city}`);
+      return;
+    }
     if (!draft) {
       console.warn(`${LOG} puppet venue interpret returned nothing`);
       return;

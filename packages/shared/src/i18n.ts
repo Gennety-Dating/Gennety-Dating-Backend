@@ -685,6 +685,8 @@ const translations = {
     venueConciergeBtnMap: "🗺️ Pick on map",
     venueLocationFirst:
       "First things first — *mark where you'll be setting off from* 📍 Tap below to drop it on the map. I'll ask about the vibe right after.",
+    venueOriginOutsideMarket:
+      "That point is outside {city}, and Gennety only works in {city} for now — I look for a place within a short trip of you both, so I can't find one from there. Mark the spot in {city} you'll be setting off from:",
     venueVibeNoted: "Vibe noted ✨ Now pick where you'll be coming from:",
     venueLocationNoted:
       "Starting point saved ✨ Now — what *vibe* are you after? e.g. _quiet cafe_, _vegan brunch_, _park walk_, _small museum_.",
@@ -1772,6 +1774,8 @@ const translations = {
     venueConciergeBtnMap: "🗺️ Выбрать на карте",
     venueLocationFirst:
       "Сначала самое главное — *отметь, откуда ты будешь выезжать* 📍 Нажми кнопку ниже и поставь точку на карте. Про вайб спрошу сразу после.",
+    venueOriginOutsideMarket:
+      "Эта точка за пределами {city}, а Gennety пока работает только там — я ищу место недалеко от вас обоих, и оттуда подобрать не смогу. Отметь точку в {city}, откуда будешь выезжать:",
     venueVibeNoted: "Вайб записан ✨ Теперь укажи, откуда поедешь:",
     venueLocationNoted:
       "Точку выезда сохранил ✨ Теперь — какой *вайб* хочешь? Например: _тихое кафе_, _веган-завтрак_, _прогулка в парке_, _небольшой музей_.",
@@ -2826,6 +2830,8 @@ const translations = {
     venueConciergeBtnMap: "🗺️ Обрати на карті",
     venueLocationFirst:
       "Спершу головне — *познач, звідки ти будеш виїжджати* 📍 Натисни кнопку нижче й постав точку на карті. Про вайб запитаю одразу після.",
+    venueOriginOutsideMarket:
+      "Ця точка за межами {city}, а Gennety поки працює лише там — я шукаю місце неподалік від вас обох, і звідти підібрати не зможу. Познач точку в {city}, звідки будеш виїжджати:",
     venueVibeNoted: "Вайб записано ✨ Тепер вкажи, звідки поїдеш:",
     venueLocationNoted:
       "Точку виїзду збережено ✨ Тепер — який *вайб* хочеш? Наприклад: _тихе кафе_, _веган-сніданок_, _прогулянка в парку_, _невеликий музей_.",
@@ -3855,6 +3861,8 @@ const deTranslations: TranslationTable = {
   venueConciergeBtnMap: "🗺️ Auf Karte wählen",
   venueLocationFirst:
     "Zuerst das Wichtigste - *markiere, von wo du losfährst* 📍 Tippe unten, um den Punkt auf der Karte zu setzen. Nach dem Vibe frage ich gleich danach.",
+  venueOriginOutsideMarket:
+    "Dieser Punkt liegt außerhalb von {city}, und Gennety ist vorerst nur dort aktiv - ich suche einen Ort in kurzer Entfernung für euch beide, von dort finde ich also keinen. Markiere den Punkt in {city}, von dem du losfährst:",
   venueVibeNoted: "Vibe notiert ✨ Jetzt wähle, von wo du kommst:",
   venueLocationNoted:
     "Startpunkt gespeichert ✨ Jetzt - welchen *Vibe* willst du? z. B. _ruhiges Cafe_, _veganer Brunch_, _Parkspaziergang_, _kleines Museum_.",
@@ -4879,6 +4887,8 @@ const plTranslations: TranslationTable = {
   venueConciergeBtnMap: "🗺️ Wybierz na mapie",
   venueLocationFirst:
     "Najpierw najważniejsze - *zaznacz, skąd będziesz wyruszać* 📍 Kliknij poniżej, aby zaznaczyć punkt na mapie. O vibe zapytam zaraz potem.",
+  venueOriginOutsideMarket:
+    "Ten punkt jest poza {city}, a Gennety działa na razie tylko tam - szukam miejsca blisko was obojga, więc stamtąd nie znajdę żadnego. Zaznacz punkt w {city}, z którego wyruszysz:",
   venueVibeNoted: "Vibe zapisany ✨ Teraz wybierz, skąd będziesz jechać:",
   venueLocationNoted:
     "Punkt startowy zapisany ✨ Teraz - jaki *vibe* chcesz? np. _cicha kawiarnia_, _wegański brunch_, _spacer po parku_, _małe muzeum_.",

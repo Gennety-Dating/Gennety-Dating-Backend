@@ -22,6 +22,11 @@ import {
   venueIntentMode,
   type ConfirmVenueIntentInput,
 } from "../../services/venue-intent-v2.js";
+import {
+  assertDepartureOrigin,
+  isVenueOriginRefusal,
+  venueOriginRefusal,
+} from "../../services/venue-origin.js";
 
 export const matchesRouter: Router = Router();
 
@@ -132,6 +137,10 @@ matchesRouter.post(
       return;
     }
     const intent = await interpretVenueIntent(id, req.userId!, text, req.body?.origin ?? null);
+    if (isVenueOriginRefusal(intent)) {
+      res.status(400).json(intent);
+      return;
+    }
     if (!intent) {
       res.status(409).json({ error: "Match not in venue negotiation" });
       return;
@@ -148,6 +157,13 @@ matchesRouter.put("/:id/venue-intent", async (req: Request, res: Response): Prom
     return;
   }
   const result = await confirmVenueIntent(id, req.userId!, body);
+  // A pin outside the caller's launched market gets its own reason so the
+  // native client can name the city on the screen that can still fix it,
+  // rather than reporting it as "draft not found" (PRODUCT_SPEC §3.7).
+  if (isVenueOriginRefusal(result)) {
+    res.status(400).json(result);
+    return;
+  }
   if (!result) {
     res.status(409).json({ error: "Draft not found or match not actionable" });
     return;
@@ -169,6 +185,14 @@ matchesRouter.post("/:id/vibe-location", async (req: Request, res: Response): Pr
   }
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
     res.status(400).json({ error: "lat/lng out of range" });
+    return;
+  }
+  // The departure-point gate (PRODUCT_SPEC §3.7). This is the legacy mobile
+  // twin of `POST /v1/location/select`, and it writes the same
+  // `vibeLat/Lng` columns, so it needs the same guard.
+  const gate = await assertDepartureOrigin(req.userId!, lat, lng);
+  if (!gate.ok) {
+    res.status(400).json(venueOriginRefusal(gate.market));
     return;
   }
 

@@ -235,6 +235,23 @@
             <div class="value" id="selected">&nbsp;</div>
           </div>
         </div>
+        <!--
+          Departure-point gate (PRODUCT_SPEC §3.7). Hidden until the pin leaves
+          the launched market, then it names the city and Confirm goes dead —
+          so the refusal lands here, where the map can still fix it, instead of
+          after the save.
+        -->
+        <div class="market-block" id="market-block" hidden>
+          <span class="market-block-ico" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7.5v5.5M12 16.2v.3" stroke-linecap="round" />
+            </svg>
+          </span>
+          <span class="market-block-text" id="market-block-text"></span>
+          <!-- Demo only: the visitor may genuinely be abroad (DEMO_MODE.md). -->
+          <button type="button" class="market-block-jump" id="market-jump" hidden></button>
+        </div>
         <!-- Secondary text action: use the device's current position -->
         <button type="button" class="loc-btn" id="share-current">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -2897,6 +2897,51 @@ The same `sendVenuePostSaveAck` helper drives all three paths
 so the wording stays consistent regardless of which surface the user
 saved through.
 
+**The departure point must be inside a launched market (added 2026-08-05).**
+Until this gate, the only validation on the pin was that the coordinates were
+numbers — so a user could mark a point in another city or another country, and
+the flow accepted it. The registration city has had a real gate since §1.3
+(`validateHomeLocationPayload`); the departure point had none, on the same
+data.
+
+Nothing fake was ever assigned — `scoreVenueCandidate` discards anything beyond
+the commute cap, so the run simply found nothing and the pair sat in
+`negotiating_venue` until the §3.5c chain cancelled them 48 h later, with a
+lifetime pair ban (§3.2 filter 6) as the parting gift. **The failure was
+silent and terminal, which is why this is a gate and not a warning:** a pin
+outside the market provably cannot yield a candidate, so accepting it only
+defers the same dead end to a screen that can no longer fix it.
+
+- **The screen refuses it, and says why.** The Location Mini App centres on the
+  user's own city (not a hardcoded default), recomputes the distance on every
+  pan, and while the pin sits outside the market it disables Confirm and shows
+  a card naming the city. `GET /v1/location/venue-intent/state` serves the
+  market (centroid + `radiusKm`) rather than the bundle carrying it, so a second
+  launched city needs no Mini App redeploy. The pin is never *moved* — someone
+  panning is exploring, and snapping them back would fight the gesture.
+- **Search cannot offer one either.** `/v1/location/search` restricts Places to
+  the market circle instead of merely biasing toward it, so an out-of-market
+  address never appears. A bias only reorders, which meant the block card had to
+  explain a result the search had just offered.
+- **`services/venue-origin.ts` is the enforcement point**, and every write goes
+  through it: `POST /v1/location/select`, `interpretVenueIntent` /
+  `confirmVenueIntent` (Telegram Mini App *and* the iOS `/v1/matches/:id/*`
+  pair), the legacy mobile `POST /v1/matches/:id/vibe-location`, and the raw
+  Telegram attach-menu pin (`handleVenueLocation`, which had no validation at
+  all). Refused with `400 origin-outside-market` carrying the market, so the
+  native client can name the city too — never as `wrong-state`, which would
+  misreport why the write failed.
+- **Fail-open on missing data.** An account whose dating city is absent or not a
+  launched market is not gated. Blocking someone over a gap in OUR data is never
+  right, and such an account cannot hold a match anyway (matching joins on an
+  exact `homeCityKey`), so the permissive branch is unreachable in practice.
+- **Demo (DEMO_MODE.md):** the gate is NOT waived — the visitor sees the real
+  card with the real reason — but it gains one extra button that drops the pin
+  in the city, because a demo visitor is often genuinely abroad and would
+  otherwise be asked to lie about where they are.
+- Telegram-only for the live on-screen gate today; iOS renders the same refusal
+  from the `/v1/*` error and the `market` field on the intent state.
+
 **Curated-first venue selection.** When all four pairs are present, the bot
 first consults the hand-curated venue base (`CuratedVenue`, currently scoped by
 `universityDomain` when both sides share one) via `services/curated-venue.ts`.
@@ -2912,6 +2957,40 @@ match the merged keywords. A venue whose worse commute exceeds
 populated by `scripts/seed-venues.mjs` (Places-backed pull → manual review →
 import); it shares the exact production quality gate via `searchVenueCandidates`,
 so a curated spot can never be something the live gate would reject.
+
+**A date is never lost to geometry (the geo ladder, added 2026-08-05).** The
+selector needs a venue within `maxCommuteKm` (8) of BOTH origins, with the two
+commutes within 3 km of each other. Two people at opposite ends of one city
+cannot satisfy that — Kyiv's market radius is 60 km and Troieshchyna ↔ Vyshneve
+is roughly 30 km apart — and the engine's answer used to be *no venue at all*.
+That is legal input producing a cancelled date, so the selector now retries
+with progressively wider tolerances instead of failing:
+
+| Rung | Worse commute | Fairness gap | When |
+|---|---|---|---|
+| 1 | the pair's own `maxCommuteKm` (8 km) | 3 km | the ordinary case |
+| 2 | 12 km | 5 km | rung 1 found nothing |
+| 3 | the market radius | — | still nothing: the best available in the city |
+
+**Only the two geographic caps move.** Quality floors, opening hours, the
+price policy and every hard constraint (indoor/outdoor) are identical on each
+rung, so a widened run is a longer trip, never a worse venue. Rung 3 is bounded
+by the market radius, which the departure-point gate above guarantees both
+origins sit inside — so a pair inside a launched city can always be served,
+worst case a venue ~30 km from one of them. That is not a good date; a
+cancelled one is worse.
+
+The scoring scales follow the active rung rather than staying fixed, so a
+widened pass still discriminates: at a 60 km cap a venue 5 km from both must
+still outrank one 40 km from one of them. The rung that actually produced the
+pick is recorded in `venueSelectionReason` and in the `poolSizes` funnel
+(`geoRung`), so "how often does the engine have to stretch?" is a query rather
+than a guess — if it stops being rare, the city's catalog is too thin.
+
+One consequence for the failure path: **commute can no longer be the reason a
+run found nothing**, so `minimalRelaxation` lost its `commute_12_km` branch and
+the no-candidates notice no longer suggests relaxing a distance the user cannot
+see a control for.
 
 **Only `base`-tier venues are ever auto-assigned.** `CuratedVenue.tier` decides
 which pool a venue belongs to, and the automatic first assignment reads `base`

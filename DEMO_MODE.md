@@ -22,6 +22,7 @@ Everything on screen is production code. What the demo changes is only:
 | Liveness verdict | AWS decides | always passes |
 | Photo validation | strict | off — any three images, faces optional |
 | Contact rail | real email OTP / phone share | auto-satisfied |
+| Departure point | must be inside Kyiv | **same gate**, plus a one-tap "drop the pin in Kyiv" |
 | Date Ticket | Telegram Stars | the existing **mock** rail (real screens, real prices, no charge) |
 | Venue change | 150⭐ | settled free |
 | Waiting | hours to days | ~12 seconds per step |
@@ -195,7 +196,7 @@ and both are mounted only when `DEMO_MODE_ENABLED`.
 
 ## The guarded branches in production code
 
-Seven, each a single `if`, each commented at the site:
+Eight, each a single `if`, each commented at the site:
 
 | File | What it does |
 |---|---|
@@ -206,6 +207,7 @@ Seven, each a single `if`, each commented at the site:
 | `handlers/router.ts` | mounts the demo composer |
 | `handlers/onboarding/conversational.ts` | skips the legacy single-face gate on upload |
 | `handlers/menu/edit-profile.ts` | the same, in the photo manager |
+| `services/venue-intent-v2.ts` | adds `demoMode: true` to the venue-intent state |
 
 **Why the last two exist — `PROFILE_MEDIA_VALIDATION_ENABLED=false` does not
 mean "nothing is checked".** It selects the *pre-rollout* validator instead of

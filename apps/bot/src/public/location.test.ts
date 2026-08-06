@@ -27,10 +27,13 @@ vi.mock("../config.js", () => ({
 const matchFindUnique = vi.fn();
 const matchUpdate = vi.fn();
 const userFindUnique = vi.fn();
+const profileFindUnique = vi.fn();
 vi.mock("@gennety/db", () => ({
   prisma: {
     match: { findUnique: matchFindUnique, update: matchUpdate },
     user: { findUnique: userFindUnique },
+    // Read by the departure-point gate (`services/venue-origin.ts`).
+    profile: { findUnique: profileFindUnique },
   },
 }));
 
@@ -81,6 +84,14 @@ beforeEach(() => {
   matchFindUnique.mockReset();
   matchUpdate.mockReset();
   userFindUnique.mockReset();
+  profileFindUnique.mockReset();
+  // A Kyiv account by default, so the existing Khreshchatyk fixtures pass the
+  // departure-point gate; the gate's own cases override this.
+  profileFindUnique.mockResolvedValue({ homeCityKey: "ua:kyiv" });
+  // `/search` resolves the DB user too (it restricts results to the caller's
+  // own market), so a default identity is needed alongside the per-case
+  // `mockResolvedValueOnce` the `/select` tests set up.
+  userFindUnique.mockResolvedValue({ id: "uid-A", language: "en" });
   tryFinalize.mockReset();
   tryFinalize.mockResolvedValue(undefined);
   sendVenuePostSaveAck.mockReset();
@@ -319,5 +330,52 @@ describe("POST /v1/location/select", () => {
     expect(res.status).toBe(200);
     const updateArg = matchUpdate.mock.calls[0]![0] as { data: { vibeAddressA: string } };
     expect(updateArg.data.vibeAddressA.length).toBe(256);
+  });
+
+  // The departure-point gate (PRODUCT_SPEC §3.7). This route is what an older
+  // Mini App bundle still saves through, so the server must refuse the pin even
+  // when no client-side gate ran.
+  it("refuses an origin outside the caller's launched market", async () => {
+    matchFindUnique.mockResolvedValueOnce({
+      id: VALID_UUID,
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating_venue",
+    });
+    userFindUnique.mockResolvedValueOnce({ id: "uid-A" });
+    const initData = signInitData(BOT_TOKEN);
+
+    const res = await request(buildApp())
+      .post("/v1/location/select")
+      .set("Authorization", `tma ${initData}`)
+      // Berlin Hauptbahnhof — the pin that used to be saved silently.
+      .send({ matchId: VALID_UUID, lat: 52.525, lng: 13.369, address: "Berlin Hbf" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("origin-outside-market");
+    expect(res.body.market.city).toBe("Kyiv");
+    expect(matchUpdate).not.toHaveBeenCalled();
+    expect(tryFinalize).not.toHaveBeenCalled();
+  });
+
+  it("still saves for an account whose dating city is not a launched market", async () => {
+    profileFindUnique.mockResolvedValue({ homeCityKey: "de:berlin" });
+    matchFindUnique.mockResolvedValueOnce({
+      id: VALID_UUID,
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating_venue",
+    });
+    userFindUnique.mockResolvedValueOnce({ id: "uid-A" });
+    matchUpdate.mockResolvedValueOnce({});
+    const initData = signInitData(BOT_TOKEN);
+
+    const res = await request(buildApp())
+      .post("/v1/location/select")
+      .set("Authorization", `tma ${initData}`)
+      .send({ matchId: VALID_UUID, lat: 52.525, lng: 13.369, address: "Berlin Hbf" });
+
+    expect(res.status).toBe(200);
+    expect(matchUpdate).toHaveBeenCalledTimes(1);
   });
 });

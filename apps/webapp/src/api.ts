@@ -2,6 +2,7 @@
 // API calls (Telegram WebView UA gets HTML instead of JSON otherwise). Compiled
 // out of production builds. See dev-ngrok-fetch.ts.
 import "./dev-ngrok-fetch.js";
+import type { MarketBounds } from "./market-gate.js";
 
 /**
  * Tiny fetch wrapper for the Mini App → bot public API.
@@ -201,6 +202,14 @@ export interface VenueIntentTmaState {
   suggestions: Array<Pick<VenueIntentDraft, "experiences" | "ambiences" | "formats">>;
   selectionError: string | null;
   mode: "off" | "shadow" | "live";
+  /**
+   * The user's launched market — centres the map and drives the on-screen
+   * departure-point gate (PRODUCT_SPEC §3.7). `null`/absent = do not gate.
+   * Served rather than bundled so a new city needs no Mini App redeploy.
+   */
+  market?: MarketBounds | null;
+  /** Demo only: adds a one-tap "drop the pin in the city" shortcut. */
+  demoMode?: boolean;
 }
 
 export async function fetchVenueIntentState(initData: string, matchId: string): Promise<VenueIntentTmaState> {

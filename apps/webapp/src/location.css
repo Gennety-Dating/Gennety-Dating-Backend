@@ -224,6 +224,53 @@ input.search::placeholder {
   padding: 6px 8px 8px;
 }
 
+/* Departure-point gate (PRODUCT_SPEC §3.7). Sits directly above the two
+   buttons so the reason is read on the way to the dead Confirm, not hunted for
+   afterwards. Deliberately quiet — an explanation, not an alarm: the user has
+   done nothing wrong, the city just isn't launched yet. */
+.market-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 2px 0 10px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  background: var(--fill);
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.42;
+  text-align: left;
+}
+.market-block[hidden] {
+  display: none;
+}
+.market-block-ico {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--accent-bright);
+}
+.market-block-text {
+  flex: 1 1 auto;
+}
+/* Demo-only shortcut (DEMO_MODE.md) — a text action, never competing with
+   Confirm. Wraps under the copy so it never squeezes the sentence. */
+.market-block-jump {
+  display: block;
+  margin-top: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-bright);
+  text-align: left;
+}
+.market-block-jump[hidden] {
+  display: none;
+}
+
 /* Secondary text action: use the device's current position. A labelled ghost
    button (not a cryptic FAB), full-width and low in the reach zone, above the
    primary Confirm. */

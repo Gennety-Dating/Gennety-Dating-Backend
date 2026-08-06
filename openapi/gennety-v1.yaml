@@ -1560,7 +1560,14 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SerializedMatch" }
-        "400": { $ref: "#/components/responses/BadRequest" }
+        "400":
+          description: Invalid payload, or the departure pin is outside the caller's market
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/VenueOriginOutsideMarket"
+                  - $ref: "#/components/schemas/Error"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409":
           description: Match not in a negotiating state
@@ -1601,7 +1608,14 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/VenueIntentState" }
-        "400": { $ref: "#/components/responses/BadRequest" }
+        "400":
+          description: Invalid payload, or the departure pin is outside the caller's market
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/VenueOriginOutsideMarket"
+                  - $ref: "#/components/schemas/Error"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
 
@@ -1632,7 +1646,14 @@ paths:
                 required: [intent]
                 properties:
                   intent: { $ref: "#/components/schemas/VenueIntentV2" }
-        "400": { $ref: "#/components/responses/BadRequest" }
+        "400":
+          description: Invalid payload, or the departure pin is outside the caller's market
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/VenueOriginOutsideMarket"
+                  - $ref: "#/components/schemas/Error"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409": { $ref: "#/components/responses/Conflict" }
 
@@ -2193,6 +2214,39 @@ components:
               ambiences: { type: array, items: { type: string } }
               formats: { type: array, items: { type: string } }
         selectionError: { type: [string, "null"] }
+        market:
+          description: >-
+            The user's launched market (PRODUCT_SPEC 3.7). Centre the departure
+            map on it and refuse a pin outside its radius BEFORE the user can
+            confirm — the server refuses it either way, but a refusal that only
+            arrives after Confirm is a dead end. `null` means do not gate.
+          oneOf:
+            - $ref: "#/components/schemas/Market"
+            - type: "null"
+
+    Market:
+      type: object
+      description: A launched city. Served, not bundled, so a new market needs no client release.
+      required: [cityKey, city, latitude, longitude, radiusKm]
+      properties:
+        cityKey: { type: string, example: "ua:kyiv" }
+        city: { type: string, example: "Kyiv" }
+        latitude: { type: number }
+        longitude: { type: number }
+        radiusKm:
+          type: number
+          description: Kilometres from the centroid still treated as inside the city.
+
+    VenueOriginOutsideMarket:
+      type: object
+      description: >-
+        The departure pin sits outside the caller's launched market, so no venue
+        can satisfy both sides (PRODUCT_SPEC 3.7). Name the city and send the
+        user back to the map — do not retry the same coordinates.
+      required: [error, market]
+      properties:
+        error: { type: string, enum: [origin-outside-market] }
+        market: { $ref: "#/components/schemas/Market" }
 
     SerializedMatch:
       type: object

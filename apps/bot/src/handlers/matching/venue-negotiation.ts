@@ -41,6 +41,7 @@ import {
 import { resolveVenue } from "../../services/curated-venue.js";
 import { generateAndSaveWingmanHints } from "../../services/wingman-hint.js";
 import { runVenueFinalizationOnce } from "../../services/venue-finalization-flight.js";
+import { assertDepartureOrigin, isVenueOriginRefusal } from "../../services/venue-origin.js";
 import {
   confirmVenueIntent,
   interpretVenueIntent,
@@ -401,15 +402,31 @@ export async function handleVenueLocation(ctx: BotContext): Promise<void> {
 
   const resolved = await resolveMatchSide(ctx);
   if (!resolved) return;
-  const { matchId, side } = resolved;
+  const { matchId, side, userId } = resolved;
+
+  const lang = ctx.session.language;
+
+  // The departure-point gate (PRODUCT_SPEC §3.7). This path — a raw pin shared
+  // through Telegram's attach menu — had NO validation at all, not even a
+  // coordinate range check, so it was the one way to put an out-of-market
+  // origin on a match without the Mini App ever being opened.
+  const gate = await assertDepartureOrigin(userId, loc.latitude, loc.longitude);
+  if (!gate.ok) {
+    const actor = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { theme: true },
+    });
+    await ctx.reply(t(lang, "venueOriginOutsideMarket", { city: gate.market.city }), {
+      reply_markup: buildLocationMapKeyboard(matchId, lang, actor?.theme ?? "dark"),
+    });
+    return;
+  }
 
   const data =
     side === "A"
       ? { vibeLatA: loc.latitude, vibeLngA: loc.longitude }
       : { vibeLatB: loc.latitude, vibeLngB: loc.longitude };
   await prisma.match.update({ where: { id: matchId }, data });
-
-  const lang = ctx.session.language;
 
   await sendVenuePostSaveAck(
     ctx.api,
@@ -508,7 +525,10 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
       : { lat: locState!.vibeLatB!, lng: locState!.vibeLngB!, address: locState!.vibeAddressB };
     if (actor) {
       const shadowDraft = await interpretVenueIntent(matchId, actor.id, text, origin);
-      if (shadowDraft) {
+      // Shadow traffic is observation only: an out-of-market origin here means
+      // the legacy path already banked a pin the gate would refuse, and there
+      // is nothing to tell the user (the V1 flow is authoritative).
+      if (shadowDraft && !isVenueOriginRefusal(shadowDraft)) {
         await confirmVenueIntent(matchId, actor.id, {
           experiences: shadowDraft.experiences,
           ambiences: shadowDraft.ambiences,
@@ -699,7 +719,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
  */
 async function resolveMatchSide(
   ctx: BotContext,
-): Promise<{ matchId: string; side: "A" | "B" } | null> {
+): Promise<{ matchId: string; side: "A" | "B"; userId: string } | null> {
   const fromId = ctx.from?.id;
   if (!fromId) return null;
 
@@ -725,5 +745,6 @@ async function resolveMatchSide(
   return {
     matchId: match.id,
     side: match.userAId === user.id ? "A" : "B",
+    userId: user.id,
   };
 }

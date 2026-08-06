@@ -16,6 +16,7 @@ import {
 } from "./api.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { wireContentInsets } from "./telegram-insets.js";
+import { isInsideMarket, type MarketBounds } from "./market-gate.js";
 
 /**
  * Location Mini App entry point (Phase 3.7 — concierge venue, map picker).
@@ -115,6 +116,9 @@ const addrLabelEl = document.getElementById("addr-label");
 const selectedEl = document.getElementById("selected");
 const noContextEl = document.getElementById("no-context");
 const bootEl = document.getElementById("boot");
+const marketBlockEl = document.getElementById("market-block");
+const marketBlockTextEl = document.getElementById("market-block-text");
+const marketJumpEl = document.getElementById("market-jump") as HTMLButtonElement | null;
 
 let bootDismissed = false;
 
@@ -150,6 +154,15 @@ let confirming = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 let venueState: VenueIntentTmaState | null = null;
 let draft: VenueIntentDraft | null = null;
+/**
+ * Departure-point gate (PRODUCT_SPEC §3.7). Null until `/state` answers, and
+ * null forever for an account we cannot place — both mean "do not gate", so
+ * the screen never blocks Confirm over data it is still waiting for.
+ */
+let market: MarketBounds | null = null;
+let demoMode = false;
+/** True once the user has deliberately chosen a point (search / geolocation). */
+let originPicked = false;
 // Venue Intent V2: the Location Mini App owns the WHOLE two-step flow again —
 // origin (the map) then the vibe + canonical chips on the in-app "step 2" screen
 // (2026-07: reverted from the short-lived chat-chip presentation because inline
@@ -171,12 +184,22 @@ if (matchId && app) {
   void fetchVenueIntentState(app.initData, matchId)
     .then((state) => {
       venueState = state;
+      market = state.market ?? null;
+      demoMode = state.demoMode === true;
+      // Centre on the user's actual city rather than the hardcoded Kyiv
+      // fallback — but only while they haven't chosen a point themselves, so a
+      // late `/state` can never yank the map out from under them.
+      if (market && !originPicked) {
+        recenter(market.latitude, market.longitude, null);
+      }
+      applyMarketGate();
       if (state.intent?.state === "draft" || state.intent?.state === "confirmed") {
         draft = state.intent;
         if (draft.origin) {
           selectedLat = draft.origin.lat;
           selectedLng = draft.origin.lng;
           selectedAddress = draft.origin.address;
+          originPicked = true;
         }
         showVibeStage();
         renderDraft();
@@ -197,6 +220,7 @@ if (!matchId) {
   initMap();
   initSearch();
   initShareCurrentLocation();
+  initMarketJump();
   initKeyboardBottomBar();
   confirmEl?.addEventListener("click", () => {
     void handleConfirm();
@@ -327,6 +351,38 @@ function setSelected(lat: number, lng: number, address: string | null): void {
   selectedLng = lng;
   selectedAddress = address;
   renderSelectedLine();
+  applyMarketGate();
+}
+
+/**
+ * Departure-point gate (PRODUCT_SPEC §3.7): reflect whether the current pin is
+ * inside the launched market. Runs on every pan, so the answer is on screen
+ * before the user reaches for Confirm rather than after they press it.
+ *
+ * Never *moves* the pin — someone panning across the map is exploring, and
+ * snapping them back would fight the gesture. It only refuses to let a point
+ * we cannot serve be submitted.
+ */
+function applyMarketGate(): boolean {
+  const inside = isInsideMarket(market, selectedLat, selectedLng);
+
+  if (confirmEl && !confirming) confirmEl.disabled = !inside;
+  if (marketBlockEl) marketBlockEl.hidden = inside;
+  if (!inside && market) {
+    if (marketBlockTextEl) {
+      marketBlockTextEl.textContent = tr(lang, "locOutsideMarket").replaceAll(
+        "{city}",
+        market.city,
+      );
+    }
+    // Demo only: the visitor is often genuinely abroad, so they get a way past
+    // a gate that is otherwise correct to show them (DEMO_MODE.md).
+    if (marketJumpEl) {
+      marketJumpEl.hidden = !demoMode;
+      marketJumpEl.textContent = tr(lang, "locJumpToCity").replaceAll("{city}", market.city);
+    }
+  }
+  return inside;
 }
 
 function renderSelectedLine(): void {
@@ -407,8 +463,23 @@ function initShareCurrentLocation(): void {
   shareCurrentEl?.addEventListener("click", handleShareCurrentLocation);
 }
 
+/**
+ * Demo-only shortcut (DEMO_MODE.md): drop the pin in the launched city. The
+ * gate is NOT waived — this just produces a valid pin, so the visitor sees the
+ * real block card with the real reason and still gets through it. Hidden
+ * outside demo mode, where "pretend you're in Kyiv" would be nonsense.
+ */
+function initMarketJump(): void {
+  marketJumpEl?.addEventListener("click", () => {
+    if (!market) return;
+    originPicked = true;
+    recenter(market.latitude, market.longitude, market.city);
+  });
+}
+
 function pickHit(hit: LocationSearchHit): void {
   if (searchEl) searchEl.value = hit.name;
+  originPicked = true;
   hideResults();
   // Dismiss the keyboard so the bottom island (Confirm) slides back in and the
   // map/pin is visible again now that a place has been chosen.
@@ -427,6 +498,9 @@ async function handleConfirm(): Promise<void> {
     app.showAlert(tr(lang, "locErrInvalidCoords"));
     return;
   }
+  // Belt-and-braces: the button is already disabled outside the market, so this
+  // only catches a programmatic path (or an older cached page).
+  if (!applyMarketGate()) return;
   startSaving(false);
   await completeLocationStep(selectedLat, selectedLng, selectedAddress);
 }
@@ -466,7 +540,17 @@ async function handleGeolocationSuccess(position: GeolocationPosition): Promise<
   }
 
   const label = tr(lang, "locCurrentLocation");
+  originPicked = true;
   recenter(lat, lng, label);
+  // Departure-point gate (PRODUCT_SPEC §3.7). This path used to save silently,
+  // which made "use my location" the easiest way to put an out-of-market origin
+  // on a match — someone travelling taps it without ever seeing the map. Show
+  // them where they are, explain, and let them pick a real departure point.
+  if (!applyMarketGate()) {
+    resetSaving();
+    app?.HapticFeedback?.notificationOccurred?.("warning");
+    return;
+  }
   await completeLocationStep(lat, lng, label);
 }
 

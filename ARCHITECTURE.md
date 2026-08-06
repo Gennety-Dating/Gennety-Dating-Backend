@@ -1196,8 +1196,13 @@ against production, not by anything the product could see). Two additions make
 that visible without a second table:
 
 - **`topCandidates.poolSizes`** — the selection funnel per run
-  (`curatedInBox` → `curatedEligible` → `placesAdded` → `ranked`). The column
-  was already `Json`, so this is a shape change, not a migration.
+  (`curatedInBox` → `curatedEligible` → `placesAdded` → `ranked`), plus
+  **`geoRung`** (1-based) naming which rung of the geo ladder produced `ranked`
+  (PRODUCT_SPEC §3.7). Anything above 1 means the pair's departure points were
+  too far apart for a normal pick and the selector had to widen — the state
+  that used to fail outright, so its frequency is the signal for whether a
+  city's catalog is thin. The column was already `Json`, so this is a shape
+  change, not a migration.
   `curatedEligible` is read BEFORE the Places fallback appends to the same
   array, so "the curated catalog is thin here" stays distinguishable from
   "Places carried the run" — two states with completely different fixes. A
@@ -1271,6 +1276,30 @@ precisely why registration has to be gated. Accounts created before the gate
 keep their city and are offered a one-tap move to a launched market
 (`apps/bot/src/handlers/menu/city-switch.ts`, reused by the weekly no-match DM
 and reflected in the pinned status banner).
+
+**The DEPARTURE point is gated by a second choke point** (added 2026-08-05):
+`apps/bot/src/services/venue-origin.ts`, the twin of `validateHomeLocationPayload`
+for the venue step (PRODUCT_SPEC §3.7). Registration's city had a real gate while
+the "where are you setting off from?" pin had only a coordinate-range check, so
+any point on Earth could be written — after which the concierge could find no
+venue and the match died 48 h later in the §3.5c stall chain.
+
+Five write paths reach it, which is exactly why the check lives in one module
+rather than at the routes: `POST /v1/location/select`, `interpretVenueIntent` +
+`confirmVenueIntent` (shared by the Telegram Mini App and the iOS
+`/v1/matches/:id/venue-intent*` pair), the legacy mobile
+`POST /v1/matches/:id/vibe-location`, and `handleVenueLocation` (a raw Telegram
+attach-menu pin — the one that previously had NO validation whatsoever). The
+refusal is a value, not a throw (`VenueOriginRefusal`), because the two service
+functions already signalled every problem as `null` and the routes turned that
+into `409 wrong-state` — a lie about why the write failed.
+
+`resolveDepartureMarket` returning `null` means **do not gate**, never refuse:
+it covers an account with no dating city or an unlaunched one, where blocking
+the user would punish them for a gap in our data. The same
+`MarketView` it produces is served on the venue-intent state so both clients can
+run the check live on their own screen; the server re-checks regardless, so a
+stale bundle costs a worse error message and never a bad write.
 
 # Purchase ownership (revenue feed + admin ledger)
 

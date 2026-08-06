@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { Prisma, prisma } from "@gennety/db";
+import type { InlineKeyboardMarkup } from "grammy/types";
+import { Prisma, prisma, type Theme } from "@gennety/db";
 import {
   VENUE_AMBIENCES,
   VENUE_DIETARY_CONSTRAINTS,
@@ -8,14 +9,19 @@ import {
   VENUE_INTENT_PARSER_VERSION,
   VENUE_PRICE_LIMITS,
   VENUE_SELECTION_VERSION,
+  DEFAULT_MARKET,
+  defaultVenueGeoTolerance,
   defaultVenueHardConstraints,
+  findMarketByCityKey,
   mapVibeTagsToFacets,
   isConfirmedVenueIntent,
   normalizeVenueIntent,
   rankVenueCandidates,
   resolveVenueBridge,
+  t,
   venueContextMultiplier,
   venueExposureOf,
+  type VenueGeoTolerance,
   type VenueAmbience,
   type VenueCandidateFacets,
   type VenueExperience,
@@ -45,6 +51,16 @@ import {
 } from "./venue.js";
 import { type VenueCategory } from "./vibe-parser.js";
 import { runVenueFinalizationOnce } from "./venue-finalization-flight.js";
+import { buildMiniAppUrl } from "./mini-app-url.js";
+import { DEMO_MODE_ENABLED } from "../demo/config.js";
+import {
+  assertDepartureOrigin,
+  marketView,
+  resolveDepartureMarket,
+  venueOriginRefusal,
+  type MarketView,
+  type VenueOriginRefusal,
+} from "./venue-origin.js";
 import { sendPushToUser } from "./push.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { notifyFounderVenueSelectionFailure } from "./founder-notify.js";
@@ -85,6 +101,19 @@ export interface VenueIntentStateResponse {
   partnerSubmitted: boolean;
   suggestions: Array<Pick<VenueIntentV2, "experiences" | "ambiences" | "formats">>;
   selectionError: string | null;
+  /**
+   * The user's launched market (PRODUCT_SPEC §3.7). Both clients centre the map
+   * on it and refuse a pin outside it before the user can confirm, so the
+   * refusal lands on the screen that can still fix it rather than as a dead end
+   * an hour later. `null` = do not gate (see `resolveDepartureMarket`).
+   */
+  market: MarketView | null;
+  /**
+   * Demo only: the visitor may genuinely be abroad, so the block card offers a
+   * one-tap "drop the pin in the city" shortcut. The gate itself is NOT waived
+   * — the shortcut simply produces a valid pin (DEMO_MODE.md).
+   */
+  demoMode?: true;
 }
 
 const INTERPRETER_SCHEMA = {
@@ -108,6 +137,15 @@ Do not infer dietary, accessibility, alcohol, indoor/outdoor requirements, or pr
 Never turn an unknown request into coffee_treats. Use surprise_me only when the user explicitly delegates the choice.`;
 
 const PRIVATE_SETTING = /\b(hotel|motel|hostel|airbnb|sauna|banya|spa|massage|my place|your place|apartment|flat|dorm|room)\b/i;
+
+/**
+ * Rung 2 of the geo ladder (PRODUCT_SPEC §3.7). 12 km is the upper bound the
+ * `maxCommuteKm` type already carries, so widening to it asks nothing of the
+ * pair that the product did not already consider reasonable; the fairness delta
+ * widens with it so a slightly lopsided trip is not what blocks the pass.
+ */
+const WIDENED_COMMUTE_KM = 12;
+const WIDENED_FAIRNESS_KM = 5;
 
 function asJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -209,12 +247,18 @@ export async function getVenueIntentState(matchId: string, userId: string): Prom
     }
   }
 
+  const market = await resolveDepartureMarket(userId);
+
   return {
     intent,
     status: intent?.state ?? "none",
     partnerSubmitted: partnerIntent?.state === "confirmed",
     suggestions,
     selectionError: scopedSelectionError(own.match.venueSelectionError, own.side),
+    market: market ? marketView(market) : null,
+    // Demo mode (DEMO_MODE.md): the flag has to travel over the wire because
+    // the demo runs its own Mini App bundle built from this same source.
+    ...(DEMO_MODE_ENABLED ? { demoMode: true as const } : {}),
   };
 }
 
@@ -250,10 +294,19 @@ export async function interpretVenueIntent(
   userId: string,
   text: string,
   origin: VenueIntentOrigin | null = null,
-): Promise<VenueIntentV2 | null> {
+): Promise<VenueIntentV2 | VenueOriginRefusal | null> {
   const own = await participant(matchId, userId);
   const rawText = text.trim();
   if (!own || own.match.status !== "negotiating_venue" || !rawText || rawText.length > 500) return null;
+
+  // The departure-point gate (PRODUCT_SPEC §3.7). Checked on the DRAFT too, not
+  // only on confirm: the draft's origin is what the Mini App restores on reopen
+  // and what the legacy columns mirror, so letting a bad pin land here would
+  // just move the refusal one screen later.
+  if (origin) {
+    const gate = await assertDepartureOrigin(userId, origin.lat, origin.lng);
+    if (!gate.ok) return venueOriginRefusal(gate.market);
+  }
 
   let payload: InterpreterPayload | null = null;
   if (!PRIVATE_SETTING.test(rawText)) {
@@ -336,13 +389,18 @@ export async function confirmVenueIntent(
    * reads `selectionError` off this very response.
    */
   opts?: { awaitFinalization?: boolean },
-): Promise<VenueIntentStateResponse | null> {
+): Promise<VenueIntentStateResponse | VenueOriginRefusal | null> {
   const own = await participant(matchId, userId);
   if (!own || own.match.status !== "negotiating_venue") return null;
   const draft = parseStored(own.side === "A" ? own.match.venueIntentA : own.match.venueIntentB);
   if (!draft) return null;
   const origin = input.origin;
   if (!Number.isFinite(origin.lat) || !Number.isFinite(origin.lng) || Math.abs(origin.lat) > 90 || Math.abs(origin.lng) > 180) return null;
+  // The departure-point gate (PRODUCT_SPEC §3.7) — the one write that actually
+  // enters the pair into venue selection, so it is the one that must not be
+  // bypassable by a stale bundle or a hand-rolled request.
+  const gate = await assertDepartureOrigin(userId, origin.lat, origin.lng);
+  if (!gate.ok) return venueOriginRefusal(gate.market);
   const confirmed = normalizeVenueIntent({
     ...draft,
     experiences: input.experiences,
@@ -557,10 +615,17 @@ function minimalRelaxation(a: VenueIntentV2, b: VenueIntentV2): { key: string; s
   // themselves (`applyInitialVenueConstraintPolicy`). They used to lead this
   // list, so the one relaxation the product suggested was almost always an
   // accessibility or religious requirement — the exact thing a user cannot
-  // "just relax". What is left are the two constraints the catalog can answer.
+  // "just relax". What is left is the indoor/outdoor setting.
+  //
+  // The old `commute_12_km` fallback is gone with the geo ladder (§3.7): the
+  // selector now widens the commute itself, so distance can no longer be the
+  // reason a run found nothing, and suggesting it would send the user to look
+  // for a control that would not have helped. `vibe` is the honest catch-all —
+  // neither side pinned a setting, so what is left is simply the combination
+  // of what they asked for.
   if (a.hardConstraints.setting) return { key: a.hardConstraints.setting, sides: "A" };
   if (b.hardConstraints.setting) return { key: b.hardConstraints.setting, sides: "B" };
-  return { key: "commute_12_km", sides: "AB" };
+  return { key: "vibe", sides: "AB" };
 }
 
 function chipCorrectionCount(intent: VenueIntentV2): number {
@@ -597,8 +662,8 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     where: { id: matchId },
     select: {
       id: true, status: true, agreedTime: true, venueIntentA: true, venueIntentB: true,
-      userA: { select: { id: true, telegramId: true, platform: true, language: true, universityDomain: true, profile: { select: { homeCityKey: true } } } },
-      userB: { select: { id: true, telegramId: true, platform: true, language: true, universityDomain: true, profile: { select: { homeCityKey: true } } } },
+      userA: { select: { id: true, telegramId: true, platform: true, language: true, theme: true, universityDomain: true, profile: { select: { homeCityKey: true } } } },
+      userB: { select: { id: true, telegramId: true, platform: true, language: true, theme: true, universityDomain: true, profile: { select: { homeCityKey: true } } } },
     },
   });
   if (!match || match.status !== "negotiating_venue" || !match.agreedTime) return;
@@ -658,7 +723,25 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   // `commuteBoundingBox`). Without it the query returned the whole city and the
   // pair's actual location had no say in which venues were even considered —
   // the single biggest reason the same handful of places kept winning.
-  const commuteLimitKm = Math.min(a.hardConstraints.maxCommuteKm, b.hardConstraints.maxCommuteKm);
+  //
+  // The LADDER (PRODUCT_SPEC §3.7). The pair's own tolerance is rung 1 and is
+  // what almost every run uses. Rungs 2 and 3 exist because the geometry used
+  // to be able to fail outright: two people at opposite ends of one city are
+  // more than `2 * commuteLimitKm` apart, the box comes back empty, and the
+  // date died over arithmetic. The widest rung is the market radius, which the
+  // departure-point gate guarantees BOTH origins sit inside, so a pair inside a
+  // launched city can always be served.
+  const cityRadiusKm = findMarketByCityKey(cityKey)?.radiusKm ?? DEFAULT_MARKET.radiusKm;
+  const geoLadder: VenueGeoTolerance[] = [
+    defaultVenueGeoTolerance(a, b),
+    { commuteLimitKm: WIDENED_COMMUTE_KM, fairnessDeltaKm: WIDENED_FAIRNESS_KM },
+    { commuteLimitKm: cityRadiusKm, fairnessDeltaKm: cityRadiusKm },
+  ];
+  // The catalog query is done ONCE, at the widest rung: the box is a cheap SQL
+  // pre-filter and the exact per-rung checks run in `scoreVenueCandidate`, so
+  // fetching wide and narrowing in memory costs one query instead of three.
+  const widestKm = Math.max(...geoLadder.map((rung) => rung.commuteLimitKm));
+  const commuteLimitKm = widestKm;
   const box = commuteBoundingBox(originA, originB, commuteLimitKm);
   const curated = box
     ? await prisma.curatedVenue.findMany({
@@ -730,7 +813,12 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   let placesCalls = 0;
   let providerFailed = false;
   const apiKey = process.env.PLACES_API_KEY;
-  if (apiKey) {
+  // A null box means the origins are further apart than even the widest rung
+  // can bridge, so no candidate from anywhere can satisfy both. Only reachable
+  // for a pair the departure-point gate could not apply to (a legacy account
+  // with no launched market); running the provider anyway spent real money on
+  // a search whose every result the ranker was about to discard.
+  if (apiKey && box) {
     const radiusMeters = venueSearchRadiusMeters(haversineDistanceKm(originA, originB));
     for (const category of searchCategories(a, b)) {
       placesCalls += 1;
@@ -752,7 +840,24 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   // Dedupe only — the old `.slice(0, 30)` here had the same defect as the one
   // above: it truncated by position before anything was scored.
   const deduped = [...new Map(selections.map((row) => [row.rank.placeId, row])).values()];
-  const ranked = rankVenueCandidates(deduped.map((row) => row.rank), a, b);
+  // Climb the ladder: the pair's own tolerance first, widening only when that
+  // pass produced nothing at all. Everything except the two geographic caps is
+  // identical on each rung, so a widened run is a longer trip, never a worse
+  // venue. `geoRung` is 1-based and rides into the selection log and the reason
+  // line, so "how often does the engine have to stretch?" is a query, not a
+  // guess — if it stops being rare, the catalog is too thin for the city.
+  const rankCandidates = deduped.map((row) => row.rank);
+  let geoRung = 1;
+  let ranked = rankVenueCandidates(rankCandidates, a, b, geoLadder[0]);
+  while (ranked.length === 0 && geoRung < geoLadder.length) {
+    geoRung += 1;
+    ranked = rankVenueCandidates(rankCandidates, a, b, geoLadder[geoRung - 1]!);
+  }
+  if (geoRung > 1 && ranked.length > 0) {
+    console.warn(
+      `[venue-intent-v2] ${matchId}: no venue at the pair's own commute tolerance, widened to rung ${geoRung} (${geoLadder[geoRung - 1]!.commuteLimitKm} km)`,
+    );
+  }
 
   // Season + weather. A soft reorder among comparable venues, never a filter:
   // a rained-out park sinks a few places and stays selectable, because a wrong
@@ -783,6 +888,10 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     curatedEligible,
     placesAdded: selections.length - curatedEligible,
     ranked: ranked.length,
+    // Which rung of the geo ladder actually produced `ranked` (1 = the pair's
+    // own tolerance). Anything above 1 means their departure points were too
+    // far apart for a normal pick — the case that used to fail outright.
+    geoRung,
   };
 
   // Context is folded in and the list re-sorted ONCE, so both the diversity
@@ -876,7 +985,11 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     if (failure.startsWith("no_candidates") || attempts >= 3) {
       await notifyVenueIntentParticipants(match, failure);
     }
-    if (failure === "provider_unavailable" && attempts >= 3) {
+    // Both failure modes reach the founder now. `no_candidates` is terminal —
+    // it schedules no retry — so a pair sits in `negotiating_venue` until the
+    // §3.5c stall chain cancels them 48 h later. That is a live match about to
+    // be lost, and it used to be visible only in the database.
+    if (failure.startsWith("no_candidates") || attempts >= 3) {
       await notifyFounderVenueSelectionFailure(matchId, failure, attempts);
     }
     return;
@@ -899,7 +1012,12 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   // feature off) and names the factor on the runs where it mattered.
   const chosenContext = contextFor(best.candidate);
   const contextNote = chosenContext === 1 ? "" : ` context ×${chosenContext.toFixed(2)};`;
-  const reason = `Pair intent: ${resolveVenueBridge(a, b).join(", ")}; verified fit ${(best.score.pairFit * 100).toFixed(0)}%; route imbalance ${Math.abs(chosen.rank.distanceA - chosen.rank.distanceB).toFixed(1)} km;${contextNote} pick ${diversityReason} of ${ranked.length}.`;
+  // Named only when it fired, like the context note above: rung 1 is the
+  // ordinary case and does not deserve a line, while anything wider is the
+  // single most useful fact about how this venue was chosen.
+  const rungNote =
+    geoRung === 1 ? "" : ` widened to ${geoLadder[geoRung - 1]!.commuteLimitKm} km (rung ${geoRung});`;
+  const reason = `Pair intent: ${resolveVenueBridge(a, b).join(", ")}; verified fit ${(best.score.pairFit * 100).toFixed(0)}%; route imbalance ${Math.abs(chosen.rank.distanceA - chosen.rank.distanceB).toFixed(1)} km;${contextNote}${rungNote} pick ${diversityReason} of ${ranked.length}.`;
   const committed = await prisma.match.updateMany({
     where: { id: matchId, status: "negotiating_venue" },
     data: {
@@ -958,34 +1076,56 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
 
 type VenueIntentNotificationMatch = {
   id: string;
-  userA: { id: string; telegramId: bigint; platform: string; language: string | null };
-  userB: { id: string; telegramId: bigint; platform: string; language: string | null };
+  userA: { id: string; telegramId: bigint; platform: string; language: string | null; theme?: Theme | null };
+  userB: { id: string; telegramId: bigint; platform: string; language: string | null; theme?: Theme | null };
 };
+
+/**
+ * The way back into the venue screen, attached to every non-scheduled outcome.
+ * Built here rather than imported from `handlers/matching/venue-negotiation.ts`
+ * to keep this service free of a handler import cycle; the URL builder is the
+ * shared one, so the link carries the caller's current language + theme like
+ * every other Mini App entry point.
+ */
+function buildVenueRetryKeyboard(
+  matchId: string,
+  lang: Language,
+  theme: Theme,
+): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[
+      {
+        text: t(lang, "venueConciergeBtnMap"),
+        web_app: { url: buildMiniAppUrl("location", { lang, theme, query: { match: matchId } }) },
+      },
+    ]],
+  };
+}
 
 const VENUE_NOTICE = {
   en: {
     scheduled: (name: string, uri: string) => `Your date spot is ready: ${name}\n${uri}`,
-    no_candidates: "I couldn't find a verified place that satisfies every required condition. Reopen the venue screen and relax the suggested condition.",
+    no_candidates: "I couldn't find a verified place that matches what you both asked for. Reopen the venue screen and widen it a little — a different setting, or one fewer must-have.",
     provider_unavailable: "The venue provider is still unavailable after several retries. Your date is not scheduled yet; I'll keep the match safe and let the team know.",
   },
   ru: {
     scheduled: (name: string, uri: string) => `Место для свидания готово: ${name}\n${uri}`,
-    no_candidates: "Не удалось найти проверенное место со всеми обязательными условиями. Откройте экран выбора места и ослабьте предложенное ограничение.",
+    no_candidates: "Не удалось найти проверенное место под то, что вы оба выбрали. Открой экран места и чуть расширь запрос — другой формат или на одно пожелание меньше.",
     provider_unavailable: "Сервис мест всё ещё недоступен после нескольких попыток. Свидание пока не назначено; матч остаётся в безопасном ожидании.",
   },
   uk: {
     scheduled: (name: string, uri: string) => `Місце для побачення готове: ${name}\n${uri}`,
-    no_candidates: "Не вдалося знайти перевірене місце з усіма обов'язковими умовами. Відкрийте екран місця й послабте запропоноване обмеження.",
+    no_candidates: "Не вдалося знайти перевірене місце під те, що ви обоє обрали. Відкрий екран місця й трохи розшир запит — інший формат або на одне побажання менше.",
     provider_unavailable: "Сервіс місць досі недоступний після кількох спроб. Побачення ще не призначене; матч залишається в безпечному очікуванні.",
   },
   de: {
     scheduled: (name: string, uri: string) => `Euer Treffpunkt steht fest: ${name}\n${uri}`,
-    no_candidates: "Ich konnte keinen verifizierten Ort finden, der alle Pflichtbedingungen erfüllt. Öffne den Ortsbildschirm und lockere die vorgeschlagene Bedingung.",
+    no_candidates: "Ich konnte keinen verifizierten Ort finden, der zu euren beiden Wünschen passt. Öffne den Ortsbildschirm und mach die Auswahl etwas weiter - ein anderes Format oder ein Muss weniger.",
     provider_unavailable: "Der Ortsdienst ist nach mehreren Versuchen weiterhin nicht verfügbar. Das Date ist noch nicht geplant und das Match bleibt sicher in Wartestellung.",
   },
   pl: {
     scheduled: (name: string, uri: string) => `Miejsce na randkę jest gotowe: ${name}\n${uri}`,
-    no_candidates: "Nie udało się znaleźć zweryfikowanego miejsca spełniającego wszystkie wymagania. Otwórz ekran miejsca i poluzuj sugerowane ograniczenie.",
+    no_candidates: "Nie udało się znaleźć zweryfikowanego miejsca pasującego do tego, co oboje wybraliście. Otwórz ekran miejsca i poszerz nieco wybór - inny format albo o jedno wymaganie mniej.",
     provider_unavailable: "Usługa miejsc nadal jest niedostępna po kilku próbach. Randka nie została jeszcze zaplanowana, a dopasowanie bezpiecznie czeka.",
   },
 } as const;
@@ -1011,7 +1151,15 @@ async function notifyVenueIntentParticipants(
         ? copy.no_candidates
         : copy.provider_unavailable;
     if (opts?.telegram !== false && api && user.telegramId > 0n && (user.platform === "telegram" || user.platform === "both")) {
-      await api.sendMessage(Number(user.telegramId), text).catch(() => undefined);
+      // A failure the user is asked to fix has to carry the way to fix it. The
+      // notice used to be a bare `sendMessage` telling them to "reopen the
+      // venue screen" — a screen whose only entry point had scrolled away by
+      // then, since the concierge prompt is sent when the stage OPENS.
+      const retry =
+        state === "scheduled"
+          ? {}
+          : { reply_markup: buildVenueRetryKeyboard(match.id, locale, user.theme ?? "dark") };
+      await api.sendMessage(Number(user.telegramId), text, retry).catch(() => undefined);
     }
     if (user.platform === "mobile" || user.platform === "both") {
       await sendPushToUser(user.id, {

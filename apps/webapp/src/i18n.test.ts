@@ -35,6 +35,16 @@ describe("Mini App i18n", () => {
     }
   });
 
+  it("has departure-point gate copy, with the city placeholder intact, in every language", () => {
+    // The city name is interpolated at the call site (`tr` has no params), so a
+    // locale that lost the placeholder would render a sentence naming no city
+    // at all — the one fact the block card exists to deliver.
+    for (const lang of languages) {
+      expect(tr(lang, "locOutsideMarket")).toContain("{city}");
+      expect(tr(lang, "locJumpToCity")).toContain("{city}");
+    }
+  });
+
   it("monthsPhrase declines the unit word for every supported language", () => {
     expect(monthsPhrase("en", 1)).toBe("1 month");
     expect(monthsPhrase("en", 3)).toBe("3 months");

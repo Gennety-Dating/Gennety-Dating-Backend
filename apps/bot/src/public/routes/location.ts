@@ -18,6 +18,17 @@ import {
   venueIntentMode,
   type ConfirmVenueIntentInput,
 } from "../../services/venue-intent-v2.js";
+import {
+  assertDepartureOrigin,
+  checkDepartureOrigin,
+  isVenueOriginRefusal,
+  resolveDepartureMarket,
+  venueOriginRefusal,
+} from "../../services/venue-origin.js";
+import type { Market } from "@gennety/shared";
+
+/** Places caps a `locationRestriction` circle at 50 km. */
+const PLACES_MAX_RESTRICTION_KM = 50;
 
 /**
  * Location Mini App endpoints (Phase 3.7 — concierge venue, map picker).
@@ -80,6 +91,13 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       return;
     }
     const intent = await interpretVenueIntent(matchId, actor.id, text, req.body?.origin ?? null);
+    // A pin outside the user's launched market is refused with its own reason,
+    // never as `wrong-state` — the Mini App turns it into the on-screen block
+    // card naming the city (PRODUCT_SPEC §3.7).
+    if (isVenueOriginRefusal(intent)) {
+      res.status(400).json(intent);
+      return;
+    }
     if (!intent) {
       res.status(409).json({ error: "wrong-state" });
       return;
@@ -102,6 +120,10 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     // the date card lands — instead of the user staring at a spinning button in
     // a web view that used to stay open for the whole selection.
     const state = await confirmVenueIntent(matchId, actor.id, intent, { awaitFinalization: false });
+    if (isVenueOriginRefusal(state)) {
+      res.status(400).json(state);
+      return;
+    }
     if (!state) {
       res.status(409).json({ error: "draft-not-found" });
       return;
@@ -128,11 +150,10 @@ export function createLocationRouter(api: Api<RawApi>): Router {
   });
 
   router.get("/search", locationSearchLimiter, async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
-    if (!auth.ok) {
-      res.status(401).json(auth.body);
-      return;
-    }
+    // Resolves the DB user (not just the Telegram id) because the search is
+    // restricted to the caller's own market below.
+    const actor = await authenticatedUser(req, res);
+    if (!actor) return;
 
     const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
     if (query.length < 2) {
@@ -143,10 +164,14 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       res.status(400).json({ error: "Query is too long" });
       return;
     }
-    // Optional bias: if the Mini App passed a center it can ride the
-    // current map view as a hint. Otherwise we let Google sort by
-    // global relevance — for typed queries like "metro Lukyanivska"
-    // the bias usually adds little vs. a strong textual match.
+    // The market is a HARD restriction, not a bias (PRODUCT_SPEC §3.7). A bias
+    // only reorders, so "Berlin Hauptbahnhof" still came back and could still be
+    // picked and saved — the block card would then have to explain a result the
+    // search had just offered. Restricting instead means an out-of-market place
+    // is simply not on the screen. Falls back to the caller's map centre as a
+    // plain bias when we cannot resolve their market (a legacy account), which
+    // is the old behaviour.
+    const market = await resolveDepartureMarket(actor.id);
     const lat = parseFloat(req.query.lat as string);
     const lng = parseFloat(req.query.lng as string);
     const hasBias = Number.isFinite(lat) && Number.isFinite(lng);
@@ -166,7 +191,12 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     }
 
     try {
-      const results = await searchText(apiKey, query, hasBias ? { lat, lng } : null);
+      const results = await searchText(
+        apiKey,
+        query,
+        hasBias ? { lat, lng } : null,
+        market,
+      );
       res.status(200).json({ ok: true, results });
     } catch (err) {
       console.warn("[location/search] Places searchText failed:", err);
@@ -240,6 +270,15 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     const isB = user.id === match.userBId;
     if (!isA && !isB) {
       res.status(403).json({ error: "not-participant" });
+      return;
+    }
+
+    // The departure-point gate (PRODUCT_SPEC §3.7). Same refusal shape as the
+    // V2 confirm above, so an older Mini App bundle — which still saves through
+    // this route — gets a reason it can render instead of a silent write.
+    const gate = await assertDepartureOrigin(user.id, lat, lng);
+    if (!gate.ok) {
+      res.status(400).json(venueOriginRefusal(gate.market));
       return;
     }
 
@@ -337,9 +376,22 @@ async function searchText(
   apiKey: string,
   query: string,
   bias: { lat: number; lng: number } | null,
+  market: Market | null,
 ): Promise<PlaceSearchHit[]> {
   const body: Record<string, unknown> = { textQuery: query };
-  if (bias) {
+  if (market) {
+    // Hard restriction to the launched market: Places is told not to return
+    // anything outside it, so an out-of-market address is never offered in the
+    // first place (PRODUCT_SPEC §3.7). `locationRestriction` caps a circle at
+    // 50 km, and Kyiv's market radius is 60, so the request is clamped and the
+    // post-filter below covers the remaining ring.
+    body.locationRestriction = {
+      circle: {
+        center: { latitude: market.latitude, longitude: market.longitude },
+        radius: Math.min(market.radiusKm, PLACES_MAX_RESTRICTION_KM) * 1000,
+      },
+    };
+  } else if (bias) {
     body.locationBias = {
       circle: {
         center: { latitude: bias.lat, longitude: bias.lng },
@@ -371,6 +423,11 @@ async function searchText(
     const lat = p.location?.latitude;
     const lng = p.location?.longitude;
     if (!name || lat == null || lng == null) continue;
+    // Belt-and-braces on top of `locationRestriction`: the request radius is
+    // clamped to what Places accepts, so the outer ring of a larger market is
+    // still filtered here, and a provider that ever ignores the restriction
+    // cannot put an unpickable result on the screen.
+    if (market && !checkDepartureOrigin(market, lat, lng).ok) continue;
     hits.push({
       placeId: p.id,
       name,

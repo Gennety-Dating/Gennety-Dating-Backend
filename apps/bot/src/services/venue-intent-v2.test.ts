@@ -9,6 +9,7 @@ vi.mock("../config.js", () => ({
 }));
 
 const matchFindUnique = vi.fn();
+const profileFindUnique = vi.fn();
 const txQueryRawUnsafe = vi.fn();
 const txMatchFindUnique = vi.fn();
 const txMatchUpdate = vi.fn();
@@ -22,6 +23,9 @@ const prismaTransaction = vi.fn(async (fn: (tx: unknown) => unknown) =>
 vi.mock("@gennety/db", () => ({
   prisma: {
     match: { findUnique: matchFindUnique },
+    // Read by the departure-point gate (`services/venue-origin.ts`) to resolve
+    // the caller's launched market.
+    profile: { findUnique: profileFindUnique },
     $transaction: prismaTransaction,
   },
   Prisma: {},
@@ -33,6 +37,19 @@ vi.mock("./openai.js", () => ({
 }));
 
 const { interpretVenueIntent } = await import("./venue-intent-v2.js");
+const { isVenueOriginRefusal } = await import("./venue-origin.js");
+
+/**
+ * `interpretVenueIntent` returns an intent OR a departure-point refusal. These
+ * tests assert on the intent branch, so narrow once here rather than repeating
+ * the guard — and fail loudly if a case ever starts returning the refusal.
+ */
+function asIntent(value: Awaited<ReturnType<typeof interpretVenueIntent>>) {
+  if (!value || isVenueOriginRefusal(value)) {
+    throw new Error(`expected an intent, got ${JSON.stringify(value)}`);
+  }
+  return value;
+}
 
 const MATCH_ID = "11111111-1111-1111-1111-111111111111";
 const USER_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -79,6 +96,9 @@ function confirmedIntent(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Every participant is a Kyiv account unless a test says otherwise, so the
+  // departure-point gate passes for the shared `ORIGIN` (Khreshchatyk).
+  profileFindUnique.mockResolvedValue({ homeCityKey: "ua:kyiv" });
   callOpenAIJson.mockResolvedValue({
     experiences: ["coffee_treats"],
     ambiences: ["quiet"],
@@ -95,7 +115,7 @@ describe("interpretVenueIntent (VENUE-1)", () => {
     const draft = await interpretVenueIntent(MATCH_ID, USER_A, "quiet cafe please", ORIGIN);
 
     expect(draft).not.toBeNull();
-    expect(draft!.state).toBe("draft");
+    expect(asIntent(draft).state).toBe("draft");
     expect(txQueryRawUnsafe).toHaveBeenCalledWith(
       expect.stringContaining("FOR UPDATE"),
       MATCH_ID,
@@ -115,8 +135,8 @@ describe("interpretVenueIntent (VENUE-1)", () => {
     const result = await interpretVenueIntent(MATCH_ID, USER_A, "actually let's do drinks", ORIGIN);
 
     expect(result).not.toBeNull();
-    expect(result!.state).toBe("confirmed");
-    expect(result!.experiences).toEqual(["coffee_treats"]);
+    expect(asIntent(result).state).toBe("confirmed");
+    expect(asIntent(result).experiences).toEqual(["coffee_treats"]);
     // The critical assertion: no write happened, so the confirmed intent
     // cannot have been reverted to a draft.
     expect(txMatchUpdate).not.toHaveBeenCalled();
@@ -130,7 +150,7 @@ describe("interpretVenueIntent (VENUE-1)", () => {
     const draft = await interpretVenueIntent(MATCH_ID, USER_A, "quiet cafe please", ORIGIN);
 
     expect(draft).not.toBeNull();
-    expect(draft!.state).toBe("draft");
+    expect(asIntent(draft).state).toBe("draft");
     expect(txMatchUpdate).toHaveBeenCalledTimes(1);
     const updateArg = txMatchUpdate.mock.calls[0]![0];
     // Only the caller's own side (A) is written — partner's confirmed B is untouched.
@@ -153,5 +173,44 @@ describe("interpretVenueIntent (VENUE-1)", () => {
     const result = await interpretVenueIntent(MATCH_ID, "not-a-participant", "quiet cafe please", ORIGIN);
 
     expect(result).toBeNull();
+  });
+});
+
+describe("interpretVenueIntent — departure-point gate (PRODUCT_SPEC §3.7)", () => {
+  const BERLIN = { lat: 52.525, lng: 13.369, address: "Berlin Hauptbahnhof" };
+
+  it("refuses an origin outside the caller's market and writes nothing", async () => {
+    matchFindUnique.mockResolvedValue(baseMatch());
+
+    const result = await interpretVenueIntent(MATCH_ID, USER_A, "quiet cafe please", BERLIN);
+
+    expect(isVenueOriginRefusal(result)).toBe(true);
+    if (!isVenueOriginRefusal(result)) throw new Error("expected a refusal");
+    expect(result.market.city).toBe("Kyiv");
+    // The refusal is decided before the OpenAI call and before the row lock, so
+    // a bad pin costs neither a token nor a transaction.
+    expect(callOpenAIJson).not.toHaveBeenCalled();
+    expect(prismaTransaction).not.toHaveBeenCalled();
+  });
+
+  it("does not gate when the caller's dating city is not a launched market", async () => {
+    // A legacy account: blocking someone over a gap in OUR data is never right.
+    profileFindUnique.mockResolvedValue({ homeCityKey: "de:berlin" });
+    matchFindUnique.mockResolvedValue(baseMatch());
+    txMatchFindUnique.mockResolvedValue({ venueIntentA: null, venueIntentB: null });
+
+    const result = await interpretVenueIntent(MATCH_ID, USER_A, "quiet cafe please", BERLIN);
+
+    expect(asIntent(result).state).toBe("draft");
+  });
+
+  it("does not gate a call that carries no origin at all", async () => {
+    matchFindUnique.mockResolvedValue(baseMatch());
+    txMatchFindUnique.mockResolvedValue({ venueIntentA: null, venueIntentB: null });
+
+    const result = await interpretVenueIntent(MATCH_ID, USER_A, "quiet cafe please", null);
+
+    expect(asIntent(result).state).toBe("draft");
+    expect(profileFindUnique).not.toHaveBeenCalled();
   });
 });

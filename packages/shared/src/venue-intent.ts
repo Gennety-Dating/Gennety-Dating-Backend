@@ -388,6 +388,34 @@ function userFit(intent: VenueIntentV2, candidate: VenueRankCandidate): number {
 /** Worst-commute decay: 1.0 at the doorstep, `PROXIMITY_FLOOR` at the limit. */
 const PROXIMITY_FLOOR = 0.4;
 
+/** Default cap on |distA − distB| — the venue must be roughly fair to both. */
+export const VENUE_FAIRNESS_DELTA_KM = 3;
+
+/**
+ * How far the geometry is allowed to stretch on one ranking pass.
+ *
+ * Both numbers were hardcoded until 2026-08-05, which made the venue step fail
+ * outright for a pair whose departure points were simply far apart — legal
+ * input inside one city, and a dead end that cost them the date (PRODUCT_SPEC
+ * §3.7). The selector now retries with progressively wider tolerances instead;
+ * these are the knobs it turns, and NOTHING ELSE relaxes with them — quality,
+ * hours, price policy and hard constraints are identical on every pass.
+ */
+export interface VenueGeoTolerance {
+  /** Hard cap on the worse of the two commutes (km). */
+  commuteLimitKm: number;
+  /** Hard cap on the difference between the two commutes (km). */
+  fairnessDeltaKm: number;
+}
+
+/** The pair's own stated tolerance — the first and usual rung. */
+export function defaultVenueGeoTolerance(a: VenueIntentV2, b: VenueIntentV2): VenueGeoTolerance {
+  return {
+    commuteLimitKm: Math.min(a.hardConstraints.maxCommuteKm, b.hardConstraints.maxCommuteKm),
+    fairnessDeltaKm: VENUE_FAIRNESS_DELTA_KM,
+  };
+}
+
 /**
  * Commute score = fairness x proximity.
  *
@@ -396,14 +424,20 @@ const PROXIMITY_FLOOR = 0.4;
  * 300 m from both. Since the pair's own coordinates entered the score nowhere
  * else, the ranking was effectively location-blind and the same central venues
  * kept winning for everyone. Proximity restores the half that was missing.
+ *
+ * Both scales follow the active tolerance rather than being fixed, so a widened
+ * pass still discriminates: at a 60 km limit a venue 5 km from both must still
+ * outrank one 40 km from one of them. Freezing the scales at the tight defaults
+ * would flatten every far candidate to the same floor and hand the decision
+ * entirely to fit — exactly when commute matters most.
  */
-function commuteScore(candidate: VenueRankCandidate, limitKm: number): number {
+function commuteScore(candidate: VenueRankCandidate, tolerance: VenueGeoTolerance): number {
   const imbalance = Math.abs(candidate.distanceA - candidate.distanceB);
-  const fairness = Math.max(0, 1 - imbalance / 3);
+  const fairness = Math.max(0, 1 - imbalance / Math.max(tolerance.fairnessDeltaKm, 0.001));
   const worst = Math.max(candidate.distanceA, candidate.distanceB);
   const proximity = Math.max(
     PROXIMITY_FLOOR,
-    1 - (worst / limitKm) * (1 - PROXIMITY_FLOOR),
+    1 - (worst / Math.max(tolerance.commuteLimitKm, 0.001)) * (1 - PROXIMITY_FLOOR),
   );
   return fairness * proximity;
 }
@@ -432,15 +466,15 @@ export function scoreVenueCandidate(
   candidate: VenueRankCandidate,
   a: VenueIntentV2,
   b: VenueIntentV2,
+  tolerance: VenueGeoTolerance = defaultVenueGeoTolerance(a, b),
 ): VenueScoreBreakdown | null {
-  const commuteLimit = Math.min(a.hardConstraints.maxCommuteKm, b.hardConstraints.maxCommuteKm);
-  if (Math.max(candidate.distanceA, candidate.distanceB) > commuteLimit) return null;
-  if (Math.abs(candidate.distanceA - candidate.distanceB) > 3) return null;
+  if (Math.max(candidate.distanceA, candidate.distanceB) > tolerance.commuteLimitKm) return null;
+  if (Math.abs(candidate.distanceA - candidate.distanceB) > tolerance.fairnessDeltaKm) return null;
   if (!satisfiesVenueHardConstraints(a, candidate) || !satisfiesVenueHardConstraints(b, candidate)) return null;
   const userFitA = userFit(a, candidate);
   const userFitB = userFit(b, candidate);
   const pairFit = 0.6 * Math.min(userFitA, userFitB) + 0.4 * ((userFitA + userFitB) / 2);
-  const commuteFairness = commuteScore(candidate, commuteLimit);
+  const commuteFairness = commuteScore(candidate, tolerance);
   const rating = candidate.rating == null ? 0.5 : Math.max(0, Math.min(1, (candidate.rating - 3) / 2));
   const reviews = candidate.reviews == null ? 0.5 : Math.min(1, Math.log10(candidate.reviews + 1) / 4);
   const priority = Math.max(0, Math.min(1, (4 - candidate.priority) / 3));
@@ -597,9 +631,10 @@ export function rankVenueCandidates(
   candidates: VenueRankCandidate[],
   a: VenueIntentV2,
   b: VenueIntentV2,
+  tolerance: VenueGeoTolerance = defaultVenueGeoTolerance(a, b),
 ): Array<{ candidate: VenueRankCandidate; score: VenueScoreBreakdown }> {
   return candidates
-    .map((candidate) => ({ candidate, score: scoreVenueCandidate(candidate, a, b) }))
+    .map((candidate) => ({ candidate, score: scoreVenueCandidate(candidate, a, b, tolerance) }))
     .filter((row): row is { candidate: VenueRankCandidate; score: VenueScoreBreakdown } => row.score !== null)
     .sort((left, right) =>
       right.score.finalScore - left.score.finalScore ||
