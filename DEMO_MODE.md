@@ -20,7 +20,7 @@ Everything on screen is production code. What the demo changes is only:
 |---|---|---|
 | The other person | a real matched user | a fixed synthetic profile |
 | Liveness verdict | AWS decides | always passes |
-| Photo validation | strict | off — any three images |
+| Photo validation | strict | off — any three images, faces optional |
 | Contact rail | real email OTP / phone share | auto-satisfied |
 | Date Ticket | Telegram Stars | the existing **mock** rail (real screens, real prices, no charge) |
 | Venue change | 150⭐ | settled free |
@@ -167,7 +167,7 @@ and both are mounted only when `DEMO_MODE_ENABLED`.
 
 ## The guarded branches in production code
 
-Five, each a single `if`, each commented at the site:
+Seven, each a single `if`, each commented at the site:
 
 | File | What it does |
 |---|---|
@@ -176,6 +176,19 @@ Five, each a single `if`, each commented at the site:
 | `handlers/matching/venue-change.ts` | `changeIsFree` → true |
 | `public/routes/telegram-onboarding.ts` | `/track` satisfies the phone rail; `/email/verify` accepts any code |
 | `handlers/router.ts` | mounts the demo composer |
+| `handlers/onboarding/conversational.ts` | skips the legacy single-face gate on upload |
+| `handlers/menu/edit-profile.ts` | the same, in the photo manager |
+
+**Why the last two exist — `PROFILE_MEDIA_VALIDATION_ENABLED=false` does not
+mean "nothing is checked".** It selects the *pre-rollout* validator instead of
+the current one: a `validateSingleFace` call that rejects scenery as `no_face`,
+plus (in the photo manager) a `gateProfilePhoto` identity check. So a demo
+visitor who was just told to upload any three images they have to hand had
+their landscape photos refused with "your face must be visible" — and the
+refusal left **no `media_validation_rejections` row**, because only the new
+validator writes those, which is what made it look like nothing had been
+rejected at all. The env var alone could never have delivered the promise in
+the table at the top of this file; these two branches are what do.
 
 Plus two `if (DEMO_MODE_ENABLED)` blocks in `index.ts`: the isolation assert +
 banner + driver, and **not** scheduling the drop-matching or no-match crons.

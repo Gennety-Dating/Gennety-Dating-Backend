@@ -72,6 +72,7 @@ import {
   ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
 } from "../../services/onboarding-photo-stage.js";
 import { renderPhotoCards } from "../../services/photo-cards.js";
+import { DEMO_MODE_ENABLED } from "../../demo/config.js";
 import {
   closeStalePhotoEditor,
   onboardingPhotoSurface,
@@ -1123,7 +1124,13 @@ async function handlePhotoFrame(
         );
       }
       return;
-    } else {
+      // DEMO MODE (DEMO_MODE.md): skip the legacy face gate below.
+      // `PROFILE_MEDIA_VALIDATION_ENABLED=false` does NOT mean "nothing is
+      // checked" — it falls back to this pre-rollout single-face check, which
+      // rejects scenery as `no_face` while writing no
+      // `media_validation_rejections` row. The demo tells the visitor to upload
+      // any three images they have to hand, so the promise has to hold here.
+    } else if (!DEMO_MODE_ENABLED) {
       const validation = await withTyping(ctx, () =>
         validateSingleFace(ctx, fileId),
       );

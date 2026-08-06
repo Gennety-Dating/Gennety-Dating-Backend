@@ -58,6 +58,7 @@ import {
 import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
 import { VERIFY_PHOTOS_CLEAR_CALLBACK } from "../../services/verification-keyboard.js";
 import { sendVerificationCTABare } from "../onboarding/verification.js";
+import { DEMO_MODE_ENABLED } from "../../demo/config.js";
 import {
   removePhotoCardMessage,
   renderPhotoCards,
@@ -788,21 +789,29 @@ async function processPhotoFrame(
   }
 
   // Legacy path retained behind the rollout flag.
-  const result = await validateSingleFace(ctx, fileId);
-  if (!result.ok) return { kind: "infra_error" };
-  if (!result.valid) return { kind: "rejected", reason: "no_face" };
-  if (!userRow) return { kind: "infra_error" };
+  //
+  // DEMO MODE (DEMO_MODE.md): skipped whole. Same reason as the onboarding
+  // media stage — `PROFILE_MEDIA_VALIDATION_ENABLED=false` falls back to this
+  // face + identity gate rather than to no gate at all, and the demo promises
+  // that any image is a valid profile photo. Without this the photo manager
+  // would refuse exactly the photos onboarding had just accepted.
+  if (!DEMO_MODE_ENABLED) {
+    const result = await validateSingleFace(ctx, fileId);
+    if (!result.ok) return { kind: "infra_error" };
+    if (!result.valid) return { kind: "rejected", reason: "no_face" };
+    if (!userRow) return { kind: "infra_error" };
 
-  const photoBytes = await fetchTelegramFileBuffer(ctx.api, fileId);
-  if (!photoBytes) return { kind: "infra_error" };
+    const photoBytes = await fetchTelegramFileBuffer(ctx.api, fileId);
+    if (!photoBytes) return { kind: "infra_error" };
 
-  const gate = await gateProfilePhoto(userRow.id, photoBytes);
-  if (gate.kind === "blocked") return { kind: "rejected", reason: "identity_mismatch" };
-  if (gate.kind === "reference_expired") {
-    return { kind: "rejected", reason: "reference_expired" };
+    const gate = await gateProfilePhoto(userRow.id, photoBytes);
+    if (gate.kind === "blocked") return { kind: "rejected", reason: "identity_mismatch" };
+    if (gate.kind === "reference_expired") {
+      return { kind: "rejected", reason: "reference_expired" };
+    }
+    if (gate.kind === "unavailable") return { kind: "infra_error" };
+    gateScore = gate.score ?? 0;
   }
-  if (gate.kind === "unavailable") return { kind: "infra_error" };
-  gateScore = gate.score ?? 0;
 
   ctx.session.pendingPhotos.push(fileId);
   ctx.session.pendingProfileMedia = [
