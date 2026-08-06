@@ -6,6 +6,7 @@ import {
   type VerificationInit,
 } from "./api.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
+import { wireContentInsets } from "./telegram-insets.js";
 
 /**
  * Verification Mini App — AWS Rekognition Face Liveness.
@@ -204,7 +205,7 @@ function consentScreen(lang: Lang): string {
   const p = (key: Parameters<typeof tr>[1]): string =>
     `<p class="consent-text">${escapeHtml(tr(lang, key))}</p>`;
   return `
-    <div class="screen screen--scroll">
+    <div class="screen screen--consent">
       <div class="consent">
         <h1 class="consent-title">${escapeHtml(tr(lang, "verifyConsentTitle"))}</h1>
         ${p("verifyConsentLead")}
@@ -217,6 +218,9 @@ function consentScreen(lang: Lang): string {
         </a>
         <p class="consent-error" id="consent-error" hidden></p>
       </div>
+      <button class="consent-cta" id="consent-agree" type="button">
+        ${escapeHtml(tr(lang, "verifyConsentAgreeBtn"))}
+      </button>
     </div>`;
 }
 
@@ -308,6 +312,10 @@ function boot(): void {
   } catch (err) {
     console.warn("[verification] fullscreen/chrome setup failed (non-fatal)", err);
   }
+  // Fullscreen floats Telegram's close ×/menu ⋯ over the page and `env()` does
+  // not account for them, so the consent copy would slide under the chrome.
+  // Mirrors the real reserve into --tg-content-top/bottom for the CSS above.
+  wireContentInsets(app);
 
   // Dev-only screen preview: `?screen=loading|success|retry|error|...` renders
   // that state and skips the liveness session, so every themed status screen
@@ -347,8 +355,11 @@ function boot(): void {
  * Show the biometric-consent screen and resolve once the user has agreed AND
  * the server has recorded it. Rejects only if the user backs out.
  *
- * The MainButton carries the action rather than an in-page button so the
- * affirmative act is unmissable and consistent with every other Mini App here.
+ * The action is an in-page floating button rather than Telegram's MainButton:
+ * this page runs fullscreen, and the MainButton renders as a full-width bar
+ * welded to the bottom edge, which is the one shape this screen doesn't want.
+ * The affirmative act is unchanged — one explicit tap, recorded server-side
+ * before any session is minted.
  */
 async function collectConsent(
   app: NonNullable<typeof window.Telegram>["WebApp"],
@@ -356,21 +367,22 @@ async function collectConsent(
   lang: Lang,
 ): Promise<boolean> {
   renderScreen(root, "consent", lang);
-  const button = app.MainButton;
-  button.setText(tr(lang, "verifyConsentAgreeBtn"));
-  button.show();
+  // Defensive: an earlier screen may have left the bottom bar up, and the whole
+  // point here is that it isn't there.
+  app.MainButton?.hide();
+  const button = document.getElementById("consent-agree") as HTMLButtonElement | null;
+  if (!button) return false;
 
   return new Promise<boolean>((resolve) => {
-    button.onClick(() => {
-      button.showProgress?.();
+    button.addEventListener("click", () => {
+      if (button.disabled) return;
+      button.disabled = true;
       void postVerificationConsent(app.initData)
         .then(() => {
-          button.hideProgress?.();
-          button.hide();
           resolve(true);
         })
         .catch(() => {
-          button.hideProgress?.();
+          button.disabled = false;
           const err = document.getElementById("consent-error");
           if (err) {
             err.textContent = tr(lang, "verifyConsentFailed");

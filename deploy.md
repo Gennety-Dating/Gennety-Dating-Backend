@@ -887,7 +887,14 @@ What ships:
   more additive columns: `users.biometric_consent_at` / `_version`. **Every
   existing user must consent once** on their next verification attempt; the
   three currently-`unverified` production accounts are the only ones affected,
-  and nobody loses `verified` status.
+  and nobody loses `verified` status. **Restyled 2026-08-05, before this block
+  ever shipped** — visual only, same one explicit tap, same server gate: the
+  disclosure is borderless and vertically centred (padded clear of Telegram's
+  floating close ×/menu ⋯ via `wireContentInsets`, which this page did not call
+  before), and the action moved off Telegram's MainButton — a full-width bar
+  welded to the bottom edge — onto an independent floating pill carrying the
+  house inner-perimeter burgundy sheen (`.ref-share`, referral.css). Every other
+  screen here still uses MainButton for its Close action.
 
 Also lands `pnpm gdpr:export` — the subject-access / portability tool the policy
 now promises. It needs no deploy step of its own (it is a script run against

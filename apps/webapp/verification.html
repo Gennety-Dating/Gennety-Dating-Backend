@@ -46,6 +46,12 @@
         --glass-blur: 22px;
         --success: #28c76f;
         --error: #e0566e;
+        /* Telegram fullscreen chrome inset (close ×, menu ⋯). `env()` does NOT
+           include those floating controls; `contentSafeAreaInset` does, and
+           telegram-insets.ts writes the real value over these fallbacks. 56px
+           covers every current client if the event never fires. */
+        --tg-content-top: 56px;
+        --tg-content-bottom: 0px;
       }
       :root[data-theme="light"] {
         color-scheme: light;
@@ -106,28 +112,33 @@
         text-align: center;
       }
       /* The consent screen is the one view that can overflow a short phone —
-         it carries real disclosure text, so it scrolls and top-aligns instead
-         of centring like the one-line status screens. */
-      .screen--scroll {
+         it carries real disclosure text, so it stays scrollable. `margin-block:
+         auto` on the text block centres it while there is room and gives up the
+         centring (rather than clipping the top) once there isn't. Top padding
+         clears Telegram's floating close ×/menu ⋯; bottom padding clears the
+         floating CTA below, which is out of flow. */
+      .screen--consent {
         justify-content: flex-start;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        padding-bottom: 96px;
+        padding-top: calc(
+          env(safe-area-inset-top, 0px) + var(--tg-content-top) + 24px
+        );
+        padding-bottom: calc(
+          max(env(safe-area-inset-bottom, 0px), var(--tg-content-bottom)) + 116px
+        );
       }
+      /* Borderless by design: no card, no rim, no frosted plate — the
+         disclosure is the screen, so it sits directly on the page and the only
+         object with a shape is the button. */
       .consent {
         display: flex;
         flex-direction: column;
         gap: 14px;
         width: 100%;
         max-width: 380px;
-        padding: 28px 24px;
-        border-radius: 28px;
+        margin-block: auto;
         text-align: left;
-        background: var(--glass-bg);
-        border: 1px solid var(--glass-border);
-        box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
-        backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
-        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
       }
       .consent-title {
         margin: 0;
@@ -155,6 +166,79 @@
       }
       .consent-error[hidden] {
         display: none;
+      }
+
+      /* The one action on the screen. Deliberately NOT Telegram's MainButton:
+         that renders as a full-width bar welded to the bottom edge, which is
+         exactly the block this screen doesn't want. This is an independent
+         floating pill instead, inset from all three edges and riding above the
+         disclosure text.
+
+         Its light is the house treatment (`.ref-share`, referral.css): burgundy
+         fill carrying an inner-perimeter sheen — light sprayed from each of the
+         four edges INWARD. Mechanically four `inset` shadows with a negative
+         spread, which pulls each shadow's body back past its edge so only the
+         soft falloff survives just inside the border; the edge lights the
+         button's interior rather than drawing a stroke. No outward bloom and no
+         drop shadow — keeping the light inside the shape is what makes it read
+         as soft rather than neon. */
+      .consent-cta {
+        position: fixed;
+        z-index: 2;
+        left: 20px;
+        right: 20px;
+        bottom: calc(
+          max(env(safe-area-inset-bottom, 0px), var(--tg-content-bottom)) + 22px
+        );
+        margin: 0 auto;
+        width: auto;
+        max-width: 380px;
+        border: 0;
+        cursor: pointer;
+        border-radius: 24px;
+        padding: 17px 20px;
+        font-family: inherit;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: -0.005em;
+        color: #fff;
+        background:
+          linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.26),
+            rgba(255, 255, 255, 0) 16%,
+            rgba(255, 255, 255, 0) 84%,
+            rgba(255, 255, 255, 0.2)
+          ),
+          linear-gradient(160deg, #a23350 0%, #8b253b 55%, #6f1c2f 100%);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.5),
+          inset 0 10px 20px -14px rgba(255, 255, 255, 0.62),
+          inset 0 -10px 20px -14px rgba(255, 255, 255, 0.48),
+          inset 9px 0 20px -13px rgba(255, 255, 255, 0.55),
+          inset -9px 0 20px -13px rgba(255, 255, 255, 0.55),
+          inset 0 -2px 6px rgba(74, 16, 31, 0.18);
+        transition:
+          transform 140ms ease,
+          box-shadow 180ms ease,
+          opacity 160ms ease;
+      }
+      /* Press lifts the sheen rather than dimming the button — the light
+         answers the touch, which is the point of putting it inside the shape. */
+      .consent-cta:active {
+        transform: scale(0.98);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.55),
+          inset 0 10px 20px -14px rgba(255, 255, 255, 0.7),
+          inset 0 -10px 20px -14px rgba(255, 255, 255, 0.54),
+          inset 9px 0 20px -13px rgba(255, 255, 255, 0.62),
+          inset -9px 0 20px -13px rgba(255, 255, 255, 0.62),
+          inset 0 -2px 6px rgba(74, 16, 31, 0.18);
+      }
+      .consent-cta:disabled {
+        opacity: 0.62;
+        cursor: default;
+        transform: none;
       }
 
       /* Liquid Glass status panel wrapping the spinner / check / message. */
