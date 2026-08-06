@@ -11,6 +11,7 @@ import { groupCutout, isPlaceholderPhotoSet, photoSet } from "./preference-photo
 import type { PreferenceSide } from "./preference-photos.js";
 import { otherVariantHref, preferenceVariant } from "./preference-variant.js";
 import type { PreferenceVariant } from "./preference-variant.js";
+import { WHEEL_ITEM_H, shouldTickHaptic, wheelValueAt } from "./onboarding-wheel.js";
 
 /**
  * The Mini App's own profile screens: name, age, gender, who you're looking
@@ -37,9 +38,6 @@ const app = window.Telegram?.WebApp;
 /** Where the wheel and the slider open when the user has no value yet. */
 const DEFAULT_AGE = 25;
 const DEFAULT_HEIGHT_CM = 175;
-
-/** Height of one drum row, in px. Must match `.ob-wheel-item` in onboarding.css. */
-const WHEEL_ITEM_H = 56;
 
 export interface BasicsGateProps {
   step: BasicsStep;
@@ -586,6 +584,12 @@ function Wheel(props: {
   // Guards the scroll handler while we are the ones moving the list, so
   // programmatic centring can't be read back as a user pick.
   const selfScrollRef = useRef(false);
+  // Which value last pulsed, and when. The tick fires as each row passes under
+  // the capsule, not when the drum finally stops: on a real picker the tick IS
+  // how you count rows while your eyes are on the number, and a drum that only
+  // buzzes once at the end feels like a list that happened to land somewhere.
+  const tickedRef = useRef(value);
+  const tickedAtRef = useRef(0);
 
   const values = useMemo(
     () => Array.from({ length: max - min + 1 }, (_, index) => min + index),
@@ -597,6 +601,10 @@ function Wheel(props: {
       const list = listRef.current;
       if (!list) return;
       selfScrollRef.current = true;
+      // Nothing crossed under the user's finger, so re-arm the tick tracker at
+      // the destination — otherwise the first real scroll afterwards pulses for
+      // a row that was never passed.
+      tickedRef.current = next;
       list.scrollTo({
         top: (next - min) * WHEEL_ITEM_H,
         behavior: smooth && !prefersReducedMotion() ? "smooth" : "auto",
@@ -622,14 +630,22 @@ function Wheel(props: {
   const handleScroll = useCallback((): void => {
     const list = listRef.current;
     if (!list || selfScrollRef.current) return;
+
+    const centred = wheelValueAt(list.scrollTop, min, max);
+    const now = Date.now();
+    if (shouldTickHaptic(tickedRef.current, centred, tickedAtRef.current, now)) {
+      tickedRef.current = centred;
+      tickedAtRef.current = now;
+      app?.HapticFeedback?.selectionChanged?.();
+    }
+
+    // The value itself is still committed on settle rather than per row: the
+    // list re-renders every option on a change, and doing that on each scroll
+    // frame is exactly the jank a native scroll was chosen to avoid.
     if (settleRef.current !== null) window.clearTimeout(settleRef.current);
     settleRef.current = window.setTimeout(() => {
-      const index = Math.round(list.scrollTop / WHEEL_ITEM_H);
-      const next = clamp(min + index, min, max);
-      if (next !== value) {
-        app?.HapticFeedback?.selectionChanged();
-        onChange(next);
-      }
+      const next = wheelValueAt(list.scrollTop, min, max);
+      if (next !== value) onChange(next);
     }, 90);
   }, [min, max, value, onChange]);
 

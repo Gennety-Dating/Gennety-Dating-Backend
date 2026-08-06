@@ -3778,14 +3778,14 @@ button {
 /* Half the frame minus half a row, so the first and last values can sit dead
    centre under the capsule. Height must match WHEEL_ITEM_H in the TSX. */
 .ob-wheel-pad {
-  height: 112px;
+  height: 117px;
 }
 
 .ob-wheel-item {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 56px;
+  height: 46px;
   scroll-snap-align: center;
   color: var(--text-muted);
   font-size: 1.75rem;
@@ -3807,7 +3807,7 @@ button {
   top: 50%;
   left: 0;
   right: 0;
-  height: 56px;
+  height: 46px;
   transform: translateY(-50%);
   border-radius: 16px;
   /* The hairline is what makes the capsule read on the light theme, where a

@@ -221,6 +221,24 @@ out of Telegram-only workers.
   button it belongs to, and the label alone carries the accessible name. Same
   save, same burst, same collector write as before — this is the control
   changing, not the question. Telegram-only.
+  **The height drum ticks per row, and turns a little freer (2026-08-06).**
+  It is the one screen answered by a continuous gesture rather than a tap, and
+  it gave no feedback until the gesture ENDED: one haptic pulse on settle, which
+  reads as a list that happened to land somewhere rather than a drum you aimed.
+  A `selectionChanged` pulse now fires as each value passes under the capsule —
+  the tick is how you count rows while your eyes stay on the number — thinned by
+  a 30 ms floor so a violent fling cannot fire ~80 bridge calls in a second
+  (ticks that close together are one continuous buzz anyway, and a deliberate
+  scroll never reaches the floor). The *value* is still committed on settle, not
+  per row: every option re-renders on a change, and doing that each scroll frame
+  is the jank the native scroll was chosen to avoid. Separately, the row height
+  is the drum's gearing — a native scroll moves 1:1 with the finger, so that one
+  number decides how many values a swipe crosses — and 56px made a deliberate
+  175 → 190 a long drag; at 46px the same gesture travels ~22% further.
+  Deliberately a modest step: the value has to stay easy to stop ON, and much
+  below this the rows read as a list rather than as a drum you can aim. Both
+  pure decisions live in `onboarding-wheel.ts` so they are testable away from
+  the DOM. Telegram-only; the native iOS client owns its own picker.
 - **The phone gate is also the LOGIN (2026-07-25).** A trusted `message.contact`
   is Telegram vouching that the number belongs to the current Telegram account,
   and Telegram allows one active account per number — so a `User.phone` unique

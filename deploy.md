@@ -260,6 +260,24 @@ this change where a user gets stuck at the handoff.
     is `1`. The `?v=` override and the on-screen toggle are
     `import.meta.env.DEV`-gated and verified absent from the built bundle;
     switching the live one is a one-line code change, not an env flag.
+- **And so does the height drum's per-row tick** (added 2026-08-06,
+  PRODUCT_SPEC §1.3). The drum pulses `HapticFeedback.selectionChanged` as each
+  value passes under the capsule instead of once when the scroll stops, and its
+  row height drops 56px → 46px, which is the drum's gearing: a native scroll is
+  1:1 with the finger, so one swipe now crosses ~22% more values. Client-only —
+  no server change, no env, no schema — so `./scripts/deploy-webapp.sh` is again
+  the whole deploy, and **skipping that step ships the drum unchanged**. Two
+  things worth knowing:
+  - **The row height is duplicated by construction.** `WHEEL_ITEM_H`
+    (`onboarding-wheel.ts`) and `.ob-wheel-item` / `.ob-wheel-capsule` /
+    `.ob-wheel-pad` in `onboarding.css` must agree, and nothing enforces it —
+    the pad is `(280 − row) / 2`, so a change in one place alone silently
+    stops the first and last values from reaching the centre. Verified on the
+    dev preview after this change: row 46, capsule 46, active row centred on
+    the capsule to within a pixel, in both themes.
+  - **Haptics are not gated on `prefers-reduced-motion`.** That setting is
+    about motion; iOS and Telegram honour their own haptic settings below us.
+  Review with `?preview=basics:height` on the same dev-only route.
 - **Demo mode picks all of it up for free.** The screens are the same source
   behind the same Mini App build, so `pnpm demo:deploy` (which builds its own
   bundle) is the whole story — no gate, no paid step, no negotiation branch, so
