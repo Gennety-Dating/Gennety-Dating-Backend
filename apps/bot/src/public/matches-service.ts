@@ -105,6 +105,14 @@ export interface SerializedMatch {
   transitHint: string | null;
   partnerFirstName: string | null;
   partnerAge: number | null;
+  /**
+   * Needed for the native pitch's decision question, which is gendered in
+   * four of the five supported languages («хочешь пойти с ней/с ним?»).
+   * Strictly less than the client already sees at that moment — the photo,
+   * the name and the age are all on screen — and matching is gendered
+   * anyway, so this reveals nothing the pairing did not.
+   */
+  partnerGender: "male" | "female" | null;
   partnerUniversityDomain: string | null;
   myVibeSubmitted: boolean;
   partnerVibeSubmitted: boolean;
@@ -261,8 +269,8 @@ export async function getCurrentMatchForUser(
       safetyAckA: true,
       safetyAckB: true,
       dispatchedAt: true,
-      userA: { select: { firstName: true, age: true, universityDomain: true } },
-      userB: { select: { firstName: true, age: true, universityDomain: true } },
+      userA: { select: { firstName: true, age: true, gender: true, universityDomain: true } },
+      userB: { select: { firstName: true, age: true, gender: true, universityDomain: true } },
     },
   });
   const match = pickCurrentMatch(matches);
@@ -350,6 +358,7 @@ export async function getCurrentMatchForUser(
     transitHint: null,
     partnerFirstName: partner.firstName,
     partnerAge: partner.age,
+    partnerGender: partner.gender,
     partnerUniversityDomain: partner.universityDomain,
     myVibeSubmitted,
     partnerVibeSubmitted,

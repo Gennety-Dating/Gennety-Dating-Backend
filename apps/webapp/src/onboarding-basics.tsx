@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactElement, ReactNode } from "react";
+import type { MouseEvent, ReactElement, ReactNode } from "react";
 import type { TelegramProfileBasics, TelegramProfileLimits, TelegramProfilePatch } from "./api.js";
 import type { BasicsStep } from "./onboarding-basics-route.js";
 import { burstFromEvent } from "./onboarding-burst.js";
+import type { BurstTone } from "./onboarding-burst.js";
 import { errorCopy } from "./onboarding-errors.js";
 import type { OnboardingStrings } from "./onboarding-i18n.js";
+import { placeCluster, placeScatter } from "./preference-layout.js";
+import { cutoutSet, isPlaceholder, photoSet } from "./preference-photos.js";
+import type { PreferenceSide } from "./preference-photos.js";
+import { otherVariantHref, preferenceVariant } from "./preference-variant.js";
+import type { PreferenceVariant } from "./preference-variant.js";
 
 /**
  * The Mini App's own profile screens: name, age, gender, who you're looking
@@ -112,16 +118,11 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
       );
     case "preference":
       return (
-        <ChoiceScreen
-          title={strings.basicsPreferenceTitle}
+        <PreferenceScreen
+          strings={strings}
           busy={busy}
           error={errorNode}
           selected={basics.preference}
-          options={[
-            { value: "men", label: strings.basicsPreferenceMen, tone: "male" },
-            { value: "women", label: strings.basicsPreferenceWomen, tone: "female" },
-            { value: "both", label: strings.basicsPreferenceBoth, tone: "neutral" },
-          ]}
           onPick={(preference) =>
             void save({ preference: preference as "men" | "women" | "both" })
           }
@@ -292,16 +293,47 @@ function AgeScreen(props: {
 interface ChoiceOption {
   value: string;
   label: string;
-  tone: "male" | "female" | "neutral";
+  tone: BurstTone;
 }
 
 /**
- * The two tap-to-answer screens. Unlike the other three there is no Continue
- * pill here — the option IS the action — so the tap gets a reaction of its own:
- * a burst of objects themed to what was picked, thrown from the point the
- * finger landed on (`onboarding-burst.ts`). It is decoration only, and never
- * gates the save.
+ * The tap semantics shared by the two tap-to-answer screens. Unlike the other
+ * three there is no Continue pill here — the option IS the action — so the tap
+ * gets a reaction of its own: a burst of objects themed to what was picked,
+ * thrown from the point the finger landed on (`onboarding-burst.ts`). It is
+ * decoration only, and never gates the save.
  */
+function useChoiceTap(
+  onPick: (value: string) => void,
+  /** Changing this clears the pop — see below. */
+  resetKey: string,
+): {
+  firing: string | null;
+  fire: (event: MouseEvent, value: string, tone: BurstTone) => void;
+} {
+  // Which option is mid-pop. Cleared when the user comes back to a screen they
+  // already answered, so a stale value cannot light the wrong one on arrival.
+  const [firing, setFiring] = useState<string | null>(null);
+  useEffect(() => {
+    setFiring(null);
+  }, [resetKey]);
+
+  const fire = useCallback(
+    (event: MouseEvent, value: string, tone: BurstTone): void => {
+      setFiring(value);
+      // A crisper tap than the selection tick the save fires on success: this
+      // one lands with the burst, not a round-trip later.
+      app?.HapticFeedback?.impactOccurred("medium");
+      burstFromEvent(event, tone);
+      onPick(value);
+    },
+    [onPick],
+  );
+
+  return { firing, fire };
+}
+
+/** Gender: two plain rows, the option's own label doing all the work. */
 function ChoiceScreen(props: {
   title: string;
   options: ChoiceOption[];
@@ -310,13 +342,7 @@ function ChoiceScreen(props: {
   error: ReactNode;
   onPick: (value: string) => void;
 }): ReactElement {
-  // Which row is mid-pop. Cleared when the user comes back to a screen they
-  // already answered (the same component instance serves gender and
-  // preference, so a stale value would light the wrong row on arrival).
-  const [firing, setFiring] = useState<string | null>(null);
-  useEffect(() => {
-    setFiring(null);
-  }, [props.title]);
+  const { firing, fire } = useChoiceTap(props.onPick, props.title);
 
   return (
     <BasicsShell title={props.title} error={props.error} modifier="ob-basics--choice">
@@ -330,20 +356,178 @@ function ChoiceScreen(props: {
             } ${firing === option.value ? "is-firing" : ""}`}
             disabled={props.busy}
             aria-pressed={props.selected === option.value}
-            onClick={(event) => {
-              setFiring(option.value);
-              // A crisper tap than the selection tick the save fires on
-              // success: this one lands with the burst, not a round-trip later.
-              app?.HapticFeedback?.impactOccurred("medium");
-              burstFromEvent(event, option.tone);
-              props.onPick(option.value);
-            }}
+            onClick={(event) => fire(event, option.value, option.tone)}
           >
             {option.label}
           </button>
         ))}
       </div>
     </BasicsShell>
+  );
+}
+
+/**
+ * "Who do you want to meet?" — the one screen in the set that shows the answer
+ * rather than naming it.
+ *
+ * Men and women are two tall columns splitting the screen in half: a target big
+ * enough to hit without aiming, and wide enough to carry photographs of the
+ * people behind the choice. "Both" sits under them, deliberately smaller and
+ * quieter — it is a real answer, not the headline one, and three equal rows
+ * made it compete with the two that most people are actually choosing between.
+ *
+ * Two designs exist behind `preferenceVariant()`; see preference-variant.ts.
+ */
+function PreferenceScreen(props: {
+  strings: OnboardingStrings;
+  selected: string | null;
+  busy: boolean;
+  error: ReactNode;
+  onPick: (value: string) => void;
+}): ReactElement {
+  const { strings } = props;
+  const variant = preferenceVariant();
+  const { firing, fire } = useChoiceTap(props.onPick, strings.basicsPreferenceTitle);
+
+  const column = (side: PreferenceSide, label: string, tone: BurstTone) => (
+    <PreferenceColumn
+      side={side}
+      label={label}
+      tone={tone}
+      variant={variant}
+      selected={props.selected === side}
+      busy={props.busy}
+      firing={firing === side}
+      onFire={(event) => fire(event, side, tone)}
+    />
+  );
+
+  return (
+    <BasicsShell
+      title={strings.basicsPreferenceTitle}
+      error={props.error}
+      modifier={`ob-basics--choice ob-basics--pref ob-basics--pref-v${variant}`}
+    >
+      <div className="ob-pref-pair">
+        {column("men", strings.basicsPreferenceMen, "male")}
+        {column("women", strings.basicsPreferenceWomen, "female")}
+      </div>
+      <button
+        type="button"
+        className={`ob-pref-both ${props.selected === "both" ? "is-selected" : ""} ${
+          firing === "both" ? "is-firing" : ""
+        }`}
+        disabled={props.busy}
+        aria-pressed={props.selected === "both"}
+        onClick={(event) => fire(event, "both", "neutral")}
+      >
+        {strings.basicsPreferenceBoth}
+      </button>
+      {import.meta.env.DEV ? <VariantToggle variant={variant} /> : null}
+    </BasicsShell>
+  );
+}
+
+/**
+ * One half of the fork.
+ *
+ * The photos are decoration on top of a button: `alt=""` plus a `pointer-events`
+ * block in CSS, so they are invisible to a screen reader and can never swallow
+ * the tap — including the tiles that hang past the button's edge, which
+ * otherwise would be a live target sitting outside the thing they belong to.
+ * The label carries the accessible name on its own.
+ */
+function PreferenceColumn(props: {
+  side: PreferenceSide;
+  label: string;
+  tone: BurstTone;
+  variant: PreferenceVariant;
+  selected: boolean;
+  busy: boolean;
+  firing: boolean;
+  onFire: (event: MouseEvent) => void;
+}): ReactElement {
+  const { side, variant } = props;
+  // The right-hand column is the left one mirrored (preference-layout.ts).
+  const mirror = side === "women";
+
+  const scatter = useMemo(
+    () => (variant === 1 ? placeScatter(photoSet(side), mirror) : []),
+    [variant, side, mirror],
+  );
+  const cluster = useMemo(
+    () => (variant === 2 ? placeCluster(cutoutSet(side), mirror) : []),
+    [variant, side, mirror],
+  );
+
+  return (
+    <button
+      type="button"
+      className={`ob-pref-col ob-pref-col--${props.tone} ${
+        props.selected ? "is-selected" : ""
+      } ${props.firing ? "is-firing" : ""}`}
+      disabled={props.busy}
+      aria-pressed={props.selected}
+      onClick={props.onFire}
+    >
+      <span className="ob-pref-art" aria-hidden="true">
+        {scatter.map(({ src, slot }) => (
+          <span
+            key={src}
+            className="ob-pref-shot"
+            style={{
+              left: `${slot.x}%`,
+              top: `${slot.y}%`,
+              width: `${slot.w}%`,
+              opacity: slot.opacity,
+              zIndex: slot.z,
+              ["--rot" as string]: `${slot.rot}deg`,
+            }}
+          >
+            <img src={src} alt="" draggable={false} />
+          </span>
+        ))}
+        {cluster.map(({ src, slot }) => (
+          <img
+            key={src}
+            className="ob-pref-figure"
+            src={src}
+            alt=""
+            draggable={false}
+            style={{
+              left: `${slot.x}%`,
+              bottom: `${slot.bottom}%`,
+              height: `${slot.h}%`,
+              zIndex: slot.z,
+              ["--rot" as string]: `${slot.rot}deg`,
+            }}
+          />
+        ))}
+      </span>
+      <span className="ob-pref-label">{props.label}</span>
+    </button>
+  );
+}
+
+/**
+ * Dev-only review affordance: flip between the two designs without editing
+ * code. `import.meta.env.DEV` is constant-folded, so neither this component nor
+ * the `?v=` parsing behind it exists in the production bundle.
+ */
+function VariantToggle(props: { variant: PreferenceVariant }): ReactElement {
+  const missing =
+    props.variant === 2 && (isPlaceholder("men", 2) || isPlaceholder("women", 2));
+  return (
+    <div className="ob-pref-devbar">
+      <a className="ob-pref-devlink" href={otherVariantHref(props.variant)}>
+        {props.variant === 1 ? "V1 → try V2" : "V2 → back to V1"}
+      </a>
+      {missing ? (
+        <span className="ob-pref-devnote">
+          no cutouts yet — showing the demo deck, so these are rectangles
+        </span>
+      ) : null}
+    </div>
   );
 }
 

@@ -153,7 +153,8 @@ out of Telegram-only workers.
   prose and then recovered the value with a regex or an LLM classifier. They now
   sit on their own screens between the welcome-gift screen and the AI-memory
   choice — one bold question, one control (a text field, a slider, tinted choice
-  buttons, a scroll-snap drum), nothing else — and the chat resumes at
+  buttons, a two-column photo fork, a scroll-snap drum), nothing else — and the
+  chat resumes at
   `hobbies`. **The name screen carries no question at all** (founder decision
   2026-08-06): it is a single empty field labelled "Твоё имя", which already
   says everything the heading did, so the heading was the one line on these
@@ -189,6 +190,28 @@ out of Telegram-only workers.
   the palette is the button's own gradient plus one gold, and it is skipped
   outright under `prefers-reduced-motion` or on a client with no Web Animations
   API. Telegram-only; the native iOS client owns its own controls here.
+  **"Who do you want to meet?" shows the answer instead of naming it
+  (2026-08-06).** It was three stacked rows carrying three words, which asked
+  the one question in the set that is *about people* and put no people on the
+  screen. Men and women are now two tall columns splitting the screen in half —
+  a target you hit without aiming, and wide enough to carry photographs of the
+  people behind the choice — with "both" underneath, smaller and quieter: a
+  real answer, but not the headline one, and three equal rows made it compete
+  with the two most users are actually deciding between. Two designs were built
+  to be compared (`preference-variant.ts`, `?v=` in dev; production ships
+  `LIVE_VARIANT`): **(1)** ordinary photographs tilted inside each column,
+  slightly transparent, a few hanging past its edge, over the column's own
+  burgundy/blue gradient; **(2)** background-removed people standing shoulder to
+  shoulder over near-black behind a thin bright border, under a heavy white
+  word. The photo placements are authored, not random (`preference-layout.ts`):
+  a scatter re-rolled per render would shuffle under the user's finger and could
+  never be reviewed twice. The right column is the left one mirrored, which is
+  also what keeps every sideways overhang pointing at the screen's own margin
+  rather than into the gutter the two columns share. Photos are `alt=""` and
+  take no pointer, so an overhang cannot become a tap target sitting outside the
+  button it belongs to, and the label alone carries the accessible name. Same
+  save, same burst, same collector write as before — this is the control
+  changing, not the question. Telegram-only.
 - **The phone gate is also the LOGIN (2026-07-25).** A trusted `message.contact`
   is Telegram vouching that the number belongs to the current Telegram account,
   and Telegram allows one active account per number — so a `User.phone` unique

@@ -2257,7 +2257,7 @@ components:
          venueGoogleMapsUri, venueSelectionReason, myVenueIntentStatus,
          partnerVenueIntentSubmitted, venueIntentMode,
          mapPreviewUrl, transitHint, partnerFirstName, partnerAge,
-         partnerUniversityDomain, myVibeSubmitted, partnerVibeSubmitted,
+         partnerGender, partnerUniversityDomain, myVibeSubmitted, partnerVibeSubmitted,
          safetyBriefAck, proposalDeadlineAt, serverTimeAt]
       properties:
         id: { type: string, format: uuid }
@@ -2289,6 +2289,14 @@ components:
         transitHint: { type: [string, "null"] }
         partnerFirstName: { type: [string, "null"] }
         partnerAge: { type: [integer, "null"] }
+        partnerGender:
+          oneOf:
+            - $ref: "#/components/schemas/Gender"
+            - type: "null"
+          description: |
+            The native pitch's decision question is gendered in four of the
+            five supported languages. Reveals nothing the pairing did not —
+            the photo, name and age are already on screen at that moment.
         partnerUniversityDomain: { type: [string, "null"] }
         myVibeSubmitted: { type: boolean }
         partnerVibeSubmitted: { type: boolean }
