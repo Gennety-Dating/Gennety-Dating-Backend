@@ -1,5 +1,5 @@
 /**
- * Venue change service (PRODUCT_SPEC §3.7 — female-exclusive one-shot swap).
+ * Venue change service (PRODUCT_SPEC §3.7b — paid multiplayer likes board).
  *
  * Pure eligibility/deadline logic + the catalog builder that backs the
  * "Change venue" Mini App. The catalog is **curated-first** (same first-party
@@ -9,7 +9,7 @@
  * single best, and centered on the original venue rather than recomputing a
  * midpoint.
  *
- * Per the agreed design (implementation_plan.md, decision C2): the catalog is
+ * Per the agreed design (VENUE_CHANGE_PRODUCT_SPEC.md, decision C2): the catalog is
  * centered on the original venue center already stored on the match
  * (`Match.venueLat/venueLng`, which is the fairness-balanced commute midpoint),
  * so a 3 km radius keeps both commutes within ~±10–15 min of the original.
