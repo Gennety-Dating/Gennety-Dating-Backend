@@ -6,8 +6,8 @@ import { burstFromEvent } from "./onboarding-burst.js";
 import type { BurstTone } from "./onboarding-burst.js";
 import { errorCopy } from "./onboarding-errors.js";
 import type { OnboardingStrings } from "./onboarding-i18n.js";
-import { placeCluster, placeScatter } from "./preference-layout.js";
-import { cutoutSet, isPlaceholder, photoSet } from "./preference-photos.js";
+import { placeScatter } from "./preference-layout.js";
+import { groupCutout, isPlaceholderPhotoSet, photoSet } from "./preference-photos.js";
 import type { PreferenceSide } from "./preference-photos.js";
 import { otherVariantHref, preferenceVariant } from "./preference-variant.js";
 import type { PreferenceVariant } from "./preference-variant.js";
@@ -436,6 +436,13 @@ function PreferenceScreen(props: {
  * the tap — including the tiles that hang past the button's edge, which
  * otherwise would be a live target sitting outside the thing they belong to.
  * The label carries the accessible name on its own.
+ *
+ * The two variants differ in what they put inside, and in how the button is
+ * sized. Variant 1 fills whatever height the screen allows and scatters frames
+ * across it. Variant 2 is fitted TO its artwork: the group image spans the
+ * column edge to edge, so the outermost figures — which the artwork already
+ * cuts off — end exactly at the border, and the button is only as tall as the
+ * picture plus its word.
  */
 function PreferenceColumn(props: {
   side: PreferenceSide;
@@ -449,16 +456,13 @@ function PreferenceColumn(props: {
 }): ReactElement {
   const { side, variant } = props;
   // The right-hand column is the left one mirrored (preference-layout.ts).
-  const mirror = side === "women";
-
+  // Variant 2 is never mirrored: these are photographs of real people, and
+  // flipping them is a different picture, not a mirrored layout.
   const scatter = useMemo(
-    () => (variant === 1 ? placeScatter(photoSet(side), mirror) : []),
-    [variant, side, mirror],
+    () => (variant === 1 ? placeScatter(photoSet(side), side === "women") : []),
+    [variant, side],
   );
-  const cluster = useMemo(
-    () => (variant === 2 ? placeCluster(cutoutSet(side), mirror) : []),
-    [variant, side, mirror],
-  );
+  const group = variant === 2 ? groupCutout(side) : null;
 
   return (
     <button
@@ -470,40 +474,27 @@ function PreferenceColumn(props: {
       aria-pressed={props.selected}
       onClick={props.onFire}
     >
-      <span className="ob-pref-art" aria-hidden="true">
-        {scatter.map(({ src, slot }) => (
-          <span
-            key={src}
-            className="ob-pref-shot"
-            style={{
-              left: `${slot.x}%`,
-              top: `${slot.y}%`,
-              width: `${slot.w}%`,
-              opacity: slot.opacity,
-              zIndex: slot.z,
-              ["--rot" as string]: `${slot.rot}deg`,
-            }}
-          >
-            <img src={src} alt="" draggable={false} />
-          </span>
-        ))}
-        {cluster.map(({ src, slot }) => (
-          <img
-            key={src}
-            className="ob-pref-figure"
-            src={src}
-            alt=""
-            draggable={false}
-            style={{
-              left: `${slot.x}%`,
-              bottom: `${slot.bottom}%`,
-              height: `${slot.h}%`,
-              zIndex: slot.z,
-              ["--rot" as string]: `${slot.rot}deg`,
-            }}
-          />
-        ))}
-      </span>
+      {variant === 1 ? (
+        <span className="ob-pref-art" aria-hidden="true">
+          {scatter.map(({ src, slot }) => (
+            <span
+              key={src}
+              className="ob-pref-shot"
+              style={{
+                left: `${slot.x}%`,
+                top: `${slot.y}%`,
+                width: `${slot.w}%`,
+                opacity: slot.opacity,
+                zIndex: slot.z,
+                ["--rot" as string]: `${slot.rot}deg`,
+              }}
+            >
+              <img src={src} alt="" draggable={false} />
+            </span>
+          ))}
+        </span>
+      ) : null}
+      {group ? <img className="ob-pref-group" src={group} alt="" draggable={false} /> : null}
       <span className="ob-pref-label">{props.label}</span>
     </button>
   );
@@ -516,17 +507,19 @@ function PreferenceColumn(props: {
  */
 function VariantToggle(props: { variant: PreferenceVariant }): ReactElement {
   const missing =
-    props.variant === 2 && (isPlaceholder("men", 2) || isPlaceholder("women", 2));
+    props.variant === 1
+      ? isPlaceholderPhotoSet("men") || isPlaceholderPhotoSet("women")
+        ? "no photos yet — showing the demo deck"
+        : null
+      : !groupCutout("men") || !groupCutout("women")
+        ? "no group cutout yet — drop one PNG per side"
+        : null;
   return (
     <div className="ob-pref-devbar">
       <a className="ob-pref-devlink" href={otherVariantHref(props.variant)}>
         {props.variant === 1 ? "V1 → try V2" : "V2 → back to V1"}
       </a>
-      {missing ? (
-        <span className="ob-pref-devnote">
-          no cutouts yet — showing the demo deck, so these are rectangles
-        </span>
-      ) : null}
+      {missing ? <span className="ob-pref-devnote">{missing}</span> : null}
     </div>
   );
 }

@@ -3489,6 +3489,11 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Anchored to the TOP, not the centre. The photos are full-length 9:16 and
+     the frame is 3:4, so covering it throws away a third of the height —
+     centred, that third comes off the top and bottom equally and takes the
+     head with it. Faces are the entire point of this screen. */
+  object-position: center top;
 }
 
 .ob-pref-label {
@@ -3565,21 +3570,35 @@ button {
   transition: transform 140ms ease, opacity 160ms ease;
 }
 
-/* ── Variant 2: cutouts over a bordered dark panel ──────────────────────
-   Background-removed people standing shoulder to shoulder above a heavy white
-   word, on near-black behind a thin bright border.
+/* ── Variant 2: the group, fitted to the button ─────────────────────────
+   One finished image per side — the people already standing together, already
+   outlined in white, and already cut off at the artwork's own left and right
+   edges. The button is fitted to those edges rather than the image being
+   fitted into the button: the picture spans the column exactly, so the
+   outermost figures end ON the border, and the column is only as tall as the
+   picture plus its word.
 
-   This variant is deliberately theme-independent: white figures outlined in
-   white over a dark panel is the design, and re-tinting it for the cream page
-   would be a different one. */
-.ob-basics--pref-v2 {
-  /* The white contour around each figure, drawn in CSS from the PNG's alpha —
-     so a plain cutout needs no hand-painted outline. Set to 0 if the outline
-     is ever baked into the artwork instead, or the two will stack. */
-  --pref-outline: 1.5px;
+   Theme-independent on purpose: white figures over a dark panel is the design,
+   and re-tinting it for the cream page would be a different one. */
+/* The button is fitted to its artwork on BOTH axes: full width so the cut
+   figures land on the border, and only as tall as the picture plus its word.
+   That works because the group is prepared at ~0.52 w/h (`--tight` in
+   prepare.mjs) — roughly three figures. Shipped at the full five-across ratio
+   the same rule produced a 200px stub with a void above it, which is the
+   measurement that set the crop, not the other way round. */
+.ob-basics--pref-v2 .ob-pref-pair {
+  flex: 0 0 auto;
+  min-height: 0;
+  align-items: end;
 }
 
 .ob-basics--pref-v2 .ob-pref-col {
+  /* Flush artwork inside a 30px radius has to be clipped, or the image's square
+     corners poke out of the rounded ones. Variant 1 needs the opposite and
+     keeps `overflow: visible` for its overhangs. */
+  overflow: hidden;
+  flex-direction: column;
+  justify-content: flex-end;
   background: rgba(6, 6, 8, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow:
@@ -3593,7 +3612,7 @@ button {
 }
 
 .ob-basics--pref-v2 .ob-pref-label {
-  padding-bottom: 1.25rem;
+  padding: 0.75rem 0.5rem 1.15rem;
   color: #fff;
   font-size: clamp(1.15rem, 5.4vw, 1.65rem);
   font-weight: 800;
@@ -3601,25 +3620,17 @@ button {
   text-shadow: none;
 }
 
-/* Sized by HEIGHT and stood on a baseline, so figures share a scale whatever
-   each cutout's width happens to be (see preference-layout.ts).
-   `max-width` is the rail under that: a cutout carrying wide transparent
-   padding — or a stand-in that is not a cutout at all — would otherwise be
-   scaled to the same height and blow straight out of the column. Clamping the
-   width re-derives the height from the image's own ratio, so it shrinks whole
-   instead of squashing. */
-.ob-pref-figure {
-  position: absolute;
-  width: auto;
-  max-width: 48%;
-  transform: translateX(-50%) rotate(var(--rot, 0deg));
-  transform-origin: bottom center;
-  filter:
-    drop-shadow(var(--pref-outline) 0 0 #fff)
-    drop-shadow(calc(var(--pref-outline) * -1) 0 0 #fff)
-    drop-shadow(0 var(--pref-outline) 0 #fff)
-    drop-shadow(0 calc(var(--pref-outline) * -1) 0 #fff)
-    drop-shadow(0 16px 18px rgba(0, 0, 0, 0.55));
+/* Edge to edge. `width: 100%` is what puts the artwork's cut edges on the
+   button's border; `height: auto` keeps the group at its own proportions, so
+   nobody is stretched to make a layout work. In flow rather than absolute,
+   because the column's height is supposed to follow from it. */
+.ob-pref-group {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* The white contour is drawn into the artwork already, so CSS adds only the
+     shadow that lifts the group off the panel. */
+  filter: drop-shadow(0 14px 20px rgba(0, 0, 0, 0.5));
 }
 
 /* ── Dev-only variant toggle ────────────────────────────────────────────

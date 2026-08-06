@@ -6,9 +6,12 @@
  *
  *  - `photo/`  — ordinary framed photographs, scattered and tilted inside the
  *    button, semi-transparent, a few spilling past its edge (variant 1).
- *  - `cutout/` — background-removed PNGs of people, standing in a tight cluster
- *    above a heavy word (variant 2). These MUST carry an alpha channel; a JPG
- *    here renders as a rectangle and the whole idea collapses.
+ *  - `cutout/` — ONE finished image per side: the whole group of people already
+ *    standing together, background removed, white contour already drawn, and
+ *    the outermost figures cut off at the image's own left and right edges.
+ *    Those cut edges are the whole point — the button is fitted to them, so the
+ *    figures end exactly where the border does. Alpha is mandatory; a JPG here
+ *    renders as a rectangle and the idea collapses.
  *
  * The files are enumerated at build time with `import.meta.glob` rather than
  * listed in a manifest, so adding or removing a photo is dropping a file in
@@ -17,10 +20,15 @@
  * live under `src/` rather than `public/` for exactly that reason: `public/` is
  * copied verbatim and cannot be globbed.
  *
- * Until real photos land, every set falls back to the demo profile deck already
- * in `public/profiles/`, so the layout is reviewable on day one. That fallback
- * is honest for variant 1 and a placeholder only for variant 2 — those frames
- * have backgrounds, which is the one thing variant 2 is defined by not having.
+ * The framed set falls back to the demo profile deck in `public/profiles/` while
+ * its folder is empty, so variant 1 stays reviewable. The cutout has NO
+ * fallback: a stand-in with a background is not a cutout, and a variant 2
+ * rendered from one would be a picture of the wrong idea. It renders the plain
+ * bordered panel instead.
+ *
+ * Both are prepared by `~/Desktop/gennety-preference-photos/prepare.mjs`, which
+ * is also what crops the cutout to its own alpha bounding box — the crop is
+ * what makes "the figures end at the border" true rather than approximate.
  */
 
 /** Demo deck, gender-split exactly as `PROFILE_CARDS` documents it. */
@@ -51,6 +59,8 @@ const cutoutWomen = import.meta.glob("./preference/cutout/women/*.{png,webp}", {
   import: "default",
 });
 
+/** Framed photographs, in the order the scatter's slots consume them. */
+
 /**
  * Glob results come back keyed by path in unspecified order, so sort by key:
  * the layout slots are authored in order, and "which photo lands in the big
@@ -77,22 +87,17 @@ export function photoSet(side: PreferenceSide): string[] {
     : orderedAssets(photoWomen, PLACEHOLDER_WOMEN);
 }
 
-/** Background-removed people for variant 2. */
-export function cutoutSet(side: PreferenceSide): string[] {
-  return side === "men"
-    ? orderedAssets(cutoutMen, PLACEHOLDER_MEN)
-    : orderedAssets(cutoutWomen, PLACEHOLDER_WOMEN);
+/**
+ * The finished group image for variant 2, or null while none is supplied.
+ * Exactly one per side: extra files in the folder are ignored rather than
+ * stacked, because the composition is inside the artwork, not in the layout.
+ */
+export function groupCutout(side: PreferenceSide): string | null {
+  const globbed = side === "men" ? cutoutMen : cutoutWomen;
+  return orderedAssets(globbed, [])[0] ?? null;
 }
 
-/** True while a set is still the demo deck — variant 2 cannot be judged then. */
-export function isPlaceholder(side: PreferenceSide, variant: 1 | 2): boolean {
-  const globbed =
-    variant === 1
-      ? side === "men"
-        ? photoMen
-        : photoWomen
-      : side === "men"
-        ? cutoutMen
-        : cutoutWomen;
-  return Object.keys(globbed).length === 0;
+/** True while variant 1 is still drawing the demo deck rather than real photos. */
+export function isPlaceholderPhotoSet(side: PreferenceSide): boolean {
+  return Object.keys(side === "men" ? photoMen : photoWomen).length === 0;
 }

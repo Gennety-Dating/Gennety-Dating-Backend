@@ -183,14 +183,17 @@ this change where a user gets stuck at the handoff.
   "Who do you want to meet?" becomes two tall photo columns over a smaller,
   quieter "both". Also client-only — no server change, no env, no schema — but
   it carries three things the burst did not:
-  - **Photos ship inside the bundle.** They live in
-    `apps/webapp/src/preference/{photo,cutout}/{men,women}/` and are enumerated
-    by `import.meta.glob`, so adding one is dropping a file in (the drop box is
-    `~/Desktop/gennety-preference-photos/`, `sync.sh` copies them across).
-    Those folders are **empty today** and the screen falls back to the demo deck
-    in `public/profiles/` — which is why the deploy is safe either way, and why
-    it will ship placeholder faces if the real photos are not synced first.
-    Keep an eye on the bundle: ~250KB per photo, up to 7 per column.
+  - **Photos ship inside the bundle**, and they are the one thing here with a
+    real user cost. They live in
+    `apps/webapp/src/preference/{photo,cutout}/{men,women}/`, enumerated by
+    `import.meta.glob`. The screen downloads **440 KB** on variant 1 (10 photos)
+    or **224 KB** on variant 2 (2 group images) — against a 124 KB onboarding
+    chunk, over mobile data, inside Telegram. That is the budget; check it if
+    the set ever changes.
+    **Never copy originals in by hand.** They are 2–6 MB PNGs, ~40 MB across the
+    set. `~/Desktop/gennety-preference-photos/prepare.mjs --tight` is what
+    resizes, re-encodes and crops them into the repo; the naive `sync.sh` that
+    preceded it was deleted precisely because running it shipped the originals.
   - **`onboarding.html` now requests Inter 800** for variant 2's heavy word
     (the Google Fonts URL previously stopped at 700). One extra font file for
     every onboarding user. If variant 1 wins, drop `;800` again — it is the only

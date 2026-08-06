@@ -201,9 +201,18 @@ out of Telegram-only workers.
   to be compared (`preference-variant.ts`, `?v=` in dev; production ships
   `LIVE_VARIANT`): **(1)** ordinary photographs tilted inside each column,
   slightly transparent, a few hanging past its edge, over the column's own
-  burgundy/blue gradient; **(2)** background-removed people standing shoulder to
-  shoulder over near-black behind a thin bright border, under a heavy white
-  word. The photo placements are authored, not random (`preference-layout.ts`):
+  burgundy/blue gradient; **(2)** one finished group image per side — people
+  already standing together, background removed, white contour already drawn —
+  spanning the column edge to edge over near-black behind a thin border, under
+  a heavy white word. Variant 2's button is **fitted to its artwork on both
+  axes**: full width, so the figures the artwork cuts off end exactly on the
+  border, and only as tall as the picture plus its word. That works because the
+  group is prepared at ~0.52 w/h (roughly three figures); at the full
+  five-across ratio the same rule yields a 200px stub with a void above it, so
+  the crop is a measurement rather than a preference. Variant 2 is never
+  mirrored — these are photographs of real people, and flipping them is a
+  different picture, not a mirrored layout.
+  The photo placements are authored, not random (`preference-layout.ts`):
   a scatter re-rolled per render would shuffle under the user's finger and could
   never be reviewed twice. The right column is the left one mirrored, which is
   also what keeps every sideways overhang pointing at the screen's own margin

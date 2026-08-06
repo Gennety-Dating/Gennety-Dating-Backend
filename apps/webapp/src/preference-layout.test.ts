@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  CLUSTER_SLOTS,
-  SCATTER_SLOTS,
-  mirrorScatter,
-  placeCluster,
-  placeScatter,
-} from "./preference-layout.js";
-import { orderedAssets } from "./preference-photos.js";
+import { SCATTER_SLOTS, mirrorScatter, placeScatter } from "./preference-layout.js";
+import { groupCutout, orderedAssets } from "./preference-photos.js";
 import { otherVariantHref, parseVariant, preferenceVariant } from "./preference-variant.js";
 
 describe("scatter placement", () => {
@@ -53,32 +47,27 @@ describe("scatter placement", () => {
   });
 
   it("keeps every frame's centre inside the column", () => {
-    for (const slot of [...SCATTER_SLOTS, ...CLUSTER_SLOTS]) {
+    for (const slot of SCATTER_SLOTS) {
       expect(slot.x).toBeGreaterThan(0);
       expect(slot.x).toBeLessThan(100);
     }
   });
 });
 
-describe("cluster placement", () => {
-  it("shows the centre figure first, so one cutout is still a composition", () => {
-    const placed = placeCluster(["only.png"], false);
-    expect(placed).toHaveLength(1);
-    expect(placed[0]?.slot.x).toBe(50);
-  });
-
-  it("stands every figure on the same rough baseline", () => {
-    const baselines = CLUSTER_SLOTS.map((slot) => slot.bottom);
-    expect(Math.max(...baselines) - Math.min(...baselines)).toBeLessThanOrEqual(6);
-  });
-
-  /** The heavy word lives under the cluster; every figure has to clear it. */
-  it("leaves the bottom of the column free for the word", () => {
-    for (const slot of CLUSTER_SLOTS) expect(slot.bottom).toBeGreaterThanOrEqual(14);
-  });
-
-  it("keeps every figure inside the column's height", () => {
-    for (const slot of CLUSTER_SLOTS) expect(slot.bottom + slot.h).toBeLessThanOrEqual(95);
+describe("the variant 2 group image", () => {
+  /**
+   * Variant 2's composition lives in the artwork, not in code: one finished
+   * image per side, cut off at its own left and right edges so the button can
+   * be fitted to them. Extra files must be ignored rather than stacked.
+   */
+  it("takes exactly one image per side", () => {
+    const men = groupCutout("men");
+    const women = groupCutout("women");
+    for (const src of [men, women]) {
+      expect(src).toBeTypeOf("string");
+      expect(src).not.toBe("");
+    }
+    expect(men).not.toBe(women);
   });
 });
 
