@@ -11,14 +11,16 @@
  * Height of one drum row, in px. Must match `.ob-wheel-item` (and the capsule,
  * and twice the pad's complement) in onboarding.css.
  *
- * It is also the drum's *gearing*: a native scroll moves 1:1 with the finger,
- * so this number alone decides how many values one swipe crosses. It was 56px,
- * which made a deliberate 175 → 190 a long drag; at 46 the same gesture travels
- * ~22% further. Deliberately a modest step — the value has to stay easy to stop
- * ON, and past roughly 40px the rows start reading as a list rather than as a
- * drum you can aim.
+ * It is also the drum's *gearing*, and the only honest one: a native scroll
+ * moves 1:1 with the finger, so this number alone decides how many values a
+ * swipe crosses. It shipped at 56px, which made a deliberate 175 → 190 a long
+ * drag; at 38 the same gesture travels ~47% further and a flick genuinely
+ * spins. That is close to the floor rather than a midpoint — 38px is about
+ * where a native iOS picker row sits, and the 28px numerals leave only a few
+ * px of air, so going lower starts costing the thing the screen exists for:
+ * being able to stop ON a value and read it.
  */
-export const WHEEL_ITEM_H = 46;
+export const WHEEL_ITEM_H = 38;
 
 /**
  * Ticks closer together than this are indistinguishable from one continuous

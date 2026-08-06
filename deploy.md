@@ -358,18 +358,25 @@ this change where a user gets stuck at the handoff.
 - **And so does the height drum's per-row tick** (added 2026-08-06,
   PRODUCT_SPEC §1.3). The drum pulses `HapticFeedback.selectionChanged` as each
   value passes under the capsule instead of once when the scroll stops, and its
-  row height drops 56px → 46px, which is the drum's gearing: a native scroll is
-  1:1 with the finger, so one swipe now crosses ~22% more values. Client-only —
-  no server change, no env, no schema — so `./scripts/deploy-webapp.sh` is again
-  the whole deploy, and **skipping that step ships the drum unchanged**. Two
-  things worth knowing:
+  row height drops 56px → 38px, which is the drum's gearing: a native scroll is
+  1:1 with the finger, so one swipe now crosses ~47% more values and a flick
+  genuinely spins. Client-only — no server change, no env, no schema — so
+  `./scripts/deploy-webapp.sh` is again the whole deploy, and **skipping that
+  step ships the drum unchanged**. Three things worth knowing:
   - **The row height is duplicated by construction.** `WHEEL_ITEM_H`
     (`onboarding-wheel.ts`) and `.ob-wheel-item` / `.ob-wheel-capsule` /
     `.ob-wheel-pad` in `onboarding.css` must agree, and nothing enforces it —
     the pad is `(280 − row) / 2`, so a change in one place alone silently
     stops the first and last values from reaching the centre. Verified on the
-    dev preview after this change: row 46, capsule 46, active row centred on
-    the capsule to within a pixel, in both themes.
+    dev preview after this change: row 38, capsule 38, pad 121, active row
+    centred on the capsule to within a pixel, ~7 rows in frame, in both themes.
+  - **38px is near the floor, not a midpoint.** It is about where a native iOS
+    picker row sits, and the numerals are 28px, so there are only a few px of
+    air left. A further increase in sensitivity has to come from somewhere
+    other than this number — and there is nowhere honest: the scroll is
+    native and 1:1 by design. Dropping `scroll-snap-type` to `proximity`
+    would lengthen flings but let one land between two values, which the
+    settle handler does not re-centre.
   - **Haptics are not gated on `prefers-reduced-motion`.** That setting is
     about motion; iOS and Telegram honour their own haptic settings below us.
   Review with `?preview=basics:height` on the same dev-only route.

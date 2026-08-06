@@ -234,13 +234,16 @@ out of Telegram-only workers.
   scroll never reaches the floor). The *value* is still committed on settle, not
   per row: every option re-renders on a change, and doing that each scroll frame
   is the jank the native scroll was chosen to avoid. Separately, the row height
-  is the drum's gearing — a native scroll moves 1:1 with the finger, so that one
-  number decides how many values a swipe crosses — and 56px made a deliberate
-  175 → 190 a long drag; at 46px the same gesture travels ~22% further.
-  Deliberately a modest step: the value has to stay easy to stop ON, and much
-  below this the rows read as a list rather than as a drum you can aim. Both
-  pure decisions live in `onboarding-wheel.ts` so they are testable away from
-  the DOM. Telegram-only; the native iOS client owns its own picker.
+  is the drum's gearing, and the only honest one — a native scroll moves 1:1
+  with the finger, so that one number decides how many values a swipe crosses —
+  and the 56px it shipped at made a deliberate 175 → 190 a long drag; at 38px
+  the same gesture travels ~47% further and a flick genuinely spins. That is
+  near the floor rather than a midpoint: 38px is about where a native iOS
+  picker row sits, and the 28px numerals leave only a few px of air, so going
+  lower would start costing the thing the screen exists for — being able to
+  stop ON a value and read it. Both pure decisions live in
+  `onboarding-wheel.ts` so they are testable away from the DOM. Telegram-only;
+  the native iOS client owns its own picker.
 - **The phone gate is also the LOGIN (2026-07-25).** A trusted `message.contact`
   is Telegram vouching that the number belongs to the current Telegram account,
   and Telegram allows one active account per number — so a `User.phone` unique
