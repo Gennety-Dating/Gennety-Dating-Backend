@@ -146,6 +146,16 @@ export interface SerializedMatch {
    */
   proposalDeadlineAt: string | null;
   /**
+   * IANA zone of the caller's city, or `null` for a profile with no city yet.
+   *
+   * `agreedTime` is an instant, and the native date card (§3.8) has to pick a
+   * wall clock to draw it on. The device's is the wrong one: the date happens
+   * in the pair's city, so a traveller would be shown — and would turn up at —
+   * a time neither side meant. `CalendarState.timeZone` exists for the same
+   * reason, and the server-rendered Telegram card already makes this choice.
+   */
+  timeZone: string | null;
+  /**
    * Server's current wall-clock at the time of this response, ISO. The
    * client subtracts this from its local `Date.now()` to derive an
    * offset, then applies that offset to `proposalDeadlineAt` so a
@@ -293,8 +303,27 @@ export async function getCurrentMatchForUser(
       paidForPartnerByA: true,
       paidForPartnerByB: true,
       partnerPaidSeenAt: true,
-      userA: { select: { firstName: true, age: true, gender: true, universityDomain: true } },
-      userB: { select: { firstName: true, age: true, gender: true, universityDomain: true } },
+      // `profile.timeZone` is read for the CALLER's side only (see `timeZone`
+      // below); it is selected on both because which side the caller is on is
+      // not known until the row is picked.
+      userA: {
+        select: {
+          firstName: true,
+          age: true,
+          gender: true,
+          universityDomain: true,
+          profile: { select: { timeZone: true } },
+        },
+      },
+      userB: {
+        select: {
+          firstName: true,
+          age: true,
+          gender: true,
+          universityDomain: true,
+          profile: { select: { timeZone: true } },
+        },
+      },
     },
   });
   const match = pickCurrentMatch(matches);
@@ -302,6 +331,7 @@ export async function getCurrentMatchForUser(
 
   const side: MatchSide = match.userAId === userId ? "A" : "B";
   const partner = side === "A" ? match.userB : match.userA;
+  const me = side === "A" ? match.userA : match.userB;
   // Only ever this side's own column — the peer's stays unread here.
   const myAccepted = side === "A" ? match.acceptedByA : match.acceptedByB;
 
@@ -392,6 +422,7 @@ export async function getCurrentMatchForUser(
     partnerVibeSubmitted,
     safetyBriefAck: side === "A" ? match.safetyAckA : match.safetyAckB,
     proposalDeadlineAt,
+    timeZone: me.profile?.timeZone ?? null,
     serverTimeAt: new Date().toISOString(),
   };
 }

@@ -2579,14 +2579,21 @@ components:
               formats: { type: array, items: { type: string } }
         selectionError: { type: [string, "null"] }
         market:
+          $ref: "#/components/schemas/Market"
           description: >-
             The user's launched market (PRODUCT_SPEC 3.7). Centre the departure
             map on it and refuse a pin outside its radius BEFORE the user can
             confirm — the server refuses it either way, but a refusal that only
-            arrives after Confirm is a dead end. `null` means do not gate.
-          oneOf:
-            - $ref: "#/components/schemas/Market"
-            - type: "null"
+            arrives after Confirm is a dead end.
+
+
+            Absent (the server sends `null`) means do not gate. Deliberately a
+            bare `$ref` and NOT `oneOf: [$ref, "null"]`: swift-openapi-generator
+            SKIPS that shape silently, which is how this very field never
+            reached iOS between 2026-08-05 and 2026-08-06 — the client had no
+            way to see the market and the gate existed on one surface only. An
+            optional property decodes an explicit JSON `null` to nil, so the
+            wire format is unchanged and the Mini App is unaffected.
 
     Market:
       type: object
@@ -2623,7 +2630,7 @@ components:
          mapPreviewUrl, transitHint, partnerFirstName, partnerAge,
          partnerGender, myDecision, ticketGate, partnerUniversityDomain,
          myVibeSubmitted, partnerVibeSubmitted,
-         safetyBriefAck, proposalDeadlineAt, serverTimeAt]
+         safetyBriefAck, proposalDeadlineAt, timeZone, serverTimeAt]
       properties:
         id: { type: string, format: uuid }
         status: { $ref: "#/components/schemas/MatchStatus" }
@@ -2704,6 +2711,19 @@ components:
           type: [string, "null"]
           format: date-time
           description: 24h decision deadline; only for dispatched `proposed` matches
+        timeZone:
+          type: [string, "null"]
+          description: |
+            IANA zone of the caller's city (§3.8). `agreedTime` is an instant,
+            and a date card has to draw it on a wall clock — the device's is
+            the wrong one, because the date happens in the pair's city and a
+            traveller would otherwise read a time neither side meant. Same
+            reason `CalendarState.timeZone` exists, and the same choice the
+            server-rendered Telegram card already makes.
+
+            `null` only for a profile with no city yet, which cannot reach a
+            scheduled match; fall back to the device zone rather than hiding
+            the time.
         serverTimeAt:
           type: string
           format: date-time

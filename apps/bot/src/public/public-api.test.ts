@@ -144,6 +144,7 @@ type ProfileRow = {
   homeCountryCode?: string | null;
   homeCityKey?: string | null;
   homePlaceId?: string | null;
+  timeZone?: string | null;
 };
 
 type OtpRow = {
@@ -2347,6 +2348,57 @@ describe("/v1/matches/*", () => {
     expect(res.status).toBe(200);
     expect(res.body.match.id).toBe(scheduled.id);
     expect(res.body.match.status).toBe("scheduled");
+  });
+
+  // `agreedTime` is an instant; the native date card (§3.8) has to draw it on
+  // some wall clock, and the device's is the wrong one for a traveller. The
+  // zone is the CALLER's own — not the partner's, and not a constant.
+  it("GET /current carries the caller's own city timezone, never the partner's", async () => {
+    const inZone = (timeZone: string): Partial<UserRow> => ({
+      profile: {
+        id: crypto.randomUUID(),
+        userId: "",
+        hobbies: [],
+        partnerPreferences: null,
+        psychologicalSummary: null,
+        ageRangeMin: null,
+        ageRangeMax: null,
+        matchRadius: "campus_only",
+        photos: [],
+        timeZone,
+      },
+    });
+    const alice = await seedUser({ firstName: "Alice", ...inZone("Europe/Kyiv") });
+    const bob = await seedUser({ firstName: "Bob", ...inZone("Europe/Berlin") });
+    await seedMatch(alice.id, bob.id, {
+      status: "scheduled",
+      agreedTime: new Date("2026-08-20T16:00:00Z"),
+    });
+
+    const forAlice = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+    const forBob = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(bob.id)}`);
+
+    expect(forAlice.body.match.timeZone).toBe("Europe/Kyiv");
+    expect(forBob.body.match.timeZone).toBe("Europe/Berlin");
+  });
+
+  // A profile with no city cannot reach a scheduled match, but the field must
+  // still be present and null rather than absent — the client falls back to
+  // the device zone, and an absent key is a decode failure on iOS.
+  it("GET /current reports a null timezone for a profile with no city", async () => {
+    const alice = await seedUser({ firstName: "Alice" });
+    const bob = await seedUser({ firstName: "Bob" });
+    await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+    const res = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+    expect(res.body.match).toHaveProperty("timeZone", null);
   });
 
   // The partner's face is the one piece of another user's data this API hands
