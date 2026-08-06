@@ -1,5 +1,45 @@
 # Gennety Dating Deploy
 
+**PENDING — the slot calendar becomes reachable from the native client
+(PRODUCT_SPEC §3.6).** Not deployed yet. **No Prisma schema change, no env
+change, no flag change, no Mini App change** (`apps/webapp` untouched) — it is
+half client, so the iOS app must ship with it (separate repo, `d345bca`).
+
+Ships alongside the ticket-gate block below and has the same shape: the server
+has always written `proposedTimes` for every `negotiating` match whichever
+client accepted, but the only way to read or answer that grid was
+`/v1/calendar/*`, which is `initData`-authed. An iOS pair reached scheduling
+and had no calendar at all. New: `GET`/`POST /v1/matches/{id}/calendar` (JWT).
+
+**Three things worth knowing before the restart:**
+
+- **No new scheduling logic.** Both verbs delegate to `getCalendarState` /
+  `processCalendarSlotsUpdate` unchanged, so auto-lock, `overlapCandidates`,
+  the first-mover DM and the peer's live card behave identically to the Mini
+  App. Nothing about the Telegram path moves.
+- **The response carries the pair's `Profile.timeZone`.** Read-only, additive.
+  It exists because the grid is a set of instants and the client has to pick a
+  wall clock; the device's is the wrong one, since the date happens in the
+  pair's city.
+- **A closed calendar answers 409**, matching how the native ticket gate
+  reports the same class of state. The Mini App routes are untouched and keep
+  their existing codes.
+
+Post-deploy check — the route needs a real `negotiating` match to answer
+anything but 401, and production has **0 matches ever**, so verify on
+`@gennetytestbot` via `scripts/dev-e2e-full-flow.mjs`:
+
+```sh
+# Unauthenticated must be 401 (mounted), never 404 (missing).
+curl -s -o /dev/null -w '%{http_code}\n' \
+  https://dating-api.gennety.com/v1/matches/00000000-0000-4000-8000-000000000000/calendar
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag; the Mini App calendar is unaffected either way.
+
+---
+
 **PENDING — the Date Ticket gate becomes reachable from the native client
 (PRODUCT_SPEC §3.5b).** Not deployed yet. **No Prisma schema change, no env
 change, no flag change, no Mini App change** (`apps/webapp` untouched) — but it
