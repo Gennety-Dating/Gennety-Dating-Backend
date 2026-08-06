@@ -52,6 +52,46 @@ done
 undo — no schema, no env, no flag, no server state.
 
 
+**PENDING — two contract fields the native client could not see
+(PRODUCT_SPEC §3.7 / §3.8).** Not deployed yet. **No Prisma schema change, no
+env change, no flag change, no Mini App change** (`apps/webapp` untouched) — it
+is half client, so the iOS app must ship with it (separate repo, `a2b1b38`).
+
+Both halves of `SerializedMatch`/`VenueIntentState` are read-only additions; the
+server-side behaviour they describe already ships.
+
+**Two things worth knowing before the restart:**
+
+- **`VenueIntentState.market` is a schema fix, not a new field.** It was added
+  on 2026-08-05 with the departure-point gate and declared
+  `oneOf: [$ref Market, "null"]` — the shape swift-openapi-generator SKIPS
+  silently — so it never reached the generated Swift client and the live gate
+  existed on Telegram only. The wire format is unchanged: it is now a bare
+  `$ref`, and the server still sends an explicit `null`, which an optional
+  property decodes to absent. The Mini App reads `state.market` and is
+  unaffected either way.
+- **`SerializedMatch.timeZone` is genuinely new** — the CALLER's own city zone,
+  from `Profile.timeZone`. `agreedTime` is an instant and the native date card
+  has to draw it on a wall clock; the device's is wrong for a traveller. Same
+  reason `CalendarState.timeZone` exists (block above). One extra `profile`
+  select on `/v1/matches/current`, no new query.
+
+Post-deploy check — `/v1/matches/current` needs a real match and production has
+**0 matches ever**, so verify the shape on `@gennetytestbot` via
+`scripts/dev-e2e-full-flow.mjs`. The spec itself is checkable without one:
+
+```sh
+curl -s https://dating-api.gennety.com/v1/app/config >/dev/null && echo mounted
+pnpm openapi:lint
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag. `timeZone` simply stops being sent and the iOS card falls back to
+the device zone; `market` reverts to the shape iOS cannot read, i.e. the state
+this fixes.
+
+---
+
 **PENDING — the slot calendar becomes reachable from the native client
 (PRODUCT_SPEC §3.6).** Not deployed yet. **No Prisma schema change, no env
 change, no flag change, no Mini App change** (`apps/webapp` untouched) — it is

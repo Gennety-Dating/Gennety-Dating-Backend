@@ -3061,8 +3061,19 @@ defers the same dead end to a screen that can no longer fix it.
   card with the real reason — but it gains one extra button that drops the pin
   in the city, because a demo visitor is often genuinely abroad and would
   otherwise be asked to lie about where they are.
-- Telegram-only for the live on-screen gate today; iOS renders the same refusal
-  from the `/v1/*` error and the `market` field on the intent state.
+- **Both surfaces since 2026-08-06.** The `market` field was added for iOS on
+  2026-08-05, but declared in the OpenAPI as `oneOf: [$ref Market, "null"]` —
+  the shape swift-openapi-generator drops silently — so it never reached the
+  generated client and the live gate existed on Telegram only. For that day the
+  native client centred its map on a hard-coded constant and let any pin
+  through to the server's refusal. The schema is now a bare `$ref` (an explicit
+  JSON `null` still decodes to absent, so nothing on the wire changed), and iOS
+  centres on the market, draws the radius, gates Confirm locally and names the
+  city — including on the "use my location" branch, which is the likeliest way
+  to set a bad point. The native client repeats the server's haversine
+  deliberately, R = 6371 and all: `CLLocation.distance` measures on the
+  ellipsoid and would disagree with this module by ~100 m at a 60 km radius,
+  producing a band where the client allows what the server refuses.
 
 **Curated-first venue selection.** When all four pairs are present, the bot
 first consults the hand-curated venue base (`CuratedVenue`, currently scoped by
@@ -3250,7 +3261,8 @@ entity's `unix_time`.
 ### 3.7a Date Card (feature-flagged shareable PNG)
 
 Gated by `DATE_CARD_FEATURE_ENABLED` (default **off** → the scheduled
-confirmation is the plain-text DM above). Telegram-only in v1. When on, each
+confirmation is the plain-text DM above). **Telegram-only, and deliberately so
+— see the end of this section for what iOS does instead.** When on, each
 side's `scheduled` confirmation is a rendered **PNG date card** (the recipient
 sees their *partner*). The look ("Partiful-glow", 2026-06-20; recolored to the
 burgundy / black / white design system 2026-07-09; **theme-aware 2026-07-11**)
@@ -3345,6 +3357,20 @@ live only in the Telegram caption.
 - **Never wedges.** Any render/send failure degrades per-side to the existing
   plain-text scheduled card, so one side's hiccup never denies the other their
   card and scheduling always completes.
+
+**The native client does not receive this PNG, and should not (2026-08-06).**
+iOS renders the scheduled state as a live SwiftUI card off `SerializedMatch` —
+no new route, no render job, no `DATE_CARD_FEATURE_ENABLED`. The PNG exists
+because a Telegram chat cannot draw a countdown, honour Dynamic Type, or read
+itself out under VoiceOver; shipping the same image to a client that can do all
+three would be a regression, and the shareable-with-blurred-face copy is a
+Telegram affordance with no App Store equivalent yet. What the server owes the
+native card instead is one field: **`SerializedMatch.timeZone`**, the caller's
+own city zone. `agreedTime` is an instant and the card has to draw it on a wall
+clock — the device's is wrong for a traveller, who would read and turn up at a
+time neither side meant. It is the same choice this PNG already makes by
+rendering in the canonical city zone, and the same reason `CalendarState`
+carries the field (§3.6).
 
 ### 3.7b Venue Change v2 (feature-flagged, paid multiplayer board)
 
