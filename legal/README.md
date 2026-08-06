@@ -92,7 +92,8 @@ placeholders left in the text:
 ## Still open (not blockers for publishing)
 
 - The Apple StoreKit product ids / display prices match what ships (Premium
-  price: code default `$9.99`, prod `.env` still shows `$10` — reconcile).
+  price: code default `$17.99` = 750⭐; prod `.env` still shows `$11.99`/500⭐
+  and App Store Connect still shows `$9.99` — reconcile all three).
 - Governing law / jurisdiction wording (drafts use Ukraine / Kyiv — confirmed).
 - The sub-processor list (Privacy §12.4) — keep it in sync as providers change.
 - Art. 15 / Art. 20 requests are served by `pnpm gdpr:export -- --telegram=<id>

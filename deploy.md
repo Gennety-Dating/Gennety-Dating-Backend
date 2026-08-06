@@ -1,5 +1,67 @@
 # Gennety Dating Deploy
 
+**PENDING — Premium is $17.99/mo = 750⭐ (PRODUCT_SPEC §3.8).** Not deployed
+yet. **No Prisma schema change, no flag change** — but it needs a **two-line
+`.env` edit** and a **Mini App redeploy**, and one step of it is not in this
+repo at all (App Store Connect). Sequence: `.env` → Deploy Full Server Code →
+`pnpm db:drift-check` → `pm2 restart gennety-bot --update-env` →
+`./scripts/deploy-webapp.sh`.
+
+The charge is Stars, and the dollar figure is only ever a description of what
+those Stars cost: **750⭐ is exactly what Telegram's own Star store bills
+$17.99 for**. That is why the two values are edited together and why the code
+comment now says so — a label cheaper than the Stars it spends is the one kind
+of wrong price that takes money from a user who was told otherwise.
+
+**⚠️ The code defaults are NOT what production runs.** `/opt/gennety/.env`
+carries explicit `PREMIUM_STARS=500` / `PREMIUM_PRICE_USD_DISPLAY=$11.99`,
+which override them, so deploying the code alone changes nothing a user sees:
+
+```sh
+ssh root@167.172.178.229
+cd /opt/gennety
+cp .env ".env.bak.$(date +%Y%m%d-%H%M%S)"
+sed -i 's/^PREMIUM_STARS=.*/PREMIUM_STARS=750/;
+        s/^PREMIUM_PRICE_USD_DISPLAY=.*/PREMIUM_PRICE_USD_DISPLAY=$17.99/' .env
+grep -n '^PREMIUM_' .env    # expect 750 and $17.99
+pm2 restart gennety-bot --update-env && pm2 save
+```
+
+**Three things worth knowing before the restart:**
+
+- **The iOS price is Apple's, and nothing here can set it.** The native app
+  renders StoreKit's `displayPrice` for `premium_monthly`, which is **$9.99**
+  in App Store Connect today (recorded in the StoreKit block below). Raising it
+  there is a manual operator step; until it is done the same subscription costs
+  $17.99 in the bot and $9.99 in the app. `/v1/app/config` exposes only
+  `features.premium`, a boolean — there is no server-side price for iOS to read,
+  so no code change can close that gap.
+- **Existing subscribers keep their old price until they resubscribe.** A
+  Telegram Stars subscription's amount is fixed on the invoice that created it,
+  and `pre_checkout_query` validates against the *current* `PREMIUM_STARS`
+  (`handlers/payments.ts`), so an already-recurring 500⭐ subscription keeps
+  renewing at 500⭐ while any new invoice is 750⭐. Production has had **0
+  purchases ever**, so today that cohort is empty — verify before assuming it
+  stays that way.
+- **Referral rung values move with it.** `referralUsdValue` parses
+  `PREMIUM_PRICE_USD_DISPLAY`, so the ladder's "≈ $ value" column rises
+  (1 friend: $18.98 → $24.98). Inert in production —
+  `REFERRAL_FEATURE_ENABLED=false`.
+
+Post-deploy check — the state endpoint is the single source both surfaces read:
+
+```sh
+# Needs initData, so verify from the Premium Mini App itself; the button must
+# read "Оформить — $17.99/мес" and the Stars sheet must say 750.
+pm2 logs gennety-bot --lines 50 --nostream | grep -i premium
+```
+
+**Rollback:** restore the `.env.bak.*` snapshot and
+`pm2 restart gennety-bot --update-env`. The code defaults are then overridden
+back to the old price with no redeploy; revert the commit at leisure.
+
+---
+
 **PENDING — the first five profile questions move from the chat into the Mini
 App (PRODUCT_SPEC §1.1 / §1.3).** Not deployed yet. **No Prisma schema change,
 no env change, no flag change** — every column it writes (`users.first_name`,
@@ -580,6 +642,13 @@ exactly. Verified US base prices, and the per-ticket ladder they produce:
 | `ticket_3` | $16.99 | $5.66 |
 | `ticket_6` | $29.99 | $5.00 |
 | `premium_monthly` | $9.99/mo | — |
+
+**`premium_monthly` is now out of date and only App Store Connect can fix it.**
+The Telegram rail moved to $17.99/mo (750⭐) — see the PENDING block at the top
+of this file — and this row is the *measured* App Store price, left as measured
+rather than edited to the intended one. Raise the price tier to $17.99 in App
+Store Connect; nothing in this repo reads or sets it, since iOS renders
+StoreKit's own `displayPrice` and `/v1/app/config` exposes only a boolean.
 
 An earlier agent report suggested `ticket_1` might have inherited $16.99, which
 would have charged one ticket the price of three; direct inspection shows $6.99.
@@ -3574,10 +3643,11 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   columns/table may stay.
 - Gennety Premium (feature-flagged, recurring subscription, §Premium):
   `PREMIUM_FEATURE_ENABLED` (default `false` — leave off until launch),
-  `PREMIUM_STARS` (default `500`, the monthly Telegram Stars price ≈ $10),
-  `PREMIUM_PRICE_USD_DISPLAY` (default `$9.99`, display-only — production `.env`
-  still carries the launch value `$10`; update it to `$9.99` on the next deploy
-  to match the code default), and
+  `PREMIUM_STARS` (default `750`, the monthly Telegram Stars price — exactly
+  what Telegram's Star store bills $17.99 for),
+  `PREMIUM_PRICE_USD_DISPLAY` (default `$17.99`, display-only; it must always
+  name the real cost of `PREMIUM_STARS`, so the two are edited together — a
+  cheaper label over a 750⭐ charge misleads), and
   `PREMIUM_APPSTORE_PRODUCT_ID` (default `premium_monthly`, the StoreKit 2
   auto-renewable subscription id — matched by full id or last dot-segment). When
   on, the menu shows a ✨ Gennety Premium row → hub → the Premium Mini App

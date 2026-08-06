@@ -43,14 +43,14 @@ export interface PlaybookFeatures {
  * Prices the playbook quotes, resolved from env by the caller.
  *
  * Deliberately injected rather than written inline: the literals `$6.99` and
- * `$11.99` used to sit in the prose, so the first edit of `TICKET_PRICE_CENTS`
+ * `$17.99` used to sit in the prose, so the first edit of `TICKET_PRICE_CENTS`
  * or `PREMIUM_PRICE_USD_DISPLAY` would have turned the agent into a source of
  * wrong prices — the one category of wrong answer that costs money directly.
  */
 export interface PlaybookPricing {
   /** Formatted single Date Ticket price, e.g. "$6.99". */
   ticketPrice: string;
-  /** Formatted Premium monthly price, e.g. "$11.99". */
+  /** Formatted Premium monthly price, e.g. "$17.99". */
   premiumPrice: string;
   /** Formatted Rematch price, e.g. "$2.99". */
   rematchPrice: string;
@@ -59,7 +59,7 @@ export interface PlaybookPricing {
 /** Fallbacks matching `config.ts` defaults, for callers that pass nothing. */
 const DEFAULT_PRICING: PlaybookPricing = {
   ticketPrice: "$6.99",
-  premiumPrice: "$11.99",
+  premiumPrice: "$17.99",
   rematchPrice: "$2.99",
 };
 

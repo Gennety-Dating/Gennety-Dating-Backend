@@ -3348,8 +3348,16 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
 
 ### 3.8 Gennety Premium (feature-flagged recurring subscription)
 
-An optional **$9.99/month** subscription (Gennety Premium), gated by
-`PREMIUM_FEATURE_ENABLED` (default **off**). It is a **standalone per-user
+An optional **$17.99/month** subscription (Gennety Premium), gated by
+`PREMIUM_FEATURE_ENABLED` (default **off**). **The price is denominated in
+Telegram Stars, not in dollars**: the charge is `PREMIUM_STARS` (750⭐), and
+$17.99 is exactly what Telegram's own Star store bills for 750⭐, so the label
+states what the user actually pays rather than a marketing number. The two move
+together — changing one without the other makes the button lie. The iOS rail is
+Apple's own price for `premium_monthly` (StoreKit `displayPrice`, set in App
+Store Connect), which is the only place that number lives; nothing in this repo
+can set it, so keeping the two surfaces at the same price is an operator step,
+not a code one. It is a **standalone per-user
 entitlement** owned by `services/premium.ts` and deliberately decoupled from any
 one feature — its first (v1) benefit is venue-change, but the entitlement is the
 seam future perks plug into. Active ⇔ `User.premiumUntil > now`; the

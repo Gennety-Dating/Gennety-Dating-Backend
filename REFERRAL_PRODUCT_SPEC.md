@@ -36,12 +36,12 @@ date."*
   totals unlocked at each rung, with the dollar value shown in the Mini App
   (`$6.99`/ticket + `PREMIUM_PRICE_USD_DISPLAY`/month):
 
-  | Verified friends | Total tickets | Total Premium months | ≈ $ value ($11.99 Premium) |
+  | Verified friends | Total tickets | Total Premium months | ≈ $ value ($17.99 Premium) |
   |---|---|---|---|
-  | 1 | 1 | 1 | $18.98 |
-  | 3 | 2 | 2 | $37.96 |
-  | 5 | 3 | 3 | $56.94 |
-  | 10 | 5 | 5 | $94.90 |
+  | 1 | 1 | 1 | $24.98 |
+  | 3 | 2 | 2 | $49.96 |
+  | 5 | 3 | 3 | $74.94 |
+  | 10 | 5 | 5 | $124.90 |
 
 ## Mechanics
 

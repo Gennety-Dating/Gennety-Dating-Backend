@@ -503,16 +503,18 @@ export const env = {
   /// subscribers. Standalone per-user entitlement (`services/premium.ts`).
   PREMIUM_FEATURE_ENABLED: process.env.PREMIUM_FEATURE_ENABLED === "true",
   /// Telegram Stars (XTR) monthly price of a Gennety Premium subscription
-  /// (`subscription_period` is fixed at 30 days by Telegram). 500⭐ ≈ $11.99
-  /// at user-facing rates; env-tunable at launch. Keep within Telegram's
-  /// per-subscription Star ceiling.
-  PREMIUM_STARS: Number(process.env.PREMIUM_STARS ?? "500"),
+  /// (`subscription_period` is fixed at 30 days by Telegram). 750⭐ is what
+  /// Telegram's own Star store charges for $17.99, which is why the two values
+  /// below move together: the display price is not a marketing number, it is
+  /// what the user actually pays to acquire the Stars this subscription spends.
+  /// Env-tunable; keep within Telegram's per-subscription Star ceiling.
+  PREMIUM_STARS: Number(process.env.PREMIUM_STARS ?? "750"),
   /// Human-readable price shown in premium copy (the Stars amount is the actual
   /// charge; this is display-only). Must reflect the real cost of PREMIUM_STARS
-  /// at Telegram's in-app Star rate — 500⭐ ≈ $11.99, so we quote $11.99 to avoid
-  /// under-promising the charge (a "$9.99/mo" label over a 500⭐ purchase would
-  /// mislead).
-  PREMIUM_PRICE_USD_DISPLAY: process.env.PREMIUM_PRICE_USD_DISPLAY ?? "$11.99",
+  /// at Telegram's in-app Star rate — 750⭐ = $17.99 — so we never under-promise
+  /// the charge (a cheaper label over a 750⭐ purchase would mislead). Change
+  /// one and you must change the other.
+  PREMIUM_PRICE_USD_DISPLAY: process.env.PREMIUM_PRICE_USD_DISPLAY ?? "$17.99",
   /// StoreKit 2 auto-renewable subscription product id for the native iOS app.
   /// Matched by full id or last dot-segment (mirrors APPSTORE_TICKET_PRODUCTS).
   PREMIUM_APPSTORE_PRODUCT_ID:
