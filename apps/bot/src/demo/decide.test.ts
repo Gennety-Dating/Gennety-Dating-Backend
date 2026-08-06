@@ -49,13 +49,45 @@ function match(overrides: Partial<DemoMatchSnapshot> = {}): DemoMatchSnapshot {
 }
 
 describe("demo narration", () => {
-  it("opens with the intro before anything else", () => {
+  // The onboarding Mini App owns `consent` and `language` (PRODUCT_SPEC §1.2),
+  // so before it hands off there is no `User.language` and the intro would be
+  // English for everyone — pushed at someone not yet asked what they read.
+  it.each(["consent", "language"] as const)(
+    "stays silent on %s, before the Mini App has asked for a language",
+    (onboardingStep) => {
+      const decision = decideDemoAction(
+        snapshot({ spokenBeats: new Set(), status: "onboarding", onboardingStep, language: null }),
+      );
+      expect(decision.action).toEqual({ kind: "none" });
+    },
+  );
+
+  it("opens with the intro once the Mini App hands the chat back", () => {
     const decision = decideDemoAction(
-      snapshot({ spokenBeats: new Set(), status: "onboarding", onboardingStep: "consent" }),
+      snapshot({
+        spokenBeats: new Set(),
+        status: "onboarding",
+        onboardingStep: "conversational",
+        verificationStatus: "unverified",
+      }),
     );
     expect(decision.action).toEqual({ kind: "narrate", beat: "intro" });
     // Narration is not a "wait a beat" action — the visitor is mid-step.
     expect(decision.waitMs).toBe(0);
+  });
+
+  it("still leads with the intro when a later beat is also owed", () => {
+    // Ordering matters: a visitor who reaches the verification gate without
+    // having read the intro must get the intro first, not the gate's warning.
+    const decision = decideDemoAction(
+      snapshot({
+        spokenBeats: new Set(),
+        status: "onboarding",
+        onboardingStep: "completed",
+        verificationStatus: "unverified",
+      }),
+    );
+    expect(decision.action).toEqual({ kind: "narrate", beat: "intro" });
   });
 
   it("warns about photos exactly when the collector asks for them", () => {

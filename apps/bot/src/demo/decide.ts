@@ -139,12 +139,25 @@ function isLive(snapshot: DemoSnapshot): boolean {
 /**
  * The three moments the demo has to speak for itself. Each is tied to a state
  * the product itself owns, so the beat lands at the right time without the
- * onboarding flow knowing demo mode exists.
+ * onboarding flow knowing demo mode exists — and, for the intro, late enough
+ * that the visitor has told us which language to say it in.
  */
 function decideNarration(snapshot: DemoSnapshot): DemoAction | null {
   const spoken = snapshot.spokenBeats;
 
-  if (!spoken.has("intro")) return { kind: "narrate", beat: "intro" };
+  // The intro waits for the onboarding Mini App to hand the chat back, because
+  // that Mini App is where the visitor picks their language (PRODUCT_SPEC §1.2:
+  // `consent` and `language` are Mini App-owned steps with no chat screens).
+  // Firing at `/start` meant `User.language` was still null and this longest,
+  // most explanatory message in the demo resolved to English for everyone —
+  // pushed at someone who had not yet been asked which language they read.
+  // Baking it into the Mini App instead was rejected: demo behaviour must not
+  // leak into `apps/webapp`.
+  if (!spoken.has("intro")) {
+    return snapshot.onboardingStep === "consent" || snapshot.onboardingStep === "language"
+      ? null
+      : { kind: "narrate", beat: "intro" };
+  }
 
   // The collector is asking for photos next.
   if (
