@@ -3,7 +3,9 @@ import {
   apnsConfigured,
   buildAlertPayload,
   buildLiveActivityPayload,
+  buildLiveActivityStartPayload,
   sendApnsNotification,
+  type LiveActivityStartInput,
   type LiveActivityUpdateInput,
 } from "./apns.js";
 
@@ -123,6 +125,43 @@ export async function sendLiveActivityUpdateToUser(
   if (!result.ok) {
     console.warn(
       `[push] live-activity ${activityType} update failed for ${userId}: ${result.status} ${result.reason}`,
+    );
+  }
+  return result.ok;
+}
+
+/**
+ * Start a Live Activity remotely (push-to-start), using the per-TYPE `start`
+ * token the client registers once — not the per-activity `update` token, which
+ * cannot exist yet because there is no activity.
+ *
+ * Same dead-token sweep as above; resolves `false` (never throws) when the user
+ * has no start token, which is the ordinary state for a Telegram-only user.
+ */
+export async function sendLiveActivityStartToUser(
+  userId: string,
+  activityType: LiveActivityType,
+  start: LiveActivityStartInput,
+): Promise<boolean> {
+  if (!apnsConfigured()) return false;
+  const row = await prisma.liveActivityToken.findUnique({
+    where: {
+      userId_activityType_kind: { userId, activityType, kind: "start" },
+    },
+    select: { id: true, token: true },
+  });
+  if (!row) return false;
+
+  const result = await sendApnsNotification(row.token, buildLiveActivityStartPayload(start), {
+    pushType: "liveactivity",
+  });
+  if (tokenIsDead(result)) {
+    await prisma.liveActivityToken.delete({ where: { id: row.id } }).catch(() => undefined);
+    return false;
+  }
+  if (!result.ok) {
+    console.warn(
+      `[push] live-activity ${activityType} start failed for ${userId}: ${result.status} ${result.reason}`,
     );
   }
   return result.ok;

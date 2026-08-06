@@ -1,5 +1,53 @@
 # Gennety Dating Deploy
 
+**PENDING — the «date day» Live Activity gets driven from the server
+(PRODUCT_SPEC §Phase 4).** Not deployed yet. **No Prisma schema change, no env
+change, no flag change, no Mini App change** (`apps/webapp` untouched) — it is
+half client, so the iOS app must ship with it (separate repo).
+
+`live_activity_tokens` and `sendLiveActivityUpdateToUser` have existed since
+Stage 0 with **no production caller at all**: the transport was built and never
+wired, so `date_day` was a row shape and nothing more. Now the date lifecycle
+drives it — push-to-start at T-5h alongside the ice-breakers, a `wingman` stage
+update at T-1.5h, and an end sweep at T+2h.
+
+**Four things worth knowing before the restart:**
+
+- **`APNS_KEY_PATH` must actually resolve.** This is the first feature whose
+  value is *entirely* in reaching a phone that is not being looked at, so an
+  unloadable key degrades it to nothing rather than to less. The 2026-07-25
+  rsync deleted `/opt/gennety/keys/` once and APNs was silently dead for nine
+  days; re-check `ls -l /opt/gennety/keys/` before believing this shipped.
+- **Push-to-start is a new payload shape**, not a new endpoint:
+  `buildLiveActivityStartPayload` adds `event: "start"` with `attributes-type`,
+  `attributes` and a required `alert`. `attributes-type` must equal the Swift
+  struct name **verbatim** (`DateDayActivity`) — ActivityKit drops an
+  unresolvable start push in complete silence, so a client-side rename is a
+  breaking change with no error anywhere.
+- **The alert is user-visible.** A start push necessarily raises a
+  notification, so a mobile user now gets one more push on date day than
+  before — localized, once, at T-5h.
+- **The `chat_open` stage is defined and deliberately never sent.** The
+  pre-date proxy chat is Telegram-only until the native chat screen lands, and
+  announcing an open chat on a lock screen the app cannot follow is the
+  dead-button anti-pattern.
+
+Post-deploy check — production has **0 dates ever**, so nothing exercises this
+until a pair schedules; verify on `@gennetytestbot`. The lifecycle logs only on
+failure, so silence is the good case:
+
+```sh
+pm2 logs gennety-bot --lines 200 --nostream | grep 'date-day activity'
+psql "$DATABASE_URL" -c "select activity_type, kind, count(*) from live_activity_tokens group by 1,2;"
+```
+
+A `date_day / start` row appearing is the proof the client half landed.
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag; the card simply never starts and the Telegram beats are unchanged.
+
+---
+
 **PENDING — the Mini App loading screens become the brand mark: butterflies in
 the stomach (PRODUCT_SPEC → Cross-Cutting Concerns).** Not deployed yet.
 **No Prisma schema change, no env change, no flag change, and NO SERVER CODE

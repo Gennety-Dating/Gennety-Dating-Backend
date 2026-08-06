@@ -23,7 +23,8 @@ vi.mock("./apns.js", async (importOriginal) => {
   };
 });
 
-const { sendPushToUser, sendLiveActivityUpdateToUser } = await import("./push.js");
+const { sendPushToUser, sendLiveActivityStartToUser, sendLiveActivityUpdateToUser } =
+  await import("./push.js");
 
 beforeEach(() => {
   userFindUnique.mockReset();
@@ -131,5 +132,62 @@ describe("sendLiveActivityUpdateToUser", () => {
       }),
     ).resolves.toBe(false);
     expect(laDelete).toHaveBeenCalledWith({ where: { id: "row-2" } });
+  });
+
+  it("omits content-state on an end event so the activity keeps its last look", async () => {
+    laFindUnique.mockResolvedValue({ id: "row-3", token: "la-token" });
+    sendApnsNotification.mockResolvedValue({ ok: true });
+
+    await sendLiveActivityUpdateToUser("u1", "date_day", { event: "end" });
+
+    const payload = sendApnsNotification.mock.calls[0]![1] as { aps: Record<string, unknown> };
+    expect(payload.aps.event).toBe("end");
+    expect(payload.aps).not.toHaveProperty("content-state");
+  });
+});
+
+describe("sendLiveActivityStartToUser", () => {
+  it("push-starts through the per-type start token, not the update token", async () => {
+    laFindUnique.mockResolvedValue({ id: "row-4", token: "start-token" });
+    sendApnsNotification.mockResolvedValue({ ok: true });
+
+    await expect(
+      sendLiveActivityStartToUser("u1", "date_day", {
+        attributesType: "DateDayActivity",
+        attributes: { matchId: "m1", startsAt: 1000, venueName: "Aroma", venueAddress: "", mapsUrl: "" },
+        contentState: { stage: "icebreakers" },
+        alert: { title: "Your date is today", body: "Everything you need." },
+        staleDate: 1000,
+      }),
+    ).resolves.toBe(true);
+
+    expect(laFindUnique).toHaveBeenCalledWith({
+      where: {
+        userId_activityType_kind: { userId: "u1", activityType: "date_day", kind: "start" },
+      },
+      select: { id: true, token: true },
+    });
+    const [token, payload] = sendApnsNotification.mock.calls[0]!;
+    expect(token).toBe("start-token");
+    const aps = (payload as { aps: Record<string, unknown> }).aps;
+    expect(aps.event).toBe("start");
+    // The type name is how ActivityKit finds the configuration; a mismatch is
+    // a silent drop, so it is pinned rather than trusted.
+    expect(aps["attributes-type"]).toBe("DateDayActivity");
+    expect(aps.alert).toEqual({ title: "Your date is today", body: "Everything you need." });
+    expect(aps["stale-date"]).toBe(1000);
+  });
+
+  it("is a no-op for a user with no start token", async () => {
+    laFindUnique.mockResolvedValue(null);
+    await expect(
+      sendLiveActivityStartToUser("u1", "date_day", {
+        attributesType: "DateDayActivity",
+        attributes: {},
+        contentState: {},
+        alert: { title: "t", body: "b" },
+      }),
+    ).resolves.toBe(false);
+    expect(sendApnsNotification).not.toHaveBeenCalled();
   });
 });

@@ -780,6 +780,8 @@ const translations = {
     profilerSkip: "Skip",
     wingmanHintIntro:
       "👋 Insider tip — your date's in 90 minutes:\n\n",
+    dateDayActivityStartTitle: "Your date is today",
+    dateDayActivityStartBody: "Everything you need is on your lock screen.",
     emergencyUnlocked:
       "Emergency cancel window is open.\n" +
       "If you really can't make it, tap below.\n" +
@@ -1862,6 +1864,8 @@ const translations = {
     profilerSkip: "Пропустить",
     wingmanHintIntro:
       "👋 Маленькая подсказка — свидание через полтора часа:\n\n",
+    dateDayActivityStartTitle: "Сегодня свидание",
+    dateDayActivityStartBody: "Всё нужное — на экране блокировки.",
     emergencyUnlocked:
       "Окно экстренной отмены открыто.\n" +
       "Совсем не можешь прийти — жми кнопку ниже.\n" +
@@ -2918,6 +2922,8 @@ const translations = {
     profilerSkip: "Пропустити",
     wingmanHintIntro:
       "👋 Маленька підказка — побачення через півтори години:\n\n",
+    dateDayActivityStartTitle: "Сьогодні побачення",
+    dateDayActivityStartBody: "Усе потрібне — на екрані блокування.",
     emergencyUnlocked:
       "Вікно екстреного скасування відкрите.\n" +
       "Зовсім не можеш прийти — тисни кнопку нижче.\n" +
@@ -3943,6 +3949,8 @@ const deTranslations: TranslationTable = {
   icebreakerStreamStart: "✨ Ich stelle ein paar Gesprächsthemen für euch zusammen…",
   noMatchStreamStart: "💫 Ich gehe den Pool für dich durch…",
   wingmanHintIntro: "👋 Insider-Tipp - dein Date ist in 90 Minuten:\n\n",
+  dateDayActivityStartTitle: "Heute ist dein Date",
+  dateDayActivityStartBody: "Alles Wichtige liegt auf deinem Sperrbildschirm.",
   profilerSkip: "Überspringen",
   emergencyUnlocked:
     "Das Notfall-Storno-Fenster ist offen.\n" +
@@ -4969,6 +4977,8 @@ const plTranslations: TranslationTable = {
   icebreakerStreamStart: "✨ Dobieram kilka tematów do rozmowy dla was…",
   noMatchStreamStart: "💫 Przeglądam dopasowania dla Ciebie…",
   wingmanHintIntro: "👋 Wskazówka od środka - randka jest za 90 minut:\n\n",
+  dateDayActivityStartTitle: "Dziś masz randkę",
+  dateDayActivityStartBody: "Wszystko, czego potrzebujesz, jest na ekranie blokady.",
   profilerSkip: "Pomiń",
   emergencyUnlocked:
     "Okno awaryjnego odwołania jest otwarte.\n" +

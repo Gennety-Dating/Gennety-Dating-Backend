@@ -352,7 +352,18 @@ user never runs two activities of one type, so re-registration upserts in
 place. A token APNs reports dead is deleted so the next activity re-registers
 cleanly. `onDelete: Cascade` from `users`. Written by
 `public/routes/live-activity.ts`; consumed by
-`services/push.ts → sendLiveActivityUpdateToUser`.
+`services/push.ts → sendLiveActivityUpdateToUser` (the per-activity `update`
+token) and `→ sendLiveActivityStartToUser` (the per-TYPE `start` token).
+
+**The two kinds are not interchangeable, and that is the whole point of the
+composite key.** An `update` token exists only while an activity is running, so
+it cannot be the thing that starts one; the `start` token is minted once per
+attributes type and survives the app being killed. `date_day` uses both — the
+lifecycle push-starts the card at T-5h on a phone whose owner has not opened
+the app, then updates it — while `match_decision` deliberately registers
+neither: the only thing that changes over its 24 hours is the clock, and the
+system runs that itself (PRODUCT_SPEC §Phase 4, iOS ARCHITECTURE §Live
+Activities).
 
 ### `phone_otps`
 

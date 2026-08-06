@@ -96,8 +96,13 @@ export function buildAlertPayload(input: AlertPushInput): Record<string, unknown
 
 export interface LiveActivityUpdateInput {
   event: "update" | "end";
-  /** Must match the ActivityAttributes.ContentState shape on the client. */
-  contentState: Record<string, unknown>;
+  /**
+   * Must match the ActivityAttributes.ContentState shape on the client.
+   * Optional on `end`, and omitting it there is the right default: the
+   * activity keeps whatever it was last showing, whereas a partial object
+   * fails to decode and the end is dropped.
+   */
+  contentState?: Record<string, unknown>;
   /** Unix seconds after which the UI shows as stale. */
   staleDate?: number;
   /** Unix seconds when an `end` event removes the activity from the lock screen. */
@@ -113,9 +118,53 @@ export function buildLiveActivityPayload(
     aps: {
       timestamp: Math.floor(nowMs / 1000),
       event: input.event,
-      "content-state": input.contentState,
+      ...(input.contentState ? { "content-state": input.contentState } : {}),
       ...(input.staleDate ? { "stale-date": input.staleDate } : {}),
       ...(input.dismissalDate ? { "dismissal-date": input.dismissalDate } : {}),
+    },
+  };
+}
+
+export interface LiveActivityStartInput {
+  /**
+   * The Swift `ActivityAttributes` TYPE NAME, spelled exactly as the struct is
+   * declared in the app. ActivityKit resolves the configuration by this string
+   * and silently drops a push it cannot match, so a rename on the client is a
+   * breaking change here — see `DATE_DAY_ATTRIBUTES_TYPE`.
+   */
+  attributesType: string;
+  /** The activity's immutable half. Must match the Swift struct's stored properties. */
+  attributes: Record<string, unknown>;
+  contentState: Record<string, unknown>;
+  /**
+   * Required by Apple on a start push: the activity appears without the user
+   * having opened anything, so there has to be a notification explaining why.
+   */
+  alert: { title: string; body: string };
+  staleDate?: number;
+}
+
+/**
+ * Push-to-start payload (iOS 17.2+): begins a Live Activity on a device where
+ * the app is not running at all.
+ *
+ * This is what makes the date-day activity a product rather than a decoration.
+ * A locally-started activity only appears the next time the user opens the
+ * app — and the whole point of a T-5h card is that they haven't.
+ */
+export function buildLiveActivityStartPayload(
+  input: LiveActivityStartInput,
+  nowMs = Date.now(),
+): Record<string, unknown> {
+  return {
+    aps: {
+      timestamp: Math.floor(nowMs / 1000),
+      event: "start",
+      "content-state": input.contentState,
+      "attributes-type": input.attributesType,
+      attributes: input.attributes,
+      alert: { title: input.alert.title, body: input.alert.body },
+      ...(input.staleDate ? { "stale-date": input.staleDate } : {}),
     },
   };
 }

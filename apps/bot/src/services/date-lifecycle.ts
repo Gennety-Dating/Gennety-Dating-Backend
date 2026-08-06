@@ -17,6 +17,11 @@ import { streamDraftsToChat } from "./ai-stream.js";
 import { AI_EMOJI } from "./ai-emoji.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { sendPushToUser } from "./push.js";
+import {
+  advanceDateDayActivities,
+  endDateDayActivities,
+  startDateDayActivities,
+} from "./date-day-activity.js";
 import { sweepExpiredVenueChanges } from "../handlers/matching/venue-change.js";
 import { buildMiniAppUrl } from "./mini-app-url.js";
 
@@ -61,6 +66,17 @@ function buildFeedbackKeyboard(
  * Each action is idempotent: tracked by DB flags so it's safe to
  * retry on failure or if the tick interval overlaps.
  */
+
+/**
+ * How long after `agreedTime` the native date-day Live Activity comes down.
+ * Deliberately its own constant rather than `PROXY_CLOSE_AFTER_HOURS`, which
+ * happens to hold the same number today: that one bounds the pre-date chat and
+ * is behind a feature flag, and retuning it must not silently change how long
+ * a card sits on someone's lock screen.
+ */
+const DATE_DAY_ACTIVITY_END_HOURS = 2;
+/** How far back the end sweep looks, so a restarted process still catches it. */
+const DATE_DAY_ACTIVITY_END_GRACE_MIN = 30;
 
 /** Static ice-breaker topics — swap with an LLM call later. */
 const ICEBREAKER_TOPICS_EN = [
@@ -344,6 +360,16 @@ export async function runDateLifecycleTick(
       deliver(match.userB.telegramId, draftsB, t(langB, "emergencyUnlocked"), emergKbB),
     ]);
 
+    // The native card starts at the same gate as the ice-breakers — push-to-
+    // start, because the point of a T-5h Live Activity is precisely the user
+    // who has not opened the app. A no-op for anyone without a start token.
+    await startDateDayActivities(match.id, now).catch((err: unknown) => {
+      console.warn(
+        `[date-lifecycle] date-day activity start failed for ${match.id}:`,
+        err instanceof Error ? err.message : err,
+      );
+    });
+
     // `icebreakersSentAt` was already stamped by the atomic claim above
     // (H2); persist only the generated content here. We'd rather miss one
     // send than duplicate-spam every 2 minutes (C-3 in the prior audit).
@@ -462,7 +488,42 @@ export async function runDateLifecycleTick(
 
     await Promise.all(deliveries);
 
+    await advanceDateDayActivities(match.id, "wingman").catch((err: unknown) => {
+      console.warn(
+        `[date-lifecycle] date-day activity wingman stage failed for ${match.id}:`,
+        err instanceof Error ? err.message : err,
+      );
+    });
+
     result.wingmen++;
+  }
+
+  // 2c. Take the date-day card down at T+2h — the same moment the pre-date
+  // proxy chat closes, and the last point at which anything on it is
+  // actionable. Deliberately a TIME WINDOW rather than an idempotency column:
+  // ending an activity that has already ended is a no-op, so a second sweep
+  // costs one wasted APNs call and nothing else. The window is generous
+  // against a restarted process; past its right edge the system's own 12-hour
+  // display cap is the backstop.
+  const dateDayEndFrom = new Date(
+    now.getTime() - (DATE_DAY_ACTIVITY_END_HOURS * 60 + DATE_DAY_ACTIVITY_END_GRACE_MIN) * 60_000,
+  );
+  const dateDayEndTo = new Date(now.getTime() - DATE_DAY_ACTIVITY_END_HOURS * 60 * 60 * 1000);
+  const finishedDates = await prisma.match.findMany({
+    where: {
+      status: "scheduled",
+      agreedTime: { gt: dateDayEndFrom, lte: dateDayEndTo },
+      icebreakersSentAt: { not: null },
+    },
+    select: { id: true },
+  });
+  for (const match of finishedDates) {
+    await endDateDayActivities(match.id).catch((err: unknown) => {
+      console.warn(
+        `[date-lifecycle] date-day activity end failed for ${match.id}:`,
+        err instanceof Error ? err.message : err,
+      );
+    });
   }
 
   // 3. Feedback prompt — 24h after agreed_time
