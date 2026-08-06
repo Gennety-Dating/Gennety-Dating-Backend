@@ -32,6 +32,7 @@ import { createTelegramOnboardingRouter } from "./routes/telegram-onboarding.js"
 import { createVerificationMiniAppRouter } from "./routes/verification-mini-app.js";
 import { createTicketRouter } from "./routes/ticket.js";
 import { createNativeTicketGateRouter } from "./routes/ticket-gate.js";
+import { createNativeCalendarRouter } from "./routes/calendar-native.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createRadarRouter } from "./routes/radar.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
@@ -101,6 +102,7 @@ let telegramOnboardingRouter: ReturnType<typeof createTelegramOnboardingRouter> 
 let verificationMiniAppRouter: ReturnType<typeof createVerificationMiniAppRouter> | null = null;
 let ticketRouter: ReturnType<typeof createTicketRouter> | null = null;
 let nativeTicketGateRouter: ReturnType<typeof createNativeTicketGateRouter> | null = null;
+let nativeCalendarRouter: ReturnType<typeof createNativeCalendarRouter> | null = null;
 let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
@@ -252,6 +254,18 @@ app.use("/v1/telegram-onboarding", (req, res, next) => {
     telegramOnboardingRouter = createTelegramOnboardingRouter(injectedBotApi);
   }
   telegramOnboardingRouter(req, res, next);
+});
+
+// Slot calendar for the NATIVE client — the JWT twin of /v1/calendar, which is
+// initData-authed and therefore unreachable from the app. Mounted before the
+// JWT /v1/matches router, which owns no such sub-path and would 404 it.
+app.use("/v1/matches/:matchId/calendar", (req, res, next) => {
+  if (!injectedBotApi) {
+    res.status(503).json({ error: "Calendar endpoint not ready" });
+    return;
+  }
+  if (!nativeCalendarRouter) nativeCalendarRouter = createNativeCalendarRouter(injectedBotApi);
+  nativeCalendarRouter(req, res, next);
 });
 
 // Date Ticket gate for the NATIVE client — same match, JWT auth instead of

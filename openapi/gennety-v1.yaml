@@ -1459,6 +1459,121 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/matches/{id}/calendar:
+    get:
+      tags: [matches]
+      operationId: getMatchCalendar
+      summary: Slot grid and both sides' marks
+      description: |
+        PRODUCT_SPEC §3.6. After mutual accept (and, when the §3.5b gate is
+        enabled, after both tickets settle) the server writes a fixed grid of
+        instants into the match; each side marks any subset as "I'm free".
+
+        The JWT twin of the `initData`-authed `/v1/calendar/*` used by the
+        Telegram Mini App. The mechanics behind both are the same functions —
+        auto-lock on a single overlap, `overlapCandidates` on several, the
+        first-mover notification — so the two surfaces cannot drift on the one
+        question that matters here, which is when a date locks in.
+
+        Poll this while the screen is open (~4s, like the Mini App) so the
+        partner's marks land live.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      responses:
+        "200":
+          description: The grid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalendarState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant of this match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: |
+            The calendar is closed for this match (cancelled, expired, or past
+            the venue step). Deliberately not a 404 — the match exists and the
+            caller is on it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: Calendar not ready (bot API unavailable)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      tags: [matches]
+      operationId: submitMatchCalendarSlots
+      summary: Replace this side's availability
+      description: |
+        `slots` is the FULL set for this side, not a delta, so unmarking needs
+        no second verb. Every entry must be one of `proposedTimes`; anything
+        else is a 400 rather than silently dropped.
+
+        The response is the new state, so no re-fetch is needed — at a 4s poll
+        that round trip is the difference between a tap landing and a tap
+        appearing to do nothing.
+
+        Three outcomes, decided server-side:
+
+        - **one shared slot** — the date locks immediately and `agreedTime` is
+          set. Nothing is asked of either side.
+        - **several shared slots** — `overlapCandidates` is returned and
+          NOTHING is locked. The actor picks the final one and re-submits it
+          alone. Initiator offers, responder decides: earliest-wins would
+          quietly take the choice away from the person who was offered it.
+        - **none** — the partner is told this side proposed times.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slots]
+              properties:
+                slots:
+                  type: array
+                  maxItems: 200
+                  items: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Saved; the new state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalendarState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant of this match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: The calendar is closed for this match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: Calendar not ready (bot API unavailable)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/matches/{id}/ticket-gate:
     get:
       tags: [matches]
@@ -2101,6 +2216,53 @@ components:
             Date Ticket wallet balance (§3.5b). On the user rather than behind a
             wallet route: the store screen and the gate both need it and the app
             already refetches `/v1/me`. Simply 0 while tickets are off.
+
+    CalendarState:
+      type: object
+      description: Mirrors `nativeState` in `public/routes/calendar-native.ts`
+      required:
+        [proposedTimes, mySlots, peerSlots, agreedTime, overlapCandidates,
+         timeZone, serverNow]
+      properties:
+        proposedTimes:
+          type: array
+          items: { type: string, format: date-time }
+          description: |
+            Every offerable instant, ascending. Server-owned and identical for
+            both sides; a submission outside this set is refused.
+        mySlots:
+          type: array
+          items: { type: string, format: date-time }
+        peerSlots:
+          type: array
+          items: { type: string, format: date-time }
+          description: |
+            The partner's marks. Not a blind-decision leak: this step is after
+            mutual accept, and seeing when they are free is the entire point —
+            tapping a slot they already marked agrees the date in one round
+            trip.
+        agreedTime:
+          type: [string, "null"]
+          format: date-time
+          description: Set the moment exactly one slot is shared.
+        overlapCandidates:
+          type: array
+          items: { type: string, format: date-time }
+          description: |
+            Non-empty only on a submission that produced MORE than one shared
+            slot. Nothing is locked; the actor re-submits one of these alone.
+            Always empty on a read.
+        timeZone:
+          type: [string, "null"]
+          description: |
+            IANA zone of the pair's dating city. Render the grid in THIS zone,
+            not the device's: the slots are instants, and a traveller shown
+            them on their own wall clock would agree to a time neither side
+            meant. Null for a profile with no city resolved yet — fall back to
+            the device zone.
+        serverNow:
+          type: string
+          format: date-time
 
     TicketGateState:
       type: object
