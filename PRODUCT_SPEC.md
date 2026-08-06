@@ -173,6 +173,22 @@ out of Telegram-only workers.
   didn't deliver, the chat asks for — which is what keeps a cached older bundle,
   the iOS rail and a legacy mid-flight account from dead-ending at the handoff.
   The change is additive by construction.
+  **The two tap-to-answer screens burst on tap (2026-08-06).** Gender and
+  preference are the only screens in the set where a single tap commits the
+  answer — no slider to drag, no drum to spin, no Continue pill afterwards — so
+  the tap was the whole interaction and produced nothing but a 1.5% scale before
+  the screen swapped. Tapping now throws a burst of objects themed to the option
+  from the point the finger landed on: football, boxing glove, race car, trophy,
+  dumbbell and gamepad on the male rows; butterfly, flower, heart, diamond,
+  crown and sparkle on the female ones; the shared symbols only on "both", which
+  must not read as a third gender. The picked row also lifts and holds its glow
+  for the beat the save takes, rather than dimming with the others.
+  Purely decorative and scoped as such (`apps/webapp/src/onboarding-burst.ts`):
+  it never gates or delays the save, the particles are authored vectors rather
+  than emoji (same rule as `icons.ts` — a rotating platform emoji rasterizes),
+  the palette is the button's own gradient plus one gold, and it is skipped
+  outright under `prefers-reduced-motion` or on a client with no Web Animations
+  API. Telegram-only; the native iOS client owns its own controls here.
 - **The phone gate is also the LOGIN (2026-07-25).** A trusted `message.contact`
   is Telegram vouching that the number belongs to the current Telegram account,
   and Telegram allows one active account per number — so a `User.phone` unique

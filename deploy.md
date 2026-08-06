@@ -172,6 +172,13 @@ this change where a user gets stuck at the handoff.
   that needs no Telegram and no account:
   `http://localhost:5173/onboarding.html?preview=basics:height&lang=ru&theme=light`
   — `import.meta.env.DEV`-gated, so it does not exist in the production bundle.
+- **The tap burst rides along, and it is client-only** (added 2026-08-06,
+  PRODUCT_SPEC §1.3). Tapping an option on the gender / preference screens
+  throws a themed particle burst from the touch point. No server change, no env,
+  no schema — it lives entirely in the Mini App bundle, so the
+  `./scripts/deploy-webapp.sh` step above is the whole deploy for it, and
+  skipping that step is what would ship the screens without it. Review it with
+  `?preview=basics:gender` (or `basics:preference`) on the same dev-only route.
 
 Post-deploy check — the route logs its own line on every screen, so one walk
 through onboarding on the dev bot should print five of them:

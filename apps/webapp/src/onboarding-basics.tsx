@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import type { TelegramProfileBasics, TelegramProfileLimits, TelegramProfilePatch } from "./api.js";
 import type { BasicsStep } from "./onboarding-basics-route.js";
+import { burstFromEvent } from "./onboarding-burst.js";
 import { errorCopy } from "./onboarding-errors.js";
 import type { OnboardingStrings } from "./onboarding-i18n.js";
 
@@ -294,6 +295,13 @@ interface ChoiceOption {
   tone: "male" | "female" | "neutral";
 }
 
+/**
+ * The two tap-to-answer screens. Unlike the other three there is no Continue
+ * pill here — the option IS the action — so the tap gets a reaction of its own:
+ * a burst of objects themed to what was picked, thrown from the point the
+ * finger landed on (`onboarding-burst.ts`). It is decoration only, and never
+ * gates the save.
+ */
 function ChoiceScreen(props: {
   title: string;
   options: ChoiceOption[];
@@ -302,6 +310,14 @@ function ChoiceScreen(props: {
   error: ReactNode;
   onPick: (value: string) => void;
 }): ReactElement {
+  // Which row is mid-pop. Cleared when the user comes back to a screen they
+  // already answered (the same component instance serves gender and
+  // preference, so a stale value would light the wrong row on arrival).
+  const [firing, setFiring] = useState<string | null>(null);
+  useEffect(() => {
+    setFiring(null);
+  }, [props.title]);
+
   return (
     <BasicsShell title={props.title} error={props.error} modifier="ob-basics--choice">
       <div className="ob-choice-stack">
@@ -311,10 +327,17 @@ function ChoiceScreen(props: {
             type="button"
             className={`ob-choice ob-choice--${option.tone} ${
               props.selected === option.value ? "is-selected" : ""
-            }`}
+            } ${firing === option.value ? "is-firing" : ""}`}
             disabled={props.busy}
             aria-pressed={props.selected === option.value}
-            onClick={() => props.onPick(option.value)}
+            onClick={(event) => {
+              setFiring(option.value);
+              // A crisper tap than the selection tick the save fires on
+              // success: this one lands with the burst, not a round-trip later.
+              app?.HapticFeedback?.impactOccurred("medium");
+              burstFromEvent(event, option.tone);
+              props.onPick(option.value);
+            }}
           >
             {option.label}
           </button>

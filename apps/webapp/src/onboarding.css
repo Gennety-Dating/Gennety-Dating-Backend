@@ -3280,6 +3280,9 @@ button {
   --tone-a: #a23350;
   --tone-b: #8b253b;
   --tone-c: #6f1c2f;
+  /* Anchors the `is-firing` halo pseudo-element; without it the halo would
+     resolve against `.ob-basics` and ring the whole screen. */
+  position: relative;
   min-height: 4.25rem;
   padding: 1rem 1.5rem;
   border: 0;
@@ -3336,9 +3339,98 @@ button {
   outline-offset: 3px;
 }
 
-.ob-choice:disabled {
+/* The row that was just picked is disabled for the beat the save takes, but it
+   must NOT dim: it is mid-pop, and dimming the one thing the user just chose
+   reads as the tap having failed. Only the other rows recede. */
+.ob-choice:disabled:not(.is-firing) {
   opacity: 0.55;
   cursor: default;
+}
+
+/* The picked row lifts and keeps its glow for the beat before the screen
+   swaps, so the burst has something to launch off rather than hanging over a
+   button that already went flat. `is-firing` is set on tap and never cleared:
+   the element is unmounted by the advance a moment later. */
+.ob-choice.is-firing {
+  transform: scale(1.035);
+  transition: transform 320ms cubic-bezier(0.22, 1.3, 0.4, 1);
+}
+
+.ob-choice.is-firing::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.34);
+  animation: ob-choice-halo 520ms ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes ob-choice-halo {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.07);
+  }
+}
+
+/* ── Tap burst ──────────────────────────────────────────────────────────
+   The particle layer for the two tap-to-answer screens (onboarding-burst.ts).
+   It lives in <body>, not in the React tree, so the screen advancing mid-flight
+   can't cut the animation off — which means it must never take a pointer, and
+   must sit above the flow without reaching Telegram's own chrome. Each particle
+   is positioned AT the tap point; the flight is a transform from there, so the
+   whole burst moves by editing two custom properties. */
+.ob-burst {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 60;
+  pointer-events: none;
+  contain: layout style;
+}
+
+.ob-burst-bit,
+.ob-burst-ring {
+  position: absolute;
+  left: var(--burst-x, 50%);
+  top: var(--burst-y, 50%);
+  display: block;
+  /* Centre the particle on the tap point using the INDEPENDENT `translate`
+     property, not `transform`. The flight animation owns `transform` outright
+     and would overwrite a centring offset written there; `translate` composes
+     ahead of it, and a pure translation commutes with the flight, so the
+     particle both starts centred and spins about its own middle. */
+  translate: -50% -50%;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+
+.ob-burst-bit > svg {
+  display: block;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.35));
+}
+
+.ob-burst-dot {
+  border-radius: 50%;
+  background: var(--dot, #fff);
+}
+
+.ob-burst-ring {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--ring, #fff);
+  opacity: 0;
+}
+
+.ob-burst-ring--late {
+  border-width: 1px;
 }
 
 /* ── Height drum ────────────────────────────────────────────────────────
