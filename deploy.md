@@ -1,10 +1,12 @@
 # Gennety Dating Deploy
 
-**PENDING — demo mode: a second, isolated bot that walks one person through the
-whole product (DEMO_MODE.md).** Not deployed yet. **No Prisma schema change, no
+**Deployed 2026-08-05 — demo mode: a second, isolated bot that walks one person
+through the whole product (DEMO_MODE.md).** **No Prisma schema change, no
 production env change, no production flag change** — production behaviour is
 byte-identical with `DEMO_MODE_ENABLED` unset, which is how it ships. What it
-adds is a SECOND deployment of the same source tree.
+adds is a SECOND deployment of the same source tree. Production was NOT
+restarted: `gennety-bot` held PID 2174947 and restart count 49 across the whole
+rollout.
 
 For an investor or a friend, the only way to see the product end to end today is
 to actually register, wait for a Thursday drop, and hope someone matches — i.e.
@@ -24,21 +26,54 @@ verification for real users — it stops the bot from booting**, naming the
 setting that gave it away. Production is unaffected either way; there is nothing
 to undo on the production side.
 
-One-time setup before the first demo deploy (all of it outside `/opt/gennety`):
+One-time setup, all of it done on 2026-08-05 and all outside `/opt/gennety`:
 
-1. BotFather: create the demo bot, then `/setdomain demo-app.gennety.com` —
-   without it the liveness Mini App cannot ask for camera permission.
-2. A **second Supabase project** (demo data is disposable; pgvector is created
-   by `db:push` because the datasource declares the extension), plus three
-   `…-demo` storage buckets.
-3. Hostinger DNS: `demo-app` and `demo-api` A records → `167.172.178.229`.
-4. Two Caddy blocks — `demo-api.gennety.com` → `localhost:3102`, and
-   `demo-app.gennety.com` serving `/var/www/demo-app` (copy the
-   `dating-calendar` block's headers/caching verbatim).
-5. `/opt/gennety-demo/.env` — the full list is in DEMO_MODE.md → Setup.
-6. Seed: `pnpm --filter @gennety/db db:push`, then the Kyiv venue catalog
-   (`pnpm seed-venues:import --apply`), then `pnpm demo:seed -- --photos=<dir>`.
-7. `pm2 start bash --name gennety-demo -- -c "cd /opt/gennety-demo && ./apps/bot/node_modules/.bin/tsx apps/bot/src/index.ts"` then `pm2 save`.
+1. BotFather: demo bot `@gennety_demo_bot` (id `8845048941`), `/setdomain
+   demo-app.gennety.com` — without it the liveness Mini App cannot ask for
+   camera permission. ✓
+2. A **second Supabase project** — ref `amwalpnalqkhyiaqpqre`, distinct from
+   production's `ophztqjrabwemkqwidkq`. pgvector is created by `db:push`
+   because the datasource declares the extension. ✓
+3. Hostinger DNS: `demo-app` and `demo-api` A records → `167.172.178.229`. ✓
+4. Two Caddy blocks appended to `/etc/caddy/Caddyfile` (backup taken first) —
+   `demo-api.gennety.com` → `localhost:3102`, `demo-app.gennety.com` serving
+   `/var/www/demo-app`. TLS auto-provisioned. ✓
+5. `/opt/gennety-demo/.env` — generated as production's `.env` **minus every
+   key `.env.demo` defines, minus `FOUNDER_BOT_TOKEN`/`FOUNDER_TELEGRAM_ID`**,
+   with `.env.demo` appended. Dropping the founder keys is deliberate:
+   `assertDemoIsolation` only checks the FLAG, so removing the token means no
+   route to the real ops chat exists even if the flag were flipped. ✓
+6. Seed: `db:push` + `db:drift-check` OK; Kyiv catalog imported — **1208
+   venues** (913 base / 195 premium / 100 alternative). ✓
+7. `pm2 start bash --name gennety-demo --max-memory-restart 300M -- -c "cd /opt/gennety-demo && ./apps/bot/node_modules/.bin/tsx apps/bot/src/index.ts"` then `pm2 save`. ✓
+
+**The 300 MB cap is not decoration.** The droplet has 2 GB and the demo is the
+process that must die first if memory gets tight — it has no users to lose.
+Production carries no such cap.
+
+**Two things this rollout uncovered, both fixed in code:**
+
+- `scripts/seed-venues.mjs` loaded `.env.local` with `override: true`, so
+  `DATABASE_URL=… pnpm seed-venues:import --apply` **silently wrote to the dev
+  database and reported success**. It surfaced as "1208 updated" against a
+  database holding zero rows. This runbook tells you to run that script against
+  production, and DEMO_MODE.md against the demo DB; both were unfollowable. An
+  exported variable now beats every dotenv file (`.env.local` still beats
+  `.env`).
+- The demo photo seeder fell back to `FOUNDER_TELEGRAM_ID` for its upload chat —
+  a **production**-bot chat. It failed with "chat not found", and had it
+  resolved it would have posted fictional profiles into the real founder ops
+  feed. It now resolves the chat from the demo DB, falling back to `getUpdates`.
+
+**One open item.** `SUPABASE_URL` in the demo `.env` still points at the
+production Supabase project (the demo project's service-role key was never
+supplied), with `…-demo` bucket names. In the Telegram demo path this is inert:
+the only write, the liveness reference selfie, is stubbed by `demo/verification.ts`,
+Telegram profile photos are `file_id`s, and the mobile/Aether upload paths are
+not reachable. If a write ever does occur it targets buckets that do not exist
+in the production project, so it fails loudly rather than polluting anything.
+Close it by putting the demo project's `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
+into `/opt/gennety-demo/.env`.
 
 Thereafter it is one command per release, run **after** production is verified:
 
@@ -71,6 +106,19 @@ ssh root@167.172.178.229 'pm2 logs gennety-demo --lines 40 --nostream' | head -2
 curl -s https://demo-api.gennety.com/v1/ping
 curl -sI https://demo-app.gennety.com/onboarding.html | head -1
 ```
+
+Verified on the 2026-08-05 rollout: `Bot @gennety_demo_bot started`, banner
+naming the demo bot + `aws-1-eu-west-1` database, `[worker] Demo driver every
+3000ms`, **`[cron] Drop matching NOT scheduled (demo mode owns matching)`** and
+`[cron] No-match notice NOT scheduled` (the two that would otherwise pair two
+visitors with each other), `:3102` listening, `/v1/ping` ok, **all 11 Mini App
+pages 200**, no admin API (empty key), restart count 0, error log empty.
+
+**Still outstanding at hand-off:** nobody had pressed Start on the demo bot, so
+the partner photos are not uploaded yet — `pnpm demo:seed -- --photos=<dir>`
+needs one real chat to mint per-bot `file_id`s. The profiles themselves (Артём
+29, Ева 25) are seeded and the demo runs; the pitch just has no images until
+that step.
 
 **Rollback:** `pm2 delete gennety-demo`. Production is untouched by anything in
 this block — no shared database, no shared token, no shared port, no shared
