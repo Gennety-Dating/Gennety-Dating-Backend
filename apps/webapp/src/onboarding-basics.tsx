@@ -487,7 +487,6 @@ function PreferenceColumn(props: {
                 left: `${slot.x}%`,
                 top: `${slot.y}%`,
                 width: `${slot.w}%`,
-                opacity: slot.opacity,
                 zIndex: slot.z,
                 ["--rot" as string]: `${slot.rot}deg`,
               }}

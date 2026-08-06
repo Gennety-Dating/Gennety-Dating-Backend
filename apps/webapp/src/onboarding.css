@@ -3472,28 +3472,32 @@ button {
 
 .ob-pref-shot {
   position: absolute;
-  /* Slot geometry (left/top/width/opacity/z) is inline — authored per photo in
+  /* Slot geometry (left/top/width/z) is inline — authored per photo in
      preference-layout.ts, which is the only place the composition lives. */
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 9 / 16;
   overflow: hidden;
-  border-radius: 14px;
-  background: rgba(0, 0, 0, 0.35);
+  border-radius: 12px;
+  /* Opaque, and framed. Overlapping tiles have to read as a stack of prints;
+     translucent ones read as a rendering fault, with two faces occupying the
+     same square. The white edge is what separates one print from the next where
+     they cross — a border rather than an inset shadow, which a child image
+     paints straight over. */
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  box-sizing: border-box;
+  background: #14161a;
   transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
-  box-shadow:
-    0 14px 26px -14px rgba(0, 0, 0, 0.8),
-    inset 0 0 0 1.5px rgba(255, 255, 255, 0.22);
+  box-shadow: 0 16px 30px -14px rgba(0, 0, 0, 0.85);
 }
 
 .ob-pref-shot img {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  /* Anchored to the TOP, not the centre. The photos are full-length 9:16 and
-     the frame is 3:4, so covering it throws away a third of the height —
-     centred, that third comes off the top and bottom equally and takes the
-     head with it. Faces are the entire point of this screen. */
-  object-position: center top;
+  /* `contain`, not `cover`: the whole person, always. The frame is the photos'
+     own 9:16, so nothing is letterboxed today — but an odd-sized photo dropped
+     into the folder later shows a margin rather than a decapitated head, and a
+     margin is a visible signal to go and re-crop it. */
+  object-fit: contain;
 }
 
 .ob-pref-label {

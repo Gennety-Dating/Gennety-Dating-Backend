@@ -201,9 +201,9 @@ out of Telegram-only workers.
   to be compared (`preference-variant.ts`, `?v=` in dev — `?v=both` stacks them
   on one scrolling page, one full screen each, so either can be edited and
   checked against the other without a reload in between; production ships
-  `LIVE_VARIANT` alone): **(1)** ordinary photographs tilted inside each column,
-  slightly transparent, a few hanging past its edge, over the column's own
-  burgundy/blue gradient; **(2)** one finished group image per side — people
+  `LIVE_VARIANT` alone): **(1)** six ordinary photographs tilted inside each
+  column, a few hanging past its edge, over the column's own burgundy/blue
+  gradient; **(2)** one finished group image per side — people
   already standing together, background removed, white contour already drawn —
   spanning the column edge to edge over near-black behind a thin border, under
   a heavy white word. Variant 2's button is **fitted to its artwork on both
@@ -216,9 +216,20 @@ out of Telegram-only workers.
   different picture, not a mirrored layout.
   The photo placements are authored, not random (`preference-layout.ts`):
   a scatter re-rolled per render would shuffle under the user's finger and could
-  never be reviewed twice. The right column is the left one mirrored, which is
+  never be reviewed twice. Variant 1's is four bands read from the bottom up —
+  two small, one large, two small, one large-ish — and the sixth photo is
+  deliberately the LAST slot, the bottom row's outer corner, so a five-photo set
+  still renders a composition rather than half a band. Each frame shows a
+  **whole person**: the tile carries the photos' own 9:16 and `object-fit:
+  contain`, so an odd-sized photo dropped in later shows a margin instead of a
+  decapitated head. The frames are **opaque**, with a thin white border — a
+  photograph seen through another photograph reads as a rendering fault rather
+  than as depth, so where they overlap the paint order is the whole of what you
+  see. The right column is the left one mirrored, which is
   also what keeps every sideways overhang pointing at the screen's own margin
-  rather than into the gutter the two columns share. Photos are `alt=""` and
+  rather than into the gutter the two columns share; because a tilted tile is
+  wider than its own box (`slotSpanX`, and with full-length photos the tilt term
+  dominates), that clearance is computed rather than eyeballed. Photos are `alt=""` and
   take no pointer, so an overhang cannot become a tap target sitting outside the
   button it belongs to, and the label alone carries the accessible name. Same
   save, same burst, same collector write as before — this is the control

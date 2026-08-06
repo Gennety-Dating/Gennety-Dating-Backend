@@ -336,10 +336,11 @@ this change where a user gets stuck at the handoff.
   - **Photos ship inside the bundle**, and they are the one thing here with a
     real user cost. They live in
     `apps/webapp/src/preference/{photo,cutout}/{men,women}/`, enumerated by
-    `import.meta.glob`. The screen downloads **440 KB** on variant 1 (10 photos)
-    or **224 KB** on variant 2 (2 group images) — against a 124 KB onboarding
-    chunk, over mobile data, inside Telegram. That is the budget; check it if
-    the set ever changes.
+    `import.meta.glob`. The screen downloads **~520 KB** on variant 1 (12
+    photos, six per side) or **224 KB** on variant 2 (2 group images) — against
+    a 124 KB onboarding chunk, over mobile data, inside Telegram. That is the
+    budget; check it if the set ever changes. It grew from 440 KB when the sixth
+    photo per side was added.
     **Never copy originals in by hand.** They are 2–6 MB PNGs, ~40 MB across the
     set. `~/Desktop/gennety-preference-photos/prepare.mjs --tight` is what
     resizes, re-encodes and crops them into the repo; the naive `sync.sh` that
