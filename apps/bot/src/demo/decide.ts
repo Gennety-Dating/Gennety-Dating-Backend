@@ -201,9 +201,20 @@ function decideMatchAction(match: DemoMatchSnapshot): DemoDecision {
   switch (match.status) {
     case "proposed": {
       // Blind-decision invariant is untouched: the puppet answers only after
-      // the visitor has committed, and always with a yes. A "no" from the
-      // visitor terminates the row, which is handled by `awaitingContinueOffer`.
-      if (match.visitorAccepted === true && match.partnerAccepted === null) {
+      // the visitor has committed — but it answers whichever way they went.
+      //
+      // A decline does NOT terminate the row. Per PRODUCT_SPEC §3.4 the first
+      // decider leaves it `proposed` regardless of their answer; it only
+      // resolves once the second side decides, or at the 24h TTL. So a puppet
+      // that waited for `visitorAccepted === true` sat idle forever after a
+      // "no": the match never went terminal, `awaitingContinueOffer` never
+      // flipped, and the "continue the demo" button never arrived. The one
+      // path the demo has for its most likely misstep dead-ended for a day.
+      //
+      // Answering yes also makes the mixed-outcome reveal real: the visitor
+      // learns their match had said yes, which is the actual product behaviour
+      // and a more honest thing to show than silence.
+      if (match.visitorAccepted !== null && match.partnerAccepted === null) {
         return wait({ kind: "partner_accept" });
       }
       return idle;

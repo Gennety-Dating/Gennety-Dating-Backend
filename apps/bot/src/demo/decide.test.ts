@@ -170,6 +170,24 @@ describe("blind decision invariant", () => {
     ).toEqual({ kind: "partner_accept" });
   });
 
+  it("also answers after the visitor DECLINED, so the row can terminate", () => {
+    // §3.4: a first decider leaves the match `proposed` whichever way they
+    // went. A puppet that only answered a "yes" left a declined match live
+    // until its 24h TTL, so `awaitingContinueOffer` never flipped and the
+    // "continue the demo" button never arrived.
+    expect(
+      decideDemoAction(snapshot({ match: match({ visitorAccepted: false }) })).action,
+    ).toEqual({ kind: "partner_accept" });
+  });
+
+  it("never answers twice after a decline either", () => {
+    expect(
+      decideDemoAction(
+        snapshot({ match: match({ visitorAccepted: false, partnerAccepted: true }) }),
+      ).action,
+    ).toEqual({ kind: "none" });
+  });
+
   it("never answers twice", () => {
     expect(
       decideDemoAction(
