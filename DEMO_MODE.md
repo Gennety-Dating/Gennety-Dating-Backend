@@ -100,6 +100,19 @@ The two "different first" steps matter: they are what make the negotiation read
 like a person with their own calendar and their own taste, rather than a bot
 that says yes. The 90-second give-in exists so a demo can never dead-end.
 
+**Every pitch releases the match cooldown on BOTH participants, not just the
+puppet.** `createProposedMatch` enforces `lastMatchedAt < now − 24h` on each id
+it is handed, including a pair named explicitly — so the first pitch makes the
+*visitor* ineligible for a day, and the second pitch of the session (after a
+decline, after «continue the demo», or simply to see it again) silently
+produces nothing while the driver retries every tick. The cooldown protects a
+real candidate from being served up day after day; neither a stage prop nor a
+fifteen-minute demo account is that.
+
+Because the allocator returns a bare `null` for a dozen distinct reasons, the
+driver names the cause in the log rather than reporting "refused" — in a demo,
+a refusal means the chat has stopped in front of whoever is watching.
+
 ### Blind decision, preserved
 
 The puppet answers only after the visitor has committed, and always with a yes.
