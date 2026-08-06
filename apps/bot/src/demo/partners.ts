@@ -248,18 +248,26 @@ async function upsertDemoPartner(partner: DemoPartnerDefinition): Promise<void> 
 }
 
 /**
- * Make a puppet matchable again.
+ * Make these people matchable again — **both sides, not just the puppet**.
  *
- * `createProposedMatch` stamps `lastMatchedAt` on both participants and the
- * eligibility snapshot enforces a cooldown (`CADENCE.cooldownMs`, 24h under the
- * weekly profile). Without clearing it, the puppet could be matched once a day
- * — so the second visitor of the afternoon, or the same visitor retrying after
- * a decline, would silently get no match at all. Real users are meant to have
- * that cooldown; a stage prop is not.
+ * `createProposedMatch` stamps `lastMatchedAt` on both participants and
+ * `loadEligibleUsersForIds` enforces `lastMatchedAt < now − CADENCE.cooldownMs`
+ * (24h under the weekly profile) on every id it is handed, including a pair
+ * named explicitly. So one match makes the VISITOR ineligible for a day too,
+ * and the demo's whole recovery path — decline, «continue the demo», or simply
+ * wanting to see the pitch again — silently produced no match at all: the
+ * driver just retried every tick and logged `createProposedMatch refused`.
+ *
+ * Releasing only the puppet was the original bug. The cooldown exists to stop a
+ * real candidate being served up day after day; neither a stage prop nor a
+ * fifteen-minute demo account is that. Nothing else in the demo database reads
+ * this column — the drop cron is not scheduled here (DEMO_MODE.md) — so this
+ * allocator is its only consumer.
  */
-export async function releaseDemoPartner(partnerUserId: string): Promise<void> {
+export async function releaseMatchCooldown(userIds: readonly string[]): Promise<void> {
+  if (userIds.length === 0) return;
   await prisma.profile.updateMany({
-    where: { userId: partnerUserId },
+    where: { userId: { in: [...userIds] } },
     data: { lastMatchedAt: null },
   });
 }

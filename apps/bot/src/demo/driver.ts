@@ -4,7 +4,8 @@ import { prisma } from "@gennety/db";
 import type { Language } from "@gennety/shared";
 
 import { env } from "../config.js";
-import { createProposedMatch } from "../services/match-engine.js";
+import { MATCH_COOLDOWN_MS, createProposedMatch } from "../services/match-engine.js";
+import { ACTIVE_MATCH_STATUSES } from "../services/active-match-priority.js";
 import { dispatchMatches } from "../services/dispatch-queue.js";
 import { applyMatchDecision } from "../public/matches-service.js";
 import { processCalendarSlotsUpdate } from "../handlers/matching/scheduler.js";
@@ -29,7 +30,7 @@ import { runDateLifecycleTick } from "../services/date-lifecycle.js";
 import {
   DEMO_PARTNERS,
   pickDemoPartner,
-  releaseDemoPartner,
+  releaseMatchCooldown,
   seedDemoPartners,
 } from "./partners.js";
 import { decideDemoAction, type DemoAction, type DemoMatchSnapshot, type DemoSnapshot } from "./decide.js";
@@ -408,10 +409,11 @@ async function performAction(
 /**
  * Explain how matching works, then produce the first real match.
  *
- * `createProposedMatch` is the production allocator, so the puppet has to be
- * genuinely eligible to be paired — which is exactly the behaviour we want the
- * demo to exercise. It also stamps `lastMatchedAt` on both sides, hence the
- * release call: a stage prop must not inherit the 24h candidate cooldown.
+ * `createProposedMatch` is the production allocator, so BOTH participants have
+ * to be genuinely eligible — which is exactly the behaviour we want the demo to
+ * exercise. It also stamps `lastMatchedAt` on both sides, hence the release
+ * call covering the visitor as well as the puppet: neither may inherit the 24h
+ * candidate cooldown, or the second pitch of the session never happens.
  */
 async function startDemoMatch(
   api: Api<RawApi>,
@@ -435,7 +437,7 @@ async function startDemoMatch(
     return;
   }
 
-  await releaseDemoPartner(partner.id);
+  await releaseMatchCooldown([userId, partner.id]);
 
   // Marked the moment it is sent, not after the pitch lands. This beat is the
   // one piece of narration delivered from inside an action rather than through
@@ -465,13 +467,113 @@ async function startDemoMatch(
     starvationBonus: 0,
   });
   if (!match) {
-    console.error(`${LOG} createProposedMatch refused for visitor ${userId}`);
+    console.error(
+      `${LOG} createProposedMatch refused for visitor ${userId}: ` +
+        (await explainRefusal(userId, partner.id)),
+    );
     return;
   }
   const dispatch = await dispatchMatches(api, [match.id], 0);
   if (dispatch.failed > 0) {
     console.error(`${LOG} pitch dispatch failed:`, dispatch.errors);
   }
+}
+
+/**
+ * Say WHY the allocator said no.
+ *
+ * `createProposedMatch` returns a bare `null` for every one of a dozen reasons —
+ * correct for production, where the weekly batch simply moves on to the next
+ * pair, and useless in a demo, where it means the visitor is watching a chat
+ * that has stopped. The first time this fired it took reading
+ * `loadEligibleUsersForIds` line by line to discover that the VISITOR was inside
+ * the 24h candidate cooldown; the log had said only "refused".
+ *
+ * Re-derives the same predicates rather than sharing them: they live inside a
+ * Prisma `where` in the allocator with no exported form, and the demo must not
+ * grow a second copy that production is obliged to keep in sync. If this ever
+ * reports "no obvious cause" the allocator has a filter this list has not
+ * learned about — go read it. Runs only on the failure path, so it costs
+ * nothing in the normal case.
+ */
+async function explainRefusal(visitorId: string, partnerId: string): Promise<string> {
+  const reasons: string[] = [];
+
+  const priorPair = await prisma.match.findFirst({
+    where: {
+      OR: [
+        { userAId: visitorId, userBId: partnerId },
+        { userAId: partnerId, userBId: visitorId },
+      ],
+    },
+    select: { id: true, status: true },
+  });
+  if (priorPair) {
+    reasons.push(
+      `lifetime pair ban — these two already have match ${priorPair.id} (${priorPair.status}); ` +
+        `the demo clears its own rows in clearDemoMatches()`,
+    );
+  }
+
+  const cutoff = new Date(Date.now() - MATCH_COOLDOWN_MS);
+  for (const [label, id] of [
+    ["visitor", visitorId],
+    ["puppet", partnerId],
+  ] as const) {
+    const row = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        status: true,
+        onboardingStep: true,
+        gender: true,
+        preference: true,
+        verificationStatus: true,
+        verificationSkippedAt: true,
+        profile: {
+          select: {
+            lastMatchedAt: true,
+            embeddingDirty: true,
+            homeCityKey: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
+        matchesAsA: { where: { status: { in: [...ACTIVE_MATCH_STATUSES] } }, select: { id: true } },
+        matchesAsB: { where: { status: { in: [...ACTIVE_MATCH_STATUSES] } }, select: { id: true } },
+      },
+    });
+    if (!row) {
+      reasons.push(`${label} row is missing`);
+      continue;
+    }
+    const verified =
+      row.verificationStatus === "verified" ||
+      (row.verificationStatus === "unverified" && row.verificationSkippedAt !== null);
+
+    if (row.status !== "active") reasons.push(`${label} status=${row.status}`);
+    if (row.onboardingStep !== "completed") reasons.push(`${label} onboardingStep=${row.onboardingStep}`);
+    if (!row.gender || !row.preference) reasons.push(`${label} gender/preference not set`);
+    if (!verified) reasons.push(`${label} verificationStatus=${row.verificationStatus}`);
+    if (!row.profile) reasons.push(`${label} has no profile`);
+    else {
+      if (row.profile.embeddingDirty) reasons.push(`${label} embeddingDirty (no vector yet)`);
+      if (!row.profile.homeCityKey) reasons.push(`${label} homeCityKey is null`);
+      if (row.profile.latitude === null || row.profile.longitude === null) {
+        reasons.push(`${label} has no saved city coordinates`);
+      }
+      const last = row.profile.lastMatchedAt;
+      if (last && last >= cutoff) {
+        reasons.push(
+          `${label} is inside the ${Math.round(MATCH_COOLDOWN_MS / 3_600_000)}h candidate ` +
+            `cooldown (lastMatchedAt=${last.toISOString()}) — releaseMatchCooldown() must cover BOTH sides`,
+        );
+      }
+    }
+    const live = [...row.matchesAsA, ...row.matchesAsB];
+    if (live.length > 0) reasons.push(`${label} already occupies live match ${live[0]!.id}`);
+  }
+
+  return reasons.length > 0 ? reasons.join("; ") : "no obvious cause — read loadEligibleUsersForIds()";
 }
 
 /**
@@ -628,7 +730,7 @@ export async function clearDemoMatches(userId: string): Promise<void> {
       ],
     },
   });
-  for (const id of ids) await releaseDemoPartner(id);
+  await releaseMatchCooldown([userId, ...ids]);
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
