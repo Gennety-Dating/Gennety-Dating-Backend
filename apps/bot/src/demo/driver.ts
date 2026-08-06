@@ -436,7 +436,20 @@ async function startDemoMatch(
   }
 
   await releaseDemoPartner(partner.id);
-  await say(api, telegramId, demoText("matchmaking", lang));
+
+  // Marked the moment it is sent, not after the pitch lands. This beat is the
+  // one piece of narration delivered from inside an action rather than through
+  // `decideNarration`, because it ends with "here is your profile 👇" and must
+  // sit immediately above the card — a separate narrate tick would put
+  // DEMO_STEP_WAIT_MS between the promise and the card. The cost of living
+  // outside the normal path is that nothing else dedupes it: when
+  // `createProposedMatch` refused (a puppet with no embedding), every 3-second
+  // retry re-sent the whole explanation and the visitor collected seven copies
+  // of it with no profile ever arriving.
+  if (!spokenBeats.get(userId)?.has("matchmaking")) {
+    await say(api, telegramId, demoText("matchmaking", lang));
+    markSpoken(userId, "matchmaking");
+  }
 
   // A plausible frozen breakdown so `match_score_logs` — and therefore the
   // agent's `explain_my_match` tool — has something real to describe when a

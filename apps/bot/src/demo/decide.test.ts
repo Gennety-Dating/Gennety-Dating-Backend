@@ -76,6 +76,14 @@ describe("demo narration", () => {
     expect(decision.waitMs).toBe(0);
   });
 
+  it("does not replay the intro to an active visitor after a restart", () => {
+    // `spokenBeats` lives in memory, so a deploy forgets what was read. Every
+    // other beat is protected by its own window having closed; this is the
+    // intro's.
+    const decision = decideDemoAction(snapshot({ spokenBeats: new Set() }));
+    expect(decision.action).not.toEqual({ kind: "narrate", beat: "intro" });
+  });
+
   it("still leads with the intro when a later beat is also owed", () => {
     // Ordering matters: a visitor who reaches the verification gate without
     // having read the intro must get the intro first, not the gate's warning.

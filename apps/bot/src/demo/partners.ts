@@ -1,5 +1,6 @@
 import { prisma, type Gender, type GenderPreference } from "@gennety/db";
 import { DEFAULT_MARKET, cityKeyToTimeZone } from "@gennety/shared";
+import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 
 /**
  * The puppet on the other side of every demo match.
@@ -209,12 +210,15 @@ async function upsertDemoPartner(partner: DemoPartnerDefinition): Promise<void> 
     longitude: market.longitude,
     locationUpdatedAt: now,
     timeZone: cityKeyToTimeZone(market.cityKey),
-    // The eligibility snapshot (`loadEligibleUsersForIds`) requires
-    // `embeddingDirty: false` but never reads the vector itself — the demo
-    // driver creates matches directly instead of going through the pgvector
-    // candidate query, so the puppet needs no embedding. Marking it clean is
-    // therefore accurate, not a shortcut: there is nothing pending.
-    embeddingDirty: false,
+    // Dirty on purpose, and cleared below by a real embedding.
+    //
+    // `createProposedMatch` re-checks eligibility through
+    // `loadEligibleUsersForIds`, whose last step is
+    // `.filter((u) => embeddingMap.get(u.id))` — an embedding is REQUIRED even
+    // when the pair is named explicitly and never goes through the pgvector
+    // candidate search. A puppet without one is silently dropped from the
+    // snapshot and every pitch is refused.
+    embeddingDirty: true,
   };
 
   const user = await prisma.user.upsert({
@@ -229,6 +233,18 @@ async function upsertDemoPartner(partner: DemoPartnerDefinition): Promise<void> 
     create: { userId: user.id, ...profileFields },
     update: profileFields,
   });
+
+  // Build the vector through the production refresher rather than writing one
+  // here, so the puppet's embedding can never drift from how a real profile's
+  // is derived. It reads the same `psychologicalSummary` the pitch generator
+  // does, so the demo's synergy copy describes a genuinely comparable profile.
+  const refreshed = await refreshUserEmbedding(user.id);
+  if (refreshed.failed > 0 || refreshed.refreshed === 0) {
+    console.warn(
+      `[demo] embedding refresh did not complete for ${partner.firstName} — ` +
+        `the puppet stays ineligible until it does (matching requires a vector)`,
+    );
+  }
 }
 
 /**

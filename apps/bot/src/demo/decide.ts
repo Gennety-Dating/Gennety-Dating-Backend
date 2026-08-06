@@ -153,8 +153,17 @@ function decideNarration(snapshot: DemoSnapshot): DemoAction | null {
   // pushed at someone who had not yet been asked which language they read.
   // Baking it into the Mini App instead was rejected: demo behaviour must not
   // leak into `apps/webapp`.
+  // The upper bound is what makes the beat survive a restart. `spokenBeats` is
+  // in memory (no demo-only schema, DEMO_MODE.md), so a deploy mid-demo forgets
+  // what a visitor has read — and every other beat is saved by its own window
+  // already having closed. Without one here, an active visitor would be handed
+  // the whole "how this works" opener again on the next PM2 restart. Once they
+  // are past onboarding the moment has genuinely passed: the matchmaking beat
+  // that precedes the pitch covers what happens from there.
   if (!spoken.has("intro")) {
-    return snapshot.onboardingStep === "consent" || snapshot.onboardingStep === "language"
+    const beforeHandoff =
+      snapshot.onboardingStep === "consent" || snapshot.onboardingStep === "language";
+    return beforeHandoff || snapshot.status !== "onboarding"
       ? null
       : { kind: "narrate", beat: "intro" };
   }
