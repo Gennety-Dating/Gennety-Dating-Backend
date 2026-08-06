@@ -2257,7 +2257,7 @@ components:
          venueGoogleMapsUri, venueSelectionReason, myVenueIntentStatus,
          partnerVenueIntentSubmitted, venueIntentMode,
          mapPreviewUrl, transitHint, partnerFirstName, partnerAge,
-         partnerGender, partnerUniversityDomain, myVibeSubmitted, partnerVibeSubmitted,
+         partnerGender, myDecision, partnerUniversityDomain, myVibeSubmitted, partnerVibeSubmitted,
          safetyBriefAck, proposalDeadlineAt, serverTimeAt]
       properties:
         id: { type: string, format: uuid }
@@ -2289,14 +2289,30 @@ components:
         transitHint: { type: [string, "null"] }
         partnerFirstName: { type: [string, "null"] }
         partnerAge: { type: [integer, "null"] }
-        partnerGender:
-          oneOf:
-            - $ref: "#/components/schemas/Gender"
-            - type: "null"
+        myDecision:
+          type: [string, "null"]
           description: |
-            The native pitch's decision question is gendered in four of the
-            five supported languages. Reveals nothing the pairing did not —
-            the photo, name and age are already on screen at that moment.
+            `accept` | `decline` — THIS caller's own answer to the pitch, null
+            while it is still owed.
+
+            Blind-decision safe by construction: it is never the partner's
+            choice. It exists because a first decider leaves the row
+            `proposed` (§3.4), so without it a client cannot tell "you still
+            owe an answer" from "you answered, we're waiting on them" — and
+            would re-open the pitch over a decision already made.
+        partnerGender:
+          type: [string, "null"]
+          description: |
+            `male` | `female`. The native pitch's decision question is gendered
+            in four of the five supported languages. Reveals nothing the
+            pairing did not — the photo, name and age are already on screen at
+            that moment.
+
+            Deliberately NOT `oneOf: [$ref Gender, "null"]`: swift-openapi-
+            generator does not support that shape and SKIPS the property
+            silently, which is how `SerializedUser.language` ended up missing
+            from the generated client. A nullable scalar is the shape that
+            actually reaches iOS.
         partnerUniversityDomain: { type: [string, "null"] }
         myVibeSubmitted: { type: boolean }
         partnerVibeSubmitted: { type: boolean }

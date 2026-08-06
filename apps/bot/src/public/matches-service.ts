@@ -113,6 +113,16 @@ export interface SerializedMatch {
    * anyway, so this reveals nothing the pairing did not.
    */
   partnerGender: "male" | "female" | null;
+  /**
+   * THIS side's own answer to the pitch, or null while it is still owed.
+   *
+   * Blind-decision safe by construction: it is the caller's own choice, never
+   * the partner's. It exists because a first decider leaves the row
+   * `proposed` (§3.4) — without it the native client cannot tell "you still
+   * owe an answer" from "you answered, we're waiting on them", and would
+   * re-open the pitch over a decision the user already made.
+   */
+  myDecision: "accept" | "decline" | null;
   partnerUniversityDomain: string | null;
   myVibeSubmitted: boolean;
   partnerVibeSubmitted: boolean;
@@ -268,6 +278,8 @@ export async function getCurrentMatchForUser(
       vibeLngB: true,
       safetyAckA: true,
       safetyAckB: true,
+      acceptedByA: true,
+      acceptedByB: true,
       dispatchedAt: true,
       userA: { select: { firstName: true, age: true, gender: true, universityDomain: true } },
       userB: { select: { firstName: true, age: true, gender: true, universityDomain: true } },
@@ -278,6 +290,8 @@ export async function getCurrentMatchForUser(
 
   const side: MatchSide = match.userAId === userId ? "A" : "B";
   const partner = side === "A" ? match.userB : match.userA;
+  // Only ever this side's own column — the peer's stays unread here.
+  const myAccepted = side === "A" ? match.acceptedByA : match.acceptedByB;
 
   const myVibeSubmitted =
     side === "A"
@@ -359,6 +373,7 @@ export async function getCurrentMatchForUser(
     partnerFirstName: partner.firstName,
     partnerAge: partner.age,
     partnerGender: partner.gender,
+    myDecision: myAccepted === null ? null : myAccepted ? "accept" : "decline",
     partnerUniversityDomain: partner.universityDomain,
     myVibeSubmitted,
     partnerVibeSubmitted,

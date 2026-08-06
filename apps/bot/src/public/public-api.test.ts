@@ -2446,6 +2446,36 @@ describe("/v1/matches/*", () => {
     });
   });
 
+  // Without this field the client cannot tell "you still owe an answer" from
+  // "you answered, we're waiting on them" — a first decider leaves the row
+  // `proposed` either way, so the pitch would re-open over a decision the user
+  // already made.
+  it("GET /current reports only THIS side's own decision, never the peer's", async () => {
+    const alice = await seedUser({ firstName: "Alice" });
+    const bob = await seedUser({ firstName: "Bob" });
+    const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+    const before = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+    expect(before.body.match.myDecision).toBeNull();
+
+    // Bob answers first. The row stays `proposed`, and Alice must still see
+    // nothing — his choice is not hers to read.
+    db.matches.get(match.id)!.acceptedByB = true;
+    const peerAnswered = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+    expect(peerAnswered.body.match.status).toBe("proposed");
+    expect(peerAnswered.body.match.myDecision).toBeNull();
+
+    db.matches.get(match.id)!.acceptedByA = false;
+    const mine = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+    expect(mine.body.match.myDecision).toBe("decline");
+  });
+
   it("POST /:id/decision FIRST decline keeps the row 'proposed' (blind invariant) and nudges the peer", async () => {
     // H1: a single decline must NOT cancel the match — the peer's decision
     // stays blind until they also decide (or the TTL expires). The peer gets
