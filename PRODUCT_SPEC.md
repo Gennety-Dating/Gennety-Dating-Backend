@@ -205,13 +205,23 @@ out of Telegram-only workers.
   column, a few hanging past its edge, over the column's own burgundy/blue
   gradient; **(2)** one finished group image per side — people
   already standing together, background removed, white contour already drawn —
-  spanning the column edge to edge over near-black behind a thin border, under
-  a heavy white word. Variant 2's button is **fitted to its artwork on both
-  axes**: full width, so the figures the artwork cuts off end exactly on the
-  border, and only as tall as the picture plus its word. That works because the
-  group is prepared at ~0.52 w/h (roughly three figures); at the full
-  five-across ratio the same rule yields a 200px stub with a void above it, so
-  the crop is a measurement rather than a preference. Variant 2 is never
+  sitting inside a near-black panel behind a thin border, under a heavy white
+  word. Variant 2's button **states its own shape and the artwork fits inside
+  it** (reversed 2026-08-06 from the opposite rule — the button shrink-wrapping
+  a cropped group). The whole group is shown uncropped, `object-fit: contain`,
+  settled on the button's floor with a margin on every side and headroom above
+  the heads. The button's ratio is fixed rather than derived, because a button
+  fitted to whole-group artwork — nearly square at 0.86 and 0.79 w/h for the two
+  sides, against a column that is half a phone wide — either cuts figures off at
+  the edges or opens a void above them.
+  **A taller button does not draw the people any bigger**: the artwork runs out
+  of column WIDTH long before it runs out of height, so every extra pixel of
+  height lands as headroom, never as scale. That is why the side margins are
+  narrow (3% a side) and why this variant reaches 8px past the page's own margin
+  on each side — column width is the only lever on how large five people can be
+  drawn. It also bounds what the design can do: at half a phone, five people
+  are ~32px each, and the only way past that is to show fewer of them, which
+  the earlier ~0.52 crop did at the cost of two of the models. Variant 2 is never
   mirrored — these are photographs of real people, and flipping them is a
   different picture, not a mirrored layout.
   The photo placements are authored, not random (`preference-layout.ts`):

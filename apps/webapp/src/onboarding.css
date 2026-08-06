@@ -3594,15 +3594,38 @@ button {
   flex: 0 0 auto;
   min-height: 0;
   align-items: end;
+  /* Reaches 8px past the page's own margin on each side. Column WIDTH is the
+     only thing that decides how big five people can be drawn — button height
+     does not touch it — so this is the one lever that makes them larger, and
+     it costs nothing: variant 1 keeps the full margin, because its tiles hang
+     out into it on purpose. The width has to grow with the margin: the base
+     rule states `width: 100%`, and a negative margin alone cannot widen a box
+     whose width is already fixed. */
+  width: calc(100% + 1rem);
+  margin-inline: -0.5rem;
 }
 
+
 .ob-basics--pref-v2 .ob-pref-col {
-  /* Flush artwork inside a 30px radius has to be clipped, or the image's square
-     corners poke out of the rounded ones. Variant 1 needs the opposite and
-     keeps `overflow: visible` for its overhangs. */
+  /* The button states its own shape rather than shrink-wrapping the artwork.
+     Whole-group artwork is nearly square (0.86 and 0.79 w/h for the two sides)
+     while a column is half a phone wide, so a button fitted to it either cuts
+     figures off at the edges or leaves a void above them. Given a shape of its
+     own it can hold the whole group, comfortably inside its border, with air
+     above — which is the point.
+     A taller button does NOT show the people any bigger: the artwork runs out
+     of column WIDTH long before it runs out of height, so every extra pixel of
+     button height lands as headroom, never as scale. 100/195 puts the button
+     back at roughly the height it had while it was shrink-wrapping a cropped
+     group, with the headroom a quarter of it rather than half. */
+  aspect-ratio: 100 / 195;
+  /* Belt and braces: nothing should reach the edge any more, but a rounded
+     button must clip anyway or square corners poke out of round ones. Variant 1
+     needs the opposite and keeps `overflow: visible` for its overhangs. */
   overflow: hidden;
   flex-direction: column;
   justify-content: flex-end;
+  padding-top: 0.85rem;
   background: rgba(6, 6, 8, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow:
@@ -3624,14 +3647,26 @@ button {
   text-shadow: none;
 }
 
-/* Edge to edge. `width: 100%` is what puts the artwork's cut edges on the
-   button's border; `height: auto` keeps the group at its own proportions, so
-   nobody is stretched to make a layout work. In flow rather than absolute,
-   because the column's height is supposed to follow from it. */
+/* Inside the button, never touching it. The group is shown WHOLE — no crop, its
+   own proportions — so `contain` is what guarantees that: it fits the artwork
+   to whichever axis runs out first and leaves the other as margin, rather than
+   filling the box and losing whoever stands at the edge.
+ *
+ * `flex: 1` hands it every pixel the label does not need, and `bottom` settles
+ * the group on the button's floor, so the slack collects above their heads as
+ * air rather than under their feet as a gap. The side inset is deliberately
+ * small — 3% a side — because the artwork's width IS the limit on how big the
+ * five people can be drawn, so every point given away as margin comes straight
+ * off their faces. It is there to keep the outermost figures clear of the
+ * border, and no wider than that job needs. */
 .ob-pref-group {
   display: block;
-  width: 100%;
-  height: auto;
+  width: 94%;
+  margin: 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  object-fit: contain;
+  object-position: bottom center;
   /* The white contour is drawn into the artwork already, so CSS adds only the
      shadow that lifts the group off the panel. */
   filter: drop-shadow(0 14px 20px rgba(0, 0, 0, 0.5));

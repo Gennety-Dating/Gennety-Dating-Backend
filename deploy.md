@@ -376,15 +376,19 @@ this change where a user gets stuck at the handoff.
   - **Photos ship inside the bundle**, and they are the one thing here with a
     real user cost. They live in
     `apps/webapp/src/preference/{photo,cutout}/{men,women}/`, enumerated by
-    `import.meta.glob`. The screen downloads **~520 KB** on variant 1 (12
-    photos, six per side) or **224 KB** on variant 2 (2 group images) — against
+    `import.meta.glob`. The screen downloads **~530 KB** on variant 1 (12
+    photos, six per side) or **~330 KB** on variant 2 (2 group images) — against
     a 124 KB onboarding chunk, over mobile data, inside Telegram. That is the
-    budget; check it if the set ever changes. It grew from 440 KB when the sixth
-    photo per side was added.
+    budget; check it if the set ever changes. Variant 1 grew from 440 KB with
+    the sixth photo per side; variant 2 from 224 KB when its crop was dropped
+    and the artwork went back to the whole five-across group.
     **Never copy originals in by hand.** They are 2–6 MB PNGs, ~40 MB across the
-    set. `~/Desktop/gennety-preference-photos/prepare.mjs --tight` is what
-    resizes, re-encodes and crops them into the repo; the naive `sync.sh` that
-    preceded it was deleted precisely because running it shipped the originals.
+    set. `~/Desktop/gennety-preference-photos/prepare.mjs` is what resizes,
+    re-encodes and trims them into the repo; the naive `sync.sh` that preceded
+    it was deleted precisely because running it shipped the originals. **Run it
+    with no flags** — `--tight` narrows the group cutout to ~3 figures, which is
+    what the button wanted while it was fitted to the artwork and is wrong now
+    that the artwork fits inside the button.
   - **`onboarding.html` now requests Inter 800** for variant 2's heavy word
     (the Google Fonts URL previously stopped at 700). One extra font file for
     every onboarding user. If variant 1 wins, drop `;800` again — it is the only
