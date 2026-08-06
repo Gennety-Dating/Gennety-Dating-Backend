@@ -86,7 +86,7 @@ different snapshot, not as a broken hook.
 | State | What the puppet does | Production function reused |
 |---|---|---|
 | active + verified, no match | explain matchmaking, create the match, dispatch the pitch | `createProposedMatch`, `dispatchMatches` |
-| `proposed`, visitor accepted | accept | `applyMatchDecision` |
+| `proposed`, visitor answered (either way) | accept | `applyMatchDecision` |
 | ticket gate, visitor paid | settle its own half from its wallet | `useTicketFromBalance` |
 | calendar, visitor picked | counter with **different** slots | `processCalendarSlotsUpdate` |
 | calendar, no overlap after 90s | give in and take one of theirs | `processCalendarSlotsUpdate` |
@@ -158,6 +158,13 @@ only change needed if a demo in those languages is ever required.
   offers a button that deletes its own match history and re-pitches. The
   lifetime pair ban (§3.2 filter 6) is not bypassed in the allocator; the demo
   removes its own rows instead.
+
+  **The puppet has to answer a "no" for any of that to happen.** A first
+  decider leaves the row `proposed` whichever way they went (§3.4) — it goes
+  terminal only when the second side answers or the 24h TTL fires. So the
+  puppet accepts after a decline too, which both frees the recovery path and
+  makes the mixed-outcome reveal real: the visitor is told their match had said
+  yes, which is what the product actually does.
 - **`/restart`** wipes the account through the real `deleteUserAccount`, not a
   bespoke reset — that function is the only code that knows every table,
   storage object and founder-report snapshot a user touches.
