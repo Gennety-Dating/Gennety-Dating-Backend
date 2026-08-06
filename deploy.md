@@ -257,9 +257,12 @@ this change where a user gets stuck at the handoff.
     every onboarding user. If variant 1 wins, drop `;800` again — it is the only
     line of this change that costs anything to a user who never sees variant 2.
   - **Two designs exist behind `LIVE_VARIANT`** (`preference-variant.ts`), which
-    is `1`. The `?v=` override and the on-screen toggle are
-    `import.meta.env.DEV`-gated and verified absent from the built bundle;
-    switching the live one is a one-line code change, not an env flag.
+    is `1`. The `?v=` override, the on-screen toggle, and the `?v=both` review
+    page that stacks the two designs are all `import.meta.env.DEV`-gated —
+    re-verified absent from the built JS after the stack was added (the CSS
+    cannot be folded away and keeps ~0.3 KB of dead rules, as the toggle's own
+    styles already did). Switching the live one is a one-line code change, not
+    an env flag.
 - **And so does the height drum's per-row tick** (added 2026-08-06,
   PRODUCT_SPEC §1.3). The drum pulses `HapticFeedback.selectionChanged` as each
   value passes under the capsule instead of once when the scroll stops, and its

@@ -3638,8 +3638,35 @@ button {
    in onboarding-basics.tsx); these rules are the only trace left behind. */
 /* Top-right, because bottom-centre is exactly where the "both" pill lives and
    a review toggle must not sit on top of the thing being reviewed. */
+/* Dev-only review scaffolding: `?v=both` puts the two designs on one scrolling
+   page, one full screen each, so an edit to either is checked against the other
+   by scrolling rather than by reloading with a different query param. Snapping
+   makes that a flick instead of a drag. Constant-folded out of production. */
+.ob-pref-stack {
+  height: 100%;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.ob-pref-stack-item {
+  position: relative;
+  /* Exactly one viewport each, so a section is the screen as it really ships
+     and not a squeezed thumbnail of it. */
+  height: 100%;
+  scroll-snap-align: start;
+}
+
+.ob-pref-stack-item + .ob-pref-stack-item {
+  border-top: 1px dashed rgba(127, 127, 127, 0.35);
+}
+
+/* Anchored to the shell (`.ob-basics` is positioned), NOT to the viewport:
+   stacked, two fixed bars would pile into the same corner and only the last
+   one would be readable. */
 .ob-pref-devbar {
-  position: fixed;
+  position: absolute;
   top: 0.5rem;
   right: 0.5rem;
   z-index: 90;
@@ -3651,15 +3678,37 @@ button {
   pointer-events: none;
 }
 
+/* What this section IS, as opposed to where you can go — the two are separate
+   so a screenshot of one section says which design it shows. */
+.ob-pref-devtag {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(139, 37, 59, 0.92);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.ob-pref-devnav {
+  display: flex;
+  gap: 0.25rem;
+}
+
 .ob-pref-devlink {
-  padding: 0.3rem 0.75rem;
+  padding: 0.3rem 0.7rem;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.72);
-  color: #fff;
+  color: rgba(255, 255, 255, 0.72);
   font-size: 0.75rem;
   font-weight: 600;
   text-decoration: none;
   pointer-events: auto;
+}
+
+.ob-pref-devlink.is-current {
+  background: rgba(255, 255, 255, 0.92);
+  color: #111;
 }
 
 .ob-pref-devnote {

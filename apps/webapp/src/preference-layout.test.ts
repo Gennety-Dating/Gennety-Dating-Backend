@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { SCATTER_SLOTS, mirrorScatter, placeScatter } from "./preference-layout.js";
 import { groupCutout, orderedAssets } from "./preference-photos.js";
-import { otherVariantHref, parseVariant, preferenceVariant } from "./preference-variant.js";
+import {
+  parseVariant,
+  parseView,
+  preferenceView,
+  variantOf,
+  viewHref,
+} from "./preference-variant.js";
 
 describe("scatter placement", () => {
   it("renders the prefix when there are fewer photos than slots", () => {
@@ -92,16 +98,40 @@ describe("variant selection", () => {
   });
 
   it("falls back to the live variant when ?v= is absent or junk", () => {
-    expect(preferenceVariant("?v=nonsense")).toBe(1);
-    expect(preferenceVariant("")).toBe(1);
+    expect(preferenceView("?v=nonsense")).toBe(1);
+    expect(preferenceView("")).toBe(1);
   });
 
-  it("flips the query param without losing the rest of the URL", () => {
+  it("sets the query param without losing the rest of the URL", () => {
     expect(
-      otherVariantHref(1, "http://localhost:5173/onboarding.html?preview=basics:preference"),
+      viewHref(2, "http://localhost:5173/onboarding.html?preview=basics:preference"),
     ).toBe("http://localhost:5173/onboarding.html?preview=basics%3Apreference&v=2");
-    expect(otherVariantHref(2, "http://localhost:5173/onboarding.html?v=2")).toBe(
+    expect(viewHref(1, "http://localhost:5173/onboarding.html?v=2")).toBe(
       "http://localhost:5173/onboarding.html?v=1",
     );
+    expect(viewHref("both", "http://localhost:5173/onboarding.html?v=1")).toBe(
+      "http://localhost:5173/onboarding.html?v=both",
+    );
+  });
+});
+
+/**
+ * The stacked review page. It exists so the two designs can be edited and
+ * compared without a reload in between; production never renders it.
+ */
+describe("the side-by-side review view", () => {
+  it("recognises ?v=both as a view, but never as a design", () => {
+    expect(parseView("both")).toBe("both");
+    expect(parseView("2")).toBe(2);
+    expect(parseView("neither")).toBeNull();
+    // A design is always a concrete one — nothing downstream should have to
+    // handle "both" as something to draw.
+    expect(parseVariant("both")).toBeNull();
+  });
+
+  it("resolves the stacked view to the live design when one is required", () => {
+    expect(preferenceView("?v=both")).toBe("both");
+    expect(variantOf("both")).toBe(1);
+    expect(variantOf(2)).toBe(2);
   });
 });

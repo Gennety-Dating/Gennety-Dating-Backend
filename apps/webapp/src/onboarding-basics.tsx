@@ -9,8 +9,8 @@ import type { OnboardingStrings } from "./onboarding-i18n.js";
 import { placeScatter } from "./preference-layout.js";
 import { groupCutout, isPlaceholderPhotoSet, photoSet } from "./preference-photos.js";
 import type { PreferenceSide } from "./preference-photos.js";
-import { otherVariantHref, preferenceVariant } from "./preference-variant.js";
-import type { PreferenceVariant } from "./preference-variant.js";
+import { ALL_VARIANTS, preferenceView, variantOf, viewHref } from "./preference-variant.js";
+import type { PreferenceVariant, PreferenceView } from "./preference-variant.js";
 import { WHEEL_ITEM_H, shouldTickHaptic, wheelValueAt } from "./onboarding-wheel.js";
 
 /**
@@ -116,7 +116,7 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
       );
     case "preference":
       return (
-        <PreferenceScreen
+        <PreferenceGate
           strings={strings}
           busy={busy}
           error={errorNode}
@@ -374,7 +374,9 @@ function ChoiceScreen(props: {
  * quieter — it is a real answer, not the headline one, and three equal rows
  * made it compete with the two that most people are actually choosing between.
  *
- * Two designs exist behind `preferenceVariant()`; see preference-variant.ts.
+ * Two designs exist behind `preferenceView()`; see preference-variant.ts. In dev
+ * `?v=both` renders them stacked (`PreferenceReview` below) — otherwise this
+ * screen is one design, chosen by `LIVE_VARIANT`.
  */
 function PreferenceScreen(props: {
   strings: OnboardingStrings;
@@ -382,9 +384,12 @@ function PreferenceScreen(props: {
   busy: boolean;
   error: ReactNode;
   onPick: (value: string) => void;
+  /** Which design to draw. The caller resolves it, so the stack can force one. */
+  variant: PreferenceVariant;
+  /** Dev-only corner label + navigation; absent in production. */
+  chrome?: ReactNode;
 }): ReactElement {
-  const { strings } = props;
-  const variant = preferenceVariant();
+  const { strings, variant } = props;
   const { firing, fire } = useChoiceTap(props.onPick, strings.basicsPreferenceTitle);
 
   const column = (side: PreferenceSide, label: string, tone: BurstTone) => (
@@ -421,7 +426,7 @@ function PreferenceScreen(props: {
       >
         {strings.basicsPreferenceBoth}
       </button>
-      {import.meta.env.DEV ? <VariantToggle variant={variant} /> : null}
+      {props.chrome}
     </BasicsShell>
   );
 }
@@ -499,11 +504,57 @@ function PreferenceColumn(props: {
 }
 
 /**
- * Dev-only review affordance: flip between the two designs without editing
- * code. `import.meta.env.DEV` is constant-folded, so neither this component nor
- * the `?v=` parsing behind it exists in the production bundle.
+ * The preference screen as the app renders it, plus — in dev only — the review
+ * scaffolding around it.
+ *
+ * `?v=both` stacks the two designs on one scrolling page, one full screen each.
+ * That is what makes them comparable while they are still being edited: a
+ * change to either is checked against the other by scrolling, not by reloading
+ * with a different query param and holding the previous screen in your head.
+ * Each section snaps and carries its own V1/V2 badge, so a screenshot of it is
+ * self-labelling.
+ *
+ * `import.meta.env.DEV` is constant-folded, so production ships neither the
+ * stack nor the `?v=` parsing behind it — it renders `LIVE_VARIANT` alone.
  */
-function VariantToggle(props: { variant: PreferenceVariant }): ReactElement {
+function PreferenceGate(
+  props: Omit<Parameters<typeof PreferenceScreen>[0], "variant" | "chrome">,
+): ReactElement {
+  const view = preferenceView();
+
+  if (!import.meta.env.DEV || view !== "both") {
+    const variant = variantOf(view);
+    return (
+      <PreferenceScreen
+        {...props}
+        variant={variant}
+        chrome={
+          import.meta.env.DEV ? <VariantToggle view={view} variant={variant} /> : undefined
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="ob-pref-stack">
+      {ALL_VARIANTS.map((variant) => (
+        <section key={variant} className="ob-pref-stack-item">
+          <PreferenceScreen
+            {...props}
+            variant={variant}
+            chrome={<VariantToggle view={view} variant={variant} />}
+          />
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/** Dev-only: which design this section is, and where else you can go. */
+function VariantToggle(props: {
+  view: PreferenceView;
+  variant: PreferenceVariant;
+}): ReactElement {
   const missing =
     props.variant === 1
       ? isPlaceholderPhotoSet("men") || isPlaceholderPhotoSet("women")
@@ -512,11 +563,21 @@ function VariantToggle(props: { variant: PreferenceVariant }): ReactElement {
       : !groupCutout("men") || !groupCutout("women")
         ? "no group cutout yet — drop one PNG per side"
         : null;
+
   return (
     <div className="ob-pref-devbar">
-      <a className="ob-pref-devlink" href={otherVariantHref(props.variant)}>
-        {props.variant === 1 ? "V1 → try V2" : "V2 → back to V1"}
-      </a>
+      <span className="ob-pref-devtag">V{props.variant}</span>
+      <span className="ob-pref-devnav">
+        {([1, 2, "both"] as const).map((target) => (
+          <a
+            key={String(target)}
+            className={`ob-pref-devlink ${props.view === target ? "is-current" : ""}`}
+            href={viewHref(target)}
+          >
+            {target === "both" ? "both" : `V${target}`}
+          </a>
+        ))}
+      </span>
       {missing ? <span className="ob-pref-devnote">{missing}</span> : null}
     </div>
   );

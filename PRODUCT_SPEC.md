@@ -198,8 +198,10 @@ out of Telegram-only workers.
   people behind the choice — with "both" underneath, smaller and quieter: a
   real answer, but not the headline one, and three equal rows made it compete
   with the two most users are actually deciding between. Two designs were built
-  to be compared (`preference-variant.ts`, `?v=` in dev; production ships
-  `LIVE_VARIANT`): **(1)** ordinary photographs tilted inside each column,
+  to be compared (`preference-variant.ts`, `?v=` in dev — `?v=both` stacks them
+  on one scrolling page, one full screen each, so either can be edited and
+  checked against the other without a reload in between; production ships
+  `LIVE_VARIANT` alone): **(1)** ordinary photographs tilted inside each column,
   slightly transparent, a few hanging past its edge, over the column's own
   burgundy/blue gradient; **(2)** one finished group image per side — people
   already standing together, background removed, white contour already drawn —
