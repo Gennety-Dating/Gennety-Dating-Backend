@@ -1,5 +1,26 @@
 # Gennety Dating Deploy
 
+**PENDING — the Type Radar stops gating a client that cannot open it.** Not
+deployed yet. **No Prisma schema change, no env change, no flag change** —
+code-only, and Telegram behaviour is unchanged by construction
+(`AgentDeps.canPresentTypeRadar` defaults to true).
+
+**Read this one before deciding the deploy order.** `TYPE_RADAR_ENABLED=true` is
+live, and the gate was written into `runAgentTurn`, which BOTH surfaces share —
+while only the Telegram handler consumes `typeRadarRequested` and attaches the
+buttons that clear it. So on the native rail the invite came back as a bare
+question on every turn with nothing to tap, and the collector never advanced
+past `context_dump`/`photos`. **iOS onboarding has been impassable in production
+since that flag was flipped**, which also means the founder's pending live runs
+(4 real photos through Rekognition, the end-to-end liveness pass) cannot be done
+until this ships. Nothing else in the backlog blocks them.
+
+Telegram is unaffected either way, so this changes no behaviour a current user
+sees — but it is the one PENDING block whose absence is actively blocking work.
+Commit `e0079df`; regression test `onboarding-agent.test.ts` → "does not gate a
+caller that cannot present the radar". Full reasoning: TYPE_RADAR_PRODUCT_SPEC.md
+→ «Mobile parity».
+
 **Deployed 2026-08-05 — demo mode: a second, isolated bot that walks one person
 through the whole product (DEMO_MODE.md).** **No Prisma schema change, no
 production env change, no production flag change** — production behaviour is
