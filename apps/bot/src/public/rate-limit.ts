@@ -1,4 +1,4 @@
-import rateLimit, { ipKeyGenerator, type Options } from "express-rate-limit";
+import rateLimit, { ipKeyGenerator, MemoryStore, type Options } from "express-rate-limit";
 import type { Request } from "express";
 import { createHash } from "node:crypto";
 
@@ -15,8 +15,28 @@ function ipKey(req: Request): string {
   return ipKeyGenerator(req.ip ?? "");
 }
 
-/** Global floor — 100 req/min per IP. */
-export const globalLimiter = make({ windowMs: 60_000, limit: 100 });
+/**
+ * Global floor — 100 req/min per IP.
+ *
+ * The store is held so tests can clear it between cases. Every request in the
+ * public-API suite comes from one loopback address, so the whole file shares a
+ * single 100-request budget: adding a handful of cases to one describe block
+ * made unrelated tests further down answer 429. That is a property of the test
+ * harness, not of the product, and this is the seam that lets the harness say
+ * so. Production behaviour is unchanged — an explicit `MemoryStore` is what
+ * `express-rate-limit` builds by default anyway.
+ */
+const globalLimiterStore = new MemoryStore();
+export const globalLimiter = make({
+  windowMs: 60_000,
+  limit: 100,
+  store: globalLimiterStore,
+});
+
+/** Test-only: forget every counted request against the global floor. */
+export function resetGlobalRateLimit(): void {
+  globalLimiterStore.resetAll?.();
+}
 
 /** OTP send — 5/hour per email + IP. */
 export const otpRequestLimiter = make({

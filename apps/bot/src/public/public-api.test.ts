@@ -13,6 +13,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import { MAX_PHOTOS, MIN_PHOTOS } from "@gennety/shared";
+import { resetGlobalRateLimit } from "./rate-limit.js";
 
 const embeddingRefreshMocks = vi.hoisted(() => ({
   refreshUserEmbedding: vi.fn().mockResolvedValue({
@@ -65,6 +66,7 @@ vi.mock("../config.js", () => ({
     JWT_ACCESS_TTL: "15m",
     JWT_REFRESH_TTL: "30d",
     PUBLIC_PORT: 3101,
+    PUBLIC_BASE_URL: "https://dating-api.test",
     PUBLIC_CORS_ORIGIN: "*",
     EXPO_ACCESS_TOKEN: "",
     SUPABASE_URL: "",
@@ -252,6 +254,10 @@ const db = {
 };
 
 function resetDb(): void {
+  // Every request in this file comes from one loopback IP, so the 100 req/min
+  // global floor is shared by the whole suite: without this, adding cases to
+  // one describe block makes unrelated tests further down answer 429.
+  resetGlobalRateLimit();
   db.users.clear();
   db.otps.length = 0;
   db.sessions.clear();
@@ -487,6 +493,11 @@ vi.mock("@gennety/db", async () => {
           const hit =
             list.find(
               (m) =>
+                // `where.id` was ignored here until 2026-08-05, which made any
+                // query scoped to a specific match silently resolve to the
+                // caller's newest one — a test could then pass while asking
+                // about a match that isn't the one under test.
+                (where.id === undefined || m.id === where.id) &&
                 (!statusFilter || statusFilter.includes(m.status)) &&
                 (idIsUserA(m, uid ?? "") || idIsUserB(m, uid ?? "")),
             ) ?? null;
@@ -2336,6 +2347,103 @@ describe("/v1/matches/*", () => {
     expect(res.status).toBe(200);
     expect(res.body.match.id).toBe(scheduled.id);
     expect(res.body.match.status).toBe("scheduled");
+  });
+
+  // The partner's face is the one piece of another user's data this API hands
+  // out. Everything here is about who may load it, and for how long.
+  describe("GET /:id/partner-photos", () => {
+    const withPhotos = (photos: string[]): Partial<UserRow> => ({
+      profile: {
+        id: crypto.randomUUID(),
+        userId: "",
+        hobbies: [],
+        partnerPreferences: null,
+        psychologicalSummary: null,
+        ageRangeMin: null,
+        ageRangeMax: null,
+        matchRadius: "campus_only",
+        photos,
+      },
+    });
+
+    it("gives a participant one URL per partner photo", async () => {
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob", ...withPhotos(["b/1.jpg", "tgfileid2"]) });
+      const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+      const res = await request(app)
+        .get(`/v1/matches/${match.id}/partner-photos`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.urls).toHaveLength(2);
+      // The URL is scoped to this viewer and this match — never a raw ref.
+      expect(res.body.urls[0]).toContain(`m=${match.id}`);
+      expect(res.body.urls[0]).toContain(`v=${alice.id}`);
+      expect(res.body.urls[0]).not.toContain("b/1.jpg");
+    });
+
+    it("404s for a user who is not in the match", async () => {
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob", ...withPhotos(["b/1.jpg"]) });
+      const stranger = await seedUser({ firstName: "Mallory" });
+      const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+      const res = await request(app)
+        .get(`/v1/matches/${match.id}/partner-photos`)
+        .set("Authorization", `Bearer ${signAccess(stranger.id)}`);
+
+      expect(res.status).toBe(404);
+    });
+
+    // After a decline the pair is banned for life (§3.2 filter 6), so there is
+    // nothing left the face is needed for.
+    it("404s once the match is no longer live", async () => {
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob", ...withPhotos(["b/1.jpg"]) });
+      const match = await seedMatch(alice.id, bob.id, { status: "cancelled" });
+
+      const res = await request(app)
+        .get(`/v1/matches/${match.id}/partner-photos`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+      expect(res.status).toBe(404);
+    });
+
+    it("refuses a tampered byte URL", async () => {
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob", ...withPhotos(["b/1.jpg", "b/2.jpg"]) });
+      const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+      const listed = await request(app)
+        .get(`/v1/matches/${match.id}/partner-photos`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+      const url = new URL(listed.body.urls[0]);
+      // Same signature, different photo — the index is part of the payload.
+      url.searchParams.set("i", "1");
+
+      const res = await request(app).get(`${url.pathname}${url.search}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    // The signature alone would keep working for its full ten minutes; the
+    // bytes route re-resolves entitlement so the link dies with the match.
+    it("stops serving bytes once the match is cancelled, on an already-minted URL", async () => {
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob", ...withPhotos(["b/1.jpg"]) });
+      const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+      const listed = await request(app)
+        .get(`/v1/matches/${match.id}/partner-photos`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+      const url = new URL(listed.body.urls[0]);
+
+      db.matches.get(match.id)!.status = "cancelled";
+      const res = await request(app).get(`${url.pathname}${url.search}`);
+
+      expect(res.status).toBe(404);
+    });
   });
 
   it("POST /:id/decision FIRST decline keeps the row 'proposed' (blind invariant) and nudges the peer", async () => {

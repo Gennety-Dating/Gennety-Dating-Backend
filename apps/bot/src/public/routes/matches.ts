@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth-middleware.js";
 import { agentTextLimiter } from "../rate-limit.js";
 import { classifyMatchDecisionForUser } from "../../services/decision-intent.js";
+import { countPartnerPhotos, partnerPhotoUrls } from "../partner-photos.js";
 import {
   getCurrentMatchForUser,
   applyMatchDecision,
@@ -39,6 +40,25 @@ const REPORT_CATEGORIES = new Set<ReportCategory>([
   "tier2_ghosting",
   "tier3_safety",
 ]);
+
+/**
+ * GET /v1/matches/:id/partner-photos — URLs for the native cinematic pitch.
+ *
+ * Deliberately NOT a field on `SerializedMatch`: `/current` is polled, and
+ * minting signed URLs on every poll would be work nobody asked for. The pitch
+ * needs them once, when it opens.
+ *
+ * Who may load them is decided in `public/partner-photos.ts` — participant of
+ * a live match, and nobody else.
+ */
+matchesRouter.get("/:id/partner-photos", async (req: Request, res: Response): Promise<void> => {
+  const count = await countPartnerPhotos(req.userId!, paramId(req));
+  if (count === null) {
+    res.status(404).json({ error: "Match not found" });
+    return;
+  }
+  res.json({ urls: partnerPhotoUrls(req.userId!, paramId(req), count) });
+});
 
 matchesRouter.get("/current", async (req: Request, res: Response): Promise<void> => {
   const match = await getCurrentMatchForUser(req.userId!);

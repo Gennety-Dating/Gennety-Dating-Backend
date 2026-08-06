@@ -1419,6 +1419,46 @@ paths:
                   match: { $ref: "#/components/schemas/SerializedMatch" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/matches/{id}/partner-photos:
+    get:
+      tags: [matches]
+      operationId: getPartnerPhotos
+      summary: Signed, short-lived URLs for the partner's photos (cinematic pitch)
+      description: |
+        The native pitch renders the partner full-screen; Telegram gets the
+        same photos as a `protect_content` media group, which has no client
+        equivalent here. Deliberately not a field on `SerializedMatch` —
+        `/current` is polled, and these are needed once when the pitch opens.
+
+        Entitlement is the existing product rule, not a new one: the caller
+        must be a participant of a match that is still live. A cancelled or
+        expired match returns 404, because after a decline the pair is banned
+        for life and there is nothing left to show.
+
+        URLs expire in 10 minutes and are bound to this caller. The bytes
+        endpoint behind them re-checks entitlement on every request, so a URL
+        minted before a cancellation stops working with the match.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      responses:
+        "200":
+          description: Ordered URLs, one per partner photo (may be empty)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [urls]
+                properties:
+                  urls:
+                    type: array
+                    items: { type: string, format: uri }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: No live match with this id for this caller
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/matches/{id}/decision-intent:
     post:
       tags: [matches]
