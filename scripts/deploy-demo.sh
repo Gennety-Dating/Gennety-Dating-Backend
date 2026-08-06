@@ -45,7 +45,10 @@ RSYNC_EXCLUDES=(
 rsync -az --delete --dry-run --itemize-changes "${RSYNC_EXCLUDES[@]}" \
   ./ "$SERVER:$REMOTE_PATH/" | grep '^\*deleting' || echo "   (nothing to delete)"
 
-echo "→ Syncing source to $SERVER:$REMOTE_PATH…"
+# Braces are load-bearing where a variable abuts a non-ASCII character: bash
+# swallowed the "…" into the identifier and `set -u` killed the script with
+# "REMOTE_PATH<mojibake>: unbound variable".
+echo "→ Syncing source to ${SERVER}:${REMOTE_PATH}…"
 rsync -az --delete "${RSYNC_EXCLUDES[@]}" ./ "$SERVER:$REMOTE_PATH/"
 
 echo "→ Installing, generating Prisma client, building…"
@@ -67,7 +70,7 @@ ssh "$SERVER" "cd $REMOTE_PATH && pm2 restart gennety-demo --update-env && pm2 s
 echo "→ Building the demo Mini App bundle (API base: $DEMO_API_BASE)…"
 VITE_API_BASE_URL="$DEMO_API_BASE" pnpm --filter @gennety/webapp build
 
-echo "→ Syncing the Mini App bundle to $SERVER:$WEBAPP_PATH…"
+echo "→ Syncing the Mini App bundle to ${SERVER}:${WEBAPP_PATH}…"
 rsync -avz --delete apps/webapp/dist/ "$SERVER:$WEBAPP_PATH"
 
 # Leave the working tree's dist/ matching PRODUCTION, so a later
