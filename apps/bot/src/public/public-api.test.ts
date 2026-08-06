@@ -2260,10 +2260,13 @@ describe("/v1/onboarding/interview", () => {
       .send({ text: dump });
 
     expect(res.status).toBe(200);
-    expect(runAgentTurnMock).toHaveBeenCalledWith(user.telegramId, {
-      kind: "context_dump",
-      text: dump,
-    });
+    expect(runAgentTurnMock).toHaveBeenCalledWith(
+      user.telegramId,
+      { kind: "context_dump", text: dump },
+      // This surface cannot open the Telegram-only Type Radar Mini App, so it
+      // must never be handed a gate it cannot clear.
+      { canPresentTypeRadar: false },
+    );
   });
 });
 

@@ -84,6 +84,9 @@ onboardingRouter.post("/interview/answer", agentTextLimiter, async (req: Request
   const result = await runAgentTurn(
     user.telegramId,
     isContextDump ? { kind: "context_dump", text } : text,
+    // The Type Radar is a Telegram Mini App behind `initData` auth, so this
+    // client cannot open it — see `AgentDeps.canPresentTypeRadar`.
+    { canPresentTypeRadar: false },
   );
 
   const ctx = await loadStateContext(req.userId!);
@@ -189,7 +192,9 @@ onboardingRouter.post(
       return;
     }
 
-    const result = await runAgentTurn(user.telegramId, transcript);
+    const result = await runAgentTurn(user.telegramId, transcript, {
+      canPresentTypeRadar: false,
+    });
     const ctx = await loadStateContext(req.userId!);
     res.json(buildInterviewState({ ...ctx, question: result.reply, acknowledgement: transcript }));
   },

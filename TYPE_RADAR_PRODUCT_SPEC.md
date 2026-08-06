@@ -350,6 +350,27 @@ neutral `V_type` on their direction (the symmetric average still uses the
 Telegram side's data). No `/v1` JWT route changes ⇒ no OpenAPI change. When
 iOS adopts the radar, add the task to `~/Desktop/Gennety-iOS/IMPLEMENTATION_PLAN.md`.
 
+**The code did not honour that decision, and it dead-ended native onboarding
+(fixed 2026-08-05).** The gate was written into `runAgentTurn` — shared by both
+surfaces — while only the Telegram handler consumed its `typeRadarRequested`
+result and attached the `web_app` + Skip buttons that clear it. So a native
+caller received the invite copy as a bare question, on **every** turn, with
+nothing to tap: the collector never advanced past `context_dump`/`photos`, and
+the app's chat feed filled with the same message repeated. Since
+`TYPE_RADAR_ENABLED=true` in production, this made iOS onboarding impassable
+from the moment the flag was flipped — found by reading the simulator's chat
+transcript, not by any test, because both existing gate tests exercised the
+Telegram path.
+
+The gate is now a property of the CALLER (`AgentDeps.canPresentTypeRadar`,
+default true), not of the user: the public `/v1/onboarding/interview/{answer,
+voice}` routes pass `false`. This is the right shape because the radar Mini App
+authenticates with Telegram `initData` (`public/routes/radar.ts`) — a
+mobile-only account (synthetic negative `telegramId`) cannot call it *at all*,
+so the gate was unsatisfiable by construction rather than merely unimplemented.
+Regression coverage: `onboarding-agent.test.ts` → "does not gate a caller that
+cannot present the radar".
+
 ## Docs impact (on implementation, not now)
 
 - PRODUCT_SPEC §1.3: new radar step before the AI-memory screen.

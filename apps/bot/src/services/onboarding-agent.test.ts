@@ -473,6 +473,29 @@ describe("onboarding-agent", () => {
       expect(result.typeRadarRequested).toBe(false);
       expect(result.contextPromptRequested).toBe(true);
     });
+
+    // The radar Mini App authenticates with Telegram initData, so a caller that
+    // has no Telegram surface cannot present it. Gating such a caller produced
+    // a gate nobody could pass: the invite was re-emitted on every turn and the
+    // native client's onboarding never advanced past this point.
+    it("does not gate a caller that cannot present the radar", async () => {
+      (env as { TYPE_RADAR_ENABLED?: boolean }).TYPE_RADAR_ENABLED = true;
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(radarUser(null));
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          toolCallResponse([{ id: "call-ctx", name: "request_context_dump", args: {} }]),
+        );
+
+      const result = await runAgentTurn(telegramId, "ок дальше", {
+        fetchFn: mockFetch,
+        canPresentTypeRadar: false,
+      });
+
+      expect(result.typeRadarRequested).toBe(false);
+      expect(result.reply).not.toBe(typeRadarInviteCopy("ru").intro);
+      expect(result.contextPromptRequested).toBe(true);
+    });
   });
 
   it("saves the user's latest pasted message as the dump, ignoring any LLM rephrasing in raw_dump", async () => {

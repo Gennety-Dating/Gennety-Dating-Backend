@@ -129,6 +129,20 @@ export interface AgentTurnResult {
 
 /** Injectable dependencies for testing */
 export interface AgentDeps {
+  /**
+   * Whether THIS caller can actually put the Type Radar in front of the user.
+   * Default true (Telegram, where the handler attaches the `web_app` + Skip
+   * buttons to the invite copy this agent returns).
+   *
+   * The native client passes `false`, and that is not a preference — the radar
+   * Mini App authenticates with Telegram `initData` (`public/routes/radar.ts`),
+   * so a mobile-only account (synthetic negative `telegramId`, never pressed
+   * Start) cannot call it at all. Emitting the invite there produced a gate
+   * nobody could pass: every answer re-sent the same copy, the collector never
+   * advanced past `context_dump`/`photos`, and native onboarding dead-ended
+   * with a duplicated message and no affordance.
+   */
+  canPresentTypeRadar?: boolean;
   fetchFn?: typeof fetch;
   sendOtp?: (to: string, otp: string) => Promise<void>;
   analyseProfile?: typeof analyseAndSaveProfile;
@@ -351,6 +365,7 @@ async function runCollectorTurn(
   // gate cleared (typeRadarCompletedAt set) and continues to the Magic Prompt or
   // photos exactly as if the gate hadn't been there.
   if (
+    deps.canPresentTypeRadar !== false &&
     input.kind !== "context_dump" &&
     (snapshot.currentQuestion === "context_dump" ||
       snapshot.currentQuestion === "photos") &&
@@ -2125,7 +2140,7 @@ export async function runAgentTurn(
                   "The user declined AI memory export. Do not show the Magic Prompt. " +
                   "Continue with the remaining profile fields, then call request_photos.",
               });
-            } else if (typeRadarGatePending(user)) {
+            } else if (deps.canPresentTypeRadar !== false && typeRadarGatePending(user)) {
               // Visual type picker must come first. The server sends it (web_app
               // button + Skip) and stops; the Magic Prompt follows on resume.
               typeRadarRequested = true;
@@ -2167,7 +2182,7 @@ export async function runAgentTurn(
             // Type Radar gate for the DECLINED path (no Magic Prompt): the visual
             // picker still comes before photos. For accepted users this is a
             // no-op here — they already cleared the gate at request_context_dump.
-            if (typeRadarGatePending(user)) {
+            if (deps.canPresentTypeRadar !== false && typeRadarGatePending(user)) {
               typeRadarRequested = true;
               stopAfterToolRound = true;
               result = JSON.stringify({
