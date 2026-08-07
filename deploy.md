@@ -48,10 +48,13 @@ env, no flag, no Mini App state.
 
 ---
 
-**PENDING — a stuck demo says so instead of retrying forever (DEMO_MODE.md).**
-Not deployed yet. **Demo only** — the diff is `apps/bot/src/demo/**` plus docs,
-so there is **nothing to rsync to `/opt/gennety` and no production restart**.
-`pnpm demo:deploy` is the whole deploy. No Prisma schema change, no flag change.
+**Deployed 2026-08-07 — a stuck demo says so instead of retrying forever
+(DEMO_MODE.md).** Demo only (`263e9b9`) — the diff is `apps/bot/src/demo/**` plus
+docs, so **nothing was rsynced to `/opt/gennety` and production was not
+restarted** (`gennety-bot` held restart count 52 across the whole rollout).
+`pnpm demo:deploy` was the whole deploy, run from an isolated `git worktree` at
+`263e9b9` because the shared tree carried a parallel session's in-progress
+Profiler work. No Prisma schema change, no flag change.
 
 Groundwork for the full demo walkthrough: before hunting for more dead-ends, make
 a dead-end impossible to miss. Every branch of `performAction` now returns an
@@ -77,13 +80,19 @@ effect on the redeploy's restart.
   Lower it and a provider hiccup ends a demo; raise it and the audience is back
   to watching silence.
 
-Post-deploy check — the point is that a stall is now loud, so verify by making
-one. On the demo box, zero the puppet's wallet and watch it give up rather than
-loop (this is safe: `/restart` clears the tracker, and the top-up refills the
-wallet on the next real run):
+**Post-deploy verified:** demo banner names `@gennety_demo_bot` and the demo
+database (`aws-1-eu-west-1`; production is `aws-0-`), both demo-only cron
+suppressions logged, `failure-tracker.ts` present on the droplet, `demo-api`
+ping ok, `demo-app/ticket.html` 200, and **zero** `giving up on` / `acted=0`
+lines since the restart — i.e. nothing is currently stuck. The Premium price was
+read back off the surface an investor actually sees: `GET /v1/premium/state`
+now answers `priceStars: 750, priceDisplay: "$17.99"`, matching production.
+
+To confirm the give-up path itself, make a stall on purpose — zero the puppet's
+wallet and remove the top-up. It is safe: `/restart` clears the tracker and the
+top-up refills the wallet on the next real run.
 
 ```sh
-pnpm demo:deploy
 ssh root@167.172.178.229 'pm2 logs gennety-demo --lines 100 --nostream | grep -E "giving up on|acted=0"'
 # Empty in the healthy case. A `giving up on <action>` line is the feature
 # working, and it must appear ONCE per streak — not once per tick.
