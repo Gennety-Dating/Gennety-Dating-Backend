@@ -47,6 +47,141 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-07 — Premium moves to 750⭐/$17.99 with the App Store left behind on purpose
+
+**Kind:** founder decision
+**What:** `PREMIUM_STARS` 500 → 750 and `PREMIUM_PRICE_USD_DISPLAY` $11.99 →
+$17.99 applied to `/opt/gennety/.env` during the 2026-08-07 release, while App
+Store Connect still prices `premium_monthly` at **$9.99**. The founder chose to
+raise the Telegram rail now rather than wait for the two surfaces to line up.
+**Why:** the deploy.md block had been blocked on an operator step nobody was
+going to do first, and the code defaults were already 750/$17.99 — only the
+`.env` override was holding the old price, so the block would have stayed
+PENDING indefinitely. 0 purchases ever, so no existing subscriber is
+grandfathered onto the old amount and the cohort the block warns about is empty.
+**What it changes going forward:** the same subscription costs **$17.99 in the
+bot and $9.99 in the app** until the price tier is raised in App Store Connect.
+Nothing in this repo can close that gap — iOS renders StoreKit's own
+`displayPrice` and `/v1/app/config` exposes only a boolean — so it is an
+operator task, not a code one. Do not "fix" it by editing constants.
+**Recorded in:** deploy.md → the 2026-08-07 release block and the Premium price
+block; `/opt/gennety/.env` (rollback snapshot `.env.bak.*` taken same deploy).
+
+## 2026-08-07 — a deploy.md block below the catch-up marker was still pending
+
+**Kind:** a document turned out to be wrong
+**What:** the 2026-08-02 marker claims "every block below that was marked PENDING
+shipped in one deploy". The account-health block sits below it but its commit
+`44f9e41` is dated 2026-08-03 — it was inserted in the wrong place and had never
+been deployed. Caught only because `admin/utils/user-health.ts` was absent from
+the droplet.
+**Why:** it matters more than a filing error. That marker is the single thing a
+new session uses to tell a real backlog from a stale label, and the failure is
+silent in the worst direction — a block that reads as shipped and is not. The
+paired symptom: the admin dashboard repo had already been pushed and
+auto-deployed, so its new tabs had been calling `/admin/users/:id/health` and
+`/admin/purchases` against a server that did not serve them, with nothing
+surfacing the breakage.
+**What it changes going forward:** verify a block by whether its module is on the
+droplet, never by which side of the marker it is on. New blocks go at the TOP of
+deploy.md. When a block names a dashboard redeploy, check whether it already
+happened — a pushed dashboard against an undeployed server is a broken tab, not
+an error anyone sees. Marker annotated; all 34 stale PENDING labels retired, so
+deploy.md now has **zero** PENDING blocks.
+**Recorded in:** deploy.md → the ⚠️ warning on the 2026-08-02 marker and the
+account-health block.
+
+## 2026-08-07 — "production has 0 matches ever" was copied forward until it was false
+
+**Kind:** a document turned out to be wrong
+**What:** a dozen deploy.md blocks assert production has had 0 matches ever and
+base their post-deploy advice on it. Production has had **2**, both from the real
+Thursday drop: `2026-07-30 15:00Z` (expired) and `2026-08-06 15:00Z` (cancelled),
+both `source = weekly`.
+**Why:** the claim was true when first written and was then pasted into each new
+block as boilerplate rather than re-measured. It is load-bearing — it is the
+justification for "nothing exercises this, verify on @gennetytestbot", and it
+had quietly stopped being a statement about production and become a statement
+about the last time someone checked.
+**What it changes going forward:** the drop IS pairing real users weekly, and
+both pairs died before a date (one ghosted to expiry, one cancelled) — that is a
+product signal, not just a doc error. Re-measure the claim rather than copying
+it. The narrower facts remain true and are what the blocks actually needed:
+**0 dates ever**, `venue_selection_logs` 0 rows, `live_activity_tokens` empty —
+so the venue geo-ladder, the Live Activity and the date-card path are still
+genuinely unexercised in production.
+**Recorded in:** deploy.md → the 2026-08-07 release block; corrected in every
+block above the 2026-08-02 marker (older blocks left as historical record).
+
+## 2026-08-07 — three dependency overrides had rotted below their advisories
+
+**Kind:** deviation from plan
+**What:** `pnpm security:audit` — a mandatory preflight gate — failed with 7
+advisories during the 2026-08-07 release. Three existing `pnpm.overrides` entries
+(`postcss` 8.5.18, `fast-uri` 3.1.4, `brace-expansion` 5.0.8) each sat exactly
+one patch below a newly published advisory. I raised those three and added
+`js-yaml` 4.3.1 and `ip-address` 10.3.1, which was not part of the requested
+scope.
+**Why:** the alternative was shipping past a gate this runbook calls mandatory.
+The advisories were already live in prod (the lockfile had not changed since
+2026-08-02), so the release did not introduce them — but skipping the fix would
+have carried them another release and left the gate red for whoever ran it next.
+Only the `ip-address` chain (`apps/bot > express-rate-limit`) reaches the droplet
+runtime; the rest are `apps/video` build-time or `eslint` dev tooling.
+**What it changes going forward:** an override is not a one-time fix. Re-check
+the pinned versions against `pnpm audit` on every deploy — each of these three
+was correct when written and looked deliberate right up to the moment it wasn't.
+**Recorded in:** deploy.md → Preflight ("an override rots") and the 2026-08-07
+release block; root `package.json` `pnpm.overrides`.
+
+## 2026-08-07 — Type Radar shipped as a two-file hotfix ahead of the release
+
+**Kind:** deviation from plan
+**What:** the Type Radar gate fix (`e0079df`) went to production as a targeted
+two-file patch about an hour before the 84-commit release that also contained it,
+rather than waiting for the full preflight.
+**Why:** it was the only backlog item actively blocking work — iOS onboarding was
+impassable in production, which blocked the founder's live photo/verification
+runs. deploy.md warns that a single-file rsync from a newer tree crash-loops prod
+(the 2026-08-01 incident), and that warning is right in general. It did not apply
+here for a checkable reason: **both files it touches are changed by exactly one
+commit in the whole `7f19a72..c25adbc` range**, so prod's version plus `e0079df`
+IS the target version and the patch pulls in no module prod lacked.
+**What it changes going forward:** that ancestry check — `git log --oneline
+<prod-sha>..<target> -- <path>` returning a single commit per file — is the
+precondition for ever repeating this. A file touched by two commits does not
+satisfy it. Also: stage the patch under a **`.hotfix.ts`** name, not `.ts.new`;
+tsx refuses an unknown extension, so the mandated in-place import test cannot run
+against a `.new` file.
+**Recorded in:** deploy.md → the Type Radar block's "shipped ahead of the rest"
+note.
+
+## 2026-08-07 — deploying from an isolated worktree, and two backups rsync would have eaten
+
+**Kind:** deviation from plan
+**What:** the 2026-08-07 release was deployed from `git worktree add
+/tmp/gennety-deploy c25adbc` rather than from the working tree, and preflight was
+run there. Separately, the documented rsync flag set was found to destroy **two**
+droplet-only database backups, not the one deploy.md mentions.
+**Why:** a parallel session was writing the `/v1/*` proxy-chat server half in the
+same checkout, and rsync copies the working tree — so deploying from it would
+have shipped someone's unfinished module, and running preflight there would have
+produced test numbers describing code that was not being deployed. The backup
+hazard: `--exclude '*-backup-*.json'` appears only in a 2026-08-02 release note,
+names only `ethnicity-backup-*.json`, and was **absent from the flag set itself**
+— following the runbook literally also destroys the 3.3 MB
+`prod-backup-2026-07-27T14-08-06-066Z.json`.
+**What it changes going forward:** deploy from a clean worktree whenever the tree
+is not yours alone. The exclude is now in the documented flag set in both the
+dry-run and the real sync. A clean worktree also means `--delete` removes
+accumulated junk — 176 of this release's 189 deletions were gitignored
+`apps/video/{build,out}` artifacts that earlier deploys had shipped because the
+exclude list covers `dist/` but not `build/` or `out/`. Read every deletion line
+anyway; that is what separates junk from the `keys/` directory an earlier deploy
+destroyed.
+**Recorded in:** deploy.md → Deploy Full Server Code (flag set + the two backup
+paths) and the 2026-08-07 release block.
+
 ## 2026-08-07 — the onboarding photo shimmer counts; the photo manager stays as it is
 
 **Kind:** founder decision + deviation from plan

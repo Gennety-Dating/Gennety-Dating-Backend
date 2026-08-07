@@ -1,8 +1,133 @@
 # Gennety Dating Deploy
 
-**PENDING — emergency cancellation reaches the native client, and the partner
-finally gets a push (PRODUCT_SPEC §Phase 4 → Emergency Protocol).** Not
-deployed yet. **No Prisma schema change, no env change, no flag change, no Mini
+**Deployed 2026-08-07 — the 84-commit backlog: every block below that was marked
+PENDING above the 2026-08-02 catch-up marker shipped in one release, plus the
+misfiled account-health block.** Full server code + Mini App + demo + two `.env`
+lines. Brought prod from `7f19a72` (2026-08-02) to `c25adbc` plus one
+dependency-override commit made during the release.
+
+**No Prisma schema change at all.** The droplet's `schema.prisma` was already
+byte-identical to the target, so there was no `db:push`, no `migrate diff` plan
+to read, and no additive-step conflict to sequence around — which is why 19
+blocks could group into a single release. `db:drift-check` still ran as the
+mandatory gate and returned **OK**.
+
+**Deployed from an isolated `git worktree`, not the working tree.** A parallel
+session was writing the `/v1/*` proxy-chat server half in the same checkout, and
+rsync copies the working tree. `git worktree add /tmp/gennety-deploy c25adbc`
+gave a clean source; preflight ran **there**, so the test numbers describe what
+shipped rather than someone's half-written module. Do this whenever the tree is
+not yours alone — it also means the sync deletes accumulated build junk, which
+is where most of the deletion lines below came from.
+
+**⚠️ `security:audit` failed preflight, and three existing overrides were the
+cause.** `postcss`, `fast-uri` and `brace-expansion` were each pinned in
+`pnpm.overrides` at exactly one patch below their advisory's fix — the precise
+trap this file's Preflight section warns about ("never pin an override BELOW the
+patched version"). They were correct when written; advisories published since
+moved the bar. 7 advisories (4 high / 3 moderate). Only the `ip-address` chain
+(`apps/bot > express-rate-limit`) reaches the droplet runtime — the other four
+are `apps/video` build-time or `eslint` dev tooling. Fixed by raising three
+overrides and adding two:
+
+```
+postcss         8.5.18 -> 8.5.23      fast-uri   3.1.4 -> 3.1.5
+brace-expansion 5.0.8  -> 5.0.9       js-yaml    (new) -> 4.3.1
+ip-address      (new)  -> 10.3.1
+```
+
+Re-audit: **No known vulnerabilities found.** These advisories were already live
+in prod (the lockfile was unchanged since 2026-08-02), so the release did not
+introduce them — but the gate is mandatory and shipping past it silently would
+have carried them another release. **Re-check the pinned versions against
+`pnpm audit` every deploy**; an override rots the moment a new advisory lands.
+
+Preflight green (in the worktree): typecheck clean across all 5 projects,
+**3776 tests** (bot 3256 / shared 273 / webapp 247, 257 files, 0 failed),
+`pnpm build`, `security:secrets` (1012 files), `security:audit` 0 advisories,
+`openapi:lint` valid.
+
+rsync dry-run listed **189 deletions, every one reviewed**: 11 docs/scripts
+retired by `1e6db50` + `27ef241`, 1 stale `apps/bot/src/admin/server.ts.bak.*`
+(snapshotted to `/root/` first), and 176 gitignored `apps/video/{build,out}`
+artifacts — Remotion output that is not in the bot runtime, all but 2 also
+present on the Mac, and only on the droplet because the documented exclude list
+covers `dist/` but not `build/` or `out/`.
+
+**Two droplet-only DB backups would have been destroyed by `--delete`, not
+one.** This file already said to add `--exclude '*-backup-*.json'` for the
+ethnicity backup; it does **not** mention the second file, which is 3.3 MB:
+
+```
+/opt/gennety/ethnicity-backup-2026-08-02T08-26-08-301Z.json   (1 KB)
+/opt/gennety/prod-backup-2026-07-27T14-08-06-066Z.json        (3.3 MB)
+```
+
+One pattern covers both. Verified present after the sync, along with both
+`keys/*.p8`.
+
+**Two `.env` changes**, both applied before the single restart:
+`ADMIN_TEST_TELEGRAM_IDS=-153639032722566` (was missing entirely — the
+account-health block's own check fails without it) and the Premium price
+`PREMIUM_STARS` 500 → **750**, `PREMIUM_PRICE_USD_DISPLAY` $11.99 → **$17.99**
+(founder decision this session; 0 purchases ever, so no cohort is grandfathered).
+
+**⚠️ Open operator step, not closed by this deploy: App Store Connect.**
+`premium_monthly` is still **$9.99** there while the Telegram rail now charges
+$17.99. Nothing in this repo can set Apple's price. Until it is raised, the same
+subscription costs two different amounts on the two surfaces.
+
+**Post-deploy verified (measured, not inferred):**
+
+- Prod tree is **byte-identical to the deployed worktree across all 728 files**
+  (`.ts/.tsx/.prisma/.json` under `apps/` + `packages/`), by md5 sweep.
+- `pm2`: PID held, restart count 50 → 51 (one increment, no loop), **zero
+  `P2022` / `P2023` / unhandled / `ERR_MODULE_NOT_FOUND` from the new PID**.
+- All 16 crons + `[worker] Peer-wait shimmer every 20000ms` registered.
+  `venue-concentration-alert` correctly absent — its flag is unset.
+- `/v1/app/config` now serves **`features.telegramAuth: true`** and
+  **`ticketProducts`** (3 products) — both new, both previously missing.
+- `POST /v1/auth/telegram` → **400 `{"error":"Missing idToken"}`** (was 404).
+  It is live rather than 503 because `TELEGRAM_LOGIN_CLIENT_ID` was already set
+  on the droplet, ahead of its code.
+- All 10 new modules present on the droplet (`emergency-cancel`,
+  `date-day-activity`, `venue-origin`, `telegram-login`, `outcome-gate`,
+  `calendar-native`, `ticket-gate`, `telegram-auth`, `user-health` ×2).
+- `/admin/stats` → **`userHealth.byClass.test = 1`**, which is this file's own
+  stated proof that `ADMIN_TEST_TELEGRAM_IDS` landed.
+- Loaded config re-read from the running process: `PREMIUM_STARS = 750`,
+  `PREMIUM_PRICE_USD_DISPLAY = $17.99`.
+- All **11 Mini App pages 200**; assets 57 → 76; `verification.html` carries the
+  hand-inlined butterfly mark; the 12 preference photos shipped (~516 KB, inside
+  the ~530 KB budget) and the onboarding chunk is 124.5 KB as documented.
+- Demo redeployed and **isolation re-confirmed from its own banner**:
+  `@gennety_demo_bot`, database `aws-1-eu-west-1.pooler…` (prod is `aws-0-…`,
+  a different Supabase project), drop matching not scheduled.
+- `api-admin` unauthenticated → 401; `/v1/ping` ok.
+
+**Not verified, and deliberately so:** every flow needing a live match. Nothing
+has reached `negotiating_venue` or `scheduled`, so `venue_selection_logs` is
+**0 rows** and `live_activity_tokens` is **empty** — the geo-ladder `geoRung`
+query, the Live Activity `date_day/start` row and the date-card path have no
+data to check and remain unexercised in production. Walk them on
+`@gennetytestbot`.
+
+**A note this file kept getting wrong: production does NOT have "0 matches
+ever".** It has had **2**, both from the real Thursday drop —
+`2026-07-30 15:00Z` (expired) and `2026-08-06 15:00Z` (cancelled), both
+`source = weekly`, neither reaching a date. The claim was true when first
+written and was then copied forward into every new block. Corrected in the
+blocks below; older blocks keep it as the historical record they are.
+
+**Rollback:** re-sync a clean worktree at `7f19a72` and redeploy the Mini App
+from it. No schema to undo. Restore `.env` from the `.env.bak.*` snapshot taken
+during this deploy to return the Premium price and drop
+`ADMIN_TEST_TELEGRAM_IDS`.
+
+---
+
+**Deployed 2026-08-07 (was PENDING) — emergency cancellation reaches the native client, and the partner
+finally gets a push (PRODUCT_SPEC §Phase 4 → Emergency Protocol).** Deployed 2026-08-07. **No Prisma schema change, no env change, no flag change, no Mini
 App change** (`apps/webapp` untouched) — half of it is client, so the iOS app
 ships with it (separate repo).
 
@@ -29,7 +154,7 @@ iOS-only user could not call off a date at all. New:
   irreversible step here is the request itself. The reason IS enforced (400 on
   empty), because forwarding it verbatim is the product rule.
 
-Post-deploy check — production has **0 dates ever**, so nothing exercises this
+Post-deploy check — production has **0 dates ever** (2 matches, neither reached `scheduled`), so nothing exercises this
 until a pair schedules; verify on `@gennetytestbot`. Mounted-ness is checkable
 without one:
 
@@ -45,8 +170,8 @@ env, no flag. The Telegram flow returns to its own copy of the logic.
 
 ---
 
-**PENDING — the «date day» Live Activity gets driven from the server
-(PRODUCT_SPEC §Phase 4).** Not deployed yet. **No Prisma schema change, no env
+**Deployed 2026-08-07 (was PENDING) — the «date day» Live Activity gets driven from the server
+(PRODUCT_SPEC §Phase 4).** Deployed 2026-08-07. **No Prisma schema change, no env
 change, no flag change, no Mini App change** (`apps/webapp` untouched) — it is
 half client, so the iOS app must ship with it (separate repo).
 
@@ -77,7 +202,7 @@ update at T-1.5h, and an end sweep at T+2h.
   announcing an open chat on a lock screen the app cannot follow is the
   dead-button anti-pattern.
 
-Post-deploy check — production has **0 dates ever**, so nothing exercises this
+Post-deploy check — production has **0 dates ever** (2 matches, neither reached `scheduled`), so nothing exercises this
 until a pair schedules; verify on `@gennetytestbot`. The lifecycle logs only on
 failure, so silence is the good case:
 
@@ -93,8 +218,8 @@ env, no flag; the card simply never starts and the Telegram beats are unchanged.
 
 ---
 
-**PENDING — the Mini App loading screens become the brand mark: butterflies in
-the stomach (PRODUCT_SPEC → Cross-Cutting Concerns).** Not deployed yet.
+**Deployed 2026-08-07 (was PENDING) — the Mini App loading screens become the brand mark: butterflies in
+the stomach (PRODUCT_SPEC → Cross-Cutting Concerns).** Deployed 2026-08-07.
 **No Prisma schema change, no env change, no flag change, and NO SERVER CODE
 CHANGE AT ALL** — the diff is `apps/webapp/**` plus this file and
 PRODUCT_SPEC.md. So this is the **Deploy Mini App Only** path
@@ -145,8 +270,8 @@ done
 undo — no schema, no env, no flag, no server state.
 
 
-**PENDING — two contract fields the native client could not see
-(PRODUCT_SPEC §3.7 / §3.8).** Not deployed yet. **No Prisma schema change, no
+**Deployed 2026-08-07 (was PENDING) — two contract fields the native client could not see
+(PRODUCT_SPEC §3.7 / §3.8).** Deployed 2026-08-07. **No Prisma schema change, no
 env change, no flag change, no Mini App change** (`apps/webapp` untouched) — it
 is half client, so the iOS app must ship with it (separate repo, `a2b1b38`).
 
@@ -170,7 +295,7 @@ server-side behaviour they describe already ships.
   select on `/v1/matches/current`, no new query.
 
 Post-deploy check — `/v1/matches/current` needs a real match and production has
-**0 matches ever**, so verify the shape on `@gennetytestbot` via
+**2 matches ever, both terminal**, so verify the shape on `@gennetytestbot` via
 `scripts/dev-e2e-full-flow.mjs`. The spec itself is checkable without one:
 
 ```sh
@@ -185,8 +310,8 @@ this fixes.
 
 ---
 
-**PENDING — the slot calendar becomes reachable from the native client
-(PRODUCT_SPEC §3.6).** Not deployed yet. **No Prisma schema change, no env
+**Deployed 2026-08-07 (was PENDING) — the slot calendar becomes reachable from the native client
+(PRODUCT_SPEC §3.6).** Deployed 2026-08-07. **No Prisma schema change, no env
 change, no flag change, no Mini App change** (`apps/webapp` untouched) — it is
 half client, so the iOS app must ship with it (separate repo, `d345bca`).
 
@@ -211,7 +336,7 @@ and had no calendar at all. New: `GET`/`POST /v1/matches/{id}/calendar` (JWT).
   their existing codes.
 
 Post-deploy check — the route needs a real `negotiating` match to answer
-anything but 401, and production has **0 matches ever**, so verify on
+anything but 401, and production has **2 matches ever, both terminal**, so verify on
 `@gennetytestbot` via `scripts/dev-e2e-full-flow.mjs`:
 
 ```sh
@@ -225,8 +350,8 @@ env, no flag; the Mini App calendar is unaffected either way.
 
 ---
 
-**PENDING — the Date Ticket gate becomes reachable from the native client
-(PRODUCT_SPEC §3.5b).** Not deployed yet. **No Prisma schema change, no env
+**Deployed 2026-08-07 (was PENDING) — the Date Ticket gate becomes reachable from the native client
+(PRODUCT_SPEC §3.5b).** Deployed 2026-08-07. **No Prisma schema change, no env
 change, no flag change, no Mini App change** (`apps/webapp` untouched) — but it
 is half client, so the iOS app must ship with it (separate repo, `368918b`).
 
@@ -283,8 +408,8 @@ tickets switched off.
 
 ---
 
-**PENDING — the departure point must be in a launched city, and the venue
-engine stops failing on geometry (PRODUCT_SPEC §3.7).** Not deployed yet. **No
+**Deployed 2026-08-07 (was PENDING) — the departure point must be in a launched city, and the venue
+engine stops failing on geometry (PRODUCT_SPEC §3.7).** Deployed 2026-08-07. **No
 Prisma schema change, no env change, no flag change** — but it is half client,
 so it **DOES need a Mini App redeploy**: Deploy Full Server Code →
 `pnpm db:drift-check` → `pm2 restart` → `./scripts/deploy-webapp.sh` →
@@ -325,7 +450,7 @@ the server does not yet send, which degrades to no gate at all.
   into the venue screen. Expect ops-feed traffic that did not exist before —
   `FOUNDER_NOTIFY_ENABLED` is on in production.
 - **Nothing exercises any of this until a pair reaches `negotiating_venue`.**
-  Production has **0 matches ever**, so verify on `@gennetytestbot` (needs an
+  Production has **2 matches ever, both terminal**, so verify on `@gennetytestbot` (needs an
   HTTPS tunnel and `WEBAPP_URL` pointed at it) via
   `scripts/dev-e2e-full-flow.mjs`.
 
@@ -349,8 +474,7 @@ points already saved stay valid; they are the same columns as before.
 
 ---
 
-**PENDING — Premium is $17.99/mo = 750⭐ (PRODUCT_SPEC §3.8).** Not deployed
-yet. **No Prisma schema change, no flag change** — but it needs a **two-line
+**Deployed 2026-08-07 (was PENDING) — Premium is $17.99/mo = 750⭐ (PRODUCT_SPEC §3.8).** Deployed 2026-08-07. **No Prisma schema change, no flag change** — but it needs a **two-line
 `.env` edit** and a **Mini App redeploy**, and one step of it is not in this
 repo at all (App Store Connect). Sequence: `.env` → Deploy Full Server Code →
 `pnpm db:drift-check` → `pm2 restart gennety-bot --update-env` →
@@ -411,8 +535,8 @@ back to the old price with no redeploy; revert the commit at leisure.
 
 ---
 
-**PENDING — the first five profile questions move from the chat into the Mini
-App (PRODUCT_SPEC §1.1 / §1.3).** Not deployed yet. **No Prisma schema change,
+**Deployed 2026-08-07 (was PENDING) — the first five profile questions move from the chat into the Mini
+App (PRODUCT_SPEC §1.1 / §1.3).** Deployed 2026-08-07. **No Prisma schema change,
 no env change, no flag change** — every column it writes (`users.first_name`,
 `age`, `gender`, `preference`, `profiles.height`) already exists. But it is
 half client, so it **DOES need a Mini App redeploy**, and the order matters:
@@ -556,8 +680,7 @@ the chat writes.
 
 ---
 
-**PENDING — the Type Radar stops gating a client that cannot open it.** Not
-deployed yet. **No Prisma schema change, no env change, no flag change** —
+**Deployed 2026-08-07 (was PENDING) — the Type Radar stops gating a client that cannot open it.** Deployed 2026-08-07. **No Prisma schema change, no env change, no flag change** —
 code-only, and Telegram behaviour is unchanged by construction
 (`AgentDeps.canPresentTypeRadar` defaults to true).
 
@@ -572,10 +695,35 @@ since that flag was flipped**, which also means the founder's pending live runs
 until this ships. Nothing else in the backlog blocks them.
 
 Telegram is unaffected either way, so this changes no behaviour a current user
-sees — but it is the one PENDING block whose absence is actively blocking work.
+sees — but it was the one PENDING block whose absence was actively blocking work.
 Commit `e0079df`; regression test `onboarding-agent.test.ts` → "does not gate a
 caller that cannot present the radar". Full reasoning: TYPE_RADAR_PRODUCT_SPEC.md
 → «Mobile parity».
+
+**Shipped ahead of the rest of the backlog, as a targeted two-file hotfix
+(2026-08-07 12:24 UTC).** It was the only blocking block, so it did not wait for
+the 84-commit release below. The hotfix was safe *specifically* because both
+files it touches — `services/onboarding-agent.ts` and
+`public/routes/onboarding.ts` — are changed by **exactly one commit** in the
+whole `7f19a72..c25adbc` range (verified with `git log -- <path>`), so prod's
+version plus `e0079df` IS the target version and the change pulls in no module
+prod did not already have. That is the condition the 2026-08-01 incident note
+above is really about; check it with `git log` before ever repeating this,
+because a file touched by two commits does not satisfy it.
+
+Procedure actually used: `pnpm --filter @gennety/bot exec vitest run
+src/services/onboarding-agent.test.ts src/public/public-api.test.ts` (148
+passed) → `scp` both files to the droplet under a **`.hotfix.ts`** name (not
+`.ts.new` — tsx refuses an unknown extension, so the import test cannot run) →
+`tsx` import-test in place, both OK → `mv` over the live files → restart.
+
+Post-deploy verified: both files md5-match the target, PID 2298196 held, restart
+count 49 → 50 with no loop, **zero errors in the error log from the new PID**,
+all 16 crons + the peer-wait worker registered, and
+`grep canPresentTypeRadar public/routes/onboarding.ts` shows `false` passed at
+both call sites (lines 89 and 196) — which is the actual proof the native rail
+is no longer gated. Superseded an hour later by the full release below, which
+re-synced the same content.
 
 **Deployed 2026-08-05 — demo mode: a second, isolated bot that walks one person
 through the whole product (DEMO_MODE.md).** **No Prisma schema change, no
@@ -742,8 +890,7 @@ bundle.
 
 ---
 
-**PENDING — venue photos open full-screen (PRODUCT_SPEC §3.7b).** Not deployed
-yet. **No Prisma schema change, no env change, no flag change, no server
+**Deployed 2026-08-07 (was PENDING) — venue photos open full-screen (PRODUCT_SPEC §3.7b).** Deployed 2026-08-07. **No Prisma schema change, no env change, no flag change, no server
 behaviour change** — but it is client-side, so it **DOES need a Mini App
 redeploy** (`apps/webapp`: `venue-change.ts` / `venue-change.css` / `icons.ts` /
 `telegram.d.ts`). The server half is a no-op for this change alone; sequence is
@@ -769,7 +916,7 @@ ever shown was a 340px rail tile.
 - **The dev preview now renders synthetic photos.** `?preview` had
   `photoRefs: []` for every mock venue, so the galleries were a wall of category
   glyphs and this feature would have been unreviewable without a live match —
-  and production has **0 matches ever** with `VENUE_CHANGE_FEATURE_ENABLED` off.
+  and production has **2 matches ever, both terminal** with `VENUE_CHANGE_FEATURE_ENABLED` off.
   The mock now carries 0/1/4/7-photo venues backed by generated SVG data-URIs, so
   `http://localhost:5173/venue-change.html?preview=board` exercises every gallery
   shape. `import.meta.env.DEV`-gated — unreachable in production.
@@ -793,8 +940,8 @@ checkout. Nothing else to undo — no schema, no env, no flag, no server state.
 
 ---
 
-**PENDING — a status is never shown on a step the user owes (PRODUCT_SPEC §3.6b,
-§3.5, §3.5c).** Not deployed yet. **Code-only: no Prisma schema change, no env
+**Deployed 2026-08-07 (was PENDING) — a status is never shown on a step the user owes (PRODUCT_SPEC §3.6b,
+§3.5, §3.5c).** Deployed 2026-08-07. **Code-only: no Prisma schema change, no env
 change, no flag change, no Mini App change** (`apps/webapp` untouched).
 
 A user picks a time, their partner counters with a different one — and both of
@@ -829,7 +976,7 @@ Two smaller things ride along, both consequences of the same consolidation:
 - Two i18n keys are deleted (`peerWaitNoOverlap`, `peerWaitNoOverlapLate`, ×5
   locales). Nothing else read them.
 
-Post-deploy check — production has **0 matches ever**, so nothing exercises this
+Post-deploy check — production has **2 matches ever, both terminal**, so nothing exercises this
 until a Thursday batch pairs someone. Walk it on `@gennetytestbot`: pick a slot
 from one account, counter with a different one from the other, and confirm both
 chats show no shimmer. The reminder is hourly, so verify it from the log rather
@@ -844,8 +991,8 @@ env, no flag, no Mini App state.
 
 ---
 
-**PENDING — an abandoned question stops owning the chat (PRODUCT_SPEC §Phase 4 →
-Emergency Protocol, §Phase 5, §2.1).** Not deployed yet. **Code-only: no Prisma
+**Deployed 2026-08-07 (was PENDING) — an abandoned question stops owning the chat (PRODUCT_SPEC §Phase 4 →
+Emergency Protocol, §Phase 5, §2.1).** Deployed 2026-08-07. **Code-only: no Prisma
 schema change, no env change, no flag change, no Mini App change**
 (`apps/webapp` untouched). From a full-codebase audit; three flows, one root
 cause.
@@ -899,8 +1046,8 @@ code).
 
 ---
 
-**PENDING — referral share card arrives whole (REFERRAL_PRODUCT_SPEC → Surfaces).**
-Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
+**Deployed 2026-08-07 (was PENDING) — referral share card arrives whole (REFERRAL_PRODUCT_SPEC → Surfaces).**
+Deployed 2026-08-07. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change** (`apps/webapp` untouched).
 
 Sharing an invite delivered a *sliver* of the card — the top ~20%, blank
@@ -949,8 +1096,8 @@ env, no flag, no Mini App state.
 
 ---
 
-**PENDING — Premium screen gets a way back to the board (PRODUCT_SPEC §3.8).**
-Not deployed yet. **No Prisma schema change, no env change, no flag change** —
+**Deployed 2026-08-07 (was PENDING) — Premium screen gets a way back to the board (PRODUCT_SPEC §3.8).**
+Deployed 2026-08-07. **No Prisma schema change, no env change, no flag change** —
 but this one is **client-side and therefore DOES need a Mini App redeploy**
 (`apps/webapp`: new `return-to.ts`, plus `premium.ts` / `venue-change.ts`).
 Sequence: Deploy Full Server Code → `pnpm db:drift-check` → `pm2 restart` →
@@ -992,8 +1139,8 @@ checkout.
 
 ---
 
-**PENDING — venue-change board: photos back, duplicates gone, premium reaches
-5 km (PRODUCT_SPEC §3.7b).** Not deployed yet. **Code-only: no Prisma schema
+**Deployed 2026-08-07 (was PENDING) — venue-change board: photos back, duplicates gone, premium reaches
+5 km (PRODUCT_SPEC §3.7b).** Deployed 2026-08-07. **Code-only: no Prisma schema
 change, no env change, no flag change, no Mini App change** (`apps/webapp`
 untouched — the client already renders `photoRefs`).
 
@@ -1030,7 +1177,7 @@ are both photo-less and stored one-per-university-domain.
   catalog warms in ~113. Only the board *read* pays — the like/confirm calls
   rebuild the same catalog to re-resolve a key and skip lookups entirely.
 - **Nothing exercises this until a pair reaches `scheduled`.** Production has
-  **0 matches ever**, and `VENUE_CHANGE_FEATURE_ENABLED` gates the entry button.
+  **2 matches ever, both terminal**, and `VENUE_CHANGE_FEATURE_ENABLED` gates the entry button.
   Verify on `@gennetytestbot`.
 
 Post-deploy check — the board should show distinct venues with photos, and three
@@ -1163,8 +1310,8 @@ setting it early changes current behaviour.
 
 ---
 
-**PENDING — status shimmers stop being overtaken by their own results
-(PRODUCT_SPEC §1.3 / §1.4 / §3.7a).** Not deployed yet. **Code-only: no Prisma
+**Deployed 2026-08-07 (was PENDING) — status shimmers stop being overtaken by their own results
+(PRODUCT_SPEC §1.3 / §1.4 / §3.7a).** Deployed 2026-08-07. **Code-only: no Prisma
 schema change, no env change, no flag change, no Mini App change**
 (`apps/webapp` untouched). Two user-reported bugs, one shared cause — a status
 sequence and the work it narrates were independent async chains, so the work's
@@ -1192,7 +1339,7 @@ speed decided what the user saw.
 **Worth knowing before the restart:** the date card now lands ~6s after the
 venue is picked even when the render was instant — that is the fix, not a
 regression (the beats are a script the user is meant to read). Production has
-**0 matches ever**, so nothing exercises the date-card half until a Thursday
+**2 matches ever, both terminal**, so nothing exercises the date-card half until a Thursday
 batch pairs someone; verify it on `@gennetytestbot`. The verification half is
 live for anyone who runs a check.
 
@@ -1200,8 +1347,7 @@ live for anyone who runs a check.
 
 ---
 
-**PENDING — "Continue with Telegram" on iOS (`POST /v1/auth/telegram`).** Not
-deployed yet. **No Prisma schema change, no Mini App change, no flag change** —
+**Deployed 2026-08-07 (was PENDING) — "Continue with Telegram" on iOS (`POST /v1/auth/telegram`).** Deployed 2026-08-07. **No Prisma schema change, no Mini App change, no flag change** —
 but it needs **one new env var**, and it is inert until that var is set.
 
 ```
@@ -1269,11 +1415,50 @@ watch that the PID holds and the restart count stops climbing. Otherwise do a
 full deploy — but note that rsync copies the **working tree**, not git HEAD, so
 check `git status` first: an unrelated in-progress refactor ships with it.
 
-**Prod is now at `HEAD` as of the 2026-08-02 deploy below** — the hand-patched
-divergence that used to be recorded here is reconciled. Re-anchor the md5 after
-every deploy rather than trusting this line.
+**Prod anchor, re-verified 2026-08-07 after the release at the top of this file.**
+Prod is at **`c25adbc` plus the dependency-override commit** made during that
+release — deliberately **not** at `HEAD`. Excluded on purpose: `d205bbf` +
+`ae0721e` (Kyiv premium venues — catalog JSON only, and DECISIONS.md records that
+no `seed-venues:import` is authorised against prod, so there is nothing to
+deploy) and `27f426b` (the onboarding photo shimmer, written by a parallel
+session after this release was cut). **`27f426b` is a real undeployed behaviour
+change** and needs its own block before the next deploy.
+
+Anchor md5 as of 2026-08-07:
+
+```
+45b55b6600994a7869511e777c1e4704  /opt/gennety/packages/shared/src/ai/prompts.ts
+```
+
+That file is a weak anchor on its own — it happened to be identical across the
+whole 84-commit range, so it matched prod both before and after this release and
+proved nothing. **Anchor on a file the release actually changed, or better, sweep
+the whole tree**, which is what settles it in one command:
+
+```sh
+ssh root@167.172.178.229 'cd /opt/gennety && find apps packages -type f \
+  \( -name "*.ts" -o -name "*.tsx" -o -name "*.prisma" -o -name "*.json" \) \
+  -not -path "*/node_modules/*" -not -path "*/dist/*" | sort | xargs md5sum' \
+  | sort > /tmp/prod.md5
+# then in a clean worktree at the candidate sha:
+find apps packages -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.prisma" \
+  -o -name "*.json" \) | sort | xargs md5 -r | awk '{print $1"  "$2}' | sort \
+  | diff - /tmp/prod.md5 && echo "prod == this tree"
+```
+
+728 files, zero differences, is what "prod is at this commit" should mean.
 
 ---
+
+**⚠️ The rule below has exactly one known exception — do not trust the marker
+alone (found 2026-08-07).** The account-health block sits *below* this marker but
+its commit (`44f9e41`) is dated **2026-08-03**, i.e. after this release. It was
+inserted in the wrong place, so the marker's "everything below already shipped"
+claim silently covered a block that had not. It was caught only because
+`apps/bot/src/admin/utils/user-health.ts` was **absent** from the droplet, and it
+shipped in the 2026-08-07 release. **Verify a block by whether its module is on
+the droplet, not by which side of this line it is on**, and keep inserting new
+blocks at the TOP of the file where the convention puts them.
 
 **Deployed 2026-08-02 — the 104-commit catch-up: every block below that was
 marked PENDING shipped in one deploy.** Full server code + Mini App + one
@@ -1351,11 +1536,31 @@ from the JSON backup above.
 
 ---
 
-**PENDING — account-health classification + fixed conversions (admin only).**
-Not deployed yet. **No Prisma schema change, no flag change, no Mini App
+**Deployed 2026-08-07 (was PENDING) — account-health classification + fixed conversions (admin only).**
+**No Prisma schema change, no flag change, no Mini App
 change** (`apps/webapp` untouched) — but it adds **one optional env var** and
 requires a **dashboard redeploy** (separate repo,
 `~/Desktop/gennety-admin-dashboard`, auto-deploys to Vercel on push).
+
+**This block was filed below the 2026-08-02 catch-up marker by mistake** (see the
+warning on that marker) — its commit `44f9e41` postdates that release, so it was
+still genuinely pending until 2026-08-07 despite sitting in the "already
+shipped" half of the file.
+
+**The dashboard half was already live and had been failing.** The repo was clean
+and 0/0 with `origin` — `cf9c9a7` (health section, funnel, class tabs) and
+`547ff83` (revenue ledger) had been pushed and auto-deployed to Vercel some time
+earlier, so those tabs were calling `/admin/users/:id/health` and
+`/admin/purchases` against a server that did not serve them. Nothing needed
+doing on the dashboard side at deploy time; this release is what made its
+existing tabs work. **When a block names a dashboard redeploy, check whether it
+has already happened — a pushed dashboard against an undeployed server is a
+silently broken tab, not an error anyone sees.**
+
+Post-deploy measured: `userHealth.byClass` =
+`{test: 1, suspicious: 0, stuck_onboarding: 6, cold_open_unengaged: 9,
+inactive: 0, live: 4, other: 0}` over 20 users. `test: 1` is the proof the env
+var landed.
 
 ```
 ADMIN_TEST_TELEGRAM_IDS=-153639032722566
@@ -1411,9 +1616,9 @@ feature back; it just stops excluding the test account.
 
 ---
 
-**PENDING — privacy remediation, 2026-08-01 (ethnicity removed, founder-feed
+**Deployed 2026-08-02 (was PENDING) — privacy remediation, 2026-08-01 (ethnicity removed, founder-feed
 delete anonymised, OTP redaction, consent versioning, biometric consent screen,
-coordination-card protection).** Not deployed yet. **No env change, no flag
+coordination-card protection).** Deployed 2026-08-02. **No env change, no flag
 change** — but it **DOES need a Mini App redeploy** (`apps/webapp`:
 `verification.html` + `verification.ts` + `i18n.ts` + `api.ts` carry the new
 biometric-consent screen). Ships with the next full deploy — note the
@@ -1534,8 +1739,8 @@ reinstate Art. 9 data you just erased.
 
 ---
 
-**PENDING — Premium hub stops asking for money up front (PRODUCT_SPEC §3.8).**
-Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
+**Deployed 2026-08-02 (was PENDING) — Premium hub stops asking for money up front (PRODUCT_SPEC §3.8).**
+Deployed 2026-08-02. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change** (`apps/webapp` untouched) — the price still comes
 from `PREMIUM_PRICE_USD_DISPLAY`, now rendered only by
 `GET /v1/premium/state` for the Mini App. Copy-only in `packages/shared/src/i18n.ts`
@@ -1552,7 +1757,7 @@ and restart.
 
 ---
 
-**PENDING — purchase notifications + admin revenue ledger.** Not deployed yet.
+**Deployed 2026-08-02 (was PENDING) — purchase notifications + admin revenue ledger.** Deployed 2026-08-02.
 **No env change, no flag change, no Mini App change** (`apps/webapp`
 untouched) — but it needs an **additive `db:push` BEFORE the restart**, and it
 requires a **dashboard redeploy** (separate repo,
@@ -1619,8 +1824,8 @@ notifications follow `FOUNDER_NOTIFY_ENABLED`, which also silences them.
 
 ---
 
-**PENDING — audit fixes round 2, 2026-08-02 (Mini App timeouts + two dead ends).**
-Not deployed yet. **No Prisma schema change, no env change, no flag change** —
+**Deployed 2026-08-02 (was PENDING) — audit fixes round 2, 2026-08-02 (Mini App timeouts + two dead ends).**
+Deployed 2026-08-02. **No Prisma schema change, no env change, no flag change** —
 but this one **DOES require a Mini App redeploy** (`apps/webapp` changed), so the
 sequence is Deploy Full Server Code → `pnpm db:drift-check` → `pm2 restart` →
 `./scripts/deploy-webapp.sh`.
@@ -1672,8 +1877,8 @@ previous checkout. Nothing else to undo.
 
 ---
 
-**PENDING — audit fixes, 2026-08-01 (NOMATCH-2 + chat-queue + card fonts).**
-Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
+**Deployed 2026-08-02 (was PENDING) — audit fixes, 2026-08-01 (NOMATCH-2 + chat-queue + card fonts).**
+Deployed 2026-08-02. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change.** Ships with whatever restart carries the blocks
 below. Three independent fixes from a full-codebase audit:
 
@@ -1705,7 +1910,7 @@ code and restart; nothing else to undo.
 
 ---
 
-**PENDING — expiry card (PRODUCT_SPEC §3.4).** Not deployed yet. **No Prisma
+**Deployed 2026-08-02 (was PENDING) — expiry card (PRODUCT_SPEC §3.4).** Deployed 2026-08-02. **No Prisma
 schema change, no env change, no flag change, no Mini App change**
 (`apps/webapp` untouched). Always-on — there is no feature flag, because the
 card degrades to the exact plain text that ships today rather than to nothing.
@@ -1766,8 +1971,7 @@ env, no flag, no Mini App state. The added font file can stay either way.
 
 ---
 
-**PENDING — pre-date coordination PNG cards (PRODUCT_SPEC §Phase 4).** Not
-deployed yet. **Code-only: no Prisma schema change, no env change, no flag
+**Deployed 2026-08-02 (was PENDING) — pre-date coordination PNG cards (PRODUCT_SPEC §Phase 4).** Deployed 2026-08-02. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change** (`apps/webapp` untouched). Ships with whatever
 restart carries the blocks below.
 
@@ -1807,9 +2011,9 @@ env, no flag, no Mini App state.
 
 ---
 
-**PENDING — daily-cadence matching migration groundwork (PRODUCT_SPEC §3.1 /
+**Deployed 2026-08-02 (was PENDING) — daily-cadence matching migration groundwork (PRODUCT_SPEC §3.1 /
 §3.1b, `DAILY_MATCHING_MIGRATION_AUDIT.md`, `DAILY_MATCHING_IMPLEMENTATION_PLAN.md`).**
-Not deployed yet. **Code + one additive schema column, no env change required
+Deployed 2026-08-02. **Code + one additive schema column, no env change required
 to keep current behavior, no Mini App change.** `DROP_CADENCE` is unset in
 `/opt/gennety/.env` today and this deploy does not add it — production keeps
 running the `weekly` profile byte-for-byte identical to today (pinned by
@@ -1917,8 +2121,8 @@ deploy adds no env var.
 
 ---
 
-**PENDING — season + weather venue ranking (PRODUCT_SPEC §3.7,
-VENUE_ENGINE_IMPROVEMENT_PLAN 5.3).** Not deployed yet. **No Prisma schema
+**Deployed 2026-08-02 (was PENDING) — season + weather venue ranking (PRODUCT_SPEC §3.7,
+VENUE_ENGINE_IMPROVEMENT_PLAN 5.3).** Deployed 2026-08-02. **No Prisma schema
 change, no Mini App change** (`apps/webapp` untouched) — but it ships alongside
 the observability block below, which DOES need an additive `db:push`, so follow
 that block's schema step. One new external dependency, one new flag, ships
@@ -1972,8 +2176,7 @@ psql "$DATABASE_URL" -c "select venue_name, venue_selection_reason from matches 
 
 ---
 
-**PENDING — venue observability (VENUE_ENGINE_IMPROVEMENT_PLAN part 6).** Not
-deployed yet. **No Mini App change** (`apps/webapp` untouched) — but it needs an
+**Deployed 2026-08-02 (was PENDING) — venue observability (VENUE_ENGINE_IMPROVEMENT_PLAN part 6).** Deployed 2026-08-02. **No Mini App change** (`apps/webapp` untouched) — but it needs an
 **additive `db:push` BEFORE the restart**, and it ships alongside the blocks
 below, which need their own schema steps. Do every schema step, then one
 restart. A **dashboard redeploy** (separate repo, `~/Desktop/gennety-admin-dashboard`)
@@ -2048,8 +2251,8 @@ and `pm2 restart gennety-bot --update-env`.
 
 ---
 
-**PENDING — admin dialog media + the fat user card (ARCHITECTURE.md
-→ `chat_events` / Admin API).** Not deployed yet. **No env change, no flag
+**Deployed 2026-08-02 (was PENDING) — admin dialog media + the fat user card (ARCHITECTURE.md
+→ `chat_events` / Admin API).** Deployed 2026-08-02. **No env change, no flag
 change, no Mini App change** (`apps/webapp` untouched) — but it needs an
 **additive `db:push` BEFORE the restart**, and it ships alongside the blocks
 below, which need their own schema steps. Do every schema step, then one
@@ -2136,8 +2339,8 @@ worst case of leaving it is a nullable column nothing reads.
 
 ---
 
-**PENDING — `reference_expired` is escapable again (PRODUCT_SPEC §1.4 rule 5).**
-Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
+**Deployed 2026-08-02 (was PENDING) — `reference_expired` is escapable again (PRODUCT_SPEC §1.4 rule 5).**
+Deployed 2026-08-02. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change** (`apps/webapp` untouched). Ships with whatever
 restart carries the blocks below.
 
@@ -2164,7 +2367,7 @@ psql "$DATABASE_URL" -c "select count(*) from users where verification_status='v
 
 ---
 
-**PENDING — peer-wait shimmer v2 (PRODUCT_SPEC §3.6b).** Not deployed yet.
+**Deployed 2026-08-02 (was PENDING) — peer-wait shimmer v2 (PRODUCT_SPEC §3.6b).** Deployed 2026-08-02.
 **No env change, no flag change, no Mini App change** (`apps/webapp` untouched) —
 but it needs an **additive `db:push` BEFORE the restart**, and it ships alongside
 the two blocks below, which need their own schema steps. Do all three schema
@@ -2230,7 +2433,7 @@ removed, not merely decorated). Or revert the code; the additive columns can sta
 
 ---
 
-**PENDING — stage-aware pinned banner (PRODUCT_SPEC §2.1).** Not deployed yet.
+**Deployed 2026-08-02 (was PENDING) — stage-aware pinned banner (PRODUCT_SPEC §2.1).** Deployed 2026-08-02.
 **This change adds no Prisma schema change, no env change, no flag change, and no
 Mini App change** (`apps/webapp` untouched) — but it ships alongside the planning
 stall chain below, which DOES need an additive `db:push`, so follow that block's
@@ -2276,7 +2479,7 @@ env, no flag, no Mini App state.
 
 ---
 
-**PENDING — planning stall chain (PRODUCT_SPEC §3.5c).** Code-only otherwise:
+**Deployed 2026-08-02 (was PENDING) — planning stall chain (PRODUCT_SPEC §3.5c).** Code-only otherwise:
 **no env change, no flag change, no Mini App change** (`apps/webapp` untouched).
 Always-on — there is no feature flag, because the thing it fixes is a hole rather
 than a feature: the scheduling and venue steps had no deadline, so a partner who
@@ -3285,6 +3488,18 @@ waiting on the upstream dependency. **Never pin an override BELOW the patched
 version** — `postcss` was held at `8.5.10` while the fix was `8.5.18`, so the
 override itself was the vulnerability.
 
+**An override rots — re-check the pinned versions every deploy, not only when
+adding one.** This recurred on 2026-08-07, to three overrides at once
+(`postcss` 8.5.18, `fast-uri` 3.1.4, `brace-expansion` 5.0.8), each sitting
+exactly one patch below a **newly published** advisory. Every one had been
+correct when written; the bar moved underneath them, and the block still looked
+deliberate and healthy on inspection. `pnpm audit` is the only thing that
+notices. Triage the output by whether the path reaches the droplet runtime — an
+`apps/video > @remotion/cli` or `eslint > …` chain is build/dev-only and never
+ships, while `apps/bot > …` does — but fix all of them anyway, because the gate
+is pass/fail and one tolerated advisory turns it into a permanently red check
+nobody reads.
+
 Identity and profile-media validation preflight:
 
 ```sh
@@ -3352,7 +3567,7 @@ cd "/Users/pro/Desktop/Gennety Dating"
 # ALWAYS dry-run first. Every line must be a deletion you intend.
 rsync -az --delete --dry-run --itemize-changes \
   --exclude '.git/' --exclude 'node_modules/' --exclude 'dist/' --exclude 'tmp/' \
-  --exclude '.env*' --exclude 'keys/' \
+  --exclude '.env*' --exclude 'keys/' --exclude '*-backup-*.json' \
   --exclude '.claude/' --exclude '.agents/' --exclude '.codex/' --exclude '.gstack/' \
   ./ root@167.172.178.229:/opt/gennety/ | grep '^\*deleting'
 ```
@@ -3367,6 +3582,7 @@ rsync -az --delete \
   --exclude 'tmp/' \
   --exclude '.env*' \
   --exclude 'keys/' \
+  --exclude '*-backup-*.json' \
   --exclude '.claude/' \
   --exclude '.agents/' \
   --exclude '.codex/' \
@@ -3374,11 +3590,22 @@ rsync -az --delete \
   ./ root@167.172.178.229:/opt/gennety/
 ```
 
-**`.env*` and `keys/` are not optional excludes.** `.env*` (not just `.env`)
-covers the `.env.bak.*` snapshots that Rollback depends on. `keys/` holds
-server-only Apple secrets (`APNS_KEY_PATH`, `APPSTORE_KEY_PATH`) that exist
-nowhere in the repo — the narrower pre-2026-07-25 list already destroyed the
-APNs `.p8` once.
+**`.env*`, `keys/` and `*-backup-*.json` are not optional excludes.** `.env*`
+(not just `.env`) covers the `.env.bak.*` snapshots that Rollback depends on.
+`keys/` holds server-only Apple secrets (`APNS_KEY_PATH`, `APPSTORE_KEY_PATH`)
+that exist nowhere in the repo — the narrower pre-2026-07-25 list already
+destroyed the APNs `.p8` once. `*-backup-*.json` covers the **two** droplet-only
+database backups, which live in the repo root and are matched by nothing else:
+
+```
+/opt/gennety/ethnicity-backup-2026-08-02T08-26-08-301Z.json   (1 KB)
+/opt/gennety/prod-backup-2026-07-27T14-08-06-066Z.json        (3.3 MB)
+```
+
+Until 2026-08-07 this exclude was mentioned only in the 2026-08-02 release note,
+named only the first file, and was **absent from the flag set above** — so
+following this section literally destroyed both. `ls /opt/gennety/*.json` after
+any deploy; it is the same class of failure as the `keys/` deletion.
 
 Then install, validate, and restart on the droplet:
 
