@@ -249,6 +249,32 @@ the change affects:
 Do not document local implementation details just because code changed. If no
 docs are affected, say `Docs unaffected` in the final response or PR notes.
 
+### DECISIONS.md — the context rule (MANDATORY, every session)
+
+Only files cross a session boundary; the conversation does not. So anything
+that would otherwise live only in chat MUST land in
+[DECISIONS.md](DECISIONS.md) — **in the same turn and the same commit as the
+work**, whatever the task:
+
+- a product decision the founder made in conversation (including "no, we are
+  not doing that");
+- a change of my own mind mid-task;
+- a deviation from the plan — different scope, approach, or order;
+- scope deliberately left undone, with the reason;
+- a document found to disagree with the code.
+
+This is a separate rule, not a special case of the impact check above.
+PRODUCT_SPEC and ARCHITECTURE record HOW the product works; DECISIONS.md
+records WHY it is that way and what was rejected. The second does not follow
+from the first, and it is the one that gets lost.
+
+**Read DECISIONS.md before starting a task.** An entry there can override the
+plan or a runbook block: the specs state intent, the journal states the latest
+decision. On conflict the journal wins, and the disagreement is resolved by
+editing the spec in the same turn.
+
+Client-side decisions go in the iOS repo's DECISIONS.md, under its rules.
+
 ## Post-Implementation Git Workflow
 
 **Standing rule (single-branch journal — see CLAUDE.md): commit and push after

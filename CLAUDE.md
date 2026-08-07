@@ -5,6 +5,7 @@ Claude Code should load and follow these root documents:
 @AGENTS.md
 @PRODUCT_SPEC.md
 @ARCHITECTURE.md
+@DECISIONS.md
 @DEMO_MODE.md
 @deploy.md
 
@@ -15,6 +16,10 @@ Document roles:
 - **PRODUCT_SPEC.md** — product invariants and major user flows.
 - **ARCHITECTURE.md** — durable architecture boundaries, topology, data
   ownership, API surface, background jobs, external integrations.
+- **DECISIONS.md** — decision and deviation journal: what was decided in
+  conversation, where I changed my mind mid-task, where the work departed from
+  the plan, and what was deliberately left undone. Read it BEFORE starting any
+  task — it holds reasons that exist nowhere in the code or the specs.
 - **DEMO_MODE.md** — the second (demo) bot: what it fakes, how it stays
   isolated from production, and the impact check every product change owes it.
 - **deploy.md** — production runbook for DigitalOcean, PM2, Caddy, env,
