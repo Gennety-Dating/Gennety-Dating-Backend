@@ -230,12 +230,33 @@ out of Telegram-only workers.
   two small, one large, two small, one large-ish — and the sixth photo is
   deliberately the LAST slot, the bottom row's outer corner, so a five-photo set
   still renders a composition rather than half a band. Each frame shows a
-  **whole person**: the tile carries the photos' own 9:16 and `object-fit:
-  contain`, so an odd-sized photo dropped in later shows a margin instead of a
-  decapitated head. The frames are **opaque**, with a thin white border — a
-  photograph seen through another photograph reads as a rendering fault rather
-  than as depth, so where they overlap the paint order is the whole of what you
-  see. The right column is the left one mirrored, which is
+  **whole person**: the tile carries the photos' own 9:16, which is the ratio
+  `prepare.mjs` prepares them at, so filling it crops nobody.
+  **The photographs are unframed and reach their own edges (2026-08-07).**
+  They shipped in white 2px frames, and the frame cost more than it bought: with
+  `box-sizing: border-box` it shrank the tile's *content* box to a ratio the
+  photo no longer matched, so `object-fit: contain` letterboxed every one of
+  them — a dark hairline along the top and bottom of all twelve tiles, reading
+  as a rendering fault rather than as a border. The tiles now paint edge to edge
+  (`object-fit: cover`, which absorbs the sub-pixel rounding of a 1152×2048
+  original scaled to 338×600 and would crop an odd-sized photo rather than
+  letterbox it — so the folder stays 9:16). They remain **opaque**, and what
+  separates one print from the next where they cross is now the shadow under it
+  rather than a white edge: a photograph seen through another photograph reads
+  as a rendering fault rather than as depth, so where they overlap the paint
+  order is still the whole of what you see.
+  **The label owns the bottom strip, and no photo may enter it (2026-08-07).**
+  The bottom band ran through the button's floor and sat behind «Парней» /
+  «Девушек» — the one word the button is asking about, legible only because of
+  the scrim over it. The scatter's coordinate space is now the button *minus*
+  that strip (`.ob-pref-art`, `--pref-label-zone`), so the rule is structural
+  rather than a per-slot reminder, and the bottom pair is authored to clear the
+  floor at the **tightest** column rather than the one that was screenshotted:
+  the pair is elastic (`flex: 1`, 15–32rem) while a tile is sized from the
+  column's WIDTH, so a short screen makes each tile a bigger fraction of the
+  height — a `y` that clears on a 390×844 phone can still cross the word on a
+  320×568 one. `maxCentreY` states that bound, tilt included, and a test holds
+  every slot to it. The right column is the left one mirrored, which is
   also what keeps every sideways overhang pointing at the screen's own margin
   rather than into the gutter the two columns share; because a tilted tile is
   wider than its own box (`slotSpanX`, and with full-length photos the tilt term

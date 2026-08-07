@@ -4,8 +4,10 @@
  *
  * Two sets per gender, one per design variant:
  *
- *  - `photo/`  — ordinary framed photographs, scattered and tilted inside the
- *    button, semi-transparent, a few spilling past its edge (variant 1).
+ *  - `photo/`  — ordinary photographs, scattered and tilted inside the button,
+ *    unframed and opaque, a few spilling past its sides (variant 1). They must
+ *    be 9:16: the tile states that ratio and fills it, so another shape is
+ *    cropped rather than letterboxed.
  *  - `cutout/` — ONE finished image per side: the whole group of people already
  *    standing together, background removed, white contour already drawn, and
  *    the outermost figures cut off at the image's own left and right edges.

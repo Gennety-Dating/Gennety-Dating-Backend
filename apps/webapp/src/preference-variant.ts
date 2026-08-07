@@ -3,8 +3,8 @@
  *
  * Two were built to be compared side by side (PRODUCT_SPEC §1.3):
  *
- *  1. **Scatter** — two tall rounded columns, ordinary photographs tilted and
- *     semi-transparent inside them, a few hanging past the edge.
+ *  1. **Scatter** — two tall rounded columns, ordinary photographs tilted
+ *     inside them, unframed and opaque, a few hanging past the sides.
  *  2. **Cutout** — the same two columns, thin-bordered over near-black, holding
  *     background-removed people in a tight cluster above a heavy white word.
  *

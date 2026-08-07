@@ -3407,6 +3407,10 @@ button {
   --tone-a: #a23350;
   --tone-b: #8b253b;
   --tone-c: #5c1727;
+  /* The bottom strip that belongs to the word, and that no photo may enter.
+     Sized to the tallest the label gets — its font is `clamp(…, 4.6vw, 1.35rem)`
+     over a 1rem bottom padding — so it is a reservation, never a squeeze. */
+  --pref-label-zone: 2.75rem;
   position: relative;
   /* The whole point of the scatter: some frames hang past the button's edge.
      Nothing may clip them — not the column, not the art layer. */
@@ -3463,10 +3467,15 @@ button {
 
 /* The photo layer. `pointer-events: none` is load-bearing rather than tidy: a
    frame hanging past the column's edge would otherwise be a live target
-   sitting outside the button it belongs to — and over the neighbouring one. */
+   sitting outside the button it belongs to — and over the neighbouring one.
+
+   It stops where the label starts. The scatter's whole coordinate space is this
+   box, so reserving the bottom strip here is what keeps a photo off the word
+   the button is actually asking about — a rule the composition cannot break by
+   accident, rather than one every slot has to remember. */
 .ob-pref-art {
   position: absolute;
-  inset: 0;
+  inset: 0 0 var(--pref-label-zone) 0;
   pointer-events: none;
 }
 
@@ -3477,32 +3486,53 @@ button {
   aspect-ratio: 9 / 16;
   overflow: hidden;
   border-radius: 12px;
-  /* Opaque, and framed. Overlapping tiles have to read as a stack of prints;
-     translucent ones read as a rendering fault, with two faces occupying the
-     same square. The white edge is what separates one print from the next where
-     they cross — a border rather than an inset shadow, which a child image
-     paints straight over. */
-  border: 2px solid rgba(255, 255, 255, 0.92);
-  box-sizing: border-box;
+  /* No frame and no visible edge of its own: the photograph is the whole tile,
+     right to the corner radius. What separates one print from the next where
+     they cross is the shadow under it — the tiles stay OPAQUE (a photograph
+     seen through another reads as a rendering fault, two faces in one square),
+     so paint order alone decides what you see.
+
+     The background only ever shows before the image has loaded; `cover` means
+     it is never a letterbox bar. */
+  border: 0;
   background: #14161a;
   transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
-  box-shadow: 0 16px 30px -14px rgba(0, 0, 0, 0.85);
+  /* Three layers doing one job the white border used to do on its own: a tight
+     halo that hugs the edge so two overlapping photographs stay two, then the
+     drop that lifts the print off the column. A dark ring would read as a frame
+     again — this has to stay a shadow, i.e. no offset-less hard edge. */
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.55),
+    0 4px 12px -4px rgba(0, 0, 0, 0.65),
+    0 18px 34px -16px rgba(0, 0, 0, 0.85);
 }
 
 .ob-pref-shot img {
   display: block;
   width: 100%;
   height: 100%;
-  /* `contain`, not `cover`: the whole person, always. The frame is the photos'
-     own 9:16, so nothing is letterboxed today — but an odd-sized photo dropped
-     into the folder later shows a margin rather than a decapitated head, and a
-     margin is a visible signal to go and re-crop it. */
-  object-fit: contain;
+  /* `cover`, so the frame is always painted edge to edge. It is not a crop in
+     practice: every shipped photo is the source's own 9:16, the same ratio the
+     tile states, and prepare.mjs preserves it — `cover` absorbs the sub-pixel
+     rounding of a 1152×2048 original scaled to 338×600, which under `contain`
+     was a visible dark hairline along the top and bottom of every tile. Keep
+     the folder 9:16: an odd-sized photo dropped in later gets cropped here
+     rather than letterboxed. */
+  object-fit: cover;
 }
 
 .ob-pref-label {
   position: relative;
   z-index: 20;
+  /* The strip the photo layer above reserves for it. Stated as a floor rather
+     than a fixed height so the word still sets its own size — but the two
+     cannot disagree, which is what makes "no photo touches the label" true at
+     every column height rather than at the one that was screenshotted. */
+  min-height: var(--pref-label-zone);
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
   padding: 0 0.75rem 1rem;
   font-size: clamp(1.05rem, 4.6vw, 1.35rem);
   font-weight: 700;

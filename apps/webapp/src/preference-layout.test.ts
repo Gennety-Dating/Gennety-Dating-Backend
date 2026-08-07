@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  PHOTO_ASPECT,
   SCATTER_SLOTS,
+  maxCentreY,
   mirrorScatter,
   placeScatter,
   slotSpanX,
@@ -104,6 +106,34 @@ describe("scatter placement", () => {
     expect(tilted.left).toBeLessThan(30);
     expect(tilted.right).toBeGreaterThan(70);
     expect(30 - tilted.left).toBeCloseTo(tilted.right - 70, 6);
+  });
+
+  /**
+   * The label owns the bottom strip of the button, and the photo area stops
+   * where it begins — so a tile crossing y = 100 lands on the word the button
+   * is asking about. The bottom pair used to sit at 84/82, which did exactly
+   * that on every screen.
+   *
+   * Checked at the TIGHTEST column, because that is the failing direction and
+   * not the obvious one: tiles are sized from the area's width, so the shorter
+   * the column, the more of its height each one eats. A y that clears the floor
+   * on a 390×844 phone can still run through it on a 320×568 one.
+   */
+  it("keeps every frame off the label, at the tightest column", () => {
+    for (const slot of SCATTER_SLOTS) {
+      expect(slot.y).toBeLessThanOrEqual(maxCentreY(slot));
+    }
+  });
+
+  it("measures a tile's vertical reach with the tilt included", () => {
+    // A square-ish area: the tile's own height is then w/0.5625 of it, so an
+    // untilted 40-wide tile spans 71.1 and its centre may sit at 100 - 35.6.
+    const upright = maxCentreY({ x: 50, y: 0, w: 40, rot: 0, z: 1 }, 1);
+    expect(upright).toBeCloseTo(100 - 40 / PHOTO_ASPECT / 2, 6);
+    // Turned, it reaches lower and must sit higher.
+    expect(maxCentreY({ x: 50, y: 0, w: 40, rot: 9, z: 1 }, 1)).toBeLessThan(upright);
+    // And a taller area leaves more room under the same tile.
+    expect(maxCentreY({ x: 50, y: 0, w: 40, rot: 0, z: 1 }, 3)).toBeGreaterThan(upright);
   });
 
   it("keeps every frame's centre inside the column", () => {

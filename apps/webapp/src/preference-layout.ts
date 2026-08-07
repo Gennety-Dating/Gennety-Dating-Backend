@@ -6,7 +6,8 @@
  * shuffle under the user's finger and would make a design review impossible —
  * you would never be looking at the same screen twice. What the brief calls a
  * chaotic scatter is a fixed composition that reads as chaotic: uneven tilts,
- * uneven sizes, and tiles deliberately hanging past the button's edge.
+ * uneven sizes, and tiles deliberately hanging past the button's SIDE edges.
+ * Sideways only: downward there is a word to keep clear of (`maxCentreY`).
  *
  * This is variant 1 only. Variant 2 has no layout to speak of: its people
  * arrive as ONE finished image, already arranged and already cut off at its own
@@ -19,16 +20,32 @@
  * past the last slot are not shown.
  */
 
-/** A framed photo, tilted, its centre at (x, y). All units are % of the button. */
+/**
+ * A photo, tilted, its centre at (x, y). All units are % of the PHOTO AREA —
+ * `.ob-pref-art`, which is the button minus the strip its label occupies, not
+ * the button itself. The distinction is the whole reason nothing lands on the
+ * word: y = 100 is the floor of the picture, and the word lives below it.
+ */
 export interface ScatterSlot {
-  /** Horizontal centre, % of button width. */
+  /** Horizontal centre, % of the photo area's width. */
   x: number;
-  /** Vertical centre, % of button height. */
+  /**
+   * Vertical centre, % of the photo area's height.
+   *
+   * Bounded from below by `maxCentreY` — a tile is sized from the area's WIDTH
+   * while y is measured against its HEIGHT, so how much room is left under a
+   * given y depends on how tall the column happens to be, and the column is
+   * elastic (`flex: 1`, 15–32rem). The bottom band is authored to clear the
+   * floor at the SHORTEST column, not the one that was screenshotted.
+   */
   y: number;
   /**
-   * Tile width, % of button width. Height follows from the photo's own 9:16,
-   * so a wider tile is a taller one — the frames show a whole person, never a
-   * crop of one, and width is the only handle on their size.
+   * Tile width, % of the photo area's width. Height follows from the photo's
+   * own 9:16, so a wider tile is a taller one — the tiles show a whole person,
+   * and width is the only handle on their size. That "whole person" holds
+   * because the tile states the ratio the photos are prepared at; the CSS fills
+   * the tile edge to edge (`object-fit: cover`) rather than fitting inside it,
+   * so a photo dropped in at some other shape is cropped, not letterboxed.
    */
   w: number;
   /** Tilt in degrees. */
@@ -63,7 +80,7 @@ export const SCATTER_SLOTS: readonly ScatterSlot[] = [
   // The anchor: the large one in the middle band.
   { x: 44, y: 60, w: 62, rot: 4, z: 4 },
   // The large-ish one at the top.
-  { x: 54, y: 15, w: 56, rot: -5, z: 1 },
+  { x: 54, y: 17, w: 56, rot: -5, z: 1 },
   // The upper pair.
   { x: 22, y: 38, w: 45, rot: 7, z: 3 },
   { x: 72, y: 36, w: 42, rot: -6, z: 2 },
@@ -72,8 +89,12 @@ export const SCATTER_SLOTS: readonly ScatterSlot[] = [
   // some other band, and the sixth photo fills the corner it left — bottom
   // RIGHT on the men's column, bottom LEFT on the women's once mirrored, which
   // is what was asked for.
-  { x: 23, y: 84, w: 47, rot: -6, z: 5 },
-  { x: 70, y: 82, w: 44, rot: 7, z: 6 },
+  //
+  // These two are the ones the label constrains (see the note below): they used
+  // to sit at 84/82, which put them through the button's floor and behind the
+  // word on every screen.
+  { x: 23, y: 79, w: 47, rot: -6, z: 5 },
+  { x: 70, y: 78, w: 44, rot: 7, z: 6 },
 ];
 
 /**
@@ -109,6 +130,39 @@ export function slotSpanX(slot: ScatterSlot): { left: number; right: number } {
   const radians = (Math.abs(slot.rot) * Math.PI) / 180;
   const half = (slot.w * Math.cos(radians) + height * Math.sin(radians)) / 2;
   return { left: slot.x - half, right: slot.x + half };
+}
+
+/**
+ * How tall the photo area is compared to its own width, at the TIGHTEST column
+ * the layout produces — measured, not assumed: the pair is `flex: 1` between
+ * 15rem and 32rem, so the button's proportions move with the screen (h/w ≈ 2.51
+ * at 320×568, ≈ 3.10 at 390×844), and `.ob-pref-art` is that button minus the
+ * label strip.
+ *
+ * A short column is the hard case, and the counter-intuitive one: tiles are
+ * sized from the area's WIDTH, so on a short column they take up MORE of its
+ * height, and a y that clears the floor on a tall phone runs through it on a
+ * small one. This is the number the bottom band is authored against.
+ */
+export const TIGHTEST_AREA_RATIO = 2.17;
+
+/**
+ * The lowest a tile's centre may sit and still keep the whole frame inside the
+ * photo area — i.e. off the label underneath it.
+ *
+ * Tilt is in it because a rotated tile is TALLER than its own box by the same
+ * argument `slotSpanX` makes about width: the bounding box is
+ * `h·cos|θ| + w·sin|θ|`. At these sizes that is several percent, which is the
+ * difference between "sits on the floor" and "its bottom corner crosses the
+ * word".
+ */
+export function maxCentreY(slot: ScatterSlot, areaRatio = TIGHTEST_AREA_RATIO): number {
+  const radians = (Math.abs(slot.rot) * Math.PI) / 180;
+  // Both terms as % of the area's HEIGHT: the tile's own height is its width
+  // divided by the photo aspect, and either is converted from width-% to
+  // height-% by dividing by the area's ratio.
+  const spanY = (slot.w / areaRatio) * (Math.cos(radians) / PHOTO_ASPECT + Math.sin(radians));
+  return 100 - spanY / 2;
 }
 
 /**

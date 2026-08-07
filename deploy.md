@@ -493,6 +493,19 @@ this change where a user gets stuck at the handoff.
     cannot be folded away and keeps ~0.3 KB of dead rules, as the toggle's own
     styles already did). Switching the live one is a one-line code change, not
     an env flag.
+  - **Variant 1 is the one that ships, and it was tidied 2026-08-07** — the
+    white frames and the dark hairlines inside them are gone (the frame's
+    `border-box` shrank the tile's content box below the photo's own ratio, so
+    `object-fit: contain` letterboxed all twelve), and the bottom band no longer
+    runs under «Парней» / «Девушек». Still client-only. Two things worth
+    knowing: the tiles are now `object-fit: cover`, so **the folder must stay
+    9:16** or a photo gets cropped instead of showing a margin (`prepare.mjs`
+    already preserves the source ratio, so this only bites a hand-copied file);
+    and the label's strip is reserved in CSS (`--pref-label-zone`) while the
+    bottom slots are authored against the **tightest** column, so a slot's `y`
+    is bounded by `maxCentreY` and a test enforces it — verify on a short
+    viewport (320×568), not only on 390×844, if those numbers are ever touched.
+    Byte cost unchanged; variant 2 untouched.
 - **And so does the height drum's per-row tick** (added 2026-08-06,
   PRODUCT_SPEC §1.3). The drum pulses `HapticFeedback.selectionChanged` as each
   value passes under the capsule instead of once when the scroll stops, and its
