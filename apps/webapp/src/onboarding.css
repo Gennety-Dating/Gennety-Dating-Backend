@@ -3078,6 +3078,12 @@ button {
     calc(var(--tg-content-bottom, 0px) + 1.75rem);
   box-sizing: border-box;
   text-align: center;
+  /* The keyboard appearing is a step change in `--kb-height`, and with it the
+     pill jumps up and the centred control jumps with it. Ease the shrink so
+     the rise reads as the screen making room rather than as a glitch. (Only
+     covers the floating-keyboard path; where the WebView resizes the layout
+     viewport itself, the browser owns that animation.) */
+  transition: height 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ob-basics-title {
@@ -3164,6 +3170,14 @@ button {
 }
 
 /* ── Name ──────────────────────────────────────────────────────────────── */
+/* The one control on this screen that raises the keyboard, so it is the one
+   whose size may NOT be measured against the viewport HEIGHT: opening the
+   keyboard shrinks that height (directly where the WebView resizes the layout
+   viewport, via `--kb-height` where it floats it), so a `dvh` size made the
+   name shrink the moment the user tapped to type it, and snap back when the
+   field blurred on Continue. Width is the honest axis here — it is what a long
+   name actually runs out of, and the keyboard never changes it. The pill still
+   rises above the keyboard; only the letters hold their size. */
 .ob-basics-input {
   width: min(100%, 20rem);
   border: 0;
@@ -3172,10 +3186,13 @@ button {
   color: var(--text);
   text-align: center;
   font-family: inherit;
-  font-size: clamp(2rem, 6.5dvh, 3rem);
+  font-size: clamp(2rem, 12vw, 3rem);
   font-weight: 700;
   letter-spacing: -0.02em;
   caret-color: var(--accent-bright);
+  /* Belt and braces: if some client still resizes the type (rotation, a font
+     scale change), it glides instead of snapping. */
+  transition: font-size 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ob-basics-input::placeholder {
@@ -3372,8 +3389,9 @@ button {
    carry photographs of the people behind the choice. "Both" sits under them,
    smaller and quieter: a real answer, but not the headline one.
 
-   Two designs live here behind `?v=` (preference-variant.ts); variant 1 is the
-   default and variant 2 overrides it under `.ob-basics--pref-v2`. */
+   A second design lived alongside this one behind `?v=`, with its own overrides
+   under `.ob-basics--pref-v2`. The founder settled on this one on 2026-08-07;
+   the switch, the side-by-side review page and those overrides are gone. */
 .ob-basics--pref {
   /* The quiet "both" pill. Black on BOTH themes, deliberately: the effect the
      brief asks for — light bleeding inward from the edges — needs a dark base
@@ -3616,192 +3634,6 @@ button {
   transition: transform 140ms ease, opacity 160ms ease;
 }
 
-/* ── Variant 2: the group, fitted to the button ─────────────────────────
-   One finished image per side — the people already standing together, already
-   outlined in white, and already cut off at the artwork's own left and right
-   edges. The button is fitted to those edges rather than the image being
-   fitted into the button: the picture spans the column exactly, so the
-   outermost figures end ON the border, and the column is only as tall as the
-   picture plus its word.
-
-   Theme-independent on purpose: white figures over a dark panel is the design,
-   and re-tinting it for the cream page would be a different one. */
-/* The button is fitted to its artwork on BOTH axes: full width so the cut
-   figures land on the border, and only as tall as the picture plus its word.
-   That works because the group is prepared at ~0.52 w/h (`--tight` in
-   prepare.mjs) — roughly three figures. Shipped at the full five-across ratio
-   the same rule produced a 200px stub with a void above it, which is the
-   measurement that set the crop, not the other way round. */
-.ob-basics--pref-v2 .ob-pref-pair {
-  flex: 0 0 auto;
-  min-height: 0;
-  align-items: end;
-  /* Reaches 8px past the page's own margin on each side. Column WIDTH is the
-     only thing that decides how big five people can be drawn — button height
-     does not touch it — so this is the one lever that makes them larger, and
-     it costs nothing: variant 1 keeps the full margin, because its tiles hang
-     out into it on purpose. The width has to grow with the margin: the base
-     rule states `width: 100%`, and a negative margin alone cannot widen a box
-     whose width is already fixed. */
-  width: calc(100% + 1rem);
-  margin-inline: -0.5rem;
-}
-
-
-.ob-basics--pref-v2 .ob-pref-col {
-  /* The button states its own shape rather than shrink-wrapping the artwork.
-     Whole-group artwork is nearly square (0.86 and 0.79 w/h for the two sides)
-     while a column is half a phone wide, so a button fitted to it either cuts
-     figures off at the edges or leaves a void above them. Given a shape of its
-     own it can hold the whole group, comfortably inside its border, with air
-     above — which is the point.
-     A taller button does NOT show the people any bigger: the artwork runs out
-     of column WIDTH long before it runs out of height, so every extra pixel of
-     button height lands as headroom, never as scale. 100/195 puts the button
-     back at roughly the height it had while it was shrink-wrapping a cropped
-     group, with the headroom a quarter of it rather than half. */
-  aspect-ratio: 100 / 195;
-  /* Belt and braces: nothing should reach the edge any more, but a rounded
-     button must clip anyway or square corners poke out of round ones. Variant 1
-     needs the opposite and keeps `overflow: visible` for its overhangs. */
-  overflow: hidden;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding-top: 0.85rem;
-  background: rgba(6, 6, 8, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 20px 44px -30px rgba(0, 0, 0, 0.95);
-}
-
-/* No photo behind the word here, so the scrim has nothing to rescue. */
-.ob-basics--pref-v2 .ob-pref-col::before {
-  content: none;
-}
-
-.ob-basics--pref-v2 .ob-pref-label {
-  padding: 0.75rem 0.5rem 1.15rem;
-  color: #fff;
-  font-size: clamp(1.15rem, 5.4vw, 1.65rem);
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  text-shadow: none;
-}
-
-/* Inside the button, never touching it. The group is shown WHOLE — no crop, its
-   own proportions — so `contain` is what guarantees that: it fits the artwork
-   to whichever axis runs out first and leaves the other as margin, rather than
-   filling the box and losing whoever stands at the edge.
- *
- * `flex: 1` hands it every pixel the label does not need, and `bottom` settles
- * the group on the button's floor, so the slack collects above their heads as
- * air rather than under their feet as a gap. The side inset is deliberately
- * small — 3% a side — because the artwork's width IS the limit on how big the
- * five people can be drawn, so every point given away as margin comes straight
- * off their faces. It is there to keep the outermost figures clear of the
- * border, and no wider than that job needs. */
-.ob-pref-group {
-  display: block;
-  width: 94%;
-  margin: 0 auto;
-  flex: 1 1 auto;
-  min-height: 0;
-  object-fit: contain;
-  object-position: bottom center;
-  /* The white contour is drawn into the artwork already, so CSS adds only the
-     shadow that lifts the group off the panel. */
-  filter: drop-shadow(0 14px 20px rgba(0, 0, 0, 0.5));
-}
-
-/* ── Dev-only variant toggle ────────────────────────────────────────────
-   Stripped from the production bundle with its component (`import.meta.env.DEV`
-   in onboarding-basics.tsx); these rules are the only trace left behind. */
-/* Top-right, because bottom-centre is exactly where the "both" pill lives and
-   a review toggle must not sit on top of the thing being reviewed. */
-/* Dev-only review scaffolding: `?v=both` puts the two designs on one scrolling
-   page, one full screen each, so an edit to either is checked against the other
-   by scrolling rather than by reloading with a different query param. Snapping
-   makes that a flick instead of a drag. Constant-folded out of production. */
-.ob-pref-stack {
-  height: 100%;
-  overflow-y: auto;
-  scroll-snap-type: y mandatory;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-}
-
-.ob-pref-stack-item {
-  position: relative;
-  /* Exactly one viewport each, so a section is the screen as it really ships
-     and not a squeezed thumbnail of it. */
-  height: 100%;
-  scroll-snap-align: start;
-}
-
-.ob-pref-stack-item + .ob-pref-stack-item {
-  border-top: 1px dashed rgba(127, 127, 127, 0.35);
-}
-
-/* Anchored to the shell (`.ob-basics` is positioned), NOT to the viewport:
-   stacked, two fixed bars would pile into the same corner and only the last
-   one would be readable. */
-.ob-pref-devbar {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  z-index: 90;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.25rem;
-  max-width: 11rem;
-  pointer-events: none;
-}
-
-/* What this section IS, as opposed to where you can go — the two are separate
-   so a screenshot of one section says which design it shows. */
-.ob-pref-devtag {
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(139, 37, 59, 0.92);
-  color: #fff;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.ob-pref-devnav {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.ob-pref-devlink {
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.72);
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-decoration: none;
-  pointer-events: auto;
-}
-
-.ob-pref-devlink.is-current {
-  background: rgba(255, 255, 255, 0.92);
-  color: #111;
-}
-
-.ob-pref-devnote {
-  padding: 0.25rem 0.5rem;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.72);
-  color: rgba(255, 190, 190, 0.95);
-  font-size: 0.6875rem;
-  line-height: 1.25;
-  text-align: right;
-}
-
 /* ── Tap burst ──────────────────────────────────────────────────────────
    The particle layer for the two tap-to-answer screens (onboarding-burst.ts).
    It lives in <body>, not in the React tree, so the screen advancing mid-flight
@@ -3969,6 +3801,11 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .ob-basics-title {
     animation: none;
+  }
+
+  .ob-basics,
+  .ob-basics-input {
+    transition: none;
   }
 
   .ob-wheel-item {

@@ -1,5 +1,35 @@
 # Gennety Dating Deploy
 
+**PENDING — the onboarding name field stops shrinking under the keyboard
+(PRODUCT_SPEC §1.1).** Not deployed yet. **No Prisma schema change, no env
+change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is
+`apps/webapp/src/onboarding.css` plus docs. So this is the **Deploy Mini App
+Only** path (`./scripts/deploy-webapp.sh`); there is nothing to rsync to
+`/opt/gennety` and **no `pm2 restart`**. Also run `pnpm demo:deploy` — the demo
+builds its own bundle from the same source and will otherwise keep the old one.
+
+The name screen's font size was measured in `dvh`, so opening the keyboard
+shrank the letters the user was typing and closing it snapped them back (the
+"blink" on Continue). It is width-measured now, which the keyboard cannot
+touch. One thing worth knowing: on a 390px phone the unfocused size moves
+48px → 46.8px — a deliberate 2.5% trade for a constant size, and narrower
+phones scale down further, which is what a long name wanted anyway.
+
+Post-deploy check — this is a transient visual state, so verify by eye rather
+than from logs. The dev-only preview needs no Telegram and no account:
+
+```sh
+./scripts/deploy-webapp.sh
+curl -sI https://dating-calendar.gennety.com/onboarding.html | head -1
+# Then, on the dev server: tap the field and confirm the name holds its size.
+#   http://localhost:5173/onboarding.html?preview=basics:name&lang=ru&theme=dark
+```
+
+**Rollback:** redeploy the Mini App from the previous checkout. Nothing else to
+undo — no schema, no env, no flag, no server state.
+
+---
+
 **PENDING — the anonymous pre-date chat reaches the native client, and opens at
 all for a pair with an app participant (PRODUCT_SPEC §Phase 4).** Not deployed
 yet. **No Prisma schema change, no env change, no flag change, no Mini App

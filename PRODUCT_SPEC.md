@@ -159,7 +159,15 @@ out of Telegram-only workers.
   2026-08-06): it is a single empty field labelled "Твоё имя", which already
   says everything the heading did, so the heading was the one line on these
   screens that added nothing. The question survives as the input's accessible
-  name for a screen reader. The native iOS client already had purpose-built
+  name for a screen reader. **The typed name does not change size when the
+  keyboard opens (2026-08-07):** with the heading gone, the field IS the screen,
+  and its size was measured against the viewport HEIGHT — which the soft
+  keyboard shrinks — so the name shrank the instant the user tapped to type it
+  and snapped back when the field blurred on Continue. It is measured against
+  the width now, the one axis a long name actually runs out of and the one the
+  keyboard never touches. The Continue pill still rises above the keyboard;
+  that part was always right, and the shrink easing is smoothed rather than
+  stepped. The native iOS client already had purpose-built
   controls here via the `ui_hint` contract; this is Telegram catching up, and
   the `/v1/*` surface is untouched.
   **The screens write through the collector** (`applyOnboardingFacts`,
