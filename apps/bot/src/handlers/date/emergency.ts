@@ -3,12 +3,9 @@ import { InlineKeyboard } from "grammy";
 import { t, type Language } from "@gennety/shared";
 import type { MessageEntity } from "grammy/types";
 import type { BotContext } from "../../session.js";
-import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.js";
 import { withRedactedSummary } from "../../services/outbound-recorder.js";
-import {
-  refundMatchTickets,
-  ticketRefundNoticeKey,
-} from "../../services/ticket-refund.js";
+import { cancelScheduledDate } from "../../services/emergency-cancel.js";
+import { ticketRefundNoticeKey } from "../../services/ticket-refund.js";
 import {
   claimMatchFlow,
   releaseMatchFlowClaim,
@@ -184,42 +181,25 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
     where: { id: matchId },
     select: {
       id: true,
-      status: true,
       userAId: true,
-      userBId: true,
       userA: { select: { telegramId: true, language: true } },
       userB: { select: { telegramId: true, language: true } },
     },
   });
-  if (!match || match.status !== "scheduled") return;
+  if (!match) return;
+
+  // Everything irreversible — the status CAS, the peer boost, the refunds —
+  // lives in the shared service, so this handler and the native rail cannot
+  // drift on what cancelling actually does (iOS task 4.4).
+  const result = await cancelScheduledDate({
+    matchId,
+    actorUserId: user.id,
+    reason,
+  });
+  if (!result.ok) return;
+  const { peerUserId: otherUserId, reason: forwardedReason, refunds } = result.outcome;
 
   const isA = user.id === match.userAId;
-  const isB = user.id === match.userBId;
-  if (!isA && !isB) return;
-
-  const forwardedReason = reason.slice(0, 1000);
-
-  // Persist cancellation.
-  await prisma.match.update({
-    where: { id: matchId },
-    data: {
-      status: "cancelled",
-      emergencyCancelledBy: user.id,
-      emergencyReason: forwardedReason,
-    },
-  });
-
-  const otherUserId = isA ? match.userBId : match.userAId;
-  await applyEmergencyCancellationPeerBoost(otherUserId);
-
-  // The date isn't happening, so every paid ticket goes back to its payer —
-  // including this user's, who cancelled honestly (PRODUCT_SPEC §3.5b). Safe as
-  // a plain post-cancel call: the ticket-expiry rail only touches `negotiating`
-  // rows, and this path only ever cancels a `scheduled` one.
-  const refunds = await refundMatchTickets(matchId).catch((err: unknown) => {
-    console.warn("[emergency] ticket refund failed:", err);
-    return [];
-  });
   const refundLineFor = (userId: string, refundLang: Language): string => {
     const key = ticketRefundNoticeKey(
       refunds.find((r) => r.userId === userId)?.refunded ?? 0,

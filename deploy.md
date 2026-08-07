@@ -1,5 +1,50 @@
 # Gennety Dating Deploy
 
+**PENDING — emergency cancellation reaches the native client, and the partner
+finally gets a push (PRODUCT_SPEC §Phase 4 → Emergency Protocol).** Not
+deployed yet. **No Prisma schema change, no env change, no flag change, no Mini
+App change** (`apps/webapp` untouched) — half of it is client, so the iOS app
+ships with it (separate repo).
+
+Cancelling a scheduled date existed only as a Telegram callback flow. An
+iOS-only user could not call off a date at all. New:
+`POST /v1/matches/{id}/cancel` (JWT), with everything irreversible moved into
+`services/emergency-cancel.ts` and shared by both rails.
+
+**Three things worth knowing before the restart:**
+
+- **A mobile partner now gets a push, and did not before.** The Telegram
+  handler carried a comment claiming one was "dispatched separately"; nothing
+  sent it. A mobile-only partner learned their date was off only by opening the
+  app. Expect one new push per cancellation — localized, and deliberately
+  **without the reason**, which is someone else's free text and does not belong
+  on a lock screen.
+- **The Telegram path now writes with `updateMany` (a CAS), not `update`.**
+  Same outcome, but two clients racing — the partner cancelling from Telegram
+  at the same moment — produce one cancellation and one refusal instead of two
+  sets of refunds.
+- **The client owns the two-step guard, the server does not.** That is
+  deliberate and worth knowing before someone reads the route as under-
+  validated: a confirmation the caller can skip is not a confirmation, and the
+  irreversible step here is the request itself. The reason IS enforced (400 on
+  empty), because forwarding it verbatim is the product rule.
+
+Post-deploy check — production has **0 dates ever**, so nothing exercises this
+until a pair schedules; verify on `@gennetytestbot`. Mounted-ness is checkable
+without one:
+
+```sh
+# 401 (mounted), never 404 (missing).
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  https://dating-api.gennety.com/v1/matches/00000000-0000-4000-8000-000000000000/cancel
+pnpm openapi:lint
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag. The Telegram flow returns to its own copy of the logic.
+
+---
+
 **PENDING — the «date day» Live Activity gets driven from the server
 (PRODUCT_SPEC §Phase 4).** Not deployed yet. **No Prisma schema change, no env
 change, no flag change, no Mini App change** (`apps/webapp` untouched) — it is

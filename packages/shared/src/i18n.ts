@@ -781,6 +781,8 @@ const translations = {
     wingmanHintIntro:
       "👋 Insider tip — your date's in 90 minutes:\n\n",
     dateDayActivityStartTitle: "Your date is today",
+    emergencyPushTitle: "Your date is off",
+    emergencyPushBody: "Open Gennety — they left a reason.",
     dateDayActivityStartBody: "Everything you need is on your lock screen.",
     emergencyUnlocked:
       "Emergency cancel window is open.\n" +
@@ -1865,6 +1867,8 @@ const translations = {
     wingmanHintIntro:
       "👋 Маленькая подсказка — свидание через полтора часа:\n\n",
     dateDayActivityStartTitle: "Сегодня свидание",
+    emergencyPushTitle: "Свидание отменено",
+    emergencyPushBody: "Откройте Gennety — там написана причина.",
     dateDayActivityStartBody: "Всё нужное — на экране блокировки.",
     emergencyUnlocked:
       "Окно экстренной отмены открыто.\n" +
@@ -2923,6 +2927,8 @@ const translations = {
     wingmanHintIntro:
       "👋 Маленька підказка — побачення через півтори години:\n\n",
     dateDayActivityStartTitle: "Сьогодні побачення",
+    emergencyPushTitle: "Побачення скасовано",
+    emergencyPushBody: "Відкрийте Gennety — там написана причина.",
     dateDayActivityStartBody: "Усе потрібне — на екрані блокування.",
     emergencyUnlocked:
       "Вікно екстреного скасування відкрите.\n" +
@@ -3950,6 +3956,8 @@ const deTranslations: TranslationTable = {
   noMatchStreamStart: "💫 Ich gehe den Pool für dich durch…",
   wingmanHintIntro: "👋 Insider-Tipp - dein Date ist in 90 Minuten:\n\n",
   dateDayActivityStartTitle: "Heute ist dein Date",
+  emergencyPushTitle: "Dein Date ist abgesagt",
+  emergencyPushBody: "Öffne Gennety - dort steht der Grund.",
   dateDayActivityStartBody: "Alles Wichtige liegt auf deinem Sperrbildschirm.",
   profilerSkip: "Überspringen",
   emergencyUnlocked:
@@ -4978,6 +4986,8 @@ const plTranslations: TranslationTable = {
   noMatchStreamStart: "💫 Przeglądam dopasowania dla Ciebie…",
   wingmanHintIntro: "👋 Wskazówka od środka - randka jest za 90 minut:\n\n",
   dateDayActivityStartTitle: "Dziś masz randkę",
+  emergencyPushTitle: "Randka odwołana",
+  emergencyPushBody: "Otwórz Gennety - jest tam powód.",
   dateDayActivityStartBody: "Wszystko, czego potrzebujesz, jest na ekranie blokady.",
   profilerSkip: "Pomiń",
   emergencyUnlocked:

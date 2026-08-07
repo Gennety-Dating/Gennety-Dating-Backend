@@ -3997,6 +3997,21 @@ Telegram-only, and inert with `COORDINATION_FEATURE_ENABLED` off.
 
 `handlers/date/emergency.ts`:
 
+**Both surfaces since 2026-08-07.** Everything irreversible — the status
+compare-and-set, the peer's priority boost, the ticket refunds — lives in
+`services/emergency-cancel.ts`, shared by the Telegram handler and the native
+`POST /v1/matches/{id}/cancel` (JWT). Each surface owns only how it *asks* and
+how it *tells the partner*: Telegram quotes the reason verbatim into a chat,
+iOS has no chat to quote into and shows it in the app. They must not disagree
+about anything else, which is why the split is where it is.
+
+The same change fixed something that had been quietly false: the Telegram
+handler's comment claimed a mobile peer got "a push notification dispatched
+separately", and no such push existed anywhere. A mobile-only partner learned
+their date was off only by opening the app. The service now pushes the peer on
+either rail — **without the reason**, which is someone else's free text and
+does not belong on a lock screen; it is shown where the recipient chose to look.
+
 - Tap → an explicit **confirmation guard** that makes the lower-risk choice
   visually easier: `[Keep the date]` first with native `success` styling, then
   `[Yes, cancel the date]` with native `danger` styling (callbacks

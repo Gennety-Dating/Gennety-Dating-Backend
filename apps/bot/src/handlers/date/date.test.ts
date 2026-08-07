@@ -147,6 +147,32 @@ function matchRow(partial: Record<string, unknown> = {}): Record<string, unknown
 }
 
 // ---------------------------------------------------------------------------
+/**
+ * Stub the lifecycle tick's `match.findMany` calls **by query shape**, not by
+ * call order.
+ *
+ * They used to be a chain of `mockResolvedValueOnce`, which meant adding one
+ * query to the tick silently handed another block's rows to the new one and
+ * broke all six tests at once (it did, when the §4.2 date-day end sweep
+ * landed). Each block's `where` is already distinctive, so match on that.
+ */
+function stubLifecycleQueries(rows: {
+  upcoming?: unknown[];
+  wingman?: unknown[];
+  finished?: unknown[];
+  feedback?: unknown[];
+} = {}): void {
+  mMatch.findMany.mockImplementation(async (args: { where?: Record<string, unknown> }) => {
+    const where = args?.where ?? {};
+    if (where.icebreakersSentAt === null) return rows.upcoming ?? [];
+    if (where.wingmanSentAt === null) return rows.wingman ?? [];
+    if (where.icebreakersSentAt !== undefined) return rows.finished ?? [];
+    if (where.feedbackPromptedAt === null) return rows.feedback ?? [];
+    return [];
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Emergency cancellation handler
 // ---------------------------------------------------------------------------
 
@@ -155,6 +181,9 @@ describe("emergency cancellation", () => {
     vi.resetAllMocks();
     mApplyEmergencyCancellationPeerBoost.mockResolvedValue(505);
     mRefundMatchTickets.mockResolvedValue([]);
+    // The cancellation write is a CAS inside `cancelScheduledDate`; a zero
+    // count there means "someone else already cancelled" and stops the flow.
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it("handleEmergencyStart shows a confirmation guard without touching session", async () => {
@@ -282,8 +311,9 @@ describe("emergency cancellation", () => {
 
   it("handleEmergencyReason cancels match, boosts peer, and quotes exact text", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-    mMatch.findUnique.mockResolvedValueOnce(matchRow());
-    mMatch.update.mockResolvedValueOnce({});
+    // Twice: once for the handler's own read, once inside the shared
+    // `cancelScheduledDate` service that owns everything irreversible.
+    mMatch.findUnique.mockResolvedValue(matchRow());
     const reason = "болею, прости _[x] <3";
 
     const ctx = createCtx({
@@ -301,10 +331,10 @@ describe("emergency cancellation", () => {
     expect(ctx.session.matchFlow).toBe("idle");
     expect(ctx.session.activeMatchId).toBeNull();
 
-    // Match updated
-    expect(mMatch.update).toHaveBeenCalledWith(
+    // Claimed with a compare-and-set, so two clients racing cancel once.
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "match-1" },
+        where: { id: "match-1", status: "scheduled", emergencyCancelledBy: null },
         data: {
           status: "cancelled",
           emergencyCancelledBy: "uid-A",
@@ -332,8 +362,7 @@ describe("emergency cancellation", () => {
 
   it("handleEmergencyReason refunds both tickets and tells each side", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-    mMatch.findUnique.mockResolvedValueOnce(matchRow());
-    mMatch.update.mockResolvedValueOnce({});
+    mMatch.findUnique.mockResolvedValue(matchRow());
     // The canceller covered both tickets, so both come back to him.
     mRefundMatchTickets.mockResolvedValueOnce([
       {
@@ -368,8 +397,7 @@ describe("emergency cancellation", () => {
 
   it("handleEmergencyReason appends the partner's refund line after the quote", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-    mMatch.findUnique.mockResolvedValueOnce(matchRow());
-    mMatch.update.mockResolvedValueOnce({});
+    mMatch.findUnique.mockResolvedValue(matchRow());
     mRefundMatchTickets.mockResolvedValueOnce([
       { userId: "uid-B", refunded: 1, telegramId: 1002n, language: "en", platform: "telegram" },
     ]);
@@ -394,8 +422,7 @@ describe("emergency cancellation", () => {
 
   it("handleEmergencyReason still cancels when the refund throws", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-    mMatch.findUnique.mockResolvedValueOnce(matchRow());
-    mMatch.update.mockResolvedValueOnce({});
+    mMatch.findUnique.mockResolvedValue(matchRow());
     mRefundMatchTickets.mockRejectedValueOnce(new Error("wallet down"));
 
     const ctx = createCtx({
@@ -406,7 +433,7 @@ describe("emergency cancellation", () => {
 
     await handleEmergencyReason(ctx);
 
-    expect(mMatch.update).toHaveBeenCalled();
+    expect(mMatch.updateMany).toHaveBeenCalled();
     expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
   });
 
@@ -599,19 +626,16 @@ describe("date-lifecycle tick", () => {
     // now = 4h45m before the date → inside the 5h alert window
     const now = new Date(agreedTime.getTime() - 4.75 * 60 * 60 * 1000);
 
-    mMatch.findMany
-      .mockResolvedValueOnce([
+    stubLifecycleQueries({
+      upcoming: [
         {
           id: "match-1",
           agreedTime,
           userA: { id: "ua-1", telegramId: 1001n, language: "en", firstName: "Alice" },
           userB: { id: "ub-1", telegramId: 1002n, language: "ru", firstName: "Boris" },
         },
-      ])
-      // wingman query returns empty (T-1.5h hasn't fired)
-      .mockResolvedValueOnce([])
-      // feedback query returns empty
-      .mockResolvedValueOnce([]);
+      ],
+    });
     // H2: the atomic claim stamps icebreakersSentAt; default it to a win.
     mMatch.updateMany.mockResolvedValue({ count: 1 });
     mMatch.update.mockResolvedValue({});
@@ -657,18 +681,15 @@ describe("date-lifecycle tick", () => {
     // now = 25h after the date
     const now = new Date(agreedTime.getTime() + 25 * 60 * 60 * 1000);
 
-    mMatch.findMany
-      // icebreaker query returns empty
-      .mockResolvedValueOnce([])
-      // wingman query returns empty
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
+    stubLifecycleQueries({
+      feedback: [
         {
           id: "match-2",
           userA: { telegramId: 2001n, language: "en", theme: "light" },
           userB: { telegramId: 2002n, language: "uk", theme: "dark" },
         },
-      ]);
+      ],
+    });
     mMatch.update.mockResolvedValue({});
     mMatch.updateMany.mockResolvedValue({ count: 1 });
 
@@ -709,10 +730,7 @@ describe("date-lifecycle tick", () => {
     // signal, which kept matching every 2 minutes until both users replied.
     // Now we filter on `feedbackPromptedAt: null` so a one-shot prompt is
     // truly one-shot.
-    mMatch.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]); // feedback query, filtered to feedbackPromptedAt: null
+    stubLifecycleQueries(); // every block empty
 
     const api = { sendMessage: vi.fn() } as any;
     const result = await runDateLifecycleTick(api, new Date());
@@ -734,17 +752,16 @@ describe("date-lifecycle tick", () => {
     const agreedTime = new Date("2026-04-10T19:00:00Z");
     const now = new Date(agreedTime.getTime() - 2.75 * 60 * 60 * 1000);
 
-    mMatch.findMany
-      .mockResolvedValueOnce([
+    stubLifecycleQueries({
+      upcoming: [
         {
           id: "match-1",
           agreedTime,
           userA: { id: "ua-1", telegramId: 1001n, language: "en", firstName: "Alice" },
           userB: { id: "ub-1", telegramId: 1002n, language: "ru", firstName: "Boris" },
         },
-      ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+      ],
+    });
     mMatch.updateMany.mockResolvedValue({ count: 1 });
     mMatch.update.mockResolvedValue({});
     mProfile.findUnique.mockResolvedValue({ psychologicalSummary: null });
@@ -778,17 +795,16 @@ describe("date-lifecycle tick", () => {
     const agreedTime = new Date("2026-04-10T19:00:00Z");
     const now = new Date(agreedTime.getTime() - 2.75 * 60 * 60 * 1000);
 
-    mMatch.findMany
-      .mockResolvedValueOnce([
+    stubLifecycleQueries({
+      upcoming: [
         {
           id: "match-3",
           agreedTime,
           userA: { id: "ua-3", telegramId: 1001n, language: "en", firstName: "Alice" },
           userB: { id: "ub-3", telegramId: -42n, language: "en", firstName: "MobileBob" },
         },
-      ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+      ],
+    });
     mMatch.updateMany.mockResolvedValue({ count: 1 });
     mMatch.update.mockResolvedValue({});
     mProfile.findUnique.mockResolvedValue({ psychologicalSummary: null });
@@ -805,10 +821,7 @@ describe("date-lifecycle tick", () => {
   });
 
   it("returns zeros when there are no matches to process", async () => {
-    mMatch.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+    stubLifecycleQueries();
 
     const api = { sendMessage: vi.fn() } as any;
     const result = await runDateLifecycleTick(api, new Date());

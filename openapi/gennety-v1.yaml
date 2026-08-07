@@ -1917,6 +1917,69 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/matches/{id}/cancel:
+    post:
+      tags: [matches]
+      operationId: cancelDate
+      summary: Emergency-cancel a scheduled date
+      description: |
+        Irreversible: the pair is never re-matched (the lifetime pair ban of
+        §3.2 filter 6 applies to any row that ever existed). Both sides' paid
+        Date Tickets are returned to their wallets — including the canceller's,
+        because the penalty for flaking is already Elo, and charging on top
+        would make an honest cancellation more expensive than a silent no-show.
+
+        `reason` is **mandatory and forwarded to the partner verbatim**. That is
+        a product rule rather than a validation detail: the person it lands on
+        is owed the actual sentence, not a system notice. The two-step
+        confirmation lives in the client — the server does not enforce one,
+        because a guard the caller can skip is not a guard, and the
+        irreversible step is this request.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "200":
+          description: Date cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, ticketsRefunded]
+                properties:
+                  ok: { type: boolean }
+                  ticketsRefunded:
+                    type: integer
+                    description: Tickets returned to THIS caller's wallet.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant of this match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            Not a scheduled date — already cancelled, or never got that far.
+            409 rather than 404: the match exists and the caller is on it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: Reason too long
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/matches/{id}/report:
     post:
       tags: [matches]

@@ -204,6 +204,8 @@ type MatchRow = {
   venuePromptAskedAt: Date | null;
   safetyAckA: boolean;
   safetyAckB: boolean;
+  emergencyCancelledBy: string | null;
+  emergencyReason: string | null;
   createdAt: Date;
 };
 
@@ -1016,6 +1018,8 @@ async function seedMatch(
     venuePromptAskedAt: null,
     safetyAckA: false,
     safetyAckB: false,
+    emergencyCancelledBy: null,
+    emergencyReason: null,
     createdAt: new Date(),
     ...overrides,
   };
@@ -2720,6 +2724,90 @@ describe("/v1/matches/*", () => {
     expect(res.status).toBe(409);
     expect(db.matches.get(match.id)?.status).toBe("negotiating");
     expect(db.matches.get(match.id)?.vibeTextA).toBeNull();
+  });
+
+  it("POST /:id/cancel calls off a scheduled date and reports the caller's refund", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "scheduled" });
+
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/cancel`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+      .send({ reason: "Прости, заболел" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    const row = db.matches.get(match.id);
+    expect(row?.status).toBe("cancelled");
+    expect(row?.emergencyCancelledBy).toBe(alice.id);
+    // Verbatim, not paraphrased: the partner is owed the actual sentence.
+    expect(row?.emergencyReason).toBe("Прости, заболел");
+  });
+
+  it("POST /:id/cancel requires a reason — an empty one is refused, nothing is cancelled", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "scheduled" });
+
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/cancel`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+      .send({ reason: "   " });
+
+    expect(res.status).toBe(400);
+    expect(db.matches.get(match.id)?.status).toBe("scheduled");
+  });
+
+  it("POST /:id/cancel enforces IDOR: a non-participant is 403 and the date stands", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const eve = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "scheduled" });
+
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/cancel`)
+      .set("Authorization", `Bearer ${signAccess(eve.id)}`)
+      .send({ reason: "не хочу" });
+
+    expect(res.status).toBe(403);
+    expect(db.matches.get(match.id)?.status).toBe("scheduled");
+  });
+
+  it("POST /:id/cancel answers 409 for a match that never reached a scheduled date", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "negotiating" });
+
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/cancel`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+      .send({ reason: "передумал" });
+
+    // 409, not 404: the match exists and the caller is on it.
+    expect(res.status).toBe(409);
+    expect(db.matches.get(match.id)?.status).toBe("negotiating");
+  });
+
+  it("POST /:id/cancel is not repeatable — the second call finds nothing to cancel", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "scheduled" });
+    const auth = `Bearer ${signAccess(alice.id)}`;
+
+    const first = await request(app)
+      .post(`/v1/matches/${match.id}/cancel`)
+      .set("Authorization", auth)
+      .send({ reason: "первый" });
+    expect(first.status).toBe(200);
+
+    const second = await request(app)
+      .post(`/v1/matches/${match.id}/cancel`)
+      .set("Authorization", auth)
+      .send({ reason: "второй" });
+    expect(second.status).toBe(409);
+    // The stored reason is the one that actually cancelled the date.
+    expect(db.matches.get(match.id)?.emergencyReason).toBe("первый");
   });
 
   it("POST /:id/report enforces IDOR: non-participant is 403", async () => {

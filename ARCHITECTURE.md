@@ -855,6 +855,7 @@ auth) are deliberately outside the spec.
 | POST | `/v1/matches/:id/decision` | Accept / decline (mirrors bot decision handler) |
 | POST | `/v1/matches/:id/vibe-location` | Submit concierge vibe + location pin |
 | POST | `/v1/matches/:id/safety-ack` | Acknowledge T-1.5 h safety brief |
+| POST | `/v1/matches/:id/cancel` | **Native** emergency cancellation of a scheduled date (JWT). Delegates to `services/emergency-cancel.ts`, shared with the Telegram handler, so the two surfaces cannot drift on what cancelling does. `reason` is mandatory and forwarded verbatim; the two-step guard lives in the client, because a guard the caller can skip is not a guard. 409 (not 404) when the match exists but is not a scheduled date. |
 | POST | `/v1/matches/:id/report` | File post-match report (LLM-triaged) |
 | GET  | `/v1/matches/:id/ticket/state` | Date Ticket Mini App screen state (status/price/gender/partner-paid/expiry, plus `selfDiscountPct`/`selfPriceCents` for the famine single-ticket discount on the `self` scope, plus `starsEnabled` + per-scope `stars` when `TICKET_STARS_ENABLED`). **Telegram `initData` HMAC auth** (not JWT) — mounted before the JWT `matches` router. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
 | POST | `/v1/matches/:id/ticket/stars-invoice` | Mint a Telegram Stars (XTR) `createInvoiceLink` for the date gate (`scope: self\|both\|partner`; payload `gate:<id>:<scope>`), opened via `WebApp.openInvoice`; settled by the `successful_payment` handler. 404 when `TICKET_STARS_ENABLED` is off. `initData` HMAC auth. |

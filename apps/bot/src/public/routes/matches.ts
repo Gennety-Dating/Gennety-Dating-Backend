@@ -23,6 +23,10 @@ import {
   type ConfirmVenueIntentInput,
 } from "../../services/venue-intent-v2.js";
 import {
+  cancelScheduledDate,
+  EMERGENCY_REASON_MAX_LENGTH,
+} from "../../services/emergency-cancel.js";
+import {
   assertDepartureOrigin,
   isVenueOriginRefusal,
   venueOriginRefusal,
@@ -212,6 +216,56 @@ matchesRouter.post("/:id/safety-ack", async (req: Request, res: Response): Promi
     return;
   }
   res.json(result);
+});
+
+/**
+ * Emergency cancellation of a scheduled date (PRODUCT_SPEC §Phase 4, iOS §4.4).
+ *
+ * The reason is **mandatory** and forwarded to the partner verbatim — that is
+ * the product rule, not a validation detail: cancelling on someone an hour
+ * before is allowed to be a real decision, and the person it lands on is owed
+ * the actual sentence rather than a system notice. The client is expected to
+ * guard this behind its own two-step confirmation; the server does not enforce
+ * one because a guard the caller can skip is not a guard, and the irreversible
+ * step here is the request itself.
+ */
+matchesRouter.post("/:id/cancel", async (req: Request, res: Response): Promise<void> => {
+  const id = paramId(req);
+  const { reason } = (req.body ?? {}) as { reason?: unknown };
+
+  if (typeof reason !== "string" || reason.trim().length === 0) {
+    res.status(400).json({ error: "Reason is required" });
+    return;
+  }
+  if (reason.trim().length > EMERGENCY_REASON_MAX_LENGTH) {
+    res.status(413).json({ error: "Reason is too long" });
+    return;
+  }
+
+  const result = await cancelScheduledDate({
+    matchId: id,
+    actorUserId: req.userId!,
+    reason,
+  });
+
+  if (!result.ok) {
+    if (result.error === "not-found") {
+      res.status(404).json({ error: "Match not found" });
+      return;
+    }
+    if (result.error === "forbidden") {
+      res.status(403).json({ error: "Not a participant of this match" });
+      return;
+    }
+    // Already cancelled, or never got as far as a scheduled date. 409 rather
+    // than 404: the match exists and the caller is on it.
+    res.status(409).json({ error: "Match is not a scheduled date" });
+    return;
+  }
+
+  const refunded =
+    result.outcome.refunds.find((entry) => entry.userId === req.userId!)?.refunded ?? 0;
+  res.json({ ok: true, ticketsRefunded: refunded });
 });
 
 matchesRouter.post("/:id/report", async (req: Request, res: Response): Promise<void> => {
