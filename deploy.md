@@ -1608,13 +1608,29 @@ full deploy — but note that rsync copies the **working tree**, not git HEAD, s
 check `git status` first: an unrelated in-progress refactor ships with it.
 
 **Prod anchor, re-verified 2026-08-07 after the release at the top of this file.**
-Prod is at **`c25adbc` plus the dependency-override commit** made during that
-release — deliberately **not** at `HEAD`. Excluded on purpose: `d205bbf` +
-`ae0721e` (Kyiv premium venues — catalog JSON only, and DECISIONS.md records that
-no `seed-venues:import` is authorised against prod, so there is nothing to
-deploy) and `27f426b` (the onboarding photo shimmer, written by a parallel
-session after this release was cut). **`27f426b` is a real undeployed behaviour
-change** and needs its own block before the next deploy.
+Prod is at **`c25adbc` plus `01c32b8`** (the dependency-override commit made
+during that release) — deliberately **not** at `HEAD`, and the gap grows every
+time anyone commits.
+
+**Do not maintain a list of undeployed commits here — compute it.** An earlier
+revision of this note named them, and it was stale within the hour because a
+parallel session kept landing work. The set is a one-liner:
+
+```sh
+git log --oneline c25adbc..HEAD | grep -v 01c32b8    # what prod is missing
+git diff --stat c25adbc..HEAD -- apps packages       # is any of it runtime code?
+```
+
+The second command is the one that matters: a range that touches only `*.md` is
+a documentation gap, while anything under `apps/` or `packages/` is undeployed
+behaviour and needs a block at the top of this file before the next release.
+Two standing exclusions, both deliberate rather than forgotten:
+
+- **Kyiv venue-catalog commits** (`scripts/curated-venues.kyiv.*.json`) ship
+  nothing. DECISIONS.md records that no `seed-venues:import` is authorised
+  against prod, and that prod deliberately carries the pre-expansion catalog —
+  so an import is a separate, larger decision, not part of any deploy.
+- **`apps/video/**`** is the Remotion workspace and is not in the bot runtime.
 
 Anchor md5 as of 2026-08-07:
 
