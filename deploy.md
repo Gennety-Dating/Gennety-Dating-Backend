@@ -1,10 +1,16 @@
 # Gennety Dating Deploy
 
-**PENDING — ticket-gate avatars stop being half a megabyte each, and two demo
-dead-ends (DEMO_MODE.md).** Not deployed yet. **No Prisma schema change, no env
-change, no flag change** — but it touches all three surfaces, so the full
-sequence applies: Deploy Full Server Code → `pnpm db:drift-check` →
-`pm2 restart` → `./scripts/deploy-webapp.sh` → `pnpm demo:deploy`.
+**Deployed 2026-08-07 — ticket-gate avatars stop being half a megabyte each, and
+two demo dead-ends (DEMO_MODE.md).** Server + Mini App + demo, brought prod from
+`c25adbc`+`01c32b8` to **`d5405f6`**. **No Prisma schema change, no env change,
+no flag change** (`db:drift-check` **OK**, nothing to push). Deployed from an
+isolated `git worktree` at `d5405f6`.
+
+**This release also carried every other PENDING block** — the three below (the
+preference screen, the onboarding name field, the native proxy-chat server half)
+plus the two photo-shimmer commits `27f426b` / `d75b518`, which had no block of
+their own (PRODUCT_SPEC §1.3 / §2.1 carry the behaviour). All four blocks are
+marked deployed in place.
 
 Three fixes from one founder report. **Only the first reaches production**; the
 other two are `apps/bot/src/demo/` and inert without `DEMO_MODE_ENABLED`.
@@ -43,17 +49,29 @@ other two are `apps/bot/src/demo/` and inert without `DEMO_MODE_ENABLED`.
   `ticketStatus: partial` will complete on the next 3-second tick once the demo
   is redeployed — no manual DB edit.
 
-Post-deploy check — the size drop is the whole point, so measure it rather than
-eyeballing the button (needs a live gate; production has none, so use the demo):
+**Post-deploy verified (measured, not inferred):**
 
-```sh
-./scripts/deploy-webapp.sh && pnpm demo:deploy
-# Was ~517000 / ~355000 bytes; expect ~5% of that.
-curl -s -o /dev/null -w '%{size_download}\n' --get --data-urlencode "a=<initData>" \
-  "https://demo-api.gennety.com/v1/matches/<matchId>/ticket/photo/self"
-ssh root@167.172.178.229 'pm2 logs gennety-demo --lines 200 --nostream | grep "puppet ticket settle"'
-# Empty is the good case: that line only prints when the settle failed.
-```
+- **Avatar bytes, against the same live gate that produced the "before"
+  numbers:** self **517,591 → 17,073 B**, partner **354,963 → 12,703 B**. One
+  button went from ~850 KB to **~30 KB (3.5%)**. Downloaded and decoded: a valid
+  144×256 JPEG, aspect ratio intact. The cache shows up as a second fetch at
+  0.35s against 0.88s cold.
+- **The stuck demo healed itself on the first tick**, with no manual DB edit:
+  the match that had been logging `insufficient-balance` every 12s since 14:53Z
+  went `ticketStatus: partial → completed`, both slots paid, and
+  `proposedTimes` filled with 84 slots — i.e. the Calendar finally opened. The
+  ledger reads `+1 store_purchase` then `-1 spend_match`, which is the top-up
+  and the settle.
+- Production: `Bot @gennetybot started`, all 16 crons + the peer-wait worker,
+  restart count 51 → **52** (one increment, no loop), **zero** P2022 / P2023 /
+  `ERR_MODULE_NOT_FOUND` / unhandled from the new PID, `/v1/ping` ok, admin
+  `401`, **all 11 Mini App pages 200**.
+- Demo re-verified after `pnpm demo:deploy`: `demo-api` ping ok,
+  `demo-app/ticket.html` 200, driver ticking `scanned=1 acted=1 errors=0`.
+- rsync dry-run listed **80** deletions, all reviewed: 72 gitignored
+  `apps/video/build|out` Remotion artifacts (same class as the last release) and
+  8 files of the deliberately-deleted second preference design. Both droplet-only
+  DB backups and both `keys/*.p8` survived.
 
 **Rollback:** revert the code, restart, redeploy the Mini App and the demo.
 Nothing else to undo — no schema, no env, no flag. The cache is in-process and
@@ -61,8 +79,9 @@ disappears with the restart.
 
 ---
 
-**PENDING — the preference screen is one design now, and the photos and the
-word both changed (PRODUCT_SPEC §1.3).** Not deployed yet. **No Prisma schema
+**Deployed 2026-08-07 (was PENDING) — the preference screen is one design now,
+and the photos and the word both changed (PRODUCT_SPEC §1.3).** Deployed
+2026-08-07 in the release at the top of this file. **No Prisma schema
 change, no env change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the
 diff is `apps/webapp/**` plus docs. **Deploy Mini App Only**
 (`./scripts/deploy-webapp.sh`); nothing to rsync to `/opt/gennety`, **no
@@ -105,8 +124,9 @@ undo — no schema, no env, no flag, no server state.
 
 ---
 
-**PENDING — the onboarding name field stops shrinking under the keyboard
-(PRODUCT_SPEC §1.1).** Not deployed yet. **No Prisma schema change, no env
+**Deployed 2026-08-07 (was PENDING) — the onboarding name field stops shrinking
+under the keyboard (PRODUCT_SPEC §1.1).** Deployed 2026-08-07 in the release at
+the top of this file. **No Prisma schema change, no env
 change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is
 `apps/webapp/src/onboarding.css` plus docs. So this is the **Deploy Mini App
 Only** path (`./scripts/deploy-webapp.sh`); there is nothing to rsync to
@@ -135,9 +155,10 @@ undo — no schema, no env, no flag, no server state.
 
 ---
 
-**PENDING — the anonymous pre-date chat reaches the native client, and opens at
-all for a pair with an app participant (PRODUCT_SPEC §Phase 4).** Not deployed
-yet. **No Prisma schema change, no env change, no flag change, no Mini App
+**Deployed 2026-08-07 (was PENDING) — the anonymous pre-date chat reaches the
+native client, and opens at all for a pair with an app participant
+(PRODUCT_SPEC §Phase 4).** Deployed 2026-08-07 in the release at the top of this
+file; still inert (`COORDINATION_FEATURE_ENABLED` off). **No Prisma schema change, no env change, no flag change, no Mini App
 change** (`apps/webapp` untouched) — half of it is client, so the iOS app ships
 with it (separate repo).
 
