@@ -8,14 +8,7 @@ import {
   slotSpanX,
 } from "./preference-layout.js";
 import type { ScatterSlot } from "./preference-layout.js";
-import { groupCutout, orderedAssets } from "./preference-photos.js";
-import {
-  parseVariant,
-  parseView,
-  preferenceView,
-  variantOf,
-  viewHref,
-} from "./preference-variant.js";
+import { orderedAssets } from "./preference-photos.js";
 
 describe("scatter placement", () => {
   it("renders the prefix when there are fewer photos than slots", () => {
@@ -144,23 +137,6 @@ describe("scatter placement", () => {
   });
 });
 
-describe("the variant 2 group image", () => {
-  /**
-   * Variant 2's composition lives in the artwork, not in code: one finished
-   * image per side, cut off at its own left and right edges so the button can
-   * be fitted to them. Extra files must be ignored rather than stacked.
-   */
-  it("takes exactly one image per side", () => {
-    const men = groupCutout("men");
-    const women = groupCutout("women");
-    for (const src of [men, women]) {
-      expect(src).toBeTypeOf("string");
-      expect(src).not.toBe("");
-    }
-    expect(men).not.toBe(women);
-  });
-});
-
 describe("photo sets", () => {
   it("falls back to the demo deck while a folder is empty", () => {
     expect(orderedAssets({}, ["/profiles/1.jpg"])).toEqual(["/profiles/1.jpg"]);
@@ -173,49 +149,3 @@ describe("photo sets", () => {
   });
 });
 
-describe("variant selection", () => {
-  it("accepts only the two designs that exist", () => {
-    expect(parseVariant("1")).toBe(1);
-    expect(parseVariant("2")).toBe(2);
-    expect(parseVariant("3")).toBeNull();
-    expect(parseVariant(null)).toBeNull();
-  });
-
-  it("falls back to the live variant when ?v= is absent or junk", () => {
-    expect(preferenceView("?v=nonsense")).toBe(1);
-    expect(preferenceView("")).toBe(1);
-  });
-
-  it("sets the query param without losing the rest of the URL", () => {
-    expect(
-      viewHref(2, "http://localhost:5173/onboarding.html?preview=basics:preference"),
-    ).toBe("http://localhost:5173/onboarding.html?preview=basics%3Apreference&v=2");
-    expect(viewHref(1, "http://localhost:5173/onboarding.html?v=2")).toBe(
-      "http://localhost:5173/onboarding.html?v=1",
-    );
-    expect(viewHref("both", "http://localhost:5173/onboarding.html?v=1")).toBe(
-      "http://localhost:5173/onboarding.html?v=both",
-    );
-  });
-});
-
-/**
- * The stacked review page. It exists so the two designs can be edited and
- * compared without a reload in between; production never renders it.
- */
-describe("the side-by-side review view", () => {
-  it("recognises ?v=both as a view, but never as a design", () => {
-    expect(parseView("both")).toBe("both");
-    expect(parseView("2")).toBe(2);
-    expect(parseView("neither")).toBeNull();
-    // A design is always a concrete one — nothing downstream should have to
-    // handle "both" as something to draw.
-    expect(parseVariant("both")).toBeNull();
-  });
-
-  it("resolves the stacked view to the live design when one is required", () => {
-    expect(preferenceView("?v=both")).toBe("both");
-    expect(variantOf("both")).toBe(1);
-    expect(variantOf(2)).toBe(2);
-  });
-});

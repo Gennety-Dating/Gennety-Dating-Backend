@@ -47,6 +47,46 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-07 — the preference screen's photo scatter wins; the other design is deleted, not flagged off
+
+**Kind:** founder decision
+**What:** "Who do you want to meet?" ships the tilted-photograph scatter. The
+group-cutout design built beside it, the dev `?v=` switch, the side-by-side
+review page, the variant-2 CSS and the two cutout images are removed from the
+tree — `preference-variant.ts` is gone, `PreferenceColumn` takes no `variant`.
+**Why:** the founder compared the two on the live screens over two days and
+settled ("я уже полностью определился"). Keeping the loser behind a constant
+would leave a switch nobody is going to flip, plus ~335 KB of artwork in the
+bundle and a second set of CSS overrides that every future edit to this screen
+has to be checked against. A decision that is made stops being configuration.
+**What it changes going forward:** this screen has ONE design. Do not
+reintroduce a variant switch to try an alternative — branch instead. The
+deleted design is recoverable from git (`git show
+8190fea:apps/webapp/src/preference-variant.ts` and the paths beside it), which
+is where a reverted design belongs. One trap: `onboarding.html` requests Inter
+800 and must keep doing so — it arrived for the deleted design's heavy word,
+but «Парней» / «Девушек» now depend on it, so the obvious post-removal tidy-up
+would silently downgrade them to a synthesised bold.
+**Recorded in:** PRODUCT_SPEC.md §1.3 (the preference screen), deploy.md → the
+PENDING Mini App block at the top and the "So does the preference photo fork"
+bullets.
+
+## 2026-08-07 — what the two-design comparison taught, kept after the loser was deleted
+
+**Kind:** founder decision
+**What:** the reasoning that killed the group-cutout design is retained in
+PRODUCT_SPEC as a constraint on anything that replaces this screen, rather than
+deleted with the code: **a taller button does not draw people any bigger.**
+**Why:** the finding is about the column, not about that design — group artwork
+runs out of column WIDTH long before it runs out of height, so at half a phone
+wide five people across are ~32px each and extra button height only becomes
+headroom. Someone proposing "show a group photo here" in six months would
+otherwise rediscover it by building the thing again. The scatter sidesteps it by
+showing one person per frame.
+**What it changes going forward:** a future group/multi-person treatment for
+this screen has to answer that measurement before it is worth building.
+**Recorded in:** PRODUCT_SPEC.md §1.3.
+
 ## 2026-08-07 — the proxy-chat window is derived from `agreedTime`, not read from the cron's stamps
 
 **Kind:** deviation from plan

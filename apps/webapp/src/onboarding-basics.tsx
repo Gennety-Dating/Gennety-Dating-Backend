@@ -7,10 +7,8 @@ import type { BurstTone } from "./onboarding-burst.js";
 import { errorCopy } from "./onboarding-errors.js";
 import type { OnboardingStrings } from "./onboarding-i18n.js";
 import { placeScatter } from "./preference-layout.js";
-import { groupCutout, isPlaceholderPhotoSet, photoSet } from "./preference-photos.js";
+import { photoSet } from "./preference-photos.js";
 import type { PreferenceSide } from "./preference-photos.js";
-import { ALL_VARIANTS, preferenceView, variantOf, viewHref } from "./preference-variant.js";
-import type { PreferenceVariant, PreferenceView } from "./preference-variant.js";
 import { WHEEL_ITEM_H, shouldTickHaptic, wheelValueAt } from "./onboarding-wheel.js";
 
 /**
@@ -116,7 +114,7 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
       );
     case "preference":
       return (
-        <PreferenceGate
+        <PreferenceScreen
           strings={strings}
           busy={busy}
           error={errorNode}
@@ -374,9 +372,10 @@ function ChoiceScreen(props: {
  * quieter — it is a real answer, not the headline one, and three equal rows
  * made it compete with the two that most people are actually choosing between.
  *
- * Two designs exist behind `preferenceView()`; see preference-variant.ts. In dev
- * `?v=both` renders them stacked (`PreferenceReview` below) — otherwise this
- * screen is one design, chosen by `LIVE_VARIANT`.
+ * A second design was built alongside this one and compared against it behind a
+ * `?v=` switch; the founder settled on this one on 2026-08-07 and the switch,
+ * the review page and the other design's artwork were deleted with it. There is
+ * one design here now, and the way to try another is a branch.
  */
 function PreferenceScreen(props: {
   strings: OnboardingStrings;
@@ -384,12 +383,8 @@ function PreferenceScreen(props: {
   busy: boolean;
   error: ReactNode;
   onPick: (value: string) => void;
-  /** Which design to draw. The caller resolves it, so the stack can force one. */
-  variant: PreferenceVariant;
-  /** Dev-only corner label + navigation; absent in production. */
-  chrome?: ReactNode;
 }): ReactElement {
-  const { strings, variant } = props;
+  const { strings } = props;
   const { firing, fire } = useChoiceTap(props.onPick, strings.basicsPreferenceTitle);
 
   const column = (side: PreferenceSide, label: string, tone: BurstTone) => (
@@ -397,7 +392,6 @@ function PreferenceScreen(props: {
       side={side}
       label={label}
       tone={tone}
-      variant={variant}
       selected={props.selected === side}
       busy={props.busy}
       firing={firing === side}
@@ -409,7 +403,7 @@ function PreferenceScreen(props: {
     <BasicsShell
       title={strings.basicsPreferenceTitle}
       error={props.error}
-      modifier={`ob-basics--choice ob-basics--pref ob-basics--pref-v${variant}`}
+      modifier="ob-basics--choice ob-basics--pref"
     >
       <div className="ob-pref-pair">
         {column("men", strings.basicsPreferenceMen, "male")}
@@ -426,7 +420,6 @@ function PreferenceScreen(props: {
       >
         {strings.basicsPreferenceBoth}
       </button>
-      {props.chrome}
     </BasicsShell>
   );
 }
@@ -440,32 +433,25 @@ function PreferenceScreen(props: {
  * otherwise would be a live target sitting outside the thing they belong to.
  * The label carries the accessible name on its own.
  *
- * The two variants differ in what they put inside, and in how the button is
- * sized. Variant 1 fills whatever height the screen allows and scatters frames
- * across it. Variant 2 is fitted TO its artwork: the group image spans the
- * column edge to edge, so the outermost figures — which the artwork already
- * cuts off — end exactly at the border, and the button is only as tall as the
- * picture plus its word.
+ * The button fills whatever height the screen allows and scatters frames across
+ * it — all but the label's own strip at the bottom, which the photos are
+ * authored to stay out of (`maxCentreY`, preference-layout.ts).
  */
 function PreferenceColumn(props: {
   side: PreferenceSide;
   label: string;
   tone: BurstTone;
-  variant: PreferenceVariant;
   selected: boolean;
   busy: boolean;
   firing: boolean;
   onFire: (event: MouseEvent) => void;
 }): ReactElement {
-  const { side, variant } = props;
+  const { side } = props;
   // The right-hand column is the left one mirrored (preference-layout.ts).
-  // Variant 2 is never mirrored: these are photographs of real people, and
-  // flipping them is a different picture, not a mirrored layout.
   const scatter = useMemo(
-    () => (variant === 1 ? placeScatter(photoSet(side), side === "women") : []),
-    [variant, side],
+    () => placeScatter(photoSet(side), side === "women"),
+    [side],
   );
-  const group = variant === 2 ? groupCutout(side) : null;
 
   return (
     <button
@@ -477,108 +463,25 @@ function PreferenceColumn(props: {
       aria-pressed={props.selected}
       onClick={props.onFire}
     >
-      {variant === 1 ? (
-        <span className="ob-pref-art" aria-hidden="true">
-          {scatter.map(({ src, slot }) => (
-            <span
-              key={src}
-              className="ob-pref-shot"
-              style={{
-                left: `${slot.x}%`,
-                top: `${slot.y}%`,
-                width: `${slot.w}%`,
-                zIndex: slot.z,
-                ["--rot" as string]: `${slot.rot}deg`,
-              }}
-            >
-              <img src={src} alt="" draggable={false} />
-            </span>
-          ))}
-        </span>
-      ) : null}
-      {group ? <img className="ob-pref-group" src={group} alt="" draggable={false} /> : null}
-      <span className="ob-pref-label">{props.label}</span>
-    </button>
-  );
-}
-
-/**
- * The preference screen as the app renders it, plus — in dev only — the review
- * scaffolding around it.
- *
- * `?v=both` stacks the two designs on one scrolling page, one full screen each.
- * That is what makes them comparable while they are still being edited: a
- * change to either is checked against the other by scrolling, not by reloading
- * with a different query param and holding the previous screen in your head.
- * Each section snaps and carries its own V1/V2 badge, so a screenshot of it is
- * self-labelling.
- *
- * `import.meta.env.DEV` is constant-folded, so production ships neither the
- * stack nor the `?v=` parsing behind it — it renders `LIVE_VARIANT` alone.
- */
-function PreferenceGate(
-  props: Omit<Parameters<typeof PreferenceScreen>[0], "variant" | "chrome">,
-): ReactElement {
-  const view = preferenceView();
-
-  if (!import.meta.env.DEV || view !== "both") {
-    const variant = variantOf(view);
-    return (
-      <PreferenceScreen
-        {...props}
-        variant={variant}
-        chrome={
-          import.meta.env.DEV ? <VariantToggle view={view} variant={variant} /> : undefined
-        }
-      />
-    );
-  }
-
-  return (
-    <div className="ob-pref-stack">
-      {ALL_VARIANTS.map((variant) => (
-        <section key={variant} className="ob-pref-stack-item">
-          <PreferenceScreen
-            {...props}
-            variant={variant}
-            chrome={<VariantToggle view={view} variant={variant} />}
-          />
-        </section>
-      ))}
-    </div>
-  );
-}
-
-/** Dev-only: which design this section is, and where else you can go. */
-function VariantToggle(props: {
-  view: PreferenceView;
-  variant: PreferenceVariant;
-}): ReactElement {
-  const missing =
-    props.variant === 1
-      ? isPlaceholderPhotoSet("men") || isPlaceholderPhotoSet("women")
-        ? "no photos yet — showing the demo deck"
-        : null
-      : !groupCutout("men") || !groupCutout("women")
-        ? "no group cutout yet — drop one PNG per side"
-        : null;
-
-  return (
-    <div className="ob-pref-devbar">
-      <span className="ob-pref-devtag">V{props.variant}</span>
-      <span className="ob-pref-devnav">
-        {([1, 2, "both"] as const).map((target) => (
-          <a
-            key={String(target)}
-            className={`ob-pref-devlink ${props.view === target ? "is-current" : ""}`}
-            href={viewHref(target)}
+      <span className="ob-pref-art" aria-hidden="true">
+        {scatter.map(({ src, slot }) => (
+          <span
+            key={src}
+            className="ob-pref-shot"
+            style={{
+              left: `${slot.x}%`,
+              top: `${slot.y}%`,
+              width: `${slot.w}%`,
+              zIndex: slot.z,
+              ["--rot" as string]: `${slot.rot}deg`,
+            }}
           >
-            {target === "both" ? "both" : `V${target}`}
-          </a>
+            <img src={src} alt="" draggable={false} />
+          </span>
         ))}
       </span>
-      {missing ? <span className="ob-pref-devnote">{missing}</span> : null}
-    </div>
+      <span className="ob-pref-label">{props.label}</span>
+    </button>
   );
 }
 

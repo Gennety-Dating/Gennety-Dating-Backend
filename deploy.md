@@ -1,5 +1,49 @@
 # Gennety Dating Deploy
 
+**PENDING — the preference screen is one design now, and the photos and the
+word both changed (PRODUCT_SPEC §1.3).** Not deployed yet. **No Prisma schema
+change, no env change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the
+diff is `apps/webapp/**` plus docs. **Deploy Mini App Only**
+(`./scripts/deploy-webapp.sh`); nothing to rsync to `/opt/gennety`, **no
+`pm2 restart`**. Run `pnpm demo:deploy` too — the demo builds its own bundle
+from the same source and will otherwise keep the old one.
+
+Three commits, one bundle: the photo tiles lost their white frames and the dark
+hairlines the frames were causing; «Парней» / «Девушек» went to Inter 800 and
+larger; and the second design plus its `?v=` switch, review page and artwork
+were deleted after the founder settled on the photo scatter. Full detail is in
+the profile-screens block below (the four bullets under "So does the preference
+photo fork") — that block is labelled *Deployed*, which is true of the screens
+themselves and **not** of these three changes.
+
+**Two things worth knowing before the redeploy:**
+
+- **The bundle gets ~335 KB SMALLER**: `apps/webapp/src/preference/cutout/`
+  (two group images) is deleted along with the code that read it. Nothing else
+  referenced those files, so this is dead weight leaving, not an asset going
+  missing.
+- **`onboarding.html` must keep `;800` in its Google Fonts URL.** It was added
+  for the deleted design, so the obvious tidy-up after removing that design is
+  to drop it again — that would silently downgrade the two labels to a
+  synthesised bold. An earlier revision of the bullet below actively told you to
+  drop it; it now says the opposite.
+
+Post-deploy check — the screen is transient and logs nothing, so verify by eye
+on `@gennetytestbot` (or the dev preview, which needs no Telegram):
+
+```sh
+./scripts/deploy-webapp.sh
+curl -sI https://dating-calendar.gennety.com/onboarding.html | head -1
+# Dev preview of the exact screen, both themes:
+#   http://localhost:5173/onboarding.html?preview=basics:preference&lang=ru&theme=light
+# `?v=1`, `?v=2`, `?v=both` must now all render the same single design.
+```
+
+**Rollback:** redeploy the Mini App from the previous checkout. Nothing else to
+undo — no schema, no env, no flag, no server state.
+
+---
+
 **PENDING — the onboarding name field stops shrinking under the keyboard
 (PRODUCT_SPEC §1.1).** Not deployed yet. **No Prisma schema change, no env
 change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is
@@ -674,33 +718,34 @@ this change where a user gets stuck at the handoff.
   quieter "both". Also client-only — no server change, no env, no schema — but
   it carries three things the burst did not:
   - **Photos ship inside the bundle**, and they are the one thing here with a
-    real user cost. They live in
-    `apps/webapp/src/preference/{photo,cutout}/{men,women}/`, enumerated by
-    `import.meta.glob`. The screen downloads **~530 KB** on variant 1 (12
-    photos, six per side) or **~330 KB** on variant 2 (2 group images) — against
-    a 124 KB onboarding chunk, over mobile data, inside Telegram. That is the
-    budget; check it if the set ever changes. Variant 1 grew from 440 KB with
-    the sixth photo per side; variant 2 from 224 KB when its crop was dropped
-    and the artwork went back to the whole five-across group.
+    real user cost. They live in `apps/webapp/src/preference/photo/{men,women}/`,
+    enumerated by `import.meta.glob`. The screen downloads **~530 KB** (12
+    photos, six per side) against a 124 KB onboarding chunk, over mobile data,
+    inside Telegram. That is the budget; check it if the set ever changes. It
+    grew from 440 KB with the sixth photo per side. (The dropped second design
+    held one group image per side in a `cutout/` folder — ~330 KB; that folder
+    is gone, see the last bullet.)
     **Never copy originals in by hand.** They are 2–6 MB PNGs, ~40 MB across the
     set. `~/Desktop/gennety-preference-photos/prepare.mjs` is what resizes,
     re-encodes and trims them into the repo; the naive `sync.sh` that preceded
     it was deleted precisely because running it shipped the originals. **Run it
-    with no flags** — `--tight` narrows the group cutout to ~3 figures, which is
-    what the button wanted while it was fitted to the artwork and is wrong now
-    that the artwork fits inside the button.
-  - **`onboarding.html` now requests Inter 800** for variant 2's heavy word
-    (the Google Fonts URL previously stopped at 700). One extra font file for
-    every onboarding user. If variant 1 wins, drop `;800` again — it is the only
-    line of this change that costs anything to a user who never sees variant 2.
-  - **Two designs exist behind `LIVE_VARIANT`** (`preference-variant.ts`), which
-    is `1`. The `?v=` override, the on-screen toggle, and the `?v=both` review
-    page that stacks the two designs are all `import.meta.env.DEV`-gated —
-    re-verified absent from the built JS after the stack was added (the CSS
-    cannot be folded away and keeps ~0.3 KB of dead rules, as the toggle's own
-    styles already did). Switching the live one is a one-line code change, not
-    an env flag.
-  - **Variant 1 is the one that ships, and it was tidied 2026-08-07** — the
+    with no flags.** It still writes a `cutout/` folder the app no longer reads,
+    and its `--tight` flag only ever narrowed that artwork — both are dead
+    weight now, harmless because nothing globs that path.
+  - **`onboarding.html` requests Inter 800**, and **must keep doing so** (the
+    Google Fonts URL previously stopped at 700). It was added for the dropped
+    design's heavy word, and an earlier revision of this bullet said to drop
+    `;800` again if the other design won — **that is now wrong**: «Парней» /
+    «Девушек» were made 800 on 2026-08-07 and would fall back to a synthesised
+    bold. One extra font file for every onboarding user.
+  - **One design, no switch (2026-08-07).** `preference-variant.ts`, the `?v=`
+    override, the on-screen V1/V2/both toggle, the stacked review page, the
+    variant-2 CSS and the `cutout/` artwork are **deleted** — the founder
+    settled on the photo scatter. `?v=` is now inert rather than removed-and-
+    erroring: it is simply read by nothing. The deleted design is recoverable
+    from git history (`git show 8190fea:apps/webapp/src/preference-variant.ts`
+    and the paths beside it); it is not recoverable from a flag, on purpose.
+  - **The photo scatter was tidied 2026-08-07** — the
     white frames and the dark hairlines inside them are gone (the frame's
     `border-box` shrank the tile's content box below the photo's own ratio, so
     `object-fit: contain` letterboxed all twelve), and the bottom band no longer
@@ -712,11 +757,11 @@ this change where a user gets stuck at the handoff.
     bottom slots are authored against the **tightest** column, so a slot's `y`
     is bounded by `maxCentreY` and a test enforces it — verify on a short
     viewport (320×568), not only on 390×844, if those numbers are ever touched.
-    Byte cost unchanged; variant 2 untouched. The same pass made «Парней» /
-    «Девушек» heavier (Inter 800, larger) — which is why the strip and
-    `TIGHTEST_AREA_RATIO` moved with it: the reservation is sized to the label,
-    so the two are edited together or the photos land on the word again. Inter
-    800 was already being loaded for variant 2, so no new font request.
+    Byte cost unchanged. The same pass made «Парней» / «Девушек» heavier (Inter
+    800, larger) — which is why the strip and `TIGHTEST_AREA_RATIO` moved with
+    it: the reservation is sized to the label, so the two are edited together or
+    the photos land on the word again. Inter 800 was already being loaded, so no
+    new font request.
 - **And so does the height drum's per-row tick** (added 2026-08-06,
   PRODUCT_SPEC §1.3). The drum pulses `HapticFeedback.selectionChanged` as each
   value passes under the capsule instead of once when the scroll stops, and its

@@ -205,36 +205,27 @@ out of Telegram-only workers.
   a target you hit without aiming, and wide enough to carry photographs of the
   people behind the choice — with "both" underneath, smaller and quieter: a
   real answer, but not the headline one, and three equal rows made it compete
-  with the two most users are actually deciding between. Two designs were built
-  to be compared (`preference-variant.ts`, `?v=` in dev — `?v=both` stacks them
-  on one scrolling page, one full screen each, so either can be edited and
-  checked against the other without a reload in between; production ships
-  `LIVE_VARIANT` alone): **(1)** six ordinary photographs tilted inside each
-  column, a few hanging past its edge, over the column's own burgundy/blue
-  gradient; **(2)** one finished group image per side — people
-  already standing together, background removed, white contour already drawn —
-  sitting inside a near-black panel behind a thin border, under a heavy white
-  word. Variant 2's button **states its own shape and the artwork fits inside
-  it** (reversed 2026-08-06 from the opposite rule — the button shrink-wrapping
-  a cropped group). The whole group is shown uncropped, `object-fit: contain`,
-  settled on the button's floor with a margin on every side and headroom above
-  the heads. The button's ratio is fixed rather than derived, because a button
-  fitted to whole-group artwork — nearly square at 0.86 and 0.79 w/h for the two
-  sides, against a column that is half a phone wide — either cuts figures off at
-  the edges or opens a void above them.
-  **A taller button does not draw the people any bigger**: the artwork runs out
-  of column WIDTH long before it runs out of height, so every extra pixel of
-  height lands as headroom, never as scale. That is why the side margins are
-  narrow (3% a side) and why this variant reaches 8px past the page's own margin
-  on each side — column width is the only lever on how large five people can be
-  drawn. It also bounds what the design can do: at half a phone, five people
-  are ~32px each, and the only way past that is to show fewer of them, which
-  the earlier ~0.52 crop did at the cost of two of the models. Variant 2 is never
-  mirrored — these are photographs of real people, and flipping them is a
-  different picture, not a mirrored layout.
+  with the two most users are actually deciding between. Inside each column sit
+  six ordinary photographs, tilted, a few hanging past its side, over the
+  column's own burgundy/blue gradient.
+  **A second design was built to be compared against it, and dropped
+  (2026-08-07).** It put one finished group image per side — people already
+  standing together, background removed, white contour drawn — inside a
+  near-black panel under a heavy white word, and for two days both shipped
+  behind a dev `?v=` switch that could also stack them on one scrolling page.
+  The founder settled on the photographs. The switch, the review page, the
+  second design's CSS and its artwork are **deleted**, not flagged off: a
+  decision that is made stops being a configuration, and the alternative lives
+  in git history where a reverted design belongs. What the comparison taught is
+  worth keeping, because it is a constraint on anything that replaces this
+  screen: **a taller button does not draw people any bigger.** Group artwork
+  runs out of column WIDTH long before it runs out of height, so every extra
+  pixel of button height lands as headroom, never as scale — at half a phone
+  wide, five people across are ~32px each, and the only way past that is to show
+  fewer of them. The scatter sidesteps it by showing one person per frame.
   The photo placements are authored, not random (`preference-layout.ts`):
   a scatter re-rolled per render would shuffle under the user's finger and could
-  never be reviewed twice. Variant 1's is four bands read from the bottom up —
+  never be reviewed twice. It is four bands read from the bottom up —
   two small, one large, two small, one large-ish — and the sixth photo is
   deliberately the LAST slot, the bottom row's outer corner, so a five-photo set
   still renders a composition rather than half a band. Each frame shows a
