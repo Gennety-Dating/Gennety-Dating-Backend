@@ -53,7 +53,11 @@ import {
   type IncomingProfileMedia,
 } from "../../services/telegram-profile-media.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
-import { runStatusSequence, type StatusStep } from "../../services/ai-stream.js";
+import {
+  reviseStatusScript,
+  runStatusSequence,
+  type StatusStep,
+} from "../../services/ai-stream.js";
 import {
   onboardingThinkingSteps,
   photoReviewSteps,
@@ -1028,14 +1032,12 @@ async function handlePhotoFrame(
   acc.frameCount++;
   if (acc.frameCount === 2) {
     // The burst just stopped being a single photo while its shimmer is still on
-    // screen — photos sent one at a time join the same batch. Revise the script
-    // in place so the remaining beats drop the singular; each beat's text is
-    // read at its own transition, so the next one picks this up.
-    const plural = photoReviewSteps(ctx.session.language, acc.frameCount);
-    acc.statusSteps.forEach((step, i) => {
-      const revised = plural[i];
-      if (revised) step.text = revised.text;
-    });
+    // screen — photos sent one at a time join the same batch. Drop the singular
+    // from the beats that have not been drawn yet.
+    reviseStatusScript(
+      acc.statusSteps,
+      photoReviewSteps(ctx.session.language, acc.frameCount),
+    );
   }
 
   // Cancel any pending flush while we process this frame — we'll

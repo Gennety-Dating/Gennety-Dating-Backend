@@ -333,27 +333,36 @@ destroyed.
 **Recorded in:** deploy.md → Deploy Full Server Code (flag set + the two backup
 paths) and the 2026-08-07 release block.
 
-## 2026-08-07 — the onboarding photo shimmer counts; the photo manager stays as it is
+## 2026-08-07 — both photo shimmers count, and "which flow did they ask about" was the wrong axis
 
-**Kind:** founder decision + deviation from plan
-**What:** the onboarding upload shimmer gets a singular script for a one-photo
-burst; the plural one is kept for two or more. Scoped to onboarding — the §2.1
-photo manager's identical plural-for-one wording ("Загружаю фотографии…") was
-deliberately left alone.
-**Why:** the founder noticed the effect firing in the plural when they had sent
-a single photo, which reads as the bot miscounting what it was just handed. The
-manager was excluded because it is a different flow with different copy (about
-*uploading*, not looking) and was not what was asked for; widening the change is
-the founder's call, not mine.
-**What it changes going forward:** the two scripts must stay the same LENGTH.
-The burst can grow after the shimmer starts (photos sent one at a time join the
-same batch), so the handler revises later beats in place, beat for beat — a
-length mismatch would silently drop one. Two tests pin this: equal length/cadence
-per language, and `runStatusSequence` reading each step's text at its own
-transition rather than snapshotting up front. That read-per-transition behaviour
-was previously incidental and is now a contract.
-**Recorded in:** PRODUCT_SPEC.md §1.3 (media stage), `services/analysis-status.ts`,
-`handlers/onboarding/conversational.ts`, `services/ai-stream.ts`.
+**Kind:** founder decision + change of mind
+**What:** both photo-upload shimmers — the onboarding media stage (§1.3) and the
+§2.1 photo manager — now carry a singular script for a burst that is still one
+photo. Shipped in two commits hours apart: I scoped the first to onboarding and
+recorded the manager as a deliberate exclusion; the founder came back with the
+manager, and the exclusion was wrong.
+**Why the first cut was wrong, since that is the reusable part:** I drew the
+boundary around the *flow the founder named* ("при регистрации") rather than
+around the *defect*, and reasoned that the manager's copy is about uploading
+rather than looking, so it was a separate decision. Two things were missing. The
+manager is REACHED from registration — the §1.4 verification gate's "📷 upload
+different photos" is the only photo surface a not-yet-verified account has, and
+that is exactly where the founder was standing (`menuState=edit_photos`,
+`onboarding_step=completed`) when they reported it a second time. And a lone
+upload is the *usual* case there, not an edge one: you open the manager to
+replace one bad photo. So the surface I called out-of-scope had the worse
+version of the same false statement.
+**What it changes going forward:** when a founder reports a copy or UX defect
+against a named flow, check where else the SAME code path or the same sentence
+is user-visible before scoping to what they named — particularly across the
+onboarding/menu boundary, which users do not perceive as a boundary at all.
+Mechanically: the two scripts per surface must stay the same LENGTH, because a
+growing burst is revised in place beat for beat (`reviseStatusScript`, shared by
+both). A count-neutral beat (the manager's "almost there") is one i18n key used
+by both scripts, not two identical ones.
+**Recorded in:** PRODUCT_SPEC.md §1.3 + §2.1, `services/analysis-status.ts`,
+`services/ai-stream.ts`, `handlers/onboarding/conversational.ts`,
+`handlers/menu/edit-profile.ts`.
 
 ## 2026-08-07 — ten Kyiv venues promoted to premium; the catalog file is not the prod DB
 

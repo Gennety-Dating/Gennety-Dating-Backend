@@ -1,8 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { t } from "@gennety/shared";
-import { photoReviewSteps, venueSearchSteps, videoCheckSteps } from "./analysis-status.js";
+import { SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
+import {
+  photoReviewSteps,
+  photoUploadSteps,
+  venueSearchSteps,
+  videoCheckSteps,
+} from "./analysis-status.js";
 import { AI_EMOJI } from "./ai-emoji.js";
-import { SUPPORTED_LANGUAGES } from "@gennety/shared";
+import type { StatusStep } from "./ai-stream.js";
+
+/**
+ * Both photo bursts revise a singular script into the plural one beat for beat
+ * while it is on screen (`reviseStatusScript`), so the two must agree on
+ * everything except wording: a length mismatch would silently drop a beat, and
+ * a cadence mismatch would change the rhythm halfway through.
+ */
+function expectRevisableScripts(build: (lang: Language, frames: number) => StatusStep[]): void {
+  for (const lang of SUPPORTED_LANGUAGES) {
+    const one = build(lang, 1);
+    const many = build(lang, 2);
+    expect(one).toHaveLength(many.length);
+    expect(one.map((step) => step.holdMs)).toEqual(many.map((step) => step.holdMs));
+    expect(one.map((step) => step.emojiId)).toEqual(many.map((step) => step.emojiId));
+    // At least one beat has to actually carry the count, else the split is inert.
+    expect(one.map((step) => step.text)).not.toEqual(many.map((step) => step.text));
+  }
+}
 
 describe("venueSearchSteps", () => {
   it("uses the concierge venue-search timing cadence", () => {
@@ -31,15 +54,35 @@ describe("photoReviewSteps", () => {
   });
 
   it("keeps both scripts the same length and cadence in every language", () => {
-    // `handlePhotoFrame` revises a singular script into the plural one beat for
-    // beat when the burst grows, so a mismatch would silently drop a beat.
+    expectRevisableScripts(photoReviewSteps);
+  });
+});
+
+describe("photoUploadSteps", () => {
+  it("narrates a single-photo burst in the singular", () => {
+    expect(photoUploadSteps("ru", 1).map((step) => step.text)).toEqual([
+      t("ru", "photoUploadOneStep1"),
+      t("ru", "photoUploadOneStep2"),
+      t("ru", "photoUploadStep3"),
+    ]);
+    expect(photoUploadSteps("ru", 4).map((step) => step.text)).toEqual([
+      t("ru", "photoUploadStep1"),
+      t("ru", "photoUploadStep2"),
+      t("ru", "photoUploadStep3"),
+    ]);
+  });
+
+  it("keeps both scripts the same length and cadence in every language", () => {
+    expectRevisableScripts(photoUploadSteps);
+  });
+
+  it("shares the count-neutral closing beat between both scripts", () => {
+    // "Almost there…" says nothing about how many, so it is one key rather than
+    // two identical ones drifting apart across five languages.
     for (const lang of SUPPORTED_LANGUAGES) {
-      const one = photoReviewSteps(lang, 1);
-      const many = photoReviewSteps(lang, 2);
-      expect(one).toHaveLength(many.length);
-      expect(one.map((step) => step.holdMs)).toEqual(many.map((step) => step.holdMs));
-      expect(one.map((step) => step.emojiId)).toEqual(many.map((step) => step.emojiId));
-      expect(one.map((step) => step.text)).not.toEqual(many.map((step) => step.text));
+      expect(photoUploadSteps(lang, 1).at(-1)?.text).toBe(
+        photoUploadSteps(lang, 2).at(-1)?.text,
+      );
     }
   });
 });

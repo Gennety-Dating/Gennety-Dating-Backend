@@ -37,7 +37,11 @@ import {
 import { prepareProfileVideo, videoSavedAck } from "../../services/profile-video.js";
 import { grantVideoBonusIfEligible } from "../../services/ticket-wallet.js";
 import { sendTicketRewardDM } from "../../services/ticket-reward.js";
-import { runStatusSequence } from "../../services/ai-stream.js";
+import {
+  reviseStatusScript,
+  runStatusSequence,
+  type StatusStep,
+} from "../../services/ai-stream.js";
 import { photoUploadSteps } from "../../services/analysis-status.js";
 import { dispatchToChat } from "../../chat-queue.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
@@ -704,7 +708,7 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
   }
 
   if (!ctx.chat) return;
-  const batch = openPhotoBatch(ctx);
+  const batch = openPhotoBatch(ctx, ctx.message?.media_group_id ?? null);
   const outcome = await processPhotoFrame(ctx, incoming);
   recordFrameOutcome(batch, outcome, ctx.message?.message_id);
   armPhotoBatchFlush(batch);
@@ -859,22 +863,52 @@ interface PhotoUploadBatch {
    *  user guessing which frame of an album failed). */
   rejections: Array<{ messageId?: number; reason: MediaValidationReason }>;
   timer: NodeJS.Timeout | null;
+  /**
+   * Frames that have ARRIVED in this burst, whatever their verdict — distinct
+   * from `accepted`/`capped`, which are only known after validation. It is what
+   * the shimmer's wording is chosen from, and it has to be the arrival count:
+   * the copy has to be right while the frames are still being checked.
+   */
+  frames: number;
   /** Resolved on flush; the shimmer status is held until then. */
   finish: () => void;
   /** The shimmer itself, awaited before the summary so it is torn down first. */
   status: Promise<void>;
+  /**
+   * The live script behind that shimmer. Held here because the burst can GROW
+   * after the shimmer starts (photos sent one at a time join the same batch),
+   * and a script opened in the singular must then stop saying "photo".
+   */
+  statusSteps: StatusStep[];
 }
 
 const photoUploadBatches = new Map<number, PhotoUploadBatch>();
 const PHOTO_UPLOAD_DEBOUNCE_MS = 900;
 
-function openPhotoBatch(ctx: BotContext): PhotoUploadBatch {
+/**
+ * Get (or open) the burst this frame belongs to, and count the frame.
+ *
+ * Called exactly once per arriving frame, which is what makes `frames` an
+ * honest arrival count and lets the shimmer's wording follow the burst as it
+ * grows.
+ */
+function openPhotoBatch(ctx: BotContext, mediaGroupId: string | null): PhotoUploadBatch {
   const chatId = ctx.chat!.id;
   const existing = photoUploadBatches.get(chatId);
   if (existing) {
     if (existing.timer) {
       clearTimeout(existing.timer);
       existing.timer = null;
+    }
+    existing.frames++;
+    if (existing.frames === 2) {
+      // The burst just stopped being a single photo while its shimmer is still
+      // on screen — photos sent one at a time land in the same batch. Drop the
+      // singular from the beats that have not been drawn yet.
+      reviseStatusScript(
+        existing.statusSteps,
+        photoUploadSteps(existing.language, existing.frames),
+      );
     }
     return existing;
   }
@@ -883,6 +917,12 @@ function openPhotoBatch(ctx: BotContext): PhotoUploadBatch {
   const done = new Promise<void>((resolve) => {
     finish = resolve;
   });
+  // An album arrives as N separate messages but is known to be several photos
+  // from its very first frame; a standalone photo is one until another joins.
+  const statusSteps = photoUploadSteps(
+    ctx.session.language,
+    mediaGroupId === null ? 1 : 2,
+  );
   const batch: PhotoUploadBatch = {
     chatId,
     api: ctx.api,
@@ -893,9 +933,11 @@ function openPhotoBatch(ctx: BotContext): PhotoUploadBatch {
     notes: [],
     rejections: [],
     timer: null,
+    frames: 1,
     finish,
+    statusSteps,
     // One shimmer for the whole burst, held until the last frame settles.
-    status: runStatusSequence(ctx.api, chatId, photoUploadSteps(ctx.session.language), {
+    status: runStatusSequence(ctx.api, chatId, statusSteps, {
       rich: true,
       until: done,
     }).catch(() => {}),

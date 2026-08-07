@@ -573,8 +573,8 @@ Hard rules enforced by the collector:
   send another" ends in the plural rather than being stranded in the singular
   for the rest of the burst — the beat already drawn is left alone, since
   rewriting what the user is currently reading is worse than a stale line. The
-  §2.1 photo manager is deliberately NOT changed: its copy is about *uploading*
-  rather than looking, and it is a separate decision.
+  §2.1 photo manager carries the same split (it shipped a few hours later, in
+  the same shape, off the same `reviseStatusScript`).
   At 5 photos the
   bot uses a short progress reminder rather than repeating the full pitch.
   **The stage is an editor, not an append-only log (2026-07-27).** A persistent
@@ -1395,7 +1395,17 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   this the manager answered every frame separately, so a 4-photo album produced
   four "Photo k/10" messages interleaved with detached rejection lines while
   later frames were still validating (each photo takes seconds), which read as
-  the bot losing track. A **video** sent into the manager is accepted here too
+  the bot losing track.
+  **That shimmer counts too (2026-08-07).** It carries the same two scripts as
+  the onboarding one — plural, and a singular one for a burst that is still a
+  single photo — chosen from `media_group_id` on the first frame and revised in
+  place if the burst grows (§1.3 states the mechanics; `reviseStatusScript` is
+  shared by both). This surface needed it MORE than onboarding, not less: it is
+  reached to swap one bad photo, and from the §1.4 verification gate's "upload
+  different photos", so a lone upload is the usual case here rather than an edge
+  one — and "uploading your photos" over a single frame is simply false. The
+  closing beat ("almost there") says nothing about how many and is shared by
+  both scripts rather than duplicated. A **video** sent into the manager is accepted here too
   (same shared display-only, safety-only validator and one-time ticket bonus as
   the Profile Video entry) — it used to fall through to "send me photos" and be
   silently dropped, which strands a user whose menu is locked behind the §1.4

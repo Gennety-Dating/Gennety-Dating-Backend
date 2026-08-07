@@ -295,6 +295,32 @@ export async function runStatusSequence(
 }
 
 /**
+ * Rewrite a script that is CURRENTLY being narrated, beat for beat.
+ *
+ * Both photo-upload bursts open their shimmer on the first frame and can only
+ * learn later that the burst is bigger than one photo — frames sent one at a
+ * time join the same batch — so the wording has to be revisable after the
+ * sequence has started. This works because {@link runStatusSequence} reads each
+ * step's `text` at its own transition; the beat already on screen keeps its
+ * text, since rewriting what the user is mid-read is worse than one stale line.
+ *
+ * Only `text` is revised: `holdMs` and `emojiId` set the cadence, and a script
+ * that changed its rhythm halfway would read as a glitch. Extra beats in
+ * `next` are ignored — the rich path snapshots the array length, so a revision
+ * can never add or drop a beat (the two scripts are held to equal length by
+ * their builder's own test).
+ */
+export function reviseStatusScript(
+  live: StatusStep[],
+  next: readonly StatusStep[],
+): void {
+  live.forEach((step, i) => {
+    const revised = next[i];
+    if (revised) step.text = revised.text;
+  });
+}
+
+/**
  * Put a status sequence's PERSISTED last line into the chat timeline.
  *
  * Only `deleteAtEnd: false` sequences leave anything behind — today the

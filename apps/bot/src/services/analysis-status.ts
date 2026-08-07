@@ -71,11 +71,28 @@ export function verifyAnalysisSteps(lang: Language): StatusStep[] {
  * One status for the burst — the per-frame verdicts land together at the end,
  * instead of a "Photo 1/10" reply arriving per frame while later frames are
  * still being checked (which read as the bot spamming/losing track).
+ *
+ * `frames` picks between two scripts of the SAME length, exactly like
+ * {@link photoReviewSteps}: the plural one, and a singular one for a burst that
+ * is still a single photo. This surface is where a lone upload is MOST common —
+ * it is reached to swap one bad photo, and from the verification gate's
+ * "upload different photos" — so the plural was the usual case rather than an
+ * edge one. The closing beat says nothing about how many, so both scripts share
+ * it; `reviseStatusScript` then leaves it untouched when a burst grows.
  */
-export function photoUploadSteps(lang: Language): StatusStep[] {
+export function photoUploadSteps(lang: Language, frames: number): StatusStep[] {
+  const many = frames > 1;
   return [
-    { text: t(lang, "photoUploadStep1"), holdMs: 3000, emojiId: AI_EMOJI.spark },
-    { text: t(lang, "photoUploadStep2"), holdMs: 4000, emojiId: AI_EMOJI.spark },
+    {
+      text: t(lang, many ? "photoUploadStep1" : "photoUploadOneStep1"),
+      holdMs: 3000,
+      emojiId: AI_EMOJI.spark,
+    },
+    {
+      text: t(lang, many ? "photoUploadStep2" : "photoUploadOneStep2"),
+      holdMs: 4000,
+      emojiId: AI_EMOJI.spark,
+    },
     { text: t(lang, "photoUploadStep3"), holdMs: 4000, emojiId: AI_EMOJI.spark },
   ];
 }

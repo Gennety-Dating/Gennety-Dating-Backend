@@ -19,6 +19,7 @@ vi.mock("../config.js", () => ({
 import {
   streamDrafts,
   streamDraftsToChat,
+  reviseStatusScript,
   runStatusSequence,
   runThinkingStatusSequence,
   NEVER_CUT_SHORT,
@@ -264,6 +265,47 @@ describe("runStatusSequence", () => {
     });
 
     expect(api.editMessageText).toHaveBeenCalledWith(5, 7, "Revised");
+  });
+});
+
+describe("reviseStatusScript", () => {
+  it("rewrites only the text, keeping the cadence the sequence is already running", () => {
+    const live = [
+      { text: "one photo", holdMs: 100, emojiId: "scan" },
+      { text: "the shot", holdMs: 200, emojiId: "spark" },
+    ];
+
+    reviseStatusScript(live, [
+      { text: "several photos", holdMs: 999, emojiId: "other" },
+      { text: "the shots", holdMs: 999, emojiId: "other" },
+    ]);
+
+    expect(live).toEqual([
+      { text: "several photos", holdMs: 100, emojiId: "scan" },
+      { text: "the shots", holdMs: 200, emojiId: "spark" },
+    ]);
+  });
+
+  it("never adds or drops a beat — the rich path snapshots the length", () => {
+    const live = [{ text: "a", holdMs: 10 }];
+
+    reviseStatusScript(live, [
+      { text: "b", holdMs: 10 },
+      { text: "c", holdMs: 10 },
+    ]);
+
+    expect(live).toEqual([{ text: "b", holdMs: 10 }]);
+  });
+
+  it("leaves a beat the shorter script has nothing to say about", () => {
+    const live = [
+      { text: "a", holdMs: 10 },
+      { text: "keep me", holdMs: 20 },
+    ];
+
+    reviseStatusScript(live, [{ text: "b", holdMs: 10 }]);
+
+    expect(live.map((step) => step.text)).toEqual(["b", "keep me"]);
   });
 });
 

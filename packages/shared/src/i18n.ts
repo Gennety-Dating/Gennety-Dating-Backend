@@ -334,10 +334,16 @@ const translations = {
     photoManagerDoneBtn: "Done",
     photoManagerMinReached: "You need at least {min} photos. Add a new one first.",
     // Shimmer beats held while a whole upload burst is validated (one status
-    // for the burst, not one reply per frame).
+    // for the burst, not one reply per frame). Two scripts, same as the
+    // onboarding pair below: the plural one, and a singular one for a burst
+    // that is still a single photo. The closing beat says nothing about how
+    // many, so both scripts share it rather than carrying two identical keys
+    // through five languages.
     photoUploadStep1: "Uploading your photos…",
     photoUploadStep2: "Checking the shots…",
     photoUploadStep3: "Almost there…",
+    photoUploadOneStep1: "Uploading your photo…",
+    photoUploadOneStep2: "Checking the shot…",
     // Onboarding media stage: held while the first photo burst is validated,
     // so the several-second wait before the progress reply reads as the bot
     // looking at the photos rather than as silence. Two scripts: one photo vs.
@@ -1454,6 +1460,8 @@ const translations = {
     photoUploadStep1: "Загружаю фотографии…",
     photoUploadStep2: "Проверяю кадры…",
     photoUploadStep3: "Ещё пара секунд…",
+    photoUploadOneStep1: "Загружаю фото…",
+    photoUploadOneStep2: "Проверяю кадр…",
     photoReviewStep1: "Смотрю твои фото…",
     photoReviewStep2: "Просматриваю кадры…",
     photoReviewOneStep1: "Смотрю твоё фото…",
@@ -2519,6 +2527,8 @@ const translations = {
     photoUploadStep1: "Завантажую фотографії…",
     photoUploadStep2: "Перевіряю кадри…",
     photoUploadStep3: "Ще пара секунд…",
+    photoUploadOneStep1: "Завантажую фото…",
+    photoUploadOneStep2: "Перевіряю кадр…",
     photoReviewStep1: "Дивлюся твої фото…",
     photoReviewStep2: "Переглядаю кадри…",
     photoReviewOneStep1: "Дивлюся твоє фото…",
@@ -3577,6 +3587,8 @@ const deTranslations: TranslationTable = {
   photoUploadStep1: "Lade deine Fotos hoch…",
   photoUploadStep2: "Prüfe die Aufnahmen…",
   photoUploadStep3: "Gleich fertig…",
+  photoUploadOneStep1: "Lade dein Foto hoch…",
+  photoUploadOneStep2: "Prüfe die Aufnahme…",
   photoReviewStep1: "Ich schaue mir deine Fotos an…",
   photoReviewStep2: "Gehe die Aufnahmen durch…",
   photoReviewOneStep1: "Ich schaue mir dein Foto an…",
@@ -4608,6 +4620,8 @@ const plTranslations: TranslationTable = {
   photoUploadStep1: "Wgrywam Twoje zdjęcia…",
   photoUploadStep2: "Sprawdzam kadry…",
   photoUploadStep3: "Jeszcze chwila…",
+  photoUploadOneStep1: "Wgrywam Twoje zdjęcie…",
+  photoUploadOneStep2: "Sprawdzam kadr…",
   photoReviewStep1: "Oglądam Twoje zdjęcia…",
   photoReviewStep2: "Przeglądam kadry…",
   photoReviewOneStep1: "Oglądam Twoje zdjęcie…",
