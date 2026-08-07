@@ -558,7 +558,20 @@ Hard rules enforced by the collector:
   `until: <batch flush>`, so it ends when the work does rather than on a timer)
   — the same treatment the §2.1 photo manager already gives an upload burst.
   Without it the user sends three photos at once and sits in silence with only
-  the typing indicator, which reads as the bot having missed them. At 5 photos the
+  the typing indicator, which reads as the bot having missed them.
+  **The shimmer counts (2026-08-07).** It has two scripts of the same length —
+  plural, and a singular one ("смотрю твоё фото") for a burst that is still one
+  photo — because the stage accepts photos **one at a time** and the plural read
+  as the bot having miscounted what it was just handed. An album is known to be
+  several from its very first frame (`media_group_id`); a standalone photo is
+  one until another joins. A burst that GROWS past one frame while the shimmer
+  is still on screen has its remaining beats revised in place, so "send, then
+  send another" ends in the plural rather than being stranded in the singular
+  for the rest of the burst — the beat already drawn is left alone, since
+  rewriting what the user is currently reading is worse than a stale line. The
+  §2.1 photo manager is deliberately NOT changed: its copy is about *uploading*
+  rather than looking, and it is a separate decision.
+  At 5 photos the
   bot uses a short progress reminder rather than repeating the full pitch.
   **The stage is an editor, not an append-only log (2026-07-27).** A persistent
   bottom panel (Telegram *reply* keyboard, one button — "🗂 My photos") sits

@@ -245,6 +245,26 @@ describe("runStatusSequence", () => {
     await runStatusSequence(api, 5, steps, { wait });
     expect(waited).toEqual([100, 200, 300]);
   });
+
+  // Pinned contract, not an accident: the onboarding photo burst revises a
+  // one-photo shimmer's later beats in place when a second photo joins the
+  // batch (PRODUCT_SPEC §1.3). Snapshotting the texts up front would strand
+  // that shimmer in the singular for the rest of the burst.
+  it("reads each step's text at its own transition, not up front", async () => {
+    const api = createApi();
+    const live = [
+      { text: "Step 1", holdMs: 100 },
+      { text: "Step 2", holdMs: 200 },
+    ];
+
+    await runStatusSequence(api, 5, live, {
+      wait: async () => {
+        live[1]!.text = "Revised";
+      },
+    });
+
+    expect(api.editMessageText).toHaveBeenCalledWith(5, 7, "Revised");
+  });
 });
 
 describe("runStatusSequence (rich thinking path)", () => {
@@ -308,6 +328,28 @@ describe("runStatusSequence (rich thinking path)", () => {
     expect(api.raw.sendRichMessageDraft).toHaveBeenCalledTimes(2);
     expect(api.raw.sendRichMessage).toHaveBeenCalledWith(
       expect.objectContaining({ chat_id: 5, rich_message: { markdown: "S3" } }),
+    );
+  });
+
+  it("reads each step's text at its own transition, not up front", async () => {
+    const api = createRichApi();
+    const live = [
+      { text: "S1", holdMs: 10 },
+      { text: "S2", holdMs: 20 },
+    ];
+
+    await runStatusSequence(api, 5, live, {
+      rich: true,
+      wait: async () => {
+        live[1]!.text = "Revised";
+      },
+    });
+
+    expect(api.raw.sendRichMessageDraft).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        rich_message: { html: "<tg-thinking>Revised</tg-thinking>" },
+      }),
     );
   });
 

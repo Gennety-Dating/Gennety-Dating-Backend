@@ -217,6 +217,13 @@ async function holdStep(
  * silently if the chat rejects send/edit/delete (blocked bot, message too
  * old, identical-text edit, etc.) — a cosmetic status must never break the
  * real flow it decorates.
+ *
+ * Each step's `text` is read **at its own transition**, never snapshotted up
+ * front, so a caller that keeps a reference to `steps` can revise a beat that
+ * has not been drawn yet — the onboarding photo burst does exactly that when a
+ * one-photo burst grows (PRODUCT_SPEC §1.3). The array's LENGTH is snapshotted
+ * on the rich path, so a revision may change wording but never add or drop a
+ * beat. Both properties are pinned by tests.
  */
 export async function runStatusSequence(
   api: Api<RawApi>,

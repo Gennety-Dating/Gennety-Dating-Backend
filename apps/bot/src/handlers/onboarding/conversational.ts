@@ -53,7 +53,7 @@ import {
   type IncomingProfileMedia,
 } from "../../services/telegram-profile-media.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
-import { runStatusSequence } from "../../services/ai-stream.js";
+import { runStatusSequence, type StatusStep } from "../../services/ai-stream.js";
 import {
   onboardingThinkingSteps,
   photoReviewSteps,
@@ -808,6 +808,14 @@ interface PhotoBatchAccumulator {
   hadInfraError: boolean;
   /** True when the batch arrived before `request_photos` was called */
   unsolicited: boolean;
+  /**
+   * Frames that have ARRIVED in this burst, whatever their verdict — distinct
+   * from the outcome counters above, which are only known after validation.
+   * It is what the shimmer's wording is chosen from, and it has to be the
+   * arrival count: the copy has to be right while the frames are still being
+   * looked at.
+   */
+  frameCount: number;
   timer: NodeJS.Timeout | null;
   /**
    * Resolved when the burst is done being validated — the shimmer below is held
@@ -822,6 +830,14 @@ interface PhotoBatchAccumulator {
    * must never break the stage it decorates.
    */
   status: Promise<void>;
+  /**
+   * The live script behind that shimmer. Held here because the burst can GROW
+   * after the shimmer starts (photos sent one at a time join the same batch),
+   * and a script opened in the singular must then stop saying "photo". Each
+   * beat's text is read at its own transition, so revising a later beat in
+   * place is picked up (pinned by `ai-stream.test.ts`).
+   */
+  statusSteps: StatusStep[];
 }
 
 const photoBatchAccumulators = new Map<number, PhotoBatchAccumulator>();
@@ -974,6 +990,12 @@ async function handlePhotoFrame(
     const done = new Promise<void>((resolve) => {
       finish = resolve;
     });
+    // An album arrives as N separate messages but is known to be several photos
+    // from its very first frame; a standalone photo is one until another joins.
+    const statusSteps = photoReviewSteps(
+      ctx.session.language,
+      mediaGroupId === null ? 1 : 2,
+    );
     acc = {
       mediaGroupId,
       chatId,
@@ -990,17 +1012,30 @@ async function handlePhotoFrame(
       rejections: [],
       hadInfraError: false,
       unsolicited: !ctx.session.expectingPhoto,
+      frameCount: 0,
       timer: null,
       finish,
+      statusSteps,
       // One shimmer for the whole burst, held until the last frame settles.
-      status: runStatusSequence(
-        ctx.api,
-        chatId,
-        photoReviewSteps(ctx.session.language),
-        { rich: true, until: done },
-      ).catch(() => {}),
+      status: runStatusSequence(ctx.api, chatId, statusSteps, {
+        rich: true,
+        until: done,
+      }).catch(() => {}),
     };
     photoBatchAccumulators.set(chatId, acc);
+  }
+
+  acc.frameCount++;
+  if (acc.frameCount === 2) {
+    // The burst just stopped being a single photo while its shimmer is still on
+    // screen — photos sent one at a time join the same batch. Revise the script
+    // in place so the remaining beats drop the singular; each beat's text is
+    // read at its own transition, so the next one picks this up.
+    const plural = photoReviewSteps(ctx.session.language, acc.frameCount);
+    acc.statusSteps.forEach((step, i) => {
+      const revised = plural[i];
+      if (revised) step.text = revised.text;
+    });
   }
 
   // Cancel any pending flush while we process this frame — we'll

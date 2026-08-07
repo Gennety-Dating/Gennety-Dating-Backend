@@ -47,6 +47,28 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-07 — the onboarding photo shimmer counts; the photo manager stays as it is
+
+**Kind:** founder decision + deviation from plan
+**What:** the onboarding upload shimmer gets a singular script for a one-photo
+burst; the plural one is kept for two or more. Scoped to onboarding — the §2.1
+photo manager's identical plural-for-one wording ("Загружаю фотографии…") was
+deliberately left alone.
+**Why:** the founder noticed the effect firing in the plural when they had sent
+a single photo, which reads as the bot miscounting what it was just handed. The
+manager was excluded because it is a different flow with different copy (about
+*uploading*, not looking) and was not what was asked for; widening the change is
+the founder's call, not mine.
+**What it changes going forward:** the two scripts must stay the same LENGTH.
+The burst can grow after the shimmer starts (photos sent one at a time join the
+same batch), so the handler revises later beats in place, beat for beat — a
+length mismatch would silently drop one. Two tests pin this: equal length/cadence
+per language, and `runStatusSequence` reading each step's text at its own
+transition rather than snapshotting up front. That read-per-transition behaviour
+was previously incidental and is now a contract.
+**Recorded in:** PRODUCT_SPEC.md §1.3 (media stage), `services/analysis-status.ts`,
+`handlers/onboarding/conversational.ts`, `services/ai-stream.ts`.
+
 ## 2026-08-07 — ten Kyiv venues promoted to premium; the catalog file is not the prod DB
 
 **Kind:** founder decision

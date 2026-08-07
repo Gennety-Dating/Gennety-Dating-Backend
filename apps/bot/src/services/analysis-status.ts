@@ -83,17 +83,32 @@ export function photoUploadSteps(lang: Language): StatusStep[] {
 /**
  * Held while an ONBOARDING photo burst is validated (the first time the user is
  * asked for photos). Same shape as {@link photoUploadSteps}, different copy: at
- * this point nothing is "uploaded" from the user's side yet — they sent three
- * or more photos at once and then wait several seconds while each frame goes
- * through vision validation, with only the typing indicator to go on. Two short
- * beats, and — like the photo manager's burst — passed with
- * `until: <batch flush>`, so the shimmer ends the moment the batch settles
- * rather than on a fixed timer.
+ * this point nothing is "uploaded" from the user's side yet — they sent photos
+ * and then wait several seconds while each frame goes through vision
+ * validation, with only the typing indicator to go on. Two short beats, and —
+ * like the photo manager's burst — passed with `until: <batch flush>`, so the
+ * shimmer ends the moment the batch settles rather than on a fixed timer.
+ *
+ * `frames` picks between two scripts of the SAME length: the plural one, and a
+ * singular one for a burst that is still a single photo. The burst is often one
+ * frame — the stage accepts photos one at a time — and narrating that as "your
+ * photos / the shots" reads as the bot having miscounted what it was just sent.
+ * Equal length is what lets the caller revise a burst that grows past one frame
+ * in place, beat for beat (see `handlePhotoFrame`), so it is asserted by a test.
  */
-export function photoReviewSteps(lang: Language): StatusStep[] {
+export function photoReviewSteps(lang: Language, frames: number): StatusStep[] {
+  const many = frames > 1;
   return [
-    { text: t(lang, "photoReviewStep1"), holdMs: 2200, emojiId: AI_EMOJI.scan },
-    { text: t(lang, "photoReviewStep2"), holdMs: 3000, emojiId: AI_EMOJI.spark },
+    {
+      text: t(lang, many ? "photoReviewStep1" : "photoReviewOneStep1"),
+      holdMs: 2200,
+      emojiId: AI_EMOJI.scan,
+    },
+    {
+      text: t(lang, many ? "photoReviewStep2" : "photoReviewOneStep2"),
+      holdMs: 3000,
+      emojiId: AI_EMOJI.spark,
+    },
   ];
 }
 
