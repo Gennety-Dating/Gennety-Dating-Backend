@@ -135,7 +135,7 @@ export async function demoDriverTick(api: Api<RawApi>): Promise<DemoTickResult> 
     if (inFlight.has(visitor.id)) continue;
 
     try {
-      const snapshot = await buildSnapshot(visitor.id, partnerTelegramIds);
+      const snapshot = await buildSnapshot(visitor.id, visitor.telegramId, partnerTelegramIds);
       if (!snapshot) continue;
 
       const decision = decideDemoAction(snapshot);
@@ -188,6 +188,7 @@ function actionKey(action: DemoAction): string {
 
 async function buildSnapshot(
   userId: string,
+  telegramId: bigint,
   partnerTelegramIds: readonly bigint[],
 ): Promise<DemoSnapshot | null> {
   const user = await prisma.user.findUnique({
@@ -218,12 +219,35 @@ async function buildSnapshot(
     onboardingStep: user.onboardingStep,
     verificationStatus: user.verificationStatus,
     currentQuestion: progress?.currentQuestion ?? null,
+    awaitingPhotoUpload: await isAwaitingPhotoUpload(telegramId),
     spokenBeats: spokenBeats.get(userId) ?? new Set<DemoBeat>(),
     match: match.live,
     finishedMatch:
       match.finished && match.finished.id !== alreadyOffered ? match.finished : null,
     hasEverMatched: match.hasEverMatched,
   };
+}
+
+/**
+ * Is the bot currently waiting for the visitor's profile photos?
+ *
+ * Read from the grammY session store rather than from a column, because that is
+ * where the answer lives: `expectingPhoto` is set from the agent's own turn
+ * result at every site that asks for photos (`handlers/onboarding/conversational.ts`,
+ * and `sessionPatchAfterRadar` on the Type Radar resume paths). Session keys are
+ * the chat id, which for a private chat is the Telegram id.
+ *
+ * Absent/unparsable session ⇒ false: the note it gates is worth skipping rather
+ * than mistiming, and the visitor is told the same thing by the intro anyway.
+ */
+async function isAwaitingPhotoUpload(telegramId: bigint): Promise<boolean> {
+  const row = await prisma.botSession.findUnique({
+    where: { key: String(telegramId) },
+    select: { data: true },
+  });
+  const data = row?.data;
+  if (typeof data !== "object" || data === null) return false;
+  return (data as { expectingPhoto?: unknown }).expectingPhoto === true;
 }
 
 const LIVE_STATUSES = ["proposed", "negotiating", "negotiating_venue", "scheduled"] as const;

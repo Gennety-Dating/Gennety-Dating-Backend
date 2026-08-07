@@ -884,6 +884,36 @@ Post-deploy check: walk one demo to a scheduled date and confirm the card sits
 alone until the button, and that finishing the feedback form ends with the
 🎬 closing message and nothing else.
 
+**Follow-up 2026-08-07 — the photo note stops firing under the Type Radar
+invite (`apps/bot/src/demo/` only, DEMO_MODE.md).** Same shape: ships with
+`pnpm demo:deploy`, **production is not restarted**, nothing outside
+`apps/bot/src/demo/` changed, no schema, no env, no Mini App.
+
+Reported as "the note before photos isn't there in demo mode". It was — in the
+wrong place. `TYPE_RADAR_ENABLED=true` on the demo box, so the radar gate
+intercepts the photos question *before* it is asked: the collector writes
+`currentQuestion = "photos"`, the chat gets the radar invite, and the demo's
+note (which the beat fired on that column) landed underneath it. The visitor
+then spent several minutes inside the radar Mini App, sat through the ~13s
+thinking sequence, and got the photo request — by which point the note was four
+screens up. The trigger is now the session's `expectingPhoto`, so it lands
+directly under the photo request on every path.
+
+Two things worth knowing before the redeploy:
+
+- **`Profile.typeRadarCompletedAt` is the trap, not the fix.** It is stamped
+  *before* the radar thinking sequence runs, so keying on it would drop the note
+  into the middle of that sequence — and a real message collapses a rich draft
+  (PRODUCT_SPEC §3.6b), so the ~10.7s shimmer would visibly die mid-beat.
+- **The driver now reads `bot_sessions`** once per visitor per 3s tick — one
+  indexed `findUnique` on a table the bot writes on every update anyway. Demo
+  scans at most 100 visitors, so this is noise, but it is the first time the
+  driver reads the session store at all.
+
+Post-deploy check: walk one demo onboarding to the radar step and confirm the
+note arrives immediately below the "send me 3 photos" request — not above the
+radar invite — on both the submit and the Skip path.
+
 **Rollback:** `pm2 delete gennety-demo`. Production is untouched by anything in
 this block — no shared database, no shared token, no shared port, no shared
 bundle.

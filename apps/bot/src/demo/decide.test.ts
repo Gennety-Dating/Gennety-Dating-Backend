@@ -18,6 +18,7 @@ function snapshot(overrides: Partial<DemoSnapshot> = {}): DemoSnapshot {
     onboardingStep: "completed",
     verificationStatus: "verified",
     currentQuestion: null,
+    awaitingPhotoUpload: false,
     spokenBeats: new Set<DemoBeat>(["intro"]),
     match: null,
     finishedMatch: null,
@@ -101,18 +102,41 @@ describe("demo narration", () => {
     expect(decision.action).toEqual({ kind: "narrate", beat: "intro" });
   });
 
-  it("warns about photos exactly when the collector asks for them", () => {
+  describe("the photo note", () => {
     const base = {
       status: "onboarding" as const,
       onboardingStep: "conversational" as const,
       verificationStatus: "unverified" as const,
     };
-    expect(
-      decideDemoAction(snapshot({ ...base, currentQuestion: "hobbies" })).action,
-    ).toEqual({ kind: "none" });
-    expect(
-      decideDemoAction(snapshot({ ...base, currentQuestion: "photos" })).action,
-    ).toEqual({ kind: "narrate", beat: "photos" });
+
+    it("lands once the bot is actually waiting for photos", () => {
+      expect(
+        decideDemoAction(
+          snapshot({ ...base, currentQuestion: "photos", awaitingPhotoUpload: true }),
+        ).action,
+      ).toEqual({ kind: "narrate", beat: "photos" });
+    });
+
+    it("says nothing on an earlier question", () => {
+      expect(
+        decideDemoAction(
+          snapshot({ ...base, currentQuestion: "hobbies", awaitingPhotoUpload: true }),
+        ).action,
+      ).toEqual({ kind: "none" });
+    });
+
+    // The regression this whole field exists for. The Type Radar gate makes the
+    // collector reach `photos` while the chat still shows the radar invite, so
+    // firing here put the note minutes above the photo request and under a Mini
+    // App the visitor was about to spend several minutes inside — it read as
+    // never having been sent.
+    it("waits out the Type Radar step instead of firing under its invite", () => {
+      expect(
+        decideDemoAction(
+          snapshot({ ...base, currentQuestion: "photos", awaitingPhotoUpload: false }),
+        ).action,
+      ).toEqual({ kind: "none" });
+    });
   });
 
   it("explains the fake liveness check while the verification gate holds them", () => {

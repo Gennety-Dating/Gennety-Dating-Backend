@@ -93,6 +93,29 @@ export interface DemoSnapshot {
   verificationStatus: VerificationStatus;
   /** `OnboardingProgress.currentQuestion` — the collector's next missing field. */
   currentQuestion: string | null;
+  /**
+   * The bot has actually ASKED for photos and is waiting for them
+   * (`BotSession.expectingPhoto`).
+   *
+   * `currentQuestion === "photos"` is not the same thing, and the difference is
+   * a bug a visitor reported. The Type Radar gate intercepts the photos question
+   * *before* it is asked (`onboarding-agent.ts` → `typeRadarGatePending`), so
+   * the collector writes `photos` and the chat gets the radar invite instead —
+   * meaning the demo's "in the real product photos are checked against your
+   * face" note landed under the invite, minutes before the photo request, and
+   * was then buried by the radar Mini App, the ~13s radar thinking sequence and
+   * the photo request itself. It read as missing.
+   *
+   * Keying on the radar being *done* (`Profile.typeRadarCompletedAt`) is the
+   * obvious-looking alternative and is also wrong: that stamp lands BEFORE the
+   * thinking sequence, so the note would drop into the middle of it and collapse
+   * the rich draft. `expectingPhoto` flips only once the resume has sent the
+   * photo request, which is after the sequence is torn down — and it is set the
+   * same way on every path (radar submitted, radar skipped, radar off, age band
+   * without a deployed deck), so the demo needs no idea whether a radar step
+   * exists at all.
+   */
+  awaitingPhotoUpload: boolean;
   /** Narration already delivered this process lifetime (see driver). */
   spokenBeats: ReadonlySet<DemoBeat>;
   /** The live match with the puppet, if any. */
@@ -219,11 +242,15 @@ function decideNarration(snapshot: DemoSnapshot): DemoAction | null {
       : { kind: "narrate", beat: "intro" };
   }
 
-  // The collector is asking for photos next.
+  // The bot has asked for photos and is waiting for them. Both conditions are
+  // load-bearing: the collector's question is what the note is *about*, and
+  // `awaitingPhotoUpload` is what says it has actually been put to the user —
+  // see that field for the Type Radar gate that separates the two.
   if (
     !spoken.has("photos") &&
     snapshot.onboardingStep === "conversational" &&
-    snapshot.currentQuestion === "photos"
+    snapshot.currentQuestion === "photos" &&
+    snapshot.awaitingPhotoUpload
   ) {
     return { kind: "narrate", beat: "photos" };
   }

@@ -171,7 +171,8 @@ by a state the product itself owns:
 1. **`/start`** — what the demo is; and that the bot is a conversational agent
    you can talk to by text or voice at any point, which is the capability most
    easily missed because it has no button.
-2. **The collector reaches `photos`** — upload anything, they need not be of you.
+2. **The bot has asked for photos** — in the real product they are validated and
+   later matched against your face; here they are not, so upload anything.
 3. **Onboarding done, liveness pending** — the check is real on screen and
    always passes.
 4. **Verified** — how matching actually works, then the first profile with an
@@ -185,6 +186,20 @@ by a state the product itself owns:
 Languages: `ru`, `uk`, `en` are written out; `de` and `pl` fall back to `en`.
 A deliberate scope call for long explanatory prose; adding the two blocks is the
 only change needed if a demo in those languages is ever required.
+
+**Message 2 waits for the question, not for the collector.** The Type Radar gate
+intercepts the photos question *before* it is asked, so `currentQuestion` reaches
+`photos` while the chat is still showing the radar invite. Firing there put the
+note under that invite — minutes above the photo request, and directly in front
+of a Mini App the visitor was about to spend several minutes inside; the first
+person walked through the demo reported it as never sent. The trigger is the
+session's `expectingPhoto`, which flips only once the resume has actually asked
+for photos. Deliberately NOT `Profile.typeRadarCompletedAt`, the obvious
+alternative: that lands *before* the ~13s radar thinking sequence, so the note
+would drop into the middle of it and collapse the rich draft. `expectingPhoto`
+is also set identically whether the radar was submitted, skipped, disabled, or
+never shown for want of a deployed deck at that age band — so the demo needs no
+idea whether a radar step exists at all.
 
 **Message 4 says "regularly", not a number.** Production runs `DROP_CADENCE=weekly`
 — one Thursday drop — with a `daily` profile in code but inert (PRODUCT_SPEC
