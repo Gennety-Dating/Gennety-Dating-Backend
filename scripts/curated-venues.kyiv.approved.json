@@ -30024,7 +30024,7 @@
     "placeId": "ChIJj5MtLVjO1EARO1QyBhuU79U",
     "category": "cafe",
     "priority": 1,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -34123,7 +34123,7 @@
     "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
     "category": "restaurant",
     "priority": 3,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -41072,7 +41072,7 @@
     "placeId": "ChIJs9KLLAHP1EARAXg11su0JkI",
     "category": "restaurant",
     "priority": 2,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -46037,6 +46037,137 @@
     "_reviews": 39,
     "_priceLevel": "PRICE_LEVEL_INEXPENSIVE",
     "_primaryType": "coffee_shop"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "Porto Maltese",
+    "address": "бульвар Лесі Українки, 30В, Київ, 02000",
+    "lat": 50.423744299999996,
+    "lng": 30.5422085,
+    "googleMapsUri": "https://maps.google.com/?cid=13389139628489582656&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJzwdw7RLP1EARQCg6rI3Hz7k",
+    "category": "restaurant",
+    "priority": 3,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "cozy",
+      "lively"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "lively",
+      "romantic_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 11:00–23:00",
+        "вівторок: 11:00–23:00",
+        "середа: 11:00–23:00",
+        "четвер: 11:00–23:00",
+        "пʼятниця: 11:00–23:00",
+        "субота: 11:00–23:00",
+        "неділя: 11:00–23:00"
+      ],
+      "nextCloseTime": "2026-08-07T20:00:00Z"
+    },
+    "_rating": 4.1,
+    "_reviews": 81,
+    "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+    "_primaryType": "restaurant"
   },
   {
     "approved": true,
@@ -56570,7 +56701,7 @@
     "placeId": "ChIJj5MtLVjO1EARO1QyBhuU79U",
     "category": "cafe",
     "priority": 1,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -60669,7 +60800,7 @@
     "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
     "category": "restaurant",
     "priority": 3,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -67619,7 +67750,7 @@
     "placeId": "ChIJs9KLLAHP1EARAXg11su0JkI",
     "category": "restaurant",
     "priority": 2,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -72586,6 +72717,137 @@
     "_reviews": 39,
     "_priceLevel": "PRICE_LEVEL_INEXPENSIVE",
     "_primaryType": "coffee_shop"
+  },
+  {
+    "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "Porto Maltese",
+    "address": "бульвар Лесі Українки, 30В, Київ, 02000",
+    "lat": 50.423744299999996,
+    "lng": 30.5422085,
+    "googleMapsUri": "https://maps.google.com/?cid=13389139628489582656&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJzwdw7RLP1EARQCg6rI3Hz7k",
+    "category": "restaurant",
+    "priority": 3,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "cozy",
+      "lively"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "lively",
+      "romantic_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 11:00–23:00",
+        "вівторок: 11:00–23:00",
+        "середа: 11:00–23:00",
+        "четвер: 11:00–23:00",
+        "пʼятниця: 11:00–23:00",
+        "субота: 11:00–23:00",
+        "неділя: 11:00–23:00"
+      ],
+      "nextCloseTime": "2026-08-07T20:00:00Z"
+    },
+    "_rating": 4.1,
+    "_reviews": 81,
+    "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+    "_primaryType": "restaurant"
   },
   {
     "approved": true,
@@ -83121,7 +83383,7 @@
     "placeId": "ChIJj5MtLVjO1EARO1QyBhuU79U",
     "category": "cafe",
     "priority": 1,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -87220,7 +87482,7 @@
     "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
     "category": "restaurant",
     "priority": 3,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -94169,7 +94431,7 @@
     "placeId": "ChIJs9KLLAHP1EARAXg11su0JkI",
     "category": "restaurant",
     "priority": 2,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -99134,6 +99396,137 @@
     "_reviews": 39,
     "_priceLevel": "PRICE_LEVEL_INEXPENSIVE",
     "_primaryType": "coffee_shop"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "Porto Maltese",
+    "address": "бульвар Лесі Українки, 30В, Київ, 02000",
+    "lat": 50.423744299999996,
+    "lng": 30.5422085,
+    "googleMapsUri": "https://maps.google.com/?cid=13389139628489582656&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJzwdw7RLP1EARQCg6rI3Hz7k",
+    "category": "restaurant",
+    "priority": 3,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "cozy",
+      "lively"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "lively",
+      "romantic_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 11:00–23:00",
+        "вівторок: 11:00–23:00",
+        "середа: 11:00–23:00",
+        "четвер: 11:00–23:00",
+        "пʼятниця: 11:00–23:00",
+        "субота: 11:00–23:00",
+        "неділя: 11:00–23:00"
+      ],
+      "nextCloseTime": "2026-08-07T20:00:00Z"
+    },
+    "_rating": 4.1,
+    "_reviews": 81,
+    "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+    "_primaryType": "restaurant"
   },
   {
     "approved": true,
@@ -109676,7 +110069,7 @@
     "placeId": "ChIJj5MtLVjO1EARO1QyBhuU79U",
     "category": "cafe",
     "priority": 1,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -113776,7 +114169,7 @@
     "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
     "category": "restaurant",
     "priority": 3,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -120725,7 +121118,7 @@
     "placeId": "ChIJs9KLLAHP1EARAXg11su0JkI",
     "category": "restaurant",
     "priority": 2,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -125692,6 +126085,137 @@
     "_reviews": 39,
     "_priceLevel": "PRICE_LEVEL_INEXPENSIVE",
     "_primaryType": "coffee_shop"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "Porto Maltese",
+    "address": "бульвар Лесі Українки, 30В, Київ, 02000",
+    "lat": 50.423744299999996,
+    "lng": 30.5422085,
+    "googleMapsUri": "https://maps.google.com/?cid=13389139628489582656&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJzwdw7RLP1EARQCg6rI3Hz7k",
+    "category": "restaurant",
+    "priority": 3,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "cozy",
+      "lively"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "lively",
+      "romantic_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 11:00–23:00",
+        "вівторок: 11:00–23:00",
+        "середа: 11:00–23:00",
+        "четвер: 11:00–23:00",
+        "пʼятниця: 11:00–23:00",
+        "субота: 11:00–23:00",
+        "неділя: 11:00–23:00"
+      ],
+      "nextCloseTime": "2026-08-07T20:00:00Z"
+    },
+    "_rating": 4.1,
+    "_reviews": 81,
+    "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+    "_primaryType": "restaurant"
   },
   {
     "approved": true,
@@ -136233,7 +136757,7 @@
     "placeId": "ChIJj5MtLVjO1EARO1QyBhuU79U",
     "category": "cafe",
     "priority": 1,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -140334,7 +140858,7 @@
     "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
     "category": "restaurant",
     "priority": 3,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -147284,7 +147808,7 @@
     "placeId": "ChIJs9KLLAHP1EARAXg11su0JkI",
     "category": "restaurant",
     "priority": 2,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -152251,5 +152775,136 @@
     "_reviews": 39,
     "_priceLevel": "PRICE_LEVEL_INEXPENSIVE",
     "_primaryType": "coffee_shop"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "Porto Maltese",
+    "address": "бульвар Лесі Українки, 30В, Київ, 02000",
+    "lat": 50.423744299999996,
+    "lng": 30.5422085,
+    "googleMapsUri": "https://maps.google.com/?cid=13389139628489582656&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJzwdw7RLP1EARQCg6rI3Hz7k",
+    "category": "restaurant",
+    "priority": 3,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "cozy",
+      "lively"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "lively",
+      "romantic_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 11:00–23:00",
+        "вівторок: 11:00–23:00",
+        "середа: 11:00–23:00",
+        "четвер: 11:00–23:00",
+        "пʼятниця: 11:00–23:00",
+        "субота: 11:00–23:00",
+        "неділя: 11:00–23:00"
+      ],
+      "nextCloseTime": "2026-08-07T20:00:00Z"
+    },
+    "_rating": 4.1,
+    "_reviews": 81,
+    "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+    "_primaryType": "restaurant"
   }
 ]

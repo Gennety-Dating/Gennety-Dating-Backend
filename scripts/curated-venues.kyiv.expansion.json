@@ -910,7 +910,6 @@
       "name": "Дуже по-французьки",
       "category": "cafe",
       "priority": 2,
-      "tier": "premium",
       "vibeTags": [
         "dinner",
         "wine",
@@ -957,7 +956,6 @@
       "name": "The Burger",
       "category": "restaurant",
       "priority": 2,
-      "tier": "premium",
       "vibeTags": [
         "casual",
         "meat",
@@ -1632,7 +1630,6 @@
       "name": "Волконський",
       "category": "cafe",
       "priority": 3,
-      "tier": "premium",
       "vibeTags": [
         "coffee",
         "cozy",
@@ -1992,6 +1989,7 @@
       "name": "Cafe Marko",
       "category": "restaurant",
       "priority": 2,
+      "tier": "premium",
       "vibeTags": [
         "dinner",
         "cozy",
@@ -2141,7 +2139,6 @@
       "name": "PAUL (Велика васильківська, 32)",
       "category": "cafe",
       "priority": 2,
-      "tier": "premium",
       "vibeTags": [
         "dinner",
         "wine",
@@ -2153,7 +2150,6 @@
       "name": "Paul",
       "category": "restaurant",
       "priority": 3,
-      "tier": "premium",
       "vibeTags": [
         "dinner",
         "wine",
@@ -2428,6 +2424,18 @@
         "study"
       ],
       "allowQualityOverride": true
+    },
+    {
+      "placeId": "ChIJzwdw7RLP1EARQCg6rI3Hz7k",
+      "name": "Porto Maltese",
+      "category": "restaurant",
+      "priority": 3,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
     }
   ],
   "excludedPlaces": [

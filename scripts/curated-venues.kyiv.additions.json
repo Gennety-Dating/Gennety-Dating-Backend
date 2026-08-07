@@ -464,7 +464,8 @@
       "name": "t.c.pizza"
     },
     {
-      "name": "Cafe Markó"
+      "name": "Cafe Markó",
+      "tier": "premium"
     },
     {
       "name": "Mirali",
@@ -572,6 +573,10 @@
       "maxBranches": 12,
       "query": "Пиріжкова Тітка Клара Київ",
       "chainMatch": "тітка клара"
+    },
+    {
+      "name": "Porto Maltese",
+      "tier": "premium"
     }
   ],
   "qualityOverrides": [
