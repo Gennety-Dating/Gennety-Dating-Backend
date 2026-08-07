@@ -682,7 +682,11 @@ this change where a user gets stuck at the handoff.
     bottom slots are authored against the **tightest** column, so a slot's `y`
     is bounded by `maxCentreY` and a test enforces it — verify on a short
     viewport (320×568), not only on 390×844, if those numbers are ever touched.
-    Byte cost unchanged; variant 2 untouched.
+    Byte cost unchanged; variant 2 untouched. The same pass made «Парней» /
+    «Девушек» heavier (Inter 800, larger) — which is why the strip and
+    `TIGHTEST_AREA_RATIO` moved with it: the reservation is sized to the label,
+    so the two are edited together or the photos land on the word again. Inter
+    800 was already being loaded for variant 2, so no new font request.
 - **And so does the height drum's per-row tick** (added 2026-08-06,
   PRODUCT_SPEC §1.3). The drum pulses `HapticFeedback.selectionChanged` as each
   value passes under the capsule instead of once when the scroll stops, and its

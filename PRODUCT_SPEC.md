@@ -256,7 +256,12 @@ out of Telegram-only workers.
   column's WIDTH, so a short screen makes each tile a bigger fraction of the
   height — a `y` that clears on a 390×844 phone can still cross the word on a
   320×568 one. `maxCentreY` states that bound, tilt included, and a test holds
-  every slot to it. The right column is the left one mirrored, which is
+  every slot to it. The word itself is the heaviest type on the screen (Inter
+  800, the top weight the page loads — 900 would be synthesised and smear rather
+  than thicken): it is the answer, and it sits on a photograph-backed column
+  rather than on the page. **The strip and the type move together** — the
+  reservation is sized to the tallest the label gets, so growing the word
+  without growing the strip puts the photos back on it. The right column is the left one mirrored, which is
   also what keeps every sideways overhang pointing at the screen's own margin
   rather than into the gutter the two columns share; because a tilted tile is
   wider than its own box (`slotSpanX`, and with full-length photos the tilt term

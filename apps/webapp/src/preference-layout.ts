@@ -144,7 +144,7 @@ export function slotSpanX(slot: ScatterSlot): { left: number; right: number } {
  * height, and a y that clears the floor on a tall phone runs through it on a
  * small one. This is the number the bottom band is authored against.
  */
-export const TIGHTEST_AREA_RATIO = 2.17;
+export const TIGHTEST_AREA_RATIO = 2.13;
 
 /**
  * The lowest a tile's centre may sit and still keep the whole frame inside the

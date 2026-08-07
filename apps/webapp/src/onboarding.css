@@ -3408,9 +3408,12 @@ button {
   --tone-b: #8b253b;
   --tone-c: #5c1727;
   /* The bottom strip that belongs to the word, and that no photo may enter.
-     Sized to the tallest the label gets — its font is `clamp(…, 4.6vw, 1.35rem)`
-     over a 1rem bottom padding — so it is a reservation, never a squeeze. */
-  --pref-label-zone: 2.75rem;
+     Sized to the tallest the label gets — its font is `clamp(…, 5.2vw, 1.55rem)`
+     over a 1rem bottom padding — so it is a reservation, never a squeeze. It
+     moves with the type: shrink it below what the label actually measures and
+     the photos start touching the word again, which is the bug this whole strip
+     exists to prevent. */
+  --pref-label-zone: 3rem;
   position: relative;
   /* The whole point of the scatter: some frames hang past the button's edge.
      Nothing may clip them — not the column, not the art layer. */
@@ -3534,10 +3537,19 @@ button {
   align-items: flex-end;
   justify-content: center;
   padding: 0 0.75rem 1rem;
-  font-size: clamp(1.05rem, 4.6vw, 1.35rem);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+  /* Heavier than the rest of the screen on purpose: it is the answer, and it
+     sits on a photograph-backed column rather than on the page. 800 is the top
+     weight `onboarding.html` loads for Inter — asking for 900 would be
+     synthesised, which smears the letterforms rather than thickening them. */
+  font-size: clamp(1.15rem, 5.2vw, 1.55rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  /* Two shadows, one job each: a tight one that holds the edge of every glyph
+     against whatever it lands on, and the soft pool that lifts the word off the
+     column. The scrim underneath is what makes both cheap. */
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.75),
+    0 2px 14px rgba(0, 0, 0, 0.7);
 }
 
 .ob-pref-col:active,
