@@ -47,6 +47,42 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-07 — the App Store price gap closed, and iOS Premium turned out not to be purchasable at all
+
+**Kind:** founder decision + a document turned out to be wrong
+**What:** `premium_monthly` was raised $9.99 → **$17.99/mo** in App Store Connect
+(US base; Apple auto-generated 175 storefronts), closing the gap opened hours
+earlier when the Telegram rail went to 750⭐/$17.99. Verified by reloading the
+product page, not from the confirmation dialog: US at 17,99 $ with **0 upcoming
+changes**, so it is the live price rather than a scheduled one. Ticket products
+untouched. Supersedes the "left behind on purpose" entry below.
+**Why the second half matters more than the price:** the same pass surfaced a
+fact recorded **nowhere in this repo** — the subscription group sits in
+*Preparing for Submission*, under Apple's rule that **the first subscription
+group must ship with a new app version**. So `premium_monthly` cannot be bought
+on any storefront until a build carrying it clears review. Everything written in
+deploy.md about the $9.99/$17.99 mismatch described a real config divergence
+that **no user could ever have encountered**, because the product was not
+purchasable on either price.
+**What it changes going forward:**
+1. **`features.premium: true` in `/v1/app/config` does not mean iOS can sell
+   Premium.** That flag mirrors `PREMIUM_FEATURE_ENABLED` on the server and
+   knows nothing about App Store review state. A native paywall gated only on it
+   renders a StoreKit product that cannot be purchased. The App Store rail goes
+   live at first approved submission, not at a flag flip — and the same is true
+   of the ticket products.
+2. **Every future `PREMIUM_PRICE_USD_DISPLAY` change needs a manual App Store
+   Connect edit in the same breath.** There is no server-side price for iOS to
+   read, so no deploy can ever move it and nothing in this repo will show the
+   drift. Treat the two as one edit with two halves.
+3. Fixing the price *before* first submission was the cheapest possible moment:
+   no price history, no subscriber cohort, so no "preserve price for existing
+   subscribers" decision existed to get wrong. That is why the wizard offered
+   neither that prompt nor a start-date picker — do not read their absence as a
+   sign something was skipped.
+**Recorded in:** deploy.md → the 2026-08-07 release block, the Premium price
+block, and the StoreKit block (price table + the new submission-state warning).
+
 ## 2026-08-07 — the preference screen's photo scatter wins; the other design is deleted, not flagged off
 
 **Kind:** founder decision
@@ -158,6 +194,11 @@ the id, so no existing Telegram user loses the offer.
 **Recorded in:** `telegramReachable` in `services/coordination.ts`.
 
 ## 2026-08-07 — Premium moves to 750⭐/$17.99 with the App Store left behind on purpose
+
+> **Superseded the same day** — the App Store price was raised to $17.99 hours
+> later and the two rails now agree. See "the App Store price gap closed, and
+> iOS Premium turned out not to be purchasable at all" above. The reasoning
+> below still stands as the record of why the bot rail moved first.
 
 **Kind:** founder decision
 **What:** `PREMIUM_STARS` 500 → 750 and `PREMIUM_PRICE_USD_DISPLAY` $11.99 →
