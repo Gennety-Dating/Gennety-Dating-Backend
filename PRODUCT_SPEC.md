@@ -3956,9 +3956,38 @@ something more than a tech ping:
 ### Pre-date Coordination (feature-flagged)
 
 Gated by `COORDINATION_FEATURE_ENABLED` (default **off**). Solves the "find each
-other at the venue / signal a delay" gap. Telegram-only in v1 (offered only when
-both participants have a real `telegramId`). Driven by `services/coordination.ts`
+other at the venue / signal a delay" gap. Driven by `services/coordination.ts`
 on the date-lifecycle tick; handlers in `handlers/date/coordination.ts`.
+
+**The anonymous chat (Variant C) reaches both surfaces since 2026-08-07;
+contact exchange (A/B) stays Telegram-only.** This section used to say the whole
+flow was Telegram-only, and the gap was not one missing endpoint but a missing
+*initiation*: the offer requires both sides in a bot chat, and `openProxies`
+only opens a window for a match whose `coordMethod` was set by tapping an inline
+keyboard — so a pair with an app participant never got the offer, never got a
+method, and never got a window. Two changes close it:
+
+- A pair the Telegram fork cannot reach has **variant C selected for them** at
+  T-60m. That is the right default rather than a second menu, because the other
+  two variants exchange `t.me/` handles — meaningless to someone who has none —
+  and the MVP scope already keeps only variant C on the app.
+- The relay moved into `services/proxy-chat.ts`, shared by the Telegram handler
+  and `GET/POST /v1/matches/{id}/chat` (JWT), so the two surfaces cannot drift
+  on the window, the log, or what the partner receives. Delivery follows the
+  partner's OWN rail — a DM, an APNs push carrying the message text, or both.
+  Before this the relay only ever DM'd, so a mobile partner learned of a message
+  by opening the app.
+
+The window is derived from `agreedTime` (T-30m … T+2h) rather than read from
+`proxyOpenedAt`/`proxyClosesAt`: those are written by the 2-minute tick, which
+would open a thirty-minute window up to two minutes late. The stamps keep their
+real job — the pair was told — and `proxyClosedAt` is still a force-close.
+
+**Reachability is `platform`, not `telegramId > 0`.** The offer used to filter
+on the id alone, which stopped being a reachability test when Telegram login
+shipped: that rail stores a REAL id on an app-only account the bot cannot
+message. It would have offered an inline keyboard to someone who could never
+see it, then read the silence as a choice.
 
 - **Initiator (T-60m).** ~1h before the date the bot offers the **female**
   participant three ways to coordinate. A same-sex pair with no female

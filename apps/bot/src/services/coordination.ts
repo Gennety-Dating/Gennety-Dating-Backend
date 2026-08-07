@@ -10,6 +10,8 @@ import {
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { sendCoordCard } from "./coordination-card/send.js";
+import { sendPushToUser } from "./push.js";
+import { advanceDateDayActivities } from "./date-day-activity.js";
 import type { CoordCardTheme } from "./coordination-card/index.js";
 
 /**
@@ -46,6 +48,7 @@ export interface CoordinationResult {
 interface CoordParticipant {
   id: string;
   telegramId: bigint;
+  platform?: string | null;
   language: string | null;
   theme?: string | null;
   firstName: string | null;
@@ -55,19 +58,39 @@ interface CoordParticipant {
 }
 
 /**
+ * Whether the bot can actually message this user.
+ *
+ * `telegramId > 0n` is NOT the test, and has not been since Telegram login
+ * shipped: that rail stores a REAL positive id on an app-only account, and a
+ * bot cannot open a chat with someone who never pressed Start. `platform` is
+ * the canonical reachability check (ARCHITECTURE → `users`). A row predating
+ * the column falls back to the id so no existing Telegram user loses the offer.
+ */
+function telegramReachable(u: { telegramId: bigint; platform?: string | null }): boolean {
+  if (u.telegramId <= 0n) return false;
+  if (u.platform === undefined || u.platform === null) return true;
+  return u.platform === "telegram" || u.platform === "both";
+}
+
+/**
  * Resolve who receives the T-60m offer. The female participant keeps the
  * safety-first framing (mirrors `pre-date-safety.ts`); a same-sex pair with no
  * female participant opens the offer to both, and whoever taps first becomes
- * the initiator. Only Telegram-present users (`telegramId > 0n`) are eligible.
+ * the initiator.
+ *
+ * Empty when the fork cannot run at all — the offer's two contact-exchange
+ * variants are `t.me/` links and its buttons are an inline keyboard, so both
+ * need both sides in a bot chat. That case is not a dead end any more: see
+ * `autoSelectProxy` in the offer sweep.
  */
 export function resolveCoordRecipients(
   a: CoordParticipant,
   b: CoordParticipant,
 ): CoordParticipant[] {
-  const telegramBoth = [a, b].filter((u) => u.telegramId > 0n);
-  if (telegramBoth.length < 2) return [];
-  const females = telegramBoth.filter((u) => u.gender === "female");
-  return females.length > 0 ? females : telegramBoth;
+  const reachable = [a, b].filter(telegramReachable);
+  if (reachable.length < 2) return [];
+  const females = reachable.filter((u) => u.gender === "female");
+  return females.length > 0 ? females : reachable;
 }
 
 /**
@@ -115,6 +138,7 @@ export function isProxyOpen(
 const participantSelect = {
   id: true,
   telegramId: true,
+  platform: true,
   language: true,
   // Card chrome follows the RECIPIENT's theme; the partner's first photo fills
   // the offer card's polaroid (PRODUCT_SPEC §Phase 4).
@@ -165,8 +189,26 @@ async function sendOffers(api: Api<RawApi>, now: Date, result: CoordinationResul
     if (claim.count === 0) continue;
 
     const recipients = resolveCoordRecipients(match.userA, match.userB);
-    // Even when there's nothing to send (e.g. a mobile-only participant),
-    // stamp the marker so the sweep doesn't re-scan this row every tick.
+
+    // A pair the Telegram fork cannot reach is NOT left without a way to find
+    // each other: the anonymous chat is selected for them and opens at T-30m
+    // like any other. Two reasons this is the right default rather than a
+    // second menu on the app. The choice the fork offers is between exchanging
+    // Telegram handles and not exchanging them — meaningless to someone who
+    // has no handle to give. And the product already decided this: ROADMAP and
+    // PRODUCT_SPEC put contact exchange (variants A/B) in stage 2 and keep only
+    // variant C in the MVP, so on the app there is nothing to choose BETWEEN.
+    //
+    // It writes the same two columns a tap writes, so `openProxies` below and
+    // both relays treat such a pair identically — no second code path.
+    if (recipients.length === 0) {
+      await prisma.match.updateMany({
+        where: { id: match.id, status: "scheduled", coordMethod: null },
+        data: { coordMethod: "proxy", coordChosenAt: now },
+      });
+      continue;
+    }
+
     if (recipients.length > 0) {
       await Promise.all(
         recipients.map((r) => {
@@ -225,8 +267,8 @@ async function openProxies(
     select: {
       id: true,
       agreedTime: true,
-      userA: { select: { telegramId: true, language: true, theme: true } },
-      userB: { select: { telegramId: true, language: true, theme: true } },
+      userA: { select: { id: true, telegramId: true, platform: true, language: true, theme: true } },
+      userB: { select: { id: true, telegramId: true, platform: true, language: true, theme: true } },
     },
   });
 
@@ -236,7 +278,19 @@ async function openProxies(
     );
 
     for (const u of [match.userA, match.userB]) {
-      if (u.telegramId <= 0n) continue;
+      // A mobile participant is told on their own rail. Before this the open
+      // was a Telegram card and nothing else, so someone on the app got a
+      // window they were never informed about — for the thirty minutes it
+      // matters most.
+      if (u.platform === "mobile" || u.platform === "both") {
+        const lang = (u.language ?? "en") as Language;
+        await sendPushToUser(u.id, {
+          title: t(lang, "coordProxyPushTitle"),
+          body: t(lang, "coordProxyOpenedEnterPrompt"),
+          data: { type: "proxy.opened", matchId: match.id },
+        }).catch(() => false);
+      }
+      if (!telegramReachable(u)) continue;
       const lang = (u.language ?? "en") as Language;
       const kb = new InlineKeyboard().text(
         t(lang, "coordEnterBtn"),
@@ -263,6 +317,13 @@ async function openProxies(
       where: { id: match.id },
       data: { proxyOpenedAt: now, proxyClosesAt: closesAt },
     });
+
+    // The `chat_open` stage of the date-day Live Activity (§4.2) was declared
+    // on both sides and deliberately never sent, because announcing an open
+    // chat on a lock screen the app could not enter is a button into nowhere.
+    // The app can enter it now, so the stage finally fires.
+    await advanceDateDayActivities(match.id, "chat_open").catch(() => undefined);
+
     result.opened++;
   }
 }

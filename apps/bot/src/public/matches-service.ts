@@ -9,6 +9,7 @@ import {
   type LatLng,
 } from "../services/geo.js";
 import { resolveVenue } from "../services/curated-venue.js";
+import { proxyChatWindow } from "../services/proxy-chat.js";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
 import {
   applyReportAction,
@@ -134,6 +135,18 @@ export interface SerializedMatch {
   myVibeSubmitted: boolean;
   partnerVibeSubmitted: boolean;
   safetyBriefAck: boolean;
+  /**
+   * The §Phase 4 anonymous chat window for this pair — T-30m and T+2h — or
+   * null when there is none (feature off, or the pair coordinates another
+   * way). It is what tells the date hub whether to offer the entry at all,
+   * so the client does not need a second request on every open.
+   *
+   * Two nullable SCALARS rather than one nullable object: a
+   * `oneOf: [$ref, "null"]` is the shape swift-openapi-generator drops in
+   * silence, and this field's whole job is to be read by the client.
+   */
+  proxyChatOpensAt: string | null;
+  proxyChatClosesAt: string | null;
   /**
    * 24h proposal-response deadline as an ISO timestamp. Populated only
    * for `status === 'proposed'` matches that have been dispatched —
@@ -267,6 +280,8 @@ export async function getCurrentMatchForUser(
       status: true,
       userAId: true,
       userBId: true,
+      // Read only to derive the §Phase 4 chat window below.
+      coordMethod: true,
       pitchForA: true,
       pitchForB: true,
       synergyScore: true,
@@ -360,6 +375,11 @@ export async function getCurrentMatchForUser(
     match.parsedCategoryB ??
     null;
 
+  // The anonymous chat window, derived from `agreedTime` by the same function
+  // both the relay and the native route use — so the hub's entry can never
+  // appear while the server would refuse a message, or vice versa.
+  const proxyWindow = proxyChatWindow(match);
+
   // Wingman hint is only revealed within T-1.5h of the agreed time. This is
   // the single source of truth for the reveal gate — the column may already
   // contain the string well ahead of that window (generation happens at
@@ -421,6 +441,8 @@ export async function getCurrentMatchForUser(
     myVibeSubmitted,
     partnerVibeSubmitted,
     safetyBriefAck: side === "A" ? match.safetyAckA : match.safetyAckB,
+    proxyChatOpensAt: proxyWindow?.opensAt.toISOString() ?? null,
+    proxyChatClosesAt: proxyWindow?.closesAt.toISOString() ?? null,
     proposalDeadlineAt,
     timeZone: me.profile?.timeZone ?? null,
     serverTimeAt: new Date().toISOString(),

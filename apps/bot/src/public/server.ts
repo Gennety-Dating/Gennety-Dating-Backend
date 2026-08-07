@@ -33,6 +33,7 @@ import { createVerificationMiniAppRouter } from "./routes/verification-mini-app.
 import { createTicketRouter } from "./routes/ticket.js";
 import { createNativeTicketGateRouter } from "./routes/ticket-gate.js";
 import { createNativeCalendarRouter } from "./routes/calendar-native.js";
+import { createProxyChatRouter } from "./routes/proxy-chat.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createRadarRouter } from "./routes/radar.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
@@ -103,6 +104,7 @@ let verificationMiniAppRouter: ReturnType<typeof createVerificationMiniAppRouter
 let ticketRouter: ReturnType<typeof createTicketRouter> | null = null;
 let nativeTicketGateRouter: ReturnType<typeof createNativeTicketGateRouter> | null = null;
 let nativeCalendarRouter: ReturnType<typeof createNativeCalendarRouter> | null = null;
+let proxyChatRouter: ReturnType<typeof createProxyChatRouter> | null = null;
 let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
@@ -266,6 +268,19 @@ app.use("/v1/matches/:matchId/calendar", (req, res, next) => {
   }
   if (!nativeCalendarRouter) nativeCalendarRouter = createNativeCalendarRouter(injectedBotApi);
   nativeCalendarRouter(req, res, next);
+});
+
+// Anonymous pre-date chat for the NATIVE client — the JWT twin of the Telegram
+// relay, which is a bot chat session and therefore unreachable from the app.
+// Needs no bot API of its own: the service reaches a Telegram partner through
+// `getMainBotApi()` and a mobile one through APNs.
+app.use("/v1/matches/:matchId/chat", (req, res, next) => {
+  if (!env.COORDINATION_FEATURE_ENABLED) {
+    res.status(404).json({ error: "coordination-disabled" });
+    return;
+  }
+  if (!proxyChatRouter) proxyChatRouter = createProxyChatRouter();
+  proxyChatRouter(req, res, next);
 });
 
 // Date Ticket gate for the NATIVE client — same match, JWT auth instead of

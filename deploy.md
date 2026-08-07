@@ -1,5 +1,58 @@
 # Gennety Dating Deploy
 
+**PENDING — the anonymous pre-date chat reaches the native client, and opens at
+all for a pair with an app participant (PRODUCT_SPEC §Phase 4).** Not deployed
+yet. **No Prisma schema change, no env change, no flag change, no Mini App
+change** (`apps/webapp` untouched) — half of it is client, so the iOS app ships
+with it (separate repo).
+
+**Inert in production**: `COORDINATION_FEATURE_ENABLED` is off, so every route
+here 404s and the sweep does nothing. It ships now so the client half has a
+contract to build against.
+
+New: `GET/POST /v1/matches/{id}/chat` (JWT), plus `services/proxy-chat.ts` —
+the window, the `proxy_messages` write and delivery, shared with the Telegram
+relay.
+
+**Four things worth knowing before the restart:**
+
+- **The gap was not a missing endpoint, it was a missing initiation.** The
+  offer requires both sides in a bot chat, and `openProxies` only opens a
+  window for a match whose `coordMethod` a tap set — so a pair with an app
+  participant never got the offer, a method, or a window. Such a pair now has
+  variant C selected for them at T-60m. Once the flag is on, expect
+  `coordMethod: "proxy"` rows nobody chose; that is the fix, not drift.
+- **The window moved off the cron's columns.** Derived from `agreedTime`
+  (T-30m…T+2h). `proxyOpenedAt`/`proxyClosesAt` are still written and still
+  mean "the pair was told"; `proxyClosedAt` still force-closes. Effect on
+  Telegram: the chat becomes enterable up to two minutes earlier, which is the
+  point.
+- **`resolveCoordRecipients` now checks `platform`, not `telegramId > 0`** —
+  the same fix already applied to the Profiler and re-engagement workers.
+  Nobody is in that state until `TELEGRAM_LOGIN_CLIENT_ID` is live.
+- **A mobile partner now gets pushes that did not exist**: one when the window
+  opens, one per relayed message, and the message push CARRIES the text (see
+  DECISIONS.md for why this differs from the emergency-cancellation push). It
+  also fires the `chat_open` stage of the date-day Live Activity, declared in
+  §4.2 and deliberately never sent until now.
+
+Post-deploy check — the flag is off and production has **0 dates ever**, so
+nothing exercises this; verify mountedness, then walk it on `@gennetytestbot`
+with the flag on:
+
+```sh
+# 404 while the flag is off = mounted and correctly inert.
+curl -s -o /dev/null -w '%{http_code}\n' \
+  https://dating-api.gennety.com/v1/matches/00000000-0000-4000-8000-000000000000/chat
+pnpm openapi:lint
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag. `SerializedMatch.proxyChatOpensAt`/`ClosesAt` simply stop being
+sent, and the iOS build treats their absence as "no window".
+
+---
+
 **Deployed 2026-08-07 — the 84-commit backlog: every block below that was marked
 PENDING above the 2026-08-02 catch-up marker shipped in one release, plus the
 misfiled account-health block.** Full server code + Mini App + demo + two `.env`

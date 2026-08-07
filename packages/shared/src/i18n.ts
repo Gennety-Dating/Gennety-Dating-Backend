@@ -998,6 +998,7 @@ const translations = {
     coordChatExited: "Left the chat. Type /menu any time.",
     coordProxyRelayPrefix: "💬 Your date: ",
     coordProxyRelayNamedPrefix: "💬 {name}: ",
+    coordProxyPushTitle: "Your date",
     coordProxyTextOnly: "Only text messages work in this chat — photos and voice notes aren't passed on.",
     coordProxyClosed: "The anonymous chat has closed. Hope the date went well — I'll check in tomorrow ✨",
     coordAlreadyChosen: "You've already picked a coordination option for this date.",
@@ -2072,6 +2073,7 @@ const translations = {
     coordChatExited: "Вышел из чата. Напиши /menu в любой момент.",
     coordProxyRelayPrefix: "💬 Твоё свидание: ",
     coordProxyRelayNamedPrefix: "💬 {name}: ",
+    coordProxyPushTitle: "Твоё свидание",
     coordProxyTextOnly: "В этом чате работают только текстовые сообщения — фото и голосовые не передаются.",
     coordProxyClosed: "Анонимный чат закрылся. Надеюсь, свидание прошло отлично — загляну завтра ✨",
     coordAlreadyChosen: "Ты уже выбрал способ координации для этого свидания.",
@@ -3134,6 +3136,7 @@ const translations = {
     coordChatExited: "Вийшов із чату. Напиши /menu будь-коли.",
     coordProxyRelayPrefix: "💬 Твоє побачення: ",
     coordProxyRelayNamedPrefix: "💬 {name}: ",
+    coordProxyPushTitle: "Твоє побачення",
     coordProxyTextOnly: "У цьому чаті працюють лише текстові повідомлення — фото й голосові не передаються.",
     coordProxyClosed: "Анонімний чат закрився. Сподіваюсь, побачення пройшло чудово — зазирну завтра ✨",
     coordAlreadyChosen: "Ти вже обрав спосіб координації для цього побачення.",
@@ -4171,6 +4174,7 @@ const deTranslations: TranslationTable = {
     "Du bist im anonymen Chat 🕶 Schreib einfach, ich leite weiter. Du kannst jederzeit raus.",
   coordChatExited: "Chat verlassen. /menu bringt dich zurück.",
   coordProxyRelayPrefix: "💬 Dein Date: ",
+  coordProxyPushTitle: "Dein Date",
   coordProxyTextOnly:
     "Hier gehen nur Textnachrichten durch — Fotos und Sprachnachrichten leite ich nicht weiter.",
   coordProxyClosed:
@@ -5207,6 +5211,7 @@ const plTranslations: TranslationTable = {
     "Jesteś na anonimowym czacie 🕶 Pisz normalnie — przekażę dalej. Możesz wyjść w każdej chwili.",
   coordChatExited: "Czat zamknięty. /menu wraca do menu.",
   coordProxyRelayPrefix: "💬 Twój match: ",
+  coordProxyPushTitle: "Twój match",
   coordProxyTextOnly:
     "Tu przechodzą tylko wiadomości tekstowe — zdjęć i głosówek nie przekazuję.",
   coordProxyClosed:

@@ -1574,6 +1574,137 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/matches/{id}/chat:
+    get:
+      tags: [matches]
+      operationId: getProxyChat
+      summary: Anonymous pre-date chat — window state and messages
+      description: |
+        PRODUCT_SPEC §Phase 4 (Variant C). The narrow, deliberately-scoped
+        exception to NO IN-APP CHAT: an already-matched, already-scheduled pair
+        gets a text-only relay that opens at T-30m and auto-closes at T+2h, so
+        they can find each other at the venue. It is not conversation, and it
+        is not reopened general user-to-user chat.
+
+        The JWT twin of the Telegram relay in `handlers/date/coordination.ts`.
+        Both call the same `services/proxy-chat.ts`, so neither surface can
+        drift on when the window is open, what is logged, or what the partner
+        receives.
+
+        **This read succeeds whether or not the window is open**, because the
+        client has to render "the chat opens at 19:30" before it opens and
+        "the chat has closed" after — a 409 there would leave it with nothing
+        to say. `open` is the only thing that gates sending.
+
+        Poll ~4s while the screen is open, like the calendar. Pass `since` with
+        the id of the newest message already held to get only what is new;
+        omit it for the whole window.
+
+        404 while `COORDINATION_FEATURE_ENABLED` is off, matching the Mini App
+        routes — the feature does not exist rather than being empty.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+        - name: since
+          in: query
+          required: false
+          schema: { type: string }
+          description: |
+            Id of the newest message the client already has; only newer ones
+            are returned. An id this match does not carry is NOT an error —
+            the whole window comes back, because the alternative is a client
+            stuck with a cursor it can never advance.
+      responses:
+        "200":
+          description: Window state and messages
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyChatState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant of this match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such match, or the coordination feature is off
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: |
+            The match is not a scheduled date, so there is no window to
+            describe. Deliberately not a 404 — the match exists and the caller
+            is on it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      tags: [matches]
+      operationId: sendProxyChatMessage
+      summary: Relay one text message to the partner
+      description: |
+        Text only. Media is refused rather than stripped: the window exists to
+        say "I'm by the window on the left", and a photo carries a face and
+        EXIF the pair has not agreed to exchange — that is the leak this
+        variant is scoped to avoid.
+
+        Every relayed message is written to `proxy_messages` before delivery.
+        That log is the justification for the carve-out to NO IN-APP CHAT, so
+        it is not optional and not sampled.
+
+        The response is the new state, so a send needs no follow-up read — at a
+        4s poll that round trip is the difference between a message appearing
+        instantly and appearing to be swallowed.
+
+        Delivery follows the partner's own rail: a Telegram DM, an APNs push,
+        or both for a `both`-platform account. A partner who cannot be reached
+        does NOT fail the send — the message is logged and shown, and they see
+        it when they open the chat.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+                  description: |
+                    Trimmed server-side; empty after trimming is a 400. The
+                    ceiling mirrors `PROXY_MAX_MESSAGE_LEN` and is served back
+                    as `maxMessageLength` so the client never hard-codes it.
+      responses:
+        "200":
+          description: Relayed; the new state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyChatState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant of this match
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such match, or the coordination feature is off
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: |
+            The window is not open — it has not reached T-30m, it closed at
+            T+2h, or this match is not a scheduled date. The client should
+            re-read the state rather than retry the send.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/matches/{id}/ticket-gate:
     get:
       tags: [matches]
@@ -2327,6 +2458,79 @@ components:
           type: string
           format: date-time
 
+    ProxyChatMessage:
+      type: object
+      required: [id, mine, body, sentAt]
+      properties:
+        id:
+          type: string
+          description: |
+            Opaque. Pass the newest one back as `since` to poll for the delta.
+        mine:
+          type: boolean
+          description: |
+            Who sent it, and deliberately the ONLY thing said about the sender.
+            The client renders two bubble styles and needs nothing more; a
+            user id here would be identity the screen has no use for.
+        body: { type: string }
+        sentAt: { type: string, format: date-time }
+
+    ProxyChatState:
+      type: object
+      description: Mirrors `chatState` in `public/routes/proxy-chat.ts`
+      required:
+        [open, opensAt, closesAt, messages, maxMessageLength, partnerFirstName,
+         serverNow]
+      properties:
+        open:
+          type: boolean
+          description: |
+            Whether a message can be sent right now. Derived server-side from
+            the window, never from the client's clock — the phone's may be off,
+            and the two sides must agree about a window that closes on its own.
+        opensAt:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            T-30m. Non-null before AND after opening, so a client that renders
+            "opens at 19:30" and one that renders a live chat read the same
+            field. Null only when this pair has no proxy window at all.
+        closesAt:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            T+2h. Shown so the pair can see the window is finite; the server
+            closes it regardless of what the client does with this.
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/ProxyChatMessage" }
+          description: |
+            Ascending by time. The full window on a bare read, only what is
+            newer when `since` was passed. Capped at the most recent 200 —
+            a window that produced more than that is not a coordination chat.
+        maxMessageLength:
+          type: integer
+          description: |
+            `PROXY_MAX_MESSAGE_LEN`. Served rather than bundled for the same
+            reason `AppConfig.ticketProducts` is: a limit the client believes
+            and the server does not is a message the user types and loses.
+        partnerFirstName:
+          type: [string, "null"]
+          description: |
+            Whom the other bubbles are from. The Telegram relay already
+            attributes each line by first name, and by this point the pair has
+            seen each other's photo, name and age — withholding it here would
+            be anonymity theatre, not privacy. "Anonymous" in this feature
+            means no contact details are exchanged, not that the partner is
+            unnamed.
+        serverNow:
+          type: string
+          format: date-time
+          description: |
+            Server clock, for the same skew correction the countdowns use: the
+            window's edges are the product, so a device clock several minutes
+            out must not decide when the composer unlocks.
+
     TicketGateState:
       type: object
       description: Mirrors `nativeState` in `public/routes/ticket-gate.ts`
@@ -2693,7 +2897,8 @@ components:
          mapPreviewUrl, transitHint, partnerFirstName, partnerAge,
          partnerGender, myDecision, ticketGate, partnerUniversityDomain,
          myVibeSubmitted, partnerVibeSubmitted,
-         safetyBriefAck, proposalDeadlineAt, timeZone, serverTimeAt]
+         safetyBriefAck, proxyChatOpensAt, proxyChatClosesAt,
+         proposalDeadlineAt, timeZone, serverTimeAt]
       properties:
         id: { type: string, format: uuid }
         status: { $ref: "#/components/schemas/MatchStatus" }
@@ -2770,6 +2975,25 @@ components:
         myVibeSubmitted: { type: boolean }
         partnerVibeSubmitted: { type: boolean }
         safetyBriefAck: { type: boolean }
+        proxyChatOpensAt:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            T-30m — when the §Phase 4 anonymous chat opens for this pair, or
+            null when it has no window (feature off, or the pair coordinates
+            another way). This is what tells the date hub whether to offer the
+            entry at all, without a second request on every open.
+
+            Two nullable SCALARS rather than one nullable object, deliberately:
+            a `oneOf: [$ref, "null"]` is the shape swift-openapi-generator drops
+            in silence (see `partnerGender` below), and this field's whole job
+            is to be read by the client.
+        proxyChatClosesAt:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            T+2h. Sent rather than derived so the client never re-implements a
+            product constant; the server closes the window regardless.
         proposalDeadlineAt:
           type: [string, "null"]
           format: date-time

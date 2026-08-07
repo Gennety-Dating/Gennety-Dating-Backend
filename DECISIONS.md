@@ -47,6 +47,76 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-07 — the proxy-chat window is derived from `agreedTime`, not read from the cron's stamps
+
+**Kind:** deviation from plan
+**What:** `proxyChatWindow()` computes T-30m…T+2h from `Match.agreedTime`.
+`proxyOpenedAt` / `proxyClosesAt` are no longer the gate; they keep their real
+job (the pair was TOLD) and `proxyClosedAt` remains a force-close that wins.
+**Why:** those columns are written by the 2-minute coordination tick, so gating
+on them opens a THIRTY-minute window up to two minutes late — on the one
+surface whose entire value is the last half hour before a meeting. Deriving it
+also makes both surfaces agree instantly instead of agreeing eventually.
+**What it changes going forward:** the window is a pure function of the
+schedule. A change to when the tick runs cannot move the edges, and any new
+surface must call `proxyChatWindow` rather than read the columns.
+**Recorded in:** `services/proxy-chat.ts`; pinned by `proxy-chat.test.ts`
+("is open on time even though no cron has stamped anything").
+
+## 2026-08-07 — the proxy-chat push carries the message text (4.4's rule does not apply here)
+
+**Kind:** change of mind
+**What:** a relayed message is pushed to a mobile partner with the body in it.
+In §4.4 the emergency-cancellation push deliberately withholds the canceller's
+reason.
+**Why:** the two are not the same case. A cancellation reason arrives unbidden
+and is emotionally loaded, so it belongs where the recipient chose to look. A
+coordination message is a chat the user opted into, in the last half hour
+before meeting, where "you have a new message" is precisely the notification
+that makes someone open the app and read "I'm by the door" thirty seconds too
+late.
+**What it changes going forward:** "never put another user's free text in a
+push" is NOT a general rule of this product — it is a rule about unbidden text.
+Anyone applying it to a future surface should check which of the two this is.
+**Recorded in:** `deliverToPartner` in `services/proxy-chat.ts`.
+
+## 2026-08-07 — a pair the Telegram fork cannot reach gets the proxy chat automatically
+
+**Kind:** deviation from plan
+**What:** when `resolveCoordRecipients` comes back empty — either side is not
+reachable in a bot chat — the T-60m sweep now writes `coordMethod: "proxy"`
+itself instead of only stamping the marker and moving on.
+**Why:** the coordination method was selected by tapping an inline keyboard, so
+a pair with an app participant never had one, and `openProxies` (which requires
+`coordMethod: "proxy"`) never opened a window for them. The whole feature was
+structurally unreachable from the app — not missing an endpoint, missing an
+initiation. Auto-selecting is right rather than building a second menu: the
+fork's other two variants exchange Telegram handles, meaningless to someone who
+has none, and ROADMAP/PRODUCT_SPEC already put contact exchange in stage 2 and
+keep only variant C in the MVP. So on the app there is nothing to choose
+between. Flagged to the founder before implementing; no objection.
+**What it changes going forward:** reversible by deleting one branch in
+`sendOffers` if the app is ever given its own choice screen. Until then, "the
+pair has no coordination method" no longer implies "the pair chose not to
+coordinate".
+**Recorded in:** `sendOffers` in `services/coordination.ts`.
+
+## 2026-08-07 — `telegramId > 0` was still being used as a reachability test
+
+**Kind:** deviation from plan
+**What:** `resolveCoordRecipients` filtered on `telegramId > 0n` alone; it now
+also requires `platform in (telegram, both)`.
+**Why:** ARCHITECTURE has stated since Telegram login shipped that a positive
+`telegramId` no longer implies the bot can message someone — that rail stores a
+REAL id on an app-only account, and a bot cannot open a chat with a user who
+never pressed Start. Two workers were already fixed for this; the coordination
+sweep was not, so it would have offered an inline keyboard to someone who could
+never see it, and then read the silence as a choice.
+**What it changes going forward:** the same audit is worth running on any other
+`telegramId > 0` filter. A row predating the `platform` column falls back to
+the id, so no existing Telegram user loses the offer.
+**Recorded in:** `telegramReachable` in `services/coordination.ts`.
+
 ## 2026-08-07 — Premium moves to 750⭐/$17.99 with the App Store left behind on purpose
 
 **Kind:** founder decision
