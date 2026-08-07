@@ -31,6 +31,7 @@ import { runDateLifecycleTick } from "../services/date-lifecycle.js";
 
 import {
   DEMO_PARTNERS,
+  ensurePuppetTicket,
   pickDemoPartner,
   releaseMatchCooldown,
   seedDemoPartners,
@@ -437,7 +438,15 @@ async function performAction(
     }
 
     case "partner_pay_ticket": {
+      const partnerId = await partnerIdFor(snapshot.match!, userId);
       const partnerTelegramId = await partnerTelegramIdFor(snapshot.match!, userId);
+      // Top up FIRST. `useTicketFromBalance` is the production wallet path and
+      // it refuses at zero — which is where a seeded puppet starts, so a visitor
+      // who paid only for themselves watched the demo stop dead: every tick
+      // logged `insufficient-balance`, the gate never completed, and the
+      // Calendar was never sent. There is no second person to chase, so the
+      // demo owes the visitor the other half of the gate.
+      await ensurePuppetTicket(partnerId);
       const paid = await useTicketFromBalance(
         api,
         partnerTelegramId,
@@ -829,20 +838,31 @@ export async function restartDemoPitch(
   telegramId: bigint,
   language: Language | null,
 ): Promise<void> {
-  await clearDemoMatches(userId);
+  const cleared = await clearDemoMatches(userId);
+  // A second run must not re-explain how matchmaking works. `spokenBeats` is in
+  // memory (no demo-only schema, DEMO_MODE.md), so a deploy mid-demo forgets
+  // what this visitor has read — and the demo is redeployed with every release,
+  // which is exactly how a visitor came back from a pass and was told "you're
+  // in the system, now here is how it actually works" a second time.
+  //
+  // A deleted match is durable proof the beat was delivered: it is sent
+  // immediately before the pitch that created that row, and nothing else
+  // creates one. Read from `clearDemoMatches`'s own delete count rather than a
+  // separate query, because the evidence is gone a line later.
+  if (cleared > 0) markSpoken(userId, "matchmaking");
   await startDemoMatch(api, userId, telegramId, language);
 }
 
-/** Wipe every match this visitor has had with a puppet. */
-export async function clearDemoMatches(userId: string): Promise<void> {
+/** Wipe every match this visitor has had with a puppet; returns how many. */
+export async function clearDemoMatches(userId: string): Promise<number> {
   const partnerIds = await prisma.user.findMany({
     where: { telegramId: { in: DEMO_PARTNERS.map((p) => p.telegramId) } },
     select: { id: true },
   });
   const ids = partnerIds.map((p) => p.id);
-  if (ids.length === 0) return;
+  if (ids.length === 0) return 0;
 
-  await prisma.match.deleteMany({
+  const removed = await prisma.match.deleteMany({
     where: {
       OR: [
         { userAId: userId, userBId: { in: ids } },
@@ -851,6 +871,7 @@ export async function clearDemoMatches(userId: string): Promise<void> {
     },
   });
   await releaseMatchCooldown([userId, ...ids]);
+  return removed.count;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

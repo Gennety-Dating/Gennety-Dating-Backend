@@ -1,5 +1,66 @@
 # Gennety Dating Deploy
 
+**PENDING — ticket-gate avatars stop being half a megabyte each, and two demo
+dead-ends (DEMO_MODE.md).** Not deployed yet. **No Prisma schema change, no env
+change, no flag change** — but it touches all three surfaces, so the full
+sequence applies: Deploy Full Server Code → `pnpm db:drift-check` →
+`pm2 restart` → `./scripts/deploy-webapp.sh` → `pnpm demo:deploy`.
+
+Three fixes from one founder report. **Only the first reaches production**; the
+other two are `apps/bot/src/demo/` and inert without `DEMO_MODE_ENABLED`.
+
+- **Date Ticket avatars (production + demo).** The Mini App draws two 44px
+  circles on the "pay for us both" button and the route streamed the
+  participants' FULL profile photos to fill them — measured on the live demo at
+  **517 KB + 355 KB for one button**, over mobile data, inside a Telegram
+  WebView, against the client's 6-second preload budget. `GET
+  /v1/matches/:id/ticket/photo/:side` now shrinks to a 256px ceiling
+  (`services/avatar-thumbnail.ts`, `@napi-rs/canvas` — already a dependency, no
+  new install) and caches the result in-process by storage ref. `Avatar` also
+  falls back to the monogram on a load error, so a failure reads as an initial
+  rather than a broken-image glyph.
+- **The puppet could not pay its own ticket (demo).** A visitor who chose "pay
+  only mine" hit a hard stop: `useTicketFromBalance` refuses at a zero balance,
+  which is where every seeded puppet starts, so the gate never completed and the
+  Calendar was never sent — `[demo] puppet ticket settle failed:
+  insufficient-balance` every 12s, forever. Reproduced live before the fix. Only
+  the "pay for both" path avoided it, which is why earlier walkthroughs missed it.
+- **The product was explained twice (demo).** `spokenBeats` is in memory and the
+  demo restarts on every release, so a visitor who came back from a pass got the
+  whole "you're in the system, here is how matchmaking works" message again. The
+  deleted match rows are durable proof it was already said.
+
+**Three things worth knowing before the restart:**
+
+- **The avatar change is NOT demo-only** even though it was reported against the
+  demo. `TICKET_FEATURE_ENABLED=true` in production, so this is the paid gate's
+  own screen. It is strictly less data and the same picture.
+- **The in-process cache holds image bytes.** Bounded to 200 entries with a 6h
+  TTL and swept on insert; at ~25 KB an entry that is a few megabytes worst case
+  on a 2 GB droplet. Keyed by `file_id`/Supabase path, both of which change when
+  the photo does, so a cached avatar can never outlive its photo.
+- **A stuck demo heals itself on the restart.** The match currently sitting in
+  `ticketStatus: partial` will complete on the next 3-second tick once the demo
+  is redeployed — no manual DB edit.
+
+Post-deploy check — the size drop is the whole point, so measure it rather than
+eyeballing the button (needs a live gate; production has none, so use the demo):
+
+```sh
+./scripts/deploy-webapp.sh && pnpm demo:deploy
+# Was ~517000 / ~355000 bytes; expect ~5% of that.
+curl -s -o /dev/null -w '%{size_download}\n' --get --data-urlencode "a=<initData>" \
+  "https://demo-api.gennety.com/v1/matches/<matchId>/ticket/photo/self"
+ssh root@167.172.178.229 'pm2 logs gennety-demo --lines 200 --nostream | grep "puppet ticket settle"'
+# Empty is the good case: that line only prints when the settle failed.
+```
+
+**Rollback:** revert the code, restart, redeploy the Mini App and the demo.
+Nothing else to undo — no schema, no env, no flag. The cache is in-process and
+disappears with the restart.
+
+---
+
 **PENDING — the preference screen is one design now, and the photos and the
 word both changed (PRODUCT_SPEC §1.3).** Not deployed yet. **No Prisma schema
 change, no env change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the

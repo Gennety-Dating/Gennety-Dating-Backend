@@ -96,7 +96,7 @@ different snapshot, not as a broken hook.
 |---|---|---|
 | active + verified, no match | explain matchmaking, create the match, dispatch the pitch | `createProposedMatch`, `dispatchMatches` |
 | `proposed`, visitor answered (either way) | accept | `applyMatchDecision` |
-| ticket gate, visitor paid | settle its own half from its wallet | `useTicketFromBalance` |
+| ticket gate, visitor paid | top up its wallet, then settle its own half | `grantTickets` → `useTicketFromBalance` |
 | calendar, visitor picked | counter with **different** slots | `processCalendarSlotsUpdate` |
 | calendar, no overlap after 90s | give in and take one of theirs | `processCalendarSlotsUpdate` |
 | `negotiating_venue`, visitor confirmed | submit vibe + departure point | `interpretVenueIntent` → `confirmVenueIntent` |
@@ -110,6 +110,18 @@ different snapshot, not as a broken hook.
 The two "different first" steps matter: they are what make the negotiation read
 like a person with their own calendar and their own taste, rather than a bot
 that says yes. The 90-second give-in exists so a demo can never dead-end.
+
+**The puppet is topped up before it pays, not seeded with a lump.** The §3.5b
+gate needs BOTH slots settled before the Calendar is sent, and the demo settles
+the puppet's through `useTicketFromBalance` — a real production path, the one a
+partner with a ticket in their wallet takes. That path refuses at a zero
+balance, which is where every seeded puppet starts, so a visitor who chose
+**"pay only mine"** watched the demo stop dead: `insufficient-balance` every
+tick, no Calendar, and no second person to chase for the missing half. Paying
+for both never hit it, which is why it survived the first walkthroughs.
+`ensurePuppetTicket` grants one ticket when the balance is short, on demand
+rather than at seed time so it is still right after a process that has been up
+for weeks and many demos.
 
 **The scheduled date is left alone for minutes, not seconds.** The date card is
 the one screen in the demo whose interesting parts are *on it* — the
@@ -220,6 +232,17 @@ idea whether a radar step exists at all.
   profile twelve seconds later whether or not anyone pressed anything. The rows
   now stay, `hasEverMatched` keeps the driver quiet, and the offer is made once
   per ending (`redoOffered`, keyed by match id).
+
+  **A second run does not re-explain the product.** The "you're in the system,
+  here is how matchmaking actually works" message is delivered once, immediately
+  above the first pitch. `spokenBeats` is in memory (no demo-only schema, below),
+  so a deploy mid-demo forgets what a visitor has read — and the demo is
+  redeployed with every release, which is how a visitor came back from a pass and
+  was handed the whole explanation a second time. The deleted match rows are
+  durable proof it was already said: `clearDemoMatches` returns its delete count
+  and a non-zero one marks the beat spoken. The beats that describe a *match*
+  rather than the product — the date-card handover, the pre-date replay — are
+  deliberately forgotten instead, so the second run gets its own.
 
   **A finished demo is not a decline.** The post-date feedback flips `scheduled`
   to `completed`, which is terminal exactly like a pass — so for the first day of

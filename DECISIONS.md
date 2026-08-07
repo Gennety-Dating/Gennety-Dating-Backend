@@ -47,6 +47,34 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-07 — a demo bug report fixed in production code, and a symptom I could not reproduce
+
+**Kind:** deviation from plan
+**What:** the founder reported three demo-mode defects. Two were demo-only and
+fixed there. The third — the two avatars on the Date Ticket "pay for us both"
+button rendering as placeholders — was fixed in the **shared** ticket route
+(`services/avatar-thumbnail.ts`, `public/routes/ticket.ts`) plus the shared
+`Avatar` component, so it ships to production as well as to the demo.
+**Why:** the cause is not demo-specific. The route streams participants' FULL
+profile photos to fill two 44px circles — measured live at **517 KB + 355 KB**
+for one button, ~850 KB inside a Telegram WebView against the client's 6-second
+preload budget. A real user on mobile data hits the same thing; scoping the fix
+to `apps/bot/src/demo/` would have meant knowingly leaving it in the paid flow.
+**The part worth flagging for whoever reads this next:** I could not reproduce
+the exact rendering. Both endpoints answer **200 image/jpeg** in 0.6–1.0s from a
+laptop, so the "two question marks" were never observed by me directly. What
+shipped is the measurable defect (bytes) plus a graceful failure path (`onError`
+→ monogram, because `alt=""` makes a broken `<img>` render as nothing or as the
+client's broken-image glyph). If the placeholders come back on a fast
+connection, this was the wrong cause and the next step is a device-side network
+trace, not another guess.
+**What it changes going forward:** a demo-mode report is not automatically a
+demo-mode fix — check whether the code path is shared before scoping. The
+avatar ceiling (256px) is 2× the largest avatar the Mini App draws at 2× DPR;
+raising the drawn size means raising it.
+**Recorded in:** deploy.md → the PENDING block at the top; DEMO_MODE.md →
+driver state table + Recovery.
+
 ## 2026-08-07 — the App Store price gap closed, and iOS Premium turned out not to be purchasable at all
 
 **Kind:** founder decision + a document turned out to be wrong

@@ -12,6 +12,7 @@ import {
   notePartnerPaidSeen,
 } from "../../handlers/matching/ticket-gate.js";
 import { downloadProfileImage } from "../../services/storage.js";
+import { toAvatarThumbnail } from "../../services/avatar-thumbnail.js";
 import { recordMiniAppAction } from "../../services/chat-events.js";
 import {
   createTicketIntent,
@@ -228,14 +229,21 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       res.status(photo.reason === "not-participant" ? 403 : 404).json({ error: photo.reason });
       return;
     }
+    const cached = readAvatarCache(photo.ref);
+    if (cached) {
+      sendAvatar(res, cached);
+      return;
+    }
     const bytes = await downloadProfileImage(photo.ref, api);
     if (!bytes) {
       res.status(404).json({ error: "photo-unavailable" });
       return;
     }
-    res.setHeader("Content-Type", "image/jpeg");
-    res.setHeader("Cache-Control", "private, max-age=300");
-    res.status(200).end(bytes);
+    // Shrunk to avatar size, not streamed at full resolution — see
+    // `services/avatar-thumbnail.ts` for the measurement behind that.
+    const thumb = await toAvatarThumbnail(bytes);
+    writeAvatarCache(photo.ref, thumb);
+    sendAvatar(res, thumb);
   });
 
   router.post("/intent", async (req: Request, res: Response): Promise<void> => {
@@ -458,4 +466,48 @@ function authenticatePhotoRequest(req: Request): AuthOk | AuthErr {
     return { ok: false, body: { error: "Invalid initData", reason: validation.reason } };
   }
   return { ok: true, user: { id: validation.user.id } };
+}
+
+// ── Avatar bytes ───────────────────────────────────────────────────────────
+
+/**
+ * In-process cache of already-shrunk avatars, keyed by the storage ref.
+ *
+ * The key is a Telegram `file_id` or a Supabase path, both of which change when
+ * the photo does, so a cached entry can never outlive the photo it belongs to.
+ * What it removes is the two Telegram round trips (`getFile` + download) and the
+ * decode on every cold open — the Mini App is reopened repeatedly from a
+ * persistent chat card that is never edited (§3.5b), and the entry is a few tens
+ * of kilobytes. Same shape as the venue-change board's Places photo cache.
+ *
+ * Bounded and swept on insert: this holds bytes, so an unbounded map on a 2 GB
+ * droplet is a leak rather than an optimisation.
+ */
+const AVATAR_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const AVATAR_CACHE_MAX = 200;
+const avatarCache = new Map<string, { bytes: Buffer; at: number }>();
+
+function readAvatarCache(ref: string): Buffer | null {
+  const hit = avatarCache.get(ref);
+  if (!hit) return null;
+  if (Date.now() - hit.at > AVATAR_CACHE_TTL_MS) {
+    avatarCache.delete(ref);
+    return null;
+  }
+  return hit.bytes;
+}
+
+function writeAvatarCache(ref: string, bytes: Buffer): void {
+  if (avatarCache.size >= AVATAR_CACHE_MAX) {
+    // Insertion-ordered, so the first key is the oldest write.
+    const oldest = avatarCache.keys().next().value;
+    if (oldest !== undefined) avatarCache.delete(oldest);
+  }
+  avatarCache.set(ref, { bytes, at: Date.now() });
+}
+
+function sendAvatar(res: Response, bytes: Buffer): void {
+  res.setHeader("Content-Type", "image/jpeg");
+  res.setHeader("Cache-Control", "private, max-age=300");
+  res.status(200).end(bytes);
 }

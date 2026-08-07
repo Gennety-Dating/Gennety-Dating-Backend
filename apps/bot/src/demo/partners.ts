@@ -1,6 +1,7 @@
 import { prisma, type Gender, type GenderPreference } from "@gennety/db";
 import { DEFAULT_MARKET, cityKeyToTimeZone } from "@gennety/shared";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
+import { getBalance, grantTickets } from "../services/ticket-wallet.js";
 
 /**
  * The puppet on the other side of every demo match.
@@ -270,6 +271,28 @@ export async function releaseMatchCooldown(userIds: readonly string[]): Promise<
     where: { userId: { in: [...userIds] } },
     data: { lastMatchedAt: null },
   });
+}
+
+/**
+ * Make sure the puppet can pay for its own Date Ticket.
+ *
+ * The §3.5b gate needs BOTH slots settled before the Calendar is sent, and a
+ * visitor who chooses "pay only mine" leaves the puppet's slot open. The demo
+ * settles it through `useTicketFromBalance` — a real production path, the one a
+ * partner with a ticket in their wallet would take — and that path refuses at a
+ * zero balance, which is where every seeded puppet starts. So the flow simply
+ * stopped: `insufficient-balance` every tick, no Calendar, no way forward, and
+ * nobody to chase for the missing half.
+ *
+ * Topped up on demand rather than seeded with a lump, so it is still right
+ * after a process that has been up for weeks and many demos. The ledger row is
+ * stage bookkeeping in a throwaway database: no money moves (demo runs
+ * `TICKET_PAYMENT_MODE=mock` with Stars off), which is why `amountCents` is
+ * left unset.
+ */
+export async function ensurePuppetTicket(userId: string): Promise<void> {
+  if ((await getBalance(userId)) >= 1) return;
+  await grantTickets({ userId, count: 1, reason: "store_purchase" });
 }
 
 /** Resolve a seeded puppet's `User.id`, or null if it has not been seeded. */
