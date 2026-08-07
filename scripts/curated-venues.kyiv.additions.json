@@ -72,7 +72,8 @@
       "tier": "alternative"
     },
     {
-      "name": "Kuvshin"
+      "name": "Kuvshin",
+      "tier": "premium"
     },
     {
       "name": "Petrus-b Restaurant"
@@ -476,7 +477,8 @@
       "tier": "alternative"
     },
     {
-      "name": "Good Girl"
+      "name": "Good Girl",
+      "tier": "premium"
     },
     {
       "name": "Dubler"
@@ -576,6 +578,14 @@
     },
     {
       "name": "Porto Maltese",
+      "tier": "premium"
+    },
+    {
+      "name": "SHO",
+      "tier": "premium"
+    },
+    {
+      "name": "Vicini Italiani",
       "tier": "premium"
     }
   ],

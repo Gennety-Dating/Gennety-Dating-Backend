@@ -2436,6 +2436,30 @@
         "cozy",
         "lively"
       ]
+    },
+    {
+      "placeId": "ChIJ5Yz1ZwfP1EARSNjYL9MgxvA",
+      "name": "SHO",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "local",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJI6bN8ULP1EARcXPQNy6dFsk",
+      "name": "Vicini Italiani",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "italian",
+        "cozy"
+      ]
     }
   ],
   "excludedPlaces": [

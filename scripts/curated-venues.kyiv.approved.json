@@ -46171,6 +46171,264 @@
   },
   {
     "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "SHO",
+    "address": "вулиця Мечникова, 18, Київ, 01021",
+    "lat": 50.437625999999995,
+    "lng": 30.5352159,
+    "googleMapsUri": "https://maps.google.com/?cid=17349590705904343112&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJ5Yz1ZwfP1EARSNjYL9MgxvA",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "local",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 10:00–22:00",
+        "вівторок: 10:00–22:00",
+        "середа: 10:00–22:00",
+        "четвер: 10:00–22:00",
+        "пʼятниця: 10:00–22:00",
+        "субота: 10:00–22:00",
+        "неділя: 10:00–22:00"
+      ],
+      "nextCloseTime": "2026-08-07T19:00:00Z"
+    },
+    "_rating": 4.5,
+    "_reviews": 2906,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "ukrainian_restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "Vicini Italiani",
+    "address": "вул. Андрія Верхогляда, 16, Київ, 01103",
+    "lat": 50.411121099999995,
+    "lng": 30.5458301,
+    "googleMapsUri": "https://maps.google.com/?cid=14489941672941613937&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJI6bN8ULP1EARcXPQNy6dFsk",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "italian",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 09:00–22:00",
+        "вівторок: 09:00–22:00",
+        "середа: 09:00–22:00",
+        "четвер: 09:00–22:00",
+        "пʼятниця: 09:00–22:00",
+        "субота: 09:00–22:00",
+        "неділя: 09:00–22:00"
+      ],
+      "nextCloseTime": "2026-08-07T19:00:00Z"
+    },
+    "_rating": 4.3,
+    "_reviews": 359,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "italian_restaurant"
+  },
+  {
+    "approved": true,
     "universityDomain": "knu.ua",
     "name": "Сенс на Хрещатику",
     "address": "вулиця Хрещатик, 34, Київ, 02000",
@@ -72851,6 +73109,264 @@
   },
   {
     "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "SHO",
+    "address": "вулиця Мечникова, 18, Київ, 01021",
+    "lat": 50.437625999999995,
+    "lng": 30.5352159,
+    "googleMapsUri": "https://maps.google.com/?cid=17349590705904343112&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJ5Yz1ZwfP1EARSNjYL9MgxvA",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "local",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 10:00–22:00",
+        "вівторок: 10:00–22:00",
+        "середа: 10:00–22:00",
+        "четвер: 10:00–22:00",
+        "пʼятниця: 10:00–22:00",
+        "субота: 10:00–22:00",
+        "неділя: 10:00–22:00"
+      ],
+      "nextCloseTime": "2026-08-07T19:00:00Z"
+    },
+    "_rating": 4.5,
+    "_reviews": 2906,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "ukrainian_restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "Vicini Italiani",
+    "address": "вул. Андрія Верхогляда, 16, Київ, 01103",
+    "lat": 50.411121099999995,
+    "lng": 30.5458301,
+    "googleMapsUri": "https://maps.google.com/?cid=14489941672941613937&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJI6bN8ULP1EARcXPQNy6dFsk",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "italian",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 09:00–22:00",
+        "вівторок: 09:00–22:00",
+        "середа: 09:00–22:00",
+        "четвер: 09:00–22:00",
+        "пʼятниця: 09:00–22:00",
+        "субота: 09:00–22:00",
+        "неділя: 09:00–22:00"
+      ],
+      "nextCloseTime": "2026-08-07T19:00:00Z"
+    },
+    "_rating": 4.3,
+    "_reviews": 359,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "italian_restaurant"
+  },
+  {
+    "approved": true,
     "universityDomain": "kpi.ua",
     "name": "Сенс на Хрещатику",
     "address": "вулиця Хрещатик, 34, Київ, 02000",
@@ -99530,6 +100046,264 @@
   },
   {
     "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "SHO",
+    "address": "вулиця Мечникова, 18, Київ, 01021",
+    "lat": 50.437625999999995,
+    "lng": 30.5352159,
+    "googleMapsUri": "https://maps.google.com/?cid=17349590705904343112&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJ5Yz1ZwfP1EARSNjYL9MgxvA",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "local",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 10:00–22:00",
+        "вівторок: 10:00–22:00",
+        "середа: 10:00–22:00",
+        "четвер: 10:00–22:00",
+        "пʼятниця: 10:00–22:00",
+        "субота: 10:00–22:00",
+        "неділя: 10:00–22:00"
+      ],
+      "nextCloseTime": "2026-08-07T19:00:00Z"
+    },
+    "_rating": 4.5,
+    "_reviews": 2906,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "ukrainian_restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "Vicini Italiani",
+    "address": "вул. Андрія Верхогляда, 16, Київ, 01103",
+    "lat": 50.411121099999995,
+    "lng": 30.5458301,
+    "googleMapsUri": "https://maps.google.com/?cid=14489941672941613937&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJI6bN8ULP1EARcXPQNy6dFsk",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "italian",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 09:00–22:00",
+        "вівторок: 09:00–22:00",
+        "середа: 09:00–22:00",
+        "четвер: 09:00–22:00",
+        "пʼятниця: 09:00–22:00",
+        "субота: 09:00–22:00",
+        "неділя: 09:00–22:00"
+      ],
+      "nextCloseTime": "2026-08-07T19:00:00Z"
+    },
+    "_rating": 4.3,
+    "_reviews": 359,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "italian_restaurant"
+  },
+  {
+    "approved": true,
     "universityDomain": "stud.nau.edu.ua",
     "name": "Сенс на Хрещатику",
     "address": "вулиця Хрещатик, 34, Київ, 02000",
@@ -126219,6 +126993,264 @@
   },
   {
     "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "SHO",
+    "address": "вулиця Мечникова, 18, Київ, 01021",
+    "lat": 50.437625999999995,
+    "lng": 30.5352159,
+    "googleMapsUri": "https://maps.google.com/?cid=17349590705904343112&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJ5Yz1ZwfP1EARSNjYL9MgxvA",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "local",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 10:00–22:00",
+        "вівторок: 10:00–22:00",
+        "середа: 10:00–22:00",
+        "четвер: 10:00–22:00",
+        "пʼятниця: 10:00–22:00",
+        "субота: 10:00–22:00",
+        "неділя: 10:00–22:00"
+      ],
+      "nextCloseTime": "2026-08-07T19:00:00Z"
+    },
+    "_rating": 4.5,
+    "_reviews": 2906,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "ukrainian_restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "Vicini Italiani",
+    "address": "вул. Андрія Верхогляда, 16, Київ, 01103",
+    "lat": 50.411121099999995,
+    "lng": 30.5458301,
+    "googleMapsUri": "https://maps.google.com/?cid=14489941672941613937&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJI6bN8ULP1EARcXPQNy6dFsk",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "italian",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 09:00–22:00",
+        "вівторок: 09:00–22:00",
+        "середа: 09:00–22:00",
+        "четвер: 09:00–22:00",
+        "пʼятниця: 09:00–22:00",
+        "субота: 09:00–22:00",
+        "неділя: 09:00–22:00"
+      ],
+      "nextCloseTime": "2026-08-07T19:00:00Z"
+    },
+    "_rating": 4.3,
+    "_reviews": 359,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "italian_restaurant"
+  },
+  {
+    "approved": true,
     "universityDomain": "ukma.edu.ua",
     "name": "Сенс на Хрещатику",
     "address": "вулиця Хрещатик, 34, Київ, 02000",
@@ -152906,5 +153938,263 @@
     "_reviews": 81,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
     "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "SHO",
+    "address": "вулиця Мечникова, 18, Київ, 01021",
+    "lat": 50.437625999999995,
+    "lng": 30.5352159,
+    "googleMapsUri": "https://maps.google.com/?cid=17349590705904343112&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJ5Yz1ZwfP1EARSNjYL9MgxvA",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "local",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 10:00–22:00",
+        "вівторок: 10:00–22:00",
+        "середа: 10:00–22:00",
+        "четвер: 10:00–22:00",
+        "пʼятниця: 10:00–22:00",
+        "субота: 10:00–22:00",
+        "неділя: 10:00–22:00"
+      ],
+      "nextCloseTime": "2026-08-07T19:00:00Z"
+    },
+    "_rating": 4.5,
+    "_reviews": 2906,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "ukrainian_restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "Vicini Italiani",
+    "address": "вул. Андрія Верхогляда, 16, Київ, 01103",
+    "lat": 50.411121099999995,
+    "lng": 30.5458301,
+    "googleMapsUri": "https://maps.google.com/?cid=14489941672941613937&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJI6bN8ULP1EARcXPQNy6dFsk",
+    "category": "restaurant",
+    "priority": 2,
+    "tier": "premium",
+    "vibeTags": [
+      "dinner",
+      "italian",
+      "cozy"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ],
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "понеділок: 09:00–22:00",
+        "вівторок: 09:00–22:00",
+        "середа: 09:00–22:00",
+        "четвер: 09:00–22:00",
+        "пʼятниця: 09:00–22:00",
+        "субота: 09:00–22:00",
+        "неділя: 09:00–22:00"
+      ],
+      "nextCloseTime": "2026-08-07T19:00:00Z"
+    },
+    "_rating": 4.3,
+    "_reviews": 359,
+    "_priceLevel": "PRICE_LEVEL_MODERATE",
+    "_primaryType": "italian_restaurant"
   }
 ]
