@@ -47,6 +47,31 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-07 — a broken demo says so out loud rather than going quiet
+
+**Kind:** founder decision
+**What:** when a puppet move is refused three times running, the demo tells the
+visitor it is stuck and points at `/restart`, and stops retrying that move.
+Before this every branch of the driver either ignored the result or logged a
+warning and returned, so a refusal was re-derived and re-attempted every tick
+forever.
+**Why:** the founder asked for a full sweep of the demo specifically because the
+ticket-gate stall was found by accident. Two measurements settled the shape of
+the fix: `insufficient-balance` was logged **1500 times** across hours, and the
+tick summary reported `acted=1 errors=0` throughout — so the only signal anyone
+watches was actively asserting health while the demo was dead. The failure that
+matters here is not an exception, it is **silence in front of an audience**. A
+demo that admits a fault can be restarted in two minutes; one that quietly stops
+cannot be rescued at all.
+**What it changes going forward:** a new puppet move must return an outcome, not
+`void` — `performAction`'s parameter is typed `Exclude<DemoAction, {kind:"none"}>`
+so a new action kind fails the exhaustiveness check instead of silently counting
+as a success. The visitor-facing message stays **vague about the cause** on
+purpose (nobody can act on `insufficient-balance`); the reason belongs in the
+log, written once per streak rather than once per tick.
+**Recorded in:** DEMO_MODE.md → "A refused move is reported, not retried
+forever"; `apps/bot/src/demo/failure-tracker.ts` (+ its test).
+
 ## 2026-08-07 — a demo bug report fixed in production code, and a symptom I could not reproduce
 
 **Kind:** deviation from plan

@@ -29,6 +29,8 @@ import {
 } from "../handlers/matching/venue-change.js";
 import { runDateLifecycleTick } from "../services/date-lifecycle.js";
 
+import { createFailureTracker } from "./failure-tracker.js";
+
 import {
   DEMO_PARTNERS,
   ensurePuppetTicket,
@@ -79,11 +81,38 @@ const pendingSince = new Map<string, { key: string; at: number }>();
 const inFlight = new Set<string>();
 const redoOffered = new Map<string, string>();
 
+/**
+ * How many times the same action may be refused before the demo stops trying
+ * and says so.
+ *
+ * Three, at `DEMO_STEP_WAIT_MS` apart, is a little over half a minute — long
+ * enough to ride out a transient provider hiccup, short enough that nobody is
+ * left staring at a chat that has quietly stopped. The alternative is what
+ * shipped: a refusal logged and retried every tick forever, which is how
+ * `puppet ticket settle failed: insufficient-balance` reached 1500 identical
+ * lines while a visitor sat in front of a demo that had died.
+ */
+const DEMO_MAX_ACTION_FAILURES = 3;
+const failures = createFailureTracker(DEMO_MAX_ACTION_FAILURES);
+
 /** Reset a visitor's in-memory bookkeeping (used by `/restart`). */
 export function forgetDemoVisitor(userId: string): void {
   spokenBeats.delete(userId);
   pendingSince.delete(userId);
   redoOffered.delete(userId);
+  failures.clear(userId);
+}
+
+/**
+ * What a puppet move did. `reason` is for the log, never for the visitor —
+ * `insufficient-balance` is not something a person can act on.
+ */
+type DemoActionOutcome = { ok: true } | { ok: false; reason: string };
+
+const ACTED: DemoActionOutcome = { ok: true };
+
+function refused(reason: string): DemoActionOutcome {
+  return { ok: false, reason };
 }
 
 /**
@@ -142,15 +171,47 @@ export async function demoDriverTick(api: Api<RawApi>): Promise<DemoTickResult> 
       const decision = decideDemoAction(snapshot);
       if (decision.action.kind === "none") {
         pendingSince.delete(visitor.id);
+        failures.clear(visitor.id);
         continue;
       }
+
+      // Already given up on this exact action: the visitor has been told, and
+      // hammering a service that has refused three times helps nobody.
+      if (failures.abandoned(visitor.id, actionKey(decision.action))) continue;
 
       if (!waitElapsed(visitor.id, decision.action, decision.waitMs)) continue;
 
       inFlight.add(visitor.id);
       try {
-        await performAction(api, visitor.id, visitor.telegramId, snapshot, decision.action);
-        result.acted += 1;
+        // A throw is counted exactly like a refusal. Letting it reach the outer
+        // catch would leave the streak at zero, so a step that reliably throws
+        // would retry forever and never reach the give-up below — which is the
+        // very failure mode this block exists to end.
+        const outcome = await performAction(
+          api,
+          visitor.id,
+          visitor.telegramId,
+          snapshot,
+          decision.action,
+        ).catch((err: unknown) =>
+          refused(`threw:${err instanceof Error ? err.message : String(err)}`),
+        );
+        if (outcome.ok) {
+          result.acted += 1;
+          failures.clear(visitor.id);
+        } else {
+          result.errors += 1;
+          const streak = failures.note(visitor.id, actionKey(decision.action));
+          // One line per streak, not one per tick — the whole point is that a
+          // flood of identical warnings is indistinguishable from noise.
+          if (streak === DEMO_MAX_ACTION_FAILURES) {
+            console.error(
+              `${LOG} giving up on ${actionKey(decision.action)} for visitor ` +
+                `${visitor.id} after ${streak} refusals: ${outcome.reason}`,
+            );
+            await say(api, visitor.telegramId, demoText("stuck", snapshot.language));
+          }
+        }
       } finally {
         inFlight.delete(visitor.id);
         pendingSince.delete(visitor.id);
@@ -388,8 +449,11 @@ async function performAction(
   userId: string,
   telegramId: bigint,
   snapshot: DemoSnapshot,
-  action: DemoAction,
-): Promise<void> {
+  // `none` is filtered by the caller, and saying so in the type is what makes
+  // the switch below provably exhaustive — otherwise a future action kind added
+  // to `DemoAction` would fall through and be counted as a successful move.
+  action: Exclude<DemoAction, { kind: "none" }>,
+): Promise<DemoActionOutcome> {
   const lang = snapshot.language;
 
   switch (action.kind) {
@@ -408,11 +472,10 @@ async function performAction(
           : {}),
       });
       markSpoken(userId, action.beat);
-      return;
+      return ACTED;
 
     case "pitch":
-      await startDemoMatch(api, userId, telegramId, lang);
-      return;
+      return startDemoMatch(api, userId, telegramId, lang);
 
     case "offer_continue": {
       await say(api, telegramId, demoText(action.beat, lang), {
@@ -428,13 +491,17 @@ async function performAction(
       // seconds later, whether or not the button was touched. The rows now stay
       // until the tap, which is the only thing that may start a second run.
       redoOffered.set(userId, action.matchId);
-      return;
+      return ACTED;
     }
 
     case "partner_accept": {
       const partnerId = await partnerIdFor(snapshot.match!, userId);
-      await applyMatchDecision(snapshot.match!.id, partnerId, "accept");
-      return;
+      // `applyMatchDecision` answers `null` rather than throwing when the row is
+      // no longer `proposed`. That return used to be dropped on the floor, so a
+      // refusal here looked exactly like a successful accept and the driver
+      // re-tried it every tick — the same shape as the ticket-gate stall.
+      const decided = await applyMatchDecision(snapshot.match!.id, partnerId, "accept");
+      return decided ? ACTED : refused("decision-refused");
     }
 
     case "partner_pay_ticket": {
@@ -453,8 +520,7 @@ async function performAction(
         snapshot.match!.id,
         "self",
       );
-      if (!paid.ok) console.warn(`${LOG} puppet ticket settle failed: ${paid.reason}`);
-      return;
+      return paid.ok ? ACTED : refused(`ticket-settle:${paid.reason}`);
     }
 
     case "partner_counter_slots":
@@ -473,32 +539,24 @@ async function performAction(
         snapshot.match!.id,
         picks,
       );
-      if (!res.ok) console.warn(`${LOG} puppet calendar update failed: ${res.reason}`);
-      return;
+      return res.ok ? ACTED : refused(`calendar:${res.reason}`);
     }
 
-    case "partner_venue": {
-      await submitPuppetVenue(api, snapshot.match!, userId);
-      return;
-    }
+    case "partner_venue":
+      return submitPuppetVenue(api, snapshot.match!, userId);
 
     case "partner_counter_likes":
-    case "partner_agree_likes": {
-      await submitPuppetLikes(api, snapshot.match!, userId, action.kind);
-      return;
-    }
+    case "partner_agree_likes":
+      return submitPuppetLikes(api, snapshot.match!, userId, action.kind);
 
     case "partner_settle_venue_change": {
       const partnerTelegramId = await partnerTelegramIdFor(snapshot.match!, userId);
       const res = await settleFreeVenueChange(api, partnerTelegramId, snapshot.match!.id);
-      if (!res.ok) console.warn(`${LOG} puppet venue-change settle failed: ${res.reason}`);
-      return;
+      return res.ok ? ACTED : refused(`venue-change-settle:${res.reason}`);
     }
 
-    case "run_predate": {
-      await runDemoPredate(api, userId, telegramId, lang, snapshot.match!.agreedTime);
-      return;
-    }
+    case "run_predate":
+      return runDemoPredate(api, userId, telegramId, lang, snapshot.match!.agreedTime);
   }
 }
 
@@ -517,12 +575,21 @@ export async function runDemoPredate(
   telegramId: bigint,
   lang: Language | null,
   agreedTime: Date | null,
-): Promise<void> {
-  if (spokenBeats.get(userId)?.has("predate")) return;
+): Promise<DemoActionOutcome> {
+  if (spokenBeats.get(userId)?.has("predate")) return ACTED;
   markSpoken(userId, "predate");
 
   await say(api, telegramId, demoText("predate", lang));
-  await replayDateLifecycle(api, agreedTime);
+  try {
+    await replayDateLifecycle(api, agreedTime);
+  } catch (err) {
+    // The claim above is NOT released: the narration has already gone out, and
+    // re-running would promise the pre-date days a second time. What must not
+    // happen is silence — the visitor has just been told "I'll play all of it
+    // now", so a half-played replay is reported rather than swallowed.
+    return refused(`predate-replay:${err instanceof Error ? err.message : String(err)}`);
+  }
+  return ACTED;
 }
 
 /**
@@ -539,12 +606,12 @@ async function startDemoMatch(
   userId: string,
   telegramId: bigint,
   lang: Language | null,
-): Promise<void> {
+): Promise<DemoActionOutcome> {
   const visitor = await prisma.user.findUnique({
     where: { id: userId },
     select: { gender: true, preference: true },
   });
-  if (!visitor) return;
+  if (!visitor) return refused("visitor-row-missing");
 
   const definition = pickDemoPartner(visitor);
   const partner = await prisma.user.findUnique({
@@ -553,7 +620,7 @@ async function startDemoMatch(
   });
   if (!partner) {
     console.error(`${LOG} puppet ${definition.firstName} is not seeded — cannot pitch`);
-    return;
+    return refused("puppet-not-seeded");
   }
 
   await releaseMatchCooldown([userId, partner.id]);
@@ -593,12 +660,16 @@ async function startDemoMatch(
       `${LOG} createProposedMatch refused for visitor ${userId}: ` +
         (await explainRefusal(userId, partner.id)),
     );
-    return;
+    return refused("allocator-refused");
   }
   const dispatch = await dispatchMatches(api, [match.id], 0);
   if (dispatch.failed > 0) {
     console.error(`${LOG} pitch dispatch failed:`, dispatch.errors);
+    // The row exists but the visitor never saw a card. Reporting it is what
+    // stops the demo sitting on a `proposed` match nobody was shown.
+    return refused("pitch-dispatch-failed");
   }
+  return ACTED;
 }
 
 /**
@@ -711,7 +782,7 @@ async function submitPuppetVenue(
   api: Api<RawApi>,
   match: DemoMatchSnapshot,
   visitorId: string,
-): Promise<void> {
+): Promise<DemoActionOutcome> {
   const partnerId = await partnerIdFor(match, visitorId);
   // A different part of central Kyiv from anywhere the visitor is likely to
   // drop their pin, so the concierge has a real midpoint to solve for.
@@ -724,12 +795,10 @@ async function submitPuppetVenue(
     // (PRODUCT_SPEC §3.7) can only refuse it if the seeded partner's dating city
     // ever drifts — worth naming in the log rather than failing as "nothing".
     if (isVenueOriginRefusal(draft)) {
-      console.warn(`${LOG} puppet venue origin refused: outside ${draft.market.city}`);
-      return;
+      return refused(`venue-origin-outside:${draft.market.city}`);
     }
     if (!draft) {
-      console.warn(`${LOG} puppet venue interpret returned nothing`);
-      return;
+      return refused("venue-interpret-empty");
     }
     await confirmVenueIntent(
       match.id,
@@ -743,7 +812,7 @@ async function submitPuppetVenue(
       },
       { awaitFinalization: false },
     );
-    return;
+    return ACTED;
   }
 
   // Legacy concierge path: write the side's columns, then let the existing
@@ -757,6 +826,7 @@ async function submitPuppetVenue(
         : { vibeTextB: vibe, vibeLatB: origin.lat, vibeLngB: origin.lng, vibeAddressB: origin.address },
   });
   await tryFinalize(api, match.id);
+  return ACTED;
 }
 
 /**
@@ -772,7 +842,7 @@ async function submitPuppetLikes(
   match: DemoMatchSnapshot,
   visitorId: string,
   mode: "partner_counter_likes" | "partner_agree_likes",
-): Promise<void> {
+): Promise<DemoActionOutcome> {
   const partnerTelegramId = await partnerTelegramIdFor(match, visitorId);
 
   let keys: string[];
@@ -782,19 +852,22 @@ async function submitPuppetLikes(
   } else {
     const catalog = await getVenueChangeCatalog(partnerTelegramId, match.id);
     if (!catalog.ok) {
-      console.warn(`${LOG} puppet could not read venue catalog: ${catalog.reason}`);
-      return;
+      return refused(`venue-catalog:${catalog.reason}`);
     }
     const taken = new Set(match.visitorLikeKeys);
     const alternative = catalog.venues
       .map((venue) => venueKeyOf(venue))
       .find((key) => key !== KEEP_KEY && !taken.has(key));
-    if (!alternative) return;
+    // Nothing left that the visitor has not already hearted — there is no
+    // counter-suggestion to make, so agreeing is the only move that keeps the
+    // board alive. Reported rather than returned silently: a board with no
+    // alternatives at all is a thin catalog, which is worth seeing in the log.
+    if (!alternative) return refused("venue-catalog-exhausted");
     keys = [alternative];
   }
 
   const res = await submitVenueLikes(api, partnerTelegramId, match.id, keys);
-  if (!res.ok) console.warn(`${LOG} puppet like submission failed: ${res.reason}`);
+  return res.ok ? ACTED : refused(`venue-likes:${res.reason}`);
 }
 
 /**

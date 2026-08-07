@@ -1,5 +1,52 @@
 # Gennety Dating Deploy
 
+**PENDING — a stuck demo says so instead of retrying forever (DEMO_MODE.md).**
+Not deployed yet. **Demo only** — the diff is `apps/bot/src/demo/**` plus docs,
+so there is **nothing to rsync to `/opt/gennety` and no production restart**.
+`pnpm demo:deploy` is the whole deploy. No Prisma schema change, no flag change.
+
+Groundwork for the full demo walkthrough: before hunting for more dead-ends, make
+a dead-end impossible to miss. Every branch of `performAction` now returns an
+outcome instead of `void`, a refusal (or a throw) is counted per (visitor,
+action), and at three in a row the demo tells the visitor it is stuck and stops
+retrying. Seven branches had the same shape as the ticket-gate stall; one of them
+(`partner_accept`) was not even checking `applyMatchDecision`'s `null`.
+
+**One env change, applied separately and already live:** the demo was quoting a
+**stale Premium price** — `PREMIUM_STARS=500` / `$11.99` against production's
+`750` / `$17.99` as of today. An investor was being shown the wrong number.
+Fixed in `/opt/gennety-demo/.env` (backup `.env.bak.20260807-214909`); it takes
+effect on the redeploy's restart.
+
+**Two things worth knowing before the restart:**
+
+- **The tick summary changes meaning.** `acted` used to count refusals;
+  `errors` was effectively always 0. After this, `[demo] scanned=1 acted=0
+  errors=1` is a real signal, and `giving up on <action> …` is the line to grep
+  for. Historical log lines are not comparable.
+- **`DEMO_MAX_ACTION_FAILURES = 3` is a code constant, not env.** At
+  `DEMO_STEP_WAIT_MS` (12s) apart that is ~36 seconds before the demo gives up.
+  Lower it and a provider hiccup ends a demo; raise it and the audience is back
+  to watching silence.
+
+Post-deploy check — the point is that a stall is now loud, so verify by making
+one. On the demo box, zero the puppet's wallet and watch it give up rather than
+loop (this is safe: `/restart` clears the tracker, and the top-up refills the
+wallet on the next real run):
+
+```sh
+pnpm demo:deploy
+ssh root@167.172.178.229 'pm2 logs gennety-demo --lines 100 --nostream | grep -E "giving up on|acted=0"'
+# Empty in the healthy case. A `giving up on <action>` line is the feature
+# working, and it must appear ONCE per streak — not once per tick.
+```
+
+**Rollback:** revert the code and `pnpm demo:deploy`. Production is untouched by
+this block. To put the Premium price back, restore
+`/opt/gennety-demo/.env.bak.20260807-214909` and restart `gennety-demo`.
+
+---
+
 **Deployed 2026-08-07 — ticket-gate avatars stop being half a megabyte each, and
 two demo dead-ends (DEMO_MODE.md).** Server + Mini App + demo, brought prod from
 `c25adbc`+`01c32b8` to **`d5405f6`**. **No Prisma schema change, no env change,

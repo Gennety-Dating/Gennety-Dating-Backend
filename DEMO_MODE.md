@@ -123,6 +123,37 @@ for both never hit it, which is why it survived the first walkthroughs.
 rather than at seed time so it is still right after a process that has been up
 for weeks and many demos.
 
+### A refused move is reported, not retried forever
+
+Re-deriving state every tick is what keeps the driver from rotting, and it is
+also the one thing that can hide a dead demo: a move that gets refused is
+re-derived and re-attempted on the next tick, and the next, indefinitely. That
+is not hypothetical — a puppet with an empty ticket wallet logged
+`insufficient-balance` **1500 times over several hours** while a visitor sat in
+front of a demo that had stopped, and the tick summary said
+`acted=1 errors=0` the entire time because a refusal counted as an action.
+
+Every branch of `performAction` now returns `{ok} | {ok:false, reason}` instead
+of `void`; nothing swallows a refusal, and a **throw is counted the same way**
+(otherwise a reliably-throwing step would never reach the ceiling below).
+`failure-tracker.ts` counts consecutive refusals per (visitor, action) — pure,
+so it is testable without a database, a bot or a clock, the same split
+`decide.ts` already makes.
+
+At three in a row the demo **stops and says so** (`stuck`, all three languages),
+and the action is not retried until the state moves on. Three matters in both
+directions: at `DEMO_STEP_WAIT_MS` apart it is a little over half a minute, long
+enough to ride out a provider hiccup and short enough that nobody is left
+watching a chat that has quietly died. The message is deliberately vague about
+*what* broke — a visitor cannot act on `insufficient-balance` — and points at
+`/restart`, which is always available. A demo that admits a fault is
+recoverable; one that silently stops in front of an audience is not.
+
+The log follows the same rule: the refusal is written **once per streak**, at
+error level, with the action and the reason. A flood of identical warnings is
+indistinguishable from noise, which is precisely why the first one went
+unnoticed.
+
 **The scheduled date is left alone for minutes, not seconds.** The date card is
 the one screen in the demo whose interesting parts are *on it* — the
 venue-change board, Open in Maps, the blurred share copy — and the pre-date

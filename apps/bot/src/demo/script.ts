@@ -30,6 +30,7 @@ export type DemoBeat =
   | "predate"
   | "declined"
   | "finale"
+  | "stuck"
   | "restarted";
 
 type BeatCopy = Partial<Record<Language, string>> & { en: string };
@@ -325,6 +326,31 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
       "but the screens, the cards and the logic were exactly the same.\n\n" +
       "Want to run it again from scratch? /restart. Or I can show you another " +
       "profile and a second pass through the flow.",
+  },
+
+  // ── The puppet's move failed several times running ──────────────────────
+  //
+  // The demo's worst failure is not an error, it is silence: a step that
+  // refuses is retried every tick forever while the chat says nothing, which is
+  // exactly how a ticket gate stood still for hours in front of whoever was
+  // being shown the product. Saying so out loud costs a sentence and turns a
+  // dead demo into a recoverable one.
+  //
+  // Deliberately vague about WHAT broke — the visitor cannot act on
+  // `insufficient-balance`, and the log carries the real reason for us.
+  stuck: {
+    ru:
+      "🛠 Кажется, я застрял на этом шаге — это демо, и здесь такое бывает.\n\n" +
+      "Дальше сам не поеду, чтобы не морочить вам голову. Напишите /restart — " +
+      "начнём с чистого листа, это займёт пару минут.",
+    uk:
+      "🛠 Здається, я застряг на цьому кроці — це демо, тут таке буває.\n\n" +
+      "Далі сам не поїду, щоб не морочити вам голову. Напишіть /restart — " +
+      "почнемо з чистого аркуша, це займе пару хвилин.",
+    en:
+      "🛠 Looks like I'm stuck on this step — it's a demo, it happens.\n\n" +
+      "I'm not going to pretend otherwise and keep you waiting. Send /restart " +
+      "and we'll begin from a clean slate; it takes a couple of minutes.",
   },
 
   restarted: {
