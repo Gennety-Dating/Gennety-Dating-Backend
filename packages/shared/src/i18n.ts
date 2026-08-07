@@ -462,9 +462,9 @@ const translations = {
     matchBothAccepted: "It's mutual 🤍 Let's find a time.",
     matchDeclined:
       "All good. What was the main reason you passed?\n\n" +
-      "Pick one below, or send a short text or voice note — I'll factor it into the next drop.\n\n" +
-      "If it's something else, just tell me — next time I'll bring someone closer to what you're after.",
-    matchDeclineReasonType: "Not my type",
+      "Tap one below — quick answer, and it helps me see the pattern over time.\n\n" +
+      "Or say it in your own words: a short text or voice note, and I'll factor that into your next drop.",
+    matchDeclineReasonType: "Not my type physically",
     matchDeclineReasonVibe: "Different vibe",
     matchDeclineReasonInterests: "Interests don't match",
     matchDeclineReasonLifestyle: "Lifestyle mismatch",
@@ -737,6 +737,7 @@ const translations = {
       "Preference card updated ✨ I'll use it for the next match.",
     profilerNextAck: "Got it…",
     profilerNextFormulating: "Thinking…",
+    profilerRefusalAck: "Okay, I won't push. I'll ask again another time 💛",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
     venueChangeButton: "🔄 Change venue",
@@ -1574,9 +1575,9 @@ const translations = {
     matchBothAccepted: "Взаимно 🤍 Найдём время.",
     matchDeclined:
       "Ок, всё нормально. Что стало главной причиной?\n\n" +
-      "Выбери вариант ниже или отправь короткий текст/голосовое — учту в следующем дропе.\n\n" +
-      "Если причина в чём-то другом — просто напиши: в следующий раз приведу кого-то ближе к тому, что ты ищешь.",
-    matchDeclineReasonType: "Не мой тип",
+      "Нажми вариант ниже — это быстрый ответ, он помогает мне видеть картину со временем.\n\n" +
+      "А если скажешь своими словами — короткий текст или голосовое — я учту это в следующем дропе.",
+    matchDeclineReasonType: "Не мой тип внешне",
     matchDeclineReasonVibe: "Не тот вайб",
     matchDeclineReasonInterests: "Не совпали интересы",
     matchDeclineReasonLifestyle: "Разный образ жизни",
@@ -1835,6 +1836,7 @@ const translations = {
       "Карточка обновлена ✨ Учту при следующем подборе.",
     profilerNextAck: "Принято…",
     profilerNextFormulating: "Думаю…",
+    profilerRefusalAck: "Окей, не буду допытываться. Спрошу в другой раз 💛",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
     venueChangeButton: "🔄 Сменить место",
@@ -2641,9 +2643,9 @@ const translations = {
     matchBothAccepted: "Взаємно 🤍 Знайдемо час.",
     matchDeclined:
       "Ок, усе нормально. Що стало головною причиною?\n\n" +
-      "Обери варіант нижче або надішли короткий текст/голосове. ШІ проаналізує фідбек і врахує його в наступному дропі.\n\n" +
-      "Якщо причина в чомусь іншому - напиши: наступного разу запропонуємо людину, яка краще підходить під твої інтереси й уподобання.",
-    matchDeclineReasonType: "Не мій тип",
+      "Натисни варіант нижче — це швидка відповідь, вона допомагає мені бачити картину з часом.\n\n" +
+      "А якщо скажеш своїми словами — короткий текст або голосове — я врахую це в наступному дропі.",
+    matchDeclineReasonType: "Не мій тип зовні",
     matchDeclineReasonVibe: "Не той вайб",
     matchDeclineReasonInterests: "Не збіглися інтереси",
     matchDeclineReasonLifestyle: "Різний спосіб життя",
@@ -2900,6 +2902,7 @@ const translations = {
       "Картку оновлено ✨ Врахую під час наступного підбору.",
     profilerNextAck: "Прийнято…",
     profilerNextFormulating: "Думаю…",
+    profilerRefusalAck: "Окей, не наполягаю. Запитаю іншим разом 💛",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
     venueChangeButton: "🔄 Змінити місце",
@@ -3696,9 +3699,9 @@ const deTranslations: TranslationTable = {
   matchBothAccepted: "Beidseitig 🤍 Lass uns eine Zeit finden.",
   matchDeclined:
     "Alles gut. Was war der Hauptgrund, warum du gepasst hast?\n\n" +
-    "Wähle unten etwas aus oder schick einen kurzen Text bzw. eine Sprachnachricht — ich nehme es in den nächsten Drop mit.\n\n" +
-    "Wenn es etwas anderes war, sag es mir — nächstes Mal bringe ich jemanden, der näher an dem ist, was du suchst.",
-  matchDeclineReasonType: "Nicht mein Typ",
+    "Tipp unten etwas an — schnelle Antwort, und ich sehe mit der Zeit das Muster.\n\n" +
+    "Oder sag es in deinen eigenen Worten: ein kurzer Text oder eine Sprachnachricht — das nehme ich in deinen nächsten Drop mit.",
+  matchDeclineReasonType: "Optisch nicht mein Typ",
   matchDeclineReasonVibe: "Anderer Vibe",
   matchDeclineReasonInterests: "Interessen passen nicht",
   matchDeclineReasonLifestyle: "Lifestyle passt nicht",
@@ -3939,6 +3942,7 @@ const deTranslations: TranslationTable = {
     "Präferenzkarte aktualisiert ✨ Ich nutze sie beim nächsten Match.",
   profilerNextAck: "Notiert…",
   profilerNextFormulating: "Denke nach…",
+  profilerRefusalAck: "Okay, ich hake nicht nach. Frage ein andermal 💛",
 
   // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
   venueChangeButton: "🔄 Ort ändern",
@@ -4728,9 +4732,9 @@ const plTranslations: TranslationTable = {
   matchBothAccepted: "Wzajemne 🤍 Znajdźmy termin.",
   matchDeclined:
     "W porządku. Jaki był główny powód, że odpuściłeś/odpuściłaś?\n\n" +
-    "Wybierz poniżej albo wyślij krótki tekst lub głosówkę — uwzględnię to w kolejnym dropie.\n\n" +
-    "Jeśli chodzi o coś innego, po prostu napisz — następnym razem przyprowadzę kogoś bliższego temu, czego szukasz.",
-  matchDeclineReasonType: "Nie mój typ",
+    "Kliknij opcję poniżej — szybka odpowiedź, dzięki niej z czasem widzę wzorzec.\n\n" +
+    "Albo powiedz to własnymi słowami: krótki tekst lub głosówka — to uwzględnię w Twoim kolejnym dropie.",
+  matchDeclineReasonType: "Wyglądowo nie mój typ",
   matchDeclineReasonVibe: "Inny vibe",
   matchDeclineReasonInterests: "Zainteresowania nie pasują",
   matchDeclineReasonLifestyle: "Styl życia nie pasuje",
@@ -4974,6 +4978,7 @@ const plTranslations: TranslationTable = {
     "Karta preferencji zaktualizowana ✨ Uwzględnię ją przy następnym doborze.",
   profilerNextAck: "Zapisane…",
   profilerNextFormulating: "Myślę…",
+  profilerRefusalAck: "Okej, nie drążę. Zapytam innym razem 💛",
 
   // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
   venueChangeButton: "🔄 Zmień miejsce",

@@ -8,9 +8,11 @@ import {
   PROFILER_SKIP_PREFIX,
   closeProfilerAnswerWindow,
   recordProfilerAnswer,
+  recordProfilerRefusal,
   recordProfilerSkip,
   resolveProfilerCapture,
 } from "../../services/profiler.js";
+import { isProfilerRefusal } from "../../services/profiler-intent.js";
 
 /**
  * Profiler router (PRODUCT_SPEC §Phase 1b) — captures answers/skips to the
@@ -74,6 +76,15 @@ function cancelAnswerFlush(chatId: number | undefined): void {
 async function flushAnswer(acc: AnswerAccumulator): Promise<void> {
   const text = acc.lines.join("\n").trim();
   if (!text) return;
+
+  // A refusal is not an answer. Classified on the COALESCED text rather than
+  // per line, so "не хочу" split across two messages is still read once and as
+  // a whole — the same reason the buffer exists at all.
+  if (isProfilerRefusal(text)) {
+    await recordProfilerRefusal(acc.api, acc.userId, acc.questionId);
+    return;
+  }
+
   await recordProfilerAnswer(acc.api, acc.userId, acc.questionId, text, {
     reactionTarget: { chatId: acc.chatId, messageId: acc.messageId },
   });

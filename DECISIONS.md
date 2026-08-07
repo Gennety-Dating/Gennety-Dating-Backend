@@ -47,6 +47,74 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-07 — the rule behind three separate "what if the text isn't an answer" fixes
+
+**Kind:** change of mind
+**What:** the codebase held **four** unsynchronised strategies for a user
+replying to a prompt with something that is not an answer. Decline → the agent
+judges and the tool is guarded. Profiler → the router wrote it verbatim and the
+agent was never told the feature exists. Onboarding photos below the minimum →
+the agent answers while the gate holds. Onboarding photos above it → the agent
+was not called at all. The rule that separates the two good ones from the two
+bad ones is now explicit: **a gate is derived from state, never from the
+conversation; and the conversation always reaches the agent.**
+**Why:** the founder asked the same question three times about three different
+screens, which is what surfaced it as one problem rather than three. The photo
+stage below the minimum already satisfies both halves and is the model — it is
+the only one of the four that was fully correct. Profiler satisfied neither
+(verbatim capture means the conversation writes state directly, bypassing the
+agent); photos above the minimum satisfied the first but not the second.
+**What it changes going forward:** any new step that reads free text owes both
+halves. If a new surface captures text in a router before the agent, it must
+classify intent before writing — and whatever it refuses to write must still
+reach the agent rather than vanish.
+**Recorded in:** PRODUCT_SPEC.md §1.3 (media stage), §Phase 1b (refusal),
+§3.4 (decline feedback).
+
+## 2026-08-07 — preset decline reasons stay out of matching, and that is deliberate
+
+**Kind:** change of mind
+**What:** I first offered "route the four preset reasons into
+`negativeConstraints`" as an equal alternative to fixing the copy. It is wrong,
+and the copy fix is the whole change: the buttons remain analytics and the
+message no longer promises otherwise.
+**Why:** `V_penalty` is a literal word-match of each stored trait against the
+candidate's `psychologicalSummary`. A preset is a category, not content — "не
+мой тип" does not say which type — so feeding it in either writes a trait that
+can never match any summary, or lets the LLM distiller invent a specific trait
+out of a content-free label, and that invention then penalises real candidates.
+The second is worse than doing nothing. Separately, production has had 2 matches
+ever, both terminal, so a learning loop here would be calibrated on zero
+examples.
+**What it changes going forward:** **do not route presets into
+`negativeConstraints`** — the mechanism is built for free text with content, and
+the free-text path already does this correctly. If preset reasons should ever
+influence matching, each button names a *different* axis with its own structured
+home (appearance → `typePrefTags`/`appearanceTags`, vibe → the energy/orientation
+quadrant, interests → `hobbies`/`anchorTags`), one decline is too weak a signal
+to mutate any of them, and it starts with a query over accumulated declines
+rather than a write. Note also that Type Radar is opt-in calibration while a
+decline is not, so learning appearance preference from rejections is a consent
+decision, not a technical one.
+**Recorded in:** PRODUCT_SPEC.md §3.4.
+
+## 2026-08-07 — a Profiler refusal pauses the batch; a permanent opt-out is not built
+
+**Kind:** founder decision + not done
+**What:** answering a Profiler question with "не хочу" records a skip and defers
+the rest of the batch to the user's next local window. A permanent "stop asking
+me these" was discussed and deliberately left out.
+**Why:** the founder described wanting the bot to say "окей" and stop the batch,
+which the pause delivers. Permanent is a different thing: it needs a Settings
+surface, a way back, and a demo-mode branch, and a one-word "потом" must not be
+able to retire a feature for an account. The pause self-heals, so the cost of
+being wrong about the classification is one window rather than forever.
+**What it changes going forward:** if a permanent opt-out is wanted later it is
+a product decision with its own UI, not an extension of this classifier.
+**Recorded in:** PRODUCT_SPEC.md §Phase 1b; `services/profiler-intent.ts`.
+
+---
+
 ## 2026-08-07 — a broken demo says so out loud rather than going quiet
 
 **Kind:** founder decision

@@ -105,4 +105,42 @@ describe("isPhotoStageContinueText", () => {
   it("does not treat a question as completion", () => {
     expect(isPhotoStageContinueText("Что это за билет?")).toBe(false);
   });
+
+  // The reported gap: the matcher took single words only, so the natural ways
+  // people actually say "I'm done" matched nothing and the bot answered with
+  // the progress card — reading as if it had not heard them.
+  it.each([
+    "мне хватит",
+    "не хочу больше",
+    "больше не хочу",
+    "это всё",
+    "я закончил",
+    "идём дальше",
+    "that's all",
+    "i'm done",
+    "no more photos",
+    "мені досить",
+    "не хочу більше",
+    "das reicht",
+    "ich bin fertig",
+    "to wszystko",
+    "nie chcę więcej",
+  ])("recognizes the phrase %j", (text) => {
+    expect(isPhotoStageContinueText(text)).toBe(true);
+  });
+
+  it("normalizes case, trailing punctuation and inner whitespace", () => {
+    expect(isPhotoStageContinueText("  Мне   хватит.  ")).toBe(true);
+    expect(isPhotoStageContinueText("ГОТОВО!")).toBe(true);
+  });
+
+  // Matching is on the whole utterance, so a sentence that merely contains a
+  // done-phrase must not end the stage early — the user is still talking.
+  it.each([
+    "мне хватит трёх, но давай ещё гляну",
+    "это всё, что у меня есть под рукой сейчас, поищу ещё",
+    "a kto zobaczy te zdjęcia?",
+  ])("does NOT treat %j as completion", (text) => {
+    expect(isPhotoStageContinueText(text)).toBe(false);
+  });
 });

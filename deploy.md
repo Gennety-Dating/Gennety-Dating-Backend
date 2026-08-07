@@ -1,5 +1,53 @@
 # Gennety Dating Deploy
 
+**PENDING — free text that isn't an answer stops being recorded as one
+(PRODUCT_SPEC §1.3, §Phase 1b, §3.4).** Not deployed yet. **No Prisma schema
+change, no env change, no flag change, no Mini App change** (`apps/webapp`
+untouched) — bot-side only, so a full server code deploy carries all of it.
+Demo picks it up from the same source with `pnpm demo:deploy`; no gate, no paid
+step, no negotiation branch, so `apps/bot/src/demo/decide.ts` is untouched.
+
+Three flows, one root cause: a prompt read the next message as its answer with
+no check that it *was* one. See DECISIONS.md for the rule this establishes.
+
+- **Profiler.** "не хочу отвечать" was stored verbatim as the ANSWER to the
+  live question with `skipped: false` — burning it permanently (answered
+  questions are never re-asked) and feeding it to the ice-breaker / wingman
+  generators. It is now recorded as a skip and **ends the batch**, deferring to
+  the user's next local window. Expect `profiler_answers` rows that previously
+  would have carried refusal text to arrive as `skipped: true` with a null
+  `answerText` instead; that is the fix, not data loss.
+- **Onboarding photo stage, at or above `MIN_PHOTOS`.** The continue matcher
+  took bare words only, and every unmatched message got the progress card
+  without the agent being called. Now it matches phrases ("мне хватит", "не
+  хочу больше", "это всё") and hands **question-shaped** text to the agent.
+  Only questions — an ordinary message there would advance the collector to
+  `complete` and finalize onboarding, which §1.3 forbids.
+- **Decline reasons.** The four preset buttons record analytics and explicitly
+  do NOT write `negativeConstraints`; the message promised the opposite. Copy
+  fixed in all 5 locales, and the first button now names appearance explicitly
+  ("Не мой тип" alone read as personality). **No behaviour change** — read
+  DECISIONS.md before ever "fixing" the presets by routing them into matching.
+
+Preflight for this change: typecheck clean, **3347 bot tests + 273 shared**,
+lint clean. One existing assertion was updated (`matching.test.ts` pinned the
+old button label — that test doing its job is how the copy change was caught).
+
+Post-deploy check — nothing new is logged and production has 2 matches ever, so
+verify on `@gennetytestbot` rather than from prod logs: answer a Profiler
+question with "не хочу" (expect the ack + no further question until the next
+window), and at 3 photos type "мне хватит" (expect the stage to close) and then
+"а кто увидит мои фото?" (expect an answer, not the progress card).
+
+```sh
+psql "$DATABASE_URL" -c "select skipped, count(*) from profiler_answers group by 1;"
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag, no Mini App state.
+
+---
+
 **PENDING — a stuck demo says so instead of retrying forever (DEMO_MODE.md).**
 Not deployed yet. **Demo only** — the diff is `apps/bot/src/demo/**` plus docs,
 so there is **nothing to rsync to `/opt/gennety` and no production restart**.

@@ -142,11 +142,59 @@ export async function sendPhotoStagePrompt(
   });
 }
 
+/**
+ * Whole utterances that mean "I'm done sending photos", per language.
+ *
+ * Deliberately a list of COMPLETE phrases rather than a stem regex: the stage
+ * only reaches this check once the minimum is already satisfied, so a false
+ * positive ends the stage early while a false negative merely routes the text
+ * onward. Exact phrases keep the first failure impossible and the second cheap,
+ * and every entry is reviewable on its own line.
+ *
+ * The list is phrase-level because the single-word version it replaced only
+ * matched a bare "хватит": the natural refusals people actually type — "мне
+ * хватит", "не хочу больше", "это всё" — matched nothing and silently fell
+ * through to a re-render of the progress card, which reads as the bot not
+ * having heard them.
+ */
+const PHOTO_STAGE_CONTINUE_PHRASES: readonly string[] = [
+  // en
+  "continue", "done", "finish", "finished", "next", "enough", "no more",
+  "that's enough", "thats enough", "that's all", "thats all", "that's it",
+  "thats it", "i'm done", "im done", "i am done", "i'm finished", "im finished",
+  "no more photos", "let's continue", "lets continue", "let's move on",
+  "lets move on", "move on", "go on", "ready", "i'm ready", "im ready",
+  // ru
+  "дальше", "идём дальше", "идем дальше", "давай дальше", "поехали дальше",
+  "продолжить", "продолжаем", "продолжай", "готово", "хватит", "мне хватит",
+  "достаточно", "мне достаточно", "всё", "все", "это всё", "это все",
+  "всё готово", "все готово", "закончил", "закончила", "я закончил",
+  "я закончила", "больше не хочу", "не хочу больше", "больше нет",
+  "больше не буду", "не буду больше", "стоп",
+  // uk
+  "далі", "ідемо далі", "давай далі", "продовжити", "продовжуємо", "продовжуй",
+  "досить", "мені досить", "вистачить", "мені вистачить", "це все", "це всі",
+  "закінчив", "закінчила", "я закінчив", "я закінчила", "більше не хочу",
+  "не хочу більше", "більше немає",
+  // de
+  "weiter", "fertig", "genug", "das reicht", "mehr nicht", "ich bin fertig",
+  "das war's", "das wars", "keine mehr", "weiter geht's", "weiter gehts",
+  // pl
+  "dalej", "idziemy dalej", "kontynuuj", "gotowe", "wystarczy", "to wszystko",
+  "już nie chcę", "juz nie chce", "nie chcę więcej", "nie chce wiecej",
+  "skończyłem", "skończyłam", "skonczylem", "skonczylam",
+];
+
+const PHOTO_STAGE_CONTINUE_SET = new Set(PHOTO_STAGE_CONTINUE_PHRASES);
+
 export function isPhotoStageContinueText(text: string): boolean {
-  const normalized = text.trim().toLocaleLowerCase().replace(/[.!?]+$/gu, "");
+  const normalized = text
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[.!?…]+$/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
   if (!normalized || normalized.length > 40) return false;
 
-  return /^(?:continue|done|finish|next|that'?s enough|no more|дальше|продолжить|продолжаем|готово|хватит|достаточно|вс[её]|далі|продовжити|продовжуємо|досить|weiter|fertig|genug|dalej|kontynuuj|gotowe|wystarczy)$/iu.test(
-    normalized,
-  );
+  return PHOTO_STAGE_CONTINUE_SET.has(normalized);
 }

@@ -845,8 +845,11 @@ describe("buildDeclineReasonKeyboard", () => {
     const kb = buildDeclineReasonKeyboard("match-42", "en");
     const buttons = kb.inline_keyboard.flat() as Array<{ text: string; callback_data?: string }>;
 
+    // The first label names APPEARANCE explicitly. "Not my type" alone reads
+    // just as easily as personality, which made it compete with the three
+    // buttons beside it — each of which already owns one of the other axes.
     expect(buttons.map((b) => b.text)).toEqual([
-      "Not my type",
+      "Not my type physically",
       "Different vibe",
       "Interests don't match",
       "Lifestyle mismatch",

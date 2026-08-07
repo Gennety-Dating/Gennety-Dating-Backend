@@ -11,6 +11,7 @@ vi.mock("../../services/profiler.js", async () => {
   return {
     PROFILER_SKIP_PREFIX: actual.PROFILER_SKIP_PREFIX,
     recordProfilerAnswer: vi.fn().mockResolvedValue(true),
+    recordProfilerRefusal: vi.fn().mockResolvedValue(true),
     recordProfilerSkip: vi.fn().mockResolvedValue(true),
     resolveProfilerCapture: vi.fn(),
     closeProfilerAnswerWindow: vi.fn().mockResolvedValue(false),
@@ -23,6 +24,7 @@ import { profilerRouter } from "./router.js";
 import {
   closeProfilerAnswerWindow,
   recordProfilerAnswer,
+  recordProfilerRefusal,
   recordProfilerSkip,
   resolveProfilerCapture,
 } from "../../services/profiler.js";
@@ -34,6 +36,7 @@ const mAnswer = recordProfilerAnswer as unknown as MockFn;
 const mSkip = recordProfilerSkip as unknown as MockFn;
 const mCapture = resolveProfilerCapture as unknown as MockFn;
 const mCloseWindow = closeProfilerAnswerWindow as unknown as MockFn;
+const mRefusal = recordProfilerRefusal as unknown as MockFn;
 
 const answerCallbackQuery = vi.fn().mockResolvedValue(true);
 const editMessageReplyMarkup = vi.fn().mockResolvedValue(true);
@@ -119,6 +122,7 @@ beforeEach(() => {
   mSkip.mockClear().mockResolvedValue(true);
   mCapture.mockReset().mockResolvedValue({ userId: "u1", questionId: "f_date_spots" });
   mCloseWindow.mockClear().mockResolvedValue(false);
+  mRefusal.mockClear().mockResolvedValue(true);
   answerCallbackQuery.mockClear();
   editMessageReplyMarkup.mockClear();
 });
@@ -248,5 +252,52 @@ describe("profiler router — skip button", () => {
     await run(skipCtx("f_date_spots"));
 
     expect(mSkip).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("profiler router — a refusal is not an answer", () => {
+  // The reported defect: "не хочу отвечать" was stored verbatim as the ANSWER
+  // to the live question with `skipped: false`, which burns the question for
+  // good (answered questions are never re-asked) and feeds the text to the
+  // ice-breaker / wingman generators as though it were an interest.
+  it("routes a refusal to the skip path, never to recordProfilerAnswer", async () => {
+    await run(textCtx("не хочу отвечать", 1));
+    await elapseDebounce();
+
+    expect(mAnswer).not.toHaveBeenCalled();
+    expect(mRefusal).toHaveBeenCalledTimes(1);
+    expect(mRefusal.mock.calls[0]![1]).toBe("u1");
+    expect(mRefusal.mock.calls[0]![2]).toBe("f_date_spots");
+  });
+
+  // Classification runs on the COALESCED text for the same reason the buffer
+  // exists: a refusal split over two messages is one refusal, not one refusal
+  // plus one stray answer.
+  it("classifies the coalesced text, not the first line", async () => {
+    await run(textCtx("не хочу", 1));
+    await run(textCtx("отвечать", 2));
+    await elapseDebounce();
+
+    expect(mRefusal).toHaveBeenCalledTimes(1);
+    expect(mAnswer).not.toHaveBeenCalled();
+  });
+
+  it("still records a real answer that merely opens with a refusal phrase", async () => {
+    await run(textCtx("не хочу в кино, а вот на концерт хочу", 1));
+    await elapseDebounce();
+
+    expect(mRefusal).not.toHaveBeenCalled();
+    expect(mAnswer).toHaveBeenCalledTimes(1);
+  });
+
+  // A bare "нет" answers a large part of the bank ("do you play any sport?"),
+  // so it must stay an answer or real signal is thrown away.
+  it("records a bare negative as an answer", async () => {
+    await run(textCtx("нет", 1));
+    await elapseDebounce();
+
+    expect(mRefusal).not.toHaveBeenCalled();
+    expect(mAnswer).toHaveBeenCalledTimes(1);
+    expect(mAnswer.mock.calls[0]![3]).toBe("нет");
   });
 });

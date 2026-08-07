@@ -554,6 +554,24 @@ Hard rules enforced by the collector:
   **Continue** action instead of finalizing automatically. The user may keep
   sending photos one-by-one or as a Telegram album, send a short profile video,
   tap Continue, or type a localized equivalent such as "done" / "дальше".
+  **The typed equivalent is a phrase, not a single word (2026-08-07)**, and
+  **a question asked at this stage now reaches the agent.** The matcher took
+  bare words only (`хватит`, `готово`), so the ways people actually finish —
+  "мне хватит", "не хочу больше", "это всё", "я закончил" — matched nothing;
+  and every unmatched message was answered with the progress card without the
+  agent being called at all. So "а кто увидит мои фото?" — the question this
+  screen is most likely to provoke — got a photo counter back, while the SAME
+  question below the minimum was answered properly. The bot listened worse the
+  further the user had actually got. Two bounds keep the fix safe. The
+  continue list matches the **whole utterance**, never a substring, so a
+  sentence that merely contains a done-phrase ("мне хватит трёх, но давай ещё
+  гляну") does not end the stage. And only **question-shaped** text is handed
+  to the agent (`isLikelyMetaQuestion`, the same predicate the collector's own
+  no-advance guard reads): past `MIN_PHOTOS` the next question is `complete`,
+  so an ordinary message would advance the collector and finalize onboarding —
+  which is exactly what "keeps the stage open instead of finalizing
+  automatically" forbids. A question therefore gets answered and the photo
+  request re-posed; anything else still gets the progress card.
   Albums and rapid standalone photos are coalesced into one progress response,
   so a 4- or 10-photo burst does not produce one reply per frame. Because that
   one response only lands after every frame has been through vision validation
@@ -1244,6 +1262,31 @@ Telegram-only in v1.
   answers are coalesced over a short debounce window
   (`PROFILER_ANSWER_DEBOUNCE_MS`), so an answer split across several messages
   is one answer to one question rather than one answer per message.
+- **A refusal is recorded as a skip, not as an answer (2026-08-07).** Free text
+  used to be written verbatim by `recordProfilerAnswer` with no check that it
+  was an answer at all, so "не хочу отвечать" was stored as the ANSWER to "what
+  are you watching right now?" with `skipped: false`. That cost twice: answered
+  questions are never re-asked, so the refusal burned the question permanently,
+  and the text became icebreaker / wingman-hint fuel — the bot could hand a
+  partner "не хочу отвечать" as though it were an interest. `isProfilerRefusal`
+  (`services/profiler-intent.ts`) now classifies the coalesced text first;
+  a refusal goes through `skipTransition` exactly like a tapped Skip, so the
+  question returns once.
+  **It also ends the batch**, releasing the active question and deferring the
+  rest to the user's next local window — the same release the date-negotiation
+  gate performs. Someone who just said they don't want to answer is the last
+  person to ask two more questions of. Deliberately a **pause, not an opt-out**:
+  it self-heals at the next window, so a one-word "потом" can never silently
+  retire the Profiler for an account. A permanent "stop asking me these" is
+  **not** built — it needs a Settings surface and a way back, which is a
+  separate product decision.
+  Classification is deterministic, not an LLM call: it runs on every Profiler
+  reply, and the failure modes are asymmetric — a missed refusal degrades to
+  the old behaviour, while a false positive discards a real answer. So matching
+  is on the **whole utterance** ("не хочу в кино, а вот на концерт хочу" is an
+  answer), and **bare negatives are deliberately excluded** — "нет" / "no" /
+  "ні" answer a large part of the question bank ("do you play any sport?") and
+  must stay answers.
 - **Cross-cycle persistence.** Unanswered questions carry into the next drop
   cycle in priority order; the Profiler never resets. Completion is **silent**
   (no "profile complete" ping). No progress indicator, no "why we ask" copy.
@@ -2257,8 +2300,34 @@ and a heart split in two.
   `PAŹDZIERNIKA`, `ŚR`), the match card and the referral card.
 
 After a decline (and once the user has seen the partner's verdict, if any),
-the bot prompts for a free-text reason; the LLM distils it and appends the
-result to the *decliner's* `Profile.negativeConstraints`.
+the bot asks why. The card carries four one-tap reasons — appearance, vibe,
+interests, lifestyle — plus **Something else**, which opens the free-text /
+voice path: that text falls through to the menu agent, which distils it via
+`record_rejection_feedback` and appends the result to the *decliner's*
+`Profile.negativeConstraints`.
+
+**Only the free-text path reaches matching, and the copy now says so
+(2026-08-07).** A preset tap records the canonical reason on the match row and
+the `MatchEvent` with `updateNegativeConstraints: false` — deliberately, not
+as an oversight. `V_penalty` is a **literal word-match of each stored trait
+against the candidate's `psychologicalSummary`**, so it needs a trait with
+content; a preset is a *category*, and "не мой тип" does not say which type.
+Feeding it in yields one of two failures: the whole line becomes a single
+trait that can never match any summary (dead weight), or the LLM distiller
+manufactures a specific trait out of a content-free label and that invention
+then penalises real candidates. The buttons are therefore analytics — read in
+the admin dashboard — and the message no longer promises them a place in the
+next drop. **Do not "fix" this by routing presets into `negativeConstraints`.**
+If preset reasons are ever to influence matching, each button names a
+*different* axis that already has a structured representation (appearance →
+`typePrefTags`/`appearanceTags`, vibe → the energy/orientation quadrant,
+interests → `hobbies`/`anchorTags`), a single decline is far too weak a signal
+to mutate any of them, and learning appearance preference from rejections is a
+consent question the Type Radar's opt-in calibration does not cover.
+
+**The first button names appearance explicitly.** The four presets are four
+axes, so the one meaning "looks" has to say it: "Не мой тип" alone reads just
+as easily as personality and competed with the three buttons beside it.
 
 ### 3.5 Match nudges
 

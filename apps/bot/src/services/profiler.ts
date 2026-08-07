@@ -702,8 +702,77 @@ export async function recordProfilerSkip(
   // question's button may still be sitting in the chat).
   if (!(await claimActiveQuestion(userId, questionId)).claimed) return false;
 
+  await upsertProfilerSkip(userId, question, cycleId);
+
+  return advanceAfterReply(api, userId, now, options.wait);
+}
+
+/**
+ * Record the user declining to answer the live question in free text.
+ *
+ * Two deliberate differences from an ordinary Skip tap:
+ *
+ * 1. **It is recorded as a skip, not as an answer.** Before this, the router
+ *    handed refusal text straight to `recordProfilerAnswer`, which stored it
+ *    verbatim with `skipped: false` — burning the question for good (answered
+ *    questions are never re-asked) and feeding "не хочу отвечать" to the
+ *    ice-breaker and wingman generators as though it were an interest. Going
+ *    through `skipTransition` instead means the question returns once, exactly
+ *    like a tapped Skip.
+ * 2. **It ends the batch** rather than firing the next question. Someone who
+ *    just said they don't want to answer is the last person to ask two more
+ *    questions of; the rest of the batch pauses to their next local window,
+ *    reusing the same release the date-negotiation gate performs. Deliberately
+ *    a pause, not an opt-out: it self-heals on the next window, so a one-word
+ *    "потом" can never silently retire the Profiler for an account.
+ */
+export async function recordProfilerRefusal(
+  api: Api<RawApi>,
+  userId: string,
+  questionId: string,
+  options: { now?: Date } = {},
+): Promise<boolean> {
+  const question = profilerQuestionById(questionId);
+  if (!question) return false;
+  const now = options.now ?? new Date();
+  const cycleId = profilerCycleId(now);
+
+  const claim = await claimActiveQuestion(userId, questionId);
+  if (!claim.claimed) return false;
+
+  await upsertProfilerSkip(userId, question, cycleId);
+
+  const state = await loadState(userId);
+  if (!state) return false;
+
+  // The question is resolved, so its Skip button must go — the same rule an
+  // answer follows. It is not deleted: unlike a question reclaimed by the stall
+  // sweep, the user dealt with this one and their reply sits under it.
+  await stripQuestionKeyboard(api, state.telegramId, claim.messageId);
+
+  await pauseBatchUntilNextWindow(userId, now, state.timeZone);
+
+  if (state.telegramId > 0n) {
+    try {
+      await api.sendMessage(
+        Number(state.telegramId),
+        t(state.language, "profilerRefusalAck"),
+      );
+    } catch {
+      // The pause above already landed; a failed ack must not undo it.
+    }
+  }
+  return true;
+}
+
+/** Write the one-time-return skip state for a question (`skipTransition`). */
+async function upsertProfilerSkip(
+  userId: string,
+  question: ProfilerQuestion,
+  cycleId: string,
+): Promise<void> {
   const existing = await prisma.profilerAnswer.findUnique({
-    where: { userId_questionId: { userId, questionId } },
+    where: { userId_questionId: { userId, questionId: question.id } },
     select: {
       questionId: true,
       answerText: true,
@@ -715,10 +784,10 @@ export async function recordProfilerSkip(
   const { skipped, skipReturned } = skipTransition(existing ?? undefined, cycleId);
 
   await prisma.profilerAnswer.upsert({
-    where: { userId_questionId: { userId, questionId } },
+    where: { userId_questionId: { userId, questionId: question.id } },
     create: {
       userId,
-      questionId,
+      questionId: question.id,
       priority: question.priority,
       answerText: null,
       skipped,
@@ -727,8 +796,27 @@ export async function recordProfilerSkip(
     },
     update: { skipped, skipReturned, cycleId },
   });
+}
 
-  return advanceAfterReply(api, userId, now, options.wait);
+/**
+ * Release the active question and pause the rest of the batch to the user's
+ * next local window. Shared by the date-negotiation gate and the refusal path.
+ */
+async function pauseBatchUntilNextWindow(
+  userId: string,
+  now: Date,
+  timeZone: string | null,
+): Promise<void> {
+  await prisma.profile.update({
+    where: { userId },
+    data: {
+      profilerActiveQuestionId: null,
+      profilerAnswerWindowUntil: null,
+      profilerQuestionMessageId: null,
+      profilerBatchRemaining: 0,
+      profilerNextAt: nextWindowAt(now, resolveZone(timeZone)),
+    },
+  });
 }
 
 /** Clear the active question and send the next one (or pause/finish). */
@@ -745,16 +833,7 @@ async function advanceAfterReply(
   // the next question into the planning flow — the answer just given is saved,
   // and the rest of the batch pauses to the next local window.
   if (await hasActiveDatePlanning(userId)) {
-    await prisma.profile.update({
-      where: { userId },
-      data: {
-        profilerActiveQuestionId: null,
-        profilerAnswerWindowUntil: null,
-        profilerQuestionMessageId: null,
-        profilerBatchRemaining: 0,
-        profilerNextAt: nextWindowAt(now, resolveZone(state.timeZone)),
-      },
-    });
+    await pauseBatchUntilNextWindow(userId, now, state.timeZone);
     return true;
   }
   await sendOneFromBatch(api, state, now, "advance", wait);

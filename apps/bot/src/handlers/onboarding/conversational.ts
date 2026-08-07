@@ -75,6 +75,7 @@ import {
   sessionHasProfileVideo,
   ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
 } from "../../services/onboarding-photo-stage.js";
+import { isLikelyMetaQuestion } from "../../services/onboarding-collector.js";
 import { renderPhotoCards } from "../../services/photo-cards.js";
 import { DEMO_MODE_ENABLED } from "../../demo/config.js";
 import {
@@ -296,7 +297,27 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     return;
   }
 
-  if (photoStageActive && !continuePhotoStage) {
+  // A question asked once the minimum is met must reach the agent. This branch
+  // used to swallow EVERY non-continue message and answer with the progress
+  // card, so "who will see my photos?" — the question this screen is most
+  // likely to provoke — got a photo counter back. Below the minimum the same
+  // question is answered, which made the bot listen worse the further the user
+  // had actually got.
+  //
+  // Only question-shaped text is let through, and that bound is load-bearing:
+  // once photos are complete the next question is `complete`, so an ordinary
+  // message would advance the collector and finalize onboarding — while
+  // PRODUCT_SPEC §1.3 keeps this stage deliberately open (more photos, a video,
+  // or an explicit Continue). `isLikelyMetaQuestion` is the same predicate the
+  // collector's own no-advance guard reads, so the two agree by construction:
+  // the turn answers and re-poses the photo request instead of finalizing.
+  const photoStageQuestion =
+    photoStageActive &&
+    !continuePhotoStage &&
+    Boolean(ctx.message?.text) &&
+    isLikelyMetaQuestion(text);
+
+  if (photoStageActive && !continuePhotoStage && !photoStageQuestion) {
     if (ctx.chat) {
       await sendPhotoStageUpdate(
         ctx.api,
