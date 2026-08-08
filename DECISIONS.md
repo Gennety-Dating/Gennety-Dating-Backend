@@ -47,6 +47,51 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — "best-effort" is not "one attempt", and a silent 502 is a bug of its own
+
+**Kind:** deviation from plan + a document turned out to be wrong
+**What:** reported as a demo bug — no photos anywhere on the venue-change board.
+It is not demo-specific: same code (md5-identical), same Places key
+(md5-identical), same droplet. Fixed in shared code — the proxy now retries a
+transient upstream failure inside its existing 10s budget, the client retries
+once, and every failure is logged.
+**Why it matters more than the symptom:** two separate defects, and the second
+is the reason the first was so hard to see.
+- **The retry.** Measured on the droplet: intermittent `ETIMEDOUT` on the TCP
+  connect to Google's photo CDN, ~1 request in 10 under a parallel burst,
+  reproduced in **production** with the prod bot token. The board opens ~13
+  tiles at once and the client's `onerror` was terminal (`settled = true`, swap
+  in the category glyph, never ask again), so one blip meant permanently blank
+  tiles until the Mini App was closed and reopened. `PLACES_API_KEY`, the Place
+  Details lookups, the catalog and the bundle were all verified healthy — 85/85
+  and then 72/72 parallel requests returned real JPEGs while I was testing.
+- **The silence.** `!upstream.ok` and a non-image content-type answered 502 with
+  **no log line at all**; only the `catch` logged. So a systematic upstream
+  problem — a quota, a revoked key, a 429 storm — was indistinguishable from
+  "photos just don't work". PRODUCT_SPEC's "best-effort" was being read as
+  license for that; it is not, and it now says so.
+**What it changes going forward:** on this path, **best-effort means retried and
+logged, never silent**. Retry classification is explicit and must stay that way:
+transient = thrown fetch / 5xx / 429 / 408; permanent = 4xx, non-image body,
+over-ceiling file. The body read is deliberately classified separately from the
+network error rather than sharing one `catch` — before this, an oversized image
+threw into the same place a connect timeout did, so a retry loop would have
+re-downloaded it. On the client, the retry paints the URL that actually decoded,
+not the one it started from; painting the original would re-request the bytes
+that just failed and hand the tile one more chance to break.
+**Deliberately not done:** `fetchPlacePhotoNames` (Place Details) got no retry.
+Zero failures in either log since the feature shipped, the host measured healthy
+(0.13s), and its failures are **already logged** — so unlike the proxy it has no
+blind spot. Its blast radius is worse (a failed lookup is cached empty for 5
+minutes, costing one venue all six photos for everyone), so if evidence ever
+appears, that is the next place to look.
+**Also worth recording:** I could not reproduce the total blackout the founder
+saw — at test time every request succeeded. The fix addresses a measured,
+reproducible defect on the same path; it is not confirmed to be the whole of
+what they experienced.
+**Recorded in:** PRODUCT_SPEC.md §3.7b, ARCHITECTURE.md → `/v1/venue-change/photo`,
+`apps/bot/src/public/routes/venue-change.ts`, `apps/webapp/src/photo-retry.ts`.
+
 ## 2026-08-08 — the ticket's barcode is replaced by the field it never had
 
 **Kind:** founder decision

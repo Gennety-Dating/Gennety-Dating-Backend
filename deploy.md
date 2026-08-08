@@ -1,5 +1,67 @@
 # Gennety Dating Deploy
 
+**PENDING — venue-change photos are retried instead of dropped, and a failed
+one is no longer silent (PRODUCT_SPEC §3.7b, DECISIONS.md).** Not deployed yet.
+**No Prisma schema change, no env change, no flag change.** Half server, half
+client, so it needs BOTH: Deploy Full Server Code → `pnpm db:drift-check` →
+`pm2 restart` → `./scripts/deploy-webapp.sh` → `pnpm demo:deploy`.
+
+**The two halves are independent — there is no ordering constraint**, which is
+unusual enough to state. The new client works against today's server and the
+new server works against today's bundle; each is a strict improvement on its own
+hop. If the Mini App build fails (see below), the server half still ships.
+
+Reported against the demo — no photos on the venue-change board, neither in the
+card previews nor in the opened gallery. It is **not** a demo bug: the
+venue-change handler is md5-identical between the two deployments, the
+`PLACES_API_KEY` line is md5-identical, and it is the same droplet. Production
+simply has never had a date reach that board (0 dates ever), so nobody had seen
+it. Reproduced in **production** with the prod bot token: 1 of 6 proxied photos
+came back 502, logged as `ETIMEDOUT` connecting to Google's photo CDN.
+
+**Four things worth knowing before the restart:**
+
+- **The 10s photo budget now covers up to 3 attempts** (≤4s each, 150ms apart)
+  rather than one long wait, so a proxied photo can never take *longer* than it
+  could before — only fail less often. Only transient outcomes retry: a thrown
+  fetch, 5xx, 429, 408. A 4xx, a non-image body and an over-ceiling file are
+  permanent and answer on the first attempt, so a genuinely broken ref costs one
+  request, not three.
+- **Expect new log lines, and treat a burst of them as the signal they are.**
+  `photo proxy failed after N attempt(s): <reason>` on every 502 (previously two
+  of the three failure branches returned in complete silence — that is why the
+  original report left almost nothing to go on), and
+  `photo recovered on attempt N` when a retry rescues a blip. The second is
+  rare by design; if it becomes frequent, the droplet's path to Google's CDN is
+  degrading and that is worth acting on before users lose photos again.
+- **Upstream request volume can rise on a bad day**, bounded at 3× for the
+  photos that fail. Google Places photo requests are billed, so a sustained
+  outage now costs somewhat more than it did — capped, and only while failing.
+- **Nothing in production exercises this** until a pair reaches `scheduled`
+  with `VENUE_CHANGE_FEATURE_ENABLED` on. Verify on the demo (walk a run to a
+  scheduled date, open "Change venue") or on `@gennetytestbot`. Note the demo's
+  own match had already gone `completed` during diagnosis, so it needs a fresh
+  run — `/restart`, or the "show me another profile" button.
+
+Preflight for this change: typecheck clean across all 5 projects, lint clean,
+**3935 tests** (bot 3410 / shared 273 / webapp 252), 0 failed.
+
+Post-deploy check — the healthy state is silence, so grep for the absence:
+
+```sh
+./scripts/deploy-webapp.sh && pnpm demo:deploy
+pm2 logs gennety-bot  --lines 200 --nostream | grep '\[venue-change\] photo'
+pm2 logs gennety-demo --lines 200 --nostream | grep '\[venue-change\] photo'
+# Empty = nothing failing. `photo recovered on attempt N` = a blip the retry
+# caught (fine, but watch the rate). `failed after 3 attempt(s)` = a real
+# upstream problem — read the reason, it now names one.
+```
+
+**Rollback:** revert the code, restart, redeploy the Mini App and the demo.
+Nothing else to undo — no schema, no env, no flag, no server state.
+
+---
+
 **PENDING — security audit remediation: the demo stops holding production's JWT
 secret and stops being able to send real SMS (DECISIONS.md ×3, DEMO_MODE.md →
 The isolation invariant).** Not deployed yet. **No Prisma schema change, no flag

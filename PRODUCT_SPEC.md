@@ -3670,6 +3670,33 @@ live only in the Telegram caption.
   already draws, and a board is never held up or failed for imagery. Only the
   board *read* pays for this; the like/confirm calls rebuild the same catalog
   purely to re-resolve a submitted key and skip the lookups entirely.
+  **Delivering those bytes is retried, on both hops (2026-08-08).** "Best-effort"
+  was being read as "one attempt", and one attempt is not enough on this path:
+  the droplet hits occasional TCP connect timeouts reaching Google's photo CDN —
+  measured at roughly one request in ten under a parallel burst, in **production
+  as well as the demo**, and invisible until now only because production has
+  never had a date reach this board. The board opens ~13 tiles at once, so a
+  single blip landed on several of them, and the client's fallback was terminal:
+  it swapped in the category glyph, marked the tile settled and never asked
+  again, so one dropped connection cost a permanently blank tile until the Mini
+  App was closed and reopened. The proxy now spends its existing 10-second
+  budget on up to 3 attempts (≤4s each, 150ms apart) instead of one long wait,
+  and the client retries once more after 600ms — so a tile has to fail twice, on
+  two different hops, before anyone sees a glyph. **Only transient failures are
+  retried**: a thrown fetch, a 5xx, a 429 or a 408. A 4xx, a non-image body and
+  an over-ceiling file are verdicts that do not change on the second ask, and
+  re-downloading an oversized image is not a fix. The client's retry asks for a
+  marked URL and paints the one that actually decoded, never the one it started
+  from — otherwise a rescued tile would immediately re-request the bytes that
+  just failed.
+  **And a failed photo is always logged now.** The two non-throwing failures —
+  a non-OK upstream and a non-image body — used to answer 502 in complete
+  silence, so a systematic upstream problem (a quota, a revoked key, a 429
+  storm) was indistinguishable from "photos just don't work" and left almost
+  nothing in the logs to go on. Every exhausted request logs its attempt count
+  and last reason; a blip that a retry rescues logs one line too, because a
+  rescue is rare by definition and is the only early warning that the path is
+  degrading before it starts costing users actual photographs.
 - **Never wedges.** Any render/send failure degrades per-side to the existing
   plain-text scheduled card, so one side's hiccup never denies the other their
   card and scheduling always completes.

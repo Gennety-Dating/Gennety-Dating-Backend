@@ -237,6 +237,115 @@ describe("GET /v1/venue-change/photo", () => {
       .get(`/v1/venue-change/photo?ref=${encodeURIComponent("places/x/photos/y")}&tma=${encodeURIComponent(rawInitData())}`);
     expect(res.status).toBe(502);
   });
+
+  // ── Retry (PRODUCT_SPEC §3.7b) ────────────────────────────────────────────
+  // The failure this exists for, measured on the droplet 2026-08-08: occasional
+  // ETIMEDOUT connecting to Google's photo CDN, in production as well as demo.
+  // The board opens ~13 tiles at once, so one blip left visible holes.
+  const photoRequest = () =>
+    request(buildApp()).get(
+      `/v1/venue-change/photo?ref=${encodeURIComponent("places/x/photos/y")}&tma=${encodeURIComponent(rawInitData())}`,
+    );
+  const jpeg = () => new Response("image", { headers: { "content-type": "image/jpeg" } });
+
+  it("retries a dropped connection and serves the photo", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    const err = Object.assign(new TypeError("fetch failed"), { cause: { code: "ETIMEDOUT" } });
+    const fetchMock = vi.fn().mockRejectedValueOnce(err).mockResolvedValueOnce(jpeg());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await photoRequest();
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^image\/jpeg/);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a 5xx and a 429, which are the upstream saying 'not now'", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("", { status: 503 }))
+      .mockResolvedValueOnce(new Response("", { status: 429 }))
+      .mockResolvedValueOnce(jpeg());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await photoRequest();
+
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("does NOT retry a 403 — a verdict does not change on the second ask", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await photoRequest();
+
+    expect(res.status).toBe(502);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("does NOT retry a non-image body", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("nope", { headers: { "content-type": "text/html" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect((await photoRequest()).status).toBe(502);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("does NOT retry an oversized image — re-downloading it is not a fix", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("x", {
+        headers: {
+          "content-type": "image/jpeg",
+          "content-length": String(10 * 1024 * 1024 + 1),
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect((await photoRequest()).status).toBe(502);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("stops at the attempt ceiling instead of hammering a dead upstream", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect((await photoRequest()).status).toBe(502);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("logs every failure — a silent 502 is what made this invisible", async () => {
+    // Both non-throwing failure branches used to answer 502 without a line in
+    // the log, so a systematic upstream problem looked like nothing at all.
+    process.env.PLACES_API_KEY = "test-key";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 403 })));
+
+    await photoRequest();
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("HTTP 403"));
+    warn.mockRestore();
+  });
+
+  it("logs a rescued blip, the only signal the upstream is degrading", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const err = Object.assign(new TypeError("fetch failed"), { cause: { code: "ETIMEDOUT" } });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(err).mockResolvedValueOnce(jpeg()));
+
+    expect((await photoRequest()).status).toBe(200);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("ETIMEDOUT"));
+    warn.mockRestore();
+  });
 });
 
 describe("POST /v1/venue-change/like", () => {

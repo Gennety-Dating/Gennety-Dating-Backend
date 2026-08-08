@@ -48,6 +48,7 @@ import { icon, categoryIcon, type IconName } from "./icons.js";
 import { wireContentInsets } from "./telegram-insets.js";
 import { returnParams } from "./return-to.js";
 import { referralChip } from "./referral-hint.js";
+import { loadPhotoWithRetry, domImageLoader } from "./photo-retry.js";
 
 const app = window.Telegram?.WebApp;
 app?.ready();
@@ -807,27 +808,23 @@ function photoTile(
   if (!url) return el(tag, { ...attrs, class: className }, [fallback()]);
 
   const node = el(tag, { ...attrs, class: `${className} is-loading` });
-  let settled = false;
-  const settle = (ok: boolean): void => {
-    if (settled) return;
-    settled = true;
+  const settle = (loaded: string | null): void => {
     node.classList.remove("is-loading");
-    if (ok) {
-      node.style.backgroundImage = `url("${url}")`;
+    if (loaded) {
+      node.style.backgroundImage = `url("${loaded}")`;
       node.classList.add("is-loaded");
     } else {
       node.append(fallback());
     }
   };
 
-  const img = new Image();
-  img.decoding = "async";
-  img.onload = () => settle(true);
-  img.onerror = () => settle(false);
-  img.src = url;
-  // Already in the browser cache (re-entering a detail page): paint at once so
-  // a cached photo never flashes a skeleton.
-  if (img.complete && img.naturalWidth > 0) settle(true);
+  // One retry before giving up — see photo-retry.ts. The tile keeps shimmering
+  // across the retry rather than flashing the glyph and taking it back, which
+  // would read as the board glitching.
+  loadPhotoWithRetry(url, settle, {
+    load: domImageLoader,
+    schedule: (fn, ms) => window.setTimeout(fn, ms),
+  });
 
   return node;
 }
