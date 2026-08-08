@@ -301,14 +301,58 @@ export async function requestPhoneCode(
         };
       };
 
+      /**
+       * Non-production rail: print the code, send nothing.
+       *
+       * Dev and the demo deployment (DEMO_MODE.md) both run on production's
+       * `TWILIO_*` credentials — the demo's isolation guard deliberately lets
+       * stateless third-party keys through — and nothing in this module ever
+       * consulted `OTP_LOG_TO_CONSOLE`. So a code requested against
+       * `demo-api.gennety.com` (the route is mounted unconditionally, and
+       * `PHONE_AUTH_ENABLED` is on there) sent a REAL SMS billed to the
+       * production account, to any number on earth, from the deployment we hand
+       * to outsiders. `email.ts` has short-circuited on this flag since it was
+       * written; this is the phone rail catching up.
+       *
+       * Safe as the FIRST branch rather than a fallback because the flag cannot
+       * be set in a production-like runtime: `identityTrustConfigurationErrors`
+       * refuses to boot with `OTP_LOG_TO_CONSOLE` on unless the process is
+       * test, development, or demo. Production therefore never reaches it.
+       *
+       * The code is ours, so `verifyPhoneCode` checks it locally against the
+       * bcrypt hash — the same path the Gateway rail uses, and the reason this
+       * rail needs no provider at all.
+       */
+      const viaConsole = async () => {
+        const code = generateOtp(PHONE_CODE_LENGTH);
+        const codeHash = await bcrypt.hash(code, 10);
+        const row = await tx.phoneOtp.create({
+          data: { phone, provider: "console", codeHash, expiresAt },
+        });
+        console.log(`[phone-verification] console rail — code for ${phone}: ${code}`);
+        return {
+          ok: true as const,
+          // The wire contract is `telegram | sms`; there is no third value and
+          // adding one would be a client-visible change for a rail no client
+          // can reach. "sms" matches the default primary.
+          deliveredVia: "sms" as const,
+          expiresAt,
+          resendAvailableAt: new Date(
+            row.createdAt.getTime() + PHONE_OTP_RESEND_COOLDOWN_MS,
+          ),
+        };
+      };
+
       // forceSms → Twilio only; otherwise the primary rail first with the
       // other configured rail as automatic fallback
       // (order = PHONE_CODE_PRIMARY_PROVIDER, default twilio).
-      const order = options.forceSms
-        ? [viaTwilio]
-        : env.PHONE_CODE_PRIMARY_PROVIDER === "telegram"
-          ? [viaTelegram, viaTwilio]
-          : [viaTwilio, viaTelegram];
+      const order = env.OTP_LOG_TO_CONSOLE
+        ? [viaConsole]
+        : options.forceSms
+          ? [viaTwilio]
+          : env.PHONE_CODE_PRIMARY_PROVIDER === "telegram"
+            ? [viaTelegram, viaTwilio]
+            : [viaTwilio, viaTelegram];
       for (const attempt of order) {
         const result = await attempt();
         if (result) return result;
@@ -342,13 +386,25 @@ export async function verifyPhoneCode(
   if (latest.expiresAt < now) return { ok: false, reason: "expired" };
   if (latest.attempts >= PHONE_OTP_MAX_ATTEMPTS) return { ok: false, reason: "exhausted" };
 
+  // Twilio is the only rail that checks the code for us; every other rail
+  // (Gateway, and the console rail above) delivered a code WE generated and is
+  // verified locally against the bcrypt hash.
+  //
+  // The test is deliberately "is it Twilio?" rather than the inverse. An
+  // unrecognised provider then lands on the local branch with no `codeHash`,
+  // which is `false` — a refusal. Written the other way round, a new rail added
+  // without a matching branch here would be handed to Twilio, which knows
+  // nothing about that verification and answers 404 → `rejected`; that happens
+  // to be safe today but only by accident, and a Twilio outage on such a row
+  // would report `provider_unavailable` for a code we could have checked
+  // ourselves.
   let matched: boolean;
-  if (latest.provider === "telegram_gateway") {
-    matched = latest.codeHash ? await bcrypt.compare(code, latest.codeHash) : false;
-  } else {
+  if (latest.provider === "twilio_verify") {
     const check = await twilioCheckVerification(phone, code);
     if (check === "unavailable") return { ok: false, reason: "provider_unavailable" };
     matched = check === "approved";
+  } else {
+    matched = latest.codeHash ? await bcrypt.compare(code, latest.codeHash) : false;
   }
 
   if (!matched) {

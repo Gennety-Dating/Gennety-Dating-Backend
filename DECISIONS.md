@@ -234,6 +234,82 @@ returns one precisely so a refusal cannot be dropped, and the button path was
 the one caller still throwing it away.
 **Recorded in:** DEMO_MODE.md → Recovery; `demo/commands.ts`, `demo/driver.ts`.
 
+## 2026-08-08 — demo shared production's JWT secret, and nothing could have caught it
+
+**Kind:** deviation from plan
+**What:** `/opt/gennety-demo/.env` carried production's `JWT_SECRET` verbatim.
+Both deployments therefore signed and accepted the same `/v1/*` access tokens —
+same secret, same hardcoded `issuer`/`audience`, and `requireAuth`
+(`auth-middleware.ts`) verifies a signature and never looks the user up. Rotated
+to a demo-owned value; a divergence gate now runs in `deploy-demo.sh`.
+**Why it happened, which is the reusable part:** the demo env is assembled by
+hand as production's `.env` plus the overrides in `.env.demo`, so **every key
+`.env.demo` forgets is silently inherited**. That same mechanism leaked
+`SUPABASE_URL` on day one; it was caught and fixed, and the *class* was not.
+`assertDemoIsolation()` cannot close it — from inside the demo process
+production's values are unknowable, which is exactly why that function is
+limited to settings wrong on their face (founder notifications, Stars, an admin
+key).
+**What it changes going forward:** the check belongs in `deploy-demo.sh`,
+the only vantage point where both `.env` files are readable at once, and it runs
+**before** the rsync so a violation costs nothing. Adding a secret to the demo
+deployment now means adding it to `MUST_DIFFER`/`MUST_BE_ABSENT` there. Do not
+try to move this into the process — it cannot work there.
+**Recorded in:** `scripts/deploy-demo.sh` (isolation gate), DEMO_MODE.md → The
+isolation invariant, deploy.md → the PENDING block at the top.
+
+## 2026-08-08 — the demo could send real SMS on production's Twilio account
+
+**Kind:** deviation from plan
+**What:** `services/phone-verification.ts` had no dev/demo short-circuit at all,
+while `/v1/auth/phone` is mounted unconditionally and `PHONE_AUTH_ENABLED` is on
+in demo. A code requested against `demo-api.gennety.com` went to Twilio on
+production's credentials. Fixed with a console rail gated on
+`OTP_LOG_TO_CONSOLE`, mirroring `email.ts`.
+**Why that gate and not `DEMO_MODE_ENABLED`:** the flag cannot be set in a
+production-like runtime — `identityTrustConfigurationErrors` refuses to boot with
+it on — so it already means "this is not production", and it covers **local dev
+too**, which inherits the same `TWILIO_*` keys from `.env`. Gating on the demo
+flag would have fixed one of the two deployments that had the problem.
+**What it changes going forward:** the shared-third-party-credential decision in
+DEMO_MODE.md ("stateless, spend is negligible") is sound for OpenAI/AWS/Places
+but was never true of the two rails that **send things to strangers** — Twilio
+and Resend. Resend was already handled. Any future outbound-messaging provider
+needs the same short-circuit before it ships, not after an audit.
+**Recorded in:** `phone-verification.ts` (console rail + its test),
+ARCHITECTURE.md → `phone_otps`, DEMO_MODE.md → guarded branches.
+
+## 2026-08-08 — giving up in the demo is a pause, not a retirement
+
+**Kind:** change of mind
+**What:** `failure-tracker.ts` abandoned an action permanently; it now releases
+one probe after a cooldown. Plus a belt-and-braces guard: `ensureFreshEmbeddings`
+rebuilds a stale vector before the demo pitches.
+**Why:** the tracker shipped 2026-08-07 to stop a 1500-line refusal flood, and it
+was right about that. What it could not distinguish is a *self-healing* refusal —
+and it turned one into a dead demo, observed live: a ready visitor, zero matches,
+`giving up on pitch`.
+**Relationship to the decline-reason entry above, because they were found the
+same day from the same symptom:** that one is the real fix and it is in
+**production** code — `appendNegativeConstraint` now refreshes, so the specific
+race is gone at the source. This entry is about what the *demo* did when a
+refusal happened at all. The two are complementary rather than duplicated, and
+that commit makes this one MORE necessary, not less: it routes the redo button's
+refusals into the same ladder, so more things can now reach a ceiling that used
+to be permanent.
+**What it changes going forward:** the ceiling must never mean "never again". A
+failed probe pushes the deadline out and cannot re-announce (the driver announces
+only where the streak first equals the ceiling), so the flood stays shut without
+the demo being able to die. `ensureFreshEmbeddings` is deliberately kept even
+though the known writer now refreshes: it costs nothing when the vector is clean,
+and not every path that dirties the flag refreshes it (a finalize whose initial
+embedding failed leaves it dirty by design). It sits beside `releaseMatchCooldown`
+because it is the same shape — a production precondition a fifteen-minute demo
+must not be held by. It is a guard, **not** the fix for the decline race; do not
+read it as one.
+**Recorded in:** `demo/failure-tracker.ts`, `demo/partners.ts`
+(`ensureFreshEmbeddings`), DEMO_MODE.md → A refused move is reported.
+
 ## 2026-08-08 — the referral cross-promo is a chip, and it never sits in an action bar
 
 **Kind:** founder decision

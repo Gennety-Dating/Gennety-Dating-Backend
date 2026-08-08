@@ -14,6 +14,10 @@ import { prisma } from "@gennety/db";
  * people who never finished signing up therefore have no row for the GDPR
  * deletion cascade to reach, and were retained indefinitely.
  *
+ * A fifth target was added 2026-08-08: `bot_sessions` rows whose account is
+ * gone. That table has no relation to `users` at all, so nothing cascades into
+ * it and no window applies to it — see `ORPHAN_SESSION_RETENTION_MS` below.
+ *
  * Deletion is batched per tick so one run can never take a long table lock or
  * blow up a transaction; the sweep simply catches up over subsequent hours.
  */
@@ -63,6 +67,30 @@ export const PROXY_MESSAGE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
  */
 export const CHAT_EVENT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * Chat sessions whose account no longer exists.
+ *
+ * `bot_sessions` is keyed by Telegram CHAT id with no relation to `users`, so
+ * it is the one store a Prisma cascade cannot reach. `deleteUserAccount` erases
+ * it directly (2026-08-08), but that is forward-only: production still carried
+ * five orphans from before it, and any future path that removes a user without
+ * going through that service would make more.
+ *
+ * Worth sweeping rather than leaving, on both counts the direct fix was made
+ * for: the row holds `pendingPhotos` (Telegram file_ids of an erased profile),
+ * a buffered AI-memory paste and `activeMatchId` — so leaving it is incomplete
+ * erasure — and the NEXT account in that chat inherits the state, which is how
+ * a stale `expectingPhoto: true` once dropped a brand-new user into the photo
+ * stage several questions early.
+ *
+ * The age floor is not decoration. `sessionMiddleware` runs before the handler
+ * that creates the `User` row, so a chat mid-`/start` legitimately has a session
+ * and no user for a moment; without a floor this sweep would race registration
+ * and delete a live session. A week is far past that and far short of mattering
+ * for cleanup.
+ */
+export const ORPHAN_SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** Rows removed per table per tick. */
 const BATCH_LIMIT = 1_000;
 
@@ -72,6 +100,7 @@ export interface RetentionSweepResult {
   sessions: number;
   proxyMessages: number;
   chatEvents: number;
+  orphanBotSessions: number;
 }
 
 /**
@@ -159,12 +188,39 @@ export async function retentionTick(
     (ids) => prisma.chatEvent.deleteMany({ where: { id: { in: ids } } }),
   );
 
-  const total = emailOtps + phoneOtps + sessions + proxyMessages + chatEvents;
+  // Raw, because there is no relation to traverse: the join is
+  // `users.telegram_id::text = bot_sessions.key`, which is exactly the coupling
+  // the schema does not express. Anti-join rather than "load all keys and diff
+  // in Node" so the work stays in Postgres and the batch limit is real.
+  const orphanCutoff = new Date(now.getTime() - ORPHAN_SESSION_RETENTION_MS);
+  const orphanBotSessions = await prisma.$executeRaw`
+    DELETE FROM bot_sessions
+    WHERE key IN (
+      SELECT b.key
+      FROM bot_sessions b
+      LEFT JOIN users u ON u.telegram_id::text = b.key
+      WHERE u.id IS NULL
+        AND b.updated_at < ${orphanCutoff}
+      ORDER BY b.updated_at ASC
+      LIMIT ${BATCH_LIMIT}
+    )
+  `;
+
+  const total =
+    emailOtps + phoneOtps + sessions + proxyMessages + chatEvents + orphanBotSessions;
   if (total > 0) {
     console.log(
       `[retention] emailOtps=${emailOtps} phoneOtps=${phoneOtps} ` +
-        `sessions=${sessions} proxyMessages=${proxyMessages} chatEvents=${chatEvents}`,
+        `sessions=${sessions} proxyMessages=${proxyMessages} chatEvents=${chatEvents} ` +
+        `orphanBotSessions=${orphanBotSessions}`,
     );
   }
-  return { emailOtps, phoneOtps, sessions, proxyMessages, chatEvents };
+  return {
+    emailOtps,
+    phoneOtps,
+    sessions,
+    proxyMessages,
+    chatEvents,
+    orphanBotSessions,
+  };
 }

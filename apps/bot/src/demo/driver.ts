@@ -38,6 +38,7 @@ import { composeProxyReply, type ProxyReplyTurn } from "./proxy-partner.js";
 
 import {
   DEMO_PARTNERS,
+  ensureFreshEmbeddings,
   ensurePuppetTicket,
   pickDemoPartner,
   releaseMatchCooldown,
@@ -969,7 +970,11 @@ async function startDemoMatch(
     return refused("puppet-not-seeded");
   }
 
+  // Both preconditions the production allocator enforces and a demo must not be
+  // held by: the 24h candidate cooldown, and a vector left stale by the
+  // visitor's own decline (see each helper for why).
   await releaseMatchCooldown([userId, partner.id]);
+  await ensureFreshEmbeddings([userId, partner.id]);
   // A second pass through the flow gets its own date-card handover and its own
   // pre-date replay; without this it would land on a scheduled date in silence.
   forgetMatchBeats(userId);

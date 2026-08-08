@@ -274,6 +274,48 @@ export async function releaseMatchCooldown(userIds: readonly string[]): Promise<
 }
 
 /**
+ * Rebuild any stale vector NOW instead of waiting for the 5-minute cron.
+ *
+ * The twin of `releaseMatchCooldown` above: a production precondition that is
+ * right for a weekly batch and wrong for a demo measured in minutes. Matching
+ * fail-closes on the seeker's own `embeddingDirty`, so a stale flag is not a
+ * slow match — it is no match at all until the cron catches up.
+ *
+ * **A guard, not the fix for the decline race.** That race — a rejection reason
+ * writing `negativeConstraints`, flipping the flag, and withholding the user
+ * from the very next pitch — was a PRODUCTION bug and is fixed where it
+ * belongs, in `appendNegativeConstraint`, which now attempts the immediate
+ * refresh every other embedding-feeding writer already did (DECISIONS.md,
+ * 2026-08-08). This exists because not every path that dirties the flag
+ * refreshes it: a finalize whose initial embedding failed deliberately leaves
+ * the profile dirty for the worker to retry, and a demo cannot afford to wait
+ * out that retry in front of an audience.
+ *
+ * Costs nothing when the vector is clean — the query filters on the flag — and
+ * `refreshUserEmbedding` is the same production refresher the puppet is seeded
+ * through, so nothing about how a vector is derived is special-cased for demo.
+ */
+export async function ensureFreshEmbeddings(userIds: readonly string[]): Promise<void> {
+  if (userIds.length === 0) return;
+  const stale = await prisma.profile.findMany({
+    where: { userId: { in: [...userIds] }, embeddingDirty: true },
+    select: { userId: true },
+  });
+  for (const { userId } of stale) {
+    const result = await refreshUserEmbedding(userId).catch((err: unknown) => {
+      console.warn(`[demo] embedding refresh threw for ${userId}:`, err);
+      return { refreshed: 0, failed: 1 };
+    });
+    if (result.failed > 0 || result.refreshed === 0) {
+      // Not fatal here: the caller's own refusal path reports it, and the next
+      // tick tries again. Saying it once keeps a persistent OpenAI failure
+      // distinguishable from an ordinary allocator refusal.
+      console.warn(`[demo] embedding still stale for ${userId} — pitch will be refused`);
+    }
+  }
+}
+
+/**
  * Make sure the puppet can pay for its own Date Ticket.
  *
  * The §3.5b gate needs BOTH slots settled before the Calendar is sent, and a

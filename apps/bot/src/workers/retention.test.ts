@@ -5,9 +5,10 @@ const phoneOtp = { findMany: vi.fn(), deleteMany: vi.fn() };
 const userSession = { findMany: vi.fn(), deleteMany: vi.fn() };
 const proxyMessage = { findMany: vi.fn(), deleteMany: vi.fn() };
 const chatEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
+const $executeRaw = vi.fn();
 
 vi.mock("@gennety/db", () => ({
-  prisma: { emailOtp, phoneOtp, userSession, proxyMessage, chatEvent },
+  prisma: { emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, $executeRaw },
 }));
 
 const {
@@ -16,6 +17,7 @@ const {
   SESSION_RETENTION_MS,
   PROXY_MESSAGE_RETENTION_MS,
   CHAT_EVENT_RETENTION_MS,
+  ORPHAN_SESSION_RETENTION_MS,
 } = await import("./retention.js");
 
 const NOW = new Date("2026-08-01T03:45:00.000Z");
@@ -25,6 +27,7 @@ beforeEach(() => {
     model.findMany.mockReset().mockResolvedValue([]);
     model.deleteMany.mockReset().mockResolvedValue({ count: 0 });
   }
+  $executeRaw.mockReset().mockResolvedValue(0);
   vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
@@ -37,6 +40,7 @@ describe("retentionTick", () => {
       sessions: 0,
       proxyMessages: 0,
       chatEvents: 0,
+      orphanBotSessions: 0,
     });
     for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent]) {
       expect(model.deleteMany).not.toHaveBeenCalled();
@@ -130,6 +134,45 @@ describe("retentionTick", () => {
       sessions: 0,
       proxyMessages: 2,
       chatEvents: 0,
+      orphanBotSessions: 0,
+    });
+  });
+
+  describe("orphaned chat sessions", () => {
+    /** The tagged-template call: [strings, ...values]. */
+    function rawCall() {
+      const call = $executeRaw.mock.calls[0];
+      return { sql: (call[0] as string[]).join("?"), values: call.slice(1) };
+    }
+
+    it("anti-joins bot_sessions against users, since no relation exists", async () => {
+      await retentionTick(NOW);
+      const { sql } = rawCall();
+      expect(sql).toContain("DELETE FROM bot_sessions");
+      // The coupling the schema does not express: chat id as text.
+      expect(sql).toContain("u.telegram_id::text = b.key");
+      expect(sql).toContain("u.id IS NULL");
+    });
+
+    it("will not race registration — only sessions untouched for a week", async () => {
+      // `sessionMiddleware` runs before the handler that creates the `User`
+      // row, so a chat mid-`/start` legitimately has a session and no user.
+      // Without the floor this sweep would delete a live session.
+      await retentionTick(NOW);
+      const { values } = rawCall();
+      expect(values).toContainEqual(new Date(NOW.getTime() - ORPHAN_SESSION_RETENTION_MS));
+      expect(ORPHAN_SESSION_RETENTION_MS).toBe(7 * 24 * 60 * 60 * 1000);
+    });
+
+    it("is batched like every other table", async () => {
+      await retentionTick(NOW);
+      expect(rawCall().values).toContain(1_000);
+    });
+
+    it("counts what it deleted", async () => {
+      $executeRaw.mockResolvedValue(5);
+      const result = await retentionTick(NOW);
+      expect(result.orphanBotSessions).toBe(5);
     });
   });
 });

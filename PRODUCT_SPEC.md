@@ -4593,7 +4593,11 @@ excluding an otherwise-complete user from matching.
   `pendingPhotos` — Telegram `file_id`s of the profile being erased — plus a
   buffered AI-memory paste and the current match id, so leaving it behind was
   not erasure. See ARCHITECTURE.md → `bot_sessions` for why a Telegram caller
-  must also reset the live session.
+  must also reset the live session. That erasure is **forward-only**, so the
+  `retention` cron additionally sweeps sessions whose chat id matches no user
+  and that nothing has touched for 7 days — the rows left by every deletion
+  before the fix, and by any future path that removes a user without going
+  through `deleteUserAccount`.
 - Liveness-captured reference selfies are auto-deleted 90 days after `verifiedAt`
   (`selfie-retention` cron); the user stays `verified`, only the reference
   image is scrubbed.

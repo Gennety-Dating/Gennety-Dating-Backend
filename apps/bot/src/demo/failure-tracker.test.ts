@@ -65,4 +65,47 @@ describe("createFailureTracker", () => {
     expect(t.note("u1", "partner_pay_ticket")).toBe(1);
     expect(t.abandoned("u1", "partner_pay_ticket")).toBe(false);
   });
+
+  describe("giving up is a pause, not a retirement", () => {
+    const COOLDOWN = 120_000;
+    const T0 = 1_000_000;
+
+    function abandonedTracker() {
+      const t = createFailureTracker(MAX, COOLDOWN);
+      for (let i = 0; i < MAX; i += 1) t.note("u1", "pitch", T0);
+      return t;
+    }
+
+    it("lets one probe through once the cooldown has elapsed", () => {
+      const t = abandonedTracker();
+      expect(t.abandoned("u1", "pitch", T0 + COOLDOWN - 1)).toBe(true);
+      // The cause may have healed on its own — an embedding finished building,
+      // a provider came back. Parking the demo forever is worse than a slow
+      // retry, and the visitor is still sitting there.
+      expect(t.abandoned("u1", "pitch", T0 + COOLDOWN)).toBe(false);
+    });
+
+    it("a failed probe pushes the deadline out instead of reopening the flood", () => {
+      const t = abandonedTracker();
+      const probeAt = T0 + COOLDOWN;
+      expect(t.note("u1", "pitch", probeAt)).toBe(MAX + 1);
+      expect(t.abandoned("u1", "pitch", probeAt + 1)).toBe(true);
+      expect(t.abandoned("u1", "pitch", probeAt + COOLDOWN)).toBe(false);
+    });
+
+    it("a failed probe cannot re-announce the give-up", () => {
+      const t = abandonedTracker();
+      // The driver announces only on the tick where the streak first equals the
+      // ceiling, so the count must keep climbing rather than resetting to 1 —
+      // otherwise every cooldown would send the visitor another "I'm stuck".
+      expect(t.note("u1", "pitch", T0 + COOLDOWN)).not.toBe(MAX);
+    });
+
+    it("a probe that succeeds clears the visitor completely", () => {
+      const t = abandonedTracker();
+      t.clear("u1"); // the driver clears on any successful action
+      expect(t.abandoned("u1", "pitch", T0 + 1)).toBe(false);
+      expect(t.note("u1", "pitch", T0 + 1)).toBe(1);
+    });
+  });
 });

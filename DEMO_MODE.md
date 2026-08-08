@@ -21,7 +21,7 @@ Everything on screen is production code. What the demo changes is only:
 | The other person | a real matched user | a fixed synthetic profile |
 | Liveness verdict | AWS decides | always passes |
 | Photo validation | strict | off — any three images, faces optional |
-| Contact rail | real email OTP / phone share | auto-satisfied |
+| Contact rail | real email OTP / phone share | auto-satisfied; any OTP code is printed, never sent |
 | Departure point | must be inside Kyiv | **same gate**, plus a one-tap "drop the pin in Kyiv" |
 | Date Ticket | Telegram Stars | the existing **mock** rail (real screens, real prices, no charge) |
 | Venue change | 150⭐ | settled free |
@@ -47,6 +47,22 @@ build time, so the demo needs its own build of the same source.
 
 Deliberately **shared**: the source tree, and the stateless third-party
 credentials (OpenAI, Google Places, AWS). Demo spend is real but negligible.
+
+**"Stateless" is the load-bearing word, and two credentials never qualified.**
+Twilio and Resend do not compute an answer — they *send something to a
+stranger*, on production's account, from the deployment we hand to outsiders.
+Email was short-circuited from the start (`services/email.ts` checks
+`OTP_LOG_TO_CONSOLE`); the phone rail was not, and `/v1/auth/phone` is mounted
+unconditionally, so until 2026-08-08 a code requested against `demo-api` sent a
+real SMS billed to production. Both rails now print instead of sending. Any
+future outbound-messaging provider owes the same branch **before** it ships.
+
+**`JWT_SECRET` is demo-owned, and the deploy refuses without it.** It was
+production's until an audit on 2026-08-08: both deployments signed and accepted
+the same `/v1/*` tokens, and `requireAuth` verifies a signature without looking
+the user up. The cause is structural rather than careless — the demo `.env` is
+production's plus the overrides in `.env.demo`, so **anything `.env.demo` does
+not name is inherited**. See the gate below.
 
 **Supabase Storage is NOT in that list** — it holds user media, so the demo
 points at its own project with its own `service_role` key and its own private
@@ -76,6 +92,28 @@ stops the process from booting, naming the setting that gave it away.**
 Two things no automated check can verify are which bot and which database the
 process is talking to. `logDemoBanner()` prints both as the first lines of the
 log instead.
+
+### The inheritance gate lives in the deploy script, not in the process
+
+`assertDemoIsolation()` catches settings that are wrong on their face. It
+structurally **cannot** catch an inherited production secret: from inside the
+demo process, production's values are unknowable, so "is this the same
+`JWT_SECRET` production uses?" has no answer there. That is not a gap to fix in
+`demo/config.ts` — it is a reason the check has to live somewhere else.
+
+`scripts/deploy-demo.sh` runs it, because the server is the only place both
+`.env` files are readable at once. Before anything is synced, it compares
+`/opt/gennety/.env` with `/opt/gennety-demo/.env` and refuses to deploy when:
+
+- `BOT_TOKEN`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` or
+  `JWT_SECRET` is **identical in both**, or missing from the demo file (missing
+  means inherited — that is exactly how both known leaks happened);
+- `ADMIN_API_KEY`, `FOUNDER_BOT_TOKEN` or `FOUNDER_TELEGRAM_ID` is present at
+  all in the demo file.
+
+Adding a new secret to the demo deployment means adding it to that list. The
+gate caught the real `JWT_SECRET` violation the day it was written, which is the
+only endorsement worth having.
 
 ## How it works
 
@@ -145,11 +183,35 @@ of `void`; nothing swallows a refusal, and a **throw is counted the same way**
 so it is testable without a database, a bot or a clock, the same split
 `decide.ts` already makes.
 
-At three in a row the demo **stops and says so** (`stuck`, all three languages),
-and the action is not retried until the state moves on. Three matters in both
-directions: at `DEMO_STEP_WAIT_MS` apart it is a little over half a minute, long
-enough to ride out a provider hiccup and short enough that nobody is left
-watching a chat that has quietly died. The message is deliberately vague about
+At three in a row the demo **stops and says so** (`stuck`, all three languages).
+Three matters in both directions: at `DEMO_STEP_WAIT_MS` apart it is a little
+over half a minute, long enough to ride out a provider hiccup and short enough
+that nobody is left watching a chat that has quietly died.
+
+**But giving up is a pause, not a retirement** (corrected 2026-08-08). The first
+version held the action abandoned until a different action, a success, or
+`/restart`, which turned any *self-healing* refusal into a dead demo — found
+live, with a ready visitor, zero matches and `giving up on pitch` in the log.
+
+The ceiling now releases **one probe** after `DEMO_RETRY_AFTER_MS` (2 min). A
+failed probe pushes the deadline out and **cannot** re-announce: the driver
+announces only on the tick where the streak first equals the ceiling, so the
+count keeps climbing rather than resetting. The flood stays shut; the demo stops
+being able to die permanently.
+
+That matters more after the redo button's refusals began feeding this same
+ladder (the entry below) — more paths can now reach a ceiling that used to be
+permanent.
+
+The refusal that exposed it was a *production* bug, and is fixed there rather
+than here: a rejection reason wrote `negativeConstraints`, flipped
+`embeddingDirty`, and withheld the user from the very next pitch until the
+5-minute cron caught up. `appendNegativeConstraint` now refreshes immediately,
+like every other embedding-feeding writer. `ensureFreshEmbeddings`
+(`partners.ts`, beside `releaseMatchCooldown` and for the same reason) stays as
+a guard for the paths that legitimately leave the flag set — a finalize whose
+initial embedding failed is meant to stay dirty for the worker to retry, and a
+demo cannot wait that out in front of an audience. The message is deliberately vague about
 *what* broke — a visitor cannot act on `insufficient-balance` — and points at
 `/restart`, which is always available. A demo that admits a fault is
 recoverable; one that silently stops in front of an audience is not.

@@ -392,6 +392,18 @@ lock, and a durable per-phone daily cap backs the in-memory rate limiter.
 Indexed `(phone, createdAt)`. Written by
 `services/phone-verification.ts`; consumed by `public/routes/phone-auth.ts`.
 
+A third `provider` value, **`console`**, is written only when
+`OTP_LOG_TO_CONSOLE` is set — dev and the demo deployment, which
+`identityTrustConfigurationErrors` are the only runtimes allowed to set it. It
+prints the code and calls no provider at all. This exists because both of those
+deployments run on PRODUCTION's `TWILIO_*` credentials and `/v1/auth/phone` is
+mounted unconditionally, so before 2026-08-08 a code requested against
+`demo-api.gennety.com` sent a real SMS billed to the production account.
+Verification branches on `provider === "twilio_verify"` (remote check) and
+treats **everything else** as locally hash-verified — deliberately that way
+round, so a rail added without a matching branch is refused for want of a
+`codeHash` rather than handed to a provider that never issued it.
+
 ### `user_sessions`
 
 Active mobile refresh tokens. Access JWTs are stateless; refresh tokens are
@@ -822,7 +834,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `*/5 * * * *` | UTC | Embedding refresh (dirty-flag scan, ≤20 rows/tick) | `workers/embedding-refresh.ts` |
 | `0 * * * *` | UTC | Auto-unsuspend elapsed Tier-2 suspensions | `services/match-engine.ts` (`autoUnsuspendElapsed`) |
 | `30 3 * * *` | Europe/Kyiv | GDPR Article 9 selfie scrub (90 d post-`verifiedAt`) | `services/selfie-retention.ts` |
-| `45 3 * * *` | Europe/Kyiv | Data retention: OTP challenges (7 d), dead refresh sessions (30 d past unusable), proxy-chat messages (90 d), chat-timeline events (30 d). Batched ≤1000 rows/table/tick | `workers/retention.ts` (`retentionTick`) |
+| `45 3 * * *` | Europe/Kyiv | Data retention: OTP challenges (7 d), dead refresh sessions (30 d past unusable), proxy-chat messages (90 d), chat-timeline events (30 d), plus **orphaned `bot_sessions`** — rows whose Telegram chat id matches no user, untouched for 7 d (a raw anti-join: that table has no relation to `users`, so nothing cascades into it; the age floor is what stops it racing a chat mid-`/start`, where the session legitimately exists before the user row). Batched ≤1000 rows/table/tick | `workers/retention.ts` (`retentionTick`) |
 | `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours refresh, ≤30 rows/tick) | `services/venue-revalidation.ts` |
 | `0 * * * *` (only when `TICKET_FEATURE_ENABLED`) | UTC | Date Ticket expiry: retry durable Stars refunds, reverse stalled `partial` payments, then open the Calendar for free | `workers/ticket-expiry.ts` → `handlers/matching/ticket-gate.ts` |
 | `0 * * * *` (only when `REMATCH_FEATURE_ENABLED`) | UTC | Rematch refunds: retry `refund_failed` rows and refund purchases abandoned mid-run (`processing` past 5 min). What makes "never keep money without delivering a match" durable | `services/rematch-refund.ts` (`sweepRematchRefunds`) |

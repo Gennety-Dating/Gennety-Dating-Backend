@@ -28,6 +28,7 @@ const envMock = {
   TWILIO_ACCOUNT_SID: "AC123",
   TWILIO_AUTH_TOKEN: "tw-secret",
   TWILIO_VERIFY_SERVICE_SID: "VA123",
+  OTP_LOG_TO_CONSOLE: false,
 };
 
 vi.mock("../config.js", () => ({ env: envMock }));
@@ -82,6 +83,7 @@ beforeEach(() => {
   envMock.TWILIO_ACCOUNT_SID = "AC123";
   envMock.TWILIO_AUTH_TOKEN = "tw-secret";
   envMock.TWILIO_VERIFY_SERVICE_SID = "VA123";
+  envMock.OTP_LOG_TO_CONSOLE = false;
   phoneOtpFindFirst.mockResolvedValue(null);
   phoneOtpCount.mockResolvedValue(0);
   phoneOtpCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
@@ -94,6 +96,80 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("console rail (OTP_LOG_TO_CONSOLE)", () => {
+  /**
+   * The demo deployment and local dev both run on PRODUCTION's `TWILIO_*`
+   * credentials — the demo isolation guard deliberately lets stateless
+   * third-party keys through — and `/v1/auth/phone` is mounted unconditionally.
+   * Until 2026-08-08 nothing here consulted this flag, so a code requested
+   * against `demo-api.gennety.com` sent a real SMS billed to production.
+   */
+  it("sends NOTHING to any provider — the whole point of the fix", async () => {
+    envMock.OTP_LOG_TO_CONSOLE = true;
+    const fetchMock = stubProviders({});
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const result = await requestPhoneCode("+380631234567");
+
+    expect(result.ok).toBe(true);
+    // Not "Twilio wasn't reached" — no outbound call was made at all.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalled();
+  });
+
+  it("stores a locally-verifiable code, so the rail needs no provider", async () => {
+    envMock.OTP_LOG_TO_CONSOLE = true;
+    stubProviders({});
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await requestPhoneCode("+380631234567");
+
+    const { data } = phoneOtpCreate.mock.calls[0][0];
+    expect(data.provider).toBe("console");
+    expect(data.codeHash).toEqual(expect.any(String));
+    // Twilio is the only rail that keeps the code for us; this one must not
+    // pretend to have a provider request to check against later.
+    expect(data.providerRequestId).toBeUndefined();
+  });
+
+  it("verifies the printed code locally", async () => {
+    const code = "123456";
+    phoneOtpFindFirst.mockResolvedValue({
+      id: "row-1",
+      provider: "console",
+      codeHash: await bcrypt.hash(code, 10),
+      expiresAt: new Date(Date.now() + 60_000),
+      attempts: 0,
+    });
+    phoneOtpUpdateMany.mockResolvedValue({ count: 1 });
+    const fetchMock = stubProviders({});
+
+    const result = await verifyPhoneCode("+380631234567", code);
+
+    expect(result).toEqual({ ok: true, phone: "+380631234567" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("fails closed on an unknown provider instead of asking Twilio about it", async () => {
+    // The branch is "is it Twilio?", not "is it the Gateway?". A rail added
+    // without a matching branch lands here with no `codeHash` and is refused,
+    // rather than being handed to a provider that never issued it.
+    phoneOtpFindFirst.mockResolvedValue({
+      id: "row-1",
+      provider: "some_future_rail",
+      codeHash: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      attempts: 0,
+    });
+    const fetchMock = stubProviders({});
+
+    const result = await verifyPhoneCode("+380631234567", "123456");
+
+    expect(result).toEqual({ ok: false, reason: "mismatch" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("normalizePhone", () => {

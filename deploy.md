@@ -1,5 +1,82 @@
 # Gennety Dating Deploy
 
+**PENDING — security audit remediation: the demo stops holding production's JWT
+secret and stops being able to send real SMS (DECISIONS.md ×3, DEMO_MODE.md →
+The isolation invariant).** Not deployed yet. **No Prisma schema change, no flag
+change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so a full
+server code deploy carries all of it, plus `pnpm demo:deploy`. **One env change,
+demo-side only**, and it must land BEFORE the demo redeploy or the new gate will
+(correctly) refuse to deploy.
+
+From a full demo↔production isolation audit. Four fixes; the first two are the
+ones that matter.
+
+- **`JWT_SECRET` was identical in both deployments.** Same secret, same
+  hardcoded issuer/audience, and `requireAuth` verifies a signature without
+  looking the user up — so a token minted by the demo API was cryptographically
+  valid on production, with only "does this UUID exist in the prod database?"
+  left between it and an authenticated request. Cause is structural: the demo
+  `.env` is production's plus the overrides in `.env.demo`, so every key
+  `.env.demo` omits is inherited (the same mechanism that leaked `SUPABASE_URL`
+  on day one). Fixed by giving the demo its own secret, and by a **gate in
+  `deploy-demo.sh`** that compares both `.env` files on the server and refuses
+  to deploy on a shared secret. `assertDemoIsolation()` cannot do this — from
+  inside the process, production's values are unknowable.
+- **The demo could send real SMS billed to production's Twilio account.**
+  `phone-verification.ts` had no dev/demo short-circuit while `/v1/auth/phone`
+  is mounted unconditionally and `PHONE_AUTH_ENABLED` is on there. A console
+  rail gated on `OTP_LOG_TO_CONSOLE` now prints the code and calls no provider,
+  mirroring `email.ts`. **That gate also covers local dev**, which inherits the
+  same `TWILIO_*` keys — gating on `DEMO_MODE_ENABLED` would have fixed one of
+  the two affected deployments.
+- **`retention` gains a fifth target:** `bot_sessions` rows whose chat id
+  matches no user and that nothing has touched for 7 days. `deleteUserAccount`
+  erases the session directly as of `981ef04`, but forward-only — production
+  carried five orphans from before it.
+- **The demo can no longer park itself permanently** (`failure-tracker.ts`): a
+  given-up action releases one probe every 2 minutes. See DECISIONS.md for why
+  this is complementary to, not a duplicate of, the decline-reason fix in
+  `8055c03`.
+
+**Three things worth knowing before the restart:**
+
+- **The env step is not optional and comes first.** Generate a fresh secret
+  (≥32 bytes; the public API refuses to start on a shorter one) into
+  `/opt/gennety-demo/.env` **and** into `.env.demo`, or the next hand-built demo
+  env inherits production's again — which is the entire failure this fixes.
+  Rotating the DEMO secret only invalidates demo tokens; production's is
+  untouched, so no iOS client is affected either way.
+- **`phone_otps.provider` gains a third value, `console`.** No schema change
+  (plain string column). Verification now branches on
+  `provider === "twilio_verify"` and treats everything else as locally
+  hash-verified — deliberately that way round, so an unrecognised rail is
+  refused rather than handed to a provider that never issued it.
+- **The new orphan sweep is raw SQL with an age floor**, and the floor is
+  load-bearing: `sessionMiddleware` runs before the handler that creates the
+  `User` row, so a chat mid-`/start` legitimately has a session and no user.
+  Without it the sweep would race registration.
+
+Post-deploy check — the gate proves itself by refusing when it should, and the
+console rail by making no outbound call:
+
+```sh
+# 1. The gate must PASS after the env change (it failed on JWT_SECRET before it):
+pnpm demo:deploy          # first line: "OK — bot, database, storage and JWT secret are all demo-owned"
+
+# 2. The demo must no longer reach Twilio. On the demo, request a code and watch:
+ssh root@167.172.178.229 'pm2 logs gennety-demo --lines 50 --nostream | grep "console rail"'
+#    A "[phone-verification] console rail — code for +…" line and NO twilio line.
+
+# 3. Orphan sweep (runs 03:45 Kyiv; the count should go to zero and stay there):
+psql "$DATABASE_URL" -c "select count(*) from bot_sessions b left join users u on u.telegram_id::text = b.key where u.id is null;"
+```
+
+**Rollback:** revert the code and restart. The demo's new `JWT_SECRET` can stay
+(nothing depends on it matching anything) — reverting it would restore the
+vulnerability. The `console` provider rows expire on their own within 7 days.
+
+---
+
 **PENDING — the ticket becomes a portrait object, the recommended bundle becomes
 a burgundy button (PRODUCT_SPEC §3.5b).** Not deployed yet. **No Prisma schema
 change, no env change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the
