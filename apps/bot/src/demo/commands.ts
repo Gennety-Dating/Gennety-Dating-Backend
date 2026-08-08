@@ -1,6 +1,6 @@
 import { Composer } from "grammy";
 import { prisma } from "@gennety/db";
-import type { Language } from "@gennety/shared";
+import { DEFAULT_SESSION, type Language } from "@gennety/shared";
 
 import type { BotContext } from "../session.js";
 import { deleteUserAccount } from "../services/account-deletion.js";
@@ -67,6 +67,17 @@ demoRouter.command("restart", async (ctx) => {
   // pair ban refuse to pair them with the same puppet again.
   await clearDemoMatches(user.id);
   await deleteUserAccount(user.id, ctx.api);
+
+  // `deleteUserAccount` drops the persisted `bot_sessions` row, but grammY
+  // holds this chat's session in memory for the rest of the update and writes
+  // it back when the handler returns — so without resetting it here the delete
+  // is immediately undone and the brand-new account inherits the old one's
+  // state. That is not theoretical: a surviving `expectingPhoto: true` put a
+  // fresh visitor into the photo stage while the collector was still asking
+  // profile questions, and tapping Continue there dead-ended onboarding.
+  // The Telegram Settings → Delete path has always done this (settings.ts);
+  // `/restart` is the same deletion and owes the same reset.
+  Object.assign(ctx.session, { ...DEFAULT_SESSION });
 });
 
 /**

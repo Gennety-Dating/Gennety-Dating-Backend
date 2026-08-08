@@ -407,6 +407,23 @@ idea whether a radar step exists at all.
   bespoke reset — that function is the only code that knows every table,
   storage object and founder-report snapshot a user touches.
 
+  **It must also reset `ctx.session`, and for a while it did not.** The chat
+  session is keyed by Telegram chat id and has no relation to `users`, so it
+  survives the deletion; `deleteUserAccount` now erases the row, but grammY
+  holds this chat's session in memory for the rest of the update and writes it
+  back when the handler returns — so without the in-place reset the delete is
+  immediately undone. The Telegram Settings → Delete path has always done this;
+  `/restart` is the same deletion and owes the same reset.
+
+  What it cost while missing is worth keeping, because it is the shape of every
+  future version of this bug: a brand-new visitor inherited the previous one's
+  `expectingPhoto: true`, which put them in the photo stage while the collector
+  was still asking profile questions. Three uploads then produced a Continue
+  button that finalized onboarding early, the guard refused, and the demo
+  dead-ended at the one step a visitor cannot skip. **A demo that deletes an
+  account must leave nothing of it in the chat** — the point of `/restart` is
+  that the next `/start` is a genuinely new person.
+
 Both are registered ahead of every other handler so they work from any state,
 and both are mounted only when `DEMO_MODE_ENABLED`.
 

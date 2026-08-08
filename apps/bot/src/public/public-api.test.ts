@@ -254,6 +254,7 @@ const db = {
   matchEvents: [] as MatchEventRow[],
   messages: [] as MessageRow[],
   founderReports: [] as FounderReportRow[],
+  botSessions: [] as { key: string }[],
 };
 
 function resetDb(): void {
@@ -269,6 +270,7 @@ function resetDb(): void {
   db.matchEvents.length = 0;
   db.messages.length = 0;
   db.founderReports.length = 0;
+  db.botSessions.length = 0;
 }
 
 function userById(id: string): UserRow | undefined {
@@ -639,6 +641,19 @@ vi.mock("@gennety/db", async () => {
         }),
       },
 
+      // ----- botSession -----
+      // Account deletion erases the grammY chat session too: it is keyed by
+      // Telegram chat id with no relation to `users`, so no cascade reaches it
+      // and whatever it holds would be inherited by the next account in that
+      // chat (see services/account-deletion.ts).
+      botSession: {
+        deleteMany: vi.fn(async ({ where }: any) => {
+          const before = db.botSessions.length;
+          db.botSessions = db.botSessions.filter((row) => row.key !== where.key);
+          return { count: before - db.botSessions.length };
+        }),
+      },
+
       // ----- profile -----
       profile: {
         findUnique: vi.fn(async ({ where, select }: any) => {
@@ -737,6 +752,7 @@ vi.mock("@gennety/db", async () => {
       matchEvents: structuredClone(db.matchEvents),
       messages: structuredClone(db.messages),
       founderReports: structuredClone(db.founderReports),
+      botSessions: structuredClone(db.botSessions),
     };
   }
 
@@ -749,6 +765,7 @@ vi.mock("@gennety/db", async () => {
     db.matchEvents = snapshot.matchEvents;
     db.messages = snapshot.messages;
     db.founderReports = snapshot.founderReports;
+    db.botSessions = snapshot.botSessions;
   }
 
   prismaMock.$transaction = vi.fn(async (ops: unknown) => {

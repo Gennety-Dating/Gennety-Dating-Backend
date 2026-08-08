@@ -77,6 +77,33 @@ deploy.md → the PENDING block at the top.
 
 ---
 
+## 2026-08-08 — the chat session is account state, and deleting an account must erase it
+
+**Kind:** deviation from plan
+**What:** `deleteUserAccount` now deletes the `bot_sessions` row, and the demo
+`/restart` resets `ctx.session` in place. Found from a founder-reported dead end
+in the demo — "Cannot finalize — missing required data: partner_preferences"
+after uploading photos, with no way forward.
+**Why:** the row is keyed by Telegram CHAT id and has no relation to `users`, so
+it is the one store the Prisma cascade cannot reach. It had been treated as
+transport state; it is account state. The reconstruction from `chat_events` is
+what makes the class clear rather than the instance: a `/restart` left
+`expectingPhoto: true` behind, the NEXT account inherited it, three uploads at
+the `hobbies` question produced a Continue button, and Continue called finalize
+directly — refused, changed nothing, stage still open, no path back to the
+missing question.
+**What it changes going forward:** three rules. **A store with no FK to `users`
+is not automatically out of scope for deletion** — `bot_sessions` was the only
+one, and it also held `pendingPhotos`, a buffered AI-memory paste and
+`activeMatchId`, so this was a GDPR gap as much as a state one. **A Telegram
+caller must reset `ctx.session` as well as the row**, because grammY writes the
+live session back after the handler and would resurrect it. And **an
+LLM-facing tool diagnostic must never be a user-facing reply**: it is English,
+names internal field keys, and instructs a model — the two sites that printed
+it now log it and answer with localized copy.
+**Recorded in:** ARCHITECTURE.md → `bot_sessions`; PRODUCT_SPEC.md §1.3 and
+§GDPR; DEMO_MODE.md → Recovery.
+
 ## 2026-08-08 — a demo-only deploy can ship a production fix to the demo and nowhere else
 
 **Kind:** deviation from plan

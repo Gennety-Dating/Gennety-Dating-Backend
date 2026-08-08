@@ -432,10 +432,23 @@ async function runCollectorTurn(
         snapshot.completedFields,
       );
     } else {
-      reply =
-        typeof parsed?.error === "string"
-          ? parsed.error
-          : "I couldn't finish onboarding yet. Please try again.";
+      // The collector says every question is answered and the finalize guard
+      // disagrees — the two notions of "done" have diverged, which is a defect
+      // on our side rather than anything the user can act on. Its message is
+      // written FOR THE MODEL (English, internal field keys, "call
+      // finalize_onboarding"), so it must never reach the chat; it goes to the
+      // log, where the missing list is what identifies the divergence. One is
+      // known and reachable: `home_city` is required by finalize and is not a
+      // collector question at all.
+      console.error("[onboarding] finalize refused a complete collector state", {
+        telegramId: telegramId.toString(),
+        error: typeof parsed?.error === "string" ? parsed.error : finalized,
+      });
+      reply = t(snapshot.language, "onboardingFinalizeBlocked");
+      // Release the photo stage: holding it open would swallow every following
+      // message into the upload handler, so a divergence would also cost the
+      // user the ability to say anything at all.
+      expectingPhoto = false;
     }
   }
 
@@ -1957,6 +1970,23 @@ export async function runAgentTurn(
   }
 
   if (onboardingInput.kind === "photos_continue") {
+    // "Continue" ends the photo stage — it must never be a back door around the
+    // collector's own question order. It used to call finalize directly, so a
+    // session that believed the photo stage was open (a stale one, or photos
+    // sent early) turned one tap into a finalize attempt while profile
+    // questions were still outstanding: the guard refused, its LLM-facing
+    // diagnostic was printed into the chat, and nothing ever re-asked the
+    // missing question. Routing through the collector makes the tap mean
+    // exactly what a typed "done" means — finalize when the collector says
+    // `complete`, otherwise answer with the question that is actually next and
+    // let `expectingPhoto` fall to false, which releases the stage.
+    if (
+      env.ONBOARDING_FACT_COLLECTOR_ENABLED &&
+      user?.onboardingStep === "conversational" &&
+      hasTrackVerifiedContact(user)
+    ) {
+      return runCollectorTurn(telegramId, onboardingInput, deps, user);
+    }
     const history = ((user?.messageHistory ?? []) as unknown[]).map(
       (message) => message as ChatMessage,
     );
@@ -1972,14 +2002,20 @@ export async function runAgentTurn(
     const parsed = parseJsonObject(finalized);
     const onboardingComplete = parsed?.success === true;
     const verificationRequired = parsed?.verificationRequired === true;
+    if (!onboardingComplete) {
+      // Same rule as the collector branch: the guard's message is written for
+      // the model, not for a human, and must not be printed into the chat.
+      console.error("[onboarding] legacy photos_continue finalize refused", {
+        telegramId: telegramId.toString(),
+        error: typeof parsed?.error === "string" ? parsed.error : finalized,
+      });
+    }
     const reply = onboardingComplete
       ? onboardingQuestionText(
           user?.language ?? "en",
           "complete",
         )
-      : typeof parsed?.error === "string"
-        ? parsed.error
-        : "I couldn't finish onboarding yet. Please try again.";
+      : t(user?.language ?? "en", "onboardingFinalizeBlocked");
 
     await appendCollectorHistory(
       telegramId,

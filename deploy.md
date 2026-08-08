@@ -1,5 +1,76 @@
 # Gennety Dating Deploy
 
+**PENDING — deleting an account erases its chat session, and photo-stage
+"Continue" stops finalizing early (PRODUCT_SPEC §1.3 / §GDPR, ARCHITECTURE →
+`bot_sessions`).** Not deployed yet. **No Prisma schema change, no env change,
+no flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only,
+so a full server code deploy carries all of it, and `pnpm demo:deploy` after it.
+
+Found from a founder-reported dead end in the demo: after uploading photos the
+chat printed **"Cannot finalize — missing required data: partner_preferences.
+Please collect these before calling finalize_onboarding."** and nothing moved
+the flow on. Reconstructed exactly from `chat_events` rather than guessed — the
+hobbies question at 15:47:29, three photos at 15:47:53, a Continue button at
+15:47:55, the tap, the error; then the same error again 85 minutes later on a
+second tap.
+
+Three defects, one chain:
+
+- **Root cause: `bot_sessions` survives account deletion.** It is keyed by
+  Telegram CHAT id with no relation to `users`, so no cascade reaches it. The
+  demo `/restart` deleted the account and left the session, and the NEXT
+  account inherited `expectingPhoto: true` — which put a brand-new user into
+  the photo stage while the collector was still at `hobbies`.
+- **`photos_continue` called finalize directly**, bypassing the collector's own
+  question order. The guard refused, changed no state, and left the stage open:
+  a permanent dead end with no path back to the missing question.
+- **The guard's message went straight into the chat.** It is written for the
+  model — English, internal field keys — and now goes to the log while the user
+  gets localized copy.
+
+**Three things worth knowing before the restart:**
+
+- **The session delete is a GDPR fix as much as a state fix**, and it is NOT
+  demo-only: `DELETE /v1/me` and Telegram Settings → Delete run the same
+  service. `SessionData` holds `pendingPhotos` (file_ids of the erased
+  profile), `contextDumpBuffer` (a pasted AI-memory export) and `activeMatchId`.
+  It rides the same transaction as `user.delete`, so a storage-cleanup failure
+  still leaves both the account and its session intact for a safe retry.
+- **Telegram Settings → Delete was already correct** — it resets `ctx.session`
+  itself. Only the demo `/restart` was missing that half, and grammY writes the
+  live session back after the handler, so the row delete alone would have been
+  undone.
+- **One divergence remains reachable and is deliberately not "fixed" here:**
+  `home_city` is required by the finalize guard and is not a collector question
+  at all, so a missing city can still refuse a `complete` state. It now
+  produces localized copy plus `[onboarding] finalize refused a complete
+  collector state` in the log instead of a raw dump. Watch for that line: it is
+  the only signal that the two notions of "done" have drifted.
+
+Preflight for this change: typecheck clean, **3902 tests** (bot 3384 / shared
+273 / webapp 245), lint clean. Two existing test harnesses needed a
+`botSession` mock added (`account-deletion.test.ts`, `public-api.test.ts`) —
+without it the mobile delete path 500s, which is exactly the failure the change
+prevents in production.
+
+Post-deploy check — nothing new is logged on the happy path, so verify on
+`@gennetytestbot` (or the demo): send photos BEFORE answering every profile
+question, tap Continue, and confirm the bot asks the pending question instead
+of an English error. The session erasure is checkable directly:
+
+```sh
+# Delete an account (Settings → Delete, or /restart on the demo), then:
+psql "$DATABASE_URL" -c "select count(*) from bot_sessions where key = '<telegram id>';"
+# 0 is the fix. A surviving row is what the next account would inherit.
+pm2 logs gennety-bot --lines 200 --nostream | grep 'finalize refused'
+# Empty is the good case.
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag. Sessions already erased stay erased, which is the correct state.
+
+---
+
 **PENDING — "invite a friend instead" becomes one chip instead of five rows
 (PRODUCT_SPEC §3.9).** Not deployed yet. **No Prisma schema change, no env
 change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is

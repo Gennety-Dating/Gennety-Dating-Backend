@@ -554,6 +554,27 @@ Hard rules enforced by the collector:
   **Continue** action instead of finalizing automatically. The user may keep
   sending photos one-by-one or as a Telegram album, send a short profile video,
   tap Continue, or type a localized equivalent such as "done" / "дальше".
+  **Continue means "I'm done sending photos", never "finalize" (2026-08-08).**
+  It resolves through the collector's own question order, exactly like a typed
+  "done": onboarding finalizes only when the collector says every question is
+  answered, and otherwise the bot replies with the question that is actually
+  next and closes the photo stage. Before this it called the finalize routine
+  directly, so a session that believed the stage was open while profile
+  questions were still outstanding turned one tap into a refused finalize —
+  and, because the refusal changed no state and the stage stayed open, the
+  account was stuck there permanently with no way back to the missing
+  question. That the stage was open at all traces to a chat session surviving
+  an account deletion (ARCHITECTURE.md → `bot_sessions`), which is fixed at the
+  source; routing Continue through the collector is what makes any such
+  disagreement recoverable rather than terminal.
+  **The finalize guard's own message is never shown to the user.** It is
+  written for the model — English, internal field keys, "call
+  finalize_onboarding" — so a refusal answers with localized copy
+  (`onboardingFinalizeBlocked`), releases the photo stage so the chat is not
+  held hostage by the upload handler, and logs the guard's text, which is the
+  only place the divergence can be diagnosed. One such divergence is known and
+  reachable: `home_city` is required by finalize and is not a collector
+  question at all.
   **The typed equivalent is a phrase, not a single word (2026-08-07)**, and
   **a question asked at this stage now reaches the agent.** The matcher took
   bare words only (`хватит`, `готово`), so the ways people actually finish —
@@ -4435,7 +4456,13 @@ excluding an otherwise-complete user from matching.
 ### GDPR
 
 - Account deletion (`/v1/me` `DELETE`, or admin) cascades through Prisma
-  (`onDelete: Cascade` on every relation).
+  (`onDelete: Cascade` on every relation), **plus one store no cascade can
+  reach: the grammY chat session** (`bot_sessions`, keyed by Telegram chat id
+  with no relation to `users`; erased explicitly since 2026-08-08). It holds
+  `pendingPhotos` — Telegram `file_id`s of the profile being erased — plus a
+  buffered AI-memory paste and the current match id, so leaving it behind was
+  not erasure. See ARCHITECTURE.md → `bot_sessions` for why a Telegram caller
+  must also reset the live session.
 - Liveness-captured reference selfies are auto-deleted 90 days after `verifiedAt`
   (`selfie-retention` cron); the user stays `verified`, only the reference
   image is scrubbed.

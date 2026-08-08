@@ -115,6 +115,8 @@ const translations = {
     ticketGateInvoiceDesc:
       "Securing your date — {count} Date Ticket(s). Each ticket covers one person.",
     ticketStoreInvoiceLabel: "{count} Date Ticket(s)",
+    onboardingFinalizeBlocked:
+      "I can't finish setting you up just yet — a couple of details are still missing on my side. Give it another go in a minute; if it keeps happening, write to @gennetysupport and we'll sort it out.",
     onboardingPhotosNeedMore:
       "Photo progress: {count}/{min}. Clear photos still needed: {remaining}.",
     onboardingPhotosBonusOffer:
@@ -1250,6 +1252,8 @@ const translations = {
     ticketGateInvoiceDesc:
       "Оплата вашего свидания — {count} билет(а/ов). Один билет — на одного человека.",
     ticketStoreInvoiceLabel: "Билеты Gennety × {count}",
+    onboardingFinalizeBlocked:
+      "Пока не могу завершить настройку — на моей стороне не хватает пары данных. Попробуй ещё раз через минуту; если повторится, напиши в @gennetysupport, разберёмся.",
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Осталось загрузить ещё {remaining} чёткое фото до обязательного минимума.",
     onboardingPhotosBonusOffer:
@@ -2318,6 +2322,8 @@ const translations = {
     ticketGateInvoiceDesc:
       "Оплата вашого побачення — {count} квиток(ів). Один квиток — на одну людину.",
     ticketStoreInvoiceLabel: "Квитки Gennety × {count}",
+    onboardingFinalizeBlocked:
+      "Поки не можу завершити налаштування — на моєму боці бракує кількох даних. Спробуй ще раз за хвилину; якщо повториться, напиши в @gennetysupport, розберемось.",
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Залишилося надіслати ще {remaining} чітке фото до обов'язкового мінімуму.",
     onboardingPhotosBonusOffer:
@@ -3496,6 +3502,8 @@ const deTranslations: TranslationTable = {
   ticketGateInvoiceDesc:
     "Dein Date wird gesichert — {count} Date-Ticket(s). Ein Ticket pro Person.",
   ticketStoreInvoiceLabel: "{count} Date-Ticket(s)",
+  onboardingFinalizeBlocked:
+    "Ich kann dich noch nicht fertig einrichten — auf meiner Seite fehlen ein paar Angaben. Versuch es gleich noch einmal; wenn es bleibt, schreib an @gennetysupport, wir klären das.",
   onboardingPhotosNeedMore:
     "Fotostand: {count}/{min}. Noch benötigte klare Fotos: {remaining}.",
   onboardingPhotosBonusOffer:
@@ -4530,6 +4538,8 @@ const plTranslations: TranslationTable = {
   ticketGateInvoiceDesc:
     "Zabezpieczenie randki — {count} bilet(y/ów). Jeden bilet na jedną osobę.",
   ticketStoreInvoiceLabel: "Bilety Gennety × {count}",
+  onboardingFinalizeBlocked:
+    "Nie mogę jeszcze dokończyć konfiguracji — po mojej stronie brakuje kilku danych. Spróbuj ponownie za chwilę; jeśli to się powtórzy, napisz na @gennetysupport, ogarniemy to.",
   onboardingPhotosNeedMore:
     "Postęp zdjęć: {count}/{min}. Pozostało wyraźnych zdjęć: {remaining}.",
   onboardingPhotosBonusOffer:

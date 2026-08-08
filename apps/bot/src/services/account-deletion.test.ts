@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   messageFindMany: vi.fn(),
   reportFindMany: vi.fn(),
   reportDeleteMany: vi.fn(),
+  botSessionDeleteMany: vi.fn(),
   claimMatches: vi.fn(),
   deliverEffects: vi.fn(),
   deleteStorageObject: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock("@gennety/db", () => {
     user: { delete: mocks.userDelete },
     match: { findMany: vi.fn(), updateMany: vi.fn() },
     founderReport: { deleteMany: mocks.reportDeleteMany },
+    botSession: { deleteMany: mocks.botSessionDeleteMany },
   };
   return {
     prisma: {
@@ -121,6 +123,7 @@ beforeEach(() => {
     },
   ]);
   mocks.reportDeleteMany.mockResolvedValue({ count: 1 });
+  mocks.botSessionDeleteMany.mockResolvedValue({ count: 1 });
   mocks.userDelete.mockResolvedValue({});
   mocks.claimMatches.mockResolvedValue([{ matchId: "m1" }]);
   mocks.deliverEffects.mockResolvedValue(undefined);
@@ -208,6 +211,31 @@ describe("deleteUserAccount", () => {
     expect(mocks.deliverEffects).not.toHaveBeenCalled();
     expect(mocks.notifyFounder).not.toHaveBeenCalled();
     expect(mocks.unpinKnownStatusBanner).not.toHaveBeenCalled();
+  });
+
+  it("erases the chat session, which no cascade can reach", async () => {
+    await deleteUserAccount(USER_ID, null);
+
+    // Keyed by Telegram CHAT id, with no relation to `users` — so it survives
+    // the cascade unless deleted explicitly. It carries pendingPhotos,
+    // contextDumpBuffer and activeMatchId, and whatever it still says is
+    // inherited by the NEXT account created in the same chat.
+    expect(mocks.botSessionDeleteMany).toHaveBeenCalledWith({
+      where: { key: "42" },
+    });
+  });
+
+  it("does not erase the chat session when storage cleanup fails", async () => {
+    mocks.deleteStorageObject.mockImplementation(
+      async (_bucket: string, path: string) => !path.endsWith("persona.jpg"),
+    );
+
+    await expect(deleteUserAccount(USER_ID, null)).rejects.toBeInstanceOf(
+      AccountDeletionCleanupError,
+    );
+    // The account survives for a safe retry, so its session must survive too:
+    // wiping it here would sign the user out of a flow they are still in.
+    expect(mocks.botSessionDeleteMany).not.toHaveBeenCalled();
   });
 
   it("unpins the exact Telegram banner after storage cleanup and before DB erasure", async () => {

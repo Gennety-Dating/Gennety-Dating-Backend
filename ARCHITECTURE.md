@@ -401,6 +401,28 @@ hashed here for server-controlled rotation/revocation.
 
 grammY session adapter persistence (Prisma-backed). Keyed by Telegram chat id.
 
+**It is the one store an account cannot cascade into, so account deletion
+erases it explicitly** (`services/account-deletion.ts`, added 2026-08-08). The
+key is the CHAT id and there is no relation to `users`, so nothing in the
+Prisma cascade reaches it. Two consequences, and the second is what actually
+broke a flow:
+
+- **GDPR.** `SessionData` holds `pendingPhotos` (Telegram `file_id`s of the
+  erased profile), `contextDumpBuffer` (a pasted AI-memory export) and
+  `activeMatchId`. A hard delete that left them behind was not erasure.
+- **The next account in that chat inherited the state.** A session left with
+  `expectingPhoto: true` put a brand-new account into the photo stage while the
+  onboarding collector was still several questions away, so three uploads
+  produced a Continue button that finalized onboarding early — and the finalize
+  guard then refused, permanently (PRODUCT_SPEC §1.3).
+
+The delete rides the same transaction as `user.delete`, so a storage-cleanup
+failure leaves the session intact along with the account it belongs to.
+**A Telegram caller must ALSO reset `ctx.session` in place**: grammY writes the
+live session back after the handler returns and would otherwise resurrect the
+row it just deleted. `handlers/menu/settings.ts` has always done this; the demo
+`/restart` (`demo/commands.ts`) did not, which is where the defect surfaced.
+
 ### `system_knowledge`
 
 Curated knowledge entries surfaced to the menu/onboarding agents. Each row:

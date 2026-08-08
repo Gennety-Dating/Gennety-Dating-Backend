@@ -147,6 +147,25 @@ export async function deleteUserAccount(
         ? await tx.founderReport.deleteMany({ where: { id: { in: reportIds } } })
         : { count: 0 };
     await tx.user.delete({ where: { id: user.id } });
+    // `bot_sessions` is keyed by Telegram CHAT id and carries no relation to
+    // `users`, so the cascade above cannot reach it — it is the one store that
+    // survives an account. Two reasons that is wrong, and the second is the one
+    // that actually broke a flow:
+    //
+    // 1. GDPR. The row holds `pendingPhotos` (Telegram file_ids of the erased
+    //    profile), `contextDumpBuffer` (a pasted AI-memory export) and
+    //    `activeMatchId`. A hard delete that leaves them behind is not erasure.
+    // 2. The next account in the same chat INHERITS that state. A session left
+    //    with `expectingPhoto: true` put a fresh account into the photo stage
+    //    while the collector was still several questions from it, so uploading
+    //    three photos produced a Continue button that finalized onboarding
+    //    early — and the finalize guard then refused, permanently.
+    //
+    // Telegram callers must ALSO reset `ctx.session`: grammY writes the live
+    // session back after the handler returns and would resurrect the row.
+    await tx.botSession.deleteMany({
+      where: { key: String(user.telegramId) },
+    });
     return deletedReports.count;
   });
 
