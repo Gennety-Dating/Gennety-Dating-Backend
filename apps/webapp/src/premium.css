@@ -459,33 +459,10 @@ body {
   margin: 2px 0 0;
 }
 
-/* Referral cross-promo — a quiet secondary link, never another filled/bordered
-   button, so it reads as an alternative rather than competing with .pm-cta. */
-.pm-referral-link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  margin: 2px 0 0;
-  padding: 4px 0;
-  border: none;
-  background: none;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: opacity 0.12s ease;
-}
-.pm-referral-link:active {
-  opacity: 0.6;
-}
-.pm-referral-ico {
-  width: 15px;
-  height: 15px;
-  flex: none;
-}
+/* The referral cross-promo is NOT here any more: it is the shared
+   `.gn-referral` chip (`referral-hint.css`) and it lives at the tail of
+   `.pm-scroll`. Anything added to `.pm-action` grows this footer and pushes the
+   CTA up the screen, which is exactly what that row used to do. */
 
 /* THE HERO ACTION — a clean liquid-glass pill (same recipe as the onboarding
    AI-memory primary): a bright glossy fill (so the label is always fully

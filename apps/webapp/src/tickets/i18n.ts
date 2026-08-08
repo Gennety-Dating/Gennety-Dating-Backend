@@ -24,9 +24,6 @@ export interface StoreStrings {
   back: string;
   loading: string;
   errGeneric: string;
-  /** Anonymized holder names printed on the store ticket card. */
-  /** Referral cross-promo — shown only when the wallet is empty. */
-  referralHint: string;
 }
 
 const en: StoreStrings = {
@@ -44,7 +41,6 @@ const en: StoreStrings = {
   back: "← Back",
   loading: "Loading your wallet…",
   errGeneric: "Something went wrong. Reopen this from the bot.",
-  referralHint: "Short on tickets? Invite a friend instead",
 };
 
 const ru: StoreStrings = {
@@ -62,7 +58,6 @@ const ru: StoreStrings = {
   back: "← Назад",
   loading: "Загружаем кошелёк…",
   errGeneric: "Что-то пошло не так. Открой заново из бота.",
-  referralHint: "Не хватает билетов? Пригласи друга вместо оплаты",
 };
 
 const uk: StoreStrings = {
@@ -80,7 +75,6 @@ const uk: StoreStrings = {
   back: "← Назад",
   loading: "Завантажуємо гаманець…",
   errGeneric: "Щось пішло не так. Відкрий знову з бота.",
-  referralHint: "Не вистачає квитків? Запроси друга замість оплати",
 };
 
 const de: StoreStrings = {
@@ -98,7 +92,6 @@ const de: StoreStrings = {
   back: "← Zurück",
   loading: "Dein Guthaben wird geladen…",
   errGeneric: "Etwas ist schiefgelaufen. Öffne dies erneut aus dem Bot.",
-  referralHint: "Zu wenig Tickets? Lade stattdessen einen Freund ein",
 };
 
 const pl: StoreStrings = {
@@ -116,7 +109,6 @@ const pl: StoreStrings = {
   back: "← Wstecz",
   loading: "Ładujemy Twój portfel…",
   errGeneric: "Coś poszło nie tak. Otwórz to ponownie z bota.",
-  referralHint: "Brakuje biletów? Zaproś znajomego zamiast płacić",
 };
 
 const dict: Record<Lang, StoreStrings> = { en, ru, uk, de, pl };

@@ -30,8 +30,8 @@ import {
 import { Ticket3D } from "../ticket/Ticket3D.js";
 import { MockPayment } from "../ticket/MockPayment.js";
 import { Confetti } from "../ticket/Confetti.js";
-import { LetterMark } from "../ticket/marks.js";
 import { returnParams } from "../return-to.js";
+import { ReferralChip } from "../referral-hint-react.js";
 
 const app = window.Telegram?.WebApp;
 const params = new URLSearchParams(location.search);
@@ -314,17 +314,13 @@ export function App(): ReactElement {
             paying, shown only while the wallet is genuinely empty — never
             competing with the bundle buttons above it. */}
         {!bought && phase.balance === 0 && referralEnabled && (
-          <button
-            type="button"
-            className="store-referral-hint"
-            onClick={() => {
+          <ReferralChip
+            lang={lang}
+            onTap={() => {
               haptic("light");
               location.href = `referral.html?${returnParams("ticket-store", { lang })}`;
             }}
-          >
-            <LetterMark />
-            <span>{s.referralHint}</span>
-          </button>
+          />
         )}
       </div>
 

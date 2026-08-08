@@ -2078,31 +2078,10 @@ a.vc-info-row .vc-info-text {
    above: a plain, muted text row with no fill or border, so it reads as a
    quiet alternative underneath the bold "free with Premium" CTA rather than
    a second button competing with it. */
-.vc-referral-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  margin-top: 10px;
-  padding: 6px 0;
-  border: none;
-  background: none;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: opacity 0.12s ease;
-}
-.vc-referral-hint:active {
-  opacity: 0.6;
-}
-.vc-referral-hint-ico {
-  width: 15px;
-  height: 15px;
-  flex: none;
-}
+/* The referral cross-promo is the shared `.gn-referral` chip
+   (`referral-hint.css`), in its tight form — it sits under the Premium
+   counterfactual, and two equal full-width rows read as a list of options
+   rather than as an offer plus a footnote. */
 
 /* ── Photo skeletons ──────────────────────────────────────────────────── */
 /* Venue photos are Places bytes streamed through our proxy and can take a

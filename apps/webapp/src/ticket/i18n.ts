@@ -67,8 +67,6 @@ export interface TicketStrings {
   close: string;
   youFallback: string;
   matchFallback: string;
-  /** Referral cross-promo — shown only on "offer" when the wallet is empty. */
-  referralHint: string;
 }
 
 const en: TicketStrings = {
@@ -115,7 +113,6 @@ const en: TicketStrings = {
   close: "Close",
   youFallback: "You",
   matchFallback: "Your match",
-  referralHint: "No tickets? Invite a friend instead",
 };
 
 const ru: TicketStrings = {
@@ -164,7 +161,6 @@ const ru: TicketStrings = {
   close: "Закрыть",
   youFallback: "Ты",
   matchFallback: "Твой мэтч",
-  referralHint: "Нет билетов? Пригласи друга вместо оплаты",
 };
 
 const uk: TicketStrings = {
@@ -211,7 +207,6 @@ const uk: TicketStrings = {
   close: "Закрити",
   youFallback: "Ти",
   matchFallback: "Твій метч",
-  referralHint: "Немає квитків? Запроси друга замість оплати",
 };
 
 const de: TicketStrings = {
@@ -258,7 +253,6 @@ const de: TicketStrings = {
   close: "Schließen",
   youFallback: "Du",
   matchFallback: "Dein Match",
-  referralHint: "Keine Tickets? Lade stattdessen einen Freund ein",
 };
 
 const pl: TicketStrings = {
@@ -305,7 +299,6 @@ const pl: TicketStrings = {
   close: "Zamknij",
   youFallback: "Ty",
   matchFallback: "Twoje dopasowanie",
-  referralHint: "Brak biletów? Zaproś znajomego zamiast płacić",
 };
 
 const dict: Record<Lang, TicketStrings> = { en, ru, uk, de, pl };

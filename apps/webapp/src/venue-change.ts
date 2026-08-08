@@ -47,6 +47,7 @@ import {
 import { icon, categoryIcon, type IconName } from "./icons.js";
 import { wireContentInsets } from "./telegram-insets.js";
 import { returnParams } from "./return-to.js";
+import { referralChip } from "./referral-hint.js";
 
 const app = window.Telegram?.WebApp;
 app?.ready();
@@ -187,8 +188,6 @@ interface Strings {
   premiumPlate: string;
   premiumUnlockConfirm: string;
   premiumFreeWithSub: string;
-  /** Referral cross-promo — reused on both the pay step and a locked venue. */
-  referralHint: string;
 }
 
 const T: Record<Lang, Strings> = {
@@ -280,7 +279,6 @@ const T: Record<Lang, Strings> = {
     premiumUnlockConfirm:
       "This is a Premium venue. Gennety Premium unlocks it — and makes your venue changes free.",
     premiumFreeWithSub: "Free with Gennety Premium",
-    referralHint: "Invite a friend — get Premium free",
   },
   ru: {
     boardTitle: "Место свидания",
@@ -371,7 +369,6 @@ const T: Record<Lang, Strings> = {
     premiumUnlockConfirm:
       "Это премиум-место. Gennety Premium открывает его — и делает смену места бесплатной.",
     premiumFreeWithSub: "Бесплатно с Gennety Premium",
-    referralHint: "Пригласи друга — получи Premium бесплатно",
   },
   uk: {
     boardTitle: "Місце побачення",
@@ -462,7 +459,6 @@ const T: Record<Lang, Strings> = {
     premiumUnlockConfirm:
       "Це преміум-місце. Gennety Premium відкриває його — і робить зміну місця безкоштовною.",
     premiumFreeWithSub: "Безкоштовно з Gennety Premium",
-    referralHint: "Запроси друга — отримай Premium безкоштовно",
   },
   de: {
     boardTitle: "Euer Date-Ort",
@@ -554,7 +550,6 @@ const T: Record<Lang, Strings> = {
     premiumUnlockConfirm:
       "Das ist ein Premium-Ort. Gennety Premium schaltet ihn frei — und Ortswechsel werden kostenlos.",
     premiumFreeWithSub: "Gratis mit Gennety Premium",
-    referralHint: "Freund einladen — Premium gratis erhalten",
   },
   pl: {
     boardTitle: "Miejsce randki",
@@ -644,7 +639,6 @@ const T: Record<Lang, Strings> = {
     premiumUnlockConfirm:
       "To miejsce premium. Gennety Premium je odblokowuje — a zmiany miejsca stają się darmowe.",
     premiumFreeWithSub: "Za darmo z Gennety Premium",
-    referralHint: "Zaproś znajomego — odbierz Premium za darmo",
   },
 };
 const s = T[lang];
@@ -1304,17 +1298,20 @@ function openReferralMiniApp(): void {
 
 /**
  * Referral cross-promo — a quiet secondary way to get Premium's perks without
- * paying. Reused at both spots where a non-premium user is asked to pay:
- * the agreed-venue pay step (`renderAgreed`) and a locked premium venue's
- * detail page (`renderDetail`). Deliberately its own plain-text row rather
- * than a filled/bordered button, so it never competes with the real CTA.
+ * paying. Reused at both spots where a non-premium user is asked to pay: the
+ * agreed-venue pay step (`renderAgreed`) and a locked premium venue's detail
+ * page (`renderDetail`).
+ *
+ * The shared chip (`referral-hint.ts`). `tight` halves its top gap and is for
+ * the pay step alone, where it lands directly beneath the Premium
+ * counterfactual: those used to be two full-width rows of identical width,
+ * weight and type, reading as a list of two options rather than as an offer
+ * plus its footnote. On the detail page it follows an ordinary info row and
+ * keeps the full gap, so it reads as the tail of the content instead of as
+ * that row's appendix.
  */
-function referralHintNode(): HTMLElement {
-  return el(
-    "button",
-    { class: "vc-referral-hint", type: "button", onClick: () => openReferralMiniApp() },
-    [icon("letter", "icon vc-referral-hint-ico"), el("span", { text: s.referralHint })],
-  );
+function referralHintNode(opts: { tight?: boolean } = {}): HTMLElement {
+  return referralChip({ lang, tight: opts.tight, onTap: () => openReferralMiniApp() });
 }
 
 /**
@@ -2395,7 +2392,7 @@ function renderAgreed(st: VenueBoardState): void {
         [icon("lock", "icon vc-premium-hint-ico"), el("span", { text: s.premiumFreeWithSub })],
       ),
     );
-    if (st.referralEnabled) nodes.push(referralHintNode());
+    if (st.referralEnabled) nodes.push(referralHintNode({ tight: true }));
   }
 
   // The way back: call the agreement off and keep the assigned venue. Available
@@ -2657,6 +2654,11 @@ function mockState(): VenueBoardState {
     express: false,
     expressAvailable: true,
     settled: null,
+    // The referral cross-promo chip is only reachable on a live board with
+    // `REFERRAL_FEATURE_ENABLED` on — which production does not have — so the
+    // preview turns it on to keep the pay step and the locked-venue page
+    // reviewable at all.
+    referralEnabled: true,
   };
   if (view === "agreed" || view === "offer-sent") {
     const offered = view === "offer-sent";

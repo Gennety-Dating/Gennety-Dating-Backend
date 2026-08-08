@@ -1,5 +1,62 @@
 # Gennety Dating Deploy
 
+**PENDING — "invite a friend instead" becomes one chip instead of five rows
+(PRODUCT_SPEC §3.9).** Not deployed yet. **No Prisma schema change, no env
+change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is
+`apps/webapp/**` plus docs, so this is the **Deploy Mini App Only** path
+(`./scripts/deploy-webapp.sh`), nothing to rsync to `/opt/gennety`, **no
+`pm2 restart`**. Run `pnpm demo:deploy` as well. **It ships in the same Mini App
+build as the ticket-screen block below** — one `deploy-webapp.sh` carries both.
+
+The referral cross-promo existed as five hand-copied full-width rows across four
+Mini Apps, four identical CSS blocks under four class names. It is now one
+module (`apps/webapp/src/referral-hint.ts` + its React twin) rendering a 30px
+auto-width chip, and the four old classes are deleted.
+
+**Three things worth knowing before the redeploy:**
+
+- **The Premium footer changes shape, and that is the actual fix.** The hint was
+  the only one of the five living inside `.pm-action`, which is `flex: none` —
+  so it grew that footer by ~39px (~57px once its 59-character copy wrapped,
+  which it did on every phone) and pushed the subscribe CTA and the price line
+  up the screen. The footer now holds the CTA and the price alone and cannot
+  move. Verified by eye at 390×844 in both themes via `?preview=offer`.
+- **Nine i18n keys are DELETED, not blanked** — `referralHint` across all five
+  locales in `premium.ts`, `venue-change.ts`, `ticket/i18n.ts` and
+  `tickets/i18n.ts`, plus the four interface declarations. One string now lives
+  in `referral-hint.ts`, ≤31 characters per language, guarded by
+  `referral-hint.test.ts` (that bound is what keeps the chip one line — a
+  longer translation turns it back into the block this replaced). A stale bundle
+  cannot half-apply it: it is one build or the other.
+- **`REFERRAL_FEATURE_ENABLED=false` in production**, so none of this is
+  reachable by a real user on any of the five surfaces. Verify on
+  `@gennetytestbot`, or on the dev previews, which need no Telegram and no
+  account — `venue-change.html?preview=board` now sets `referralEnabled` in its
+  mock for exactly this reason (dev-only, `import.meta.env.DEV`-gated).
+
+Post-deploy check — the chip is static and logs nothing, so verify by eye:
+
+```sh
+./scripts/deploy-webapp.sh
+pnpm demo:deploy
+for p in premium venue-change ticket tickets; do
+  curl -sI "https://dating-calendar.gennety.com/$p.html" | head -1
+done
+# Dev previews (vite dev server), both themes:
+#   /premium.html?preview=offer&lang=ru&theme=dark      → chip under "Дальше
+#     будет больше", footer = CTA + price only
+#   /venue-change.html?preview=agreed&lang=ru           → chip 8px under the
+#     burgundy Premium row, visibly smaller
+#   /venue-change.html?preview=board → tap a locked premium card → chip at the
+#     tail of the detail, full 18px gap
+```
+
+**Rollback:** redeploy the Mini App from the previous checkout, and
+`pnpm demo:deploy` from it too. Nothing else to undo — no schema, no env, no
+flag, no server state.
+
+---
+
 **PENDING — the two ticket screens get one light, and the card stops lying
 (PRODUCT_SPEC §3.5b).** Not deployed yet. **No Prisma schema change, no env
 change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is

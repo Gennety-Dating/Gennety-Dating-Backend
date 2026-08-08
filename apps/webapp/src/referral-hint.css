@@ -1,0 +1,57 @@
+/**
+ * The "invite a friend instead" cross-promo chip — one definition for all four
+ * paying Mini Apps (Premium, the Date Ticket gate, the ticket store, the venue
+ * board). See `referral-hint.ts` for why it is a chip rather than a row.
+ *
+ * `width: fit-content` + `margin-inline: auto` is what centres it: an
+ * `inline-flex` box ignores `margin: auto`, and a full-width flex row is
+ * exactly the shape this replaced.
+ */
+.gn-referral {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 18px auto 0;
+  padding: 0 14px;
+  min-height: 30px;
+  border: none;
+  border-radius: 999px;
+  /* A quiet chip fill, not a button: `--fill` is white 6% on the dark theme and
+     black 5% on the light one, so it reads at the same weight in both without a
+     border. A border would give it the silhouette of a secondary action. */
+  background: var(--fill);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    opacity 0.12s ease;
+}
+.gn-referral:active {
+  transform: scale(0.96);
+  opacity: 0.75;
+}
+/* Matched on the element, not a class: the vanilla rail's `icon()` and the
+   React rail's `LetterMark` build the same envelope but hand it different
+   attributes, and only one of them can be given a class. */
+.gn-referral svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  opacity: 0.65;
+}
+
+/* Directly under another tappable row (the venue board stacks this beneath the
+   Premium counterfactual). The default 18px gap would read as two paragraphs;
+   at 8px the pair reads as one line plus its footnote. */
+.gn-referral--tight {
+  margin-top: 8px;
+}

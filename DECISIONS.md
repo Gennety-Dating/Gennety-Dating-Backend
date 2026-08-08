@@ -47,6 +47,36 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — the referral cross-promo is a chip, and it never sits in an action bar
+
+**Kind:** founder decision
+**What:** the "invite a friend instead" link on all five paying surfaces becomes
+one shared 30px chip (`apps/webapp/src/referral-hint.ts`) with one ≤31-character
+statement per language — «Пригласи друга вместо оплаты» in RU — replacing five
+hand-copied full-width rows of sentence-length text. On Premium it also moves
+out of the pinned footer into the tail of the scroll.
+**Why:** the founder reported it as "смещает кнопку сильно выше… визуально
+нагромождённый". The audit found three separable causes rather than one taste
+problem, and the measurements are what picked the fix: Premium was the only
+surface where the hint sat in the action zone, which is `flex: none`, so it grew
+that footer ~39px and moved the CTA; the copy ran 59 characters ≈ 415px against
+~350px of usable width, i.e. two lines on every phone; and on the venue board
+two equal full-width rows stacked and read as a list of options. Two alternatives
+were offered and rejected — an inline link inside the price line (zero added
+height, but the ticket gate and store have no such line at an empty wallet, so
+it would have meant two patterns), and cutting the number of surfaces (a change
+to REFERRAL_PRODUCT_SPEC, not to layout).
+**What it changes going forward:** two rules, both encoded in that module's
+doc-comment and one of them in a test. **This element never goes in an action
+bar and is never full width** — it is a tail-of-content object. And **the copy
+stays one line**: `referral-hint.test.ts` fails a translation over 31 characters,
+because a chip that wraps is the block this replaced under a rounder corner. Add
+a sixth surface by calling the shared module, not by copying a row.
+**Recorded in:** PRODUCT_SPEC.md §3.9, `apps/webapp/src/referral-hint.ts`,
+deploy.md → the PENDING block at the top.
+
+---
+
 ## 2026-08-08 — a demo-only deploy can ship a production fix to the demo and nowhere else
 
 **Kind:** deviation from plan

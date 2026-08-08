@@ -5,6 +5,7 @@ import { icon, type IconName } from "./icons";
 import { butterflyLoader } from "./butterfly-loader";
 import { wireContentInsets } from "./telegram-insets";
 import { wireReturnBackButton, returnParams } from "./return-to.js";
+import { referralChip } from "./referral-hint.js";
 
 /**
  * Gennety Premium Mini App (PRODUCT_SPEC §Premium). A small vanilla-TS page that
@@ -60,8 +61,6 @@ interface Copy {
   activePlateUntil: (d: string) => string;
   manage: string;
   payFailed: string;
-  /** Referral cross-promo — quiet secondary link under the price/terms line. */
-  referralHint: string;
 }
 
 const COPY: Record<Lang, Copy> = {
@@ -83,7 +82,6 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `until ${d}`,
     manage: "Manage or cancel anytime in Telegram → Settings → Subscriptions.",
     payFailed: "That didn't go through. Try again in a moment.",
-    referralHint: "Not ready to pay? Invite a friend — get Premium free",
   },
   ru: {
     crest: "✨",
@@ -103,7 +101,6 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `до ${d}`,
     manage: "Управлять и отменить — в Telegram → Настройки → Подписки.",
     payFailed: "Не прошло. Попробуй ещё раз через минуту.",
-    referralHint: "Не готов платить? Пригласи друга — получи Premium бесплатно",
   },
   uk: {
     crest: "✨",
@@ -123,7 +120,6 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `до ${d}`,
     manage: "Керувати та скасувати — у Telegram → Налаштування → Підписки.",
     payFailed: "Не вдалося. Спробуй ще раз за хвилину.",
-    referralHint: "Не готовий платити? Запроси друга — отримай Premium безкоштовно",
   },
   de: {
     crest: "✨",
@@ -143,7 +139,6 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `bis ${d}`,
     manage: "Verwalten oder kündigen in Telegram → Einstellungen → Abos.",
     payFailed: "Das hat nicht geklappt. Bitte gleich nochmal.",
-    referralHint: "Noch nicht bereit zu zahlen? Freund einladen — Premium gratis erhalten",
   },
   pl: {
     crest: "✨",
@@ -163,7 +158,6 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `do ${d}`,
     manage: "Zarządzaj lub anuluj w Telegram → Ustawienia → Subskrypcje.",
     payFailed: "Nie udało się. Spróbuj ponownie za chwilę.",
-    referralHint: "Nie gotów płacić? Zaproś znajomego — odbierz Premium za darmo",
   },
 };
 
@@ -394,6 +388,27 @@ function renderOffer(state: PremiumState): void {
   scroll.append(list);
   scroll.append(el("p", "pm-more", s.more));
 
+  // Referral cross-promo: a quiet secondary way to get Premium without paying,
+  // shown only on the sales screen (never once already subscribed) and only
+  // while the program is actually live.
+  //
+  // It sits at the TAIL OF THE SCROLL, never in `.pm-action` below. That footer
+  // is `flex: none`, so anything added to it grows it and pushes the subscribe
+  // CTA and its price line up the screen — which is exactly what this row used
+  // to do, at ~39px, or ~57px once its two-line copy wrapped. The footer now
+  // holds the CTA and the price and nothing else, so it cannot move.
+  if (state.referralEnabled) {
+    scroll.append(
+      referralChip({
+        lang,
+        onTap: () => {
+          haptic("success");
+          location.href = `referral.html?${returnParams("premium", { lang })}`;
+        },
+      }),
+    );
+  }
+
   const action = el("div", "pm-action");
 
   const btn = el("button", "pm-cta") as HTMLButtonElement;
@@ -404,22 +419,6 @@ function renderOffer(state: PremiumState): void {
   // Only the price/terms sit under the button now. How to cancel lives in the
   // bot conversation (the agent can explain it and cancel on request), not here.
   action.append(el("p", "pm-price", s.price(state.priceDisplay)));
-
-  // Referral cross-promo: a quiet secondary way to get Premium without paying,
-  // shown only on the sales screen (never once already subscribed) and only
-  // while the program is actually live. Deliberately a plain text link below
-  // the price line, never another `pm-cta`-styled button, so it can't compete
-  // with the real subscribe action above it.
-  if (state.referralEnabled) {
-    const referralBtn = el("button", "pm-referral-link") as HTMLButtonElement;
-    referralBtn.type = "button";
-    referralBtn.append(icon("letter", "icon pm-referral-ico"), el("span", undefined, s.referralHint));
-    referralBtn.addEventListener("click", () => {
-      haptic("success");
-      location.href = `referral.html?${returnParams("premium", { lang })}`;
-    });
-    action.append(referralBtn);
-  }
 
   page.append(scroll, action);
   root.replaceChildren(page);

@@ -3955,10 +3955,11 @@ AND complimentary Premium months, so it rides the already-on
   clobbering a real recurring anchor). No new tables; the blind-decision,
   no-in-app-chat, and ledger exactly-once invariants are unaffected.
 - **Cross-promo entry points (paying screens → referral.html).** The Ticket
-  Store, the Date Ticket gate, Premium, and the Venue Change board each show a
-  quiet, secondary "invite a friend instead" link — never a button competing
-  with the real pay/subscribe CTA — only when the user is genuinely short
-  (empty ticket wallet, not subscribed, or paying Stars for a venue swap) and
+  Store, the Date Ticket gate, Premium, and the Venue Change board (twice — the
+  pay step and a locked premium venue) each show a quiet, secondary "invite a
+  friend instead" affordance — never a button competing with the real
+  pay/subscribe CTA — only when the user is genuinely short (empty ticket
+  wallet, not subscribed, or paying Stars for a venue swap) and
   only while `REFERRAL_FEATURE_ENABLED` is on (mirrors `starsEnabled`, exposed
   per-screen as `referralEnabled` on the wallet/ticket-gate/premium/
   venue-change state endpoints). Tapping it opens `referral.html`, which
@@ -3967,6 +3968,26 @@ AND complimentary Premium months, so it rides the already-on
   When that screen was itself reached from another (board → Premium → here),
   back keeps walking rather than stopping one hop up; see §3.8 for the trail
   and its bounds.
+  **It is a compact chip, and two rules keep it that way (2026-08-08).** It
+  shipped as five hand-copied full-width rows of sentence-length text — four
+  identical CSS blocks under four class names — and each of the three ways that
+  shape failed is now a rule in `apps/webapp/src/referral-hint.ts`, the single
+  module all five call sites share. **(a) Never in an action bar.** On Premium
+  it sat inside the pinned footer, which is `flex: none`, so it grew that footer
+  by ~39px and pushed the subscribe CTA and its price line up the screen — the
+  one surface where the hint MOVED the thing the user came to tap. It is now the
+  tail of the scroll and the footer holds the CTA and the price alone.
+  **(b) One line of copy.** The Premium string ran 59 characters, ~415px at
+  13px/600 against ~350px of usable width on a 390px phone — two lines on every
+  device, i.e. a paragraph rather than a link. Every string is now ≤31
+  characters, one statement rather than a question ("Не хватает билетов?" made
+  the reader answer a question before they could skip the line), one wording for
+  all five surfaces, and a test holds the bound. **(c) Never full width.** A
+  30px auto-width pill on a faint fill, against a 52px hero CTA; on the venue
+  board's pay step it also loses half its top gap, because two equal full-width
+  rows under each other — the Premium counterfactual and this — read as a list
+  of two options rather than as an offer plus its footnote. Telegram-only; the
+  native client owns its own paywall.
 
 ### 3.10 Promo Codes (feature-flagged, independent campaign links)
 
