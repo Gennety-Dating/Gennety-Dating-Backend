@@ -55,11 +55,15 @@ flag, no server state.
 
 ---
 
-**PENDING — a decline reason stops blocking the next match, and the demo's redo
-button answers (PRODUCT_SPEC → Embedding freshness (M-2), DEMO_MODE.md →
-Recovery).** Not deployed yet. **No Prisma schema change, no env change, no flag
-change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so a
-full server code deploy carries all of it, plus `pnpm demo:deploy` after it.
+**Deployed 2026-08-08 — a decline reason stops blocking the next match, and the
+demo's redo button answers (`8055c03`, PRODUCT_SPEC → Embedding freshness (M-2),
+DEMO_MODE.md → Recovery).** Full server code + demo. **No Prisma schema change**
+(`db:drift-check` **OK**, nothing to push), no env change, no flag change, no
+Mini App change (`apps/webapp` untouched). Deployed from an isolated
+`git worktree` at `8055c03` — a parallel session was mid-way through the ticket
+screens in the shared tree, and it landed `47a5352` on `main` while this was
+being verified, so **production is deliberately at `8055c03`, not at HEAD**;
+that commit is `apps/webapp` only and carries its own PENDING block below.
 
 Found from a founder report against the demo: tapping «Показати анкету знову»
 after a pass produced **nothing** — no profile, no message — for 44 seconds.
@@ -110,8 +114,30 @@ pm2 logs gennety-bot --lines 200 --nostream | grep 'immediate embedding refresh 
 psql "$DATABASE_URL" -c "select count(*) from profiles where embedding_dirty;"
 ```
 
-Then, on the demo after `pnpm demo:deploy`: pass on a profile, give a free-text
-reason, tap «Показати анкету знову» — a profile must arrive, not silence.
+**Post-deploy verified (measured):** the founder's own stuck demo visitor healed
+itself the moment the demo came back — the driver pitched at 18:19:04 and
+`[dispatch] 1/1 matchId=315ca7d9… OK`, where every attempt in the previous hour
+had answered `createProposedMatch refused … visitor embeddingDirty`. Their
+profile's flag reads `embeddingDirty: false` with the constraint still on the
+row, which is the whole change in one line. Both changed files md5-match the
+deployed worktree; production restart count 54 → **55** (one increment, no
+loop), **zero** errors from the new PID (the error log's last write is dated
+2026-08-07), `/v1/ping` ok, admin `401`, **all 11 Mini App pages 200**. Demo
+re-verified from its own banner: `@gennety_demo_bot`, database
+`aws-1-eu-west-1` (production is `aws-0-`), both demo-only cron suppressions
+logged, restart count 16, `demo-api` ping ok.
+
+**⚠️ `deploy-demo.sh` again exits after failing its Mini App build step on a
+worktree run** — no `node_modules`, so `vite: command not found`. Harmless here
+for the same reason as 2026-08-08's coordination release: `apps/webapp` is
+untouched, the existing `/var/www/demo-app` bundle stays correct, and the
+failure comes after the rsync, the schema check and the restart have all
+succeeded. Read the restart count and the banner, not the exit code.
+
+**Still owed** (needs a human in the chat, on the demo): pass on a profile, give
+a free-text reason, tap «Показати анкету знову» — a profile must arrive. And the
+negative case, which is the actual regression guard: if it ever refuses, the tap
+must answer within a second and the button must still be there.
 
 **Rollback:** revert the code and restart. Nothing else to undo — no schema, no
 env, no flag. Constraints already written stay written; their embeddings are
