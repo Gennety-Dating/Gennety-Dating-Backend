@@ -104,7 +104,12 @@ different snapshot, not as a broken hook.
 | board, still no overlap | heart one of theirs → agreement | `submitVenueLikes` |
 | board `agreed`, puppet is payer | settle | `settleFreeVenueChange` |
 | `scheduled` | hand over the date card, then wait | — |
-| `scheduled`, visitor tapped / 7 min | explain the wait, then replay it | `runDateLifecycleTick` + `runCoordinationTick`, ×4 gates |
+| `scheduled`, visitor tapped / 7 min | explain the pre-date days, play the T-2h gate | `runDateLifecycleTick` + `runCoordinationTick` |
+| `scheduled`, ice-breakers sent, no `coordMethod` | send the coordination fork — all three buttons | `sendCoordCard` (`variant: "offer"`) |
+| fork, visitor tapped A or B | explain what the button would have done, hand the choice back | — (nothing is written) |
+| fork, visitor tapped C / 5 min | lock in the anonymous chat, play T-45m + T-30m | `runDateLifecycleTick` + `runCoordinationTick` |
+| relay open, puppet owes a line | write in the chat (LLM, in character) | `relayProxyMessage` |
+| relay open, visitor tapped / 7 min | close the chat, play T+25h | `runDateLifecycleTick` + `runCoordinationTick` |
 | terminal | say which ending it was, offer the way back | — |
 
 The two "different first" steps matter: they are what make the negotiation read
@@ -204,14 +209,81 @@ together.
 
 Gates: `agreedTime − 2h`, `− 45m`, `− 30m`, `+ 25h`.
 
-One demo-only branch is needed here. `openProxies` only opens the chat for a
-match whose `coordMethod` is set, and in the product that is a **tap** on the
-offer card. A demo cannot depend on a tap landing inside a four-second beat —
-the visitor is reading, not racing a timer — so an unanswered offer resolves to
-the anonymous chat, which is both the interesting variant and the same default a
-pair the Telegram fork cannot reach already gets. Guarded on
-`coordMethod: null`, so a visitor who did tap keeps their choice: the demo fills
-a silence, it never overrides a decision.
+**They are replayed in three stretches, not one run, because two of them are
+real decisions.** Running every gate back to back put `+ 25h` four seconds after
+`− 30m`, so `closeProxies` shut the anonymous chat before anyone could open it:
+the visitor was handed a live "Enter chat" button that was dead by the time they
+reached it. The replay now stops at the coordination fork and again at the open
+relay, and each stretch resumes on the visitor's own tap or on a floor timer
+(`decide.ts` → `decidePredateAction`). The floors are what keep a demo from
+stalling in front of an audience; the buttons are the intended path.
+
+### The coordination fork is the demo's own screen
+
+The card the visitor sees at the fork is production's — `sendCoordCard`,
+`variant: "offer"`, the partner's photo in the polaroid, `coordOfferIntro` as the
+caption, `coordBtnShareSelf` / `coordBtnRequestPartner` / `coordBtnProxy` as the
+labels. What is demo-owned is the **sending** of it and its callback data
+(`demo:coord:*`), and that is the whole point of the arrangement:
+
+- production sends nothing at all here — `resolveCoordRecipients` needs both
+  sides reachable on Telegram and the puppet never is, so `sendOffers` silently
+  selects the anonymous chat and asks no question;
+- production's keyboard could not show the two contact-exchange buttons anyway:
+  it hides them without a public `@username`, and the puppet has none;
+- and production's `handleCoordMethod` would refuse the tap, because the visitor
+  is not an eligible offer recipient — except for variant A, which would
+  **succeed** for a visitor who does have a username, writing
+  `coordMethod: "share_self"` and permanently blocking the anonymous chat in
+  exchange for a contact reveal that reaches nobody.
+
+So the demo owns all three taps. **A and B are explained rather than performed**
+(founder decision — DECISIONS.md): the visitor is told what the button would do
+in production, what it costs (A is irreversible, B asks the other person), and
+why it cannot run here, and the choice is handed straight back with the
+remaining buttons. Nothing is written, so `coordMethod` stays null and the fork
+simply stays open — which is what lets someone read both before choosing. **C is
+performed**, and its four-field write mirrors `handleCoordMethod`'s own `proxy`
+branch, guarded on `coordMethod: null` so the tap and the floor timer cannot both
+fire.
+
+Because the method is set before the coordination sweep ever runs, production's
+auto-select for an unreachable pair is a no-op (it is guarded on the same
+column). Giving the puppet a fake `@username` to make A and B "work" was
+rejected: it would put a dead `t.me/` link in front of an investor. The full
+three-variant flow with a live partner is tested on `@gennetytestbot` with
+`scripts/dev-coord-offer-demo.mjs`.
+
+### The puppet talks in the anonymous chat
+
+The relay is the one place in the product where two people write to each other,
+and in demo the other person cannot type: no chat, no push token, nothing that
+could answer. A visitor who wrote "I'm here" into silence had been shown a broken
+feature, which is worse than not showing it.
+
+`demo/proxy-partner.ts` gives the puppet a voice — one small LLM call per turn
+(`MODELS.fast`), prompted as a person on their way to the date, with the real
+venue, the real time in the pair's own timezone, and the transcript so far. The
+situation advances by turn count rather than by the clock, because the demo
+compresses the whole 30-minute window into a couple of minutes: **it writes
+first** ("ten minutes out, where are you?" — which is what makes the visitor open
+the chat at all), then arrives, then settles into finding each other. It never
+starts a conversation about the date itself; the product deliberately has no such
+feature and a puppet that demoed one would be lying.
+
+Three bounds make it safe: prompt building is pure and unit-tested; every
+generation is validated (one line, ≤220 chars, no links, no broken character) and
+falls back to a scripted ladder, so the chat works with no `OPENAI_API_KEY` at
+all; and the puppet answers at most `DEMO_PROXY_MAX_PARTNER_MESSAGES` (8) times,
+so a stuck relay cannot become an open-ended bill.
+
+Delivery goes through the production `relayProxyMessage`, not a hand-written row
+plus DM, so the message is logged to `proxy_messages` and reaches the visitor by
+exactly the path, prefix and controls keyboard a real partner's would. It is
+called with an **injected clock** (`agreedTime − 15m`): that module derives the
+window from `agreedTime` on purpose, and the demo's date sits days in the real
+future, so without the shift the production path would honestly answer `closed`.
+Same idiom as the lifecycle replay.
 
 **A same-sex pair cannot show every screen.** The pre-date safety brief is
 addressed to the female participant, so a male visitor matched with the male
@@ -221,9 +293,16 @@ design. Covering those needs a second run from the other side.
 
 ### What is held in memory (and why nothing is in the schema)
 
-Four maps in `driver.ts`: which narration beats a visitor has read, when the
-currently-owed action was first observed, which visitors are being acted on, and
-which finished match a visitor has already been offered a way back from.
+Five maps in `driver.ts`: which narration beats a visitor has read, when the
+currently-owed action was first observed, which visitors are being acted on,
+which finished match a visitor has already been offered a way back from, and
+which of the two impossible coordination variants have already been explained.
+
+That last one is the only piece here that genuinely *cannot* be derived: tapping
+"share my Telegram" or "ask for theirs" writes nothing to the match — that is
+what keeps the fork open — so the product carries no trace of it. It only thins
+the re-offer keyboard, so losing it on restart shows a button that has already
+been read.
 
 **No table was added to `packages/db/prisma/schema.prisma` for demo mode**, and
 none should be — the schema is shared with production, and a demo-only table
@@ -236,7 +315,7 @@ idempotency columns.
 
 ## The narration
 
-Seven moments where the demo speaks as itself (`demo/script.ts`), each triggered
+The moments where the demo speaks as itself (`demo/script.ts`), each triggered
 by a state the product itself owns:
 
 1. **`/start`** — what the demo is; and that the bot is a conversational agent
@@ -251,8 +330,17 @@ by a state the product itself owns:
 5. **`scheduled`** — the date card is yours; here is what on it is live, tap when
    you're done looking.
 6. **The tap, or 7 minutes** — what normally happens over the following days,
-   immediately followed by it happening.
-7. **Terminal** — which ending this was, and the way back.
+   immediately followed by the first of it happening.
+7. **The coordination fork** — the question the product asks an hour out, above
+   the real card. Deliberately does NOT say which of the three are impossible
+   here: pressing one and being told what it does IS the demo of this screen.
+8. **A or B pressed** — what that button would have done in production, what it
+   costs, and why it cannot run against a puppet with no Telegram account.
+9. **The relay is open** — what the anonymous chat is, that it is the only
+   channel between two users in the whole product, and an invitation to write
+   into it (the puppet answers).
+10. **The tap, or 7 minutes** — the day-after question, then it arriving.
+11. **Terminal** — which ending this was, and the way back.
 
 Languages: `ru`, `uk`, `en` are written out; `de` and `pl` fall back to `en`.
 A deliberate scope call for long explanatory prose; adding the two blocks is the

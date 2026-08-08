@@ -28,6 +28,11 @@ export type DemoBeat =
   | "matchmaking"
   | "date_ready"
   | "predate"
+  | "coord_offer"
+  | "coord_share_self"
+  | "coord_request_partner"
+  | "chat_open"
+  | "after_date"
   | "declined"
   | "finale"
   | "stuck"
@@ -249,7 +254,8 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
       "что стоит знать про вашу пару. Ближе к встрече напоминаю детали: место, " +
       "время, как добраться. А на следующий день после свидания спрашиваю, как " +
       "всё прошло — и этот ответ делает следующий подбор точнее.\n\n" +
-      "Сейчас я проиграю всё это подряд, без ожидания. 👇",
+      "Сейчас проиграю всё это — с парой остановок, чтобы вы успели потрогать " +
+      "то, что появится. 👇",
     uk:
       "📅 Побачення призначено — і в справжньому продукті на цьому моменті " +
       "настає пауза на кілька днів.\n\n" +
@@ -261,7 +267,8 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
       "знати про вашу пару. Ближче до зустрічі нагадую деталі: місце, час, як " +
       "дістатися. А наступного дня після побачення запитую, як усе минуло — і " +
       "ця відповідь робить наступний підбір точнішим.\n\n" +
-      "Зараз я програю все це поспіль, без очікування. 👇",
+      "Зараз програю все це — з парою зупинок, щоб ви встигли потикати те, що " +
+      "з'явиться. 👇",
     en:
       "📅 The date is set — and in the real product this is where a pause of " +
       "several days begins.\n\n" +
@@ -273,7 +280,165 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
       "worth knowing about your match. Closer to the time I remind you of the " +
       "details: place, time, how to get there. And the day after, I ask how it " +
       "went — and that answer makes the next match sharper.\n\n" +
-      "I'll play all of it now, back to back. 👇",
+      "I'll play all of it now — with a couple of stops, so you get to touch " +
+      "what shows up. 👇",
+  },
+
+  // ── 7. An hour before the date: how will the two of you find each other? ──
+  //
+  // The card that follows this beat is production's own (`sendCoordCard`,
+  // variant `offer`) with production's own copy and button labels — but it is
+  // sent BY THE DEMO with demo callback data, because in demo the puppet is
+  // unreachable on Telegram and production would send nothing at all and
+  // silently select the anonymous chat. See DEMO_MODE.md.
+  //
+  // Deliberately does NOT say up front which of the three are impossible here:
+  // the visitor is meant to press one and be told what it does. That IS the
+  // demo of this screen.
+  coord_offer: {
+    ru:
+      "🕐 До свидания час — и здесь продукт задаёт вопрос, который в обычном " +
+      "приложении решается сам собой: как вы найдёте друг друга на месте?\n\n" +
+      "Способов три, и карточка ниже настоящая. Нажмите любой — я по ходу " +
+      "расскажу, что именно он делает.",
+    uk:
+      "🕐 До побачення година — і тут продукт ставить питання, яке у звичайному " +
+      "застосунку вирішується саме собою: як ви знайдете одне одного на місці?\n\n" +
+      "Способів три, і картка нижче справжня. Натисніть будь-який — я дорогою " +
+      "розкажу, що саме він робить.",
+    en:
+      "🕐 An hour to go — and here the product asks the question an ordinary app " +
+      "leaves to you: how will the two of you actually find each other?\n\n" +
+      "There are three ways, and the card below is the real one. Press any of " +
+      "them and I'll tell you what it does.",
+  },
+
+  // ── 7a. Variant A, explained instead of performed ───────────────────────
+  coord_share_self: {
+    ru:
+      "📲 Это «поделиться своим Telegram».\n\n" +
+      "В продакшене: партнёру приходит карточка с вашим именем и ссылкой " +
+      "t.me/… — одно нажатие, и он пишет вам напрямую. Разрешения у него никто " +
+      "не спрашивает: контакт ваш, вы им и распорядились. И это единственный " +
+      "необратимый из трёх способов — отданный контакт обратно не забрать.\n\n" +
+      "Здесь отдавать ссылку некому: ваша пара — демо-профиль, аккаунта в " +
+      "Telegram у неё нет.\n\n" +
+      "Выберите ещё раз 👇",
+    uk:
+      "📲 Це «поділитися своїм Telegram».\n\n" +
+      "У продакшені: партнерові приходить картка з вашим ім'ям і посиланням " +
+      "t.me/… — одне натискання, і він пише вам напряму. Дозволу в нього ніхто " +
+      "не питає: контакт ваш, ви ним і розпорядилися. І це єдиний незворотний " +
+      "із трьох способів — відданий контакт назад не забрати.\n\n" +
+      "Тут віддавати посилання нікому: ваша пара — демо-профіль, акаунта в " +
+      "Telegram у неї немає.\n\n" +
+      "Оберіть ще раз 👇",
+    en:
+      "📲 That's \"share my Telegram\".\n\n" +
+      "In production: your match gets a card with your name and a t.me/… link — " +
+      "one tap and they message you directly. Nobody asks their permission: the " +
+      "contact is yours to give. It's also the only irreversible one of the " +
+      "three — a shared contact can't be taken back.\n\n" +
+      "Here there is nobody to give it to: your match is a demo profile with no " +
+      "Telegram account.\n\n" +
+      "Pick again 👇",
+  },
+
+  // ── 7b. Variant B, explained instead of performed ───────────────────────
+  coord_request_partner: {
+    ru:
+      "🙋 Это «попросить его контакт».\n\n" +
+      "В продакшене: партнёру приходит карточка с фото того, кто спрашивает, и " +
+      "двумя кнопками — зелёной «поделиться» и красной «не сейчас». " +
+      "Согласится — вы получаете ссылку на его Telegram. Откажет — я скажу об " +
+      "этом мягко, без объяснений с его стороны, и предложу анонимный чат. Это " +
+      "единственный из трёх способов, который спрашивает разрешение у второй " +
+      "стороны.\n\n" +
+      "Здесь спрашивать некого — партнёра нет в Telegram.\n\n" +
+      "Выберите ещё раз 👇",
+    uk:
+      "🙋 Це «попросити його контакт».\n\n" +
+      "У продакшені: партнерові приходить картка з фото того, хто питає, і " +
+      "двома кнопками — зеленою «поділитися» і червоною «не зараз». " +
+      "Погодиться — ви отримуєте посилання на його Telegram. Відмовить — я " +
+      "скажу про це м'яко, без пояснень з його боку, і запропоную анонімний " +
+      "чат. Це єдиний із трьох способів, який питає дозволу в другої " +
+      "сторони.\n\n" +
+      "Тут питати нікого — партнера немає в Telegram.\n\n" +
+      "Оберіть ще раз 👇",
+    en:
+      "🙋 That's \"ask them for theirs\".\n\n" +
+      "In production: your match gets a card with the asker's photo and two " +
+      "buttons — a green \"share\" and a red \"not now\". If they agree, you get " +
+      "a link to their Telegram. If they decline, I tell you gently, with no " +
+      "explanation owed on their side, and offer the anonymous chat instead. " +
+      "It's the only one of the three that asks the other person's " +
+      "permission.\n\n" +
+      "Here there is nobody to ask — your match isn't on Telegram.\n\n" +
+      "Pick again 👇",
+  },
+
+  // ── 8. Variant C, for real: the anonymous relay is open ─────────────────
+  chat_open: {
+    ru:
+      "🕶 Анонимный чат открыт — карточка выше, и она рабочая.\n\n" +
+      "В продакшене он открывается за 30 минут до встречи и закрывается через " +
+      "два часа после. Сообщения идут через меня: контакты не раскрываются, " +
+      "медиа не пропускаются, под каждым сообщением есть кнопка «пожаловаться». " +
+      "Это единственное место во всём продукте, где два человека могут написать " +
+      "друг другу — и сделано оно ровно для одного: «я на месте, сижу у окна», " +
+      "«опаздываю на десять минут».\n\n" +
+      "Представьте, что до встречи полчаса. Нажмите «Войти в чат» и напишите " +
+      "что-нибудь — вам ответят. Выйти можно кнопкой под любым сообщением.\n\n" +
+      "Как закончите — жмите «Дальше».",
+    uk:
+      "🕶 Анонімний чат відкритий — картка вище, і вона робоча.\n\n" +
+      "У продакшені він відкривається за 30 хвилин до зустрічі й закривається " +
+      "через дві години після. Повідомлення йдуть через мене: контакти не " +
+      "розкриваються, медіа не пропускаються, під кожним повідомленням є кнопка " +
+      "«поскаржитися». Це єдине місце в усьому продукті, де двоє людей можуть " +
+      "написати одне одному — і зроблено воно рівно для одного: «я на місці, " +
+      "сиджу біля вікна», «запізнююся на десять хвилин».\n\n" +
+      "Уявіть, що до зустрічі півгодини. Натисніть «Увійти в чат» і напишіть " +
+      "щось — вам відповідять. Вийти можна кнопкою під будь-яким " +
+      "повідомленням.\n\n" +
+      "Як закінчите — тисніть «Далі».",
+    en:
+      "🕶 The anonymous chat is open — the card above is live.\n\n" +
+      "In production it opens 30 minutes before you meet and closes two hours " +
+      "after. Messages go through me: no contacts are revealed, media is " +
+      "rejected, and every message carries a report button. This is the only " +
+      "place in the entire product where two people can write to each other — " +
+      "and it exists for exactly one thing: \"I'm here, by the window\", " +
+      "\"running ten minutes late\".\n\n" +
+      "Imagine you're half an hour out. Tap \"Enter chat\" and write something — " +
+      "you'll get an answer. Leave any time with the button under a message.\n\n" +
+      "Tap \"Next\" when you're done.",
+  },
+
+  // ── 9. The date happened; the day-after question is what closes the loop ─
+  after_date: {
+    ru:
+      "🌙 Свидание состоялось — и здесь я снова замолкаю до следующего дня.\n\n" +
+      "Через сутки я спрашиваю каждого, как всё прошло: насколько совпало, " +
+      "хочется ли второй раз, и что угодно словами — текстом или голосом. Это " +
+      "единственный способ, которым система узнаёт, что угадала или ошиблась: " +
+      "ответ идёт в ваш профиль и меняет следующий подбор.\n\n" +
+      "Проиграю и это. 👇",
+    uk:
+      "🌙 Побачення відбулося — і тут я знову замовкаю до наступного дня.\n\n" +
+      "Через добу я питаю кожного, як усе минуло: наскільки збіглося, чи " +
+      "хочеться вдруге, і будь-що словами — текстом або голосом. Це єдиний " +
+      "спосіб, яким система дізнається, що вгадала або помилилася: відповідь " +
+      "іде у ваш профіль і змінює наступний підбір.\n\n" +
+      "Програю і це. 👇",
+    en:
+      "🌙 The date happened — and here I go quiet again until the next day.\n\n" +
+      "A day later I ask each of you how it went: how much it clicked, whether " +
+      "you want a second one, and anything at all in your own words — by text or " +
+      "voice. That answer is the only way the system learns it got you right or " +
+      "wrong: it goes into your profile and changes the next match.\n\n" +
+      "I'll play that too. 👇",
   },
 
   // ── Recovery: the visitor passed on the profile ─────────────────────────
@@ -375,6 +540,39 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
  */
 export const DEMO_CONTINUE_CALLBACK = "demo:continue";
 export const DEMO_PREDATE_CALLBACK = "demo:predate";
+export const DEMO_AFTER_DATE_CALLBACK = "demo:after-date";
+
+/**
+ * The demo's own coordination fork.
+ *
+ * Deliberately NOT production's `coord:m:{matchId}:{method}` data, even though
+ * the card, its caption and its button labels are all production's. Two reasons,
+ * both load-bearing:
+ *
+ *   - production's `handleCoordMethod` refuses a caller who is not an eligible
+ *     offer recipient, and in demo `resolveCoordRecipients` returns nobody (the
+ *     puppet is unreachable on Telegram), so every tap would be a silent no-op;
+ *   - variant A would otherwise genuinely SUCCEED for a visitor who has a public
+ *     `@username` — writing `coordMethod: "share_self"`, which permanently
+ *     blocks the anonymous chat and hands the visitor a contact reveal that
+ *     reaches nobody.
+ *
+ * So the demo owns all three taps: A and B are explained, C is performed.
+ */
+export const DEMO_COORD_PREFIX = "demo:coord:";
+export type DemoCoordChoice = "share_self" | "request_partner" | "proxy";
+
+export function demoCoordCallback(choice: DemoCoordChoice): string {
+  return `${DEMO_COORD_PREFIX}${choice}`;
+}
+
+export function parseDemoCoordChoice(data: string): DemoCoordChoice | null {
+  if (!data.startsWith(DEMO_COORD_PREFIX)) return null;
+  const choice = data.slice(DEMO_COORD_PREFIX.length);
+  return choice === "share_self" || choice === "request_partner" || choice === "proxy"
+    ? choice
+    : null;
+}
 
 /**
  * Button labels.
@@ -401,6 +599,12 @@ const PREDATE_LABEL: BeatCopy = {
   en: "▶️ What happens next",
 };
 
+const AFTER_DATE_LABEL: BeatCopy = {
+  ru: "▶️ Дальше",
+  uk: "▶️ Далі",
+  en: "▶️ Next",
+};
+
 export function demoText(beat: DemoBeat, language: Language | null): string {
   return resolve(SCRIPT[beat], language);
 }
@@ -414,6 +618,10 @@ export function demoContinueLabel(
 
 export function demoPredateLabel(language: Language | null): string {
   return resolve(PREDATE_LABEL, language);
+}
+
+export function demoAfterDateLabel(language: Language | null): string {
+  return resolve(AFTER_DATE_LABEL, language);
 }
 
 function resolve(copy: BeatCopy, language: Language | null): string {

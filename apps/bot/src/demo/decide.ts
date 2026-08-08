@@ -38,8 +38,27 @@ export type DemoAction =
   | { kind: "partner_agree_likes" }
   /** The puppet is the payer for the venue change; settle it for free. */
   | { kind: "partner_settle_venue_change" }
-  /** Explain the pre-date days, then play them out immediately. */
+  /** Explain the pre-date days, then play the T-2h gate and offer the fork. */
   | { kind: "run_predate" }
+  /**
+   * Send the coordination fork — production's own card, with all three buttons
+   * (§Phase 4). Held here until the visitor picks, because the two
+   * contact-exchange variants cannot work against a puppet with no Telegram
+   * account and are explained rather than performed.
+   */
+  | { kind: "coord_offer" }
+  /**
+   * Nobody tapped: pick the anonymous chat and carry on. The floor under the
+   * fork, so a demo can never stall in front of an audience.
+   */
+  | { kind: "coord_pick_proxy" }
+  /**
+   * The puppet's next line in the anonymous chat — an opener before the visitor
+   * has written anything, an answer afterwards.
+   */
+  | { kind: "partner_proxy_reply" }
+  /** Close the chat and play the day-after feedback. */
+  | { kind: "run_after_date" }
   /**
    * The match is over — the visitor passed, or the demo ran all the way to the
    * post-date feedback. Say which, and offer the way back. `matchId` is what
@@ -78,6 +97,22 @@ export interface DemoMatchSnapshot {
   visitorVenueConfirmed: boolean;
   partnerVenueConfirmed: boolean;
   icebreakersSentAt: Date | null;
+  /**
+   * Pre-date coordination (§Phase 4). `coordMethod` is null until the visitor
+   * picks, which is what makes the fork's hold DERIVED rather than tracked —
+   * production's own auto-select for an unreachable pair never runs here,
+   * because the demo sets the method itself the moment a choice is made.
+   */
+  coordMethod: string | null;
+  /**
+   * Whether the anonymous relay window is open, from the cron's own stamps.
+   * `none` also covers `COORDINATION_FEATURE_ENABLED` being off, in which case
+   * it stays `none` forever and the demo must not wait for a chat.
+   */
+  proxyState: "none" | "open" | "closed";
+  /** Who wrote last in the relay — the whole trigger for the puppet's reply. */
+  proxyLastSender: "visitor" | "partner" | null;
+  proxyPartnerMessageCount: number;
   /** §3.7b board sub-state: null | liking | agreed | settled | lapsed. */
   venueChangeStatus: string | null;
   visitorLikeKeys: string[];
@@ -169,6 +204,39 @@ export const DEMO_DATE_CARD_WAIT_MS = 25_000;
  * visitor who never taps it, so the demo cannot stall in front of an audience.
  */
 export const DEMO_EXPLORE_WAIT_MS = 7 * 60_000;
+/**
+ * How long the coordination fork waits for a tap before the demo picks the
+ * anonymous chat itself.
+ *
+ * Generous, because the two impossible variants exist to be pressed and read:
+ * a visitor who taps A, reads the explanation, taps B and reads that one has
+ * spent a couple of minutes on this screen legitimately. The floor is only
+ * there so an abandoned demo does not sit on a card forever.
+ */
+export const DEMO_COORD_CHOICE_WAIT_MS = 5 * 60_000;
+/**
+ * How long the anonymous chat is left open before the demo moves to the
+ * day-after feedback.
+ *
+ * The chat is the point of this whole stretch, so it gets its own exploration
+ * window rather than sharing the date card's — and like that one, the button in
+ * the `chat_open` beat is the intended path and this is the floor under it.
+ */
+export const DEMO_CHAT_WAIT_MS = 7 * 60_000;
+/**
+ * A person typing, not a service responding. Short on purpose — the relay is a
+ * chat, and the 12-second beat that suits a negotiation step would read here as
+ * the other side having walked away.
+ */
+export const DEMO_PROXY_REPLY_WAIT_MS = 5_000;
+/**
+ * A ceiling on the puppet's side of the conversation.
+ *
+ * It only ever speaks when written to, so the visitor already bounds this — the
+ * cap is there so a stuck relay (or someone testing how long it will go) cannot
+ * turn a demo into an open-ended LLM bill.
+ */
+export const DEMO_PROXY_MAX_PARTNER_MESSAGES = 8;
 
 export function decideDemoAction(snapshot: DemoSnapshot): DemoDecision {
   const narration = decideNarration(snapshot);
@@ -349,8 +417,9 @@ function decideMatchAction(
       const board = decideVenueChangeAction(match);
       if (board) return wait(board);
 
-      // The lifecycle claimed its marker: the pre-date content has played.
-      if (match.icebreakersSentAt !== null) return idle;
+      // The T-2h gate claimed its marker, so the pre-date content has played and
+      // the coordination stretch owns everything from here.
+      if (match.icebreakersSentAt !== null) return decidePredateAction(match, spoken);
 
       // Hand over the card and say what is worth touching, then get out of the
       // way. Both waits are measured from when the action becomes owed, and an
@@ -366,6 +435,55 @@ function decideMatchAction(
     default:
       return idle;
   }
+}
+
+/**
+ * The hour before the date, once the T-2h gate has played (§Phase 4).
+ *
+ * Three states, all read off the product's own columns rather than tracked:
+ *
+ *   1. **No method chosen yet** — the fork is on screen and the visitor owes a
+ *      tap. Taps on the two contact-exchange variants write nothing (they are
+ *      explained, not performed), so this state persists across them, which is
+ *      exactly what lets the visitor read both before choosing.
+ *   2. **Relay open** — the puppet keeps the conversation alive, and the
+ *      day-after feedback waits for the visitor to finish.
+ *   3. **Anything else** — a method is set but no window exists (the flag is
+ *      off, or the chat has already closed). Nothing to wait for; move on rather
+ *      than hold a demo open for a chat that will never appear.
+ */
+function decidePredateAction(
+  match: DemoMatchSnapshot,
+  spoken: ReadonlySet<DemoBeat>,
+): DemoDecision {
+  const wait = (action: DemoAction, waitMs = DEMO_STEP_WAIT_MS): DemoDecision => ({
+    action,
+    waitMs,
+  });
+
+  if (match.coordMethod === null && match.proxyState === "none") {
+    if (!spoken.has("coord_offer")) {
+      return { action: { kind: "coord_offer" }, waitMs: 0 };
+    }
+    return wait({ kind: "coord_pick_proxy" }, DEMO_COORD_CHOICE_WAIT_MS);
+  }
+
+  if (match.proxyState === "open") {
+    // The beat explains the window and carries the "done here" button, so it
+    // must land before the puppet's opener drops into the same chat.
+    if (!spoken.has("chat_open")) {
+      return { action: { kind: "narrate", beat: "chat_open" }, waitMs: 0 };
+    }
+    if (
+      match.proxyPartnerMessageCount < DEMO_PROXY_MAX_PARTNER_MESSAGES &&
+      match.proxyLastSender !== "partner"
+    ) {
+      return wait({ kind: "partner_proxy_reply" }, DEMO_PROXY_REPLY_WAIT_MS);
+    }
+    return wait({ kind: "run_after_date" }, DEMO_CHAT_WAIT_MS);
+  }
+
+  return wait({ kind: "run_after_date" }, DEMO_STEP_WAIT_MS);
 }
 
 function decideVenueChangeAction(match: DemoMatchSnapshot): DemoAction | null {

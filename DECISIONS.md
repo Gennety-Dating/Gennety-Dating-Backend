@@ -182,6 +182,73 @@ a product decision with its own UI, not an extension of this classifier.
 
 ---
 
+## 2026-08-08 — the demo shows all three coordination variants, and explains the two it cannot run
+
+**Kind:** founder decision
+**What:** in demo mode the pre-date fork (§Phase 4) is shown with **all three**
+buttons. Tapping either contact-exchange variant — impossible against a puppet
+with no Telegram account — answers with what that button would have done in
+production, what it costs, and why it cannot run here, then hands the choice
+straight back with the remaining buttons. Only the anonymous chat is performed.
+**Why:** the founder wanted the *mechanic* demonstrated, not hidden. The two
+rejected alternatives were worse in opposite directions: sending nothing (what
+production does for an unreachable pair) means an investor never learns the
+question exists, and giving the puppet a fake `@username` to make A and B "work"
+would put a dead `t.me/` link on screen — a demo that lies is worse than one
+that explains. Explaining costs one paragraph and demonstrates more of the
+product than pressing a working button would.
+**What it changes going forward:** the fork card is **demo-owned** — sent from
+`apps/bot/src/demo/`, with `demo:coord:*` callback data, reusing production's
+renderer, copy and labels. Do NOT "simplify" this by adding a ninth
+`if (DEMO_MODE_ENABLED)` to `resolveCoordRecipients`: production's own handler
+would still refuse the tap, its keyboard still could not show A/B without a
+username, and variant A would *succeed* for a visitor who has one — writing
+`coordMethod: "share_self"` and permanently blocking the anonymous chat. A and B
+must keep writing **nothing**; that is what holds the fork open so both can be
+read.
+**Recorded in:** DEMO_MODE.md → "The coordination fork is the demo's own
+screen"; `apps/bot/src/demo/script.ts` → `DEMO_COORD_PREFIX`.
+
+## 2026-08-08 — the demo puppet answers in the anonymous chat, via an LLM
+
+**Kind:** founder decision
+**What:** the puppet writes in the pre-date relay — one small LLM call per turn,
+prompted as a real person on the way to the date, carrying the venue, the time
+in the pair's timezone and the transcript. It writes FIRST ("ten minutes out,
+where are you?"), then arrives, then keeps to finding each other.
+**Why:** the relay is the one place in the product where two users write to each
+other, and in demo the other side cannot type at all (no chat, no push token).
+A visitor writing into silence had been shown a broken feature. The founder's
+framing was explicit: give it the date context and a situation, and let it
+simulate the real thing.
+**What it changes going forward:** the puppet must never start a conversation
+about the date itself — the product deliberately has no pre-date chat beyond
+logistics, and demoing one would be inventing a feature. The reply is capped
+(8 messages), validated, and falls back to a scripted ladder, so the chat works
+with no `OPENAI_API_KEY`. It goes through the production `relayProxyMessage`
+with an injected clock, never a hand-written row plus DM — anything else would
+drift from the real log and the real delivery path.
+**Recorded in:** DEMO_MODE.md → "The puppet talks in the anonymous chat";
+`apps/bot/src/demo/proxy-partner.ts`.
+
+## 2026-08-08 — a demo step that is a real decision gets a real pause
+
+**Kind:** change of mind
+**What:** the pre-date replay was one run of four gates 4 seconds apart. It is
+now three stretches, stopping at the coordination fork and again at the open
+relay, resuming on the visitor's own tap or a floor timer.
+**Why:** the single run closed the anonymous chat four seconds after opening it,
+so the visitor got a live "Enter chat" button that was dead by the time they
+reached it. The rule this establishes is more general than the bug: **the replay
+compresses WAITING, not deciding.** A gate the visitor is meant to answer cannot
+be replayed past.
+**What it changes going forward:** a new gate added to the replay must be sorted
+into one of the two kinds. If it produces something the visitor is meant to press,
+it needs its own stretch, a floor timer and a button — the pattern the date-card
+handover already established.
+**Recorded in:** DEMO_MODE.md → the gate list; `apps/bot/src/demo/driver.ts`
+(`PRE_DATE_GATES` / `COORD_GATES` / `AFTER_DATE_GATES`).
+
 ## 2026-08-08 — the first complete demo run, and what it found
 
 **Kind:** deviation from plan + a document turned out to be wrong

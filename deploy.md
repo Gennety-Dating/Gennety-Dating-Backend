@@ -1,5 +1,104 @@
 # Gennety Dating Deploy
 
+**PENDING — the pre-date coordination flow becomes walkable in the demo
+(DEMO_MODE.md).** Not deployed yet. **Demo only** — the diff is
+`apps/bot/src/demo/**` plus docs, so **nothing to rsync to `/opt/gennety`, no
+production restart**. `pnpm demo:deploy` is the whole deploy. No Prisma schema
+change, no env change, no flag change, no Mini App change.
+
+Builds directly on the replay fix two blocks down (`23c8ea1`, deployed earlier
+today) and **supersedes one bullet of it**: `defaultCoordMethodToProxy` is
+deleted, because the choice is now the visitor's. That block carries a note in
+place.
+
+Three defects, one flow. Even with the replay live, the hour before the date was
+not something a visitor could actually walk:
+
+1. **The coordination fork was never shown.** The puppet is `platform: "mobile"`
+   with a negative `telegramId`, so `resolveCoordRecipients` returns nobody and
+   production silently selects the anonymous chat instead of asking — the
+   three-way question never appeared on screen at all.
+2. **The chat window lived ~4 seconds.** The replay ran all four gates with a 4s
+   sleep between them, so `closeProxies` (T+25h) shut the relay almost
+   immediately after `openProxies` (T-30m) opened it: the "Enter chat" button was
+   dead by the time anyone reached it.
+3. **The puppet could not answer.** No chat, no push token, no branch in
+   `decide.ts` — a visitor who got in wrote into silence.
+
+Now: the demo sends production's own offer card with **all three** buttons; the
+two contact-exchange variants are explained rather than performed (founder
+decision — DECISIONS.md) and deliberately write nothing, so the fork stays open
+and both can be read; the anonymous chat is locked in by the visitor's own tap;
+the replay is split into three stretches that stop at each real decision; and the
+puppet talks in the relay through one small LLM call per turn, in character, with
+the real venue and time.
+
+**Five things worth knowing before the restart:**
+
+- **The demo now spends OpenAI on the relay** (`MODELS.fast`, roughly one call
+  per message the visitor sends, capped at 8 per match). Small, not zero. With no
+  `OPENAI_API_KEY` — or on any failure, or on a generation that breaks character
+  — it falls back to a scripted ladder, so the chat still works.
+- **A new give-up line to grep for:** `giving up on partner_proxy_reply` means
+  the relay refused three times running. `proxy-relay:closed` as the reason means
+  the injected clock (`agreedTime − 15m`) and the window derived from
+  `agreedTime` have drifted apart — that pairing is the one fragile join in this
+  change.
+- **Two floor timers, 5 and 7 minutes.** A visitor who walks away leaves the demo
+  holding a screen for that long before continuing by itself. Deliberate (the
+  buttons are the intended path), but longer than any previous demo pause — so a
+  demo that looks stalled at the fork or in the chat probably is not.
+- **Production coordination behaviour is untouched.** Nothing under
+  `apps/bot/src/services/` or `handlers/` changed, and the guarded-branch count
+  in production code stays at **8** — the fork card is sent from
+  `apps/bot/src/demo/` with its own callback data precisely so no ninth branch is
+  needed. DEMO_MODE.md explains why routing variant C through production's
+  `handleCoordMethod` was rejected.
+- **One test assertion changed rather than a behaviour:** `decide.test.ts` had
+  two cases asserting `{ kind: "none" }` on a `scheduled` fixture past the T-2h
+  gate. That state is no longer idle — it is the coordination stretch — so both
+  now assert the thing they were actually about.
+
+Preflight for this change: typecheck clean, **3380 bot tests** (85 under
+`src/demo/`, 32 of them new), lint clean across all five projects.
+
+Post-deploy check — the demo's previous match is `completed`, so this needs a
+fresh walk: `/restart` (or «показать ещё одну анкету») through to a scheduled
+date, «Что происходит дальше», then press **A**, press **B**, then the anonymous
+chat, write two messages, press «Дальше».
+
+```sh
+pnpm demo:deploy
+ssh root@167.172.178.229 'pm2 describe gennety-demo | grep -E "uptime|restarts"'
+# uptime in seconds, restarts +1 — the bot runs from source, so the restart IS
+# the deploy. A stale uptime means the code on disk is not the code running.
+ssh root@167.172.178.229 'pm2 logs gennety-demo --lines 60 --nostream | grep -E "giving up|acted=0"'
+# empty = nothing is stuck.
+```
+
+In the demo database afterwards:
+
+```sql
+select coord_method, proxy_opened_at is not null, proxy_closed_at is not null, status
+  from matches order by created_at desc limit 1;
+select sender_id, left(body, 60) from proxy_messages order by created_at;
+```
+
+Expect `coord_method = 'proxy'`, both stamps set, `status = 'completed'`, and
+`proxy_messages` alternating between the puppet and the visitor — the puppet's
+own line **first**, which is what makes a visitor open the chat.
+
+**Variants A and B stay explanations, by design.** They exchange `t.me/` links
+and the puppet has no account; giving it a fake `@username` would put a dead link
+in front of an investor. The full three-variant flow with a live partner is
+`@gennetytestbot` plus `scripts/dev-coord-offer-demo.mjs` (it has `--reset`, so A,
+then B, then C on one match).
+
+**Rollback:** revert and `pnpm demo:deploy`. Production is untouched. Nothing
+else to undo — no schema, no env, no flag.
+
+---
+
 **Deployed 2026-08-08 — the two fixes production was still missing (`f66949a`).**
 Full server code + Mini App + demo, bringing prod from `d5405f6` to
 **`f66949a` plus `e04ffec`** (the dependency-override commit made during the
@@ -154,6 +253,10 @@ now carry a note in place. Nothing has exercised it because production has had
   anonymous chat. `openProxies` needs `coordMethod`, which in the product comes
   from a tap, and a demo cannot depend on a tap landing inside a four-second
   beat. Guarded on `coordMethod: null`, so a visitor who did tap keeps theirs.
+  **⚠️ Superseded by the PENDING block at the top of this file:** the four-second
+  beat is gone (the replay now stops at the fork and waits), so this branch was
+  deleted and the visitor makes the choice themselves. The floor timer that
+  replaces it is five minutes.
 - **A same-sex pair still cannot show everything.** The safety brief goes to the
   female participant, so a male visitor will correctly never see it — same for
   the hetero-only cover gesture, wish card and express venue change. That needs

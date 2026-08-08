@@ -2,7 +2,7 @@ import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { prisma } from "@gennety/db";
 import type { MatchStatus } from "@gennety/db";
-import type { Language } from "@gennety/shared";
+import { t, type Language } from "@gennety/shared";
 
 import { env } from "../config.js";
 import { MATCH_COOLDOWN_MS, createProposedMatch } from "../services/match-engine.js";
@@ -29,8 +29,12 @@ import {
 } from "../handlers/matching/venue-change.js";
 import { runDateLifecycleTick } from "../services/date-lifecycle.js";
 import { runCoordinationTick } from "../services/coordination.js";
+import { sendCoordCard } from "../services/coordination-card/send.js";
+import type { CoordCardTheme } from "../services/coordination-card/index.js";
+import { relayProxyMessage } from "../services/proxy-chat.js";
 
 import { createFailureTracker } from "./failure-tracker.js";
+import { composeProxyReply, type ProxyReplyTurn } from "./proxy-partner.js";
 
 import {
   DEMO_PARTNERS,
@@ -41,12 +45,16 @@ import {
 } from "./partners.js";
 import { decideDemoAction, type DemoAction, type DemoMatchSnapshot, type DemoSnapshot } from "./decide.js";
 import {
+  DEMO_AFTER_DATE_CALLBACK,
   DEMO_CONTINUE_CALLBACK,
   DEMO_PREDATE_CALLBACK,
+  demoAfterDateLabel,
   demoContinueLabel,
+  demoCoordCallback,
   demoPredateLabel,
   demoText,
   type DemoBeat,
+  type DemoCoordChoice,
 } from "./script.js";
 
 const LOG = "[demo]";
@@ -81,6 +89,17 @@ const spokenBeats = new Map<string, Set<DemoBeat>>();
 const pendingSince = new Map<string, { key: string; at: number }>();
 const inFlight = new Set<string>();
 const redoOffered = new Map<string, string>();
+/**
+ * Which of the two impossible coordination variants a visitor has already had
+ * explained (§Phase 4 fork).
+ *
+ * The only piece of demo state here that genuinely cannot be derived: tapping
+ * "share my Telegram" or "ask for theirs" writes NOTHING to the match — that is
+ * the point, it leaves the fork open — so the product carries no trace of it.
+ * Used purely to thin the re-offer keyboard; losing it on restart shows a button
+ * that has already been read, which is the cheapest possible failure.
+ */
+const coordExplained = new Map<string, Set<DemoCoordChoice>>();
 
 /**
  * How many times the same action may be refused before the demo stops trying
@@ -101,6 +120,7 @@ export function forgetDemoVisitor(userId: string): void {
   spokenBeats.delete(userId);
   pendingSince.delete(userId);
   redoOffered.delete(userId);
+  coordExplained.delete(userId);
   failures.clear(userId);
 }
 
@@ -126,10 +146,14 @@ function refused(reason: string): DemoActionOutcome {
  * left alone: they were true the first time and repeating them is noise.
  */
 function forgetMatchBeats(userId: string): void {
+  coordExplained.delete(userId);
   const set = spokenBeats.get(userId);
   if (!set) return;
   set.delete("date_ready");
   set.delete("predate");
+  set.delete("coord_offer");
+  set.delete("chat_open");
+  set.delete("after_date");
 }
 
 export interface DemoTickResult {
@@ -351,6 +375,9 @@ async function loadDemoMatch(
       venueIntentA: true,
       venueIntentB: true,
       icebreakersSentAt: true,
+      coordMethod: true,
+      proxyOpenedAt: true,
+      proxyClosedAt: true,
       venueChangeStatus: true,
       venueChangeProposerId: true,
       venueLikesA: true,
@@ -382,6 +409,7 @@ async function loadDemoMatch(
   }
 
   const own = <T>(a: T, b: T): T => (visitorSide === "A" ? a : b);
+  const relay = await loadProxyRelayState(row.id, userId);
   const payer = payerSide({
     userA: { id: row.userA.id, gender: row.userA.gender },
     userB: { id: row.userB.id, gender: row.userB.gender },
@@ -407,6 +435,11 @@ async function loadDemoMatch(
       visitorVenueConfirmed: isConfirmedIntent(own(row.venueIntentA, row.venueIntentB)),
       partnerVenueConfirmed: isConfirmedIntent(own(row.venueIntentB, row.venueIntentA)),
       icebreakersSentAt: row.icebreakersSentAt,
+      coordMethod: row.coordMethod,
+      proxyState:
+        row.proxyOpenedAt === null ? "none" : row.proxyClosedAt === null ? "open" : "closed",
+      proxyLastSender: relay.lastSender,
+      proxyPartnerMessageCount: relay.partnerCount,
       venueChangeStatus: row.venueChangeStatus,
       visitorLikeKeys: likeKeys(own(row.venueLikesA, row.venueLikesB)),
       partnerLikeKeys: likeKeys(own(row.venueLikesB, row.venueLikesA)),
@@ -422,6 +455,33 @@ async function loadDemoMatch(
 
 function iso(value: Date): string {
   return value.toISOString();
+}
+
+/**
+ * Who spoke last in the anonymous relay, and how much the puppet has already
+ * said.
+ *
+ * Read from `proxy_messages` — the production log every relayed message lands in
+ * — rather than tracked in memory, so the puppet's turn survives a restart and
+ * the demo cannot double-answer. Two cheap queries instead of one aggregate:
+ * both are indexed by `matchId` and the table holds a handful of rows per match.
+ */
+async function loadProxyRelayState(
+  matchId: string,
+  visitorId: string,
+): Promise<{ lastSender: "visitor" | "partner" | null; partnerCount: number }> {
+  const [last, partnerCount] = await Promise.all([
+    prisma.proxyMessage.findFirst({
+      where: { matchId },
+      orderBy: { createdAt: "desc" },
+      select: { senderId: true },
+    }),
+    prisma.proxyMessage.count({ where: { matchId, senderId: { not: visitorId } } }),
+  ]);
+  return {
+    lastSender: last === null ? null : last.senderId === visitorId ? "visitor" : "partner",
+    partnerCount,
+  };
 }
 
 function isConfirmedIntent(value: unknown): boolean {
@@ -459,19 +519,7 @@ async function performAction(
 
   switch (action.kind) {
     case "narrate":
-      await say(api, telegramId, demoText(action.beat, lang), {
-        // The date-card handover is the one beat that carries an action: it
-        // ends with "tap when you're done", and the tap is the intended way
-        // into the pre-date replay (the timer is only the floor under it).
-        ...(action.beat === "date_ready"
-          ? {
-              reply_markup: new InlineKeyboard().text(
-                demoPredateLabel(lang),
-                DEMO_PREDATE_CALLBACK,
-              ),
-            }
-          : {}),
-      });
+      await say(api, telegramId, demoText(action.beat, lang), beatKeyboard(action.beat, lang));
       markSpoken(userId, action.beat);
       return ACTED;
 
@@ -565,7 +613,57 @@ async function performAction(
         snapshot.match!.id,
         snapshot.match!.agreedTime,
       );
+
+    case "coord_offer": {
+      const sent = await sendDemoCoordOffer(api, userId, telegramId, snapshot.match!);
+      if (sent.ok) markSpoken(userId, "coord_offer");
+      return sent;
+    }
+
+    case "coord_pick_proxy":
+      return chooseDemoProxy(
+        api,
+        userId,
+        telegramId,
+        lang,
+        snapshot.match!.id,
+        snapshot.match!.agreedTime,
+      );
+
+    case "partner_proxy_reply":
+      return sendPuppetProxyMessage(userId, snapshot.match!);
+
+    case "run_after_date":
+      return runDemoAfterDate(
+        api,
+        userId,
+        telegramId,
+        lang,
+        snapshot.match!.id,
+        snapshot.match!.agreedTime,
+      );
   }
+}
+
+/**
+ * The two beats that end with something to press.
+ *
+ * Both are "here is a screen, go touch it" moments where the button is the
+ * intended path and the driver's own timer is only the floor under a visitor who
+ * never taps — so neither may be the ONLY way forward.
+ */
+function beatKeyboard(beat: DemoBeat, lang: Language | null): Record<string, unknown> {
+  if (beat === "date_ready") {
+    return {
+      reply_markup: new InlineKeyboard().text(demoPredateLabel(lang), DEMO_PREDATE_CALLBACK),
+    };
+  }
+  if (beat === "chat_open") {
+    return {
+      reply_markup: new InlineKeyboard().text(demoAfterDateLabel(lang), DEMO_AFTER_DATE_CALLBACK),
+    };
+  }
+  return {};
 }
 
 /**
@@ -590,13 +688,252 @@ export async function runDemoPredate(
 
   await say(api, telegramId, demoText("predate", lang));
   try {
-    await replayDateLifecycle(api, matchId, agreedTime);
+    await replayGates(api, PRE_DATE_GATES, agreedTime);
   } catch (err) {
     // The claim above is NOT released: the narration has already gone out, and
     // re-running would promise the pre-date days a second time. What must not
     // happen is silence — the visitor has just been told "I'll play all of it
     // now", so a half-played replay is reported rather than swallowed.
     return refused(`predate-replay:${err instanceof Error ? err.message : String(err)}`);
+  }
+  return ACTED;
+}
+
+/**
+ * The visitor pressed one of the two variants that cannot work here.
+ *
+ * Nothing is written: `coordMethod` stays null, so the fork stays open and the
+ * driver keeps holding. That is the whole mechanic the founder asked for — the
+ * button is answered with what it WOULD do, and the choice is handed back.
+ *
+ * The re-offer keyboard drops whichever explanations have been read, so a
+ * visitor who works through both is left with the anonymous chat as the only
+ * remaining button rather than being invited to re-read a paragraph.
+ */
+export async function explainDemoCoordChoice(
+  api: Api<RawApi>,
+  userId: string,
+  telegramId: bigint,
+  lang: Language | null,
+  choice: Exclude<DemoCoordChoice, "proxy">,
+): Promise<void> {
+  const explained = coordExplained.get(userId) ?? new Set<DemoCoordChoice>();
+  explained.add(choice);
+  coordExplained.set(userId, explained);
+
+  // Restart the fork's five-minute floor. The tap changes no product state, so
+  // the derived action stays `coord_pick_proxy` and its clock would otherwise
+  // keep running from when the card was sent — meaning a visitor who spends the
+  // window reading both explanations could have the choice made for them
+  // mid-sentence. Pressing a button IS the signal that someone is still here.
+  pendingSince.delete(userId);
+
+  const beat = choice === "share_self" ? "coord_share_self" : "coord_request_partner";
+  const language = lang ?? "en";
+  // Whatever is still worth pressing: the other contact variant if it has not
+  // been read yet (`choice` is in the set by now, so it drops out on its own),
+  // and always the anonymous chat, which is the one that actually runs.
+  const keyboard = new InlineKeyboard();
+  if (!explained.has("share_self")) {
+    keyboard.text(t(language, "coordBtnShareSelf"), demoCoordCallback("share_self")).row();
+  }
+  if (!explained.has("request_partner")) {
+    keyboard.text(t(language, "coordBtnRequestPartner"), demoCoordCallback("request_partner")).row();
+  }
+  keyboard.text(t(language, "coordBtnProxy"), demoCoordCallback("proxy"));
+
+  await say(api, telegramId, demoText(beat, lang), { reply_markup: keyboard });
+}
+
+/**
+ * Send the coordination fork — production's card, production's copy, production's
+ * button labels, the demo's own callback data.
+ *
+ * Production would send NOTHING here: `resolveCoordRecipients` needs both sides
+ * reachable on Telegram and the puppet never is, so `sendOffers` silently
+ * selects the anonymous chat instead. Rather than widen that rule with a ninth
+ * `if (DEMO_MODE_ENABLED)` inside `services/coordination.ts` — which still could
+ * not show the two contact-exchange buttons, because production hides those
+ * without a `@username` — the demo owns this one screen. See `script.ts` →
+ * `DEMO_COORD_PREFIX` for why the callback data cannot be production's.
+ */
+async function sendDemoCoordOffer(
+  api: Api<RawApi>,
+  userId: string,
+  telegramId: bigint,
+  match: DemoMatchSnapshot,
+): Promise<DemoActionOutcome> {
+  const partnerId = await partnerIdFor(match, userId);
+  const [partner, visitor] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: partnerId },
+      select: { firstName: true, profile: { select: { photos: true } } },
+    }),
+    prisma.user.findUnique({ where: { id: userId }, select: { language: true, theme: true } }),
+  ]);
+  if (!partner) return refused("puppet-row-missing");
+
+  const language = (visitor?.language ?? "en") as Language;
+  const keyboard = new InlineKeyboard()
+    .text(t(language, "coordBtnShareSelf"), demoCoordCallback("share_self"))
+    .row()
+    .text(t(language, "coordBtnRequestPartner"), demoCoordCallback("request_partner"))
+    .row()
+    .text(t(language, "coordBtnProxy"), demoCoordCallback("proxy"));
+
+  // The demo's own framing first, then the real card — same order as every other
+  // beat that introduces a production screen.
+  await say(api, telegramId, demoText("coord_offer", language));
+  await sendCoordCard(
+    api,
+    telegramId,
+    {
+      variant: "offer",
+      personName: partner.firstName ?? "",
+      personPhotoRef: partner.profile?.photos?.[0] ?? null,
+      language,
+      theme: (visitor?.theme ?? "dark") as CoordCardTheme,
+    },
+    t(language, "coordOfferIntro"),
+    { keyboard },
+  );
+  return ACTED;
+}
+
+/**
+ * Variant C, for real: lock in the anonymous chat and play the two gates that
+ * open it.
+ *
+ * The four-field write mirrors `handleCoordMethod`'s own `proxy` branch
+ * (`handlers/date/coordination.ts`) — the demo cannot route the tap through that
+ * handler, because it refuses anyone who is not an eligible offer recipient and
+ * in demo there are none. Guarded on `coordMethod: null`, so the visitor's tap
+ * and the five-minute floor cannot both fire.
+ */
+export async function chooseDemoProxy(
+  api: Api<RawApi>,
+  userId: string,
+  telegramId: bigint,
+  lang: Language | null,
+  matchId: string,
+  agreedTime: Date | null,
+): Promise<DemoActionOutcome> {
+  const now = new Date();
+  const claimed = await prisma.match.updateMany({
+    where: { id: matchId, status: "scheduled", coordMethod: null },
+    data: {
+      coordInitiatorId: userId,
+      coordMethod: "proxy",
+      coordChosenAt: now,
+      coordResolvedAt: now,
+    },
+  });
+  // Already chosen — the tap lost to the timer or to itself. Not a failure: the
+  // gates below are idempotent, so just don't say "got it" a second time.
+  if (claimed.count > 0) {
+    await say(api, telegramId, t((lang ?? "en") as Language, "coordProxyChosenAck"));
+  }
+
+  try {
+    await replayGates(api, COORD_GATES, agreedTime);
+  } catch (err) {
+    return refused(`coord-replay:${err instanceof Error ? err.message : String(err)}`);
+  }
+  return ACTED;
+}
+
+/**
+ * The puppet's turn in the anonymous chat.
+ *
+ * Goes through `relayProxyMessage` (`services/proxy-chat.ts`) rather than
+ * writing the row and the DM by hand, so the message is logged to
+ * `proxy_messages` and reaches the visitor by exactly the path, with exactly the
+ * prefix and exactly the controls keyboard a real partner's message would.
+ *
+ * The injected clock is the one demo-ism, and it is load-bearing: that module
+ * derives the window from `agreedTime` (deliberately, so the two surfaces cannot
+ * drift on cron timing), while the demo's date sits days in the real future — so
+ * without the shift the production path would honestly answer `closed`. Same
+ * trick as the lifecycle replay above.
+ */
+async function sendPuppetProxyMessage(
+  userId: string,
+  match: DemoMatchSnapshot,
+): Promise<DemoActionOutcome> {
+  if (!match.agreedTime) return refused("proxy-reply-no-agreed-time");
+  const partnerId = await partnerIdFor(match, userId);
+
+  const [partner, visitor, rows, row] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: partnerId },
+      select: { firstName: true, gender: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, language: true, profile: { select: { timeZone: true } } },
+    }),
+    prisma.proxyMessage.findMany({
+      where: { matchId: match.id },
+      orderBy: { createdAt: "asc" },
+      select: { senderId: true, body: true },
+    }),
+    prisma.match.findUnique({
+      where: { id: match.id },
+      select: { venueName: true, venueAddress: true },
+    }),
+  ]);
+  if (!partner) return refused("puppet-row-missing");
+
+  const transcript: ProxyReplyTurn[] = rows.map((entry) => ({
+    from: entry.senderId === userId ? "visitor" : "partner",
+    body: entry.body,
+  }));
+
+  const body = await composeProxyReply({
+    partnerName: partner.firstName ?? "",
+    partnerGender: partner.gender,
+    visitorName: visitor?.firstName ?? null,
+    language: (visitor?.language ?? null) as Language | null,
+    venueName: row?.venueName ?? null,
+    venueAddress: row?.venueAddress ?? null,
+    agreedTime: match.agreedTime,
+    timeZone: visitor?.profile?.timeZone ?? "Europe/Kyiv",
+    transcript,
+  });
+
+  const relayed = await relayProxyMessage({
+    matchId: match.id,
+    senderUserId: partnerId,
+    body,
+    now: new Date(match.agreedTime.getTime() - 15 * 60_000),
+  });
+  return relayed.ok ? ACTED : refused(`proxy-relay:${relayed.error}`);
+}
+
+/**
+ * The day after: close the chat and play the feedback prompt.
+ *
+ * Reached two ways — the button under the `chat_open` beat, or the exploration
+ * window running out — so the beat marker is claimed BEFORE anything runs, for
+ * the same reason `runDemoPredate` does it: the lifecycle steps are individually
+ * idempotent but the narration is an ordinary message.
+ */
+export async function runDemoAfterDate(
+  api: Api<RawApi>,
+  userId: string,
+  telegramId: bigint,
+  lang: Language | null,
+  matchId: string,
+  agreedTime: Date | null,
+): Promise<DemoActionOutcome> {
+  if (spokenBeats.get(userId)?.has("after_date")) return ACTED;
+  markSpoken(userId, "after_date");
+
+  await say(api, telegramId, demoText("after_date", lang));
+  try {
+    await replayGates(api, AFTER_DATE_GATES, agreedTime);
+  } catch (err) {
+    return refused(`after-date-replay:${err instanceof Error ? err.message : String(err)}`);
   }
   return ACTED;
 }
@@ -880,7 +1217,7 @@ async function submitPuppetLikes(
 }
 
 /**
- * Play the days before the date, now.
+ * Play the days around the date, now — in three stretches rather than one run.
  *
  * `runDateLifecycleTick` takes an injected clock and every step claims its own
  * idempotency column, so shifting `now` to each gate is enough to fire the real
@@ -894,48 +1231,42 @@ async function submitPuppetLikes(
  * and all five coordination cards, with `COORDINATION_FEATURE_ENABLED` on the
  * entire time. The first demo ever to reach a scheduled date is what surfaced
  * it — `coordOfferSentAt` and `proxyOpenedAt` were both still null at the end.
+ *
+ * **Why three stretches.** Running every gate back to back put T+25h four
+ * seconds after T-30m, so `closeProxies` shut the anonymous chat before anyone
+ * could open it: the visitor was handed a live "Enter chat" button that was dead
+ * by the time they reached it. Both the coordination fork and the relay are real
+ * decisions the visitor makes, so the replay stops at each and waits — see
+ * `decide.ts` → `decidePredateAction` for the states it waits in.
  */
-async function replayDateLifecycle(
+interface Gate {
+  /** Offset from `agreedTime`, in minutes. */
+  minutes: number;
+}
+
+/** T-2h → ice-breakers, the emergency window, the date-day Live Activity. */
+const PRE_DATE_GATES: readonly Gate[] = [{ minutes: -120 }];
+/**
+ * T-45m → the coordination sweep claims `coordOfferSentAt` and sends nothing
+ * (the demo owns that card, see `sendDemoCoordOffer`); T-30m → wingman reveal,
+ * safety brief, and `openProxies` opens the relay now that the method is set.
+ */
+const COORD_GATES: readonly Gate[] = [{ minutes: -45 }, { minutes: -30 }];
+/** T+25h → the feedback prompt (which flips the row to `completed`) + close. */
+const AFTER_DATE_GATES: readonly Gate[] = [{ minutes: 25 * 60 }];
+
+async function replayGates(
   api: Api<RawApi>,
-  matchId: string,
+  gates: readonly Gate[],
   agreedTime: Date | null,
 ): Promise<void> {
   if (!agreedTime) return;
-  const at = agreedTime.getTime();
-  const gates: Array<{ at: number; needsCoordMethod?: true }> = [
-    { at: at - 2 * 60 * 60 * 1000 }, // T-2h  → ice-breakers + emergency window
-    { at: at - 45 * 60 * 1000 }, // T-45m → the coordination offer (T-60m passed)
-    // T-30m → wingman reveal + safety brief + the anonymous chat opens
-    { at: at - 30 * 60 * 1000, needsCoordMethod: true },
-    { at: at + 25 * 60 * 60 * 1000 }, // T+25h → feedback prompt, chat closed
-  ];
   for (const gate of gates) {
-    const now = new Date(gate.at);
-    if (gate.needsCoordMethod) await defaultCoordMethodToProxy(matchId);
+    const now = new Date(agreedTime.getTime() + gate.minutes * 60_000);
     await runDateLifecycleTick(api, now);
     await runCoordinationTick(api, now);
     await sleep(4_000);
   }
-}
-
-/**
- * Give the pair a coordination method if they have not chosen one.
- *
- * `openProxies` only opens the chat for a match whose `coordMethod` is set, and
- * in the product that is a tap on the offer card. A demo cannot depend on one
- * landing inside a four-second beat — the visitor is reading, not racing a
- * timer — so an unanswered offer resolves to the anonymous chat, which is both
- * the interesting variant and the same default a pair the Telegram fork cannot
- * reach already gets (`services/coordination.ts`).
- *
- * Guarded on `coordMethod: null`, so a visitor who DID tap keeps their choice:
- * the demo fills a silence, it never overrides a decision.
- */
-async function defaultCoordMethodToProxy(matchId: string): Promise<void> {
-  await prisma.match.updateMany({
-    where: { id: matchId, coordMethod: null },
-    data: { coordMethod: "proxy", coordChosenAt: new Date() },
-  });
 }
 
 // ── Recovery ───────────────────────────────────────────────────────────────

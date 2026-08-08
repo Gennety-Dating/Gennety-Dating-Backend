@@ -6,15 +6,21 @@ import type { BotContext } from "../session.js";
 import { deleteUserAccount } from "../services/account-deletion.js";
 import { DEMO_MODE_ENABLED } from "./config.js";
 import {
+  chooseDemoProxy,
   clearDemoMatches,
+  explainDemoCoordChoice,
   forgetDemoVisitor,
   restartDemoPitch,
+  runDemoAfterDate,
   runDemoPredate,
 } from "./driver.js";
 import {
+  DEMO_AFTER_DATE_CALLBACK,
   DEMO_CONTINUE_CALLBACK,
+  DEMO_COORD_PREFIX,
   DEMO_PREDATE_CALLBACK,
   demoText,
+  parseDemoCoordChoice,
 } from "./script.js";
 
 /**
@@ -125,6 +131,91 @@ demoRouter.callbackQuery(DEMO_PREDATE_CALLBACK, async (ctx) => {
 
   await ctx.editMessageReplyMarkup().catch(() => undefined);
   await runDemoPredate(
+    ctx.api,
+    user.id,
+    BigInt(telegramId),
+    user.language,
+    match.id,
+    match.agreedTime,
+  );
+});
+
+/**
+ * The coordination fork (§Phase 4), owned by the demo.
+ *
+ * Two of the three variants exchange `t.me/` handles and the puppet has none, so
+ * they are ANSWERED rather than performed: the visitor is told what the button
+ * would do in production and handed the choice back. Only the anonymous chat is
+ * carried out. See `script.ts` → `DEMO_COORD_PREFIX` for why this cannot route
+ * through production's own `handleCoordMethod`.
+ */
+demoRouter.callbackQuery(new RegExp(`^${DEMO_COORD_PREFIX}`), async (ctx) => {
+  if (!DEMO_MODE_ENABLED) return;
+  await ctx.answerCallbackQuery();
+  const telegramId = ctx.from?.id;
+  const choice = parseDemoCoordChoice(ctx.callbackQuery.data ?? "");
+  if (telegramId === undefined || !choice) return;
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(telegramId) },
+    select: { id: true, language: true },
+  });
+  if (!user) return;
+
+  // One live keyboard per decision: the explanation below carries its own, with
+  // whatever is still worth pressing.
+  await ctx.editMessageReplyMarkup().catch(() => undefined);
+
+  if (choice !== "proxy") {
+    await explainDemoCoordChoice(ctx.api, user.id, BigInt(telegramId), user.language, choice);
+    return;
+  }
+
+  // Read the live row rather than trusting the callback for the agreed time.
+  const match = await prisma.match.findFirst({
+    where: { status: "scheduled", OR: [{ userAId: user.id }, { userBId: user.id }] },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, agreedTime: true },
+  });
+  if (!match) return;
+
+  await chooseDemoProxy(
+    ctx.api,
+    user.id,
+    BigInt(telegramId),
+    user.language,
+    match.id,
+    match.agreedTime,
+  );
+});
+
+/**
+ * "Next" under the anonymous-chat beat — the visitor is done with the relay.
+ *
+ * Like the pre-date button above, strictly a way to skip the wait: the day-after
+ * feedback arrives either way (`DEMO_CHAT_WAIT_MS`).
+ */
+demoRouter.callbackQuery(DEMO_AFTER_DATE_CALLBACK, async (ctx) => {
+  if (!DEMO_MODE_ENABLED) return;
+  await ctx.answerCallbackQuery();
+  const telegramId = ctx.from?.id;
+  if (telegramId === undefined) return;
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(telegramId) },
+    select: { id: true, language: true },
+  });
+  if (!user) return;
+
+  const match = await prisma.match.findFirst({
+    where: { status: "scheduled", OR: [{ userAId: user.id }, { userBId: user.id }] },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, agreedTime: true },
+  });
+  if (!match) return;
+
+  await ctx.editMessageReplyMarkup().catch(() => undefined);
+  await runDemoAfterDate(
     ctx.api,
     user.id,
     BigInt(telegramId),
