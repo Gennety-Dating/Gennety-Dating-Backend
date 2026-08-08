@@ -29,6 +29,7 @@ import {
 } from "../ticket/i18n.js";
 import { Ticket3D } from "../ticket/Ticket3D.js";
 import { MockPayment } from "../ticket/MockPayment.js";
+import { useActionBarSpace } from "../ticket/action-bar.js";
 import { Confetti } from "../ticket/Confetti.js";
 import { returnParams } from "../return-to.js";
 import { ReferralChip } from "../referral-hint-react.js";
@@ -77,6 +78,11 @@ export function App(): ReactElement {
   // call site) since it never changes what screen is shown, only whether a
   // quiet secondary link appears on it.
   const [referralEnabled, setReferralEnabled] = useState(false);
+  // The action bar floats over the scroll; this measures it so the scroll
+  // reserves exactly its height at the end (see ../ticket/action-bar.ts). On
+  // this screen the bar only exists after a purchase, and the hook clears the
+  // reservation when it unmounts, so the bundle list reserves nothing.
+  const barRef = useActionBarSpace();
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -197,7 +203,7 @@ export function App(): ReactElement {
         <div className="ticket-scroll">
           <MockPayment amountCents={phase.intent.amountCents} strings={ticketS} />
         </div>
-        <footer className="action-bar">
+        <footer className="action-bar" ref={barRef}>
           <button
             type="button"
             className="btn-primary"
@@ -327,7 +333,7 @@ export function App(): ReactElement {
       </div>
 
       {bought && (
-        <footer className="action-bar">
+        <footer className="action-bar" ref={barRef}>
           <button type="button" className="btn-primary" onClick={() => app?.close()}>
             {s.done}
           </button>

@@ -25,6 +25,7 @@ import {
   type OfferButton,
 } from "./ticket-state.js";
 import { Ticket3D } from "./Ticket3D.js";
+import { useActionBarSpace } from "./action-bar.js";
 import { MockPayment } from "./MockPayment.js";
 import { Confetti } from "./Confetti.js";
 import { PartialTimer } from "./PartialTimer.js";
@@ -111,6 +112,9 @@ export function App(): ReactElement {
   // is reversible from the waiting screen.
   const [coverDeferred, setCoverDeferred] = useState(false);
   const myName = app?.initDataUnsafe?.user?.first_name ?? s.youFallback;
+  // The action bar floats over the scroll; this measures it so the scroll
+  // reserves exactly its height at the end (see action-bar.ts).
+  const barRef = useActionBarSpace();
 
   // Ref to the latest phase so imperative MainButton handlers read fresh values.
   const phaseRef = useRef<Phase>(phase);
@@ -297,7 +301,7 @@ export function App(): ReactElement {
         <div className="ticket-scroll">
           <MockPayment amountCents={phase.intent.amountCents} strings={s} />
         </div>
-        <footer className="action-bar">
+        <footer className="action-bar" ref={barRef}>
           <button
             type="button"
             className="btn-primary"
@@ -407,7 +411,7 @@ export function App(): ReactElement {
         )}
       </div>
 
-      <footer className="action-bar">
+      <footer className="action-bar" ref={barRef}>
         {sc === "offer" &&
           deriveOfferButtons(state).map((b) => {
             const discounted =

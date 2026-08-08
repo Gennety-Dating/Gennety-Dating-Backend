@@ -8,11 +8,22 @@ diff is `apps/webapp/**` plus docs. **Deploy Mini App Only**
 `pm2 restart`**. Run `pnpm demo:deploy` too — the demo builds its own bundle from
 the same source, and the mock/USD branch is only reachable there.
 
-A second and third pass over the two ticket screens, both from founder review of
-the first one (shipped in the block further down, still undeployed — **all of it
-is one Mini App build**, so whichever redeploy happens first carries everything).
+A second, third and fourth pass over the two ticket screens, each from founder
+review of the one before (the first is in the block further down, still
+undeployed — **all of it is one Mini App build**, so whichever redeploy happens
+first carries everything).
 
-**Five things worth knowing before the redeploy:**
+**Six things worth knowing before the redeploy:**
+
+- **The pinned button bar stops being a footer and starts floating**, on both
+  screens: content now scrolls *under* it and dissolves through a 72px scrim
+  instead of being cut against its top edge. The only behaviour worth watching
+  is the space at the end of the scroll — it is now the bar's **measured**
+  height (`--bar-space`, written by a ResizeObserver in
+  `apps/webapp/src/ticket/action-bar.ts`), so a screen with no bar reserves
+  nothing and a wrapped RU label reserves more. If a last row of content ever
+  sits stuck behind the buttons, that hook is where to look, not the CSS. The
+  venue board's own CTA — the pattern this copies — is deliberately untouched.
 
 - **The recommended bundle gets its burgundy fill BACK**, in both themes,
   reversing the earlier block's "no fill, burgundy light on glass". That earlier
@@ -60,6 +71,9 @@ for p in ticket tickets; do curl -sI "https://dating-calendar.gennety.com/$p.htm
 # burgundy-deep rather than pink-washed on BOTH themes, with its "6" clean and
 # not washed pale at the left edge; and, on dark only, the ×1/×3 rows reading as
 # flat lifted grey with no glow inside their edges.
+# Then SCROLL both screens: content must fade out under the bottom buttons with
+# no horizontal edge anywhere, and scrolling to the very end must leave the last
+# row fully clear of them (not tucked behind).
 ```
 
 **Rollback:** redeploy the Mini App from the previous checkout, and

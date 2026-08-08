@@ -22,6 +22,9 @@
      Calendar Mini App and covers older clients / the pre-event first paint. */
   --tg-content-top: 56px;
   --tg-content-bottom: 0px;
+  /* Height of the floating action bar, measured at runtime (action-bar.ts) and
+     reserved at the end of the scroll. 0 when a screen has no bar. */
+  --bar-space: 0px;
 
   /* ── The house inner-edge sheen ─────────────────────────────────────────
      Four inset shadows pulled back past the border by a negative spread, so
@@ -128,21 +131,51 @@ body {
   align-items: center;
   gap: 26px;
   /* Top padding clears the Telegram fullscreen controls (--tg-content-top)
-     AND the device notch (env(safe-area-inset-top)) — they stack. */
-  padding: calc(30px + env(safe-area-inset-top) + var(--tg-content-top)) 22px 30px;
+     AND the device notch (env(safe-area-inset-top)) — they stack.
+     The bottom reserves the floating action bar's measured height, so the last
+     row of content can always be scrolled clear of it. */
+  padding: calc(30px + env(safe-area-inset-top) + var(--tg-content-top)) 22px
+    calc(30px + var(--bar-space));
 }
 
-/* Our own buttons, fixed to the bottom of the screen (not Telegram's
-   MainButton). The gradient lets ticket art scroll softly underneath. */
+/* Our own buttons, pinned to the bottom of the screen (not Telegram's
+   MainButton).
+   It FLOATS over the scroll area rather than sitting in the flex flow, and the
+   difference is the whole point of this block. In the flow it was a welded
+   footer: the scroll area ended exactly at its top edge, so content was cut off
+   against a hard horizontal line that moved with nothing and belonged to no
+   object on screen. Floating, the content passes underneath and dissolves into
+   the page through the scrim below, and the buttons read as an island resting
+   over the list. Same construction as the venue board's own CTA (`.vc-bar`).
+
+   The scrim is opaque page colour under the buttons, fading to nothing over a
+   fixed 72px at the top — fill only beneath them, never a panel with an edge.
+   The fade is a LENGTH rather than a percentage (which is what `.vc-bar` uses)
+   because the bar's height is not fixed here: one button on the store's "done"
+   screen, two or three on the gate, more when a long label wraps. A percentage
+   would make the softness a function of how many buttons happen to be on
+   screen, and the shortest bar — the one most likely to be read as a welded
+   footer — would get the harshest edge. `transparent` interpolates in
+   premultiplied alpha, so the ramp fades toward the page colour rather than
+   through grey, on either theme. */
 .action-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 16px 22px calc(18px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
-  /* No shared bar behind the buttons — each button floats on its own (the
-     primary carries its burgundy fill, the secondary its glass). */
-  background: transparent;
+  /* No panel behind the buttons — each floats on its own (the hero carries its
+     burgundy fill, the secondary its glass); the gradient only keeps the text
+     they sit over from showing through them. */
+  background: linear-gradient(
+    to top,
+    var(--bg) max(0px, 100% - 72px),
+    transparent 100%
+  );
 }
 
 .btn-text {

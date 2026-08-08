@@ -2777,6 +2777,28 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
     around it went flat, the tile was the only thing left carrying colour. A lit
     tile inside an unlit row is also one object saying two things about where
     the light comes from.
+- **The action bar floats; it is an island, not a welded footer (2026-08-08,
+  Telegram-only).** Both ticket screens pin their own buttons to the bottom —
+  the store's **Готово** after a purchase, the gate's pay/use pair — and the bar
+  used to sit in the page's flex flow. That made the scroll area end exactly at
+  its top edge, so content was cut off against a hard horizontal line belonging
+  to no object on screen: a panel edge the design system does not otherwise
+  have (*depth from fills, inset light and shadow, never outlines*). The bar now
+  paints **over** the scroll, and content dissolves under it through a scrim —
+  opaque page colour beneath the buttons, fading to nothing above them. Same
+  construction as the venue board's own CTA (`.vc-bar`, §3.7b), which is where
+  the pattern already worked; that screen is untouched.
+  Two details are load-bearing rather than styling. The fade is a fixed
+  **72px length**, not the percentage `.vc-bar` uses, because this bar's height
+  is not fixed — one button, two, three, more when a long RU/UK label wraps —
+  and a percentage would make the softness a function of how many buttons
+  happen to be on screen, giving the *shortest* bar the harshest edge. And the
+  scroll reserves the bar's **measured** height at its end (`--bar-space`,
+  `apps/webapp/src/ticket/action-bar.ts`) rather than a constant: too little
+  hides the last row of content behind the buttons, too much leaves a dead
+  strip at the end of a short list, and the right number is only knowable at
+  runtime for the same wrapping reason. A screen with no bar (the store before
+  a purchase) reserves nothing.
 - **The store's heading carries no 🎟️, and gets its weight from size
   (2026-08-08, Telegram-only).** A rendered ticket is the largest thing on that
   screen, so an emoji of one above it restated the picture in a platform font we

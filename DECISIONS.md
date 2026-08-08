@@ -47,6 +47,33 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — a pinned action bar is an island, and its fade is a length
+
+**Kind:** founder decision
+**What:** both ticket screens' bottom buttons stop being a welded footer. The
+bar floats over the scroll and content dissolves under it through a scrim,
+copying the venue board's CTA — which the founder named as the reference and
+explicitly ruled out of scope for changes.
+**Why:** in the flex flow the scroll ended at the bar's top edge, so content was
+cut against a hard horizontal line belonging to no object on screen — a panel
+edge in a system whose stated rule is depth from fills, inset light and shadow,
+never outlines. Worth an entry for the two choices that diverge from `.vc-bar`
+rather than for the copy itself: the fade is a fixed **72px** instead of that
+bar's percentage, because this bar's height varies with the number of buttons
+and with label wrapping, and a percentage hands the *shortest* bar the harshest
+edge; and the scroll reserves the bar's **measured** height rather than a
+constant, because a constant is either too small (content hidden behind the
+buttons) or too large (a dead strip at the end of a short list), and which one
+depends on the locale.
+**What it changes going forward:** adding a button to either bar needs no
+padding change — that is the point of measuring. Do not "simplify"
+`action-bar.ts` back into a constant, and do not convert the 72px into a
+percentage for consistency with `.vc-bar`; the two bars differ in exactly the
+property that makes a percentage safe there. The venue board itself stays as it
+is (founder scope call).
+**Recorded in:** PRODUCT_SPEC.md §3.5b → "The action bar floats";
+`apps/webapp/src/ticket/{action-bar.ts,ticket.css}`.
+
 ## 2026-08-08 — on the dark theme the store's ordinary rows carry no light at all
 
 **Kind:** founder decision
