@@ -368,7 +368,6 @@ export function App(): ReactElement {
                 settles, how many tickets are left is no longer this screen's
                 business. */}
             <Ticket3D
-              seed={matchId}
               myName={myName}
               partnerName={state.partnerName}
               balance={sc === "offer" || sc === "cover-partner" ? state.myBalance : null}

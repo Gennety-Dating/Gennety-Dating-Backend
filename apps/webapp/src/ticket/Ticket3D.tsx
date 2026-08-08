@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { ReactElement } from "react";
 import { ButterflyMark, TicketMark } from "./marks.js";
 import type { TicketStrings } from "./i18n.js";
@@ -7,15 +7,22 @@ import type { TicketStrings } from "./i18n.js";
  * The hero Date Ticket card. Pure CSS 3D — no WebGL, no new deps.
  *
  * What it prints, and what it deliberately does not:
- * - the wordmark, the brand butterfly, a barcode, and the wallet count on the
- *   stub;
+ * - the wordmark, the brand butterfly, and — on the stub — the wallet count
+ *   under its own printed field name;
+ * - NOT a barcode. It was the one element on the card that encoded nothing:
+ *   seeded stripes that scan to no record and mean nothing to the person
+ *   holding the ticket. The stub now prints BALANCE ▸ N instead, which is the
+ *   same ticket idiom (a field name on the left, its value on the right) doing
+ *   an actual job: it says what the number in the corner IS. The object still
+ *   reads as a ticket from the perforation, the real notch cutouts and the
+ *   stub itself.
  * - NOT "Admit two" / "На двоих". One ticket admits ONE person — a man paying
  *   $13.98 "for us both" buys TWO of them (PRODUCT_SPEC §3.5b) — so that line
  *   was telling a user who pays for their own slot that their partner is
  *   already covered. It is gone from the header and from the stub.
  * - NOT the "curated date ticket" label or the marketing tagline. The
- *   perforation, the real notch cutouts, the stub and the barcode say what the
- *   object is; the screen's own headline says the rest.
+ *   perforation, the real notch cutouts and the stub say what the object is;
+ *   the screen's own headline says the rest.
  * - NOT a printed serial. It was the last piece of small grey type left on the
  *   card, and it bought nothing: it identifies no real record, and a user who
  *   reads it learns a hex string. Its space goes to the mark.
@@ -30,32 +37,19 @@ import type { TicketStrings } from "./i18n.js";
  *   every version of it read as painted-on rather than as a reflection.
  */
 
-/** FNV-1a — stable barcode pattern from the card's seed. */
-function fnv1a(str: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
 const DRAG_MAX = 38;
 const AMBIENT_MAX = 9;
 
 export function Ticket3D(props: {
-  /**
-   * What the printed barcode is derived from — the match id on the gate, a
-   * constant in the store. It used to be the holders' names, which stopped
-   * working the moment the store's card lost them; a ticket for a specific
-   * date deserves its own stripes rather than ones shared by every pair whose
-   * names happen to collide.
-   */
-  seed: string;
   /** Printed under the mark on the gate. The store's card carries no names. */
   myName?: string | null;
   partnerName?: string | null;
-  /** Wallet count printed on the stub. Null/0 leaves the stub to the barcode. */
+  /**
+   * Wallet count printed on the stub. Null/0 leaves the stub blank — an
+   * unprinted stub, which is a real thing a ticket can have, where "Balance 0"
+   * would read as a rendering fault. The stub keeps its height either way, so
+   * the tear line never moves between screens.
+   */
   balance?: number | null;
   strings: TicketStrings;
 }): ReactElement {
@@ -85,16 +79,6 @@ export function Ticket3D(props: {
       ? `${props.myName} & ${props.partnerName}`
       : props.myName
     : null;
-
-  // Deterministic "printed" detail so the ticket looks issued, not templated.
-  // Seeded LCG → pseudo-random barcode stripe widths (2..5 px).
-  const bars = useMemo(() => {
-    let x = fnv1a(props.seed) || 1;
-    return Array.from({ length: 22 }, () => {
-      x = (Math.imul(x, 1103515245) + 12345) >>> 0;
-      return 2 + (x % 4);
-    });
-  }, [props.seed]);
 
   useEffect(() => {
     const card = cardRef.current;
@@ -225,22 +209,24 @@ export function Ticket3D(props: {
           </div>
           <div className="ticket-perf" aria-hidden="true" ref={perfRef} />
           <div className="ticket-stub">
-            <div className="ticket-barcode" aria-hidden="true">
-              {bars.map((w, i) => (
-                <span key={i} style={{ width: `${w}px` }} />
-              ))}
-            </div>
             {balance !== null && (
-              // The count is the visible part; the localized sentence survives
-              // only as the accessible name, since "🎟 × 2" is not something a
-              // screen reader can make a sentence out of.
-              <span
-                className="ticket-stub-count"
-                aria-label={s.balanceNote.replace("{n}", String(balance))}
-              >
-                <TicketMark />
-                <span aria-hidden="true">× {balance}</span>
-              </span>
+              <>
+                {/* Field name, value. The label is what the barcode never was:
+                    a reason for the number in the corner to be there. */}
+                <span className="ticket-stub-label" aria-hidden="true">
+                  {s.balanceLabel}
+                </span>
+                {/* The count is the visible part; the localized sentence
+                    survives as the accessible name for the pair, since
+                    "Balance 🎟 × 2" read out as three fragments is not one. */}
+                <span
+                  className="ticket-stub-count"
+                  aria-label={s.balanceNote.replace("{n}", String(balance))}
+                >
+                  <TicketMark />
+                  <span aria-hidden="true">× {balance}</span>
+                </span>
+              </>
             )}
           </div>
         </div>

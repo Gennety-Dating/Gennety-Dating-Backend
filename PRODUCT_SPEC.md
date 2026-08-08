@@ -2664,8 +2664,8 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
 - **The ticket card, and what it may print (reworked 2026-08-08, Telegram-only).**
   One `Ticket3D` component renders the hero card on BOTH ticket screens — the
   gate and the store — so what follows is true of each. It carries the wordmark,
-  the brand butterfly, a barcode and the wallet count, and it deliberately
-  carries nothing else.
+  the brand butterfly, and the wallet count under its own printed field name,
+  and it deliberately carries nothing else.
   - **It is a portrait object, at a fixed proportion** (268 × 392, ~1:1.46 —
     revised the same day from 300 × content, which summed to roughly square).
     The height is a property of the CARD, not of its contents: `.ticket-main`
@@ -2687,10 +2687,26 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
     to nothing — no record carries it, so a user who reads it learns a hex
     string. Its space went to the mark, which is now **148px**: the card's one
     piece of art, stamped into the stock, rather than a logo sitting above a
-    caption. The barcode keeps the match seed, so a pair's stripes are theirs.
+    caption.
   - **The "curated date ticket" label and the marketing tagline are cut**
-    (founder decision). The perforation, the real notch cutouts, the stub and
-    the barcode say what the object is; the screen's own headline says the rest.
+    (founder decision). The perforation, the real notch cutouts and the stub
+    say what the object is; the screen's own headline says the rest.
+  - **The barcode is gone, and the stub prints a field instead (2026-08-08).**
+    It was the last purely decorative element on the card: seeded stripes that
+    scan to no record, sitting opposite a number the card never explained. The
+    stub now reads as a real ticket stub does — the field's name on the left
+    (`balanceLabel`, one word, uppercased in CSS: БАЛАНС / BALANCE / GUTHABEN /
+    SALDO), its value on the right — which is the same idiom doing an actual
+    job: it says that the figure in the corner is how many Date Tickets the
+    user holds. The number takes the weight the label gives up (17px near-white
+    against a dim tracked 11px), because it is now a value in a field rather
+    than a mark in a corner. Two consequences worth stating: the ticket's
+    `seed` prop and its stripe generator are deleted with it, and the stub
+    carries a **`min-height` floor** so a blank stub — the gate past the offer
+    screen, where the balance is deliberately withheld — leaves the tear line
+    exactly where a printed one does. Without that floor the perforation would
+    sit at a different height per screen, which is the silhouette drift the
+    fixed 268 × 392 card exists to end.
   - **The wallet count moved onto the stub**, replacing a glass pill under the
     card that on the light theme was grey-on-cream and barely legible — the
     always-dark stock gives it a ground to read against, so the theme problem

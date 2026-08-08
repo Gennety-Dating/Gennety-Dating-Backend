@@ -28,6 +28,12 @@ export interface TicketStrings {
    * reopens the door without pushing him through it.
    */
   coverReconsider: string;
+  /**
+   * The field name printed on the ticket stub, left of the count. One word,
+   * rendered uppercase by CSS — it is what turns the number on the right from a
+   * decoration into a value the user can read.
+   */
+  balanceLabel: string;
   balanceNote: string;
   mockBadge: string;
   mockTitle: string;
@@ -85,6 +91,7 @@ const en: TicketStrings = {
   coverPartnerSub: "Your ticket's set. Want to cover {name}'s too, or let them grab it?",
   justWait: "I'll let them grab it",
   coverReconsider: "Actually — cover their ticket",
+  balanceLabel: "Balance",
   balanceNote: "Your wallet: {n}",
   mockBadge: "Test mode — no real charge",
   mockTitle: "Payment",
@@ -131,6 +138,7 @@ const ru: TicketStrings = {
   coverPartnerSub: "Твой билет уже есть. Оплатить и за {name} или пусть берёт сам(а)?",
   justWait: "Пусть берёт сам(а)",
   coverReconsider: "Всё-таки оплатить за пару",
+  balanceLabel: "Баланс",
   balanceNote: "Твой кошелёк: {n}",
   mockBadge: "Тестовый режим — без реальной оплаты",
   mockTitle: "Оплата",
@@ -179,6 +187,7 @@ const uk: TicketStrings = {
   coverPartnerSub: "Твій квиток уже є. Сплатити й за {name} чи нехай бере сам(а)?",
   justWait: "Нехай бере сам(а)",
   coverReconsider: "Все-таки сплатити за пару",
+  balanceLabel: "Баланс",
   balanceNote: "Твій гаманець: {n}",
   mockBadge: "Тестовий режим — без реальної оплати",
   mockTitle: "Оплата",
@@ -225,6 +234,7 @@ const de: TicketStrings = {
   coverPartnerSub: "Dein Ticket steht. Auch {name} übernehmen oder selbst holen lassen?",
   justWait: "Sollen sie selbst holen",
   coverReconsider: "Doch für dein Date zahlen",
+  balanceLabel: "Guthaben",
   balanceNote: "Dein Guthaben: {n}",
   mockBadge: "Testmodus — keine echte Abbuchung",
   mockTitle: "Zahlung",
@@ -271,6 +281,7 @@ const pl: TicketStrings = {
   coverPartnerSub: "Twój bilet jest. Pokryć też {name} czy niech weźmie sam(a)?",
   justWait: "Niech weźmie sam(a)",
   coverReconsider: "Jednak zapłać za swoją randkę",
+  balanceLabel: "Saldo",
   balanceNote: "Twój portfel: {n}",
   mockBadge: "Tryb testowy — bez prawdziwej opłaty",
   mockTitle: "Płatność",

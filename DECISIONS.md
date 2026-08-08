@@ -47,6 +47,28 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — the ticket's barcode is replaced by the field it never had
+
+**Kind:** founder decision
+**What:** the stub's barcode is deleted and the stub prints `БАЛАНС ▸ 🎟 × N`
+instead — a field name on the left, the wallet count on the right.
+**Why:** the founder's reasoning, and it is the right one to record rather than
+the visual: the barcode "носит только визуальную функцию", while the number
+beside it was never explained, so the swap makes the same space functional. It
+is not a loss of ticket-ness either — a printed field is at least as much a
+ticket idiom as a barcode, and the perforation and real notch cutouts carry
+that job anyway.
+**What it changes going forward:** the card's `seed` prop and its stripe
+generator are gone; nothing on the card is derived from the match id any more,
+so do not reintroduce "a pair's own stripes". The stub's `min-height` is
+load-bearing rather than spacing — a blank stub (the gate past the offer
+screen) must keep the tear line where a printed one puts it, or the fixed
+268 × 392 silhouette starts drifting per screen again. And `balanceLabel` is
+**one word**, capped and space-free by a test: it shares a 220px line with the
+count at 0.16em tracking, and a wrapped field name reads as a rendering fault.
+**Recorded in:** PRODUCT_SPEC.md §3.5b → "The barcode is gone";
+`apps/webapp/src/ticket/{Ticket3D.tsx,ticket.css,i18n.ts}`.
+
 ## 2026-08-08 — a pinned action bar is an island, and its fade is a length
 
 **Kind:** founder decision

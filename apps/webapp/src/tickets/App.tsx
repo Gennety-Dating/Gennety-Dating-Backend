@@ -252,7 +252,7 @@ export function App(): ReactElement {
             ticket. It used to print "Участник & Твоя пара", which is the only
             place in the app where a fabricated pair was shown as if issued.
             The wallet count rides on its stub instead of in a pill below. */}
-        <Ticket3D seed="gennety-store" balance={phase.balance} strings={ticketS} />
+        <Ticket3D balance={phase.balance} strings={ticketS} />
 
         <div className="store-bundles">
           {phase.starsEnabled && phase.bundleStars

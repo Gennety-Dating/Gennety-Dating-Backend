@@ -11,6 +11,14 @@ describe("Date Ticket i18n", () => {
       expect(strings(lang).matchFallback.length).toBeGreaterThan(0);
       // Accessible name for the stub's "🎟 × N"; the count is substituted in.
       expect(strings(lang).balanceNote).toContain("{n}");
+      // The stub's printed field name. It shares a 220px line with the count
+      // and is uppercased and tracked at 0.16em, so a phrase does not fit —
+      // "Guthaben" (8) is the longest that does. A wrapped or ellipsised field
+      // name would read as a rendering fault on a ticket.
+      const label = strings(lang).balanceLabel;
+      expect(label.length).toBeGreaterThan(0);
+      expect(label.length).toBeLessThanOrEqual(10);
+      expect(label).not.toContain(" ");
     }
     expect(strings("de").heading).not.toBe(strings("en").heading);
     expect(strings("pl").heading).not.toBe(strings("en").heading);

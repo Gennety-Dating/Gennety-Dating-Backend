@@ -301,11 +301,18 @@ body {
 .ticket-card:active {
   cursor: grabbing;
 }
-/* Muted text inside the (always-dark) ticket stays light in both themes —
-   the shared --text-dim would flip dark on the light page and vanish. */
-.ticket-card .ticket-names,
-.ticket-card .ticket-stub-count {
+/* Text inside the (always-dark) ticket stays light in both themes — the shared
+   --text-dim would flip dark on the light page and vanish. Three levels on one
+   stock: the pair's names and the stub's field name are printed matter, the
+   count is the value being printed. */
+.ticket-card .ticket-names {
   color: rgba(255, 255, 255, 0.62);
+}
+.ticket-card .ticket-stub-label {
+  color: rgba(255, 255, 255, 0.44);
+}
+.ticket-card .ticket-stub-count {
+  color: rgba(255, 255, 255, 0.92);
 }
 
 /* The specular highlight is GONE, in both of its lives — first a soft radial
@@ -452,6 +459,15 @@ body {
 .ticket-perf::after {
   right: -25px;
 }
+/* The stub prints one field: its name on the left, its value on the right —
+   the layout a real ticket stub uses, and the reason the barcode is gone. That
+   barcode encoded nothing (seeded stripes, no record behind them), so it was
+   the one element on the card doing purely decorative work while the number
+   beside it went unexplained.
+   `min-height` holds the tear line still. The stub is blank when there is no
+   balance to print (the gate past the offer screen), and without a floor the
+   perforation would sit at a different height on those screens — which is the
+   silhouette drift the fixed 268 × 392 card was introduced to end. */
 .ticket-stub {
   position: relative;
   z-index: 1;
@@ -459,20 +475,20 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  min-height: 60px;
   padding: 16px 24px 18px;
 }
 
-/* CSS barcode — seeded stripe widths come from Ticket3D as inline widths. */
-.ticket-barcode {
-  display: flex;
-  align-items: stretch;
-  gap: 2px;
-  height: 26px;
-  opacity: 0.85;
-}
-.ticket-barcode span {
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.62));
-  border-radius: 0.5px;
+/* The field name. Small, tracked and dim — printed matter, not a heading; it
+   exists so the value opposite it means something, and must never compete with
+   it. Uppercased in CSS so the five locales stay natural-cased at source. */
+.ticket-stub-label {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 /* The wallet count, printed on the stub — where a real ticket carries its
@@ -481,22 +497,30 @@ body {
    (always-dark) stock it has a black ground to read against, so the theme
    problem disappears rather than being restyled. Hidden entirely at zero: "× 0"
    on a ticket reads as a rendering fault, and an empty wallet is already what
-   the bundles below are for. */
+   the bundles below are for.
+   Now that a label names it, the number is the value in a field rather than a
+   loose mark in a corner, so it takes the weight the label gives up: 17px and
+   near-white against the label's dim 11px. */
 .ticket-stub-count {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  align-items: baseline;
+  gap: 7px;
   font-family: "Space Grotesk", sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   white-space: nowrap;
 }
 .ticket-stub-count svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   flex: none;
-  opacity: 0.85;
+  opacity: 0.8;
+  /* Baseline-aligned flex would sit an SVG on its own bottom edge; nudge it
+     back onto the digits' optical centre. */
+  align-self: center;
+  position: relative;
+  top: 1px;
 }
 
 /* Floor shadow — drifts against the rotation (--sx set from JS). */

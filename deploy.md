@@ -13,8 +13,16 @@ review of the one before (the first is in the block further down, still
 undeployed — **all of it is one Mini App build**, so whichever redeploy happens
 first carries everything).
 
-**Six things worth knowing before the redeploy:**
+**Seven things worth knowing before the redeploy:**
 
+- **The ticket card loses its barcode; the stub prints БАЛАНС ▸ 🎟 × N.** One
+  new i18n key (`balanceLabel`, all five locales) and one prop deleted
+  (`Ticket3D.seed`, with its stripe generator) — so nothing on the card is
+  derived from the match id any more. Watch the tear line rather than the text:
+  the stub carries a `min-height` floor so the gate's screens that print no
+  balance keep the perforation at the same height as the ones that do. If the
+  card's silhouette ever differs between the offer screen and the waiting
+  screen, that floor is what broke.
 - **The pinned button bar stops being a footer and starts floating**, on both
   screens: content now scrolls *under* it and dissolves through a 72px scrim
   instead of being cut against its top edge. The only behaviour worth watching
@@ -51,10 +59,10 @@ first carries everything).
 - **The specular highlight is deleted, not retuned.** Do not add a third
   version; DECISIONS.md records why the failure is structural. The holographic
   film stays.
-- **Ten i18n strings change**, not just styling: `title` and `successTitle` lose
-  their 🎟️ in all five store locales. Nothing reads those strings but the
-  heading, and a stale bundle cannot half-apply it — it is one build or the
-  other.
+- **Fifteen i18n strings change**, not just styling: `title` and `successTitle`
+  lose their 🎟️ in all five store locales, and `balanceLabel` is added in all
+  five ticket ones. Nothing reads them but the heading and the stub, and a stale
+  bundle cannot half-apply either — it is one build or the other.
 
 Post-deploy check — these screens are transient and log nothing, so verify by
 eye. `scripts/dev-stage-all-screens.mjs` stands up all six gate states plus the
@@ -66,7 +74,8 @@ pnpm demo:deploy
 for p in ticket tickets; do curl -sI "https://dating-calendar.gennety.com/$p.html" | head -1; done
 # Then, on @gennetytestbot:
 #   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-stage-all-screens.mjs --apply
-# Look for: a clearly PORTRAIT card with no serial and no moving highlight; the
+# Look for: a clearly PORTRAIT card with no serial, no barcode and no moving
+# highlight, its stub reading БАЛАНС on the left and 🎟 × N on the right; the
 # notch cutouts landing exactly on the dashed tear line; the ×6 row reading as
 # burgundy-deep rather than pink-washed on BOTH themes, with its "6" clean and
 # not washed pale at the left edge; and, on dark only, the ×1/×3 rows reading as
