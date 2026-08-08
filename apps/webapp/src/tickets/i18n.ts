@@ -10,7 +10,6 @@ export type Lang = "en" | "ru" | "uk" | "de" | "pl";
 export interface StoreStrings {
   title: string;
   sub: string;
-  balance: string;
   perTicket: string;
   bestValue: string;
   /** Per-ticket saving badge on multi-ticket bundles. `{pct}` = whole percent. */
@@ -26,8 +25,6 @@ export interface StoreStrings {
   loading: string;
   errGeneric: string;
   /** Anonymized holder names printed on the store ticket card. */
-  anonHolderA: string;
-  anonHolderB: string;
   /** Referral cross-promo — shown only when the wallet is empty. */
   referralHint: string;
 }
@@ -35,7 +32,6 @@ export interface StoreStrings {
 const en: StoreStrings = {
   title: "Get Date Tickets 🎟️",
   sub: "One ticket = one date. Stock up so you're always ready.",
-  balance: "Your wallet: {n} 🎟️",
   perTicket: "{amount} / ticket",
   bestValue: "Best value",
   save: "Save {pct}%",
@@ -48,15 +44,12 @@ const en: StoreStrings = {
   back: "← Back",
   loading: "Loading your wallet…",
   errGeneric: "Something went wrong. Reopen this from the bot.",
-  anonHolderA: "Member",
-  anonHolderB: "Your date",
   referralHint: "Short on tickets? Invite a friend instead",
 };
 
 const ru: StoreStrings = {
   title: "Билеты на свидания 🎟️",
   sub: "Один билет = одно свидание. Запасись, чтобы всегда быть готовым.",
-  balance: "Твой кошелёк: {n} 🎟️",
   perTicket: "{amount} / билет",
   bestValue: "Выгоднее всего",
   save: "Скидка {pct}%",
@@ -69,15 +62,12 @@ const ru: StoreStrings = {
   back: "← Назад",
   loading: "Загружаем кошелёк…",
   errGeneric: "Что-то пошло не так. Открой заново из бота.",
-  anonHolderA: "Участник",
-  anonHolderB: "Твоя пара",
   referralHint: "Не хватает билетов? Пригласи друга вместо оплаты",
 };
 
 const uk: StoreStrings = {
   title: "Квитки на побачення 🎟️",
   sub: "Один квиток = одне побачення. Запасись, щоб завжди бути готовим.",
-  balance: "Твій гаманець: {n} 🎟️",
   perTicket: "{amount} / квиток",
   bestValue: "Найвигідніше",
   save: "Знижка {pct}%",
@@ -90,15 +80,12 @@ const uk: StoreStrings = {
   back: "← Назад",
   loading: "Завантажуємо гаманець…",
   errGeneric: "Щось пішло не так. Відкрий знову з бота.",
-  anonHolderA: "Учасник",
-  anonHolderB: "Твоя пара",
   referralHint: "Не вистачає квитків? Запроси друга замість оплати",
 };
 
 const de: StoreStrings = {
   title: "Date-Tickets holen 🎟️",
   sub: "Ein Ticket = ein Date. Leg dir welche zu, dann bist du immer bereit.",
-  balance: "Dein Guthaben: {n} 🎟️",
   perTicket: "{amount} / Ticket",
   bestValue: "Bester Preis",
   save: "{pct}% sparen",
@@ -111,15 +98,12 @@ const de: StoreStrings = {
   back: "← Zurück",
   loading: "Dein Guthaben wird geladen…",
   errGeneric: "Etwas ist schiefgelaufen. Öffne dies erneut aus dem Bot.",
-  anonHolderA: "Mitglied",
-  anonHolderB: "Dein Date",
   referralHint: "Zu wenig Tickets? Lade stattdessen einen Freund ein",
 };
 
 const pl: StoreStrings = {
   title: "Zdobądź bilety na randki 🎟️",
   sub: "Jeden bilet = jedna randka. Zrób zapas, żeby zawsze być gotowym.",
-  balance: "Twój portfel: {n} 🎟️",
   perTicket: "{amount} / bilet",
   bestValue: "Najlepsza cena",
   save: "Oszczędź {pct}%",
@@ -132,8 +116,6 @@ const pl: StoreStrings = {
   back: "← Wstecz",
   loading: "Ładujemy Twój portfel…",
   errGeneric: "Coś poszło nie tak. Otwórz to ponownie z bota.",
-  anonHolderA: "Członek",
-  anonHolderB: "Twoja randka",
   referralHint: "Brakuje biletów? Zaproś znajomego zamiast płacić",
 };
 

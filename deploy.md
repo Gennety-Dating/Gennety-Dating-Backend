@@ -1,5 +1,57 @@
 # Gennety Dating Deploy
 
+**PENDING — the two ticket screens get one light, and the card stops lying
+(PRODUCT_SPEC §3.5b).** Not deployed yet. **No Prisma schema change, no env
+change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is
+`apps/webapp/**` plus docs. So this is the **Deploy Mini App Only** path
+(`./scripts/deploy-webapp.sh`); there is nothing to rsync to `/opt/gennety` and
+**no `pm2 restart`**. Run `pnpm demo:deploy` too — the demo builds its own
+bundle from the same source and will otherwise keep the old one, and the demo
+is where half of this is actually reachable (below).
+
+Covers both ticket surfaces, which share one component and one stylesheet: the
+store (`tickets.html`, the **My Tickets** menu row) and the §3.5b gate
+(`ticket.html`, reached while planning a date).
+
+**Three things worth knowing before the redeploy:**
+
+- **The mock/USD branch only renders in DEMO.** Production runs
+  `TICKET_STARS_ENABLED=true`, so the Stars bundle rows are what real users see
+  and the rose "famine" bundle is unreachable there. The demo bot runs
+  `TICKET_PAYMENT_MODE=mock`, so it gets the other branch. Both were restyled
+  and both were screenshotted; if you only check one deployment you have only
+  checked half of it.
+- **Six i18n keys are DELETED, not blanked** — `ticketHolders` + `ticketStub`
+  (the "На двоих" falsehood), `ticketLabel`, `ticketTagline`, and the store's
+  `anonHolderA/B` + `balance`, across all five locales. `TicketStrings` /
+  `StoreStrings` shrank with them, so a stale bundle cannot half-apply this: it
+  is one build or the other.
+- **`ticket/i18n.test.ts` changed its assertion** from `ticketStub` to
+  `balanceNote` containing `{n}` — that string is now an accessible name only
+  (the visible text on the stub is the vector mark plus "× N"), which is also
+  why its emoji was removed from all five locales.
+
+Post-deploy check — these screens are transient and log nothing, so verify by
+eye. `scripts/dev-stage-all-screens.mjs` already stands up all six gate states
+plus the store, in both themes, as `web_app` buttons in the dev-bot chat:
+
+```sh
+./scripts/deploy-webapp.sh
+pnpm demo:deploy
+for p in ticket tickets; do curl -sI "https://dating-calendar.gennety.com/$p.html" | head -1; done
+# Then, on @gennetytestbot:
+#   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-stage-all-screens.mjs --apply
+# Look for: no "На двоих" anywhere on the card; the store's card carries NO
+# names while the gate's does; the wallet count on the stub (and absent at 0);
+# three distinguishable bundle rows in BOTH themes.
+```
+
+**Rollback:** redeploy the Mini App from the previous checkout, and
+`pnpm demo:deploy` from it as well. Nothing else to undo — no schema, no env,
+no flag, no server state.
+
+---
+
 **PENDING — the pre-date coordination flow becomes walkable in the demo
 (DEMO_MODE.md).** Not deployed yet. **Demo only** — the diff is
 `apps/bot/src/demo/**` plus docs, so **nothing to rsync to `/opt/gennety`, no

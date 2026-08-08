@@ -22,6 +22,62 @@
      Calendar Mini App and covers older clients / the pre-event first paint. */
   --tg-content-top: 56px;
   --tg-content-bottom: 0px;
+
+  /* ── The house inner-edge sheen ─────────────────────────────────────────
+     Four inset shadows pulled back past the border by a negative spread, so
+     only the soft falloff survives just inside the edge and the light reads as
+     coming FROM the border INWARD. Same recipe as onboarding's
+     `.ob-basics-pill`, referral's `.ref-share` and the height drum's
+     `.ob-wheel-capsule`. Deliberately no OUTER bloom — coloured light thrown
+     past the edge turns neon on the dark theme.
+
+     Three temperatures, and the difference between the first two is the whole
+     point: NEUTRAL light for the ordinary rungs, BURGUNDY light for the one
+     rung we recommend. Colour is spent on meaning, never on decoration
+     (theme.css) — which is why the recommended bundle no longer ALSO carries a
+     burgundy fill. Two ways of saying "this one" is one too many. */
+  --sheen-neutral:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 10px 20px -15px rgba(255, 255, 255, 0.5),
+    inset 0 -10px 20px -15px rgba(255, 255, 255, 0.35),
+    inset 9px 0 20px -14px rgba(255, 255, 255, 0.45),
+    inset -9px 0 20px -14px rgba(255, 255, 255, 0.45);
+  --sheen-accent:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 11px 22px -14px rgba(226, 118, 145, 0.6),
+    inset 0 -11px 22px -14px rgba(182, 48, 79, 0.55),
+    inset 10px 0 22px -13px rgba(206, 82, 112, 0.58),
+    inset -10px 0 22px -13px rgba(206, 82, 112, 0.58);
+  /* White light inside a BURGUNDY FILL — the hero button. Theme-independent,
+     because that button is burgundy on the cream page too. Verbatim the
+     `.ref-share` list, so the two cannot drift apart. */
+  --sheen-on-accent:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 10px 20px -14px rgba(255, 255, 255, 0.62),
+    inset 0 -10px 20px -14px rgba(255, 255, 255, 0.48),
+    inset 9px 0 20px -13px rgba(255, 255, 255, 0.55),
+    inset -9px 0 20px -13px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 6px rgba(74, 16, 31, 0.18);
+}
+
+/* On the cream page the same geometry has to invert its polarity: a white card
+   cannot be lit whiter from its own edges, so the neutral sheen becomes a soft
+   SHADING inward (and the accent one shades burgundy). The top highlight stays
+   bright — that edge really does catch light. A hairline is added on light too
+   (see `.store-bundle`), for the same reason `.ob-wheel-capsule` needed one. */
+:root[data-theme="light"] {
+  --sheen-neutral:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 10px 20px -15px rgba(255, 255, 255, 0.9),
+    inset 0 -11px 22px -14px rgba(0, 0, 0, 0.1),
+    inset 9px 0 20px -14px rgba(0, 0, 0, 0.055),
+    inset -9px 0 20px -14px rgba(0, 0, 0, 0.055);
+  --sheen-accent:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 11px 22px -13px rgba(139, 37, 59, 0.34),
+    inset 0 -11px 22px -12px rgba(139, 37, 59, 0.58),
+    inset 11px 0 24px -12px rgba(139, 37, 59, 0.5),
+    inset -11px 0 24px -12px rgba(139, 37, 59, 0.5);
 }
 
 * {
@@ -158,8 +214,7 @@ body {
 .ticket-card {
   --rx: 0deg;
   --ry: 0deg;
-  --gx: 50%;
-  --gy: 46%;
+  --gp: 0%;
   --holo: 0px;
   position: relative;
   width: 300px;
@@ -204,28 +259,42 @@ body {
 }
 /* Muted text inside the (always-dark) ticket stays light in both themes —
    the shared --text-dim would flip dark on the light page and vanish. */
-.ticket-card .ticket-brand-sub,
-.ticket-card .ticket-tagline,
-.ticket-card .ticket-stub-text {
+.ticket-card .ticket-names,
+.ticket-card .ticket-stub-count {
   color: rgba(255, 255, 255, 0.62);
 }
 
-/* Specular highlight that tracks the rotation, like light on gloss. */
+/* Specular highlight that tracks the rotation.
+   A NARROW diagonal streak, not a soft blob. It used to be a radial gradient
+   58%×46% of the card wide, sliding around on two axes — light does not behave
+   like that on gloss at any angle, and a highlight covering half the surface
+   reads as a painted-on smudge rather than as a reflection. A thin band with a
+   hard core and a fast falloff is what a real card catches; it sweeps as the
+   card turns because the band's position (--gp) is driven by the rotation. */
 .ticket-glare {
   position: absolute;
-  inset: 0;
+  inset: -20%;
   z-index: 3;
-  background: radial-gradient(
-    58% 46% at var(--gx) var(--gy),
-    rgba(255, 255, 255, 0.22),
-    rgba(255, 255, 255, 0.05) 46%,
-    transparent 72%
+  background: linear-gradient(
+    118deg,
+    transparent 41%,
+    rgba(255, 255, 255, 0.04) 46%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.04) 54%,
+    transparent 59%
   );
+  background-size: 300% 100%;
+  /* Parked OFF-CENTRE at rest. Dead centre is the one position that reads as a
+     painted stripe rather than as light: it is symmetric, so nothing about the
+     card's pose explains why it is there. Raking in from the left does. */
+  background-position: calc(34% + var(--gp) * 2.4) 50%;
   mix-blend-mode: screen;
   pointer-events: none;
 }
 
-/* Iridescent foil film — its pastel band slides as the card turns. */
+/* Iridescent foil film — its pastel band slides as the card turns. Kept, but
+   quiet: at 0.55 it was a rainbow across the whole face competing with the
+   specular band above, which is the other half of why the card read as fake. */
 .ticket-holo {
   position: absolute;
   inset: 0;
@@ -238,79 +307,103 @@ body {
     rgba(149, 250, 173, 0.1) 64%,
     rgba(255, 184, 108, 0.16) 86%
   );
-  background-size: 220% 220%;
+  background-size: 300% 220%;
   background-position: calc(50% + var(--holo)) 50%;
   mix-blend-mode: overlay;
-  opacity: 0.55;
+  opacity: 0.22;
   pointer-events: none;
 }
 
 .ticket-main {
   position: relative;
   z-index: 1;
-  padding: 26px 24px 20px;
+  padding: 22px 24px 18px;
 }
 .ticket-brand {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: baseline;
-  margin-bottom: 26px;
 }
+/* The wordmark. It used to be 14px filled with a burgundy gradient through
+   `background-clip: text` — on a near-black stock that made the one word
+   naming the brand the LOWEST-contrast thing on the card. Flat white at the
+   same tracking reads at a glance; the burgundy is spent on the glow behind the
+   butterfly instead, where it has a dark ground to sit on. */
 .ticket-brand-mark {
   font-family: "Space Grotesk", sans-serif;
   font-weight: 700;
-  letter-spacing: 0.22em;
-  font-size: 14px;
-  background: linear-gradient(120deg, var(--accent-bright), var(--accent) 55%, var(--accent-deep));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  letter-spacing: 0.28em;
+  font-size: 17px;
+  /* Tracking adds space after the LAST letter too, so the text box is 0.28em
+     wider than the glyphs and centring the box lands the word visibly left of
+     centre. Pulling that trailing space out of the flex measurement is what
+     actually centres the letters. */
+  margin-right: -0.28em;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
-.ticket-brand-sub {
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+
+/* The brand butterfly, stamped into the card stock — the hero, and the whole
+   reason the label, tagline and "admit two" line could go. Flat white with a
+   tight dark shadow so it reads as punched OUT of the stock rather than pasted
+   onto it, over a soft burgundy plate so it sits in light. Same treatment as
+   the partner-paid card's `.pp-logo`, so the big ticket and the small one are
+   one object at two sizes. */
+.ticket-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 18px auto 14px;
+  width: 96px;
+  height: 96px;
+  color: #fff;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
+  animation: pp-logo-pulse 3s ease-in-out infinite;
 }
+.ticket-mark::before {
+  content: "";
+  position: absolute;
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(182, 48, 79, 0.42), transparent 72%);
+  filter: blur(5px);
+}
+.ticket-mark svg {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The pair, printed under the mark — the gate only. Small and quiet: this is a
+   caption on an object, not the object's headline (which is what the old 22px
+   name row made it). */
 .ticket-names {
   font-family: "Space Grotesk", sans-serif;
-  font-size: 22px;
+  font-size: 14px;
   font-weight: 600;
-  margin-bottom: 18px;
+  letter-spacing: 0.02em;
+  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ticket-label {
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  color: var(--accent);
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-.ticket-tagline {
-  font-size: 12px;
-  color: var(--text-dim);
-  letter-spacing: 0.02em;
-}
 
-/* Printed issue details — serial number row under the tagline. */
+/* Printed issue details — the serial, alone. The ♥ that shared this row is
+   gone: the butterfly above is the brand mark now, and two marks on one card
+   is one too many. */
 .ticket-meta {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  margin-top: 18px;
+  margin-top: 14px;
 }
 .ticket-serial {
   font-family: "Space Grotesk", sans-serif;
   font-size: 11px;
   letter-spacing: 0.16em;
   color: rgba(255, 255, 255, 0.42);
-}
-.ticket-heart {
-  font-size: 12px;
-  color: var(--accent);
-  opacity: 0.7;
 }
 
 /* Perforation + stub */
@@ -356,12 +449,28 @@ body {
   border-radius: 0.5px;
 }
 
-.ticket-stub-text {
+/* The wallet count, printed on the stub — where a real ticket carries its
+   admission. It replaced a `.ticket-balance-note` glass pill sitting UNDER the
+   card, which on the light theme was grey-on-cream and barely legible; on the
+   (always-dark) stock it has a black ground to read against, so the theme
+   problem disappears rather than being restyled. Hidden entirely at zero: "× 0"
+   on a ticket reads as a rendering fault, and an empty wallet is already what
+   the bundles below are for. */
+.ticket-stub-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: "Space Grotesk", sans-serif;
-  letter-spacing: 0.18em;
-  font-size: 12px;
-  color: var(--text-dim);
-  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.ticket-stub-count svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  opacity: 0.85;
 }
 
 /* Floor shadow — drifts against the rotation (--sx set from JS). */
@@ -399,7 +508,14 @@ body {
 }
 
 /* HERO — the gentleman's move (pay/use for you both), and the paid moment. The
-   only burgundy button, and the only one that shimmers. */
+   only burgundy button on the screen.
+   It used to carry a white bar sweeping across it every 3.4s. That was the same
+   "light doing something light does not do" problem as the ticket's old glare:
+   a hard-edged rectangle travelling over a static button, on a loop, with no
+   surface for it to be a reflection OF. The house treatment replaces it —
+   light held just inside the button's own edges (`--sheen-on-accent`), which is
+   what every other primary in the product does (onboarding's pill, referral's
+   share button). Still the loudest thing on the screen; it just stops moving. */
 .btn-hero {
   position: relative;
   overflow: hidden;
@@ -409,26 +525,16 @@ body {
   font-weight: 700;
   letter-spacing: -0.01em;
   color: #fff;
-  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 70%, var(--accent-deep) 100%);
-  box-shadow:
-    0 16px 40px -14px rgba(182, 48, 79, 0.95),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-.btn-hero::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-  transform: skewX(-18deg);
-  animation: sheen 3.4s ease-in-out infinite;
-  pointer-events: none;
-}
-.btn-hero:disabled::after {
-  animation: none;
-  opacity: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.26),
+      rgba(255, 255, 255, 0) 16%,
+      rgba(255, 255, 255, 0) 84%,
+      rgba(255, 255, 255, 0.2)
+    ),
+    linear-gradient(160deg, #a23350 0%, #8b253b 55%, #6f1c2f 100%);
+  box-shadow: var(--sheen-on-accent);
 }
 
 /* PRIMARY — solid white (ink on cream). Highest contrast on the grey stage. */
@@ -481,17 +587,6 @@ body {
 .btn-primary:disabled {
   filter: brightness(0.75);
   cursor: default;
-}
-
-@keyframes sheen {
-  0%,
-  62% {
-    left: -40%;
-  }
-  92%,
-  100% {
-    left: 130%;
-  }
 }
 
 /* ── Partner-paid surprise screen (PRODUCT_SPEC §3.5b) ─────────────────── */
@@ -789,19 +884,8 @@ body {
   flex: none;
 }
 
-/* Wallet balance — a soft glass pill chip under the ticket. */
-.ticket-balance-note {
-  display: inline-flex;
-  align-items: center;
-  margin: 0 auto;
-  padding: 9px 18px;
-  border-radius: 999px;
-  background: var(--glass);
-  box-shadow: var(--glass-edge);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-dim);
-}
+/* The wallet-balance pill that used to live here is retired — the count is
+   printed on the ticket's own stub now (`.ticket-stub-count`). */
 
 /* ── Cover-your-date offer card ───────────────────────────────────────── */
 /* Shown under his own "ticket secured" result. A bounded card rather than a
@@ -1009,6 +1093,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .ticket-float,
+  .ticket-mark,
   .ticket-header,
   .mock-pay {
     animation: none;

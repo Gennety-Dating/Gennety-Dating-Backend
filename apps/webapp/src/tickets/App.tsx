@@ -242,9 +242,11 @@ export function App(): ReactElement {
           </p>
         </header>
 
-        <Ticket3D myName={s.anonHolderA} partnerName={s.anonHolderB} strings={ticketS} />
-
-        <p className="ticket-balance-note">{fill(s.balance, { n: String(phase.balance) })}</p>
+        {/* The store's card carries no names — it is the product, not anyone's
+            ticket. It used to print "Участник & Твоя пара", which is the only
+            place in the app where a fabricated pair was shown as if issued.
+            The wallet count rides on its stub instead of in a pill below. */}
+        <Ticket3D seed="gennety-store" balance={phase.balance} strings={ticketS} />
 
         <div className="store-bundles">
           {phase.starsEnabled && phase.bundleStars
@@ -271,9 +273,6 @@ export function App(): ReactElement {
                       {fill(s.perTicket, { amount: formatStars(b.perTicketStars) })}
                       {b.bestValue && <span className="store-bundle-tag">{s.bestValue}</span>}
                     </span>
-                  </span>
-                  <span className="store-bundle-chevron" aria-hidden="true">
-                    ›
                   </span>
                 </button>
               ))
@@ -306,9 +305,6 @@ export function App(): ReactElement {
                   {fill(s.perTicket, { amount: formatUsd(b.perTicketCents) })}
                   {b.bestValue && <span className="store-bundle-tag">{s.bestValue}</span>}
                 </span>
-              </span>
-              <span className="store-bundle-chevron" aria-hidden="true">
-                ›
               </span>
             </button>
           ))}

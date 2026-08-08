@@ -356,11 +356,19 @@ export function App(): ReactElement {
               </div>
             )}
 
-            <Ticket3D myName={myName} partnerName={state.partnerName} strings={s} />
-
-            {(sc === "offer" || sc === "cover-partner") && state.myBalance > 0 && (
-              <p className="ticket-balance-note">{fill(s.balanceNote, { n: String(state.myBalance) })}</p>
-            )}
+            {/* The serial is seeded from the match, so this pair's ticket is
+                genuinely their own rather than one shared by every pair whose
+                names collide. The wallet count rides on the stub, and only on
+                the two screens where it is still actionable — after the gate
+                settles, how many tickets are left is no longer this screen's
+                business. */}
+            <Ticket3D
+              seed={matchId}
+              myName={myName}
+              partnerName={state.partnerName}
+              balance={sc === "offer" || sc === "cover-partner" ? state.myBalance : null}
+              strings={s}
+            />
 
             {/* Referral cross-promo: a quiet secondary way to get a ticket
                 without paying, shown only while the wallet is genuinely empty

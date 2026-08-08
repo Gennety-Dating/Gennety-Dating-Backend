@@ -114,6 +114,98 @@ poll carry the gallery; do not make the first paint wait on Places.
 `resolveVenuePhotoRefs` in `services/venue-change.ts`; ARCHITECTURE.md → the
 `/v1/venue-change/state` row.
 
+## 2026-08-08 — the ticket card keeps names on the gate only, and loses everything else
+
+**Kind:** founder decision
+**What:** the hero Date Ticket card drops "На двоих" (both places), the
+"curated date ticket" label and the marketing tagline; gains the brand
+butterfly as its centre and the wallet count on its stub. The **names stay on
+the gate and go from the store** — the founder picked that over my
+recommendation of dropping them everywhere.
+**Why:** I argued for one composition with no names at all (the partner's name
+is already on the gate three times: headline, sub, and the pay-for-both
+avatar), because keeping them on one screen and not the other is how you end up
+maintaining two designs. The founder wants the gate's ticket to be *theirs*.
+Resolved without a second design: the names are one optional line under the
+butterfly, so the store simply renders the same card minus that line.
+**What it changes going forward:** the card is one component
+(`Ticket3D`) on both screens, and it must stay that way — anything added for
+one screen has to be expressible as an optional line, or the (б) choice quietly
+becomes two layouts after all. The serial no longer seeds from the holders'
+names (it could not, once one screen had none); it seeds from the match id on
+the gate and a constant in the store.
+**Recorded in:** PRODUCT_SPEC.md §3.5b → "The ticket card, and what it may
+print"; `apps/webapp/src/ticket/Ticket3D.tsx`.
+
+## 2026-08-08 — "На двоих" was a lie, not a style problem
+
+**Kind:** founder decision
+**What:** the card printed "На двоих" / "Admit two" in its header and "НА
+ДВОИХ" on its stub. One ticket admits **one** person — a man paying $13.98 "for
+us both" buys two of them (§3.5b) — so a user who chose "pay only mine" was
+being told his partner was already covered. Deleted from `TicketStrings` and
+all five locales.
+**Why:** worth its own entry because it is the one deletion on that card that
+was **mandatory** rather than aesthetic. The label, the tagline and the names
+went because the card is better without them; these two had to go even if we
+had decided to keep the card wordy.
+**What it changes going forward:** the falsehood was confined to the Mini App —
+`packages/shared/src/i18n.ts` has no ticket copy claiming two admissions — so
+there is nothing else to chase. Do not reintroduce a "for two" line anywhere on
+a single ticket.
+**Recorded in:** PRODUCT_SPEC.md §3.5b; `apps/webapp/src/ticket/i18n.ts`.
+
+## 2026-08-08 — the wallet count hides at zero, which is NOT the rule I was given
+
+**Kind:** deviation from plan
+**What:** I asked whether to keep the balance-visibility rule one-to-one when
+moving the count from a pill under the card onto the card's stub; the founder
+said keep it. I then made it hide at a **zero** balance, which the store's pill
+did not do — it rendered "Твой кошелёк: 0 🎟️" unconditionally.
+**Why:** the two are not the same element. "Твой кошелёк: 0" is a sentence and
+reads fine; "🎟 × 0" printed on a ticket reads as a rendering fault. The
+information is not lost — an empty wallet is precisely the state the bundles
+below are for, and the referral cross-promo already fires at zero.
+**What it changes going forward:** the gate's own rule (only on `offer` /
+`cover-partner`) is untouched. If the store ever needs to state an empty wallet
+explicitly, that is a line of copy on the page, not a zero on the ticket.
+**Recorded in:** PRODUCT_SPEC.md §3.5b; `Ticket3D.tsx` (`balance` prop).
+
+## 2026-08-08 — the hero button stops shimmering
+
+**Kind:** change of mind
+**What:** `.btn-hero`'s travelling white bar (`sheen`, 3.4s loop) is replaced by
+the house inner-edge sheen. PRODUCT_SPEC had described that button as "the one
+burgundy, **shimmering** rung", so this is a documented behaviour changing, not
+a tidy-up.
+**Why:** the founder asked for the perimeter glow on the store's bundle buttons
+and, separately, complained that the ticket card's moving highlight looked
+unnatural. Those are the same defect: a hard-edged rectangle sweeping across a
+static surface on a loop, with no surface for it to be a reflection of. Fixing
+one and leaving the other on the adjacent screen would have been incoherent.
+**What it changes going forward:** **`venue-change.css` still has its own copy
+of the `sheen` keyframes and uses it twice** — those two buttons now shimmer
+while the ticket screens in the same flow do not. Deliberately left alone
+(out of the scope the founder set), but it is the next thing to converge.
+**Recorded in:** PRODUCT_SPEC.md §3.5b (both the pricing bullet and the new
+"One light, everywhere" note); `apps/webapp/src/ticket/ticket.css`.
+
+## 2026-08-08 — the ticket glyph ships as a vector, and is expected to be replaced
+
+**Kind:** founder decision
+**What:** the wallet count on the stub is drawn with a new `TicketMark()` in
+`marks.tsx`. The founder will supply a PNG of the mark from an external tool
+later.
+**Why:** platform emoji are banned on these surfaces (`marks.tsx`) — the old
+string used `🎟️`, which would have rendered as Apple's art on iOS and Google's
+on Android and blurred at any scale.
+**What it changes going forward:** whoever swaps in that PNG must know the mark
+sits on the **always-dark** ticket stock in both themes and currently inherits
+`currentColor` at 0.85 opacity. A PNG cannot inherit colour, so it has to ship
+light-on-dark and be checked against the stub's burgundy-black ground, not
+against the page.
+**Recorded in:** `apps/webapp/src/ticket/marks.tsx`.
+
 ## 2026-08-07 — the rule behind three separate "what if the text isn't an answer" fixes
 
 **Kind:** change of mind

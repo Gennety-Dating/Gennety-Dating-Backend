@@ -2444,9 +2444,11 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   sets `paidForPartnerBy*`) plus "Pay only mine — $6.99". Female users get a
   single "Pay my ticket — $6.99". The server re-validates that pay-for-both is
   male-only.
-  **The covering option is always the hero button** — the one burgundy,
-  shimmering rung of the Mini App's button ladder — at every wallet balance
-  (corrected 2026-07-29). It used to invert at exactly `balance === 1`, where
+  **The covering option is always the hero button** — the one burgundy rung of
+  the Mini App's button ladder — at every wallet balance
+  (corrected 2026-07-29; it also **shimmered** until 2026-08-08, when the
+  travelling white bar was replaced by the house inner-edge sheen — see the
+  ticket-card note below). It used to invert at exactly `balance === 1`, where
   "use my ticket for myself" became the hero and covering dropped to the quiet
   secondary. That is the single most common state a man reaches this screen in:
   the welcome gift (§3.5b) is exactly one ticket, so for most first-time payers
@@ -2638,6 +2640,55 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
     down on all three. `partial` (one side paid, the other never did) IS
     refunded here, since a cancelled match never reaches the expiry sweep's
     `negotiating` filter.
+- **The ticket card, and what it may print (reworked 2026-08-08, Telegram-only).**
+  One `Ticket3D` component renders the hero card on BOTH ticket screens — the
+  gate and the store — so what follows is true of each. It carries the wordmark,
+  the brand butterfly, a serial, a barcode and the wallet count, and it
+  deliberately carries nothing else.
+  - **"Admit two" / "На двоих" is gone from the header and the stub**, because
+    it was false: one ticket admits ONE person, and a man paying $13.98 "for us
+    both" is buying TWO. On the male's "pay only mine" path the card was telling
+    him his partner was already covered.
+  - **The names are the gate's alone.** The store used to print a fabricated
+    pair ("Участник & Твоя пара") — the one place in the app where invented
+    people were shown as issued. Its card now carries none; the gate keeps the
+    real pair, small, under the mark (founder decision — the alternative was
+    dropping them everywhere and making the ticket a pure object).
+  - **The serial is seeded from the match**, not from the holders' names, so a
+    pair's ticket is genuinely theirs.
+  - **The "curated date ticket" label and the marketing tagline are cut**
+    (founder decision). The perforation, the real notch cutouts, the stub and
+    the barcode say what the object is; the screen's own headline says the rest.
+  - **The wallet count moved onto the stub**, replacing a glass pill under the
+    card that on the light theme was grey-on-cream and barely legible — the
+    always-dark stock gives it a ground to read against, so the theme problem
+    disappears rather than being restyled. It stays hidden wherever it was
+    hidden before (the gate shows it only on `offer` / `cover-partner`), and
+    additionally at a **zero** balance: "× 0" printed on a ticket reads as a
+    rendering fault, and in the store an empty wallet is what the bundles below
+    are for.
+  - **The specular highlight is a narrow raking band, parked off-centre**,
+    instead of a soft blob half the card wide sitting dead centre; the
+    holographic film drops from 0.55 to 0.22 opacity. Both were doing something
+    light does not do, which is what made an otherwise physical object read as a
+    rendering. The drag / gyro / inertia interaction is untouched.
+- **One light, everywhere (2026-08-08, Telegram-only).** The store's bundle rows
+  and the gate's hero button carry the house **inner-edge sheen** — four inset
+  shadows pulled back past the border by a negative spread, so the light reads
+  as coming from the border inward (the same recipe as onboarding's action pill,
+  referral's share button and the height drum's capsule). Three temperatures,
+  and the temperature IS the meaning: neutral light for the ordinary rungs,
+  burgundy for the one recommended bundle, warm rose for the one-time famine
+  deal. The recommended rung therefore no longer ALSO carries a burgundy fill —
+  saying "this one" twice made it read as a different component rather than the
+  same one recommended. On the light theme the geometry survives but the
+  polarity inverts (a white card cannot be lit whiter from its own edges, so the
+  light becomes a shading inward) and a hairline is added, for the same reason
+  `.ob-wheel-capsule` needed one. The hero button's travelling white bar is
+  retired with it: a hard-edged rectangle sweeping a static button on a loop is
+  the same "light doing what light does not" problem as the card's old glare.
+  The saving badges are unchanged; the trailing `›` is dropped, since the whole
+  row is the button and the chevron sat a few pixels from the badge.
 - **State machine.** The whole gate runs while `Match.status = negotiating`;
   `ticketStatus` is a sub-state so the scheduling/venue/lifecycle code is
   untouched. Blind-decision and all other invariants are unaffected.

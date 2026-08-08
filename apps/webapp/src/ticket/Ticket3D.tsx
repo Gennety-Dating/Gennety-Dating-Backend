@@ -1,19 +1,31 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { ReactElement } from "react";
+import { ButterflyMark, TicketMark } from "./marks.js";
 import type { TicketStrings } from "./i18n.js";
 
 /**
  * The hero Date Ticket card. Pure CSS 3D — no WebGL, no new deps.
  *
+ * What it prints, and what it deliberately does not:
+ * - the wordmark, the brand butterfly, a serial, a barcode, and the wallet
+ *   count on the stub;
+ * - NOT "Admit two" / "На двоих". One ticket admits ONE person — a man paying
+ *   $13.98 "for us both" buys TWO of them (PRODUCT_SPEC §3.5b) — so that line
+ *   was telling a user who pays for their own slot that their partner is
+ *   already covered. It is gone from the header and from the stub.
+ * - NOT the "curated date ticket" label or the marketing tagline. The
+ *   perforation, the real notch cutouts, the stub and the barcode say what the
+ *   object is; the screen's own headline says the rest.
+ *
  * Interaction model:
  * - Drag (pointer) to grab and rotate the ticket freely, with inertia on
  *   release and a spring back to the ambient pose.
  * - `deviceorientation` drives a subtle ambient tilt on phones when idle.
- * - The glare highlight, holographic film, and floor shadow all track the
+ * - The specular band, holographic film, and floor shadow all track the
  *   current rotation through CSS custom properties.
  */
 
-/** FNV-1a — stable serial + barcode pattern from the holder names. */
+/** FNV-1a — stable serial + barcode pattern from the card's seed. */
 function fnv1a(str: string): number {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
@@ -27,8 +39,19 @@ const DRAG_MAX = 38;
 const AMBIENT_MAX = 9;
 
 export function Ticket3D(props: {
-  myName: string;
-  partnerName: string | null;
+  /**
+   * What the printed serial and barcode are derived from — the match id on the
+   * gate, a constant in the store. It used to be the holders' names, which
+   * stopped working the moment the store's card lost them; more importantly a
+   * ticket for a specific date deserves its own serial rather than one shared
+   * by every pair whose names happen to collide.
+   */
+  seed: string;
+  /** Printed under the mark on the gate. The store's card carries no names. */
+  myName?: string | null;
+  partnerName?: string | null;
+  /** Wallet count printed on the stub. Null/0 leaves the stub to the barcode. */
+  balance?: number | null;
   strings: TicketStrings;
 }): ReactElement {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -37,7 +60,8 @@ export function Ticket3D(props: {
 
   // Expose the tear-line Y to CSS so the card can punch *real* notch holes
   // there (a mask that lets the page show through), rather than faking them
-  // with filled circles. Recomputed on any layout change (name length, etc.).
+  // with filled circles. Recomputed on any layout change (name length, whether
+  // names are printed at all, etc.).
   useEffect(() => {
     const card = cardRef.current;
     const perf = perfRef.current;
@@ -51,20 +75,24 @@ export function Ticket3D(props: {
     return () => ro.disconnect();
   }, []);
 
-  const holders = props.partnerName ? `${props.myName} & ${props.partnerName}` : props.myName;
+  const holders = props.myName
+    ? props.partnerName
+      ? `${props.myName} & ${props.partnerName}`
+      : props.myName
+    : null;
 
   // Deterministic "printed" details so the ticket looks issued, not templated.
   const { serial, bars } = useMemo(() => {
-    const seed = fnv1a(holders);
+    const seed = fnv1a(props.seed);
     const hex = (seed % 0xffffff).toString(16).toUpperCase().padStart(6, "0");
     // Seeded LCG → pseudo-random barcode stripe widths (2..5 px).
     let x = seed || 1;
-    const widths = Array.from({ length: 26 }, () => {
+    const widths = Array.from({ length: 22 }, () => {
       x = (Math.imul(x, 1103515245) + 12345) >>> 0;
       return 2 + (x % 4);
     });
     return { serial: `GD-${hex}`, bars: widths };
-  }, [holders]);
+  }, [props.seed]);
 
   useEffect(() => {
     const card = cardRef.current;
@@ -92,9 +120,11 @@ export function Ticket3D(props: {
     const apply = (): void => {
       card.style.setProperty("--rx", `${rx.toFixed(2)}deg`);
       card.style.setProperty("--ry", `${ry.toFixed(2)}deg`);
-      // Glare highlight slides opposite the tilt, like light on gloss.
-      card.style.setProperty("--gx", `${(50 + ry * 1.9).toFixed(1)}%`);
-      card.style.setProperty("--gy", `${(46 - rx * 1.9).toFixed(1)}%`);
+      // Where the specular band sits along the card. ONE number, because the
+      // highlight is now a narrow diagonal streak rather than a soft blob that
+      // could be positioned in two axes — a blob half the size of the card is
+      // not a thing light does on gloss, which is exactly what read as fake.
+      card.style.setProperty("--gp", `${(ry * 2.4 - rx * 1.1).toFixed(1)}%`);
       // Holographic film shifts its hue band as the card turns.
       card.style.setProperty("--holo", `${(ry * 4).toFixed(1)}px`);
       // Floor shadow drifts against the rotation for a grounded feel.
@@ -166,6 +196,7 @@ export function Ticket3D(props: {
   }, []);
 
   const s = props.strings;
+  const balance = props.balance && props.balance > 0 ? props.balance : null;
 
   return (
     <div className="ticket-stage" ref={stageRef}>
@@ -176,18 +207,17 @@ export function Ticket3D(props: {
           <div className="ticket-main">
             <div className="ticket-brand">
               <span className="ticket-brand-mark">GENNETY</span>
-              <span className="ticket-brand-sub">{s.ticketHolders}</span>
             </div>
-            <div className="ticket-names" title={holders}>
-              {holders}
+            <div className="ticket-mark" aria-hidden="true">
+              <ButterflyMark />
             </div>
-            <div className="ticket-label">{s.ticketLabel}</div>
-            <div className="ticket-tagline">{s.ticketTagline}</div>
+            {holders && (
+              <div className="ticket-names" title={holders}>
+                {holders}
+              </div>
+            )}
             <div className="ticket-meta">
               <span className="ticket-serial">№ {serial}</span>
-              <span className="ticket-heart" aria-hidden="true">
-                ♥
-              </span>
             </div>
           </div>
           <div className="ticket-perf" aria-hidden="true" ref={perfRef} />
@@ -197,7 +227,18 @@ export function Ticket3D(props: {
                 <span key={i} style={{ width: `${w}px` }} />
               ))}
             </div>
-            <span className="ticket-stub-text">{s.ticketStub}</span>
+            {balance !== null && (
+              // The count is the visible part; the localized sentence survives
+              // only as the accessible name, since "🎟 × 2" is not something a
+              // screen reader can make a sentence out of.
+              <span
+                className="ticket-stub-count"
+                aria-label={s.balanceNote.replace("{n}", String(balance))}
+              >
+                <TicketMark />
+                <span aria-hidden="true">× {balance}</span>
+              </span>
+            )}
           </div>
         </div>
       </div>

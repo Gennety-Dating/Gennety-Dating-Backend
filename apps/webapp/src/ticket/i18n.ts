@@ -9,9 +9,6 @@ export type Lang = "en" | "ru" | "uk" | "de" | "pl";
 export interface TicketStrings {
   heading: string;
   sub: string;
-  ticketLabel: string;
-  ticketTagline: string;
-  ticketHolders: string;
   payBoth: string;
   payBothWithTicket: string;
   paySelf: string;
@@ -70,7 +67,6 @@ export interface TicketStrings {
   close: string;
   youFallback: string;
   matchFallback: string;
-  ticketStub: string;
   /** Referral cross-promo — shown only on "offer" when the wallet is empty. */
   referralHint: string;
 }
@@ -78,9 +74,6 @@ export interface TicketStrings {
 const en: TicketStrings = {
   heading: "It's a match 🤍",
   sub: "Claim your Date Ticket to unlock planning.",
-  ticketLabel: "CURATED DATE TICKET",
-  ticketTagline: "One Perfect Match • Verified • Zero Drama",
-  ticketHolders: "Admit two",
   payBoth: "Pay for us both — {amount}",
   payBothWithTicket: "Pay for both 🎟️ + {amount}",
   paySelf: "Pay only mine — {amount}",
@@ -94,7 +87,7 @@ const en: TicketStrings = {
   coverPartnerSub: "Your ticket's set. Want to cover {name}'s too, or let them grab it?",
   justWait: "I'll let them grab it",
   coverReconsider: "Actually — cover their ticket",
-  balanceNote: "Your wallet: {n} 🎟️",
+  balanceNote: "Your wallet: {n}",
   mockBadge: "Test mode — no real charge",
   mockTitle: "Payment",
   mockSub: "Pay {amount} to secure your Date Ticket.",
@@ -122,16 +115,12 @@ const en: TicketStrings = {
   close: "Close",
   youFallback: "You",
   matchFallback: "Your match",
-  ticketStub: "ADMIT 2",
   referralHint: "No tickets? Invite a friend instead",
 };
 
 const ru: TicketStrings = {
   heading: "Это мэтч 🤍",
   sub: "Забери свой билет на свидание, чтобы открыть планирование.",
-  ticketLabel: "КУРАТОРСКИЙ БИЛЕТ НА СВИДАНИЕ",
-  ticketTagline: "Идеальный метч • Проверено • Без драмы",
-  ticketHolders: "На двоих",
   payBoth: "Оплатить за нас обоих — {amount}",
   payBothWithTicket: "Оплатить за двоих 🎟️ + {amount}",
   paySelf: "Оплатить только свой — {amount}",
@@ -145,7 +134,7 @@ const ru: TicketStrings = {
   coverPartnerSub: "Твой билет уже есть. Оплатить и за {name} или пусть берёт сам(а)?",
   justWait: "Пусть берёт сам(а)",
   coverReconsider: "Всё-таки оплатить за пару",
-  balanceNote: "Твой кошелёк: {n} 🎟️",
+  balanceNote: "Твой кошелёк: {n}",
   mockBadge: "Тестовый режим — без реальной оплаты",
   mockTitle: "Оплата",
   mockSub: "Оплати {amount}, чтобы закрепить свой билет.",
@@ -175,16 +164,12 @@ const ru: TicketStrings = {
   close: "Закрыть",
   youFallback: "Ты",
   matchFallback: "Твой мэтч",
-  ticketStub: "НА ДВОИХ",
   referralHint: "Нет билетов? Пригласи друга вместо оплаты",
 };
 
 const uk: TicketStrings = {
   heading: "Це метч 🤍",
   sub: "Забери свій квиток на побачення, щоб відкрити планування.",
-  ticketLabel: "КУРАТОРСЬКИЙ КВИТОК НА ПОБАЧЕННЯ",
-  ticketTagline: "Ідеальний метч • Перевірено • Без драми",
-  ticketHolders: "На двох",
   payBoth: "Сплатити за нас обох — {amount}",
   payBothWithTicket: "Сплатити за двох 🎟️ + {amount}",
   paySelf: "Сплатити лише свій — {amount}",
@@ -198,7 +183,7 @@ const uk: TicketStrings = {
   coverPartnerSub: "Твій квиток уже є. Сплатити й за {name} чи нехай бере сам(а)?",
   justWait: "Нехай бере сам(а)",
   coverReconsider: "Все-таки сплатити за пару",
-  balanceNote: "Твій гаманець: {n} 🎟️",
+  balanceNote: "Твій гаманець: {n}",
   mockBadge: "Тестовий режим — без реальної оплати",
   mockTitle: "Оплата",
   mockSub: "Сплати {amount}, щоб закріпити свій квиток.",
@@ -226,16 +211,12 @@ const uk: TicketStrings = {
   close: "Закрити",
   youFallback: "Ти",
   matchFallback: "Твій метч",
-  ticketStub: "НА ДВОХ",
   referralHint: "Немає квитків? Запроси друга замість оплати",
 };
 
 const de: TicketStrings = {
   heading: "Es ist ein Match 🤍",
   sub: "Sichere dein Date Ticket, um die Planung freizuschalten.",
-  ticketLabel: "KURATIERTES DATE TICKET",
-  ticketTagline: "Ein perfektes Match • Verifiziert • Kein Drama",
-  ticketHolders: "Für zwei",
   payBoth: "Für uns beide zahlen — {amount}",
   payBothWithTicket: "Für beide zahlen 🎟️ + {amount}",
   paySelf: "Nur meins zahlen — {amount}",
@@ -249,7 +230,7 @@ const de: TicketStrings = {
   coverPartnerSub: "Dein Ticket steht. Auch {name} übernehmen oder selbst holen lassen?",
   justWait: "Sollen sie selbst holen",
   coverReconsider: "Doch für dein Date zahlen",
-  balanceNote: "Dein Guthaben: {n} 🎟️",
+  balanceNote: "Dein Guthaben: {n}",
   mockBadge: "Testmodus — keine echte Abbuchung",
   mockTitle: "Zahlung",
   mockSub: "Zahle {amount}, um dein Date Ticket zu sichern.",
@@ -277,16 +258,12 @@ const de: TicketStrings = {
   close: "Schließen",
   youFallback: "Du",
   matchFallback: "Dein Match",
-  ticketStub: "FÜR 2",
   referralHint: "Keine Tickets? Lade stattdessen einen Freund ein",
 };
 
 const pl: TicketStrings = {
   heading: "To match 🤍",
   sub: "Odbierz Date Ticket, aby odblokować planowanie.",
-  ticketLabel: "WYBRANY DATE TICKET",
-  ticketTagline: "Jedno idealne dopasowanie • Weryfikacja • Bez dramatu",
-  ticketHolders: "Dla dwojga",
   payBoth: "Zapłać za nas oboje — {amount}",
   payBothWithTicket: "Zapłać za oboje 🎟️ + {amount}",
   paySelf: "Zapłać tylko za siebie — {amount}",
@@ -300,7 +277,7 @@ const pl: TicketStrings = {
   coverPartnerSub: "Twój bilet jest. Pokryć też {name} czy niech weźmie sam(a)?",
   justWait: "Niech weźmie sam(a)",
   coverReconsider: "Jednak zapłać za swoją randkę",
-  balanceNote: "Twój portfel: {n} 🎟️",
+  balanceNote: "Twój portfel: {n}",
   mockBadge: "Tryb testowy — bez prawdziwej opłaty",
   mockTitle: "Płatność",
   mockSub: "Zapłać {amount}, aby zabezpieczyć Date Ticket.",
@@ -328,7 +305,6 @@ const pl: TicketStrings = {
   close: "Zamknij",
   youFallback: "Ty",
   matchFallback: "Twoje dopasowanie",
-  ticketStub: "DLA 2",
   referralHint: "Brak biletów? Zaproś znajomego zamiast płacić",
 };
 

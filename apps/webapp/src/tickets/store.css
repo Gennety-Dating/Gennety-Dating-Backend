@@ -41,6 +41,13 @@
   flex: none;
 }
 
+/* Glass rungs lit from their own edges inward (`--sheen-neutral`, ticket.css),
+   plus a neutral drop shadow so the card lifts off the page — on the cream
+   theme especially, inset light alone leaves a white row on a white page.
+   The hairline is light-theme only: the dark theme's rule is that depth comes
+   from fills, inset light and shadow, never from outlines, and it holds there;
+   on cream none of those three survive, which is the same reason
+   `.ob-wheel-capsule` had to grow one. */
 .store-bundle {
   position: relative;
   display: flex;
@@ -48,10 +55,10 @@
   gap: 14px;
   width: 100%;
   padding: 16px 18px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 20px;
   background: var(--glass);
-  box-shadow: var(--glass-edge);
+  box-shadow: var(--sheen-neutral), var(--glass-shadow);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   color: var(--text);
@@ -60,19 +67,24 @@
   font-family: inherit;
   transition: transform 0.15s ease, background 0.15s ease;
 }
+:root[data-theme="light"] .store-bundle {
+  border-color: var(--glass-border);
+}
 
 .store-bundle:active {
   transform: scale(0.985);
   background: var(--glass-press);
 }
 
+/* The recommended rung. It differs by the TEMPERATURE OF ITS LIGHT and nothing
+   else — the burgundy wash it used to carry as well is gone, because saying
+   "this one" twice is what made the row look like a different component rather
+   than the same component recommended. */
 .store-bundle-best {
-  background:
-    linear-gradient(135deg, rgba(182, 48, 79, 0.22), rgba(139, 37, 59, 0.1)),
-    var(--glass);
-  box-shadow:
-    0 12px 32px rgba(139, 37, 59, 0.2),
-    inset 0 1px 0 var(--glass-highlight);
+  box-shadow: var(--sheen-accent), 0 14px 34px -18px rgba(139, 37, 59, 0.55);
+}
+:root[data-theme="light"] .store-bundle-best {
+  border-color: rgba(139, 37, 59, 0.22);
 }
 
 /* Floating "Save N%" pill — the concrete per-ticket discount vs buying
@@ -110,13 +122,29 @@
   box-shadow: 0 6px 16px rgba(226, 98, 125, 0.42);
 }
 
+/* Third temperature, same geometry: warm rose light for the one-time loyalty
+   deal, so it is legible as "different" beside the burgundy recommendation
+   without reintroducing a coloured wash. Inlined rather than tokenised — it is
+   the only rung that ever wears it, and it only renders on the mock rail (the
+   famine discount is USD-only, so production's Stars store never shows it). */
 .store-bundle-famine {
-  background:
-    linear-gradient(135deg, rgba(255, 138, 155, 0.2), rgba(226, 98, 125, 0.08)),
-    var(--glass);
   box-shadow:
-    0 12px 32px rgba(226, 98, 125, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 11px 22px -14px rgba(255, 175, 190, 0.62),
+    inset 0 -11px 22px -14px rgba(226, 98, 125, 0.55),
+    inset 10px 0 22px -13px rgba(240, 130, 155, 0.58),
+    inset -10px 0 22px -13px rgba(240, 130, 155, 0.58),
+    0 14px 34px -18px rgba(226, 98, 125, 0.5);
+}
+:root[data-theme="light"] .store-bundle-famine {
+  border-color: rgba(226, 98, 125, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 11px 22px -14px rgba(255, 255, 255, 0.8),
+    inset 0 -11px 22px -13px rgba(226, 98, 125, 0.4),
+    inset 10px 0 22px -13px rgba(226, 98, 125, 0.32),
+    inset -10px 0 22px -13px rgba(226, 98, 125, 0.32),
+    var(--glass-shadow);
 }
 
 /* ×N count emblem — a soft glass square on the left. */
@@ -172,10 +200,6 @@
   text-transform: uppercase;
 }
 
-.store-bundle-chevron {
-  flex: none;
-  font-size: 22px;
-  line-height: 1;
-  color: var(--text-dim);
-  opacity: 0.6;
-}
+/* The trailing "›" is retired. The whole row is the button, so the chevron was
+   restating that — and it sat a few pixels from the saving pill, which is the
+   thing on this row actually worth looking at. */

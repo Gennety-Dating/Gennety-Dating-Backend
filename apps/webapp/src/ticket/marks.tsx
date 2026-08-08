@@ -59,6 +59,41 @@ export function LetterMark(): ReactElement {
   );
 }
 
+/**
+ * Ticket outline — the wallet count printed on the card's stub.
+ *
+ * It exists because that count used to be a `🎟️` inside a localized sentence
+ * ("Твой кошелёк: 2 🎟️") sitting in an ordinary pill BELOW the card. On the card
+ * itself a platform emoji is not an option (see the note above), and a bare
+ * "× 2" beside a barcode reads as a quantity of nothing in particular.
+ *
+ * Drawn at the same 1.6 stroke weight as `LetterMark` so the two read as one
+ * family. The notches are exact semicircles (radius = half the chord), which is
+ * what makes the silhouette a ticket at 13px rather than a rounded rectangle.
+ */
+export function TicketMark(): ReactElement {
+  return (
+    <svg viewBox={BOX} aria-hidden="true" focusable="false" shapeRendering="geometricPrecision">
+      <path
+        d="M4.4 6.4h15.2a1.8 1.8 0 0 1 1.8 1.8v2a1.8 1.8 0 0 0 0 3.6v2a1.8 1.8 0 0 1-1.8 1.8H4.4a1.8 1.8 0 0 1-1.8-1.8v-2a1.8 1.8 0 0 0 0-3.6v-2a1.8 1.8 0 0 1 1.8-1.8Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M15.4 8.6v6.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeDasharray="1.7 1.7"
+      />
+    </svg>
+  );
+}
+
 /** Check — the "paid" seal. */
 export function CheckMark(): ReactElement {
   return (
