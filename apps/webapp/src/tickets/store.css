@@ -48,6 +48,24 @@
   background: var(--glass-press);
 }
 
+/* DARK: the ordinary rungs carry no edge light at all. They are separated from
+   the page by being a step LIGHTER than it (0.085 white over #030303 ≈ #1a1a1a,
+   near-black but visibly grey) and by the shadow underneath — tint and
+   elevation, which is what theme.css says structure is allowed to use.
+   This makes the house sheen mean something on this screen instead of being
+   worn by every row: light is now spent on the two rows that have something to
+   say — the recommended one, and the one-time loyalty deal below, whose rose
+   temperature IS its meaning and is therefore left alone (it only ever renders
+   on the mock rail, so production's Stars store shows two flat rows and one lit
+   burgundy button). On the cream page the sheen stays: there it is a shading
+   inward rather than a glow, and without it a white row on a white page has no
+   edge at all. */
+:root[data-theme="dark"]
+  .store-bundle:not(.store-bundle-best):not(.store-bundle-famine) {
+  background: rgba(255, 255, 255, 0.085);
+  box-shadow: var(--glass-shadow);
+}
+
 /* The recommended rung: a FILLED burgundy button carrying WHITE light, not
    glass carrying burgundy light.
    This reverses the 2026-08-08 pass, which stripped the fill on the argument
@@ -62,23 +80,37 @@
 .store-bundle-best {
   color: #fff;
   border-color: transparent;
-  background:
-    linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.26),
-      rgba(255, 255, 255, 0) 16%,
-      rgba(255, 255, 255, 0) 84%,
-      rgba(255, 255, 255, 0.2)
-    ),
-    linear-gradient(160deg, #a23350 0%, #8b253b 55%, #6f1c2f 100%);
-  /* Exactly `.btn-hero`'s shadow list and nothing else. An outer burgundy glow
-     was tried here for separation from the two glass rows above and dropped:
-     it haloed the row and made the fill read washed rather than deep, which is
-     the failure this change exists to fix. The rows are 22px apart already. */
-  box-shadow: var(--sheen-on-accent);
+  /* One fill, no white edge wash on top of it. The wash used to be a 90deg
+     gradient bright at both ends — and the left end is exactly where the count
+     emblem sits (18px padding + a 52px tile lands inside the first ~19% of the
+     row), so the layer whose job was "edge light" was in practice painting over
+     the number the row is selling. The sheen below already lights the edges. */
+  background: linear-gradient(160deg, #a23350 0%, #8b253b 55%, #6f1c2f 100%);
+  /* Deliberately NOT `--sheen-on-accent` verbatim any more, which is a real
+     divergence from `.btn-hero` and needs its reason recorded: the hero button
+     is centred text on empty fill, so light hugging its sides lands on nothing.
+     This row has a 52px emblem hard against the left inset and a floating
+     saving pill at the right, so the same side light lands on CONTENT. The
+     vertical light (which crosses only fill) is untouched; the horizontal pair
+     is cut to a whisper. An outer burgundy glow was tried for separation from
+     the rows above and dropped — it haloed the row and made the fill read
+     washed rather than deep. The rows are 22px apart already. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.44),
+    inset 0 10px 20px -14px rgba(255, 255, 255, 0.6),
+    inset 0 -10px 20px -14px rgba(255, 255, 255, 0.46),
+    inset 7px 0 18px -15px rgba(255, 255, 255, 0.24),
+    inset -7px 0 18px -15px rgba(255, 255, 255, 0.24),
+    inset 0 -2px 6px rgba(74, 16, 31, 0.18);
 }
+/* LIGHT: no inner light at all. On cream, a white rim held just inside a
+   burgundy button does not read as light coming from the edge — it reads as a
+   white FRAME drawn around the fill, which is the one thing this row must not
+   have. What separates it from the page here is the page itself (dark on light)
+   plus the shadow underneath, so the rim buys nothing and costs the silhouette. */
 :root[data-theme="light"] .store-bundle-best {
   border-color: transparent;
+  box-shadow: 0 12px 26px -14px rgba(111, 28, 47, 0.5);
 }
 .store-bundle-best:active {
   filter: brightness(0.93);
@@ -181,6 +213,23 @@
   box-shadow: var(--sheen-neutral);
   font-family: "Space Grotesk", "Inter", sans-serif;
   color: var(--accent-bright);
+}
+/* DARK: a properly saturated burgundy tile. `--accent-soft` is 0.18 alpha, which
+   over a near-black row resolves to about #2b1017 — a tile that is technically
+   burgundy and reads as dark grey, and now that the row around it is flat it was
+   the only thing left to carry colour. Scoped past the best row, whose emblem is
+   white-on-burgundy and whose override would otherwise lose on specificity. */
+:root[data-theme="dark"] .store-bundle:not(.store-bundle-best) .store-bundle-emblem {
+  background: linear-gradient(
+    160deg,
+    rgba(196, 56, 88, 0.42),
+    rgba(139, 37, 59, 0.3)
+  );
+  color: #e8748d;
+  /* And no white halo held inside its edges: it was the one thing left washing
+     the burgundy paler at exactly the four edges, and a lit tile inside an
+     unlit row is the same object saying two different things about the light. */
+  box-shadow: none;
 }
 .store-bundle-emblem-x {
   font-size: 13px;

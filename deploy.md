@@ -8,19 +8,30 @@ diff is `apps/webapp/**` plus docs. **Deploy Mini App Only**
 `pm2 restart`**. Run `pnpm demo:deploy` too — the demo builds its own bundle from
 the same source, and the mock/USD branch is only reachable there.
 
-A second pass over the two ticket screens, all of it from founder review of the
-first one (shipped in the block further down, still undeployed — **the two are
-one Mini App build**, so whichever redeploy happens first carries both).
+A second and third pass over the two ticket screens, both from founder review of
+the first one (shipped in the block further down, still undeployed — **all of it
+is one Mini App build**, so whichever redeploy happens first carries everything).
 
-**Four things worth knowing before the redeploy:**
+**Five things worth knowing before the redeploy:**
 
 - **The recommended bundle gets its burgundy fill BACK**, in both themes,
   reversing the earlier block's "no fill, burgundy light on glass". That earlier
-  call was made on the dark theme and failed on cream — see DECISIONS.md. It is
-  now literally `.btn-hero`: same fill, same `--sheen-on-accent`, same shadow
-  list with nothing added. **The dark theme changes too**, which the founder did
-  not ask for; a rung that is a filled button on one theme and a glass row on the
-  other is two components.
+  call was made on the dark theme and failed on cream — see DECISIONS.md. **The
+  dark theme changes too**, which the founder did not ask for; a rung that is a
+  filled button on one theme and a glass row on the other is two components.
+  Its **edge light now diverges from `.btn-hero`** and that is deliberate: the
+  white 90° wash layer is gone (it painted over the count emblem, which sits in
+  the first ~19% of the row), the side insets are a whisper on dark, and on
+  light there is no inner light at all — a white rim inside a burgundy button
+  reads as a frame on cream. `.btn-hero` itself is untouched and keeps the full
+  recipe; the two are never on screen together.
+- **On dark, the two ordinary bundle rows lose the sheen entirely** and are
+  lifted by tint instead (≈`#1a1a1a` over the `#030303` page, plus the existing
+  drop shadow), and their count tiles become a saturated burgundy with no white
+  halo. The famine row keeps its rose light — that temperature is its meaning,
+  and it only renders on the mock rail. So production's Stars store is two flat
+  rows and one lit burgundy button; the demo shows the rose one between them.
+  Light theme is unchanged here.
 - **The ticket card's geometry is now fixed, not content-derived** (268 × 392).
   Before, the gate's card and the store's card were different shapes because one
   prints a name row. If a future line is added to the card, it eats into the
@@ -45,8 +56,10 @@ for p in ticket tickets; do curl -sI "https://dating-calendar.gennety.com/$p.htm
 # Then, on @gennetytestbot:
 #   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-stage-all-screens.mjs --apply
 # Look for: a clearly PORTRAIT card with no serial and no moving highlight; the
-# notch cutouts landing exactly on the dashed tear line; and the ×6 row reading
-# as burgundy-deep rather than pink-washed on BOTH themes.
+# notch cutouts landing exactly on the dashed tear line; the ×6 row reading as
+# burgundy-deep rather than pink-washed on BOTH themes, with its "6" clean and
+# not washed pale at the left edge; and, on dark only, the ×1/×3 rows reading as
+# flat lifted grey with no glow inside their edges.
 ```
 
 **Rollback:** redeploy the Mini App from the previous checkout, and

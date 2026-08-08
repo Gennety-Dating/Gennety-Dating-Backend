@@ -2713,9 +2713,9 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   and the gate's hero button carry the house **inner-edge sheen** — four inset
   shadows pulled back past the border by a negative spread, so the light reads
   as coming from the border inward (the same recipe as onboarding's action pill,
-  referral's share button and the height drum's capsule). The ordinary rungs
-  carry neutral light and the one-time famine deal carries warm rose, so on
-  those two the temperature IS the meaning. On the light theme the geometry
+  referral's share button and the height drum's capsule). The one-time famine
+  deal carries warm rose, so there the temperature IS the meaning. On the light
+  theme the geometry
   survives but the polarity inverts (a white card cannot be lit whiter from its
   own edges, so the light becomes a shading inward) and a hairline is added, for
   the same reason `.ob-wheel-capsule` needed one. The hero button's travelling
@@ -2729,10 +2729,9 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
     temperature says "this one" twice. That held on the dark theme and failed on
     cream: burgundy light shading inward on a white card is a smudge, not an
     emphasis, so the strongest offer on the screen read as the weakest row. It
-    is now literally `.btn-hero` — the same two-layer burgundy fill, the same
-    `--sheen-on-accent` white light held inside its own edges, white type, and
-    the same shadow list with nothing added (an outer burgundy glow was tried
-    for separation and dropped: it haloed the row and re-created the washed
+    is the same object as `.btn-hero` — the two-layer burgundy fill, white light
+    held inside its own edges, white type (an outer burgundy glow was tried for
+    separation and dropped: it haloed the row and re-created the washed
     look). This does not break "exactly one loud button per screen" — the store
     has no hero of its own, since its action bar appears only after a purchase.
     Applied in **both** themes deliberately: a rung that is a filled button on
@@ -2742,12 +2741,42 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
     than going grey (which turns muddy on this fill), and the saving pill
     inverts to near-white with burgundy type — it used to be a burgundy gradient
     on burgundy, i.e. the single best saving on the screen, invisible.
+    **Its fill is one gradient, and its edge light differs by theme** (revised
+    the same day). It shipped with a second layer on top — a 90° white wash
+    bright at both ends — which was doing the job of edge light in the one place
+    edge light must not land: the left end is where the count emblem sits (18px
+    of padding plus a 52px tile falls inside the first ~19% of the row), so the
+    layer washed out the very number the row is selling. That layer is gone, and
+    the *horizontal* pair of the inset sheen is cut to a whisper for the same
+    reason, while the vertical pair — which crosses only fill — is untouched.
+    This is a real divergence from `.btn-hero` and it is structural rather than
+    a matter of taste: the hero button is centred text on empty fill, so light
+    hugging its sides lands on nothing, and it keeps the full recipe. On the
+    **light** theme the row carries **no inner light at all**: on cream, a white
+    rim held just inside a burgundy button does not read as light coming from
+    the edge, it reads as a white FRAME drawn around the fill. What separates it
+    from the page there is the page itself plus the shadow underneath.
+  - **On the dark theme, light is a signal rather than a finish** (added the
+    same day). The two ordinary rungs carry **no edge light**: they are lifted
+    off the near-black page by being a step lighter than it (about `#1a1a1a` —
+    black, but visibly grey) and by the shadow underneath, which is tint and
+    elevation, exactly what the shared theme rules allow structure to use. The
+    sheen then belongs only to the two rows that have something to say — the
+    recommendation and the one-time deal — instead of being worn by every row,
+    which is what made it read as a finish. On the cream page the sheen stays on
+    all of them: there it is a shading inward, and without it a white row on a
+    white page has no edge at all.
   - **The count emblem sets the number, not a formula.** It printed "×3" as one
     17px string, so the multiplication sign carried as much weight as the digit
     — and the digit is the only part anyone reads. The digit is now 26px with
     the "×" a small mark beside it, optically centred against the digit's
-    x-height rather than sat on the baseline, and the tile carries the house
-    light instead of a flat accent wash.
+    x-height rather than sat on the baseline. On dark it is a properly saturated
+    burgundy tile with no white halo inside its edges: `--accent-soft` is 0.18
+    alpha, which over a near-black row resolves to roughly `#2b1017` — a tile
+    that is technically burgundy and reads as dark grey — and once the row
+    around it went flat, the tile was the only thing left carrying colour. A lit
+    tile inside an unlit row is also one object saying two things about where
+    the light comes from.
 - **The store's heading carries no 🎟️, and gets its weight from size
   (2026-08-08, Telegram-only).** A rendered ticket is the largest thing on that
   screen, so an emoji of one above it restated the picture in a platform font we

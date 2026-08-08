@@ -47,6 +47,51 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — on the dark theme the store's ordinary rows carry no light at all
+
+**Kind:** founder decision
+**What:** the two glass bundle rows lose the inner-edge sheen on dark and are
+lifted by tint instead (a step lighter than the near-black page, plus the
+shadow underneath). The sheen survives on the recommended row, on the one-time
+famine row, and on both of them plus the ordinary rows on the light theme.
+**Why:** the founder's words were "сделать их чёрными… а чуть более светлыми…
+за счёт этого оттенок выделит их" — and the reason it is worth an entry rather
+than a commit message is what it does to the rule above it. Light was being
+worn by every row, which makes it a finish; spent on two rows, it is a signal,
+and it now says the same kind of thing colour already says under "colour =
+meaning". On cream the sheen has to stay: there it is a shading inward, and a
+white row on a white page has no edge without it.
+**What it changes going forward:** the house sheen is no longer "every
+interactive surface gets it". On a dark surface, ask what it is distinguishing;
+if the answer is nothing, tint and elevation are the correct tools. The famine
+row is deliberately exempt — its rose temperature IS its meaning — so a future
+pass must not fold it in with the ordinary rows for tidiness.
+**Recorded in:** PRODUCT_SPEC.md §3.5b → "One light, everywhere";
+`apps/webapp/src/tickets/store.css`.
+
+## 2026-08-08 — the recommended row's edge light diverges from `.btn-hero`, on purpose
+
+**Kind:** change of mind
+**What:** the burgundy row drops the white 90° wash layer from its fill, cuts
+the horizontal half of its inset sheen to a whisper on dark, and carries **no**
+inner light at all on light. Hours earlier the same day I had written that it
+was "exactly `.btn-hero`'s shadow list and nothing else", and treated that
+identity as the thing to protect.
+**Why:** the identity was protecting the wrong property. The hero button is
+centred text on empty fill, so light hugging its sides lands on nothing. This
+row has a 52px count emblem hard against the left inset — inside the first ~19%
+of the width — so the same light lands on the one number the row is selling,
+and the founder read it exactly that way ("засвечивает циферку шесть"). On
+cream the rim had a second failure mode: white held just inside a burgundy
+button does not read as light from the edge, it reads as a frame drawn around
+the fill.
+**What it changes going forward:** two components that look alike are not
+automatically one component. Before copying a shadow list between surfaces,
+check what sits under the light — an edge treatment is safe over fill and is
+not safe over content. `.btn-hero` itself is unchanged and keeps the full
+recipe; the two are never on screen together (store vs gate).
+**Recorded in:** PRODUCT_SPEC.md §3.5b; `apps/webapp/src/tickets/store.css`.
+
 ## 2026-08-08 — the recommended bundle gets its burgundy fill back, in both themes
 
 **Kind:** founder decision
