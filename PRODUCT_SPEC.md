@@ -4253,12 +4253,14 @@ Other safeguards:
 - `autoUnsuspendElapsed` runs hourly so a 14-day Tier-2 suspension that
   expires mid-week reactivates within the hour rather than waiting for the
   next Thursday batch.
-- `MatchEvent` rows (`PROPOSAL_SHOWN`, `ACCEPTED`, `DECLINED`,
-  `EXPIRED_SILENT`, `EXPIRED_PEER_IGNORED`, `DATE_COMPLETED`,
-  `CHEMISTRY_POSITIVE`, `CHEMISTRY_NEGATIVE`) drive Elo updates and the
-  admin dashboard's behavioural views. Emergency cancellation's small peer
-  boost is applied directly by `handlers/date/emergency.ts` and does not
-  increment `eloMatchesPlayed`.
+- `MatchEvent` rows (`ACCEPTED`, `DECLINED`, `EXPIRED_SILENT`,
+  `EXPIRED_PEER_IGNORED`, `CHEMISTRY_POSITIVE`, `CHEMISTRY_NEGATIVE`) drive Elo
+  updates and the admin dashboard's behavioural views. The enum also declares
+  `PROPOSAL_SHOWN` and `DATE_COMPLETED`, and **nothing writes either**
+  (ARCHITECTURE.md → `match_events`) — a completed date leaves no
+  `DATE_COMPLETED` row, so read completion from `Match.status`. Emergency
+  cancellation's small peer boost is applied directly by
+  `handlers/date/emergency.ts` and does not increment `eloMatchesPlayed`.
 
 ## Cross-Cutting Concerns
 

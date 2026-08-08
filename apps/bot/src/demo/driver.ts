@@ -28,6 +28,7 @@ import {
   KEEP_KEY,
 } from "../handlers/matching/venue-change.js";
 import { runDateLifecycleTick } from "../services/date-lifecycle.js";
+import { runCoordinationTick } from "../services/coordination.js";
 
 import { createFailureTracker } from "./failure-tracker.js";
 
@@ -556,7 +557,14 @@ async function performAction(
     }
 
     case "run_predate":
-      return runDemoPredate(api, userId, telegramId, lang, snapshot.match!.agreedTime);
+      return runDemoPredate(
+        api,
+        userId,
+        telegramId,
+        lang,
+        snapshot.match!.id,
+        snapshot.match!.agreedTime,
+      );
   }
 }
 
@@ -574,6 +582,7 @@ export async function runDemoPredate(
   userId: string,
   telegramId: bigint,
   lang: Language | null,
+  matchId: string,
   agreedTime: Date | null,
 ): Promise<DemoActionOutcome> {
   if (spokenBeats.get(userId)?.has("predate")) return ACTED;
@@ -581,7 +590,7 @@ export async function runDemoPredate(
 
   await say(api, telegramId, demoText("predate", lang));
   try {
-    await replayDateLifecycle(api, agreedTime);
+    await replayDateLifecycle(api, matchId, agreedTime);
   } catch (err) {
     // The claim above is NOT released: the narration has already gone out, and
     // re-running would promise the pre-date days a second time. What must not
@@ -877,22 +886,56 @@ async function submitPuppetLikes(
  * idempotency column, so shifting `now` to each gate is enough to fire the real
  * ice-breakers, the emergency window, the safety brief, the wingman hint and
  * the feedback prompt in order. No demo-specific lifecycle code exists.
+ *
+ * **`runCoordinationTick` has to be replayed too, and used not to be.** It is a
+ * SEPARATE sweep, called from `index.ts` on the real clock — so a demo that
+ * replayed only the lifecycle silently skipped the whole hour before the date:
+ * the "how do we find each other" offer at T-60m, the anonymous chat at T-30m,
+ * and all five coordination cards, with `COORDINATION_FEATURE_ENABLED` on the
+ * entire time. The first demo ever to reach a scheduled date is what surfaced
+ * it — `coordOfferSentAt` and `proxyOpenedAt` were both still null at the end.
  */
 async function replayDateLifecycle(
   api: Api<RawApi>,
+  matchId: string,
   agreedTime: Date | null,
 ): Promise<void> {
   if (!agreedTime) return;
   const at = agreedTime.getTime();
-  const gates = [
-    at - 2 * 60 * 60 * 1000, // T-2h  → ice-breakers + emergency window
-    at - 30 * 60 * 1000, // T-30m → wingman reveal + safety brief
-    at + 25 * 60 * 60 * 1000, // T+25h → feedback prompt
+  const gates: Array<{ at: number; needsCoordMethod?: true }> = [
+    { at: at - 2 * 60 * 60 * 1000 }, // T-2h  → ice-breakers + emergency window
+    { at: at - 45 * 60 * 1000 }, // T-45m → the coordination offer (T-60m passed)
+    // T-30m → wingman reveal + safety brief + the anonymous chat opens
+    { at: at - 30 * 60 * 1000, needsCoordMethod: true },
+    { at: at + 25 * 60 * 60 * 1000 }, // T+25h → feedback prompt, chat closed
   ];
   for (const gate of gates) {
-    await runDateLifecycleTick(api, new Date(gate));
+    const now = new Date(gate.at);
+    if (gate.needsCoordMethod) await defaultCoordMethodToProxy(matchId);
+    await runDateLifecycleTick(api, now);
+    await runCoordinationTick(api, now);
     await sleep(4_000);
   }
+}
+
+/**
+ * Give the pair a coordination method if they have not chosen one.
+ *
+ * `openProxies` only opens the chat for a match whose `coordMethod` is set, and
+ * in the product that is a tap on the offer card. A demo cannot depend on one
+ * landing inside a four-second beat — the visitor is reading, not racing a
+ * timer — so an unanswered offer resolves to the anonymous chat, which is both
+ * the interesting variant and the same default a pair the Telegram fork cannot
+ * reach already gets (`services/coordination.ts`).
+ *
+ * Guarded on `coordMethod: null`, so a visitor who DID tap keeps their choice:
+ * the demo fills a silence, it never overrides a decision.
+ */
+async function defaultCoordMethodToProxy(matchId: string): Promise<void> {
+  await prisma.match.updateMany({
+    where: { id: matchId, coordMethod: null },
+    data: { coordMethod: "proxy", coordChosenAt: new Date() },
+  });
 }
 
 // ── Recovery ───────────────────────────────────────────────────────────────

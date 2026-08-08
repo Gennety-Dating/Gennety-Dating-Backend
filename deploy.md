@@ -1,5 +1,51 @@
 # Gennety Dating Deploy
 
+**PENDING — the demo replays the hour before the date, which it never did
+(DEMO_MODE.md).** Not deployed yet. **Demo only** — `apps/bot/src/demo/**` plus
+docs, so **nothing to rsync to `/opt/gennety`, no production restart**.
+`pnpm demo:deploy` is the whole deploy. No schema, no env, no flag change.
+
+Found by the first demo run ever to reach a scheduled date. It finished
+correctly (`status: completed`, real venue, date card rendered,
+`venue_selection_logs` 0 → 1) but `coordOfferSentAt` and `proxyOpenedAt` were
+both still null: `runCoordinationTick` is a **separate sweep** from
+`runDateLifecycleTick`, called from `index.ts` on the real clock, and the demo
+replayed only the lifecycle. So the T-60m "how do we find each other" offer, the
+T-30m anonymous chat and all five coordination cards were invisible in the demo
+— with the flag on the whole time. Both take an injected clock, so the replay now
+calls both, at gates `−2h / −45m / −30m / +25h` (the extra gate keeps the offer
+and the chat opening as two separate beats).
+
+**⚠️ Related correction, no action needed:** two blocks below claimed
+`COORDINATION_FEATURE_ENABLED` is **off** in production. It is **on**, and has
+been — `GET /v1/app/config` reports `features.coordination: true`. Both blocks
+now carry a note in place. Nothing has exercised it because production has had
+0 dates ever.
+
+**Two things worth knowing:**
+
+- **One demo-only branch:** an unanswered coordination offer resolves to the
+  anonymous chat. `openProxies` needs `coordMethod`, which in the product comes
+  from a tap, and a demo cannot depend on a tap landing inside a four-second
+  beat. Guarded on `coordMethod: null`, so a visitor who did tap keeps theirs.
+- **A same-sex pair still cannot show everything.** The safety brief goes to the
+  female participant, so a male visitor will correctly never see it — same for
+  the hetero-only cover gesture, wish card and express venue change. That needs
+  a second run from the other side, not a code change.
+
+Post-deploy check — walk a demo to a scheduled date, tap «Что происходит
+дальше», then confirm the two columns are no longer null:
+
+```sh
+pnpm demo:deploy
+# In the demo DB: coord_offer_sent_at and proxy_opened_at must both be set,
+# and coord_method should read 'proxy' for an untapped offer.
+```
+
+**Rollback:** revert and `pnpm demo:deploy`. Production is untouched.
+
+---
+
 **PENDING — free text that isn't an answer stops being recorded as one
 (PRODUCT_SPEC §1.3, §Phase 1b, §3.4).** Not deployed yet. **No Prisma schema
 change, no env change, no flag change, no Mini App change** (`apps/webapp`
@@ -262,13 +308,19 @@ undo — no schema, no env, no flag, no server state.
 **Deployed 2026-08-07 (was PENDING) — the anonymous pre-date chat reaches the
 native client, and opens at all for a pair with an app participant
 (PRODUCT_SPEC §Phase 4).** Deployed 2026-08-07 in the release at the top of this
-file; still inert (`COORDINATION_FEATURE_ENABLED` off). **No Prisma schema change, no env change, no flag change, no Mini App
+file. **No Prisma schema change, no env change, no flag change, no Mini App
 change** (`apps/webapp` untouched) — half of it is client, so the iOS app ships
 with it (separate repo).
 
-**Inert in production**: `COORDINATION_FEATURE_ENABLED` is off, so every route
-here 404s and the sweep does nothing. It ships now so the client half has a
-contract to build against.
+**⚠️ This block said "inert in production — the flag is off". That was wrong**
+(corrected 2026-08-08). `COORDINATION_FEATURE_ENABLED=true` has been in
+`/opt/gennety/.env` (line 70) for some time, and the running process confirms
+it: `GET /v1/app/config` answers `features.coordination: true`. So these routes
+are **live**, and the T-60m offer plus the anonymous chat are real behaviour for
+real users. What made the error invisible is that production has had **0 dates
+ever**, so nothing has ever reached T-60m to exercise them. Read the flag off
+`/v1/app/config`, never off a sentence in this file — an older block one screen
+down states the opposite, and only one of them could be right.
 
 New: `GET/POST /v1/matches/{id}/chat` (JWT), plus `services/proxy-chat.ts` —
 the window, the `proxy_messages` write and delivery, shared with the Telegram
@@ -2377,12 +2429,13 @@ already-deployed satori/resvg/canvas stack and the already-bundled fonts, so
 
 **Three things worth knowing before the restart:**
 
-- **It is inert in production today.** `COORDINATION_FEATURE_ENABLED` gates the
-  cron sweep that sends the T-60m offer and opens the T-30m window, and it is
-  **off** in `/opt/gennety/.env`. The Variant A/B callback handlers are
-  registered unconditionally, but they can only be reached from an offer that
-  the disabled sweep never sends. Nothing changes for users until that flag is
-  a separate decision.
+- **⚠️ "Inert in production today" was wrong** (corrected 2026-08-08).
+  `COORDINATION_FEATURE_ENABLED=true` is set in `/opt/gennety/.env` and the
+  running process reports `features.coordination: true` on `/v1/app/config`, so
+  the sweep DOES send the T-60m offer and DOES open the T-30m window. The cards
+  in this block are therefore live. Nothing has exercised them only because
+  production has had **0 dates ever** — which is why the mistake cost nothing
+  and also why it went unnoticed for six days.
 - **Fail-open is the load-bearing property, not the cards.** A null render, a
   caption over Telegram's 1024-char photo limit, or a rejected `sendPhoto` each
   fall through to the exact plain-text DM the flow sends today. This DM lands

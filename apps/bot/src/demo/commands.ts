@@ -119,10 +119,17 @@ demoRouter.callbackQuery(DEMO_PREDATE_CALLBACK, async (ctx) => {
       OR: [{ userAId: user.id }, { userBId: user.id }],
     },
     orderBy: { createdAt: "desc" },
-    select: { agreedTime: true },
+    select: { id: true, agreedTime: true },
   });
   if (!match) return;
 
   await ctx.editMessageReplyMarkup().catch(() => undefined);
-  await runDemoPredate(ctx.api, user.id, BigInt(telegramId), user.language, match.agreedTime);
+  await runDemoPredate(
+    ctx.api,
+    user.id,
+    BigInt(telegramId),
+    user.language,
+    match.id,
+    match.agreedTime,
+  );
 });

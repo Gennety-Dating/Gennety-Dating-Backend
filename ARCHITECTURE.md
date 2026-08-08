@@ -323,6 +323,19 @@ Emergency cancellation's small peer boost is applied directly by
 `(matchId, createdAt)`, `(actorId, createdAt)`, `(targetId, createdAt)`,
 `(actionType, createdAt)`.
 
+**Two of the eight enum values are never written** (measured 2026-08-08, after a
+demo run that reached the post-date feedback produced no row for either):
+`PROPOSAL_SHOWN` and `DATE_COMPLETED` exist in `MatchEventActionType` and have
+**no write site anywhere** in `apps/bot/src` or `packages`. The six that are
+emitted are `ACCEPTED`, `DECLINED`, `EXPIRED_SILENT`, `EXPIRED_PEER_IGNORED`,
+`CHEMISTRY_POSITIVE`, `CHEMISTRY_NEGATIVE`. This matters to anyone reading the
+table as a funnel: a date that actually happened leaves **no** `DATE_COMPLETED`
+row, so completion must be read from `Match.status = 'completed'` (set by
+`date-lifecycle.ts` at the T+24h feedback prompt), and dispatch from
+`Match.dispatchedAt` rather than from `PROPOSAL_SHOWN`. The values are kept in
+the enum because dropping one is a migration on a shared production enum for no
+behavioural gain; treat them as reserved, not as data.
+
 ### `reports`
 
 Post-match user-vs-user reports. LLM-triaged into `tier` 1/2/3

@@ -104,7 +104,7 @@ different snapshot, not as a broken hook.
 | board, still no overlap | heart one of theirs → agreement | `submitVenueLikes` |
 | board `agreed`, puppet is payer | settle | `settleFreeVenueChange` |
 | `scheduled` | hand over the date card, then wait | — |
-| `scheduled`, visitor tapped / 7 min | explain the wait, then replay it | `runDateLifecycleTick` ×3 |
+| `scheduled`, visitor tapped / 7 min | explain the wait, then replay it | `runDateLifecycleTick` + `runCoordinationTick`, ×4 gates |
 | terminal | say which ending it was, offer the way back | — |
 
 The two "different first" steps matter: they are what make the negotiation read
@@ -184,12 +184,40 @@ The puppet answers only after the visitor has committed, and always with a yes.
 This is the same invariant the product enforces (PRODUCT_SPEC §3.4) — the demo
 does not weaken it, it simply has a partner who is reliably keen.
 
-### The pre-date replay needs no new code
+### The pre-date replay needs no new lifecycle code — but it needs BOTH sweeps
 
 `runDateLifecycleTick(api, now)` accepts an injected clock and every step claims
-its own idempotency column, so the driver calls it three times with `now` set to
-`agreedTime − 5h`, `− 1.5h` and `+ 25h`. The real ice-breakers, emergency
-window, safety brief, wingman hint and feedback prompt fire in order.
+its own idempotency column, so the driver replays it at shifted gates and the
+real ice-breakers, emergency window, safety brief, wingman hint and feedback
+prompt fire in order.
+
+**`runCoordinationTick` is a SEPARATE sweep and has to be replayed too.** It is
+called from `index.ts` on the real clock, so a replay that shifted only the
+lifecycle silently skipped the whole hour before the date: the T-60m "how do we
+find each other" offer, the T-30m anonymous chat, and all five coordination
+cards — with `COORDINATION_FEATURE_ENABLED` on the entire time. The first demo
+ever to reach a scheduled date is what surfaced it; `coordOfferSentAt` and
+`proxyOpenedAt` were both still null when the run finished. It takes an injected
+clock as well, so the fix is to call both at every gate, plus one extra gate at
+T-45m so the offer and the chat opening read as two beats instead of arriving
+together.
+
+Gates: `agreedTime − 2h`, `− 45m`, `− 30m`, `+ 25h`.
+
+One demo-only branch is needed here. `openProxies` only opens the chat for a
+match whose `coordMethod` is set, and in the product that is a **tap** on the
+offer card. A demo cannot depend on a tap landing inside a four-second beat —
+the visitor is reading, not racing a timer — so an unanswered offer resolves to
+the anonymous chat, which is both the interesting variant and the same default a
+pair the Telegram fork cannot reach already gets. Guarded on
+`coordMethod: null`, so a visitor who did tap keeps their choice: the demo fills
+a silence, it never overrides a decision.
+
+**A same-sex pair cannot show every screen.** The pre-date safety brief is
+addressed to the female participant, so a male visitor matched with the male
+puppet will correctly never see it — as with the "pay for us both" cover
+gesture, the wish card and express venue change, which are hetero-only by
+design. Covering those needs a second run from the other side.
 
 ### What is held in memory (and why nothing is in the schema)
 

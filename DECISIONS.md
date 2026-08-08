@@ -115,6 +115,53 @@ a product decision with its own UI, not an extension of this classifier.
 
 ---
 
+## 2026-08-08 — the first complete demo run, and what it found
+
+**Kind:** deviation from plan + a document turned out to be wrong
+**What:** the founder walked the demo end to end for the first time. It reached
+`status: completed` with a real venue, a rendered date card and the feedback
+prompt — and `venue_selection_logs` went from 0 to 1, i.e. the venue engine ran
+in the demo for the first time ever. Three things did not fire; only one was a
+bug.
+**Why each:**
+- **Pre-date coordination never ran (real bug).** `runCoordinationTick` is a
+  SEPARATE sweep from `runDateLifecycleTick`, called on the real clock, so the
+  demo's replay skipped the whole hour before the date — offer, anonymous chat
+  and all five coordination cards — with the flag on the entire time. Fixed.
+- **The safety brief did not fire (not a bug).** It addresses the female
+  participant and the pair was male+male. It is a *coverage* limit: a male
+  visitor can never see it, nor the hetero-only cover gesture, wish card or
+  express venue change. A second run from the other side is the only way.
+- **`DATE_COMPLETED` never appeared — because nothing writes it.** I had told
+  the founder that event would be the proof the demo finished. It and
+  `PROPOSAL_SHOWN` are declared in `MatchEventActionType` and have no write site
+  anywhere. Completion is `Match.status`, dispatch is `Match.dispatchedAt`.
+**What it changes going forward:** a new sweep on the date-lifecycle interval
+must be added to the demo replay as well — the replay is not "the lifecycle", it
+is "everything the interval does". And `match_events` is not a funnel: two of
+its eight values are reserved, not data.
+**Recorded in:** DEMO_MODE.md → "the pre-date replay … needs BOTH sweeps";
+ARCHITECTURE.md → `match_events`; PRODUCT_SPEC.md §Phase 5.
+
+## 2026-08-08 — deploy.md said coordination was off in production; it has been on
+
+**Kind:** a document turned out to be wrong
+**What:** two deploy.md blocks stated `COORDINATION_FEATURE_ENABLED` is **off**
+in production and that the pre-date coordination routes were therefore inert. It
+is `true` in `/opt/gennety/.env` (line 70) and the running process confirms it —
+`GET /v1/app/config` answers `features.coordination: true`. A third block, from
+2026-08-02, said the opposite and was right; the file had been contradicting
+itself for six days. I repeated the wrong version to the founder before checking.
+**Why it went unnoticed:** production has had **0 dates ever**, so nothing has
+reached T-60m and the feature has never actually fired there. A flag being on
+looks exactly like a flag being off when no data can exercise it.
+**What it changes going forward:** read a flag off `/v1/app/config` (or the
+running process), never off a sentence in deploy.md — that file carries per-release
+snapshots that age, and a later block can silently contradict an earlier one. When
+a block asserts "inert in production", the assertion needs a runtime check beside
+it, not a claim.
+**Recorded in:** deploy.md → both corrected blocks carry a ⚠️ note in place.
+
 ## 2026-08-07 — a broken demo says so out loud rather than going quiet
 
 **Kind:** founder decision
