@@ -263,7 +263,8 @@ export function App(): ReactElement {
                     </span>
                   )}
                   <span className="store-bundle-emblem" aria-hidden="true">
-                    ×{b.count}
+                    <span className="store-bundle-emblem-x">×</span>
+                    <span className="store-bundle-emblem-n">{b.count}</span>
                   </span>
                   <span className="store-bundle-info">
                     <span className="store-bundle-main">
@@ -295,7 +296,8 @@ export function App(): ReactElement {
                 )
               )}
               <span className="store-bundle-emblem" aria-hidden="true">
-                ×{b.count}
+                <span className="store-bundle-emblem-x">×</span>
+                <span className="store-bundle-emblem-n">{b.count}</span>
               </span>
               <span className="store-bundle-info">
                 <span className="store-bundle-main">

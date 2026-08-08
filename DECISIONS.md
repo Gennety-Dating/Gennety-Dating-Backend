@@ -47,6 +47,52 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — the recommended bundle gets its burgundy fill back, in both themes
+
+**Kind:** founder decision
+**What:** `.store-bundle-best` becomes a filled burgundy button carrying white
+inner-edge light — literally `.btn-hero`'s recipe — reversing the decision made
+a few hours earlier the same day, which stripped the fill and left burgundy
+light on glass.
+**Why:** that earlier reasoning ("a colour plus a light temperature says 'this
+one' twice") was derived on the dark theme, where it holds, and it failed on
+cream: burgundy light shading inward on a white card is a smudge rather than an
+emphasis, so the best offer on the screen rendered as the weakest row. The
+founder described the fix precisely — burgundy button, white light, white
+elements inside — which is the recipe that already exists as `--sheen-on-accent`.
+**What it changes going forward:** the "exactly one loud button per screen" rule
+is intact but now needs stating for this screen: the store HAS no hero button
+(its action bar appears only after a purchase), so the recommended bundle is it.
+Applied in **both** themes on purpose — a rung that is a filled button on one
+theme and a glass row on the other is two components, and every later edit would
+have to be checked twice. The row's shadow list must stay byte-identical to
+`.btn-hero`'s: an outer burgundy glow was tried here for separation from the two
+rows above and dropped, because it haloed the row and re-created the washed look
+this change exists to remove.
+**Recorded in:** PRODUCT_SPEC.md §3.5b → "One light, everywhere";
+`apps/webapp/src/tickets/store.css`.
+
+## 2026-08-08 — the ticket's specular highlight is deleted, not tuned a third time
+
+**Kind:** change of mind
+**What:** `.ticket-glare` and the `--gp` rotation binding are removed outright.
+Earlier the same day the highlight went from a soft radial blob to a narrow
+raking band; the founder's verdict on the band was that it still reads wrong, so
+the element is gone rather than retuned.
+**Why:** worth an entry because the failure is structural, not parametric, and
+the next person will otherwise try a fourth version. A highlight is a reflection
+OF something. This card sits on a flat page with no light source, so whatever we
+draw is a guess about a lamp that does not exist, and the eye reads a wrong
+guess as paint on the surface. Two rounds of tuning (size, angle, alpha, rest
+position) each produced a different wrong guess.
+**What it changes going forward:** **do not reintroduce a drawn highlight on the
+ticket.** The holographic film stays, at 0.22, because foil is a real property
+of the stock and can shift with the angle honestly — that is the distinction to
+apply to any future surface effect here. The drag / gyro / inertia interaction
+is untouched; the card still turns.
+**Recorded in:** PRODUCT_SPEC.md §3.5b → "The ticket card, and what it may
+print"; `apps/webapp/src/ticket/ticket.css`, `Ticket3D.tsx`.
+
 ## 2026-08-08 — a decline reason blocked the next match, and ARCHITECTURE had been describing the fix for months
 
 **Kind:** deviation from plan + a document turned out to be wrong

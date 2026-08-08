@@ -2664,8 +2664,15 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
 - **The ticket card, and what it may print (reworked 2026-08-08, Telegram-only).**
   One `Ticket3D` component renders the hero card on BOTH ticket screens — the
   gate and the store — so what follows is true of each. It carries the wordmark,
-  the brand butterfly, a serial, a barcode and the wallet count, and it
-  deliberately carries nothing else.
+  the brand butterfly, a barcode and the wallet count, and it deliberately
+  carries nothing else.
+  - **It is a portrait object, at a fixed proportion** (268 × 392, ~1:1.46 —
+    revised the same day from 300 × content, which summed to roughly square).
+    The height is a property of the CARD, not of its contents: `.ticket-main`
+    flexes and the mark is centred in whatever is left. Before that, the gate's
+    card (which prints a name row) and the store's (which does not) were
+    literally different shapes, and any line added or removed silently changed
+    the silhouette.
   - **"Admit two" / "На двоих" is gone from the header and the stub**, because
     it was false: one ticket admits ONE person, and a man paying $13.98 "for us
     both" is buying TWO. On the male's "pay only mine" path the card was telling
@@ -2675,8 +2682,12 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
     people were shown as issued. Its card now carries none; the gate keeps the
     real pair, small, under the mark (founder decision — the alternative was
     dropping them everywhere and making the ticket a pure object).
-  - **The serial is seeded from the match**, not from the holders' names, so a
-    pair's ticket is genuinely theirs.
+  - **The printed serial is gone** (removed the same day it was reseeded from
+    the match id). It was the last small grey type on the card and it referred
+    to nothing — no record carries it, so a user who reads it learns a hex
+    string. Its space went to the mark, which is now **148px**: the card's one
+    piece of art, stamped into the stock, rather than a logo sitting above a
+    caption. The barcode keeps the match seed, so a pair's stripes are theirs.
   - **The "curated date ticket" label and the marketing tagline are cut**
     (founder decision). The perforation, the real notch cutouts, the stub and
     the barcode say what the object is; the screen's own headline says the rest.
@@ -2688,28 +2699,67 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
     additionally at a **zero** balance: "× 0" printed on a ticket reads as a
     rendering fault, and in the store an empty wallet is what the bundles below
     are for.
-  - **The specular highlight is a narrow raking band, parked off-centre**,
-    instead of a soft blob half the card wide sitting dead centre; the
-    holographic film drops from 0.55 to 0.22 opacity. Both were doing something
-    light does not do, which is what made an otherwise physical object read as a
-    rendering. The drag / gyro / inertia interaction is untouched.
+  - **There is no specular highlight at all**, in either of the two forms it
+    took — first a soft blob half the card wide, then a narrow raking band
+    parked off-centre. The second was better and still wrong, and the reason is
+    structural rather than a matter of tuning: a highlight is a reflection OF
+    something, and this card sits on a flat page with no light source to
+    reflect, so anything drawn is a guess the eye reads as paint on the surface.
+    What survives is the **holographic film at 0.22** (down from 0.55), because
+    foil is a genuine property of the stock and can shift with the angle
+    honestly. The drag / gyro / inertia interaction is untouched — the card
+    still turns, it just stops pretending to catch a lamp.
 - **One light, everywhere (2026-08-08, Telegram-only).** The store's bundle rows
   and the gate's hero button carry the house **inner-edge sheen** — four inset
   shadows pulled back past the border by a negative spread, so the light reads
   as coming from the border inward (the same recipe as onboarding's action pill,
-  referral's share button and the height drum's capsule). Three temperatures,
-  and the temperature IS the meaning: neutral light for the ordinary rungs,
-  burgundy for the one recommended bundle, warm rose for the one-time famine
-  deal. The recommended rung therefore no longer ALSO carries a burgundy fill —
-  saying "this one" twice made it read as a different component rather than the
-  same one recommended. On the light theme the geometry survives but the
-  polarity inverts (a white card cannot be lit whiter from its own edges, so the
-  light becomes a shading inward) and a hairline is added, for the same reason
-  `.ob-wheel-capsule` needed one. The hero button's travelling white bar is
-  retired with it: a hard-edged rectangle sweeping a static button on a loop is
-  the same "light doing what light does not" problem as the card's old glare.
-  The saving badges are unchanged; the trailing `›` is dropped, since the whole
-  row is the button and the chevron sat a few pixels from the badge.
+  referral's share button and the height drum's capsule). The ordinary rungs
+  carry neutral light and the one-time famine deal carries warm rose, so on
+  those two the temperature IS the meaning. On the light theme the geometry
+  survives but the polarity inverts (a white card cannot be lit whiter from its
+  own edges, so the light becomes a shading inward) and a hairline is added, for
+  the same reason `.ob-wheel-capsule` needed one. The hero button's travelling
+  white bar is retired with it: a hard-edged rectangle sweeping a static button
+  on a loop is the same "light doing what light does not" problem as the card's
+  old glare. The saving badges are unchanged; the trailing `›` is dropped, since
+  the whole row is the button and the chevron sat a few pixels from the badge.
+  - **The recommended rung is a FILLED burgundy button carrying WHITE light**
+    (founder decision, revised the same day). The first pass stripped its fill
+    and gave it burgundy light on glass, arguing that a colour plus a
+    temperature says "this one" twice. That held on the dark theme and failed on
+    cream: burgundy light shading inward on a white card is a smudge, not an
+    emphasis, so the strongest offer on the screen read as the weakest row. It
+    is now literally `.btn-hero` — the same two-layer burgundy fill, the same
+    `--sheen-on-accent` white light held inside its own edges, white type, and
+    the same shadow list with nothing added (an outer burgundy glow was tried
+    for separation and dropped: it haloed the row and re-created the washed
+    look). This does not break "exactly one loud button per screen" — the store
+    has no hero of its own, since its action bar appears only after a purchase.
+    Applied in **both** themes deliberately: a rung that is a filled button on
+    one and a glass row on the other is two components, and every later edit
+    would have to be checked twice. Two consequences inside the row: the
+    per-ticket line and the "best value" tag drop to translucent white rather
+    than going grey (which turns muddy on this fill), and the saving pill
+    inverts to near-white with burgundy type — it used to be a burgundy gradient
+    on burgundy, i.e. the single best saving on the screen, invisible.
+  - **The count emblem sets the number, not a formula.** It printed "×3" as one
+    17px string, so the multiplication sign carried as much weight as the digit
+    — and the digit is the only part anyone reads. The digit is now 26px with
+    the "×" a small mark beside it, optically centred against the digit's
+    x-height rather than sat on the baseline, and the tile carries the house
+    light instead of a flat accent wash.
+- **The store's heading carries no 🎟️, and gets its weight from size
+  (2026-08-08, Telegram-only).** A rendered ticket is the largest thing on that
+  screen, so an emoji of one above it restated the picture in a platform font we
+  do not control — the same rule `marks.tsx` applies to the card itself — while
+  competing with the heading at roughly equal optical weight. Both `title` and
+  `successTitle` lose it in all five locales. "Heavier" then could not come from
+  the weight axis: Space Grotesk's variable range stops at **700**, and asking
+  for 800 gets a synthesised smear (the trap onboarding's headline already hit,
+  §1.3). It comes from **31px and tighter tracking** instead, which thickens the
+  strokes ~15% in absolute terms. The size is on the shared `.ticket-header h1`,
+  so the gate's own heading grows with it — deliberate, since two header scales
+  across one flow would be worse than one.
 - **State machine.** The whole gate runs while `Match.status = negotiating`;
   `ticketStatus` is a sub-state so the scheduling/venue/lifecycle code is
   untouched. Blind-decision and all other invariants are unaffected.

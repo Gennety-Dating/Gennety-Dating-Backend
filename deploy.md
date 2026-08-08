@@ -1,5 +1,60 @@
 # Gennety Dating Deploy
 
+**PENDING — the ticket becomes a portrait object, the recommended bundle becomes
+a burgundy button (PRODUCT_SPEC §3.5b).** Not deployed yet. **No Prisma schema
+change, no env change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the
+diff is `apps/webapp/**` plus docs. **Deploy Mini App Only**
+(`./scripts/deploy-webapp.sh`); nothing to rsync to `/opt/gennety`, **no
+`pm2 restart`**. Run `pnpm demo:deploy` too — the demo builds its own bundle from
+the same source, and the mock/USD branch is only reachable there.
+
+A second pass over the two ticket screens, all of it from founder review of the
+first one (shipped in the block further down, still undeployed — **the two are
+one Mini App build**, so whichever redeploy happens first carries both).
+
+**Four things worth knowing before the redeploy:**
+
+- **The recommended bundle gets its burgundy fill BACK**, in both themes,
+  reversing the earlier block's "no fill, burgundy light on glass". That earlier
+  call was made on the dark theme and failed on cream — see DECISIONS.md. It is
+  now literally `.btn-hero`: same fill, same `--sheen-on-accent`, same shadow
+  list with nothing added. **The dark theme changes too**, which the founder did
+  not ask for; a rung that is a filled button on one theme and a glass row on the
+  other is two components.
+- **The ticket card's geometry is now fixed, not content-derived** (268 × 392).
+  Before, the gate's card and the store's card were different shapes because one
+  prints a name row. If a future line is added to the card, it eats into the
+  centred field rather than making the card taller — check it at 392 before
+  raising `min-height`.
+- **The specular highlight is deleted, not retuned.** Do not add a third
+  version; DECISIONS.md records why the failure is structural. The holographic
+  film stays.
+- **Ten i18n strings change**, not just styling: `title` and `successTitle` lose
+  their 🎟️ in all five store locales. Nothing reads those strings but the
+  heading, and a stale bundle cannot half-apply it — it is one build or the
+  other.
+
+Post-deploy check — these screens are transient and log nothing, so verify by
+eye. `scripts/dev-stage-all-screens.mjs` stands up all six gate states plus the
+store, in both themes, as `web_app` buttons in the dev-bot chat:
+
+```sh
+./scripts/deploy-webapp.sh
+pnpm demo:deploy
+for p in ticket tickets; do curl -sI "https://dating-calendar.gennety.com/$p.html" | head -1; done
+# Then, on @gennetytestbot:
+#   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-stage-all-screens.mjs --apply
+# Look for: a clearly PORTRAIT card with no serial and no moving highlight; the
+# notch cutouts landing exactly on the dashed tear line; and the ×6 row reading
+# as burgundy-deep rather than pink-washed on BOTH themes.
+```
+
+**Rollback:** redeploy the Mini App from the previous checkout, and
+`pnpm demo:deploy` from it as well. Nothing else to undo — no schema, no env, no
+flag, no server state.
+
+---
+
 **PENDING — a decline reason stops blocking the next match, and the demo's redo
 button answers (PRODUCT_SPEC → Embedding freshness (M-2), DEMO_MODE.md →
 Recovery).** Not deployed yet. **No Prisma schema change, no env change, no flag

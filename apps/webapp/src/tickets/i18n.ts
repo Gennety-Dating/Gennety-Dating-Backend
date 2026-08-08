@@ -1,8 +1,14 @@
 /**
  * Self-contained i18n for the ticket store / wallet Mini App. The hero
  * Ticket3D card reuses the Date Ticket strings (../ticket/i18n) so its labels
- * stay consistent; everything store-specific lives here. Anonymized holder
- * names are used on the card (the store ticket is generic, not personalized).
+ * stay consistent; everything store-specific lives here. The store's card
+ * carries no names — it is the product, not anyone's ticket.
+ *
+ * The headings carry no 🎟️. A rendered ticket is the largest thing on this
+ * screen, so an emoji of one above it restates the picture in a platform font
+ * we do not control — the same reason `marks.tsx` bans emoji on the card
+ * itself. It also competed with the heading at roughly equal optical weight,
+ * which is half of why the heading read as light.
  */
 
 export type Lang = "en" | "ru" | "uk" | "de" | "pl";
@@ -27,14 +33,14 @@ export interface StoreStrings {
 }
 
 const en: StoreStrings = {
-  title: "Get Date Tickets 🎟️",
+  title: "Get Date Tickets",
   sub: "One ticket = one date. Stock up so you're always ready.",
   perTicket: "{amount} / ticket",
   bestValue: "Best value",
   save: "Save {pct}%",
   famineSave: "−{pct}% for you",
   buy: "Buy {count} — {amount}",
-  successTitle: "Tickets added 🎟️",
+  successTitle: "Tickets added",
   successSub: "Your wallet now holds {n}. Use them when your next date is set.",
   done: "Done",
   processing: "Processing…",
@@ -44,14 +50,14 @@ const en: StoreStrings = {
 };
 
 const ru: StoreStrings = {
-  title: "Билеты на свидания 🎟️",
+  title: "Билеты на свидания",
   sub: "Один билет = одно свидание. Запасись, чтобы всегда быть готовым.",
   perTicket: "{amount} / билет",
   bestValue: "Выгоднее всего",
   save: "Скидка {pct}%",
   famineSave: "−{pct}% для тебя",
   buy: "Купить {count} — {amount}",
-  successTitle: "Билеты добавлены 🎟️",
+  successTitle: "Билеты добавлены",
   successSub: "Теперь в кошельке {n}. Используй их, когда назначишь свидание.",
   done: "Готово",
   processing: "Обработка…",
@@ -61,14 +67,14 @@ const ru: StoreStrings = {
 };
 
 const uk: StoreStrings = {
-  title: "Квитки на побачення 🎟️",
+  title: "Квитки на побачення",
   sub: "Один квиток = одне побачення. Запасись, щоб завжди бути готовим.",
   perTicket: "{amount} / квиток",
   bestValue: "Найвигідніше",
   save: "Знижка {pct}%",
   famineSave: "−{pct}% для тебе",
   buy: "Купити {count} — {amount}",
-  successTitle: "Квитки додано 🎟️",
+  successTitle: "Квитки додано",
   successSub: "Тепер у гаманці {n}. Використай їх, коли призначиш побачення.",
   done: "Готово",
   processing: "Обробка…",
@@ -78,14 +84,14 @@ const uk: StoreStrings = {
 };
 
 const de: StoreStrings = {
-  title: "Date-Tickets holen 🎟️",
+  title: "Date-Tickets holen",
   sub: "Ein Ticket = ein Date. Leg dir welche zu, dann bist du immer bereit.",
   perTicket: "{amount} / Ticket",
   bestValue: "Bester Preis",
   save: "{pct}% sparen",
   famineSave: "−{pct}% für dich",
   buy: "{count} kaufen — {amount}",
-  successTitle: "Tickets hinzugefügt 🎟️",
+  successTitle: "Tickets hinzugefügt",
   successSub: "Dein Guthaben beträgt jetzt {n}. Nutze sie für dein nächstes Date.",
   done: "Fertig",
   processing: "Verarbeitung…",
@@ -95,14 +101,14 @@ const de: StoreStrings = {
 };
 
 const pl: StoreStrings = {
-  title: "Zdobądź bilety na randki 🎟️",
+  title: "Zdobądź bilety na randki",
   sub: "Jeden bilet = jedna randka. Zrób zapas, żeby zawsze być gotowym.",
   perTicket: "{amount} / bilet",
   bestValue: "Najlepsza cena",
   save: "Oszczędź {pct}%",
   famineSave: "−{pct}% dla Ciebie",
   buy: "Kup {count} — {amount}",
-  successTitle: "Bilety dodane 🎟️",
+  successTitle: "Bilety dodane",
   successSub: "W portfelu masz teraz {n}. Użyj ich, gdy ustalisz randkę.",
   done: "Gotowe",
   processing: "Przetwarzanie…",

@@ -41,18 +41,62 @@
 
 .store-bundle:active {
   transform: scale(0.985);
+}
+/* The press wash is for the glass rungs only — the burgundy one below owns its
+   own fill and would otherwise revert to grey under the finger. */
+.store-bundle:not(.store-bundle-best):active {
   background: var(--glass-press);
 }
 
-/* The recommended rung. It differs by the TEMPERATURE OF ITS LIGHT and nothing
-   else — the burgundy wash it used to carry as well is gone, because saying
-   "this one" twice is what made the row look like a different component rather
-   than the same component recommended. */
+/* The recommended rung: a FILLED burgundy button carrying WHITE light, not
+   glass carrying burgundy light.
+   This reverses the 2026-08-08 pass, which stripped the fill on the argument
+   that a colour plus a light temperature says "this one" twice. On the dark
+   theme that held; on the cream page it did not — burgundy light shading
+   inward on a white card is a smudge, not an emphasis, and the strongest offer
+   on the screen read as the weakest row. It is now the same object as the
+   gate's `.btn-hero`: the burgundy two-layer fill, the white `--sheen-on-accent`
+   held just inside its edges, white type. That costs nothing here, because the
+   store has no hero button of its own — the action bar only appears after a
+   purchase — so this is still exactly one loud button per screen. */
 .store-bundle-best {
-  box-shadow: var(--sheen-accent), 0 14px 34px -18px rgba(139, 37, 59, 0.55);
+  color: #fff;
+  border-color: transparent;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.26),
+      rgba(255, 255, 255, 0) 16%,
+      rgba(255, 255, 255, 0) 84%,
+      rgba(255, 255, 255, 0.2)
+    ),
+    linear-gradient(160deg, #a23350 0%, #8b253b 55%, #6f1c2f 100%);
+  /* Exactly `.btn-hero`'s shadow list and nothing else. An outer burgundy glow
+     was tried here for separation from the two glass rows above and dropped:
+     it haloed the row and made the fill read washed rather than deep, which is
+     the failure this change exists to fix. The rows are 22px apart already. */
+  box-shadow: var(--sheen-on-accent);
 }
 :root[data-theme="light"] .store-bundle-best {
-  border-color: rgba(139, 37, 59, 0.22);
+  border-color: transparent;
+}
+.store-bundle-best:active {
+  filter: brightness(0.93);
+}
+/* Everything inside flips to white-on-burgundy. The muted per-ticket line keeps
+   its hierarchy by dropping opacity rather than by going grey, which on this
+   fill would turn muddy. */
+.store-bundle-best .store-bundle-per {
+  color: rgba(255, 255, 255, 0.74);
+}
+.store-bundle-best .store-bundle-emblem {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.store-bundle-best .store-bundle-tag {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
 }
 
 /* Floating "Save N%" pill — the concrete per-ticket discount vs buying
@@ -76,10 +120,13 @@
     0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
+/* On the recommended rung the pill sits ON burgundy, so it inverts: a bright
+   near-white chip with burgundy type. The old burgundy-gradient version was
+   burgundy on burgundy — the single best saving on the screen, invisible. */
 .store-badge-best {
-  background: linear-gradient(135deg, var(--accent-bright), var(--accent-deep));
-  color: #fff;
-  box-shadow: 0 6px 16px rgba(139, 37, 59, 0.4);
+  background: linear-gradient(135deg, #ffffff, #f6dfe5);
+  color: #6f1c2f;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.32);
 }
 
 /* One-time "famine" loyalty discount on the single ticket — a warm rose pill so
@@ -115,20 +162,39 @@
     var(--glass-shadow);
 }
 
-/* ×N count emblem — a soft glass square on the left. */
+/* The count emblem. It used to set "×3" as one 17px string, which is why it
+   read as a formula rather than as a quantity: the multiplication sign carried
+   exactly as much weight as the number, and the number is the only part anyone
+   is reading. The digit is now the glyph (26px) and the "×" is a small mark
+   beside it, and the tile carries the house inner-edge light instead of a flat
+   accent wash, so it belongs to the same family as the row around it. */
 .store-bundle-emblem {
   flex: none;
-  display: grid;
-  place-items: center;
-  width: 50px;
-  height: 50px;
-  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 52px;
+  height: 52px;
+  border-radius: 17px;
   background: var(--accent-soft);
-  box-shadow: inset 0 1px 0 var(--glass-highlight);
+  box-shadow: var(--sheen-neutral);
   font-family: "Space Grotesk", "Inter", sans-serif;
-  font-size: 17px;
-  font-weight: 700;
   color: var(--accent-bright);
+}
+.store-bundle-emblem-x {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.6;
+  /* Optically centred against the digit's x-height rather than sat on the
+     baseline, where a lone "×" hangs low next to a lining numeral. */
+  transform: translateY(-0.06em);
+}
+.store-bundle-emblem-n {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 .store-bundle-info {

@@ -177,12 +177,18 @@ body {
   text-align: center;
   animation: rise 0.5s ease both;
 }
+/* Space Grotesk's variable range stops at 700, so "heavier" cannot come from
+   the weight axis — asking for 800 would get a synthesised smear, the same
+   trap onboarding's headline hit (PRODUCT_SPEC §1.3). It comes from size and
+   tracking instead: at 31px the strokes are ~15% thicker in absolute terms,
+   and the negative tracking packs the word into a denser block. */
 .ticket-header h1 {
   font-family: "Space Grotesk", sans-serif;
-  font-size: 27px;
+  font-size: 31px;
   font-weight: 700;
-  margin: 0 0 8px;
-  letter-spacing: -0.015em;
+  margin: 0 0 9px;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 .ticket-header p {
   margin: 0 auto;
@@ -211,13 +217,18 @@ body {
     ticket-float 7s ease-in-out 0.8s infinite;
 }
 
+/* PORTRAIT, and fixed. A ticket is a tall object, and the card had drifted to
+   roughly square (300 × ~276) because its height was whatever its contents
+   summed to — so the gate's card and the store's card were also different
+   shapes. `min-height` makes the proportion a property of the card (268 × 392,
+   about 1:1.46) and `.ticket-main` flexes to absorb the difference. */
 .ticket-card {
   --rx: 0deg;
   --ry: 0deg;
-  --gp: 0%;
   --holo: 0px;
   position: relative;
-  width: 300px;
+  width: 268px;
+  min-height: 392px;
   display: flex;
   flex-direction: column;
   border-radius: 22px;
@@ -264,37 +275,17 @@ body {
   color: rgba(255, 255, 255, 0.62);
 }
 
-/* Specular highlight that tracks the rotation.
-   A NARROW diagonal streak, not a soft blob. It used to be a radial gradient
-   58%×46% of the card wide, sliding around on two axes — light does not behave
-   like that on gloss at any angle, and a highlight covering half the surface
-   reads as a painted-on smudge rather than as a reflection. A thin band with a
-   hard core and a fast falloff is what a real card catches; it sweeps as the
-   card turns because the band's position (--gp) is driven by the rotation. */
-.ticket-glare {
-  position: absolute;
-  inset: -20%;
-  z-index: 3;
-  background: linear-gradient(
-    118deg,
-    transparent 41%,
-    rgba(255, 255, 255, 0.04) 46%,
-    rgba(255, 255, 255, 0.14) 50%,
-    rgba(255, 255, 255, 0.04) 54%,
-    transparent 59%
-  );
-  background-size: 300% 100%;
-  /* Parked OFF-CENTRE at rest. Dead centre is the one position that reads as a
-     painted stripe rather than as light: it is symmetric, so nothing about the
-     card's pose explains why it is there. Raking in from the left does. */
-  background-position: calc(34% + var(--gp) * 2.4) 50%;
-  mix-blend-mode: screen;
-  pointer-events: none;
-}
+/* The specular highlight is GONE, in both of its lives — first a soft radial
+   blob half the card wide, then a narrow raking band. Neither read as light,
+   and the reason is structural rather than a matter of tuning: a highlight is a
+   reflection OF something, and this card sits on a flat page with no light
+   source to reflect. Whatever we draw is therefore a guess, and the eye reads a
+   wrong guess as paint on the surface. What survives is the foil below, which
+   is a genuine property of the stock and can shift with the angle honestly. */
 
 /* Iridescent foil film — its pastel band slides as the card turns. Kept, but
-   quiet: at 0.55 it was a rainbow across the whole face competing with the
-   specular band above, which is the other half of why the card read as fake. */
+   quiet: at 0.55 it was a rainbow across the whole face, which was the other
+   half of why the card read as fake. */
 .ticket-holo {
   position: absolute;
   inset: 0;
@@ -317,12 +308,26 @@ body {
 .ticket-main {
   position: relative;
   z-index: 1;
-  padding: 22px 24px 18px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 26px 22px 20px;
 }
 .ticket-brand {
+  flex: none;
   display: flex;
   justify-content: center;
   align-items: baseline;
+}
+/* Everything below the wordmark, centred in the leftover height. */
+.ticket-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 0;
 }
 /* The wordmark. It used to be 14px filled with a burgundy gradient through
    `background-clip: text` — on a near-black stock that made the one word
@@ -353,9 +358,9 @@ body {
   position: relative;
   display: grid;
   place-items: center;
-  margin: 18px auto 14px;
-  width: 96px;
-  height: 96px;
+  flex: none;
+  width: 148px;
+  height: 148px;
   color: #fff;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
   animation: pp-logo-pulse 3s ease-in-out infinite;
@@ -363,8 +368,8 @@ body {
 .ticket-mark::before {
   content: "";
   position: absolute;
-  width: 116px;
-  height: 116px;
+  width: 182px;
+  height: 182px;
   border-radius: 50%;
   background: radial-gradient(closest-side, rgba(182, 48, 79, 0.42), transparent 72%);
   filter: blur(5px);
@@ -390,21 +395,9 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Printed issue details — the serial, alone. The ♥ that shared this row is
-   gone: the butterfly above is the brand mark now, and two marks on one card
-   is one too many. */
-.ticket-meta {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 14px;
-}
-.ticket-serial {
-  font-family: "Space Grotesk", sans-serif;
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  color: rgba(255, 255, 255, 0.42);
-}
+/* The printed serial is retired. It was the last piece of small grey type on
+   the card and it referred to nothing — no record carries it, so a user who
+   reads it learns a hex string. Its space went to the mark. */
 
 /* Perforation + stub */
 .ticket-perf {
@@ -475,7 +468,7 @@ body {
 
 /* Floor shadow — drifts against the rotation (--sx set from JS). */
 .ticket-shadow {
-  width: 230px;
+  width: 205px;
   height: 28px;
   margin-top: 20px;
   border-radius: 50%;
