@@ -52,11 +52,14 @@ no flag, no server state.
 
 ---
 
-**PENDING — the pre-date coordination flow becomes walkable in the demo
-(DEMO_MODE.md).** Not deployed yet. **Demo only** — the diff is
-`apps/bot/src/demo/**` plus docs, so **nothing to rsync to `/opt/gennety`, no
-production restart**. `pnpm demo:deploy` is the whole deploy. No Prisma schema
-change, no env change, no flag change, no Mini App change.
+**Deployed 2026-08-08 — the pre-date coordination flow becomes walkable in the
+demo (`7c67fd2`, DEMO_MODE.md).** **Demo only** — the diff is
+`apps/bot/src/demo/**` plus docs, so **nothing was rsynced to `/opt/gennety` and
+production was not restarted** (`gennety-bot` held restart count 53, PID
+2344409). `pnpm demo:deploy` was the whole deploy, run from an isolated
+`git worktree` at `7c67fd2` because the shared tree carried a parallel session's
+in-progress ticket-screen work. No Prisma schema change (`db:drift-check` **OK**,
+nothing to push), no env change, no flag change, no Mini App change.
 
 Builds directly on the replay fix two blocks down (`23c8ea1`, deployed earlier
 today) and **supersedes one bullet of it**: `defaultCoordMethodToProxy` is
@@ -111,13 +114,41 @@ the real venue and time.
   gate. That state is no longer idle — it is the coordination stretch — so both
   now assert the thing they were actually about.
 
-Preflight for this change: typecheck clean, **3380 bot tests** (85 under
-`src/demo/`, 32 of them new), lint clean across all five projects.
+Preflight green: typecheck clean, **3380 bot tests** (85 under `src/demo/`, 32 of
+them new), lint clean across all five projects.
 
-Post-deploy check — the demo's previous match is `completed`, so this needs a
-fresh walk: `/restart` (or «показать ещё одну анкету») through to a scheduled
-date, «Что происходит дальше», then press **A**, press **B**, then the anonymous
-chat, write two messages, press «Дальше».
+**⚠️ `deploy-demo.sh` exits non-zero when run from a worktree, AFTER the bot is
+already live.** Its last step builds the demo Mini App bundle, and a fresh
+`git worktree` has no `node_modules`, so `vite build` dies with
+`vite: command not found`. Harmless here — `apps/webapp` is untouched by this
+change, the existing `/var/www/demo-app` bundle stays correct, and the failure
+comes after the rsync, the schema check, the restart and `pm2 save` have all
+succeeded. But it means **the script's exit code cannot be trusted as the
+verification** on a worktree run: read the restart count and the banner instead.
+It also means the script will NOT rebuild `dist/` back to the production API
+base — safe only because it never built a demo-pointed one either. For a release
+that does touch the Mini App, either `pnpm install` in the worktree first or
+deploy from the main tree.
+
+**Post-deploy verified (measured):** `driver.ts` on the droplet md5-matches local
+(`e8f66c2c`), `proxy-partner.ts` present (10,959 bytes), banner names
+`@gennety_demo_bot` + the demo database (`aws-1-eu-west-1`; production is
+`aws-0-`), both demo-only cron suppressions logged, `:3102` listening,
+`/v1/ping` ok, `demo-app/ticket.html` 200, restart count 13 → 14 with a stable
+PID, and **zero errors from the new PID**. The driver is correctly idle: 0
+actions across 10 consecutive ticks with the one visitor mid-onboarding (the
+`[demo] scanned=…` line only prints when something was acted on, so silence is
+the healthy state — do not read a run of `acted=1` at startup as a loop).
+
+**Pre-existing and unrelated, seen while checking:** 8 historical `P2003
+chat_events_user_id_fkey` lines in the demo error log — the outbound recorder
+writing a chat event for an account `/restart` has just deleted. Fire-and-forget
+and swallowed; nothing to do with coordination.
+
+**Post-deploy walk still owed** (needs a human in the chat): a fresh run —
+`/restart`, or «показать ещё одну анкету» — through to a scheduled date, then
+«Что происходит дальше», then press **A**, press **B**, then the anonymous chat,
+write two messages, press «Дальше».
 
 ```sh
 pnpm demo:deploy
