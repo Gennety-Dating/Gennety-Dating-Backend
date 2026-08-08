@@ -47,6 +47,50 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — the current-venue card's badge moved so a photo could fit
+
+**Kind:** deviation from plan
+**What:** the ask was "show a photo on the current-venue card too". Adding the
+68px thumbnail broke the card's text: the "Picked for you" badge wrapped into a
+two-line pill and the venue's own name truncated. So the badge moved out of the
+text column onto its own line at the top of the card, and the name now wraps
+instead of ellipsizing. That is a visible layout change nobody asked for.
+**Why:** the photo and the badge want the same width and the card cannot give
+both. Measured rather than eyeballed: the photo costs 82px of a ~350px card,
+leaving the badge 176px against 188px (ru) and 203px (pl). Shrinking the
+thumbnail does not fix it — 12px back does not cover a 27px shortfall in Polish
+— and a wide photo banner across the card top would have roughly doubled the
+height of the one venue the user came to this screen to move away from.
+**What it changes going forward:** the pinned card is now a two-row card
+(badge, then picture/words/heart) while the twelve alternatives stay one row.
+Do not "restore" the badge into the meta column without also removing the
+photo. The name wraps only on this card; the alternatives keep their ellipsis
+because an even row height is what makes that list scannable.
+**Recorded in:** PRODUCT_SPEC.md §3.7b; `renderCurrentCard` +
+`.vc-card.is-current` in `apps/webapp/src/venue-change.{ts,css}`.
+
+## 2026-08-08 — the pinned venue shows its stored cover, not a fresh gallery
+
+**Kind:** change of mind
+**What:** I first planned to resolve the current venue's full photo set from
+`venuePlaceId` on every board state, giving the pinned card the same 6-photo
+gallery every alternative has. It ships the other way round: the cover stored at
+assignment (`Match.venuePhotoName`) is used, and a Places lookup happens ONLY
+when a row carries no cover.
+**Why:** `/v1/venue-change/state` is polled every ~4 s, and the gallery is worth
+a network call on that path only if it buys something. It does not: the stored
+cover is already correct, free, and is the exact image the pair saw on their
+date card, so the board and the card agree on what the place looks like. The
+lookup survives as the fallback because a row with no cover would otherwise show
+a grey tile forever.
+**What it changes going forward:** the pinned card's preview shows one photo
+where an alternative shows up to six — deliberate, not an oversight. If that
+asymmetry ever needs closing, warm the cache in the background and let the NEXT
+poll carry the gallery; do not make the first paint wait on Places.
+**Recorded in:** `originalPhotoRefs` in `handlers/matching/venue-change.ts`,
+`resolveVenuePhotoRefs` in `services/venue-change.ts`; ARCHITECTURE.md → the
+`/v1/venue-change/state` row.
+
 ## 2026-08-07 — the rule behind three separate "what if the text isn't an answer" fixes
 
 **Kind:** change of mind

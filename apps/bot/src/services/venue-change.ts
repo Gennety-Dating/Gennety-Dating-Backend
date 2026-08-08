@@ -513,13 +513,7 @@ async function withCuratedPhotos(venues: CatalogVenue[]): Promise<CatalogVenue[]
   // but this also protects against a future caller passing an un-deduped list.
   const ids = [...new Set(pending.map((v) => v.placeId as string))];
   await mapWithConcurrency(ids, PHOTO_LOOKUP_CONCURRENCY, async (placeId) => {
-    const refs = await fetchPlacePhotoNames(apiKey, placeId, VENUE_CHANGE_PHOTOS_PER_VENUE);
-    photoCache.set(placeId, {
-      // A null answer means the lookup failed, not that the place has no
-      // photos — cache it briefly so we retry, rather than for a day.
-      refs: refs ?? [],
-      expiresAt: Date.now() + (refs ? PHOTO_CACHE_TTL_MS : PHOTO_CACHE_FAILURE_TTL_MS),
-    });
+    await lookupAndCachePhotos(apiKey, placeId);
   });
 
   return venues.map((v) => {
@@ -527,6 +521,37 @@ async function withCuratedPhotos(venues: CatalogVenue[]): Promise<CatalogVenue[]
     const hit = photoCache.get(v.placeId);
     return hit && hit.refs.length > 0 ? { ...v, photoRefs: hit.refs } : v;
   });
+}
+
+/** One Place Details lookup, written into the shared cache. Never throws. */
+async function lookupAndCachePhotos(apiKey: string, placeId: string): Promise<string[]> {
+  const refs = await fetchPlacePhotoNames(apiKey, placeId, VENUE_CHANGE_PHOTOS_PER_VENUE);
+  photoCache.set(placeId, {
+    // A null answer means the lookup failed, not that the place has no
+    // photos — cache it briefly so we retry, rather than for a day.
+    refs: refs ?? [],
+    expiresAt: Date.now() + (refs ? PHOTO_CACHE_TTL_MS : PHOTO_CACHE_FAILURE_TTL_MS),
+  });
+  return refs ?? [];
+}
+
+/**
+ * Photos for ONE place, through the same cache the catalog fills.
+ *
+ * The board's pinned "keep this place" card is not a catalog row — the assigned
+ * venue is deliberately excluded from the alternatives — so it cannot inherit
+ * the batch lookup above and needs its own way in. Callers that already hold a
+ * stored cover should prefer it and reach for this only when they have none:
+ * the board state is polled every ~4s, and this is a network call.
+ *
+ * Best-effort like everything else in this file: no key, no place id, or a
+ * failed lookup all resolve to an empty list and the client draws its glyph.
+ */
+export async function resolveVenuePhotoRefs(placeId: string | null): Promise<string[]> {
+  const apiKey = process.env.PLACES_API_KEY;
+  if (!apiKey || !placeId) return [];
+  if (!isFreshInPhotoCache(placeId, Date.now())) return lookupAndCachePhotos(apiKey, placeId);
+  return photoCache.get(placeId)?.refs ?? [];
 }
 
 function isFreshInPhotoCache(placeId: string, now: number): boolean {

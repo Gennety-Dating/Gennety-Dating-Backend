@@ -990,7 +990,18 @@ export interface VenueBoardState {
   status: string; // none | liking | agreed | settled | lapsed
   open: boolean;
   closedReason: string | null;
-  original: { name: string | null; address: string | null; mapsUri: string | null };
+  original: {
+    name: string | null;
+    address: string | null;
+    mapsUri: string | null;
+    /**
+     * Photo refs for the currently-assigned venue (same proxy as the catalog's).
+     * Served separately because the assigned venue is deliberately absent from
+     * the catalog, so the pinned card has no row to take pictures from.
+     * Optional: a bundle can outlive the server that fed it.
+     */
+    photoRefs?: string[];
+  };
   /** Partner's first name — board captions name who picked what. */
   partnerName: string;
   myLikes: string[];

@@ -501,6 +501,25 @@ describe("confirmVenueAgreement", () => {
 // ---------------------------------------------------------------------------
 
 describe("getVenueBoardState", () => {
+  // The pinned "keep this place" card was the one card on the board with no
+  // picture, because the assigned venue is excluded from the catalog and the
+  // state never carried its imagery. The cover stored at assignment is what
+  // fixes it — and the client can only draw what this endpoint sends.
+  it("carries the assigned venue's stored cover photo", async () => {
+    mMatch.findUnique.mockResolvedValue(fakeMatch({ venuePhotoName: "places/old/photos/a" }));
+    const res = await getVenueBoardState(100n, "m1");
+    if (!res.ok) throw new Error("expected ok");
+    expect(res.state.original.photoRefs).toEqual(["places/old/photos/a"]);
+  });
+
+  it("answers with no photo rather than failing when the row carries none", async () => {
+    mMatch.findUnique.mockResolvedValue(fakeMatch());
+    const res = await getVenueBoardState(100n, "m1");
+    if (!res.ok) throw new Error("expected ok");
+    expect(res.state.original.photoRefs).toEqual([]);
+    expect(res.state.original.name).toBe("Old Cafe");
+  });
+
   it("her fork: she initiated → pay_or_offer with price", async () => {
     mMatch.findUnique.mockResolvedValue(agreedMatch());
     const res = await getVenueBoardState(100n, "m1");

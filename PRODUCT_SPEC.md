@@ -3548,6 +3548,25 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   already had. The exclusion is server-side and applied before the 12-card cap,
   so the freed slot goes to a real alternative and the like/confirm calls refuse
   that key as `invalid-venue` rather than trusting the client to hide it.
+  **The pinned card has a photo too (2026-08-08).** It was the one card on this
+  board without one — a consequence of the exclusion above, since the card is
+  not a catalog row and had nothing to inherit pictures from, so the board asked
+  the pair to compare places while showing them everything except the place they
+  already had. `original.photoRefs` on the board state carries it: the cover
+  stored at assignment (`Match.venuePhotoName`, the same image the date card
+  showed them), falling back to one cached Place Details lookup from
+  `venuePlaceId` when a row carries no cover. The state is polled every ~4 s, so
+  the common path is deliberately network-free; a failed lookup leaves the
+  category glyph exactly as before. **The "Picked for you" badge moved onto its
+  own line to make room.** A 68px photo takes 82px out of a ~350px card, and the
+  badge sits in what is left — at which point no locale's wording fits
+  ("Obecne miejsce spotkania" is 203px against 176px), so it wrapped into a
+  two-line pill and pushed the venue's own name into an ellipsis. Heading the
+  card instead, it fits on one line at any width in every language, and the row
+  under it is the same picture / words / heart an alternative uses. The name on
+  this card wraps rather than truncating — it is the one card whose venue is
+  already yours; the twelve alternatives keep their ellipsis, because an even
+  row height is what makes that list scannable.
   **The premium tier searches a wider radius** than the rest of the board,
   because the pinned slots must hold *different* venues and the premium pool is
   small and hand-picked: from Podil only 10 of Kyiv's 18 premium venues sit

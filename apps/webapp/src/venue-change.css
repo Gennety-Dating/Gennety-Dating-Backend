@@ -1739,18 +1739,29 @@ a.vc-info-row .vc-info-text {
 .vc-frame.is-current {
   margin-bottom: 18px;
 }
+/* Two stacked rows: the badge heads the card, the venue itself sits under it in
+   the same picture / words / heart row an alternative uses. The badge needs the
+   card's FULL width — inside the text column it shares 184px with a 68px photo,
+   which no locale's wording survives (see `renderCurrentCard`). */
 .vc-card.is-current {
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.vc-current-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 .vc-card.is-current .vc-card-meta {
   gap: 5px;
-  padding: 2px 0;
-}
-.vc-card.is-current .vc-current-badge {
-  margin-bottom: 2px;
 }
 .vc-card.is-current .vc-card-name {
   font-size: 17px;
+  /* The one card where the venue's own name must never be cut: wrap it. The
+     alternatives keep their ellipsis — there are twelve of them and an even
+     row height is what makes that list scannable. */
+  white-space: normal;
 }
 .vc-card.is-current .vc-card-addr {
   white-space: normal;

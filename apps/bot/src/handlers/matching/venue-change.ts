@@ -50,6 +50,7 @@ import {
   venueChangeDeadline,
   venueChangeCutoff,
   buildVenueChangeCatalog,
+  resolveVenuePhotoRefs,
   type CatalogVenue,
   type VenueChangeIneligibleReason,
 } from "../../services/venue-change.js";
@@ -83,8 +84,10 @@ const VC_SELECT = {
   venueLng: true,
   venueGoogleMapsUri: true,
   // Identifies the currently-assigned venue so the catalog can leave it out of
-  // the alternatives (`venueCatalogScope`).
+  // the alternatives (`venueCatalogScope`) — and, with `venuePhotoName`, gives
+  // the pinned "keep this place" card its picture (`originalPhotoRefs`).
   venuePlaceId: true,
+  venuePhotoName: true,
   venueChangeStatus: true,
   venueChangeProposerId: true,
   venueChangeProposedAt: true,
@@ -457,7 +460,19 @@ export interface VenueBoardStateView {
   status: string; // none | liking | agreed | settled | lapsed
   open: boolean; // board interactions (likes/confirm/express) allowed
   closedReason: VenueChangeIneligibleReason | null;
-  original: { name: string | null; address: string | null; mapsUri: string | null };
+  original: {
+    name: string | null;
+    address: string | null;
+    mapsUri: string | null;
+    /**
+     * Google Places photo resource names for the currently-assigned venue, so
+     * the pinned card looks like every other card on the board. It cannot come
+     * from the catalog: the assigned venue is excluded from the alternatives
+     * (`BuildCatalogInput.excludeVenue`), which is exactly why this card was
+     * the one photo-less thing on the screen.
+     */
+    photoRefs: string[];
+  };
   /** The partner's first name — the board captions name who picked what. */
   partnerName: string;
   myLikes: string[];
@@ -512,7 +527,28 @@ export async function getVenueBoardState(
   if (!match) return { ok: false, reason: "match-not-found" };
   const side = sideOfUser(match, telegramId);
   if (!side) return { ok: false, reason: "not-participant" };
-  return { ok: true, state: buildBoardState(match, side, now) };
+  const state = buildBoardState(match, side, now);
+  const photoRefs = await originalPhotoRefs(match);
+  return { ok: true, state: { ...state, original: { ...state.original, photoRefs } } };
+}
+
+/**
+ * Pictures for the pinned current venue.
+ *
+ * The stored cover is the free answer and the RIGHT one: `venuePhotoName` is
+ * written at assignment by both selectors and is the exact image the date card
+ * already showed this pair, so the board and the card agree on what the place
+ * looks like. This endpoint is polled every ~4s, so the common path must not
+ * touch the network.
+ *
+ * A live Places lookup happens only when there is no stored cover at all — a
+ * row assigned before that column was filled, or one whose resolution failed on
+ * the day. Paying once (then cached for a day) beats showing a grey tile, and a
+ * failure just leaves the client drawing its glyph.
+ */
+async function originalPhotoRefs(match: VcMatch): Promise<string[]> {
+  if (match.venuePhotoName) return [match.venuePhotoName];
+  return resolveVenuePhotoRefs(match.venuePlaceId);
 }
 
 function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardStateView {
@@ -578,6 +614,9 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
       name: match.venueName,
       address: match.venueAddress,
       mapsUri: match.venueGoogleMapsUri,
+      // The stored cover only — this builder is pure. `getVenueBoardState`
+      // upgrades it when the row carries none (`originalPhotoRefs`).
+      photoRefs: match.venuePhotoName ? [match.venuePhotoName] : [],
     },
     partnerName: userOfSide(match, otherSide(side)).firstName ?? "",
     myLikes,

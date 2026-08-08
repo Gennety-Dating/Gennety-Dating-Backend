@@ -757,11 +757,24 @@ function previewPhotoUrl(ref: string): string {
 function photoUrl(ref: string, width: number): string {
   return previewMode ? previewPhotoUrl(ref) : venueChangePhotoUrl(getInitData(), ref, width);
 }
-function thumbUrl(v: VenueChangeCatalogItem): string | null {
+/**
+ * Everything the photo helpers below actually need: the refs, and the glyph to
+ * draw when there are none. Deliberately narrower than `VenueChangeCatalogItem`
+ * (which every catalog row satisfies) so the pinned CURRENT venue — which is
+ * not a catalog row and has no distance, rating or summary — can be shown with
+ * the same tiles, gallery and fullscreen viewer as every alternative, without
+ * inventing the fields it doesn't have.
+ */
+interface VenuePhotoSet {
+  photoRefs: string[];
+  /** Falls back to the pin glyph for anything unmapped — see `categoryIcon`. */
+  category: string;
+}
+function thumbUrl(v: VenuePhotoSet): string | null {
   if (v.photoRefs[0]) return photoUrl(v.photoRefs[0], 240);
   return null;
 }
-function galleryUrls(v: VenueChangeCatalogItem): string[] {
+function galleryUrls(v: VenuePhotoSet): string[] {
   return v.photoRefs.map((ref) => photoUrl(ref, 1000));
 }
 /**
@@ -772,7 +785,7 @@ function galleryUrls(v: VenueChangeCatalogItem): string[] {
  * pointless. 1600 is the proxy's own ceiling (`clampWidth`, routes/venue-change.ts).
  */
 const VIEWER_PHOTO_WIDTH = 1600;
-function viewerUrls(v: VenueChangeCatalogItem): string[] {
+function viewerUrls(v: VenuePhotoSet): string[] {
   return v.photoRefs.map((ref) => photoUrl(ref, VIEWER_PHOTO_WIDTH));
 }
 /**
@@ -1439,13 +1452,13 @@ function renderVenueCard(v: VenueChangeCatalogItem): HTMLElement {
   return frame;
 }
 
-function venueThumb(v: VenueChangeCatalogItem, className = "vc-thumb"): HTMLElement {
+function venueThumb(v: VenuePhotoSet, className = "vc-thumb"): HTMLElement {
   return photoTile(thumbUrl(v), className, () => categoryIcon(v.category, "icon vc-thumb-icon"));
 }
 
 /** One gallery frame (detail + preview), skeleton-shimmering until it decodes. */
 function venueShot(
-  v: VenueChangeCatalogItem,
+  v: VenuePhotoSet,
   url: string,
   single: boolean,
   onOpen?: () => void,
@@ -1466,7 +1479,7 @@ function venueShot(
  * card and had drifted (the preview was missing the dots entirely), which is
  * exactly how one of the two would have ended up without the viewer too.
  */
-function venueGallery(v: VenueChangeCatalogItem): Node[] {
+function venueGallery(v: VenuePhotoSet): Node[] {
   const urls = galleryUrls(v);
   if (urls.length === 0) {
     // No photos at all: the category glyph is the whole tile, and there is
@@ -1549,7 +1562,7 @@ function closePhotoViewer(): void {
   closeViewer?.();
 }
 
-function openPhotoViewer(v: VenueChangeCatalogItem, start: number): void {
+function openPhotoViewer(v: VenuePhotoSet, start: number): void {
   closePhotoViewer();
 
   const low = galleryUrls(v);
@@ -1702,10 +1715,21 @@ function renderCurrentCard(st: VenueBoardState): HTMLElement {
   );
 
   const meta = el("div", { class: "vc-card-meta" }, [
-    el("div", { class: "vc-current-badge", text: s.currentBadge }),
     el("div", { class: "vc-card-name", text: st.original.name ?? "" }),
     el("div", { class: "vc-card-addr", text: st.original.address ?? "" }),
   ]);
+  const photos = currentPhotoSet(st);
+  // Below the badge, the same three slots as an alternative (`renderVenueCard`)
+  // — picture, words, heart. The pinned card used to skip the picture, which
+  // made the ONE venue the pair already has the only place on this board you
+  // could not see.
+  //
+  // The badge heads the card instead of sitting inside the text column,
+  // because the picture takes 82px out of a 350px card and "Obecne miejsce
+  // spotkania" does not fit in what is left — it wrapped into a two-line pill
+  // and pushed the venue's own name into an ellipsis. On its own line it fits
+  // in every language, at any phone width.
+  const row = el("div", { class: "vc-current-row" }, [venueThumb(photos), meta, heart]);
   const card = el(
     "div",
     {
@@ -1717,11 +1741,12 @@ function renderCurrentCard(st: VenueBoardState): HTMLElement {
             name: st.original.name ?? "",
             address: st.original.address ?? "",
             mapsUri: st.original.mapsUri,
+            photos,
           },
           () => renderBoard(),
         ),
     },
-    [meta, heart],
+    [el("div", { class: "vc-current-badge", text: s.currentBadge }), row],
   );
   const cap = el("div", { class: "vc-cap" }, captionKids(key, mine, theirs));
   const frame = el(
@@ -1736,6 +1761,16 @@ function renderCurrentCard(st: VenueBoardState): HTMLElement {
   );
   cardRefs.set(key, { frame, heart, cap });
   return frame;
+}
+
+/**
+ * Pictures for the assigned venue, served on the board state rather than taken
+ * from the catalog (which excludes it). No `category` is stored for it, so the
+ * empty string resolves to the pin glyph — the same fallback the agreed and
+ * kept screens already draw for this venue.
+ */
+function currentPhotoSet(st: VenueBoardState): VenuePhotoSet {
+  return { photoRefs: st.original.photoRefs ?? [], category: "" };
 }
 
 /**
@@ -1924,6 +1959,12 @@ interface VenueRef {
   name: string;
   address: string;
   mapsUri: string | null;
+  /**
+   * Photos for a venue that is NOT in the catalog — i.e. the assigned one,
+   * which the board serves separately. Catalog venues leave this unset and are
+   * resolved by `key` instead, so they also pick up their chips and summary.
+   */
+  photos?: VenuePhotoSet;
 }
 
 /**
@@ -1952,7 +1993,11 @@ function renderVenuePreview(ref: VenueRef, back: () => void): void {
   const item = ref.key ? catalogByKey(ref.key) : null;
   const nodes: Node[] = [];
 
-  if (item) nodes.push(...venueGallery(item));
+  // A catalog row carries its own photos; anything else (the assigned venue)
+  // brings them along. The chips and blurb below stay on the catalog branch —
+  // there is no distance or rating to state for a venue that is already yours.
+  const photos = item ?? ref.photos;
+  if (photos) nodes.push(...venueGallery(photos));
 
   nodes.push(el("div", { class: "vc-detail-name", text: ref.name }));
 
@@ -2179,6 +2224,8 @@ function renderSuccess(kind: "suggested" | "agreed" | "kept" | "keep-asked" | "o
       name: venue.name,
       address: venue.address ?? "",
       mapsUri: venue.mapsUri ?? null,
+      // The kept branch names the ASSIGNED venue, which no catalog row covers.
+      ...(keptLike && st ? { photos: currentPhotoSet(st) } : {}),
     };
     nodes.push(
       el(
@@ -2591,7 +2638,14 @@ function mockState(): VenueBoardState {
     status: "liking",
     open: true,
     closedReason: null,
-    original: { name: "Кафе «Старое место»", address: "ул. Прорезная, 8", mapsUri: null },
+    original: {
+      name: "Кафе «Старое место»",
+      address: "ул. Прорезная, 8",
+      mapsUri: null,
+      // Production serves the ONE cover stored at assignment, so the preview
+      // ships one too — the pinned card's thumbnail and a single-shot gallery.
+      photoRefs: ["current-photo-0"],
+    },
     partnerName: "Sofia",
     myLikes: ["p1"],
     peerLikes: ["p2"],

@@ -25,6 +25,7 @@ import {
   VENUE_CHANGE_PREMIUM_PINNED,
   VENUE_CHANGE_PREMIUM_MAX,
   isWithinRadius,
+  resolveVenuePhotoRefs,
   __resetVenuePhotoCacheForTests,
   type CatalogVenue,
   type VenueBoardEligibilityInput,
@@ -673,5 +674,39 @@ describe("buildVenueChangeCatalog — curated cover photos", () => {
 
     expect(out).toHaveLength(12);
     expect(photoLookup).toHaveBeenCalledTimes(12);
+  });
+
+  // The pinned "keep this place" card is not a catalog row (the assigned venue
+  // is excluded from the alternatives), so it needs its own way into the same
+  // cache — see `resolveVenuePhotoRefs`.
+  describe("resolveVenuePhotoRefs — the pinned current venue", () => {
+    it("shares the catalog's cache, so a warm place costs no lookup", async () => {
+      await buildVenueChangeCatalog(input, { listCurated: async () => [curatedNoPhotos("c1")] });
+      expect(photoLookup).toHaveBeenCalledTimes(1);
+
+      expect(await resolveVenuePhotoRefs("c1")).toEqual([
+        "places/p/photos/a",
+        "places/p/photos/b",
+      ]);
+      expect(photoLookup).toHaveBeenCalledTimes(1);
+    });
+
+    it("looks a cold place up once, then serves it from the cache", async () => {
+      expect(await resolveVenuePhotoRefs("cold")).toHaveLength(2);
+      expect(await resolveVenuePhotoRefs("cold")).toHaveLength(2);
+      expect(photoLookup).toHaveBeenCalledTimes(1);
+    });
+
+    it("answers empty rather than throwing when there is nothing to ask with", async () => {
+      expect(await resolveVenuePhotoRefs(null)).toEqual([]);
+      delete process.env.PLACES_API_KEY;
+      expect(await resolveVenuePhotoRefs("c1")).toEqual([]);
+      expect(photoLookup).not.toHaveBeenCalled();
+    });
+
+    it("survives a failed lookup — photos never fail a board", async () => {
+      photoLookup.mockResolvedValue(null);
+      expect(await resolveVenuePhotoRefs("c1")).toEqual([]);
+    });
   });
 });

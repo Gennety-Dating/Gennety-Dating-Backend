@@ -1,5 +1,63 @@
 # Gennety Dating Deploy
 
+**PENDING — the venue-change board's current-venue card gets its photo
+(PRODUCT_SPEC §3.7b).** Not deployed yet. **No Prisma schema change, no env
+change, no flag change** — but it is half client, so it **DOES need a Mini App
+redeploy**: Deploy Full Server Code → `pnpm db:drift-check` → `pm2 restart` →
+`./scripts/deploy-webapp.sh` → `pnpm demo:deploy`.
+
+**Server first, and the order matters.** The photo refs are new on
+`GET /v1/venue-change/state`; a cached older bundle ignores the field and keeps
+today's photo-less card. The reverse order ships a client reading a field the
+server does not send yet — no picture, and the badge has already moved.
+
+The pinned "keep this place" card was the one card on the board with no
+picture, because the assigned venue is deliberately excluded from the catalog
+(2026-08-03) and the card had no row to inherit pictures from. The board was
+asking the pair to compare places while showing them everything except the
+place they already had.
+
+**Three things worth knowing before the restart:**
+
+- **The data was already there.** `Match.venuePhotoName` is written at
+  assignment by both selectors and is the same image the date card renders —
+  the state endpoint just never sent it. The common path costs nothing; a row
+  with no stored cover falls back to ONE Place Details lookup from
+  `venuePlaceId`, cached for a day in the same map the catalog fills (5 min on
+  failure). This endpoint is polled every ~4 s, which is why the stored cover
+  comes first rather than always querying for the fuller gallery.
+- **The card's badge moved to its own line**, which is a visible layout change
+  beyond "add a photo". A 68px photo takes 82px out of a ~350px card, leaving
+  the badge 176px against 203px of "Obecne miejsce spotkania" — measured, not
+  guessed: it wrapped into a two-line pill and pushed the venue's own name into
+  an ellipsis. Verified at 390px and 320px in ru/uk/pl, light and dark, plain
+  and burgundy-marked. The venue name on this card now wraps instead of
+  truncating; the twelve alternatives are untouched.
+- **Nothing exercises it until a pair reaches `scheduled`.** Production has
+  **2 matches ever, both terminal**, and `VENUE_CHANGE_FEATURE_ENABLED` gates
+  the entry button, so verify on `@gennetytestbot` — or, with no match at all,
+  on the dev preview, which now ships a photo for the pinned card:
+  `http://localhost:5173/venue-change.html?preview=board&lang=ru&theme=dark`.
+
+Demo picks it up from the same source with `pnpm demo:deploy` (its matches are
+assigned through the real path, so they carry a cover). No gate, no paid step,
+no negotiation branch — `apps/bot/src/demo/decide.ts` is untouched.
+
+Post-deploy check — the photo either renders or it doesn't, so verify by eye;
+the one thing worth querying is that the covers exist at all:
+
+```sh
+psql "$DATABASE_URL" -c "select count(*) filter (where venue_photo_name is not null) as with_cover, count(*) as scheduled from matches where status='scheduled';"
+# A scheduled row with no cover takes the fallback-lookup path — not a bug.
+pm2 logs gennety-bot --lines 200 --nostream | grep '\[venue\] photo lookup'
+# Empty is the good case: that line only prints when a lookup fails.
+```
+
+**Rollback:** revert the code, restart, and redeploy the Mini App from the
+previous checkout. Nothing else to undo — no schema, no env, no flag.
+
+---
+
 **Deployed 2026-08-08 — the demo replays the hour before the date, which it never
 did (DEMO_MODE.md).** Demo only (`23c8ea1`) — `apps/bot/src/demo/**` plus docs,
 so **nothing was rsynced to `/opt/gennety` and production was not restarted**
