@@ -1,9 +1,12 @@
 # Gennety Dating Deploy
 
-**PENDING — the demo replays the hour before the date, which it never did
-(DEMO_MODE.md).** Not deployed yet. **Demo only** — `apps/bot/src/demo/**` plus
-docs, so **nothing to rsync to `/opt/gennety`, no production restart**.
-`pnpm demo:deploy` is the whole deploy. No schema, no env, no flag change.
+**Deployed 2026-08-08 — the demo replays the hour before the date, which it never
+did (DEMO_MODE.md).** Demo only (`23c8ea1`) — `apps/bot/src/demo/**` plus docs,
+so **nothing was rsynced to `/opt/gennety` and production was not restarted**
+(`gennety-bot` held restart count 52). Deployed from an isolated `git worktree`,
+the shared tree again carrying a parallel session's work. No schema, no env, no
+flag change. Demo banner re-verified: `@gennety_demo_bot`, database
+`aws-1-eu-west-1` (production is `aws-0-`).
 
 Found by the first demo run ever to reach a scheduled date. It finished
 correctly (`status: completed`, real venue, date card rendered,
@@ -33,11 +36,12 @@ now carry a note in place. Nothing has exercised it because production has had
   the hetero-only cover gesture, wish card and express venue change. That needs
   a second run from the other side, not a code change.
 
-Post-deploy check — walk a demo to a scheduled date, tap «Что происходит
-дальше», then confirm the two columns are no longer null:
+**Post-deploy check still owed:** the previous run's match is already
+`completed`, so this needs a fresh walk — `/restart`, or «показать ещё одну
+анкету» — through to a scheduled date, then «Что происходит дальше». The two
+columns that were null are the assertion:
 
 ```sh
-pnpm demo:deploy
 # In the demo DB: coord_offer_sent_at and proxy_opened_at must both be set,
 # and coord_method should read 'proxy' for an untapped offer.
 ```
