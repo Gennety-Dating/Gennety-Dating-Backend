@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
 import { DEFAULT_SESSION } from "@gennety/shared";
 
-const { mClaimMatchDecision, mUpdateEloScores } = vi.hoisted(() => ({
+const { mClaimMatchDecision, mUpdateEloScores, mRefreshUserEmbedding } = vi.hoisted(() => ({
   mClaimMatchDecision: vi.fn(),
   mUpdateEloScores: vi.fn(),
+  mRefreshUserEmbedding: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,10 @@ vi.mock("../../config.js", () => ({
 
 vi.mock("../../services/match-decision-claim.js", () => ({
   claimMatchDecision: (...args: unknown[]) => mClaimMatchDecision(...args),
+}));
+
+vi.mock("../../workers/embedding-refresh.js", () => ({
+  refreshUserEmbedding: (...args: unknown[]) => mRefreshUserEmbedding(...args),
 }));
 
 vi.mock("../../utils/elo-calculator.js", () => ({
@@ -2177,6 +2182,7 @@ describe("venue negotiation finalization", () => {
 describe("negative-constraints", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mRefreshUserEmbedding.mockResolvedValue({ scanned: 1, refreshed: 1, failed: 0, stillDirty: 0 });
   });
 
   it("normalizeReason trims, collapses whitespace, and caps at 240 chars", () => {
@@ -2202,6 +2208,35 @@ describe("negative-constraints", () => {
     await appendNegativeConstraint("uid-A", "loud chewing");
     const call = mProfile.upsert.mock.calls[0]![0] as { update: { negativeConstraints: string } };
     expect(call.update.negativeConstraints).toBe("- prior item\n- loud chewing");
+  });
+
+  // The write marks the profile dirty, and `findCandidatesFor` fail-closes on
+  // the SEEKER's own dirty flag — so without an immediate refresh the user is
+  // withheld from matching until the 5-minute cron. That window is not
+  // theoretical: the paid Rematch offer is sent on the decline path, i.e. right
+  // when a decline reason has just been recorded.
+  it("appendNegativeConstraint refreshes the embedding instead of waiting for the cron", async () => {
+    mProfile.findUnique.mockResolvedValueOnce({ negativeConstraints: null });
+    mProfile.upsert.mockResolvedValueOnce({});
+    await appendNegativeConstraint("uid-A", "too arrogant for me");
+    expect(mRefreshUserEmbedding).toHaveBeenCalledWith("uid-A");
+  });
+
+  it("appendNegativeConstraint never fails the write when the refresh does", async () => {
+    mProfile.findUnique.mockResolvedValueOnce({ negativeConstraints: null });
+    mProfile.upsert.mockResolvedValueOnce({});
+    mRefreshUserEmbedding.mockRejectedValueOnce(new Error("openai down"));
+    await expect(appendNegativeConstraint("uid-A", "too arrogant for me")).resolves.toBeUndefined();
+    // The constraint still landed; the row stays dirty for the cron to retry.
+    expect(mProfile.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("a batch of constraints costs one refresh, not one per line", async () => {
+    mProfile.findUnique.mockResolvedValue({ negativeConstraints: null });
+    mProfile.upsert.mockResolvedValue({});
+    await appendNegativeConstraint("uid-A", "first thing", "en", { refreshEmbedding: false });
+    await appendNegativeConstraint("uid-A", "second thing", "en", { refreshEmbedding: true });
+    expect(mRefreshUserEmbedding).toHaveBeenCalledTimes(1);
   });
 });
 

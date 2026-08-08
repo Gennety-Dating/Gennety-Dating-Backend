@@ -380,6 +380,20 @@ idea whether a radar step exists at all.
   now stay, `hasEverMatched` keeps the driver quiet, and the offer is made once
   per ending (`redoOffered`, keyed by match id).
 
+  **The tap answers, and it keeps its button until a profile actually
+  arrives.** It used to retire the keyboard first — double-tap protection — and
+  then discard whatever `startDemoMatch` returned, so a refused pitch left the
+  visitor with no button, no message, and nothing but `/restart`. That is not a
+  hypothetical: the allocator refused because the decline reason the visitor had
+  *just given* marked their embedding dirty (PRODUCT_SPEC → Embedding freshness,
+  fixed at the write), and the chat then sat unchanged for 44 seconds until the
+  driver's own three attempts exhausted themselves. Now the keyboard is retired
+  only on success, `restartDemoPitch` shares the driver's single-flight guard
+  instead (so a double tap — or a tick landing on the same visitor — cannot run
+  two pitches), a refusal says so immediately, and it **counts into the same
+  failure ladder** as the driver's attempts rather than being invisible to it.
+  A success clears the streak, so a give-up can never outlive its cause.
+
   **A second run does not re-explain the product.** The "you're in the system,
   here is how matchmaking actually works" message is delivered once, immediately
   above the first pitch. `spokenBeats` is in memory (no demo-only schema, below),

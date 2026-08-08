@@ -4437,11 +4437,25 @@ breaks ties without forcing bad pairings.
 ### Embedding freshness (M-2)
 
 Every code path that mutates `psychologicalSummary`, `partnerPreferences`,
-`negativeConstraints`, or `hobbies` flips `Profile.embeddingDirty = true`.
-Bio and partner-preference edits immediately attempt a user-scoped refresh with
-a 30-second deadline; failure leaves the dirty marker intact and the user is
+`negativeConstraints`, or `hobbies` flips `Profile.embeddingDirty = true`, and
+**every one of them then attempts an immediate user-scoped refresh with a
+30-second deadline**; failure leaves the dirty marker intact and the user is
 told that automatic synchronization will finish later. The
 `embedding-refresh` cron (every 5 min, ≤20 rows/tick) remains the retry path.
+
+**`negativeConstraints` only joined that rule on 2026-08-08 — until then it
+marked dirty and walked away.** The flag is not a scheduling hint: eligibility
+below is fail-closed on the *seeker's own* dirty flag, so between the write and
+the next cron tick the user is withheld from matching entirely. Every other
+writer closed that window; `appendNegativeConstraint` is the one that fires
+seconds before the product may want to match the same person again, because it
+is what records a **decline reason** — and the paid Rematch offer (§3.11) is
+sent on exactly that path. A man who explained why he passed and then bought a
+re-run inside the window was told the engine found nobody, and refunded, when
+in truth it had refused to look. (The same window is what stopped the demo:
+it pitches seconds after the reason is given, so it lost that race every time.)
+A caller appending several constraints at once — post-date feedback — refreshes
+once at the end rather than per line.
 Before every weekly batch, matching takes and processes the complete dirty
 snapshot without the cron's 20-row cap, logging only aggregate counts.
 Eligibility requires `embeddingDirty = false`: a still-dirty profile is skipped

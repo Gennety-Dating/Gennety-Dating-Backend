@@ -128,7 +128,7 @@ export function forgetDemoVisitor(userId: string): void {
  * What a puppet move did. `reason` is for the log, never for the visitor —
  * `insufficient-balance` is not something a person can act on.
  */
-type DemoActionOutcome = { ok: true } | { ok: false; reason: string };
+export type DemoActionOutcome = { ok: true } | { ok: false; reason: string };
 
 const ACTED: DemoActionOutcome = { ok: true };
 
@@ -1284,7 +1284,26 @@ export async function restartDemoPitch(
   userId: string,
   telegramId: bigint,
   language: Language | null,
-): Promise<void> {
+): Promise<DemoActionOutcome> {
+  // Single-flight, shared with the driver. Two reasons, and the second is not
+  // hypothetical: a double tap would run two pitches at once, and a tick landing
+  // on the same visitor mid-tap would too — the driver decides `pitch` the
+  // moment `clearDemoMatches` below removes the finished row.
+  if (inFlight.has(userId)) return refused("already-in-flight");
+  inFlight.add(userId);
+  try {
+    return await pitchAgain(api, userId, telegramId, language);
+  } finally {
+    inFlight.delete(userId);
+  }
+}
+
+async function pitchAgain(
+  api: Api<RawApi>,
+  userId: string,
+  telegramId: bigint,
+  language: Language | null,
+): Promise<DemoActionOutcome> {
   const cleared = await clearDemoMatches(userId);
   // A second run must not re-explain how matchmaking works. `spokenBeats` is in
   // memory (no demo-only schema, DEMO_MODE.md), so a deploy mid-demo forgets
@@ -1297,7 +1316,17 @@ export async function restartDemoPitch(
   // creates one. Read from `clearDemoMatches`'s own delete count rather than a
   // separate query, because the evidence is gone a line later.
   if (cleared > 0) markSpoken(userId, "matchmaking");
-  await startDemoMatch(api, userId, telegramId, language);
+
+  const outcome = await startDemoMatch(api, userId, telegramId, language);
+  // The tap belongs to the SAME ladder as the driver's own attempts. Without
+  // this its refusal was invisible in every direction: the visitor got no
+  // answer, the streak stayed at zero, and they then waited out three more
+  // driver attempts — 44 seconds of silence — before the give-up line landed.
+  // A success clears the streak, so an earlier give-up can never outlive the
+  // thing that caused it.
+  if (outcome.ok) failures.clear(userId);
+  else failures.note(userId, "pitch");
+  return outcome;
 }
 
 /** Wipe every match this visitor has had with a puppet; returns how many. */

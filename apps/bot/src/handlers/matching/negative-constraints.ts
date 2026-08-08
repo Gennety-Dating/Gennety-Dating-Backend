@@ -1,6 +1,7 @@
 import { prisma } from "@gennety/db";
 import { parseRejectionFeedbackPrompt } from "@gennety/shared";
 import { callOpenAIJson } from "../../services/openai.js";
+import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
 
 /**
  * Distill a free-form rejection reason into a concise constraint string
@@ -42,6 +43,15 @@ async function parseRejectionWithLLM(
   return callOpenAIJson<ParsedRejectionConstraint>(systemPrompt, rawReason);
 }
 
+export interface AppendNegativeConstraintOptions {
+  /**
+   * Attempt the immediate embedding refresh (default true). Pass `false` only
+   * when the caller appends several constraints in a row and refreshes once
+   * itself — see `handlers/date/feedback.ts`.
+   */
+  refreshEmbedding?: boolean;
+}
+
 /**
  * Append a distilled constraint to a user's profile. Uses the LLM to
  * extract structured constraints when available, falling back to simple
@@ -51,6 +61,7 @@ export async function appendNegativeConstraint(
   userId: string,
   rawReason: string,
   language: string = "en",
+  options: AppendNegativeConstraintOptions = {},
 ): Promise<void> {
   const normalized = normalizeReason(rawReason);
   if (!normalized) return;
@@ -96,4 +107,27 @@ export async function appendNegativeConstraint(
       embeddingDirtyAt: new Date(),
     },
   });
+
+  // …and close the window it just opened. `embeddingDirty` does not merely
+  // schedule work: `findCandidatesFor` fail-closes on the SEEKER's own dirty
+  // flag, so between this write and the 5-minute cron the user is withheld from
+  // matching entirely. Bio and partner-preference edits have always closed that
+  // window with an immediate user-scoped refresh (PRODUCT_SPEC → Embedding
+  // freshness); this writer did not — and it is the one that fires seconds
+  // before the product may want to match the same person again.
+  //
+  // Two reachable consequences, both observed rather than theorised. The paid
+  // Rematch offer (§3.11) is sent on the decline path, so a man who explains
+  // why he passed and then buys a re-run inside the window is told the engine
+  // found nobody — and refunded — when in truth it refused to look. And the
+  // demo, which pitches seconds after the same reason is given, simply stopped.
+  //
+  // Best-effort by the same rule as every other refresh call site: a failure
+  // leaves the marker intact and the cron retries, so this can only ever make
+  // the flag clear sooner, never keep a stale vector alive.
+  if (options.refreshEmbedding ?? true) {
+    await refreshUserEmbedding(userId).catch((err: unknown) => {
+      console.warn("[negative-constraints] immediate embedding refresh failed:", err);
+    });
+  }
 }

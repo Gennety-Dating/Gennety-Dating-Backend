@@ -83,8 +83,14 @@ export async function recordPostDateFeedback(input: {
     const systemPrompt = parsePostDateFeedbackPrompt({ language: input.language });
     const analysis = await callOpenAIJson<ParsedPostDateFeedback>(systemPrompt, trimmed);
     if (analysis) {
-      for (const constraint of analysis.new_negative_constraints) {
-        await appendNegativeConstraint(input.userId, constraint, input.language);
+      // One refresh for the whole batch, not one per constraint: each append
+      // marks the profile dirty, and re-embedding after every line would buy
+      // nothing but N OpenAI calls. The last append does it for all of them.
+      const constraints = analysis.new_negative_constraints;
+      for (const [i, constraint] of constraints.entries()) {
+        await appendNegativeConstraint(input.userId, constraint, input.language, {
+          refreshEmbedding: i === constraints.length - 1,
+        });
       }
     }
   } catch {

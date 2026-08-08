@@ -35,6 +35,7 @@ export type DemoBeat =
   | "after_date"
   | "declined"
   | "finale"
+  | "retrying"
   | "stuck"
   | "restarted";
 
@@ -503,6 +504,24 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
   //
   // Deliberately vague about WHAT broke — the visitor cannot act on
   // `insufficient-balance`, and the log carries the real reason for us.
+  // A tap that produced nothing. Said immediately, because the alternative is
+  // what shipped: the button retired itself, the pitch was refused silently,
+  // and the visitor sat in front of an unchanged chat for 44 seconds before the
+  // give-up line below arrived. "Trying again" is a statement of fact, not a
+  // hedge — the driver re-derives `pitch` within one step and the third refusal
+  // escalates to `stuck`.
+  retrying: {
+    ru:
+      "⏳ Анкета не пришла с первой попытки — это демо, так бывает.\n\n" +
+      "Пробую ещё раз. Если через минуту всё ещё тихо — напишите /restart.",
+    uk:
+      "⏳ Анкета не прийшла з першої спроби — це демо, так буває.\n\n" +
+      "Пробую ще раз. Якщо за хвилину все ще тихо — напишіть /restart.",
+    en:
+      "⏳ The profile didn't come through on the first try — it's a demo, it happens.\n\n" +
+      "I'm trying again. If it's still quiet in a minute, send /restart.",
+  },
+
   stuck: {
     ru:
       "🛠 Кажется, я застрял на этом шаге — это демо, и здесь такое бывает.\n\n" +
@@ -604,6 +623,9 @@ const AFTER_DATE_LABEL: BeatCopy = {
   uk: "▶️ Далі",
   en: "▶️ Next",
 };
+
+/** Every beat, for tests that must hold across the whole script. */
+export const DEMO_BEATS = Object.keys(SCRIPT) as DemoBeat[];
 
 export function demoText(beat: DemoBeat, language: Language | null): string {
   return resolve(SCRIPT[beat], language);

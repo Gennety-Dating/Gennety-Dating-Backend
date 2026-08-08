@@ -47,6 +47,53 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — a decline reason blocked the next match, and ARCHITECTURE had been describing the fix for months
+
+**Kind:** deviation from plan + a document turned out to be wrong
+**What:** a demo bug report ("I pressed «show me the profile again» and nothing
+came") was fixed in **production** code: `appendNegativeConstraint` now attempts
+the immediate user-scoped embedding refresh that every other embedding-feeding
+writer already did. Only two of the three fixes are demo-scoped.
+**Why:** the demo was the messenger, not the defect. `embeddingDirty` is not a
+scheduling hint — `findCandidatesFor` fail-closes on the **seeker's own** flag —
+so recording a decline reason withheld that user from matching for up to five
+minutes. And ARCHITECTURE.md had said *"embedding-feeding edits mark the profile
+dirty and attempt a 30-second user-scoped refresh"* since M-2 shipped, which was
+true of bio and partner-preferences and false of this one writer. The production
+consequence is not theoretical: the paid Rematch offer (§3.11) is sent on the
+decline path, so a man who explained his pass and bought a re-run inside the
+window was told the engine found nobody — and refunded — when it had refused to
+look. `REMATCH_FEATURE_ENABLED` has been on since 2026-07-27.
+**What it changes going forward:** **marking `embeddingDirty` without attempting
+a refresh is now a bug, not a style choice** — the flag removes a user from
+matching, so whoever sets it owes the attempt. The one exception is explicit and
+typed (`{ refreshEmbedding: false }`), for a caller appending several
+constraints in a row; it must refresh once at the end. Also, per the 2026-08-07
+entry: a demo-mode report is not automatically a demo-mode fix — check whether
+the path is shared before scoping.
+**Recorded in:** PRODUCT_SPEC.md → Embedding freshness (M-2); DEMO_MODE.md →
+Recovery; `handlers/matching/negative-constraints.ts`.
+
+## 2026-08-08 — a demo button keeps its button until it has something to show
+
+**Kind:** change of mind
+**What:** the redo tap no longer retires its own keyboard up front. It retires
+it only once a profile has actually been dispatched; a refusal answers
+immediately and leaves the button live.
+**Why:** retiring first was deliberate — double-tap protection — and it is what
+turned a recoverable refusal into a dead end: no button, no message, `/restart`
+or nothing. The protection was worth keeping and belonged somewhere else, so it
+moved to the driver's existing single-flight guard, which additionally fixes a
+race the old code had (a tick can decide `pitch` the instant the tap clears the
+finished row, and both would have run).
+**What it changes going forward:** the general rule for a demo affordance is
+that **the state a button describes is what may retire it, never the tap
+itself** — the same reason production's ticket card is never edited. And a
+handler that calls into the driver must consume the outcome: `performAction`
+returns one precisely so a refusal cannot be dropped, and the button path was
+the one caller still throwing it away.
+**Recorded in:** DEMO_MODE.md → Recovery; `demo/commands.ts`, `demo/driver.ts`.
+
 ## 2026-08-08 — the referral cross-promo is a chip, and it never sits in an action bar
 
 **Kind:** founder decision

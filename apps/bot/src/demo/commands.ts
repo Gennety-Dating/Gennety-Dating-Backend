@@ -99,10 +99,32 @@ demoRouter.callbackQuery(DEMO_CONTINUE_CALLBACK, async (ctx) => {
   });
   if (!user || user.status !== "active") return;
 
-  // Retire the button so a second tap can't queue a second pitch.
-  await ctx.editMessageReplyMarkup().catch(() => undefined);
+  const outcome = await restartDemoPitch(
+    ctx.api,
+    user.id,
+    BigInt(telegramId),
+    user.language,
+  );
 
-  await restartDemoPitch(ctx.api, user.id, BigInt(telegramId), user.language);
+  // Retire the button only once a profile has actually been produced.
+  //
+  // It used to be retired up front, as double-tap protection — which
+  // `restartDemoPitch` now owns properly (single-flight, shared with the
+  // driver). Retiring first meant a refused pitch left the visitor with no
+  // button, no message and no way forward but `/restart`: exactly what happened
+  // when the allocator refused because the decline reason they had just given
+  // had marked their embedding dirty. Leaving it live is what makes "press it
+  // again" work, and it keeps its own correct label ("show me the profile
+  // again" vs "show me another profile") without this handler having to know
+  // which ending it came from.
+  if (outcome.ok) {
+    await ctx.editMessageReplyMarkup().catch(() => undefined);
+    return;
+  }
+  // A second tap while the first is still running is not a failure to report —
+  // the visitor is about to get their profile from the tap already in flight.
+  if (outcome.reason === "already-in-flight") return;
+  await ctx.reply(demoText("retrying", user.language));
 });
 
 /**

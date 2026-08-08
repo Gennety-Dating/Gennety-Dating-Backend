@@ -1,9 +1,74 @@
 # Gennety Dating Deploy
 
-**PENDING — deleting an account erases its chat session, and photo-stage
-"Continue" stops finalizing early (PRODUCT_SPEC §1.3 / §GDPR, ARCHITECTURE →
-`bot_sessions`).** Not deployed yet. **No Prisma schema change, no env change,
-no flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only,
+**PENDING — a decline reason stops blocking the next match, and the demo's redo
+button answers (PRODUCT_SPEC → Embedding freshness (M-2), DEMO_MODE.md →
+Recovery).** Not deployed yet. **No Prisma schema change, no env change, no flag
+change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so a
+full server code deploy carries all of it, plus `pnpm demo:deploy` after it.
+
+Found from a founder report against the demo: tapping «Показати анкету знову»
+after a pass produced **nothing** — no profile, no message — for 44 seconds.
+Reconstructed exactly from `chat_events` in the demo DB rather than guessed:
+reason given by voice 17:45:52 → recorded 17:45:57 → button tapped 17:46:05 →
+`createProposedMatch refused … visitor embeddingDirty (no vector yet)` → three
+more silent driver attempts → the give-up line at 17:46:49.
+
+**The root cause is production, not the demo.** `appendNegativeConstraint`
+marked `embeddingDirty` and stopped there, while every other embedding-feeding
+writer has always attempted an immediate user-scoped refresh — and
+`findCandidatesFor` fail-closes on the **seeker's own** dirty flag, so recording
+a decline reason withheld that user from matching until the 5-minute cron.
+ARCHITECTURE.md has described the fixed behaviour since M-2 shipped; the code
+only did it for bio and partner-preferences.
+
+**Three things worth knowing before the restart:**
+
+- **This is reachable in production today, via Rematch.** The §3.11 offer is
+  sent on the decline path — its primary case — and `REMATCH_FEATURE_ENABLED`
+  has been on since 2026-07-27. Inside the window a buyer was told the engine
+  found nobody and refunded, when it had refused to look. The refund rail worked,
+  so nothing was lost but the purchase and the truth of the message. Nobody has
+  hit it yet: production has had **2 matches ever, both terminal**, and
+  `rematch_purchases` is empty.
+- **Report and post-date-feedback paths now pay for one embeddings call.**
+  They already awaited an OpenAI JSON call inside the same function, so this
+  roughly doubles a sub-second step; it is bounded by the existing 30s deadline
+  and is best-effort, so a failure leaves the row dirty for the cron exactly as
+  before. Post-date feedback appends several constraints and deliberately
+  refreshes **once at the end** rather than per line.
+- **The demo half changes a button's behaviour.** The redo keyboard is retired
+  only once a profile is actually dispatched, double-tap protection moved to the
+  driver's single-flight guard, and a refused tap now answers immediately
+  (`retrying`, ru/uk/en) and counts into the same failure ladder the driver uses.
+
+Preflight for this change: typecheck clean, **3908 tests** (bot 3390 /
+shared 273 / webapp 245), lint clean.
+
+Post-deploy check — the production half logs nothing on the happy path, so the
+assertion is the absence of the window rather than a new line:
+
+```sh
+# Should stay empty; it only prints when the immediate refresh fails.
+pm2 logs gennety-bot --lines 200 --nostream | grep 'immediate embedding refresh failed'
+# A profile dirtied by a decline reason should clear within a second, not five
+# minutes — this is a snapshot, so run it right after a decline reason lands.
+psql "$DATABASE_URL" -c "select count(*) from profiles where embedding_dirty;"
+```
+
+Then, on the demo after `pnpm demo:deploy`: pass on a profile, give a free-text
+reason, tap «Показати анкету знову» — a profile must arrive, not silence.
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag. Constraints already written stay written; their embeddings are
+correct either way.
+
+---
+
+**Deployed 2026-08-08 — deleting an account erases its chat session, and
+photo-stage "Continue" stops finalizing early (`981ef04`, PRODUCT_SPEC §1.3 /
+§GDPR, ARCHITECTURE → `bot_sessions`).** **No Prisma schema change, no env
+change, no flag change, no Mini App change** (`apps/webapp` untouched) —
+bot-side only,
 so a full server code deploy carries all of it, and `pnpm demo:deploy` after it.
 
 Found from a founder-reported dead end in the demo: after uploading photos the
