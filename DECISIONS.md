@@ -47,6 +47,29 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — a demo-only deploy can ship a production fix to the demo and nowhere else
+
+**Kind:** deviation from plan
+**What:** `087e7e4` (free text that isn't an answer) ran in the demo from
+2026-08-07 and in production only on 2026-08-08. Nothing was mis-scoped — it was
+committed before two demo-only releases, and `deploy-demo.sh` syncs the whole
+working tree, so it rode along to `/opt/gennety-demo` while `/opt/gennety` was
+deliberately never restarted.
+**Why it matters:** the signal we use to prove a demo deploy was safe — the
+production restart count not moving — is the same thing that hides an unshipped
+production fix. It also inverts the usual assumption: the demo was AHEAD of
+production, so testing the demo bot would have shown a fix that real users did
+not have. Found only because the founder asked directly whether production was
+current.
+**What it changes going forward:** a demo release is not a release. After
+`pnpm demo:deploy`, recompute the production gap (`git log <prod-sha>..HEAD`) —
+and when that range contains a commit under `apps/bot/src/demo/`, the commits
+*around* it are the ones to check, because the demo one is the reason the range
+exists at all. Verify by module presence on `/opt/gennety`, never by which
+release a commit happened to precede.
+**Recorded in:** deploy.md → the 2026-08-08 release block and the "Prod anchor"
+section.
+
 ## 2026-08-08 — the current-venue card's badge moved so a photo could fit
 
 **Kind:** deviation from plan

@@ -1,7 +1,72 @@
 # Gennety Dating Deploy
 
-**PENDING — the venue-change board's current-venue card gets its photo
-(PRODUCT_SPEC §3.7b).** Not deployed yet. **No Prisma schema change, no env
+**Deployed 2026-08-08 — the two fixes production was still missing (`f66949a`).**
+Full server code + Mini App + demo, bringing prod from `d5405f6` to
+**`f66949a` plus `e04ffec`** (the dependency-override commit made during the
+release). **No Prisma schema change** — `db:drift-check` **OK**, nothing to
+push. No env change, no flag change.
+
+It carried both PENDING blocks below — the venue-change current-venue card
+photo, and the "free text that isn't an answer" fix (`087e7e4`) — which had sat
+undeployed because the two releases in between were **demo-only** and never
+restarted `gennety-bot`. Worth stating plainly, because it is the failure this
+file keeps warning about in a new shape: a demo deploy touches
+`/opt/gennety-demo`, so a production-relevant commit that happens to be an
+ancestor of a demo release ships to the DEMO and nowhere else. `087e7e4` was in
+the demo since 2026-08-07 and in production only now. **Check the prod restart
+count after any demo deploy**: it not moving is the whole point, and it is also
+what hides an unshipped fix.
+
+**⚠️ `security:audit` failed preflight again — the third release running.**
+`nanoid` <3.3.17 (GHSA-2v37-7h3g-55p8), reached through
+`apps/video > @remotion/cli > @remotion/bundler > css-loader > postcss`. Not in
+the bot runtime, so no user was exposed, but the gate is pass/fail. Fixed by
+adding `"nanoid": "3.3.17"` to `pnpm.overrides` (`e04ffec`), which also sorted
+the block so the next entry lands somewhere obvious. Re-audit: **No known
+vulnerabilities found.** This is now a standing tax, not an incident — read the
+Preflight note about overrides rotting.
+
+**⚠️ A worktree deploy leaves a stray `.git` FILE on the droplet.** `git
+worktree` writes `.git` as a file containing `gitdir: /Users/pro/…`, and the
+documented `--exclude '.git/'` matches directories only — so yesterday's
+worktree deploy rsynced that pointer to `/opt/gennety/.git`, where it sat as a
+dangling reference to a Mac path. This release's `--delete` removed it, which is
+correct and self-healing. Do **not** "fix" the exclude to `.git` without a
+slash: an excluded path is protected from `--delete`, so that would pin the junk
+there permanently. Either leave it to the next full deploy or
+`rm -f /opt/gennety/.git` after a worktree run.
+
+Preflight green: typecheck clean across all 5 projects, **3867 tests**
+(bot 3353 / shared 273 / webapp 241, 261 files, 0 failed), `pnpm build`,
+`security:secrets` (1016 files), `security:audit` 0 advisories after the
+override.
+
+rsync dry-run listed exactly **3** deletions, all reviewed: two gitignored
+`apps/video/build` Remotion artifacts and the stray `.git` file above. Both
+droplet-only DB backups and both `keys/*.p8` verified present afterwards.
+
+**Post-deploy verified (measured, not inferred):** the three files that
+distinguish the two undeployed commits now md5-match local HEAD
+(`onboarding-photo-stage.ts` `4983080a`, `venue-change.ts` `9fd9e243`,
+`i18n.ts` `359cb5e6` — before the deploy they matched `d5405f6`);
+`services/profiler-intent.ts` present on the droplet (it did not exist there);
+`originalPhotoRefs` appears 4× in the venue-change handler (0× before);
+`Bot @gennetybot started` with all 16 crons + the peer-wait worker; restart
+count 52 → **53** (one increment, no loop); **zero** P2022 / P2023 /
+`ERR_MODULE_NOT_FOUND` / unhandled from the new PID; `/v1/ping` ok; admin
+`401`; **all 11 Mini App pages 200**. Demo redeployed from the same source and
+isolation re-confirmed from its own banner (`@gennety_demo_bot`, database
+`aws-1-eu-west-1` — production is `aws-0-`), both demo-only cron suppressions
+still logged.
+
+**Rollback:** re-sync a checkout at `d5405f6` and redeploy the Mini App and the
+demo from it. No schema to undo, no env, no flag.
+
+---
+
+**Deployed 2026-08-08 (was PENDING) — the venue-change board's current-venue card gets its photo
+(PRODUCT_SPEC §3.7b).** Deployed 2026-08-08 in the release at the top of this
+file. **No Prisma schema change, no env
 change, no flag change** — but it is half client, so it **DOES need a Mini App
 redeploy**: Deploy Full Server Code → `pnpm db:drift-check` → `pm2 restart` →
 `./scripts/deploy-webapp.sh` → `pnpm demo:deploy`.
@@ -108,8 +173,11 @@ columns that were null are the assertion:
 
 ---
 
-**PENDING — free text that isn't an answer stops being recorded as one
-(PRODUCT_SPEC §1.3, §Phase 1b, §3.4).** Not deployed yet. **No Prisma schema
+**Deployed 2026-08-08 (was PENDING) — free text that isn't an answer stops being recorded as one
+(PRODUCT_SPEC §1.3, §Phase 1b, §3.4).** Deployed 2026-08-08 in the release at
+the top of this file — **note it reached the DEMO a day earlier**, on
+2026-08-07, because `087e7e4` is an ancestor of the demo-only release `23c8ea1`
+and `deploy-demo.sh` syncs the whole tree. **No Prisma schema
 change, no env change, no flag change, no Mini App change** (`apps/webapp`
 untouched) — bot-side only, so a full server code deploy carries all of it.
 Demo picks it up from the same source with `pnpm demo:deploy`; no gate, no paid
@@ -1907,8 +1975,8 @@ watch that the PID holds and the restart count stops climbing. Otherwise do a
 full deploy — but note that rsync copies the **working tree**, not git HEAD, so
 check `git status` first: an unrelated in-progress refactor ships with it.
 
-**Prod anchor, re-verified 2026-08-07 after the release at the top of this file.**
-Prod is at **`c25adbc` plus `01c32b8`** (the dependency-override commit made
+**Prod anchor, re-verified 2026-08-08 after the release at the top of this file.**
+Prod is at **`f66949a` plus `e04ffec`** (the dependency-override commit made
 during that release) — deliberately **not** at `HEAD`, and the gap grows every
 time anyone commits.
 
@@ -1917,9 +1985,17 @@ revision of this note named them, and it was stale within the hour because a
 parallel session kept landing work. The set is a one-liner:
 
 ```sh
-git log --oneline c25adbc..HEAD | grep -v 01c32b8    # what prod is missing
-git diff --stat c25adbc..HEAD -- apps packages       # is any of it runtime code?
+git log --oneline f66949a..HEAD | grep -v e04ffec    # what prod is missing
+git diff --stat f66949a..HEAD -- apps packages       # is any of it runtime code?
 ```
+
+**A demo-only release does not advance this anchor, and that is the trap.**
+`deploy-demo.sh` syncs the whole tree to `/opt/gennety-demo`, so every commit
+that is an *ancestor* of a demo release ships to the demo — production-relevant
+or not — while `/opt/gennety` stays where it was. That is exactly how `087e7e4`
+ran in the demo for a day before reaching production. When the range above
+contains a commit under `apps/bot/src/demo/`, the commits *around* it are the
+ones to check, not the demo one.
 
 The second command is the one that matters: a range that touches only `*.md` is
 a documentation gap, while anything under `apps/` or `packages/` is undeployed
@@ -1932,7 +2008,16 @@ Two standing exclusions, both deliberate rather than forgotten:
   so an import is a separate, larger decision, not part of any deploy.
 - **`apps/video/**`** is the Remotion workspace and is not in the bot runtime.
 
-Anchor md5 as of 2026-08-07:
+Anchor md5 as of 2026-08-08 — three files the last release actually changed,
+which is what makes them worth anchoring on:
+
+```
+4983080a84fdf053fc79bb99fcf118c5  /opt/gennety/apps/bot/src/services/onboarding-photo-stage.ts
+9fd9e243fea22d10a7c862ced62b2f2f  /opt/gennety/apps/bot/src/services/venue-change.ts
+359cb5e6ba572d0939e141ee7ddba224  /opt/gennety/packages/shared/src/i18n.ts
+```
+
+The file below is kept as the counter-example, not as a check to run:
 
 ```
 45b55b6600994a7869511e777c1e4704  /opt/gennety/packages/shared/src/ai/prompts.ts
