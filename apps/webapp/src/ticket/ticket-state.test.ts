@@ -191,10 +191,19 @@ describe("formatting helpers", () => {
     expect(formatUsd(1398)).toBe("$13.98");
   });
   it("formats countdown spans", () => {
-    expect(formatCountdown(0)).toBe("0m");
-    expect(formatCountdown(90 * 60 * 1000)).toBe("1h 30m");
-    expect(formatCountdown(5 * 60 * 1000)).toBe("5m");
-    expect(formatCountdown(30 * 1000)).toBe("<1m");
+    const en = { hours: "{n}h", minutes: "{n}m", soon: "under a minute" };
+    expect(formatCountdown(0, en)).toBe("0m");
+    expect(formatCountdown(90 * 60 * 1000, en)).toBe("1h 30m");
+    expect(formatCountdown(5 * 60 * 1000, en)).toBe("5m");
+    expect(formatCountdown(30 * 1000, en)).toBe("under a minute");
+  });
+  it("formats countdown spans in the caller's units, not English letters", () => {
+    // The regression this guards: «Осталось 23h 59m» — a Russian sentence with
+    // English unit letters spliced into the middle of it, because the units
+    // were baked into the formatter.
+    const ru = { hours: "{n} ч", minutes: "{n} мин", soon: "меньше минуты" };
+    expect(formatCountdown(23 * 60 * 60 * 1000 + 59 * 60 * 1000, ru)).toBe("23 ч 59 мин");
+    expect(formatCountdown(7 * 60 * 1000, ru)).toBe("7 мин");
   });
   it("msUntil clamps to zero in the past", () => {
     const past = new Date(Date.now() - 1000).toISOString();

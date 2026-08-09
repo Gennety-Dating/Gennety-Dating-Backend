@@ -1,5 +1,70 @@
 # Gennety Dating Deploy
 
+**PENDING — the gate's waiting screen: the countdown stops hiding behind the
+Close button, and says whose it is (PRODUCT_SPEC §3.5b, DECISIONS.md ×3).** Not
+deployed yet. **No Prisma schema change, no env change, no flag change, and NO
+SERVER CODE CHANGE AT ALL** — the diff is `apps/webapp/**` plus docs. **Deploy
+Mini App Only** (`./scripts/deploy-webapp.sh`); nothing to rsync to
+`/opt/gennety`, **no `pm2 restart`**. Run `pnpm demo:deploy` too — the demo
+builds its own bundle from the same source, and the waiting screen is far easier
+to reach there (it runs the mock rail). **It ships in the same Mini App build as
+the three ticket blocks below** — one `deploy-webapp.sh` carries all of them.
+
+Reported as "the Закрыть button overlaps some other button". There is no second
+button: the countdown was being read *through* Close. Three fixes, one screen.
+
+**Four things worth knowing before the redeploy:**
+
+- **The action bar's scrim changes shape, on BOTH ticket screens and the store.**
+  Its background becomes plain `--bg` (opaque, invisible against the page) and
+  the 72px fade moves into a `::before` above the bar. It looks identical where
+  nothing scrolls under the buttons and fixes it where something does — this is
+  a property of the pattern, not of the waiting screen, so check the store's
+  post-purchase **Готово** bar too. `--bar-space` is unchanged by design (see
+  DECISIONS.md for why the fade must stay out of the bar's box).
+- **The countdown moves into the header** and loses its burgundy for muted text
+  at the sub's size. It can no longer be occluded, and it now names the partner.
+- **Fifteen i18n strings change**, and one is not cosmetic: `waitingTimer` gains
+  a subject in ru/uk/de/pl, and three NEW keys per locale (`timeHours`,
+  `timeMinutes`, `timeSoon`) localize the unit letters — «23h 59m» inside a
+  Russian sentence was half-English. Three headings lose 🎟️ in all five
+  locales; **button** labels keep theirs on purpose. A stale bundle cannot
+  half-apply any of it — it is one build or the other.
+- **The waiting screen's buttons swap rungs**: "Всё-таки оплатить за пару"
+  becomes the real button, Закрыть becomes the text link under it. A user with
+  nothing to reconsider still sees Закрыть as a full button.
+
+Preflight for this change: webapp typecheck clean, lint clean, **255 webapp
+tests** (0 failed), `vite build` clean. Four new assertions guard the copy
+invariants (no 🎟️ in the four headings; `waitingTimer` longer than its
+placeholder plus a word; every unit string carries `{n}`).
+
+Post-deploy check — these screens are transient and log nothing, so verify by
+eye. `scripts/dev-stage-all-screens.mjs` stands up all six gate states in both
+themes as `web_app` buttons in the dev-bot chat, and the founder's exact path is
+reachable from screen 3:
+
+```sh
+./scripts/deploy-webapp.sh
+pnpm demo:deploy
+curl -sI https://dating-calendar.gennety.com/ticket.html | head -1
+# Then, on @gennetytestbot:
+#   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-stage-all-screens.mjs --apply
+# Open "3 · Cover-partner", tap «Пусть берёт сам(а)» → the waiting screen must
+# show: the countdown under the sub in muted grey (NOT burgundy, NOT at the
+# bottom), «У собеседника осталось 23 ч 59 мин» in Russian units, no 🎟️ in the
+# heading, and «Всё-таки оплатить за пару» as the button with Закрыть as text
+# beneath it. Then SCROLL: nothing may be legible through any button.
+# Open "2 · Waiting" directly for the female/alone case — Закрыть must be a
+# full button there, with no text link under it.
+```
+
+**Rollback:** redeploy the Mini App from the previous checkout, and
+`pnpm demo:deploy` from it as well. Nothing else to undo — no schema, no env, no
+flag, no server state.
+
+---
+
 **PENDING — a forgotten menu edit stops owning the chat, and About me shows what
 it replaces (PRODUCT_SPEC §2.1, DECISIONS.md).** Not deployed yet. **No Prisma
 schema change, no env change, no flag change, no Mini App change**

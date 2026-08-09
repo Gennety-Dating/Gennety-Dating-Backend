@@ -23,4 +23,31 @@ describe("Date Ticket i18n", () => {
     expect(strings("de").heading).not.toBe(strings("en").heading);
     expect(strings("pl").heading).not.toBe(strings("en").heading);
   });
+
+  it("keeps the ticket emoji out of every screen heading", () => {
+    // Each of these sits directly above the rendered 268×392 ticket, so an
+    // emoji of one restates the picture in a platform font we do not control.
+    // Button labels are deliberately NOT covered: 🎟️ there tells the wallet
+    // rail apart from the money rail.
+    for (const lang of languages) {
+      const s = strings(lang);
+      for (const heading of [s.heading, s.waitingTitle, s.successTitle, s.coverPartnerTitle]) {
+        expect(heading).not.toContain("🎟");
+      }
+    }
+  });
+
+  it("names whose window the countdown is, and carries localized units", () => {
+    for (const lang of languages) {
+      const s = strings(lang);
+      expect(s.waitingTimer).toContain("{time}");
+      // A bare "Осталось {time}" is what this guards against: the line has to
+      // say whose time it is, so it is longer than the placeholder plus a word.
+      expect(s.waitingTimer.replace("{time}", "").trim().length).toBeGreaterThan(12);
+      expect(s.timeHours).toContain("{n}");
+      expect(s.timeMinutes).toContain("{n}");
+      expect(s.timeSoon.length).toBeGreaterThan(0);
+      expect(s.timeSoon).not.toContain("{n}");
+    }
+  });
 });

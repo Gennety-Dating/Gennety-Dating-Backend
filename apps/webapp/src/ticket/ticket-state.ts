@@ -162,13 +162,29 @@ export function msUntil(expiresAt: string | null, now: number = Date.now()): num
   return Math.max(0, new Date(expiresAt).getTime() - now);
 }
 
-/** Format a remaining-ms span as `Hh Mm` / `Mm` / `<1m`. */
-export function formatCountdown(ms: number): string {
-  if (ms <= 0) return "0m";
-  const totalMin = Math.floor(ms / 60000);
+/**
+ * Localized unit templates for `formatCountdown` — each carries `{n}`.
+ *
+ * The units are strings rather than baked-in letters because this countdown is
+ * read inside a localized sentence: `Осталось 23h 59m` was a Russian line with
+ * English unit letters spliced into the middle of it.
+ */
+export interface CountdownUnits {
+  hours: string;
+  minutes: string;
+  /** Under a minute — a phrase, not a number, so it carries no `{n}`. */
+  soon: string;
+}
+
+/** Format a remaining-ms span in the caller's language, e.g. `23 ч 59 мин`. */
+export function formatCountdown(ms: number, units: CountdownUnits): string {
+  const totalMin = Math.floor(Math.max(0, ms) / 60000);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return "<1m";
+  const mins = units.minutes.replace("{n}", String(m));
+  if (h > 0) return `${units.hours.replace("{n}", String(h))} ${mins}`;
+  if (m > 0) return mins;
+  // Only reachable at exactly 0 through this branch when ms <= 0; the live
+  // timer unmounts at zero (PartialTimer), so this is the sub-minute tail.
+  return ms > 0 ? units.soon : mins;
 }

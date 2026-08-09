@@ -347,6 +347,13 @@ export function App(): ReactElement {
             <header className="ticket-header">
               <h1>{headerTitle(sc, state, s)}</h1>
               <p>{headerSub(sc, state, s)}</p>
+              {/* The partner's remaining window belongs to the sentence above
+                  it, not to the bottom of the scroll where it used to live —
+                  see PartialTimer for why that position was both unreadable
+                  and unexplained. */}
+              {(sc === "waiting" || sc === "cover-partner") && (
+                <PartialTimer expiresAt={state.expiresAt} strings={s} />
+              )}
             </header>
 
             {sc === "success" && state.iCoveredPartner && (
@@ -388,10 +395,6 @@ export function App(): ReactElement {
                   location.href = `referral.html?${returnParams("ticket-gate", { match: matchId, lang })}`;
                 }}
               />
-            )}
-
-            {(sc === "waiting" || sc === "cover-partner") && (
-              <PartialTimer expiresAt={state.expiresAt} template={s.waitingTimer} />
             )}
 
             {/* The cover offer is a distinct block UNDER his own "ticket
@@ -477,16 +480,27 @@ export function App(): ReactElement {
           </button>
         )}
 
+        {/* Reopening the cover offer is the only ACTION on this screen, so it
+            takes the button rung and Close drops to text under it. Close is
+            not an action — Telegram renders its own ✕ in the chrome above —
+            and it had the full-width glass button while the real choice was a
+            14px grey link beneath, i.e. the exact inversion §3.5b corrected on
+            the cover screen. With nothing to reconsider (a female, or a
+            partner who already settled) Close is alone and keeps the rung. */}
         {sc === "waiting" && (
           <>
-            <button type="button" className="btn-secondary" onClick={() => app?.close()}>
-              {s.close}
-            </button>
             {canReconsiderCover && (
-              <button type="button" className="btn-text" onClick={() => setCoverDeferred(false)}>
+              <button type="button" className="btn-secondary" onClick={() => setCoverDeferred(false)}>
                 {s.coverReconsider}
               </button>
             )}
+            <button
+              type="button"
+              className={canReconsiderCover ? "btn-text" : "btn-secondary"}
+              onClick={() => app?.close()}
+            >
+              {s.close}
+            </button>
           </>
         )}
       </footer>

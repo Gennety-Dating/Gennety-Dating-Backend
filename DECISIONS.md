@@ -47,6 +47,77 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — a translucent button is not a scrim, and the fade was on the wrong side of it
+
+**Kind:** deviation from plan
+**What:** reported as "the Close button overlaps some other button" on the ticket
+gate's waiting screen. There is no second button — the countdown line was being
+read *through* Close. The floating action bar (shipped hours earlier) ran one
+gradient across its whole box, solid at the bottom and fading over the top 72px,
+while the buttons start 16px below that top; so the first button sat almost
+entirely in the transparent end of its own scrim. `.btn-secondary` is `--fill`,
+**6% white**. The bar's background is now plain `--bg` and the ramp is a
+`::before` above it.
+**Why it is worth an entry rather than a CSS tweak:** the bug is invisible on
+every screen whose bottom content is a picture, and it is a *property of the
+pattern*, not of this screen — anything that ever scrolls under the first button
+is legible through it. The doc-comment claiming "the gradient only keeps the text
+they sit over from showing through them" described an intent the geometry never
+delivered.
+**What it changes going forward:** the ramp must stay OUT of the bar's box.
+`--bar-space` is `offsetHeight`, so folding the fade into padding would reserve
+72px of dead strip at the end of every short list — which is the exact failure
+`action-bar.ts` exists to prevent. Do not "simplify" the `::before` back into the
+bar's own background. `.vc-bar` (venue board) is untouched and still uses a
+percentage; the two are deliberately different and neither is the model for the
+other.
+**Recorded in:** PRODUCT_SPEC.md §3.5b → "The action bar floats";
+`apps/webapp/src/ticket/ticket.css`.
+
+## 2026-08-08 — the gate's countdown named nobody, in half-English units
+
+**Kind:** deviation from plan
+**What:** «Осталось 23h 59m». Two independent defects in one line, both found
+from the founder asking what the timer was *for* and *for whom*. The English
+string has always been "They have {time} left"; the four translations had been
+cut to a bare "Осталось {time}" in the course of a 2026-07 change making them
+gender-neutral — the subject was removed rather than de-gendered. And
+`formatCountdown` baked `h`/`m` into the formatter, so every non-English locale
+rendered English unit letters in the middle of its own sentence. Units are now
+`{n}`-templates per locale; the line names the partner with the same role noun
+`waitingSub` already uses.
+**Why it survived:** the line reads fine in English, which is the locale anyone
+reviewing the code reads. Nothing in the product renders a number inside a
+translated sentence anywhere else, so there was no precedent to copy and no test
+that could have caught it.
+**What it changes going forward:** a `{time}` / `{n}` placeholder inside a
+translated string needs its UNITS translated too, not just the frame. Two tests
+hold it: `waitingTimer` must be longer than the placeholder plus a word (a bare
+«Осталось {time}» fails), and every unit string must carry `{n}`.
+**Recorded in:** PRODUCT_SPEC.md §3.5b; `apps/webapp/src/ticket/i18n.ts` (the
+TRANSLATOR NOTE on `waitingTimer`), `ticket-state.ts` `CountdownUnits`.
+
+## 2026-08-08 — "Close" is not an action, and it had the loud rung
+
+**Kind:** founder decision
+**What:** on the gate's waiting screen, **Закрыть** held the full-width glass
+button and "Всё-таки оплатить за пару" — the only thing on the screen that does
+anything — was a 14px grey text link beneath it. Swapped: the cover offer takes
+the button, Close drops to text.
+**Why:** the same inversion §3.5b already corrected once, on the cover screen
+directly upstream of this one ("the only alternative was a 14px ghost text link
+under a shimmering burgundy button"). It recurred here because the reconsider
+link was written as *deliberately quiet* — "he already said no once, so this
+reopens the door without pushing him through it" — which is right about tone and
+wrong about rank. Close additionally duplicates Telegram's own ✕, sitting in the
+chrome a few pixels above it.
+**What it changes going forward:** "exactly one loud button per screen" is about
+which ACTION is loudest, not about giving the loud shape to whatever is left. A
+screen whose only offer is a way back still gives that way back the rung; Close
+keeps it only when it is genuinely alone (a woman, or a man whose partner already
+settled).
+**Recorded in:** PRODUCT_SPEC.md §3.5b; `apps/webapp/src/ticket/App.tsx`.
+
 ## 2026-08-08 — the claim rule was fixed on one side of the router and not the other
 
 **Kind:** deviation from plan

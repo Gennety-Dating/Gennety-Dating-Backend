@@ -7,6 +7,17 @@
 export type Lang = "en" | "ru" | "uk" | "de" | "pl";
 
 export interface TicketStrings {
+  /**
+   * TRANSLATOR NOTE — no 🎟️ in any screen HEADING. Every screen renders the
+   * ticket itself, at 268×392, directly under the heading: an emoji of one
+   * above it restates the picture in a platform font we do not control (the
+   * rule `marks.tsx` applies to the card) while competing with the heading at
+   * roughly equal optical weight. The store's headings were cleared for the
+   * same reason on 2026-08-08; the gate's are cleared here.
+   *
+   * BUTTON labels keep theirs: 🎟️ there distinguishes the two payment rails
+   * ("use a wallet ticket" vs "pay money"), which is a job, not decoration.
+   */
   heading: string;
   sub: string;
   payBoth: string;
@@ -23,9 +34,13 @@ export interface TicketStrings {
   coverPartnerSub: string;
   justWait: string;
   /**
-   * Quiet way back from the waiting screen after he declined the cover offer.
-   * Deliberately a text link, not a button: he already said no once, so this
-   * reopens the door without pushing him through it.
+   * The way back from the waiting screen after he declined the cover offer.
+   *
+   * It is the only thing on that screen that DOES anything — "Close" merely
+   * repeats Telegram's own ✕ in the chrome above — so it takes the button slot
+   * and Close drops to the text rung beneath it. It shipped the other way round
+   * (a 14px grey link under a full-width Close), which is the same inversion
+   * §3.5b already corrected once on the cover screen itself.
    */
   coverReconsider: string;
   /**
@@ -60,7 +75,22 @@ export interface TicketStrings {
   goToScheduling: string;
   waitingTitle: string;
   waitingSub: string;
+  /**
+   * The partner's remaining window, rendered under `waitingSub`. `{time}`.
+   *
+   * TRANSLATOR NOTE: it MUST name whose window it is. The English line always
+   * did ("They have {time} left"); the four translations had been reduced to a
+   * bare "Осталось {time}" while making them gender-neutral, which left a
+   * number on screen that said neither what was running out nor for whom. Name
+   * the person with the same role noun `waitingSub` uses, in a form that works
+   * for a partner of either gender.
+   */
   waitingTimer: string;
+  /** Countdown units for `waitingTimer`'s `{time}` — each carries `{n}`. */
+  timeHours: string;
+  timeMinutes: string;
+  /** Under a minute; a phrase, so no `{n}`. */
+  timeSoon: string;
   partnerPaidTitle: string;
   partnerPaidSub: string;
   /** Tiny "PAID" seal on the covered-ticket hero (partner-paid screen). */
@@ -87,7 +117,7 @@ const en: TicketStrings = {
   useBoth: "Use 2 tickets — you & your date 🎟️🎟️",
   usePartner: "Use a ticket for your date 🎟️",
   payPartner: "Pay for your date — {amount}",
-  coverPartnerTitle: "Cover your date? 🎟️",
+  coverPartnerTitle: "Cover your date?",
   coverPartnerSub: "Your ticket's set. Want to cover {name}'s too, or let them grab it?",
   justWait: "I'll let them grab it",
   coverReconsider: "Actually — cover their ticket",
@@ -101,14 +131,17 @@ const en: TicketStrings = {
   mockCvcLabel: "CVC",
   mockPayNow: "Complete payment · {amount}",
   processing: "Processing…",
-  successTitle: "You're in 🎟️",
+  successTitle: "You're in",
   successSub: "Both tickets are secured. Time to pick your moment.",
   coveredHerTitle: "Nice one!",
   coveredHerSub: "You covered {name}'s ticket — we've let her know. Now just pick your moment.",
   goToScheduling: "Go to date planning",
-  waitingTitle: "Ticket secured 🎟️",
+  waitingTitle: "Ticket secured",
   waitingSub: "Waiting on your match to grab theirs. We'll ping you the second they do.",
   waitingTimer: "They have {time} left",
+  timeHours: "{n}h",
+  timeMinutes: "{n}m",
+  timeSoon: "under a minute",
   partnerPaidTitle: "{name} already paid your ticket",
   partnerPaidSub: "Nothing to pay — it's already covered.",
   partnerPaidStamp: "Paid",
@@ -134,7 +167,7 @@ const ru: TicketStrings = {
   useBoth: "Использовать 2 билета — ты и пара 🎟️🎟️",
   usePartner: "Использовать билет за пару 🎟️",
   payPartner: "Оплатить за пару — {amount}",
-  coverPartnerTitle: "Оплатить за пару? 🎟️",
+  coverPartnerTitle: "Оплатить за пару?",
   coverPartnerSub: "Твой билет уже есть. Оплатить и за {name} или пусть берёт сам(а)?",
   justWait: "Пусть берёт сам(а)",
   coverReconsider: "Всё-таки оплатить за пару",
@@ -148,16 +181,20 @@ const ru: TicketStrings = {
   mockCvcLabel: "CVC",
   mockPayNow: "Завершить оплату · {amount}",
   processing: "Обработка…",
-  successTitle: "Готово 🎟️",
+  successTitle: "Готово",
   successSub: "Оба билета у вас. Время выбрать момент.",
   coveredHerTitle: "Респект!",
   coveredHerSub: "Ты оплатил билет за {name} — мы дали ей знать. Осталось выбрать момент.",
   goToScheduling: "Перейти к планированию даты",
-  waitingTitle: "Билет закреплён 🎟️",
+  waitingTitle: "Билет закреплён",
   waitingSub: "Ждём, пока собеседник возьмёт свой. Напишем сразу, как это случится.",
-  // Gender-neutral: the male now reaches this screen too (he can decline the
-  // cover offer), so "У него" would be wrong for half the viewers.
-  waitingTimer: "Осталось {time}",
+  // Names the subject without gendering it: the male reaches this screen too
+  // (he can decline the cover offer), so «У неё» would be wrong for half the
+  // viewers — but «Осталось» alone named nobody at all.
+  waitingTimer: "У собеседника осталось {time}",
+  timeHours: "{n} ч",
+  timeMinutes: "{n} мин",
+  timeSoon: "меньше минуты",
   partnerPaidTitle: "{name} уже оплатил твой билет",
   partnerPaidSub: "Платить не нужно — всё уже оплачено.",
   partnerPaidStamp: "Оплачено",
@@ -183,7 +220,7 @@ const uk: TicketStrings = {
   useBoth: "Використати 2 квитки — ти і пара 🎟️🎟️",
   usePartner: "Використати квиток за пару 🎟️",
   payPartner: "Сплатити за пару — {amount}",
-  coverPartnerTitle: "Сплатити за пару? 🎟️",
+  coverPartnerTitle: "Сплатити за пару?",
   coverPartnerSub: "Твій квиток уже є. Сплатити й за {name} чи нехай бере сам(а)?",
   justWait: "Нехай бере сам(а)",
   coverReconsider: "Все-таки сплатити за пару",
@@ -197,14 +234,17 @@ const uk: TicketStrings = {
   mockCvcLabel: "CVC",
   mockPayNow: "Завершити оплату · {amount}",
   processing: "Обробка…",
-  successTitle: "Готово 🎟️",
+  successTitle: "Готово",
   successSub: "Обидва квитки у вас. Час обрати момент.",
   coveredHerTitle: "Респект!",
   coveredHerSub: "Ти оплатив квиток за {name} — ми дали їй знати. Лишилось обрати момент.",
   goToScheduling: "Перейти до планування побачення",
-  waitingTitle: "Квиток закріплено 🎟️",
+  waitingTitle: "Квиток закріплено",
   waitingSub: "Чекаємо, поки співрозмовник візьме свій. Напишемо щойно це станеться.",
-  waitingTimer: "Залишилось {time}",
+  waitingTimer: "У співрозмовника залишилось {time}",
+  timeHours: "{n} год",
+  timeMinutes: "{n} хв",
+  timeSoon: "менше хвилини",
   partnerPaidTitle: "{name} вже сплатив твій квиток",
   partnerPaidSub: "Платити не потрібно — усе вже сплачено.",
   partnerPaidStamp: "Сплачено",
@@ -230,7 +270,7 @@ const de: TicketStrings = {
   useBoth: "2 Tickets nutzen — du & dein Date 🎟️🎟️",
   usePartner: "Ticket für dein Date nutzen 🎟️",
   payPartner: "Für dein Date zahlen — {amount}",
-  coverPartnerTitle: "Date übernehmen? 🎟️",
+  coverPartnerTitle: "Date übernehmen?",
   coverPartnerSub: "Dein Ticket steht. Auch {name} übernehmen oder selbst holen lassen?",
   justWait: "Sollen sie selbst holen",
   coverReconsider: "Doch für dein Date zahlen",
@@ -244,14 +284,17 @@ const de: TicketStrings = {
   mockCvcLabel: "CVC",
   mockPayNow: "Zahlung abschließen · {amount}",
   processing: "Verarbeitung...",
-  successTitle: "Du bist dabei 🎟️",
+  successTitle: "Du bist dabei",
   successSub: "Beide Tickets sind gesichert. Jetzt wählt ihr euren Moment.",
   coveredHerTitle: "Respekt!",
   coveredHerSub: "Du hast {name}s Ticket übernommen — sie weiß Bescheid. Jetzt nur noch euren Moment wählen.",
   goToScheduling: "Date planen",
-  waitingTitle: "Ticket gesichert 🎟️",
+  waitingTitle: "Ticket gesichert",
   waitingSub: "Wir warten, bis dein Match das eigene Ticket sichert. Dann melden wir uns sofort.",
-  waitingTimer: "Noch {time}",
+  waitingTimer: "Dein Match hat noch {time}",
+  timeHours: "{n} Std.",
+  timeMinutes: "{n} Min.",
+  timeSoon: "weniger als eine Minute",
   partnerPaidTitle: "{name} hat dein Ticket schon bezahlt",
   partnerPaidSub: "Nichts zu zahlen — schon erledigt.",
   partnerPaidStamp: "Bezahlt",
@@ -277,7 +320,7 @@ const pl: TicketStrings = {
   useBoth: "Użyj 2 biletów — Ty i Twoja randka 🎟️🎟️",
   usePartner: "Użyj biletu za swoją randkę 🎟️",
   payPartner: "Zapłać za swoją randkę — {amount}",
-  coverPartnerTitle: "Pokryć randkę? 🎟️",
+  coverPartnerTitle: "Pokryć randkę?",
   coverPartnerSub: "Twój bilet jest. Pokryć też {name} czy niech weźmie sam(a)?",
   justWait: "Niech weźmie sam(a)",
   coverReconsider: "Jednak zapłać za swoją randkę",
@@ -291,14 +334,17 @@ const pl: TicketStrings = {
   mockCvcLabel: "CVC",
   mockPayNow: "Dokończ płatność · {amount}",
   processing: "Przetwarzanie...",
-  successTitle: "Gotowe 🎟️",
+  successTitle: "Gotowe",
   successSub: "Oba bilety są zabezpieczone. Czas wybrać termin.",
   coveredHerTitle: "Respekt!",
   coveredHerSub: "Opłaciłeś bilet za {name} — daliśmy jej znać. Teraz wybierz termin.",
   goToScheduling: "Przejdź do planowania randki",
-  waitingTitle: "Bilet zabezpieczony 🎟️",
+  waitingTitle: "Bilet zabezpieczony",
   waitingSub: "Czekamy, aż Twoje dopasowanie odbierze swój. Od razu damy Ci znać.",
-  waitingTimer: "Pozostało {time}",
+  waitingTimer: "Twoje dopasowanie ma jeszcze {time}",
+  timeHours: "{n} godz.",
+  timeMinutes: "{n} min",
+  timeSoon: "mniej niż minuta",
   partnerPaidTitle: "{name} zapłacił już za Twój bilet",
   partnerPaidSub: "Nic nie płacisz — już opłacone.",
   partnerPaidStamp: "Opłacone",

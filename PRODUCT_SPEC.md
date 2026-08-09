@@ -2853,6 +2853,46 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   strip at the end of a short list, and the right number is only knowable at
   runtime for the same wrapping reason. A screen with no bar (the store before
   a purchase) reserves nothing.
+  **The ramp lives entirely ABOVE the buttons, outside the bar's own box
+  (corrected 2026-08-08).** The first version ran one gradient across the whole
+  bar — solid at the bottom, fading over the top 72px — but the buttons start
+  only 16px below that top, so the first one sat almost wholly in the
+  transparent end of the ramp. A glass secondary is `--fill`, **6% white**, so
+  whatever the bar passed over was read straight *through* it: on the waiting
+  screen the countdown line showed burgundy inside the grey Close button, which
+  reads as two controls stacked on each other. The bar's own background is now
+  plain `--bg` (invisible against the page, so still no panel — but genuinely
+  opaque) and the 72px ramp is a `::before` sitting above it. Keeping the ramp
+  out of the box is also what keeps `--bar-space` honest: it is `offsetHeight`,
+  so folding the fade into padding would reserve 72px of dead strip at the end
+  of every short list. Content is meant to dissolve under the ramp; it only has
+  to clear the buttons.
+- **The countdown moved into the header, and says whose it is (2026-08-08,
+  Telegram-only).** The partner's remaining window used to be the LAST item in
+  the gate's scroll, under a ticket that already fills the screen — i.e. inside
+  the one band the floating bar passes over, which is how it ended up legible
+  through the Close button. It now sits under `waitingSub`, the sentence that
+  explains it, where it cannot be occluded and reads as one thought with the
+  line above. Three things travel with the move. Its **subject is named**: the
+  English line always said "They have {time} left", while the four translations
+  had been cut to a bare «Осталось {time}» in the course of making them
+  gender-neutral — a number on screen saying neither what was running out nor
+  for whom. **The units are localized**: `formatCountdown` baked in `h`/`m`, so
+  a Russian sentence carried English letters spliced into its middle
+  («Осталось 23h 59m»); the units are now `{n}`-templates per locale. And it
+  drops the burgundy for muted text at the sub's size — a countdown was the
+  loudest thing on a screen whose whole message is "nothing to do, we'll tell
+  you".
+- **On the waiting screen the way back to the cover offer is the button, and
+  Close is the text under it (2026-08-08, Telegram-only).** It shipped
+  inverted: **Закрыть** held the full-width glass rung while "Всё-таки оплатить
+  за пару" — the only thing on that screen that *does* anything — was a 14px
+  grey link beneath it. That is the same inversion this section already
+  corrected once on the cover screen itself, and Close is not an action in any
+  case: Telegram renders its own ✕ in the chrome directly above. A user with
+  nothing to reconsider (a woman, or a man whose partner already settled) sees
+  Close alone and it keeps the rung, since the "exactly one loud button" rule is
+  about which action is loudest, not about denying the only one a shape.
 - **The store's heading carries no 🎟️, and gets its weight from size
   (2026-08-08, Telegram-only).** A rendered ticket is the largest thing on that
   screen, so an emoji of one above it restated the picture in a platform font we
@@ -2865,6 +2905,13 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   strokes ~15% in absolute terms. The size is on the shared `.ticket-header h1`,
   so the gate's own heading grows with it — deliberate, since two header scales
   across one flow would be worse than one.
+  **The gate's headings were cleared the same day, on the same reasoning**:
+  `waitingTitle`, `successTitle` and the cover card's `coverPartnerTitle` all
+  printed 🎟️ above the same rendered ticket. **Button** labels keep theirs —
+  🎟️ there is what tells "use a wallet ticket" apart from "pay money", which is
+  a job rather than decoration — and the two non-ticket glyphs stay (`heading`'s
+  🤍 is the match, `closedTitle`'s 📅 the calendar). A test holds the four
+  headings emoji-free in all five locales.
 - **State machine.** The whole gate runs while `Match.status = negotiating`;
   `ticketStatus` is a sub-state so the scheduling/venue/lifecycle code is
   untouched. Blind-decision and all other invariants are unaffected.
