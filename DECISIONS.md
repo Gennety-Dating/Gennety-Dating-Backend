@@ -101,6 +101,43 @@ not a wasted edit), so they're fixed alongside the three the founder named.
 
 ---
 
+## 2026-08-09 — the daily-matching plan described shipped work as pending, and four cadence fields are dead
+
+**Kind:** a document turned out to be wrong + deviation from plan
+**What:** `DAILY_MATCHING_IMPLEMENTATION_PLAN.md` presented phases 0–6 as future
+work; they shipped 2026-08-02. Rewritten with a status pass (§3.0), a real
+remaining-work list (§3.1), and the measured pool. Two findings inside it are
+worth carrying separately.
+**Why it matters more than a stale doc usually would:** that file is what a new
+session reads before touching cadence, and it was pointing at ~85% already-done
+work while the genuinely undone part — Rematch — sat under a recommendation
+(D8) that was never executed and never recorded here. So the one thing needing
+attention was the one thing the plan treated as settled.
+**The two findings:**
+- **Four of five `DropCadence` rematch fields are dead.** `rematchBlackoutMs`,
+  `rematchMaxPerInterval`, `rematchCooldownMs` and `rematchGiftCapMs` are
+  declared, pinned by `cadence.test.ts:72-76`, and **read by nothing**; only
+  `rematchWindowMs` is live. The abstraction therefore *looks* complete for
+  Rematch and is not — anyone flipping `DROP_CADENCE=daily` would reasonably
+  assume the limits move with it. They do not, and the `daily` values are
+  identical to `weekly` anyway, so wiring them without retuning changes
+  nothing either.
+- **The `standbyCount` normalization script that §6 calls a precondition of
+  rollback does not exist.** Without it, rolling the cadence back reads a
+  daily-inflated count as weeks and pins every user at the starvation cap —
+  i.e. the rollback that this whole migration calls "one env var" is currently
+  not reversible in the way the doc claims.
+**What it changes going forward:** D8 ("turn Rematch off during the pilot") is
+**not** adopted — §3.1 block A proposes decoupling *availability* from *offer*
+instead, so daily rematch costs no daily DM. That is a **proposal awaiting the
+founder**, not a decision; it is recorded here only so the next session does
+not re-derive it or silently execute D8. The `gift cap` (7 days, the woman's
+protection) is called out as an invariant that must NOT scale with purchase
+frequency.
+**Recorded in:** `DAILY_MATCHING_IMPLEMENTATION_PLAN.md` §3.0/§3.1/§4/§6/§7.
+
+---
+
 ## 2026-08-09 — the Kyiv catalog is imported into production, and a file edit is not a shipped change
 
 **Kind:** founder decision
