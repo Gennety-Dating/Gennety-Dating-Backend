@@ -27,9 +27,6 @@ import {
 } from "../../services/venue-origin.js";
 import type { Market } from "@gennety/shared";
 
-/** Places caps a `locationRestriction` circle at 50 km. */
-const PLACES_MAX_RESTRICTION_KM = 50;
-
 /**
  * Location Mini App endpoints (Phase 3.7 — concierge venue, map picker).
  *
@@ -372,6 +369,40 @@ interface PlacesV1Place {
   location?: { latitude?: number; longitude?: number };
 }
 
+/** Degrees of latitude per km — the meridian is the one axis with a constant scale. */
+const KM_PER_DEGREE_LAT = 111.32;
+
+/**
+ * The smallest lat/lng box containing the market's circle.
+ *
+ * Places wants a rectangle (see `searchText`) while a market is a centroid
+ * plus a radius, so the box necessarily over-includes at the corners; the
+ * per-result `checkDepartureOrigin` filter is what cuts them back to the
+ * circle. Over-including is the safe direction — under-including would hide
+ * real addresses inside the market.
+ */
+export function marketBoundingBox(market: Market): {
+  low: { latitude: number; longitude: number };
+  high: { latitude: number; longitude: number };
+} {
+  const dLat = market.radiusKm / KM_PER_DEGREE_LAT;
+  // Meridians converge toward the poles, so a km buys more longitude the
+  // further north you are. Kyiv sits at ~50°, where the box is over half again
+  // as wide as it is tall; using dLat for both would cut ~36% off each side.
+  const cos = Math.cos((market.latitude * Math.PI) / 180);
+  const dLng = market.radiusKm / (KM_PER_DEGREE_LAT * Math.max(cos, 0.01));
+  return {
+    low: {
+      latitude: Math.max(market.latitude - dLat, -90),
+      longitude: Math.max(market.longitude - dLng, -180),
+    },
+    high: {
+      latitude: Math.min(market.latitude + dLat, 90),
+      longitude: Math.min(market.longitude + dLng, 180),
+    },
+  };
+}
+
 async function searchText(
   apiKey: string,
   query: string,
@@ -382,15 +413,17 @@ async function searchText(
   if (market) {
     // Hard restriction to the launched market: Places is told not to return
     // anything outside it, so an out-of-market address is never offered in the
-    // first place (PRODUCT_SPEC §3.7). `locationRestriction` caps a circle at
-    // 50 km, and Kyiv's market radius is 60, so the request is clamped and the
-    // post-filter below covers the remaining ring.
-    body.locationRestriction = {
-      circle: {
-        center: { latitude: market.latitude, longitude: market.longitude },
-        radius: Math.min(market.radiusKm, PLACES_MAX_RESTRICTION_KM) * 1000,
-      },
-    };
+    // first place (PRODUCT_SPEC §3.7).
+    //
+    // It MUST be a rectangle. `searchText` accepts a circle for
+    // `locationBias` but not for `locationRestriction`, and it does not
+    // degrade to an unrestricted search — it answers
+    // `400 INVALID_ARGUMENT: Unknown name "circle"`, which the caller's catch
+    // then reports as an empty result list. That is how a circle here made the
+    // Mini App's search look like it simply found nothing, for every user in a
+    // launched market, from the day the gate shipped (2026-08-05) until
+    // 2026-08-09.
+    body.locationRestriction = { rectangle: marketBoundingBox(market) };
   } else if (bias) {
     body.locationBias = {
       circle: {
@@ -423,10 +456,11 @@ async function searchText(
     const lat = p.location?.latitude;
     const lng = p.location?.longitude;
     if (!name || lat == null || lng == null) continue;
-    // Belt-and-braces on top of `locationRestriction`: the request radius is
-    // clamped to what Places accepts, so the outer ring of a larger market is
-    // still filtered here, and a provider that ever ignores the restriction
-    // cannot put an unpickable result on the screen.
+    // The restriction is a rectangle and the market is a circle, so the box's
+    // corners reach past it. This is what trims them back, which is what keeps
+    // the offered results and the write gate (`assertDepartureOrigin`, also
+    // circular) in agreement — otherwise the search could put a place on the
+    // screen that Confirm would then refuse.
     if (market && !checkDepartureOrigin(market, lat, lng).ok) continue;
     hits.push({
       placeId: p.id,

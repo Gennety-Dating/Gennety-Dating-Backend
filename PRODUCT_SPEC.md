@@ -3460,6 +3460,24 @@ defers the same dead end to a screen that can no longer fix it.
   the market circle instead of merely biasing toward it, so an out-of-market
   address never appears. A bias only reorders, which meant the block card had to
   explain a result the search had just offered.
+  **The restriction goes to Places as a RECTANGLE, and the circle is restored by
+  a per-result filter (fixed 2026-08-09).** `searchText` accepts a circle for
+  `locationBias` but **not** for `locationRestriction`, and it does not quietly
+  widen the search when handed one — it answers `400 INVALID_ARGUMENT`, which
+  the route's catch reports as an empty result list. So from the day this gate
+  shipped (2026-08-05) until the fix, typing anything into the departure-point
+  search returned **nothing at all** for every user in a launched market, and it
+  read as "no such place" rather than as a fault: HTTP 200, `results: []`, no
+  error on screen. It went unnoticed for four days because no production user
+  had yet reached the venue step (0 dates ever), so the failure had never once
+  been executed. The box is the smallest one containing the market circle — it
+  necessarily over-includes at the corners, which is why the existing
+  `checkDepartureOrigin` pass over the results is load-bearing rather than
+  belt-and-braces: it is what keeps the offered results and the circular write
+  gate in agreement, so search can never surface a place that Confirm would
+  refuse. Over-including is the safe direction; a box narrower than the circle
+  would hide real addresses inside the market. Nothing about the product rule
+  changes — the gate is still exactly the market circle.
 - **`services/venue-origin.ts` is the enforcement point**, and every write goes
   through it: `POST /v1/location/select`, `interpretVenueIntent` /
   `confirmVenueIntent` (Telegram Mini App *and* the iOS `/v1/matches/:id/*`

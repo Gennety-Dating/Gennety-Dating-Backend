@@ -47,6 +47,46 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-09 — a provider 400 was being served as an empty success, and no test built the payload
+
+**Kind:** deviation from plan
+**What:** the departure-point search in the Location Mini App returned nothing
+for every user in a launched market, for four days. `/v1/location/search` sent
+Places `locationRestriction: { circle }`, which `searchText` does not accept —
+it takes a circle only for `locationBias`. Fixed by sending the market as a
+rectangle and letting the existing per-result `checkDepartureOrigin` pass cut
+the corners back to the circle.
+**Why it is worth an entry rather than a commit message:** the mechanical bug is
+one word; the two things that let it live are general.
+- **A caught provider error was returned as a successful empty result.** The
+  catch answers `200 {ok:true, results:[]}`, which is right for "Places found
+  nothing" and wrong for "Places refused our request" — on screen they are the
+  same blank dropdown. The one `console.warn` it does emit had **zero**
+  occurrences in either log, which I first read as evidence the path was fine;
+  it was evidence the path had never been executed, because production has had
+  0 dates ever and nobody had reached the venue step. A failure that has never
+  run looks exactly like a failure that does not exist.
+- **The payload itself was untested.** All four existing `/search` tests exit
+  before the request is built (401, short query, long query, no-API-key stub),
+  so nothing in the suite had ever looked at what we send Google. The guard
+  test added here was confirmed to FAIL against the old code before being
+  confirmed green against the new.
+**What it changes going forward:** when a call site translates a provider error
+into a valid-looking empty result, the log line is the only signal, so treat an
+*absent* log line as unknown rather than as healthy — check whether the path
+has ever run. And a request body assembled for a third-party API needs a test
+that asserts the body; mocking the transport and asserting only the response
+leaves the exact shape that broke here uncovered. Two related notes:
+`searchNearby` in `services/venue.ts` genuinely requires a circle and is
+untouched — the two endpoints disagree, so neither is the model for the other.
+And `checkDepartureOrigin` over the results is now load-bearing rather than
+defensive: the rectangle over-includes at the corners by construction, and that
+filter is what keeps search and the circular write gate from disagreeing.
+**Recorded in:** PRODUCT_SPEC.md §3.7 → "Search cannot offer one either";
+`apps/bot/src/public/routes/location.ts` (`marketBoundingBox`).
+
+---
+
 ## 2026-08-08 — the calendar's time list opens at the evening, not the afternoon
 
 **Kind:** founder decision

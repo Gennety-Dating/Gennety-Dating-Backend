@@ -44,7 +44,8 @@ vi.mock("../handlers/matching/venue-negotiation.js", () => ({
   sendVenuePostSaveAck,
 }));
 
-const { createLocationRouter } = await import("./routes/location.js");
+const { createLocationRouter, marketBoundingBox } = await import("./routes/location.js");
+const { SUPPORTED_MARKETS } = await import("@gennety/shared");
 
 const fakeApi = {} as Parameters<typeof createLocationRouter>[0];
 
@@ -128,6 +129,111 @@ describe("GET /v1/location/search", () => {
       .set("Authorization", `tma ${initData}`);
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Query is too long");
+  });
+
+  // The payload itself was untested until 2026-08-09, and that is exactly how
+  // `locationRestriction: { circle }` — which `searchText` rejects with a 400 —
+  // shipped and made the Mini App's search return nothing for every user in a
+  // launched market. Assert the shape Places actually accepts.
+  it("restricts the Places query to the caller's market as a RECTANGLE, not a circle", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    const prevKey = process.env.PLACES_API_KEY;
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ places: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    try {
+      const res = await request(buildApp())
+        .get("/v1/location/search?q=lukyanivska")
+        .set("Authorization", `tma ${initData}`);
+      expect(res.status).toBe(200);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      const body = JSON.parse(String(fetchSpy.mock.calls[0][1]?.body)) as {
+        locationRestriction?: Record<string, unknown>;
+      };
+      expect(body.locationRestriction).toBeDefined();
+      // The whole bug in one assertion: a circle here is a 400, not a wider search.
+      expect(body.locationRestriction).not.toHaveProperty("circle");
+      expect(body.locationRestriction).toHaveProperty("rectangle");
+      const rect = body.locationRestriction!.rectangle as {
+        low: { latitude: number; longitude: number };
+        high: { latitude: number; longitude: number };
+      };
+      expect(rect.low.latitude).toBeLessThan(rect.high.latitude);
+      expect(rect.low.longitude).toBeLessThan(rect.high.longitude);
+      // Kyiv's centroid must sit inside its own box.
+      expect(rect.low.latitude).toBeLessThan(50.45);
+      expect(rect.high.latitude).toBeGreaterThan(50.45);
+    } finally {
+      fetchSpy.mockRestore();
+      if (prevKey === undefined) delete process.env.PLACES_API_KEY;
+      else process.env.PLACES_API_KEY = prevKey;
+    }
+  });
+
+  it("drops a Places hit that lands in the box's corner but outside the market circle", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    const prevKey = process.env.PLACES_API_KEY;
+    process.env.PLACES_API_KEY = "test-key";
+    // The NE corner of Kyiv's bounding box: inside the rectangle we send,
+    // ~80 km from the centroid, so outside the 60 km market.
+    const corner = { latitude: 50.99, longitude: 31.36 };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          places: [
+            {
+              id: "far",
+              displayName: { text: "Corner place" },
+              formattedAddress: "Somewhere",
+              location: corner,
+            },
+            {
+              id: "near",
+              displayName: { text: "Khreshchatyk" },
+              formattedAddress: "Kyiv",
+              location: { latitude: 50.45, longitude: 30.52 },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    try {
+      const res = await request(buildApp())
+        .get("/v1/location/search?q=somewhere")
+        .set("Authorization", `tma ${initData}`);
+      expect(res.status).toBe(200);
+      expect(res.body.results.map((r: { placeId: string }) => r.placeId)).toEqual(["near"]);
+    } finally {
+      fetchSpy.mockRestore();
+      if (prevKey === undefined) delete process.env.PLACES_API_KEY;
+      else process.env.PLACES_API_KEY = prevKey;
+    }
+  });
+
+  it("returns an empty list rather than an error when Places rejects the query", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    const prevKey = process.env.PLACES_API_KEY;
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("nope", { status: 400 }));
+    try {
+      const res = await request(buildApp())
+        .get("/v1/location/search?q=lukyanivska")
+        .set("Authorization", `tma ${initData}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true, results: [] });
+    } finally {
+      fetchSpy.mockRestore();
+      if (prevKey === undefined) delete process.env.PLACES_API_KEY;
+      else process.env.PLACES_API_KEY = prevKey;
+    }
   });
 
   it("falls back to a deterministic stub when PLACES_API_KEY is unset", async () => {
@@ -377,5 +483,60 @@ describe("POST /v1/location/select", () => {
 
     expect(res.status).toBe(200);
     expect(matchUpdate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("marketBoundingBox", () => {
+  // Places wants a rectangle; a market is a circle. The box must therefore
+  // CONTAIN the circle — under-including would hide real addresses inside the
+  // market, and the per-result circular filter already trims the corners.
+  it("contains every extreme point of each market's circle", () => {
+    for (const market of SUPPORTED_MARKETS) {
+      const box = marketBoundingBox(market);
+      const dLat = market.radiusKm / 111.32;
+      const dLng = market.radiusKm / (111.32 * Math.cos((market.latitude * Math.PI) / 180));
+      const extremes = [
+        { latitude: market.latitude + dLat, longitude: market.longitude },
+        { latitude: market.latitude - dLat, longitude: market.longitude },
+        { latitude: market.latitude, longitude: market.longitude + dLng },
+        { latitude: market.latitude, longitude: market.longitude - dLng },
+      ];
+      for (const p of extremes) {
+        expect(p.latitude).toBeGreaterThanOrEqual(box.low.latitude - 1e-9);
+        expect(p.latitude).toBeLessThanOrEqual(box.high.latitude + 1e-9);
+        expect(p.longitude).toBeGreaterThanOrEqual(box.low.longitude - 1e-9);
+        expect(p.longitude).toBeLessThanOrEqual(box.high.longitude + 1e-9);
+      }
+    }
+  });
+
+  // The longitude term must scale with latitude. Using the latitude delta for
+  // both axes is the tempting simplification and it silently narrows the box —
+  // at Kyiv's ~50° it would cut ~36% off each side, hiding the eastern and
+  // western edges of the market from search.
+  it("is wider than it is tall away from the equator", () => {
+    const kyiv = SUPPORTED_MARKETS.find((m) => m.cityKey === "ua:kyiv");
+    expect(kyiv).toBeDefined();
+    const box = marketBoundingBox(kyiv!);
+    const latSpan = box.high.latitude - box.low.latitude;
+    const lngSpan = box.high.longitude - box.low.longitude;
+    expect(lngSpan).toBeGreaterThan(latSpan * 1.4);
+  });
+
+  it("stays inside legal lat/lng bounds", () => {
+    const polar = {
+      cityKey: "xx:polar",
+      city: "Polar",
+      countryCode: "XX",
+      latitude: 89.9,
+      longitude: 179.9,
+      radiusKm: 200,
+      aliases: [],
+    };
+    const box = marketBoundingBox(polar);
+    expect(box.high.latitude).toBeLessThanOrEqual(90);
+    expect(box.low.latitude).toBeGreaterThanOrEqual(-90);
+    expect(box.high.longitude).toBeLessThanOrEqual(180);
+    expect(box.low.longitude).toBeGreaterThanOrEqual(-180);
   });
 });

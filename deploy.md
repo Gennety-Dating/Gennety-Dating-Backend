@@ -1,5 +1,64 @@
 # Gennety Dating Deploy
 
+**PENDING — the departure-point search returns results again (PRODUCT_SPEC §3.7,
+DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no
+flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so
+a full server code deploy carries it, plus `pnpm demo:deploy`. **The demo needs
+it as much as prod**: the demo is where the venue step is actually reachable
+today, so that is where this is verifiable.
+
+Typing anything into the "where are you setting off from?" search returned an
+empty list for **every** user in a launched market — i.e. everyone — from
+2026-08-05 (`d83b019`, the departure-point gate) until now. We sent Places
+`locationRestriction: { circle }`; `searchText` accepts a circle only for
+`locationBias` and answers `400 INVALID_ARGUMENT` for this, which the route's
+catch reported as `200 {ok:true, results:[]}`. Now sent as a rectangle, with
+the existing circular per-result filter trimming its corners.
+
+**Four things worth knowing before the restart:**
+
+- **Reproduced live on demo-api before the fix**, with a real Kyiv account:
+  `HTTP 200 {"ok":true,"results":[]}`, and the corresponding
+  `[location/search] Places searchText failed: Error: … 400` appeared in
+  `gennety-demo-out.log` only after that probe — i.e. that log line had **never
+  been written before**, which is how a four-day outage stayed invisible.
+  Production has had 0 dates ever, so no real user has hit it.
+- **The fix was verified against the live Places API**, not just against a
+  mock: the exact bounding box the code computes for Kyiv
+  (`49.9111,29.6769 → 50.9891,31.3699`) returns real results for the centre
+  («Лукьяновская», «Хрещатик 14») and for the far suburbs (Vyshneve,
+  Троєщина) that the old 50 km-clamped circle was trying to cover.
+- **The 50 km clamp is gone**, so search now covers Kyiv's full 60 km market
+  rather than a clipped circle. `PLACES_MAX_RESTRICTION_KM` is deleted —
+  `rectangle` has no such cap. The gate itself is unchanged and still circular;
+  `checkDepartureOrigin` cuts the box's corners back.
+- **`services/venue.ts` is NOT affected and was checked.** Its
+  `locationRestriction: { circle }` at line 567 is on `searchNearby`, where a
+  circle is the required shape. The two Places endpoints disagree on this, so
+  do not "fix" that one to match.
+
+Preflight for this change: bot typecheck clean, lint clean across all 5
+projects, **3436 bot tests** (0 failed, +6 new). The new guard test was
+confirmed to FAIL against the old `circle` payload before being confirmed green
+against the rectangle.
+
+Post-deploy check — the healthy state is that the warning stops appearing, so
+grep for its absence and then actually search:
+
+```sh
+pm2 logs gennety-bot  --lines 200 --nostream | grep 'location/search'
+pm2 logs gennety-demo --lines 200 --nostream | grep 'location/search'
+# Empty = nothing failing. Any `Places searchText failed: … 400` after the
+# restart means the payload is still wrong.
+# Then, on the demo: walk a run to `negotiating_venue`, open the map Mini App
+# and type "Лукь" — results must appear. That is the only end-to-end proof.
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag, no Mini App state. Reverting restores the broken search.
+
+---
+
 **PENDING — the calendar's time list opens at the evening (PRODUCT_SPEC §3.6,
 DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no
 flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is
