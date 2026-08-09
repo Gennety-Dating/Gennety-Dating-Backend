@@ -47,6 +47,32 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — the calendar's time list opens at the evening, not the afternoon
+
+**Kind:** founder decision
+**What:** tapping a date in the Calendar Mini App now opens the slot sheet
+scrolled to the LAST slot (19:30) instead of the first (13:00).
+**Why:** the founder's reasoning, and it is worth recording because it is two
+arguments rather than one. The obvious half is frequency — a first date is
+planned for the evening far more often than for mid-afternoon, so the common
+answer should need no scroll. The half that is easy to lose is the
+*affordance*: opening at 13:00 puts a full row flush against the top edge,
+which reads as the list simply starting there, and nothing else on that screen
+says it scrolls; opening at the bottom leaves a row cut in half at the top
+edge, which is the only thing telling the user an earlier time exists at all.
+**What it changes going forward:** `openSheet()` is the single owner of the
+opening scroll position — every path that makes the sheet visible funnels
+through it. A poll-driven rebuild deliberately **preserves** the user's scroll
+instead of re-anchoring, so do not "fix" that into consistency: the rule is
+about where a fresh open lands, not about overriding where someone scrolled
+to. If the slot grid ever gains a morning band, re-open this decision — the
+argument is about the evening being the likely answer, not about the bottom of
+a list being a good default in general.
+**Recorded in:** PRODUCT_SPEC.md §3.6 → "The time list opens at the LATEST
+slot"; `apps/webapp/src/main.ts` (`anchorSheetToLatest`).
+
+---
+
 ## 2026-08-08 — a translucent button is not a scrim, and the fade was on the wrong side of it
 
 **Kind:** deviation from plan

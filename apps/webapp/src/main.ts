@@ -390,6 +390,10 @@ function onBackButton(): void {
 function buildSheetContent(group: DayGroup): void {
   if (sheetTitleEl) sheetTitleEl.textContent = formatDate(group.date, lang);
   if (!sheetBodyEl) return;
+  // A poll-driven rebuild (the peer marked a slot) must not yank the user
+  // back up the list mid-pick — it wipes and re-appends every row, which
+  // resets scrollTop to 0. Where a *fresh* open lands is openSheet's call.
+  const keepScrollTop = sheetBodyEl.scrollTop;
   sheetBodyEl.innerHTML = "";
   for (const iso of group.isos) {
     const btn = renderSlotShell(iso, "time");
@@ -398,7 +402,25 @@ function buildSheetContent(group: DayGroup): void {
     btn.addEventListener("click", () => onTapTime(iso));
     sheetBodyEl.appendChild(btn);
   }
+  sheetBodyEl.scrollTop = keepScrollTop;
   setSheetCtaState(canSubmitSelection());
+}
+
+/**
+ * The slot list opens at the LATEST time, not the earliest.
+ *
+ * The grid runs 13:00 → 19:30 and dates are overwhelmingly planned for the
+ * evening, so the bottom of the list is where the answer usually is. It also
+ * leaves a row half-cut above the fold, which is the only affordance on this
+ * screen saying the list scrolls at all — opening at 13:00 shows a full row
+ * at the top edge and reads like the list simply starts there.
+ *
+ * Must run with the sheet's `hidden` attribute already off: a `display: none`
+ * element reports `scrollHeight = 0` and the assignment silently no-ops.
+ */
+function anchorSheetToLatest(): void {
+  if (!sheetBodyEl) return;
+  sheetBodyEl.scrollTop = sheetBodyEl.scrollHeight;
 }
 
 function openSheet(): void {
@@ -416,6 +438,9 @@ function openSheet(): void {
   const wasHidden = sheetEl.hasAttribute("hidden");
   sheetEl.removeAttribute("hidden");
   sheetBackdropEl.removeAttribute("hidden");
+  // Every path that makes the sheet visible funnels through here, so this is
+  // the one place that owns the opening scroll position.
+  anchorSheetToLatest();
   if (wasHidden) {
     // Force layout so the transition fires from translateY(100%).
     void sheetEl.offsetHeight;

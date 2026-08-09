@@ -1,5 +1,54 @@
 # Gennety Dating Deploy
 
+**PENDING — the calendar's time list opens at the evening (PRODUCT_SPEC §3.6,
+DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no
+flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is
+`apps/webapp/src/main.ts` plus docs. **Deploy Mini App Only**
+(`./scripts/deploy-webapp.sh`); nothing to rsync to `/opt/gennety`, **no
+`pm2 restart`**. Run `pnpm demo:deploy` too — the demo builds its own bundle
+from the same source, and it is the only place the sheet is easy to reach
+without a live match. **It ships in the same Mini App build as the ticket and
+referral blocks below** — one `deploy-webapp.sh` carries all of them.
+
+Tapping a date used to open the slot sheet at 13:00, the top of a list that is
+taller than the sheet on every phone. It now opens at 19:30, so the evening
+needs no scroll and a half-cut row at the top edge says an earlier time exists.
+
+**Two things worth knowing before the redeploy:**
+
+- **A poll-driven rebuild now preserves scroll, which is a second behaviour
+  change.** The sheet wipes and re-appends every row when the peer marks a
+  slot, and that reset scrollTop to 0 — so before this, a peer's move mid-pick
+  yanked the user back to 13:00. It keeps their position now. Without it the
+  new default would have been undone by the first poll that mattered.
+- **The anchor is measured, not assumed.** `anchorSheetToLatest()` runs inside
+  `openSheet()` *after* the `hidden` attribute comes off, because a
+  `display: none` element reports `scrollHeight = 0` and the assignment
+  silently no-ops. If the sheet ever opens at the top again, that ordering is
+  the first thing to check.
+
+Post-deploy check — the sheet is transient and logs nothing, so verify by eye.
+It needs a `negotiating` match with the Calendar open, which production has
+never had (0 dates ever), so walk it on `@gennetytestbot` via
+`scripts/dev-calendar-solo-demo.mjs` (run with `TZ=Europe/Kyiv`, and clear any
+existing pair match first — the lifetime ban blocks a re-pair):
+
+```sh
+./scripts/deploy-webapp.sh
+pnpm demo:deploy
+curl -sI https://dating-calendar.gennety.com/ | head -1
+# Then open the Calendar from the dev bot, tap any date, and confirm the sheet
+# lands on 19:30 with a row cut in half at the TOP edge (not a full row flush
+# against it). Scroll up to 13:00, then have the other side mark a slot — your
+# position must not jump.
+```
+
+**Rollback:** redeploy the Mini App from the previous checkout, and
+`pnpm demo:deploy` from it as well. Nothing else to undo — no schema, no env,
+no flag, no server state.
+
+---
+
 **PENDING — the gate's waiting screen: the countdown stops hiding behind the
 Close button, and says whose it is (PRODUCT_SPEC §3.5b, DECISIONS.md ×3).** Not
 deployed yet. **No Prisma schema change, no env change, no flag change, and NO

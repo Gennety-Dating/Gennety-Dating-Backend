@@ -3101,6 +3101,20 @@ better UX than three separate retries.
   - `waiting` — first-mover success card with peer-still-empty copy;
     `Close` and `Change my picks` buttons.
   - `grid` — default editing view with the 4-state slot rendering.
+- **The time list opens at the LATEST slot, not the earliest (2026-08-08,
+  Telegram-only).** Tapping a date slides up a sheet holding all 14 slots
+  (13:00 → 19:30), which is taller than the sheet on every phone, and it used
+  to open at 13:00 — the top of a scrollable list, where the first row sits
+  flush against the top edge and reads as though the list simply *starts*
+  there. Nothing else on that screen says it scrolls. It now opens scrolled to
+  the bottom: the evening is where the answer usually is (a first date is
+  planned for the evening far more often than for mid-afternoon), so the
+  common case needs no scroll at all, and the row cut in half at the top edge
+  is the affordance that says an earlier time is one swipe away. A
+  poll-triggered rebuild — the peer marking a slot while the sheet is open —
+  **preserves** the user's scroll position rather than re-anchoring, since the
+  rule is about where a fresh open lands, not about overriding where the user
+  scrolled to. The native iOS client draws its own grid and is unaffected.
 - **Auth.** The Mini App is opened via `InlineKeyboardButton.web_app`
   in production, where `Telegram.WebApp.sendData` is silently a no-op.
   Both `GET /v1/calendar/state` and `POST /v1/calendar/pick` therefore
