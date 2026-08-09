@@ -1,5 +1,62 @@
 # Gennety Dating Deploy
 
+**PENDING — daily Rematch groundwork: the cadence owns the limits, and two pull
+entries (PRODUCT_SPEC §3.11 / §2.1 mode 5, REMATCH_PRODUCT_SPEC, DECISIONS.md
+×3).** Not deployed yet. **No Prisma schema change, no env change, no flag
+change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so a
+full server code deploy carries it, plus `pnpm demo:deploy`.
+
+**Production behaviour is unchanged by this deploy, and that is checkable rather
+than asserted.** `DROP_CADENCE` is unset (weekly), the four `REMATCH_*` limit
+vars are unset, and a test asserts the weekly profile reproduces today's numbers
+literally. What ships is the seam, not a behaviour change.
+
+**Five things worth knowing before the restart:**
+
+- **The banner block costs nothing today and is the one thing to watch if that
+  ever changes.** Rematch eligibility is resolved once per `status-timer` tick
+  (3 queries), but only when `dropOutpacesNotices()` is true — false under
+  weekly, so **not a single extra query runs**. Under a future `daily` flip it
+  becomes 3 queries a minute, which is why it is batched rather than per-user.
+- **Four `REMATCH_*` env vars changed meaning from "default" to "override".**
+  They are unset in `/opt/gennety/.env`, so nothing moves. If any is ever set,
+  note that a literal `0` is now a real value (`REMATCH_PRE_BATCH_BLACKOUT_HOURS=0`
+  still disables the blackout) while an empty string means "follow the profile".
+- **The concierge gains one tool target** (`open_screen: rematch`). It is gated
+  per user in code, so a woman or a rate-limited man gets nothing — and the
+  refusal string names no feature, deliberately, because it is fed back to the
+  model verbatim.
+- **Ten i18n keys added** (`rematchOfferNeutral` + `statusButtonRematch` × 5
+  locales). Additive; nothing existing changed.
+- **`REMATCH_FEATURE_ENABLED=true` in production**, so the concierge entry is
+  live on deploy. The banner entry is not reachable until a `daily` flip.
+
+Preflight for this change: typecheck clean across all projects, lint clean,
+**3509 bot tests + 276 shared** (0 failed). The new guard tests were each
+confirmed to FAIL against the unwired code first — the `env ?? CADENCE` fallback
+(3 failures), the batch-vs-single agreement (1), and the `open_screen` gate (3).
+
+**Also ships `pnpm cadence:normalize-standby`** — the rollback precondition that
+had been listed in the plan since 2026-07-30 and never written. It writes
+nothing without `--apply` and refuses to run in the wrong direction; see
+DECISIONS.md for why a dry run against production is what surfaced that guard.
+
+Post-deploy check — nothing new is logged on the happy path, so verify the
+absence of the failure path plus the concierge entry:
+
+```sh
+pm2 logs gennety-bot --lines 200 --nostream | grep 'rematch eligibility failed'
+# Empty = the banner's lookup is not erroring (it should not even run: weekly).
+# Then, on @gennetytestbot as an eligible male with no live match, write
+# "найди мне кого-то ещё сейчас" — expect the offer CARD (terms + price), not a
+# payment sheet. As a female account, expect no mention of the feature at all.
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag, no Mini App state.
+
+---
+
 **PENDING — the pinned banner push extends to accept/decline, first venue
 assignment, TTL expiry and emergency cancellation (PRODUCT_SPEC §2.1,
 DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no

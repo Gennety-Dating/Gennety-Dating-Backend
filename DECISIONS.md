@@ -101,6 +101,77 @@ not a wasted edit), so they're fixed alongside the three the founder named.
 
 ---
 
+## 2026-08-09 — daily Rematch: availability is decoupled from the offer, and D8 is dead
+
+**Kind:** founder decision
+**What:** the founder approved block A of the reworked daily-matching plan and
+it is implemented. Rematch limits now follow the cadence profile; the `daily`
+profile allows 7 runs per 7 days with a 1h blackout; and two PULL entries were
+added — the pinned banner (silent-drops mode) and the concierge's
+`open_screen: rematch`.
+**Why the shape is what it is:** the ask was "let a user take a rematch every
+day, after a failed match or on a silent evening, without breaking anything".
+The obstacle was never the limits — it was that availability and offer were the
+same thing, because the DM was the only surface. So "daily rematch" implied a
+daily sales DM, which contradicts *"match daily, apologise weekly"* and is worse
+than what that decision forbade: a daily reminder of failure with a price on it.
+Splitting the two makes the frequency question disappear.
+**What it changes going forward:**
+- **D8 is not adopted and should not be revived.** "Turn Rematch off for the
+  daily pilot" existed because the knobs could not follow the cadence. They can
+  now. `REMATCH_FEATURE_ENABLED` stays a master switch, not a migration step.
+- **A pull surface lands on the offer card, never the invoice**, and carries no
+  price. The price belongs one tap later, before payment — the rule §3.8
+  already applies to the Premium hub. Do not "simplify" the banner button into
+  `rematch:buy`.
+- **`rematchGiftCapMs` is an invariant, not a knob.** Every other rematch limit
+  describes what the buyer may do; that one protects the woman he is buying his
+  way to, and it must not loosen when his cap does. Both profiles hold 7 days
+  and a test pins it.
+- **`open_screen: rematch` is gated in code, not in the playbook.** The
+  asymmetry it protects (a woman never learns the feature exists) is the
+  product, and its refusal string must keep naming no feature — the tool result
+  is fed to the model verbatim.
+- **D4's "no menu row" still stands.** What it accidentally also forbade was
+  *asking*; that is what these entries restore. A permanent menu row (A3.3) was
+  explicitly left unbuilt.
+**Deliberately not done:** A3.3, the conditional menu row — gated on the banner
+proving insufficient, and it would reverse D4 properly rather than amend it.
+**Recorded in:** PRODUCT_SPEC.md §2.1 mode 5 + §3.11, REMATCH_PRODUCT_SPEC.md
+(Surfaces + the rewritten cadence note), DAILY_MATCHING_IMPLEMENTATION_PLAN.md
+§3.1 block A.
+
+---
+
+## 2026-08-09 — the cadence rollback was not reversible, and a dry run proved it twice
+
+**Kind:** deviation from plan
+**What:** `scripts/normalize-standby-count.mjs` now exists (block C1). The plan
+had listed it as a precondition of rolling `DROP_CADENCE` back since 2026-07-30
+and nobody had written it.
+**Why it matters more than a missing utility:** the whole migration is sold as
+"one env var, reversible". It is not. `standbyCount` counts CYCLES, and the two
+profiles are calibrated by moving `alpha` rather than the counter, so the
+counter means different things in each. Flipping back without rescaling re-reads
+every accumulated count at 7× its weight and pins the entire base at the
+starvation cap — which does not inflate priority, it **deletes** it, because a
+bonus identical for every starved user can no longer order them.
+**What the dry run found, which is the part worth recording:** running it
+read-only against production immediately proposed zeroing three healthy weekly
+counters. The rescale is unconditional arithmetic with no idea what scale the
+data is on, so running it in the wrong direction — or twice — destroys exactly
+what it exists to protect. It now refuses unless `DROP_CADENCE` disagrees with
+`--to`, i.e. **it must run BEFORE the env flip**, and that ordering is now the
+script's own guard rather than a line in a runbook nobody reads at 2am.
+**What it changes going forward:** any future counter whose meaning depends on
+the cadence profile needs the same treatment — the danger is not the flip, it is
+that the data outlives it. Dry run is the default and `--apply` is opt-in.
+**Recorded in:** `scripts/normalize-standby-count.mjs`,
+DAILY_MATCHING_IMPLEMENTATION_PLAN.md §3.1 block C1 and §6, `package.json`
+(`pnpm cadence:normalize-standby`).
+
+---
+
 ## 2026-08-09 — the daily-matching plan described shipped work as pending, and four cadence fields are dead
 
 **Kind:** a document turned out to be wrong + deviation from plan

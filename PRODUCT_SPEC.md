@@ -1850,7 +1850,14 @@ winning:
    **But the countdown itself is withheld when drops outpace the notices that
    explain them** (`dropOutpacesNotices`, §3.1): the banner then states a steady
    search ("I'm looking — I check every evening") with a plain "open menu"
-   button and no timer anywhere. A countdown is only honest if reaching zero
+   button and no timer anywhere. **One exception on the button only
+   (2026-08-09):** a user who could buy a paid Rematch right now (§3.11) gets
+   that entry instead of the menu button — same body, no timer, and
+   deliberately **no price**, since a pinned message sits above every
+   conversation. It opens the offer card, where the price is stated before any
+   payment. This mode is the only place it appears: it is the one moment the
+   product has nothing to promise, and the banner is edited rather than sent,
+   so a way to act on the wait costs no message. A countdown is only honest if reaching zero
    resolves into something — under `weekly` it always does (a match, or the
    famine DM fifteen minutes later), but under `daily` the famine notice stays
    throttled to one a week, so six evenings out of seven the timer would hit
@@ -4506,14 +4513,45 @@ in v1. Full spec: [REMATCH_PRODUCT_SPEC.md](REMATCH_PRODUCT_SPEC.md).
   weekly-optimizer analytics filter to `weekly` so on-demand runs never pollute
   the scoring A/B. The blind-decision, no-in-app-chat, single-live-match, and
   ledger exactly-once invariants are unaffected.
-- **Cadence.** The purchase-count rolling window and the famine gift-framing
-  lookback both read `CADENCE.rematchWindowMs` (7 days under `weekly`). The
-  three env-backed knobs above (`REMATCH_MAX_PER_WEEK`, `REMATCH_COOLDOWN_HOURS`,
-  `REMATCH_PRE_BATCH_BLACKOUT_HOURS`) are deliberately NOT sourced from
-  `CADENCE` — they stay plain env reads in `config.ts` — so they need manual
-  review (and almost certainly new values) before Rematch is ever enabled
-  under a `daily` cadence; `REMATCH_FEATURE_ENABLED` itself was left untouched
-  by the daily-cadence migration and remains **off** in production.
+- **Two pull entries (2026-08-09).** The offer used to exist ONLY as a DM sent
+  at a moment of disappointment, which is why "no menu row" also meant "no way
+  to ask": if the DM scrolled away, the feature was gone until the next
+  failure. Both new entries land on the **offer card, never the invoice** — the
+  price appears one tap later, before any payment, the same rule §3.8 applies
+  to the Premium hub — and both are additions, not replacements: the two
+  pain-triggered DMs are unchanged.
+  - **The pinned status banner**, in silent-drops mode only (§2.1 mode 5). It
+    is the one surface where a way in costs nothing: already on screen, already
+    saying "still looking", and *edited* rather than sent, so it raises no
+    notification. Its button carries **no price** — a pinned message sits above
+    every conversation, and a permanent price there is a standing sales pitch.
+    Eligibility is resolved once per worker tick (`filterRematchEligible`, a
+    batched twin of `checkRematchEligibility` that the tests hold to the same
+    verdict), never per user; under `weekly` the whole block is short-circuited
+    and costs nothing at all.
+  - **The concierge**, via `open_screen: rematch` — so "find me someone else
+    now" works by text and by voice. Unlike every other screen in that registry
+    it carries a **per-user gate enforced in code**, because the asymmetry it
+    protects is the product: a woman must never learn the feature exists, and a
+    playbook rule is not a boundary. The refusal string names no feature, since
+    the tool result is fed back to the model verbatim.
+- **Cadence.** Every D3 limit now resolves as `env ?? CADENCE`
+  (`rematchLimits()`): the profile is the source of truth and the env vars are
+  ops overrides. Before 2026-08-09 four of the five `DropCadence` rematch fields
+  were declared, pinned by a test, and **read by nothing**, while `config.ts`
+  baked weekly-tuned literals in as defaults — so the abstraction looked
+  complete for Rematch and was not. The `daily` profile allows **7 purchases per
+  7 days** (the 24h cooldown is then the real governor, and it already means
+  "at most once a day") with a **1h** pre-batch blackout instead of 6h, because
+  6h is ~3.5% of a week and **25% of a day**. `weekly` is untouched and
+  reproduces today's numbers exactly.
+  **`rematchGiftCapMs` is deliberately identical in both profiles**: every other
+  knob describes what the BUYER may do, that one protects the woman he is
+  buying his way to, and in a thin pool a cap that loosens with his purchase
+  rate turns one candidate into everyone's punching bag. This supersedes D8
+  ("turn Rematch off for the daily pilot"), which was never adopted — the limits
+  move with the cadence instead. `REMATCH_FEATURE_ENABLED` is the sole master
+  switch and is **on** in production.
 
 ## Phase 4 — Date Lifecycle
 

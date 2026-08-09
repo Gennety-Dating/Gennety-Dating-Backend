@@ -24,6 +24,17 @@ const STEP_ORDER: readonly string[] = [
   "verification",
 ];
 
+/**
+ * The founder digest's comparison window, deliberately a flat 7 days rather
+ * than `CADENCE.intervalMs`.
+ *
+ * It stays weekly under any cadence, and that is a decision rather than an
+ * oversight: the digest is read once a week by a human, and "match daily,
+ * apologise weekly" (PRODUCT_SPEC §3.1) keeps the notice rhythm weekly too, so
+ * a week is the horizon on which these numbers mean something. Under `daily` it
+ * simply aggregates 7 drops instead of 1 — the totals stay correct as a weekly
+ * sum, and only the reading "this is one drop" would be wrong.
+ */
 const WEEK_MS = 7 * 86_400_000;
 
 // ---------------------------------------------------------------------------

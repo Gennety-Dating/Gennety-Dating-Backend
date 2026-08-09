@@ -181,7 +181,22 @@ pattern):
 `onDelete: Cascade` from `users`. **No `User` columns are added** — limits are
 derived from these rows, so there is no counter to drift.
 
-## Surfaces (D4 — pain-triggered only)
+## Surfaces (D4 — pain-triggered PUSH, plus two pull entries)
+
+> **Amended 2026-08-09.** D4 said "pain-triggered CTA only — no permanent
+> main-menu row", and the second half is still true: there is no menu row, and
+> the product still never looks like a shop. What the rule accidentally also
+> forbade was *asking*. With the DM as the only surface, a man who wanted a
+> rematch and had let the message scroll away had no way to reach it — the
+> honest answer the playbook told the agent to give was "wait for it to appear
+> again", i.e. wait to be disappointed. Entries 3 and 4 close that without
+> reopening the shop: neither is a menu row, neither is permanent, and both are
+> gated on him actually being able to buy right now.
+>
+> **Both land on the offer card, never the invoice.** He arrived under his own
+> steam and has not seen a price, so the card — which states the terms and the
+> price — is the step that introduces one. Only its button mints the invoice.
+> Same rule §3.8 applies to the Premium hub.
 
 1. **No-match DM** (Thursday 18:15, `no-match-notifier.ts`) — the offer follows
    as its **own** short DM rather than being folded into the no-match message.
@@ -206,8 +221,35 @@ derived from these rows, so there is no counter to drift.
    have a live match. Sent to both sides; the sender self-gates on male-only +
    D3 limits, and the copy is static and identical for both, so it discloses
    nothing about who decided what.
-3. **NOT in the main menu** (D4) and **not** in the My Date hub (by definition
-   there is no live date).
+3. **The pinned status banner**, silent-drops mode only (§2.1 mode 5, callback
+   `rematch:open`, variant `neutral`). That mode renders when drops run more
+   often than the notices explaining them — i.e. exactly when an evening can
+   pass in deliberate silence — and it is the one surface where a way in costs
+   nothing: it is already on screen, already says "still looking", and is
+   **edited** rather than sent, so it raises no notification and needs no quiet
+   hours.
+   - **No price on the button.** A pinned message sits above every conversation;
+     a permanent price there is a standing sales pitch. The body is unchanged —
+     only the button moves.
+   - **Eligibility is batched per tick**, not per user (`filterRematchEligible`).
+     The worker touches every active account every minute, so the single-user
+     check would be ~3 queries per user per minute; the batch is 3 per tick
+     whatever the pool size. It is a twin, not an approximation — a drifting
+     batch would render a button that fails on tap, which this product treats as
+     worse than no button, so tests hold the two to the same verdict on every
+     gate. Under `weekly` the whole thing is short-circuited and never queries.
+   - A live match, an unlaunched city, and the ordinary drop countdown all
+     outrank it.
+4. **The concierge** (`open_screen: rematch`) — so it is reachable by asking, in
+   text or by voice, without hunting for a card that scrolled away.
+   **The per-user gate is enforced in `execOpenScreen`, not in the playbook.**
+   The asymmetry below (a woman never learns the feature exists) is the product,
+   and a prompt rule is not a boundary; the gate happens to cover her case for
+   free, since Rematch is male-only. Its refusal string deliberately names no
+   feature at all, because the tool result is fed back to the model verbatim and
+   an error mentioning a paid re-run is precisely how the asymmetry would leak.
+5. **STILL not a main-menu row** (D4 stands) and **not** in the My Date hub (by
+   definition there is no live date).
 
 **Two taps by design** (`handlers/matching/rematch.ts`). The DM carries the full
 terms and a callback button; tapping mints the Stars invoice and swaps the same
@@ -263,16 +305,50 @@ untouched.
 
 ## Env
 
-**Cadence note (2026-08-01).** The 7-day rolling windows below (D3's purchase
-count, the famine gift-framing lookback) are sourced from
-`CADENCE.rematchWindowMs` (`packages/shared/src/cadence.ts`), not a bare
-constant — the `weekly` `DropCadence` profile's value is 7 days, identical to
-today. `REMATCH_MAX_PER_WEEK` / `REMATCH_COOLDOWN_HOURS` /
-`REMATCH_PRE_BATCH_BLACKOUT_HOURS` themselves stay plain env reads and are
-NOT cadence-sourced — they need a deliberate, manual re-tune (almost
-certainly smaller numbers) before this feature is ever enabled under a
-`daily` cadence. `REMATCH_FEATURE_ENABLED` is unaffected by any of this and
-remains the sole master switch.
+**Cadence note (rewritten 2026-08-09 — the previous version is now wrong).**
+Every D3 limit resolves as **`env ?? CADENCE`** through `rematchLimits()`
+(`services/rematch.ts`): the active `DropCadence` profile
+(`packages/shared/src/cadence.ts`) is the source of truth, and the four env vars
+below are ops **overrides** on top of it. An unset var therefore follows
+`DROP_CADENCE` automatically; `weekly` reproduces today's numbers exactly, which
+a test asserts literally.
+
+This replaces the note that stood here until 2026-08-09, which said these knobs
+"stay plain env reads" and "need a deliberate, manual re-tune". That described
+a real gap rather than a design: `rematchBlackoutMs`, `rematchMaxPerInterval`,
+`rematchCooldownMs` and `rematchGiftCapMs` were declared on `DropCadence`,
+pinned by `cadence.test.ts`, and **read by nothing** — only `rematchWindowMs`
+was live. The abstraction looked complete for Rematch and was not.
+
+Two consequences worth holding onto:
+
+- **The resolution lives at the READ site, not in `config.ts`.** That file must
+  stay the first module evaluated (dotenv ordering) and can never safely import
+  `@gennety/shared` — which is exactly why the original wiring was skipped.
+- **A literal `0` is a real value, not "unset".**
+  `REMATCH_PRE_BATCH_BLACKOUT_HOURS=0` is the documented way to disable the
+  blackout and must not fall through to the profile's 6h, so the env vars are
+  nullable rather than defaulted.
+
+`daily` values and why they differ: **7 purchases per 7 days** (2 bound on day
+two and left the 24h cooldown decorative; at 7 the cooldown is the real
+governor and already means "at most once a day") and a **1h** blackout (6h is
+~3.5% of a week and **25% of a day** — 12:00–18:00 Kyiv dead, every day).
+`rematchCooldownMs` and `rematchGiftCapMs` are unchanged.
+
+**`rematchGiftCapMs` must stay identical in both profiles.** Every other knob
+here describes what the BUYER may do; that one protects the woman he is buying
+his way to. Loosen `rematchMaxPerInterval` freely — in a thin pool a gift cap
+that tracks his purchase rate turns a single candidate into everyone's punching
+bag. A test pins it, and it must outlast his cooldown by a wide margin or
+"protected for a week" degrades to "protected until he can buy again".
+
+This supersedes **D8** (`DAILY_MATCHING_IMPLEMENTATION_PLAN.md`, "turn Rematch
+off for the daily pilot"), which was never adopted and never recorded as a
+decision: the limits move with the cadence instead, so a `DROP_CADENCE` flip no
+longer needs the feature switched off to stay sane.
+`REMATCH_FEATURE_ENABLED` is unaffected by any of this and remains the sole
+master switch.
 
 | Key | Default | Purpose |
 |---|---|---|
