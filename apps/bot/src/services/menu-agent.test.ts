@@ -54,12 +54,30 @@ vi.mock("../config.js", () => ({
     CUSTOM_EMOJI_DISLIKE_ID: "",
     CUSTOM_EMOJI_MENU_ID: "",
     WEBAPP_URL: "https://test.invalid/calendar",
+    // ON so the `open_screen: rematch` tests exercise the per-user eligibility
+    // gate. With the flag absent they passed for the wrong reason — refused one
+    // step earlier, by `featureOn`, without the gate ever being consulted.
+    REMATCH_FEATURE_ENABLED: true,
   },
 }));
 
 // `appendNegativeConstraint` calls the LLM under the hood; stub it out.
 vi.mock("../handlers/matching/negative-constraints.js", () => ({
   appendNegativeConstraint: vi.fn(),
+}));
+
+// `open_screen: rematch` gates on the real eligibility check (§3.11).
+// `rematchLimits` must be stubbed too — `prompt-builder` reads it for the
+// playbook's limit prose, and a module mock replaces the whole module.
+const rematchEligible = vi.fn();
+vi.mock("./rematch.js", () => ({
+  checkRematchEligibility: (...args: unknown[]) => rematchEligible(...args),
+  rematchLimits: () => ({
+    maxPerInterval: 2,
+    cooldownMs: 24 * 60 * 60 * 1000,
+    blackoutMs: 6 * 60 * 60 * 1000,
+    giftCapMs: 7 * 24 * 60 * 60 * 1000,
+  }),
 }));
 
 import { prisma } from "@gennety/db";
@@ -1137,6 +1155,60 @@ describe("menu-agent open_screen", () => {
     });
 
     expect(result.action).toBeUndefined();
+  });
+
+  /**
+   * Rematch is the one screen here with a PER-USER gate, and it is enforced in
+   * code rather than by the playbook. The asymmetry it protects is the product:
+   * a woman must never learn the feature exists (§3.11), and "we told the model
+   * not to mention it" is a prompt, not a boundary.
+   */
+  describe("rematch — gated per user, not by prompt", () => {
+    async function openRematch(): Promise<Awaited<ReturnType<typeof runMenuAgentTurn>>> {
+      const fetchFn = vi
+        .fn()
+        .mockResolvedValueOnce(
+          toolCallResponse([{ id: "c1", name: "open_screen", args: { screen: "rematch" } }]),
+        )
+        .mockResolvedValueOnce(textResponse("ok"));
+      return runMenuAgentTurn(telegramId, "find me someone else now", {
+        fetchFn: fetchFn as unknown as typeof fetch,
+      });
+    }
+
+    it("offers nothing when the user may not buy — and the refusal names no feature", async () => {
+      // A woman reaches this branch as `not_male`. The tool result is fed back
+      // to the model verbatim, so an error string mentioning a paid re-run is
+      // exactly how the asymmetry would leak.
+      rematchEligible.mockResolvedValue({ ok: false, reason: "not_male" });
+
+      const result = await openRematch();
+
+      expect(result.action).toBeUndefined();
+      const toolMessage = (
+        prisma.user.update as ReturnType<typeof vi.fn>
+      ).mock.calls
+        .flatMap((call) => (call[0] as { data: { messageHistory: unknown[] } }).data.messageHistory)
+        .filter((m): m is { role: string; content: string } => {
+          const msg = m as { role?: string };
+          return msg.role === "tool";
+        })
+        .map((m) => m.content)
+        .join(" ");
+      expect(toolMessage.toLowerCase()).not.toContain("rematch");
+      expect(toolMessage.toLowerCase()).not.toContain("pay");
+      expect(toolMessage.toLowerCase()).not.toContain("price");
+    });
+
+    it("offers nothing while he is rate-limited, rather than a button that fails on tap", async () => {
+      rematchEligible.mockResolvedValue({ ok: false, reason: "cooldown" });
+      expect((await openRematch()).action).toBeUndefined();
+    });
+
+    it("treats an eligibility lookup failure as 'no'", async () => {
+      rematchEligible.mockRejectedValue(new Error("db down"));
+      expect((await openRematch()).action).toBeUndefined();
+    });
   });
 });
 

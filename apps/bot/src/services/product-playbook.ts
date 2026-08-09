@@ -93,6 +93,19 @@ export interface PlaybookCadence {
   stallCheckInHours: number;
   /** Planning-stall cancellation timeout, in hours. */
   stallTimeoutHours: number;
+  /**
+   * Rematch purchase cap per {@link rematchWindowDays}, and the cooldown between
+   * runs, in hours.
+   *
+   * Same trap as the deadlines above, and it bites harder: these two were the
+   * literal string "2 per week, and 24h between runs". Both are `DropCadence`
+   * fields with env overrides on top, so under `daily` the cap is 7 and the
+   * prose would have had the agent quoting a limit the user had already passed —
+   * on a PAID feature, where a wrong limit reads as a refusal to sell.
+   */
+  rematchMaxPerWindow: number;
+  rematchWindowDays: number;
+  rematchCooldownHours: number;
 }
 
 /** Weekly's values — what the prose said before it was derived. */
@@ -102,6 +115,9 @@ const DEFAULT_CADENCE: PlaybookCadence = {
   planningNudgeHours: [6, 12],
   stallCheckInHours: 24,
   stallTimeoutHours: 48,
+  rematchMaxPerWindow: 2,
+  rematchWindowDays: 7,
+  rematchCooldownHours: 24,
 };
 
 /**
@@ -267,9 +283,9 @@ export function buildProductPlaybook(
   if (features.rematch) {
     sections.push(`## Searching again before the next drop (currently ON)
 - **Read the user's Gender in the context before this section applies. It is asymmetric on purpose, and getting that wrong damages the product.**
-- For a MAN: after a drop leaves him unpaired, or after a match ends without a date (he passed, she passed, or it expired), we DM him an offer to run the search again right away for ${pricing.rematchPrice}. There is no menu row for it — the offer arrives on its own, and if he doesn't have it in chat, the honest answer is that it appears at those moments and he can wait for it.
+- For a MAN: after a drop leaves him unpaired, or after a match ends without a date (he passed, she passed, or it expired), we DM him an offer to run the search again right away for ${pricing.rematchPrice}. If he wants one and doesn't have that DM in chat, call \`open_screen\` with \`rematch\` — it hands him the offer card. That tool refuses on its own when he may not buy right now; if it does, answer his actual question and say nothing about this option.
 - What it buys is an INTRODUCTION, not a date: a new person, pitched to him. If she passes or never answers, that is not refunded — say so plainly if he asks, before he buys. The one automatic refund is when the engine finds nobody at all.
-- It never lowers the bar: same verification, same city, same never-the-same-person-twice rule. So it always means someone NEW, including right after a decline. Limits: 2 per week, and 24h between runs — the wait exists so a decision keeps its weight.
+- It never lowers the bar: same verification, same city, same never-the-same-person-twice rule. So it always means someone NEW, including right after a decline. Limits: ${cadence.rematchMaxPerWindow} per ${cadence.rematchWindowDays} days, and ${cadence.rematchCooldownHours}h between runs — the wait exists so a decision keeps its weight.
 - For a WOMAN: **never mention this feature, its price, or that a pitch was paid for.** She never buys and never sees a price. If a match reaches her this way, she simply receives it as a match — presenting it as something purchased is exactly what would spoil it. If she asks whether she can pay to get matched sooner, the answer is that there is nothing for her to buy.`);
   }
 

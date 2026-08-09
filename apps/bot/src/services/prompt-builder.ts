@@ -23,6 +23,7 @@ import {
 } from "./product-playbook.js";
 import { getRecentChatEvents, type ChatEventView } from "./chat-events.js";
 import { stallCheckInPending } from "./match-stall.js";
+import { rematchLimits } from "./rematch.js";
 
 // ---------------------------------------------------------------------------
 // Base Persona (static)
@@ -112,6 +113,12 @@ function playbookCadence(): PlaybookCadence {
     ],
     stallCheckInHours: asHours(CADENCE.stallCheckInMs),
     stallTimeoutHours: asHours(CADENCE.stallTimeoutMs),
+    // Through `rematchLimits()`, not `CADENCE` directly: the env overrides are
+    // what production actually runs on, so reading the profile here would have
+    // the agent quote a limit nobody is subject to.
+    rematchMaxPerWindow: rematchLimits().maxPerInterval,
+    rematchWindowDays: Math.round(CADENCE.rematchWindowMs / (24 * HOUR_MS)),
+    rematchCooldownHours: asHours(rematchLimits().cooldownMs),
   };
 }
 

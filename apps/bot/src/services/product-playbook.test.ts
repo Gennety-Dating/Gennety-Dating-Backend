@@ -164,6 +164,9 @@ describe("buildProductPlaybook", () => {
       planningNudgeHours: [3, 6],
       stallCheckInHours: 12,
       stallTimeoutHours: 24,
+      rematchMaxPerWindow: 7,
+      rematchWindowDays: 7,
+      rematchCooldownHours: 24,
     };
 
     it("defaults to weekly's numbers when no cadence is passed", () => {
@@ -188,6 +191,20 @@ describe("buildProductPlaybook", () => {
       expect(text).toContain("decide within until shortly before the next drop");
       expect(text).not.toContain("24h to decide");
     });
+
+    it("states the rematch limits from the cadence, not the old literal prose", () => {
+      // "2 per week, and 24h between runs" was a hardcoded string on a PAID
+      // feature. Under a faster cadence the cap is 7, and quoting 2 would read
+      // to the buyer as a refusal to sell him something he is entitled to.
+      const withRematch = { ...ALL_ON, rematch: true };
+      const weekly = buildProductPlaybook(withRematch);
+      expect(weekly).toContain("2 per 7 days");
+
+      const daily = buildProductPlaybook(withRematch, undefined, DAILY_ISH);
+      expect(daily).toContain("7 per 7 days");
+      expect(daily).not.toContain("2 per 7 days");
+      expect(daily).not.toContain("2 per week");
+    });
   });
 
   describe("silent drops", () => {
@@ -197,6 +214,9 @@ describe("buildProductPlaybook", () => {
       planningNudgeHours: [3, 6],
       stallCheckInHours: 12,
       stallTimeoutHours: 24,
+      rematchMaxPerWindow: 7,
+      rematchWindowDays: 7,
+      rematchCooldownHours: 24,
     };
 
     it("explains that a search finding nobody sends nothing at all", () => {

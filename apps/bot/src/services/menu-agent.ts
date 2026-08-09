@@ -32,6 +32,7 @@ import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 import { transitionAccountStatus } from "./account-status-transitions.js";
 import { getPremiumCancelContext, formatPremiumUntil } from "./premium.js";
 import { explainMatch, getMatchmakingStanding } from "./agent-insights.js";
+import { checkRematchEligibility } from "./rematch.js";
 import { STALL_ASK_CANCEL_PREFIX } from "./match-stall.js";
 import { setUserLanguage, setUserTheme } from "./user-preferences.js";
 
@@ -504,13 +505,21 @@ const TOOLS = [
     function: {
       name: "open_screen",
       description:
-        "Give the user a button that opens an existing screen, when what they want lives there rather than in chat. Use it instead of describing where to tap. Choose: profile (view their profile card), photos (add/remove photos), edit_bio (rewrite 'About me' in the editor, where they can see the current text first), settings (language, theme, account), tickets (Date Ticket balance and store), premium (subscription).",
+        "Give the user a button that opens an existing screen, when what they want lives there rather than in chat. Use it instead of describing where to tap. Choose: profile (view their profile card), photos (add/remove photos), edit_bio (rewrite 'About me' in the editor, where they can see the current text first), settings (language, theme, account), tickets (Date Ticket balance and store), premium (subscription), rematch (search for a new person right now — see the Rematch section of the playbook for who may hear about it at all; the tool refuses on its own for everyone else, so a refusal means say nothing about it).",
       parameters: {
         type: "object",
         properties: {
           screen: {
             type: "string",
-            enum: ["profile", "photos", "edit_bio", "settings", "tickets", "premium"],
+            enum: [
+              "profile",
+              "photos",
+              "edit_bio",
+              "settings",
+              "tickets",
+              "premium",
+              "rematch",
+            ],
           },
         },
         required: ["screen"],
@@ -1094,7 +1103,11 @@ async function evaluatePremiumCancelOffer(
 /** Screens `open_screen` may hand over, mapped to the real menu callbacks. */
 const SCREEN_ENTRIES: Record<
   string,
-  { labelKey: Parameters<typeof t>[1]; data: string; flag?: "tickets" | "premium" }
+  {
+    labelKey: Parameters<typeof t>[1];
+    data: string;
+    flag?: "tickets" | "premium" | "rematch";
+  }
 > = {
   profile: { labelKey: "menuMyProfile", data: "menu:profile" },
   photos: { labelKey: "editProfilePhotosBtn", data: "menu:edit:photos" },
@@ -1102,6 +1115,16 @@ const SCREEN_ENTRIES: Record<
   settings: { labelKey: "menuSettings", data: "menu:settings" },
   tickets: { labelKey: "menuMyTickets", data: "menu:tickets", flag: "tickets" },
   premium: { labelKey: "menuPremium", data: "menu:premium", flag: "premium" },
+  // §3.11. Opens the offer card, never the invoice — same rule as the pinned
+  // banner's entry: the price appears on the card, before any payment.
+  //
+  // Unlike every other screen here, this one is NOT reachable by everyone. It
+  // carries an eligibility gate in `execOpenScreen` rather than a prompt rule,
+  // because the asymmetry it protects is the product: a woman must never learn
+  // the feature exists, and "the playbook told the model not to" is not a
+  // boundary. The gate happens to cover her case for free — Rematch is
+  // male-only — along with rate limits and a live match.
+  rematch: { labelKey: "statusButtonRematch", data: "rematch:open", flag: "rematch" },
 };
 
 async function userLanguage(telegramId: bigint): Promise<Language> {
@@ -1112,9 +1135,10 @@ async function userLanguage(telegramId: bigint): Promise<Language> {
   return (user?.language ?? "en") as Language;
 }
 
-function featureOn(flag: "tickets" | "premium" | undefined): boolean {
+function featureOn(flag: "tickets" | "premium" | "rematch" | undefined): boolean {
   if (!flag) return true;
   if (flag === "tickets") return env.TICKET_FEATURE_ENABLED === true;
+  if (flag === "rematch") return env.REMATCH_FEATURE_ENABLED === true;
   return env.PREMIUM_FEATURE_ENABLED === true;
 }
 
@@ -1138,6 +1162,33 @@ async function execOpenScreen(
       }),
       action: null,
     };
+  }
+
+  // Rematch is the one screen with a per-user gate, and it is enforced here
+  // rather than in the playbook. The refusal text deliberately reveals nothing
+  // about the feature: the caller may be a woman, for whom Rematch must not
+  // exist at all (the gift framing is the product — §3.11), and an error string
+  // naming a paid re-run is exactly how that leaks.
+  if (screen === "rematch") {
+    const user = await prisma.user.findUnique({
+      where: { telegramId },
+      select: { id: true },
+    });
+    const eligible = user
+      ? await checkRematchEligibility(user.id)
+          .then((r): boolean => r.ok)
+          .catch(() => false)
+      : false;
+    if (!eligible) {
+      return {
+        toolResult: JSON.stringify({
+          success: false,
+          error:
+            "Not available for this user. Answer their actual question without mentioning this option, and show no button.",
+        }),
+        action: null,
+      };
+    }
   }
 
   const lang = await userLanguage(telegramId);
