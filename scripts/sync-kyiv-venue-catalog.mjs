@@ -99,8 +99,34 @@ function assertCatalog(catalog, manifest) {
           `${place.name} (${place.placeId}) has tier ${row.tier ?? "base"} for ${domain}, expected ${expectedTier}`,
         );
       }
+      // The manifest's `always_open` mark must survive into the row, for the
+      // same reason the tier above must: a rebuild regenerates these rows from
+      // Places, and Places has no opinion about a street or an embankment. A
+      // dropped mark is invisible — the row still reads as a healthy park and
+      // is simply never assigned again.
+      if ((row.hoursConfidence ?? null) !== (place.hoursConfidence ?? null)) {
+        fail(
+          `${place.name} (${place.placeId}) has hoursConfidence ${row.hoursConfidence ?? "none"} for ${domain}, expected ${place.hoursConfidence ?? "none"}`,
+        );
+      }
     }
   }
+
+  // Not a failure: a venue can legitimately have neither (the botanical garden
+  // is gated and ticketed, so leaving it unassignable is the correct answer).
+  // But it is never something to discover from a silent absence of dates, so
+  // the operator is told which rows the selector will drop.
+  const unassignable = manifest.places.filter((place) => {
+    if (place.hoursConfidence) return false;
+    const row = byId.get(place.placeId)?.values().next().value;
+    return !row?.openingHours || row?.utcOffsetMinutes == null;
+  });
+  if (unassignable.length > 0) {
+    console.warn(
+      `! ${unassignable.length} place(s) have no hours and no hoursConfidence, so V2 will never assign them: ${unassignable.map((p) => p.name).join(", ")}`,
+    );
+  }
+
   console.log(
     `OK: ${manifest.places.length} expansion places cover ${expectedDomains.size} domains; blocked/rejected places absent.`,
   );
@@ -186,6 +212,27 @@ function validatePlace(config, details) {
     typeof details.location?.longitude !== "number"
   ) {
     problems.push("missing coordinates");
+  }
+
+  // `hoursConfidence` is the operator's declaration that a venue needs no
+  // opening hours, and the runtime honours exactly two values
+  // (`venue-intent-v2.ts` → the hours pre-check). A typo resolves to neither,
+  // which is indistinguishable from `unknown` — i.e. the row keeps looking
+  // healthy in the catalog and is silently never assigned. That is the one
+  // failure this field exists to end, so it is checked rather than trusted.
+  // `unknown` is allowed and means the opposite: the operator looked and
+  // decided this venue must stay unassignable until it has real hours (the
+  // botanical garden is gated and ticketed). Saying so explicitly is what keeps
+  // that decision from reading as an oversight the next person "fixes".
+  if (
+    config.hoursConfidence != null &&
+    !["always_open", "operator_confirmed", "unknown"].includes(
+      config.hoursConfidence,
+    )
+  ) {
+    problems.push(
+      `hoursConfidence "${config.hoursConfidence}" is not always_open, operator_confirmed or unknown`,
+    );
   }
   return problems;
 }
@@ -284,6 +331,23 @@ async function main() {
         hardCapabilities: carried?.hardCapabilities ?? [],
         utcOffsetMinutes: place.utcOffsetMinutes ?? null,
         openingHours: place.regularOpeningHours ?? null,
+        // Same reason as the facets above, one field later: Places returns no
+        // hours for public space (a street, an embankment, a park), and the V2
+        // selector drops a row whose hours are unknown. The operator marks
+        // those `always_open` by hand — and a rebuild without this line quietly
+        // reverted the mark, because `retained` keeps only rows the manifest
+        // does NOT own, so every marked venue is rebuilt from Places on every
+        // `--apply`. Written only when the manifest sets it, so an ordinary row
+        // keeps deriving it at import (`seed-venues.mjs`) and the catalog diff
+        // stays the size of the change.
+        ...(config.hoursConfidence
+          ? { hoursConfidence: config.hoursConfidence }
+          : {}),
+        // The reason a venue carries an unusual mark, carried for the same
+        // reason as the mark itself. A note that survives one review and dies
+        // at the next re-sync is worse than none: the row goes back to looking
+        // like an oversight, and the next operator "fixes" the decision.
+        ...(config.reviewNote ? { reviewNote: config.reviewNote } : {}),
         _rating: place.rating ?? null,
         _reviews: place.userRatingCount ?? null,
         _priceLevel: place.priceLevel ?? null,

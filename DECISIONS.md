@@ -47,6 +47,102 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-09 — the Kyiv catalog is imported into production, and a file edit is not a shipped change
+
+**Kind:** founder decision
+**What:** `seed-venues:import --apply` was run against **both** the demo and the
+production databases, lifting prod from 127 unique active Kyiv venues to 269.
+This lands the whole 141-venue expansion, the tier moves (Cafe Marko →
+`premium`, Très Branché → `base`, Win Bar and Японський Привіт → `premium`,
+Сімона → `base`) and the park hours marks in one go. It supersedes the
+2026-08-07 entry that deliberately stopped at the file.
+**Why:** the founder went looking for Cafe Marko in the premium block and did
+not find it. That was not a tier bug — it was the gap this journal had already
+recorded and left open: the promotion existed only in `curated-venues.kyiv.*`,
+demo had been imported before it, and prod had never seen the venue at all. A
+catalog edit that nobody imports is indistinguishable from no edit, and the
+distance between the two had grown to 142 venues and three tier decisions.
+**What it changes going forward:** the "prod carries the pre-expansion catalog"
+caveat in the 2026-08-07 entry is **dead** — do not repeat it. A backup of the
+972 pre-import rows is at
+`~/Desktop/gennety-backups/curated-venues-prod-2026-08-09T14-54-49-313Z.json`
+(outside the repo, per the one-off-tooling rule). Note what the import does NOT
+do: `active` is never written on an update, so a venue the nightly revalidation
+deactivated stays deactivated — reactivation remains the cron's call on live
+evidence, and an import can no longer resurrect a closed venue.
+**Recorded in:** deploy.md → the 2026-08-09 block; PRODUCT_SPEC §3.7.
+
+## 2026-08-09 — the botanical garden stays unassignable, and says so on the row
+
+**Kind:** founder decision
+**What:** five hourless Kyiv public spaces (Воздвиженка, Андріївський узвіз,
+Оболонська набережна, Маріїнський парк, Міст закоханих) are marked
+`hoursConfidence: "always_open"` and become auto-assignable. Ботанічний сад ім.
+Фоміна is deliberately left at `unknown`, i.e. permanently unassignable until
+someone supplies real hours — offered as a choice and taken explicitly.
+**Why:** the other five are a street, an embankment, a bridge and two open
+parks — there is no gate and no closing time, so the mark is a true statement.
+The garden is gated and ticketed and genuinely closes; the slot grid runs to
+19:30, which it clears in summer and does not in winter. The founder chose
+correctness over one more venue. Worth recording because the same decision was
+independently reached on 2026-07-30 (`4d02b90`) and the reasoning existed only
+in a commit message — a later reviewer seeing five marked parks and one
+unmarked would read it as an omission.
+**What it changes going forward:** **do not mark the botanical garden
+`always_open`.** The reason now rides on the row itself (`reviewNote`) and in
+the manifest, so it survives a re-sync. The way to unblock it is real hours
+(`operator_confirmed` plus a schedule), not a blanket carve-out. Same rule for
+any future gated or ticketed outdoor venue.
+**Recorded in:** `scripts/curated-venues.kyiv.expansion.json`, PRODUCT_SPEC §3.7.
+
+## 2026-08-09 — the parks fix is data, not code, and the rule got a name
+
+**Kind:** change of mind
+**What:** I planned a carve-out in the V2 selector letting any `park` through
+with unknown hours. Shipped instead: nothing in the gate changed, the operator
+marks each venue, and the inline condition was extracted to an exported
+`hoursEvidenceAdmits` with a test.
+**Why:** a category-wide carve-out cannot express the botanical garden, which
+is the one case that actually needed judgment — and the mechanism already
+existed (`always_open` / `operator_confirmed` were read by the code and written
+by nothing, so the escape hatch was designed for exactly this and never used).
+The extraction is the more interesting half: the rule was two unnamed
+conditions inside a 200-line function, which is *why* six parks could sit dead
+for weeks. The catalog playbook told operators to mark parks; nothing connected
+that instruction to the code enforcing it, and nothing failed when the mark was
+missing.
+**What it changes going forward:** three guards now exist where there were
+none — `hoursEvidenceAdmits` is unit-tested (confirmed to fail when the
+`always_open` branch is removed), `sync-venues:kyiv --check` fails when a
+manifest mark did not survive into the catalog, and it warns about any venue
+left with neither hours nor a mark. That warning found a second dead row on its
+first run (see below). A future selector gate that can silently delete
+inventory should get the same treatment: name it, test it, and make the catalog
+tooling able to see it.
+**Recorded in:** `apps/bot/src/services/venue-intent-v2.ts`,
+`scripts/sync-kyiv-venue-catalog.mjs`, PRODUCT_SPEC §3.7, ARCHITECTURE →
+`curated_venues`.
+
+## 2026-08-09 — two Kyiv venues are in the catalog and can never be picked
+
+**Kind:** not done
+**What:** `Міст закоханих` and `GARAGE` are left as they are, and are recorded
+here rather than fixed.
+**Why:** neither is a policy problem, and both need an operator decision I
+should not make. `Міст закоханих` carries rating 3.8 with **4** reviews for a
+landmark that really has thousands — almost certainly a misresolved `placeId` —
+and it fails `meetsVenueQualityFloor` on both counts; its manifest entry has
+`allowQualityOverride: true`, which relaxes only the *sync-time* check and is
+not read at runtime, so the row survives review and is never assignable.
+`GARAGE` resolves to a Google record whose `primaryType` is `grocery_store`,
+with no hours and no price level, listed as a `cafe`.
+**What it changes going forward:** re-resolve both `placeId`s before touching
+anything else. And there is a real product question underneath the first one:
+`allowQualityOverride` looks like an operator override and is not one — either
+the runtime should honour it or the manifest should stop offering it, because a
+flag that silently means nothing is worse than no flag.
+**Recorded in:** here only; the rows are unchanged.
+
 ## 2026-08-09 — the venue board holds slots for walking spots, and it is parks only
 
 **Kind:** founder decision

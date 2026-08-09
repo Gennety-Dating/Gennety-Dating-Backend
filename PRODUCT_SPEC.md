@@ -3582,8 +3582,37 @@ their Places metadata before reconciling the replayable approved JSON.
 
 A curated venue that is **closed at the agreed date/time** (per its stored
 Places `openingHours`, evaluated in the venue's local time via
-`utcOffsetMinutes`) is skipped at selection — missing hours data is treated as
-"open", never as a reason to exclude. The curated base is kept fresh by the
+`utcOffsetMinutes`) is skipped at selection.
+
+**Unknown hours are a refusal on the automatic assignment, and an admission on
+the paid board (corrected 2026-08-09).** This paragraph used to say missing
+hours were "treated as open, never a reason to exclude", which described
+`isVenueOpenAt` — the predicate the §3.7b board still uses — and had been
+untrue of the live selector since Venue Intent V2 reached 100%.
+`hoursEvidenceAdmits` (`services/venue-intent-v2.ts`) fails closed instead, and
+that asymmetry is deliberate: the board offers a venue the couple is choosing
+with their eyes open, while the concierge picks one FOR them, sight unseen, and
+"we have no idea when it is open" is not a good enough basis for that.
+
+The consequence is that **public space needs an explicit operator mark**, since
+Google publishes hours for a café and none at all for a street, an embankment
+or a park. `CuratedVenue.hoursConfidence` carries it: `always_open` admits the
+venue at any slot, `operator_confirmed` clears the evidence bar while still
+honouring a recorded schedule, and anything else (`provider`, `unknown`, null)
+needs real hours. Six Kyiv parks — Воздвиженка, Андріївський узвіз, Оболонська
+набережна, Маріїнський парк, Міст закоханих and the botanical garden — sat in
+the catalog looking healthy and were **never once assigned** because nothing had
+ever written that field; the rule that dropped them was an unnamed inline
+expression, so neither the catalog playbook nor the operator could see it. Five
+are now marked, and the botanical garden is deliberately **not**: it is gated,
+ticketed grounds with real closing hours, and the reason rides on the row
+(`reviewNote`) so the next reviewer does not read the omission as an oversight.
+The mark lives in the replayable city manifest rather than only on the built
+row, because `sync-venues:kyiv --apply` regenerates those rows from Places and
+would otherwise revert it silently — `--check` now fails on that divergence and
+warns about any venue left with neither hours nor a mark.
+
+The curated base is kept fresh by the
 daily **venue re-validation** cron (`services/venue-revalidation.ts`): it
 re-checks the oldest-verified active venues against Google Places by stored
 `placeId`, deactivates ones that closed or dropped below the rating/review

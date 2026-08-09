@@ -559,6 +559,49 @@ function categoryFacets(category: string, tags: string[] = [], vibeTags: string[
   };
 }
 
+/**
+ * Is there enough evidence that this venue is OPEN at the agreed slot?
+ *
+ * Fails closed on unknown hours, which is the opposite of `isVenueOpenAt` — it
+ * answers "does the recorded schedule exclude this instant", so no schedule
+ * means yes. Both are right for their own caller: the paid venue-change board
+ * offers a venue the couple is choosing with their eyes open, while this picks
+ * one FOR them, sight unseen, and "we have no idea when it is open" is not a
+ * good enough basis for that.
+ *
+ * The consequence is that public space — a street, an embankment, a park —
+ * needs an explicit mark, because Google publishes no hours for any of it.
+ * `always_open` is the operator saying so (`scripts/CITY_EXPANSION_PLAYBOOK.md`
+ * §0b), and it is the reason this is a named function rather than the two
+ * inline conditions it replaced: unnamed, the rule was invisible, and six Kyiv
+ * parks sat in the catalog looking healthy and were never once assigned.
+ *
+ * `operator_confirmed` is weaker on purpose — it clears the evidence bar but
+ * still honours a recorded schedule, for a venue whose hours we trust but did
+ * not get from Places.
+ */
+export function hoursEvidenceAdmits(
+  row: {
+    hoursConfidence: string | null;
+    openingHours: unknown;
+    utcOffsetMinutes: number | null;
+  },
+  agreedTime: Date,
+): boolean {
+  if (row.hoursConfidence === "always_open") return true;
+  if (
+    row.hoursConfidence !== "operator_confirmed" &&
+    (!row.openingHours || row.utcOffsetMinutes == null)
+  ) {
+    return false;
+  }
+  return isVenueOpenAt(
+    row.openingHours as RegularOpeningHours | null,
+    row.utcOffsetMinutes,
+    agreedTime,
+  );
+}
+
 interface SelectionRecord {
   rank: VenueRankCandidate;
   name: string;
@@ -770,8 +813,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   const selections: SelectionRecord[] = curated.flatMap((row) => {
     if (!row.googleMapsUri) return [];
     if (!isValidVenueCategory(row.category)) return [];
-    if (row.hoursConfidence !== "always_open" && row.hoursConfidence !== "operator_confirmed" && (!row.openingHours || row.utcOffsetMinutes == null)) return [];
-    if (row.hoursConfidence !== "always_open" && !isVenueOpenAt(row.openingHours as RegularOpeningHours | null, row.utcOffsetMinutes, match.agreedTime!)) return [];
+    if (!hoursEvidenceAdmits(row, match.agreedTime!)) return [];
     const tags = [...row.facetTags, ...row.hardCapabilities];
     const facets = categoryFacets(row.category, tags, row.vibeTags);
     const policy = evaluateInitialVenuePolicy({

@@ -783,7 +783,26 @@ evidence for commercial/admission venues, so neither non-base tier is held to
 the student price cap; PRODUCT_SPEC §3.7 / §3.7b / §3.8), `vibeTags`, `active`,
 `lastVerifiedAt`, plus `placeId` (Places resource id for exact re-fetch),
 `utcOffsetMinutes` + `openingHours` (Places `regularOpeningHours`, for the
-open-at-slot check). Curated rows deliberately store **no imagery**: venue
+open-at-slot check), and `hoursConfidence`.
+
+**`hoursConfidence` decides whether a row can be auto-assigned at all**, so it
+is worth reading as a gate rather than as metadata. `seed-venues.mjs` derives it
+at import (`provider` when Places returned hours, `unknown` when it did not),
+and the two values that matter are written by an operator in the city manifest:
+`always_open` admits the venue at any slot, `operator_confirmed` clears the
+evidence bar while still honouring a recorded schedule. `hoursEvidenceAdmits`
+(`services/venue-intent-v2.ts`) is the single reader and fails closed on
+everything else, which is the opposite of `isVenueOpenAt` — the §3.7b board's
+predicate, which treats "no schedule" as "no reason to exclude". Both are right
+for their own caller (PRODUCT_SPEC §3.7), and the split is why public space —
+which Google never gives hours for — is invisible to the concierge until
+someone marks it. Six Kyiv parks sat unassignable on exactly that until
+2026-08-09. The mark belongs in `scripts/curated-venues.<city>.expansion.json`,
+not only on the built row: `sync-venues:kyiv --apply` rebuilds rows from Places
+and carries over only what the manifest declares (`facetTags`,
+`hardCapabilities`, and now `hoursConfidence` + `reviewNote`).
+
+Curated rows deliberately store **no imagery**: venue
 photos come exclusively from Google Places, resolved from `placeId` when a venue
 is actually assigned (`fetchPlacePhotoName`), so the pointer is always fresh and
 only ever costs one request per scheduled date. The legacy operator-supplied

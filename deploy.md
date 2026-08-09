@@ -1,5 +1,88 @@
 # Gennety Dating Deploy
 
+**Applied 2026-08-09 (data) / PENDING (code) — the Kyiv catalog is imported into
+both databases, and the parks the concierge could never pick now work
+(PRODUCT_SPEC §3.7, DECISIONS.md ×4).** **No Prisma schema change, no env
+change, no flag change, no Mini App change** (`apps/webapp` untouched).
+
+**Read the split before doing anything: the user-visible half is ALREADY LIVE
+and needed no deploy.** `curated_venues` is data, and `hoursConfidence` is read
+off the row on every selection, so the import below took effect the moment it
+ran — no rsync, **no `pm2 restart`**, and the production bot was not touched.
+The code diff is a behaviour-preserving refactor plus tests and rides the next
+ordinary full deploy; nothing waits on it.
+
+**What ran, and against what:**
+
+```sh
+# demo first, then prod — same command, different DATABASE_URL
+pnpm seed-venues:import --in=scripts/curated-venues.kyiv.approved.json \
+  --city-key=ua:kyiv --apply
+```
+
+| | demo | prod |
+|---|---|---|
+| result | 15 created, 1208 updated | **710 created, 513 updated** |
+| unique active Kyiv | 261 → 264 | **127 → 269** |
+| premium | 39 → 44 | 18 → 45 |
+| assignable parks | 15 → 20 of 21 | **15 → 19 of 21** |
+
+Prod took the whole 141-venue expansion in one go, which is why its numbers move
+so much more — it had been sitting on the pre-expansion catalog since before
+2026-08-07. `--city-key=ua:kyiv` is **required**: the approved rows carry no
+`cityKey` and the importer refuses without it.
+
+**Five things worth knowing:**
+
+- **A pre-import backup of all 972 prod rows** is at
+  `~/Desktop/gennety-backups/curated-venues-prod-2026-08-09T14-54-49-313Z.json`
+  — outside the repo on purpose, so no deploy rsync can ship or delete it.
+- **`active` is never written on an update** (the D10 fix), so an import cannot
+  resurrect a venue the nightly revalidation deactivated. That is also why prod
+  shows 269 unique venues against 266 in the file — pre-existing rows the
+  manifest does not own are retained.
+- **Two Kyiv parks are still unassignable, both deliberately.** Ботанічний сад
+  ім. Фоміна is gated and ticketed and stays at `hoursConfidence: "unknown"`
+  (founder decision, with the reason on the row); `Міст закоханих` fails the
+  quality floor at 3.8★/4 reviews, which is a misresolved `placeId` rather than
+  a policy problem. Do not "fix" either by marking it `always_open`.
+- **`GARAGE` is a third dead row**, surfaced by the new `--check` warning on its
+  first run: Google resolves it to a `grocery_store` with no hours and no price
+  level while the catalog lists it as a `cafe`. Needs re-resolving, not marking.
+- **The next `pnpm sync-venues:kyiv --apply` is now safe**, and was not before:
+  it rebuilds rows from Places and used to drop `hoursConfidence` and
+  `reviewNote`, silently reverting every mark. Both are carried from the
+  manifest now, and `--check` fails when a row and its manifest entry disagree.
+
+Preflight for the code half: typecheck clean across all 5 projects, lint clean,
+**3976 tests** (bot 3448 / shared 273 / webapp 255), 0 failed. The new
+`hoursEvidenceAdmits` tests were confirmed to FAIL with the `always_open` branch
+removed before being confirmed green with it.
+
+Post-check — the honest assertion is the gate simulation, not a log line, since
+nothing new is logged on the happy path:
+
+```sh
+pnpm sync-venues:kyiv --check   # expect OK + the GARAGE warning, nothing else
+```
+```sql
+-- prod: parks the selector can actually reach
+select count(*) filter (where hours_confidence in ('always_open','operator_confirmed')
+                           or (opening_hours is not null and utc_offset_minutes is not null))
+     , count(*)
+  from curated_venues where active and city_key = 'ua:kyiv' and category = 'park';
+-- and the two tier moves the founder asked for
+select distinct name, tier from curated_venues
+ where name in ('Cafe Marko','Très Branché');
+```
+
+**Rollback:** the data half is restored from the backup JSON above (it holds
+every column of all 972 pre-import rows); there is nothing else to undo — no
+schema, no env, no flag. Reverting the code half restores the inline conditions
+and changes no behaviour.
+
+---
+
 **PENDING — the venue board stops being a wall of tables (PRODUCT_SPEC §3.7b,
 DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no
 flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so

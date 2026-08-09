@@ -36,7 +36,7 @@ vi.mock("./openai.js", () => ({
   callOpenAIJson: (...args: unknown[]) => callOpenAIJson(...args),
 }));
 
-const { interpretVenueIntent } = await import("./venue-intent-v2.js");
+const { interpretVenueIntent, hoursEvidenceAdmits } = await import("./venue-intent-v2.js");
 const { isVenueOriginRefusal } = await import("./venue-origin.js");
 
 /**
@@ -212,5 +212,82 @@ describe("interpretVenueIntent — departure-point gate (PRODUCT_SPEC §3.7)", (
 
     expect(asIntent(result).state).toBe("draft");
     expect(profileFindUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe("hoursEvidenceAdmits (PRODUCT_SPEC §3.7 — hours evidence)", () => {
+  // A Tuesday, 18:00 Kyiv. Inside a 10:00–20:00 schedule, outside a 09:00–17:00 one.
+  const SLOT = new Date("2026-08-11T15:00:00Z");
+  const KYIV_OFFSET = 180;
+  const OPEN_10_TO_20 = {
+    periods: [
+      { open: { day: 2, hour: 10, minute: 0 }, close: { day: 2, hour: 20, minute: 0 } },
+    ],
+  };
+  const OPEN_09_TO_17 = {
+    periods: [
+      { open: { day: 2, hour: 9, minute: 0 }, close: { day: 2, hour: 17, minute: 0 } },
+    ],
+  };
+
+  // The whole reason this function is exported. Google publishes no hours for a
+  // street or an embankment, so without the mark these rows sit in the catalog
+  // looking healthy and are never assigned — which is exactly what happened to
+  // six Kyiv parks. If this test ever fails, every one of them goes dark again.
+  it("admits an hourless public space that the operator marked always_open", () => {
+    expect(
+      hoursEvidenceAdmits(
+        { hoursConfidence: "always_open", openingHours: null, utcOffsetMinutes: KYIV_OFFSET },
+        SLOT,
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses the same venue when nobody marked it", () => {
+    for (const hoursConfidence of ["unknown", "provider", null]) {
+      expect(
+        hoursEvidenceAdmits(
+          { hoursConfidence, openingHours: null, utcOffsetMinutes: KYIV_OFFSET },
+          SLOT,
+        ),
+      ).toBe(false);
+    }
+  });
+
+  // always_open means always — the mark is only ever put on somewhere that has
+  // no closing time, so a stray schedule must not be able to override it.
+  it("keeps admitting an always_open venue even against a closed schedule", () => {
+    expect(
+      hoursEvidenceAdmits(
+        { hoursConfidence: "always_open", openingHours: OPEN_09_TO_17, utcOffsetMinutes: KYIV_OFFSET },
+        SLOT,
+      ),
+    ).toBe(true);
+  });
+
+  // operator_confirmed clears the evidence bar but still honours the schedule —
+  // it is for a venue whose hours we trust and did not get from Places.
+  it("honours a recorded schedule for operator_confirmed", () => {
+    const row = { hoursConfidence: "operator_confirmed", utcOffsetMinutes: KYIV_OFFSET };
+    expect(hoursEvidenceAdmits({ ...row, openingHours: OPEN_10_TO_20 }, SLOT)).toBe(true);
+    expect(hoursEvidenceAdmits({ ...row, openingHours: OPEN_09_TO_17 }, SLOT)).toBe(false);
+    // ...and admits it with no schedule at all, unlike an unmarked row.
+    expect(hoursEvidenceAdmits({ ...row, openingHours: null }, SLOT)).toBe(true);
+  });
+
+  it("falls through to the recorded schedule for an ordinary provider row", () => {
+    const row = { hoursConfidence: "provider", utcOffsetMinutes: KYIV_OFFSET };
+    expect(hoursEvidenceAdmits({ ...row, openingHours: OPEN_10_TO_20 }, SLOT)).toBe(true);
+    expect(hoursEvidenceAdmits({ ...row, openingHours: OPEN_09_TO_17 }, SLOT)).toBe(false);
+  });
+
+  // A schedule we cannot place on a wall clock is not evidence.
+  it("refuses a schedule with no timezone offset", () => {
+    expect(
+      hoursEvidenceAdmits(
+        { hoursConfidence: "provider", openingHours: OPEN_10_TO_20, utcOffsetMinutes: null },
+        SLOT,
+      ),
+    ).toBe(false);
   });
 });

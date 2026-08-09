@@ -471,7 +471,8 @@
         "view",
         "quiet"
       ],
-      "allowMissingStatus": true
+      "allowMissingStatus": true,
+      "hoursConfidence": "always_open"
     },
     {
       "placeId": "ChIJ0fs4eHXI1EARw1NwsXkbKCo",
@@ -494,7 +495,8 @@
         "architecture",
         "podil"
       ],
-      "allowMissingStatus": true
+      "allowMissingStatus": true,
+      "hoursConfidence": "always_open"
     },
     {
       "placeId": "ChIJv56y2_fR1EARgfcnvXYobe0",
@@ -506,7 +508,8 @@
         "water",
         "view"
       ],
-      "allowMissingStatus": true
+      "allowMissingStatus": true,
+      "hoursConfidence": "always_open"
     },
     {
       "placeId": "ChIJ8RD5zEPO1EARlkMnW0tP4YY",
@@ -518,7 +521,8 @@
         "art",
         "history"
       ],
-      "allowMissingStatus": true
+      "allowMissingStatus": true,
+      "hoursConfidence": "always_open"
     },
     {
       "placeId": "ChIJ7Qs5WQDP1EARCBiC7dCvg18",
@@ -530,7 +534,8 @@
         "view",
         "romantic"
       ],
-      "allowQualityOverride": true
+      "allowQualityOverride": true,
+      "hoursConfidence": "always_open"
     },
     {
       "placeId": "ChIJc30u3PbO1EARtA0u0Ui1DG0",
@@ -541,7 +546,9 @@
         "walk",
         "nature",
         "quiet"
-      ]
+      ],
+      "hoursConfidence": "unknown",
+      "reviewNote": "Gated, ticketed grounds with real closing hours — must NOT be marked always_open. Needs operator-confirmed hours before it can be auto-assigned."
     },
     {
       "placeId": "ChIJM6zQ4FvO1EARCeqAXgHuR3Y",
@@ -1094,7 +1101,7 @@
       "name": "Très Branché",
       "category": "restaurant",
       "priority": 2,
-      "tier": "premium",
+      "tier": "base",
       "vibeTags": [
         "dinner",
         "wine",

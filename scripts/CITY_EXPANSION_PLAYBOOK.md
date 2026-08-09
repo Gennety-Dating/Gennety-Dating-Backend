@@ -66,6 +66,8 @@ produce a curated category that reads as fully stocked and contributes zero:
 
 - **Parks need `"hoursConfidence": "always_open"` set by hand.** The pull leaves
   them `unknown` whenever Places returns no hours, and `unknown` is dropped.
+  Measured cost of skipping it: six Kyiv parks — including Андріївський узвіз at
+  4.8★ — were in the catalog for weeks and never assigned once.
 - **Museums need a hand-added price tag** (`free` / `inexpensive` / `moderate`
   in `facetTags`). Without it every museum you approve is rejected as
   `unknown_price`.
@@ -280,7 +282,15 @@ using the Step 1 bar and the Step 3 shortlist:
 the category ships dead):
 
 - On **every approved `park`** that came back without hours, add
-  `"hoursConfidence": "always_open"`.
+  `"hoursConfidence": "always_open"`. **If the city has a replayable manifest
+  (`curated-venues.<city>.expansion.json`), the mark belongs THERE**, not only
+  on the built row — `sync-venues:<city> --apply` regenerates rows from Places,
+  which knows nothing about a street being open, so a mark left only in the
+  approved catalog is reverted by the next re-sync and the venue silently goes
+  dark again. `--check` fails when the two disagree. A park you deliberately
+  want left unassignable (gated, ticketed grounds) gets an explicit
+  `"hoursConfidence": "unknown"` plus a `reviewNote` saying why, so the next
+  reviewer does not read it as an oversight and "fix" it.
 - On **every approved `museum`**, add a real price to `facetTags` — `free`,
   `inexpensive` or `moderate` — based on its actual admission. If you can't
   confirm it, drop the museum rather than guess: the tag feeds a hard policy
