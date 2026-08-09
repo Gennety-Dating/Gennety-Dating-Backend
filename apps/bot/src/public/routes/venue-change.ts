@@ -548,7 +548,12 @@ function statusForReason(reason: string): number {
     // landed.
     case "send-failed":
       return 502;
+    // `budget-spent` (the per-date cap on settled changes is used up — the
+    // venue is final) is a real conflict with the row's state, exactly like
+    // `already-changed`. Deliberately NOT a 402: there is nothing a
+    // subscription or a payment could unlock here.
     case "already-changed":
+    case "budget-spent":
     case "past-cutoff":
     case "already-offered":
     case "pay-declined":

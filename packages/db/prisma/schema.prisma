@@ -1342,6 +1342,11 @@ model Match {
   ///   "settled" — paid; venueChange* copied onto the canonical venue* fields
   ///   "lapsed"  — payment deadline passed unpaid → original venue stands
   ///               (the match is NEVER cancelled by a venue change)
+  /// `settled` and `lapsed` are terminal for the SESSION, not for the date:
+  /// either can be restarted into a fresh `liking` round while
+  /// `venueChangeCount` is under its cap (PRODUCT_SPEC §3.7b). The restart
+  /// wipes every venueChange* field below in the same CAS that writes the new
+  /// round's first like — these columns are one slot, not a history.
   venueChangeStatus         String?   @map("venue_change_status")
   /// v2: the session INITIATOR — whoever placed the session's first like (or
   /// minted the express invoice). Drives the payer matrix: hetero → the male
@@ -1408,6 +1413,14 @@ model Match {
   /// a non-premium user costs VENUE_CHANGE_STARS + shows the counterfactual
   /// upsell. Null = no agreed venue / legacy row. See PRODUCT_SPEC.md §Premium.
   venueChangeTier           String?   @map("venue_change_tier")
+  /// How many venue changes have actually SETTLED on this date, capped by
+  /// VENUE_CHANGE_MAX_PER_DATE (PRODUCT_SPEC §3.7b). Incremented by both settle
+  /// paths — the paid one and the Premium free one — which is exactly why the
+  /// cap cannot be derived from `venue_change_purchases`: a free settle writes
+  /// no purchase row, so a subscribing pair (and every demo visitor, where the
+  /// change is free by design) would be uncapped. A lapse costs nothing and
+  /// does not increment. Defaulted so historical rows read 0.
+  venueChangeCount          Int       @default(0) @map("venue_change_count")
 
   /// How this pair was allocated: `weekly` (the Thursday batch — the default and
   /// the only value before Rematch) or `rematch` (a paid, on-demand single-seeker

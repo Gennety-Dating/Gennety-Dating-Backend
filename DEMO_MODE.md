@@ -141,6 +141,7 @@ different snapshot, not as a broken hook.
 | board `liking`, visitor hearted | heart a **different** venue | `submitVenueLikes` |
 | board, still no overlap | heart one of theirs → agreement | `submitVenueLikes` |
 | board `agreed`, puppet is payer | settle | `settleFreeVenueChange` |
+| board restarted after a settle | heart a **different** venue again | `submitVenueLikes` |
 | `scheduled` | hand over the date card, then wait | — |
 | `scheduled`, visitor tapped / 7 min | explain the pre-date days, play the T-2h gate | `runDateLifecycleTick` + `runCoordinationTick` |
 | `scheduled`, ice-breakers sent, no `coordMethod` | send the coordination fork — all three buttons | `sendCoordCard` (`variant: "offer"`) |
@@ -346,6 +347,16 @@ called with an **injected clock** (`agreedTime − 15m`): that module derives th
 window from `agreedTime` on purpose, and the demo's date sits days in the real
 future, so without the shift the production path would honestly answer `closed`.
 Same idiom as the lifecycle replay.
+
+**A second venue change needs no puppet branch, and the cap is what stops it
+being a loop.** `decideVenueChangeAction` keys purely on `venueChangeStatus`,
+and the driver checks the board BEFORE the pre-date replay, so a visitor who
+restarts a settled board is answered generically — the puppet counters, agrees
+and settles again. That is exactly why `VENUE_CHANGE_MAX_PER_DATE` is a counter
+on the row rather than a count of purchases (PRODUCT_SPEC §3.7b): demo settles
+every change **free**, so nothing else here bounds it, and without the cap a
+visitor could keep the demo on the board and never reach the pre-date content
+at all.
 
 **A same-sex pair cannot show every screen.** The pre-date safety brief is
 addressed to the female participant, so a male visitor matched with the male

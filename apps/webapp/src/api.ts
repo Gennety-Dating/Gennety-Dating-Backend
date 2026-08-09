@@ -1021,6 +1021,17 @@ export interface VenueBoardState {
   express: boolean;
   expressAvailable: boolean;
   settled: { name: string; address: string; mapsUri: string | null; peerPaid: boolean } | null;
+  /**
+   * A finished round (settled or lapsed) can be started over — the success
+   * screen offers "change again" instead of being a dead end. Deliberately not
+   * the same as `open`: the board must not reappear on its own underneath a
+   * result the user is still reading, so a restart takes an explicit tap.
+   * Optional — a cached bundle predating the field degrades to no offer.
+   */
+  restartable?: boolean;
+  /** Settled changes so far, and the per-date cap they count against. */
+  changesUsed?: number;
+  changesMax?: number;
   /** §Premium: either participant is premium → premium venues are selectable. */
   pairPremiumActive?: boolean;
   /** §Premium: caller has a paying action but isn't premium → show the "free with

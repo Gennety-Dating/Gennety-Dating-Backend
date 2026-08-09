@@ -220,6 +220,19 @@ export const VENUE_CHANGE_PREMIUM_RADIUS_KM = 5;
  * ice-breaker / emergency window opens on the (possibly stale) venue.
  */
 export const VENUE_CHANGE_TTL_HOURS = 12;
+/**
+ * How many venue changes may SETTLE on one date (PRODUCT_SPEC §3.7b). The board
+ * used to close for good after the first one; two is "we picked, then we
+ * reconsidered", which is a real thing couples do, without becoming a venue
+ * carousel the partner gets a new card for every hour.
+ *
+ * A code constant rather than env on purpose: it is the ONLY thing bounding a
+ * pair whose changes are free — a Premium subscriber, and every demo visitor
+ * (DEMO_MODE.md settles the board free because Stars has no mock rail). For
+ * everyone else the price is a second, softer bound, and the T-5h cutoff is a
+ * third. A lapse costs nothing and does not count against this.
+ */
+export const VENUE_CHANGE_MAX_PER_DATE = 2;
 /** Minimum length of the mandatory explanation comment the female must write. */
 export const VENUE_CHANGE_MIN_COMMENT_LEN = 10;
 /** Max characters stored/relayed for the venue-change comment (emergency-reason clamp). */

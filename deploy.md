@@ -1,5 +1,77 @@
 # Gennety Dating Deploy
 
+**PENDING — the venue can be changed twice (PRODUCT_SPEC §3.7b, DECISIONS.md).**
+Not deployed yet. **No env change, no flag change** — but it needs an **additive
+`db:push` BEFORE the restart**, and it is half client, so the full sequence is:
+Deploy Full Server Code → `db:push` → `pnpm db:drift-check` → `pm2 restart` →
+`./scripts/deploy-webapp.sh` → `pnpm demo:deploy`.
+
+One new column, `matches.venue_change_count` (`Int @default(0)`), is SELECTED on
+every board open and WRITTEN by both settle paths, so a DB missing it throws
+`P2022` the first time anyone opens the venue board after the restart — the PM2
+crash-loop this file warns about. Verify additive first (expect exactly one
+`ADD COLUMN`, zero `DROP`):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+**Server first, and the order matters.** `restartable` / `changesUsed` are new
+fields on `GET /v1/venue-change/state`; a cached older bundle ignores them and
+keeps today's dead-end behaviour, which is safe. The reverse order ships a
+client offering "change again" against a server that answers `already-changed`.
+
+**Five things worth knowing before the restart:**
+
+- **The cap is 2 and it is a code constant** (`VENUE_CHANGE_MAX_PER_DATE`), not
+  env — it is the only thing bounding a pair whose changes are FREE (a Premium
+  subscriber, and every demo visitor, since demo settles the board free). For
+  everyone else the price is a second bound and the T−5h cutoff a third.
+  Historical rows read 0, so a date that already had a change would get two
+  more — moot in production, which has had **0 dates ever**.
+- **A `lapsed` session now reopens too**, and costs no allowance. If any match
+  is sitting in `lapsed` at deploy time its board comes back to life; production
+  has none (no date has ever reached the board).
+- **A finished board now reports EMPTY like arrays.** A settle leaves both
+  sides' hearts in the columns and a lapse does not clear them; the state view
+  zeroes them so a restart cannot open showing marks the next tap deletes. The
+  columns themselves are untouched until someone actually restarts.
+- **Demo needs no code and is the best place to test this**, because it settles
+  every change free: `pnpm demo:deploy`, walk to a scheduled date, change the
+  venue, then change it again — and confirm the third attempt is refused.
+- **Nothing exercises it in production** until a pair reaches `scheduled` with
+  `VENUE_CHANGE_FEATURE_ENABLED`. Verify on `@gennetytestbot` or the demo. The
+  Mini App's own dev previews cover both ends without a match:
+  `venue-change.html?preview=settled` (the "change again" link) and
+  `?preview=settled-final` (the dead end once the cap is spent).
+
+Preflight for this change: typecheck clean across all 5 projects, lint clean,
+**3994 tests** (bot 3466 / shared 273 / webapp 255), 0 failed. The stale-peer-
+likes regression test was confirmed to FAIL against the unguarded code before
+being confirmed green.
+
+Post-deploy check — the counter is the whole story, and it should only ever move
+when a change actually settles:
+
+```sh
+psql "$DATABASE_URL" -c "select venue_change_status, venue_change_count, count(*) from matches group by 1,2;"
+# Every row 0 until a real change settles. A row at 2 is a date whose venue is
+# final — the board correctly refuses it with 409 budget-spent.
+pm2 logs gennety-bot --lines 200 --nostream | grep '\[venue-change\]'
+```
+
+**Rollback:** revert the code, restart, redeploy the Mini App and the demo. The
+additive column can stay (nothing reads it once the code is reverted), and a
+`venue_change_count` of 1 left behind is harmless — the old code closed the
+board on `settled` regardless.
+
+---
+
 **Applied 2026-08-09 (data) / PENDING (code) — the Kyiv catalog is imported into
 both databases, and the parks the concierge could never pick now work
 (PRODUCT_SPEC §3.7, DECISIONS.md ×4).** **No Prisma schema change, no env

@@ -180,6 +180,53 @@ import it without seeding walking spots in the same pass.
 
 ---
 
+## 2026-08-09 — the venue can be changed twice, and a lapse reopens the board
+
+**Kind:** founder decision
+**What:** the §3.7b board stops closing for good on the first settled change.
+Up to `VENUE_CHANGE_MAX_PER_DATE` (2) changes may settle per date, each a
+separate purchase at the full price; a `lapsed` session restarts on the same
+terms and spends no allowance.
+**Why:** the founder asked why a second change was technically impossible.
+"One settled change per date" was a real rule, but it made "we picked, then we
+reconsidered" — an ordinary thing for a couple to do — unreachable. Two things
+settled the shape. The product **already** had a second attempt on one path out
+of three: the male's "not this time" sets `venueChangeStatus` back to null
+outright, so the board reopens after his decline. Leaving `lapsed` terminal
+next to that was an accident of where the reset happened to be written, not a
+decision. And the cap has to exist because the price does not bound everyone:
+a Premium pair settles free, and so does every demo visitor.
+**What it changes going forward:**
+- **A restart is a session RESET, never a reopened flag.** The `venueChange*`
+  columns are one slot, not a history. The reset rides in the SAME CAS as the
+  new round's first like, and it must clear **both** `venueLikes*` — clearing
+  only the restarter's side lets round one's peer hearts "overlap" into an
+  agreement nobody is currently making. That is the regression test in
+  `venue-change.test.ts`, and it was confirmed red before being confirmed green.
+  `venueChangePaidAt` is in the reset for a less obvious reason:
+  `venueChangeSideWaiting` reads it as "settled, nothing to wait for", so
+  leaving it would keep the §3.6b shimmer dead for the whole round.
+- **Do not widen `evaluateVenueBoardEligibility` to allow this.** Eight call
+  sites read it, and four of them (keep-original, offer-pay, confirm-overlap,
+  pay-decline) would then run against a finished session's stale columns —
+  keep-original would resurrect a `liking` state out of dead likes. The restart
+  is a **second predicate** (`evaluateVenueChangeRestart`) asked only by the
+  four entry points that perform the reset. A test pins keep-original still
+  refusing a settled session.
+- **The cap is `Match.venueChangeCount`, not a count of
+  `venue_change_purchases`.** A free (Premium / demo) settle writes no purchase
+  row, so deriving it would uncap exactly the cohorts money does not bound.
+- **The offer is quiet and is not on the settle DM.** It is a tertiary text
+  link on the success screen; the durable entry point is the My Date hub.
+  Putting a "change again" button on the card that confirms the payment would
+  be selling the next change seconds after taking money for this one.
+**Recorded in:** PRODUCT_SPEC.md §3.7b, ARCHITECTURE.md → `matches`,
+VENUE_CHANGE_PRODUCT_SPEC.md §§1/4.5/6, DEMO_MODE.md;
+`services/venue-change.ts` (`evaluateVenueChangeRestart`,
+`venueChangeSessionReset`).
+
+---
+
 ## 2026-08-09 — a provider 400 was being served as an empty success, and no test built the payload
 
 **Kind:** deviation from plan

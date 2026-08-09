@@ -17,7 +17,10 @@ import {
 import { dateCardSteps } from "../../services/analysis-status.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { isProxyOpen } from "../../services/coordination.js";
-import { evaluateVenueBoardEligibility } from "../../services/venue-change.js";
+import {
+  evaluateVenueBoardEligibility,
+  evaluateVenueChangeRestart,
+} from "../../services/venue-change.js";
 import {
   shouldOfferVenueChange,
   buildVenueChangeButton,
@@ -224,24 +227,33 @@ function buildDateHubKeyboard(
 
   kb.url(t(lang, "matchScheduledBtnOpenMaps"), buildMapsUrl(match)).row();
 
-  // Change venue — only while the paid board is open (same T-5h cutoff the
-  // scheduled card uses). Reconstruct A/B ids from side + participants.
+  // Change venue — while the paid board is open, and also when a FINISHED round
+  // can be started over (PRODUCT_SPEC §3.7b). The hub is the durable re-entry to
+  // a date whose original messages have scrolled away, so it is where a second
+  // change has to be reachable from: the scheduled card's own button still
+  // works, but only for as long as that card is findable. Same T-5h cutoff on
+  // both paths.
   const userAId = side === "A" ? self.id : partner.id;
   const userBId = side === "A" ? partner.id : self.id;
+  const boardGateInput = {
+    featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
+    status: match.status,
+    callerUserId: self.id,
+    userAId,
+    userBId,
+    agreedTime: match.agreedTime,
+    venueLat: match.venueLat,
+    venueLng: match.venueLng,
+    venueChangeStatus: match.venueChangeStatus,
+    now,
+  };
   if (
     shouldOfferVenueChange() &&
-    evaluateVenueBoardEligibility({
-      featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
-      status: match.status,
-      callerUserId: self.id,
-      userAId,
-      userBId,
-      agreedTime: match.agreedTime,
-      venueLat: match.venueLat,
-      venueLng: match.venueLng,
-      venueChangeStatus: match.venueChangeStatus,
-      now,
-    }).ok
+    (evaluateVenueBoardEligibility(boardGateInput).ok ||
+      evaluateVenueChangeRestart({
+        ...boardGateInput,
+        venueChangeCount: match.venueChangeCount,
+      }).ok)
   ) {
     kb.add(buildVenueChangeButton(match.id, lang, self.theme)).row();
   }

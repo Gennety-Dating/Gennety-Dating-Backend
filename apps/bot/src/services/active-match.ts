@@ -44,6 +44,8 @@ export interface ActiveMatchResult {
     proxyClosedAt: Date | null;
     proxyClosesAt: Date | null;
     venueChangeStatus: string | null;
+    /** Settled venue changes so far — bounds the "change again" hub row. */
+    venueChangeCount: number;
     ticketStatus: string | null;
     dateCardFileIdA: string | null;
     dateCardFileIdB: string | null;
@@ -108,6 +110,7 @@ export async function findActiveMatchForTelegramId(
       proxyClosedAt: true,
       proxyClosesAt: true,
       venueChangeStatus: true,
+      venueChangeCount: true,
       ticketStatus: true,
       pitchMessageIdA: true,
       pitchMessageIdB: true,
@@ -169,6 +172,7 @@ export async function findActiveMatchForTelegramId(
       proxyClosedAt: match.proxyClosedAt,
       proxyClosesAt: match.proxyClosesAt,
       venueChangeStatus: match.venueChangeStatus,
+      venueChangeCount: match.venueChangeCount,
       ticketStatus: match.ticketStatus,
       dateCardFileIdA: match.dateCardFileIdA,
       dateCardFileIdB: match.dateCardFileIdB,

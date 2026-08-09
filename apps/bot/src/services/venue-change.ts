@@ -18,6 +18,7 @@
 import { prisma } from "@gennety/db";
 import {
   DATE_ALERT_HOURS,
+  VENUE_CHANGE_MAX_PER_DATE,
   VENUE_CHANGE_PREMIUM_RADIUS_KM,
   VENUE_CHANGE_RADIUS_KM,
   VENUE_CHANGE_TTL_HOURS,
@@ -120,9 +121,13 @@ export type VenueBoardEligibility =
 /**
  * Decide whether `callerUserId` may interact with the venue board right now
  * (v2 — both participants may). "Interact" = view/like/confirm; the payment
- * actions layer their own payer checks on top. A `settled`/`lapsed` session
- * closes the board for good (one settled change per date; a lapse also ends
- * it — the original venue stands).
+ * actions layer their own payer checks on top.
+ *
+ * A `settled`/`lapsed` session is closed HERE and stays closed: this predicate
+ * is about acting on a live session, and there is none. Starting a fresh round
+ * on top of a finished one is a different question with a different answer —
+ * see `evaluateVenueChangeRestart`, which the four entry points that know how
+ * to wipe the previous round ask instead.
  */
 export function evaluateVenueBoardEligibility(
   input: VenueBoardEligibilityInput,
@@ -150,6 +155,130 @@ export function evaluateVenueBoardEligibility(
   }
 
   return { ok: true, side: isA ? "A" : "B" };
+}
+
+/** Terminal session states a fresh round can be started FROM. */
+const RESTARTABLE_STATUSES = new Set(["settled", "lapsed"]);
+
+export type VenueChangeRestartReason =
+  | VenueChangeIneligibleReason
+  /** The cap on settled changes for this date is used up. */
+  | "budget-spent"
+  /** There is a live session already — the ordinary board gate governs, not this. */
+  | "session-live";
+
+export interface VenueChangeRestartInput extends VenueBoardEligibilityInput {
+  /** `Match.venueChangeCount` — how many changes have actually settled. */
+  venueChangeCount: number;
+}
+
+export type VenueChangeRestart =
+  | { ok: true; side: "A" | "B" }
+  | { ok: false; reason: VenueChangeRestartReason };
+
+/**
+ * May `callerUserId` start a NEW venue-change round on a date whose previous
+ * session already ended (`settled` or `lapsed`)?
+ *
+ * Deliberately a second predicate rather than a loosening of
+ * `evaluateVenueBoardEligibility`. That one answers "is there a live session I
+ * may act on", and eight call sites read it — keep-original, offer-pay,
+ * confirm-overlap and pay-decline among them. Widening it in place would let
+ * every one of those run against a *finished* session whose `venueChange*`
+ * columns still hold the previous round: keep-original would resurrect a
+ * `liking` state out of stale likes, and offer-pay would find its one-shot
+ * stamp already spent. Only the four entry points that know how to reset the
+ * session ask this question instead (state, catalog, likes, express mint).
+ *
+ * A lapse is restartable on the same terms as a settle. Those two look
+ * different but end the same way — the originally-assigned venue stands — and
+ * the product already reopens the board on the third such path: the male's
+ * "not this time" sets the status back to null outright. Leaving `lapsed`
+ * terminal alone was an accident of where the reset happened to be written,
+ * not a decision. It costs no budget because nothing was ever paid.
+ */
+export function evaluateVenueChangeRestart(
+  input: VenueChangeRestartInput,
+): VenueChangeRestart {
+  if (!input.featureEnabled) return { ok: false, reason: "feature-disabled" };
+
+  const isA = input.callerUserId === input.userAId;
+  const isB = input.callerUserId === input.userBId;
+  if (!isA && !isB) return { ok: false, reason: "not-participant" };
+
+  if (input.status !== "scheduled") return { ok: false, reason: "wrong-state" };
+
+  if (!RESTARTABLE_STATUSES.has(input.venueChangeStatus ?? "")) {
+    return { ok: false, reason: "session-live" };
+  }
+
+  if (input.venueChangeCount >= VENUE_CHANGE_MAX_PER_DATE) {
+    return { ok: false, reason: "budget-spent" };
+  }
+
+  if (input.venueLat == null || input.venueLng == null) {
+    return { ok: false, reason: "no-venue" };
+  }
+
+  // The T-5h cutoff binds a restart exactly as it binds a first change: past it
+  // the ice-breakers have gone out naming a venue, and it must stop moving.
+  if (!input.agreedTime) return { ok: false, reason: "wrong-state" };
+  if (input.now.getTime() >= venueChangeCutoff(input.agreedTime).getTime()) {
+    return { ok: false, reason: "past-cutoff" };
+  }
+
+  return { ok: true, side: isA ? "A" : "B" };
+}
+
+/**
+ * Everything a finished round leaves behind, cleared as one unit when a new
+ * round starts. These columns are a single slot, not a history, so a restart
+ * that reset only some of them would inherit the previous round's state in
+ * ways that are individually subtle and collectively broken:
+ *
+ *   • both `venueLikes*` — clearing only the restarter's side leaves the
+ *     partner's old hearts live, and the very first like of round two would
+ *     "overlap" them into an agreement on a venue nobody is currently choosing;
+ *   • `venueChangeProposerId` — decides the payer matrix and the she-initiated
+ *     fork, so round two would be billed to round one's initiator;
+ *   • `venueChangeOfferPaySentAt` — one wish card per session; unreset, she
+ *     could never hand the payment over again;
+ *   • `venueChangePaidAt` — `venueChangeSideWaiting` reads it as "settled,
+ *     nothing to wait for", so the peer-wait shimmer would stay dead all round;
+ *   • the ping ids — they point at messages belonging to the finished round.
+ *
+ * The agreed-venue snapshot itself is safe to drop: a settle has already copied
+ * it onto the canonical `venue*` fields, and a lapse deliberately discarded it.
+ *
+ * A factory rather than a shared constant so no caller can hand Prisma the same
+ * `[]` instance twice, and so the object is safe to spread into and mutate.
+ */
+export function venueChangeSessionReset(): Record<string, unknown> {
+  return {
+    venueLikesA: [],
+    venueLikesB: [],
+    venueChangeName: null,
+    venueChangeAddress: null,
+    venueChangeLat: null,
+    venueChangeLng: null,
+    venueChangeMapsUri: null,
+    venueChangePlaceId: null,
+    venueChangePhotoName: null,
+    venueChangeTier: null,
+    venueChangeExpiresAt: null,
+    venueChangeResolvedAt: null,
+    venueChangeExpressAt: null,
+    venueChangePaidById: null,
+    venueChangePaidAt: null,
+    venueChangeProposerId: null,
+    venueChangeProposedAt: null,
+    venueChangeOfferPaySentAt: null,
+    venueChangePayDeclinedAt: null,
+    venueChangePingSentToAAt: null,
+    venueChangePingSentToBAt: null,
+    venueChangePingMsgIdA: null,
+    venueChangePingMsgIdB: null,
+  };
 }
 
 /**

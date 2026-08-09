@@ -177,7 +177,11 @@ interface Strings {
   settledTitle: string;
   settledPeerPaid: string;
   settledNote: string;
+  /** The success screen is not a dead end while a change is still allowed. */
+  settledChangeAgain: string;
   closedChanged: string;
+  /** Every allowed change is spent — the venue is final for this date. */
+  closedFinal: string;
   closedCutoff: string;
   closedGeneric: string;
   loading: string;
@@ -215,7 +219,7 @@ const T: Record<Lang, Strings> = {
     ctaSaving: "Saving…",
     ctaWithdraw: "Withdraw my marks",
     keepOriginal: "Keep this place",
-    keepOriginalAgreed: "Keep the original place",
+    keepOriginalAgreed: "Keep the current place",
     confirmHint: "Nothing changes until you confirm.",
     okSuggestTitle: "Sent to your match",
     okSuggestSub: (name) => `${name} will see the places you marked. Agree on one and your date moves there.`,
@@ -268,7 +272,9 @@ const T: Record<Lang, Strings> = {
     settledTitle: "New spot locked in!",
     settledPeerPaid: "Your match locked it in for you",
     settledNote: "Your date cards are updated. See you there!",
+    settledChangeAgain: "Change the venue again",
     closedChanged: "The venue for this date was already changed.",
+    closedFinal: "This date's venue is final — you've used every change.",
     closedCutoff: "It's too close to the date to change the venue now.",
     closedGeneric: "Changing the venue isn't available for this date.",
     loading: "Loading…",
@@ -304,7 +310,7 @@ const T: Record<Lang, Strings> = {
     ctaSaving: "Сохраняем…",
     ctaWithdraw: "Убрать мои отметки",
     keepOriginal: "Остаёмся здесь",
-    keepOriginalAgreed: "Оставить исходное место",
+    keepOriginalAgreed: "Оставить текущее место",
     confirmHint: "Пока не подтвердите — ничего не меняется.",
     okSuggestTitle: "Отправлено партнёру",
     okSuggestSub: (name) => `${name} увидит отмеченные вами места. Совпадёте — свидание переедет туда.`,
@@ -358,7 +364,9 @@ const T: Record<Lang, Strings> = {
     settledTitle: "Новое место закреплено!",
     settledPeerPaid: "Партнёр закрепил его для вас",
     settledNote: "Карточки свидания обновлены. До встречи!",
+    settledChangeAgain: "Сменить место ещё раз",
     closedChanged: "Место для этого свидания уже меняли.",
+    closedFinal: "Место этого свидания закреплено — все смены использованы.",
     closedCutoff: "Слишком близко к свиданию, чтобы менять место.",
     closedGeneric: "Смена места недоступна для этого свидания.",
     loading: "Загрузка…",
@@ -394,7 +402,7 @@ const T: Record<Lang, Strings> = {
     ctaSaving: "Зберігаємо…",
     ctaWithdraw: "Прибрати мої позначки",
     keepOriginal: "Залишаємось тут",
-    keepOriginalAgreed: "Залишити початкове місце",
+    keepOriginalAgreed: "Залишити поточне місце",
     confirmHint: "Доки не підтвердите — нічого не змінюється.",
     okSuggestTitle: "Надіслано партнеру",
     okSuggestSub: (name) => `${name} побачить позначені вами місця. Збіжаться — побачення переїде туди.`,
@@ -448,7 +456,9 @@ const T: Record<Lang, Strings> = {
     settledTitle: "Нове місце закріплено!",
     settledPeerPaid: "Партнер закріпив його для вас",
     settledNote: "Картки побачення оновлено. До зустрічі!",
+    settledChangeAgain: "Змінити місце ще раз",
     closedChanged: "Місце для цього побачення вже змінювали.",
+    closedFinal: "Місце цього побачення закріплено — усі зміни використані.",
     closedCutoff: "Занадто близько до побачення, щоб змінювати місце.",
     closedGeneric: "Зміна місця недоступна для цього побачення.",
     loading: "Завантаження…",
@@ -484,7 +494,7 @@ const T: Record<Lang, Strings> = {
     ctaSaving: "Wird gespeichert…",
     ctaWithdraw: "Markierungen zurücknehmen",
     keepOriginal: "Hier bleiben",
-    keepOriginalAgreed: "Beim ursprünglichen Ort bleiben",
+    keepOriginalAgreed: "Beim aktuellen Ort bleiben",
     confirmHint: "Bis zur Bestätigung ändert sich nichts.",
     okSuggestTitle: "An dein Match gesendet",
     okSuggestSub: (name) => `${name} sieht die markierten Orte. Stimmt ihr überein, zieht euer Date dorthin.`,
@@ -539,7 +549,9 @@ const T: Record<Lang, Strings> = {
     settledTitle: "Neuer Ort gesichert!",
     settledPeerPaid: "Dein Match hat ihn für dich gesichert",
     settledNote: "Eure Date-Karten sind aktualisiert. Bis dann!",
+    settledChangeAgain: "Ort erneut ändern",
     closedChanged: "Der Ort für dieses Date wurde bereits geändert.",
+    closedFinal: "Der Ort steht fest — alle Änderungen sind aufgebraucht.",
     closedCutoff: "Zu kurz vor dem Date, um den Ort zu ändern.",
     closedGeneric: "Das Ändern des Ortes ist für dieses Date nicht verfügbar.",
     loading: "Wird geladen…",
@@ -575,7 +587,7 @@ const T: Record<Lang, Strings> = {
     ctaSaving: "Zapisywanie…",
     ctaWithdraw: "Wycofaj zaznaczenia",
     keepOriginal: "Zostajemy tutaj",
-    keepOriginalAgreed: "Zostaw pierwotne miejsce",
+    keepOriginalAgreed: "Zostaw obecne miejsce",
     confirmHint: "Dopóki nie potwierdzisz, nic się nie zmienia.",
     okSuggestTitle: "Wysłano do pary",
     okSuggestSub: (name) => `${name} zobaczy zaznaczone miejsca. Zgodzicie się — randka przeniesie się tam.`,
@@ -628,7 +640,9 @@ const T: Record<Lang, Strings> = {
     settledTitle: "Nowe miejsce zatwierdzone!",
     settledPeerPaid: "Twoja para zatwierdziła je dla Ciebie",
     settledNote: "Karty randki zaktualizowane. Do zobaczenia!",
+    settledChangeAgain: "Zmień miejsce jeszcze raz",
     closedChanged: "Miejsce tej randki było już zmieniane.",
+    closedFinal: "Miejsce tej randki jest ostateczne — wykorzystaliście wszystkie zmiany.",
     closedCutoff: "Zbyt blisko randki, aby zmieniać miejsce.",
     closedGeneric: "Zmiana miejsca jest niedostępna dla tej randki.",
     loading: "Ładowanie…",
@@ -960,9 +974,22 @@ function errorMessage(err: unknown): string {
 // Routing
 // ---------------------------------------------------------------------------
 
+/**
+ * The user tapped "change the venue again" on a finished session, so the board
+ * is shown even though the server still reports it closed. Client-side only and
+ * deliberately so: nothing is written until they actually heart something, and
+ * the server re-derives the right to restart on that write. Reset on every
+ * fresh load, which is what keeps the success screen the default landing.
+ */
+let restartRequested = false;
+
 function route(): void {
   const st = boardState;
   if (!st) return;
+  if (restartRequested && st.restartable) {
+    renderBoard();
+    return;
+  }
   if (st.settled) {
     stopPolling();
     renderSettled(st);
@@ -978,13 +1005,22 @@ function route(): void {
     return;
   }
   if (!st.open) {
+    // A lapse that can still be restarted opens straight onto the board: both
+    // sides were already told by DM that the agreement expired, so there is no
+    // result left to read here — only the choice of what to do next.
+    if (st.restartable) {
+      renderBoard();
+      return;
+    }
     stopPolling();
     const msg =
-      st.closedReason === "already-changed" || st.status === "lapsed"
-        ? s.closedChanged
-        : st.closedReason === "past-cutoff"
-          ? s.closedCutoff
-          : s.closedGeneric;
+      st.closedReason === "budget-spent"
+        ? s.closedFinal
+        : st.closedReason === "already-changed" || st.status === "lapsed"
+          ? s.closedChanged
+          : st.closedReason === "past-cutoff"
+            ? s.closedCutoff
+            : s.closedGeneric;
     showMessage("pin", msg, st.original.name ?? undefined);
     return;
   }
@@ -1013,7 +1049,10 @@ async function main(): Promise<void> {
 
   try {
     boardState = await fetchVenueBoardState(getInitData(), matchId);
-    if (boardState.open) {
+    // A restartable session gets its catalog up front too, even though the
+    // board is closed: "change again" must land on cards, not on a spinner,
+    // and the same request is what a lapse renders straight into.
+    if (boardState.open || boardState.restartable) {
       catalog = await fetchVenueChangeCatalog(getInitData(), matchId);
     }
   } catch (err) {
@@ -2565,10 +2604,31 @@ function renderSettled(st: VenueBoardState): void {
   nodes.push(el("p", { class: "vc-note vc-note-center", text: s.settledNote }));
 
   const href = mapsHref(settled.name, settled.address, settled.mapsUri);
-  const maps = iconBtn("btn-glass", "map", s.openMaps, () => {
-    if (!openExternal(href)) window.open(href, "_blank");
-  });
-  mount(page([el("div", { class: "vc-settled" }, nodes)], [maps]));
+  const actions: HTMLElement[] = [
+    iconBtn("btn-glass", "map", s.openMaps, () => {
+      if (!openExternal(href)) window.open(href, "_blank");
+    }),
+  ];
+  // "Change again" is a quiet text link under Maps, never a second loud button:
+  // the user just paid for this venue, and the screen's job is to confirm that,
+  // not to sell them the next change. It only exists while one is still allowed.
+  if (st.restartable) {
+    actions.push(
+      el("button", {
+        class: "btn-quiet",
+        type: "button",
+        text: s.settledChangeAgain,
+        onClick: () => {
+          restartRequested = true;
+          // renderSettled stopped the poll; a live board needs it back so the
+          // partner's hearts land here the way they do on a first round.
+          startPolling();
+          route();
+        },
+      }),
+    );
+  }
+  mount(page([el("div", { class: "vc-settled" }, nodes)], actions));
 }
 
 // ---------------------------------------------------------------------------
@@ -2673,12 +2733,19 @@ function mockState(): VenueBoardState {
       premiumWouldWaive: params.get("nopremium") == null,
     };
   }
-  if (view === "settled") {
+  // `settled` (one change left → the "change again" link) and `settled-final`
+  // (the cap spent → a plain dead end) share one screen and one mock.
+  if (view === "settled" || view === "settled-final") {
     return {
       ...base,
       status: "settled",
       open: false,
       settled: { name: "Кофейня «Молоко»", address: "ул. Крещатик, 14", mapsUri: null, peerPaid: true },
+      // One of two changes spent, so the preview exercises the "change again"
+      // link. `?preview=settled-final` covers the other half — the dead end.
+      restartable: params.get("preview") !== "settled-final",
+      changesUsed: params.get("preview") === "settled-final" ? 2 : 1,
+      changesMax: 2,
     };
   }
   return base;

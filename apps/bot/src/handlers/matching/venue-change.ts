@@ -37,6 +37,7 @@ import {
   t,
   type Language,
   buildVenueInvoicePayload,
+  VENUE_CHANGE_MAX_PER_DATE,
   type VenueInvoiceMode,
 } from "@gennety/shared";
 import { env } from "../../config.js";
@@ -47,12 +48,15 @@ import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import {
   evaluateVenueBoardEligibility,
+  evaluateVenueChangeRestart,
   venueChangeDeadline,
   venueChangeCutoff,
   buildVenueChangeCatalog,
   resolveVenuePhotoRefs,
+  venueChangeSessionReset,
   type CatalogVenue,
   type VenueChangeIneligibleReason,
+  type VenueChangeRestartReason,
 } from "../../services/venue-change.js";
 import { fetchPlacePhotoName } from "../../services/venue.js";
 import { isPremiumHeadActive } from "../../services/premium.js";
@@ -110,6 +114,7 @@ const VC_SELECT = {
   venueChangePingMsgIdB: true,
   venueChangeExpressAt: true,
   venueChangeTier: true,
+  venueChangeCount: true,
   venueLikesA: true,
   venueLikesB: true,
   userAId: true,
@@ -231,6 +236,69 @@ export function payerSide(match: VenuePayerRow): Side | null {
 function expressAllowed(match: VcMatch, side: Side): boolean {
   if (isHeteroPair(match)) return userOfSide(match, side).gender === "female";
   return true; // same-sex/unknown: either side (the veto asymmetry is hetero-only)
+}
+
+/**
+ * The two ways a caller may touch the board: acting on a LIVE session, or
+ * starting a FRESH round on top of a finished one (PRODUCT_SPEC §3.7b).
+ *
+ * Only the entry points that know how to wipe the previous round ask this —
+ * the board state, the catalog, the like submission and the express mint.
+ * Everything else (keep-original, offer-pay, confirm-overlap, pay-decline)
+ * keeps reading `evaluateVenueBoardEligibility` alone and so still refuses a
+ * finished session outright, which is what stops any of them running against
+ * columns that still describe the previous round.
+ */
+type BoardAccess =
+  | { ok: true; restart: boolean }
+  | { ok: false; reason: VenueChangeIneligibleReason | VenueChangeRestartReason };
+
+function resolveBoardAccess(match: VcMatch, meId: string, now: Date): BoardAccess {
+  const shared = {
+    featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
+    status: match.status,
+    callerUserId: meId,
+    userAId: match.userAId,
+    userBId: match.userBId,
+    agreedTime: match.agreedTime,
+    venueLat: match.venueLat,
+    venueLng: match.venueLng,
+    venueChangeStatus: match.venueChangeStatus,
+    now,
+  };
+
+  const live = evaluateVenueBoardEligibility(shared);
+  if (live.ok) return { ok: true, restart: false };
+  // Only a FINISHED session is a restart candidate. Every other refusal (wrong
+  // match state, past the cutoff, not a participant) means exactly what it says
+  // and must be reported as-is.
+  if (live.reason !== "already-changed") return { ok: false, reason: live.reason };
+
+  const restart = evaluateVenueChangeRestart({
+    ...shared,
+    venueChangeCount: match.venueChangeCount,
+  });
+  return restart.ok ? { ok: true, restart: true } : { ok: false, reason: restart.reason };
+}
+
+/**
+ * The status half of the `where` clause a write must carry to claim the board.
+ * On a restart the previous round's TERMINAL status is the thing being claimed,
+ * so it has to be an accepted starting point — but only for a caller who just
+ * passed `resolveBoardAccess`, which is why this is derived from that answer
+ * rather than being one permanently-widened list. Keeping it in the `where`
+ * means the reset and the claim are the same atomic write: two callers racing
+ * to restart the same finished session produce one round, not two.
+ */
+function boardClaimWhere(restart: boolean): Prisma.MatchWhereInput {
+  return restart
+    ? { venueChangeStatus: { in: ["settled", "lapsed"] } }
+    : { OR: [{ venueChangeStatus: null }, { venueChangeStatus: "liking" }] };
+}
+
+/** Session-reset fields to fold into a claiming write; empty on a live session. */
+function resetOnRestart(restart: boolean): Prisma.MatchUpdateManyMutationInput {
+  return restart ? (venueChangeSessionReset() as Prisma.MatchUpdateManyMutationInput) : {};
 }
 
 /** Resolve a Side from a user id (not telegram id). */
@@ -496,6 +564,16 @@ export interface VenueBoardStateView {
   /** Set when status = settled: the new canonical venue + whether the peer paid. */
   settled: { name: string; address: string; mapsUri: string | null; peerPaid: boolean } | null;
   /**
+   * The finished session can be started over — the client offers "change again"
+   * instead of a dead end. Deliberately NOT the same thing as `open`: the board
+   * must not reappear on its own under a success screen the user is still
+   * reading, so a restart takes an explicit tap.
+   */
+  restartable: boolean;
+  /** Changes that have settled on this date, and the cap they count against. */
+  changesUsed: number;
+  changesMax: number;
+  /**
    * Gennety Premium (§Premium): either participant has an active subscription →
    * premium-tier venues are selectable (the Mini App unlocks their cards).
    */
@@ -567,8 +645,17 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
   });
 
   const status = match.venueChangeStatus ?? "none";
-  const myLikes = likesOfSide(match, side).map((l) => l.key);
-  const peerLikes = likesOfSide(match, otherSide(side)).map((l) => l.key);
+  // A FINISHED session reports an empty board, whatever the columns still hold.
+  // A settle leaves both sides' hearts in place and a lapse does not clear them
+  // either, so a restartable session would otherwise open showing the previous
+  // round's marks as if they were live — while the server's own restart path
+  // wipes them on the first write. The client would be looking at a board the
+  // next tap deletes. Empty is both honest and what the restart actually does.
+  const sessionFinished = status === "settled" || status === "lapsed";
+  const myLikes = sessionFinished ? [] : likesOfSide(match, side).map((l) => l.key);
+  const peerLikes = sessionFinished
+    ? []
+    : likesOfSide(match, otherSide(side)).map((l) => l.key);
 
   // Express-pending agreements are invisible to the partner (silent until paid).
   const expressPending = status === "agreed" && match.venueChangeExpressAt != null;
@@ -652,6 +739,21 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
     pairPremiumActive: pairPremiumActive(match, now),
     premiumWouldWaive: paying && !callerPremium,
     referralEnabled: env.REFERRAL_FEATURE_ENABLED,
+    restartable: evaluateVenueChangeRestart({
+      featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
+      status: match.status,
+      callerUserId: me.id,
+      userAId: match.userAId,
+      userBId: match.userBId,
+      agreedTime: match.agreedTime,
+      venueLat: match.venueLat,
+      venueLng: match.venueLng,
+      venueChangeStatus: match.venueChangeStatus,
+      venueChangeCount: match.venueChangeCount,
+      now,
+    }).ok,
+    changesUsed: match.venueChangeCount,
+    changesMax: VENUE_CHANGE_MAX_PER_DATE,
   };
 }
 
@@ -660,7 +762,14 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
 // ---------------------------------------------------------------------------
 
 export type VenueChangeCatalogResult =
-  | { ok: false; reason: "match-not-found" | "not-participant" | VenueChangeIneligibleReason }
+  | {
+      ok: false;
+      reason:
+        | "match-not-found"
+        | "not-participant"
+        | VenueChangeIneligibleReason
+        | VenueChangeRestartReason;
+    }
   | { ok: true; venues: CatalogVenue[] };
 
 /** Catalog loader signature — injectable so tests need no DB / Places network. */
@@ -690,19 +799,10 @@ export async function getVenueChangeCatalog(
   const side = sideOfUser(match, telegramId);
   if (!side) return { ok: false, reason: "not-participant" };
 
-  const eligibility = evaluateVenueBoardEligibility({
-    featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
-    status: match.status,
-    callerUserId: userOfSide(match, side).id,
-    userAId: match.userAId,
-    userBId: match.userBId,
-    agreedTime: match.agreedTime,
-    venueLat: match.venueLat,
-    venueLng: match.venueLng,
-    venueChangeStatus: match.venueChangeStatus,
-    now,
-  });
-  if (!eligibility.ok) return { ok: false, reason: eligibility.reason };
+  // Also served for a restartable finished session: the client needs the cards
+  // in hand before the first like of round two, and this call writes nothing.
+  const access = resolveBoardAccess(match, userOfSide(match, side).id, now);
+  if (!access.ok) return { ok: false, reason: access.reason };
   if (match.venueLat == null || match.venueLng == null || !match.agreedTime) {
     return { ok: false, reason: "no-venue" };
   }
@@ -738,6 +838,7 @@ export type SubmitLikesResult =
         | "match-not-found"
         | "not-participant"
         | VenueChangeIneligibleReason
+        | VenueChangeRestartReason
         | "invalid-venue"
         | "premium-locked";
     }
@@ -765,22 +866,16 @@ export async function submitVenueLikes(
   if (!side) return { ok: false, reason: "not-participant" };
   const me = userOfSide(match, side);
 
-  const eligibility = evaluateVenueBoardEligibility({
-    featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
-    status: match.status,
-    callerUserId: me.id,
-    userAId: match.userAId,
-    userBId: match.userBId,
-    agreedTime: match.agreedTime,
-    venueLat: match.venueLat,
-    venueLng: match.venueLng,
-    venueChangeStatus: match.venueChangeStatus,
-    now,
-  });
-  if (!eligibility.ok) return { ok: false, reason: eligibility.reason };
+  const access = resolveBoardAccess(match, me.id, now);
+  if (!access.ok) return { ok: false, reason: access.reason };
   // Likes are only writable while the session is open (an `agreed` state —
   // incl. a hidden express mint — freezes the board until it settles/reverts).
-  if (match.venueChangeStatus != null && match.venueChangeStatus !== "liking") {
+  // A restart is the deliberate exception: it starts FROM a terminal status.
+  if (
+    !access.restart &&
+    match.venueChangeStatus != null &&
+    match.venueChangeStatus !== "liking"
+  ) {
     return { ok: false, reason: "wrong-state" };
   }
   if (match.venueLat == null || match.venueLng == null || !match.agreedTime) {
@@ -819,17 +914,29 @@ export async function submitVenueLikes(
     return { ok: false, reason: "premium-locked" };
   }
 
+  // Deselecting everything on a FINISHED board is a no-op, not a restart: there
+  // would be no round to start, and treating it as one would wipe the settled
+  // record (and its "{name} covered it ❤️" reveal) in exchange for nothing.
+  if (access.restart && snapshots.length === 0) {
+    return { ok: true, agreed: false, kept: false, overlapCandidates: [] };
+  }
+
   const likesColumn = side === "A" ? "venueLikesA" : "venueLikesB";
 
   // Guarded write: only while the session is still open (a concurrent
-  // agreement/express mint wins and this submission is rejected).
+  // agreement/express mint wins and this submission is rejected) — or, on a
+  // restart, only while the finished session is still the one we read. The
+  // session reset rides along in the SAME statement, so there is no instant at
+  // which the row is half-cleared and no way for two racing restarts to leave
+  // one round's likes sitting under another's.
   const written = await prisma.match.updateMany({
     where: {
       id: matchId,
       status: "scheduled",
-      OR: [{ venueChangeStatus: null }, { venueChangeStatus: "liking" }],
+      ...boardClaimWhere(access.restart),
     },
     data: {
+      ...resetOnRestart(access.restart),
       [likesColumn]: snapshots as unknown as Prisma.InputJsonValue[],
       venueChangeStatus: snapshots.length > 0 ? "liking" : match.venueChangeStatus,
     },
@@ -845,7 +952,15 @@ export async function submitVenueLikes(
   }
 
   // Overlap → agreement, exactly like the calendar.
-  const peerKeys = new Set(likesOfSide(match, otherSide(side)).map((l) => l.key));
+  //
+  // `match` is the pre-write snapshot, so on a restart it still carries the
+  // PREVIOUS round's peer hearts — which the write above just cleared. Reading
+  // them here would let the very first like of round two "overlap" a venue the
+  // partner chose in round one and has not looked at since, agreeing a change
+  // nobody is currently making. A restart always begins with an empty board.
+  const peerKeys = new Set(
+    access.restart ? [] : likesOfSide(match, otherSide(side)).map((l) => l.key),
+  );
   const overlap = snapshots.filter((s) => peerKeys.has(s.key));
   if (overlap.length === 1) {
     const r = await reachAgreement(api, matchId, me.id, overlap[0], now);
@@ -1148,6 +1263,7 @@ export type ExpressMintResult =
         | "match-not-found"
         | "not-participant"
         | VenueChangeIneligibleReason
+        | VenueChangeRestartReason
         | "invalid-venue"
         | "not-allowed"
         | "premium-locked";
@@ -1174,19 +1290,8 @@ export async function mintExpressChange(
   if (!side) return { ok: false, reason: "not-participant" };
   const me = userOfSide(match, side);
 
-  const eligibility = evaluateVenueBoardEligibility({
-    featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
-    status: match.status,
-    callerUserId: me.id,
-    userAId: match.userAId,
-    userBId: match.userBId,
-    agreedTime: match.agreedTime,
-    venueLat: match.venueLat,
-    venueLng: match.venueLng,
-    venueChangeStatus: match.venueChangeStatus,
-    now,
-  });
-  if (!eligibility.ok) return { ok: false, reason: eligibility.reason };
+  const access = resolveBoardAccess(match, me.id, now);
+  if (!access.ok) return { ok: false, reason: access.reason };
   if (!expressAllowed(match, side)) return { ok: false, reason: "not-allowed" };
   if (match.venueLat == null || match.venueLng == null || !match.agreedTime) {
     return { ok: false, reason: "no-venue" };
@@ -1223,12 +1328,17 @@ export async function mintExpressChange(
     where: {
       id: matchId,
       status: "scheduled",
-      OR: [{ venueChangeStatus: null }, { venueChangeStatus: "liking" }],
+      ...boardClaimWhere(access.restart),
     },
     data: {
+      // The reset comes first so the express fields below win: a restart wipes
+      // the finished round (both sides' likes included) in the same statement
+      // that mints the new hidden pick, so the partner never sees a board
+      // flicker back to life around a swap they are not meant to know about.
+      ...resetOnRestart(access.restart),
       venueChangeStatus: "agreed",
       venueChangeProposerId: me.id,
-      venueChangeProposedAt: match.venueChangeProposedAt ?? now,
+      venueChangeProposedAt: access.restart ? now : (match.venueChangeProposedAt ?? now),
       venueChangeName: picked.name.slice(0, 256),
       venueChangeAddress: picked.address.slice(0, 256),
       venueChangeLat: picked.lat,
@@ -1719,6 +1829,10 @@ export async function settleVenuePayment(
       venueChangeExpiresAt: null,
       venueChangePaidById: payer.id,
       venueChangePaidAt: new Date(),
+      // Spends one of this date's VENUE_CHANGE_MAX_PER_DATE changes. Inside the
+      // same CAS as the settle, so it can only ever be counted for a change
+      // that actually landed — a refunded race claims nothing and costs nothing.
+      venueChangeCount: { increment: 1 },
       venueName: match.venueChangeName,
       venueAddress: match.venueChangeAddress,
       venueLat: match.venueChangeLat,
@@ -1829,6 +1943,10 @@ async function finalizeVenueChangeFree(
       venueChangeExpiresAt: null,
       venueChangePaidById: settler.id,
       venueChangePaidAt: new Date(),
+      // A free settle counts exactly like a paid one — this is the path a
+      // Premium pair (and every demo visitor) takes, so it is the one the cap
+      // actually has to bound. Nothing else limits them: no money changes hands.
+      venueChangeCount: { increment: 1 },
       venueName: match.venueChangeName,
       venueAddress: match.venueChangeAddress,
       venueLat: match.venueChangeLat,

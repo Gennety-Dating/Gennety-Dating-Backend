@@ -4088,7 +4088,51 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   `venue*` fields (incl. `venuePhotoUrl/Name` so a re-rendered date card shows
   the new venue), and both sides get updated venue cards with the `date_time`
   entity + Maps button — plus the payer-gendered reveal / express surprise.
-  One settled change per date: the board then closes (read-only).
+- **A finished session can be started over, up to `VENUE_CHANGE_MAX_PER_DATE`
+  (2) settled changes per date (2026-08-09).** The board used to close for good
+  on the first settle, which made "we picked, then we reconsidered" — an
+  ordinary thing for a couple to do — structurally impossible. Two is the whole
+  allowance: enough to change your mind once, not enough to become a venue
+  carousel the partner gets a new card for every hour. **A lapse restarts on the
+  same terms and costs no allowance** (nothing was paid); the asymmetry that
+  left it terminal was never a decision — the male's "not this time" has always
+  reset the status to null outright, so a second attempt already existed on one
+  path out of three. Each change is a separate purchase at the full flat price,
+  and the T−5h cutoff bounds every round exactly as it bounds the first.
+  - **The restart is a session RESET, not a reopened flag.** The `venueChange*`
+    columns are one slot, not a history, so a fresh round wipes both sides'
+    likes, the initiator, the wish-card and decline stamps, the paid stamps and
+    the board-ping ids — in the SAME compare-and-set that writes the new round's
+    first like, so there is no instant at which the row is half-cleared. Two
+    consequences are load-bearing rather than tidy: clearing only the
+    restarter's likes would let the very first heart of round two "overlap" the
+    partner's round-one heart into an agreement nobody is currently making, and
+    leaving `venueChangePaidAt` set would keep the §3.6b peer-wait shimmer dead
+    for the whole round.
+  - **Nothing else about the board learns the word "restart".** Only the four
+    entry points that know how to perform that reset — the state view, the
+    catalog, the like submission and the express mint — ask whether a new round
+    may start (`evaluateVenueChangeRestart`). Keep-original, offer-pay,
+    confirm-overlap and pay-decline keep reading the ordinary live-session gate
+    and so still refuse a finished session outright, which is what stops any of
+    them running against columns describing a round that is over.
+  - **A finished session reports an EMPTY board.** A settle leaves both sides'
+    hearts in place and a lapse does not clear them either, so the state view
+    zeroes them: otherwise the restart would open showing marks the next tap
+    deletes.
+  - **The success screen stays the landing, and the offer on it is quiet.** The
+    board never reopens by itself under a result the user is still reading;
+    "change the venue again" is a tertiary text link under Open in Maps, absent
+    once the allowance is spent. It is deliberately NOT added to the settle DM:
+    that card's job is to confirm what was just paid for, not to sell the next
+    change. The durable way back in is the **My Date hub**, whose venue row now
+    appears for a restartable session as well as a live one — the scheduled
+    card's own button also still works, for as long as that card is findable.
+  - **The cap is a counter on the row (`Match.venueChangeCount`), not a derived
+    count of purchases**, because a Premium pair settles free and writes no
+    purchase row — and so does every demo visitor (DEMO_MODE.md settles the
+    board free, Stars having no mock rail). Those are exactly the cohorts money
+    does not bound, so they are the ones the counter has to.
 - **The way back (`keep-original`).** At any point before a change is paid for,
   either side can say "actually, let's just stay where we were": it withdraws
   that user's marks and, if an agreement was already reached, calls the
@@ -4104,9 +4148,10 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
 - **Lapse — the match is NEVER cancelled.** An `agreed` swap unpaid by
   `min(agreedAt + VENUE_CHANGE_TTL_HOURS (12h), T − DATE_ALERT_HOURS)` lapses
   on the date-lifecycle tick (before ice-breakers): the original venue stands,
-  both get a neutral notice, and the board closes. No Elo, no priority comp —
-  nothing was lost. The v1 "decline = cancel the match" branch is gone
-  entirely, and with it the v1 disclaimer.
+  both get a neutral notice, and the session ends. No Elo, no priority comp —
+  nothing was lost, which is also why a lapse spends no part of the per-date
+  change allowance and the board can be started over (above). The v1 "decline =
+  cancel the match" branch is gone entirely, and with it the v1 disclaimer.
 
 ### 3.8 Gennety Premium (feature-flagged recurring subscription)
 

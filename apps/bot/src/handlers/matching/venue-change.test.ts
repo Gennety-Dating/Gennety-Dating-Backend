@@ -138,6 +138,10 @@ function fakeMatch(over: Record<string, unknown> = {}) {
     venueChangePingSentToAAt: null,
     venueChangePingSentToBAt: null,
     venueChangeExpressAt: null,
+    venueChangeTier: null,
+    venueChangeCount: 0,
+    venueChangePingMsgIdA: null,
+    venueChangePingMsgIdB: null,
     venueLikesA: [] as unknown[],
     venueLikesB: [] as unknown[],
     userAId: "a",
@@ -1007,5 +1011,211 @@ describe("premium venue gating + fee waiver (§Premium)", () => {
     const she = await getVenueBoardState(100n, "m1");
     expect(she.ok).toBe(true);
     if (she.ok) expect(she.state.pairPremiumActive).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Restarting a finished session (PRODUCT_SPEC §3.7b — up to
+// VENUE_CHANGE_MAX_PER_DATE settled changes per date)
+// ---------------------------------------------------------------------------
+
+/** A date whose first change settled: one allowance spent, one left. */
+function settledMatch(over: Record<string, unknown> = {}) {
+  return fakeMatch({
+    venueChangeStatus: "settled",
+    venueChangeCount: 1,
+    // The settle copied the new venue onto the canonical fields...
+    venueName: "New Cafe",
+    venueAddress: "New Cafe St",
+    venuePlaceId: "p1",
+    // ...and left the whole finished session sitting in its one slot.
+    venueChangeProposerId: "a",
+    venueChangeProposedAt: new Date(),
+    venueChangeResolvedAt: new Date(),
+    venueChangePaidById: "b",
+    venueChangePaidAt: new Date(),
+    venueChangeOfferPaySentAt: new Date(),
+    venueChangeName: "New Cafe",
+    venueChangePlaceId: "p1",
+    venueLikesA: [likeOf("p1", "New Cafe")] as unknown[],
+    venueLikesB: [likeOf("p1", "New Cafe")] as unknown[],
+    ...over,
+  });
+}
+
+describe("venue change — a second round on a finished session", () => {
+  it("REGRESSION: the partner's round-one hearts cannot agree round two", async () => {
+    // The whole reason a restart is a reset and not a flag flip. Both sides
+    // hearted "New Cafe" last round; she now hearts it again to start a new
+    // one. Reading the pre-write snapshot's peer likes would see an overlap on
+    // the venue they ALREADY moved to and lock it in as a fresh (chargeable)
+    // change nobody is currently making.
+    mMatch.findUnique.mockResolvedValue(settledMatch());
+
+    const res = await submitVenueLikes(fakeApi(), 100n, "m1", [venueKeyOf(CATALOG[0])], {
+      loadCatalog,
+    });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.agreed).toBe(false);
+      expect(res.overlapCandidates).toEqual([]);
+    }
+    // Nothing may have been promoted to `agreed`.
+    expect(updateCalls((d) => d.venueChangeStatus === "agreed")).toHaveLength(0);
+  });
+
+  it("claims FROM the terminal status and wipes the whole session in one write", async () => {
+    mMatch.findUnique.mockResolvedValue(settledMatch());
+
+    await submitVenueLikes(fakeApi(), 100n, "m1", [venueKeyOf(CATALOG[0])], { loadCatalog });
+
+    const claim = mMatch.updateMany.mock.calls.find(
+      (c) => (c[0]?.data ?? {}).venueChangeStatus === "liking",
+    );
+    expect(claim).toBeDefined();
+    // The finished status is the thing being claimed — that is what makes the
+    // reset and the claim one atomic statement rather than two.
+    expect(claim?.[0].where).toMatchObject({
+      venueChangeStatus: { in: ["settled", "lapsed"] },
+    });
+    const data = claim?.[0].data ?? {};
+    // Both like columns, not just the restarter's.
+    expect(data.venueLikesB).toEqual([]);
+    // Every stamp that would otherwise leak from the finished round.
+    expect(data.venueChangeProposerId).toBeNull();
+    expect(data.venueChangeProposedAt).toBeNull();
+    expect(data.venueChangeOfferPaySentAt).toBeNull();
+    expect(data.venueChangePaidAt).toBeNull();
+    expect(data.venueChangePaidById).toBeNull();
+    expect(data.venueChangeName).toBeNull();
+    // NOT reset: the allowance already spent.
+    expect(data.venueChangeCount).toBeUndefined();
+  });
+
+  it("restarts after a lapse, which costs no allowance", async () => {
+    mMatch.findUnique.mockResolvedValue(
+      settledMatch({ venueChangeStatus: "lapsed", venueChangeCount: 0 }),
+    );
+
+    const res = await submitVenueLikes(fakeApi(), 100n, "m1", [venueKeyOf(CATALOG[0])], {
+      loadCatalog,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(updateCalls((d) => d.venueChangeStatus === "liking")).not.toHaveLength(0);
+  });
+
+  it("refuses once every allowed change is spent", async () => {
+    mMatch.findUnique.mockResolvedValue(settledMatch({ venueChangeCount: 2 }));
+
+    const res = await submitVenueLikes(fakeApi(), 100n, "m1", [venueKeyOf(CATALOG[0])], {
+      loadCatalog,
+    });
+
+    expect(res).toEqual({ ok: false, reason: "budget-spent" });
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("treats an empty submission on a finished board as a no-op, not a restart", async () => {
+    // Deselecting everything must not wipe the settled record (and its
+    // "{name} covered it" reveal) in exchange for a round that never starts.
+    mMatch.findUnique.mockResolvedValue(settledMatch());
+
+    const res = await submitVenueLikes(fakeApi(), 100n, "m1", [], { loadCatalog });
+
+    expect(res.ok).toBe(true);
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("resets the session on an express restart too", async () => {
+    mMatch.findUnique.mockResolvedValue(settledMatch());
+
+    const res = await mintExpressChange(100n, "m1", venueKeyOf(CATALOG[1]), { loadCatalog });
+
+    expect(res.ok).toBe(true);
+    const mint = mMatch.updateMany.mock.calls.find(
+      (c) => (c[0]?.data ?? {}).venueChangeExpressAt != null,
+    );
+    expect(mint?.[0].where).toMatchObject({ venueChangeStatus: { in: ["settled", "lapsed"] } });
+    // The reset runs first, so the express fields it writes still win.
+    expect(mint?.[0].data.venueLikesA).toEqual([]);
+    expect(mint?.[0].data.venueLikesB).toEqual([]);
+    expect(mint?.[0].data.venueChangeName).toBe("Park Spot");
+    expect(mint?.[0].data.venueChangeProposerId).toBe("a");
+  });
+
+  it("keep-original still refuses a finished session outright", async () => {
+    // The payoff of the two-predicate split: this path never learned about
+    // restarts, so it cannot resurrect a `liking` state out of stale likes.
+    mMatch.findUnique.mockResolvedValue(settledMatch());
+
+    const res = await keepOriginalVenue(fakeApi(), 100n, "m1");
+
+    expect(res).toEqual({ ok: false, reason: "already-changed" });
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("serves the catalog for a restartable session so 'change again' lands on cards", async () => {
+    mMatch.findUnique.mockResolvedValue(settledMatch());
+    const spy = vi.fn().mockResolvedValue(CATALOG);
+
+    const res = await getVenueChangeCatalog(100n, "m1", new Date(), spy);
+
+    expect(res.ok).toBe(true);
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it("refuses the catalog once the allowance is spent", async () => {
+    mMatch.findUnique.mockResolvedValue(settledMatch({ venueChangeCount: 2 }));
+    const spy = vi.fn().mockResolvedValue(CATALOG);
+
+    const res = await getVenueChangeCatalog(100n, "m1", new Date(), spy);
+
+    expect(res).toEqual({ ok: false, reason: "budget-spent" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("reports a finished session as an EMPTY board with the restart offer", async () => {
+    mMatch.findUnique.mockResolvedValue(settledMatch());
+
+    const res = await getVenueBoardState(100n, "m1");
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.state.restartable).toBe(true);
+      expect(res.state.changesUsed).toBe(1);
+      expect(res.state.settled).not.toBeNull();
+      // The columns still hold last round's hearts; the client must not see
+      // them as live, because the next write deletes them.
+      expect(res.state.myLikes).toEqual([]);
+      expect(res.state.peerLikes).toEqual([]);
+      // Still closed: a restart is an explicit tap, never an auto-reopen under
+      // a success screen the user is still reading.
+      expect(res.state.open).toBe(false);
+    }
+  });
+
+  it("stops offering a restart once the allowance is spent", async () => {
+    mMatch.findUnique.mockResolvedValue(settledMatch({ venueChangeCount: 2 }));
+
+    const res = await getVenueBoardState(100n, "m1");
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.state.restartable).toBe(false);
+      expect(res.state.changesUsed).toBe(2);
+    }
+  });
+
+  it("spends one allowance per settle, inside the settling CAS", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    await settleVenuePayment(fakeApi(), 200n, "m1", "charge-1");
+
+    const settle = mMatch.updateMany.mock.calls.find(
+      (c) => (c[0]?.data ?? {}).venueChangeStatus === "settled",
+    );
+    expect(settle?.[0].data.venueChangeCount).toEqual({ increment: 1 });
   });
 });

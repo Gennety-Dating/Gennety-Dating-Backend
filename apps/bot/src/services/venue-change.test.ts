@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DATE_ALERT_HOURS,
+  VENUE_CHANGE_MAX_PER_DATE,
   VENUE_CHANGE_TTL_HOURS,
 } from "@gennety/shared";
 
@@ -17,6 +18,7 @@ import { prisma } from "@gennety/db";
 import { fetchPlacePhotoNames } from "./venue.js";
 import {
   evaluateVenueBoardEligibility,
+  evaluateVenueChangeRestart,
   venueChangeCutoff,
   venueChangeDeadline,
   buildVenueChangeCatalog,
@@ -30,6 +32,7 @@ import {
   __resetVenuePhotoCacheForTests,
   type CatalogVenue,
   type VenueBoardEligibilityInput,
+  type VenueChangeRestartInput,
 } from "./venue-change.js";
 
 const findMany = prisma.curatedVenue.findMany as ReturnType<typeof vi.fn>;
@@ -85,7 +88,12 @@ describe("evaluateVenueBoardEligibility (v2 — both sides)", () => {
     expect(evaluateVenueBoardEligibility(baseInput({ venueChangeStatus: "agreed" })).ok).toBe(true);
   });
 
-  it("closes for good once settled or lapsed (one settled change per date)", () => {
+  it("closes once settled or lapsed — a finished session is never live again", () => {
+    // Deliberately unchanged by the restartable-board work: THIS gate answers
+    // "may I act on a live session", and a finished one is not live. Starting a
+    // fresh round is `evaluateVenueChangeRestart`'s question, and the eight call
+    // sites reading this predicate must keep getting `already-changed` so a
+    // keep-original / offer-pay / confirm can never run against stale columns.
     expect(evaluateVenueBoardEligibility(baseInput({ venueChangeStatus: "settled" }))).toEqual({
       ok: false,
       reason: "already-changed",
@@ -123,6 +131,67 @@ describe("evaluateVenueBoardEligibility (v2 — both sides)", () => {
     const now = new Date("2026-06-10T08:00:00Z");
     const agreedTime = new Date(now.getTime() + DATE_ALERT_HOURS * HOUR); // cutoff == now
     expect(evaluateVenueBoardEligibility(baseInput({ now, agreedTime })).ok).toBe(false);
+  });
+});
+
+describe("evaluateVenueChangeRestart (a second round on a finished session)", () => {
+  const restartInput = (
+    over: Partial<VenueChangeRestartInput> = {},
+  ): VenueChangeRestartInput => ({
+    ...baseInput(),
+    venueChangeStatus: "settled",
+    venueChangeCount: 1,
+    ...over,
+  });
+
+  it("lets either participant restart after a settled change", () => {
+    expect(evaluateVenueChangeRestart(restartInput())).toEqual({ ok: true, side: "A" });
+    expect(evaluateVenueChangeRestart(restartInput({ callerUserId: "b" }))).toEqual({
+      ok: true,
+      side: "B",
+    });
+  });
+
+  it("restarts after a lapse too, and a lapse costs no budget", () => {
+    // Nothing was ever paid, so the count is still 0 and BOTH changes remain.
+    expect(
+      evaluateVenueChangeRestart(
+        restartInput({ venueChangeStatus: "lapsed", venueChangeCount: 0 }),
+      ),
+    ).toEqual({ ok: true, side: "A" });
+  });
+
+  it("refuses once the per-date cap is spent", () => {
+    expect(
+      evaluateVenueChangeRestart(restartInput({ venueChangeCount: VENUE_CHANGE_MAX_PER_DATE })),
+    ).toEqual({ ok: false, reason: "budget-spent" });
+  });
+
+  it("says session-live — not budget-spent — while a round is still running", () => {
+    // The distinction matters: `budget-spent` is a dead end the client renders
+    // as "this date's venue is final", while a live session is simply the other
+    // gate's business and must not be reported as an exhausted allowance.
+    for (const status of [null, "liking", "agreed"]) {
+      expect(evaluateVenueChangeRestart(restartInput({ venueChangeStatus: status }))).toEqual({
+        ok: false,
+        reason: "session-live",
+      });
+    }
+  });
+
+  it("is bound by the same T-5h cutoff as a first change", () => {
+    const now = new Date("2026-06-10T08:00:00Z");
+    expect(
+      evaluateVenueChangeRestart(
+        restartInput({ now, agreedTime: new Date(now.getTime() + 4 * HOUR) }),
+      ),
+    ).toEqual({ ok: false, reason: "past-cutoff" });
+  });
+
+  it("blocks a non-participant, a flag-off runtime and an unscheduled match", () => {
+    expect(evaluateVenueChangeRestart(restartInput({ callerUserId: "z" })).ok).toBe(false);
+    expect(evaluateVenueChangeRestart(restartInput({ featureEnabled: false })).ok).toBe(false);
+    expect(evaluateVenueChangeRestart(restartInput({ status: "cancelled" })).ok).toBe(false);
   });
 });
 
