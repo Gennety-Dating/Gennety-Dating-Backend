@@ -67,6 +67,34 @@ const prismaMock = {
   user: {
     findUnique: async ({ where }: { where: { id: string } }) =>
       db.users.find((u) => u.id === where.id) ?? null,
+    // Batched admission filter used by `filterRematchEligible`. Mirrors the
+    // exact shape the service sends: an id list plus the same gender / status /
+    // onboarding / verification bar the single-user check applies in code.
+    findMany: async ({ where }: { where: Record<string, unknown> }) => {
+      const ids = (where.id as { in: string[] }).in;
+      const or = where.OR as Array<Record<string, unknown>> | undefined;
+      return db.users
+        .filter((u) => {
+          if (!ids.includes(u.id)) return false;
+          if (where.gender && u.gender !== where.gender) return false;
+          if (where.status && u.status !== where.status) return false;
+          if (where.onboardingStep && u.onboardingStep !== where.onboardingStep) {
+            return false;
+          }
+          if (or) {
+            const admits = or.some((clause) => {
+              if (clause.verificationStatus !== u.verificationStatus) return false;
+              if (clause.verificationSkippedAt) {
+                return u.verificationSkippedAt !== null;
+              }
+              return true;
+            });
+            if (!admits) return false;
+          }
+          return true;
+        })
+        .map((u) => ({ id: u.id }));
+    },
   },
   match: {
     findFirst: async ({ where }: { where: Record<string, unknown> }) => {
@@ -92,8 +120,13 @@ const prismaMock = {
       const source = where.source as string | undefined;
       const gte = (where.createdAt as { gte?: Date } | undefined)?.gte;
       const or = where.OR as Array<Record<string, { in: string[] }>> | undefined;
+      // `filterRematchEligible` filters live matches by status; the gift-cap
+      // query does not. Without this the batch would treat a cancelled match as
+      // live and silently exclude an eligible buyer.
+      const statusIn = (where.status as { in?: string[] } | undefined)?.in;
       return db.matches
         .filter((m) => {
+          if (statusIn && !statusIn.includes(m.status)) return false;
           if (source && m.source !== source) return false;
           if (gte && m.createdAt < gte) return false;
           if (or) {
@@ -108,15 +141,16 @@ const prismaMock = {
   rematchPurchase: {
     findMany: async ({ where }: { where: Record<string, unknown> }) => {
       const gte = (where.createdAt as { gte?: Date } | undefined)?.gte;
+      // Single-user check passes a scalar id; the batched filter passes `{ in }`.
+      const idFilter = where.userId as string | { in: string[] };
+      const matchesUser = (userId: string): boolean =>
+        typeof idFilter === "string" ? userId === idFilter : idFilter.in.includes(userId);
       return db.purchases
         .filter(
-          (p) =>
-            p.userId === where.userId &&
-            p.status === where.status &&
-            (!gte || p.createdAt >= gte),
+          (p) => matchesUser(p.userId) && p.status === where.status && (!gte || p.createdAt >= gte),
         )
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-        .map((p) => ({ createdAt: p.createdAt }));
+        .map((p) => ({ userId: p.userId, createdAt: p.createdAt }));
     },
     findFirst: async ({ where }: { where: Record<string, unknown> }) => {
       const found = db.purchases.find(
@@ -156,6 +190,7 @@ vi.mock("./next-batch.js", () => ({
 
 const {
   checkRematchEligibility,
+  filterRematchEligible,
   findRematchCandidate,
   pickGiftFraming,
   getGiftFramingForMatch,
@@ -541,5 +576,151 @@ describe("rematchLimits — env is an override, the cadence profile is the sourc
     // must be the profile's, not a stale literal left behind in the service.
     flag.REMATCH_MAX_PER_WEEK = null;
     expect(rematchLimits().maxPerInterval).toBe(CADENCE.rematchMaxPerInterval);
+  });
+});
+
+describe("filterRematchEligible — the batched twin must not drift from the single check", () => {
+  // The pinned banner reconciles every active user every minute, so it cannot
+  // afford ~3 queries per user. The batch exists for that — and a batch that
+  // disagrees with the authoritative check renders a button that fails on tap,
+  // which the product treats as worse than no button at all. Every case below
+  // asserts BOTH implementations reach the same verdict.
+  const OTHER = "buyer-2";
+
+  async function agree(userIds: string[]): Promise<void> {
+    const batch = await filterRematchEligible(userIds, NOW);
+    for (const id of userIds) {
+      const single = await checkRematchEligibility(id, NOW);
+      expect(
+        { id, eligible: batch.has(id) },
+        `batch and single check disagree for ${id}`,
+      ).toEqual({ id, eligible: single.ok });
+    }
+  }
+
+  it("agrees on a clean eligible buyer", async () => {
+    seedBuyer();
+    await agree([BUYER]);
+    expect(await filterRematchEligible([BUYER], NOW)).toEqual(new Set([BUYER]));
+  });
+
+  it("agrees on gender — women never buy", async () => {
+    seedBuyer();
+    db.users.push({
+      id: OTHER,
+      gender: "female",
+      status: "active",
+      onboardingStep: "completed",
+      verificationStatus: "verified",
+      verificationSkippedAt: null,
+    });
+    await agree([BUYER, OTHER]);
+  });
+
+  it("agrees on the verification bar, including the grandfathered skip cohort", async () => {
+    seedBuyer({ verificationStatus: "pending" });
+    db.users.push({
+      id: OTHER,
+      gender: "male",
+      status: "active",
+      onboardingStep: "completed",
+      verificationStatus: "unverified",
+      verificationSkippedAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    await agree([BUYER, OTHER]);
+    expect(await filterRematchEligible([BUYER, OTHER], NOW)).toEqual(new Set([OTHER]));
+  });
+
+  it("agrees on the single-live-match rule", async () => {
+    seedBuyer();
+    db.matches.push({
+      id: "m1",
+      userAId: BUYER,
+      userBId: "someone",
+      status: "proposed",
+      source: "weekly",
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    await agree([BUYER]);
+  });
+
+  it("a terminal match does NOT block — only live statuses do", async () => {
+    seedBuyer();
+    db.matches.push({
+      id: "m1",
+      userAId: BUYER,
+      userBId: "someone",
+      status: "cancelled",
+      source: "weekly",
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    await agree([BUYER]);
+    expect(await filterRematchEligible([BUYER], NOW)).toEqual(new Set([BUYER]));
+  });
+
+  it("agrees on the purchase cap", async () => {
+    seedBuyer();
+    for (let i = 0; i < 2; i++) {
+      db.purchases.push({
+        id: `p${i}`,
+        userId: BUYER,
+        status: "settled",
+        createdAt: new Date(NOW.getTime() - (i + 2) * 24 * 60 * 60 * 1000),
+        resultMatchId: null,
+        framing: null,
+      });
+    }
+    await agree([BUYER]);
+  });
+
+  it("agrees on the cooldown", async () => {
+    seedBuyer();
+    db.purchases.push({
+      id: "p1",
+      userId: BUYER,
+      status: "settled",
+      createdAt: new Date(NOW.getTime() - 60 * 60 * 1000), // 1h ago, inside 24h
+      resultMatchId: null,
+      framing: null,
+    });
+    await agree([BUYER]);
+  });
+
+  it("a refunded purchase consumes no quota in either implementation", async () => {
+    seedBuyer();
+    db.purchases.push({
+      id: "p1",
+      userId: BUYER,
+      status: "refunded_no_candidate",
+      createdAt: new Date(NOW.getTime() - 60 * 60 * 1000),
+      resultMatchId: null,
+      framing: null,
+    });
+    await agree([BUYER]);
+    expect(await filterRematchEligible([BUYER], NOW)).toEqual(new Set([BUYER]));
+  });
+
+  it("agrees inside the pre-batch blackout", async () => {
+    seedBuyer();
+    flag.REMATCH_PRE_BATCH_BLACKOUT_HOURS = 6;
+    // Mocked next batch is 2026-08-06T18:00Z; sit inside its 6h run-up.
+    const inside = new Date("2026-08-06T14:00:00Z");
+    const batch = await filterRematchEligible([BUYER], inside);
+    const single = await checkRematchEligibility(BUYER, inside);
+    expect(batch.has(BUYER)).toBe(false);
+    expect(single.ok).toBe(false);
+    expect(single.reason).toBe("pre_batch_blackout");
+  });
+
+  it("returns an empty set without querying when the feature is off", async () => {
+    seedBuyer();
+    flag.REMATCH_FEATURE_ENABLED = false;
+    expect(await filterRematchEligible([BUYER], NOW)).toEqual(new Set());
+  });
+
+  it("is a no-op on an empty input — the banner's weekly short-circuit", async () => {
+    expect(await filterRematchEligible([], NOW)).toEqual(new Set());
   });
 });

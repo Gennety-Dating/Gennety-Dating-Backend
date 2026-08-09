@@ -30,6 +30,8 @@ export interface CreateStatusBannerOptions {
   stage?: StatusBannerStage;
   /** §1.1 — the account's city is one Gennety hasn't launched. */
   marketPending?: { city: string | null };
+  /** §3.11 — the caller could buy a rematch right now (silent-drops mode only). */
+  rematchEligible?: boolean;
   clearExistingPins?: boolean;
   beforeApiCall?: () => Promise<void>;
 }
@@ -60,6 +62,8 @@ export interface BuildStatusBannerViewOptions {
   stage?: StatusBannerStage;
   /** §1.1 — the account's city is one Gennety hasn't launched. */
   marketPending?: { city: string | null };
+  /** §3.11 — the caller could buy a rematch right now (silent-drops mode only). */
+  rematchEligible?: boolean;
 }
 
 export function buildStatusBannerView(
@@ -80,6 +84,7 @@ export function buildStatusBannerView(
     silentDrops: dropOutpacesNotices(),
     ...(options.stage ? { stage: options.stage } : {}),
     ...(options.marketPending ? { marketPending: options.marketPending } : {}),
+    ...(options.rematchEligible ? { rematchEligible: true } : {}),
   });
 }
 
@@ -141,6 +146,7 @@ async function createStatusBannerLocked(
     now: options.now ?? new Date(),
     ...(options.stage ? { stage: options.stage } : {}),
     ...(options.marketPending ? { marketPending: options.marketPending } : {}),
+    ...(options.rematchEligible ? { rematchEligible: true } : {}),
   });
   const existing = await prisma.user.findUnique({
     where: { telegramId },

@@ -264,6 +264,83 @@ describe("renderStatusBanner", () => {
       expect(view.buttonText).toMatch(/\d/);
     });
 
+    describe("rematch pull entry (§3.11)", () => {
+      it("hands an eligible buyer the offer entry instead of the menu", () => {
+        const plain = renderStatusBanner({ ...base, language: "ru" });
+        const withRematch = renderStatusBanner({
+          ...base,
+          language: "ru",
+          rematchEligible: true,
+        });
+
+        expect(plain.callbackData).toBe("menu:open");
+        expect(withRematch.callbackData).toBe("rematch:open");
+        // Only the button moves — the body is the same steady-search line.
+        expect(withRematch.text).toBe(plain.text);
+        expect(withRematch.buttonText).not.toBe(plain.buttonText);
+      });
+
+      it.each(["en", "ru", "uk", "de", "pl"] as const)(
+        "carries no price in the pinned message, in %s",
+        (language) => {
+          // The banner sits above every conversation. A price there is a
+          // standing sales pitch; the number belongs on the offer card one tap
+          // later, before any payment (the rule §3.8 applies to Premium).
+          const view = renderStatusBanner({ ...base, language, rematchEligible: true });
+          expect(view.buttonText).not.toMatch(/\d/);
+          expect(view.buttonText).not.toMatch(/[$⭐]/);
+          expect(view.text).not.toMatch(/\d/);
+        },
+      );
+
+      it("a live match still wins — the stage owns the banner", () => {
+        // Belt and braces: a man holding a live match cannot buy anyway
+        // (single-live-match), so this combination should be unreachable. If it
+        // ever occurs, the date/reply countdown must not be replaced by an
+        // offer button.
+        const view = renderStatusBanner({
+          ...base,
+          language: "ru",
+          rematchEligible: true,
+          stage: { kind: "date", at: NEXT_DROP, venueName: "Aroma" },
+        });
+        expect(view.callbackData).toBe("menu:date");
+      });
+
+      it("an unlaunched city still wins — no offer to someone who is not in the pool", () => {
+        const view = renderStatusBanner({
+          ...base,
+          language: "ru",
+          rematchEligible: true,
+          marketPending: { city: "Львів" },
+        });
+        expect(view.callbackData).toBe("menu:open");
+      });
+
+      it("does nothing outside silent-drops mode", () => {
+        // The ordinary weekly countdown is a real deadline that resolves into
+        // something; it keeps its own button.
+        const view = renderStatusBanner({
+          ...base,
+          silentDrops: false,
+          language: "ru",
+          rematchEligible: true,
+        });
+        expect(view.callbackData).toBe("menu:open");
+        expect(view.text).toContain("GENNETY DROP");
+      });
+
+      it("changes the signature, so the worker actually re-renders on a flip", () => {
+        const plain = renderStatusBanner({ ...base, language: "ru" });
+        const withRematch = renderStatusBanner({
+          ...base,
+          language: "ru",
+          rematchEligible: true,
+        });
+        expect(withRematch.signature).not.toBe(plain.signature);
+      });
+    });
+
     it("never suppresses a live match's own countdowns", () => {
       // Those count down to real, known events (the reply window, the date
       // itself) and stay honest at any cadence — only the next-DROP timer is

@@ -20,10 +20,21 @@ import type { BotContext } from "../../session.js";
 import { checkRematchEligibility } from "../../services/rematch.js";
 
 /** Which pain moment produced this offer (selects the copy). */
-export type RematchOfferVariant = "famine" | "failed";
+export type RematchOfferVariant = "famine" | "failed" | "neutral";
 
 /** Callback data for the offer button. */
 export const REMATCH_BUY_CALLBACK = "rematch:buy";
+
+/**
+ * Callback data for a PULL entry into the offer (pinned banner, concierge).
+ *
+ * Deliberately distinct from `REMATCH_BUY_CALLBACK`, which mints the Stars
+ * invoice. A pull surface is reached by someone who came looking rather than by
+ * someone answering a DM they just received, so it must land on the card that
+ * states the terms and the price — not on a payment sheet. The banner label
+ * therefore carries no number and this callback is the step that introduces one.
+ */
+export const REMATCH_OPEN_CALLBACK = "rematch:open";
 
 /**
  * Send the rematch offer to a buyer, if he may actually buy one right now.
@@ -51,11 +62,14 @@ export async function sendRematchOfferIfEligible(
   if (!user || user.telegramId <= 0n) return false;
 
   const lang = (user.language ?? "en") as Language;
-  const text = t(
-    lang,
-    variant === "famine" ? "rematchOfferFamine" : "rematchOfferFailed",
-    { price: env.REMATCH_PRICE_USD_DISPLAY },
-  );
+  const OFFER_COPY = {
+    famine: "rematchOfferFamine",
+    failed: "rematchOfferFailed",
+    neutral: "rematchOfferNeutral",
+  } as const;
+  const text = t(lang, OFFER_COPY[variant], {
+    price: env.REMATCH_PRICE_USD_DISPLAY,
+  });
   const keyboard = new InlineKeyboard().text(
     t(lang, "rematchOfferBtn", { price: env.REMATCH_PRICE_USD_DISPLAY }),
     REMATCH_BUY_CALLBACK,
@@ -104,6 +118,49 @@ export async function offerRematchAfterCancellation(
     sendRematchOfferIfEligible(api, userAId, "failed", now).catch(() => {}),
     sendRematchOfferIfEligible(api, userBId, "failed", now).catch(() => {}),
   ]);
+}
+
+/**
+ * Pull entry (pinned banner / concierge) → post the offer card.
+ *
+ * The banner is the only rematch surface a user sees without being written to,
+ * so this is what makes daily availability possible without a daily DM: the
+ * offer stops being a message we push and becomes a screen he opens.
+ *
+ * Sends rather than edits, because the banner is a PINNED message reconciled
+ * every minute by `status-timer` — editing it here would be overwritten within
+ * 60s and would also destroy the countdown for everyone else's stage.
+ *
+ * A refusal answers as a toast and leaves the banner alone: the next worker tick
+ * re-resolves eligibility and drops the button on its own, so there is nothing
+ * to strip and no stale card to kill (unlike the durable DM the buy handler
+ * below has to defuse).
+ */
+export async function handleRematchOpenCallback(ctx: BotContext): Promise<void> {
+  const telegramId = ctx.from?.id;
+  if (telegramId == null) return;
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(telegramId) },
+    select: { id: true, language: true },
+  });
+  if (!user) {
+    await ctx.answerCallbackQuery().catch(() => {});
+    return;
+  }
+  const lang = (user.language ?? "en") as Language;
+
+  // `sendRematchOfferIfEligible` re-checks everything and stays silent when he
+  // may not buy — but silence is wrong for a tap he just made, so the refusal
+  // is surfaced as a toast here.
+  const sent = await sendRematchOfferIfEligible(ctx.api, user.id, "neutral");
+  if (!sent) {
+    await ctx
+      .answerCallbackQuery({ text: t(lang, "rematchUnavailable") })
+      .catch(() => {});
+    return;
+  }
+  await ctx.answerCallbackQuery().catch(() => {});
 }
 
 /**

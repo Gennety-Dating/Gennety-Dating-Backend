@@ -222,6 +222,101 @@ export async function checkRematchEligibility(
 }
 
 /**
+ * Batched twin of `checkRematchEligibility`: which of these users could buy a
+ * rematch right now.
+ *
+ * Exists for the pinned status banner, which reconciles EVERY active user EVERY
+ * minute. Calling the single-user check there would be ~3 queries per user per
+ * tick; this is 3 queries per tick total, whatever the pool size.
+ *
+ * **Returns an empty set unless the banner would actually use it.** Under
+ * `weekly` — production today — `dropOutpacesNotices()` is false, the banner
+ * never reaches its silent-drops branch, and this costs literally nothing: the
+ * caller short-circuits before the first query.
+ *
+ * Deliberately reuses the same `rematchLimits()` and `ACTIVE_MATCH_STATUSES` as
+ * the authoritative check, and `rematch.test.ts` pins the two to agree — a
+ * button that fails on tap is worse than no button, so a divergence here is a
+ * product bug, not an optimisation detail.
+ */
+export async function filterRematchEligible(
+  userIds: string[],
+  now: Date = new Date(),
+): Promise<Set<string>> {
+  if (!env.REMATCH_FEATURE_ENABLED || userIds.length === 0) return new Set();
+
+  const limits = rematchLimits();
+
+  // Same admission bar as the weekly batch and as checkRematchEligibility.
+  const users = await prisma.user.findMany({
+    where: {
+      id: { in: userIds },
+      gender: "male",
+      status: "active",
+      onboardingStep: "completed",
+      OR: [
+        { verificationStatus: "verified" },
+        { verificationStatus: "unverified", verificationSkippedAt: { not: null } },
+      ],
+    },
+    select: { id: true },
+  });
+  if (users.length === 0) return new Set();
+  const eligible = new Set(users.map((u) => u.id));
+
+  // Single-live-match (§3.2): he cannot buy while a match is in flight.
+  const live = await prisma.match.findMany({
+    where: {
+      status: { in: [...ACTIVE_MATCH_STATUSES] },
+      OR: [
+        { userAId: { in: [...eligible] } },
+        { userBId: { in: [...eligible] } },
+      ],
+    },
+    select: { userAId: true, userBId: true },
+  });
+  for (const row of live) {
+    eligible.delete(row.userAId);
+    eligible.delete(row.userBId);
+  }
+  if (eligible.size === 0) return eligible;
+
+  // D3 limits. Only settled purchases consume quota, exactly as above.
+  const windowStart = new Date(now.getTime() - CADENCE.rematchWindowMs);
+  const purchases = await prisma.rematchPurchase.findMany({
+    where: {
+      userId: { in: [...eligible] },
+      status: REMATCH_SETTLED,
+      createdAt: { gte: windowStart },
+    },
+    select: { userId: true, createdAt: true },
+  });
+  const byUser = new Map<string, Date[]>();
+  for (const p of purchases) {
+    const list = byUser.get(p.userId);
+    if (list) list.push(p.createdAt);
+    else byUser.set(p.userId, [p.createdAt]);
+  }
+  for (const [userId, dates] of byUser) {
+    if (dates.length >= limits.maxPerInterval) {
+      eligible.delete(userId);
+      continue;
+    }
+    const newest = dates.reduce((a, b) => (a > b ? a : b));
+    if (newest.getTime() + limits.cooldownMs > now.getTime()) eligible.delete(userId);
+  }
+
+  // Blackout is a pure time computation — identical for everyone, so it is all
+  // or nothing rather than a per-user filter.
+  if (limits.blackoutMs > 0) {
+    const blackoutStart = getNextBatchDate(now).getTime() - limits.blackoutMs;
+    if (now.getTime() >= blackoutStart) return new Set();
+  }
+
+  return eligible;
+}
+
+/**
  * Candidate ids that are currently protected from receiving another
  * rematch-sourced pitch (`rematchLimits().giftCapMs`).
  *

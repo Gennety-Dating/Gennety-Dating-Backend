@@ -1116,7 +1116,18 @@ const translations = {
       "That one didn't land. Happens.\n\n" +
       "I can go again right now and bring you someone new — {price}.\n\n" +
       "It buys a new introduction, not a guaranteed date. If I find nobody, your Stars come straight back.",
+    // He came looking for this himself (the pinned banner, or the concierge),
+    // so the copy opens no wound: the other two variants answer a specific
+    // disappointment, this one answers a question.
+    rematchOfferNeutral:
+      "Want me to go again right now? One new person, picked the same way: {price}.\n\n" +
+      "It buys a new introduction, not a guaranteed date. If I find nobody, your Stars come straight back.",
     rematchOfferBtn: "Search again — {price}",
+    // Pinned-banner entry. Deliberately carries NO price: the banner sits above
+    // every conversation, and a permanent price there is a standing sales pitch.
+    // The number appears one tap later, on the offer card, before any payment —
+    // the same rule §3.8 applies to the Premium hub.
+    statusButtonRematch: "Search now",
     rematchInvoiceTitle: "Rematch",
     rematchInvoiceDesc: "One more search, right now — a new person picked by your matchmaker.",
     rematchInvoiceLabel: "Rematch",
@@ -2189,7 +2200,11 @@ const translations = {
       "Не сложилось. Бывает.\n\n" +
       "Могу пойти на второй заход прямо сейчас и найти тебе нового человека — {price}.\n\n" +
       "Это новое знакомство, а не гарантия свидания. Если никого не найду — звёзды сразу вернутся.",
+    rematchOfferNeutral:
+      "Хочешь, пойду на новый заход прямо сейчас? Один новый человек, подбор тот же: {price}.\n\n" +
+      "Это новое знакомство, а не гарантия свидания. Если никого не найду — звёзды сразу вернутся.",
     rematchOfferBtn: "Искать заново — {price}",
+    statusButtonRematch: "Искать сейчас",
     rematchInvoiceTitle: "Реметч",
     rematchInvoiceDesc: "Ещё один поиск прямо сейчас — новый человек от твоего мэтчмейкера.",
     rematchInvoiceLabel: "Реметч",
@@ -3258,7 +3273,11 @@ const translations = {
       "Не склалося. Буває.\n\n" +
       "Можу піти на другий захід просто зараз і знайти тобі нову людину — {price}.\n\n" +
       "Це нове знайомство, а не гарантія побачення. Якщо нікого не знайду — зірки одразу повернуться.",
+    rematchOfferNeutral:
+      "Хочеш, піду на новий захід просто зараз? Одна нова людина, добір той самий: {price}.\n\n" +
+      "Це нове знайомство, а не гарантія побачення. Якщо нікого не знайду — зірки одразу повернуться.",
     rematchOfferBtn: "Шукати заново — {price}",
+    statusButtonRematch: "Шукати зараз",
     rematchInvoiceTitle: "Реметч",
     rematchInvoiceDesc: "Ще один пошук просто зараз — нова людина від твого метчмейкера.",
     rematchInvoiceLabel: "Реметч",
@@ -4304,7 +4323,11 @@ const deTranslations: TranslationTable = {
     "Hat nicht gepasst. Kommt vor.\n\n" +
     "Ich kann sofort noch mal suchen und dir jemand Neues bringen — {price}.\n\n" +
     "Das kauft ein neues Kennenlernen, kein garantiertes Date. Finde ich niemanden, bekommst du deine Stars direkt zurück.",
+  rematchOfferNeutral:
+    "Soll ich sofort noch mal suchen? Eine neue Person, gleiche Auswahl: {price}.\n\n" +
+    "Das kauft ein neues Kennenlernen, kein garantiertes Date. Finde ich niemanden, bekommst du deine Stars direkt zurück.",
   rematchOfferBtn: "Neu suchen — {price}",
+  statusButtonRematch: "Jetzt suchen",
   rematchInvoiceTitle: "Rematch",
   rematchInvoiceDesc: "Noch eine Suche, sofort — eine neue Person von deinem Matchmaker.",
   rematchInvoiceLabel: "Rematch",
@@ -5347,7 +5370,11 @@ const plTranslations: TranslationTable = {
     "Nie wyszło. Zdarza się.\n\n" +
     "Mogę pójść na drugie podejście teraz i znaleźć ci nową osobę — {price}.\n\n" +
     "To nowe poznanie, nie gwarancja randki. Jeśli nikogo nie znajdę — gwiazdki wracają od razu.",
+  rematchOfferNeutral:
+    "Chcesz, żebym poszukał jeszcze raz, teraz? Jedna nowa osoba, ten sam dobór: {price}.\n\n" +
+    "To nowe poznanie, nie gwarancja randki. Jeśli nikogo nie znajdę — gwiazdki wracają od razu.",
   rematchOfferBtn: "Szukaj jeszcze raz — {price}",
+  statusButtonRematch: "Szukaj teraz",
   rematchInvoiceTitle: "Rematch",
   rematchInvoiceDesc: "Jeszcze jedno wyszukiwanie, teraz — nowa osoba od twojego matchmakera.",
   rematchInvoiceLabel: "Rematch",

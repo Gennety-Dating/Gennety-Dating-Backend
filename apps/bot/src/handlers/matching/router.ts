@@ -34,7 +34,12 @@ import {
   STALL_CANCEL_CONFIRM_PREFIX,
   STALL_OK_PREFIX,
 } from "../../services/match-stall.js";
-import { handleRematchBuyCallback, REMATCH_BUY_CALLBACK } from "./rematch.js";
+import {
+  handleRematchBuyCallback,
+  handleRematchOpenCallback,
+  REMATCH_BUY_CALLBACK,
+  REMATCH_OPEN_CALLBACK,
+} from "./rematch.js";
 import {
   matchFlowClaimIsLive,
   releaseMatchFlowClaim,
@@ -103,6 +108,14 @@ matchingRouter.use(async (ctx, next) => {
   // purchase itself settles in the `successful_payment` trust boundary.
   if (data === REMATCH_BUY_CALLBACK) {
     await handleRematchBuyCallback(ctx);
+    return;
+  }
+
+  // Pull entry from the pinned banner / concierge → post the offer card. Lands
+  // on the card, never straight on the invoice: he arrived here himself and has
+  // not seen a price yet.
+  if (data === REMATCH_OPEN_CALLBACK) {
+    await handleRematchOpenCallback(ctx);
     return;
   }
 

@@ -1,7 +1,7 @@
 import type { Api, RawApi } from "grammy";
 import { GrammyError } from "grammy";
 import { prisma } from "@gennety/db";
-import type { Language } from "@gennety/shared";
+import { dropOutpacesNotices, type Language } from "@gennety/shared";
 import {
   buildStatusBannerKeyboard,
   buildStatusBannerView,
@@ -12,6 +12,7 @@ import {
 } from "../services/status-banner.js";
 import type { StatusBannerStage } from "../services/status-banner-view.js";
 import { loadBannerStages } from "../services/status-banner-stage.js";
+import { filterRematchEligible } from "../services/rematch.js";
 import { isMarketPending } from "../handlers/menu/city-switch.js";
 
 const MAX_EDITS_PER_SECOND = 25;
@@ -99,6 +100,28 @@ export async function statusTimerTick(
     now,
   );
 
+  // Rematch pull entry (§3.11, §2.1 mode 5). Resolved ONCE for the whole tick,
+  // not per user: this worker touches every active account every minute, and
+  // the single-user eligibility check is ~3 queries.
+  //
+  // Short-circuited on `dropOutpacesNotices()` because only the silent-drops
+  // banner renders this button. Under `weekly` — production today — that is
+  // false, so this whole block costs nothing and the banner is byte-identical
+  // to what it renders now. A user holding a live match is excluded twice over
+  // (the stage branches win, and `filterRematchEligible` drops him anyway).
+  const rematchEligible = dropOutpacesNotices()
+    ? await filterRematchEligible(
+        activeUsers.map((user) => user.id),
+        now,
+      ).catch((err: unknown) => {
+        // Never let an offer lookup break the banner: it is the pinned message
+        // for every active user, and the button is the least important thing on
+        // it. Degrades to the ordinary menu button.
+        console.warn("[status-timer] rematch eligibility failed:", err);
+        return new Set<string>();
+      })
+    : new Set<string>();
+
   let actionsThisSecond = 0;
   let windowStart = Date.now();
   const takeApiSlot = async (): Promise<void> => {
@@ -155,10 +178,12 @@ export async function statusTimerTick(
     const marketPending = isMarketPending(user.profile?.homeCityKey)
       ? { city: user.profile?.homeCity ?? user.profile?.homeCityKey ?? null }
       : undefined;
+    const canRematch = rematchEligible.has(user.id);
     const view = buildStatusBannerView(language, {
       now,
       ...(stage ? { stage } : {}),
       ...(marketPending ? { marketPending } : {}),
+      ...(canRematch ? { rematchEligible: true } : {}),
     });
 
     if (user.statusMessageId === null) {
@@ -166,6 +191,7 @@ export async function statusTimerTick(
         now,
         ...(stage ? { stage } : {}),
         ...(marketPending ? { marketPending } : {}),
+        ...(canRematch ? { rematchEligible: true } : {}),
         clearExistingPins: true,
         beforeApiCall: takeApiSlot,
       });
@@ -214,6 +240,7 @@ export async function statusTimerTick(
               now,
               stage,
               marketPending,
+              canRematch,
               view.signature,
               cache,
               retryState,
@@ -265,6 +292,7 @@ export async function statusTimerTick(
           now,
           stage,
           marketPending,
+          canRematch,
           view.signature,
           cache,
           retryState,
@@ -302,6 +330,10 @@ async function replaceMissingBanner(
   now: Date,
   stage: StatusBannerStage | undefined,
   marketPending: { city: string | null } | undefined,
+  // Must match what produced `signature` below, or the recreated banner and the
+  // cached render disagree and the next tick re-edits a message that is already
+  // correct.
+  rematchEligible: boolean,
   signature: string,
   cache: Map<string, string>,
   retryState: Map<string, RetryEntry>,
@@ -318,6 +350,7 @@ async function replaceMissingBanner(
     now,
     ...(stage ? { stage } : {}),
     ...(marketPending ? { marketPending } : {}),
+    ...(rematchEligible ? { rematchEligible: true } : {}),
     clearExistingPins: false,
     beforeApiCall,
   });

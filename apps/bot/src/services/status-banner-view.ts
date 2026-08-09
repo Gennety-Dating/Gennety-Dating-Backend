@@ -52,13 +52,32 @@ export interface StatusBannerViewInput {
    * banner then states a steady search with no deadline attached.
    */
   silentDrops?: boolean;
+  /**
+   * True when this user could buy a paid Rematch right now (§3.11).
+   *
+   * Read ONLY by the silent-drops branch below, and that is the whole design:
+   * Rematch has no menu row by product rule, so the offer only ever existed as
+   * a DM sent at a moment of disappointment. A drop that passes in deliberate
+   * silence is the one moment where a way in costs nothing — the banner is
+   * already on screen, already says "still looking", and is edited rather than
+   * sent, so it raises no notification.
+   *
+   * Never set alongside a live-match stage: a man holding a match cannot buy
+   * (single-live-match), so the stage branches above are unreachable with this
+   * on.
+   */
+  rematchEligible?: boolean;
 }
 
 export interface StatusBannerView {
   text: string;
   buttonText: string;
-  /** `menu:date` opens the My Date hub; the stage modes point there. */
-  callbackData: "menu:open" | "menu:date";
+  /**
+   * `menu:date` opens the My Date hub (the stage modes point there);
+   * `rematch:open` posts the offer card — never the invoice, so the pinned
+   * message can stay free of a price.
+   */
+  callbackData: "menu:open" | "menu:date" | "rematch:open";
   buttonStyle: "primary";
   signature: string;
 }
@@ -99,14 +118,22 @@ export function renderStatusBanner(input: StatusBannerViewInput): StatusBannerVi
   // events and stay honest at any cadence; it is only the next-DROP timer that
   // this regime invalidates.
   if (input.silentDrops) {
+    // The body is unchanged either way — only the button moves. Someone who can
+    // buy gets a way to act on the wait; everyone else gets the menu, exactly as
+    // before. The copy deliberately does not mention Rematch: the banner states
+    // the search, and the offer explains itself one tap later.
     const view = {
       text: [
         "✦ GENNETY",
         "",
         t(input.language, "statusBannerSearching"),
       ].join("\n"),
-      buttonText: t(input.language, "statusButtonMenu"),
-      callbackData: "menu:open" as const,
+      buttonText: input.rematchEligible
+        ? t(input.language, "statusButtonRematch")
+        : t(input.language, "statusButtonMenu"),
+      callbackData: (input.rematchEligible ? "rematch:open" : "menu:open") as
+        | "menu:open"
+        | "rematch:open",
       buttonStyle: "primary" as const,
     };
     return { ...view, signature: JSON.stringify(view) };
