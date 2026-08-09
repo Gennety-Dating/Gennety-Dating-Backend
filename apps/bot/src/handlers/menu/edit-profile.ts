@@ -17,6 +17,7 @@ import {
   type Language,
   type SessionData,
 } from "@gennety/shared";
+import { claimMenuText } from "../../services/menu-text-claim.js";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import {
   fetchTelegramFileBuffer,
@@ -113,13 +114,53 @@ export async function showEditProfileMenu(ctx: BotContext): Promise<void> {
 // Edit Bio
 // ---------------------------------------------------------------------------
 
-/** Enter the edit_bio FSM state. */
+/**
+ * Enter the edit_bio FSM state.
+ *
+ * The prompt carries the CURRENT text, and that is load-bearing rather than a
+ * nicety. `psychologicalSummary` is the profile's accumulated psychological
+ * signal and the dominant embedding input (`V_explicit`, 0.65), and whatever
+ * the user sends next replaces all of it — so the agent's `update_bio` tool
+ * refuses a collapse outright and routes the user here, on the stated grounds
+ * that "the editor shows the current text so they can edit it themselves".
+ * It did not. Someone arriving from that refusal — the one person we already
+ * know is about to shorten a substantial bio — saw only "write a few lines"
+ * and no sight of what they were about to delete.
+ *
+ * Deliberately NOT a second collapse guard. The agent's guard exists to push
+ * the decision HERE; refusing it here too would leave no way to shorten a bio
+ * at all. The fix is to make the premise true, not to close the door behind it.
+ */
 export async function handleEditBioStart(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   const lang = ctx.session.language;
-  ctx.session.menuState = "edit_bio";
+  claimMenuText(ctx.session, "edit_bio");
   await ctx.reply(t(lang, "editBioPrompt"));
+
+  // Best-effort: the prompt is already on screen, so a blip here costs the
+  // preview and nothing else. Never the editor itself.
+  const user = await prisma.user
+    .findUnique({
+      where: { telegramId: BigInt(ctx.from!.id) },
+      select: { profile: { select: { psychologicalSummary: true } } },
+    })
+    .catch(() => null);
+  const current = user?.profile?.psychologicalSummary?.trim();
+  if (!current) return;
+
+  // Sent as its own plain message (no `parse_mode`) so the text is quotable and
+  // cannot be mangled — or turned into markup — by whatever the AI-memory pass
+  // happened to write. An analysis can run to several thousand characters, so
+  // it is capped well inside Telegram's 4096 limit rather than failing the send.
+  const shown =
+    current.length > BIO_PREVIEW_MAX_CHARS
+      ? `${current.slice(0, BIO_PREVIEW_MAX_CHARS)}…`
+      : current;
+  await ctx.reply(`${t(lang, "editBioCurrent")}\n\n${shown}`);
 }
+
+/** Room for the heading and Telegram's own 4096-character ceiling. */
+const BIO_PREVIEW_MAX_CHARS = 3500;
 
 /** Consume text message while menuState === "edit_bio". */
 export async function handleEditBioInput(ctx: BotContext): Promise<void> {
@@ -166,7 +207,7 @@ export async function handleEditBioInput(ctx: BotContext): Promise<void> {
 export async function handleEditMajorStart(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   const lang = ctx.session.language;
-  ctx.session.menuState = "edit_major";
+  claimMenuText(ctx.session, "edit_major");
   await ctx.reply(t(lang, "editMajorPrompt"));
 }
 
@@ -238,7 +279,7 @@ async function showEditPrefsMenu(ctx: BotContext): Promise<void> {
 
 export async function handleEditPartnerPreferencesStart(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
-  ctx.session.menuState = "edit_partner_preferences";
+  claimMenuText(ctx.session, "edit_partner_preferences");
   await ctx.reply(t(ctx.session.language, "editPrefsDescriptionPrompt"));
 }
 
@@ -284,7 +325,7 @@ export async function handleEditPartnerPreferencesInput(ctx: BotContext): Promis
 export async function handleEditAgeRangeStart(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   const lang = ctx.session.language;
-  ctx.session.menuState = "edit_age_range";
+  claimMenuText(ctx.session, "edit_age_range");
   await ctx.reply(t(lang, "editAgeRangePrompt", { min: MIN_AGE, max: MAX_AGE }));
 }
 

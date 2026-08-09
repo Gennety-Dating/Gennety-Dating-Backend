@@ -47,6 +47,45 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-08 — the claim rule was fixed on one side of the router and not the other
+
+**Kind:** deviation from plan
+**What:** found by a full-codebase audit, not by a report. `services/match-flow-claim.ts`
+(2026-08-03) bounded the three MATCH flows that read the next plain message as
+their answer. The identical shape existed one router over and was left
+unbounded: five `menuState` values consume plain text and nothing ever released
+them except the user happening to tap a button. Fixed with the menu twin,
+`services/menu-text-claim.ts`.
+**Why it matters more than the other four:** `edit_bio` writes its message
+verbatim into `Profile.psychologicalSummary` — the dominant embedding input
+(`V_explicit`, 0.65). The state lives in `bot_sessions`, so a user who tapped
+**About me** and walked away had their next message, on any topic and any number
+of days later, replace their whole profile analysis with no snapshot to restore
+from — and lose the answer to the question they actually asked. Reproduced as a
+failing test before the fix: the router called `prisma.profile.update` on a
+three-week-stale claim.
+**What it changes going forward:** **a session field that captures free text is
+not finished until it carries a deadline.** The rule now exists twice, once per
+router, and a sixth text-capturing `menuState` must be added to `CLAIMABLE` or
+it inherits the bug. Expiring is deliberately a soft failure — the message falls
+to the concierge, which can hand the editor back — so when in doubt the window
+goes shorter, not longer. Media states (`edit_photos`, `edit_video`) are
+deliberately out of scope: a stray photo lands in a gallery the user can see and
+delete.
+**One thing I decided NOT to do, and it is the more interesting half:** the
+obvious second fix was to copy the agent's collapse guard
+(`SUBSTANTIAL_BIO_LENGTH` / `BIO_SHRINK_LIMIT`) into the menu editor, since the
+same wipe is reachable there unguarded. That is wrong. The agent's guard exists
+precisely to route the decision INTO the editor — its refusal text says the act
+"belongs in the editor where the user can read what they are replacing first" —
+so guarding the editor too would leave no way to shorten a bio anywhere in the
+product, a dead end in place of a data-loss bug. What was actually broken is
+that the editor never showed that text, so the guard's promise was false and its
+escape hatch led somewhere blind. The editor shows it now; the asymmetry stays,
+on purpose.
+**Recorded in:** PRODUCT_SPEC.md §2.1, `services/menu-text-claim.ts`,
+`SessionData.menuClaimUntil`.
+
 ## 2026-08-08 — "best-effort" is not "one attempt", and a silent 502 is a bug of its own
 
 **Kind:** deviation from plan + a document turned out to be wrong

@@ -9,6 +9,7 @@ import {
   attachCancellationReason,
   formatPremiumUntil,
 } from "../../services/premium.js";
+import { claimMenuText } from "../../services/menu-text-claim.js";
 
 /**
  * In-chat Gennety Premium cancellation (PRODUCT_SPEC §Premium). The menu agent
@@ -267,8 +268,11 @@ export async function handlePremiumCancelFinalConfirm(ctx: BotContext): Promise<
     t(lang, "premiumCancelDone", { date: formatPremiumUntil(premiumUntil, lang) }),
   ).catch(() => {});
 
-  // Politely ask WHY; the next free-text message is captured as the reason.
-  ctx.session.menuState = "awaiting_premium_cancel_reason";
+  // Politely ask WHY; the next free-text message is captured as the reason —
+  // but only for as long as the claim is live (`services/menu-text-claim.ts`).
+  // Unbounded, an ignored question turned some later, unrelated message into a
+  // churn reason on this ledger row, and swallowed the reply the user came for.
+  claimMenuText(ctx.session, "awaiting_premium_cancel_reason");
   ctx.session.premiumCancelLedgerId = ledgerId;
   const skip = new InlineKeyboard().text(
     t(lang, "premiumCancelReasonSkipBtn"),

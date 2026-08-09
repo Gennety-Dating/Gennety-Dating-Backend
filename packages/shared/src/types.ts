@@ -192,6 +192,24 @@ export interface SessionData {
    * outside it (explicitly entered, and bounded by the proxy window instead).
    */
   matchFlowClaimUntil: number | null;
+  /**
+   * Deadline past which a `menuState` that consumes plain text stops owning the
+   * chat — the menu twin of `matchFlowClaimUntil` above.
+   *
+   * The match flows were bounded and the menu edits were not, so the same class
+   * of bug survived on the other side of the router: `edit_bio` writes its
+   * message verbatim into `Profile.psychologicalSummary`, the dominant
+   * embedding input (`V_explicit`, 0.65). A user who tapped "About me" and
+   * walked away had their NEXT message — on any topic, weeks later — become
+   * their entire profile analysis, with nothing to restore from, while the
+   * question they actually asked went unanswered.
+   *
+   * `null` means "no live claim" and is what every session written before this
+   * field existed reads, so a stale state fails closed. Owned by
+   * `services/menu-text-claim.ts`; the photo/video upload states are outside it
+   * (they consume media, not text, and a stray photo writes nothing).
+   */
+  menuClaimUntil: number | null;
   /** Match id currently awaiting this user's text input (rejection reason / calendar) */
   activeMatchId: string | null;
   /** Selected structured report category while waiting for optional details */
@@ -232,6 +250,7 @@ export const DEFAULT_SESSION: SessionData = {
   premiumCancelLedgerId: null,
   matchFlow: "idle",
   matchFlowClaimUntil: null,
+  menuClaimUntil: null,
   activeMatchId: null,
   pendingReportCategory: null,
   awaitingContextDump: false,

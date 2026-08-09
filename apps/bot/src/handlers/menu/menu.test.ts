@@ -1133,6 +1133,112 @@ describe("Menu — Edit Bio", () => {
     expect(prisma.profile.update).not.toHaveBeenCalled();
     expect(ctx.session.menuState).toBe("edit_bio"); // stays in flow
   });
+
+  it("handleEditBioStart stamps a deadline on the claim", async () => {
+    const ctx = createMockCtx({ callbackData: "menu:edit:bio" });
+    await handleEditBioStart(ctx);
+    expect(ctx.session.menuClaimUntil).toBeGreaterThan(Date.now());
+  });
+
+  it("handleEditBioStart shows the text the next message would replace", async () => {
+    // The agent's `update_bio` refuses a collapse on the stated grounds that
+    // "the editor shows the current text so they can edit it themselves", and
+    // hands the user a button straight to this handler — which skips the
+    // profile screen. Without this the one person we know is about to shorten a
+    // substantial bio never sees what they are deleting.
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      profile: { psychologicalSummary: "A long accumulated analysis." },
+    });
+    const ctx = createMockCtx({ callbackData: "menu:edit:bio" });
+
+    await handleEditBioStart(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledWith(
+      expect.stringContaining("A long accumulated analysis."),
+    );
+  });
+
+  it("handleEditBioStart says nothing extra when there is no bio yet", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      profile: { psychologicalSummary: "   " },
+    });
+    const ctx = createMockCtx({ callbackData: "menu:edit:bio" });
+
+    await handleEditBioStart(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Menu — a forgotten text edit stops owning the chat", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "u1",
+      status: "active",
+      onboardingStep: "completed",
+      suspendedUntil: null,
+    });
+  });
+
+  /**
+   * THE regression. `edit_bio` writes its message verbatim into
+   * `Profile.psychologicalSummary` — the dominant embedding input — and the
+   * state lives in `bot_sessions`, so before the claim deadline existed a user
+   * who tapped "About me" and walked away had their next message, on any topic
+   * and any number of days later, replace their whole profile analysis. Their
+   * actual question was swallowed at the same time.
+   */
+  it("does not write an unrelated message into the bio weeks later", async () => {
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_bio",
+        // Stamped three weeks ago, i.e. long expired.
+        menuClaimUntil: Date.now() - 21 * 24 * 60 * 60 * 1000,
+      },
+      messageText: "когда моё свидание?",
+    });
+
+    await menuRouter.middleware()(ctx, vi.fn());
+
+    expect(prisma.profile.update).not.toHaveBeenCalled();
+    expect(ctx.session.menuState).toBe("idle");
+  });
+
+  it("still saves a bio typed while the claim is live", async () => {
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_bio",
+        menuClaimUntil: Date.now() + 10 * 60 * 1000,
+      },
+      messageText: "I love hiking and photography!",
+    });
+
+    await menuRouter.middleware()(ctx, vi.fn());
+
+    expect(prisma.profile.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          psychologicalSummary: "I love hiking and photography!",
+        }),
+      }),
+    );
+  });
+
+  it("fails closed for a session written before the deadline existed", async () => {
+    // The storage adapter merges defaults, so the one in-flight edit that spans
+    // the deploy reads `null` — and falls through to the agent rather than
+    // being trusted forever.
+    const ctx = createMockCtx({
+      session: { menuState: "edit_bio", menuClaimUntil: null },
+      messageText: "anything at all",
+    });
+
+    await menuRouter.middleware()(ctx, vi.fn());
+
+    expect(prisma.profile.update).not.toHaveBeenCalled();
+    expect(ctx.session.menuState).toBe("idle");
+  });
 });
 
 describe("Menu — Edit Major", () => {

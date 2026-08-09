@@ -1,5 +1,60 @@
 # Gennety Dating Deploy
 
+**PENDING — a forgotten menu edit stops owning the chat, and About me shows what
+it replaces (PRODUCT_SPEC §2.1, DECISIONS.md).** Not deployed yet. **No Prisma
+schema change, no env change, no flag change, no Mini App change**
+(`apps/webapp` untouched) — bot-side only, so a full server code deploy carries
+all of it, plus `pnpm demo:deploy`.
+
+Found by a full-codebase audit rather than a report. `services/match-flow-claim.ts`
+bounded the three match flows that read the next plain message as their answer;
+the five `menuState` values that do the same thing were never bounded. Worst
+case is `edit_bio`, which writes its message verbatim into
+`Profile.psychologicalSummary` — the dominant embedding input — so a user who
+tapped **About me** and walked away had their next message, weeks later, replace
+their whole profile analysis while their actual question went unanswered.
+
+**Three things worth knowing before the restart:**
+
+- **`SessionData` gains one nullable field** (`menuClaimUntil`). Additive, no
+  schema change — `bot_sessions` stores the blob as JSON and the storage adapter
+  merges defaults. **It fails closed on purpose:** every session written before
+  this deploy reads `null`, so the handful of users sitting in an open editor at
+  restart have that edit dropped and their next message answered by the
+  concierge instead. That is the safe direction (the agent hands the editor
+  straight back); the alternative trusts a stale state and overwrites a profile.
+- **The About me prompt is now two messages, not one** — the second carries the
+  current text so the replacement is an informed act. It is skipped entirely for
+  a user with no bio yet, and the lookup is best-effort, so a DB blip costs the
+  preview and never the editor.
+- **The windows are short on purpose** (30 min for About me / Who I want, 60 for
+  the rest). Expiring is soft — the message goes to the agent — so if anyone
+  reports "it forgot my bio edit", the fix is a longer TTL in
+  `MENU_CLAIM_TTL_MS`, not removing the deadline.
+
+Preflight for this change: typecheck clean across all 5 projects, lint clean,
+**3955 tests** (bot 3430 / shared 273 / webapp 252), 0 failed. The two
+router-level regression tests were confirmed to FAIL with the guard neutralised
+(`prisma.profile.update` called on a three-week-stale claim) before being
+confirmed green with it.
+
+Post-deploy check — nothing new is logged on the happy path, so verify on
+`@gennetytestbot`: tap **My Profile → About me**, confirm the current text is
+shown beneath the prompt, then send a bio and confirm it saves. The expiry is
+only observable by waiting, so check it in the database instead:
+
+```sh
+# Sessions holding an open text-capture claim. A row whose menu_state is one of
+# the five but whose blob has no live menuClaimUntil is the pre-deploy backlog —
+# it fails closed and self-heals on the user's next message.
+psql "$DATABASE_URL" -c "select count(*) from bot_sessions where value::jsonb->>'menuState' in ('edit_bio','edit_major','edit_partner_preferences','edit_age_range','awaiting_premium_cancel_reason');"
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag. The extra session field is ignored by the old code.
+
+---
+
 **PENDING — venue-change photos are retried instead of dropped, and a failed
 one is no longer silent (PRODUCT_SPEC §3.7b, DECISIONS.md).** Not deployed yet.
 **No Prisma schema change, no env change, no flag change.** Half server, half

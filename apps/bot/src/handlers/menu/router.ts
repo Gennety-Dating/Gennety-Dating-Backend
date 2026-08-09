@@ -45,6 +45,12 @@ import { handleMyTickets } from "./tickets.js";
 import { handlePremiumHub } from "./premium.js";
 import { handleReferralHub } from "./referral.js";
 import { runMenuAgentTurn, splitReplyIntoBubbles } from "../../services/menu-agent.js";
+import {
+  isClaimableMenuState,
+  menuClaimIsLive,
+  releaseMenuClaim,
+  updateReleasesMenuClaim,
+} from "../../services/menu-text-claim.js";
 import { retirePhotoCards } from "../../services/photo-cards.js";
 import { invalidatePendingAccountAction } from "./account-action.js";
 import {
@@ -88,6 +94,23 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     data?.startsWith(PREM_CANCEL_FINAL_YES_PREFIX);
   if (ctx.session.pendingPremiumCancel && !isPremiumCancelCallback) {
     await invalidatePendingPremiumCancel(ctx);
+  }
+
+  // A menu sub-flow that reads plain text owns the chat only while its claim is
+  // live. Past the deadline — or once the user has moved on to a command or a
+  // button that isn't the claim's own — the state is dropped here, BEFORE any
+  // sub-flow sees the update, so the message falls through to the concierge
+  // agent instead of being written over a profile field
+  // (`services/menu-text-claim.ts`).
+  if (
+    isClaimableMenuState(ctx.session.menuState) &&
+    (updateReleasesMenuClaim(ctx.session, {
+      callbackData: data,
+      text: ctx.message?.text,
+    }) ||
+      !menuClaimIsLive(ctx.session, ctx.session.menuState))
+  ) {
+    releaseMenuClaim(ctx.session);
   }
 
   // -----------------------------------------------------------------------

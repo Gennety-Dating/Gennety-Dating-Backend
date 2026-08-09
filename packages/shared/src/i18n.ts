@@ -293,6 +293,7 @@ const translations = {
     editProfilePhotosBtn: "📸 My photos",
     editBioPrompt:
       "Write a few lines about yourself (max 500 chars).\n👀 Your match reads this before the date.",
+    editBioCurrent: "This is what's there now — whatever you send replaces all of it:",
     editBioTooLong: "Too long — keep it under 500.",
     editBioSaved: "About me updated",
     editMajorPrompt:
@@ -1423,6 +1424,7 @@ const translations = {
     editProfilePhotosBtn: "📸 Мои фото",
     editBioPrompt:
       "Напиши пару строк о себе (до 500 символов).\n👀 Это читает твоя пара перед свиданием.",
+    editBioCurrent: "Сейчас там вот это — то, что пришлёшь, заменит текст целиком:",
     editBioTooLong: "Слишком длинно — уложись в 500.",
     editBioSaved: "«О себе» обновлено",
     editMajorPrompt:
@@ -2493,6 +2495,7 @@ const translations = {
     editProfilePhotosBtn: "📸 Мої фото",
     editBioPrompt:
       "Напиши кілька рядків про себе (до 500 символів).\n👀 Це читає твоя пара перед побаченням.",
+    editBioCurrent: "Зараз там ось це — те, що надішлеш, замінить текст повністю:",
     editBioTooLong: "Задовге — вклади в 500.",
     editBioSaved: "«Про себе» оновлено",
     editMajorPrompt:
@@ -3555,6 +3558,7 @@ const deTranslations: TranslationTable = {
   editProfilePhotosBtn: "📸 Meine Fotos",
   editBioPrompt:
     "Schreib ein paar Zeilen über dich (max. 500 Zeichen).\n👀 Dein Match liest das vor dem Date.",
+  editBioCurrent: "Das steht aktuell da - was du schickst, ersetzt alles davon:",
   editBioTooLong: "Zu lang - bleib unter 500 Zeichen.",
   editBioSaved: "„Über mich“ aktualisiert",
   editMajorPrompt:
@@ -4591,6 +4595,7 @@ const plTranslations: TranslationTable = {
   editProfilePhotosBtn: "📸 Moje zdjęcia",
   editBioPrompt:
     "Napisz kilka słów o sobie (maks. 500 znaków).\n👀 Twoja para czyta to przed randką.",
+  editBioCurrent: "Teraz jest tam to - to, co wyślesz, zastąpi całość:",
   editBioTooLong: "Za długie - zmieść się w 500 znakach.",
   editBioSaved: "„O mnie” zaktualizowane",
   editMajorPrompt:

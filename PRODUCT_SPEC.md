@@ -1423,6 +1423,44 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   picker for `negotiating_venue`. Every restored link carries the caller's
   current language and theme. No new product mechanic is introduced; the
   hub is purely a second entry point to existing flows.
+- **A menu edit owns the chat only while its claim is live (2026-08-08).** Five
+  menu sub-flows read the next plain message as their answer — About me, Who I
+  want, What I do, the partner age range, and the post-cancellation "why did you
+  leave?" — and until now none of them had a deadline. The state lives in
+  `bot_sessions`, so it survived restarts, deploys and weeks of silence: a user
+  who tapped **About me**, got distracted and closed Telegram had their NEXT
+  message, on any topic and any number of days later, written verbatim into
+  `Profile.psychologicalSummary` — the profile's accumulated psychological
+  signal and the dominant embedding input (`V_explicit`, 0.65) — with no
+  snapshot to restore from, while the question they actually asked went
+  unanswered. This is the same rule §Phase 1b already states for the Profiler
+  ("an active question is NOT a standing claim on everything the user types")
+  and §Phase 4 applies to the emergency-cancellation reason; the menu router was
+  the side of the product it had never reached. Each claim now carries a
+  deadline sized by what the answer costs to get wrong
+  (`services/menu-text-claim.ts`): 30 minutes for the two states that feed the
+  matching embedding, 60 for the ones whose mistake is on screen and one tap
+  from being fixed. A command, or any button that is not the claim's own, closes
+  it immediately. **Expiring is a soft failure by construction** — the message
+  falls through to the concierge agent, which can see the profile and offer the
+  editor straight back, so an over-short window costs one tap while an over-long
+  one costs the profile. The photo and video managers are deliberately outside
+  the rule: they consume media, and a stray photo lands in a gallery the user
+  can see and delete rather than silently over a field.
+- **The About me editor shows the text it is about to replace (2026-08-08).**
+  Whatever the user sends next replaces `psychologicalSummary` in full, which is
+  why the concierge's own `update_bio` tool **refuses** a rewrite that collapses
+  a substantial existing text and hands the user a button here instead — on the
+  stated grounds that "the editor shows the current text so they can edit it
+  themselves". It did not. Someone arriving from that refusal is the one person
+  the product already knows is about to shorten a long bio, and that button
+  skips the profile screen, so they saw "write a few lines" and no sight of what
+  they were deleting. The prompt now carries the current text (plain, uncapped
+  by Markdown, truncated only to stay inside Telegram's message ceiling).
+  Deliberately **not** a second collapse guard: the agent's guard exists to move
+  that decision here, so refusing it here as well would leave no way to shorten
+  a bio at all. The fix is to make the editor's premise true, not to close the
+  door behind it.
 - **My Profile** — the single combined view/edit surface: generated bio + photos
   (and profile video when present), followed by **About me**, **Who I want**,
   **What I do**, and **My photos** actions. **Who I want** shows both the
