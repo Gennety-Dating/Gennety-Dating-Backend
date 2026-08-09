@@ -92,7 +92,14 @@ export interface DropCadence {
   /** Planning-stall cancellation timeout. */
   stallTimeoutMs: number;
 
-  /** Rematch: no purchases in the run-up to the next batch. */
+  /**
+   * Rematch: no purchases in the run-up to the next batch. The batch is
+   * globally greedy-optimal, so a single-seeker run just before it can take a
+   * candidate the optimal pairing needed.
+   *
+   * Scales with the interval, and has to: 6h is ~3.5% of a week and 25% of a
+   * day. Left at 6h weekly, cut to 1h daily.
+   */
   rematchBlackoutMs: number;
   /** Rematch: max settled purchases per `rematchWindowMs`. */
   rematchMaxPerInterval: number;
@@ -100,7 +107,15 @@ export interface DropCadence {
   rematchWindowMs: number;
   /** Rematch: cooldown between purchases. */
   rematchCooldownMs: number;
-  /** Rematch: how long a candidate is protected from a repeat gift pitch. */
+  /**
+   * Rematch: how long a candidate is protected from a repeat gift pitch.
+   *
+   * **Deliberately identical in both profiles.** Every other rematch knob here
+   * describes what the BUYER may do; this one protects the woman he is buying
+   * his way to, and the two must not move together — in a thin pool, a cap that
+   * loosens with his purchase rate turns one candidate into everyone's punching
+   * bag. Loosen `rematchMaxPerInterval` freely; leave this at 7 days.
+   */
   rematchGiftCapMs: number;
 }
 
@@ -173,10 +188,21 @@ const DAILY: DropCadence = {
   stallCheckInMs: 12 * HOUR,
   stallTimeoutMs: 24 * HOUR,
 
-  rematchBlackoutMs: 6 * HOUR,
-  rematchMaxPerInterval: 2,
+  // 1h, not 6h: the blackout is a fraction of the drop interval, and 6h of a
+  // 24h day is 25% — 12:00–18:00 Kyiv dead, every single day. At a daily
+  // cadence the batch it protects is also 7× less consequential to miss.
+  rematchBlackoutMs: 1 * HOUR,
+  // 7, not 2: this is the limit that actually binds. `rematchCooldownMs` below
+  // already means "at most one a day", so 7 per 7 days makes the cooldown the
+  // real governor instead of a cap that runs out on Tuesday.
+  rematchMaxPerInterval: 7,
   rematchWindowMs: 7 * DAY,
+  // Unchanged, and it is the load-bearing limit here: 24h between purchases IS
+  // "once a day". Everything else in this block exists to stop it being
+  // shadowed by a shorter-fused cap.
   rematchCooldownMs: 24 * HOUR,
+  // Unchanged on purpose — see the field's doc comment. This protects her, not
+  // him, and does not scale with his purchase rate.
   rematchGiftCapMs: 7 * DAY,
 };
 

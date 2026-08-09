@@ -18,6 +18,26 @@ function required(name: string): string {
   return value;
 }
 
+/**
+ * An env var that is an OVERRIDE, not a default: unset resolves to `null` so the
+ * read site can fall back to whatever owns the real value (today: the cadence
+ * profile, `CADENCE.rematch*`).
+ *
+ * Distinct from the `Number(process.env.X ?? "N")` pattern used everywhere else
+ * in this file, which cannot tell "unset" from "explicitly set to N" — and that
+ * difference is the whole point here: a weekly-tuned literal baked in as a
+ * default silently survives a `DROP_CADENCE` flip.
+ *
+ * `"0"` is a real value and stays `0`; only unset/empty becomes `null`. A
+ * non-numeric value also becomes `null` rather than `NaN`, since `NaN` would
+ * pass a `?? ` fallback and then poison every comparison downstream.
+ */
+function optionalNumber(raw: string | undefined): number | null {
+  if (raw === undefined || raw.trim() === "") return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export const env = {
   BOT_TOKEN: required("BOT_TOKEN"),
   /// Telegram username of the bot (without @). Used to build `t.me/<username>`
@@ -539,24 +559,41 @@ export const env = {
   /// Human-readable price shown in the offer copy (the Stars amount is the
   /// actual charge; this is display-only).
   REMATCH_PRICE_USD_DISPLAY: process.env.REMATCH_PRICE_USD_DISPLAY ?? "$2.99",
-  /// D3 limit: paid rematches allowed per rolling 7 days, per buyer. Caps both
+  /// The four D3 limits below are `null` when unset, and that is load-bearing:
+  /// they are ops OVERRIDES over the active cadence profile
+  /// (`CADENCE.rematch*`), not the source of truth. `services/rematch.ts`
+  /// resolves `env ?? CADENCE`, so an unset var follows `DROP_CADENCE`
+  /// automatically instead of pinning a weekly-tuned number under a daily drop.
+  ///
+  /// The resolution deliberately lives at the READ site rather than here:
+  /// `config.ts` must stay the first module evaluated (dotenv ordering), so it
+  /// can never safely import `@gennety/shared`. See cadence.ts's own header.
+  ///
+  /// A literal `0` is a real value, not "unset" — `REMATCH_PRE_BATCH_BLACKOUT_HOURS=0`
+  /// disables the blackout, and must not silently fall back to the profile.
+  ///
+  /// D3 limit: paid rematches allowed per rolling window, per buyer. Caps both
   /// pool burn (every rematch permanently consumes one never-seen candidate via
   /// the lifetime pair ban) and the "paid swipe app" failure mode.
-  REMATCH_MAX_PER_WEEK: Number(process.env.REMATCH_MAX_PER_WEEK ?? "2"),
+  REMATCH_MAX_PER_WEEK: optionalNumber(process.env.REMATCH_MAX_PER_WEEK),
   /// D3 cooldown: minimum hours between two paid rematches by the same buyer.
   /// Specifically prevents decline-and-instantly-retry, which is what preserves
   /// the weight of a decision.
-  REMATCH_COOLDOWN_HOURS: Number(process.env.REMATCH_COOLDOWN_HOURS ?? "24"),
+  REMATCH_COOLDOWN_HOURS: optionalNumber(process.env.REMATCH_COOLDOWN_HOURS),
   /// Candidate protection: a woman who already received a rematch-sourced pitch
   /// within this many days is excluded from rematch candidate pools. The
   /// single-live-match invariant stops SIMULTANEOUS matches but not a series, so
   /// without this a popular candidate could be serially gift-pitched.
-  REMATCH_GIFT_CAP_DAYS: Number(process.env.REMATCH_GIFT_CAP_DAYS ?? "7"),
-  /// Blackout before the weekly batch. The Thursday run is globally greedy-
-  /// optimal; a single-seeker rematch shortly before it can take a candidate the
-  /// optimal pairing needed. Set to 0 to disable.
-  REMATCH_PRE_BATCH_BLACKOUT_HOURS: Number(
-    process.env.REMATCH_PRE_BATCH_BLACKOUT_HOURS ?? "6",
+  ///
+  /// This is the one D3 limit that must NOT scale with how often he can buy: it
+  /// protects HER, and in a thin pool a cap that tracks his purchase frequency
+  /// turns one candidate into everyone's punching bag.
+  REMATCH_GIFT_CAP_DAYS: optionalNumber(process.env.REMATCH_GIFT_CAP_DAYS),
+  /// Blackout before the drop. The batch is globally greedy-optimal; a
+  /// single-seeker rematch shortly before it can take a candidate the optimal
+  /// pairing needed. Set to 0 to disable.
+  REMATCH_PRE_BATCH_BLACKOUT_HOURS: optionalNumber(
+    process.env.REMATCH_PRE_BATCH_BLACKOUT_HOURS,
   ),
   /// Lookback window for choosing the `failed` gift framing (her most recent
   /// match ended `cancelled`/`expired` within this many days).

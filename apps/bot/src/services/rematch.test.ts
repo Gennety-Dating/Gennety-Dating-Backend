@@ -7,9 +7,17 @@
  * the engine is mocked so these tests exercise the orchestration, not the
  * matching algorithm (which has its own suites).
  */
+import { CADENCE } from "@gennety/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const flag = {
+const flag: {
+  REMATCH_FEATURE_ENABLED: boolean;
+  REMATCH_MAX_PER_WEEK: number | null;
+  REMATCH_COOLDOWN_HOURS: number | null;
+  REMATCH_GIFT_CAP_DAYS: number | null;
+  REMATCH_PRE_BATCH_BLACKOUT_HOURS: number | null;
+  REMATCH_FAILED_LOOKBACK_DAYS: number;
+} = {
   REMATCH_FEATURE_ENABLED: true,
   REMATCH_MAX_PER_WEEK: 2,
   REMATCH_COOLDOWN_HOURS: 24,
@@ -151,6 +159,7 @@ const {
   findRematchCandidate,
   pickGiftFraming,
   getGiftFramingForMatch,
+  rematchLimits,
   runRematch,
 } = await import("./rematch.js");
 
@@ -464,5 +473,73 @@ describe("runRematch", () => {
     const result = await runRematch(BUYER, NOW);
     expect(result).toEqual({ ok: false, reason: "not_male" });
     expect(findCandidatesFor).not.toHaveBeenCalled();
+  });
+});
+
+describe("rematchLimits — env is an override, the cadence profile is the source", () => {
+  // These four fields were declared on `DropCadence` from the day the cadence
+  // abstraction shipped and read by NOTHING; `config.ts` baked weekly-tuned
+  // literals in as defaults instead. So the abstraction looked complete for
+  // Rematch and was not — a `DROP_CADENCE` flip moved every other timing knob
+  // in the product and silently left these on their weekly values.
+  //
+  // The suite runs under the default (weekly) profile, so "falls back to
+  // CADENCE" and "equals today's numbers" are the same assertion here. That is
+  // the point: the fallback must be a no-op in production today.
+
+  it("falls back to the cadence profile when the env override is unset", () => {
+    flag.REMATCH_MAX_PER_WEEK = null;
+    flag.REMATCH_COOLDOWN_HOURS = null;
+    flag.REMATCH_PRE_BATCH_BLACKOUT_HOURS = null;
+    flag.REMATCH_GIFT_CAP_DAYS = null;
+
+    expect(rematchLimits()).toEqual({
+      maxPerInterval: CADENCE.rematchMaxPerInterval,
+      cooldownMs: CADENCE.rematchCooldownMs,
+      blackoutMs: CADENCE.rematchBlackoutMs,
+      giftCapMs: CADENCE.rematchGiftCapMs,
+    });
+  });
+
+  it("an unset override reproduces today's production numbers exactly", () => {
+    flag.REMATCH_MAX_PER_WEEK = null;
+    flag.REMATCH_COOLDOWN_HOURS = null;
+    flag.REMATCH_PRE_BATCH_BLACKOUT_HOURS = null;
+    flag.REMATCH_GIFT_CAP_DAYS = null;
+
+    const limits = rematchLimits();
+    expect(limits.maxPerInterval).toBe(2);
+    expect(limits.cooldownMs).toBe(24 * 60 * 60 * 1000);
+    expect(limits.blackoutMs).toBe(6 * 60 * 60 * 1000);
+    expect(limits.giftCapMs).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+
+  it("an explicit env value still wins over the profile", () => {
+    flag.REMATCH_MAX_PER_WEEK = 5;
+    flag.REMATCH_COOLDOWN_HOURS = 3;
+    flag.REMATCH_PRE_BATCH_BLACKOUT_HOURS = 2;
+    flag.REMATCH_GIFT_CAP_DAYS = 1;
+
+    const limits = rematchLimits();
+    expect(limits.maxPerInterval).toBe(5);
+    expect(limits.cooldownMs).toBe(3 * 60 * 60 * 1000);
+    expect(limits.blackoutMs).toBe(2 * 60 * 60 * 1000);
+    expect(limits.giftCapMs).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it("an explicit 0 is a real value, not 'unset'", () => {
+    // `REMATCH_PRE_BATCH_BLACKOUT_HOURS=0` is the documented way to disable the
+    // blackout. A `||`-style fallback would swallow it and quietly restore the
+    // profile's 6h — which is exactly the bug this whole seam exists to avoid.
+    flag.REMATCH_PRE_BATCH_BLACKOUT_HOURS = 0;
+    expect(rematchLimits().blackoutMs).toBe(0);
+    expect(CADENCE.rematchBlackoutMs).toBeGreaterThan(0);
+  });
+
+  it("the eligibility check reads the resolved limits, not the raw env", () => {
+    // Guards the wiring itself: with the override cleared, the cap that applies
+    // must be the profile's, not a stale literal left behind in the service.
+    flag.REMATCH_MAX_PER_WEEK = null;
+    expect(rematchLimits().maxPerInterval).toBe(CADENCE.rematchMaxPerInterval);
   });
 });

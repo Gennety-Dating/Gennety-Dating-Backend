@@ -122,6 +122,38 @@ describe("CADENCES.daily", () => {
     const dailySaturationDays = weeklyCap / daily.starvationAlpha;
     expect(dailySaturationDays).toBeCloseTo(weeklySaturationDays, 0);
   });
+
+  it("rematch: the cooldown is what governs, not a cap that runs out mid-week", () => {
+    // 2 per 7 days would make the cap bind on day two and leave the 24h
+    // cooldown decorative. 7 per 7 days inverts that: the cooldown is the real
+    // limit and it already means "at most once a day".
+    expect(daily.rematchMaxPerInterval).toBe(7);
+    expect(daily.rematchCooldownMs).toBe(24 * HOUR);
+    const maxRunsAllowedByCooldown = daily.rematchWindowMs / daily.rematchCooldownMs;
+    expect(daily.rematchMaxPerInterval).toBeGreaterThanOrEqual(maxRunsAllowedByCooldown);
+  });
+
+  it("rematch: the blackout stays a small fraction of the drop interval", () => {
+    // 6h is ~3.5% of a week and 25% of a day — the same constant means two
+    // completely different products. Bound it as a ratio, not a literal, so a
+    // future cadence cannot quietly reintroduce a quarter-day dead zone.
+    expect(daily.rematchBlackoutMs).toBe(1 * HOUR);
+    expect(daily.rematchBlackoutMs / daily.intervalMs).toBeLessThan(0.1);
+    expect(
+      CADENCES.weekly.rematchBlackoutMs / CADENCES.weekly.intervalMs,
+    ).toBeLessThan(0.1);
+  });
+
+  it("rematch: the gift cap protects HER and does NOT move with his limits", () => {
+    // The one rematch knob that must stay put when the buyer's cap loosens.
+    // In a thin pool a gift cap that tracks his purchase rate turns a single
+    // candidate into everyone's punching bag.
+    expect(daily.rematchGiftCapMs).toBe(CADENCES.weekly.rematchGiftCapMs);
+    expect(daily.rematchGiftCapMs).toBe(7 * DAY);
+    // And it must outlast his cooldown by a wide margin, or "protected for a
+    // week" degrades to "protected until he can buy again".
+    expect(daily.rematchGiftCapMs).toBeGreaterThan(daily.rematchCooldownMs * 6);
+  });
 });
 
 describe("DROP_CADENCE resolution", () => {

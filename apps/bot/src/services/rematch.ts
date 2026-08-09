@@ -41,6 +41,46 @@ const DAY_MS = 24 * HOUR_MS;
  */
 const REMATCH_CANDIDATE_SCAN = 5;
 
+/**
+ * The D3 limits, resolved as `env ?? CADENCE` — an env var is an ops override,
+ * the cadence profile is the source of truth.
+ *
+ * This is the seam that used to be missing. `DropCadence` has declared these
+ * four fields since the cadence abstraction shipped, and until now **not one of
+ * them was read anywhere** (only `rematchWindowMs` was), while `config.ts` baked
+ * weekly-tuned literals in as defaults. So the abstraction looked complete for
+ * Rematch and was not: flipping `DROP_CADENCE=daily` moved every other timing
+ * knob in the product and silently left these four on their weekly values — most
+ * visibly the blackout, which is ~3.5% of a 7-day interval and **25% of a 1-day
+ * one** (12:00–18:00 Kyiv dead, every day).
+ *
+ * Resolved per call rather than at module load: `env` is mutated in place by the
+ * test suite, and a cached object would freeze the first test's values for the
+ * whole file.
+ */
+export function rematchLimits(): {
+  maxPerInterval: number;
+  cooldownMs: number;
+  blackoutMs: number;
+  giftCapMs: number;
+} {
+  return {
+    maxPerInterval: env.REMATCH_MAX_PER_WEEK ?? CADENCE.rematchMaxPerInterval,
+    cooldownMs:
+      env.REMATCH_COOLDOWN_HOURS != null
+        ? env.REMATCH_COOLDOWN_HOURS * HOUR_MS
+        : CADENCE.rematchCooldownMs,
+    blackoutMs:
+      env.REMATCH_PRE_BATCH_BLACKOUT_HOURS != null
+        ? env.REMATCH_PRE_BATCH_BLACKOUT_HOURS * HOUR_MS
+        : CADENCE.rematchBlackoutMs,
+    giftCapMs:
+      env.REMATCH_GIFT_CAP_DAYS != null
+        ? env.REMATCH_GIFT_CAP_DAYS * DAY_MS
+        : CADENCE.rematchGiftCapMs,
+  };
+}
+
 /** Purchase states (`RematchPurchase.status`). */
 export const REMATCH_PROCESSING = "processing";
 export const REMATCH_SETTLED = "settled";
@@ -144,15 +184,12 @@ export async function checkRematchEligibility(
     select: { createdAt: true },
     orderBy: { createdAt: "desc" },
   });
-  // env.REMATCH_MAX_PER_WEEK / COOLDOWN_HOURS / PRE_BATCH_BLACKOUT_HOURS below
-  // are weekly-tuned ops defaults (config.ts) — deliberately NOT sourced from
-  // CADENCE (config.ts loads before dotenv would populate DROP_CADENCE, so it
-  // can never safely import @gennety/shared; see cadence.ts's own header).
-  // D8: Rematch ships OFF for the daily-cadence pilot, so this isn't live
-  // today — but if it's ever re-enabled under DROP_CADENCE=daily, these three
-  // env vars MUST be reviewed first (a 6h blackout is 25% of a 1-day interval,
-  // not ~3.5% of a 7-day one). See REMATCH_PRODUCT_SPEC.md.
-  if (recent.length >= env.REMATCH_MAX_PER_WEEK) {
+  // The three limits below follow the active cadence profile, with the env vars
+  // as ops overrides (`rematchLimits`). D8 — "turn Rematch off for the daily
+  // pilot" — was NOT adopted: the limits move with the cadence instead, so a
+  // `DROP_CADENCE` flip no longer needs the feature switched off to stay sane.
+  const limits = rematchLimits();
+  if (recent.length >= limits.maxPerInterval) {
     // The window frees up when the OLDEST purchase in it ages out.
     const oldest = recent[recent.length - 1];
     return oldest
@@ -165,9 +202,7 @@ export async function checkRematchEligibility(
   }
   const last = recent[0];
   if (last) {
-    const cooldownEnds = new Date(
-      last.createdAt.getTime() + env.REMATCH_COOLDOWN_HOURS * HOUR_MS,
-    );
+    const cooldownEnds = new Date(last.createdAt.getTime() + limits.cooldownMs);
     if (cooldownEnds > now) {
       return { ok: false, reason: "cooldown", retryAt: cooldownEnds };
     }
@@ -175,11 +210,9 @@ export async function checkRematchEligibility(
 
   // Blackout: the batch is globally greedy-optimal, so a single-seeker run
   // just before it can take a candidate the optimal pairing needed.
-  if (env.REMATCH_PRE_BATCH_BLACKOUT_HOURS > 0) {
+  if (limits.blackoutMs > 0) {
     const nextBatch = getNextBatchDate(now);
-    const blackoutStart = new Date(
-      nextBatch.getTime() - env.REMATCH_PRE_BATCH_BLACKOUT_HOURS * HOUR_MS,
-    );
+    const blackoutStart = new Date(nextBatch.getTime() - limits.blackoutMs);
     if (now >= blackoutStart) {
       return { ok: false, reason: "pre_batch_blackout", retryAt: nextBatch };
     }
@@ -190,18 +223,24 @@ export async function checkRematchEligibility(
 
 /**
  * Candidate ids that are currently protected from receiving another
- * rematch-sourced pitch (`REMATCH_GIFT_CAP_DAYS`).
+ * rematch-sourced pitch (`rematchLimits().giftCapMs`).
  *
  * The single-live-match invariant already prevents two SIMULTANEOUS matches, but
  * not a series: without this, one popular woman could be the top candidate for
  * many buyers and be serially gift-pitched until she burns out.
+ *
+ * This is the one D3 limit that must NOT shorten when the buyer's own limits
+ * loosen. It protects HER, and the two are independent by design: he may be
+ * allowed a run a day, she is still off-limits for a week after receiving one.
+ * Both cadence profiles therefore carry the same 7 days.
  */
 export async function findGiftCappedUserIds(
   candidateIds: string[],
   now: Date = new Date(),
 ): Promise<Set<string>> {
-  if (candidateIds.length === 0 || env.REMATCH_GIFT_CAP_DAYS <= 0) return new Set();
-  const cutoff = new Date(now.getTime() - env.REMATCH_GIFT_CAP_DAYS * DAY_MS);
+  const giftCapMs = rematchLimits().giftCapMs;
+  if (candidateIds.length === 0 || giftCapMs <= 0) return new Set();
+  const cutoff = new Date(now.getTime() - giftCapMs);
   const rows = await prisma.match.findMany({
     where: {
       source: "rematch",
