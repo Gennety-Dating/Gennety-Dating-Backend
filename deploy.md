@@ -1,5 +1,53 @@
 # Gennety Dating Deploy
 
+**PENDING — the venue board stops being a wall of tables (PRODUCT_SPEC §3.7b,
+DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no
+flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so
+a full server code deploy carries it, plus `pnpm demo:deploy`. The whole diff is
+`capCatalog` in `services/venue-change.ts` plus its tests and docs.
+
+Three of the board's twelve slots are now held for the nearest outdoor walking
+spots (`park` — parks, embankments, Andriivskyi descent, Volodymyrska Hirka).
+Before this the order was pure proximity, which in a city centre means cafés.
+
+**Four things worth knowing before the restart:**
+
+- **Measured against the live Kyiv catalog, not estimated.** Boards carrying at
+  least one walking spot go **62% → 93%**, the average goes **0.98 → 2.79**
+  cards, and board size does not change (111/113 centres still fill all twelve;
+  the two that don't have fewer than twelve venues in range and always did).
+  The remaining 7% are centres with no park inside the radius at all — they
+  degrade to today's behaviour rather than losing a slot.
+- **The radius is deliberately untouched.** The parks were never out of reach:
+  the median board centre already has ten inside the existing 3 km. Do not
+  "fix" this later by widening the radius; DECISIONS.md records why.
+- **`museum` stays excluded on both surfaces.** The reservation is walking
+  spots only and is not a back door for ticketed venues — a test holds that.
+- **Nothing exercises it in production yet.** It needs a pair at `scheduled`
+  with `VENUE_CHANGE_FEATURE_ENABLED` on, and production has had 2 matches ever
+  and 0 dates. Verify on the demo (walk a run to a scheduled date, open
+  "Change venue") or on `@gennetytestbot`. The Mini App's `?preview=board` route
+  serves its own mock catalog and will NOT show this rule.
+
+Preflight for this change: bot typecheck clean, lint clean across all 5
+projects, **3442 bot tests** (0 failed, +6 new). The two tests that carry the
+guarantee were confirmed to FAIL with the reservation set to 0 before being
+confirmed green with it.
+
+Post-deploy check — the board logs nothing on the happy path, so this is by eye
+on the demo. What you are looking for is a board that is not all cafés: at a
+central venue expect roughly three of the twelve cards to be parks/promenades,
+mixed through the list rather than grouped, with the three premium cards still
+leading. A board with none is only correct if that venue genuinely has no park
+within 3 km.
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag, no Mini App state. Setting `VENUE_CHANGE_WALK_RESERVED = 0`
+restores the previous ordering exactly, if a code-level toggle is ever wanted
+without a full revert.
+
+---
+
 **PENDING — the departure-point search returns results again (PRODUCT_SPEC §3.7,
 DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no
 flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so

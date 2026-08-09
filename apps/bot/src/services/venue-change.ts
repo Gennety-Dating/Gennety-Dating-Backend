@@ -643,6 +643,41 @@ function seededShuffle<T>(items: T[], seed: string): T[] {
 }
 
 /**
+ * Slots held for an open-air walking spot, whatever the distance ordering
+ * would otherwise have done with them (§3.7b — "the board is never all
+ * indoors"). Founder decision 2026-08-09.
+ *
+ * Without a reservation the board is decided purely by proximity, and in a city
+ * centre that means cafés: measured against the live Kyiv catalog, **38% of
+ * possible boards carried no outdoor spot at all** and the rest averaged one
+ * card in twelve — while the median board centre had **ten** parks sitting
+ * inside the same 3 km radius. So they were never out of reach, they were
+ * losing a race they cannot win: a promenade is one venue over a kilometre of
+ * riverfront, a cafe cluster is thirty doors on one street.
+ *
+ * Three, because the same measurement says 88% of centres have at least that
+ * many in range, so the reservation is nearly always fillable — and because it
+ * is a FLOOR, not a cap: an outdoor spot that would have earned a slot on
+ * distance still takes one, so a green district shows more than three.
+ */
+export const VENUE_CHANGE_WALK_RESERVED = 3;
+
+/**
+ * What counts as somewhere to walk rather than somewhere to sit.
+ *
+ * Deliberately the `park` category alone. It is what the curated base actually
+ * uses for the whole open-air set — parks, embankments, the Andriivskyi
+ * descent, Volodymyrska Hirka, the Lovers' Bridge — and every one of them is
+ * free to enter, needs no booking and works as a place to meet at a time you
+ * choose. Ticketed, timed venues are a different product answer and stay out:
+ * `museum` is excluded from this board outright (`EXCLUDED_VENUE_CATEGORIES`),
+ * and this reservation does not reopen that door.
+ */
+function isWalkingSpot(venue: CatalogVenue): boolean {
+  return venue.category === "park";
+}
+
+/**
  * Board ordering (§Premium upsell, §3.7b):
  *
  *   1. The `VENUE_CHANGE_PREMIUM_PINNED` nearest premium venues lead the list,
@@ -652,13 +687,21 @@ function seededShuffle<T>(items: T[], seed: string): T[] {
  *      **scattered** through the remainder rather than stacked on top, so the
  *      board reads as a mixed choice instead of a paywall wall — a locked card
  *      keeps turning up as the user scrolls.
- *   3. The rest of the slots go to the nearest non-premium (base +
+ *   3. `VENUE_CHANGE_WALK_RESERVED` of the remaining slots are held for the
+ *      nearest outdoor walking spots, so the board is never a wall of tables.
+ *   4. The rest of the slots go to the nearest non-premium (base +
  *      alternative), and the whole tail is shuffled together.
+ *
+ * Step 3 changes only WHICH cards make the cut, never where they sit: the
+ * reserved spots go into the same shuffled tail as everything else, because the
+ * point is that at least one is on the board at all, not that it leads. That is
+ * the opposite of the premium pin above, which exists precisely to own the top.
  *
  * The shuffle is seeded by `seed` (the match id), so the order is stable across
  * re-fetches — without that the cards would re-deal on every catalog load. With
  * no seed it degrades to plain distance order. Places-fallback rows are always
- * `tier: "base"`, so that path is unaffected.
+ * `tier: "base"`, and that sweep already searches `park`, so it gets the same
+ * guarantee for free.
  */
 export function capCatalog(venues: CatalogVenue[], seed?: string): CatalogVenue[] {
   const byDistance = (a: CatalogVenue, b: CatalogVenue): number => a.distanceKm - b.distanceKm;
@@ -669,8 +712,23 @@ export function capCatalog(venues: CatalogVenue[], seed?: string): CatalogVenue[
   const pinned = premium.slice(0, VENUE_CHANGE_PREMIUM_PINNED);
   const scattered = premium.slice(VENUE_CHANGE_PREMIUM_PINNED);
   const tailSlots = Math.max(0, VENUE_CHANGE_CATALOG_LIMIT - pinned.length - scattered.length);
-  const rest = venues.filter((v) => v.tier !== "premium").sort(byDistance).slice(0, tailSlots);
-  const tail = [...scattered, ...rest];
+
+  const nonPremium = venues.filter((v) => v.tier !== "premium").sort(byDistance);
+  // Claimed first so a dense indoor cluster cannot spend the slots before the
+  // outdoor ones are considered. Fewer in range than reserved simply yields
+  // fewer — the board degrades to today's behaviour rather than shrinking.
+  const reserved = nonPremium
+    .filter(isWalkingSpot)
+    .slice(0, Math.min(VENUE_CHANGE_WALK_RESERVED, tailSlots));
+  const claimed = new Set(reserved);
+  // Not `filter(!isWalkingSpot)`: an outdoor spot beyond the reservation is an
+  // ordinary candidate and still competes on distance, which is what makes the
+  // rule a floor rather than a quota capping how many can appear.
+  const rest = nonPremium
+    .filter((v) => !claimed.has(v))
+    .slice(0, Math.max(0, tailSlots - reserved.length));
+
+  const tail = [...scattered, ...reserved, ...rest];
   return [...pinned, ...(seed ? seededShuffle(tail, seed) : tail)];
 }
 

@@ -47,6 +47,43 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-09 — the venue board holds slots for walking spots, and it is parks only
+
+**Kind:** founder decision
+**What:** `capCatalog` reserves `VENUE_CHANGE_WALK_RESERVED` (3) of the venue
+board's twelve slots for the nearest outdoor walking spots (`park`). The founder
+reported that the change-venue board is almost always cafés and restaurants.
+**Why the reservation and not a wider radius, which is what I would have guessed:**
+measured against the live Kyiv catalog before writing anything — the median board
+centre already has **ten** parks inside the existing 3 km radius, and 88% have at
+least three. They were never out of reach. Proximity ordering is simply a race a
+promenade cannot win: it is one venue along a kilometre of riverfront against
+thirty café doors on one street. So the fix is which cards make the cut, and the
+radius stays exactly where it is (5 km would rescue 3 of the 8 park-less centres
+— a second knob for almost nothing). Effect: 62% → 93% of boards carry at least
+one, 0.98 → 2.79 cards, board size unchanged.
+**What the founder explicitly ruled OUT, which is the more useful half:** I had
+offered unblocking `museum` on the board as the way to add "art locations", with
+14 already sitting in the Kyiv base. **Rejected.** The want is places that need
+no planning — no tickets, no opening slot, no booking — that work as a meeting
+point and have somewhere to walk around them. A museum is a *plan*, not a
+meeting spot. So `EXCLUDED_VENUE_CATEGORIES` stands for both surfaces, and the
+2026-07-31 museum decision is reaffirmed rather than narrowed.
+**What it changes going forward:** `isWalkingSpot` is the seam, and today it is
+`category === "park"` and must stay that narrow — the curated base already files
+embankments, descents and viewpoints as `park`, so widening the predicate is not
+how you add more of them; **seeding more `park` rows is.** Two consequences worth
+holding onto. The rule is a **floor, not a cap**, so a park-dense district still
+shows more than three and nothing needs raising for that case. And the pending
+Kyiv catalog expansion (267 venues in the file vs 127 in prod) adds **95
+restaurants, 84 cafés and zero parks** — importing it as-is would dilute the
+outdoor share from 19% to 8%, i.e. work directly against this decision. Do not
+import it without seeding walking spots in the same pass.
+**Recorded in:** PRODUCT_SPEC.md §3.7b → "The board is never a wall of tables";
+`services/venue-change.ts` (`VENUE_CHANGE_WALK_RESERVED`, `isWalkingSpot`).
+
+---
+
 ## 2026-08-09 — a provider 400 was being served as an empty success, and no test built the payload
 
 **Kind:** deviation from plan

@@ -24,6 +24,7 @@ import {
   capCatalog,
   VENUE_CHANGE_PREMIUM_PINNED,
   VENUE_CHANGE_PREMIUM_MAX,
+  VENUE_CHANGE_WALK_RESERVED,
   isWithinRadius,
   resolveVenuePhotoRefs,
   __resetVenuePhotoCacheForTests,
@@ -410,7 +411,11 @@ describe("buildVenueChangeCatalog", () => {
 });
 
 describe("capCatalog (§Premium pin + scatter)", () => {
-  const venue = (i: number, tier: "base" | "premium" | "alternative"): CatalogVenue => ({
+  const venue = (
+    i: number,
+    tier: "base" | "premium" | "alternative",
+    category = "cafe",
+  ): CatalogVenue => ({
     source: "curated",
     placeId: `${tier}-${i}`,
     name: `${tier} ${i}`,
@@ -418,7 +423,7 @@ describe("capCatalog (§Premium pin + scatter)", () => {
     lat: 50.45,
     lng: 30.52,
     mapsUri: null,
-    category: "cafe",
+    category,
     tier,
     distanceKm: i * 0.1, // farther as i grows
     photoRefs: [],
@@ -515,6 +520,95 @@ describe("capCatalog (§Premium pin + scatter)", () => {
     const capped = capCatalog(alternative);
     expect(capped).toHaveLength(12);
     expect(capped.every((v) => v.tier === "alternative")).toBe(true);
+  });
+
+  describe("outdoor reservation (§3.7b — the board is never all indoors)", () => {
+    const parks = (count: number, startIndex: number): CatalogVenue[] =>
+      Array.from({ length: count }, (_, i) => venue(startIndex + i, "base", "park"));
+
+    it("keeps outdoor spots that a dense indoor cluster would have squeezed out", () => {
+      // The production shape: cafés fill every near slot (0.1–2.0 km) and the
+      // parks sit just beyond them. On pure distance the board is 12 cafés.
+      const cafes = Array.from({ length: 20 }, (_, i) => venue(i + 1, "base"));
+      const outdoor = parks(4, 40); // 4.0–4.3 km — farther than every café
+
+      const capped = capCatalog([...cafes, ...outdoor]);
+
+      expect(capped).toHaveLength(12);
+      expect(capped.filter((v) => v.category === "park")).toHaveLength(
+        VENUE_CHANGE_WALK_RESERVED,
+      );
+      // And the nearest ones are the ones that got in.
+      expect(capped.filter((v) => v.category === "park").map((v) => v.placeId)).toEqual([
+        "base-40",
+        "base-41",
+        "base-42",
+      ]);
+    });
+
+    it("is a floor, not a cap — a green district still shows more than the reservation", () => {
+      // Nearest 8 are outdoor, so they earn their slots on distance anyway.
+      const outdoor = parks(8, 1);
+      const cafes = Array.from({ length: 20 }, (_, i) => venue(20 + i, "base"));
+
+      const capped = capCatalog([...outdoor, ...cafes]);
+
+      expect(capped).toHaveLength(12);
+      expect(capped.filter((v) => v.category === "park").length).toBeGreaterThan(
+        VENUE_CHANGE_WALK_RESERVED,
+      );
+      expect(capped.filter((v) => v.category === "park")).toHaveLength(8);
+    });
+
+    it("degrades rather than shrinking when fewer outdoor spots are in range", () => {
+      // 7% of Kyiv centres have no park inside the board radius at all; the
+      // board must stay full there, not lose slots to an unfillable hold.
+      const cafes = Array.from({ length: 20 }, (_, i) => venue(i + 1, "base"));
+      const outdoor = parks(1, 40);
+
+      const capped = capCatalog([...cafes, ...outdoor]);
+
+      expect(capped).toHaveLength(12);
+      expect(capped.filter((v) => v.category === "park")).toHaveLength(1);
+    });
+
+    it("leaves a board with no outdoor spot at all exactly as it was", () => {
+      const cafes = Array.from({ length: 20 }, (_, i) => venue(i + 1, "base"));
+      const capped = capCatalog(cafes);
+      expect(capped.map((v) => v.placeId)).toEqual(
+        cafes.slice(0, 12).map((v) => v.placeId),
+      );
+    });
+
+    it("never spends a pinned premium slot on the reservation", () => {
+      // The two rules must not fight: premium owns the top of the board, the
+      // reservation only decides who fills the tail.
+      const premium = Array.from({ length: 5 }, (_, i) => venue(30 + i, "premium"));
+      const cafes = Array.from({ length: 20 }, (_, i) => venue(i + 1, "base"));
+      const outdoor = parks(4, 40);
+
+      const capped = capCatalog([...premium, ...cafes, ...outdoor], "match-seed");
+
+      expect(capped).toHaveLength(12);
+      expect(
+        capped.slice(0, VENUE_CHANGE_PREMIUM_PINNED).every((v) => v.tier === "premium"),
+      ).toBe(true);
+      expect(capped.filter((v) => v.tier === "premium")).toHaveLength(VENUE_CHANGE_PREMIUM_MAX);
+      expect(capped.filter((v) => v.category === "park")).toHaveLength(
+        VENUE_CHANGE_WALK_RESERVED,
+      );
+    });
+
+    it("holds no slot for a ticketed venue — the reservation is walking spots only", () => {
+      // `museum` is excluded from this board outright; the reservation must not
+      // become a back door for it, nor for indoor categories generally.
+      const cafes = Array.from({ length: 20 }, (_, i) => venue(i + 1, "base"));
+      const lounges = Array.from({ length: 4 }, (_, i) => venue(40 + i, "base", "lounge"));
+
+      const capped = capCatalog([...cafes, ...lounges]);
+
+      expect(capped.map((v) => v.placeId)).toEqual(cafes.slice(0, 12).map((v) => v.placeId));
+    });
   });
 });
 

@@ -3915,6 +3915,33 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   board reading as a paywall wall. The tail shuffle is seeded by the match id,
   so the order is stable across re-fetches (Mini App reopen, post-unlock
   repaint) — an unseeded shuffle would re-deal the cards under the user.
+  **The board is never a wall of tables (2026-08-09).**
+  `VENUE_CHANGE_WALK_RESERVED` (3) of the remaining slots are held for the
+  nearest **outdoor walking spots** — the `park` category, which is what the
+  curated base uses for the whole open-air set: parks, embankments, Andriivskyi
+  descent, Volodymyrska Hirka, the Lovers' Bridge. All of them are free, need no
+  booking, and work as a place to meet at a time the couple picks. Before this
+  the order was decided by proximity alone, and in a city centre that means
+  cafés: measured across every possible board centre in the live Kyiv catalog,
+  **38% carried no outdoor spot at all** and the rest averaged one card in
+  twelve — while the median centre had **ten** parks sitting inside the same
+  3 km radius. They were never out of reach; they were losing a race they cannot
+  win, because a promenade is one venue along a kilometre of riverfront while a
+  café cluster is thirty doors on one street. With the reservation that goes to
+  **93% of boards and 2.8 cards**, with board size unchanged.
+  Three properties are deliberate. It is a **floor, not a cap** — an outdoor
+  spot that would have earned a slot on distance still takes one, so a green
+  district shows more than three. It **changes which cards make the cut, never
+  where they sit**: the held cards join the same shuffled tail as everything
+  else, the exact opposite of the premium pin above, because the point is that
+  one is on the board at all, not that it leads. And it **degrades rather than
+  shrinking**: the 7% of centres with no park in range keep a full board of
+  twelve, exactly as today. Ticketed, timed venues are a different product
+  answer and stay out — `museum` remains excluded from this board outright, and
+  the reservation is not a back door for it. The radius is untouched (widening
+  it to 5 km rescues only 3 of those 8 centres, so it buys a second knob for
+  almost nothing). The Places fallback already sweeps `park`, so it inherits the
+  same guarantee for free. Telegram-only; no new env, no schema.
   Each side hearts any number of places (full-set submissions, server-resolved
   against the catalog — client venue data is never trusted); the partner's
   hearts land live (~4 s polling). The FIRST like of a session claims the
