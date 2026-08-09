@@ -16,7 +16,8 @@ const { mockPrisma } = vi.hoisted(() => ({
 vi.mock("@gennety/db", () => ({ prisma: mockPrisma }));
 
 import { buildStatusBannerView } from "../services/status-banner.js";
-import { resolveBannerStage, statusTimerTick } from "./status-timer.js";
+import { resolveBannerStage } from "../services/status-banner-stage.js";
+import { statusTimerTick } from "./status-timer.js";
 
 const NOW = new Date("2026-07-21T09:00:00.000Z");
 

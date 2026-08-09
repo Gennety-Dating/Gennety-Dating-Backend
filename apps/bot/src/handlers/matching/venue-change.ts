@@ -60,6 +60,7 @@ import {
 } from "../../services/venue-change.js";
 import { fetchPlacePhotoName } from "../../services/venue.js";
 import { isPremiumHeadActive } from "../../services/premium.js";
+import { refreshStatusBanners } from "../../services/status-banner-refresh.js";
 import { isUniqueViolation } from "../../services/ticket-wallet.js";
 import { notifyFounderPurchase } from "../../services/founder-notify.js";
 import {
@@ -1913,6 +1914,13 @@ export async function settleVenuePayment(
       mapsUri,
     );
   }
+
+  // The pinned banner prints the venue (§2.1 mode 2) and was otherwise only
+  // reconciled by the once-a-minute tick, so it kept naming the old place for
+  // up to a minute — on the one screen the pair is looking at right now.
+  // The `.catch` is belt-and-braces: the push swallows its own errors, but a
+  // settled change is irreversible and must not depend on that staying true.
+  await refreshStatusBanners(api, [match.userAId, match.userBId]).catch(() => {});
   return { ok: true };
 }
 
@@ -1987,6 +1995,10 @@ async function finalizeVenueChangeFree(
       match.venueChangeMapsUri,
     );
   }
+
+  // Same push as the paid settle — and this is the path a Premium pair and
+  // every demo visitor takes, so it is the one most often actually seen.
+  await refreshStatusBanners(api, [match.userAId, match.userBId]).catch(() => {});
   return { ok: true };
 }
 

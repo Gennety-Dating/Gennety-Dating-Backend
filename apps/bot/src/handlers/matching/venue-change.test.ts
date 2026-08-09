@@ -34,6 +34,12 @@ vi.mock("../../services/venue-wish-card.js", () => ({
   renderVenueWishCard: vi.fn().mockResolvedValue(null),
 }));
 
+// The pinned-banner push has its own suite (services/status-banner-refresh);
+// here we only assert that a settled change actually fires it.
+vi.mock("../../services/status-banner-refresh.js", () => ({
+  refreshStatusBanners: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from "@gennety/db";
 import {
   submitVenueLikes,
@@ -50,6 +56,7 @@ import {
   KEEP_KEY,
 } from "./venue-change.js";
 import type { CatalogVenue } from "../../services/venue-change.js";
+import { refreshStatusBanners } from "../../services/status-banner-refresh.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as {
@@ -822,6 +829,29 @@ describe("settleVenuePayment", () => {
     );
     expect(herText).toContain("Max");
     expect(api.refundStarPayment).not.toHaveBeenCalled();
+  });
+
+  it("pushes the pinned banner so it stops naming the old venue", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    await settleVenuePayment(api, 200n, "m1", "charge-1");
+
+    // Without this the banner keeps the old place for up to a minute, until
+    // the next status-timer tick — see services/status-banner-refresh.ts.
+    expect(refreshStatusBanners).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(refreshStatusBanners).mock.calls[0]![1]).toEqual(["a", "b"]);
+  });
+
+  it("a settle survives the banner push failing", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    vi.mocked(refreshStatusBanners).mockRejectedValueOnce(new Error("telegram down"));
+
+    // Cosmetic re-render, irreversible product step: the order matters.
+    await expect(
+      settleVenuePayment(api, 200n, "m1", "charge-1"),
+    ).resolves.toEqual({ ok: true });
   });
 
   it("express settle sends the partner the positive-frame surprise card", async () => {

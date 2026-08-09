@@ -36,6 +36,18 @@ export interface CreateStatusBannerOptions {
 
 const creationLocks = new Map<string, Promise<void>>();
 
+/**
+ * Last render state actually delivered per chat, keyed by Telegram id, so an
+ * unchanged banner costs no API call.
+ *
+ * Shared rather than owned by the once-a-minute tick because the tick is no
+ * longer the only writer: a venue change pushes the new banner immediately
+ * (`status-banner-refresh.ts`). With one cache the push simply satisfies the
+ * next tick; with two, the tick would re-send an identical body and lean on
+ * Telegram's "message is not modified" to notice.
+ */
+export const statusBannerRenderCache = new Map<string, string>();
+
 export function buildStatusBannerKeyboard(view: StatusBannerView): InlineKeyboard {
   return new InlineKeyboard()
     .text(view.buttonText, view.callbackData)

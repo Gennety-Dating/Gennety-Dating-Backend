@@ -1904,7 +1904,30 @@ there would mean corrupt data. The `status-timer` worker resolves this per user
 each tick, so a legacy banner self-heals within a minute without touching any
 other call site.
 
-The banner is self-healing: active Telegram users with a null/stale message id
+**A settled venue change pushes the banner instead of waiting for the tick
+(2026-08-09).** Mode 2 prints the venue, and until now the once-a-minute
+`status-timer` was the banner's ONLY writer — so changing the venue left the pin
+naming the old place for up to a minute while the updated venue cards and the My
+Date hub were already correct. A minute is nothing in the abstract and very loud
+here: it is the one moment the pair is looking straight at the pinned message,
+and the lag reads as the banner simply not updating. (It also reads as *"it
+updates when you tap it"* — tapping opens the hub, which is correct instantly,
+and by the time you are back the tick has fired.) Both settle paths — the paid
+one and the free Premium/demo one — now re-render the banner for both sides
+immediately (`services/status-banner-refresh.ts`).
+
+The push is deliberately **narrow, and is not a second banner mechanism**: it
+only ever EDITS a banner that already exists, it never records failures or
+clears pointers (the missing message, the unreachable chat and the backoff
+ladder stay the worker's, which reaches the same user within a minute anyway),
+and it shares the worker's render cache, so a pushed render simply satisfies the
+next tick rather than being re-sent. It cannot fail a settled change: the
+irreversible step never depends on a cosmetic re-render. The other stage
+transitions (a date locking in, a decision landing) keep the ≤60s poll — the
+same lag exists there, but it is not what a user is staring at.
+
+The banner is otherwise self-healing: active Telegram users with a null/stale
+message id
 get a replacement, deleted messages are recreated in the same tick, and an
 hourly physical-pin audit re-pins a tracked message that is no longer on top.
 Full render state (text + button) is de-duplicated in memory. Leaving `active`
@@ -4088,6 +4111,9 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   `venue*` fields (incl. `venuePhotoUrl/Name` so a re-rendered date card shows
   the new venue), and both sides get updated venue cards with the `date_time`
   entity + Maps button — plus the payer-gendered reveal / express surprise.
+  **The pinned status banner is re-rendered in the same breath** rather than
+  left to the once-a-minute tick, since it names the venue too (§2.1). The free
+  Premium/demo settle does exactly the same.
 - **A finished session can be started over, up to `VENUE_CHANGE_MAX_PER_DATE`
   (2) settled changes per date (2026-08-09).** The board used to close for good
   on the first settle, which made "we picked, then we reconsidered" — an

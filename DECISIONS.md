@@ -143,6 +143,47 @@ the runtime should honour it or the manifest should stop offering it, because a
 flag that silently means nothing is worse than no flag.
 **Recorded in:** here only; the rows are unchanged.
 
+## 2026-08-09 — the pinned banner is pushed on a venue change, not only polled
+
+**Kind:** founder decision + deviation from plan
+**What:** both venue-change settle paths now re-render the pinned status banner
+immediately (`services/status-banner-refresh.ts`) instead of leaving it to the
+once-a-minute `status-timer` tick. Scope was explicitly held to the venue change.
+**Why the report was NOT what it looked like:** it came in as "the banner doesn't
+update when we change the venue — only when you tap it". The banner was never
+broken: it prints the venue, its dedup `signature` is the whole render, and the
+tick does edit. What was missing is that the tick was its ONLY writer, so the pin
+named the old place for **up to 60 seconds** while every other surface was
+already correct. "It updates when you tap it" is a coincidence — the tap opens
+the My Date hub (correct instantly) and the tick fires while you are in there.
+Verified before writing code, so the fix targets the real gap: the deployed
+`status-timer.ts` / `status-banner-view.ts` are byte-identical to HEAD (md5), and
+both prod and demo logs show the worker alive and editing.
+**What it changes going forward:** three bounds on the push, and they are what
+keep this from becoming a second banner mechanism. It **only edits an existing
+banner** — creation, pinning and the DB-compensation path stay the worker's, or
+there would be two ways to create a pin. It **never records failures or clears
+pointers** — recovery is the worker's, and a push that healed state would race
+the module that owns it. And it **shares the render cache**, moved to
+`services/status-banner.ts`, so a pushed render satisfies the next tick rather
+than being re-sent; a test pins that, and it fails if the cache is un-shared.
+`resolveBannerStage`/`loadBannerStages` moved to `services/status-banner-stage.ts`
+because a service must not import from a worker.
+**Deliberately not done:** the same ≤60s lag exists on every other banner
+transition (a date locking in, a decision landing). Founder chose venue-change
+only; the helper takes a user-id list, so wiring another call site is one line.
+Do not read the lag elsewhere as a separate bug — it is this decision.
+**One thing the tests caught, worth keeping:** the "cannot throw" guarantee lived
+inside the refresh module and the settle path simply trusted it. A test that
+forced a rejection failed, because a settled, irreversible change was depending
+on a remote module's internals staying polite. Both call sites now carry their
+own `.catch`. **A cosmetic re-render attached to an irreversible step defends
+itself at the call site**, not only at the definition.
+**Recorded in:** PRODUCT_SPEC.md §2.1 + §3.7b; ARCHITECTURE.md → Cron & Workers
+(`status-timer` row).
+
+---
+
 ## 2026-08-09 — the venue board holds slots for walking spots, and it is parks only
 
 **Kind:** founder decision

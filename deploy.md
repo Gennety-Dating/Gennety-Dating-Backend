@@ -1,5 +1,61 @@
 # Gennety Dating Deploy
 
+**PENDING — the pinned banner updates the moment the venue changes (PRODUCT_SPEC
+§2.1 / §3.7b, DECISIONS.md).** Not deployed yet. **No Prisma schema change, no
+env change, no flag change, no Mini App change** (`apps/webapp` untouched) —
+bot-side only. It touches the same two settle paths as the block below, so both
+ship in one restart; that block's additive `db:push` covers the pair.
+**The demo needs it as much as prod**: the free settle is the path every demo
+visitor takes, so that is where it is easiest to actually see.
+
+Reported as "the pinned message doesn't update when we change the venue — only
+when you tap it". The banner was never broken: it prints the venue and its dedup
+signature is the whole render. What was missing is that the once-a-minute
+`status-timer` tick was its **only** writer, so the pin named the old place for
+up to 60 seconds while the updated venue cards and the My Date hub were already
+correct. Both settle paths now push the re-render immediately.
+
+**Four things worth knowing before the restart:**
+
+- **This adds up to 2 `editMessageText` calls per settled venue change**, and
+  nothing else. It is not a new periodic cost: the push writes the shared render
+  cache, so the next tick sees the banner as `unchanged` rather than re-sending
+  it. Expect the `[status-timer]` heartbeat's `edited` counts to look exactly as
+  they do today.
+- **Two modules moved, no behaviour of theirs changed.** `resolveBannerStage` +
+  `loadBannerStages` → `services/status-banner-stage.ts` (a service must not
+  import from a worker); the render cache → `services/status-banner.ts`. The
+  worker keeps its `renderCache` test option. Worth knowing only because a
+  stale-file rsync of `status-timer.ts` alone would now be missing an import —
+  the crash-loop this file warns about. Deploy the tree, not a file.
+- **It cannot fail a settled change.** The push swallows its own errors AND both
+  call sites carry a `.catch`; recovery for a missing message or an unreachable
+  chat is still the worker's, within a minute. A test forces a rejection and
+  asserts the settle still returns `ok`.
+- **Nothing exercises it in production yet.** It needs a pair at `scheduled`
+  with `VENUE_CHANGE_FEATURE_ENABLED` on, and production has had 2 matches ever
+  and 0 dates. Verify on the demo, or on `@gennetytestbot`.
+
+Preflight for this change: typecheck clean across all 5 projects, lint clean,
+**3475 bot tests** (0 failed, +9 new). The test that guards the shared cache was
+confirmed to FAIL with the cache un-shared before being confirmed green.
+
+Post-deploy check — the push logs nothing on the happy path, so the assertion is
+by eye plus the absence of a warning:
+
+```sh
+pm2 logs gennety-bot  --lines 200 --nostream | grep 'push refresh failed'
+pm2 logs gennety-demo --lines 200 --nostream | grep 'push refresh failed'
+# Empty = nothing failing. Then, on the demo: walk a run to a scheduled date,
+# open "Change venue", settle a change, and watch the pinned message at the top
+# — the 📍 line must name the new place within a second or two, not a minute.
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag, no Mini App state. Reverting restores the ≤60s lag.
+
+---
+
 **PENDING — the venue can be changed twice (PRODUCT_SPEC §3.7b, DECISIONS.md).**
 Not deployed yet. **No env change, no flag change** — but it needs an **additive
 `db:push` BEFORE the restart**, and it is half client, so the full sequence is:
