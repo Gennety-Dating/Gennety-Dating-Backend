@@ -95,8 +95,18 @@ interface CandidateMatch {
   pitchMessageIdA: number | null;
   pitchMessageIdB: number | null;
   dispatchedAt: Date | null;
-  userA: { telegramId: bigint; language: string | null; theme: string | null };
-  userB: { telegramId: bigint; language: string | null; theme: string | null };
+  userA: {
+    telegramId: bigint;
+    language: string | null;
+    theme: string | null;
+    syntheticAt: Date | null;
+  };
+  userB: {
+    telegramId: bigint;
+    language: string | null;
+    theme: string | null;
+    syntheticAt: Date | null;
+  };
 }
 
 /**
@@ -147,8 +157,12 @@ export async function expireStaleMatches(now: Date = new Date()): Promise<Expiry
       pitchMessageIdA: true,
       pitchMessageIdB: true,
       dispatchedAt: true,
-      userA: { select: { telegramId: true, language: true, theme: true } },
-      userB: { select: { telegramId: true, language: true, theme: true } },
+      userA: {
+        select: { telegramId: true, language: true, theme: true, syntheticAt: true },
+      },
+      userB: {
+        select: { telegramId: true, language: true, theme: true, syntheticAt: true },
+      },
     },
   });
 
@@ -198,6 +212,19 @@ async function classifyAndPenalise(
 ): Promise<SideClassification[]> {
   const sides: SideClassification[] = [];
 
+  // A match against a synthetic test profile leaves NO behavioural record
+  // (PRODUCT_SPEC §3.1c): neither `silentIgnoreCount` nor the flat Elo
+  // penalty. The user is still classified and still receives the expiry card —
+  // seeing that surface is part of what the test is for — but nothing about
+  // the outcome is written down.
+  //
+  // The counter is skipped as well as the penalty, and that is the point
+  // rather than an oversight: it is a THREE-strike ladder (forgive once, then
+  // deduct), so letting two scripted matches consume a real user's forgiveness
+  // would make their first genuine ghost cost them a penalty they had not
+  // earned. Both halves or neither.
+  const syntheticPair = Boolean(match.userA.syntheticAt || match.userB.syntheticAt);
+
   const meta = {
     A: {
       side: "A" as const,
@@ -242,24 +269,26 @@ async function classifyAndPenalise(
     // Silent side — increment counter, decide if this is a penalty round.
     let offenseCount = 1;
     let penalised = false;
-    try {
-      const updated = await prisma.profile.update({
-        where: { userId: m.userId },
-        data: { silentIgnoreCount: { increment: 1 } },
-        select: { silentIgnoreCount: true },
-      });
-      offenseCount = updated.silentIgnoreCount;
-      // First offense (post-increment count == 1) is the warning round.
-      // Anything beyond that triggers the flat Elo penalty.
-      if (offenseCount > 1) {
-        const newElo = await applySilentIgnorePenalty(m.userId);
-        penalised = newElo !== null;
+    if (!syntheticPair) {
+      try {
+        const updated = await prisma.profile.update({
+          where: { userId: m.userId },
+          data: { silentIgnoreCount: { increment: 1 } },
+          select: { silentIgnoreCount: true },
+        });
+        offenseCount = updated.silentIgnoreCount;
+        // First offense (post-increment count == 1) is the warning round.
+        // Anything beyond that triggers the flat Elo penalty.
+        if (offenseCount > 1) {
+          const newElo = await applySilentIgnorePenalty(m.userId);
+          penalised = newElo !== null;
+        }
+      } catch (err) {
+        console.warn(
+          `[expiry] silentIgnoreCount/penalty failed for userId=${m.userId}:`,
+          (err as Error).message,
+        );
       }
-    } catch (err) {
-      console.warn(
-        `[expiry] silentIgnoreCount/penalty failed for userId=${m.userId}:`,
-        (err as Error).message,
-      );
     }
 
     sides.push({

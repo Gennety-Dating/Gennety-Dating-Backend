@@ -2129,6 +2129,115 @@ manual Resume (menu button, any reason) also clears the marker, so a user who
 resumes themselves is never later swept up by the auto-resume probe as if
 nothing had happened.
 
+### 3.1c Synthetic test profiles (feature-flagged, temporary, Telegram-first)
+
+A **friends-and-family production test** mechanism, gated by
+`SYNTHETIC_FILL_ENABLED` (default **off** → nothing below exists). It is
+scaffolding with an end date, not a product feature: it exists so a real
+cohort can walk the real product on real clocks while the pool is still too
+thin and too skewed to pair anyone. It must be removed before the product
+opens past that cohort (`pnpm synthetic:remove -- --apply`).
+
+**Why it exists.** Matching is same-city and strictly two-sided, so a market
+with six men and one woman produces at most one pair per drop no matter how
+good the engine is. Five people then get nothing — and under a daily cadence
+they get nothing five nights running, which is not a test of the product, it
+is a test of their patience.
+
+A **synthetic profile** is an ordinary `User` + `Profile` carrying one marker,
+`User.syntheticAt`. Everything that renders a person — the pitch generator,
+the match card, the decision flow, the expiry card — reads it exactly as it
+reads a human, because a test that special-cases the thing being tested is
+worth nothing. Seeded from an operator manifest
+(`scripts/synthetic-profiles.json`) by `scripts/seed-synthetic-profiles.mjs`;
+nothing in the running product creates one.
+
+**They are offered only when the real pool could not pair someone.** That is
+structural, not a scoring bias: `runDropBatch` runs its ordinary pass over real
+users alone, and only then hands the LEFTOVERS to a second pass
+(`previewSyntheticFill`) whose one added rule is that a pair must have exactly
+one synthetic side. So a real partner always wins by construction, and no
+weight can be mistuned into preferring a stand-in. The second pass reuses the
+same eligibility snapshot, lifetime pair ban, distances, scorer and greedy
+allocator as the first — it is the same engine, over a smaller pool.
+
+**They always decline**, `SYNTHETIC_DECLINE_DELAY_MS` (20 min) after dispatch
+and never before the human has answered (`workers/synthetic-partner.ts`,
+through the ordinary `applyMatchDecision`). Both halves are load-bearing:
+
+- **Declining is the safety mechanism, not a limitation.** A mutual accept
+  opens the §3.5b Date Ticket gate, and the product would then invite a real
+  person to spend real Telegram Stars on a meeting that cannot happen.
+- **Answering second** makes the §3.4 blind-decision invariant trivially safe
+  — no outcome exists before the user has earned the right to see one — and it
+  is the better test: someone who accepts sits in the genuine wait, sees the
+  §3.6b peer-wait shimmer, and gets the real mixed-outcome reveal.
+
+**The consequence to hold onto: a synthetic match cannot test anything past
+`proposed`.** The ticket gate, the calendar, venue selection, the date card,
+the venue-change board, pre-date coordination, the proxy chat and the post-date
+feedback are all unreachable through one, even though every one of those flags
+is on in production. That half is tested on `@gennetytestbot` with
+`scripts/dev-e2e-full-flow.mjs`, and this mechanism is not a substitute for it.
+
+**A synthetic match leaves no trace on the real user.** A partner that declines
+100% of the time by construction carries no information, so its verdict is not
+allowed to become data:
+
+- **Elo** — `updateEloScores` no-ops when either side is synthetic. The guard
+  is inside that function rather than at its three call sites, so a future
+  caller inherits it. Without it a week of testing walks each participant down
+  `V_league` on losses that were scripted, changing who they match with in the
+  very test the profiles exist to enable.
+- **`standbyCount`** — a synthetically-paired user is excluded from BOTH
+  branches of the drop batch's starvation update: no reset (it was not a real
+  partner) and no increment (they did not go hungry). This is what keeps
+  `starvationBonus` and `scripts/normalize-standby-count.mjs` measuring real
+  famine.
+- **Silent ignore** — ghosting a synthetic increments nothing and costs
+  nothing. The counter is skipped as well as the penalty, deliberately: it is a
+  forgive-once ladder, so letting scripted matches consume a user's forgiveness
+  would make their first genuine ghost cost them a penalty they had not earned.
+  They still receive the real expiry card.
+- **Priority boost** — `boostAcceptedSidePriority` is skipped for the same
+  reason as `standbyCount`; it writes the same column.
+
+**Money never touches them.** `buildCandidateSql` excludes synthetics
+unconditionally, which is one line covering every single-seeker path at once —
+the paid Rematch (§3.11) and the §3.1b auto-resume probe. A man who buys a
+Rematch when only synthetics remain is honestly told nobody was found and
+refunded. Separately, the post-cancellation Rematch **offer** is suppressed on
+a synthetic pair: selling a paid consolation for a rejection the product itself
+staged is not a trade this product makes. The pinned-banner entry (§2.1 mode 5)
+still exists for a man who goes looking on his own — that one he arrives at.
+
+**Reachability.** A synthetic carries `platform: "mobile"` with a negative
+`telegramId` in a reserved band, which is the existing mechanism for a
+participant the bot cannot DM (ARCHITECTURE.md → `users`), so the Profiler,
+re-engagement, the pinned status banner and the famine notice skip them with no
+new branch anywhere. Its contact rail is `registrationTrack: "general"` plus
+`phoneVerifiedAt` with **`phone` left NULL** — the general branch of the gate
+tests the timestamp, not the number, and inventing one would permanently block
+the real person who eventually owns it, since `User.phone` is `@unique`.
+
+**How many are needed, which is the operator's real constraint.** The lifetime
+pair ban (§3.2 filter 6) applies to synthetics too — a deliberate founder
+decision, not an oversight — so one profile is one showing per person. With `M`
+real men and `N` synthetic women a drop covers `min(M, N)` of them, and full
+coverage for `D` drops needs `N ≥ max(M, D)`. When they run out the user simply
+falls back to the ordinary famine path, which needs no handling.
+
+**Pairs are stamped `Match.source = "synthetic"` and write no
+`MatchScoreLog`** — the outcome says nothing about scoring quality, so it is
+kept out of the algorithm A/B rather than filtered out of it later. The admin
+health classifier files these accounts as `test`, so they stay out of every
+conversion denominator.
+
+**iOS:** no `/v1/*` change. Synthetics live at the pool level, so a native
+client sees them exactly as Telegram does, which is correct.
+**Demo mode:** inert. The drop cron is not scheduled under `DEMO_MODE_ENABLED`
+at all, and the demo database has no rows carrying the marker.
+
 ### 3.2 Scoring (`services/match-engine.ts`)
 
 Hybrid SQL + Node.js re-rank.

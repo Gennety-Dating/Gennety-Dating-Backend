@@ -44,6 +44,7 @@ const HEALTH_USER_SELECT = {
   faceMatchedAt: true,
   createdAt: true,
   lastMessageAt: true,
+  syntheticAt: true,
   profile: { select: { photos: true } },
 } as const;
 
@@ -58,6 +59,7 @@ type HealthUserRow = {
   faceMatchScore: number | null;
   faceMatchedAt: Date | null;
   createdAt: Date;
+  syntheticAt: Date | null;
   lastMessageAt: Date | null;
   profile: { photos: string[] } | null;
 };
@@ -167,6 +169,7 @@ function toInput(
     medianResponseSec: timing?.medianSec ?? null,
     responseSamples: timing?.samples ?? 0,
     registrationBurstSize: burstSize,
+    syntheticAt: row.syntheticAt,
   };
 }
 

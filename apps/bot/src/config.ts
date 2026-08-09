@@ -601,6 +601,35 @@ export const env = {
     process.env.REMATCH_FAILED_LOOKBACK_DAYS ?? "14",
   ),
 
+  // ── Synthetic test profiles (friends-and-family production test) ─────
+  /// Master flag for the synthetic FILL — the drop batch's second pass, which
+  /// offers a hand-seeded test profile to a real user the real pool left
+  /// unpaired (PRODUCT_SPEC §3.1c). Off by default, so shipping the code ships
+  /// no behavior: with this false the second pass never runs and the seeded
+  /// rows (if any) sit inert, excluded from every candidate query anyway.
+  ///
+  /// This is the whole kill switch. Flipping it back to false stops new
+  /// synthetic pairings instantly; matches already in flight resolve through
+  /// the ordinary decline/expiry paths.
+  SYNTHETIC_FILL_ENABLED: process.env.SYNTHETIC_FILL_ENABLED === "true",
+  /// How long a synthetic partner waits before declining, measured from
+  /// `Match.dispatchedAt` (NOT from the human's answer — the schema carries no
+  /// timestamp for that, and `peerWaitStartedAt*` belongs to the peer-wait
+  /// worker under a single-writer rule).
+  ///
+  /// It only ever fires once the human has actually committed, so this is a
+  /// floor on how fast the answer comes back rather than a timer of its own.
+  /// A few minutes of hold is deliberate: it lets the real user see the §3.6b
+  /// peer-wait shimmer, which is itself part of what the test is checking.
+  SYNTHETIC_DECLINE_DELAY_MS: Number(
+    process.env.SYNTHETIC_DECLINE_DELAY_MS ?? String(20 * 60 * 1000),
+  ),
+  /// Sweep cadence for the auto-decline worker. Registered only when
+  /// `SYNTHETIC_FILL_ENABLED` — a production without the flag schedules no
+  /// extra cron at all.
+  SYNTHETIC_PARTNER_CRON_SCHEDULE:
+    process.env.SYNTHETIC_PARTNER_CRON_SCHEDULE ?? "* * * * *",
+
   // ── Date card (shareable PNG for a fully scheduled date) ─────
   /// Master flag for the date-card feature. When false (default), the
   /// scheduled-date confirmation is the existing plain-text DM. When true, both

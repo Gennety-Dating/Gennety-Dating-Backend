@@ -13,6 +13,7 @@ import {
  *  both. Scoring selects the sub-vector matching the CANDIDATE's gender, so male
  *  and female signal never conflate on shared attribute values. */
 export type TypePrefTags = Partial<Record<RadarSet, PreferenceVector>>;
+import { env } from "../config.js";
 import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
 import { refreshAllDirtyEmbeddings } from "../workers/embedding-refresh.js";
 import { expireStaleMatches, type MatchExpiry } from "./match-expiry.js";
@@ -416,10 +417,18 @@ export interface SeekerProfile {
 /**
  * How a pair was allocated (`Match.source`). `weekly` is the Thursday batch and
  * the default for every historical row; `rematch` is a paid on-demand
- * single-seeker run (REMATCH_PRODUCT_SPEC.md). A string union rather than a
- * Prisma enum, matching `ticketStatus`/`venueChangeStatus`/`coordMethod`.
+ * single-seeker run (REMATCH_PRODUCT_SPEC.md); `synthetic` is the drop batch's
+ * second "fill" pass, which offers a seeded test profile to a real user the
+ * real pool left unpaired (PRODUCT_SPEC §3.1c). A string union rather than a
+ * Prisma enum, matching `ticketStatus`/`venueChangeStatus`/`coordMethod`, so
+ * adding a value costs no migration.
+ *
+ * The weekly-optimizer analytics filter to `source = 'weekly'`, so a fill pair
+ * is excluded from the scoring A/B for free — and it writes no
+ * `MatchScoreLog` at all (see `runDropBatch`), because a pairing against a
+ * partner who declines by construction says nothing about scoring quality.
  */
-export type MatchSource = "weekly" | "rematch";
+export type MatchSource = "weekly" | "rematch" | "synthetic";
 
 export interface ScoredCandidate {
   userId: string;
@@ -448,6 +457,16 @@ export interface ScoredCandidate {
  * Returns all columns needed for multi-factor scoring. The pool is sorted
  * by embedding distance ASC so the SQL pre-filter remains useful, but the
  * final ranking is done in Node.js.
+ *
+ * **Synthetic test profiles are excluded unconditionally**, and that single
+ * line is what keeps them out of every single-seeker path at once: the paid
+ * Rematch (`services/rematch.ts`), which must never sell an introduction to an
+ * account that declines by construction, and the D10 pool-exhaustion probe
+ * (`services/pool-exhaustion.ts`), whose whole question is "does a real
+ * candidate exist for this starved user yet?". There is deliberately no opt-in
+ * parameter here — the drop batch's fill pass reaches synthetics through
+ * `loadEligibleUsersForIds`, not through this SQL, so this gate has no
+ * legitimate caller to serve. See PRODUCT_SPEC §3.1c.
  */
 export function buildCandidateSql(): string {
   return `
@@ -472,6 +491,7 @@ export function buildCandidateSql(): string {
     WHERE u.id <> $1::uuid
       AND u.status = 'active'
       AND u.onboarding_step = 'completed'
+      AND u.synthetic_at IS NULL
       AND (
         u.verification_status = 'verified'
         OR (
@@ -1152,7 +1172,13 @@ export async function createProposedMatch(
       "SELECT user_id FROM profiles WHERE user_id = ANY($1::uuid[]) ORDER BY user_id FOR UPDATE",
       participantIds,
     );
-    const currentParticipants = await loadEligibleUsersForIds(tx, participantIds);
+    // `synthetic: "any"` — this re-check re-validates two ALREADY-CHOSEN
+    // participants, so the real/synthetic split (a pool-admission question,
+    // decided by whichever planner produced the pair) does not apply here.
+    // Filtering synthetics out would make every fill pair refuse itself.
+    const currentParticipants = await loadEligibleUsersForIds(tx, participantIds, {
+      synthetic: "any",
+    });
     if (currentParticipants.length !== participantIds.length) return null;
     if (expectedAllocationFingerprints) {
       const currentById = new Map(
@@ -1233,7 +1259,12 @@ export async function createProposedMatch(
 
 export interface DropBatchResult {
   eligible: number;
+  /** Real↔real pairs created by pass 1. Excludes the synthetic fill below. */
   pairs: number;
+  /** Pairs created by the synthetic fill pass (PRODUCT_SPEC §3.1c). Always 0
+   *  unless `SYNTHETIC_FILL_ENABLED`, and 0 in a healthy production once the
+   *  real pool is deep enough — which is the number worth watching. */
+  syntheticPairs: number;
   matchIds: string[];
   /** Users who were eligible for this batch but left unpaired — their
    *  `Profile.standbyCount` was just incremented. Consumed by the standby UX. */
@@ -1508,6 +1539,29 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
 }
 
 /**
+ * Which side of the synthetic/real split a load is asking for.
+ *
+ * `exclude` is the default and the only value the ordinary drop batch uses, so
+ * pass 1 sees real users and nothing else. The other two exist for exactly one
+ * caller each:
+ *   - `only` — the fill pass's synthetic side (`previewSyntheticFill`).
+ *   - `any`  — `createProposedMatch`'s allocation re-check under the row locks.
+ *     That check re-validates two named participants against the SAME
+ *     eligibility predicate the planner used; filtering synthetics out there
+ *     would make every fill pair refuse itself at creation time.
+ */
+type SyntheticScope = "exclude" | "only" | "any";
+
+interface LoadEligibleOptions {
+  synthetic?: SyntheticScope;
+}
+
+function syntheticWhere(scope: SyntheticScope) {
+  if (scope === "any") return {};
+  return { syntheticAt: scope === "only" ? { not: null } : null };
+}
+
+/**
  * Read the same eligibility snapshot for either the full pool or a locked set
  * of participants. Keeping this in one helper prevents allocation-time checks
  * from quietly drifting away from the weekly planner's definition of eligible.
@@ -1515,10 +1569,14 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
 async function loadEligibleUsersForIds(
   db: MatchReadClient,
   requestedIds?: readonly string[],
+  options: LoadEligibleOptions = {},
 ): Promise<BatchUser[]> {
   const cutoff = new Date(Date.now() - MATCH_COOLDOWN_MS);
   if (requestedIds?.length === 0) return [];
-  const requestedWhere = requestedIds ? { id: { in: [...requestedIds] } } : {};
+  const requestedWhere = {
+    ...(requestedIds ? { id: { in: [...requestedIds] } } : {}),
+    ...syntheticWhere(options.synthetic ?? "exclude"),
+  };
 
   const users = await db.user.findMany({
     where: {
@@ -1815,9 +1873,12 @@ export async function runDropBatch(): Promise<DropBatchResult> {
   );
   const plan = await previewDropBatch();
   if (plan.eligible === 0) {
+    // No eligible real user at all — so there is nobody for the synthetic
+    // fill to fill FOR, and it is correctly skipped along with everything else.
     return {
       eligible: 0,
       pairs: 0,
+      syntheticPairs: 0,
       matchIds: [],
       missedUserIds: [],
       expiredMatches: expiry.matches,
@@ -1846,16 +1907,64 @@ export async function runDropBatch(): Promise<DropBatchResult> {
   // Diff eligible-vs-paired and update starvation counters.
   const pairedUserIds = createdPairs.flatMap((pair) => [pair.userAId, pair.userBId]);
   const missedCandidates = [...new Set([...plan.missedUserIds, ...skippedUserIds])];
+
+  // ── Second pass: synthetic fill (PRODUCT_SPEC §3.1c) ─────────────────────
+  // Runs over the leftovers only, so a real partner always wins. Off by
+  // default; with the flag unset this block is a single boolean read.
+  const syntheticPairedRealIds = new Set<string>();
+  if (env.SYNTHETIC_FILL_ENABLED && missedCandidates.length > 0) {
+    const fill = await previewSyntheticFill(missedCandidates);
+    for (const pair of fill.pairs) {
+      const match = await createProposedMatch(
+        pair.userAId,
+        pair.userBId,
+        // `breakdown` deliberately omitted → no `MatchScoreLog` row. The
+        // partner declines by construction, so the outcome carries no signal
+        // about scoring quality and would only pollute the algorithm A/B.
+        undefined,
+        pair.allocationFingerprints,
+        { source: "synthetic" },
+      );
+      if (!match) continue;
+      matchIds.push(match.id);
+      // Only the REAL side is recorded: it is the one whose starvation
+      // counters must stay untouched below.
+      for (const id of [pair.userAId, pair.userBId]) {
+        if (!fill.syntheticIds.has(id)) syntheticPairedRealIds.add(id);
+      }
+    }
+    if (syntheticPairedRealIds.size > 0) {
+      console.log(`[drop-batch] synthetic-fill paired=${syntheticPairedRealIds.size}`);
+    }
+  }
   // A user can pause, freeze, or edit their matching inputs after preview.
   // Reuse the allocation eligibility predicate so a stale plan never awards a
   // standby boost to a user who is no longer actually waiting for a match.
   const currentMissedUsers = await loadEligibleUsersForIds(prisma, missedCandidates);
-  const missedUserIds = currentMissedUsers.map((user) => user.id);
+  // A synthetic pairing is neutral on starvation: NEITHER reset nor increment.
+  // They were offered something, so they did not go hungry this drop; it was
+  // not a real partner, so the counter that measures real famine must not be
+  // cleared. `standbyCount` feeds `starvationBonus` and is what
+  // `scripts/normalize-standby-count.mjs` recalibrates before a cadence flip,
+  // so letting a test profile touch it would corrupt the very signal the daily
+  // migration is tuned against.
+  //
+  // The eligibility re-read above already drops them (they now hold a live
+  // `proposed` match), and `pairedUserIds` covers pass 1 only — so this filter
+  // is belt-and-braces. It is written out anyway because the property is a
+  // product rule, not a side effect of two unrelated queries.
+  const missedUserIds = currentMissedUsers
+    .map((user) => user.id)
+    .filter((id) => !syntheticPairedRealIds.has(id));
   const now = new Date();
 
   await prisma.$transaction([
     prisma.profile.updateMany({
-      where: { userId: { in: pairedUserIds } },
+      where: {
+        userId: {
+          in: pairedUserIds.filter((id) => !syntheticPairedRealIds.has(id)),
+        },
+      },
       data: { standbyCount: 0, missedWeeks: 0 },
     }),
     prisma.profile.updateMany({
@@ -1878,12 +1987,14 @@ export async function runDropBatch(): Promise<DropBatchResult> {
   ]);
 
   console.log(
-    `[drop-batch] eligible=${plan.eligible} pairs=${matchIds.length} missed=${missedUserIds.length}`,
+    `[drop-batch] eligible=${plan.eligible} pairs=${createdPairs.length} ` +
+      `syntheticFill=${syntheticPairedRealIds.size} missed=${missedUserIds.length}`,
   );
 
   return {
     eligible: plan.eligible,
-    pairs: matchIds.length,
+    pairs: createdPairs.length,
+    syntheticPairs: syntheticPairedRealIds.size,
     matchIds,
     missedUserIds,
     expiredMatches: expiry.matches,
@@ -1950,4 +2061,82 @@ export async function previewDropBatch(): Promise<DropBatchPlan> {
     finalPairs,
     missedUserIds: users.filter((u) => !pairedIds.has(u.id)).map((u) => u.id),
   };
+}
+
+/**
+ * Second pass of the drop batch: offer a synthetic test profile to the real
+ * users the real pool could not pair (PRODUCT_SPEC §3.1c).
+ *
+ * "Only when real users are insufficient" is expressed structurally rather
+ * than as a scoring bias: this runs over the leftovers of `previewDropBatch`,
+ * so a real↔real pairing always wins by construction and no weight can be
+ * mis-tuned into preferring a bot.
+ *
+ * Everything else is the ordinary machinery — the same eligibility snapshot,
+ * the same lifetime pair ban, the same pairwise distances, the same scorer and
+ * the same greedy allocator. Exactly ONE rule is added:
+ *
+ *   a pair must have exactly one synthetic side.
+ *
+ * Both halves of that matter. It stops two synthetics from being paired with
+ * each other (a match nobody would ever see), and it stops the fill from
+ * re-offering a real↔real pair that pass 1 legitimately rejected — those two
+ * were left unpaired because the greedy allocator or a hard filter said so,
+ * and a second bite would silently overrule it.
+ *
+ * Returns an empty plan when either side is empty, so a run with no synthetic
+ * rows costs two indexed queries and nothing else.
+ */
+export interface SyntheticFillPlan {
+  pairs: ScoredPair[];
+  /** Which ids in `pairs` are the synthetic side. The caller needs this to
+   *  leave the REAL side's starvation counters alone. */
+  syntheticIds: Set<string>;
+}
+
+export async function previewSyntheticFill(
+  missedRealUserIds: readonly string[],
+): Promise<SyntheticFillPlan> {
+  const empty: SyntheticFillPlan = { pairs: [], syntheticIds: new Set() };
+  if (missedRealUserIds.length === 0) return empty;
+
+  const [real, synthetic] = await Promise.all([
+    loadEligibleUsersForIds(prisma, missedRealUserIds),
+    loadEligibleUsersForIds(prisma, undefined, { synthetic: "only" }),
+  ]);
+  if (real.length === 0 || synthetic.length === 0) return empty;
+
+  const syntheticIds = new Set(synthetic.map((u) => u.id));
+  const pool = [...real, ...synthetic];
+  const userMap = new Map(pool.map((u) => [u.id, u]));
+
+  const historicalPairs = await loadHistoricalMatchPairs(pool.map((u) => u.id));
+  const distances = await computePairwiseDistances(pool);
+
+  const scoredPairs: ScoredPair[] = [];
+  for (const [key, distance] of distances) {
+    const [aId, bId] = key.split(":");
+    if (!aId || !bId) continue;
+    // Exactly one synthetic side — see the header.
+    if (syntheticIds.has(aId) === syntheticIds.has(bId)) continue;
+    if (historicalPairs.has(`${aId}:${bId}`)) continue;
+
+    const a = userMap.get(aId);
+    const b = userMap.get(bId);
+    if (!a || !b) continue;
+
+    const { score, breakdown } = scorePair(a, b, distance);
+    scoredPairs.push({
+      userAId: aId,
+      userBId: bId,
+      score,
+      breakdown,
+      allocationFingerprints: {
+        userA: a.allocationFingerprint ?? "",
+        userB: b.allocationFingerprint ?? "",
+      },
+    });
+  }
+
+  return { pairs: greedyPair(scoredPairs), syntheticIds };
 }

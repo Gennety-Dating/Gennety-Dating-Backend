@@ -243,6 +243,71 @@ describe("updateEloScores (DB integration)", () => {
     const result = await updateEloScores("uA", "uB", true, true);
     expect(result).toBeNull();
   });
+
+  // A synthetic test profile (PRODUCT_SPEC §3.1c) declines 100% of the time by
+  // construction, so its verdict is not evidence about the real user. Without
+  // this guard a week of friends-and-family testing walks each participant
+  // down `V_league` on contests that never happened — changing who they match
+  // with in the very test the profiles exist to make possible.
+  for (const side of ["A", "B"] as const) {
+    it(`is a no-op when side ${side} is a synthetic test profile`, async () => {
+      const tx: TxLike = {
+        profile: {
+          findUnique: vi
+            .fn()
+            .mockResolvedValueOnce({
+              id: "pa",
+              eloScore: 500,
+              eloMatchesPlayed: 20,
+              user: { syntheticAt: side === "A" ? new Date() : null },
+            })
+            .mockResolvedValueOnce({
+              id: "pb",
+              eloScore: 500,
+              eloMatchesPlayed: 20,
+              user: { syntheticAt: side === "B" ? new Date() : null },
+            }),
+          update: vi.fn().mockResolvedValue(undefined),
+        },
+      };
+      (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+        async (fn: (tx: TxLike) => Promise<unknown>) => fn(tx),
+      );
+
+      const result = await updateEloScores("uA", "uB", true, false);
+      expect(result).toBeNull();
+      expect(tx.profile.update).not.toHaveBeenCalled();
+    });
+  }
+
+  it("still updates an ordinary pair (control for the guard above)", async () => {
+    const tx: TxLike = {
+      profile: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce({
+            id: "pa",
+            eloScore: 500,
+            eloMatchesPlayed: 20,
+            user: { syntheticAt: null },
+          })
+          .mockResolvedValueOnce({
+            id: "pb",
+            eloScore: 500,
+            eloMatchesPlayed: 20,
+            user: { syntheticAt: null },
+          }),
+        update: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (fn: (tx: TxLike) => Promise<unknown>) => fn(tx),
+    );
+
+    const result = await updateEloScores("uA", "uB", true, false);
+    expect(result).not.toBeNull();
+    expect(tx.profile.update).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("applyEmergencyCancellationPeerBoost", () => {

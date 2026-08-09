@@ -45,6 +45,7 @@ import { statusTimerTick } from "./workers/status-timer.js";
 import { createStatusTimerRunner } from "./workers/status-timer-runner.js";
 import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
+import { syntheticPartnerTick } from "./workers/synthetic-partner.js";
 import { sweepRematchRefunds } from "./services/rematch-refund.js";
 import { sweepVenueChangeRefunds } from "./services/venue-change-refund.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
@@ -301,7 +302,12 @@ async function dropMatchingJob(): Promise<void> {
     console.log("[cron] Drop matching batch started");
     const result = await runDropBatch();
     console.log(
-      `[cron] Batch complete: eligible=${result.eligible} pairs=${result.pairs}`,
+      `[cron] Batch complete: eligible=${result.eligible} pairs=${result.pairs}` +
+        // Reported separately, never folded into `pairs`: a fill pairing is a
+        // real user meeting a stand-in, and a batch that looks healthy only
+        // because scaffolding covered the gap is the one thing this number
+        // must not be able to hide (PRODUCT_SPEC §3.1c).
+        (result.syntheticPairs > 0 ? ` syntheticFill=${result.syntheticPairs}` : ""),
     );
 
     // Notify sides of any proposal the batch's own expiry preflight expired
@@ -648,6 +654,23 @@ bot.start({
       );
       console.log(
         `[cron] Venue-change refund retry scheduled: "${VENUE_CHANGE_REFUND_CRON_SCHEDULE}"`,
+      );
+    }
+
+    // Synthetic test partners (PRODUCT_SPEC §3.1c): decline once the human
+    // has committed. Registered only when SYNTHETIC_FILL_ENABLED, so a
+    // production without the flag schedules nothing at all — and the tick
+    // itself re-reads the flag, so flipping it off mid-run stops the sweep
+    // rather than leaving a scheduled no-op with teeth.
+    if (env.SYNTHETIC_FILL_ENABLED) {
+      cron.schedule(
+        env.SYNTHETIC_PARTNER_CRON_SCHEDULE,
+        guardedTick("synthetic-partner", () =>
+          syntheticPartnerTick().then(() => undefined),
+        ),
+      );
+      console.log(
+        `[cron] Synthetic test partner scheduled: "${env.SYNTHETIC_PARTNER_CRON_SCHEDULE}"`,
       );
     }
 

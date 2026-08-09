@@ -209,6 +209,7 @@ const MATCH_CONTACT_SELECT = {
   telegramId: true,
   language: true,
   platform: true,
+  syntheticAt: true,
 } as const;
 
 interface ParticipantContact {
@@ -216,6 +217,10 @@ interface ParticipantContact {
   telegramId: bigint;
   language: string | null;
   platform: string;
+  /** Non-null on a synthetic test profile (PRODUCT_SPEC §3.1c). Read here to
+   *  keep a scripted outcome from moving real priority or triggering a paid
+   *  upsell — see `applyMatchDecision`. */
+  syntheticAt: Date | null;
 }
 
 /**
@@ -488,6 +493,23 @@ export async function applyMatchDecision(
   const targetId = side === "A" ? match.userBId : match.userAId;
   const actor: ParticipantContact = side === "A" ? match.userA : match.userB;
   const peer: ParticipantContact = side === "A" ? match.userB : match.userA;
+  /**
+   * This pair includes a synthetic test profile (PRODUCT_SPEC §3.1c), so the
+   * outcome is scripted: the synthetic side declines every time, by design.
+   * Two consequences downstream, both about not letting a manufactured
+   * disappointment look like a real one:
+   *
+   *   - **No priority boost.** `boostAcceptedSidePriority` increments
+   *     `standbyCount`, the same counter the drop batch deliberately leaves
+   *     untouched for a fill pairing. Compensating someone for a week they did
+   *     not actually lose would corrupt the starvation signal that
+   *     `starvationBonus` and the daily-cadence calibration both read.
+   *   - **No Rematch offer.** Selling a paid re-run as consolation for a
+   *     rejection the product itself staged is not a trade we are willing to
+   *     make. The pinned-banner entry (§3.11) still exists for a man who goes
+   *     looking on his own — that one he arrives at, rather than being sent.
+   */
+  const syntheticPair = Boolean(actor.syntheticAt || peer.syntheticAt);
   const claimed = await claimMatchDecision({
     matchId,
     side,
@@ -561,7 +583,7 @@ export async function applyMatchDecision(
         side === "A" ? true : false,
         side === "B" ? true : false,
       );
-      const boosted = await boostAcceptedSidePriority(actorId);
+      const boosted = syntheticPair ? false : await boostAcceptedSidePriority(actorId);
       await notifyParticipant(actor, outcomeRevealKey(true, false, boosted), {
         type: "match.outcome",
         title: "Gennety",
@@ -576,8 +598,11 @@ export async function applyMatchDecision(
       // frees a TELEGRAM participant — without this hook their offer would be
       // silently lost purely because their partner used the other client.
       // `sendRematchOfferIfEligible` skips synthetic negative telegramIds, so a
-      // mobile-only user correctly gets nothing.
-      await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
+      // mobile-only user correctly gets nothing. A synthetic TEST pair is
+      // suppressed for a different reason — see `syntheticPair` above.
+      if (!syntheticPair) {
+        await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
+      }
       return getCurrentMatchForUser(userId);
     }
 
@@ -623,7 +648,10 @@ export async function applyMatchDecision(
     side === "A" ? false : peerPrior,
     side === "B" ? false : peerPrior,
   );
-  const boosted = peerPrior === true ? await boostAcceptedSidePriority(targetId) : false;
+  const boosted =
+    peerPrior === true && !syntheticPair
+      ? await boostAcceptedSidePriority(targetId)
+      : false;
   await notifyParticipant(actor, outcomeRevealKey(false, peerPrior, boosted), {
     type: "match.outcome",
     title: "Gennety",
@@ -635,8 +663,11 @@ export async function applyMatchDecision(
     matchId,
   });
   // Same reason as the mixed-verdict branch above: a decline taken in the iOS
-  // app still frees a Telegram participant, who should still get the offer.
-  await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
+  // app still frees a Telegram participant, who should still get the offer —
+  // unless the rejection was staged by a synthetic test profile.
+  if (!syntheticPair) {
+    await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
+  }
   return getCurrentMatchForUser(userId);
 }
 

@@ -73,8 +73,24 @@ interface MatchView {
   status: string;
   calendarMessageIdA: number | null;
   calendarMessageIdB: number | null;
-  userA: { telegramId: bigint; language: string | null };
-  userB: { telegramId: bigint; language: string | null };
+  userA: { telegramId: bigint; language: string | null; syntheticAt: Date | null };
+  userB: { telegramId: bigint; language: string | null; syntheticAt: Date | null };
+}
+
+/**
+ * True when either participant is a synthetic test profile (PRODUCT_SPEC
+ * §3.1c). Such a pairing resolves to a scripted decline, so it must not move
+ * real priority (`boostAcceptedSidePriority` writes `standbyCount`) and must
+ * not trigger the paid Rematch upsell — selling a consolation for a rejection
+ * the product staged is not a trade we make. Elo is handled one level down,
+ * inside `updateEloScores` itself, so it needs no branch here.
+ *
+ * The mirror of this lives in `public/matches-service.ts`; both decision
+ * surfaces have to agree, which is why the rule is stated in both places
+ * rather than left implicit in one.
+ */
+function isSyntheticPair(match: MatchView): boolean {
+  return Boolean(match.userA.syntheticAt || match.userB.syntheticAt);
 }
 
 async function loadMatch(matchId: string): Promise<MatchView | null> {
@@ -89,8 +105,8 @@ async function loadMatch(matchId: string): Promise<MatchView | null> {
       status: true,
       calendarMessageIdA: true,
       calendarMessageIdB: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
+      userA: { select: { telegramId: true, language: true, syntheticAt: true } },
+      userB: { select: { telegramId: true, language: true, syntheticAt: true } },
     },
   });
 }
@@ -430,14 +446,19 @@ async function handleAccept(
     const aDecision: boolean = side === "A" ? true : false;
     const bDecision: boolean = side === "B" ? true : false;
     await updateEloScores(match.userAId, match.userBId, aDecision, bDecision);
-    const acceptedSidePriorityBoosted = await boostAcceptedSidePriority(actorId);
+    const synthetic = isSyntheticPair(match);
+    const acceptedSidePriorityBoosted = synthetic
+      ? false
+      : await boostAcceptedSidePriority(actorId);
     await sendActorReveal(ctx, peerPrior, lang, true, acceptedSidePriorityBoosted);
     await sendPeerOutcomeReveal(ctx, match, side, peerPrior, true, acceptedSidePriorityBoosted);
     // He accepted and she had already passed — the sharpest version of the pain
     // Rematch exists for. Offered only now: the match is terminal, both reveals
     // have landed, and the priority boost above compensates the NEXT weekly
     // batch, while this offers not having to wait for it.
-    await offerRematchAfterCancellation(ctx.api, match.userAId, match.userBId);
+    if (!synthetic) {
+      await offerRematchAfterCancellation(ctx.api, match.userAId, match.userBId);
+    }
     return;
   }
 
@@ -547,11 +568,14 @@ async function handleDecline(
   }
 
   // Both have now decided → reveal both ways.
+  const synthetic = isSyntheticPair(match);
   const acceptedSidePriorityBoosted =
-    peerPrior === true ? await boostAcceptedSidePriority(targetId) : false;
+    peerPrior === true && !synthetic ? await boostAcceptedSidePriority(targetId) : false;
   await sendActorReveal(ctx, peerPrior, lang, false, acceptedSidePriorityBoosted);
   await sendPeerOutcomeReveal(ctx, match, side, peerPrior, false, acceptedSidePriorityBoosted);
   // Terminal decline (his pass, or hers after he accepted). Both sides are free
   // again, so both are offered — the sender decides who may actually buy.
-  await offerRematchAfterCancellation(ctx.api, match.userAId, match.userBId);
+  if (!synthetic) {
+    await offerRematchAfterCancellation(ctx.api, match.userAId, match.userBId);
+  }
 }

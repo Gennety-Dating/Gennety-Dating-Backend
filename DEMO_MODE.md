@@ -595,6 +595,33 @@ DEMO_PEER_DELAY_MS=12000   DEMO_TICK_MS=3000
 `DEMO_TICK_MS=0` disables the puppet entirely — useful for walking onboarding
 alone without a match arriving.
 
+## Not to be confused with: synthetic test profiles
+
+PRODUCT_SPEC §3.1c adds a second kind of seeded person — a **synthetic test
+profile**, offered to a real friends-and-family tester in PRODUCTION when the
+real pool leaves them unpaired. The two look alike from a distance (both are
+`platform: "mobile"` rows with a negative `telegramId` and a bio written by
+hand) and are opposites in every way that matters:
+
+| | Demo puppet | Synthetic test profile |
+|---|---|---|
+| Where | demo database only | production |
+| Who sees it | the demo visitor, always | a real tester, only when nobody real is left |
+| What it does | accepts, then walks the whole flow | declines, every time |
+| Driven by | `demo/driver.ts`, re-deriving state each tick | `workers/synthetic-partner.ts`, one decision |
+| Reserved ids | `-777_000_00x` | `-778_000_00x` |
+
+**Demo mode is unaffected by the synthetic fill and needs no branch for it.**
+The drop cron is not scheduled at all under `DEMO_MODE_ENABLED` (that is the
+invariant keeping two visitors from being paired with each other), so
+`runDropBatch`'s second pass never runs here; and the demo database has no rows
+carrying `syntheticAt`. `demo/decide.ts` is untouched.
+
+The id bands are deliberately distinct so a row is identifiable at a glance,
+and because the demo seeder's `resolveUploadChat` looks for a **positive**
+`telegramId` to find a real visitor — a rule that would quietly break if the
+two kinds of stand-in ever shared a range and one leaked across.
+
 ## Deploying
 
 `./scripts/deploy-demo.sh` (or `pnpm demo:deploy`), **after** the production

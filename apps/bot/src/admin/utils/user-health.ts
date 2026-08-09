@@ -99,6 +99,7 @@ export const USER_HEALTH_CLASSES: readonly UserHealthClass[] = [
 
 /** Идентификаторы правил — стабильные строки, их читает Hermes и дашборд. */
 export type HealthRule =
+  | "test_synthetic_profile"
   | "test_known_id"
   | "test_name_pattern"
   | "test_email_pattern"
@@ -139,6 +140,16 @@ export interface HealthUserInput {
   responseSamples: number;
   /** Размер всплеска регистраций вокруг этого аккаунта, включая его самого. */
   registrationBurstSize: number;
+  /**
+   * Non-null on a synthetic test profile (PRODUCT_SPEC §3.1c) — a seeded
+   * account that exists only to balance the gender skew during the
+   * friends-and-family production test.
+   *
+   * It classifies as `test`, which is what keeps it out of every conversion
+   * denominator here. Without that, a dozen seeded `active`/`verified` rows
+   * would inflate exactly the funnel numbers the test was run to measure.
+   */
+  syntheticAt: Date | null;
 }
 
 export interface HealthVerdict {
@@ -160,6 +171,8 @@ const DAY_MS = 24 * HOUR_MS;
 /** Тестовый аккаунт: явный список id, либо имя/почта по шаблону. */
 function testRules(u: HealthUserInput, cfg: HealthConfig): HealthRule[] {
   const fired: HealthRule[] = [];
+  // Не эвристика, а факт: колонку ставит только сид-скрипт.
+  if (u.syntheticAt) fired.push("test_synthetic_profile");
   if (cfg.test_telegram_ids.includes(u.telegramId)) fired.push("test_known_id");
   if (u.firstName && cfg.test_name_pattern.test(u.firstName)) fired.push("test_name_pattern");
   if (u.email && cfg.test_email_pattern.test(u.email)) fired.push("test_email_pattern");
@@ -211,6 +224,7 @@ function suspiciousRules(u: HealthUserInput, cfg: HealthConfig): HealthRule[] {
 }
 
 const RULE_TEXT: Record<HealthRule, string> = {
+  test_synthetic_profile: "seeded synthetic test profile (User.syntheticAt)",
   test_known_id: "telegram id is on the test-account list",
   test_name_pattern: "first name matches the test-account pattern",
   test_email_pattern: "email matches the test-account pattern",

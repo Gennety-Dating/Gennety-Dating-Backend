@@ -209,6 +209,68 @@ frequency.
 
 ---
 
+## 2026-08-09 — synthetic test profiles, and the three calls that shaped them
+
+**Kind:** founder decision
+**What:** a set of hand-seeded profiles (`User.syntheticAt`) that the drop
+batch offers to a real friends-and-family tester when the real pool leaves them
+unpaired, and that always decline. Built to make a production test possible at
+6 men / 1 woman in Kyiv, ahead of a later flip to `DROP_CADENCE=daily`.
+**Why the three decisions matter more than the feature:**
+
+- **The lifetime pair ban (§3.2 filter 6) is kept for synthetics too.** Offered
+  the alternative — an exemption scoped to synthetic pairs, which would make 4
+  profiles per gender last forever — the founder chose to leave the invariant
+  alone. The price is arithmetic and should be stated before anyone shoots
+  photographs: one profile is one showing per person, so `N` synthetic women
+  cover `N` drops for each man (precisely, `N ≥ max(M, D)` for `M` men and `D`
+  drops). Fourteen days of daily coverage is fourteen profiles, not four. The
+  manifest and seeder are append-only and idempotent specifically because
+  topping up is now a recurring operator task rather than a one-off.
+- **Synthetics are never sold.** `buildCandidateSql` excludes them, so the paid
+  Rematch honestly reports "nobody found" and refunds instead of charging
+  150⭐ for a partner scripted to decline. This is not belt-and-braces given
+  the commits it lands on: under `daily`, `rematchMaxPerInterval` is 7 and the
+  banner entry (048d578) renders precisely in that cadence, so the exposure
+  would have been up to seven paid bot-pitches a week. The
+  post-cancellation Rematch **DM** is suppressed on a synthetic pair as well —
+  selling consolation for a rejection the product staged is a different thing
+  from offering a way forward after a real one.
+- **Synthetics first on weekly; the daily flip is its own step**, with
+  `normalize-standby-count.mjs` still its stated precondition.
+
+**What it changes going forward:** three rules that are easy to break later.
+**A synthetic match must leave no trace on the real user** — Elo, `standbyCount`,
+`silentIgnoreCount` and the priority boost are all skipped, because a partner
+that declines 100% of the time by construction produces a systematically false
+signal, not a noisy one. **Declining is the safety mechanism, not a limitation**:
+a mutual accept would open the §3.5b ticket gate and ask a real person for real
+Stars. And **it therefore cannot test anything past `proposed`** — the ticket
+gate, calendar, venue, date card, coordination and feedback stay on
+`dev-e2e-full-flow.mjs`, which is worth re-reading before anyone concludes from
+a green test week that those flows work.
+**Recorded in:** PRODUCT_SPEC.md §3.1c, ARCHITECTURE.md → `users` / `matches` /
+cron table, DEMO_MODE.md, deploy.md → the PENDING block at the top.
+
+## 2026-08-09 — deviation: the contact rail is `phoneVerifiedAt` with no number
+
+**Kind:** deviation from plan
+**What:** the plan said synthetic profiles would take the **student** rail — a
+`@gennety.test` email on a reserved TLD. They ship on the **general** rail
+instead: `registrationTrack: "general"` plus `phoneVerifiedAt`, with `phone`
+and `email` both NULL.
+**Why:** `TRACK_VERIFIED_CONTACT_SQL`'s general branch tests the timestamp, not
+the number, so no credential has to be invented at all — which is strictly
+better than inventing one on a TLD that merely cannot collide. It is also what
+`apps/bot/src/demo/partners.ts` already does, so the two seeders now agree
+rather than each having a different theory of how to satisfy the gate.
+**What it changes going forward:** **never give a synthetic profile a phone
+number.** `User.phone` is `@unique`, so a fake value permanently blocks the
+real person who one day owns it from registering — a failure that would surface
+months later as an unexplained refusal during someone's sign-up.
+**Recorded in:** `apps/bot/src/services/synthetic-profiles.ts` (header),
+PRODUCT_SPEC.md §3.1c.
+
 ## 2026-08-09 — the Kyiv catalog is imported into production, and a file edit is not a shipped change
 
 **Kind:** founder decision

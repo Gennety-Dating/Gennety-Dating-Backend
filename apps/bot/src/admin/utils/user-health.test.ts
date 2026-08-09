@@ -39,6 +39,7 @@ function user(overrides: Partial<HealthUserInput> = {}): HealthUserInput {
     medianResponseSec: 40,
     responseSamples: 4,
     registrationBurstSize: 1,
+    syntheticAt: null,
     ...overrides,
   };
 }

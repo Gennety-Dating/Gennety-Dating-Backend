@@ -44,6 +44,9 @@ describe("weekly embedding preflight", () => {
     await expect(runDropBatch()).resolves.toEqual({
       eligible: 0,
       pairs: 0,
+      // No eligible real user means there is nobody for the synthetic fill to
+      // fill FOR, so it is skipped along with everything else (§3.1c).
+      syntheticPairs: 0,
       matchIds: [],
       missedUserIds: [],
       expiredMatches: [],

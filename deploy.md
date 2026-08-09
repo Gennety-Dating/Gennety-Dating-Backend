@@ -1,5 +1,104 @@
 # Gennety Dating Deploy
 
+**PENDING — synthetic test profiles for the friends-and-family production run
+(PRODUCT_SPEC §3.1c, DECISIONS.md ×2).** Not deployed yet. **No Mini App
+change** (`apps/webapp` untouched), but it needs an **additive `db:push` BEFORE
+the restart**, plus **one env line** and a **seeding step**, so the full
+sequence is: Deploy Full Server Code → `db:push` → `pnpm db:drift-check` →
+`pm2 restart` → seed profiles → flip the flag → `pm2 restart --update-env`.
+
+One new column, `users.synthetic_at` (nullable), is SELECTED on every drop
+batch, every decision and every expiry sweep, so a DB missing it throws `P2022`
+on the first pitch after the restart — the PM2 crash-loop this file warns
+about. Verify additive first (expect exactly one `ADD COLUMN`, zero `DROP`):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+**The code ships INERT and that is the intended first state.** With
+`SYNTHETIC_FILL_ENABLED` unset the second pass never runs, the auto-decline
+cron is not registered, and — separately — no seeded row exists to be offered
+anyway. Two independent conditions have to be true before a real user sees
+anything, which is deliberate.
+
+**Six things worth knowing before the restart:**
+
+- **The arithmetic decides how many photos are needed, and it is the operator's
+  real constraint.** The lifetime pair ban applies to synthetics too (founder
+  decision), so one profile is one showing per person: `N` synthetic women
+  cover `N` drops for each man. Production is **6 men / 1 woman in Kyiv**, so
+  the shipped manifest (8 women + 6 men) is roughly 8 days of full coverage for
+  the men and 6 for the woman. Top it up by appending to
+  `scripts/synthetic-profiles.json` — **never reuse a `slot`**, it is the
+  permanent `telegramId` and a duplicate overwrites another profile's account
+  (the loader refuses one, but only if you run it).
+- **Photos must go through the PRODUCTION bot.** `file_id`s are per-bot. The
+  seeder sends each image to `FOUNDER_TELEGRAM_ID` (override with
+  `SYNTHETIC_SEED_CHAT_ID`) to mint them, so expect a burst of photos in that
+  chat — that is the mechanism, not a bug. Keep the source folder OUTSIDE the
+  repo; the deploy rsyncs the working tree.
+- **A profile with no photos is still `active` and matchable.** The seeder
+  reports which slots are short of `MIN_PHOTOS` before writing anything —
+  read that list rather than scrolling past it.
+- **`Match.source` gains the value `synthetic`.** No migration (plain string
+  column), and those pairs write no `MatchScoreLog`, so the algorithm A/B stays
+  clean without a filter.
+- **Rematch is protected two ways** and both matter now that
+  `REMATCH_FEATURE_ENABLED=true`: synthetics are invisible to
+  `findCandidatesFor`, so a paid run honestly refunds instead of selling a bot;
+  and the post-cancellation Rematch DM is suppressed after a synthetic decline.
+  The pinned-banner entry is unaffected — it only renders under `daily`.
+- **Nothing here flips the cadence.** `DROP_CADENCE` stays unset; on weekly the
+  fill runs once a week, on Thursday. Verify the mechanism there first, then
+  flip daily as its own step (`normalize-standby-count.mjs` remains its
+  precondition).
+
+Preflight for this change: typecheck clean across all 5 projects, lint clean,
+**4061 tests** (bot 3530 / shared 276 / webapp 255), 0 failed. The three guards
+that carry the money-critical and data-integrity properties were each confirmed
+to FAIL with the protection removed before being confirmed green: the
+`synthetic_at IS NULL` exclusion, the "exactly one synthetic side" pairing rule,
+and the `updateEloScores` no-op.
+
+Post-deploy sequence and checks:
+
+```sh
+# 1. Dry run FIRST — prints the target DB host and what it would write.
+pnpm synthetic:seed
+# 2. Seed for real, with photos laid out as <dir>/<slot>/*.jpg
+pnpm synthetic:seed -- --apply --photos=~/Desktop/synthetic-photos
+# 3. Confirm every profile got an embedding — without one it is silently
+#    unmatchable, which looks exactly like "the fill does not work".
+psql "$DATABASE_URL" -c "select u.first_name, u.gender, array_length(p.photos,1) photos, p.embedding_dirty from users u join profiles p on p.user_id=u.id where u.synthetic_at is not null order by u.telegram_id desc;"
+# 4. Only now flip the flag.
+#    SYNTHETIC_FILL_ENABLED=true in /opt/gennety/.env
+pm2 restart gennety-bot --update-env && pm2 save
+pm2 logs gennety-bot --lines 40 --nostream | grep 'Synthetic test partner'
+```
+
+After the Thursday drop, the two lines that tell the whole story:
+
+```sh
+pm2 logs gennety-bot --lines 200 --nostream | grep -E '\[drop-batch\]|\[synthetic-partner\]'
+# syntheticFill=N on the batch line; declined=N ~20 min after a tester answers.
+psql "$DATABASE_URL" -c "select source, status, count(*) from matches group by 1,2;"
+```
+
+**Rollback:** remove `SYNTHETIC_FILL_ENABLED` + `pm2 restart --update-env` —
+the fill stops instantly and matches already in flight resolve through the
+ordinary decline/expiry paths. To remove the accounts entirely,
+`pnpm synthetic:remove -- --apply` (hard delete through the production
+`deleteUserAccount`). **Run that before the product opens past the test
+cohort** — this is scaffolding with an end date. The additive column can stay.
+
+---
+
 **PENDING — daily Rematch groundwork: the cadence owns the limits, and two pull
 entries (PRODUCT_SPEC §3.11 / §2.1 mode 5, REMATCH_PRODUCT_SPEC, DECISIONS.md
 ×3).** Not deployed yet. **No Prisma schema change, no env change, no flag

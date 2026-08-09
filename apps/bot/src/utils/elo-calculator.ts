@@ -181,6 +181,18 @@ export function resolveMatchElo(
  *
  * Never throws; logs and swallows on DB error so a flaky write never blocks
  * the user's accept/decline flow.
+ *
+ * **A pair with a synthetic test profile on either side is a no-op**
+ * (PRODUCT_SPEC §3.1c). Such a partner declines 100% of the time by
+ * construction, so its verdict carries no information about the real user —
+ * and Elo is a rating of contests that happened. Without this guard a week of
+ * friends-and-family testing would walk each participant down `V_league` on
+ * losses that were scripted, changing who they match with in the very test the
+ * profiles exist to make possible.
+ *
+ * The guard lives HERE rather than at the call sites deliberately: `accept`,
+ * `decline` and the expiry sweep all funnel through this one function, so a
+ * future fourth caller inherits the rule instead of having to remember it.
  */
 export async function updateEloScores(
   userAId: string,
@@ -195,14 +207,25 @@ export async function updateEloScores(
       const [a, b] = await Promise.all([
         tx.profile.findUnique({
           where: { userId: userAId },
-          select: { id: true, eloScore: true, eloMatchesPlayed: true },
+          select: {
+            id: true,
+            eloScore: true,
+            eloMatchesPlayed: true,
+            user: { select: { syntheticAt: true } },
+          },
         }),
         tx.profile.findUnique({
           where: { userId: userBId },
-          select: { id: true, eloScore: true, eloMatchesPlayed: true },
+          select: {
+            id: true,
+            eloScore: true,
+            eloMatchesPlayed: true,
+            user: { select: { syntheticAt: true } },
+          },
         }),
       ]);
       if (!a || !b) return null;
+      if (a.user?.syntheticAt || b.user?.syntheticAt) return null;
 
       const result = resolveMatchElo(
         { eloScore: a.eloScore, eloMatchesPlayed: a.eloMatchesPlayed },

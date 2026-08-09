@@ -314,6 +314,26 @@ model User {
   /// (verified-after-skip, unfreeze on `/start`) never re-sends. Null = never
   /// notified.
   founderNotifiedAt          DateTime?                @map("founder_notified_at")
+  /// Non-null on a SYNTHETIC test profile — a hand-seeded account that exists
+  /// only to balance the gender skew in a friends-and-family production test
+  /// (PRODUCT_SPEC §3.1c). It is an ordinary `User` + `Profile` in every other
+  /// respect, which is the point: the pitch generator, the card renderers and
+  /// the decision flow read it exactly as they read a person.
+  ///
+  /// Two things the column gates, and both are load-bearing:
+  ///   - **Admission.** `buildCandidateSql` excludes it unconditionally, so the
+  ///     single-seeker engine (paid Rematch, the D10 auto-resume probe) can
+  ///     never surface one. Only the drop batch's second "fill" pass opts them
+  ///     in, and only for users the real pool left unpaired.
+  ///   - **Neutrality.** A synthetic partner declines 100% of the time by
+  ///     construction, so its verdict carries no information: `updateEloScores`
+  ///     no-ops on such a pair, and the real side's `standbyCount` is neither
+  ///     reset nor incremented. Without that, a week of test matches would walk
+  ///     a real friend's rating down `V_league` on contests that never happened.
+  ///
+  /// Seeded and removed by `scripts/seed-synthetic-profiles.mjs`. Null on every
+  /// real account, so the whole mechanism is inert until a row carries it.
+  syntheticAt                DateTime?                @map("synthetic_at")
   createdAt                  DateTime                 @default(now()) @map("created_at")
   updatedAt                  DateTime                 @updatedAt @map("updated_at")
 
