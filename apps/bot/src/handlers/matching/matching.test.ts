@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
 import { DEFAULT_SESSION } from "@gennety/shared";
 
-const { mClaimMatchDecision, mUpdateEloScores, mRefreshUserEmbedding } = vi.hoisted(() => ({
-  mClaimMatchDecision: vi.fn(),
-  mUpdateEloScores: vi.fn(),
-  mRefreshUserEmbedding: vi.fn(),
-}));
+const { mClaimMatchDecision, mUpdateEloScores, mRefreshUserEmbedding, mRefreshStatusBanners } =
+  vi.hoisted(() => ({
+    mClaimMatchDecision: vi.fn(),
+    mUpdateEloScores: vi.fn(),
+    mRefreshUserEmbedding: vi.fn(),
+    mRefreshStatusBanners: vi.fn().mockResolvedValue(undefined),
+  }));
 
 // ---------------------------------------------------------------------------
 // Mocks — prisma, config, and downstream services the matching flow touches.
@@ -60,6 +62,13 @@ vi.mock("../../services/match-decision-claim.js", () => ({
 
 vi.mock("../../workers/embedding-refresh.js", () => ({
   refreshUserEmbedding: (...args: unknown[]) => mRefreshUserEmbedding(...args),
+}));
+
+// The pinned-banner push (§2.1) is asserted by call args below — its own
+// implementation (prisma.user.findMany, editMessageText) is covered by
+// status-banner-refresh.test.ts, not re-exercised here.
+vi.mock("../../services/status-banner-refresh.js", () => ({
+  refreshStatusBanners: (...args: unknown[]) => mRefreshStatusBanners(...args),
 }));
 
 vi.mock("../../utils/elo-calculator.js", () => ({
@@ -1368,6 +1377,10 @@ describe("matching decision flow", () => {
     expect(startPeerWaitShimmer).toHaveBeenCalledTimes(1);
     expect((startPeerWaitShimmer as unknown as MockFn).mock.calls[0]!.slice(1)).toEqual(["match-1", { userId: "uid-A" }]);
     expect(startScheduling).not.toHaveBeenCalled();
+    // The actor's own pinned banner stops counting the 24h reply deadline the
+    // moment THEY accept, even though the row stays `proposed` — the peer
+    // hasn't decided yet, so only the actor is pushed.
+    expect(mRefreshStatusBanners).toHaveBeenCalledWith(ctx.api, ["uid-A"]);
   });
 
   it("second accept flips match to 'negotiating' and invokes startScheduling", async () => {
@@ -1416,6 +1429,10 @@ describe("matching decision flow", () => {
     // flow goes straight to the ticket/Calendar card.
     expect(startPeerWaitShimmer).not.toHaveBeenCalled();
     expect(ctx.reply).not.toHaveBeenCalled();
+    // proposed → negotiating: the pinned banner flips to "planning" for BOTH
+    // sides — a no-op re-render for the first decider, who already saw this
+    // mode from their own earlier accept.
+    expect(mRefreshStatusBanners).toHaveBeenCalledWith(ctx.api, ["uid-A", "uid-B"]);
   });
 
   it("first decline keeps match in 'proposed' and sends BLIND nudge (no reveal)", async () => {
@@ -1482,6 +1499,9 @@ describe("matching decision flow", () => {
     // A decliner is not waiting on anything — a pass is irreversible and the
     // next thing they see is the "why?" prompt, not a hand-off.
     expect(startPeerWaitShimmer).not.toHaveBeenCalled();
+    // The actor's own pinned banner stops counting the 24h reply deadline the
+    // moment THEY decline, even though the row stays `proposed` for the peer.
+    expect(mRefreshStatusBanners).toHaveBeenCalledWith(ctx.api, ["uid-A"]);
   });
 
   it("first accept sends BLIND nudge to peer (no 'they accepted' leak)", async () => {
@@ -1570,6 +1590,9 @@ describe("matching decision flow", () => {
     expect(peerSends).toHaveLength(1);
     expect(peerSends[0]![0]).toBe(1001); // userA telegramId
     expect(peerSends[0]![1]).toMatch(/your match was in/i);
+    // The match just died — both banners fall back to the ordinary drop
+    // countdown now rather than up to a minute from now.
+    expect(mRefreshStatusBanners).toHaveBeenCalledWith(ctx.api, ["uid-A", "uid-B"]);
   });
 
   it("second decline on a peer-accepted match cancels and reveals both ways", async () => {
@@ -1622,6 +1645,9 @@ describe("matching decision flow", () => {
         }),
       }),
     );
+    // The match just died — both banners fall back to the ordinary drop
+    // countdown now rather than up to a minute from now.
+    expect(mRefreshStatusBanners).toHaveBeenCalledWith(ctx.api, ["uid-A", "uid-B"]);
   });
 
   // --- Rematch offer timing (REMATCH_PRODUCT_SPEC.md, D4) -------------------
@@ -1750,6 +1776,9 @@ describe("matching decision flow", () => {
     );
 
     expect(mOfferRematchAfterCancellation).not.toHaveBeenCalled();
+    // A lost race means the row is still whatever the winning caller left it
+    // as — pushing here would be a stale re-render of this loser's own view.
+    expect(mRefreshStatusBanners).not.toHaveBeenCalled();
   });
 
   it("second decline after a peer decline stays neutral and does not boost priority", async () => {
@@ -1807,6 +1836,7 @@ describe("matching decision flow", () => {
     expect(mProfile.updateMany).not.toHaveBeenCalled();
     expect(ctx.api.sendMessage).not.toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalledTimes(1); // own acceptance acknowledgement only
+    expect(mRefreshStatusBanners).not.toHaveBeenCalled();
   });
 
   it("keeps decline feedback but does not duplicate final effects after losing the CAS", async () => {
@@ -1834,6 +1864,7 @@ describe("matching decision flow", () => {
     expect(mProfile.updateMany).not.toHaveBeenCalled();
     expect(ctx.api.sendMessage).not.toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalledTimes(1); // decline reason keyboard remains available
+    expect(mRefreshStatusBanners).not.toHaveBeenCalled();
   });
 
   it("tapping Pass opens a confirmation card and does NOT commit the decline", async () => {
@@ -2024,8 +2055,8 @@ describe("venue negotiation finalization", () => {
       vibeLngB: 30.52,
       parsedCategoryA: null,
       parsedCategoryB: null,
-      userA: { telegramId: 1001n, language: "en" },
-      userB: { telegramId: 1002n, language: "ru" },
+      userA: { id: "uid-A", telegramId: 1001n, language: "en" },
+      userB: { id: "uid-B", telegramId: 1002n, language: "ru" },
     });
     const api = { sendMessage: vi.fn().mockResolvedValue({}) } as any;
 
@@ -2041,6 +2072,9 @@ describe("venue negotiation finalization", () => {
         }),
       }),
     );
+    // The pinned banner prints its FIRST countdown + venue name exactly here —
+    // pushed rather than left to the once-a-minute status-timer tick.
+    expect(mRefreshStatusBanners).toHaveBeenCalledWith(api, ["uid-A", "uid-B"]);
 
     const finalCalls = api.sendMessage.mock.calls.filter((call: unknown[]) => {
       const opts = call[2] as { entities?: unknown[] } | undefined;
@@ -2172,6 +2206,9 @@ describe("venue negotiation finalization", () => {
       return Array.isArray(opts?.entities);
     });
     expect(scheduledCards).toHaveLength(0);
+    // A lost race means this caller never reaches deliverScheduledConfirmation
+    // at all — nothing here should push the banner either.
+    expect(mRefreshStatusBanners).not.toHaveBeenCalled();
   });
 });
 

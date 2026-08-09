@@ -17,6 +17,7 @@ import { claimMatchDecision } from "../../services/match-decision-claim.js";
 import { sendOrEditPostAcceptMessage } from "./post-accept-message.js";
 import { offerRematchAfterCancellation } from "./rematch.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
+import { refreshStatusBanners } from "../../services/status-banner-refresh.js";
 
 /**
  * Match decision handler — Accept / Decline.
@@ -381,6 +382,12 @@ async function handleAccept(
       // handoff. The callback toast above is enough here.
       return;
     }
+    // The pinned banner stops counting the 24h reply deadline and switches to
+    // "planning" (§2.1 modes "decision"→"planning") exactly here, for the
+    // side that just tapped — the first decider's banner already read
+    // "planning" from their own earlier accept, so this is a no-op for them.
+    // Pushed now instead of leaving it on the once-a-minute status-timer tick.
+    await refreshStatusBanners(ctx.api, [match.userAId, match.userBId]).catch(() => {});
     // Mutual accept → both gain Elo. Only the caller that wins the
     // status-transition race performs the update so the rating change
     // happens exactly once per match.
@@ -413,6 +420,11 @@ async function handleAccept(
       data: { status: "cancelled" },
     });
     if (transitioned.count === 0) return;
+    // The match just died — the banner's "date"/"decision" countdown was
+    // counting toward something that no longer exists, so it falls back to
+    // the ordinary drop countdown for both sides now rather than up to a
+    // minute from now.
+    await refreshStatusBanners(ctx.api, [match.userAId, match.userBId]).catch(() => {});
     // Elo: actor accepted, peer declined earlier. Use the existing
     // `updateEloScores` semantics — accepted=true, declined=false.
     const aDecision: boolean = side === "A" ? true : false;
@@ -446,6 +458,13 @@ async function handleAccept(
   //
   // Blind-decision safe: the actor has already committed, and the shimmer says
   // only that we're waiting — nothing about what the partner chose.
+  //
+  // The actor's OWN pinned banner already stopped counting the 24h reply
+  // deadline the instant `claimMatchDecision` above wrote their `acceptedBy*`
+  // — `resolveBannerStage` reads that field directly, independent of whether
+  // the row's `status` ever flips off `proposed`. Only the actor is pushed:
+  // the peer hasn't decided anything yet, so their own banner is unchanged.
+  await refreshStatusBanners(ctx.api, [actorId]).catch(() => {});
   await sendOrEditPostAcceptMessage({
     api: ctx.api,
     matchId: match.id,
@@ -499,6 +518,10 @@ async function handleDecline(
       data: { status: "cancelled" },
     });
     if (transitioned.count === 0) return;
+    // The match just died (mixed verdict or both declined) — both banners
+    // fall back to the ordinary drop countdown now rather than up to a
+    // minute from now.
+    await refreshStatusBanners(ctx.api, [match.userAId, match.userBId]).catch(() => {});
   }
 
   // Elo: actor's verdict is locked in (false). Peer's prior verdict is
@@ -512,6 +535,12 @@ async function handleDecline(
   }
 
   if (peerPrior === null) {
+    // The actor's OWN banner already stopped counting the 24h reply deadline
+    // the instant `claimMatchDecision` above wrote their `acceptedBy* = false`
+    // — `resolveBannerStage` treats a declined side as having nothing left to
+    // plan (§2.1), independent of the row's `status`, which stays `proposed`
+    // here. Only the actor is pushed: the peer hasn't decided anything yet.
+    await refreshStatusBanners(ctx.api, [actorId]).catch(() => {});
     // Blind nudge — peer doesn't yet know which way the actor went.
     await sendPeerDecidedNudge(ctx, match, side);
     return;

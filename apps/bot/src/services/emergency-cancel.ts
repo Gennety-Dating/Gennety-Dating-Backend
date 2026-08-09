@@ -3,6 +3,8 @@ import { t, type Language } from "@gennety/shared";
 import { applyEmergencyCancellationPeerBoost } from "../utils/elo-calculator.js";
 import { sendPushToUser } from "./push.js";
 import { refundMatchTickets, type TicketRefundOutcome } from "./ticket-refund.js";
+import { getMainBotApi } from "./main-bot-api.js";
+import { refreshStatusBanners } from "./status-banner-refresh.js";
 
 /**
  * Emergency cancellation of a `scheduled` date, shared by both surfaces
@@ -67,6 +69,16 @@ export async function cancelScheduledDate(input: {
     },
   });
   if (claimed.count === 0) return { ok: false, error: "wrong-state" };
+
+  // The pinned banner was counting down to THIS date (§2.1 mode "date") for
+  // both sides — one of whom may be on the OTHER surface from whoever just
+  // cancelled, which is exactly why this lives in the shared service rather
+  // than in either caller. It falls back to the ordinary drop countdown now
+  // instead of naming a moment that no longer exists for up to a minute.
+  const api = getMainBotApi();
+  if (api) {
+    await refreshStatusBanners(api, [match.userAId, match.userBId]).catch(() => {});
+  }
 
   const peerUserId = input.actorUserId === match.userAId ? match.userBId : match.userAId;
   await applyEmergencyCancellationPeerBoost(peerUserId).catch((err: unknown) => {

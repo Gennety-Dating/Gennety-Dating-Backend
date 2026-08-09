@@ -1,5 +1,85 @@
 # Gennety Dating Deploy
 
+**PENDING — the pinned banner push extends to accept/decline, first venue
+assignment, TTL expiry and emergency cancellation (PRODUCT_SPEC §2.1,
+DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no
+flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only.
+Rides the same `services/status-banner-refresh.ts` the block below introduces,
+so both blocks ship together in one restart, and `pnpm demo:deploy` after it.
+
+Follow-up to the venue-change push below: once that gap was found, the obvious
+question was where else the once-a-minute `status-timer` tick was the ONLY
+thing keeping the pinned banner honest. Five more spots, all fixed the same
+way — push the re-render the instant the write lands, instead of leaving it to
+the tick:
+
+- **A match's first venue assignment** (`services/scheduled-confirmation.ts`)
+  — the moment `status` becomes `scheduled`, which is also the FIRST time the
+  banner's countdown + venue name appear at all (flipping off the no-countdown
+  "planning" mode shown throughout negotiation).
+- **Every successfully claimed accept/decline** (`handlers/matching/
+  decision.ts`) — mutual accept flips "decision" (24h countdown) → "planning";
+  a mixed verdict or a second decline flips either mode back to the plain drop
+  countdown.
+- **The 24h reply-deadline TTL** (`services/match-expiry.ts`) — same
+  drop-countdown fallback, for a match nobody answered in time.
+- **Emergency cancellation of a scheduled date** (`services/
+  emergency-cancel.ts`, shared by the Telegram flow and the native
+  `/v1/matches/{id}/cancel` rail) — the banner was counting down to a date
+  that no longer exists.
+
+**Four things worth knowing before the restart:**
+
+- **Two of the five have no `ctx.api` at all.** `match-expiry.ts` runs off an
+  hourly cron tick and `emergency-cancel.ts` is a transport-agnostic service
+  shared by two surfaces, so neither has a handler context to push through.
+  Both read the process-wide bot handle via `getMainBotApi()`
+  (`services/main-bot-api.ts`) — the same idiom `founder-notify.ts` and
+  `proxy-chat.ts` already use for exactly this — and both no-op (never throw)
+  before the bot has finished booting.
+- **One of the five fires with the row's `status` still `proposed`.** A first
+  decider's own accept or decline already changes THEIR OWN banner mode the
+  instant `claimMatchDecision` writes `acceptedByA/B` — independent of whether
+  `status` ever moves off `proposed` at all. `resolveBannerStage` reads that
+  field directly, so this is real and was previously invisible to anyone
+  watching only for a status transition. Only the actor is pushed there; the
+  peer hasn't decided anything yet, so their own banner is unaffected.
+- **The mixed-cancel branch in `handleAccept` pushes AFTER the `cancelled`
+  transition, not right after the claim.** Pushing earlier would have
+  rendered "planning" for a match whose real, imminent outcome is `cancelled`
+  — smaller than the bug being fixed, but still a wrong state, so the ordering
+  matters here specifically.
+- **This adds at most one extra `editMessageText` call per side per event**,
+  and only on events that were already rare per user (an accept/decline, a
+  venue getting assigned, a 24h timeout, an emergency cancel) — nothing here
+  runs on a hot path. Every push shares the render-cache from the block below,
+  so a push that lands before the next tick simply satisfies it.
+
+Preflight for this change: typecheck clean across all 5 projects, lint clean,
+**3479 bot tests** (0 failed, +4 new — 2 in `match-expiry.test.ts`, 2 in
+`emergency-cancel.test.ts`; the `decision.ts` and `scheduled-confirmation.ts`
+call sites are asserted by extending the five existing scenarios in
+`handlers/matching/matching.test.ts` that already cover them, plus the four
+"lost the race" tests asserting the push does NOT fire for the loser).
+
+Post-deploy check — none of these log on the happy path, so the assertion is
+by eye on the demo or `@gennetytestbot` (production has 2 matches ever, both
+terminal, so nothing here is exercised there yet):
+
+```sh
+pm2 logs gennety-bot  --lines 200 --nostream | grep 'push refresh failed'
+pm2 logs gennety-demo --lines 200 --nostream | grep 'push refresh failed'
+# Empty = nothing failing. Then: accept a pitch and watch the pinned banner
+# flip off its 24h countdown within the second, not within a minute; let a
+# pitch expire and watch it fall back to the drop countdown immediately.
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema,
+no env, no flag, no Mini App state. Reverting restores the ≤60s lag on these
+five transitions (the venue-change push below is unaffected either way).
+
+---
+
 **PENDING — the pinned banner updates the moment the venue changes (PRODUCT_SPEC
 §2.1 / §3.7b, DECISIONS.md).** Not deployed yet. **No Prisma schema change, no
 env change, no flag change, no Mini App change** (`apps/webapp` untouched) —

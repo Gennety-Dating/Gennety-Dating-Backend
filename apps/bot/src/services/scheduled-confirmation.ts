@@ -43,6 +43,7 @@ import {
 import { isTelegramTarget } from "../utils/telegram-target.js";
 import { runStatusSequence, NEVER_CUT_SHORT } from "./ai-stream.js";
 import { dateCardSteps } from "./analysis-status.js";
+import { refreshStatusBanners } from "./status-banner-refresh.js";
 
 export function buildScheduledMapsKeyboard(venue: Venue, lang: Language): InlineKeyboardMarkup {
   const url = buildVenueMapsUrl(venue);
@@ -193,6 +194,7 @@ export async function deliverScheduledConfirmation(
       agreedTime: true,
       userA: {
         select: {
+          id: true,
           telegramId: true,
           language: true,
           theme: true,
@@ -204,6 +206,7 @@ export async function deliverScheduledConfirmation(
       },
       userB: {
         select: {
+          id: true,
           telegramId: true,
           language: true,
           theme: true,
@@ -216,6 +219,14 @@ export async function deliverScheduledConfirmation(
     },
   });
   if (!match || !match.agreedTime) return;
+
+  // The pinned banner prints its FIRST countdown + venue name exactly here —
+  // the moment a match becomes `scheduled` (§2.1 mode "date"), flipping from
+  // the no-countdown "planning" mode it showed throughout negotiation. Pushed
+  // before any of the slower per-side work below (blurb generation, card
+  // rendering), so a hiccup downstream can never delay it, and independently
+  // of whether that work ever reaches the founder-feed/cache steps at the end.
+  await refreshStatusBanners(api, [match.userA.id, match.userB.id]).catch(() => {});
 
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;

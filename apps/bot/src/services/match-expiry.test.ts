@@ -20,6 +20,17 @@ vi.mock("../utils/elo-calculator.js", () => ({
   applySilentIgnorePenalty: vi.fn().mockResolvedValue(490),
 }));
 
+const { mGetMainBotApi, mRefreshStatusBanners } = vi.hoisted(() => ({
+  mGetMainBotApi: vi.fn(() => null as unknown),
+  mRefreshStatusBanners: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("./main-bot-api.js", () => ({
+  getMainBotApi: () => mGetMainBotApi(),
+}));
+vi.mock("./status-banner-refresh.js", () => ({
+  refreshStatusBanners: (...args: unknown[]) => mRefreshStatusBanners(...args),
+}));
+
 import { prisma } from "@gennety/db";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { expireStaleMatches } from "./match-expiry.js";
@@ -74,6 +85,7 @@ describe("expireStaleMatches", () => {
     vi.clearAllMocks();
     mMatchUpdateMany.mockResolvedValue({ count: 1 });
     mMatchFindMany.mockResolvedValue([]);
+    mGetMainBotApi.mockReturnValue(null);
   });
 
   it("filters candidates by status only — the deadline check happens in memory, not SQL", async () => {
@@ -138,6 +150,28 @@ describe("expireStaleMatches", () => {
     expect(result.matches).toEqual([]);
     expect(mProfileUpdate).not.toHaveBeenCalled();
     expect(mEventCreate).not.toHaveBeenCalled();
+    expect(mRefreshStatusBanners).not.toHaveBeenCalled();
+  });
+
+  it("pushes the pinned banner back to the drop countdown for both sides once a match expires", async () => {
+    // Its 24h "decision" countdown just ran out with nothing left to count —
+    // pushed now rather than left stale for up to a minute on the tick.
+    const api = { editMessageText: vi.fn() };
+    mGetMainBotApi.mockReturnValue(api);
+    mMatchFindMany.mockResolvedValueOnce([buildCandidate({ acceptedByA: true })]);
+
+    await expireStaleMatches();
+
+    expect(mRefreshStatusBanners).toHaveBeenCalledWith(api, ["user-a", "user-b"]);
+  });
+
+  it("never throws when the bot has not finished booting (getMainBotApi() is null)", async () => {
+    mMatchFindMany.mockResolvedValueOnce([buildCandidate({ acceptedByA: true })]);
+
+    const result = await expireStaleMatches();
+
+    expect(result.expired).toBe(1);
+    expect(mRefreshStatusBanners).not.toHaveBeenCalled();
   });
 
   it("first-offense silent side: increments counter, NO Elo penalty, classifies as silent", async () => {

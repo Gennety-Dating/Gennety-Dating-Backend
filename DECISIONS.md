@@ -47,6 +47,60 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-09 — the pinned banner push extends to every stage transition, not only the venue change
+
+**Kind:** founder decision
+**What:** `refreshStatusBanners` is now called from five more places, all
+sharing the exact same `services/status-banner-refresh.ts` helper the venue-
+change fix added: `services/scheduled-confirmation.ts` (a match's first venue
+assignment — the moment it becomes `scheduled` and the banner shows its FIRST
+countdown + venue name at all), `handlers/matching/decision.ts` (every
+successfully claimed accept/decline — mutual accept, a first decider's own
+mode flip, and both cancel branches), `services/match-expiry.ts` (the 24h
+reply-deadline TTL), and `services/emergency-cancel.ts` (cancelling a
+scheduled date, shared by both the Telegram and native rails).
+**Why:** the founder asked, after the venue-change fix, whether there were
+other places with "the same bug" — and there were. The mechanism is identical
+everywhere: `resolveBannerStage` derives the banner's mode from `Match` columns
+a handler just wrote, and until this change only the once-a-minute
+`status-timer` tick ever re-read them. Two of the five spots were not in the
+original inventory I gave and were found only while reading the code: a FIRST
+decider's own accept/decline already changes THEIR OWN banner stage
+(`decided === true` → "planning", `decided === false` → the drop fallback)
+**even though the match row stays `proposed`** — `claimMatchDecision` writes
+only `acceptedBy*`, never `status`, so this is invisible to anyone who only
+watches for a status transition. Both are the identical staleness bug in
+miniature and cost nothing extra to close (`refreshStatusBanners` is
+idempotent — a stage that hasn't actually changed is a signature-cache hit,
+not a wasted edit), so they're fixed alongside the three the founder named.
+**What it changes going forward:**
+- **Two of these five call sites (`match-expiry.ts`, `emergency-cancel.ts`)
+  have no `ctx.api`** — they're transport-agnostic services invoked from a
+  cron tick or from either surface (Telegram + the native `/v1/matches/{id}/
+  cancel` rail). They read the process-wide handle via
+  `getMainBotApi()` (`services/main-bot-api.ts`), the same idiom already used
+  by `founder-notify.ts` / `proxy-chat.ts` / `account-deletion.ts` for exactly
+  this shape of problem — not a new pattern. Both null-check it and no-op
+  before the bot has finished booting, same as those callers.
+- **The mixed-cancel branch in `handleAccept` (peer already declined, actor
+  now accepts) is pushed AFTER the `cancelled` transition, not right after
+  `claimMatchDecision`.** Pushing earlier would have briefly rendered
+  "planning" (the actor's own bare accept) for a match whose true, imminent
+  outcome is `cancelled` — a new wrong state, smaller than the one being
+  fixed but still wrong. The rule going forward: push against whatever the
+  row will actually settle as, not against an intermediate write that a later
+  statement in the same function is about to override.
+- Do not add a sixth call site casually. If a future change writes to
+  `Match.status`, `acceptedByA/B`, `agreedTime`, or `venueName` and the write
+  is visible to the user on the same screen as the pinned banner, check
+  whether `resolveBannerStage` reads that field before assuming the once-a-
+  minute tick is good enough — it usually isn't, on the screen the user is
+  actually looking at.
+**Recorded in:** PRODUCT_SPEC.md §2.1; ARCHITECTURE.md → Cron & Workers
+(`status-timer` row) and → `main-bot-api.ts`; deploy.md → the 2026-08-09 block.
+
+---
+
 ## 2026-08-09 — the Kyiv catalog is imported into production, and a file edit is not a shipped change
 
 **Kind:** founder decision

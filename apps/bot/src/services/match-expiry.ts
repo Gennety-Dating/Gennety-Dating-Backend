@@ -3,6 +3,8 @@ import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
 import { createMatchEvent } from "./match-events.js";
 import { deadlineFor } from "./proposal-deadline.js";
+import { getMainBotApi } from "./main-bot-api.js";
+import { refreshStatusBanners } from "./status-banner-refresh.js";
 
 /**
  * Reply-deadline expiration for dispatched match proposals.
@@ -119,6 +121,12 @@ interface CandidateMatch {
  * `proposalDeadlineAt` column, not a change to this function's shape.
  */
 export async function expireStaleMatches(now: Date = new Date()): Promise<ExpiryResult> {
+  // A transport-agnostic worker function, called on a cron tick rather than
+  // from a handler — no `ctx.api` to thread through. Same idiom as
+  // `founder-notify.ts` / `proxy-chat.ts`: read the process-wide handle once,
+  // and every push below no-ops before the bot has finished booting.
+  const api = getMainBotApi();
+
   const candidates: CandidateMatch[] = await prisma.match.findMany({
     where: {
       status: "proposed",
@@ -156,6 +164,16 @@ export async function expireStaleMatches(now: Date = new Date()): Promise<Expiry
       data: { status: "expired" },
     });
     if (flip.count === 0) continue;
+
+    // The pinned banner was counting down this match's 24h reply deadline
+    // (§2.1 mode "decision") and has nothing left to count now that it has
+    // expired — push both sides back to the ordinary drop countdown rather
+    // than leaving the stale deadline up for up to a minute.
+    if (api) {
+      await refreshStatusBanners(api, [candidate.userAId, candidate.userBId]).catch(
+        () => {},
+      );
+    }
 
     const sides = await classifyAndPenalise(candidate);
     matches.push({ matchId: candidate.id, sides });

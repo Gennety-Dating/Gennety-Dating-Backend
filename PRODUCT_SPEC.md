@@ -1916,15 +1916,40 @@ and by the time you are back the tick has fired.) Both settle paths — the paid
 one and the free Premium/demo one — now re-render the banner for both sides
 immediately (`services/status-banner-refresh.ts`).
 
+**Every other stage transition the tick used to be the sole writer for is
+pushed the same way (2026-08-09).** Once the venue-change gap was fixed the
+obvious question was where else the identical bug lived, and the answer was:
+everywhere a handler writes the columns `resolveBannerStage` reads. Five more
+call sites push now: a match's first venue assignment (`services/scheduled-
+confirmation.ts` — the moment `status` becomes `scheduled` and mode 2's
+countdown + venue name appear for the first time, flipping off the no-countdown
+"planning" mode shown throughout negotiation); every successfully claimed
+accept or decline (`handlers/matching/decision.ts` — mutual accept flips
+"decision" → "planning"; a mixed verdict or a second decline flips either mode
+back to the plain drop countdown); the 24h reply-deadline TTL
+(`services/match-expiry.ts` — same drop-countdown fallback, for a match nobody
+answered in time); and emergency cancellation of a scheduled date
+(`services/emergency-cancel.ts`, shared by the Telegram flow and the native
+`/v1/matches/{id}/cancel` rail — the countdown was counting toward a date that
+no longer exists). One of the five is smaller than a status transition: the
+FIRST decider's own accept or decline already flips **their own** banner mode
+the instant `claimMatchDecision` writes `acceptedByA/B`, independent of whether
+`status` ever moves off `proposed` — so that push fires for the actor alone,
+before the row's status is touched at all.
+
 The push is deliberately **narrow, and is not a second banner mechanism**: it
 only ever EDITS a banner that already exists, it never records failures or
 clears pointers (the missing message, the unreachable chat and the backoff
 ladder stay the worker's, which reaches the same user within a minute anyway),
 and it shares the worker's render cache, so a pushed render simply satisfies the
 next tick rather than being re-sent. It cannot fail a settled change: the
-irreversible step never depends on a cosmetic re-render. The other stage
-transitions (a date locking in, a decision landing) keep the ≤60s poll — the
-same lag exists there, but it is not what a user is staring at.
+irreversible step never depends on a cosmetic re-render. Two of the five new
+call sites have no handler `ctx.api` to push through at all — `match-expiry.ts`
+runs off a cron tick, and `emergency-cancel.ts` is shared by two transports — so
+both read the process-wide bot handle via `getMainBotApi()`
+(`services/main-bot-api.ts`), the same idiom `founder-notify.ts` and
+`proxy-chat.ts` already use for this exact shape of problem, and both no-op
+before the bot has finished booting.
 
 The banner is otherwise self-healing: active Telegram users with a null/stale
 message id

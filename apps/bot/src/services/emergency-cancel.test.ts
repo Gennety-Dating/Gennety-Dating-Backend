@@ -19,6 +19,12 @@ vi.mock("./push.js", () => ({ sendPushToUser }));
 const refundMatchTickets = vi.fn();
 vi.mock("./ticket-refund.js", () => ({ refundMatchTickets }));
 
+const getMainBotApi = vi.fn((): unknown => null);
+vi.mock("./main-bot-api.js", () => ({ getMainBotApi }));
+
+const refreshStatusBanners = vi.fn();
+vi.mock("./status-banner-refresh.js", () => ({ refreshStatusBanners }));
+
 const { cancelScheduledDate } = await import("./emergency-cancel.js");
 
 const ACTOR = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -45,6 +51,8 @@ beforeEach(() => {
     { userId: ACTOR, refunded: 1 },
     { userId: PEER, refunded: 1 },
   ]);
+  getMainBotApi.mockReset().mockReturnValue(null);
+  refreshStatusBanners.mockReset().mockResolvedValue(undefined);
 });
 
 describe("cancelScheduledDate", () => {
@@ -88,6 +96,35 @@ describe("cancelScheduledDate", () => {
     // Nothing downstream may run for the loser of the race.
     expect(refundMatchTickets).not.toHaveBeenCalled();
     expect(sendPushToUser).not.toHaveBeenCalled();
+    expect(refreshStatusBanners).not.toHaveBeenCalled();
+  });
+
+  it("pushes the pinned banner back to the drop countdown for both sides", async () => {
+    // The date it was counting down to no longer exists — pushed now rather
+    // than left naming a cancelled date for up to a minute. Shared by BOTH
+    // surfaces (Telegram + the native /v1/matches/{id}/cancel rail), which is
+    // exactly why this lives here via the process-wide bot handle rather than
+    // in either caller.
+    const api = { editMessageText: vi.fn() };
+    getMainBotApi.mockReturnValue(api);
+    matchFindUnique.mockResolvedValue(scheduledRow());
+
+    await cancelScheduledDate({ matchId: "m1", actorUserId: ACTOR, reason: "x" });
+
+    expect(refreshStatusBanners).toHaveBeenCalledWith(api, [ACTOR, PEER]);
+  });
+
+  it("never throws when the bot has not finished booting (getMainBotApi() is null)", async () => {
+    matchFindUnique.mockResolvedValue(scheduledRow());
+
+    const result = await cancelScheduledDate({
+      matchId: "m1",
+      actorUserId: ACTOR,
+      reason: "x",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(refreshStatusBanners).not.toHaveBeenCalled();
   });
 
   it("pushes the partner without carrying the reason onto their lock screen", async () => {
