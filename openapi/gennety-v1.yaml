@@ -2480,14 +2480,6 @@ components:
       type: string
       enum: [consent, language, conversational, completed]
 
-    Gender:
-      type: string
-      enum: [male, female]
-
-    GenderPreference:
-      type: string
-      enum: [men, women, both]
-
     MatchRadius:
       type: string
       enum: [campus_only, citywide]
@@ -2529,18 +2521,29 @@ components:
         surname: { type: [string, "null"] }
         age: { type: [integer, "null"] }
         gender:
-          oneOf:
-            - $ref: "#/components/schemas/Gender"
-            - type: "null"
+          type: [string, "null"]
+          description: |
+            `male` | `female`. Null until onboarding collects it.
+
+            Nullable SCALAR, not `oneOf: [$ref Gender, "null"]` — see
+            `SerializedMatch.partnerGender` for the reasoning. These three
+            properties ARE the case that comment names: they were declared in
+            the unsupported shape, the generator dropped all three silently,
+            and iOS shipped without ever being able to read its own user's
+            gender, preference or language. Fixed at the source 2026-08-10.
+
+            The wire format does not change — the server sends the same value
+            or an explicit `null`, and the Mini App reads it unchanged.
         preference:
-          oneOf:
-            - $ref: "#/components/schemas/GenderPreference"
-            - type: "null"
+          type: [string, "null"]
+          description: "`men` | `women` | `both`. Null until onboarding collects it."
         major: { type: [string, "null"] }
         language:
-          oneOf:
-            - $ref: "#/components/schemas/Language"
-            - type: "null"
+          type: [string, "null"]
+          description: |
+            `en` | `ru` | `uk` | `de` | `pl`. The client renders from the
+            system locale, but needs this to know what the SERVER will write
+            in — a push, a DM, a rendered card.
         status: { $ref: "#/components/schemas/UserStatus" }
         onboardingStep: { $ref: "#/components/schemas/OnboardingStep" }
         termsAccepted: { type: boolean }

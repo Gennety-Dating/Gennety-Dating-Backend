@@ -47,6 +47,32 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-10 — the generator trap was documented and never fixed at the source
+
+**Kind:** a document turned out to be wrong
+**What:** `SerializedUser.gender`, `preference` and `language` were declared
+`oneOf: [$ref, "null"]`, the shape swift-openapi-generator drops silently. All
+three are now nullable scalars. The orphaned `Gender` / `GenderPreference`
+schemas are deleted with them.
+**Why this is worth recording rather than filing as a bug fix:** the comment on
+`SerializedMatch.partnerGender` has named `SerializedUser.language` as the
+victim of this trap since 2026-08-06. It was written while fixing a DIFFERENT
+property, cited the original as a cautionary tale, and nobody went back for it.
+Then `VenueIntentState.market` hit the same trap on 2026-08-05 and was fixed in
+isolation too. So the trap has now been discovered three times, documented
+twice, and the first instance survived both.
+**What it changes going forward:** a `$ref`-to-enum inside a nullable union is
+the one shape that fails **silently** — the spec lints clean, the server sends
+the field, and the property simply is not in the generated Swift. So a comment
+warning about it is not enough; the enums it referenced are deleted so nothing
+can `$ref` them back into that shape. **When a trap is found, grep the whole
+spec for it before closing the task** — that is what neither of the two earlier
+fixes did.
+**What it cost:** iOS could not read its own user's gender, preference or
+language for the entire life of the client. The first of those blocked the
+safety brief in 4.6, which is how it finally surfaced.
+**Recorded in:** `openapi/gennety-v1.yaml` → `SerializedUser`.
+
 ## 2026-08-09 — post-date feedback: the missing half was discovery, not the endpoint
 
 **Kind:** deviation from plan
