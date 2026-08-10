@@ -47,6 +47,79 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-10 — `DROP_CADENCE=daily` in production, and the Thursday gate was replaced by a dry run
+
+**Kind:** founder decision + deviation from plan
+**What:** production flipped to the `daily` cadence profile (batch `0 18 * * *`),
+with `pnpm cadence:normalize-standby --to=daily --apply` run first as its stated
+precondition. The rollout plan had gated this on observing at least one real
+Thursday drop with a working synthetic fill; the founder asked for the flip now,
+and it was taken because that gate could be satisfied a better way.
+**Why the gate was satisfiable without waiting:** `previewDropBatch` and
+`previewSyntheticFill` are pure — they compute the allocation and write nothing —
+so both were run against the production database directly. That is strictly more
+informative than waiting: it names the exact pairs rather than confirming a count
+after the fact, and it is repeatable. It produced three synthetic pairs covering
+every eligible Kyiv user, with sensible age fits (32М×31Ж, 21М×24Ж, 22Ж×26М).
+Waiting until Thursday would have observed the same thing three days later.
+**What the dry run actually found, which the plan had wrong:** the plan sized
+everything against "18 real men". Production has **4 match-eligible real users**,
+not 18 — 16 of the 20 real accounts never finished onboarding. Of those 4, one
+is in Kharkiv (an unlaunched market, so unmatchable by construction and correctly
+receiving the city-switch offer instead of a famine tier), leaving **2 men and 1
+woman in Kyiv**. And the real pass now yields **zero** pairs: the woman has
+already been matched with both men (expired 07-30, cancelled 08-06), so the
+lifetime pair ban (§3.2 filter 6) has exhausted the real pool completely. That is
+not a degraded state — it is precisely the condition synthetic profiles exist
+for, and it means the fill is load-bearing from the very first daily drop rather
+than a rare fallback.
+**What it changes going forward:**
+- **The synthetic runway is ~6 days, not ~6 weeks.** Each Kyiv man consumes one
+  synthetic woman per drop and the pair ban applies to synthetics too, so 12
+  women ÷ 2 men = 6 daily drops of full coverage (the single woman has 18 men =
+  18 drops). After that the men fall back to the ordinary famine path, which is
+  documented, correct behaviour — but if continuous coverage is wanted, more
+  synthetic **women** must be seeded before ~2026-08-16. Under weekly this was 6
+  weeks and invisible; daily is what makes it a scheduling concern.
+- **Every drop is now a rejection for these users.** Synthetics always decline —
+  that is the safety mechanism, not a limitation (a mutual accept would open the
+  §3.5b ticket gate and ask a real person for real Stars). Elo, `standbyCount`,
+  `silentIgnoreCount` and the priority boost are all guarded, so nothing
+  accumulates against them mechanically. But at daily cadence the *experience* is
+  a decline every evening rather than weekly, and that is a product judgement the
+  founder now owns explicitly rather than by accident.
+- **The rollback is no longer one env var.** It is `--to=weekly --apply` and
+  *then* the env change; reversing the order re-reads every counter at 7× and
+  pins the base at the starvation cap. deploy.md's block states this inline.
+**Recorded in:** deploy.md → the 2026-08-10 block at the top; PRODUCT_SPEC §3.1 /
+§3.1c already describe both profiles.
+
+---
+
+## 2026-08-10 — deploy.md's PENDING backlog was 15 blocks of already-shipped work
+
+**Kind:** a document turned out to be wrong
+**What:** every one of the 15 remaining `**PENDING —` blocks in deploy.md
+described work that shipped in the 2026-08-09 backlog release. Verified rather
+than assumed: an md5 sweep of all 749 tracked `.ts`/`.tsx`/`.prisma` files under
+`apps/` + `packages/` found **prod byte-identical to local HEAD** (the only
+differences were four files under `apps/bot/tmp/`, which the deploy rsync
+excludes by design). All 15 marked deployed.
+**Why it matters more than tidiness:** this file is what a session reads to tell
+a real backlog from a stale label, and the 2026-08-07 entry below records the
+opposite failure — a block that read as shipped and was not. Both directions
+make the file useless as a backlog, and this direction is the one that wastes a
+deploy: the next session would have re-verified, re-sequenced and re-run schema
+steps for sixteen changes that were already live.
+**What it changes going forward:** the md5 tree sweep in deploy.md → "Prod
+anchor" is the check that settles this in one command, and it should be run at
+the END of a multi-block release, not only at the start of the next one. A block
+is marked the moment its release is verified, not when someone next notices.
+**Recorded in:** deploy.md (16 blocks re-headed `Deployed 2026-08-09 (was
+PENDING)`).
+
+---
+
 ## 2026-08-10 — I wrote the same trap into the feedback endpoints, hours after documenting it
 
 **Kind:** change of mind

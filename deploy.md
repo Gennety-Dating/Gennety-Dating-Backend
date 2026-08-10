@@ -1,7 +1,70 @@
 # Gennety Dating Deploy
 
-**PENDING — post-date feedback reaches the app at all (PRODUCT_SPEC §Phase 4.3,
-DECISIONS.md ×3).** Not deployed yet. **No Prisma schema change, no env change,
+**Applied 2026-08-10 (env-only) — `DROP_CADENCE=daily`: matching runs every
+evening (PRODUCT_SPEC §3.1, DECISIONS.md).** **No code change, no Prisma schema
+change, no Mini App change** — the `daily` profile has shipped in code since
+2026-08-02 and was inert. Two steps, in this order, and the order is the whole
+risk:
+
+```sh
+# 1. FIRST — rescale the counters, BEFORE the env flip. The script's own guard
+#    reads DROP_CADENCE as the statement of which scale the data is on, so it
+#    refuses if you flip first.
+pnpm cadence:normalize-standby -- --to=daily --prod          # dry run, read it
+pnpm cadence:normalize-standby -- --to=daily --prod --apply
+# 2. THEN the flip.
+cd /opt/gennety && cp .env ".env.bak.$(date +%Y%m%d-%H%M%S)"
+echo 'DROP_CADENCE=daily' >> .env
+pm2 restart gennety-bot --update-env && pm2 save
+```
+
+Applied here: 38 profiles scanned, **3 rescaled** (1→7, 1→7, 2→14), which
+preserves each user's starvation weight exactly — `alpha` moves 0.05 → 0.05/7,
+so 7 daily cycles buy the same bonus 1 weekly cycle did. Backup
+`.env.bak.20260810-181310`.
+
+**Five things that change, verified live from the running process:**
+
+- **The batch cron is `0 18 * * *`** (was `0 18 * * 4`) and the no-match cron
+  `15 18 * * *`. Both confirmed in the startup log after restart.
+- **Famine notices stay WEEKLY.** `famineNoticeIntervalMs` is 7 days in *both*
+  profiles ("match daily, apologise weekly", §3.1), and it is a query-level
+  filter, so most evenings that find nobody now send **nothing at all**. That
+  silence is deliberate — do not read it as a broken cron.
+- **The pinned banner drops its countdown** for everyone without a live match
+  (`dropOutpacesNotices()` → `true`, verified). A timer is only honest if
+  reaching zero resolves into something, and under `daily` it would hit zero
+  into that deliberate silence six evenings out of seven. Mode 5 shows a steady
+  "I'm looking — I check every evening" instead, plus the Rematch entry for a
+  man who could buy one.
+- **Planning deadlines halve**: cooldown 24h → **6h**, proposal nudges 3h/10h →
+  **2h/8h**, scheduling nudges 6h/12h → **3h/6h**, stall check-in/cancel 24h/48h
+  → **12h/24h**, Profiler rush window 48h → **4h**.
+- **Rematch limits follow the profile** (`rematchLimits()`): **7 per 7 days**
+  with the 24h cooldown as the real governor, and the pre-batch blackout 6h →
+  **1h** (6h is 3.5% of a week and 25% of a day). `rematchGiftCapMs` stays **7
+  days in both profiles** — every other knob describes what the BUYER may do,
+  that one protects the woman he is buying his way to. A test pins it.
+
+**Timing gotcha:** the flip landed at 21:14 Kyiv, i.e. after that day's 18:00
+slot, so the first daily drop is the FOLLOWING evening — not the same night.
+
+Post-flip verification (all green): restart count 58 → 59 with no loop, 0
+errors from the new PID, `/v1/ping` ok, admin `401`, all 11 Mini App pages
+`200`, `supportedCities` still Kyiv-only, and the loaded profile read back from
+the process itself (cron string, famine interval, gift cap, banner predicate,
+`starvationAlpha === 0.05/7`).
+
+**Rollback:** remove the `DROP_CADENCE` line (or set `weekly`) and
+`pm2 restart gennety-bot --update-env` — **but run
+`pnpm cadence:normalize-standby -- --to=weekly --prod --apply` FIRST**, or every
+accumulated counter is re-read at 7× its weight and pins the whole base at the
+starvation cap, which deletes priority ordering rather than inflating it.
+
+---
+
+**Deployed 2026-08-09 (was PENDING) — post-date feedback reaches the app at all (PRODUCT_SPEC §Phase 4.3,
+DECISIONS.md ×3).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma schema change, no env change,
 no flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only,
 so a full server code deploy carries it, plus `pnpm demo:deploy`. The client
 half ships from the iOS repo separately.
@@ -53,8 +116,11 @@ env, no flag. The added i18n keys are inert once the caller is gone.
 
 ---
 
-**PENDING — synthetic test profiles for the friends-and-family production run
-(PRODUCT_SPEC §3.1c, DECISIONS.md ×2).** Not deployed yet. **No Mini App
+**Deployed 2026-08-09 (was PENDING) — synthetic test profiles for the
+friends-and-family production run (PRODUCT_SPEC §3.1c, DECISIONS.md ×2).**
+Deployed 2026-08-09: schema pushed, 30 profiles seeded (12 women / 18 men, 207
+photos), `SYNTHETIC_FILL_ENABLED=true` and the auto-decline cron confirmed
+registered. **No Mini App
 change** (`apps/webapp` untouched), but it needs an **additive `db:push` BEFORE
 the restart**, plus **one env line** and a **seeding step**, so the full
 sequence is: Deploy Full Server Code → `db:push` → `pnpm db:drift-check` →
@@ -152,9 +218,9 @@ cohort** — this is scaffolding with an end date. The additive column can stay.
 
 ---
 
-**PENDING — daily Rematch groundwork: the cadence owns the limits, and two pull
+**Deployed 2026-08-09 (was PENDING) — daily Rematch groundwork: the cadence owns the limits, and two pull
 entries (PRODUCT_SPEC §3.11 / §2.1 mode 5, REMATCH_PRODUCT_SPEC, DECISIONS.md
-×3).** Not deployed yet. **No Prisma schema change, no env change, no flag
+×3).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma schema change, no env change, no flag
 change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so a
 full server code deploy carries it, plus `pnpm demo:deploy`.
 
@@ -209,9 +275,9 @@ env, no flag, no Mini App state.
 
 ---
 
-**PENDING — the pinned banner push extends to accept/decline, first venue
+**Deployed 2026-08-09 (was PENDING) — the pinned banner push extends to accept/decline, first venue
 assignment, TTL expiry and emergency cancellation (PRODUCT_SPEC §2.1,
-DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no
+DECISIONS.md).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma schema change, no env change, no
 flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only.
 Rides the same `services/status-banner-refresh.ts` the block below introduces,
 so both blocks ship together in one restart, and `pnpm demo:deploy` after it.
@@ -289,8 +355,8 @@ five transitions (the venue-change push below is unaffected either way).
 
 ---
 
-**PENDING — the pinned banner updates the moment the venue changes (PRODUCT_SPEC
-§2.1 / §3.7b, DECISIONS.md).** Not deployed yet. **No Prisma schema change, no
+**Deployed 2026-08-09 (was PENDING) — the pinned banner updates the moment the venue changes (PRODUCT_SPEC
+§2.1 / §3.7b, DECISIONS.md).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma schema change, no
 env change, no flag change, no Mini App change** (`apps/webapp` untouched) —
 bot-side only. It touches the same two settle paths as the block below, so both
 ship in one restart; that block's additive `db:push` covers the pair.
@@ -345,8 +411,8 @@ env, no flag, no Mini App state. Reverting restores the ≤60s lag.
 
 ---
 
-**PENDING — the venue can be changed twice (PRODUCT_SPEC §3.7b, DECISIONS.md).**
-Not deployed yet. **No env change, no flag change** — but it needs an **additive
+**Deployed 2026-08-09 (was PENDING) — the venue can be changed twice (PRODUCT_SPEC §3.7b, DECISIONS.md).**
+Deployed 2026-08-09 in the 32-commit backlog release. **No env change, no flag change** — but it needs an **additive
 `db:push` BEFORE the restart**, and it is half client, so the full sequence is:
 Deploy Full Server Code → `db:push` → `pnpm db:drift-check` → `pm2 restart` →
 `./scripts/deploy-webapp.sh` → `pnpm demo:deploy`.
@@ -500,8 +566,8 @@ and changes no behaviour.
 
 ---
 
-**PENDING — the venue board stops being a wall of tables (PRODUCT_SPEC §3.7b,
-DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no
+**Deployed 2026-08-09 (was PENDING) — the venue board stops being a wall of tables (PRODUCT_SPEC §3.7b,
+DECISIONS.md).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma schema change, no env change, no
 flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so
 a full server code deploy carries it, plus `pnpm demo:deploy`. The whole diff is
 `capCatalog` in `services/venue-change.ts` plus its tests and docs.
@@ -548,8 +614,8 @@ without a full revert.
 
 ---
 
-**PENDING — the departure-point search returns results again (PRODUCT_SPEC §3.7,
-DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no
+**Deployed 2026-08-09 (was PENDING) — the departure-point search returns results again (PRODUCT_SPEC §3.7,
+DECISIONS.md).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma schema change, no env change, no
 flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so
 a full server code deploy carries it, plus `pnpm demo:deploy`. **The demo needs
 it as much as prod**: the demo is where the venue step is actually reachable
@@ -607,8 +673,8 @@ env, no flag, no Mini App state. Reverting restores the broken search.
 
 ---
 
-**PENDING — the calendar's time list opens at the evening (PRODUCT_SPEC §3.6,
-DECISIONS.md).** Not deployed yet. **No Prisma schema change, no env change, no
+**Deployed 2026-08-09 (was PENDING) — the calendar's time list opens at the evening (PRODUCT_SPEC §3.6,
+DECISIONS.md).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma schema change, no env change, no
 flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is
 `apps/webapp/src/main.ts` plus docs. **Deploy Mini App Only**
 (`./scripts/deploy-webapp.sh`); nothing to rsync to `/opt/gennety`, **no
@@ -656,7 +722,7 @@ no flag, no server state.
 
 ---
 
-**PENDING — the gate's waiting screen: the countdown stops hiding behind the
+**Deployed 2026-08-09 (was PENDING) — the gate's waiting screen: the countdown stops hiding behind the
 Close button, and says whose it is (PRODUCT_SPEC §3.5b, DECISIONS.md ×3).** Not
 deployed yet. **No Prisma schema change, no env change, no flag change, and NO
 SERVER CODE CHANGE AT ALL** — the diff is `apps/webapp/**` plus docs. **Deploy
@@ -721,8 +787,8 @@ flag, no server state.
 
 ---
 
-**PENDING — a forgotten menu edit stops owning the chat, and About me shows what
-it replaces (PRODUCT_SPEC §2.1, DECISIONS.md).** Not deployed yet. **No Prisma
+**Deployed 2026-08-09 (was PENDING) — a forgotten menu edit stops owning the chat, and About me shows what
+it replaces (PRODUCT_SPEC §2.1, DECISIONS.md).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma
 schema change, no env change, no flag change, no Mini App change**
 (`apps/webapp` untouched) — bot-side only, so a full server code deploy carries
 all of it, plus `pnpm demo:deploy`.
@@ -776,8 +842,8 @@ env, no flag. The extra session field is ignored by the old code.
 
 ---
 
-**PENDING — venue-change photos are retried instead of dropped, and a failed
-one is no longer silent (PRODUCT_SPEC §3.7b, DECISIONS.md).** Not deployed yet.
+**Deployed 2026-08-09 (was PENDING) — venue-change photos are retried instead of dropped, and a failed
+one is no longer silent (PRODUCT_SPEC §3.7b, DECISIONS.md).** Deployed 2026-08-09 in the 32-commit backlog release.
 **No Prisma schema change, no env change, no flag change.** Half server, half
 client, so it needs BOTH: Deploy Full Server Code → `pnpm db:drift-check` →
 `pm2 restart` → `./scripts/deploy-webapp.sh` → `pnpm demo:deploy`.
@@ -838,9 +904,9 @@ Nothing else to undo — no schema, no env, no flag, no server state.
 
 ---
 
-**PENDING — security audit remediation: the demo stops holding production's JWT
+**Deployed 2026-08-09 (was PENDING) — security audit remediation: the demo stops holding production's JWT
 secret and stops being able to send real SMS (DECISIONS.md ×3, DEMO_MODE.md →
-The isolation invariant).** Not deployed yet. **No Prisma schema change, no flag
+The isolation invariant).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma schema change, no flag
 change, no Mini App change** (`apps/webapp` untouched) — bot-side only, so a full
 server code deploy carries all of it, plus `pnpm demo:deploy`. **One env change,
 demo-side only**, and it must land BEFORE the demo redeploy or the new gate will
@@ -915,8 +981,8 @@ vulnerability. The `console` provider rows expire on their own within 7 days.
 
 ---
 
-**PENDING — the ticket becomes a portrait object, the recommended bundle becomes
-a burgundy button (PRODUCT_SPEC §3.5b).** Not deployed yet. **No Prisma schema
+**Deployed 2026-08-09 (was PENDING) — the ticket becomes a portrait object, the recommended bundle becomes
+a burgundy button (PRODUCT_SPEC §3.5b).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma schema
 change, no env change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the
 diff is `apps/webapp/**` plus docs. **Deploy Mini App Only**
 (`./scripts/deploy-webapp.sh`); nothing to rsync to `/opt/gennety`, **no
@@ -1168,8 +1234,8 @@ env, no flag. Sessions already erased stay erased, which is the correct state.
 
 ---
 
-**PENDING — "invite a friend instead" becomes one chip instead of five rows
-(PRODUCT_SPEC §3.9).** Not deployed yet. **No Prisma schema change, no env
+**Deployed 2026-08-09 (was PENDING) — "invite a friend instead" becomes one chip instead of five rows
+(PRODUCT_SPEC §3.9).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma schema change, no env
 change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is
 `apps/webapp/**` plus docs, so this is the **Deploy Mini App Only** path
 (`./scripts/deploy-webapp.sh`), nothing to rsync to `/opt/gennety`, **no
@@ -1225,8 +1291,8 @@ flag, no server state.
 
 ---
 
-**PENDING — the two ticket screens get one light, and the card stops lying
-(PRODUCT_SPEC §3.5b).** Not deployed yet. **No Prisma schema change, no env
+**Deployed 2026-08-09 (was PENDING) — the two ticket screens get one light, and the card stops lying
+(PRODUCT_SPEC §3.5b).** Deployed 2026-08-09 in the 32-commit backlog release. **No Prisma schema change, no env
 change, no flag change, and NO SERVER CODE CHANGE AT ALL** — the diff is
 `apps/webapp/**` plus docs. So this is the **Deploy Mini App Only** path
 (`./scripts/deploy-webapp.sh`); there is nothing to rsync to `/opt/gennety` and
