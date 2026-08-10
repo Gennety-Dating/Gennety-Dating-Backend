@@ -47,6 +47,28 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-10 — I wrote the same trap into the feedback endpoints, hours after documenting it
+
+**Kind:** change of mind
+**What:** `GET /v1/me/feedback/pending` and its POST twin declared their one
+payload property as `oneOf: [$ref PendingFeedback, "null"]` — the exact shape
+the entry below is about. Both are now an optional bare `$ref`.
+**Why it matters more than the mistake:** I introduced it **the day before**
+writing that entry, and reviewing the spec did not catch it — regenerating the
+Swift client did, on the very run meant to verify the other fix. That is the
+whole lesson made concrete: this trap is not caught by reading, by review, or by
+`openapi:lint`. The spec is valid, the server sends the field, and the property
+silently does not exist in Swift. The generated client would have had no
+`pending` at all, so the endpoint that exists specifically to make the form
+reachable would have been unreadable.
+**What it changes going forward:** **`./scripts/generate-api.sh` is the gate for
+a contract change, not `openapi:lint`.** A clean generator run means zero
+`Schema "null" is not supported … skipping` lines; there are now zero for the
+first time. Adding a nullable object property means an optional bare `$ref`,
+never a union — the server may still send an explicit `null`, which an optional
+property decodes to absent, so the wire is unaffected either way.
+**Recorded in:** `openapi/gennety-v1.yaml` → both feedback responses.
+
 ## 2026-08-10 — the generator trap was documented and never fixed at the source
 
 **Kind:** a document turned out to be wrong

@@ -1003,12 +1003,16 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [pending]
+                description: |
+                  `pending` is OPTIONAL rather than a nullable union, and that
+                  is load-bearing: `oneOf: [$ref, "null"]` is the shape
+                  swift-openapi-generator drops in silence (see
+                  `SerializedUser.gender`). The server still sends an explicit
+                  `null` when nothing is owed; an optional property decodes
+                  that to absent, so the wire is unchanged and the property
+                  actually exists in the generated client.
                 properties:
-                  pending:
-                    oneOf:
-                      - $ref: "#/components/schemas/PendingFeedback"
-                      - type: "null"
+                  pending: { $ref: "#/components/schemas/PendingFeedback" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/me/feedback/post-date:
@@ -1082,12 +1086,16 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [pending]
+                description: |
+                  `pending` is OPTIONAL rather than a nullable union, and that
+                  is load-bearing: `oneOf: [$ref, "null"]` is the shape
+                  swift-openapi-generator drops in silence (see
+                  `SerializedUser.gender`). The server still sends an explicit
+                  `null` when nothing is owed; an optional property decodes
+                  that to absent, so the wire is unchanged and the property
+                  actually exists in the generated client.
                 properties:
-                  pending:
-                    oneOf:
-                      - $ref: "#/components/schemas/PendingFeedback"
-                      - type: "null"
+                  pending: { $ref: "#/components/schemas/PendingFeedback" }
         "400":
           description: |
             `bad-chemistry`, `bad-second-date`, or `empty-text` (nothing at all
