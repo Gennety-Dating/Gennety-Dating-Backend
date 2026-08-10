@@ -1,10 +1,14 @@
 import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { t, type Language, SUPPORTED_LANGUAGES } from "@gennety/shared";
+import { t } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
-import { recordPostDateFeedback } from "../../handlers/date/feedback.js";
+import {
+  normaliseFeedback,
+  resolveLanguage,
+  submitPostDateFeedback,
+} from "../../services/post-date-feedback.js";
 import { recordMiniAppAction } from "../../services/chat-events.js";
 
 /**
@@ -13,96 +17,6 @@ import { recordMiniAppAction } from "../../services/chat-events.js";
  * surfacing as a 500 in the Mini App.
  */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const ALLOWED_LANGS: ReadonlySet<Language> = new Set(SUPPORTED_LANGUAGES);
-const ALLOWED_SECOND_DATE = new Set(["yes", "maybe", "no"] as const);
-const ALLOWED_VENUE_FIT = new Set(["yes", "partly", "no"] as const);
-const ALLOWED_VENUE_REASONS = new Set(["wrong_vibe", "too_loud", "too_expensive", "route_unfair", "accessibility", "closed_or_unavailable"]);
-type SecondDateAnswer = "yes" | "maybe" | "no";
-
-const MAX_TEXT_LEN = 1000;
-
-interface FeedbackBody {
-  matchId?: unknown;
-  text?: unknown;
-  chemistry?: unknown;
-  wantsSecondDate?: unknown;
-  language?: unknown;
-  venueFit?: unknown;
-  venueFitReasons?: unknown;
-}
-
-/**
- * Convert the structured Mini App inputs into the single text blob the LLM
- * post-date analyst expects (`parsePostDateFeedbackPrompt`). We don't add
- * new Prisma columns for chemistry / second-date — keeping the row schema
- * untouched is the lower-risk path and the LLM already understands these
- * cues from prose.
- */
-function composeFeedbackText(input: {
-  text: string;
-  chemistry: number;
-  wantsSecondDate: SecondDateAnswer;
-  language: Language;
-}): string {
-  const headers: Record<Language, { chem: string; second: string; notes: string; yes: string; maybe: string; no: string }> = {
-    en: {
-      chem: "Chemistry (1–10)",
-      second: "Second date?",
-      notes: "Notes",
-      yes: "yes",
-      maybe: "maybe",
-      no: "no",
-    },
-    ru: {
-      chem: "Химия (1–10)",
-      second: "Готов(а) на вторую встречу?",
-      notes: "Комментарий",
-      yes: "да",
-      maybe: "может быть",
-      no: "нет",
-    },
-    uk: {
-      chem: "Хімія (1–10)",
-      second: "Готовий(а) на другу зустріч?",
-      notes: "Коментар",
-      yes: "так",
-      maybe: "можливо",
-      no: "ні",
-    },
-    de: {
-      chem: "Chemie (1–10)",
-      second: "Zweites Date?",
-      notes: "Notizen",
-      yes: "ja",
-      maybe: "vielleicht",
-      no: "nein",
-    },
-    pl: {
-      chem: "Chemia (1–10)",
-      second: "Druga randka?",
-      notes: "Notatki",
-      yes: "tak",
-      maybe: "może",
-      no: "nie",
-    },
-  };
-  const labels = headers[input.language];
-  const secondLabel =
-    input.wantsSecondDate === "yes"
-      ? labels.yes
-      : input.wantsSecondDate === "no"
-        ? labels.no
-        : labels.maybe;
-
-  return [
-    `${labels.chem}: ${input.chemistry}`,
-    `${labels.second}: ${secondLabel}`,
-    input.text ? `${labels.notes}: ${input.text}` : null,
-  ]
-    .filter((line): line is string => line !== null)
-    .join("\n");
-}
 
 /**
  * Mini App post-date feedback endpoint.
@@ -143,7 +57,7 @@ export function createFeedbackRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    const body = (req.body ?? {}) as FeedbackBody;
+    const body = (req.body ?? {}) as Record<string, unknown>;
 
     const matchId = typeof body.matchId === "string" ? body.matchId : null;
     if (!matchId) {
@@ -155,30 +69,18 @@ export function createFeedbackRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    const text = typeof body.text === "string" ? body.text.trim().slice(0, MAX_TEXT_LEN) : "";
-
-    const chemistryRaw = typeof body.chemistry === "number" ? body.chemistry : Number(body.chemistry);
-    if (!Number.isFinite(chemistryRaw) || chemistryRaw < 1 || chemistryRaw > 10) {
-      res.status(400).json({ error: "chemistry must be an integer 1..10" });
+    // Everything below this line is shared with the native rail
+    // (`services/post-date-feedback.ts`). What stays here is only what this
+    // surface owns: initData auth, resolving the caller by Telegram id, the
+    // Mini App action trail, and the thank-you DM.
+    const normalised = normaliseFeedback(body);
+    if (!normalised.ok) {
+      const status = normalised.error === "bad-chemistry" || normalised.error === "bad-second-date" ? 400 : 400;
+      res.status(status).json({ error: normalised.error });
       return;
     }
-    const chemistry = Math.round(chemistryRaw);
+    const submission = normalised.value;
 
-    const wantsSecondDateRaw = typeof body.wantsSecondDate === "string" ? body.wantsSecondDate : "";
-    if (!ALLOWED_SECOND_DATE.has(wantsSecondDateRaw as SecondDateAnswer)) {
-      res.status(400).json({ error: "wantsSecondDate must be yes|maybe|no" });
-      return;
-    }
-    const wantsSecondDate = wantsSecondDateRaw as SecondDateAnswer;
-    const venueFit = typeof body.venueFit === "string" && ALLOWED_VENUE_FIT.has(body.venueFit as "yes" | "partly" | "no")
-      ? body.venueFit as "yes" | "partly" | "no"
-      : null;
-    const venueFitReasons = Array.isArray(body.venueFitReasons)
-      ? [...new Set(body.venueFitReasons.filter((value): value is string => typeof value === "string" && ALLOWED_VENUE_REASONS.has(value)))].slice(0, 3)
-      : [];
-
-    // The form may submit empty `text` if the user only moved the slider /
-    // tapped a chip — still a valid signal. Compose the text-blob ourselves.
     const user = await prisma.user.findUnique({
       where: { telegramId: BigInt(validation.user.id) },
       select: { id: true, language: true },
@@ -188,47 +90,27 @@ export function createFeedbackRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    const langCandidate = typeof body.language === "string" ? body.language : "";
-    const language: Language = ALLOWED_LANGS.has(langCandidate as Language)
-      ? (langCandidate as Language)
-      : ((user.language ?? "en") as Language);
+    const language = resolveLanguage(body.language, user.language);
 
-    const composed = composeFeedbackText({
-      text,
-      chemistry,
-      wantsSecondDate,
-      language,
-    });
-
-    const result = await recordPostDateFeedback({
+    const result = await submitPostDateFeedback({
       userId: user.id,
       matchId,
-      text: composed,
       language,
+      submission,
     });
-
     if (!result.ok) {
       const status =
-        result.reason === "match-not-found"
+        result.error === "match-not-found"
           ? 404
-          : result.reason === "not-participant"
+          : result.error === "not-participant"
             ? 403
             : 400;
-      res.status(status).json({ error: result.reason });
+      res.status(status).json({ error: result.error });
       return;
     }
 
-    if (venueFit) {
-      const participant = await prisma.match.findUnique({
-        where: { id: matchId },
-        select: { userAId: true, userBId: true },
-      });
-      if (participant?.userAId === user.id) {
-        await prisma.match.update({ where: { id: matchId }, data: { venueFitByA: venueFit, venueFitReasonsByA: venueFitReasons } });
-      } else if (participant?.userBId === user.id) {
-        await prisma.match.update({ where: { id: matchId }, data: { venueFitByB: venueFit, venueFitReasonsByB: venueFitReasons } });
-      }
-    }
+    const chemistry = submission.chemistry;
+    const wantsSecondDate = submission.wantsSecondDate;
 
     recordMiniAppAction(
       validation.user.id,

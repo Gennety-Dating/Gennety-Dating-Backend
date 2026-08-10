@@ -47,6 +47,64 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-09 — post-date feedback: the missing half was discovery, not the endpoint
+
+**Kind:** deviation from plan
+**What:** the native rail is TWO endpoints, not one. `POST
+/v1/me/feedback/post-date` was the obvious half; `GET /v1/me/feedback/pending`
+is the half that makes the feature exist at all. Plus a third fix in
+`date-lifecycle.ts`: the T+24h invitation now follows each side's own rail.
+**Why:** I expected the usual shape of this bug — a mechanic that works and a
+Mini App route an app user cannot sign. It was worse. `/v1/matches/current`
+filters on `ACTIVE_MATCH_STATUSES`, which excludes `completed`, so the moment
+the date closes out the match vanishes from every surface the client polls.
+Shipping only the POST would have delivered a form with no way to reach it.
+**What it changes going forward:** **`/v1/matches/current` is not a complete
+view of a user's matches, and a client-side feature that needs a terminal match
+needs its own endpoint.** This is the first one; anything post-date (a second
+date, a rating history) inherits the same constraint.
+**Recorded in:** PRODUCT_SPEC §Phase 4 → Post-date Feedback UX; ARCHITECTURE →
+Admin/Public API table; `services/post-date-feedback.ts`.
+
+## 2026-08-09 — `telegramId > 0` was still guarding the feedback invitation
+
+**Kind:** deviation from plan
+**What:** the T+24h feedback prompt filtered on `telegramId > 0n` and had no
+push leg at all. It now uses `telegramReachable` / `pushReachable`
+(`services/telegram-reach.ts`, extracted from `coordination.ts` so there is one
+definition rather than two).
+**Why:** this is the third worker found with the same guard — the Profiler and
+re-engagement sweeps were fixed 2026-08-02, coordination on 2026-08-07, and
+this one was missed each time because the audits went looking for *workers* and
+this lives inside the date-lifecycle tick. The cost here is not a missed
+notification: the form is the only place the product learns whether a date
+worked, so an uninvited participant is a permanently missing answer, and the
+absence looks exactly like someone declining to reply.
+**What it changes going forward:** the predicate now lives in its own module
+with a test that states WHY (`telegramReachable` rejects a real positive id on
+an app-only account). **Any remaining `telegramId > 0` in a fan-out is a bug
+until proven otherwise** — grep for it before adding a fourth notification.
+**Recorded in:** `services/telegram-reach.ts` (+ its test), PRODUCT_SPEC
+§Phase 4 → Post-date Feedback UX.
+
+## 2026-08-09 — the Mini App feedback route was rewritten, not left alone
+
+**Kind:** deviation from plan
+**What:** `public/routes/feedback.ts` lost its own copies of the validation
+rules, the five-language header table and the venue-fit write; it now calls the
+shared service. That is a change to a working production surface that nobody
+asked for.
+**Why:** the alternative was two implementations of "what counts as an answer"
+to the same question, and this form is the only place the product learns
+whether a date worked — two implementations would quietly produce two training
+sets. It is the same split `emergency-cancel.ts` and `proxy-chat.ts` already
+made, and both of those were made *because* the second surface arrived.
+**What it changes going forward:** the Mini App route keeps exactly four things
+of its own — initData auth, resolving the caller by Telegram id, the Mini App
+action trail, and the thank-you DM. Anything else added there belongs in the
+service, or the drift starts again.
+**Recorded in:** `services/post-date-feedback.ts` (header comment).
+
 ## 2026-08-09 — the pinned banner push extends to every stage transition, not only the venue change
 
 **Kind:** founder decision

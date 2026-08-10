@@ -832,6 +832,8 @@ const translations = {
       "Tell us how the date went — was there chemistry? What did you like? " +
       "Anything that didn't work? A minute is plenty.",
     feedbackThanks: "Thanks for the feedback ✨ We'll use it to improve your future matches.",
+    feedbackPushTitle: "How was your date?",
+    feedbackPushBody: "A minute of your time helps us find you a better match next time.",
     // --- Reporting & Moderation ---
     reportBtn: "🚨 Report",
     reportAsk:
@@ -1938,6 +1940,8 @@ const translations = {
       "Расскажи, как прошло — была ли химия, что зашло, что не очень. " +
       "Минуты вполне хватит.",
     feedbackThanks: "Спасибо за фидбэк ✨ Используем для улучшения.",
+    feedbackPushTitle: "Как прошло свидание?",
+    feedbackPushBody: "Минута вашего времени — и в следующий раз мы подберём точнее.",
     // --- Reporting & Moderation ---
     reportBtn: "🚨 Пожаловаться",
     reportAsk:
@@ -3011,6 +3015,8 @@ const translations = {
       "Розкажи, як пройшло — чи була хімія, що сподобалось, що не дуже. " +
       "Хвилини цілком вистачить.",
     feedbackThanks: "Дякую за фідбек ✨ Використаємо для покращення.",
+    feedbackPushTitle: "Як пройшло побачення?",
+    feedbackPushBody: "Хвилина вашого часу — і наступного разу ми підберемо точніше.",
     // --- Reporting & Moderation ---
     reportBtn: "🚨 Поскаржитися",
     reportAsk:
@@ -4049,6 +4055,8 @@ const deTranslations: TranslationTable = {
     "Erzähl, wie das Date lief - gab es Chemie? Was mochtest du? " +
     "Was hat nicht funktioniert? Eine Minute reicht.",
   feedbackThanks: "Danke für dein Feedback ✨ Wir nutzen es, um deine zukünftigen Matches zu verbessern.",
+  feedbackPushTitle: "Wie war dein Date?",
+  feedbackPushBody: "Eine Minute von dir, und das nächste Match passt besser.",
   reportBtn: "🚨 Melden",
   reportAsk: "Diese Meldung ist privat. Was beschreibt das Problem am besten?",
   reportCategoryFakePhotos: "Fake- oder irreführende Fotos",
@@ -5092,6 +5100,8 @@ const plTranslations: TranslationTable = {
     "Opowiedz, jak poszła randka - była chemia? Co Ci się podobało? " +
     "Co nie zadziałało? Minuta wystarczy.",
   feedbackThanks: "Dzięki za feedback ✨ Użyjemy go, żeby ulepszyć przyszłe dopasowania.",
+  feedbackPushTitle: "Jak poszła randka?",
+  feedbackPushBody: "Minuta twojego czasu, a następne dopasowanie będzie trafniejsze.",
   reportBtn: "🚨 Zgłoś",
   reportAsk: "To zgłoszenie jest prywatne. Co najlepiej opisuje problem?",
   reportCategoryFakePhotos: "Fałszywe albo mylące zdjęcia",

@@ -17,6 +17,7 @@ import { streamDraftsToChat } from "./ai-stream.js";
 import { AI_EMOJI } from "./ai-emoji.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { sendPushToUser } from "./push.js";
+import { pushReachable, telegramReachable } from "./telegram-reach.js";
 import {
   advanceDateDayActivities,
   endDateDayActivities,
@@ -540,8 +541,8 @@ export async function runDateLifecycleTick(
     },
     select: {
       id: true,
-      userA: { select: { telegramId: true, language: true, theme: true } },
-      userB: { select: { telegramId: true, language: true, theme: true } },
+      userA: { select: { id: true, telegramId: true, platform: true, language: true, theme: true } },
+      userB: { select: { id: true, telegramId: true, platform: true, language: true, theme: true } },
     },
   });
 
@@ -574,32 +575,47 @@ export async function runDateLifecycleTick(
       ...(effectId ? { message_effect_id: effectId } : {}),
     };
 
-    // Per-leg .catch + telegramId guard so a blocked / mobile-only user
-    // doesn't abort the loop and re-fire the prompt every 2 minutes.
-    const feedbackSends: Array<Promise<unknown> | null> = [
-      match.userA.telegramId > 0n
-        ? api
-            .sendMessage(Number(match.userA.telegramId), t(langA, "feedbackInvitation"), optsA)
+    // Each side is invited on ITS OWN rail. Two things were wrong here before:
+    // the guard was `telegramId > 0`, which stopped being a reachability test
+    // when Telegram login shipped (that rail stores a real positive id on an
+    // app-only account the bot cannot message), and there was no push leg at
+    // all — so a user living in the app was never told a form existed. The
+    // form is the only place the product learns whether a date worked, so an
+    // uninvited participant is a permanently missing answer.
+    const feedbackSends: Array<Promise<unknown>> = [];
+    for (const [user, lang, opts] of [
+      [match.userA, langA, optsA],
+      [match.userB, langB, optsB],
+    ] as const) {
+      if (telegramReachable(user)) {
+        feedbackSends.push(
+          api
+            .sendMessage(Number(user.telegramId), t(lang, "feedbackInvitation"), opts)
             .catch((err: unknown) =>
               console.warn(
-                `[date-lifecycle] feedback send failed for ${match.userA.telegramId}:`,
+                `[date-lifecycle] feedback send failed for ${user.telegramId}:`,
                 err instanceof Error ? err.message : err,
               ),
-            )
-        : null,
-      match.userB.telegramId > 0n
-        ? api
-            .sendMessage(Number(match.userB.telegramId), t(langB, "feedbackInvitation"), optsB)
-            .catch((err: unknown) =>
-              console.warn(
-                `[date-lifecycle] feedback send failed for ${match.userB.telegramId}:`,
-                err instanceof Error ? err.message : err,
-              ),
-            )
-        : null,
-    ];
+            ),
+        );
+      }
+      if (pushReachable(user)) {
+        feedbackSends.push(
+          sendPushToUser(user.id, {
+            title: t(lang, "feedbackPushTitle"),
+            body: t(lang, "feedbackPushBody"),
+            data: { type: "feedback.due", matchId: match.id },
+          }).catch((err: unknown) =>
+            console.warn(
+              `[date-lifecycle] feedback push failed for ${user.id}:`,
+              err instanceof Error ? err.message : err,
+            ),
+          ),
+        );
+      }
+    }
 
-    await Promise.all(feedbackSends.filter((p): p is Promise<unknown> => p !== null));
+    await Promise.all(feedbackSends);
 
     result.feedbacks++;
   }

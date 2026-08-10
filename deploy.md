@@ -1,5 +1,58 @@
 # Gennety Dating Deploy
 
+**PENDING — post-date feedback reaches the app at all (PRODUCT_SPEC §Phase 4.3,
+DECISIONS.md ×3).** Not deployed yet. **No Prisma schema change, no env change,
+no flag change, no Mini App change** (`apps/webapp` untouched) — bot-side only,
+so a full server code deploy carries it, plus `pnpm demo:deploy`. The client
+half ships from the iOS repo separately.
+
+Three holes in one feature, all closed together. The form existed only as an
+`initData`-signed Mini App; the T+24h prompt that carries its link was a
+Telegram DM guarded on `telegramId > 0`; and `/v1/matches/current` excludes
+`completed`, so once the date closed out the match vanished from every surface
+the client polls. An app user was never told a form existed and could not have
+found it.
+
+**Four things worth knowing before the restart:**
+
+- **The T+24h DM changes who it reaches, on BOTH rails.** `telegramReachable`
+  replaces `telegramId > 0`, so a Telegram-login account that never pressed
+  Start stops being DM'd (it never saw the message anyway), and a new **push**
+  leg is added for `mobile`/`both`. Expect one new push per completed date per
+  app-side participant — the first push this event has ever sent. Ten new i18n
+  keys (`feedbackPushTitle`/`feedbackPushBody` × 5 locales); additive.
+- **`public/routes/feedback.ts` was rewritten**, though its behaviour is
+  unchanged by design: same validation bounds, same five-language header table,
+  same venue-fit write, now all from `services/post-date-feedback.ts`. The one
+  observable difference is the error strings on a 400 — `bad-chemistry` /
+  `bad-second-date` instead of the old prose (`"chemistry must be an integer
+  1..10"`). The Mini App shows its own copy and never renders these, but a log
+  grep for the old strings will come up empty after this.
+- **`GET /v1/me/feedback/pending` answers `{"pending": null}`, not 404**, when
+  nothing is owed. That is the ordinary state of the endpoint; a client polling
+  it must not treat the common case as an error.
+- **Nothing exercises it in production yet.** It needs a `completed` match, and
+  production has had **0 dates ever** (2 matches, both terminal before a date).
+  Verify on `@gennetytestbot` or the demo.
+
+Preflight for this change: bot typecheck clean, `pnpm openapi:lint` valid (9
+warnings, unchanged), **3552 bot tests** (0 failed, +22 new).
+
+Post-deploy check — the routes answer 401 unauthenticated, which is the proof
+they are mounted; the fan-out logs only on failure, so silence is the good case:
+
+```sh
+# 401 (mounted), never 404 (missing).
+curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/me/feedback/pending
+pm2 logs gennety-bot --lines 200 --nostream | grep 'feedback push failed'
+psql "$DATABASE_URL" -c "select count(*) filter (where feedback_prompted_at is not null) prompted, count(*) filter (where feedback_by_a is not null or feedback_by_b is not null) answered from matches;"
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag. The added i18n keys are inert once the caller is gone.
+
+---
+
 **PENDING — synthetic test profiles for the friends-and-family production run
 (PRODUCT_SPEC §3.1c, DECISIONS.md ×2).** Not deployed yet. **No Mini App
 change** (`apps/webapp` untouched), but it needs an **additive `db:push` BEFORE

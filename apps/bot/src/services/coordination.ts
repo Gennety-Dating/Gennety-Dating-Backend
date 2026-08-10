@@ -12,6 +12,7 @@ import { env } from "../config.js";
 import { sendCoordCard } from "./coordination-card/send.js";
 import { sendPushToUser } from "./push.js";
 import { advanceDateDayActivities } from "./date-day-activity.js";
+import { telegramReachable } from "./telegram-reach.js";
 import type { CoordCardTheme } from "./coordination-card/index.js";
 
 /**
@@ -55,21 +56,6 @@ interface CoordParticipant {
   gender: string | null;
   telegramUsername: string | null;
   profile?: { photos: string[] } | null;
-}
-
-/**
- * Whether the bot can actually message this user.
- *
- * `telegramId > 0n` is NOT the test, and has not been since Telegram login
- * shipped: that rail stores a REAL positive id on an app-only account, and a
- * bot cannot open a chat with someone who never pressed Start. `platform` is
- * the canonical reachability check (ARCHITECTURE → `users`). A row predating
- * the column falls back to the id so no existing Telegram user loses the offer.
- */
-function telegramReachable(u: { telegramId: bigint; platform?: string | null }): boolean {
-  if (u.telegramId <= 0n) return false;
-  if (u.platform === undefined || u.platform === null) return true;
-  return u.platform === "telegram" || u.platform === "both";
 }
 
 /**

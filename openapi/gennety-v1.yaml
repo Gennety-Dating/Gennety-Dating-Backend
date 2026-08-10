@@ -974,6 +974,147 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/feedback/pending:
+    get:
+      tags: [me]
+      operationId: getPendingFeedback
+      summary: The date this caller still owes post-date feedback on
+      description: |
+        PRODUCT_SPEC §Phase 4.3. Exists because there is no other way for the
+        app to learn a form is waiting: `/v1/matches/current` deliberately
+        excludes `completed` (`ACTIVE_MATCH_STATUSES`), so the moment the date
+        closes out the match disappears from every surface the client polls.
+        In Telegram the T+24h DM carries the link and no discovery is needed;
+        the app has no such carrier, which is why this endpoint is the native
+        half of the feature rather than a convenience.
+
+        Gated on `feedbackPromptedAt` — the same one-shot marker the lifecycle
+        tick writes — not on `completed` alone. Asking earlier would surface
+        the form minutes after the date, while one of them may still be at the
+        table.
+
+        `pending` is **null** when nothing is owed. That is the ordinary state
+        of this endpoint, so it is not an error and a polling client must not
+        have to treat the common case as one.
+      responses:
+        "200":
+          description: The pending form, or null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pending]
+                properties:
+                  pending:
+                    oneOf:
+                      - $ref: "#/components/schemas/PendingFeedback"
+                      - type: "null"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/me/feedback/post-date:
+    post:
+      tags: [me]
+      operationId: submitPostDateFeedback
+      summary: Submit post-date feedback (chemistry, second date, notes)
+      description: |
+        The JWT twin of the Mini App's `POST /v1/feedback/post-date`. Both call
+        `services/post-date-feedback.ts`, so the two surfaces cannot disagree
+        about what counts as an answer — which matters more here than usual,
+        because this form is the only place the product learns whether a date
+        worked, and two implementations would quietly build two datasets.
+
+        The structured answers are composed into the single text blob the LLM
+        analyst reads; no new columns are written for them. Answering twice
+        overwrites the caller's own previous answer.
+
+        Unlike the Mini App twin this sends **no thank-you DM**: that surface
+        can assume a bot chat exists because the request was signed by one,
+        this one cannot, and a message nobody receives is not a confirmation.
+        The 200 is the confirmation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [matchId, chemistry, wantsSecondDate]
+              properties:
+                matchId: { type: string, format: uuid }
+                chemistry:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  description: |
+                    Refused rather than clamped when out of range. A 0 or an 11
+                    is a client bug, and rounding one into the dataset is worse
+                    than a 400.
+                wantsSecondDate:
+                  type: string
+                  enum: [yes, maybe, no]
+                text:
+                  type: string
+                  maxLength: 1000
+                  description: |
+                    Optional. An empty comment is a legitimate answer — the
+                    slider and the segment already carry signal.
+                venueFit:
+                  type: [string, "null"]
+                  enum: [yes, partly, no, null]
+                  description: Did the venue match the vibe the pair asked for.
+                venueFitReasons:
+                  type: array
+                  maxItems: 3
+                  items:
+                    type: string
+                    enum: [wrong_vibe, too_loud, too_expensive, route_unfair, accessibility, closed_or_unavailable]
+                language:
+                  type: string
+                  enum: [en, ru, uk, de, pl]
+                  description: |
+                    Optional hint. Falls back to `User.language`, because the
+                    analyst prompt is language-agnostic and a comment in one
+                    language under a header in another reads to it as two
+                    voices.
+      responses:
+        "200":
+          description: Recorded. Carries whatever is still pending afterwards.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pending]
+                properties:
+                  pending:
+                    oneOf:
+                      - $ref: "#/components/schemas/PendingFeedback"
+                      - type: "null"
+        "400":
+          description: |
+            `bad-chemistry`, `bad-second-date`, or `empty-text` (nothing at all
+            was said, which the analyst cannot use).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: The caller is not on this match.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such match.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: |
+            `wrong-state` — the date has not been closed out yet. Deliberately
+            not a 404: the match exists and the caller is on it, and a 404
+            would send the client looking for a routing bug that is not there.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/me/photos:
     get:
       tags: [me]
@@ -2474,6 +2615,36 @@ components:
             user id here would be identity the screen has no use for.
         body: { type: string }
         sentAt: { type: string, format: date-time }
+
+    PendingFeedback:
+      type: object
+      description: |
+        Mirrors `PendingFeedbackView` in `services/post-date-feedback.ts`.
+        Everything here exists so the form can name the date it is about — a
+        form arriving a day later with no venue and no partner reads as being
+        about nothing in particular.
+      required: [matchId, partnerFirstName, venueName, agreedTime, submitted, maxTextLength, serverNow]
+      properties:
+        matchId: { type: string, format: uuid }
+        partnerFirstName: { type: [string, "null"] }
+        venueName: { type: [string, "null"] }
+        agreedTime: { type: string, format: date-time }
+        submitted:
+          type: boolean
+          description: |
+            Already answered. The form still opens — read-only — rather than
+            404ing, because someone tapping a day-old push deserves to see
+            what they said, not an error.
+        maxTextLength:
+          type: integer
+          description: |
+            `FEEDBACK_MAX_TEXT_LEN`. Served rather than bundled for the same
+            reason the proxy chat serves its own: a limit the client believes
+            and the server does not is a comment the user types and loses.
+        serverNow:
+          type: string
+          format: date-time
+          description: Server clock, for the same skew correction the countdowns use.
 
     ProxyChatState:
       type: object

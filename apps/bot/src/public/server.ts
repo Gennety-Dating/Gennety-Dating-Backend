@@ -34,6 +34,7 @@ import { createTicketRouter } from "./routes/ticket.js";
 import { createNativeTicketGateRouter } from "./routes/ticket-gate.js";
 import { createNativeCalendarRouter } from "./routes/calendar-native.js";
 import { createProxyChatRouter } from "./routes/proxy-chat.js";
+import { createNativeFeedbackRouter } from "./routes/feedback-native.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createRadarRouter } from "./routes/radar.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
@@ -105,6 +106,7 @@ let ticketRouter: ReturnType<typeof createTicketRouter> | null = null;
 let nativeTicketGateRouter: ReturnType<typeof createNativeTicketGateRouter> | null = null;
 let nativeCalendarRouter: ReturnType<typeof createNativeCalendarRouter> | null = null;
 let proxyChatRouter: ReturnType<typeof createProxyChatRouter> | null = null;
+let nativeFeedbackRouter: ReturnType<typeof createNativeFeedbackRouter> | null = null;
 let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
@@ -268,6 +270,16 @@ app.use("/v1/matches/:matchId/calendar", (req, res, next) => {
   }
   if (!nativeCalendarRouter) nativeCalendarRouter = createNativeCalendarRouter(injectedBotApi);
   nativeCalendarRouter(req, res, next);
+});
+
+// Post-date feedback for the NATIVE client. The Mini App twin lives at
+// `/v1/feedback` and is initData-signed; this one is JWT and adds the piece
+// that surface never needed — discovery. In Telegram the T+24h DM carries the
+// link, so nothing has to be asked for; the app has no such carrier, and
+// `/v1/matches/current` stops returning the match once it is `completed`.
+app.use("/v1/me/feedback", (req, res, next) => {
+  if (!nativeFeedbackRouter) nativeFeedbackRouter = createNativeFeedbackRouter();
+  nativeFeedbackRouter(req, res, next);
 });
 
 // Anonymous pre-date chat for the NATIVE client — the JWT twin of the Telegram

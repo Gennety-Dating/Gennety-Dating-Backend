@@ -1988,6 +1988,10 @@ Supported first-class flows:
   verification-rerun path as a normal profile-photo upload.
 - Match decision, vibe-location, safety-ack, report endpoints under
   `/v1/matches/:id/*`.
+- **Post-date feedback** — `GET /v1/me/feedback/pending` +
+  `POST /v1/me/feedback/post-date`. The GET has no Telegram equivalent: there
+  the T+24h DM carries the link, while `/v1/matches/current` stops returning
+  the match once it is `completed`, so the app has nothing to discover it from.
 - `/v1/me/push-token` registers Expo/APNs/FCM tokens; the bot dispatches
   push via `services/push.ts` for the same events that DM Telegram users.
 - `/v1/me/home-location` persists canonical dating city + coordinates for
@@ -4682,9 +4686,33 @@ columns on `matches`.
 | T − 30 min | **Anonymous proxy chat opens** (feature-flagged, Variant C only) — DM both the "Enter chat" button | `proxyOpenedAt` |
 | Date moment | (no automated action — users meet in person) | — |
 | T + 2 h | **Anonymous proxy chat auto-closes** (feature-flagged) | `proxyClosedAt` |
-| T + 24 h | **Feedback prompt** to both sides; LLM parses positives/negatives and updates `negativeConstraints` accordingly | `feedbackPromptedAt` |
+| T + 24 h | **Feedback prompt** to both sides, each on its own rail (DM and/or push — see below); LLM parses positives/negatives and updates `negativeConstraints` accordingly | `feedbackPromptedAt` |
 
 ### Post-date Feedback UX
+
+**Both surfaces since 2026-08-09; before that the app could not reach this at
+all.** The form existed only as a Mini App signed with `initData`, the T+24h
+prompt that carries its link was a Telegram DM guarded on `telegramId > 0`, and
+`/v1/matches/current` stops returning the match the moment it turns `completed`
+(`ACTIVE_MATCH_STATUSES`). So an app user was not merely unable to submit —
+they were never told a form existed, and could not have found it if they had
+been. Three holes in one feature, and the third is the one with no Telegram
+equivalent: **there, the DM IS the discovery.**
+
+The native rail is `GET /v1/me/feedback/pending` + `POST
+/v1/me/feedback/post-date` (JWT). Everything either surface decides —
+what counts as an answer, how the structured inputs become the one text blob
+the analyst reads, what else the answer writes — lives in
+`services/post-date-feedback.ts`, so the two cannot build two datasets out of
+the same question. Each keeps only its own idiom: initData vs. JWT, and a
+thank-you DM vs. none (the app rail cannot assume a bot chat exists, and a
+message nobody receives is not a confirmation).
+
+**The invitation now follows each side's own rail.** `telegramReachable`
+(`services/telegram-reach.ts`) decides the DM and `pushReachable` the push, so
+a `both`-platform user is told twice and an app-only user is told at all. The
+old `telegramId > 0` guard stopped being a reachability test when Telegram
+login shipped — see §1.1.
 
 The T+24h DM is a structured invitation, not a single 📝 button. It carries
 two stacked inline buttons in the user's language and an optional Bot API 7.6
