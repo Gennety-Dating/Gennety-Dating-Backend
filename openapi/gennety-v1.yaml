@@ -1062,9 +1062,18 @@ paths:
                     Optional. An empty comment is a legitimate answer — the
                     slider and the segment already carry signal.
                 venueFit:
-                  type: [string, "null"]
-                  enum: [yes, partly, no, null]
-                  description: Did the venue match the vibe the pair asked for.
+                  type: string
+                  enum: [yes, partly, no]
+                  description: |
+                    Did the venue match the vibe the pair asked for. OPTIONAL
+                    rather than nullable: `enum: [..., null]` makes
+                    swift-openapi-generator emit a fourth case spelled `""`,
+                    which serialises to a value the server rejects — a foot-gun
+                    sitting in `allCases` of an enum a client will iterate to
+                    build chips. Omitting the property says the same thing to
+                    `normaliseFeedback`, which coerces anything unrecognised to
+                    `null`. Same family as the `oneOf: [$ref, "null"]` trap; see
+                    `SerializedUser.gender`.
                 venueFitReasons:
                   type: array
                   maxItems: 3
