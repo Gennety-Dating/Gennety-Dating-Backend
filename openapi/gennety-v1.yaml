@@ -2652,9 +2652,16 @@ components:
         submitted:
           type: boolean
           description: |
-            Already answered. The form still opens — read-only — rather than
-            404ing, because someone tapping a day-old push deserves to see
-            what they said, not an error.
+            Already answered. The endpoint still returns the date rather than
+            404ing, so a client opening a day-old push lands on "thank you"
+            instead of an error.
+
+            It CANNOT show what was said, and no client should try: the
+            structured answers are composed into one prose blob for the
+            analyst and are not stored as columns (see `composeFeedbackText`),
+            so the slider position that produced it no longer exists anywhere.
+            An earlier draft of this description promised a read-only form —
+            that promise was never implementable.
         maxTextLength:
           type: integer
           description: |
