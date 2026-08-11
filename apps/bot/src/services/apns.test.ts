@@ -86,10 +86,29 @@ describe("payload builders", () => {
     expect(
       buildAlertPayload({ title: "T", body: "B", data: { type: "match", matchId: "m1" } }),
     ).toEqual({
-      aps: { alert: { title: "T", body: "B" }, sound: "default" },
+      aps: { alert: { title: "T", body: "B" }, sound: "default", category: "match" },
       type: "match",
       matchId: "m1",
     });
+  });
+
+  // The client attaches actions to a category, and the category IS the type —
+  // so a push carrying a type but no category is a push whose buttons silently
+  // do not appear. That failure is invisible server-side, hence the guard.
+  it("carries the notification type as the APNs category", () => {
+    const payload = buildAlertPayload({
+      title: "T",
+      body: "B",
+      data: { type: "proxy.message", matchId: "m1" },
+    }) as { aps: { category?: string } };
+    expect(payload.aps.category).toBe("proxy.message");
+  });
+
+  it("omits the category when there is no type to name it", () => {
+    const payload = buildAlertPayload({ title: "T", body: "B" }) as {
+      aps: Record<string, unknown>;
+    };
+    expect(payload.aps).not.toHaveProperty("category");
   });
 
   it("shapes an ActivityKit update with timestamp and optional dates", () => {

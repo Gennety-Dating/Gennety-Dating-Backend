@@ -47,7 +47,7 @@ describe("sendPushToUser", () => {
     expect(sendApnsNotification).toHaveBeenCalledWith(
       "device-token",
       expect.objectContaining({
-        aps: { alert: { title: "T", body: "B" }, sound: "default" },
+        aps: { alert: { title: "T", body: "B" }, sound: "default", category: "match" },
         type: "match",
       }),
       { pushType: "alert" },

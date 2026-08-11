@@ -83,12 +83,26 @@ export interface AlertPushInput {
   data?: Record<string, unknown>;
 }
 
-/** Standard user-visible notification payload. */
+/**
+ * Standard user-visible notification payload.
+ *
+ * `aps.category` is derived from `data.type` rather than being a field every
+ * call site has to remember. Three reasons, and the third is the one that
+ * matters: the two are the same fact (what kind of notification this is), so a
+ * separate field could only ever disagree with itself; ~25 existing call sites
+ * would otherwise each need editing to gain actions; and an unregistered
+ * category is a **no-op on the device**, so shipping it for every type is safe
+ * even though the client attaches actions to only a few of them. The client
+ * registers a category per type it can act on (iOS `PushCategories`), and the
+ * ones it does not know about simply render as an ordinary notification.
+ */
 export function buildAlertPayload(input: AlertPushInput): Record<string, unknown> {
+  const category = typeof input.data?.type === "string" ? input.data.type : null;
   return {
     aps: {
       alert: { title: input.title, body: input.body },
       sound: "default",
+      ...(category ? { category } : {}),
     },
     ...(input.data ?? {}),
   };
