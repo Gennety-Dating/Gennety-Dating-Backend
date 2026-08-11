@@ -3541,13 +3541,16 @@ full deploy — but note that rsync copies the **working tree**, not git HEAD, s
 check `git status` first: an unrelated in-progress refactor ships with it.
 
 **Prod anchor, re-verified 2026-08-11 after the release at the top of this file.**
-Prod is at **`677e4e2`** — for once literally equal to `HEAD`, confirmed by the
-765-file md5 sweep below rather than asserted. That is the exception, not the
-rule: the gap reopens the moment anyone commits, and this section was itself
-stale for three days before this deploy (it still named `f66949a` after the
-2026-08-09 backlog release and the 2026-08-10 cadence flip had both landed).
-**Re-anchor it as part of every release**, or it silently becomes a claim about
-when someone last looked.
+Prod's **runtime tree** is at **`677e4e2`** — verified by the 765-file md5 sweep
+below, zero differences, rather than asserted. Deliberately anchored to the last
+commit that touched runtime code, not to `HEAD`: docs-only commits land on top
+constantly (this note's own release added one), and an anchor that counts them
+is stale the hour it is written.
+
+That is exactly what happened to the previous one — it still named `f66949a`
+three days after the 2026-08-09 backlog release and the 2026-08-10 cadence flip
+had both landed. **Re-anchor as part of every release**, or the section quietly
+stops being a fact about prod and becomes a record of when someone last looked.
 
 **Do not maintain a list of undeployed commits here — compute it.** An earlier
 revision of this note named them, and it was stale within the hour because a
