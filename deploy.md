@@ -1,13 +1,12 @@
 # Gennety Dating Deploy
 
-**PENDING — «% платящих»: раздел монетизации (PRODUCT_SPEC не затронут,
-ARCHITECTURE → Admin API + Purchase ownership, DECISIONS.md ×2).** **Нет
-изменения схемы Prisma, нет новых env, нет флагов** — всё выводится из уже
-существующих таблиц, так что `db:push` НЕ нужен. Половина изменения — клиент,
-поэтому последовательность: Deploy Full Server Code → `pnpm db:drift-check` →
-`pm2 restart` → **редеплой дашборда** (отдельный репозиторий
-`~/Desktop/gennety-admin-dashboard`, автодеплой на Vercel по пушу) →
-`pnpm demo:deploy`.
+**Deployed 2026-08-11 — «% платящих»: раздел монетизации (PRODUCT_SPEC не
+затронут, ARCHITECTURE → Admin API + Purchase ownership, DECISIONS.md ×2).**
+**Нет изменения схемы Prisma, нет новых env, нет флагов** — всё выводится из уже
+существующих таблиц, так что `db:push` НЕ понадобился (`db:drift-check` **OK**).
+Прод поднят с `68757f7` до `677e4e2`. Последовательность была: Deploy Full
+Server Code → `pnpm db:drift-check` → `pm2 restart` → `pnpm demo:deploy`;
+дашборд уехал раньше сам (автодеплой на Vercel по пушу).
 
 **Порядок важен: сервер первым.** Вкладка читает новый
 `GET /admin/analytics/monetization`; фронт вызывает его через `.catch(() => null)`
@@ -40,24 +39,49 @@ ARCHITECTURE → Admin API + Purchase ownership, DECISIONS.md ×2).** **Нет
   0 покупок и 0 свиданий за всё время. Сквозная проверка «метрика двигается»
   делается на `@gennetytestbot` мок-рельсом магазина билетов, а не на проде.
 
-Preflight по этому изменению: typecheck чистый по всем 5 проектам, lint
-чистый, **4113 тестов** (бот 3582 / shared 276 / webapp 255, 0 failed, +30
-новых), `security:secrets` чистый (1044 файла), сборка дашборда чистая. Два
-pre-existing eslint-error'а в дашборде (`DataFreshness.tsx`,
-`UserProfileDrawer.tsx`) — не из этого изменения, не трогались.
+Preflight: typecheck чистый по всем 5 проектам, lint чистый, **4113 тестов**
+(бот 3582 / 234 файла, shared 276 / 15, webapp 255 / 25 — 0 failed),
+`pnpm build` чистый, `security:secrets` чистый (1049 файлов),
+**`security:audit` 0 advisories** (оверрайды с 2026-08-07 не протухли),
+`openapi:lint` valid (9 warnings — базовая линия). rsync dry-run показал ровно
+**2** удаления, оба — устаревшие артефакты `apps/video/build`. Оба бэкапа БД,
+оба ключа `keys/*.p8` и все 15 снапшотов `.env.bak.*` на месте после синка.
 
-Проверка после деплоя — важен именно знаменатель, а не нули:
+**Проверено на живом проде (замерено, а не выведено):**
 
-```sh
-curl -s -H "Authorization: Bearer $ADMIN_API_KEY" \
-  https://api-admin.gennety.com/admin/analytics/monetization \
-  | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d['headline'], indent=1))"
-# Ожидаемо: registeredReal 19 (НЕ 50), payers 0, payingRatePct 0,
-#           ofPaywallReached {payers:0, base:0, pct:null}.
-curl -s -H "Authorization: Bearer $ADMIN_API_KEY" \
-  https://api-admin.gennety.com/admin/analytics/founder-digest \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['monetization'])"
-```
+- **`registeredReal: 19`, а не 50** — главный признак, что исключение тестовых
+  сработало. Рядом `excludedTestUsers: 31` (30 синтетиков + фаундер),
+  `ofActivated.base: 4`, `ofPaywallReached: {base: 0, pct: null}` — знаменатель
+  пуст, потому что ни одна пара не дошла до гейта билетов.
+- **Нули там, где их ждали, и `null` там, где данных нет**: `payers: 0`,
+  `revenue.allTimeUsdCents: 0`, `byKind: []`, а `arppuUsdCents` / `growthPct` /
+  `repeatRatePct` / `medianDaysToFirstPayment` — `null`. Это то самое правило
+  «нет данных ≠ 0%».
+- **Разрезы уже показывают что-то настоящее.** `byChannel` разделил 19 реальных
+  на `organic: 15` и **`promo:DATE_WITH: 4`** — то есть промо-кампания уже
+  привела людей; `byGender` даёт `unknown: 12` (столько не дошли до вопроса о
+  поле), `byCity` — Киев 6 / Харьков 1, `byTrack` — legacy 12 / general 7.
+  Когорт 4, две свежие помечены `censored: true` по 14-дневному порогу.
+- **Кэш ведёт себя как у остальных вкладок**: первый запрос `x-data-cache: miss`,
+  второй `hit`, `?fresh=1` снова `miss`, `X-Data-Generated-At` отдаётся; без
+  ключа — `401`.
+- **`founder-digest` несёт блок `monetization`** — Hermes подхватит его в
+  ближайшем прогоне без изменения его крона.
+- Рестарт 59 → **60**, `unstable restarts: 0`, **ноль ошибок от нового PID**
+  (последняя запись в error-логе — 2026-08-08, за двое суток до деплоя). Все
+  кроны зарегистрированы, включая ежедневный `Drop matching "0 18 * * *"` и
+  `Synthetic test partner`. `/v1/ping` ok, admin `401`, **все 11 страниц Mini
+  App 200**, `supportedCities` по-прежнему только Киев.
+- Демо переехало тем же исходником: баннер называет `@gennety_demo_bot` и базу
+  `aws-1-eu-west-1` (у прода `aws-0-`), оба демо-подавления кронов на месте,
+  рестарт 18 → 19, `demo-api` ping ok.
+
+**Одна деталь про синхронность деревьев.** Пока шёл деплой, параллельная сессия
+закоммитила `677e4e2` — правку описания в `openapi/gennety-v1.yaml`. Файл
+рантаймом бота не читается вовсе (ноль ссылок в `apps/bot/src` и `packages`;
+это контракт для генератора iOS и для `openapi:lint`), поэтому он был донесён
+отдельным `rsync openapi/` **без рестарта**. Полный md5-свип 765 файлов
+подтвердил: прод байт-в-байт равен `677e4e2`.
 
 **Rollback:** откатить код и перезапустить, редеплоить дашборд с предыдущего
 чекаута. Откатывать больше нечего — ни схемы, ни env, ни флага, ни состояния.
@@ -3516,18 +3540,22 @@ watch that the PID holds and the restart count stops climbing. Otherwise do a
 full deploy — but note that rsync copies the **working tree**, not git HEAD, so
 check `git status` first: an unrelated in-progress refactor ships with it.
 
-**Prod anchor, re-verified 2026-08-08 after the release at the top of this file.**
-Prod is at **`f66949a` plus `e04ffec`** (the dependency-override commit made
-during that release) — deliberately **not** at `HEAD`, and the gap grows every
-time anyone commits.
+**Prod anchor, re-verified 2026-08-11 after the release at the top of this file.**
+Prod is at **`677e4e2`** — for once literally equal to `HEAD`, confirmed by the
+765-file md5 sweep below rather than asserted. That is the exception, not the
+rule: the gap reopens the moment anyone commits, and this section was itself
+stale for three days before this deploy (it still named `f66949a` after the
+2026-08-09 backlog release and the 2026-08-10 cadence flip had both landed).
+**Re-anchor it as part of every release**, or it silently becomes a claim about
+when someone last looked.
 
 **Do not maintain a list of undeployed commits here — compute it.** An earlier
 revision of this note named them, and it was stale within the hour because a
 parallel session kept landing work. The set is a one-liner:
 
 ```sh
-git log --oneline f66949a..HEAD | grep -v e04ffec    # what prod is missing
-git diff --stat f66949a..HEAD -- apps packages       # is any of it runtime code?
+git log --oneline 677e4e2..HEAD                # what prod is missing
+git diff --stat 677e4e2..HEAD -- apps packages # is any of it runtime code?
 ```
 
 **A demo-only release does not advance this anchor, and that is the trap.**
@@ -3549,13 +3577,14 @@ Two standing exclusions, both deliberate rather than forgotten:
   so an import is a separate, larger decision, not part of any deploy.
 - **`apps/video/**`** is the Remotion workspace and is not in the bot runtime.
 
-Anchor md5 as of 2026-08-08 — three files the last release actually changed,
-which is what makes them worth anchoring on:
+Anchor md5 as of 2026-08-11 — three files the last release actually changed,
+which is what makes them worth anchoring on (the middle one did not exist on
+prod before it, so its mere presence is already the check):
 
 ```
-4983080a84fdf053fc79bb99fcf118c5  /opt/gennety/apps/bot/src/services/onboarding-photo-stage.ts
-9fd9e243fea22d10a7c862ced62b2f2f  /opt/gennety/apps/bot/src/services/venue-change.ts
-359cb5e6ba572d0939e141ee7ddba224  /opt/gennety/packages/shared/src/i18n.ts
+895c88a0067980087d47db04641ba27b  /opt/gennety/apps/bot/src/services/purchases.ts
+09cf3abe110408a69ff1d11a259b1dfa  /opt/gennety/apps/bot/src/admin/utils/monetization.ts
+5548eda49c0047121252f007c9269add  /opt/gennety/apps/bot/src/admin/server.ts
 ```
 
 The file below is kept as the counter-example, not as a check to run:
