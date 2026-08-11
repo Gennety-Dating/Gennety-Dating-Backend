@@ -1018,6 +1018,7 @@ external callers kept reaching for:
 | GET | `/admin/stats` | Headline counters in ONE call: users by status, onboarding by step, verification by status, matches by status (+ `live` = the single-live-match states), reports by tier. Every bucket is zero-filled, so a missing group reads as `0` rather than `undefined`. |
 | GET | `/admin/dashboard` | The `/admin/stats` superset plus derived rates (`signupsLast7Days`, `activeRate`, `verifiedRate`, `matchAcceptanceRate`) and the 10 most recent matches. Shares `collectStats()` with `/admin/stats` so the two can never drift. |
 | GET | `/admin/purchases` | The revenue ledger — every real money movement, newest first, with the payer inlined (`?kind=`, `?status=`, `?userId=`, `?since=`, `?until=`, paginated). Carries `totals` + `byKind` over the WHOLE filtered set, not just the page. Deliberately **uncached**, unlike the analytics tabs: a founder checking whether a payment landed must not be served a ten-minute-old answer. |
+| GET | `/admin/analytics/monetization` | **The conversion, not the ledger** — what share of acquired users pay. Three denominators side by side (all real registrations / activated / reached a paywall), revenue with ARPU+ARPPU, per-product payers, signup-week cohorts, four segment cuts (channel, gender, city, registration track), repeat-purchase and time-to-first-payment. Cached 15 min with `?fresh=1`, like the other analytics tabs — the opposite call from `/admin/purchases` above, and for the opposite reason: a conversion rate does not move meaningfully between two page loads. |
 | GET | `/admin/users/:id/health` | One account's health class plus the RULE that produced it (`reason`, `rules_fired`, `signals`). Counters and metadata only — never conversation content. |
 | GET | `/admin/matches` | The match **row** list — the pairs themselves, newest first, both participants inlined, `?status=` filtered and paginated. Distinct from `/admin/analytics/matches`, which is the aggregate funnel and cannot answer "which pairs exist right now". `telegramId` is serialized to a string (BigInt is not JSON-safe). |
 
@@ -1427,6 +1428,31 @@ Two consumers:
 - **Admin surface** — `GET /admin/purchases` (`admin/routes/purchases.ts`),
   plus `purchaseSummary` on every `/admin/users` row and `purchases[]` +
   `purchaseSummary` on `/admin/users/:id`.
+- **Paying-user conversion** — `loadPayerIndex()` collapses the same rows into
+  one entry per payer (non-refunded count, money, first/last charge, per-product
+  totals), and `admin/utils/monetization.ts` divides that by a denominator.
+  It is built on the SAME `loadPurchases` path rather than counting rows out of
+  the four tables directly, because the "is this row actually a purchase" rules
+  live there — `isPaidTicketRow` skipping free grants (welcome gift, student
+  bonus, referral, promo), `isPaidSubscriptionRow` skipping comp'd Premium, and
+  the App Store claw-back lookup. A second implementation of those would drift
+  into quietly counting a welcome gift as a sale.
+
+Two things a reader comparing the ledger with the conversion tab needs to know,
+because otherwise the gap looks like a bug. **Test and synthetic accounts are
+excluded from the conversion's numerator, denominator AND revenue** (the
+verdict comes from `admin/utils/user-health.ts`, the same classification the
+onboarding funnel divides by), while the ledger deliberately shows every
+charge — the excluded amount is reported as `revenue.excludedTestUsdCents` so
+the difference is stated rather than discovered. And **a user whose every
+purchase was refunded is not a paying user** but is counted separately
+(`refundedOnlyPayers`); `refund_failed` IS revenue, by the same rule
+`summarizePurchases` already applies — the money is still with us, which is
+exactly what makes that state an ops alarm.
+
+`loadPayerIndex` is bounded by a fetch ceiling (20 000 rows per source) and
+**reports hitting it** (`truncated`) rather than silently shortening a
+conversion rate — a rate over a truncated set is wrong, not merely incomplete.
 
 Two money rules the readers share. **Stars have no published USD rate**, so any
 dollar figure derived from them is computed at the documented `STAR_USD_CENTS`

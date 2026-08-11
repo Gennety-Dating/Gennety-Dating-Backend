@@ -20,7 +20,8 @@ import { prisma } from "@gennety/db";
  * with the tables that own the refunds by construction.
  *
  * Consumed by `admin/routes/purchases.ts`, `admin/server.ts` (the user card +
- * list), and `services/founder-notify.ts`.
+ * list), `admin/routes/monetization.ts` (the paying-users conversion) and
+ * `services/founder-notify.ts`.
  */
 
 /** What was bought. */
@@ -431,6 +432,18 @@ export interface PurchaseFilter {
  */
 const SOURCE_FETCH_CAP = 2000;
 
+/**
+ * The same ceiling for the whole-base payer index, which is not a page and so
+ * cannot be bounded by `offset + limit`.
+ *
+ * It is a hard limit rather than an unbounded scan because this feeds a cached
+ * analytics endpoint, and an unbounded merge of four tables in memory is the
+ * kind of thing that is fine at 0 rows and not fine later. Hitting it is
+ * REPORTED (`PayerIndex.truncated`) rather than silently truncating a
+ * conversion rate — the same contract `classifyAllUsers` already uses.
+ */
+const PAYER_INDEX_FETCH_CAP = 20_000;
+
 function dateFilter(filter: PurchaseFilter): { gte?: Date; lte?: Date } | undefined {
   if (!filter.since && !filter.until) return undefined;
   return {
@@ -447,9 +460,18 @@ function dateFilter(filter: PurchaseFilter): { gte?: Date; lte?: Date } | undefi
  * (each source spells it differently) so it is applied after normalization —
  * which is also why the returned `total` is the count of the merged set rather
  * than a sum of SQL counts.
+ *
+ * `truncated` is true when any single source came back exactly full, i.e. the
+ * ceiling may have cut rows off. The paginated callers ignore it (a page is
+ * bounded by construction); the payer index reports it, because a conversion
+ * rate computed over a truncated set is wrong rather than merely incomplete.
  */
-async function loadPurchases(filter: PurchaseFilter, cap: number): Promise<PurchaseRow[]> {
-  const take = Math.min(cap, SOURCE_FETCH_CAP);
+async function loadPurchases(
+  filter: PurchaseFilter,
+  cap: number,
+  ceiling: number = SOURCE_FETCH_CAP,
+): Promise<{ rows: PurchaseRow[]; truncated: boolean }> {
+  const take = Math.min(cap, ceiling);
   const createdAt = dateFilter(filter);
   const owner = filter.userId
     ? { userId: filter.userId }
@@ -576,7 +598,10 @@ async function loadPurchases(filter: PurchaseFilter, cap: number): Promise<Purch
   ];
 
   const filtered = filter.status ? rows.filter((row) => row.status === filter.status) : rows;
-  return sortPurchases(filtered);
+  const truncated = [ticketRows, subscriptionRows, rematchRows, venueRows].some(
+    (source) => source.length >= take,
+  );
+  return { rows: sortPurchases(filtered), truncated };
 }
 
 async function loadAppStoreRefundIds(creditIds: string[]): Promise<Set<string>> {
@@ -604,13 +629,15 @@ export async function listPurchases(
   filter: PurchaseFilter,
   page: { limit: number; offset: number },
 ): Promise<PurchasePage> {
-  const all = await loadPurchases(filter, page.offset + page.limit + SOURCE_FETCH_CAP);
-  const kinds: PurchaseKind[] = ["tickets", "date_ticket", "premium", "rematch", "venue_change"];
+  const { rows: all } = await loadPurchases(
+    filter,
+    page.offset + page.limit + SOURCE_FETCH_CAP,
+  );
   return {
     rows: all.slice(page.offset, page.offset + page.limit),
     total: all.length,
     totals: summarizePurchases(all),
-    byKind: kinds
+    byKind: PURCHASE_KINDS
       .map((kind) => {
         const totals = summarizePurchases(all.filter((row) => row.kind === kind));
         return { kind, count: totals.count, stars: totals.stars, usdCents: totals.usdCents };
@@ -632,7 +659,7 @@ export async function purchasesForUser(
   userId: string,
   limit = 100,
 ): Promise<{ rows: PurchaseRow[]; summary: UserPurchaseSummary }> {
-  const all = await loadPurchases({ userId }, limit + SOURCE_FETCH_CAP);
+  const { rows: all } = await loadPurchases({ userId }, limit + SOURCE_FETCH_CAP);
   return { rows: all.slice(0, limit), summary: summarizeForUser(all) };
 }
 
@@ -655,11 +682,141 @@ export async function purchaseSummariesForUsers(
   if (userIds.length === 0) return result;
 
   const ids = new Set(userIds);
-  const all = await loadPurchases({ userIds: [...ids] }, SOURCE_FETCH_CAP);
+  const { rows: all } = await loadPurchases({ userIds: [...ids] }, SOURCE_FETCH_CAP);
   for (const userId of ids) {
     const rows = all.filter((row) => row.userId === userId);
     if (rows.length === 0) continue;
     result.set(userId, summarizeForUser(rows));
   }
   return result;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Payer index — who paid, rather than what was paid
+// ───────────────────────────────────────────────────────────────────────────
+
+/** One product's totals for one payer. */
+export interface PayerKindTotals {
+  purchases: number;
+  stars: number;
+  usdCents: number;
+}
+
+/**
+ * Zero-filled so a product this payer never bought reads as `0`, never
+ * `undefined` — the same rule `/admin/stats` applies to its counter maps.
+ */
+export type PayerKindBreakdown = Record<PurchaseKind, PayerKindTotals>;
+
+/** One payer, collapsed from all of their purchase rows. */
+export interface PayerIndexEntry {
+  userId: string;
+  /** Purchases that actually moved money (refunded rows excluded). */
+  purchases: number;
+  refundedCount: number;
+  stars: number;
+  usdCents: number;
+  /** First and last purchase that moved money. Null only for a refunded-only payer. */
+  firstPaidAt: Date | null;
+  lastPaidAt: Date | null;
+  /**
+   * Per-product totals, so "which product actually makes money" needs no
+   * second pass over the rows — the aggregate would otherwise have to choose
+   * between counting payers per kind and summing money per kind.
+   */
+  byKind: PayerKindBreakdown;
+  /**
+   * `true` when every purchase this user ever made came back to them. They are
+   * deliberately NOT a paying user — nothing they bought is revenue — but they
+   * are also not nobody, so the analytics reports them separately rather than
+   * letting them vanish between the two.
+   */
+  refundedOnly: boolean;
+}
+
+/** Every kind, in a stable order — also the zero-fill key set. */
+export const PURCHASE_KINDS: readonly PurchaseKind[] = [
+  "tickets",
+  "date_ticket",
+  "premium",
+  "rematch",
+  "venue_change",
+];
+
+function emptyKindBreakdown(): PayerKindBreakdown {
+  return Object.fromEntries(
+    PURCHASE_KINDS.map((kind) => [kind, { purchases: 0, stars: 0, usdCents: 0 }]),
+  ) as PayerKindBreakdown;
+}
+
+export interface PayerIndex {
+  byUser: Map<string, PayerIndexEntry>;
+  /** A source hit the fetch ceiling — every figure derived from this is partial. */
+  truncated: boolean;
+}
+
+/**
+ * Every user who has ever been charged, keyed by user id.
+ *
+ * Deliberately built on the SAME `loadPurchases` path the ledger and the user
+ * card use, rather than counting rows straight out of the four tables: the
+ * "is this row actually a purchase" rules (`isPaidTicketRow` skipping free
+ * grants, `isPaidSubscriptionRow` skipping comp'd Premium, the App Store
+ * claw-back lookup) live there, and a second implementation of them would drift
+ * into quietly counting a welcome gift as a sale.
+ */
+export async function loadPayerIndex(
+  filter: Pick<PurchaseFilter, "since" | "until"> = {},
+): Promise<PayerIndex> {
+  const { rows, truncated } = await loadPurchases(
+    filter,
+    PAYER_INDEX_FETCH_CAP,
+    PAYER_INDEX_FETCH_CAP,
+  );
+
+  const byUser = new Map<string, PayerIndexEntry>();
+  for (const row of rows) {
+    let entry = byUser.get(row.userId);
+    if (!entry) {
+      entry = {
+        userId: row.userId,
+        purchases: 0,
+        refundedCount: 0,
+        stars: 0,
+        usdCents: 0,
+        firstPaidAt: null,
+        lastPaidAt: null,
+        byKind: emptyKindBreakdown(),
+        refundedOnly: false,
+      };
+      byUser.set(row.userId, entry);
+    }
+
+    if (row.status === "refunded") {
+      entry.refundedCount += 1;
+      continue;
+    }
+
+    const stars = row.amountStars ?? 0;
+    const usdCents = row.usdCents ?? 0;
+    entry.purchases += 1;
+    entry.stars += stars;
+    entry.usdCents += usdCents;
+
+    const kind = entry.byKind[row.kind];
+    kind.purchases += 1;
+    kind.stars += stars;
+    kind.usdCents += usdCents;
+
+    // `rows` is newest-first, so the first row seen is the latest purchase and
+    // the last one seen is the earliest.
+    entry.lastPaidAt ??= row.createdAt;
+    entry.firstPaidAt = row.createdAt;
+  }
+
+  for (const entry of byUser.values()) {
+    entry.refundedOnly = entry.purchases === 0;
+  }
+
+  return { byUser, truncated };
 }

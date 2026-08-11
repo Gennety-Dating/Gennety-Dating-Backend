@@ -1,5 +1,69 @@
 # Gennety Dating Deploy
 
+**PENDING — «% платящих»: раздел монетизации (PRODUCT_SPEC не затронут,
+ARCHITECTURE → Admin API + Purchase ownership, DECISIONS.md ×2).** **Нет
+изменения схемы Prisma, нет новых env, нет флагов** — всё выводится из уже
+существующих таблиц, так что `db:push` НЕ нужен. Половина изменения — клиент,
+поэтому последовательность: Deploy Full Server Code → `pnpm db:drift-check` →
+`pm2 restart` → **редеплой дашборда** (отдельный репозиторий
+`~/Desktop/gennety-admin-dashboard`, автодеплой на Vercel по пушу) →
+`pnpm demo:deploy`.
+
+**Порядок важен: сервер первым.** Вкладка читает новый
+`GET /admin/analytics/monetization`; фронт вызывает его через `.catch(() => null)`
+и при отсутствии эндпоинта просто не рисует вкладку, а не роняет весь дашборд.
+Обратный порядок дал бы пустую вкладку на живом дашборде.
+
+Что появляется: `GET /admin/analytics/monetization` (кэш 15 мин, `?fresh=1`,
+заголовки `X-Data-Generated-At` / `X-Data-Cache` — как у остальных
+аналитических вкладок), новая вкладка **Monetization** в дашборде и блок
+`monetization` внутри `GET /admin/analytics/founder-digest`, который Hermes
+дёргает каждый прогон.
+
+**Четыре вещи, которые стоит знать до рестарта:**
+
+- **Знаменатель — `registeredReal`, и он МЕНЬШЕ `users.total`.** Тестовые и
+  синтетические аккаунты исключены из числителя, знаменателя и выручки (тот же
+  вердикт `user-health.ts`, что и у воронки). Сегодня в проде это **19 против
+  50** — 30 синтетических профилей плюс фаундерский аккаунт. `registeredReal:
+  50` после деплоя означало бы, что исключение не сработало; это главный
+  признак поломки.
+- **Эндпоинт делает два скана `users` за запрос** (свой + внутри
+  `classifyAllUsers`) плюс три вызова индекса покупок с фильтрами по датам.
+  Осознанный размен ради того, чтобы не копировать правила классификации;
+  прикрыт кэшем на 15 минут. На 50 аккаунтах это миллисекунды — пересмотреть,
+  когда база уйдёт в пятизначные числа.
+- **`founder-digest` стал тяжелее на ту же работу.** Он тоже кэшируется на 15
+  минут и дёргается раз в неделю, так что цена номинальна, но если он начнёт
+  таймаутить — причина здесь.
+- **Ничего это пока не показывает, кроме нулей**, и это правильный результат:
+  0 покупок и 0 свиданий за всё время. Сквозная проверка «метрика двигается»
+  делается на `@gennetytestbot` мок-рельсом магазина билетов, а не на проде.
+
+Preflight по этому изменению: typecheck чистый по всем 5 проектам, lint
+чистый, **4113 тестов** (бот 3582 / shared 276 / webapp 255, 0 failed, +30
+новых), `security:secrets` чистый (1044 файла), сборка дашборда чистая. Два
+pre-existing eslint-error'а в дашборде (`DataFreshness.tsx`,
+`UserProfileDrawer.tsx`) — не из этого изменения, не трогались.
+
+Проверка после деплоя — важен именно знаменатель, а не нули:
+
+```sh
+curl -s -H "Authorization: Bearer $ADMIN_API_KEY" \
+  https://api-admin.gennety.com/admin/analytics/monetization \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d['headline'], indent=1))"
+# Ожидаемо: registeredReal 19 (НЕ 50), payers 0, payingRatePct 0,
+#           ofPaywallReached {payers:0, base:0, pct:null}.
+curl -s -H "Authorization: Bearer $ADMIN_API_KEY" \
+  https://api-admin.gennety.com/admin/analytics/founder-digest \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['monetization'])"
+```
+
+**Rollback:** откатить код и перезапустить, редеплоить дашборд с предыдущего
+чекаута. Откатывать больше нечего — ни схемы, ни env, ни флага, ни состояния.
+
+---
+
 **Applied 2026-08-10 (env-only) — `DROP_CADENCE=daily`: matching runs every
 evening (PRODUCT_SPEC §3.1, DECISIONS.md).** **No code change, no Prisma schema
 change, no Mini App change** — the `daily` profile has shipped in code since

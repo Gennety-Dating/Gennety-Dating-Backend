@@ -12,6 +12,10 @@ import {
 } from "./cities.js";
 import { computeAcquisition, normalizeChannel } from "../utils/growth.js";
 import { percentile } from "../utils/buckets.js";
+import {
+  digestMonetization,
+  loadMonetizationSummary,
+} from "../utils/monetization-source.js";
 
 export const onboardingFunnelRouter: Router = Router();
 
@@ -125,6 +129,7 @@ onboardingFunnelRouter.get(
           ignoreEventGroups,
           verificationGroups,
           geoUsers,
+          monetization,
         ] = await Promise.all([
           prisma.user.count({ where: { createdAt: { gte: weekAgo } } }),
           prisma.user.count({
@@ -181,6 +186,13 @@ onboardingFunnelRouter.get(
               },
             },
           }),
+          // Монетизация. Считается той же функцией, что и полная вкладка
+          // `/admin/analytics/monetization`, и урезается до компактного блока
+          // — Hermes обязан дёргать `founder-digest` каждый прогон, так что
+          // «% платящих» попадает в недельный отчёт без второго запроса и без
+          // изменения его крона. Читать своей копией правил здесь нельзя:
+          // дашборд и отчёт показали бы разные числа.
+          loadMonetizationSummary(),
         ]);
 
         const matchByStatus: Record<string, number> = {};
@@ -277,6 +289,11 @@ onboardingFunnelRouter.get(
             verifiedPassRate:
               verifDecided > 0 ? +(verifiedCount / verifDecided).toFixed(3) : null,
           },
+          // ⭐ Сколько из привлечённых людей платят. Знаменатель — РЕАЛЬНЫЕ
+          // регистрации (тестовые и синтетические аккаунты исключены и из
+          // числителя, и из знаменателя, и из выручки), поэтому он не сходится
+          // с `users.total` выше — и это правильно, а не расхождение.
+          monetization: digestMonetization(monetization),
         };
       }, { req, res });
 

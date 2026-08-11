@@ -1,5 +1,28 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+/**
+ * Almost everything here is pure. `loadPayerIndex` is the exception — it reads
+ * the four money tables — so Prisma is stubbed at the module level. The pure
+ * tests above are unaffected: they never touch it.
+ */
+const findMany = vi.hoisted(() => ({
+  ticketLedger: vi.fn().mockResolvedValue([]),
+  subscriptionLedger: vi.fn().mockResolvedValue([]),
+  rematchPurchase: vi.fn().mockResolvedValue([]),
+  venueChangePurchase: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("@gennety/db", () => ({
+  prisma: {
+    ticketLedger: { findMany: findMany.ticketLedger },
+    subscriptionLedger: { findMany: findMany.subscriptionLedger },
+    rematchPurchase: { findMany: findMany.rematchPurchase },
+    venueChangePurchase: { findMany: findMany.venueChangePurchase },
+  },
+}));
+
 import {
+  loadPayerIndex,
   formatPurchaseAmount,
   isPaidTicketRow,
   normalizePurchaseTableStatus,
@@ -299,5 +322,131 @@ describe("formatting", () => {
 
   it("uses the documented Stars rate", () => {
     expect(starsToUsdCents(350)).toBe(700);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("loadPayerIndex", () => {
+  beforeEach(() => {
+    for (const fn of Object.values(findMany)) fn.mockReset().mockResolvedValue([]);
+  });
+
+  /** A `ticket_ledger` row as Prisma would hand it back. */
+  function ticketRow(over: Partial<Record<string, unknown>> = {}) {
+    return {
+      id: "t1",
+      userId: "u1",
+      reason: "store_purchase",
+      delta: 3,
+      matchId: null,
+      amountCents: null,
+      amountStars: 830,
+      bundleSize: 3,
+      externalPaymentId: "charge_1",
+      createdAt: AT,
+      ...over,
+    };
+  }
+
+  it("collapses a user's rows into one entry, with per-product totals", async () => {
+    findMany.ticketLedger.mockResolvedValue([
+      ticketRow({ id: "t2", createdAt: new Date("2026-08-05T10:00:00.000Z") }),
+      ticketRow({ id: "t1", createdAt: new Date("2026-08-01T10:00:00.000Z") }),
+    ]);
+    findMany.subscriptionLedger.mockResolvedValue([
+      {
+        id: "s1",
+        userId: "u1",
+        provider: "telegram_stars",
+        event: "started",
+        amount: 750,
+        currency: "XTR",
+        periodEnd: null,
+        externalPaymentId: "sub_1",
+        createdAt: new Date("2026-08-03T10:00:00.000Z"),
+      },
+    ]);
+
+    const { byUser } = await loadPayerIndex();
+    const entry = byUser.get("u1")!;
+
+    expect(entry.purchases).toBe(3);
+    expect(entry.stars).toBe(830 + 830 + 750);
+    expect(entry.byKind.tickets).toEqual({ purchases: 2, stars: 1660, usdCents: 3320 });
+    expect(entry.byKind.premium).toEqual({ purchases: 1, stars: 750, usdCents: 1500 });
+    // A product they never bought reads as 0, not undefined.
+    expect(entry.byKind.rematch).toEqual({ purchases: 0, stars: 0, usdCents: 0 });
+    // Rows arrive newest-first, so first/last must not be read off in order.
+    expect(entry.firstPaidAt).toEqual(new Date("2026-08-01T10:00:00.000Z"));
+    expect(entry.lastPaidAt).toEqual(new Date("2026-08-05T10:00:00.000Z"));
+  });
+
+  it("does not count free grants as purchases", async () => {
+    // Reason alone decides it — a welcome gift is a wallet credit, not a sale.
+    // The loader pushes this down to SQL, so the filter is asserted there.
+    await loadPayerIndex();
+    const where = findMany.ticketLedger.mock.calls[0]?.[0]?.where as {
+      reason: { in: string[] };
+    };
+    expect(where.reason.in).toContain("store_purchase");
+    expect(where.reason.in).not.toContain("welcome_gift");
+    expect(where.reason.in).not.toContain("referral_milestone");
+    expect(where.reason.in).not.toContain("promo");
+  });
+
+  it("marks a fully-refunded payer rather than dropping them", async () => {
+    findMany.ticketLedger.mockResolvedValue([
+      ticketRow({ reason: "gate_refunded", externalPaymentId: "charge_r" }),
+    ]);
+
+    const { byUser } = await loadPayerIndex();
+    const entry = byUser.get("u1")!;
+
+    expect(entry.purchases).toBe(0);
+    expect(entry.refundedCount).toBe(1);
+    expect(entry.refundedOnly).toBe(true);
+    expect(entry.usdCents).toBe(0);
+    expect(entry.firstPaidAt).toBeNull();
+  });
+
+  it("counts a still-owed refund as money we hold", async () => {
+    // `refund_failed` is an ops alarm precisely because the reversal did not
+    // happen — the money is still with us, so it is revenue.
+    findMany.venueChangePurchase.mockResolvedValue([
+      {
+        id: "v1",
+        userId: "u2",
+        matchId: "m1",
+        status: "refund_failed",
+        amountStars: 150,
+        externalPaymentId: "charge_v",
+        createdAt: AT,
+      },
+    ]);
+
+    const { byUser } = await loadPayerIndex();
+    expect(byUser.get("u2")).toMatchObject({ purchases: 1, usdCents: 300 });
+  });
+
+  it("pushes a date window down to every source", async () => {
+    const since = new Date("2026-08-01T00:00:00.000Z");
+    await loadPayerIndex({ since });
+    for (const fn of Object.values(findMany)) {
+      expect(fn.mock.calls[0]?.[0]?.where).toMatchObject({ createdAt: { gte: since } });
+    }
+  });
+
+  it("reports truncation instead of silently cutting a conversion rate short", async () => {
+    // A ceiling hit means every figure derived from the index is partial; a
+    // rate computed over a truncated set is wrong, not merely incomplete.
+    const { truncated: clean } = await loadPayerIndex();
+    expect(clean).toBe(false);
+
+    findMany.ticketLedger.mockResolvedValue(
+      Array.from({ length: 20_000 }, (_, i) => ticketRow({ id: `t${i}`, userId: `u${i}` })),
+    );
+    const { truncated } = await loadPayerIndex();
+    expect(truncated).toBe(true);
   });
 });
