@@ -162,6 +162,7 @@ import {
 import { prepareProfileVideo } from "../../services/profile-video.js";
 import { grantVideoBonusIfEligible } from "../../services/ticket-wallet.js";
 import { isPinnedMessageServiceUpdate, menuRouter } from "./router.js";
+import { releaseStaleMenuClaim } from "../../services/menu-text-claim.js";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import {
   fetchTelegramFileBuffer,
@@ -1182,6 +1183,19 @@ describe("Menu — a forgotten text edit stops owning the chat", () => {
   });
 
   /**
+   * The claim release runs in `bot.ts`, ahead of every router — it has to,
+   * because the Profiler router is mounted BEFORE this one and reads
+   * `menuState` (see `releaseStaleMenuClaim`). These tests drive the menu
+   * router directly, so they replay that step exactly as the real chain does.
+   */
+  function botEarlyMiddleware(ctx: ReturnType<typeof createMockCtx>): void {
+    releaseStaleMenuClaim(ctx.session, {
+      callbackData: ctx.callbackQuery?.data,
+      text: ctx.message?.text,
+    });
+  }
+
+  /**
    * THE regression. `edit_bio` writes its message verbatim into
    * `Profile.psychologicalSummary` — the dominant embedding input — and the
    * state lives in `bot_sessions`, so before the claim deadline existed a user
@@ -1199,6 +1213,7 @@ describe("Menu — a forgotten text edit stops owning the chat", () => {
       messageText: "когда моё свидание?",
     });
 
+    botEarlyMiddleware(ctx);
     await menuRouter.middleware()(ctx, vi.fn());
 
     expect(prisma.profile.update).not.toHaveBeenCalled();
@@ -1214,6 +1229,7 @@ describe("Menu — a forgotten text edit stops owning the chat", () => {
       messageText: "I love hiking and photography!",
     });
 
+    botEarlyMiddleware(ctx);
     await menuRouter.middleware()(ctx, vi.fn());
 
     expect(prisma.profile.update).toHaveBeenCalledWith(
@@ -1234,6 +1250,7 @@ describe("Menu — a forgotten text edit stops owning the chat", () => {
       messageText: "anything at all",
     });
 
+    botEarlyMiddleware(ctx);
     await menuRouter.middleware()(ctx, vi.fn());
 
     expect(prisma.profile.update).not.toHaveBeenCalled();

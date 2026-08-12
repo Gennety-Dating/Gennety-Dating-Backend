@@ -17,6 +17,7 @@ import {
   releaseMatchFlowClaim,
   updateReleasesMatchFlowClaim,
 } from "./services/match-flow-claim.js";
+import { releaseStaleMenuClaim } from "./services/menu-text-claim.js";
 
 function isPendingAccountActionCallback(data: string | undefined): boolean {
   return Boolean(
@@ -75,6 +76,17 @@ export function createBot(token: string): Bot<BotContext> {
     ) {
       releaseMatchFlowClaim(ctx.session);
     }
+    // The menu twin, released here for a reason the match-flow one does not
+    // need: the menu router is mounted AFTER the Profiler router, and the
+    // Profiler reads `menuState` to decide whether the chat is idle enough to
+    // record an answer. Releasing downstream meant an expired `edit_bio` claim
+    // was still set when the Profiler looked — it refused the answer AND closed
+    // the answer window, then the menu router released the claim and gave the
+    // text to the agent. See services/menu-text-claim.ts.
+    releaseStaleMenuClaim(ctx.session, {
+      callbackData: ctx.callbackQuery?.data,
+      text: ctx.message?.text,
+    });
     await next();
   });
 

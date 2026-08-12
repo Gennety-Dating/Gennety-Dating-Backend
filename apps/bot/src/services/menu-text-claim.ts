@@ -150,3 +150,43 @@ export function updateReleasesMenuClaim(
   }
   return update.text?.startsWith("/") === true;
 }
+
+/**
+ * Drop a claim that no longer owns the chat — either because the user moved on
+ * (`updateReleasesMenuClaim`) or because its deadline passed. Returns whether
+ * anything was released.
+ *
+ * **This must run before ANY router reads `session.menuState`**, which is why it
+ * lives here rather than inline in the menu router, and why `bot.ts` calls it
+ * from the same early middleware that already releases the match-flow claim.
+ *
+ * The menu router is mounted AFTER the Profiler router, and `menuState` is one
+ * of the four fields the Profiler reads to decide whether the chat is idle
+ * enough to record a question's answer. So while the release lived downstream,
+ * an expired `edit_bio` claim was still set when the Profiler looked: it refused
+ * the answer, closed the answer window as a side effect (which disqualifies the
+ * question from ever being answered by text again), and only then did the menu
+ * router release the claim and hand the text to the concierge agent. The user's
+ * Profiler answer was lost to the agent, and the question sat unresolved until
+ * the 6 h stall sweep recorded it as an implicit skip and paused the rest of the
+ * batch — the whole series of three ended on the first question.
+ *
+ * The match-flow twin never had this bug because its two release sites
+ * (`bot.ts` for a tap/command, the matching + date routers for an expired
+ * plain-text claim) both sit ahead of the Profiler.
+ */
+export function releaseStaleMenuClaim(
+  session: SessionData,
+  update: { callbackData?: string | undefined; text?: string | undefined },
+  now: Date = new Date(),
+): boolean {
+  if (!isClaimableMenuState(session.menuState)) return false;
+  if (
+    updateReleasesMenuClaim(session, update) ||
+    !menuClaimIsLive(session, session.menuState, now)
+  ) {
+    releaseMenuClaim(session);
+    return true;
+  }
+  return false;
+}

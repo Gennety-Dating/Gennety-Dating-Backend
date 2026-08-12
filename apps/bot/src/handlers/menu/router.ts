@@ -45,12 +45,6 @@ import { handleMyTickets } from "./tickets.js";
 import { handlePremiumHub } from "./premium.js";
 import { handleReferralHub } from "./referral.js";
 import { runMenuAgentTurn, splitReplyIntoBubbles } from "../../services/menu-agent.js";
-import {
-  isClaimableMenuState,
-  menuClaimIsLive,
-  releaseMenuClaim,
-  updateReleasesMenuClaim,
-} from "../../services/menu-text-claim.js";
 import { retirePhotoCards } from "../../services/photo-cards.js";
 import { invalidatePendingAccountAction } from "./account-action.js";
 import {
@@ -97,21 +91,13 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
   }
 
   // A menu sub-flow that reads plain text owns the chat only while its claim is
-  // live. Past the deadline — or once the user has moved on to a command or a
-  // button that isn't the claim's own — the state is dropped here, BEFORE any
-  // sub-flow sees the update, so the message falls through to the concierge
-  // agent instead of being written over a profile field
-  // (`services/menu-text-claim.ts`).
-  if (
-    isClaimableMenuState(ctx.session.menuState) &&
-    (updateReleasesMenuClaim(ctx.session, {
-      callbackData: data,
-      text: ctx.message?.text,
-    }) ||
-      !menuClaimIsLive(ctx.session, ctx.session.menuState))
-  ) {
-    releaseMenuClaim(ctx.session);
-  }
+  // live. That release used to happen here; it now runs in `bot.ts`, in the same
+  // early middleware that drops a stale match-flow claim — because this router
+  // is mounted AFTER the Profiler router, which reads `menuState` and was
+  // therefore still seeing claims that had already expired
+  // (`releaseStaleMenuClaim`, services/menu-text-claim.ts). By the time an
+  // update reaches here the state is already `idle` when it should be, so the
+  // sub-flows below can trust it.
 
   // -----------------------------------------------------------------------
   // Multi-turn sub-flows: consume raw messages based on menuState

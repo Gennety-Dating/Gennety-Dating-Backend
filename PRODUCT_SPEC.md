@@ -1272,6 +1272,22 @@ Telegram-only in v1.
   conversation: a question asked hours earlier turned "when is my date?" into an
   answer, complete with an acknowledge shimmer and the next question, leaving
   the user's actual question unanswered.
+
+  **"Doing something else" means a claim that is still LIVE, not one the user
+  abandoned (2026-08-12).** The §2.1 menu editors (About me, Who I want, …) hold
+  the chat's free text for 30–60 minutes, and that claim was released inside the
+  menu router — which is mounted AFTER the Profiler. So a user who tapped "About
+  me" hours earlier, walked away, and later answered a Profiler question hit the
+  worst of both: the Profiler saw a stale non-idle `menuState`, refused the
+  answer **and closed the answer window** (which disqualifies the live question
+  from ever being answered by plain text again), and only then did the menu
+  router drop the claim and hand the text to the concierge. The answer was lost
+  to the agent and the question sat unresolved until the 6 h stall sweep recorded
+  it as an implicit skip and paused the rest of the batch — a series of three
+  ending on the first question. Stale claims are now released in `bot.ts` ahead
+  of every router (`releaseStaleMenuClaim`), where the match-flow twin has always
+  been released; that twin never had the bug because both of its release sites
+  already sat ahead of the Profiler.
 - **One reply per question.** A question is resolved by an atomic claim on
   `Profile.profilerActiveQuestionId`, so exactly ONE answer or skip can ever
   advance the batch. The Skip keyboard is stripped from a question once it is

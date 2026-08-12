@@ -29,6 +29,8 @@ import {
   resolveProfilerCapture,
 } from "../../services/profiler.js";
 import type { BotContext } from "../../session.js";
+import type { MenuState } from "@gennety/shared";
+import { releaseStaleMenuClaim } from "../../services/menu-text-claim.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mUserFind = (prisma.user as unknown as { findUnique: MockFn }).findUnique;
@@ -299,5 +301,68 @@ describe("profiler router — a refusal is not an answer", () => {
     expect(mRefusal).not.toHaveBeenCalled();
     expect(mAnswer).toHaveBeenCalledTimes(1);
     expect(mAnswer.mock.calls[0]![3]).toBe("нет");
+  });
+});
+
+/**
+ * Ordering regression: an abandoned menu editor must not eat a Profiler answer.
+ *
+ * `menuState` is one of the four fields this router reads to decide the chat is
+ * idle. Its claim used to be released inside the menu router, which is mounted
+ * AFTER this one — so a claim that had expired hours earlier was still set here.
+ * The answer was refused, the answer window was closed as a side effect, and the
+ * menu router then released the claim and handed the text to the concierge
+ * agent: the answer vanished into the agent and the question sat unresolved
+ * until the 6 h stall sweep skipped it and paused the rest of the batch.
+ *
+ * These tests run the release exactly where `bot.ts` runs it — before the
+ * router — so they encode the ORDER, which is the thing that was wrong.
+ */
+describe("profiler router — stale menu claim (bot.ts ordering)", () => {
+  function withMenuClaim(text: string, state: MenuState, claimUntil: number | null): BotContext {
+    const ctx = textCtx(text, 1);
+    ctx.session.menuState = state;
+    ctx.session.menuClaimUntil = claimUntil;
+    return ctx;
+  }
+
+  /** The early middleware from `bot.ts`, verbatim. */
+  function botEarlyMiddleware(ctx: BotContext): void {
+    releaseStaleMenuClaim(ctx.session, {
+      callbackData: ctx.callbackQuery?.data,
+      text: ctx.message?.text,
+    });
+  }
+
+  it("records the answer when the abandoned editor's claim has expired", async () => {
+    const ctx = withMenuClaim("комедии", "edit_bio", Date.now() - 60_000);
+    botEarlyMiddleware(ctx);
+
+    const next = await run(ctx);
+    await elapseDebounce();
+
+    expect(ctx.session.menuState).toBe("idle");
+    expect(mAnswer).toHaveBeenCalledTimes(1);
+    expect(mAnswer.mock.calls[0]![3]).toBe("комедии");
+    // The window must survive: closing it disqualifies the live question from
+    // ever being answered by plain text again.
+    expect(mCloseWindow).not.toHaveBeenCalled();
+    // And the agent never sees it.
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("still leaves a LIVE editor claim alone", async () => {
+    // The user really is mid-bio-edit; that text is the bio, not a Profiler
+    // answer, and the Profiler must stand down (and close its window).
+    const ctx = withMenuClaim("моя новая био", "edit_bio", Date.now() + 60_000);
+    botEarlyMiddleware(ctx);
+
+    const next = await run(ctx);
+    await elapseDebounce();
+
+    expect(ctx.session.menuState).toBe("edit_bio");
+    expect(mAnswer).not.toHaveBeenCalled();
+    expect(mCloseWindow).toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
   });
 });
