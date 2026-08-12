@@ -57,6 +57,13 @@ import {
   type OnboardingStrings,
 } from "./onboarding-i18n.js";
 import { typewriterLineHoldMs } from "./onboarding-timing.js";
+import {
+  CRUMBLE_COLS,
+  CRUMBLE_ICON_SHARDS,
+  CRUMBLE_ROWS,
+  CRUMBLE_TOTAL_MS,
+  type Shard,
+} from "./onboarding-crumble.js";
 import bumbleIcon from "./app-icons/bumble.png";
 import tinderIcon from "./app-icons/tinder.png";
 import badooIcon from "./app-icons/badoo.png";
@@ -90,6 +97,21 @@ const PREVIEW_REFERRAL_GIFT = params.get("preview") === "referral-gift";
  */
 const PREVIEW_BASICS =
   import.meta.env.DEV && (params.get("preview") ?? "").startsWith("basics");
+
+/**
+ * Dev-QA standalone preview of the visual intro scenes (`?preview=intro[:n]`,
+ * default scene 0). Same reasoning as the basics preview above: these sit
+ * behind the initData gate plus language/consent/city/theme, so reviewing the
+ * icon rise and the crumble otherwise means walking a full registration on the
+ * dev bot behind an HTTPS tunnel, per iteration.
+ *
+ * Scenes 0–1 are the pair worth opening it on: `?preview=intro` watches the
+ * icons rise and then crumble across the scene change, `?preview=intro:1` drops
+ * straight onto the crumble. `import.meta.env.DEV`-gated, so it is absent from
+ * the production bundle.
+ */
+const PREVIEW_INTRO =
+  import.meta.env.DEV && (params.get("preview") ?? "").startsWith("intro");
 
 const TRAP_BACKGROUND =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDT22v5JOFjqN2g1VkI86PnzZJ_vTS3whfVoE4pTqZMVY_zqEjFKQf0fGlab3jjVTIxx1gKK5zx4u10XcEtFiFDqeEsGaLjoNTdZMWbR46RULeC47iOvuiqYHU8PJrKZ9kQVqufAHWY-pv_0RSTu1V7cSz_tLD89uoBf8RE9OxG9ZhXIGcEKvxkjcwB3oa3Kf9KjRlxyoUZcBMol4eX5hJ6Oh2_fhyciV6tYxlSEoexfNp4Pr7iGISmsLdSC0fp35_bW0OO_cj0xmGN";
@@ -163,6 +185,16 @@ const ICON_REVEAL_DELAY_MS = 450;
 const ICON_REVEAL_VIEW_MS = 2400;
 const LOGO_RISE_DELAY_MS = 150;
 const LOGO_RISE_VIEW_MS = 2200;
+// Burnout (scene 1): the icons raised on scene 0 stay on screen (they live in
+// the shell-level overlay, like the Pivot logo) and crumble away once this
+// line lands — the copy says these apps wear you down, and this is the screen
+// acting it out. A short breath so it doesn't fire on the last keystroke, then
+// the scene holds for exactly as long as the last crumb is still falling
+// (`CRUMBLE_TOTAL_MS` is measured from the tiles themselves, so retuning the
+// crumble moves this hold with it). Net cost to the funnel is ~+400ms over the
+// plain 1.5s line hold this screen used to sit on.
+const CRUMBLE_FINAL_HOLD_MS = 250;
+const CRUMBLE_DELAY_MS = 250;
 // Pivot (scene 6): raise the Gennety logo almost the instant the line lands,
 // instead of sitting on the finished "So we built Gennety" text for the full
 // read-buffer hold. Just a short breath so it doesn't fire on the last keystroke.
@@ -264,6 +296,13 @@ function App(): ReactElement {
   // out on the way to "How it works". The Pivot scene's reveal cue flips this
   // true once its line has landed.
   const [logoRisen, setLogoRisen] = useState(false);
+  // Waste → Burnout: the three competitor icons live in the same kind of
+  // shell-level overlay as the logo above, for the same reason — they have to
+  // survive the scene crossfade, and a second copy rising on scene 1 would read
+  // as a new row of icons rather than the same one. Scene 0's reveal cue rises
+  // them; scene 1's cue crumbles them once its line has landed.
+  const [iconsRisen, setIconsRisen] = useState(false);
+  const [iconsCrumbling, setIconsCrumbling] = useState(false);
   // Stable per language: the typewriter scenes key their run on the `lines`
   // array identity, so a mid-scene parent re-render (e.g. the logo rising)
   // must not hand them a fresh object and restart the typing.
@@ -307,6 +346,12 @@ function App(): ReactElement {
         kind: "basics",
         step: (BASICS_STEPS.find((value) => value === step) ?? "name"),
       });
+      return;
+    }
+    if (PREVIEW_INTRO) {
+      const raw = Number.parseInt((params.get("preview") ?? "").split(":")[1] ?? "0", 10);
+      const index = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), VISUAL_LAST_INDEX) : 0;
+      setPhase({ kind: "visual", index });
       return;
     }
     if (!app?.initData) {
@@ -542,6 +587,20 @@ function App(): ReactElement {
     if (phase.kind === "visual" && phase.index === 6) setLogoRisen(false);
   }, [phase]);
 
+  // Same re-arm for the competitor icons, but over the two scenes they span.
+  // Paging back to Waste (0) has to take them off screen and replay the rise;
+  // paging back to Burnout (1) has to put the crumbled icons back so the fall
+  // plays again rather than the screen sitting there already empty.
+  useEffect(() => {
+    if (phase.kind !== "visual") return;
+    if (phase.index === 0) {
+      setIconsRisen(false);
+      setIconsCrumbling(false);
+    } else if (phase.index === 1) {
+      setIconsCrumbling(false);
+    }
+  }, [phase]);
+
   // The basics screens (name/age/gender/preference/height) already have
   // Telegram's own native BackButton showing (below) and run fullscreen, where
   // that native arrow floats over the same top-left corner as our in-content
@@ -560,9 +619,12 @@ function App(): ReactElement {
           pauses={SINGLE_LINE_PAUSES}
           onNext={nextVisualSilently}
           finalHoldMs={ICON_REVEAL_FINAL_HOLD_MS}
-          reveal={<AppIconRow variant="reveal" />}
+          // The icon row itself is the persistent overlay below; this invisible
+          // cue reuses the reveal timing to rise it, exactly like the Pivot.
+          reveal={<span className="intro-reveal-cue" aria-hidden="true" />}
           revealDelayMs={ICON_REVEAL_DELAY_MS}
           revealViewMs={ICON_REVEAL_VIEW_MS}
+          onReveal={() => setIconsRisen(true)}
         />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 1}>
@@ -571,6 +633,13 @@ function App(): ReactElement {
           lines={strings.burnoutLines}
           pauses={SINGLE_LINE_PAUSES}
           onNext={nextVisualSilently}
+          finalHoldMs={CRUMBLE_FINAL_HOLD_MS}
+          // Same cue mechanism, one screen on: the icons are already up, so
+          // what the landed line triggers here is the crumble.
+          reveal={<span className="intro-reveal-cue" aria-hidden="true" />}
+          revealDelayMs={CRUMBLE_DELAY_MS}
+          revealViewMs={CRUMBLE_TOTAL_MS}
+          onReveal={() => setIconsCrumbling(true)}
         />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 2}>
@@ -605,7 +674,7 @@ function App(): ReactElement {
           onNext={nextVisualSilently}
           // The logo itself is the persistent overlay below; this invisible cue
           // just reuses the reveal timing to rise it once the line has landed.
-          reveal={<span className="pivot-reveal-cue" aria-hidden="true" />}
+          reveal={<span className="intro-reveal-cue" aria-hidden="true" />}
           revealDelayMs={LOGO_RISE_DELAY_MS}
           revealViewMs={LOGO_RISE_VIEW_MS}
           onReveal={() => setLogoRisen(true)}
@@ -750,6 +819,20 @@ function App(): ReactElement {
       <Scene active={phase.kind === "done"}>
         <DoneScene />
       </Scene>
+      {/* Only mounted across the two scenes it spans — past Burnout the icons
+          are gone for good, and leaving 90 spent tiles in the tree for the rest
+          of onboarding buys nothing. Mounting at scene 0 is what the old
+          in-scene reveal did too, so the decode head start is unchanged. */}
+      {phase.kind === "visual" && phase.index <= 1 ? (
+        <div
+          className={`intro-icons${
+            (phase.index === 0 && iconsRisen) || phase.index === 1 ? " is-shown" : ""
+          }${iconsCrumbling ? " is-crumbling" : ""}`}
+          aria-hidden="true"
+        >
+          <AppIconRow variant="reveal" crumbling={iconsCrumbling} />
+        </div>
+      ) : null}
       {phase.kind === "visual" ? (
         <div
           className={`pivot-logo ${phase.index === 6 || phase.index === 7 ? (logoRisen ? "is-risen" : "") : ""}`}
@@ -901,7 +984,7 @@ function useIntroStream(
 //
 // Failure resolves the gate too, so a broken icon can never leave the row
 // permanently blank: the onError guard below hides that slot as it always did.
-function AppIcon(props: { src: string; alt: string }): ReactElement {
+function AppIcon(props: { src: string; alt: string; shards?: Shard[] | null }): ReactElement {
   const [ready, setReady] = useState(false);
 
   // A ref, not onLoad: an icon already warmed by the mount-time preload can be
@@ -921,6 +1004,43 @@ function AppIcon(props: { src: string; alt: string }): ReactElement {
     }
   }, []);
 
+  // Crumbling (scene 1): the icon becomes a grid of tiles, each one a crop of
+  // the very same PNG — `background-size` blows the image up by the grid
+  // dimensions and `background-position` picks this tile out of it. At rest the
+  // tiles reassemble the icon exactly, so this swap is invisible; only then
+  // does the keyframe throw them. Gated on `ready` because an icon that never
+  // decoded has no bitmap to crop, and the <img> below is already invisible in
+  // that case anyway.
+  if (props.shards && ready) {
+    return (
+      <span
+        className="app-icon-shards"
+        style={{
+          ["--cols" as string]: String(CRUMBLE_COLS),
+          ["--rows" as string]: String(CRUMBLE_ROWS),
+          ["--icon-src" as string]: `url(${props.src})`,
+        }}
+      >
+        {props.shards.map((shard) => (
+          <span
+            key={`${shard.col}:${shard.row}`}
+            className="app-icon-shard"
+            style={{
+              ["--col" as string]: String(shard.col),
+              ["--row" as string]: String(shard.row),
+              ["--dx" as string]: `${shard.dxPx}px`,
+              ["--dy" as string]: `${shard.dyPx}px`,
+              ["--rot" as string]: `${shard.rotDeg}deg`,
+              ["--sc" as string]: String(shard.endScale),
+              ["--delay" as string]: `${shard.delayMs}ms`,
+              ["--dur" as string]: `${shard.durationMs}ms`,
+            }}
+          />
+        ))}
+      </span>
+    );
+  }
+
   return (
     <img
       ref={gate}
@@ -938,21 +1058,28 @@ function AppIcon(props: { src: string; alt: string }): ReactElement {
 // `stats` is the larger liquid-glass tray shown above the numbers on the stats
 // scene. The icons are bundled assets (see the imports at the top); the onError
 // guard just hides a slot rather than showing a broken-image glyph.
-function AppIconRow(props: { variant: "reveal" | "stats" }): ReactElement {
+function AppIconRow(props: { variant: "reveal" | "stats"; crumbling?: boolean }): ReactElement {
   return (
     <div className={`app-icon-row app-icon-row--${props.variant}`}>
-      {APP_ICONS.map((icon) => {
-        const img = <AppIcon src={icon.src} alt={icon.label} />;
-        // The reveal wraps each icon in a slot: the slot carries the arc
-        // position + staggered spring entrance, the img inside carries the
-        // gentle float, so the two transforms never fight (see onboarding.css).
+      {APP_ICONS.map((icon, index) => {
+        const shards = props.crumbling ? (CRUMBLE_ICON_SHARDS[index] ?? null) : null;
+        const art = <AppIcon src={icon.src} alt={icon.label} shards={shards} />;
+        // The reveal nests three transforms so none of them fight: the slot
+        // carries the arc position + staggered spring entrance, the figure
+        // carries the gentle float, and the tiles inside carry the crumble.
+        //
+        // The figure exists purely so the float survives the crumble swap. It
+        // never unmounts, so its animation keeps its phase — put the float on
+        // the <img> instead and replacing that img restarts the float from
+        // zero, which jumps the icon by the float's amplitude at the exact
+        // moment the swap is supposed to be invisible.
         return props.variant === "reveal" ? (
           <span key={icon.key} className="app-icon-slot">
-            {img}
+            <span className="app-icon-figure">{art}</span>
           </span>
         ) : (
           <span key={icon.key} className="app-icon-tile">
-            {img}
+            {art}
           </span>
         );
       })}

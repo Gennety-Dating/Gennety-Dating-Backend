@@ -405,12 +405,15 @@ button {
 }
 
 /* ── Typewriter reveal ─────────────────────────────────────────────────────
-   The image group raised once a typewriter line finishes (scene 0 = the three
-   dating-app icons in a shallow arc; the Pivot screen = the Gennety icon).
-   Absolutely positioned in the lower third so the centered line above it never
-   shifts. `.is-shown` (toggled from JS after the copy lands) fades the group in;
-   each icon then plays its own staggered spring + float, so the motion reads as
-   crafted rather than a single block sliding up. */
+   The slot a typewriter scene raises once its line finishes: absolutely
+   positioned in the lower third so the centered line above it never shifts,
+   with `.is-shown` (toggled from JS after the copy lands) fading it in.
+
+   Every scene now passes an invisible `.intro-reveal-cue` through here rather
+   than real content — the icons and the logo both need to outlive their scene,
+   so they moved to the persistent overlays (`.intro-icons`, `.pivot-logo`) and
+   this slot is left doing only the timing. The positioning below is what those
+   overlays were matched to, so it still describes where they sit. */
 .intro-reveal {
   position: absolute;
   left: 0;
@@ -455,6 +458,33 @@ button {
   opacity: 1;
 }
 
+/* ── The competitor icons (scenes 0–1) ─────────────────────────────────────
+   A persistent overlay ABOVE the scene stack, on the same pattern as
+   `.pivot-logo` below and for the same reason: the icons rise on Waste and have
+   to survive the crossfade into Burnout, where they crumble. Rendered inside
+   either scene they would leave with it, and a second copy rising on Burnout
+   would read as a new row rather than the same one.
+
+   Positioned exactly where the scene-0 reveal slot used to put them, so the
+   handoff from one scene to the next moves nothing at all — the stillness is
+   what sells them as the same three objects. */
+.intro-icons {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 15%;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 480ms ease;
+  pointer-events: none;
+}
+
+.intro-icons.is-shown {
+  opacity: 1;
+}
+
 /* ── Reveal arc (scene 0) ──────────────────────────────────────────────────
    Three icons fanned along a shallow upward arc: the middle sits highest and a
    touch larger, the sides dip and tilt outward. Each slot holds that resting
@@ -493,43 +523,127 @@ button {
   --sc: 0.92;
 }
 
-.app-icon-row--reveal .app-icon {
-  width: clamp(66px, 20vw, 88px);
-  height: clamp(66px, 20vw, 88px);
+/* The figure is the icon's box, and it exists so the float can survive the
+   crumble swap: it never unmounts, so its animation keeps its phase while the
+   <img> inside is replaced by the tile grid. It also owns the drop-shadow for
+   the same reason — a shadow that disappeared at the swap would give the trick
+   away on the light theme.
+
+   Ungated, unlike the old rule on the img: `drop-shadow` traces the alpha it is
+   given, and a not-yet-decoded icon is `opacity: 0`, i.e. no alpha to trace. So
+   the shadow fades in with the icon instead of needing its own `.is-ready`. */
+.app-icon-figure {
+  /* Published as a variable because the tiles have to do absolute px maths
+     against the icon's real size — see `.app-icon-shard`. */
+  --icon-size: clamp(66px, 20vw, 88px);
+  position: relative;
+  display: block;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.16));
+  will-change: transform;
 }
 
-/* Gated with the reveal itself: a drop-shadow traces whatever alpha is painted,
-   so before decode it would trace the half-decoded slab and read as a box. */
-.app-icon-row--reveal .app-icon.is-ready {
-  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.16));
+.app-icon-row--reveal .app-icon {
+  width: 100%;
+  height: 100%;
 }
 
 /* Staggered spring entrance — the slot springs from below into its arc pose. */
-.intro-reveal.is-shown .app-icon-slot {
+.intro-icons.is-shown .app-icon-slot {
   animation: iconRise 820ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
-.intro-reveal.is-shown .app-icon-slot:nth-child(1) {
+.intro-icons.is-shown .app-icon-slot:nth-child(1) {
   animation-delay: 40ms;
 }
-.intro-reveal.is-shown .app-icon-slot:nth-child(2) {
+.intro-icons.is-shown .app-icon-slot:nth-child(2) {
   animation-delay: 170ms;
 }
-.intro-reveal.is-shown .app-icon-slot:nth-child(3) {
+.intro-icons.is-shown .app-icon-slot:nth-child(3) {
   animation-delay: 300ms;
 }
 
-/* Gentle continuous float on the inner img — composes over the slot's arc pose
-   and only breathes after the entrance has settled. */
-.intro-reveal.is-shown .app-icon-slot .app-icon {
+/* Gentle continuous float on the figure — composes over the slot's arc pose
+   and only breathes after the entrance has settled. Deliberately left running
+   through the crumble: the tiles fall from a still-breathing icon, and stopping
+   it would snap the icon back to its rest position on the swap frame. */
+.intro-icons.is-shown .app-icon-slot .app-icon-figure {
   animation: iconFloat 4.2s ease-in-out 1000ms infinite;
 }
-.intro-reveal.is-shown .app-icon-slot:nth-child(2) .app-icon {
+.intro-icons.is-shown .app-icon-slot:nth-child(2) .app-icon-figure {
   animation-duration: 4.8s;
   animation-delay: 1180ms;
 }
-.intro-reveal.is-shown .app-icon-slot:nth-child(3) .app-icon {
+.intro-icons.is-shown .app-icon-slot:nth-child(3) .app-icon-figure {
   animation-duration: 4.5s;
   animation-delay: 1100ms;
+}
+
+/* ── The crumble (scene 1) ─────────────────────────────────────────────────
+   Each tile is a crop of the icon's own PNG: the background is blown up to the
+   full grid and shifted so this tile shows its own slice (`background-position`
+   comes from onboarding-crumble.ts, which is where that sprite math is tested).
+   At rest the tiles reassemble the icon pixel for pixel — that is what makes
+   replacing the <img> with this grid invisible, and it is the whole reason the
+   effect is tiles rather than a particle canvas.
+
+   No `will-change` here on purpose: that would promote 90 tiles to permanent
+   compositor layers for the sake of a 1.7s animation. The animation promotes
+   what it needs and releases it afterwards. */
+.app-icon-shards {
+  position: absolute;
+  inset: 0;
+}
+
+/* Sized and cropped in absolute px against `--icon-size`, never in percentages
+   of the tile itself. Two measured reasons, both of which showed up as a grid
+   of hairline seams drawn over the icon before it had even started to fall:
+
+   1. A tile is a fractional number of pixels wide (an 86px icon over 5 columns
+      is 17.2px). A background sized `500%` is 5x THAT rounded box, so the image
+      scale differs slightly per tile and the crops drift out of register.
+   2. Every tile is its own rasterised box with antialiased edges, and the outer
+      icons sit rotated ~13deg, so 30 antialiased boxes laid edge to edge leave
+      a visible hairline between each pair.
+
+   The +1px on width/height fixes (2) by overlapping each tile into its
+   neighbour. That overlap is only safe BECAUSE the background is absolute: the
+   extra pixel keeps the same crop offset, so it paints exactly the pixel the
+   neighbour paints there. Inflate the box while the background is a percentage
+   and the image rescales instead, smearing the seam rather than closing it. */
+.app-icon-shard {
+  position: absolute;
+  left: calc(var(--col) * var(--icon-size) / var(--cols));
+  top: calc(var(--row) * var(--icon-size) / var(--rows));
+  width: calc(var(--icon-size) / var(--cols) + 1px);
+  height: calc(var(--icon-size) / var(--rows) + 1px);
+  background-image: var(--icon-src);
+  background-repeat: no-repeat;
+  background-size: var(--icon-size) var(--icon-size);
+  background-position:
+    calc(-1 * var(--col) * var(--icon-size) / var(--cols))
+    calc(-1 * var(--row) * var(--icon-size) / var(--rows));
+  animation: iconCrumble var(--dur) cubic-bezier(0.4, 0, 1, 1) var(--delay) both;
+}
+
+/* `both` fill is load-bearing: before its delay elapses a tile holds frame 0,
+   so the icon sits intact while the rows above it are already falling.
+
+   Ease-in is the gravity. It also holds the opacity keyframe back — 55% of
+   eased progress lands about three quarters of the way through in wall-clock
+   time, so a tile falls solid and only dissolves near the end of its arc. */
+@keyframes iconCrumble {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--dx), var(--dy), 0) rotate(var(--rot)) scale(var(--sc));
+    opacity: 0;
+  }
 }
 
 @keyframes iconRise {
@@ -638,9 +752,11 @@ button {
   animation: iconFloat 4.6s ease-in-out 1050ms infinite;
 }
 
-/* Invisible timing cue rendered in the Pivot scene's reveal slot — its only job
-   is to drive the reveal timing that rises the overlay above. */
-.pivot-reveal-cue {
+/* Invisible timing cue rendered in a scene's reveal slot — its only job is to
+   borrow the reveal's "wait until the line has landed" timing to drive one of
+   the persistent overlays instead of showing anything itself. Used by Waste
+   (rise the icons), Burnout (crumble them) and Pivot (rise the logo). */
+.intro-reveal-cue {
   display: none;
 }
 
@@ -675,8 +791,23 @@ button {
   .pivot-logo.is-risen .pivot-logo-icon {
     animation: none;
   }
-  .intro-reveal.is-shown .app-icon-slot .app-icon {
+  .intro-icons {
+    transition: opacity 260ms ease;
+  }
+  .intro-icons.is-shown .app-icon-slot,
+  .intro-icons.is-shown .app-icon-slot .app-icon-figure {
     animation: none;
+  }
+  /* No falling tiles: the icons simply go out with the overlay's fade. They
+     still render (frame 0 is the intact icon), so nothing disappears early —
+     `.is-crumbling` just takes the group's opacity to 0 over the same hold the
+     crumble would have used. */
+  .app-icon-shard {
+    animation: none;
+  }
+  .intro-icons.is-crumbling {
+    opacity: 0;
+    transition: opacity 700ms ease;
   }
 }
 

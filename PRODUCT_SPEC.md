@@ -182,6 +182,40 @@ out of Telegram-only workers.
   didn't deliver, the chat asks for — which is what keeps a cached older bundle,
   the iOS rail and a legacy mid-flight account from dead-ending at the handoff.
   The change is additive by construction.
+  **The competitor icons survive into the second intro screen and crumble there
+  (2026-08-12).** The three dating-app icons rise on the "these apps eat your
+  time" screen and used to vanish with it, so the next line — "we burn out
+  before we find our person" — was a bare sentence on an empty screen. They now
+  live in a shell-level overlay alongside the Pivot logo, at the identical
+  position on both screens (measured, not eyeballed: the row's box is unchanged
+  to the pixel across the scene change — **stillness is what reads as the same
+  three objects rather than a second showing of them**), and once the burnout
+  line finishes typing they break into tiles and fall. The copy claims these
+  apps wear you down; this is the one screen in the intro that acts it out
+  rather than asserting it.
+  Each icon becomes a 5x6 grid of tiles, and the tile is a **crop of the icon's
+  own PNG** — `background-size` blows the image up by the grid and
+  `background-position` picks the tile — so at rest the tiles reassemble the
+  icon pixel for pixel and swapping the `<img>` for the grid is invisible.
+  That is why this is tiles rather than a particle canvas: there is no
+  cross-fade needed to hide a seam. The fall is staggered **by row**, so the
+  icon erodes from its top edge downward, and the raised middle icon leads the
+  two dipped ones — the wave falls down the whole composition rather than three
+  icons animating in lockstep. Geometry is **seeded, never `Math.random()`**
+  (`onboarding-crumble.ts`), by the rule `preference-layout.ts` already states:
+  a pattern re-rolled per render can never be reviewed twice and no test can
+  pin it.
+  Two constraints are structural rather than styling. The float lives on a
+  wrapper that never unmounts, because putting it on the `<img>` restarts it at
+  the swap and jumps the icon by the float's amplitude at the exact moment the
+  swap must be invisible. And the tiles are sized and cropped in **absolute px
+  against the icon's real size, with a 1px overlap** — percentages of a tile
+  round per tile (a tile is a fractional number of pixels wide), and 30
+  antialiased boxes laid edge to edge under the outer icons' ~13° tilt drew a
+  visible grid of hairline seams over the icon before it had begun to fall.
+  Costs ~0.4s more than the 1.5s hold this screen already sat on, and is
+  skipped under `prefers-reduced-motion`, where the icons simply fade instead.
+  Telegram-only; the native iOS client owns its own intro.
   **The two tap-to-answer screens burst on tap (2026-08-06).** Gender and
   preference are the only screens in the set where a single tap commits the
   answer — no slider to drag, no drum to spin, no Continue pill afterwards — so
