@@ -1,7 +1,63 @@
 # Gennety Dating Deploy
 
-**PENDING — фото партнёра перестают чернеть на записи экрана в демо
-(PRODUCT_SPEC §3.7a, DEMO_MODE.md, DECISIONS.md).** Не задеплоено. **Нет
+**Deployed 2026-08-12 — релиз из 7 runtime-коммитов: шесть PENDING-блоков разом
+(`bcb82c9`).** Полный деплой кода + Mini App + демо. **Изменения схемы Prisma
+нет** (`db:drift-check` **OK**, пушить было нечего), **нет изменений env, нет
+флипов флагов**. Прод поднят с `677e4e2` до `bcb82c9`.
+
+Порядок был: Deploy Full Server Code → `pnpm db:drift-check` → `pm2 restart` →
+`./scripts/deploy-webapp.sh` → `pnpm demo:deploy`. Mini App понадобился из-за
+`58bc3e3` (осыпающиеся иконки конкурентов) — три остальных бот-коммита его не
+трогают, но релиз един.
+
+**Одно наблюдение, стоящее записи: заявка была на одну правку, а прод отставал
+на семь коммитов.** Блок про `protect_content` честно писал «только бот, нет
+изменений Mini App» — это верно про ТУ правку и неверно про релиз, который её
+понёс. Считайте диапазон (`git log 677e4e2..HEAD`) перед деплоем, а не читайте
+шапку верхнего блока: она описывает свой коммит, а не то, что реально поедет.
+
+**Проверено на живом проде (замерено, а не выведено):**
+
+- **Главное для этого релиза — защита фото партнёра.** Значение константы
+  прочитано из ОБОИХ рантаймов настоящим импортом модуля, а не выведено из
+  `.env`: прод → `DEMO_MODE_ENABLED = false`, `PROTECT_PARTNER_MEDIA = **true**`
+  (защита на месте, поведение прежнее); демо → `true` / **`false`** (снята).
+  Все 11 вызовов на шести поверхностях читают константу; единственные
+  оставшиеся `protect_content: true` — в generic `profile-media-dispatch.ts`,
+  который берёт флаг у вызывающего и обслуживает в том числе просмотр
+  пользователем СВОЕГО профиля.
+- **Прод байт-в-байт равен HEAD**: md5-свип 771 файла дал 767 совпадений и 4
+  расхождения — все под `apps/bot/tmp/`, которые rsync исключает по дизайну
+  (ровно как в релизе 2026-08-07).
+- `Bot @gennetybot started`, все 16 кронов + `[worker] Peer-wait shimmer every
+  20000ms`, ежедневный `Drop matching "0 18 * * *"`, `:3100`/`:3101` слушают.
+- Рестарт 60 → **61** (один инкремент), `unstable restarts: 0`, и **в
+  error-лог с момента рестарта не записано ни строки** — файл последний раз
+  менялся в 15:01 UTC при рестарте в 19:18 UTC. Две записи `peer-decided nudge
+  failed: chat not found` там исторические.
+- `/v1/ping` ok, admin `401`, **все 11 страниц Mini App 200**,
+  `supportedCities` по-прежнему только Киев, `features` без изменений.
+- Демо переехало тем же исходником: баннер называет `@gennety_demo_bot` и базу
+  `aws-1-eu-west-1` (у прода `aws-0-`), оба демо-подавления кронов на месте,
+  рестарт 19 → 20.
+
+rsync dry-run показал ровно **2** удаления, оба — устаревшие артефакты
+`apps/video/build`. Оба бэкапа БД, оба ключа `keys/*.p8` и все 15 снапшотов
+`.env.bak.*` проверены на месте ПОСЛЕ синка.
+
+**Не проверено, и сознательно:** запись экрана в демо-боте — это надо делать
+глазами с телефона. В проде проверять нечего: там это no-op по построению, и
+константа прочитана.
+
+**Rollback:** пересинкать чекаут на `677e4e2`, перезапустить, оттуда же
+редеплоить Mini App и демо. Откатывать больше нечего — ни схемы, ни env, ни
+флага.
+
+---
+
+**Deployed 2026-08-12 (was PENDING) — фото партнёра перестают чернеть на записи
+экрана в демо (PRODUCT_SPEC §3.7a, DEMO_MODE.md, DECISIONS.md).** Задеплоено
+2026-08-12 в релизе из 7 коммитов (блок наверху файла). **Нет
 изменения схемы Prisma, нет новых env, нет флагов, нет изменения Mini App**
 (`apps/webapp` не тронут) — только бот, так что полный деплой кода несёт всё
 целиком, плюс `pnpm demo:deploy`.
@@ -44,8 +100,9 @@ ssh root@167.172.178.229 'pm2 logs gennety-demo --lines 40 --nostream' | head -1
 
 ---
 
-**PENDING — иконки конкурентов держатся на втором интро-экране и осыпаются там
-(PRODUCT_SPEC §1.1, DECISIONS.md).** Не задеплоено. **Нет изменения схемы
+**Deployed 2026-08-12 (was PENDING) — иконки конкурентов держатся на втором
+интро-экране и осыпаются там (PRODUCT_SPEC §1.1, DECISIONS.md).** Задеплоено
+2026-08-12 в релизе из 7 коммитов. **Нет изменения схемы
 Prisma, нет новых env, нет флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диff это
 `apps/webapp/**` плюс документация. То есть путь **Deploy Mini App Only**
 (`./scripts/deploy-webapp.sh`); рсинкать в `/opt/gennety` нечего, **`pm2 restart`
@@ -88,8 +145,9 @@ curl -sI https://dating-calendar.gennety.com/onboarding.html | head -1
 
 ---
 
-**PENDING — письма-возвраты называют тот шаг, на котором человек реально встал
-(PRODUCT_SPEC §1.5, DECISIONS.md).** Не задеплоено. **Нет изменения схемы
+**Deployed 2026-08-12 (was PENDING) — письма-возвраты называют тот шаг, на
+котором человек реально встал (PRODUCT_SPEC §1.5, DECISIONS.md).** Задеплоено
+2026-08-12 в релизе из 7 коммитов. **Нет изменения схемы
 Prisma, нет новых env, нет флагов, нет изменения Mini App** (`apps/webapp` не
 тронут) — только бот, так что полный деплой кода несёт всё целиком, плюс
 `pnpm demo:deploy`.
@@ -142,9 +200,10 @@ pm2 logs gennety-bot --lines 200 --nostream | grep 'Re-engagement'
 
 ---
 
-**PENDING — брифинг безопасности доезжает до приложения, и два уведомления
-получают право пробивать Focus (PRODUCT_SPEC §Phase 4, ARCHITECTURE → APNs,
-DECISIONS.md ×2).** Не задеплоено. **Нет изменения схемы Prisma, нет новых env,
+**Deployed 2026-08-12 (was PENDING) — брифинг безопасности доезжает до
+приложения, и два уведомления получают право пробивать Focus (PRODUCT_SPEC
+§Phase 4, ARCHITECTURE → APNs, DECISIONS.md ×2).** Задеплоено 2026-08-12 в
+релизе из 7 коммитов. **Нет изменения схемы Prisma, нет новых env,
 нет флагов, нет изменения Mini App** (`apps/webapp` не тронут) — только бот,
 так что полный деплой кода несёт всё целиком, плюс `pnpm demo:deploy`.
 Клиентская половина уезжает из iOS-репо отдельно.
@@ -200,8 +259,9 @@ NSE и не эмулирует Focus, а сам уровень невидим, �
 
 ---
 
-**PENDING — брошенный редактор меню больше не съедает ответ Profiler'у
-(PRODUCT_SPEC §Phase 1b, DECISIONS.md).** Не задеплоено. **Нет изменения схемы
+**Deployed 2026-08-12 (was PENDING) — брошенный редактор меню больше не съедает
+ответ Profiler'у (PRODUCT_SPEC §Phase 1b, DECISIONS.md).** Задеплоено
+2026-08-12 в релизе из 7 коммитов. **Нет изменения схемы
 Prisma, нет новых env, нет флагов, нет изменения Mini App** (`apps/webapp` не
 тронут) — только бот, так что полный деплой кода несёт всё целиком, плюс
 `pnpm demo:deploy` после него.
@@ -250,8 +310,9 @@ psql "$DATABASE_URL" -c "select count(*) filter (where answer_text is not null) 
 
 ---
 
-**PENDING — дроп-пуш для приложения, с блюр-картинкой (PRODUCT_SPEC §3.3,
-ARCHITECTURE → APNs, DECISIONS.md ×3).** Не задеплоено. **Нет изменения схемы
+**Deployed 2026-08-12 (was PENDING) — дроп-пуш для приложения, с блюр-картинкой
+(PRODUCT_SPEC §3.3, ARCHITECTURE → APNs, DECISIONS.md ×3).** Задеплоено
+2026-08-12 в релизе из 7 коммитов. **Нет изменения схемы
 Prisma, нет новых env, нет флагов, нет изменения Mini App** (`apps/webapp` не
 тронут) — только бот, так что полный деплой кода несёт всё целиком, плюс
 `pnpm demo:deploy`. Клиентская половина уезжает из iOS-репо отдельно.
@@ -3847,12 +3908,13 @@ watch that the PID holds and the restart count stops climbing. Otherwise do a
 full deploy — but note that rsync copies the **working tree**, not git HEAD, so
 check `git status` first: an unrelated in-progress refactor ships with it.
 
-**Prod anchor, re-verified 2026-08-11 after the release at the top of this file.**
-Prod's **runtime tree** is at **`677e4e2`** — verified by the 765-file md5 sweep
-below, zero differences, rather than asserted. Deliberately anchored to the last
-commit that touched runtime code, not to `HEAD`: docs-only commits land on top
-constantly (this note's own release added one), and an anchor that counts them
-is stale the hour it is written.
+**Prod anchor, re-verified 2026-08-12 after the release at the top of this file.**
+Prod's **runtime tree** is at **`bcb82c9`** — verified by the 771-file md5 sweep
+below (767 identical; the only 4 differences are under `apps/bot/tmp/`, which
+the deploy rsync excludes by design), rather than asserted. Deliberately
+anchored to the last commit that touched runtime code, not to `HEAD`: docs-only
+commits land on top constantly (this note's own release added one), and an
+anchor that counts them is stale the hour it is written.
 
 That is exactly what happened to the previous one — it still named `f66949a`
 three days after the 2026-08-09 backlog release and the 2026-08-10 cadence flip
@@ -3864,8 +3926,8 @@ revision of this note named them, and it was stale within the hour because a
 parallel session kept landing work. The set is a one-liner:
 
 ```sh
-git log --oneline 677e4e2..HEAD                # what prod is missing
-git diff --stat 677e4e2..HEAD -- apps packages # is any of it runtime code?
+git log --oneline bcb82c9..HEAD                # what prod is missing
+git diff --stat bcb82c9..HEAD -- apps packages # is any of it runtime code?
 ```
 
 **A demo-only release does not advance this anchor, and that is the trap.**
@@ -3887,14 +3949,14 @@ Two standing exclusions, both deliberate rather than forgotten:
   so an import is a separate, larger decision, not part of any deploy.
 - **`apps/video/**`** is the Remotion workspace and is not in the bot runtime.
 
-Anchor md5 as of 2026-08-11 — three files the last release actually changed,
-which is what makes them worth anchoring on (the middle one did not exist on
-prod before it, so its mere presence is already the check):
+Anchor md5 as of 2026-08-12 — three files the last release actually changed,
+which is what makes them worth anchoring on (the last two did not exist on prod
+before it, so their mere presence is already the check):
 
 ```
-895c88a0067980087d47db04641ba27b  /opt/gennety/apps/bot/src/services/purchases.ts
-09cf3abe110408a69ff1d11a259b1dfa  /opt/gennety/apps/bot/src/admin/utils/monetization.ts
-5548eda49c0047121252f007c9269add  /opt/gennety/apps/bot/src/admin/server.ts
+385e9bcf2f613014218b454f60eccbf6  /opt/gennety/apps/bot/src/demo/config.ts
+4719c8140f7d383251eba1fe0ad365cc  /opt/gennety/apps/bot/src/services/match-drop-push.ts
+590170672b19a2efc35d7f04abe70de7  /opt/gennety/apps/bot/src/services/onboarding-stage.ts
 ```
 
 The file below is kept as the counter-example, not as a check to run:
