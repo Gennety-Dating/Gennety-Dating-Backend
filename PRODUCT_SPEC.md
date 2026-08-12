@@ -1152,6 +1152,50 @@ deferred to the next 13:00. Any user activity (consent click, language pick,
 agent reply, photo upload) resets the chain to step 0; finishing onboarding
 nulls `reEngagementNextAt` permanently.
 
+**The nudge names the step the user actually stopped on (2026-08-12), which
+`User.onboardingStep` cannot say.** That column has four values, and the entry
+Mini App (§1.1) collapses into ONE of them: `/consent` and `/language` both
+write `language`, and nothing moves it again until `/complete` writes
+`conversational`. So the sign-up fork, the email/phone gate, the city step, the
+theme pick, the five profile screens and the AI-memory choice — half the
+registration — all read as *"agreed to the privacy policy but hasn't picked
+their language yet"*, which is what the worker fed into its prompt. Every Mini
+App drop-off was therefore told to go and choose a language it had already
+chosen, in a message otherwise written to sound personal. Confirmed in
+production: an account with `language = uk` and terms accepted received all
+five touches about picking a language.
+
+The stage is now derived from the state the Mini App itself routes on
+(`services/onboarding-stage.ts`) — the server-side twin of the client's
+`postVisualPhaseFromRemote`, kept in the same order, in a separate module
+because `apps/webapp` deliberately does not depend on `@gennety/shared` and the
+two cannot share code. It resolves the concrete next action — the fork, the
+unconfirmed email code, the unshared phone, the city, the theme, *which* of the
+five profile screens is unanswered, the AI-memory choice, the un-tapped
+handoff — and past the handoff reads the collector's own `currentQuestion`, so
+a chat-phase drop-off is described by the question actually pending rather than
+by "email, name, photos, etc.". The prompt's standing rule is that a concrete
+WRONG step is worse than staying generic: the model may point at the one thing
+that is next or say nothing specific, but never name a step already behind the
+user.
+
+Two deliberate imprecisions, neither of which can misdescribe a task. **The
+visual intro is invisible to the server** — its position lives in the client's
+DeviceStorage — so a user parked mid-animation reads as whatever comes after
+it, which is the next thing they actually owe. And **the welcome-gift screens
+are not stages**: they ask for nothing (one tap on a reward) and resolving them
+needs the referral/promo flags plus a promo-code lookup, so someone who stopped
+there is reported one screen further along — an under-, never an over-statement
+of what is left.
+
+A second, quieter falsehood went with it: the fallback used when the LLM call
+fails told **everyone** their "profile is almost ready", including someone who
+had not got past the phone gate and had no profile at all. Registration-stage
+users now get their own line — deliberately only two of them (ordinary + final
+touch) rather than a full five-step ladder, because that path fires only on an
+OpenAI failure and a user hitting it five times running is not worth ten more
+strings.
+
 **Verification-stall nudges (Registration v2).** With
 `MANDATORY_VERIFICATION_ENABLED` on, a user who finalized onboarding but
 hasn't passed liveness (`status='onboarding'`, `onboardingStep='completed'`,

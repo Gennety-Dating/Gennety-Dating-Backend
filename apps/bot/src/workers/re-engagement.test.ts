@@ -31,6 +31,10 @@ vi.mock("../config.js", () => ({
     CUSTOM_EMOJI_DISLIKE_ID: "",
     CUSTOM_EMOJI_MENU_ID: "",
     WEBAPP_URL: "https://test.invalid/calendar",
+    // Read by services/onboarding-stage.ts to resolve which screen a Mini App
+    // drop-off is sitting on. Mirrors production.
+    PHONE_AUTH_ENABLED: true,
+    AI_MEMORY_EXPORT_ENABLED: false,
   },
 }));
 
@@ -222,6 +226,70 @@ describe("re-engagement worker", () => {
     expect(body.messages[0].content).toContain("Same-day evening");
   });
 
+  it("tells the model where the user ACTUALLY stopped, not what onboardingStep says", async () => {
+    // The reported bug: the whole entry Mini App reads as onboardingStep
+    // 'language', so a user who had already picked a language and accepted the
+    // terms was nudged five times to "pick a language".
+    (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        telegramId: BigInt(888),
+        onboardingStep: "language",
+        messageHistory: [],
+        language: "uk",
+        firstName: null,
+        lastMessageAt: DROPOFF_TIME,
+        reEngagementStep: 0,
+        termsAccepted: true,
+        registrationTrack: null,
+        email: null,
+        isEmailVerified: false,
+        phoneVerifiedAt: null,
+        themeChosenAt: null,
+        age: null,
+        gender: null,
+        preference: null,
+        aiMemoryExportPreference: "undecided",
+        profile: null,
+        onboardingProgress: null,
+      },
+    ]);
+
+    const mockFetch = vi.fn().mockResolvedValue(openaiTextResponse("ще тут?"));
+    const api = createMockApi();
+
+    await reEngagementTick(api, { fetchFn: mockFetch, now: DAY_TIME });
+
+    const prompt = JSON.parse(mockFetch.mock.calls[0][1].body).messages[0].content;
+    expect(prompt).toContain("sign-up fork");
+    expect(prompt).not.toContain("language picker");
+    // And the model is told not to name a step already behind them.
+    expect(prompt).toMatch(/Never name a step they have already passed/);
+  });
+
+  it("selects the columns the stage is derived from", async () => {
+    // A trimmed select silently regresses every user to the first stage, which
+    // is exactly the shape of the original bug — so pin it.
+    (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    await reEngagementTick(createMockApi(), { now: DAY_TIME });
+
+    const select = (prisma.user.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0].select;
+    for (const field of [
+      "termsAccepted",
+      "registrationTrack",
+      "isEmailVerified",
+      "phoneVerifiedAt",
+      "themeChosenAt",
+      "age",
+      "gender",
+      "preference",
+      "aiMemoryExportPreference",
+    ]) {
+      expect(select[field]).toBe(true);
+    }
+    expect(select.profile).toEqual({ select: { homeCityKey: true, height: true } });
+    expect(select.onboardingProgress).toEqual({ select: { currentQuestion: true } });
+  });
+
   it("respects batchSize limit", async () => {
     const users = Array.from({ length: 5 }, (_, i) => ({
       telegramId: BigInt(100 + i),
@@ -271,6 +339,16 @@ describe("getFallbackMessage", () => {
   it("supports German and Polish", () => {
     expect(getFallbackMessage("Max", "de", 1)).toContain("Profil");
     expect(getFallbackMessage("Ania", "pl", 1)).toContain("profil");
+  });
+
+  it("never claims the profile is nearly done to someone still registering", () => {
+    for (const lang of ["en", "ru", "uk", "de", "pl"]) {
+      for (let touch = 1; touch <= MAX_RE_ENGAGEMENT_STEP; touch++) {
+        const msg = getFallbackMessage("Alice", lang, touch, true);
+        expect(msg.toLowerCase()).not.toMatch(/профил|профіл|profil/);
+        expect(msg).toMatch(/регистрац|реєстрац|Anmeldung|rejestracja|sign-up/);
+      }
+    }
   });
 });
 

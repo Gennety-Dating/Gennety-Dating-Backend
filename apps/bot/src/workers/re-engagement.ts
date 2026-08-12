@@ -7,6 +7,10 @@ import { MODELS } from "../models.js";
 import { openaiFetch } from "../services/openai-fetch.js";
 import { sendVerificationReminder } from "../handlers/onboarding/verification.js";
 import {
+  resolveOnboardingStage,
+  type OnboardingStage,
+} from "../services/onboarding-stage.js";
+import {
   computeNextTouch,
   MAX_RE_ENGAGEMENT_STEP,
   reEngagementStopPatch,
@@ -84,6 +88,22 @@ export async function reEngagementTick(
       firstName: true,
       lastMessageAt: true,
       reEngagementStep: true,
+      // Everything below exists so the nudge can name the step the user
+      // ACTUALLY stopped on. `onboardingStep` cannot: the whole entry Mini App
+      // reads as `language` on that column, so every drop-off used to be told
+      // to pick a language it had already picked. See services/onboarding-stage.ts.
+      termsAccepted: true,
+      registrationTrack: true,
+      email: true,
+      isEmailVerified: true,
+      phoneVerifiedAt: true,
+      themeChosenAt: true,
+      age: true,
+      gender: true,
+      preference: true,
+      aiMemoryExportPreference: true,
+      profile: { select: { homeCityKey: true, height: true } },
+      onboardingProgress: { select: { currentQuestion: true } },
     },
     take: batchSize,
   });
@@ -127,7 +147,7 @@ export async function reEngagementTick(
 
     try {
       const hookText = await generateHookMessage(
-        { ...user, upcomingStep: nextStep },
+        { ...user, upcomingStep: nextStep, stage: resolveOnboardingStage(user) },
         fetchFn,
       );
 
@@ -212,23 +232,6 @@ export async function reEngagementTick(
 }
 
 /**
- * Human-readable description of what the user was asked to do at each step.
- * Injected into the OpenAI prompt so the message is contextually relevant.
- */
-function getStepContext(step: string): string {
-  switch (step) {
-    case "consent":
-      return "They opened the bot but haven't agreed to the privacy policy yet.";
-    case "language":
-      return "They agreed to the privacy policy but haven't picked their language yet.";
-    case "conversational":
-      return "They started filling in their profile (email, name, photos, etc.) but dropped off midway.";
-    default:
-      return "They started onboarding but haven't finished.";
-  }
-}
-
-/**
  * Tone hint for the LLM prompt based on which touch in the chain we're firing.
  * Each successive touch is a touch less urgent — retention loop, not nagging.
  */
@@ -255,11 +258,11 @@ function getTouchToneHint(touchIndex: number): string {
  */
 export async function generateHookMessage(
   user: {
-    onboardingStep: string;
     messageHistory: unknown[];
     language: string | null;
     firstName: string | null;
     upcomingStep: number;
+    stage: OnboardingStage;
   },
   fetchFn: typeof fetch,
 ): Promise<string> {
@@ -275,34 +278,41 @@ export async function generateHookMessage(
 
   const lang = user.language ?? "en";
   const name = user.firstName ?? "";
-  const stepCtx = getStepContext(user.onboardingStep);
+  const stepCtx = user.stage.description;
   const toneHint = getTouchToneHint(user.upcomingStep);
+
+  const framing = user.stage.registration
+    ? `They are still REGISTERING and have no profile yet, so do NOT say their "profile is almost ready" or "just a couple of steps left on the profile" — that would be false.`
+    : `Their registration is done and the profile itself is what's unfinished, so "профиль почти готов" framing is fair game.`;
 
   const prompt = `${VOICE_CORE}
 
-Right now you're doing ONE thing: a user started onboarding and dropped off before finishing their profile. Send a single short message to bring them back — the same voice you'd use in any normal chat with them, not a "campaign" blast.
+Right now you're doing ONE thing: a user started signing up and dropped off partway. Send a single short message to bring them back — the same voice you'd use in any normal chat with them, not a "campaign" blast.
 
 User info:
 - Name: ${name || "unknown"}
 - Language: ${lang}
-- Where they are: ${stepCtx}
+- Where they stopped: ${stepCtx}
 - Touch ${user.upcomingStep} of ${MAX_RE_ENGAGEMENT_STEP}: ${toneHint}
 
 Recent conversation:
 ${lastMessages || "(no messages yet)"}
 
-Write it in ${lang}. 1–2 short sentences, one idea. Reference something concrete from the conversation if there is one; otherwise keep it simple. Emoji default is ZERO (at most one, only if it truly lands). No begging, no hype, no "заходи скорее!".
+CRITICAL — the message must match WHERE THEY STOPPED, above. Never name a step they have already passed (do not tell someone to choose a language, confirm a phone or pick a city if the line above says that is behind them), and never invent a step that is not there. Either point at the one thing that is actually next, or stay generic ("вернёшься дописать?") — but a concrete wrong step is the worst possible outcome. ${framing}
+
+Write it in ${lang}. 1–2 short sentences, one idea. Reference something concrete from the conversation if there is one; otherwise keep it simple. Emoji default is ZERO (at most one, only if it truly lands). No begging, no hype, no "заходи скорее!". Do not use step numbers or progress percentages.
 
 CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. In Russian/Ukrainian/Polish, avoid gendered past-tense verb forms (e.g. do NOT use «упоминал/упоминала», «отвечал/отвечала», «відповів/відповіла», "wróciłeś/wróciłaś"). Rephrase to avoid gendered forms entirely — use infinitives, nouns, or impersonal constructions instead.
 
-Good examples (register, not to copy):
-- "эй, ты ещё тут? профиль почти готов — осталась пара шагов."
-- "almost there — профиль на финишной прямой. вернёшься, когда будет минута?"
-- "still there? profile's basically done, just needs the last bit."
+Good examples (register, not to copy — pick the framing that fits THIS user's step):
+- "эй, ты ещё тут? осталось подтвердить номер — и всё."
+- "остановились на городе. вернёшься на минуту — и закончим."
+- "still there? just the photos left, then you're done."
 
 Bad examples (DON'T do this):
 - "Уважаемый пользователь, напоминаем вам..." (corporate)
 - "Incredibly exciting matches await you!" / "У нас уже есть мэтчи 👀 Давай дооформим!" (hype, exclamation, emoji spam)
+- Naming a step that isn't the one above (e.g. "осталось выбрать язык" to someone who already chose it)
 - Any message with gendered past-tense forms in Russian/Ukrainian/Polish (упоминал, ответил, зашёл, wróciłeś/wróciłaś, etc.)
 
 Output ONLY the message text.`;
@@ -332,11 +342,11 @@ Output ONLY the message text.`;
 
     return (
       json.choices?.[0]?.message?.content?.trim() ??
-      getFallbackMessage(name, lang, user.upcomingStep)
+      getFallbackMessage(name, lang, user.upcomingStep, user.stage.registration)
     );
   } catch (err) {
     console.warn("Re-engagement LLM call failed, using fallback:", err);
-    return getFallbackMessage(name, lang, user.upcomingStep);
+    return getFallbackMessage(name, lang, user.upcomingStep, user.stage.registration);
   }
 }
 
@@ -344,6 +354,7 @@ export function getFallbackMessage(
   name: string,
   lang: string,
   touchIndex = 1,
+  registration = false,
 ): string {
   const greeting = name ? ` ${name}` : "";
   const lead = name ? `${name}, ` : "";
@@ -351,6 +362,16 @@ export function getFallbackMessage(
   // (only the warm final touch carries one 🤍), no exclamation-mark hype, no
   // corporate phrasing, native per language. Kept gender-neutral (drop-off =
   // gender unknown). Tone softens as the chain progresses.
+  //
+  // The ladder below says "your profile is almost done", which is only true
+  // once registration is behind the user. Someone who stopped at the phone
+  // gate or the city step has no profile yet, so they get their own line —
+  // deliberately only two of them (ordinary + final touch) rather than a full
+  // five-step ladder: this path fires only when the OpenAI call fails, and a
+  // user hitting it five times running is not a case worth ten more strings.
+  if (registration) {
+    return registrationFallback(greeting, lead, lang, touchIndex);
+  }
   if (lang === "ru") {
     switch (touchIndex) {
       case 1:
@@ -419,4 +440,42 @@ export function getFallbackMessage(
     default:
       return `${lead}last nudge — without a finished profile we can't match you. would be good to have you 🤍`;
   }
+}
+
+/**
+ * Fallback for a user who is still registering. Says only what is certainly
+ * true at every registration stage — sign-up isn't finished, there isn't much
+ * of it left — because this branch cannot know which screen they are on and
+ * naming the wrong one is the exact defect this module exists to end.
+ */
+function registrationFallback(
+  greeting: string,
+  lead: string,
+  lang: string,
+  touchIndex: number,
+): string {
+  const isFinal = touchIndex >= MAX_RE_ENGAGEMENT_STEP;
+  if (lang === "ru") {
+    return isFinal
+      ? `${lead}последнее напоминание: регистрация так и не дописана. будем рады, если вернёшься 🤍`
+      : `эй${greeting}, ещё тут? регистрация не дописана — там осталось совсем немного.`;
+  }
+  if (lang === "uk") {
+    return isFinal
+      ? `${lead}останнє нагадування: реєстрація так і не дописана. будемо раді, якщо повернешся 🤍`
+      : `гей${greeting}, ще тут? реєстрація не дописана — там лишилось зовсім небагато.`;
+  }
+  if (lang === "de") {
+    return isFinal
+      ? `${lead}letzter Reminder: die Anmeldung ist immer noch offen. schön, wenn du zurückkommst 🤍`
+      : `hey${greeting}, noch da? die Anmeldung ist nicht fertig — es fehlt nur wenig.`;
+  }
+  if (lang === "pl") {
+    return isFinal
+      ? `${lead}ostatnie przypomnienie: rejestracja wciąż nie jest dokończona. będzie miło, jeśli wrócisz 🤍`
+      : `hej${greeting}, jesteś tam? rejestracja nie jest dokończona — zostało naprawdę niewiele.`;
+  }
+  return isFinal
+    ? `${lead}last nudge — the sign-up is still unfinished. would be good to have you 🤍`
+    : `hey${greeting}, still there? your sign-up isn't finished — there's not much left.`;
 }
