@@ -216,6 +216,42 @@ out of Telegram-only workers.
   Costs ~0.4s more than the 1.5s hold this screen already sat on, and is
   skipped under `prefers-reduced-motion`, where the icons simply fade instead.
   Telegram-only; the native iOS client owns its own intro.
+  **On the stats screen each metric kills the app beneath it (2026-08-12).**
+  That screen cycles three numbers — 75 hours, 9 500 swipes, $200 — over a tray
+  holding the same three competitor icons, and the tray was inert scenery: the
+  numbers made the argument while the apps sat there watching. Metric `i` now
+  takes out icon `i`. While its number counts up the icon trembles and drains
+  into burgundy; the instant the number lands it is fully red and the shake
+  stops dead; then two scarlet strokes draw across it, the second a beat behind
+  the first. Three metrics later all three apps are crossed out and the screen
+  ends on the picture the copy has been describing.
+  **The shake accelerates through the stop SPACING, not through an easing
+  curve.** The zero-crossings sit at `(k/13)^1.7` of the ramp and the amplitude
+  climbs `(k/13)^1.2` from 0.17px to 3.4px, so it only ever winds tighter — an
+  eased constant-frequency shake speeds up and then slows down again, which
+  reads as a wobble rather than as something losing its grip. The last stop
+  snaps back to rest instead of dying away: the tremble is cut off at the exact
+  frame the number lands, so the icon reads as seized rather than as calming
+  down.
+  **Two reds, and that is a deliberate departure from the brief.** Asked for red
+  strokes over a red icon, which cannot work — the icon ends as a solid red
+  silhouette and same-red strokes on it are invisible. They are split by
+  lightness instead: burgundy body (`--accent`), bright scarlet strokes, each
+  carrying a dark shadow so the X also holds on the light theme's pale tray.
+  The reddening is the icon's **own PNG used as a CSS mask**, so the burgundy
+  fills exactly its alpha, rounded corners included — the same asset and the
+  same idiom as the crumble tiles cropping that PNG, rather than a `hue-rotate`
+  smearing over the edges and landing on some approximate red.
+  **The drama plays once.** After the drum has been round once every icon stays
+  crossed out while the numbers keep cycling; replaying it would read as the
+  apps coming back to life just to die again. Timings live in
+  `onboarding-kill.ts` — including the count-up duration, which the number and
+  the ramp tracking it would otherwise hold two copies of — and a test pins the
+  whole beat inside one metric step, since a stroke still drawing when the next
+  number starts reads as two apps dying at once. Under
+  `prefers-reduced-motion` there is no tremble and no sweep: the icon fades to
+  red and the finished X fades in over it, a beat later so the two still read in
+  order. Telegram-only.
   **The two tap-to-answer screens burst on tap (2026-08-06).** Gender and
   preference are the only screens in the set where a single tap commits the
   answer — no slider to drag, no drum to spin, no Continue pill afterwards — so

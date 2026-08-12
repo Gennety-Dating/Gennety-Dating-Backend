@@ -694,11 +694,243 @@ button {
 
 .app-icon-tile {
   display: block;
+  /* Anchors the two kill layers below (the reddening mask and the strike). */
+  position: relative;
 }
 
 .app-icon-row--stats .app-icon {
   width: clamp(40px, 12vw, 52px);
   height: clamp(40px, 12vw, 52px);
+}
+
+/* ── The kill (stats scene) ────────────────────────────────────────────────
+   Each metric takes out the app beneath it. While its number counts up the
+   icon trembles harder and harder and drains into burgundy; the instant the
+   number lands it is fully red and the shake stops dead; then two strokes draw
+   across it. `onboarding-kill.ts` owns the clock and publishes it as the
+   `--kill-*` variables — every duration below is read, never written here, so
+   the shake cannot outlive the number it is tracking.
+
+   TWO reds, not one, and that is the one place this diverges from the brief:
+   the icon ends as a solid red silhouette, so red strokes over it would be
+   literally invisible. Splitting them by lightness — burgundy body, bright
+   scarlet strokes — keeps both "red" and keeps the X readable on either
+   theme. The strokes also carry a dark shadow, because a light theme puts
+   scarlet on a pale tray. */
+.app-icon-tile {
+  --kill-fill: var(--accent);
+  --kill-strike: #ff4a5f;
+  --kill-strike-glow: rgba(255, 74, 95, 0.5);
+  --kill-stroke-w: clamp(3px, 0.85vw, 4px);
+}
+
+/* The reddening. The icon's own PNG used as a mask, so the burgundy fills
+   exactly its alpha — rounded corners included — instead of a hue-rotate
+   smearing over the edges and landing on some approximate red. Same asset and
+   the same idiom as the crumble tiles cropping that PNG with
+   background-position; `--icon-src` is set inline by AppIconRow. */
+/* The three layers are stacked EXPLICITLY — icon, then the red, then the
+   strokes. Left to the default paint order this looks right until the kill
+   starts: the drain below animates the icon's `filter`, Chromium promotes an
+   element with an animating filter to its own compositing layer, and the icon
+   jumps back above the red. Measured, not guessed — the two idle icons redden
+   correctly while the one actually being killed does not. */
+.app-icon-row--stats .app-icon {
+  position: relative;
+  z-index: 0;
+}
+
+.app-icon-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--kill-fill);
+  -webkit-mask-image: var(--icon-src, none);
+  mask-image: var(--icon-src, none);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-icon-tile.is-killing {
+  animation: iconKillShake var(--kill-count) linear both;
+  will-change: transform;
+}
+
+.app-icon-tile.is-killing::before {
+  animation: iconKillRedden var(--kill-count) ease-in both;
+}
+
+.app-icon-tile.is-killing .app-icon {
+  animation: iconKillDrain var(--kill-count) ease-in both;
+}
+
+/* Held end-state, identical to the animation's last frame — the class swap
+   from `is-killing` at the end of the beat must change nothing on screen. */
+.app-icon-tile.is-killed::before {
+  opacity: 1;
+}
+
+.app-icon-tile.is-killed .app-icon {
+  filter: grayscale(1);
+}
+
+.app-icon-strike {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Each stroke is a bar pinned at one corner of the tile and rotated onto the
+   diagonal, so `scaleX` alone draws it corner to corner — a bar grown from its
+   own centre reads as a slash appearing rather than being drawn. 150% is the
+   tile's diagonal plus a 3% overshoot at each end, which is what keeps the X
+   hand-drawn rather than boxed in. The overshoot is deliberately small: the
+   tray's gap bottoms out at 4vw, ~15px on a 390px phone, and at 6% the three
+   crosses ran into each other and read as one zigzag band across the tray. */
+.app-icon-strike::before,
+.app-icon-strike::after {
+  content: "";
+  position: absolute;
+  top: -3%;
+  width: 150%;
+  height: var(--kill-stroke-w);
+  margin-top: calc(var(--kill-stroke-w) / -2);
+  border-radius: 999px;
+  background: var(--kill-strike);
+  box-shadow:
+    0 0 7px var(--kill-strike-glow),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+  transform-origin: 0 50%;
+  transform: rotate(var(--strike-rot)) scaleX(0);
+  opacity: 0;
+}
+
+.app-icon-strike::before {
+  --strike-rot: 45deg;
+  left: -3%;
+}
+
+.app-icon-strike::after {
+  --strike-rot: 135deg;
+  left: 103%;
+}
+
+.app-icon-tile.is-killing .app-icon-strike::before {
+  animation: iconKillStrike var(--kill-strike-draw) cubic-bezier(0.22, 1, 0.36, 1)
+    var(--kill-strike-delay) both;
+}
+
+.app-icon-tile.is-killing .app-icon-strike::after {
+  animation: iconKillStrike var(--kill-strike-draw) cubic-bezier(0.22, 1, 0.36, 1)
+    calc(var(--kill-strike-delay) + var(--kill-strike-stagger)) both;
+}
+
+.app-icon-tile.is-killed .app-icon-strike::before,
+.app-icon-tile.is-killed .app-icon-strike::after {
+  transform: rotate(var(--strike-rot)) scaleX(1);
+  opacity: 1;
+}
+
+/* The tremble. Timed `linear` because the acceleration is baked into the stop
+   SPACING, not into an easing curve: the zero-crossings sit at (k/13)^1.7 of
+   the ramp, so early swings are lazy and far apart and the last few come in a
+   rush, while the amplitude climbs (k/13)^1.2 from a barely-there 0.17px to
+   3.4px. An eased constant-frequency shake would speed up and slow down again;
+   this only ever winds tighter.
+
+   The last stop snaps back to rest rather than dying away — the shake is cut
+   off at the exact frame the number lands and the strike starts, so the icon
+   reads as seized rather than as gradually calming down. */
+@keyframes iconKillShake {
+  0% {
+    transform: translateX(0) rotate(0deg);
+  }
+  1.5% {
+    transform: translateX(0.17px) rotate(0.2deg);
+  }
+  4.8% {
+    transform: translateX(-0.41px) rotate(-0.5deg);
+  }
+  9.5% {
+    transform: translateX(0.65px) rotate(0.8deg);
+  }
+  15.5% {
+    transform: translateX(-0.92px) rotate(-1.1deg);
+  }
+  22.6% {
+    transform: translateX(1.19px) rotate(1.4deg);
+  }
+  30.8% {
+    transform: translateX(-1.5px) rotate(-1.8deg);
+  }
+  40% {
+    transform: translateX(1.77px) rotate(2.1deg);
+  }
+  50.2% {
+    transform: translateX(-2.07px) rotate(-2.4deg);
+  }
+  61.3% {
+    transform: translateX(2.41px) rotate(2.8deg);
+  }
+  73.3% {
+    transform: translateX(-2.72px) rotate(-3.2deg);
+  }
+  86.3% {
+    transform: translateX(3.06px) rotate(3.6deg);
+  }
+  93.5% {
+    transform: translateX(-3.4px) rotate(-4deg);
+  }
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+}
+
+/* Ease-in, so the colour holds off while the number is still climbing and then
+   floods in over the last stretch — landing on full red at the last digit
+   rather than getting there halfway and waiting. */
+@keyframes iconKillRedden {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* The app's own colour leaving it. Invisible on its own by the end (the mask
+   above covers the icon completely) but it is what stops the mid-point reading
+   as muddy: half-opacity burgundy over a full-colour icon is a smear, over a
+   drained one it is a tint. */
+@keyframes iconKillDrain {
+  0% {
+    filter: grayscale(0);
+  }
+  100% {
+    filter: grayscale(1);
+  }
+}
+
+@keyframes iconKillStrike {
+  0% {
+    transform: rotate(var(--strike-rot)) scaleX(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--strike-rot)) scaleX(1);
+    opacity: 1;
+  }
 }
 
 /* ── Persistent Gennety logo (Pivot → Matchmaker) ──────────────────────────
@@ -804,6 +1036,34 @@ button {
      crumble would have used. */
   .app-icon-shard {
     animation: none;
+  }
+  /* The kill keeps its meaning and loses its motion: no tremble, no stroke
+     sweeping across. The icon simply fades to red and the finished X fades in
+     over it, a beat later so the two still read in order. */
+  .app-icon-tile.is-killing {
+    animation: none;
+  }
+  .app-icon-tile::before {
+    transition: opacity 500ms ease;
+  }
+  .app-icon-tile.is-killing::before {
+    animation: none;
+    opacity: 1;
+  }
+  .app-icon-tile.is-killing .app-icon {
+    animation: none;
+    filter: grayscale(1);
+    transition: filter 500ms ease;
+  }
+  .app-icon-strike::before,
+  .app-icon-strike::after {
+    transform: rotate(var(--strike-rot)) scaleX(1);
+    transition: opacity 360ms ease 420ms;
+  }
+  .app-icon-tile.is-killing .app-icon-strike::before,
+  .app-icon-tile.is-killing .app-icon-strike::after {
+    animation: none;
+    opacity: 1;
   }
   .intro-icons.is-crumbling {
     opacity: 0;
