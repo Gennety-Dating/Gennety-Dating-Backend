@@ -4714,13 +4714,39 @@ columns on `matches`.
 | T − 5 h | **Start the native «date day» Live Activity** on both sides (`services/date-day-activity.ts`, iOS §4.2) — APNs *push-to-start*, so the card appears on a locked phone whose owner has not opened the app, which is the entire reason the gate is at T-5h. No-op for anyone with no registered start token, i.e. every Telegram-only account. | shared with above |
 | T − 1.5 h | **Advance the Live Activity to the `wingman` stage.** | shared with `wingmanSentAt` |
 | T + 2 h | **End the Live Activity.** A time window (T+2h … T+2h30) rather than an idempotency column: ending an activity that is already gone is a no-op, so a repeated sweep costs one wasted push. | — (idempotent by nature) |
-| T − 1.5 h | **Pre-date safety brief** to the female user (Telegram DM only — mobile gets push). Skipped when no female participant has a Telegram presence. | `safetyNoteSentAt` |
+| T − 1.5 h | **Pre-date safety brief** to the female user, on whichever rails reach her — Telegram DM and/or APNs push (`safety.brief`, **time-sensitive**, §Phase 4 → Pre-date safety brief). Gender selects the recipient; `platform` selects the rail. | `safetyNoteSentAt` |
 | T − 1.5 h | **Wingman hint reveal push** — the asymmetric tip is unmasked at this gate (the mobile serializer enforces it independently) | `wingmanSentAt` |
 | T − 1 h | **Pre-date coordination offer** (feature-flagged) — DM the initiator the contact-exchange / anonymous-chat menu (see below) | `coordOfferSentAt` |
 | T − 30 min | **Anonymous proxy chat opens** (feature-flagged, Variant C only) — DM both the "Enter chat" button | `proxyOpenedAt` |
 | Date moment | (no automated action — users meet in person) | — |
 | T + 2 h | **Anonymous proxy chat auto-closes** (feature-flagged) | `proxyClosedAt` |
 | T + 24 h | **Feedback prompt** to both sides, each on its own rail (DM and/or push — see below); LLM parses positives/negatives and updates `negativeConstraints` accordingly | `feedbackPromptedAt` |
+
+### Pre-date safety brief (both rails since 2026-08-12)
+
+The brief is the checklist itself — a Markdown DM naming the venue. What did
+not exist until §5.4 is any way for it to reach a woman who lives in the app:
+this module filtered recipients on `telegramId > 0n` while carrying a comment
+saying mobile users "get safety briefs via push", and nothing sent one. Same
+shape as `pitch.ts`'s claim about the drop, and the ninth instance of one
+mechanic existing on a single surface.
+
+**Two defects sat inside that one filter, and the second is worse.** A woman on
+the app got nothing. A woman who signed in through Telegram — a REAL positive
+id on an account the bot cannot message (§1.1) — also got nothing, on a rail
+that reported success. **Gender selects the recipient; `platform` selects the
+rail** (`telegramReachable` / `pushReachable`), and both are attempted, so a
+`both` account is told twice.
+
+**The push is one of exactly two notifications allowed through Focus**
+(ARCHITECTURE → APNs). It arrives ninety minutes before she walks out to meet a
+stranger and is worthless afterwards, which is the whole test for that level.
+
+**It names neither the partner nor the venue.** The first is §3.3's rule for the
+public lock screen. The second is this brief's own: a safety notice that
+announces where this woman will be tonight, to anyone who picks up her phone,
+argues against the thing it was sent for. The push says a checklist has arrived;
+the checklist stays in the DM and in the app.
 
 ### Post-date Feedback UX
 

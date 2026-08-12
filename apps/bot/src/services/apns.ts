@@ -99,6 +99,44 @@ export interface AlertPushInput {
 }
 
 /**
+ * The notification types allowed through Focus / Do Not Disturb
+ * (`aps.interruption-level: time-sensitive`).
+ *
+ * This is a **policy list, not a transport detail**, and that is why it is a
+ * named set rather than a field on `AlertPushInput`. Every other push property
+ * describes the notification; this one claims a privilege over the user's
+ * phone — permission to interrupt someone who has explicitly asked not to be
+ * interrupted. A field would let any future sender grant itself that privilege
+ * in passing, and nothing would ever show the whole list; here, taking it is
+ * an edit to one named constant that a test guards, and "what is allowed to
+ * pierce Do Not Disturb?" is answered by reading four lines.
+ *
+ * Derived from `data.type` for the same reason `category` and
+ * `mutable-content` are: these two types exist only inside the minutes that
+ * make them urgent — a safety brief is sent at T-1.5h and never otherwise, the
+ * chat-open notice at T-30m and never otherwise — so urgency is not a separate
+ * fact about a send, it is what the type IS. A second field could only ever
+ * disagree with the first, silently: the level is invisible until someone has
+ * Focus on, so a push that quietly lost it looks exactly like a push that
+ * never claimed it.
+ *
+ * **If a type's urgency ever depends on context, split the type; do not add a
+ * field.** A notification that is sometimes urgent and sometimes not is two
+ * notifications to the person receiving it, the type string is free, and the
+ * client already keys its categories off that same string.
+ *
+ * Deliberately absent, each for its own reason: `match.proposed` (a 24-hour
+ * decision window is not urgency, and under the daily cadence it would pierce
+ * Focus every single evening), `proxy.message` (a message every couple of
+ * minutes breaking through Focus is spam, not priority), `feedback.due` (a
+ * question about yesterday).
+ */
+export const TIME_SENSITIVE_PUSH_TYPES: ReadonlySet<string> = new Set([
+  "safety.brief",
+  "proxy.opened",
+]);
+
+/**
  * Standard user-visible notification payload.
  *
  * `aps.category` is derived from `data.type` rather than being a field every
@@ -119,16 +157,24 @@ export interface AlertPushInput {
  * removes the failure where the flag and the payload disagree: the extension
  * would either never run (a clean face on the lock screen is impossible
  * because the picture simply would not attach) or run with nothing to fetch.
+ *
+ * `interruption-level` is the third property read off the same key, and the
+ * one with a live client-side precondition: without the
+ * `com.apple.developer.usernotifications.time-sensitive` entitlement in the
+ * app, iOS ignores the level entirely and the notification arrives ordinary.
+ * That failure is silent on both sides — see `TIME_SENSITIVE_PUSH_TYPES`.
  */
 export function buildAlertPayload(input: AlertPushInput): Record<string, unknown> {
   const category = typeof input.data?.type === "string" ? input.data.type : null;
   const mutable = typeof input.data?.image === "string" && input.data.image.length > 0;
+  const timeSensitive = category !== null && TIME_SENSITIVE_PUSH_TYPES.has(category);
   return {
     aps: {
       alert: { title: input.title, body: input.body },
       sound: "default",
       ...(category ? { category } : {}),
       ...(mutable ? { "mutable-content": 1 } : {}),
+      ...(timeSensitive ? { "interruption-level": "time-sensitive" } : {}),
     },
     ...(input.data ?? {}),
   };

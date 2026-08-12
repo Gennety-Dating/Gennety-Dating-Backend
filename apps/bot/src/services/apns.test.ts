@@ -31,6 +31,7 @@ const {
   buildLiveActivityPayload,
   liveActivityTopic,
   resetApnsCachesForTest,
+  TIME_SENSITIVE_PUSH_TYPES,
 } = await import("./apns.js");
 
 beforeEach(() => {
@@ -130,6 +131,50 @@ describe("payload builders", () => {
       data: { type: "proxy.message", matchId: "m1" },
     }) as { aps: Record<string, unknown> };
     expect(payload.aps).not.toHaveProperty("mutable-content");
+  });
+
+  // A level that never arrives is invisible: it only shows itself when the
+  // recipient has Focus on, which is precisely the case nobody tests by hand.
+  it.each(["safety.brief", "proxy.opened"])(
+    "marks %s time-sensitive so it reaches someone with Focus on",
+    (type) => {
+      const payload = buildAlertPayload({
+        title: "T",
+        body: "B",
+        data: { type, matchId: "m1" },
+      }) as { aps: Record<string, unknown> };
+      expect(payload.aps["interruption-level"]).toBe("time-sensitive");
+    },
+  );
+
+  // The absence is the actual product rule — the level is a claim on the
+  // user's attention, and the list of types allowed to make it is closed.
+  // A drop under the daily cadence would pierce Focus every single evening;
+  // a proxy message would do it every couple of minutes.
+  it.each(["match.proposed", "proxy.message", "feedback.due"])(
+    "leaves %s ordinary — it has no claim on Focus",
+    (type) => {
+      const payload = buildAlertPayload({
+        title: "T",
+        body: "B",
+        data: { type, matchId: "m1" },
+      }) as { aps: Record<string, unknown> };
+      expect(payload.aps).not.toHaveProperty("interruption-level");
+    },
+  );
+
+  it("leaves a typeless push ordinary", () => {
+    const payload = buildAlertPayload({ title: "T", body: "B" }) as {
+      aps: Record<string, unknown>;
+    };
+    expect(payload.aps).not.toHaveProperty("interruption-level");
+  });
+
+  // Guards the whole policy rather than the two members: a type added to the
+  // set is a decision about someone's Do Not Disturb, and it should have to be
+  // taken here as well as there.
+  it("keeps the Focus-piercing set to exactly the two documented types", () => {
+    expect([...TIME_SENSITIVE_PUSH_TYPES].sort()).toEqual(["proxy.opened", "safety.brief"]);
   });
 
   it("shapes an ActivityKit update with timestamp and optional dates", () => {

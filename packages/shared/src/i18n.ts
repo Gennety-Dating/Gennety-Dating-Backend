@@ -885,6 +885,14 @@ const translations = {
       "☕ **Stay aware.** Try not to leave your belongings or drink unattended.\n" +
       "🛑 **Your boundaries.** If you feel uncomfortable or your date's behavior seems off — you have every right to just get up and leave at any moment. Your safety always beats politeness.\n\n" +
       "Have a great evening ✨",
+    // The T-1.5h safety brief on the app rail (§5.4). The DM above IS the
+    // brief; this only says one has arrived, because a checklist does not fit
+    // on a lock screen and must not sit there in the first place. It names
+    // neither the partner (§5.3's rule) nor the VENUE — a briefing that
+    // announces where this woman will be tonight, to anyone who picks up her
+    // phone, argues against itself.
+    safetyBriefPushTitle: "Before you head out",
+    safetyBriefPushBody: "Your safety checklist for tonight is in the app.",
     // --- Pinned status banner (live discrete timer) ---
     statusDaysHours: "⏳ Next match in {d}d {h}h",
     statusHoursMinutes: "⏳ Matches drop in {h}h {m}m",
@@ -1995,6 +2003,8 @@ const translations = {
       "☕ **Контроль.** Старайся не оставлять свои вещи и напиток без присмотра.\n" +
       "🛑 **Твои границы.** Если тебе некомфортно или поведение партнера кажется странным — ты имеешь полное право просто встать и уйти в любой момент. Твоя безопасность всегда важнее вежливости.\n\n" +
       "Желаем отличного вечера и приятных впечатлений! ✨",
+    safetyBriefPushTitle: "Перед выходом",
+    safetyBriefPushBody: "Памятка безопасности на сегодня уже в приложении.",
     // --- Pinned status banner (live discrete timer) ---
     statusDaysHours: "⏳ Следующий мэтч через {d}д {h}ч",
     statusHoursMinutes: "⏳ Мэтчи прилетят через {h}ч {m}мин",
@@ -3072,6 +3082,8 @@ const translations = {
       "☕ **Контроль.** Намагайся не залишати речі й напій без нагляду.\n" +
       "🛑 **Твої межі.** Якщо тобі некомфортно або поведінка партнера здається дивною — маєш повне право просто встати і піти в будь-який момент. Твоя безпека завжди важливіша за ввічливість.\n\n" +
       "Бажаємо чудового вечора і приємних вражень ✨",
+    safetyBriefPushTitle: "Перед виходом",
+    safetyBriefPushBody: "Пам'ятка безпеки на сьогодні вже в застосунку.",
     // --- Pinned status banner (live discrete timer) ---
     statusDaysHours: "⏳ Наступний метч через {d}д {h}г",
     statusHoursMinutes: "⏳ Метчі прилетять через {h}г {m}хв",
@@ -4109,6 +4121,8 @@ const deTranslations: TranslationTable = {
     "☕ **Bleib aufmerksam.** Lass Sachen und Getränk möglichst nicht unbeaufsichtigt.\n" +
     "🛑 **Deine Grenzen.** Wenn du dich unwohl fühlst oder das Verhalten komisch wirkt, kannst du jederzeit gehen. Deine Sicherheit ist wichtiger als Höflichkeit.\n\n" +
     "Hab einen schönen Abend ✨",
+  safetyBriefPushTitle: "Bevor du losgehst",
+  safetyBriefPushBody: "Deine Sicherheits-Checkliste für heute Abend liegt in der App.",
   statusDaysHours: "⏳ Nächstes Match in {d}T {h}Std",
   statusHoursMinutes: "⏳ Matches droppen in {h}Std {m}Min",
   statusMinutes: "✨ Fast bereit! Matches droppen in {m} Min",
@@ -5156,6 +5170,8 @@ const plTranslations: TranslationTable = {
     "☕ **Uważaj.** Staraj się nie zostawiać rzeczy ani napoju bez opieki.\n" +
     "🛑 **Twoje granice.** Jeśli czujesz dyskomfort albo zachowanie drugiej osoby jest dziwne, masz pełne prawo wstać i wyjść w każdej chwili. Twoje bezpieczeństwo jest ważniejsze niż uprzejmość.\n\n" +
     "Dobrego wieczoru ✨",
+  safetyBriefPushTitle: "Zanim wyjdziesz",
+  safetyBriefPushBody: "Twoja lista bezpieczeństwa na dziś jest już w aplikacji.",
   statusDaysHours: "⏳ Następne dopasowanie za {d}d {h}h",
   statusHoursMinutes: "⏳ Dopasowania wlecą za {h}h {m}min",
   statusMinutes: "✨ Prawie gotowe! Dopasowania wlecą za {m} min",

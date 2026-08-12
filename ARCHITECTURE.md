@@ -1259,7 +1259,25 @@ currently bot-side only.
 | Telegram Gateway | PRIMARY phone-code delivery for the native app (`gatewayapi.telegram.org` — `checkSendAbility` + `sendVerificationMessage` with our own code, ≈$0.01/code). Env `TELEGRAM_GATEWAY_TOKEN`. |
 | Twilio Verify | SMS fallback for phone codes (numbers without Telegram / Gateway outages / explicit "send SMS"). REST via fetch — no SDK dependency, no Twilio phone number needed. Env `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID`. |
 | App Store Server API | StoreKit 2 purchase verification + refund webhooks for the native app's ticket wallet (`services/appstore.ts` — ES256 provider JWT via `jsonwebtoken`, REST via fetch, no SDK). Env `APPSTORE_KEY_PATH/KEY_ID/ISSUER_ID/BUNDLE_ID/ENVIRONMENT/TICKET_PRODUCTS`. |
-| APNs (direct) | Native-app push + Live Activity updates: token-based `.p8` auth (`jsonwebtoken` ES256 provider JWT, cached 50 min) over `node:http2` (APNs is HTTP/2-only; no SDK dependency). `services/apns.ts` transport + `services/push.ts` dispatcher; dead tokens (`Unregistered`/410) are auto-purged. Env `APNS_KEY_PATH/KEY_ID/TEAM_ID/BUNDLE_ID/ENVIRONMENT`. **`aps.category` is derived from `data.type`, not carried as its own field** — the two are the same fact, so a second field could only disagree with itself, and ~25 call sites would each have had to opt in. The iOS client attaches actions to a category per type it can act on and renders the rest as ordinary notifications, so an unknown category is a device-side no-op. **`mutable-content` follows the same rule**: it is set when and only when `data.image` carries a URL, because the client's Notification Service Extension exists to blur that one image (§3.3 → the drop push) and has nothing to do without it — so the flag and the payload cannot disagree. `apns-collapse-id` is available per send (`ApnsSendOptions.collapseId`) and used by the drop push, where the dispatcher's retry can legitimately fire the same event twice. The Expo SDK rail was retired 2026-07-18 (no Expo client ever shipped). |
+| APNs (direct) | Native-app push + Live Activity updates: token-based `.p8` auth (`jsonwebtoken` ES256 provider JWT, cached 50 min) over `node:http2` (APNs is HTTP/2-only; no SDK dependency). `services/apns.ts` transport + `services/push.ts` dispatcher; dead tokens (`Unregistered`/410) are auto-purged. Env `APNS_KEY_PATH/KEY_ID/TEAM_ID/BUNDLE_ID/ENVIRONMENT`. **`aps.category` is derived from `data.type`, not carried as its own field** — the two are the same fact, so a second field could only disagree with itself, and ~25 call sites would each have had to opt in. The iOS client attaches actions to a category per type it can act on and renders the rest as ordinary notifications, so an unknown category is a device-side no-op. **`mutable-content` follows the same rule**: it is set when and only when `data.image` carries a URL, because the client's Notification Service Extension exists to blur that one image (§3.3 → the drop push) and has nothing to do without it — so the flag and the payload cannot disagree. **`aps.interruption-level` is read
+off the same key by the same rule, but for a different reason** (2026-08-12):
+`TIME_SENSITIVE_PUSH_TYPES` is a closed set — `safety.brief` (T-1.5h) and
+`proxy.opened` (T-30m) — because the level is not a property of a notification
+but a *privilege over the user's phone*, permission to interrupt someone who
+asked not to be. A field would let any later sender take that privilege in
+passing and would leave no place showing the whole list; a named set makes
+taking it an edit to one constant a test guards. The two members qualify for
+derivation because each type exists only inside the minutes that make it urgent
+— **if a type's urgency ever becomes context-dependent, split the type rather
+than adding a field.** Deliberately outside the set: `match.proposed` (a 24-hour
+window is not urgency, and under the daily cadence it would pierce Focus nightly),
+`proxy.message` (a message every couple of minutes is spam at that level),
+`feedback.due`. **The level has a client-side precondition that fails silently**:
+without `com.apple.developer.usernotifications.time-sensitive` in the app,
+iOS ignores it entirely and the notification arrives ordinary — measured
+by differential probe, `timeSensitiveSetting` reads `notSupported` without the
+entitlement and `enabled` with it, at identical authorization state.
+`apns-collapse-id` is available per send (`ApnsSendOptions.collapseId`) and used by the drop push, where the dispatcher's retry can legitimately fire the same event twice. The Expo SDK rail was retired 2026-07-18 (no Expo client ever shipped). |
 # Venue Intent V2 ownership
 
 `packages/shared/src/venue-intent.ts` owns canonical IDs, normalization, bridge
