@@ -41,7 +41,7 @@ import {
   type VenueInvoiceMode,
 } from "@gennety/shared";
 import { env } from "../../config.js";
-import { DEMO_MODE_ENABLED } from "../../demo/config.js";
+import { DEMO_MODE_ENABLED, PROTECT_PARTNER_MEDIA } from "../../demo/config.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import type { BotContext } from "../../session.js";
 import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
@@ -1658,7 +1658,7 @@ async function sendWishCard(
     await api.sendPhoto(toTelegramChatId(him.telegramId), new InputFile(png, "venue-wish.png"), {
       caption: t(lang, "venueWishText", { name: herName }),
       reply_markup: kb,
-      protect_content: true,
+      protect_content: PROTECT_PARTNER_MEDIA,
     });
   } else {
     // No card — the text is the only thing naming the place he is asked to pay

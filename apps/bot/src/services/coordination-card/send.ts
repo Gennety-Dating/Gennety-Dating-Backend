@@ -1,4 +1,5 @@
 import { InputFile, type Api, type InlineKeyboard, type RawApi } from "grammy";
+import { PROTECT_PARTNER_MEDIA } from "../../demo/config.js";
 import { renderCoordinationCard, type CoordCardInput } from "./index.js";
 
 /**
@@ -70,7 +71,10 @@ export async function sendCoordCard(
       // unconditionally rather than per-variant — `declined` / `proxy` render an
       // emblem instead of a face, but they still name the partner, and a flag
       // that is always on cannot be forgotten when a sixth variant is added.
-      protect_content: true,
+      // The one exception is demo mode, where the partner is a puppet and the
+      // protection only blacks the card out of a screen recording
+      // (`PROTECT_PARTNER_MEDIA`, DEMO_MODE.md).
+      protect_content: PROTECT_PARTNER_MEDIA,
       ...(extra ?? {}),
     });
   } catch (err) {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   assertDemoIsolation,
   demoIsolationErrors,
@@ -97,5 +97,36 @@ describe("identity trust gate interaction", () => {
     expect(
       identityTrustConfigurationErrors(config({ DEMO_MODE_ENABLED: true }), "production"),
     ).toEqual([]);
+  });
+});
+
+describe("partner-media protection", () => {
+  async function loadFlag(demoModeEnabled: boolean): Promise<boolean> {
+    vi.resetModules();
+    // Only the flag is faked; the constant under test derives from it, so this
+    // asserts the real wiring rather than re-implementing the rule.
+    vi.doMock("../config.js", async () => {
+      const actual = await vi.importActual<typeof import("../config.js")>("../config.js");
+      return { ...actual, env: { ...actual.env, DEMO_MODE_ENABLED: demoModeEnabled } };
+    });
+    const mod = await import("./config.js");
+    return mod.PROTECT_PARTNER_MEDIA;
+  }
+
+  afterEach(() => {
+    vi.doUnmock("../config.js");
+    vi.resetModules();
+  });
+
+  it("protects a partner's face in production", async () => {
+    // PRODUCT_SPEC §3.7a. The senders' own tests pin `protect_content: true`
+    // at each call site; this pins the source they all read.
+    expect(await loadFlag(false)).toBe(true);
+  });
+
+  it("drops the protection in demo mode so a walkthrough can be filmed", async () => {
+    // Telegram blanks protected media out of a screen recording, and the demo
+    // partner is a puppet with no privacy to protect (DEMO_MODE.md).
+    expect(await loadFlag(true)).toBe(false);
   });
 });

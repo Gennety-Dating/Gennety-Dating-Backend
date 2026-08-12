@@ -17,6 +17,7 @@ import type { Api, RawApi } from "grammy";
 import type { InputMediaPhoto, MessageEntity } from "grammy/types";
 import { MAX_PHOTOS, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
+import { PROTECT_PARTNER_MEDIA } from "../../demo/config.js";
 import { downloadProfileImage } from "../storage.js";
 import { generateMatchCardTexts } from "./copy.js";
 import { renderMatchCardSet, type MatchCardTheme } from "./index.js";
@@ -78,8 +79,9 @@ export async function sendPartnerMatchCards(
         : {}),
     }));
     // Same protection as the plain media group: the pitch is the first place
-    // a user sees the partner (PRODUCT_SPEC §3.7a).
-    await api.sendMediaGroup(chatId, media, { protect_content: true });
+    // a user sees the partner (PRODUCT_SPEC §3.7a). Off in demo mode, so the
+    // cards survive a screen recording (`PROTECT_PARTNER_MEDIA`).
+    await api.sendMediaGroup(chatId, media, { protect_content: PROTECT_PARTNER_MEDIA });
     return true;
   } catch (err) {
     console.warn("[match-card] card-set send failed, falling back to plain media:", err);

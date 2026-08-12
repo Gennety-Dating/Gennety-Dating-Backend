@@ -25,6 +25,7 @@ import {
   shouldOfferVenueChange,
   buildVenueChangeButton,
 } from "../matching/venue-change.js";
+import { PROTECT_PARTNER_MEDIA } from "../../demo/config.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import { ticketUrl } from "../matching/ticket-gate.js";
 
@@ -74,7 +75,7 @@ async function renderScheduledHub(ctx: BotContext, active: ActiveMatchResult): P
         caption: caption.text,
         caption_entities: [caption.entity],
         reply_markup: keyboard,
-        protect_content: true,
+        protect_content: PROTECT_PARTNER_MEDIA,
       });
       cardSent = true;
     } catch {
@@ -156,7 +157,7 @@ async function renderAndSendCard(
       caption: caption.text,
       caption_entities: [caption.entity],
       reply_markup: keyboard,
-      protect_content: true,
+      protect_content: PROTECT_PARTNER_MEDIA,
     });
   } catch (err) {
     console.warn("[my-date] date-card send failed, falling back to text:", err);
@@ -199,11 +200,11 @@ async function sendFallbackCard(
   if (ctx.chat) {
     try {
       if (photos.length === 1) {
-        await ctx.replyWithPhoto(photos[0]!, { protect_content: true });
+        await ctx.replyWithPhoto(photos[0]!, { protect_content: PROTECT_PARTNER_MEDIA });
       } else if (photos.length >= 2) {
         await ctx.replyWithMediaGroup(
           photos.slice(0, 10).map((id) => InputMediaBuilder.photo(id)),
-          { protect_content: true },
+          { protect_content: PROTECT_PARTNER_MEDIA },
         );
       }
     } catch {

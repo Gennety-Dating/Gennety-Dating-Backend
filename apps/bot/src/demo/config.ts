@@ -21,6 +21,32 @@ import { env } from "../config.js";
 
 export const DEMO_MODE_ENABLED = env.DEMO_MODE_ENABLED;
 
+/**
+ * Whether a partner's face may be sent forward/save-protected.
+ *
+ * `true` in production, which is the rule PRODUCT_SPEC §3.7a states: every
+ * surface that shows a partner with a clear face — the pitch album, the match
+ * cards, the date card, the My Date hub, the venue wish card, the coordination
+ * cards — sets `protect_content`, so their photo cannot be forwarded or saved
+ * out of the chat. Telegram clients additionally blank protected media out of
+ * a screenshot or a screen recording, which is exactly what the demo cannot
+ * live with: a walkthrough filmed for an investor records a black rectangle
+ * where the partner should be, i.e. the one thing the demo exists to show.
+ *
+ * So `false` in demo mode, and nothing is given up by that: the partner there
+ * is a seeded puppet (DEMO_MODE.md), not a real person with a photo to
+ * protect.
+ *
+ * Deliberately ONE shared constant rather than an `if (DEMO_MODE_ENABLED)` at
+ * each of the six senders. The risk this carries is a seventh surface shipping
+ * a hardcoded `protect_content: true` and silently going black on camera
+ * again, and a rule split six ways is one a seventh author never finds. The
+ * blurred date-card share copy is intentionally NOT routed through here — it
+ * is unprotected in both modes by design, because the blur is what makes it
+ * safe to leave the platform.
+ */
+export const PROTECT_PARTNER_MEDIA = !DEMO_MODE_ENABLED;
+
 export interface DemoIsolationConfig {
   FOUNDER_NOTIFY_ENABLED: boolean;
   TICKET_STARS_ENABLED: boolean;

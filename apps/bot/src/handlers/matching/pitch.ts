@@ -6,6 +6,7 @@ import type {
 import { prisma } from "@gennety/db";
 import { normalizeProfileMedia, t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
+import { PROTECT_PARTNER_MEDIA } from "../../demo/config.js";
 import { streamDraftsToChat } from "../../services/ai-stream.js";
 import { AI_EMOJI } from "../../services/ai-emoji.js";
 import {
@@ -182,10 +183,12 @@ async function sendPartnerMedia(
         ...(text && entities?.length ? { caption_entities: entities } : {}),
       },
       // Protect the partner's photos: the pitch is the first place a user sees
-      // them, so block forward/save/download (screenshots can't be blocked in a
-      // normal bot chat — see PRODUCT_SPEC §3.7a). Privacy of the actual image
-      // off-platform stays guaranteed by the date-card blurred share copy.
-      { protect: true },
+      // them, so block forward/save/download (see PRODUCT_SPEC §3.7a). Privacy
+      // of the actual image off-platform stays guaranteed by the date-card
+      // blurred share copy. Off in demo mode, where the partner is a puppet and
+      // protection only blacks the photo out of a screen recording
+      // (`PROTECT_PARTNER_MEDIA`, DEMO_MODE.md).
+      { protect: PROTECT_PARTNER_MEDIA },
     );
   } catch (err) {
     console.warn("sendPartnerMedia failed, skipping photo card:", err);
@@ -629,7 +632,7 @@ export async function sendMatchProposal(
       await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
     } else {
       await sendMotionProfileMedia(api, chatA, normalizeProfileMedia(mediaForA, photosForA), {
-        protect: true,
+        protect: PROTECT_PARTNER_MEDIA,
       }).catch((err) => {
         console.warn("sendMotionProfileMedia failed for side A, skipping:", err);
       });
@@ -671,7 +674,7 @@ export async function sendMatchProposal(
       await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
     } else {
       await sendMotionProfileMedia(api, chatB, normalizeProfileMedia(mediaForB, photosForB), {
-        protect: true,
+        protect: PROTECT_PARTNER_MEDIA,
       }).catch((err) => {
         console.warn("sendMotionProfileMedia failed for side B, skipping:", err);
       });

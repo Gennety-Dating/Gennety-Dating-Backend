@@ -4064,9 +4064,16 @@ live only in the Telegram caption.
   clear face.** Both the match-pitch photo card (§3.3, the first place a user
   sees the partner) and the private date card are sent with `protect_content`,
   so the partner's images can't be forwarded, saved, or downloaded out of the
-  chat. (OS screenshots still can't be blocked in a normal bot chat — that is a
-  Telegram platform limit, not a toggle — so the blurred share copy remains the
-  actual off-platform privacy guarantee.)
+  chat. Screenshots and screen recordings are a weaker story and must not be
+  read as a guarantee: many Telegram clients do blank protected media out of
+  them, but that is the client's choice rather than something the Bot API
+  promises, so the blurred share copy remains the actual off-platform privacy
+  guarantee. **Demo mode is the single exception, and it exists because of that
+  blanking**: a filmed walkthrough would record a black rectangle where the
+  partner should be, so `PROTECT_PARTNER_MEDIA` (`demo/config.ts`) turns the
+  flag off there — the demo partner is a puppet with no photo to protect
+  (DEMO_MODE.md). Every sender reads that one constant rather than its own
+  flag, so a new partner-facing surface cannot half-apply the rule.
 - **Venue photo — Google Places, single source (2026-07-25).** Every venue's
   hero image is the place's Google Places **cover** photo, credited on the card;
   Google's bytes are fetched at render time and never persisted (only the photo

@@ -40,6 +40,7 @@ import {
   shouldOfferVenueChange,
   buildVenueChangeButton,
 } from "../handlers/matching/venue-change.js";
+import { PROTECT_PARTNER_MEDIA } from "../demo/config.js";
 import { isTelegramTarget } from "../utils/telegram-target.js";
 import { runStatusSequence, NEVER_CUT_SHORT } from "./ai-stream.js";
 import { dateCardSteps } from "./analysis-status.js";
@@ -140,7 +141,7 @@ async function sendScheduledConfirmation(
           caption: input.text,
           caption_entities: [input.entity],
           reply_markup: keyboard,
-          protect_content: true,
+          protect_content: PROTECT_PARTNER_MEDIA,
         });
         // Largest rendition's file_id — cached for instant re-open in the hub.
         // The buffer rides back too so the founder feed can re-upload it via

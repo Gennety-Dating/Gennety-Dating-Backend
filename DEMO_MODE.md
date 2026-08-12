@@ -25,6 +25,7 @@ Everything on screen is production code. What the demo changes is only:
 | Departure point | must be inside Kyiv | **same gate**, plus a one-tap "drop the pin in Kyiv" |
 | Date Ticket | Telegram Stars | the existing **mock** rail (real screens, real prices, no charge) |
 | Venue change | 150⭐ | settled free |
+| Partner photos | forward/save-protected (clients blank them out of screenshots and screen recordings) | unprotected, so a walkthrough can be filmed |
 | Waiting | hours to days | ~12 seconds per step |
 | Pre-date content | fires at T-5h / T-1.5h / T+24h | replayed immediately |
 
@@ -542,6 +543,27 @@ the table at the top of this file; these two branches are what do.
 
 Plus two `if (DEMO_MODE_ENABLED)` blocks in `index.ts`: the isolation assert +
 banner + driver, and **not** scheduling the drop-matching or no-match crons.
+
+**And one deliberate non-branch: `PROTECT_PARTNER_MEDIA`.** Partner photos are
+sent `protect_content` wherever they appear with a clear face (PRODUCT_SPEC
+§3.7a), and Telegram clients blank protected media out of a screenshot or a
+screen recording — so a demo filmed for an investor records a black rectangle
+exactly where the partner should be. The flag is therefore off in demo, which
+costs nothing: the partner there is a seeded puppet, not a person with a photo
+to protect.
+
+It is a **single exported constant** (`demo/config.ts`) read by all six
+senders — the pitch album (`handlers/matching/pitch.ts`), the match cards
+(`services/match-card/send.ts`), the scheduled date card
+(`services/scheduled-confirmation.ts`), the My Date hub
+(`handlers/menu/my-date.ts`), the venue wish card
+(`handlers/matching/venue-change.ts`) and the coordination cards
+(`services/coordination-card/send.ts`) — rather than six `if` blocks. Six
+copies of one rule is a rule a seventh sender never finds, and the failure is
+silent: a hardcoded `protect_content: true` on a new surface simply goes black
+on camera, with nothing failing and nobody told. The blurred date-card share
+copy is deliberately NOT routed through it — that one is unprotected in both
+modes, because the blur is what makes it safe to leave the platform.
 
 **The drop cron is disabled in code, not by an env schedule.** Every demo
 visitor is an active, verified Kyiv account, so the real engine would cheerfully
