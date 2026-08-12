@@ -27,8 +27,17 @@ import {
 export interface PushPayload {
   title: string;
   body: string;
-  /** Custom JSON forwarded to the client alongside `aps` — deep-link data. */
+  /**
+   * Custom JSON forwarded to the client alongside `aps` — deep-link data.
+   *
+   * Two keys are read by the payload builder rather than by the client:
+   * `type` becomes the APNs category (the client's action buttons), and
+   * `image` turns on `mutable-content` so the Notification Service Extension
+   * runs and blurs it (§5.3).
+   */
   data?: Record<string, unknown>;
+  /** Replaces an earlier notification with the same id — see `ApnsSendOptions`. */
+  collapseId?: string;
 }
 
 const DEAD_TOKEN_REASONS = new Set([
@@ -65,6 +74,7 @@ export async function sendPushToUser(
 
   const result = await sendApnsNotification(user.pushToken, buildAlertPayload(payload), {
     pushType: "alert",
+    ...(payload.collapseId ? { collapseId: payload.collapseId } : {}),
   });
   if (tokenIsDead(result)) {
     await prisma.user

@@ -111,6 +111,27 @@ describe("payload builders", () => {
     expect(payload.aps).not.toHaveProperty("category");
   });
 
+  // Without `mutable-content` the Notification Service Extension never runs,
+  // so the drop notification arrives with no picture at all — a silent
+  // downgrade that looks identical to a device with no image support.
+  it("turns on mutable-content when the payload carries an image", () => {
+    const payload = buildAlertPayload({
+      title: "T",
+      body: "B",
+      data: { type: "match.proposed", matchId: "m1", image: "https://x/y.jpg" },
+    }) as { aps: Record<string, unknown> };
+    expect(payload.aps["mutable-content"]).toBe(1);
+  });
+
+  it("leaves mutable-content off when there is no image to rewrite", () => {
+    const payload = buildAlertPayload({
+      title: "T",
+      body: "B",
+      data: { type: "proxy.message", matchId: "m1" },
+    }) as { aps: Record<string, unknown> };
+    expect(payload.aps).not.toHaveProperty("mutable-content");
+  });
+
   it("shapes an ActivityKit update with timestamp and optional dates", () => {
     const payload = buildLiveActivityPayload(
       {

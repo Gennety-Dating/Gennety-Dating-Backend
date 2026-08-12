@@ -54,6 +54,26 @@ describe("sendPushToUser", () => {
     );
   });
 
+  // Forwarded rather than dropped: it is the only thing standing between a
+  // retried dispatch and two identical drop notifications on one lock screen.
+  it("forwards a collapse id to the transport", async () => {
+    userFindUnique.mockResolvedValue({ pushToken: "device-token" });
+    sendApnsNotification.mockResolvedValue({ ok: true });
+
+    await sendPushToUser("u1", {
+      title: "T",
+      body: "B",
+      data: { type: "match.proposed" },
+      collapseId: "match.proposed.m1",
+    });
+
+    expect(sendApnsNotification).toHaveBeenCalledWith(
+      "device-token",
+      expect.anything(),
+      { pushType: "alert", collapseId: "match.proposed.m1" },
+    );
+  });
+
   it("is a no-op without a registered token", async () => {
     userFindUnique.mockResolvedValue({ pushToken: null });
     await expect(sendPushToUser("u1", { title: "T", body: "B" })).resolves.toBe(false);

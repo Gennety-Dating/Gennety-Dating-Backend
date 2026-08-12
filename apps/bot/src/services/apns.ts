@@ -26,7 +26,22 @@ export interface ApnsSendOptions {
   topic?: string;
   /** APNs priority; both alert and LA updates default to immediate (10). */
   priority?: 5 | 10;
+  /**
+   * `apns-collapse-id`: a later push with the same value REPLACES the earlier
+   * one on the device instead of stacking beside it. Apple caps it at 64 bytes
+   * and we truncate rather than let APNs reject the request.
+   *
+   * Used where a send can legitimately happen twice for one event — the drop
+   * dispatcher retries a whole match when either Telegram side throws, and the
+   * mobile rail rides along with it. Deduplicating in the database would mean
+   * a column and a migration to state something the device already knows how
+   * to do.
+   */
+  collapseId?: string;
 }
+
+/** Apple's documented ceiling for `apns-collapse-id`. */
+const COLLAPSE_ID_MAX_BYTES = 64;
 
 export type ApnsSendResult =
   | { ok: true }
@@ -95,14 +110,25 @@ export interface AlertPushInput {
  * even though the client attaches actions to only a few of them. The client
  * registers a category per type it can act on (iOS `PushCategories`), and the
  * ones it does not know about simply render as an ordinary notification.
+ *
+ * `mutable-content` follows the same rule for the same reason. It is the flag
+ * that lets the app's Notification Service Extension rewrite the notification
+ * before it is drawn, and the only thing our extension does is blur an image
+ * (§5.3) — so a push with a `data.image` needs it and a push without one has
+ * nothing for the extension to do. Deriving it from the image's presence
+ * removes the failure where the flag and the payload disagree: the extension
+ * would either never run (a clean face on the lock screen is impossible
+ * because the picture simply would not attach) or run with nothing to fetch.
  */
 export function buildAlertPayload(input: AlertPushInput): Record<string, unknown> {
   const category = typeof input.data?.type === "string" ? input.data.type : null;
+  const mutable = typeof input.data?.image === "string" && input.data.image.length > 0;
   return {
     aps: {
       alert: { title: input.title, body: input.body },
       sound: "default",
       ...(category ? { category } : {}),
+      ...(mutable ? { "mutable-content": 1 } : {}),
     },
     ...(input.data ?? {}),
   };
@@ -258,6 +284,9 @@ export async function sendApnsNotification(
         "apns-topic": topic,
         "apns-push-type": options.pushType,
         "apns-priority": String(options.priority ?? 10),
+        ...(options.collapseId
+          ? { "apns-collapse-id": options.collapseId.slice(0, COLLAPSE_ID_MAX_BYTES) }
+          : {}),
       },
       payload,
     );

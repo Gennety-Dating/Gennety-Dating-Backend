@@ -28,6 +28,22 @@ import { env } from "../config.js";
 
 const PHOTO_URL_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * Lifetime for the copy that travels inside the drop push (§5.3).
+ *
+ * Ten minutes is right for a screen the user is looking at and wrong for a
+ * notification: APNs stores an undelivered alert and hands it over when the
+ * phone comes back online, which is exactly the case the push exists for. A
+ * link that expired while the phone was off would drop the picture in the one
+ * scenario that matters.
+ *
+ * A day is not a weaker guarantee than ten minutes, because the signature was
+ * never the whole gate: the bytes route re-resolves entitlement per request,
+ * and the match itself dies at the 24h decision deadline — so the URL stops
+ * working with the match rather than outliving it either way.
+ */
+export const PUSH_PHOTO_URL_TTL_MS = 24 * 60 * 60 * 1000;
+
 /** How many photos this viewer may see, or null when not entitled. */
 export async function countPartnerPhotos(
   viewerId: string,
@@ -105,8 +121,9 @@ export function partnerPhotoUrls(
   viewerId: string,
   matchId: string,
   count: number,
+  ttlMs: number = PHOTO_URL_TTL_MS,
 ): string[] {
-  const expiresAt = Date.now() + PHOTO_URL_TTL_MS;
+  const expiresAt = Date.now() + ttlMs;
   const base = env.PUBLIC_BASE_URL.replace(/\/+$/, "");
   return Array.from({ length: count }, (_, index) => {
     const sig = signPartnerPhoto(viewerId, matchId, index, expiresAt);

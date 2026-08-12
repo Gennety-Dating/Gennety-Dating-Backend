@@ -2379,6 +2379,24 @@ for the dashboard's algorithm-quality view.
   protected with `protect_content`. Static photos/poster frames are not sent a
   second time. A rejected motion group falls back to individual videos, and a
   motion-delivery failure never blocks the pitch stream.
+- **The app rail gets a push, and until 2026-08-12 it got nothing at all**
+  (`services/match-drop-push.ts`, iOS §5.3). `pitch.ts` skips anyone it cannot
+  address as a Telegram chat, with a comment saying their pitch "goes via the
+  push path"; that path was never built, so an app-only user learned about the
+  most important event of their week whenever they next happened to open the
+  app. The push carries deliberately little: the copy names nobody, because the
+  lock screen is public — the same reason the decision Live Activity shows no
+  name, no age and not even a silhouette — and the only thing about the partner
+  is **one** photo, sent as a signed URL that the client's Notification Service
+  Extension **blurs on the device** before it is ever drawn. Nothing is
+  rendered server-side: the bytes leave untouched and come back blurred, since
+  a blurred copy on our disk would be a second artifact to keep in step with
+  the first. The picture is optional by construction (no photos, an expired
+  signature, an unreachable device → a plain notification), because the words
+  are the part that has to arrive. Its copy is **word for word the mock-up the
+  iOS pre-permission screen shows during onboarding** — the app promises this
+  notification, and the promise and the thing itself are one sentence living in
+  two places.
 - Pitches are queued through `services/dispatch-queue.ts` (rate-limited,
   default 2 s between sends ≈ 30/min). When a first-match welcome gift is
   actually delivered, the queue sends those gift pre-rolls first, waits

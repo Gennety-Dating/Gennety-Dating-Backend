@@ -21,6 +21,7 @@ import {
   sendProfileMediaCard,
 } from "../../services/profile-media-dispatch.js";
 import { sendPartnerMatchCards } from "../../services/match-card/send.js";
+import { sendMatchDropPush } from "../../services/match-drop-push.js";
 import { grantWelcomeGiftIfEligible } from "../../services/ticket-wallet.js";
 import { getGiftFramingForMatch } from "../../services/rematch.js";
 import {
@@ -390,6 +391,9 @@ export async function sendMatchProposal(
           age: true,
           gender: true,
           language: true,
+          // Read only by the app rail (`sendMatchDropPush`): whether a push is
+          // worth attempting is a platform question, never `telegramId > 0`.
+          platform: true,
           theme: true,
           verificationStatus: true,
           profile: {
@@ -406,6 +410,7 @@ export async function sendMatchProposal(
           age: true,
           gender: true,
           language: true,
+          platform: true,
           theme: true,
           verificationStatus: true,
           profile: {
@@ -685,7 +690,18 @@ export async function sendMatchProposal(
     if (partnerAVerified) await sendVerifiedTrustCard(api, chatB, langB);
     await sendDecisionQuestion(api, chatB, langB, match.userA.gender);
   })();
-  const results = await Promise.allSettled([sendA, sendB]);
+  // The app rail (§5.3). Started alongside the Telegram sends rather than after
+  // them: a user whose partner-side DM fails must still learn that their match
+  // dropped, and that is the whole notification they get — there is no chat
+  // waiting for them to scroll back through.
+  const notifyApps = sendMatchDropPush(match).catch((err: unknown) => {
+    console.warn(
+      `[pitch] drop push failed matchId=${matchId}:`,
+      err instanceof Error ? err.message : err,
+    );
+  });
+
+  const results = await Promise.allSettled([sendA, sendB, notifyApps]);
   const failures = results.filter(
     (result): result is PromiseRejectedResult => result.status === "rejected",
   );
