@@ -1178,8 +1178,11 @@ export async function completeTicketGateAndUnlockScheduling(
   }
 
   // The persistent ticket card stays in chat untouched; the Calendar is sent as
-  // a SEPARATE message that follows it (calendarMessageId* starts null here, so
-  // startScheduling sends fresh Calendar cards). `afterTicketGate` makes the
+  // a SEPARATE message that follows it. `calendarMessageId*` is NOT null here —
+  // it holds the "accepted, waiting" receipt from before the gate, which is why
+  // `afterTicketGate` makes `startScheduling` delete and resend rather than edit
+  // it in place: an edit would put the Calendar above the ticket card, silently.
+  // The same flag also makes the
   // Calendar card use a plain caption so it doesn't repeat the ticket card's
   // "It's mutual 🔥" celebration. When he covered her, HER card is skipped here
   // and delivered once she opens the reveal (see above). §3.5b.

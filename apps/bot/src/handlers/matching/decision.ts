@@ -473,9 +473,12 @@ async function handleAccept(
   //
   // The card itself STAYS (founder decision): unlike the calendar and venue
   // waiting lines, it is not a throwaway receipt — it is tracked in
-  // `calendarMessageIdA/B`, carries `MESSAGE_EFFECT_MATCH_ID`, and later morphs
-  // in place into the ticket card and then the Calendar. So the shimmer is
-  // started alongside it rather than replacing it.
+  // `calendarMessageIdA/B`, carries `MESSAGE_EFFECT_MATCH_ID`, and later becomes
+  // the Calendar. So the shimmer is started alongside it rather than replacing
+  // it. It morphs IN PLACE only when the Calendar follows it directly; with the
+  // ticket gate on, the standalone ticket card (§3.5b) lands below it first, so
+  // `startScheduling` deletes this one and resends at the bottom of the chat
+  // instead. The ticket card never replaces it either way.
   //
   // Blind-decision safe: the actor has already committed, and the shimmer says
   // only that we're waiting — nothing about what the partner chose.

@@ -2826,8 +2826,8 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   pay/use; or the "your match paid ❤️" surprise; or both-secured). Ticket
   progress (first paid, both paid) is reflected **inside the Mini App**, not by
   rewriting the chat card. Once both tickets settle, the Calendar arrives as a
-  **separate** message that *follows* the ticket card (`startScheduling` sends a
-  fresh `calendarMessageId*` card), and the scheduling/venue/time-lock flows
+  **separate** message that *follows* the ticket card, and the
+  scheduling/venue/time-lock flows
   only ever touch that Calendar card — so the ticket entry survives to the end
   of the flow and the covered woman can always reopen it for the surprise. This
   is a deliberate, scoped exception to the one-live-post-accept-card rule
@@ -2835,6 +2835,27 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   buttons. It also carries the **mutual-match reveal** ("It's mutual 🤍"), so
   it is the message that plays the falling-hearts `message_effect_id`
   (`MESSAGE_EFFECT_MUTUAL_ID`, default ❤️) — see §3.4.
+  **"Follows" means a new message, and that had to be made true (2026-08-12).**
+  `startScheduling` reached for the tracked post-accept card and *edited* it —
+  correct on the no-gate path, where that card is the newest thing in the chat
+  and morphing it in place is the point (§3.6), and silent here: by then the
+  standalone ticket card and the settle notice have landed **below** it, a
+  Telegram edit raises no notification, and the Calendar button appears three
+  messages up. So the whole flow died on screen at *"your ticket is ready,
+  waiting on the other side"* while both tickets were in fact settled and the
+  grid was written. Confirmed rather than inferred: a live run has
+  `ticketStatus = completed`, 84 `proposedTimes`, and **zero** chat events after
+  the second payment. The gate's three handoffs (completion, the free-Calendar
+  fallback on expiry, and the one after a refund) now delete the stale card and
+  send a fresh one, which is also what makes the deadline nudges that follow
+  point at a card the user has seen. The resend is derived from
+  `afterTicketGate` rather than passed beside it — the gate having run IS the
+  reason the tracked card is stale, and a second flag could only disagree with
+  the first. The **covered partner's deferred Calendar** (delivered when she
+  opens the "he paid your ticket ❤️" reveal) resends for the same reason, one
+  step worse: hers sits under the ticket card *and* the cover DM.
+  Reached production undetected because no pair had ever cleared the gate
+  there; found in demo mode, where every run does.
 - **Welcome gift.** Every new user is gifted **one free Date Ticket** as a
   personal "your first date is on me" gesture, delivered as a **pre-roll before
   their first-ever match pitch** (`handlers/matching/pitch.ts` →
@@ -3360,11 +3381,19 @@ better UX than three separate retries.
   response, so it must not wait on a cosmetic draft.
 - **One live post-accept card per side.** Telegram post-accept prompts are
   tracked in `Match.calendarMessageIdA/B`. The same message can move from
-  accepted/waiting → Date Ticket → Calendar; new peer proposals and
+  accepted/waiting → Calendar; new peer proposals and
   counter-proposals edit it in place, falling back to a replacement only if
   Telegram says the stored message is gone. Both cards are removed when a time
   is locked, so repeated scheduling updates do not accumulate identical "Open
   Calendar" messages in the chat.
+  **Editing in place is only safe while that card is still the newest message,
+  and two cases are not (2026-08-12).** A counter-proposal has always deleted
+  and resent — an edit "the peer never sees" is the failure mode named at its
+  own call site — and the Date Ticket gate is the other: its card is a separate
+  message that lands *below* the tracked one (§3.5b), so the Calendar that
+  follows the gate resends too. The Date Ticket card is therefore **not** a
+  stage this card passes through; it never was, and this bullet used to say
+  otherwise.
 - **No-overlap-yet ping.** When both sides have submitted but no slot
   is shared, the bot updates the peer's live calendar card with
   `matchSchedulePeerSuggestedAlternative`. This is gated on the actor's
@@ -3607,8 +3636,10 @@ a guaranteed failing call forever.
 **What is NOT replaced.** On the pitch decision the "you accepted" card **stays**
 and the shimmer sits under it. Unlike the calendar and venue lines that card is
 not a throwaway receipt: it is tracked in `calendarMessageIdA/B`, carries
-`MESSAGE_EFFECT_MATCH_ID`, and later morphs in place into the Date Ticket card
-and then the Calendar (§3.6). Blind-decision safe either way — the shimmer is
+`MESSAGE_EFFECT_MATCH_ID`, and later becomes the Calendar (§3.6) — in place when
+the Calendar follows it directly, by delete-and-resend when the Date Ticket card
+has landed below it in between (§3.5b). It never becomes the ticket card, which
+is a separate message throughout. Blind-decision safe either way — the shimmer is
 shown only to someone who has already committed, and says only that we are
 waiting, never what the partner chose.
 

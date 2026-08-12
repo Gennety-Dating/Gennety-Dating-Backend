@@ -155,6 +155,23 @@ export async function startScheduling(
   const captionKey = opts?.afterTicketGate
     ? "matchScheduleAfterTicket"
     : "matchScheduleIter3";
+  // …and it must be a NEW message, not an edit of the tracked post-accept card.
+  //
+  // That card is the "accepted, waiting" receipt, and on the no-gate path it is
+  // still the newest thing in the chat, so editing it in place is right: it
+  // morphs into the Calendar exactly where the user is already looking. Behind
+  // the ticket gate it is not — the standalone ticket card (§3.5b) and the
+  // settle notices landed BELOW it — so the same edit is silent: Telegram
+  // raises no notification for it, and the Calendar button appears several
+  // messages up where nobody looks. Observed in demo mode as a dead flow: the
+  // puppet settled its half, the gate completed, `startScheduling` ran, and the
+  // last thing the visitor could see was still "your ticket is ready, waiting
+  // on the other side".
+  //
+  // Derived from `afterTicketGate` rather than passed as its own flag: it is
+  // the same fact (the gate ran ⇒ the tracked card is stale), and two fields
+  // could only ever disagree with each other.
+  const resend = opts?.afterTicketGate === true;
   const slots = generateProposalSlots();
   await prisma.match.update({
     where: { id: matchId },
@@ -201,6 +218,7 @@ export async function startScheduling(
         t(langA, captionKey),
         langA,
         match.userA.theme,
+        resend,
       ),
     );
   }
@@ -215,6 +233,7 @@ export async function startScheduling(
         t(langB, captionKey),
         langB,
         match.userB.theme,
+        resend,
       ),
     );
   }
@@ -228,6 +247,11 @@ export async function startScheduling(
  * `skipSide` and this delivers it later. The slot grid is already set by
  * `startScheduling`, so this only sends the card and never resets
  * `proposedTimes` / `availableTimes*` (the payer may have already picked times).
+ *
+ * Always a fresh message, for the same reason `startScheduling` resends after
+ * the gate: by the time she opens the reveal her tracked post-accept card is
+ * buried under the ticket card and the "{name} covered your ticket ❤️" DM, so
+ * an in-place edit would land silently, above both of them.
  */
 export async function sendCalendarCard(
   api: Api<RawApi>,
@@ -256,6 +280,7 @@ export async function sendCalendarCard(
     t(lang, "matchScheduleAfterTicket"),
     lang,
     user.theme,
+    true,
   );
 }
 

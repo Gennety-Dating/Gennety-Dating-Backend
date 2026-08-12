@@ -251,6 +251,57 @@ describe("scheduler: startScheduling", () => {
     expect(sentTexts.every((txt: string) => txt === t("en", "matchScheduleAfterTicket"))).toBe(true);
     expect(sentTexts.some((txt: string) => txt === t("en", "matchScheduleIter3"))).toBe(false);
   });
+
+  it("afterTicketGate resends the Calendar instead of editing the pre-gate card, which is no longer the newest message", async () => {
+    // The state this used to get wrong, and it is the ordinary one: the tracked
+    // post-accept card is the "accepted, waiting" receipt, and the standalone
+    // ticket card plus the settle notice landed BELOW it while the gate ran. An
+    // in-place edit is silent — no notification, Calendar button three messages
+    // up — so the flow looked dead at "waiting on the other side" even though
+    // both tickets were settled.
+    mMatch.update.mockResolvedValue({});
+    mMatch.findUnique.mockResolvedValue({
+      calendarMessageIdA: 545,
+      calendarMessageIdB: 546,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
+    });
+
+    const api = createApi();
+    await startScheduling(api, "match-1", { afterTicketGate: true });
+
+    expect(api.editMessageText).not.toHaveBeenCalled();
+    expect(api.deleteMessage).toHaveBeenCalledWith(1001, 545);
+    expect(api.deleteMessage).toHaveBeenCalledWith(1002, 546);
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    // Re-pointed at the fresh cards, so the venue step's teardown deletes the
+    // message the user can actually see rather than one already gone.
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: { calendarMessageIdA: 500 },
+    });
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: { calendarMessageIdB: 501 },
+    });
+  });
+
+  it("without the gate it still morphs the waiting receipt in place — that card IS the newest message there", async () => {
+    mMatch.update.mockResolvedValue({});
+    mMatch.findUnique.mockResolvedValue({
+      calendarMessageIdA: 545,
+      calendarMessageIdB: 546,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
+    });
+
+    const api = createApi();
+    await startScheduling(api, "match-1");
+
+    expect(api.editMessageText).toHaveBeenCalledTimes(2);
+    expect(api.deleteMessage).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
 });
 
 describe("scheduler: handleSchedulePick (legacy callback fallback)", () => {
