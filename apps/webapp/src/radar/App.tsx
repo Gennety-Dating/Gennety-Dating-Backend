@@ -8,6 +8,12 @@ import {
 } from "../api.js";
 import { pickLang } from "../i18n.js";
 import { ButterflyLoader } from "../butterfly-loader-react.js";
+import { ButterflySuccess } from "../butterfly-success-react.js";
+import {
+  onSuccessSettle,
+  SUCCESS_READ_MS,
+  SUCCESS_TOTAL_MS,
+} from "../butterfly-success.js";
 import { radarStrings } from "./i18n.js";
 
 const app = window.Telegram?.WebApp;
@@ -126,12 +132,16 @@ export function App() {
 
   const finish = (finalAnswers: RadarAnswerInput[]) => {
     setStatus("submitting");
-    // Let the finish screen breathe before Telegram closes the Mini App.
-    const CLOSE_DELAY = 2100;
+    // Never close over a moving mark, then hold a readable beat. Derived from the
+    // shared success animation rather than the flat 2100ms this used to carry,
+    // which was fitted to a disc-and-tick that no longer exists.
+    const CLOSE_DELAY = SUCCESS_TOTAL_MS + SUCCESS_READ_MS;
     submitRadar(initData, finalAnswers)
       .then(() => {
         setStatus("done");
-        app?.HapticFeedback?.notificationOccurred?.("success");
+        // Buzzes when the butterfly lands rather than on the save response, so
+        // the pulse confirms something the screen has finished stating.
+        onSuccessSettle(() => app?.HapticFeedback?.notificationOccurred?.("success"));
         setTimeout(() => app?.close?.(), CLOSE_DELAY);
       })
       // A failed save shouldn't trap the user mid-onboarding — still show the
@@ -212,11 +222,11 @@ export function App() {
   if (status === "done") {
     return (
       <div className="radar-screen radar-center radar-done">
-        <div className="radar-done-mark">
-          <svg className="radar-done-check" viewBox="0 0 52 52" aria-hidden="true">
-            <path d="M14 27 L23 36 L39 18" />
-          </svg>
-        </div>
+        {/* The shared brand success mark. This was a solid white disc with a
+            BLACK tick — the one mark in the product that carried no brand colour
+            at all, which is how the four checkmarks became visible as a problem.
+            Unlabelled: the heading below states the outcome. */}
+        <ButterflySuccess />
         <h2 className="radar-done-title">{s.doneTitle}</h2>
         <p className="radar-done-body">{s.doneBody}</p>
       </div>

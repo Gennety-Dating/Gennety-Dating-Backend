@@ -12,6 +12,7 @@ import {
   CalendarApiError,
   type CalendarState,
 } from "./api.js";
+import { butterflySuccessMarkup, onSuccessSettle } from "./butterfly-success.js";
 import { hasNewSlot, pruneSlotsToProposedTimes } from "./calendar-selection.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { classifyDaySlots, classifySlot, type DayClass, type SlotClass } from "./state-render.js";
@@ -515,10 +516,12 @@ function renderAgreed(): void {
   if (titleEl) titleEl.hidden = true;
   agreedEl.hidden = false;
   agreedEl.classList.add("success-page");
+  // The shared brand success mark (butterfly-success.ts). This used to be an
+  // 84px stroked tick of its own — one of four unrelated checkmarks the Mini
+  // Apps had grown. Deliberately unlabelled: the card below states the date, and
+  // a caption here would announce the same success twice.
   agreedEl.innerHTML = `
-    <svg class="check-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M5 13L9 17L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-    </svg>
+    ${butterflySuccessMarkup()}
     <div class="agreed-card">
       <h2 class="agreed-date" data-role="date"></h2>
       <p class="agreed-time" data-role="time"></p>
@@ -977,7 +980,11 @@ async function handleSave(): Promise<void> {
 
     if (agreedTime) {
       void clearPicked(matchId);
-      app.HapticFeedback?.notificationOccurred?.("success");
+      // Buzzes when the butterfly lands, not on the save response — the mark
+      // mounts in the render() below and the pulse is what makes its landing
+      // land as an event. Safe here rather than inside renderAgreed(), which a
+      // poll can re-run: these two branches fire once per real commit.
+      onSuccessSettle(() => app.HapticFeedback?.notificationOccurred?.("success"));
       view = "agreed";
     } else if (overlapCandidates.length > 1) {
       multiOverlapChoice = null;
@@ -1018,7 +1025,11 @@ async function handleConfirmOverlap(): Promise<void> {
 
     if (agreedTime) {
       void clearPicked(matchId);
-      app.HapticFeedback?.notificationOccurred?.("success");
+      // Buzzes when the butterfly lands, not on the save response — the mark
+      // mounts in the render() below and the pulse is what makes its landing
+      // land as an event. Safe here rather than inside renderAgreed(), which a
+      // poll can re-run: these two branches fire once per real commit.
+      onSuccessSettle(() => app.HapticFeedback?.notificationOccurred?.("success"));
       view = "agreed";
     } else {
       // Edge: peer's set changed mid-confirm — drop back to picker.

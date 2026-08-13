@@ -31,16 +31,22 @@ export default defineConfig({
   },
   test: {
     /// Vitest stubs every CSS import to an empty string by default, which also
-    /// swallows an explicit `?raw` one. Two stylesheets are asserted on as
+    /// swallows an explicit `?raw` one. Three stylesheets are asserted on as
     /// text, so they have to come through for real:
     ///   - `liveness-theme.css` — that it never restyles the biometric capture
     ///     surface (oval, light challenge, recording indicator).
     ///   - `butterfly-loader.css` — that the shared loading mark's keyframes
     ///     exist and that verification.html's inlined pre-paint copy of them
     ///     hasn't drifted from this one.
+    ///   - `butterfly-success.css` — that the shared success mark's flight and
+    ///     stroke-draw keep the SAME keyframe stops. They are two animations on
+    ///     two elements selling one illusion, so a drift between them is not a
+    ///     styling nit but a butterfly flying beside its own stroke.
     /// Scoped rather than `css: true` so no other test starts paying for CSS
     /// processing.
-    css: { include: [/liveness-theme\.css/, /butterfly-loader\.css/] },
+    css: {
+      include: [/liveness-theme\.css/, /butterfly-loader\.css/, /butterfly-success\.css/],
+    },
   },
   server: {
     host: "0.0.0.0",

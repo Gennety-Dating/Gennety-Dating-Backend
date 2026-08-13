@@ -30,6 +30,7 @@
 
 import "./venue-change.css";
 import { butterflyLoader } from "./butterfly-loader";
+import { butterflySuccess } from "./butterfly-success";
 import {
   fetchVenueBoardState,
   fetchVenueChangeCatalog,
@@ -2587,9 +2588,15 @@ function renderSettled(st: VenueBoardState): void {
   if (!settled) return;
 
   const nodes: Node[] = [
-    el("div", { class: "vc-settled-burst", ariaHidden: true }, [
-      el("div", { class: "vc-settled-check" }, [icon("check", "icon")]),
-    ]),
+    // The shared brand success mark. This was a 76px burgundy gradient disc with
+    // a white tick inside — one of four unrelated checkmarks the Mini Apps had
+    // grown. `.vc-settled-burst` survives as the layout wrapper only; the mark
+    // owns its own look and its own a11y, so no aria-hidden here.
+    //
+    // Deliberately NO extra haptic: this screen is reached either from a Stars
+    // payment (which already pulses when Telegram reports "paid", ~1-2s earlier)
+    // or by reopening an already-settled board, where nothing happened at all.
+    el("div", { class: "vc-settled-burst" }, [butterflySuccess()]),
     el("h1", { class: "vc-h1 vc-h1-center", text: s.settledTitle }),
   ];
   if (settled.peerPaid) {

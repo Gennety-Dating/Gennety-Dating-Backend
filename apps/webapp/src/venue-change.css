@@ -1149,24 +1149,6 @@ a.vc-info-row .vc-info-text {
   place-items: center;
   margin-bottom: 18px;
 }
-.vc-settled-check .icon {
-  width: 34px;
-  height: 34px;
-  stroke-width: 2;
-}
-.vc-settled-check {
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 70%, var(--accent-deep) 100%);
-  box-shadow:
-    0 16px 44px -16px rgba(139, 37, 59, 0.95),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  animation: heart-pop 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) both;
-}
 .vc-settled .vc-current {
   margin-top: 18px;
   text-align: center;
@@ -1714,8 +1696,7 @@ a.vc-info-row .vc-info-text {
   .glass-in,
   .vc-card.is-match,
   .vc-heart.is-mine .vc-heart-glyph,
-  .vc-heart.is-theirs::after,
-  .vc-settled-check {
+  .vc-heart.is-theirs::after {
     animation: none;
   }
   .btn-express::after {

@@ -7,6 +7,12 @@ import {
 } from "./api.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { butterflyLoaderMarkup } from "./butterfly-loader.js";
+import {
+  butterflySuccessMarkup,
+  onSuccessSettle,
+  restDelayFrom,
+  SUCCESS_READ_MS,
+} from "./butterfly-success.js";
 import { wireContentInsets } from "./telegram-insets.js";
 
 /**
@@ -74,6 +80,10 @@ export interface HandlerDeps {
  */
 export async function handleComplete(deps: HandlerDeps): Promise<void> {
   deps.render("finishing");
+  // The mark goes on screen HERE, before the verdict is known, and then we wait
+  // on a network round-trip. So neither the haptic nor the close can be a flat
+  // offset from this point: both are measured from the mark's own mount.
+  const markMountedAt = Date.now();
   try {
     const result = await deps.postEvent(deps.initData, {
       kind: "complete",
@@ -87,7 +97,14 @@ export async function handleComplete(deps: HandlerDeps): Promise<void> {
       showCloseButton(deps);
       return;
     }
-    deps.app.HapticFeedback?.notificationOccurred?.("success");
+    // Buzz when the butterfly LANDS, not when the POST returns. A fast response
+    // used to fire this while the mark was still mid-flight, so the phone
+    // confirmed a success the screen had not finished stating; a slow one is
+    // already past the landing and pulses immediately.
+    onSuccessSettle(
+      () => deps.app.HapticFeedback?.notificationOccurred?.("success"),
+      markMountedAt,
+    );
   } catch (err) {
     // The check may well have passed; we just couldn't tell the server. Say so
     // honestly rather than showing a success tick we can't back up.
@@ -96,10 +113,11 @@ export async function handleComplete(deps: HandlerDeps): Promise<void> {
     showCloseButton(deps);
     return;
   }
-  // Brief delay so the success checkmark animation can play out before the
-  // WebView dismisses — the disc-pop + tick-draw + halo settle in ~1s, so we
-  // hold a beat past that. Without it iOS dismisses too fast to perceive.
-  const delay = deps.closeDelayMs ?? 2200;
+  // Never dismiss over a moving mark, then hold a readable beat on top. Both
+  // halves are derived from the animation rather than hand-tuned (this was a
+  // flat 2200ms fitted to the old disc-and-tick), so lengthening the flight
+  // cannot silently start closing the WebView over a half-drawn tick.
+  const delay = deps.closeDelayMs ?? restDelayFrom(markMountedAt) + SUCCESS_READ_MS;
   setTimeout(() => deps.app.close(), delay);
 }
 
@@ -155,31 +173,18 @@ export type Screen =
   | "unavailable";
 
 /**
- * Animated success checkmark — the "all done" moment after the check passes.
+ * The success screen — the shared brand mark plus this screen's own line.
  *
- * Implemented as an inline animated SVG (no Lottie runtime, no CDN) so it can
- * never fail to load inside the Telegram WebView the way an external player or
- * JSON asset could, and adds zero bytes to the bundle. Visually it's the same
- * "classic ✅" beat: a green disc pops in with a slight overshoot, a white tick
- * strokes itself in, and a soft halo ring expands once and fades. The whole
- * thing settles in ~1s and honours `prefers-reduced-motion`.
+ * The green-disc-and-white-tick that used to live here was one of four
+ * unrelated checkmarks across the Mini Apps; it is now
+ * `butterfly-success.ts`, which every success screen in the product renders.
+ * The caption rides the mark's own `label`, so it fades in on the mark's
+ * schedule instead of needing this page's `check-caption` timing.
  */
-function successCheckMarkup(): string {
-  return `
-    <div class="check-anim" aria-hidden="true">
-      <span class="check-anim__halo"></span>
-      <svg class="check-anim__svg" viewBox="0 0 56 56" role="img">
-        <circle class="check-anim__disc" cx="28" cy="28" r="26" />
-        <path class="check-anim__tick" d="M17 29 l7.5 7.5 L40 21" />
-      </svg>
-    </div>`;
-}
-
 function successScreen(lang: Lang, textKey: Parameters<typeof tr>[1]): string {
   return `
     <div class="screen">
-      ${successCheckMarkup()}
-      <p class="screen-text check-caption">${escapeHtml(tr(lang, textKey))}</p>
+      ${butterflySuccessMarkup({ label: tr(lang, textKey) })}
     </div>`;
 }
 

@@ -2847,6 +2847,14 @@ button {
   animation: orbBreath 1800ms ease-in-out infinite;
 }
 
+/* Spacing only — the shared success mark (butterfly-success.css) owns its own
+   look. `.orb-wrap` centres its single child, not that child's contents, so the
+   mark has to centre itself here the way `.loading-orb`'s `margin: 0 auto` did;
+   the bottom gap matches the orb's 2rem so the heading below does not move. */
+.orb-wrap .bfs {
+  margin: 0 auto 2rem;
+}
+
 .orb-wrap h1 {
   margin: 0 0 0.75rem;
   color: var(--text);

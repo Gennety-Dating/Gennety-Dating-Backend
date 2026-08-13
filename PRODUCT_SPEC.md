@@ -5250,6 +5250,104 @@ generic mark cannot — the Location Mini App's map pin with its sonar pings, th
 Type Radar deck's card-stack skeleton, and the onboarding orb — plus the 16px
 in-button spinners, where a butterfly is unreadable.
 
+### The success mark: the butterfly draws the tick (2026-08-12)
+
+Every Mini App success screen renders one shared mark
+(`apps/webapp/src/butterfly-success.ts` + `.css`): a single butterfly flies the
+checkmark's own path — enters small and banked, dives through the vertex, sweeps
+up trailing a thickening burgundy stroke, then levels out and lands on the tip
+with its wings open. The closing frame is a bold **borderless** tick with the
+logo perched at its point, and one haptic pulse fires at the landing.
+
+It replaced four checkmarks that had grown up independently, and the spread is
+the reason it exists: a green disc with a white tick (verification), an 84px
+burgundy stroke that drew itself (calendar `agreed`), a solid white disc with a
+**black** tick (Type Radar), and a 76px burgundy gradient disc with a white tick
+(venue-change `settled`). Same moment, same product, four pictures — one of them
+carrying no brand colour at all. The fifth surface, onboarding's `DoneScene`, was
+showing `loading-orb`: the SYNCING spinner, on a finished state, telling the user
+to keep waiting.
+
+Four decisions are load-bearing rather than styling:
+
+- **A tick, not the butterfly alone.** The butterfly is the brand, but a tick is
+  read as "done" instantly and in every locale — and two of these screens are a
+  PAYMENT and an IDENTITY CHECK, where ambiguity is expensive. The butterfly
+  earns its place by *drawing* the tick rather than sitting beside it.
+- **Not a spinning logo.** The loading mark is already three butterflies flapping
+  and drifting, so a spinning butterfly for success would make "working" and
+  "done" the same picture. The two marks are deliberate siblings and deliberately
+  different pictures: the loader is butterflies INSIDE a waist (nerves, the
+  feeling before), this one has no waist at all — the butterfly is out, and it
+  has landed. Both share the logo's geometry through `brand-butterfly.ts`, and a
+  test holds their wingbeat identical, because two marks of the same butterfly
+  must not flap differently.
+- **Burgundy, not green.** The tick's legibility comes from its shape. Green
+  would be the only green in the product and would read as a system dialog
+  rather than as Gennety; the change deletes the last `--success: #28c76f` with
+  it.
+- **The flight and the stroke share one set of keyframe stops**, both `linear`,
+  so the acceleration lives in the SPACING of those stops (tight through the
+  dive, loose into the landing) rather than in an easing curve. They are two
+  animations on two elements selling one illusion — the butterfly laying the
+  stroke down behind it — and different stops make the stroke tip visibly
+  separate from the butterfly mid-sweep. A test pins them together, and pins the
+  butterfly's growth as monotonic: rescaling that curve by hand once produced a
+  vertex momentarily LARGER than the frame after it, i.e. perspective that
+  reverses, which reads as a glitch rather than as depth.
+
+Two things were settled by looking at the rendered mark rather than by
+reasoning, and are worth stating so they are not "tidied" back:
+
+- **The trail gradient runs BRIGHT → DEEP**, the counter-intuitive direction.
+  Deep → bright puts the stroke's brightest point exactly where the butterfly
+  lands, and the logo's own magenta sits on its lower edge, so the two merged
+  into one bright blob and the butterfly read as a thickening of the line.
+- **The butterfly stays a signature, at 0.45 scale.** Reviewed at 0.40 / 0.58 /
+  0.74 / 0.90: past roughly 0.5 it stops reading as a mark on the tick and
+  becomes the subject, at which point the tick looks like an underline for it.
+  The logo is an abstract four-lobe shape rather than a naturalistic butterfly,
+  so scale buys recognition only up to a point.
+
+**The haptic is a retiming, not a new feature.** All five screens already fired
+`HapticFeedback`; verification and the calendar fired it before the mark had been
+drawn, so the buzz arrived ahead of the picture. `onSuccessSettle` moves it to
+the landing — and, on verification, measures from the mark's own mount rather
+than from the network response, because that screen shows the mark BEFORE the
+verdict is known. Under `prefers-reduced-motion` the mark is drawn already
+finished, so the pulse fires immediately instead.
+
+**The two screens that dismiss themselves derive their delay from the animation**
+(`SUCCESS_TOTAL_MS + SUCCESS_READ_MS`) rather than carrying a hand-tuned
+constant: verification's was a flat 2200ms fitted to the old disc-and-tick, and
+Type Radar's a flat 2100ms, both of which would have started closing the WebView
+over a moving mark.
+
+Deliberately NOT converted, and each for a reason:
+
+- **The calendar's `waiting` screen** keeps its own 96px saved-tick. It means
+  "your picks are saved", while the `agreed` screen means "the date is locked
+  in" — giving both the celebratory mark would make the two states look
+  identical, which is precisely the confusion this mark exists to remove.
+- **The venue-change `renderSuccess` medallion**, whose glyph switches between
+  spark / letter / pin / check. It answers "what happened", not "you
+  succeeded"; only the terminal `settled` screen took the mark.
+- **Selection and progress ticks** — the vibe chips, the theme-picker badge, the
+  referral ladder's reached markers, the promo-gift status rows, and the
+  how-it-works illustration. None of them is a success screen.
+- **`PartnerPaidCard`'s stamp**, which is a "PAID" rubber stamp on a ticket
+  object: a different idiom.
+- **The venue-change settle gains no second pulse.** It is reached either from a
+  Stars payment that already buzzed when Telegram reported "paid", or by
+  reopening an already-settled board, where nothing happened at all.
+
+Under `prefers-reduced-motion` the finished tick and the landed butterfly are
+drawn at rest and the whole mark does one short fade, so the success still
+ARRIVES rather than appearing to have always been there. Telegram-only: the
+native iOS client draws its own success states and no `/v1/*` shape changed. Demo
+mode (DEMO_MODE.md) builds the same bundle and inherits it — no gate, no paid
+step, no puppet branch.
+
 ### Quiet Hours
 
 23:00–09:00 Europe/Kyiv. Enforced inside the **re-engagement** and

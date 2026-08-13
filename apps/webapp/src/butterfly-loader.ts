@@ -20,15 +20,7 @@
  */
 
 import "./butterfly-loader.css";
-
-/**
- * The logo butterfly, split at the body axis and re-authored around x=0 so a
- * bare `scaleX()` folds each wing about the body — no `transform-origin`, and
- * therefore no `transform-box` (which resolves differently on SVG than on
- * HTML). Coordinates are the logo's, shifted by (-50, -50).
- */
-const WING_LEFT = "M 0 -15 C -30 -50, -60 -20, -35 5 C -55 25, -25 50, -2 15 L 0 15 Z";
-const WING_RIGHT = "M 0 -15 L 0 15 L 2 15 C 25 50, 55 25, 35 5 C 60 -20, 30 -50, 0 -15 Z";
+import { WING_LEFT, WING_RIGHT, escapeHtml, logoWingGradient } from "./brand-butterfly.js";
 
 /**
  * The waist. Two open flanks, never closed at the bottom: joining them reads
@@ -48,14 +40,6 @@ const BELLY_RIGHT =
  *  instead change the markup string on every React render and restart the
  *  animation mid-wait. */
 const GRADIENT_ID = "gnt-bfl-wing";
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 function wings(index: 1 | 2 | 3): string {
   return (
@@ -92,15 +76,7 @@ export function butterflyLoaderMarkup(options: ButterflyLoaderOptions = {}): str
     `<div class="bfl-mark">` +
     `<svg class="bfl-svg" viewBox="0 0 120 132" aria-hidden="true" focusable="false">` +
     `<defs>` +
-    // userSpaceOnUse over the full butterfly bbox (x 5.69..94.31, y 19.07..
-    // 82.51 in logo coords), shifted by (-50, -50) to match the re-authored
-    // wing paths: cx = 30% of the bbox width, cy = its bottom, r = its width.
-    `<radialGradient id="${GRADIENT_ID}" gradientUnits="userSpaceOnUse" cx="-17.73" cy="32.51" r="88.63">` +
-    `<stop offset="0%" stop-color="#FF00FF"/>` +
-    `<stop offset="30%" stop-color="#C82356"/>` +
-    `<stop offset="70%" stop-color="#8B253B"/>` +
-    `<stop offset="100%" stop-color="#3B0B1E"/>` +
-    `</radialGradient>` +
+    logoWingGradient(GRADIENT_ID) +
     `</defs>` +
     `<g class="bfl-belly"><path d="${BELLY_LEFT}"/><path d="${BELLY_RIGHT}"/></g>` +
     wings(1) +

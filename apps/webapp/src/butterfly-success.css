@@ -1,0 +1,274 @@
+/**
+ * "The butterfly draws the tick" — the shared Mini App success mark.
+ *
+ * See butterfly-success.ts for what this replaced and why the picture is what it
+ * is. This file owns motion and colour only.
+ *
+ * Motion notes (why it is built this way):
+ *  - `bfs-flight` and `bfs-draw` run for the SAME duration, both `linear`, on
+ *    the SAME stop percentages. They are the two halves of one illusion — the
+ *    butterfly laying a stroke down behind it — and any divergence shows up as
+ *    the stroke tip drifting away from the butterfly mid-sweep. Acceleration is
+ *    therefore expressed in the SPACING of the stops (tight through the dive,
+ *    loose into the landing) and never in an easing curve, which would have to
+ *    be applied identically to a transform and to a dashoffset to stay in step.
+ *  - Every transform is explicit `translate(...) rotate(...) scale(...)`,
+ *    composed left-to-right from the SVG user-space origin. That avoids
+ *    `transform-box` / `transform-origin`, which default differently on SVG
+ *    than on HTML and whose failure mode here is a butterfly flung out of frame
+ *    rather than a subtle shift. Same rule as the loading mark.
+ *  - The wing paths are authored around x=0 (the body axis), so a bare
+ *    `scaleX()` folds them about the body with no origin declaration at all.
+ *  - The BASE state of the trail and the butterfly is the LANDED pose, not the
+ *    entry pose. `animation: … both` covers the animated case, and the base is
+ *    what reduced motion falls back to — so a viewer who asked for less motion
+ *    gets the finished tick rather than a butterfly frozen off to one side.
+ */
+
+.bfs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+
+  /* The bloom behind the landing. Dark carries the brand alpha easily; on the
+     cream page the same value reads as a pink smudge under the stroke, so light
+     gets its own much weaker value rather than a shared one. Same split, and
+     the same reason, as the loading mark's glow. */
+  --bfs-glow: rgba(139, 37, 59, 0.16);
+
+  /* The mark's on-screen width. One knob: the height and the bloom derive from
+     it, and the 104/132 ratio IS the viewBox, so a screen that ever needs a
+     different size cannot squash the tick by setting one dimension.
+     156 rather than the 132 it was first drawn at — reviewed side by side, the
+     tick at 132 read tentative next to the 128px loading mark it shares a
+     product with. */
+  --bfs-w: 156px;
+
+  /* Falls back rather than depending on the token being declared. This mark is
+     shared across five surfaces, one of which (verification.html) carries
+     hand-inlined theme tokens — it was missing `--text-faint` when the loading
+     mark shipped, and an unresolvable var() is not a wrong colour but NO value.
+     A shared component cannot fail over a token one page forgot. */
+  --bfs-caption: var(--text-muted, #8e8895);
+}
+
+:root[data-theme="light"] .bfs {
+  --bfs-glow: rgba(139, 37, 59, 0.07);
+  --bfs-caption: var(--text-muted, #6b6670);
+}
+
+.bfs-mark {
+  position: relative;
+  width: var(--bfs-w);
+  height: calc(var(--bfs-w) * 104 / 132);
+  display: grid;
+  place-items: center;
+}
+
+/* Burgundy bloom, timed to peak as the butterfly touches down. Square-ish and
+   centred on the frame rather than on the tick's tip: a glow pinned to the tip
+   reads as a lens flare on one corner, while a centred one reads as the whole
+   mark settling. */
+.bfs-mark::before {
+  content: "";
+  position: absolute;
+  width: var(--bfs-w);
+  height: var(--bfs-w);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--bfs-glow) 0%, transparent 68%);
+  opacity: 0;
+  animation: bfs-bloom 520ms ease-out 760ms both;
+  pointer-events: none;
+}
+
+.bfs-svg {
+  position: relative;
+  width: var(--bfs-w);
+  height: calc(var(--bfs-w) * 104 / 132);
+}
+
+/* Bold and BORDERLESS — no disc, no ring, no plate. Three of the four marks
+   this replaced sat inside a filled circle, which is what made them read as a
+   system dialog rather than as this product. */
+.bfs-trail {
+  stroke-width: 9.5;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: bfs-draw 900ms linear both;
+}
+
+.bfs-fly {
+  transform: translate(104px, 22px) rotate(0deg) scale(0.45);
+  animation: bfs-flight 900ms linear both;
+}
+
+/* Six beats across the 900ms flight, ending open. No fill-mode, so the wings
+   fall back to the base `scaleX(1)` — open, i.e. the recognisable logo — the
+   moment the flight ends, with no second animation competing for the same
+   transform. */
+.bfs-wing {
+  transform: scaleX(1);
+  animation: bfs-flap 150ms linear 6;
+}
+
+.bfs-label {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--bfs-caption);
+  animation: bfs-label-in 380ms ease-out 820ms both;
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────────────────
+   The stop percentages below are shared by bfs-flight and bfs-draw and must
+   stay identical in both. `FLIGHT_STOPS` in butterfly-success.ts is the source
+   of truth and a test holds all three in agreement. */
+
+@keyframes bfs-flight {
+  0% {
+    transform: translate(20px, 54px) rotate(40deg) scale(0.22);
+  }
+  14% {
+    transform: translate(30.1px, 64.1px) rotate(45deg) scale(0.27);
+  }
+  /* The vertex. Fastest point of the whole flight, and where the bank starts to
+     unwind — a butterfly pulling out of a dive, not a cursor turning a corner. */
+  30% {
+    transform: translate(46px, 80px) rotate(22deg) scale(0.31);
+  }
+  46% {
+    transform: translate(63.7px, 62.3px) rotate(-34deg) scale(0.35);
+  }
+  64% {
+    transform: translate(80.5px, 45.5px) rotate(-44deg) scale(0.4);
+  }
+  82% {
+    transform: translate(94.8px, 31.2px) rotate(-40deg) scale(0.43);
+  }
+  /* Levels out over the last 8% so the mark comes to rest UPRIGHT: the closing
+     frame has to be the logo's own silhouette, not a banked version of it. */
+  92% {
+    transform: translate(100.2px, 25.8px) rotate(-16deg) scale(0.445);
+  }
+  100% {
+    transform: translate(104px, 22px) rotate(0deg) scale(0.45);
+  }
+}
+
+@keyframes bfs-draw {
+  /* stroke-width is declared only at the ends, so it interpolates across the
+     whole sweep: the stroke gains weight as it is laid down, which is the
+     "pressed harder" read. Round caps mean the growth also nudges the start cap
+     outward by ~1.7 units — below the threshold where anyone sees it move. */
+  0% {
+    stroke-dashoffset: 100;
+    stroke-width: 6;
+  }
+  14% {
+    stroke-dashoffset: 88;
+  }
+  /* 69.05 rather than 69: the short arm is exactly 30.95% of the path, so this
+     is the vertex to the same precision the flight keyframe uses for it. */
+  30% {
+    stroke-dashoffset: 69.05;
+  }
+  46% {
+    stroke-dashoffset: 48;
+  }
+  64% {
+    stroke-dashoffset: 28;
+  }
+  82% {
+    stroke-dashoffset: 11;
+  }
+  92% {
+    stroke-dashoffset: 4.5;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    stroke-width: 9.5;
+  }
+}
+
+/* Roughly half the cycle is a hold at fully open — a butterfly beats and then
+   glides, and the mark is read at a glance, so the pose it is caught in has to
+   be the recognisable one. Deliberately the loading mark's beat, unchanged: two
+   marks of the same butterfly must not flap differently. */
+@keyframes bfs-flap {
+  0%,
+  8% {
+    transform: scaleX(1);
+  }
+  30% {
+    transform: scaleX(0.44);
+  }
+  52%,
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes bfs-bloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 0.72;
+    transform: scale(1);
+  }
+}
+
+@keyframes bfs-label-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reduced motion keeps the mark — it is the brand, and a finished tick still
+   says "done" — but nothing travels. The butterfly is already landed, the tick
+   is already drawn, the bloom is already at rest; all that is left is one short
+   fade of the whole thing, so the success still ARRIVES rather than being there
+   as though the screen never changed. */
+@media (prefers-reduced-motion: reduce) {
+  .bfs-trail,
+  .bfs-fly,
+  .bfs-wing,
+  .bfs-mark::before,
+  .bfs-label {
+    animation: none;
+  }
+  .bfs-trail {
+    stroke-width: 9.5;
+    stroke-dashoffset: 0;
+  }
+  .bfs-fly {
+    transform: translate(104px, 22px) rotate(0deg) scale(0.45);
+  }
+  .bfs-mark::before {
+    opacity: 0.72;
+  }
+  .bfs {
+    animation: bfs-fade-in 320ms ease-out both;
+  }
+}
+
+@keyframes bfs-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

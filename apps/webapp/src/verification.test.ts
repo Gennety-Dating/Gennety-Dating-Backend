@@ -18,6 +18,11 @@
  * setup follows the same shape as device-storage.test.ts.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  SUCCESS_FLIGHT_MS,
+  SUCCESS_READ_MS,
+  SUCCESS_TOTAL_MS,
+} from "./butterfly-success";
 
 const SESSION_ID = "11111111-2222-3333-4444-555555555555";
 
@@ -97,14 +102,39 @@ describe("handleComplete", () => {
     await mod.handleComplete(baseDeps(stub, { render, postEvent, closeDelayMs: 1000 }));
 
     expect(render).toHaveBeenCalledWith("finishing");
-    expect(stub.notify).toHaveBeenCalledWith("success");
     expect(postEvent).toHaveBeenCalledTimes(1);
     expect(postEvent).toHaveBeenCalledWith("tma-init-data", {
       kind: "complete",
       sessionId: SESSION_ID,
     });
+    // The success haptic is deliberately NOT fired here. The mark went on screen
+    // at `render("finishing")` and is still mid-flight, so buzzing on the POST
+    // response would confirm a success the screen has not finished stating. It
+    // lands with the butterfly.
+    expect(stub.notify).not.toHaveBeenCalled();
     expect(stub.closeFn).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(SUCCESS_FLIGHT_MS);
+    expect(stub.notify).toHaveBeenCalledWith("success");
     vi.advanceTimersByTime(1000);
+    expect(stub.closeFn).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it("never closes over a mark that is still moving", async () => {
+    // Regression guard for the default close delay, which used to be a flat
+    // 2200ms hand-fitted to a checkmark that no longer exists. It is derived
+    // from the animation now, so this asserts the RELATIONSHIP rather than a
+    // number: whatever the flight costs, the WebView outlives it.
+    vi.useFakeTimers();
+    const mod = await importModule();
+    const stub = makeAppStub();
+    const postEvent = vi.fn().mockResolvedValue({ ok: true, outcome: "processing" });
+
+    await mod.handleComplete(baseDeps(stub, { postEvent }));
+
+    vi.advanceTimersByTime(SUCCESS_TOTAL_MS);
+    expect(stub.closeFn).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(SUCCESS_READ_MS);
     expect(stub.closeFn).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });

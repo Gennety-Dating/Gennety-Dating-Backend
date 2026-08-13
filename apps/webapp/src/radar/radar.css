@@ -256,37 +256,11 @@ body {
   cursor: pointer;
 }
 
-/* Finish screen — a calm, modern confirmation: a glass check that draws itself
-   in, then the reassurance copy fades up. */
+/* Finish screen — the shared brand success mark (butterfly-success.css) over the
+   reassurance copy. The mark used to be a solid white disc with a BLACK tick,
+   i.e. the one success mark in the product carrying no brand colour at all. */
 .radar-done {
   gap: 18px;
-}
-/* Finish mark — a SOLID, borderless WHITE disc (no glass/blur) with a black
-   check that draws itself in. */
-.radar-done-mark {
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #fff;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
-  animation: radar-pop 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.radar-done-check {
-  width: 50px;
-  height: 50px;
-  fill: none;
-  stroke: #111;
-  stroke-width: 4.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.radar-done-check path {
-  stroke-dasharray: 48;
-  stroke-dashoffset: 48;
-  animation: radar-draw 460ms 200ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
 }
 .radar-done-title {
   margin: 0;
@@ -305,22 +279,6 @@ body {
   color: var(--text);
   animation: radar-fade-up 460ms 220ms both;
 }
-@keyframes radar-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.7);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-@keyframes radar-draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
 /* Loading / status. The "submitting" wait is the shared butterfly mark
    (butterfly-loader.css), which brings its own caption styling — hence no
    spinner or caption rule of our own here any more. */
@@ -359,13 +317,8 @@ body {
   .radar-card,
   .radar-actions,
   .radar-chip-panel,
-  .radar-done-mark,
   .radar-done-title,
   .radar-done-body {
-    animation: none;
-  }
-  .radar-done-check path {
-    stroke-dashoffset: 0;
     animation: none;
   }
 }

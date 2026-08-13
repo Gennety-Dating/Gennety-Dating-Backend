@@ -71,6 +71,8 @@ import {
   iconKillPhase,
 } from "./onboarding-kill.js";
 import { MONEY_BILLS, MONEY_VIEW_MS } from "./onboarding-money.js";
+import { ButterflySuccess } from "./butterfly-success-react.js";
+import { onSuccessSettle } from "./butterfly-success.js";
 import bumbleIcon from "./app-icons/bumble.png";
 import tinderIcon from "./app-icons/tinder.png";
 import badooIcon from "./app-icons/badoo.png";
@@ -862,7 +864,7 @@ function App(): ReactElement {
         />
       </Scene>
       <Scene active={phase.kind === "done"}>
-        <DoneScene />
+        <DoneScene active={phase.kind === "done"} />
       </Scene>
       {/* Only mounted across the two scenes it spans — past Burnout the icons
           are gone for good, and leaving 90 spent tiles in the tree for the rest
@@ -2979,12 +2981,32 @@ function HandoffLoading(props: {
   );
 }
 
-function DoneScene(): ReactElement {
+/**
+ * The last screen of onboarding — registration is finished.
+ *
+ * It used to show `loading-orb`, i.e. the SYNCING spinner, on a state where
+ * nothing is loading any more: the one success screen in the product that was
+ * telling the user to keep waiting. It now carries the shared brand success mark
+ * (butterfly-success.ts), the same one verification, the calendar, Type Radar and
+ * the venue board show.
+ *
+ * `active` is load-bearing rather than cosmetic. `Scene` keeps every child
+ * mounted for the whole session and only toggles a class, so a mark mounted
+ * unconditionally would fly its whole animation — and fire its haptic — while
+ * still hidden at app start, and the user would arrive at a finished, static
+ * tick minutes later. Same reason `HandoffLoading` takes the flag.
+ */
+function DoneScene(props: { active: boolean }): ReactElement {
   const s = useOnboardingStrings();
+  const { active } = props;
+  useEffect(() => {
+    if (!active) return;
+    return onSuccessSettle(() => app?.HapticFeedback?.notificationOccurred("success"));
+  }, [active]);
   return (
     <div className="orb-wrap">
       <div>
-        <div className="loading-orb" />
+        {active ? <ButterflySuccess /> : null}
         <h1>{s.doneTitle}</h1>
         <p>{s.doneLead}</p>
         <button className="gate-button done-close-button" onClick={() => app?.close()}>

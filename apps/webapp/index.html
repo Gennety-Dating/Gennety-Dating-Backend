@@ -601,19 +601,12 @@
         text-align: center;
         padding-top: 16px;
       }
-      .check-svg {
-        width: 84px;
-        height: 84px;
-        margin: 32px 0 48px;
-        color: var(--brand-light);
+      /* Spacing only — the mark's own look belongs to butterfly-success.css,
+         which is shared by five screens. This replaces the margins the
+         84px .check-svg used to carry. */
+      .success-page .bfs {
+        margin: 28px 0 40px;
       }
-      .check-svg path {
-        stroke-dasharray: 100;
-        stroke-dashoffset: 100;
-        animation: check-dash 1.2s cubic-bezier(0.65, 0, 0.45, 1) forwards;
-        animation-delay: 0.3s;
-      }
-      @keyframes check-dash { to { stroke-dashoffset: 0; } }
 
       .agreed-card {
         width: 100%;
@@ -1041,7 +1034,12 @@
       @media (prefers-reduced-motion: reduce) {
         .slot, .agreed-card { transition: none !important; }
         .slot:hover { transform: none; box-shadow: none; }
-        .check-svg path, .saved-check, .saved-title, .saved-subtitle,
+        /* The agreed screen's own mark is the shared one now and stops itself
+           under reduced motion (butterfly-success.css); what is left here is the
+           WAITING screen, which keeps its own saved-tick deliberately — see
+           PRODUCT_SPEC §3.6 for why "saved, waiting on them" must not look like
+           "the date is locked in". */
+        .saved-check, .saved-title, .saved-subtitle,
         .saved-picks, .saved-actions .btn-primary, .saved-actions .btn-secondary {
           animation: none !important;
           opacity: 1 !important;
