@@ -11,9 +11,14 @@ import {
   onSuccessSettle,
   CHECK_END,
   CHECK_START,
+  BUTTERFLY_LEAD,
   CHECK_VERTEX,
+  DRAW_END_PCT,
+  EXIT_STOPS,
   FLIGHT_STOPS,
-  LANDED_SCALE,
+  PEAK_SCALE,
+  VIEWBOX,
+  SUCCESS_EXIT_MS,
   SUCCESS_FLIGHT_MS,
   SUCCESS_SETTLE_MS,
   SUCCESS_TOTAL_MS,
@@ -40,7 +45,7 @@ describe("butterflySuccessMarkup", () => {
 
   it("hides the drawing from assistive tech — the wrapper is the announced part", () => {
     expect(butterflySuccessMarkup({ label: "x" })).toContain(
-      '<svg class="bfs-svg" viewBox="0 0 132 104" aria-hidden="true"',
+      `<svg class="bfs-svg" viewBox="0 0 ${VIEWBOX.width} ${VIEWBOX.height}" aria-hidden="true"`,
     );
   });
 
@@ -77,11 +82,35 @@ describe("butterflySuccessMarkup", () => {
     expect(html).toContain(
       `x1="${CHECK_START.x}" y1="${CHECK_START.y}" x2="${CHECK_END.x}" y2="${CHECK_END.y}"`,
     );
-    // BRIGHT -> DEEP, deliberately the counter-intuitive direction: deep -> bright
-    // put the stroke's brightest point exactly where the butterfly lands, and the
-    // logo's own magenta sits on its lower edge, so the two merged into one blob.
-    expect(html).toContain('<stop offset="0%" stop-color="#C82356"/>');
+    // Light ink -> heavy ink, agreeing with the stroke-width ramp. It ends on the
+    // brand accent exactly, and the range is narrow on purpose: at #C82356 the
+    // finished mark read as a PINK tick, and the bright stroke also swallowed the
+    // butterfly, which is darker than that in its upper lobes.
+    expect(html).toContain('<stop offset="0%" stop-color="#9C2B44"/>');
     expect(html).toContain('<stop offset="100%" stop-color="#8B253B"/>');
+  });
+
+  it("keeps the butterfly the brightest thing, not the stroke", () => {
+    // The one contrast rule of this mark. The logo carries a bright magenta lobe;
+    // the trail it leaves is ink. Invert them and the butterfly reads as a dark
+    // smudge ON the line rather than an object above it — which is exactly what it
+    // looked like before the range was narrowed.
+    const html = butterflySuccessMarkup();
+    const trail = html.slice(html.indexOf('id="gnt-bfs-trail"'), html.indexOf("</linearGradient>"));
+    const luminance = (hex: string): number => {
+      const n = Number.parseInt(hex.slice(1), 16);
+      // Rough perceptual weighting; only the ordering matters here.
+      return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+    };
+    const trailStops = [...trail.matchAll(/stop-color="(#[0-9A-Fa-f]{6})"/g)].map((m) => m[1]!);
+    const wingStops = [
+      ...html.slice(0, html.indexOf('id="gnt-bfs-trail"')).matchAll(/stop-color="(#[0-9A-Fa-f]{6})"/g),
+    ].map((m) => m[1]!);
+    expect(trailStops).toHaveLength(2);
+    expect(wingStops.length).toBeGreaterThan(1);
+    expect(Math.max(...wingStops.map(luminance))).toBeGreaterThan(
+      Math.max(...trailStops.map(luminance)),
+    );
   });
 
   it("paints from attributes, so a late stylesheet cannot render it unpainted", () => {
@@ -111,16 +140,51 @@ describe("butterflySuccessMarkup", () => {
 });
 
 describe("flight geometry", () => {
-  it("lands the butterfly fully inside the frame", () => {
-    // An SVG crops silently, so the one thing worth arithmetic here is that the
-    // landed wingtip clears the viewBox rather than being trimmed on someone's
-    // screen and nobody's review.
-    const halfWidth = (WING_BBOX.width * LANDED_SCALE) / 2;
-    const halfHeight = (WING_BBOX.height * LANDED_SCALE) / 2;
-    expect(CHECK_END.x + halfWidth).toBeLessThan(132);
-    expect(CHECK_END.x - halfWidth).toBeGreaterThan(0);
-    expect(CHECK_END.y + halfHeight).toBeLessThan(104);
-    expect(CHECK_END.y - halfHeight).toBeGreaterThan(0);
+  it("keeps every VISIBLE keyframe's banked butterfly inside the frame", () => {
+    // An SVG crops silently, so this needs real arithmetic — and two naive
+    // versions of it have already let a clipped wing through. Measuring the wings'
+    // own 88.6 × 63.4 box ignores the bank, and a rotated box is far larger;
+    // checking one constant against CHECK_END misses that the butterfly is offset
+    // off the line by BUTTERFLY_LEAD and is widest a beat before the tip. So walk
+    // what is actually authored: every keyframe, with its own scale and rotation.
+    const frames = flightFrames(CSS);
+    expect(frames).toHaveLength(FLIGHT_STOPS.length + EXIT_STOPS.length - 1);
+    for (const f of frames) {
+      // The last keyframe is at opacity 0 — invisible, so allowed to graze.
+      if (f.opacity === 0) continue;
+      const rad = (Math.abs(f.rotate) * Math.PI) / 180;
+      const c = Math.cos(rad);
+      const s = Math.sin(rad);
+      const halfW = ((WING_BBOX.width * c + WING_BBOX.height * s) * f.scale) / 2;
+      const halfH = ((WING_BBOX.width * s + WING_BBOX.height * c) * f.scale) / 2;
+      expect(f.x - halfW, `${f.stop}% left`).toBeGreaterThan(0);
+      expect(f.x + halfW, `${f.stop}% right`).toBeLessThan(VIEWBOX.width);
+      expect(f.y - halfH, `${f.stop}% top`).toBeGreaterThan(0);
+      expect(f.y + halfH, `${f.stop}% bottom`).toBeLessThan(VIEWBOX.height);
+    }
+  });
+
+  it("centres the resting tick in the frame", () => {
+    // The tick is what rests here; the butterfly is transient. The frame used to
+    // be sized around a LANDED butterfly's wing, which left the tick 8 units left
+    // of centre — visible as a mark that sits slightly off on every screen.
+    const halfStroke = 9.5 / 2;
+    const left = CHECK_START.x - halfStroke;
+    const right = VIEWBOX.width - (CHECK_END.x + halfStroke);
+    const bottom = VIEWBOX.height - (CHECK_VERTEX.y + halfStroke);
+    const top = CHECK_END.y - halfStroke;
+    expect(Math.abs(left - right)).toBeLessThan(1);
+    expect(Math.abs(top - bottom)).toBeLessThan(1);
+  });
+
+  it("flies the butterfly clear of the stroke it is drawing", () => {
+    // Without the lead the butterfly sits ON the line, in the same hue, and reads
+    // as a lump on it rather than the thing making it. At the tip the lead is
+    // purely vertical (see BUTTERFLY_LEAD), so it is directly checkable.
+    const tip = flightFrames(CSS).find((f) => f.stop === DRAW_END_PCT);
+    expect(tip).toBeTruthy();
+    expect(tip!.x).toBe(CHECK_END.x);
+    expect(CHECK_END.y - tip!.y).toBe(BUTTERFLY_LEAD);
   });
 
   it("puts the vertex below both arm ends, i.e. draws a tick and not a caret", () => {
@@ -151,20 +215,26 @@ describe("stylesheet", () => {
     // butterfly laying the stroke down behind it. Different stops (or a
     // different easing) and the stroke tip separates from the butterfly
     // mid-sweep, which is the one failure a reviewer would call "cheap".
+    // The two animations share ONE timeline, so the draw's stops are directly
+    // comparable to the flight's: the draw reaches its last keyframe where the
+    // stroke closes and holds, while the flight carries on through the exit.
     const flight = keyframeBlock(CSS, "bfs-flight");
     const draw = keyframeBlock(CSS, "bfs-draw");
-    expect(stopsOf(flight)).toEqual([...FLIGHT_STOPS]);
     expect(stopsOf(draw)).toEqual([...FLIGHT_STOPS]);
+    expect(stopsOf(flight)).toEqual([...FLIGHT_STOPS, ...EXIT_STOPS.slice(1)]);
+    // The shared segment ends exactly where the constants say the drawing does.
+    expect(FLIGHT_STOPS.at(-1)).toBe(DRAW_END_PCT);
+    expect(EXIT_STOPS[0]).toBe(DRAW_END_PCT);
   });
 
   it("keeps both halves linear, so the acceleration lives in the stop spacing", () => {
     // An easing curve would have to be applied identically to a transform and to
     // a dashoffset to stay in step; spacing cannot drift the way two curves can.
-    expect(CSS).toMatch(/animation: bfs-flight 900ms linear both/);
-    expect(CSS).toMatch(/animation: bfs-draw 900ms linear both/);
+    expect(CSS).toMatch(new RegExp(`animation: bfs-flight ${SUCCESS_TOTAL_MS}ms linear both`));
+    expect(CSS).toMatch(new RegExp(`animation: bfs-draw ${SUCCESS_TOTAL_MS}ms linear both`));
   });
 
-  it("actually accelerates into the dive and decelerates into the landing", () => {
+  it("actually accelerates into the dive and decelerates into the levelling-out", () => {
     // Not a restatement of the stop list: this is the claim the spacing makes.
     // Progress per unit time has to rise through the vertex and fall to the
     // landing, or the swoop reads as a constant-rate slide.
@@ -181,30 +251,56 @@ describe("stylesheet", () => {
     expect(draw).toMatch(/stroke-width: 9\.5/);
   });
 
-  it("comes to rest upright — the closing frame is the logo's own silhouette", () => {
-    expect(keyframeBlock(CSS, "bfs-flight")).toContain(
-      `transform: translate(${CHECK_END.x}px, ${CHECK_END.y}px) rotate(0deg) scale(${LANDED_SCALE})`,
-    );
+  it("LEAVES rather than landing — the resting frame is the tick alone", () => {
+    // The correction this mark exists in its current form for. Holding the logo
+    // still on the tick's point reads as a sticker stuck onto it, not as one
+    // mark. The butterfly is the instrument: it draws and goes.
+    const block = withoutComments(keyframeBlock(CSS, "bfs-flight"));
+    expect(block).toMatch(/100% \{\s*opacity: 0;/);
+    // And it never straightens up on the way out. Levelling to rotate(0) was only
+    // ever needed to land upright; with nothing landing it would read as a swoop
+    // that stops and squares itself off.
+    expect(block).not.toContain("rotate(0deg)");
   });
 
-  it("grows the butterfly monotonically, never shrinking mid-flight", () => {
+  it("holds the tick's own bank through the up-sweep and out", () => {
+    // The butterfly flies ALONG the line it is drawing. The second arm is at
+    // exactly -45°, so anything far off that reads as sliding sideways.
+    const block = withoutComments(keyframeBlock(CSS, "bfs-flight"));
+    const rotations = [...block.matchAll(/rotate\((-?[\d.]+)deg\)/g)].map((m) => Number(m[1]));
+    // Everything from the point the sweep is established onward, i.e. the last
+    // five stops: 48%, 61.5%, 69%, 75% (draw ends), then the two exit stops.
+    for (const deg of rotations.slice(-5)) {
+      expect(deg).toBeLessThanOrEqual(-40);
+      expect(deg).toBeGreaterThanOrEqual(-55);
+    }
+  });
+
+  it("grows the butterfly monotonically through the draw, then recedes", () => {
     // Regression guard, and a real one: rescaling this curve by hand produced a
     // sequence where the vertex was momentarily LARGER than the frame after it,
     // i.e. the butterfly flew toward the viewer and then backed off in the middle
     // of the sweep. Perspective that reverses reads as a glitch, not as depth.
     const block = withoutComments(keyframeBlock(CSS, "bfs-flight"));
     const scales = [...block.matchAll(/scale\(([\d.]+)\)/g)].map((m) => Number(m[1]));
-    expect(scales).toHaveLength(FLIGHT_STOPS.length);
-    expect(scales).toEqual([...scales].sort((a, b) => a - b));
-    expect(scales.at(-1)).toBe(LANDED_SCALE);
+    expect(scales).toHaveLength(FLIGHT_STOPS.length + EXIT_STOPS.length - 1);
+    const drawing = scales.slice(0, FLIGHT_STOPS.length);
+    expect(drawing).toEqual([...drawing].sort((a, b) => a - b));
+    expect(drawing.at(-1)).toBe(PEAK_SCALE);
+    // The exit shrinks, strictly — that is what makes it read as flying away
+    // rather than fading on the spot.
+    const leaving = scales.slice(FLIGHT_STOPS.length - 1);
+    expect(leaving).toEqual([...leaving].sort((a, b) => b - a));
+    expect(new Set(leaving).size).toBe(leaving.length);
   });
 
   it("keeps one size knob, with the aspect derived from the viewBox", () => {
     // Setting a width and a height independently is how the tick gets squashed;
     // the ratio is the viewBox's, so it is not a free parameter.
     expect(CSS).toContain("--bfs-w:");
-    expect(ruleBlock(CSS, ".bfs-svg")).toContain("height: calc(var(--bfs-w) * 104 / 132)");
-    expect(ruleBlock(CSS, ".bfs-mark")).toContain("height: calc(var(--bfs-w) * 104 / 132)");
+    const aspect = `height: calc(var(--bfs-w) * ${VIEWBOX.height} / ${VIEWBOX.width})`;
+    expect(ruleBlock(CSS, ".bfs-svg")).toContain(aspect);
+    expect(ruleBlock(CSS, ".bfs-mark")).toContain(aspect);
   });
 
   it("is borderless — no disc, ring or plate behind the tick", () => {
@@ -223,27 +319,43 @@ describe("stylesheet", () => {
     );
   });
 
+  it("flaps for the whole beat, not just the drawing part of it", () => {
+    // 150ms × 8 covers the exit too, so it is still flapping as it goes rather
+    // than gliding out stiffly. A count that stops at the draw would leave the
+    // wings frozen open for the last quarter of the animation.
+    const wing = ruleBlock(CSS, ".bfs-wing");
+    const iterations = Number(/animation: bfs-flap 150ms linear (\d+)/.exec(wing)?.[1]);
+    expect(iterations * 150).toBe(SUCCESS_TOTAL_MS);
+  });
+
   it("stops all travel under prefers-reduced-motion but keeps the finished mark", () => {
     const block = CSS.slice(CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(block).toContain("animation: none");
-    // Landed pose and a drawn stroke — not a butterfly frozen at its entry point.
-    expect(block).toContain(
-      `transform: translate(${CHECK_END.x}px, ${CHECK_END.y}px) rotate(0deg) scale(${LANDED_SCALE})`,
-    );
-    expect(block).toContain("stroke-dashoffset: 0");
+    // Deliberately restates NO pose: the base states already are the resting
+    // ones, so killing the animations is the whole rule. A second copy of the
+    // final transform here is what used to have to be kept in step by hand.
+    expect(block).not.toContain("transform:");
+    expect(block).not.toContain("stroke-dashoffset");
     // The success still ARRIVES rather than being there as if nothing changed.
     expect(block).toContain("animation: bfs-fade-in");
   });
 
-  it("bases the un-animated state on the LANDED pose, not the entry pose", () => {
+  it("bases the un-animated state on the FINAL pose — tick drawn, butterfly gone", () => {
     // This is what reduced motion falls back to, and what a frame between mount
     // and animation start shows. Basing it on the entry pose would flash a tiny
-    // butterfly in the wrong corner with no stroke at all.
-    expect(ruleBlock(CSS, ".bfs-fly")).toContain(
-      `transform: translate(${CHECK_END.x}px, ${CHECK_END.y}px) rotate(0deg) scale(${LANDED_SCALE})`,
-    );
+    // butterfly in the wrong corner with no stroke at all; basing it on a LANDED
+    // pose would put a still logo on the tick, which is the reading this mark was
+    // changed to remove.
+    const fly = ruleBlock(CSS, ".bfs-fly");
+    expect(fly).toContain("opacity: 0");
     expect(ruleBlock(CSS, ".bfs-trail")).toContain("stroke-dashoffset: 0");
-    // And the wings' base is open, so the resting silhouette is the logo's.
+    // The base pose must be the flight's own last keyframe, or reduced motion and
+    // the animation's end disagree about where the butterfly finished.
+    const last = withoutComments(keyframeBlock(CSS, "bfs-flight")).split("100% {").pop() ?? "";
+    const transform = /transform: ([^;]+);/.exec(last)?.[1];
+    expect(transform).toBeTruthy();
+    expect(fly).toContain(`transform: ${transform};`);
+    // And the wings' base is open, so a wing is never frozen mid-fold.
     expect(ruleBlock(CSS, ".bfs-wing")).toContain("transform: scaleX(1)");
   });
 
@@ -262,20 +374,26 @@ describe("stylesheet", () => {
 });
 
 describe("timing constants", () => {
-  it("matches the stylesheet's flight duration", () => {
-    // The constant's other job is telling self-dismissing screens when the
-    // landing happens, so a drift here closes a WebView over a half-drawn tick.
-    expect(CSS).toContain(`${SUCCESS_FLIGHT_MS}ms linear both`);
+  it("puts the drawing's end where the constants say it is", () => {
+    // SUCCESS_FLIGHT_MS is what call sites use to time the haptic, so if the
+    // stylesheet's draw-end stop drifts from it the buzz lands away from the
+    // frame the tick actually closes on.
+    expect(DRAW_END_PCT).toBe(75);
+    expect(SUCCESS_FLIGHT_MS).toBe((DRAW_END_PCT / 100) * SUCCESS_TOTAL_MS);
+    expect(keyframeBlock(CSS, "bfs-draw")).toContain(`${DRAW_END_PCT}% {`);
   });
 
-  it("covers the bloom and caption that settle after the landing", () => {
-    // The bloom starts at 760ms and runs 520ms → rest at 1280ms; the caption
-    // starts at 820ms over 380ms → 1200ms. TOTAL must not be shorter than the
-    // last thing still moving, or a self-dismissing screen cuts it off.
-    const bloomEnd = 760 + 520;
+  it("lets everything come to rest on the SAME frame", () => {
+    // One moment of settling rather than three. The exit, the bloom (720 + 480)
+    // and the caption (820 + 380) all finish at TOTAL — and TOTAL must not be
+    // shorter than the last thing still moving, or a self-dismissing screen cuts
+    // it off mid-fade.
     expect(SUCCESS_TOTAL_MS).toBe(SUCCESS_FLIGHT_MS + SUCCESS_SETTLE_MS);
-    expect(SUCCESS_TOTAL_MS).toBeGreaterThanOrEqual(bloomEnd - 40);
-    expect(CSS).toContain("animation: bfs-bloom 520ms ease-out 760ms both");
+    expect(SUCCESS_SETTLE_MS).toBe(SUCCESS_EXIT_MS);
+    expect(720 + 480).toBe(SUCCESS_TOTAL_MS);
+    expect(820 + 380).toBe(SUCCESS_TOTAL_MS);
+    expect(CSS).toContain("animation: bfs-bloom 480ms ease-out 720ms both");
+    expect(CSS).toContain("animation: bfs-label-in 380ms ease-out 820ms both");
   });
 });
 
@@ -369,6 +487,47 @@ function stopsOf(block: string): number[] {
   return [...withoutComments(block).matchAll(/(?:^|[\s,{])(\d+(?:\.\d+)?)%/g)].map((m) =>
     Number(m[1]),
   );
+}
+
+/**
+ * Every authored flight keyframe, parsed.
+ *
+ * The point of parsing rather than importing constants: the keyframes are where
+ * the geometry actually lives, so a check that restates a constant cannot catch a
+ * position that was hand-edited. `opacity` is only declared on some stops, so it
+ * carries forward from the previous one, which is what CSS interpolation does.
+ */
+function flightFrames(css: string): {
+  stop: number;
+  x: number;
+  y: number;
+  rotate: number;
+  scale: number;
+  opacity: number;
+}[] {
+  const block = withoutComments(keyframeBlock(css, "bfs-flight"));
+  const re =
+    /(\d+(?:\.\d+)?)% \{([^}]*)\}/g;
+  const out: ReturnType<typeof flightFrames> = [];
+  let opacity = 1;
+  for (const [, stop, body] of block.matchAll(re)) {
+    const o = /opacity: ([\d.]+)/.exec(body!);
+    if (o) opacity = Number(o[1]);
+    const t =
+      /translate\((-?[\d.]+)px, (-?[\d.]+)px\) rotate\((-?[\d.]+)deg\) scale\(([\d.]+)\)/.exec(
+        body!,
+      );
+    if (!t) throw new Error(`keyframe ${stop}% has no parsable transform`);
+    out.push({
+      stop: Number(stop),
+      x: Number(t[1]),
+      y: Number(t[2]),
+      rotate: Number(t[3]),
+      scale: Number(t[4]),
+      opacity,
+    });
+  }
+  return out;
 }
 
 /** Path progress per unit of time between consecutive draw stops. */
