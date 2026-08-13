@@ -101,8 +101,12 @@ describe("scene timing", () => {
   });
 
   it("keeps the hold short enough not to stall the funnel", () => {
-    // Scene 2 costs ~3.5s today (type + hold). This is the added airtime, and
-    // onboarding drop-off is watched — see deploy.md on the Type Radar pause.
+    // This is the whole of the scene's post-typing time now that the fall
+    // starts with the screen rather than after the line lands: ~1.43s of typing
+    // plus this, against the 2.04s bare hold the screen used to sit on. So the
+    // money costs ~+0.36s, not the ~+0.9s the cued version did — and it is on
+    // screen for all ~3.8s instead of the last 2.4. Onboarding drop-off is
+    // watched; see deploy.md on the Type Radar pause.
     expect(MONEY_VIEW_MS).toBeLessThanOrEqual(2800);
   });
 });

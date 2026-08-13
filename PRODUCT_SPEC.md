@@ -223,6 +223,21 @@ out of Telegram-only workers.
   the money question held a line and moved on. Fourteen banknotes now drift
   down behind the question in three depth layers, and the question stays on
   screen underneath them.
+  **The fall begins with the SCREEN, not with the finished line (2026-08-13).**
+  It shipped on the same reveal mechanism scene 0 uses, which waits for the copy
+  to land — so the money arrived after ~1.4s of typing plus a hold, i.e. about
+  two seconds of bare screen, and read as a late effect rather than as the
+  screen's own weather. That mechanism is right for the other scenes and wrong
+  here, and the difference is what the visual IS: the icons and the crumble are
+  objects the copy has just earned, so waiting for the sentence is the point;
+  money is weather, and weather is already happening when you walk into it. The
+  scene therefore carries no reveal cue at all — a plain hold on the finished
+  question is the whole of its timing, which also makes it **shorter** than the
+  cued version (~3.8s against ~4.4s) while showing the fall for all of it
+  instead of the last 2.4s. It also **stops** one crossfade after the scene is
+  left; the cued version only ever switched the fall on, so fourteen animated
+  notes and three blurred layers went on compositing behind every later screen,
+  the stats kill sequence included.
   Four things decide the shape of it. **It falls rather than rains** — the
   screen asks what this COSTS, so the money leaves downward with weight; a
   jackpot shower reads as winning, which is the opposite claim, and the count
@@ -230,7 +245,10 @@ out of Telegram-only workers.
   negative offset into its own loop, so the frame is populated top to bottom
   the instant the fall begins — released together they enter from above the top
   edge as a curtain and leave the lower half of the screen empty for a second,
-  which is how the first build actually looked. **Paper flutters where rubble
+  which is how the first build actually looked. That became load-bearing rather
+  than merely nicer once the fall moved to start with the scene: there is no
+  longer a couple of seconds of typing for a curtain to fill during, so the
+  frame has to be full on the first frame anyone sees. **Paper flutters where rubble
   drops** — this lands one screen after the crumble, so "things falling" is the
   second use of that verb in a row, and what separates them is physics rather
   than styling: a tile falls on an ease-in and is gone, a note falls *linearly*
@@ -247,7 +265,7 @@ out of Telegram-only workers.
   `.scene-stage` crossfades — so the money is still coming down as the stats
   screen, which is the ANSWER to this question, fades in over it. Under
   `prefers-reduced-motion` the notes hold a seeded scatter down the frame with
-  no fall and no tumble. Costs ~0.9s more than the bare 2.04s line hold this
+  no fall and no tumble. Costs ~0.36s more than the bare 2.04s line hold this
   screen sat on, and ~3 kB of bundle. Telegram-only; the native iOS client owns
   its own intro. Demo mode (DEMO_MODE.md) builds the same bundle, so it
   inherits this for free — no gate, no paid step, no puppet branch.

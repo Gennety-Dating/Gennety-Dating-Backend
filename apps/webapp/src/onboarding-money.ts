@@ -21,7 +21,11 @@
  *    its own loop, so the frame is populated top to bottom the instant the
  *    fall begins. The first build emitted them all from above the top edge and
  *    the screen filled like a curtain, leaving the bottom half empty for a
- *    second — visible in the very first screenshot of it.
+ *    second — visible in the very first screenshot of it. This became
+ *    load-bearing rather than merely nicer once the fall was moved to start
+ *    with the SCENE (it used to wait for the question to finish typing): the
+ *    frame has to be full on the first frame the user sees, because there is no
+ *    longer a couple of seconds of typing for a curtain to fill during.
  *  - **Paper flutters; rubble drops.** This sits one screen after the icon
  *    crumble, so "things falling" is the second use of that verb in a row. What
  *    separates them is physics rather than styling: a tile falls on a straight
@@ -206,7 +210,8 @@ export const MONEY_LOOP_MS: number = MONEY_BILLS.reduce(
 );
 
 /**
- * How long the scene holds the fall before advancing.
+ * How long the FINISHED question holds while the money keeps falling, before
+ * the scene advances.
  *
  * Deliberately a product number rather than something derived from the notes:
  * the fall loops, so there is no "when it finishes" to wait for, and what this
@@ -214,8 +219,13 @@ export const MONEY_LOOP_MS: number = MONEY_BILLS.reduce(
  * `MONEY_LOOP_MS`, so the money is still coming down as the scene crossfades
  * into the stats — the screen that answers this one.
  *
- * Kept tight because onboarding drop-off is watched: this is ~+0.9s on a screen
- * that costs ~3.5s today (see deploy.md on the Type Radar pause for the
- * precedent of a hold being questioned on exactly those grounds).
+ * It is NOT how long the money is visible: the fall starts with the scene
+ * (onboarding.tsx), so the notes are on screen for the typing too — ~3.8s
+ * against the 2.4s here. Those were the same number only while the fall was
+ * gated behind the line landing.
+ *
+ * Kept tight because onboarding drop-off is watched (see deploy.md on the Type
+ * Radar pause for the precedent of a hold being questioned on exactly those
+ * grounds).
  */
 export const MONEY_VIEW_MS = 2400;

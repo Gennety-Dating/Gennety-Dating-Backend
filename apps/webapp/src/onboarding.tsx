@@ -208,18 +208,23 @@ const LOGO_RISE_VIEW_MS = 2200;
 // plain 1.5s line hold this screen used to sit on.
 const CRUMBLE_FINAL_HOLD_MS = 250;
 const CRUMBLE_DELAY_MS = 250;
-// Cost-2026 (scene 2): the screen that asks the money question, which until now
-// held its line and moved on with nothing to show. Banknotes start drifting
-// down a breath after it lands, and the question stays on screen underneath
-// them the whole time.
+// Cost-2026 (scene 2): the money falls from the moment the SCREEN arrives, not
+// once the line has landed — deliberately unlike every other reveal in this
+// file. The others hand over an object the copy has just earned (the icons rise
+// on "these apps eat your time", the crumble follows "we burn out"), so waiting
+// for the line is the point. Money is weather: it is already happening when you
+// walk into it. Gated behind the line it read as ~2s of empty screen and then a
+// late effect, which is exactly how it was reported.
 //
-// The hold is `MONEY_VIEW_MS` (measured from the notes, so retuning a fall
-// moves it), NOT the full fall: the far layer is deliberately still in the air
-// when the scene crossfades into the stats — the screen that answers this
-// question. Net funnel cost ≈ +0.9s over the 2.04s bare line hold it replaces,
-// most of which is airtime the user spends reading the question anyway.
-const MONEY_FINAL_HOLD_MS = 300;
-const MONEY_DELAY_MS = 260;
+// So this scene carries no reveal cue at all. `finalHoldMs` alone holds the
+// finished question while the notes keep coming, which also makes the scene
+// ~560ms SHORTER than the cued version while showing the fall for its whole
+// ~3.8s instead of the last 2.4s.
+//
+// Mirrors `.scene-stage`'s opacity transition in onboarding.css. Only the money
+// reads it, and only to know how long it is still visible after its scene has
+// been left; shorten the CSS without this and the notes vanish mid-crossfade.
+const SCENE_CROSSFADE_MS = 420;
 // Pivot (scene 6): raise the Gennety logo almost the instant the line lands,
 // instead of sitting on the finished "So we built Gennety" text for the full
 // read-buffer hold. Just a short breath so it doesn't fire on the last keystroke.
@@ -631,10 +636,21 @@ function App(): ReactElement {
     }
   }, [phase]);
 
-  // Same re-arm for the money: paging back to Cost-2026 has to clear the fall
-  // so it replays, rather than landing on a screen whose notes already fell.
+  // The money runs while its scene is on screen, and for one crossfade after it
+  // is left. Neither bound is incidental. Stopping at the phase change snaps the
+  // notes out while the stage is still fading, when the whole point is that the
+  // fall carries under the stats screen; never stopping (what the reveal-gated
+  // version did — it only ever set this true) leaves fourteen animated notes and
+  // three blurred layers compositing behind EVERY later screen, the stats kill
+  // sequence included. Paging back needs no re-arm: the loop is continuous, so
+  // arriving mid-fall is the intended look rather than a state to reset.
   useEffect(() => {
-    if (phase.kind === "visual" && phase.index === 2) setMoneyFalling(false);
+    if (phase.kind === "visual" && phase.index === 2) {
+      setMoneyFalling(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setMoneyFalling(false), SCENE_CROSSFADE_MS);
+    return () => window.clearTimeout(timer);
   }, [phase]);
 
   // The basics screens (name/age/gender/preference/height) already have
@@ -690,11 +706,10 @@ function App(): ReactElement {
           lines={strings.cost2026Lines}
           pauses={SINGLE_LINE_PAUSES}
           onNext={nextVisualSilently}
-          finalHoldMs={MONEY_FINAL_HOLD_MS}
-          reveal={<span className="intro-reveal-cue" aria-hidden="true" />}
-          revealDelayMs={MONEY_DELAY_MS}
-          revealViewMs={MONEY_VIEW_MS}
-          onReveal={() => setMoneyFalling(true)}
+          // No reveal cue: the fall is already running (the effect above starts
+          // it with the scene), so all this scene owes is a hold on the finished
+          // question while the notes keep coming.
+          finalHoldMs={MONEY_VIEW_MS}
         />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 3}>
