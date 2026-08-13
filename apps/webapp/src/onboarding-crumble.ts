@@ -32,6 +32,8 @@
  * tiles animate on the compositor and this module stays testable with no DOM.
  */
 
+import { lerp, round2, seededNoise } from "./seeded-noise.js";
+
 /** Tiles across and down one icon. 5x6 puts ~18x15px crumbs on an 88px icon. */
 export const CRUMBLE_COLS = 5;
 export const CRUMBLE_ROWS = 6;
@@ -100,28 +102,11 @@ export interface Shard {
   endScale: number;
 }
 
-/**
- * Deterministic [0,1) from three small integers.
- *
- * `Math.imul` rather than `*`: the multipliers overflow 32 bits, and a plain
- * `*` would silently go through float mantissa rounding, so the same inputs
- * could hash differently across engines. imul is exact 32-bit everywhere.
- */
-function noise(a: number, b: number, c: number): number {
-  let h = Math.imul(a + 1, 374761393) ^ Math.imul(b + 1, 668265263) ^ Math.imul(c + 1, 2246822519);
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  h = (h ^ (h >>> 16)) >>> 0;
-  return h / 4294967296;
-}
-
-function lerp(min: number, max: number, t: number): number {
-  return min + (max - min) * t;
-}
-
-/** Rounds to 2dp so the emitted inline styles stay short and diff cleanly. */
-function round(value: number): number {
-  return Math.round(value * 100) / 100;
-}
+// The hash, lerp and rounding live in `seeded-noise.ts` — the money fall seeds
+// its geometry from the same three helpers, and a hash duplicated across two
+// modules is one that eventually stops agreeing with itself.
+const noise = seededNoise;
+const round = round2;
 
 /**
  * Every tile of one icon, in reading order (top-left to bottom-right).

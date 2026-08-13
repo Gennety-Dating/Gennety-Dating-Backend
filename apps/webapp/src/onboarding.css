@@ -670,6 +670,140 @@ button {
   }
 }
 
+/* ── The money fall (scene 2) ──────────────────────────────────────────────
+   Banknotes drifting down behind the "what does it cost in 2026?" question.
+   Geometry is seeded in onboarding-money.ts and arrives as custom properties;
+   everything here is transform + opacity, so it runs on the compositor.
+
+   This lands one screen after the icon crumble, so "things falling" is the
+   second use of that verb in a row. What separates them is physics: a crumb
+   drops on an ease-in and is gone, a note falls LINEARLY (paper reaches
+   terminal velocity almost at once — an accelerating banknote reads as a
+   falling brick) while tumbling about its long axis. */
+.money-fall {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Colour tokens per theme. Dark is the easy case; on the cream page a
+   cream note would vanish, so the paper steps DOWN in lightness and the
+   burgundy edge does the work of separating it from the background. */
+.money-fall {
+  --money-paper: #efe9dc;
+  --money-edge: rgba(139, 37, 59, 0.5);
+  --money-ink: #8b253b;
+  --money-gold: #e3b45c;
+  /* Base note width; every note scales off this by its layer. */
+  --money-w: clamp(46px, 13vw, 62px);
+}
+
+:root[data-theme="light"] .money-fall,
+:root:not([data-theme="dark"]) .money-fall {
+  --money-paper: #eadfcb;
+  --money-edge: rgba(139, 37, 59, 0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .money-fall {
+    --money-paper: #efe9dc;
+    --money-edge: rgba(139, 37, 59, 0.5);
+  }
+}
+
+/* The faller. `perspective` lives HERE rather than on the container because it
+   applies to direct children only, and the tumble is on the child — set it one
+   level up and the rotation flattens into a horizontal squash. */
+.money-bill {
+  position: absolute;
+  top: 0;
+  left: var(--x);
+  width: calc(var(--money-w) * var(--sc));
+  perspective: 420px;
+  opacity: 0;
+  transform: translate3d(-50%, -24vh, 0);
+}
+
+/* Infinite, with a NEGATIVE `--phase` per note (onboarding-money.ts) so each
+   one starts part-way down its own loop. That is what fills the frame top to
+   bottom on the first frame: released together they enter from above the top
+   edge as a curtain and leave the lower half of the screen empty for a second,
+   which is exactly how the first build looked. */
+.money-fall.is-falling .money-bill {
+  animation: moneyFall var(--dur) linear var(--phase) infinite both;
+}
+/* The travel is 140vh through a 100vh frame, so a note is off-screen for its
+   first ~17% and last ~11%. The fades are tucked INSIDE those margins (6% /
+   93%), which means a note is at full opacity for its entire visible life —
+   at 9%/84% they were dimming on screen and roughly a quarter of the notes
+   were invisible at any moment, which read as the fall thinning out. */
+@keyframes moneyFall {
+  0% {
+    opacity: 0;
+    transform: translate3d(-50%, -24vh, 0);
+  }
+  6% {
+    opacity: var(--op);
+  }
+  93% {
+    opacity: var(--op);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(-50% + var(--drift)), 116vh, 0);
+  }
+}
+
+.money-bill-spin {
+  display: block;
+  transform-style: preserve-3d;
+}
+
+.money-fall.is-falling .money-bill-spin {
+  animation: moneyTumble var(--spin) linear var(--spin-delay) infinite both;
+}
+
+/* Mostly-Y axis, with real X and a little Z so the note is never PERFECTLY
+   edge-on: a pure Y rotation disappears completely twice a cycle, which reads
+   as the note blinking out rather than turning. The X term was raised from
+   0.18 to 0.34 after a frozen frame caught five of fourteen notes as razor
+   slivers at once — the tilt is what keeps a turning note readable as paper. */
+@keyframes moneyTumble {
+  from {
+    transform: rotate3d(0.34, 1, 0.08, 0deg);
+  }
+  to {
+    transform: rotate3d(0.34, 1, 0.08, 360deg);
+  }
+}
+
+.money-note {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Reduced motion: no fall, no tumble — the notes simply fade in where they
+   would have been passing, scattered down the frame by the seeded `--rest`
+   (a single constant here would stack all fourteen on one line). The screen
+   still says "money", it just stops moving. */
+@media (prefers-reduced-motion: reduce) {
+  .money-bill,
+  .money-fall.is-falling .money-bill {
+    animation: none;
+    opacity: 0;
+    transform: translate3d(-50%, var(--rest), 0);
+    transition: opacity 320ms ease;
+  }
+  .money-fall.is-falling .money-bill {
+    opacity: var(--op);
+  }
+  .money-fall.is-falling .money-bill-spin {
+    animation: none;
+  }
+}
+
 /* ── Stats row (above the numbers) ─────────────────────────────────────────
    The three cleaned tiles sit in one liquid-glass tray above the metric drum:
    a frosted translucent pane with a specular top edge and soft depth (the

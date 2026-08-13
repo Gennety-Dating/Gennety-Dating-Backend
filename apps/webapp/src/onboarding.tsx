@@ -70,6 +70,7 @@ import {
   STAT_CYCLE_INTERVAL_MS,
   iconKillPhase,
 } from "./onboarding-kill.js";
+import { MONEY_BILLS, MONEY_VIEW_MS } from "./onboarding-money.js";
 import bumbleIcon from "./app-icons/bumble.png";
 import tinderIcon from "./app-icons/tinder.png";
 import badooIcon from "./app-icons/badoo.png";
@@ -205,6 +206,18 @@ const LOGO_RISE_VIEW_MS = 2200;
 // plain 1.5s line hold this screen used to sit on.
 const CRUMBLE_FINAL_HOLD_MS = 250;
 const CRUMBLE_DELAY_MS = 250;
+// Cost-2026 (scene 2): the screen that asks the money question, which until now
+// held its line and moved on with nothing to show. Banknotes start drifting
+// down a breath after it lands, and the question stays on screen underneath
+// them the whole time.
+//
+// The hold is `MONEY_VIEW_MS` (measured from the notes, so retuning a fall
+// moves it), NOT the full fall: the far layer is deliberately still in the air
+// when the scene crossfades into the stats — the screen that answers this
+// question. Net funnel cost ≈ +0.9s over the 2.04s bare line hold it replaces,
+// most of which is airtime the user spends reading the question anyway.
+const MONEY_FINAL_HOLD_MS = 300;
+const MONEY_DELAY_MS = 260;
 // Pivot (scene 6): raise the Gennety logo almost the instant the line lands,
 // instead of sitting on the finished "So we built Gennety" text for the full
 // read-buffer hold. Just a short breath so it doesn't fire on the last keystroke.
@@ -313,6 +326,11 @@ function App(): ReactElement {
   // them; scene 1's cue crumbles them once its line has landed.
   const [iconsRisen, setIconsRisen] = useState(false);
   const [iconsCrumbling, setIconsCrumbling] = useState(false);
+  // Cost-2026: unlike the two above this one does NOT outlive its scene, so it
+  // lives inside scene 2 rather than in a shell overlay. The flag only starts
+  // the fall — the notes are mounted with the scene, so the animation is not
+  // paying for fourteen elements entering the tree on the beat it must be crisp.
+  const [moneyFalling, setMoneyFalling] = useState(false);
   // Stable per language: the typewriter scenes key their run on the `lines`
   // array identity, so a mid-scene parent re-render (e.g. the logo rising)
   // must not hand them a fresh object and restart the typing.
@@ -611,6 +629,12 @@ function App(): ReactElement {
     }
   }, [phase]);
 
+  // Same re-arm for the money: paging back to Cost-2026 has to clear the fall
+  // so it replays, rather than landing on a screen whose notes already fell.
+  useEffect(() => {
+    if (phase.kind === "visual" && phase.index === 2) setMoneyFalling(false);
+  }, [phase]);
+
   // The basics screens (name/age/gender/preference/height) already have
   // Telegram's own native BackButton showing (below) and run fullscreen, where
   // that native arrow floats over the same top-left corner as our in-content
@@ -653,11 +677,22 @@ function App(): ReactElement {
         />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 2}>
+        {/* Sibling of the copy rather than a child of it: `.hook-main` is
+            capped at 28rem and clips its overflow, so money rendered inside it
+            would fall down a column instead of across the screen. Declared
+            FIRST so DOM order paints it behind the question — the notes are
+            depth, and the question is what the screen is for. */}
+        <MoneyFall falling={moneyFalling} />
         <TypewriterScene
           active={phase.kind === "visual" && phase.index === 2}
           lines={strings.cost2026Lines}
           pauses={SINGLE_LINE_PAUSES}
           onNext={nextVisualSilently}
+          finalHoldMs={MONEY_FINAL_HOLD_MS}
+          reveal={<span className="intro-reveal-cue" aria-hidden="true" />}
+          revealDelayMs={MONEY_DELAY_MS}
+          revealViewMs={MONEY_VIEW_MS}
+          onReveal={() => setMoneyFalling(true)}
         />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 3}>
@@ -1122,6 +1157,119 @@ function AppIconRow(props: {
         );
       })}
     </div>
+  );
+}
+
+// Banknotes drifting down behind the cost-2026 question (scene 2). Geometry —
+// which note, where, how fast, how it tumbles — is all seeded in
+// onboarding-money.ts; this only reads it into custom properties, so every
+// pixel of motion runs as a compositor keyframe in onboarding.css.
+//
+// Three nested transforms so none of them fight, the same arrangement the icon
+// row uses: the outer span carries the FALL, the inner one the TUMBLE (its own
+// period, started mid-cycle so the notes are never edge-on in unison), and the
+// note itself a fixed in-plane tilt. `perspective` sits on the faller because
+// it applies to direct children only — put it on the container and the tumble
+// flattens into a horizontal squash.
+function MoneyFall(props: { falling: boolean }): ReactElement {
+  return (
+    <div className={`money-fall${props.falling ? " is-falling" : ""}`} aria-hidden="true">
+      {MONEY_BILLS.map((bill, index) => (
+        <span
+          key={index}
+          className="money-bill"
+          style={
+            {
+              "--x": `${bill.xPct}%`,
+              "--drift": `${bill.driftVw}vw`,
+              "--phase": `${bill.phaseMs}ms`,
+              "--dur": `${bill.durationMs}ms`,
+              "--sc": bill.scale,
+              "--op": bill.opacity,
+              "--rest": `${bill.restVh}vh`,
+            } as CSSProperties
+          }
+        >
+          <span
+            className="money-bill-spin"
+            style={
+              {
+                "--spin": `${bill.spinMs}ms`,
+                "--spin-delay": `${bill.spinDelayMs}ms`,
+              } as CSSProperties
+            }
+          >
+            <BankNote tiltDeg={bill.tiltDeg} blurPx={bill.blurPx} />
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// One note. Authored vector, never an emoji — same rule as `icons.ts`: a
+// platform emoji is Apple's art on iOS and Google's on Android, and this one
+// spends its whole life rotating, which rasterizes a font glyph.
+//
+// It reads as money from the SHAPE (a landscape rectangle with an engraved
+// oval and corner seals is unmistakably a banknote) plus one gold mark, so no
+// green is needed — green would be the only green in the product, against a
+// palette that spends colour on meaning. `blur` sits on the leaf <svg> because
+// `filter` on an ancestor flattens the 3D tumble above it.
+function BankNote(props: { tiltDeg: number; blurPx: number }): ReactElement {
+  return (
+    <svg
+      className="money-note"
+      viewBox="0 0 40 22"
+      role="presentation"
+      style={
+        {
+          transform: `rotate(${props.tiltDeg}deg)`,
+          filter: props.blurPx > 0 ? `blur(${props.blurPx}px)` : undefined,
+        } as CSSProperties
+      }
+    >
+      <rect
+        x="0.5"
+        y="0.5"
+        width="39"
+        height="21"
+        rx="2.2"
+        fill="var(--money-paper)"
+        stroke="var(--money-edge)"
+        strokeWidth="0.9"
+      />
+      <rect
+        x="2.8"
+        y="2.8"
+        width="34.4"
+        height="16.4"
+        rx="1.3"
+        fill="none"
+        stroke="var(--money-ink)"
+        strokeWidth="0.7"
+        opacity="0.5"
+      />
+      <ellipse
+        cx="20"
+        cy="11"
+        rx="6.2"
+        ry="6.9"
+        fill="none"
+        stroke="var(--money-ink)"
+        strokeWidth="0.85"
+        opacity="0.75"
+      />
+      <path
+        d="M20 6.6v8.8M18 8.4h4M18 13.6h4"
+        stroke="var(--money-gold)"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <circle cx="6.8" cy="11" r="1.4" fill="var(--money-ink)" opacity="0.4" />
+      <circle cx="33.2" cy="11" r="1.4" fill="var(--money-ink)" opacity="0.4" />
+    </svg>
   );
 }
 

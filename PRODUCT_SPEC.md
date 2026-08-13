@@ -216,6 +216,41 @@ out of Telegram-only workers.
   Costs ~0.4s more than the 1.5s hold this screen already sat on, and is
   skipped under `prefers-reduced-motion`, where the icons simply fade instead.
   Telegram-only; the native iOS client owns its own intro.
+  **Money falls through the screen that asks what a relationship costs
+  (2026-08-12).** Scene 2 — "Сколько стоит найти отношения в 2026 году?" — was
+  the only one of the first three with nothing but type: scene 0 raises the
+  competitor icons, scene 1 crumbles them, and the screen that actually poses
+  the money question held a line and moved on. Fourteen banknotes now drift
+  down behind the question in three depth layers, and the question stays on
+  screen underneath them.
+  Four things decide the shape of it. **It falls rather than rains** — the
+  screen asks what this COSTS, so the money leaves downward with weight; a
+  jackpot shower reads as winning, which is the opposite claim, and the count
+  is bounded by a test. **It was already falling**: every note starts at a
+  negative offset into its own loop, so the frame is populated top to bottom
+  the instant the fall begins — released together they enter from above the top
+  edge as a curtain and leave the lower half of the screen empty for a second,
+  which is how the first build actually looked. **Paper flutters where rubble
+  drops** — this lands one screen after the crumble, so "things falling" is the
+  second use of that verb in a row, and what separates them is physics rather
+  than styling: a tile falls on an ease-in and is gone, a note falls *linearly*
+  (paper reaches terminal velocity almost at once) while tumbling about its long
+  axis. And **every note stays behind the copy**: depth comes from size,
+  opacity, blur and speed, never from crossing the words. The near layer is
+  deliberately faint bokeh for that reason — at a sharper setting one of its
+  notes washed out a line of the question as it passed, and since it falls
+  through the whole frame it cannot be routed around the type.
+  Geometry is **seeded, never `Math.random()`** (`onboarding-money.ts`), by the
+  same rule `preference-layout.ts` states; the hash it shares with the crumble
+  now lives in `seeded-noise.ts` rather than in two copies. The scene
+  deliberately cuts mid-fall — the hold is shorter than a note's loop, and
+  `.scene-stage` crossfades — so the money is still coming down as the stats
+  screen, which is the ANSWER to this question, fades in over it. Under
+  `prefers-reduced-motion` the notes hold a seeded scatter down the frame with
+  no fall and no tumble. Costs ~0.9s more than the bare 2.04s line hold this
+  screen sat on, and ~3 kB of bundle. Telegram-only; the native iOS client owns
+  its own intro. Demo mode (DEMO_MODE.md) builds the same bundle, so it
+  inherits this for free — no gate, no paid step, no puppet branch.
   **On the stats screen each metric kills the app beneath it (2026-08-12).**
   That screen cycles three numbers — 75 hours, 9 500 swipes, $200 — over a tray
   holding the same three competitor icons, and the tray was inert scenery: the
