@@ -72,3 +72,41 @@ export function photoSet(side: PreferenceSide): string[] {
     ? orderedAssets(photoMen, PLACEHOLDER_MEN)
     : orderedAssets(photoWomen, PLACEHOLDER_WOMEN);
 }
+
+let warmed = false;
+
+/**
+ * Pull both sets into the cache ahead of the screen that shows them.
+ *
+ * This is the real fix for the screen assembling itself in front of the user
+ * (preference-reveal.ts): ~530 kB across twelve files is a good half second on
+ * a phone, and it used to start at the exact moment the screen appeared. Called
+ * when the profile screens BEGIN — a name, an age and a gender tap earlier —
+ * the download happens while the user is busy and the screen arrives finished.
+ *
+ * `img.src =` alone only starts the fetch, so `decode()` is what actually
+ * leaves a paintable bitmap behind; same reasoning, same idiom as the
+ * competitor icons warmed at boot in onboarding.tsx. Best-effort by
+ * construction — the screen's own gate is what it waits on, so losing this race
+ * delays the photographs rather than breaking anything.
+ *
+ * Idempotent: called from a render path that re-runs whenever the step changes.
+ */
+export function warmPreferencePhotos(): void {
+  if (warmed) return;
+  warmed = true;
+  // Absent outside a browser (the tests run in node, and this module is
+  // imported for `orderedAssets`).
+  if (typeof Image !== "function") return;
+  for (const src of [...photoSet("men"), ...photoSet("women")]) {
+    const img = new Image();
+    img.src = src;
+    try {
+      void img.decode().catch(() => {
+        // Warming is best-effort; the screen's gate is what the reveal waits on.
+      });
+    } catch {
+      // No decode() on this WebView — the fetch above still warms the cache.
+    }
+  }
+}

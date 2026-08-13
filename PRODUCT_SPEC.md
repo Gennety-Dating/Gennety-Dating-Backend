@@ -392,6 +392,37 @@ out of Telegram-only workers.
   button it belongs to, and the label alone carries the accessible name. Same
   save, same burst, same collector write as before — this is the control
   changing, not the question. Telegram-only.
+  **The screen arrives finished: the photographs are fetched three screens
+  earlier (2026-08-13).** Twelve photographs (~530 kB) were created at the
+  instant the screen mounted, so the user watched the composition assemble
+  itself — a few prints landing, dark tiles where the rest would be, the last
+  one about half a second later. `warmPreferencePhotos` now starts the fetch AND
+  the `decode()` when the profile screens BEGIN, so the download happens while
+  the user is typing a name and the bitmaps are in hand by the time the screen
+  appears. Measured rather than assumed: on the name screen all twelve are
+  already requested. `decode()` is what matters, not `img.src =` — the latter
+  only starts the fetch — and it is the same idiom the intro's competitor icons
+  are warmed with. It is skipped for someone resumed PAST the screen, who would
+  otherwise pay half a megabyte for a picture they are never shown.
+  **A gate is the insurance, and it spans the whole screen rather than a
+  column.** Someone resumed straight onto this screen gets no head start, so the
+  scatter is held back until every photograph on BOTH sides is decoded and then
+  fades in together (~260 ms). Per photo would be the same progressive assembly
+  with softer edges; per column would populate one half of the screen and then
+  the other, which is the same complaint one step smaller. What shows in the
+  meantime is not a hole — it is the two gradient columns carrying their labels,
+  i.e. a finished-looking button — and in the warm case the reveal lands a frame
+  or two after mount, inside the scene's own 420 ms crossfade, so it is never
+  seen at all. The gate reads `decode()` through a ref rather than `onLoad`,
+  because a photograph already warmed can be decoded before React attaches a
+  listener and `onLoad` would then never fire — which would leave the screen
+  bare until the cap in exactly the case the warm-up was meant to make instant.
+  A failed decode settles the gate too, and a `PREF_REVEAL_CAP_MS` (2.6 s) cap
+  bounds a request that neither answers nor errors: past it the layer is shown
+  and whatever is still in flight pops in as it always did. Telegram-only; the
+  native iOS client owns its own controls here. Demo mode builds the same
+  bundle, so it inherits this for free — no gate, no paid step, no puppet
+  branch.
   **The height drum ticks per row, and turns a little freer (2026-08-06).**
   It is the one screen answered by a continuous gesture rather than a tap, and
   it gave no feedback until the gesture ENDED: one haptic pulse on settle, which

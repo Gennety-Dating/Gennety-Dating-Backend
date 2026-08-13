@@ -2,13 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, ReactElement, ReactNode } from "react";
 import type { TelegramProfileBasics, TelegramProfileLimits, TelegramProfilePatch } from "./api.js";
 import type { BasicsStep } from "./onboarding-basics-route.js";
+import { basicsStepIndex } from "./onboarding-basics-route.js";
 import { burstFromEvent } from "./onboarding-burst.js";
 import type { BurstTone } from "./onboarding-burst.js";
 import { errorCopy } from "./onboarding-errors.js";
 import type { OnboardingStrings } from "./onboarding-i18n.js";
 import { placeScatter } from "./preference-layout.js";
-import { photoSet } from "./preference-photos.js";
-import type { PreferenceSide } from "./preference-photos.js";
+import type { ScatterSlot } from "./preference-layout.js";
+import { photoSet, warmPreferencePhotos } from "./preference-photos.js";
+import { PREF_REVEAL_CAP_MS, revealTally } from "./preference-reveal.js";
 import { WHEEL_ITEM_H, shouldTickHaptic, wheelValueAt } from "./onboarding-wheel.js";
 
 /**
@@ -55,6 +57,17 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
   useEffect(() => {
     setError(null);
   }, [step]);
+
+  // Start the "who do you want to meet?" photographs downloading and decoding
+  // the moment the profile screens begin — three screens before the one that
+  // shows them, so they land while the user is typing a name rather than while
+  // they are looking at the screen (preference-photos.ts). Skipped for someone
+  // resumed past that screen, who would otherwise pay half a megabyte for a
+  // picture they are never shown; a back-navigation into it re-runs this.
+  const warmPhotos = basicsStepIndex(step) <= basicsStepIndex("preference");
+  useEffect(() => {
+    if (warmPhotos) warmPreferencePhotos();
+  }, [warmPhotos]);
 
   const save = useCallback(
     async (patch: TelegramProfilePatch): Promise<void> => {
@@ -387,9 +400,27 @@ function PreferenceScreen(props: {
   const { strings } = props;
   const { firing, fire } = useChoiceTap(props.onPick, strings.basicsPreferenceTitle);
 
-  const column = (side: PreferenceSide, label: string, tone: BurstTone) => (
+  // The right-hand column is the left one mirrored (preference-layout.ts).
+  const art = useMemo(() => {
+    const men = placeScatter(photoSet("men"), false);
+    const women = placeScatter(photoSet("women"), true);
+    // The RENDERED photographs, which is what the reveal has to count: the
+    // scatter truncates to its slot count, and a photo left over in the folder
+    // has no element to decode.
+    return { men, women, sources: [...men, ...women].map(({ src }) => src) };
+  }, []);
+  const { revealed, gateFor } = useScatterReveal(art.sources);
+
+  const column = (
+    side: "men" | "women",
+    scatter: PhotoScatter,
+    label: string,
+    tone: BurstTone,
+  ) => (
     <PreferenceColumn
-      side={side}
+      scatter={scatter}
+      revealed={revealed}
+      gateFor={gateFor}
       label={label}
       tone={tone}
       selected={props.selected === side}
@@ -406,8 +437,8 @@ function PreferenceScreen(props: {
       modifier="ob-basics--choice ob-basics--pref"
     >
       <div className="ob-pref-pair">
-        {column("men", strings.basicsPreferenceMen, "male")}
-        {column("women", strings.basicsPreferenceWomen, "female")}
+        {column("men", art.men, strings.basicsPreferenceMen, "male")}
+        {column("women", art.women, strings.basicsPreferenceWomen, "female")}
       </div>
       <button
         type="button"
@@ -424,6 +455,67 @@ function PreferenceScreen(props: {
   );
 }
 
+type PhotoScatter = { src: string; slot: ScatterSlot }[];
+
+/**
+ * Holds the whole scatter back until every photograph across BOTH columns is
+ * decoded, then shows them together — preference-reveal.ts explains why the
+ * tally spans the screen rather than a column or a single photo, and why the
+ * warm-up above is the real fix and this only the insurance.
+ *
+ * Gated through a ref on `decode()`, not `onLoad`, for exactly the reason
+ * `AppIcon` is (onboarding.tsx): a photograph already warmed by
+ * `warmPreferencePhotos` can be decoded before React ever attaches a load
+ * listener, and `onLoad` would then never fire at all — which would leave the
+ * screen bare until the cap in the one case the warm-up was supposed to make
+ * instant.
+ */
+function useScatterReveal(sources: readonly string[]): {
+  revealed: boolean;
+  /** Undefined for a photograph the tally was never given — see `revealTally`. */
+  gateFor: (src: string) => ((img: HTMLImageElement | null) => void) | undefined;
+} {
+  const tally = useMemo(() => revealTally(sources), [sources]);
+  // Nothing to wait for when there are no photographs at all.
+  const [revealed, setRevealed] = useState(() => tally.outstanding === 0);
+
+  // Built once per source list so each <img> keeps the same ref identity across
+  // re-renders — a fresh closure would detach and re-attach the ref on every
+  // render, re-running decode for no reason.
+  const gates = useMemo(() => {
+    const map = new Map<string, (img: HTMLImageElement | null) => void>();
+    for (const src of sources) {
+      map.set(src, (img) => {
+        if (!img) return;
+        const settle = (): void => {
+          if (tally.settle(src)) setRevealed(true);
+        };
+        try {
+          // Rejection settles too: one photograph that will never paint must
+          // not keep the other eleven off the screen.
+          void img.decode().then(settle, settle);
+        } catch {
+          // No decode() on this WebView — fall back to the browser's own
+          // schedule rather than never revealing.
+          settle();
+        }
+      });
+    }
+    return map;
+  }, [sources, tally]);
+
+  useEffect(() => {
+    if (revealed) return;
+    const timer = window.setTimeout(() => setRevealed(true), PREF_REVEAL_CAP_MS);
+    return () => window.clearTimeout(timer);
+  }, [revealed]);
+
+  return {
+    revealed,
+    gateFor: useCallback((src: string) => gates.get(src), [gates]),
+  };
+}
+
 /**
  * One half of the fork.
  *
@@ -436,9 +528,15 @@ function PreferenceScreen(props: {
  * The button fills whatever height the screen allows and scatters frames across
  * it — all but the label's own strip at the bottom, which the photos are
  * authored to stay out of (`maxCentreY`, preference-layout.ts).
+ *
+ * The scatter and its reveal come from the SCREEN, not from here: both columns
+ * have to appear at the same instant, so neither may decide on its own when it
+ * is ready (preference-reveal.ts).
  */
 function PreferenceColumn(props: {
-  side: PreferenceSide;
+  scatter: PhotoScatter;
+  revealed: boolean;
+  gateFor: (src: string) => ((img: HTMLImageElement | null) => void) | undefined;
   label: string;
   tone: BurstTone;
   selected: boolean;
@@ -446,13 +544,6 @@ function PreferenceColumn(props: {
   firing: boolean;
   onFire: (event: MouseEvent) => void;
 }): ReactElement {
-  const { side } = props;
-  // The right-hand column is the left one mirrored (preference-layout.ts).
-  const scatter = useMemo(
-    () => placeScatter(photoSet(side), side === "women"),
-    [side],
-  );
-
   return (
     <button
       type="button"
@@ -463,8 +554,11 @@ function PreferenceColumn(props: {
       aria-pressed={props.selected}
       onClick={props.onFire}
     >
-      <span className="ob-pref-art" aria-hidden="true">
-        {scatter.map(({ src, slot }) => (
+      <span
+        className={`ob-pref-art ${props.revealed ? "is-ready" : ""}`}
+        aria-hidden="true"
+      >
+        {props.scatter.map(({ src, slot }) => (
           <span
             key={src}
             className="ob-pref-shot"
@@ -476,7 +570,7 @@ function PreferenceColumn(props: {
               ["--rot" as string]: `${slot.rot}deg`,
             }}
           >
-            <img src={src} alt="" draggable={false} />
+            <img ref={props.gateFor(src)} src={src} alt="" draggable={false} />
           </span>
         ))}
       </span>

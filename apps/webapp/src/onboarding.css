@@ -4031,6 +4031,30 @@ button {
   position: absolute;
   inset: 0 0 var(--pref-label-zone) 0;
   pointer-events: none;
+  /* Hidden until EVERY photograph on the screen is decoded, then both columns
+     appear together (preference-reveal.ts). What this removes is the screen
+     assembling itself in front of the user — a few prints, dark tiles where the
+     rest will be, the last one half a second later.
+
+     Nothing waits on this in the normal case: the photos are warmed three
+     screens earlier, so the flip lands a frame or two after mount and the fade
+     runs inside the scene's own 420ms crossfade, i.e. it is never seen. The
+     column underneath is a finished-looking button with its label, so the slow
+     case reads as the photographs arriving rather than as a hole. */
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+
+.ob-pref-art.is-ready {
+  opacity: 1;
+}
+
+/* The gate itself stays — withholding a half-built composition is not motion,
+   and showing one would be the bug. Only the fade goes. */
+@media (prefers-reduced-motion: reduce) {
+  .ob-pref-art {
+    transition: none;
+  }
 }
 
 .ob-pref-shot {
