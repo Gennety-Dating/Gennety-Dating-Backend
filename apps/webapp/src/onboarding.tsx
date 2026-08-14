@@ -64,12 +64,6 @@ import {
   CRUMBLE_TOTAL_MS,
   type Shard,
 } from "./onboarding-crumble.js";
-import {
-  KILL_CSS_VARS,
-  STAT_COUNT_UP_MS,
-  STAT_CYCLE_INTERVAL_MS,
-  iconKillPhase,
-} from "./onboarding-kill.js";
 import { MONEY_BILLS, MONEY_VIEW_MS } from "./onboarding-money.js";
 import { ButterflySuccess } from "./butterfly-success-react.js";
 import { onSuccessSettle } from "./butterfly-success.js";
@@ -124,11 +118,7 @@ const PREVIEW_INTRO =
 
 const TRAP_BACKGROUND =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDT22v5JOFjqN2g1VkI86PnzZJ_vTS3whfVoE4pTqZMVY_zqEjFKQf0fGlab3jjVTIxx1gKK5zx4u10XcEtFiFDqeEsGaLjoNTdZMWbR46RULeC47iOvuiqYHU8PJrKZ9kQVqufAHWY-pv_0RSTu1V7cSz_tLD89uoBf8RE9OxG9ZhXIGcEKvxkjcwB3oa3Kf9KjRlxyoUZcBMol4eX5hJ6Oh2_fhyciV6tYxlSEoexfNp4Pr7iGISmsLdSC0fp35_bW0OO_cj0xmGN";
-// Stats (screen 1) auto-cycle interval. Sourced from the kill module rather
-// than declared here: one step has to be long enough to contain a whole icon
-// kill (shake → red → strike), and a test pins that relationship — which it can
-// only do if both numbers live in one place.
-const DRUM_CYCLE_INTERVAL_MS = STAT_CYCLE_INTERVAL_MS;
+const DRUM_CYCLE_INTERVAL_MS = 2500; // Stats (screen 1) auto-cycle interval
 const PROFILE_CYCLE_INTERVAL_MS = 3000; // Profile (screen 2) text auto-cycle interval
 const PROFILE_SWIPE_INTERVAL_MS = 1000; // Profile (screen 2) Tinder-style card swipe cadence
 
@@ -1120,24 +1110,12 @@ function AppIcon(props: { src: string; alt: string; shards?: Shard[] | null }): 
 // `stats` is the larger liquid-glass tray shown above the numbers on the stats
 // scene. The icons are bundled assets (see the imports at the top); the onError
 // guard just hides a slot rather than showing a broken-image glyph.
-function AppIconRow(props: {
-  variant: "reveal" | "stats";
-  crumbling?: boolean;
-  // Stats variant only: which metric the drum is on, and whether it has been
-  // round once already. Absent = the tray is inert scenery, as it was before.
-  kill?: { index: number; lapDone: boolean };
-}): ReactElement {
+function AppIconRow(props: { variant: "reveal" | "stats"; crumbling?: boolean }): ReactElement {
   return (
-    <div
-      className={`app-icon-row app-icon-row--${props.variant}`}
-      style={props.kill ? (KILL_CSS_VARS as CSSProperties) : undefined}
-    >
+    <div className={`app-icon-row app-icon-row--${props.variant}`}>
       {APP_ICONS.map((icon, index) => {
         const shards = props.crumbling ? (CRUMBLE_ICON_SHARDS[index] ?? null) : null;
         const art = <AppIcon src={icon.src} alt={icon.label} shards={shards} />;
-        const phase = props.kill
-          ? iconKillPhase(index, props.kill.index, props.kill.lapDone)
-          : "alive";
         // The reveal nests three transforms so none of them fight: the slot
         // carries the arc position + staggered spring entrance, the figure
         // carries the gentle float, and the tiles inside carry the crumble.
@@ -1152,24 +1130,8 @@ function AppIconRow(props: {
             <span className="app-icon-figure">{art}</span>
           </span>
         ) : (
-          // `--icon-src` feeds the reddening layer, which is the icon's own PNG
-          // used as a CSS mask — so the burgundy fills exactly its alpha,
-          // rounded corners included, instead of a hue-rotate smearing over the
-          // edges and landing on some approximate red. Same asset, same idiom as
-          // the crumble tiles cropping that PNG with background-position.
-          //
-          // The strike span is always mounted, invisible while the app is still
-          // alive: mounting it at the moment of the kill would cost a frame
-          // exactly where the beat has to be crisp.
-          <span
-            key={icon.key}
-            className={`app-icon-tile${phase === "alive" ? "" : ` is-${phase}`}`}
-            style={
-              props.kill ? ({ ["--icon-src"]: `url(${icon.src})` } as CSSProperties) : undefined
-            }
-          >
+          <span key={icon.key} className="app-icon-tile">
             {art}
-            {props.kill ? <span className="app-icon-strike" aria-hidden="true" /> : null}
           </span>
         );
       })}
@@ -1676,16 +1638,7 @@ function StatsCycleScene(props: {
       <main className="trap-main">
         <div className="stats-native-panel">
           <div className="stat-wrap stat-drum-wrap">
-            {/* Each metric takes out the app beneath it: the icon trembles and
-                reddens while its number counts, then gets crossed out. The tray
-                reads the drum rather than keeping a counter of its own, so it
-                can never disagree with the number on screen about whose turn it
-                is. `canContinue` doubles as "the drum has been round once",
-                which is exactly when every app has had its turn. */}
-            <AppIconRow
-              variant="stats"
-              kill={{ index: cycle.index, lapDone: cycle.canContinue }}
-            />
+            <AppIconRow variant="stats" />
             <div key={`${copy.value}-${copy.label}`} className="drum-window stat-drum-window">
               <h1 className={`stat-value ${copy.valueSmall ? "small" : ""}`}>
                 <CountUpText value={copy.value} />
@@ -1871,11 +1824,7 @@ function CountUpText(props: { value: string }): ReactElement {
   const [display, setDisplay] = useState(() => formatCountValue(parsed, 1));
 
   useEffect(() => {
-    // Shared with the icon kill above it: the shake ramp and the reddening run
-    // for exactly this long, because "fully red when the digit is fully
-    // printed" is the beat. A local copy of the number would drift on the first
-    // retune and the miss would be invisible in a diff.
-    const durationMs = STAT_COUNT_UP_MS;
+    const durationMs = 1250;
     const startedAt = performance.now();
     let frame = 0;
 
