@@ -5299,143 +5299,92 @@ generic mark cannot — the Location Mini App's map pin with its sonar pings, th
 Type Radar deck's card-stack skeleton, and the onboarding orb — plus the 16px
 in-button spinners, where a butterfly is unreadable.
 
-### The success mark: the butterfly draws the tick (2026-08-12; the butterfly stopped landing 2026-08-13)
+### The success mark: the butterfly arrives (2026-08-13)
 
 Every Mini App success screen renders one shared mark
-(`apps/webapp/src/butterfly-success.ts` + `.css`): a single butterfly flies the
-checkmark's own path — enters small and banked, dives through the vertex, sweeps
-up trailing a thickening burgundy stroke — and then flies on out of frame,
-leaving the tick behind it. The closing frame is a bold **borderless** burgundy
-tick and nothing else. One haptic pulse fires as the stroke closes, not when the
-butterfly has finished leaving.
+(`apps/webapp/src/butterfly-success.ts` + `.css`): the brand butterfly springs
+in at full size, settles, and stays. Nothing crosses the frame, nothing is
+traced, nothing leaves. The resting frame is the Gennety logo at 190px with the
+screen's own heading beneath it.
 
-**The butterfly is the INSTRUMENT, not the subject, and that is a correction
-(2026-08-13).** It first landed on the tick's point and stayed there with its
-wings open, for brand presence. That frame is the one a user looks at for a full
-second, and a logo perched on the point reads as a sticker stuck onto the tick
-rather than as one mark — reported as «странно» and «некрасиво», which is the
-correct reading of it. Leaving is also what was asked for in the first place: a
-tick that is borderless, bold, and smoothly arrived at. Two consequences to hold
-onto before anyone re-lands it: **the branded moment is the MOTION**, so nothing
-is bought by holding the logo still at the end; and leaving removes a fight the
-landing had with itself, because resting upright forced the flight to unwind its
-bank over the last few percent, which reads as a swoop that stops and squares
-itself off.
+It replaced four checkmarks that had grown up independently — a green disc with
+a white tick (verification), an 84px burgundy stroke that drew itself
+(calendar), a solid white disc with a **black** tick (Type Radar), and a 76px
+burgundy gradient disc with a white tick (venue change) — plus a fifth screen,
+onboarding's `DoneScene`, which was showing `loading-orb`: the SYNCING spinner,
+on a finished state, telling the user to keep waiting.
 
-It replaced four checkmarks that had grown up independently, and the spread is
-the reason it exists: a green disc with a white tick (verification), an 84px
-burgundy stroke that drew itself (calendar `agreed`), a solid white disc with a
-**black** tick (Type Radar), and a 76px burgundy gradient disc with a white tick
-(venue-change `settled`). Same moment, same product, four pictures — one of them
-carrying no brand colour at all. The fifth surface, onboarding's `DoneScene`, was
-showing `loading-orb`: the SYNCING spinner, on a finished state, telling the user
-to keep waiting.
+**There is no checkmark at all, and that is the decision the whole thing turned
+on.** Two earlier versions had a butterfly draw a tick and then either land on
+it (a logo perched on a point reads as a sticker stuck onto the tick) or fly out
+of frame (which left a generic tick carrying no brand in the frame people look
+at longest). Both were rejected on sight, and measuring the second said why: the
+butterfly rendered **29 x 29 px** in flight. The logo is an abstract four-lobe
+shape with no body, head or antennae, so at that size it is a pink smudge — the
+argument that "the branded moment is the MOTION" failed on its own terms,
+because the moving object was never recognisable. The mark had traded the logo's
+presence in the resting frame for a moment that did not exist.
+
+**Dropping the tick is safe because the words were already there**, and that was
+checked rather than assumed: all five surfaces state the outcome in prose.
+Verification passes `label` into the mark itself; Type Radar, onboarding,
+venue-change and the calendar each render their own heading directly under it.
+The tick was duplicating the sentence beside it. **The consequence to hold onto:
+the mark no longer says "success" on its own — it says "Gennety", and the words
+say the rest.** A sixth surface that renders it with neither a `label` nor a
+heading turns it into decoration.
 
 Four decisions are load-bearing rather than styling:
 
-- **A tick, not the butterfly alone.** The butterfly is the brand, but a tick is
-  read as "done" instantly and in every locale — and two of these screens are a
-  PAYMENT and an IDENTITY CHECK, where ambiguity is expensive. The butterfly
-  earns its place by *drawing* the tick rather than sitting beside it.
-- **Not a spinning logo.** The loading mark is already three butterflies flapping
-  and drifting, so a spinning butterfly for success would make "working" and
-  "done" the same picture. The two marks are deliberate siblings and deliberately
-  different pictures: the loader is butterflies INSIDE a waist (nerves, the
-  feeling before), this one has no waist at all — the butterfly is out, and it is
-  gone. Both share the logo's geometry through `brand-butterfly.ts`, and a
-  test holds their wingbeat identical, because two marks of the same butterfly
-  must not flap differently.
-- **Burgundy, not green.** The tick's legibility comes from its shape. Green
-  would be the only green in the product and would read as a system dialog
-  rather than as Gennety; the change deletes the last `--success: #28c76f` with
-  it.
-- **The flight and the stroke share one set of keyframe stops**, both `linear`,
-  so the acceleration lives in the SPACING of those stops (tight through the
-  dive, loose into the levelling-out) rather than in an easing curve. They are two
-  animations on two elements selling one illusion — the butterfly laying the
-  stroke down behind it — and different stops make the stroke tip visibly
-  separate from the butterfly mid-sweep. They run on ONE 1200ms timeline: the
-  draw reaches its last keyframe at 75% and holds while the flight carries on for
-  the exit, which keeps the two stop lists directly comparable. A test pins them
-  together, and pins the butterfly's growth as monotonic through the draw:
-  rescaling that curve by hand once produced a vertex momentarily LARGER than the
-  frame after it, i.e. perspective that reverses, which reads as a glitch rather
-  than as depth.
+- **Simple was the brief, and it is the whole design.** Three candidates were
+  built and watched side by side on a throwaway dev board: wings opening from
+  folded, this one, and no mark at all (a bloom behind the heading). The middle
+  one won — strictly the least motion of the three that keeps the brand in the
+  frame. The board, the two losing variants and their `?preview=` branch were
+  **deleted** rather than left behind a flag, by the rule the preference screen
+  already states: a decision that is made stops being a configuration.
+- **The arrival and the breath are two animations on one property**, so the
+  declaration order and the breath's delay are structural. `bfs-pop` runs `both`
+  and holds `scale(1)`; the breath is declared second and delayed past the pop's
+  full duration, because the later declaration wins the property. Reverse them
+  and the mark freezes at the breath's first keyframe instead of arriving.
+- **One constant bounds the whole animation.** The arrival overshoots to
+  `POP_PEAK_SCALE`, the viewBox is sized to clear exactly that, and a test holds
+  every other `scale()` in the stylesheet under it — an SVG crops silently, and
+  a clipped wing is a hard straight cut that reads as a rendering fault.
+- **The wing gradient was corrected to the logo's** in the same change, which is
+  what makes the mark survive being this large. `r="100%"` in
+  `objectBoundingBox` is a fraction of the box's normalised diagonal, and the
+  shared module had converted it using the bbox WIDTH — a sweep 15% wider than
+  the brand's, with the magenta spread across the wings and the dark outer stop
+  barely showing. Invisible at 29px, obvious at 190. It also touches the loading
+  mark, which shares the module; there the difference is imperceptible at that
+  size.
 
-Three things were settled by looking at the rendered mark rather than by
-reasoning, and are worth stating so they are not "tidied" back:
+The mark's timing is exported rather than hand-tuned per screen:
+`SUCCESS_ARRIVE_MS` (520) is when the butterfly lands and the haptic fires,
+`SUCCESS_TOTAL_MS` (700) is when the bloom and caption finish, and the two
+self-dismissing screens derive their close from it plus `SUCCESS_READ_MS`. That
+total is 500ms shorter than the drawn tick's, which is a direct consequence of a
+simpler animation rather than an oversight.
 
-- **The butterfly flies AHEAD of the stroke, never on it** (`BUTTERFLY_LEAD`, 7
-  viewBox units). Centred exactly on the stroke's leading edge — which is where
-  it was — it overlapped the line it was drawing, in the same hue, and read as a
-  lump on the line rather than as the thing making it. Offset, the stroke emerges
-  from behind its tail. The direction is "ahead along the path, and outside the
-  bend", and because both arms are at 45° those combine into something simpler:
-  a pure +x lead on the dive, a pure −y one up the sweep.
-- **Exactly one thing is the bright one, and it is the butterfly.** The trail
-  gradient still runs BRIGHT → DEEP (light ink to heavy ink, agreeing with the
-  stroke-width ramp), but its RANGE is narrow — `#9C2B44` → the brand accent
-  `#8B253B`. At `#C82356` the finished mark read as a **pink** tick rather than a
-  burgundy one, and the bright stroke also swallowed the butterfly, whose upper
-  lobes are darker than that. The trail is ink; ink is the darker of the two. A
-  test compares the two gradients' luminance so the roles cannot be inverted.
-- **The butterfly stays a signature, at 0.40 scale.** Reviewed at 0.40 / 0.58 /
-  0.74 / 0.90: past roughly 0.5 it stops reading as a mark on the tick and
-  becomes the subject, at which point the tick looks like an underline for it.
-  The logo is an abstract four-lobe shape rather than a naturalistic butterfly,
-  so scale buys recognition only up to a point. The frame bounds it too, and the
-  binding edge is the **top**, not the right: the butterfly flies above a tip
-  that already sits high in the frame, so a bigger one is clipped by the ceiling
-  long before it reaches the right wall. A test walks every authored keyframe
-  with its own scale and rotation, because a rotated box is far larger than the
-  wings' own and checking one constant against one point missed both the bank and
-  the lead.
-
-**The frame is sized around the resting TICK** (138 × 118, tick centred to within
-a unit on both axes), not around the butterfly. It was 132 × 104 with the tick
-sitting 8 units left of centre — what sizing the frame around a landed wing cost.
-
-**The haptic is a retiming, not a new feature.** All five screens already fired
-`HapticFeedback`; verification and the calendar fired it before the mark had been
-drawn, so the buzz arrived ahead of the picture. `onSuccessSettle` moves it to
-the frame the stroke closes on — deliberately not to the end of the exit, which is
-the instrument leaving rather than the result — and, on verification, measures
-from the mark's own mount rather than from the network response, because that
-screen shows the mark BEFORE the verdict is known. Under
-`prefers-reduced-motion` the mark is drawn already finished, so the pulse fires
-immediately instead.
-
-**The two screens that dismiss themselves derive their delay from the animation**
-(`SUCCESS_TOTAL_MS + SUCCESS_READ_MS`) rather than carrying a hand-tuned
-constant: verification's was a flat 2200ms fitted to the old disc-and-tick, and
-Type Radar's a flat 2100ms, both of which would have started closing the WebView
-over a moving mark.
-
-Deliberately NOT converted, and each for a reason:
-
-- **The calendar's `waiting` screen** keeps its own 96px saved-tick. It means
-  "your picks are saved", while the `agreed` screen means "the date is locked
-  in" — giving both the celebratory mark would make the two states look
-  identical, which is precisely the confusion this mark exists to remove.
-- **The venue-change `renderSuccess` medallion**, whose glyph switches between
-  spark / letter / pin / check. It answers "what happened", not "you
-  succeeded"; only the terminal `settled` screen took the mark.
-- **Selection and progress ticks** — the vibe chips, the theme-picker badge, the
-  referral ladder's reached markers, the promo-gift status rows, and the
-  how-it-works illustration. None of them is a success screen.
-- **`PartnerPaidCard`'s stamp**, which is a "PAID" rubber stamp on a ticket
-  object: a different idiom.
-- **The venue-change settle gains no second pulse.** It is reached either from a
-  Stars payment that already buzzed when Telegram reported "paid", or by
-  reopening an already-settled board, where nothing happened at all.
-
-Under `prefers-reduced-motion` the resting mark is drawn as-is — the finished
-tick, the bloom at rest, and **no butterfly at all** — and the whole thing does
-one short fade, so the success still ARRIVES rather than appearing to have always
+Under `prefers-reduced-motion` the mark is drawn already arrived — logo at full
+size, bloom at rest, no spring and no breath — and the whole thing does one
+short fade, so the success still ARRIVES rather than appearing to have always
 been there. That falls out of the base states rather than being restated: the
 CSS base values ARE the final ones, so killing the animations is the whole rule.
-The butterfly is absent rather than frozen, because a still one is exactly the
-sticker-on-the-tick reading this mark was changed to remove.
+
+The two brand marks stay deliberate siblings and deliberately different
+pictures. The loader is three small butterflies flying INSIDE a waist — nerves,
+the feeling before. This one is a single butterfly at full size, still: their
+resolution. Both read their silhouette and gradient from `brand-butterfly.ts`.
+
+Deliberately NOT converted, and each for a reason: the calendar's `waiting`
+screen keeps its own saved-tick (it means "your picks are saved", not "the date
+is locked in", and giving both the celebratory mark would make the two states
+look identical); the venue-change `renderSuccess` medallion, whose glyph answers
+"what happened" rather than "you succeeded"; selection and progress ticks; and
+`PartnerPaidCard`'s "PAID" rubber stamp, which is a different idiom.
 
 Telegram-only: the native iOS client draws its own success states and no `/v1/*`
 shape changed. Demo mode (DEMO_MODE.md) builds the same bundle and inherits it —

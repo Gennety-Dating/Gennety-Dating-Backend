@@ -19,7 +19,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
-  SUCCESS_FLIGHT_MS,
+  SUCCESS_ARRIVE_MS,
   SUCCESS_READ_MS,
   SUCCESS_TOTAL_MS,
 } from "./butterfly-success";
@@ -113,7 +113,7 @@ describe("handleComplete", () => {
     // lands with the butterfly.
     expect(stub.notify).not.toHaveBeenCalled();
     expect(stub.closeFn).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(SUCCESS_FLIGHT_MS);
+    vi.advanceTimersByTime(SUCCESS_ARRIVE_MS);
     expect(stub.notify).toHaveBeenCalledWith("success");
     vi.advanceTimersByTime(1000);
     expect(stub.closeFn).toHaveBeenCalledTimes(1);
