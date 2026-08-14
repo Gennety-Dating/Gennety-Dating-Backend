@@ -1,0 +1,297 @@
+/**
+ * TEMPORARY — stylesheet for the success-mark comparison board.
+ * Deleted with success-variants.ts once a variant is chosen.
+ *
+ * Every variant is judged at the size the real mark will ship at (190px, up
+ * from the 156px the current tick uses) and against the heading the screen
+ * already carries, because both change the verdict.
+ */
+
+.sv-board {
+  min-height: 100vh;
+  padding: 24px 16px 40px;
+  box-sizing: border-box;
+  background: var(--bg, #030303);
+  color: var(--text, #f2eef4);
+  font-family: inherit;
+}
+
+.sv-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.sv-btn {
+  appearance: none;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  background: var(--fill, rgba(255, 255, 255, 0.06));
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.sv-hint {
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+/* Side by side is the whole point — the three have to be comparable in one
+   glance, so this wraps rather than scrolls only when it genuinely cannot fit. */
+.sv-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.sv-card {
+  flex: 1 1 300px;
+  margin: 0;
+  border-radius: 18px;
+  background: var(--fill, rgba(255, 255, 255, 0.04));
+  padding: 8px 8px 14px;
+}
+
+.sv-caption {
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  opacity: 0.55;
+}
+
+/* Fixed height, contents centred. Variant C has no mark at all, so reserving
+   mark-shaped empty space for it would misrepresent it — in the real screen the
+   heading simply sits where the composition centres. */
+.sv-stage {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.sv-mark {
+  position: relative;
+  width: 190px;
+  height: 140px;
+  display: grid;
+  place-items: center;
+}
+
+.sv-mark-bare {
+  width: 0;
+  height: 0;
+}
+
+.sv-svg {
+  width: 190px;
+  height: 140px;
+  overflow: visible;
+}
+
+.sv-heading {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: center;
+  position: relative;
+}
+
+/* The bloom. Same alpha split as the current mark, and for the same reason: on
+   cream the dark value reads as a pink smudge rather than as warmth. */
+.sv-stage {
+  --sv-glow: rgba(139, 37, 59, 0.2);
+}
+
+:root[data-theme="light"] .sv-stage {
+  --sv-glow: rgba(139, 37, 59, 0.09);
+}
+
+.sv-mark::before {
+  content: "";
+  position: absolute;
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--sv-glow) 0%, transparent 68%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── A · wings open ────────────────────────────────────────────────────────
+   One property in motion. The wings start folded to the body axis (a narrow
+   vertical sliver, which is what a butterfly at rest actually shows) and sweep
+   out past open before settling.
+
+   `scaleX` needs no `transform-origin` here: the paths are authored around x=0,
+   so the fold axis IS the body. Same property the existing wingbeat uses.
+
+   The overshoot lives in the KEYFRAMES and the timing function is a plain
+   ease-out, deliberately — a springy cubic-bezier on top of an overshooting
+   keyframe set double-counts and produces a visible second bounce. */
+/* The curve is deliberately NOT a hard ease-out. At cubic-bezier(.22,.9,.3,1)
+   the wings were 40% open by frame 40ms and essentially open by 140ms, so the
+   one gesture this variant exists for was over before it could be read. This
+   keeps the sweep moving through most of its duration and only settles at the
+   end. */
+.sv-wings .sv-wing {
+  transform: scaleX(1);
+  animation: sv-open 620ms cubic-bezier(0.45, 0.05, 0.25, 1) both;
+}
+
+/* The breath keeps the resting frame alive rather than a static PNG. On the
+   parent group, so it composes with the wings' own scaleX instead of fighting
+   it for the transform property. */
+.sv-wings .sv-fly {
+  animation: sv-breath 3200ms ease-in-out 620ms infinite;
+}
+
+.sv-wings .sv-mark::before {
+  animation: sv-bloom 520ms ease-out 160ms both;
+}
+
+.sv-wings .sv-heading {
+  animation: sv-heading-in 380ms ease-out 300ms both;
+}
+
+@keyframes sv-open {
+  0% {
+    transform: scaleX(0.05);
+  }
+  62% {
+    transform: scaleX(1.07);
+  }
+  84% {
+    transform: scaleX(0.985);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes sv-breath {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+/* ── B · appears ───────────────────────────────────────────────────────────
+   Strictly less motion than A: the butterfly is open the whole time and only
+   springs into place. The control for whether the opening gesture earns its
+   keep. */
+.sv-appear .sv-fly {
+  animation:
+    sv-pop 520ms cubic-bezier(0.22, 0.9, 0.3, 1) both,
+    sv-breath 3200ms ease-in-out 640ms infinite;
+}
+
+.sv-appear .sv-mark::before {
+  animation: sv-bloom 520ms ease-out 120ms both;
+}
+
+.sv-appear .sv-heading {
+  animation: sv-heading-in 380ms ease-out 300ms both;
+}
+
+/* Two animations touch `transform` here (pop, then breath). The pop runs `both`
+   so it holds its final scale(1), and the breath starts after it has landed —
+   the later animation in the list wins the property, which is why the breath is
+   declared second and delayed past the pop's own duration. */
+@keyframes sv-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  62% {
+    opacity: 1;
+    transform: scale(1.045);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ── C · no mark ───────────────────────────────────────────────────────────
+   Nothing new appears. The heading the screen already has gets a bloom behind
+   it and settles up. */
+.sv-bloom .sv-heading {
+  animation: sv-heading-rise 620ms cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+
+/* Stronger than the mark variants' bloom, and it has to be: with no figure on
+   screen this glow IS the whole acknowledgement, so at the mark's alpha it read
+   as nothing having happened at all. */
+.sv-bloom .sv-stage {
+  --sv-glow: rgba(139, 37, 59, 0.42);
+}
+
+:root[data-theme="light"] .sv-bloom .sv-stage {
+  --sv-glow: rgba(139, 37, 59, 0.16);
+}
+
+.sv-bloom .sv-heading::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 340px;
+  height: 340px;
+  margin: -170px 0 0 -170px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--sv-glow) 0%, transparent 62%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  animation: sv-bloom 720ms ease-out 80ms both;
+}
+
+@keyframes sv-heading-rise {
+  0% {
+    opacity: 0.35;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── shared ────────────────────────────────────────────────────────────── */
+
+@keyframes sv-bloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  62% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+}
+
+@keyframes sv-heading-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

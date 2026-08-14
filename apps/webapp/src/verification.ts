@@ -326,6 +326,17 @@ function boot(): void {
   // Mirrors the real reserve into --tg-content-top/bottom for the CSS above.
   wireContentInsets(app);
 
+  // TEMPORARY, dev-only: `?preview=success` renders the success-mark comparison
+  // board (success-variants.ts) instead of this page. It hangs off verification
+  // rather than a new HTML entry because a new entry would be built and shipped;
+  // this branch and the module behind it are deleted once a variant is chosen.
+  // Dynamically imported so the production build, where the condition folds to
+  // `false`, drops the module and its stylesheet entirely.
+  if (import.meta.env.DEV && params.get("preview") === "success") {
+    void import("./success-variants.js").then((m) => m.mountVariantsBoard(root));
+    return;
+  }
+
   // Dev-only screen preview: `?screen=loading|success|retry|error|...` renders
   // that state and skips the liveness session, so every themed status screen
   // can be reviewed without burning a real check. Inert in production builds.
