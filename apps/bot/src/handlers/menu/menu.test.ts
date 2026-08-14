@@ -153,6 +153,7 @@ import {
   handleEditPhotosDelete,
   handleVerifyPhotosRedo,
   handleVerifyPhotosClear,
+  closeAbandonedMediaManager,
 } from "./edit-profile.js";
 import {
   handleEditVideoStart,
@@ -1255,6 +1256,76 @@ describe("Menu — a forgotten text edit stops owning the chat", () => {
 
     expect(prisma.profile.update).not.toHaveBeenCalled();
     expect(ctx.session.menuState).toBe("idle");
+  });
+});
+
+/**
+ * The media twin. `edit_photos` / `edit_video` had no deadline at all, and the
+ * only thing that ever closed them was tapping another menu button — so a user
+ * who opened "My photos" and walked away kept a chat that starved the Profiler
+ * (it reads `menuState`) and answered every plain message with "send me
+ * photos". Expiring runs the SAME close as that tap, cards included.
+ */
+describe("Menu — an abandoned photo manager closes itself", () => {
+  const cards = [
+    { msgId: 100, ref: "p0" },
+    { msgId: 101, ref: "p1" },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function abandonedCtx(claimUntil: number | null) {
+    return createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        menuClaimUntil: claimUntil,
+        photoCards: [...cards],
+        photoManagerMsgId: 102,
+        pendingPhotos: ["p0", "p1"],
+        verifyPhotoRedo: true,
+      },
+      messageText: "когда моё свидание?",
+    });
+  }
+
+  it("retires the cards rather than leaving dead buttons behind", async () => {
+    // Dropping `menuState` alone would leave every card's 🗑 and the panel's
+    // ➕/✅ on screen pointing at a session that no longer exists — the
+    // orphaned-button bug PRODUCT_SPEC §2.1 records.
+    const ctx = abandonedCtx(Date.now() - 3 * 60 * 60 * 1000);
+
+    expect(await closeAbandonedMediaManager(ctx)).toBe(true);
+
+    expect(ctx.api.editMessageReplyMarkup).toHaveBeenCalledWith(12345, 100);
+    expect(ctx.api.editMessageReplyMarkup).toHaveBeenCalledWith(12345, 101);
+    expect(ctx.api.editMessageReplyMarkup).toHaveBeenCalledWith(12345, 102);
+    expect(ctx.session.photoCards).toEqual([]);
+    expect(ctx.session.photoManagerMsgId).toBeNull();
+    expect(ctx.session.menuState).toBe("idle");
+    expect(ctx.session.menuClaimUntil).toBeNull();
+    expect(ctx.session.pendingPhotos).toEqual([]);
+    // Redo mode is scoped to the manager session and must not survive it, or
+    // the next open silently lifts the MIN_PHOTOS delete floor.
+    expect(ctx.session.verifyPhotoRedo).toBe(false);
+  });
+
+  it("leaves a manager the user is still using completely alone", async () => {
+    const ctx = abandonedCtx(Date.now() + 60 * 60 * 1000);
+
+    expect(await closeAbandonedMediaManager(ctx)).toBe(false);
+
+    expect(ctx.api.editMessageReplyMarkup).not.toHaveBeenCalled();
+    expect(ctx.session.menuState).toBe("edit_photos");
+    expect(ctx.session.photoCards).toEqual(cards);
+  });
+
+  it("is a no-op for every chat with no manager open", async () => {
+    const ctx = createMockCtx({ session: { menuState: "idle" }, messageText: "hi" });
+
+    expect(await closeAbandonedMediaManager(ctx)).toBe(false);
+    expect(ctx.api.editMessageReplyMarkup).not.toHaveBeenCalled();
   });
 });
 

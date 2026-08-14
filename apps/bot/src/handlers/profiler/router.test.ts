@@ -31,6 +31,7 @@ import {
 import type { BotContext } from "../../session.js";
 import type { MenuState } from "@gennety/shared";
 import { releaseStaleMenuClaim } from "../../services/menu-text-claim.js";
+import { closeAbandonedMediaManager } from "../menu/edit-profile.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mUserFind = (prisma.user as unknown as { findUnique: MockFn }).findUnique;
@@ -197,7 +198,21 @@ describe("profiler router — free-text answers", () => {
   it("forwards an explicit reply so a late answer still counts", async () => {
     await run(textCtx("сова", 9, 4));
 
-    expect(mCapture).toHaveBeenCalledWith(555n, { replyToMessageId: 4 });
+    expect(mCapture).toHaveBeenCalledWith(555n, {
+      replyToMessageId: 4,
+      looksLikeQuestion: false,
+    });
+  });
+
+  it("tells the resolver when the message reads as a question", async () => {
+    // The router owns the predicate; `shouldCaptureProfilerAnswer` owns what to
+    // do with it (nothing inside the window, refuse capture past it).
+    await run(textCtx("что ты имеешь в виду?", 11));
+
+    expect(mCapture).toHaveBeenCalledWith(555n, {
+      replyToMessageId: undefined,
+      looksLikeQuestion: true,
+    });
   });
 
   it("abandons a half-typed answer when the user runs a command", async () => {
@@ -327,16 +342,17 @@ describe("profiler router — stale menu claim (bot.ts ordering)", () => {
   }
 
   /** The early middleware from `bot.ts`, verbatim. */
-  function botEarlyMiddleware(ctx: BotContext): void {
+  async function botEarlyMiddleware(ctx: BotContext): Promise<void> {
     releaseStaleMenuClaim(ctx.session, {
       callbackData: ctx.callbackQuery?.data,
       text: ctx.message?.text,
     });
+    await closeAbandonedMediaManager(ctx);
   }
 
   it("records the answer when the abandoned editor's claim has expired", async () => {
     const ctx = withMenuClaim("комедии", "edit_bio", Date.now() - 60_000);
-    botEarlyMiddleware(ctx);
+    await botEarlyMiddleware(ctx);
 
     const next = await run(ctx);
     await elapseDebounce();
@@ -355,7 +371,7 @@ describe("profiler router — stale menu claim (bot.ts ordering)", () => {
     // The user really is mid-bio-edit; that text is the bio, not a Profiler
     // answer, and the Profiler must stand down (and close its window).
     const ctx = withMenuClaim("моя новая био", "edit_bio", Date.now() + 60_000);
-    botEarlyMiddleware(ctx);
+    await botEarlyMiddleware(ctx);
 
     const next = await run(ctx);
     await elapseDebounce();
@@ -363,6 +379,51 @@ describe("profiler router — stale menu claim (bot.ts ordering)", () => {
     expect(ctx.session.menuState).toBe("edit_bio");
     expect(mAnswer).not.toHaveBeenCalled();
     expect(mCloseWindow).toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+  });
+
+  /** Photo-manager ctx: the close path touches the card bookkeeping. */
+  function withPhotoManager(text: string, claimUntil: number | null): BotContext {
+    const ctx = withMenuClaim(text, "edit_photos", claimUntil);
+    Object.assign(ctx.session, {
+      photoCards: [],
+      photoManagerMsgId: null,
+      pendingPhotos: [],
+      pendingProfileMedia: [],
+      pendingPhotoUniqueIds: [],
+      pendingPhotoHashes: [],
+      pendingPhotoScores: [],
+      verifyPhotoRedo: false,
+    });
+    return ctx;
+  }
+
+  it("records the answer once an abandoned photo manager has closed", async () => {
+    // The photo manager had no deadline at all, so "tapped My photos once and
+    // walked away" starved the Profiler permanently — and ate every plain
+    // message as "send me photos" on the way.
+    const ctx = withPhotoManager("бег по утрам", Date.now() - 60_000);
+    await botEarlyMiddleware(ctx);
+
+    const next = await run(ctx);
+    await elapseDebounce();
+
+    expect(ctx.session.menuState).toBe("idle");
+    expect(mAnswer).toHaveBeenCalledTimes(1);
+    expect(mAnswer.mock.calls[0]![3]).toBe("бег по утрам");
+    expect(mCloseWindow).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("leaves a photo manager the user is actually using alone", async () => {
+    const ctx = withPhotoManager("ещё фото сейчас пришлю", Date.now() + 60_000);
+    await botEarlyMiddleware(ctx);
+
+    const next = await run(ctx);
+    await elapseDebounce();
+
+    expect(ctx.session.menuState).toBe("edit_photos");
+    expect(mAnswer).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalled();
   });
 });

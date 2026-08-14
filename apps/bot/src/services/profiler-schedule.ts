@@ -259,15 +259,36 @@ export interface ProfilerCaptureState {
  *   - an **explicit reply** to the question message is always an answer, no
  *     matter how much time passed (the deliberate escape hatch for a slow
  *     answer);
- *   - otherwise the implicit window must still be open — it is set to
- *     `PROFILER_ANSWER_WINDOW_MS` when the question is sent and cleared the
- *     moment the user does anything else at all.
+ *   - a **null** window means the conversation moved on — the user ran a
+ *     command, tapped a button, or was busy in another flow — and nothing they
+ *     type next is this question's answer. That is the hard stop;
+ *   - inside the window (`PROFILER_ANSWER_WINDOW_MS` from dispatch) plain text
+ *     is the answer, unconditionally.
  *
- * Everything else falls through to the menu agent, where it belongs.
+ * Past the window but with the window still non-null, the question is in a
+ * fourth state worth separating: **nothing has happened since it was sent**.
+ * It is still on screen, its Skip button still works, and the user's very next
+ * action is this message — so refusing it was the failure the founder reported:
+ * for the 4.5 h between the 90-minute window and the 6-hour stall deadline the
+ * question looked alive and answering it silently handed the text to the
+ * concierge agent instead, burning the question at the stall sweep and pausing
+ * the rest of the batch. The reply-to escape hatch existed and nobody uses it.
+ *
+ * So a late message is still an answer, unless it is **question-shaped**
+ * (`looksLikeQuestion`, the caller's `isLikelyMetaQuestion` — the same predicate
+ * PRODUCT_SPEC §1.3 already uses to decide whether the onboarding photo stage
+ * should hand a message to the agent). This is deliberately additive: nothing
+ * that captures today stops capturing, including question-shaped text inside
+ * the fresh window, where a short genuine answer ending in "?" ("не знаю, может
+ * кино?") must keep counting.
  */
 export function shouldCaptureProfilerAnswer(
   state: ProfilerCaptureState,
-  options: { now: Date; replyToMessageId?: number | undefined },
+  options: {
+    now: Date;
+    replyToMessageId?: number | undefined;
+    looksLikeQuestion?: boolean | undefined;
+  },
 ): boolean {
   if (!state.activeQuestionId) return false;
   if (
@@ -278,7 +299,8 @@ export function shouldCaptureProfilerAnswer(
     return true;
   }
   if (!state.answerWindowUntil) return false;
-  return state.answerWindowUntil.getTime() > options.now.getTime();
+  if (state.answerWindowUntil.getTime() > options.now.getTime()) return true;
+  return options.looksLikeQuestion !== true;
 }
 
 /**

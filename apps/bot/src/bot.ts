@@ -13,6 +13,7 @@ import { voiceHandler } from "./handlers/voice.js";
 import { interactionRecorder } from "./handlers/interaction-recorder.js";
 import { outboundRecorder } from "./services/outbound-recorder.js";
 import { invalidatePendingAccountAction } from "./handlers/menu/account-action.js";
+import { closeAbandonedMediaManager } from "./handlers/menu/edit-profile.js";
 import {
   releaseMatchFlowClaim,
   updateReleasesMatchFlowClaim,
@@ -87,6 +88,13 @@ export function createBot(token: string): Bot<BotContext> {
       callbackData: ctx.callbackQuery?.data,
       text: ctx.message?.text,
     });
+    // The photo / video managers claim the chat too, and theirs was unbounded:
+    // an open manager both starved the Profiler (it reads `menuState`) and ate
+    // every plain message as "send me photos", so tapping "My photos" once and
+    // walking away left a bot that never answered again. Closing runs here for
+    // the same ordering reason, and does the full close — cards retired — so it
+    // leaves no dead 🗑 buttons behind.
+    await closeAbandonedMediaManager(ctx);
     await next();
   });
 

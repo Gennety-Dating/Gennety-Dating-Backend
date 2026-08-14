@@ -37,9 +37,9 @@ import type { MenuState, SessionData } from "@gennety/shared";
  * enforces: an open question is not a standing claim on everything the user
  * types.
  *
- * Deliberately NOT covered: `edit_photos` and `edit_video`. They consume media
- * rather than text, and a stray photo sent months later is added to a gallery
- * the user can see and delete — not silently written over their profile.
+ * `edit_photos` and `edit_video` are bounded too, but by a SEPARATE rule below
+ * (`MEDIA_CLAIM_TTL_MS`), because what they claim and what they risk are both
+ * different — see the note there.
  */
 
 /** The `menuState` values that consume a plain text message as their answer. */
@@ -189,4 +189,76 @@ export function releaseStaleMenuClaim(
     return true;
   }
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// Media managers (photo / video)
+// ---------------------------------------------------------------------------
+
+/**
+ * The `menuState` values that consume incoming MEDIA rather than plain text.
+ *
+ * They were left unbounded when the text claims above were given deadlines, on
+ * the grounds that a stray photo lands in a gallery the user can see and delete
+ * rather than silently over a profile field. That is still true of the PHOTO —
+ * and it is not the thing that had to be bounded. What had to be bounded is the
+ * claim on the CHAT:
+ *
+ *   - `menuState` is one of the four fields the Profiler reads to decide
+ *     whether the chat is idle enough to record an answer, so an open manager
+ *     starved the Profiler for as long as it stayed open — which was forever.
+ *   - the manager consumes any message with no callback data, so plain text got
+ *     "send me photos" back instead of reaching the concierge agent. A user who
+ *     tapped "My photos" once and walked away had a bot that never answered
+ *     them again.
+ *
+ * The state lives in `bot_sessions`, so "forever" is literal: it survives
+ * restarts and deploys. The one thing that closed it was tapping another menu
+ * button (PRODUCT_SPEC §2.1) — which is exactly what a deadline is: another way
+ * of saying the user moved on. Expiring therefore runs the SAME close the
+ * foreign-tap path runs, cards retired and all, rather than merely dropping the
+ * state and leaving dead 🗑 buttons on screen.
+ */
+const MEDIA_CLAIMABLE: readonly MenuState[] = ["edit_photos", "edit_video"];
+
+/**
+ * How long an open media manager owns the chat, re-armed on every interaction
+ * with it — so this bounds ABANDONMENT, not the length of an upload session.
+ *
+ * Longer than any text claim because the two failure modes are not comparable:
+ * an over-short text window can overwrite a profile with the wrong sentence,
+ * while an over-short window here only closes a manager the user has not
+ * touched in two hours, and reopening it is one tap. It must stay well under
+ * Telegram's 48 h edit limit, which is the point past which the cards' buttons
+ * can no longer be retired at all — after that the manager is dead on screen
+ * whatever the session says.
+ */
+export const MEDIA_CLAIM_TTL_MS = 2 * 60 * 60 * 1000;
+
+export function isMediaMenuState(state: MenuState): boolean {
+  return MEDIA_CLAIMABLE.includes(state);
+}
+
+/** Open (or keep open) a media manager for another `MEDIA_CLAIM_TTL_MS`. */
+export function armMediaClaim(
+  session: SessionData,
+  state: MenuState,
+  now: Date = new Date(),
+): void {
+  session.menuState = state;
+  session.menuClaimUntil = isMediaMenuState(state) ? now.getTime() + MEDIA_CLAIM_TTL_MS : null;
+}
+
+/**
+ * Has an open media manager been abandoned?
+ *
+ * A session written before this rule existed carries `null` and reads as
+ * expired — fail closed, the same direction the text claims chose. The cost is
+ * that a manager open across the deploy is closed on the user's next message;
+ * the alternative is trusting an unbounded state forever, which is the bug.
+ */
+export function mediaClaimExpired(session: SessionData, now: Date = new Date()): boolean {
+  if (!isMediaMenuState(session.menuState)) return false;
+  const until = session.menuClaimUntil;
+  return until == null || until <= now.getTime();
 }

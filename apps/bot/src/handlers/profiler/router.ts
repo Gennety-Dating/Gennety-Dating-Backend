@@ -13,6 +13,7 @@ import {
   resolveProfilerCapture,
 } from "../../services/profiler.js";
 import { isProfilerRefusal } from "../../services/profiler-intent.js";
+import { isLikelyMetaQuestion } from "../../services/onboarding-collector.js";
 
 /**
  * Profiler router (PRODUCT_SPEC §Phase 1b) — captures answers/skips to the
@@ -30,10 +31,11 @@ import { isProfilerRefusal } from "../../services/profiler-intent.js";
  * replayed tap can never record twice or push out an extra question.
  *
  * An active question does NOT own the chat indefinitely. Free text is recorded
- * as its answer only while the question still owns the conversation — a short
- * implicit window, closed early by any other interaction — or when the user
- * replies to the question message directly (`resolveProfilerCapture`).
- * Everything else falls through to the menu agent.
+ * as its answer only while the question still owns the conversation — nothing
+ * else has happened since it was sent, and past the implicit window the message
+ * is not itself a question — or when the user replies to the question message
+ * directly (`resolveProfilerCapture`). Everything else falls through to the
+ * menu agent.
  */
 export const profilerRouter = new Composer<BotContext>();
 
@@ -168,11 +170,14 @@ profilerRouter.use(async (ctx, next) => {
 
   if (text && !isCommand && idle) {
     // An active question is NOT enough to claim the text: it must still own the
-    // conversation (fresh implicit window) or be replied to directly. Anything
-    // else is a message to the assistant — "when is my date?" typed hours after
-    // a question must reach the menu agent, not be recorded as its answer.
+    // conversation — nothing else has happened since it was sent — or be
+    // replied to directly. Once the user has done anything at all the question
+    // stops being the default addressee, and "when is my date?" reaches the
+    // menu agent. Past the implicit window the question-shaped test is what
+    // separates a late answer from a new topic (`shouldCaptureProfilerAnswer`).
     const capture = await resolveProfilerCapture(BigInt(ctx.from.id), {
       replyToMessageId: ctx.message?.reply_to_message?.message_id,
+      looksLikeQuestion: isLikelyMetaQuestion(text),
     });
     if (capture && ctx.chat) {
       bufferAnswerLine(

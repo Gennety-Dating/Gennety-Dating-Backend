@@ -291,16 +291,21 @@ export const PROFILER_MAX_ANSWER_LEN = 1000;
  */
 export const PROFILER_STALL_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 /**
- * How long plain text is *implicitly* treated as the answer to the question on
- * screen. Deliberately far shorter than the stall deadline above: a question
- * asked hours ago must not silently swallow an unrelated message ("when is my
- * date?"), which the user is writing to the assistant, not to the Profiler.
+ * How long plain text is *unconditionally* treated as the answer to the
+ * question on screen.
  *
- * The window is also closed early — the moment the user does anything else at
- * all (a command, a menu tap, another flow) the conversation has moved on and
- * the question stops being the default addressee. Two escape hatches keep a
- * genuine slow answer working: the Skip button stays live, and an explicit
- * Telegram reply to the question message is always recorded as an answer.
+ * The real bound on capture is not this clock — it is that the window is
+ * cleared the moment the user does anything else at all (a command, a menu tap,
+ * another flow). That is what stops a question asked hours ago from swallowing
+ * an unrelated message; a user who went off and did something has stated that
+ * the question is no longer what they are talking about.
+ *
+ * Past this window, with nothing having happened since, the question is still
+ * on screen and its Skip button still works, so plain text is still recorded —
+ * unless it reads as a question aimed at the bot. Before that rule the 4.5 h
+ * between this window and `PROFILER_STALL_TIMEOUT_MS` was a stretch where the
+ * question looked answerable and was not: the text went to the concierge agent
+ * and the question died at the stall sweep. See `shouldCaptureProfilerAnswer`.
  */
 export const PROFILER_ANSWER_WINDOW_MS = 90 * 60 * 1000;
 /**

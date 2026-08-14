@@ -20,6 +20,7 @@ import { prepareProfileVideo, videoSavedAck } from "../../services/profile-video
 import { grantVideoBonusIfEligible } from "../../services/ticket-wallet.js";
 import { sendTicketRewardDM } from "../../services/ticket-reward.js";
 import { logMediaValidationRejection } from "../../services/profile-media-validation/rejection-log.js";
+import { armMediaClaim } from "../../services/menu-text-claim.js";
 
 const VIDEO_MAX_MB = Math.round(PROFILE_VIDEO_MAX_FILE_SIZE_BYTES / (1024 * 1024));
 
@@ -60,7 +61,7 @@ export async function handleEditVideoStart(ctx: BotContext): Promise<void> {
   const hasVideo = profileMediaHasVideo(media);
   const reward = videoRewardAvailable(profile?.videoBonusTicketAt ?? null);
 
-  ctx.session.menuState = "edit_video";
+  armMediaClaim(ctx.session, "edit_video");
 
   const keyboard = new InlineKeyboard();
   if (hasVideo) keyboard.text(t(lang, "editVideoRemoveBtn"), "menu:video:remove").row();

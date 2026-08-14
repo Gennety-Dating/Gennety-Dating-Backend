@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SESSION, type SessionData } from "@gennety/shared";
 import {
+  MEDIA_CLAIM_TTL_MS,
   MENU_CLAIM_TTL_MS,
+  armMediaClaim,
   claimMenuText,
   isClaimableMenuState,
+  isMediaMenuState,
+  mediaClaimExpired,
   menuClaimIsLive,
   releaseMenuClaim,
   updateReleasesMenuClaim,
@@ -155,5 +159,59 @@ describe("isClaimableMenuState", () => {
     for (const state of ["idle", "edit_photos", "edit_video", "settings_lang"] as const) {
       expect(isClaimableMenuState(state)).toBe(false);
     }
+  });
+});
+
+describe("media manager claim", () => {
+  it("covers exactly the states that consume media", () => {
+    expect(isMediaMenuState("edit_photos")).toBe(true);
+    expect(isMediaMenuState("edit_video")).toBe(true);
+    for (const state of ["idle", "edit_bio", "settings_lang"] as const) {
+      expect(isMediaMenuState(state)).toBe(false);
+    }
+  });
+
+  it("stamps a deadline on open", () => {
+    const s = session();
+    armMediaClaim(s, "edit_photos", NOW);
+
+    expect(s.menuState).toBe("edit_photos");
+    expect(s.menuClaimUntil).toBe(NOW.getTime() + MEDIA_CLAIM_TTL_MS);
+    expect(mediaClaimExpired(s, NOW)).toBe(false);
+  });
+
+  it("outlives any realistic upload session but not an abandoned one", () => {
+    const s = session();
+    armMediaClaim(s, "edit_photos", NOW);
+
+    expect(mediaClaimExpired(s, later(60 * 60 * 1000))).toBe(false);
+    expect(mediaClaimExpired(s, later(MEDIA_CLAIM_TTL_MS + 1))).toBe(true);
+  });
+
+  it("stays well under Telegram's 48h edit limit", () => {
+    // Past that the cards' buttons can no longer be retired at all, so a
+    // deadline beyond it would close a manager it can no longer clean up.
+    expect(MEDIA_CLAIM_TTL_MS).toBeLessThan(48 * 60 * 60 * 1000);
+  });
+
+  it("re-arming keeps a manager the user is actually using", () => {
+    const s = session();
+    armMediaClaim(s, "edit_photos", NOW);
+    // An hour in, the user sends another photo — the router re-arms.
+    armMediaClaim(s, "edit_photos", later(60 * 60 * 1000));
+
+    expect(mediaClaimExpired(s, later(MEDIA_CLAIM_TTL_MS + 1))).toBe(false);
+  });
+
+  it("reads a session written before the rule existed as expired", () => {
+    // Fail closed, the same direction the text claims chose: an unbounded
+    // state is the bug, so trusting a null deadline forever is not an option.
+    const s = session({ menuState: "edit_video", menuClaimUntil: null });
+    expect(mediaClaimExpired(s, NOW)).toBe(true);
+  });
+
+  it("says nothing about a chat with no manager open", () => {
+    expect(mediaClaimExpired(session(), NOW)).toBe(false);
+    expect(mediaClaimExpired(session({ menuState: "edit_bio" }), NOW)).toBe(false);
   });
 });

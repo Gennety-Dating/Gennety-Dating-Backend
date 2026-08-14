@@ -189,14 +189,42 @@ describe("shouldCaptureProfilerAnswer", () => {
     expect(shouldCaptureProfilerAnswer(state, { now: NOW })).toBe(true);
   });
 
-  it("does NOT capture once the window has expired", () => {
-    // The reported bug: a question asked hours ago swallowing "when is my date?".
+  it("still captures past the window while nothing else has happened", () => {
+    // Past the 90-minute window but with the window still non-null: the user
+    // has done nothing since the question, it is on screen, its Skip works —
+    // so this is a late answer, not a new topic.
     const state = {
       activeQuestionId: "f_media",
       answerWindowUntil: CLOSED,
       questionMessageId: 42,
     };
-    expect(shouldCaptureProfilerAnswer(state, { now: NOW })).toBe(false);
+    expect(shouldCaptureProfilerAnswer(state, { now: NOW })).toBe(true);
+  });
+
+  it("does NOT capture a question-shaped message past the window", () => {
+    // The case the window was protecting: "when is my date?" typed hours later
+    // belongs to the assistant.
+    const state = {
+      activeQuestionId: "f_media",
+      answerWindowUntil: CLOSED,
+      questionMessageId: 42,
+    };
+    expect(
+      shouldCaptureProfilerAnswer(state, { now: NOW, looksLikeQuestion: true }),
+    ).toBe(false);
+  });
+
+  it("captures a question-shaped message INSIDE the window", () => {
+    // Deliberately additive: a short genuine answer ending in "?" ("не знаю,
+    // может кино?") must keep counting while the window is fresh.
+    const state = {
+      activeQuestionId: "f_media",
+      answerWindowUntil: OPEN,
+      questionMessageId: 42,
+    };
+    expect(
+      shouldCaptureProfilerAnswer(state, { now: NOW, looksLikeQuestion: true }),
+    ).toBe(true);
   });
 
   it("does NOT capture after the window was closed by another interaction", () => {

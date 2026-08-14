@@ -395,7 +395,16 @@ async function claimActiveQuestion(
  */
 export async function resolveProfilerCapture(
   telegramId: bigint,
-  options: { now?: Date; replyToMessageId?: number | undefined } = {},
+  options: {
+    now?: Date;
+    replyToMessageId?: number | undefined;
+    /**
+     * Whether the message reads as a question aimed at the bot. Passed in
+     * rather than computed here so this module keeps no dependency on the
+     * onboarding collector; it only matters past the implicit window.
+     */
+    looksLikeQuestion?: boolean | undefined;
+  } = {},
 ): Promise<{ userId: string; questionId: string } | null> {
   const user = await prisma.user.findUnique({
     where: { telegramId },
@@ -421,6 +430,7 @@ export async function resolveProfilerCapture(
     {
       now: options.now ?? new Date(),
       replyToMessageId: options.replyToMessageId,
+      looksLikeQuestion: options.looksLikeQuestion,
     },
   );
   if (!capture) return null;

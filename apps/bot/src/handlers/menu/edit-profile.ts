@@ -17,7 +17,11 @@ import {
   type Language,
   type SessionData,
 } from "@gennety/shared";
-import { claimMenuText } from "../../services/menu-text-claim.js";
+import {
+  armMediaClaim,
+  claimMenuText,
+  mediaClaimExpired,
+} from "../../services/menu-text-claim.js";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import {
   fetchTelegramFileBuffer,
@@ -460,7 +464,7 @@ async function openPhotoManager(ctx: BotContext): Promise<void> {
   const existingHashes = profile?.uploadedPhotoHashes ?? [];
   const existingMedia = normalizeProfileMedia(profile?.profileMedia ?? [], existing);
 
-  ctx.session.menuState = "edit_photos";
+  armMediaClaim(ctx.session, "edit_photos");
   ctx.session.pendingPhotos = [...existing];
   ctx.session.pendingProfileMedia = existingMedia;
   // We can't recover `file_unique_id` from a stored `file_id`, so dedupe
@@ -478,6 +482,44 @@ async function openPhotoManager(ctx: BotContext): Promise<void> {
   ];
 
   await renderPhotoManager(ctx);
+}
+
+/**
+ * Close a media manager the user abandoned (`mediaClaimExpired`).
+ *
+ * Deliberately the SAME close the router already performs when the user taps
+ * another menu button — cards retired, staged arrays dropped, redo mode off —
+ * because a deadline means exactly what that tap means: they moved on. Dropping
+ * `menuState` alone would leave every card's 🗑 and the panel's ➕/✅ on screen
+ * pointing at a session that no longer exists, which is the orphaned-button bug
+ * PRODUCT_SPEC §2.1 already records.
+ *
+ * Runs from `bot.ts`, ahead of every router, because the state it clears is one
+ * the Profiler reads first — see `services/menu-text-claim.ts`. Returns whether
+ * anything was closed.
+ */
+export async function closeAbandonedMediaManager(ctx: BotContext): Promise<boolean> {
+  if (!mediaClaimExpired(ctx.session)) return false;
+
+  if (ctx.session.menuState === "edit_photos") {
+    discardPhotoBatch(ctx.chat?.id);
+    if (ctx.chat) {
+      await retirePhotoCards(ctx.api, ctx.chat.id, ctx.session);
+    } else {
+      ctx.session.photoCards = [];
+      ctx.session.photoManagerMsgId = null;
+    }
+    ctx.session.verifyPhotoRedo = false;
+    ctx.session.pendingPhotos = [];
+    ctx.session.pendingProfileMedia = [];
+    ctx.session.pendingPhotoUniqueIds = [];
+    ctx.session.pendingPhotoHashes = [];
+    ctx.session.pendingPhotoScores = [];
+  }
+
+  ctx.session.menuState = "idle";
+  ctx.session.menuClaimUntil = null;
+  return true;
 }
 
 /**

@@ -1454,22 +1454,35 @@ Telegram-only in v1.
   deleted: it is the context for the answer below it, and the user knows they
   dealt with it — only its Skip button goes.
 - **A question owns the chat only while it is live.** An active question is NOT
-  a standing claim on everything the user types. Plain text is recorded as its
-  answer only when the question still owns the conversation:
-  - the **implicit window** (`PROFILER_ANSWER_WINDOW_MS`, 90 min from sending,
-    `Profile.profilerAnswerWindowUntil`) is still open, AND
-  - the user hasn't done anything else since — any command, menu tap, or other
-    flow closes the window immediately, because the next thing they type is for
-    the assistant, not for the question.
+  a standing claim on everything the user types. What bounds it is not a clock
+  but the user's own behaviour: `Profile.profilerAnswerWindowUntil` is **cleared
+  outright** the moment they do anything else — any command, menu tap, or other
+  flow — because the next thing they type after that is for the assistant, not
+  for the question. Once cleared, free text falls through to the menu agent, and
+  the two explicit escapes still resolve the question: the Skip button stays
+  live until the stall deadline, and a Telegram **reply** to the question
+  message (anchored by `Profile.profilerQuestionMessageId`) is always recorded
+  as its answer. Without this bound the Profiler mis-read ordinary conversation:
+  a question asked hours earlier turned "when is my date?" into an answer,
+  complete with an acknowledge shimmer and the next question, leaving the user's
+  actual question unanswered.
 
-  Outside that, free text falls through to the menu agent as normal. Two
-  explicit escapes keep a slow answer working regardless of the window: the Skip
-  button stays live until the stall deadline, and a Telegram **reply** to the
-  question message (anchored by `Profile.profilerQuestionMessageId`) is always
-  recorded as its answer. Without this bound the Profiler mis-read ordinary
-  conversation: a question asked hours earlier turned "when is my date?" into an
-  answer, complete with an acknowledge shimmer and the next question, leaving
-  the user's actual question unanswered.
+  **A question is answerable for as long as it is visible (2026-08-13).**
+  `PROFILER_ANSWER_WINDOW_MS` (90 min) used to be a hard second bound on top of
+  that rule, and the two disagreed: the question is reclaimed at
+  `PROFILER_STALL_TIMEOUT_MS` (6 h), when its message is *deleted*, so for the
+  4.5 h in between it sat on screen with a working Skip button and could not be
+  answered — typing the answer handed it to the concierge instead, and the
+  question then died at the stall sweep and paused the rest of the batch. The
+  reply-to escape hatch existed for exactly this and nobody uses it. Past the
+  window, **with the window still uncleared** — i.e. nothing at all has happened
+  since the question was sent, so the user's very next action is this message —
+  plain text is still recorded, unless it reads as a **question aimed at the
+  bot** (`isLikelyMetaQuestion`, the same predicate §1.3 uses to decide whether
+  the photo stage should hand a message to the agent). That test applies only
+  past the window: inside it a short genuine answer ending in "?" ("не знаю,
+  может кино?") must keep counting, so the change is additive — nothing that
+  captured before stops capturing.
 
   **"Doing something else" means a claim that is still LIVE, not one the user
   abandoned (2026-08-12).** The §2.1 menu editors (About me, Who I want, …) hold
@@ -1658,9 +1671,31 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   it immediately. **Expiring is a soft failure by construction** — the message
   falls through to the concierge agent, which can see the profile and offer the
   editor straight back, so an over-short window costs one tap while an over-long
-  one costs the profile. The photo and video managers are deliberately outside
-  the rule: they consume media, and a stray photo lands in a gallery the user
-  can see and delete rather than silently over a field.
+  one costs the profile.
+- **So does a photo or video manager (2026-08-13).** `edit_photos` /
+  `edit_video` were left out of the rule above because they consume media, and
+  a stray photo lands in a gallery the user can see and delete rather than
+  silently over a field. That is still true of the photo — and it was never the
+  thing that needed bounding. What needed bounding is the claim on the CHAT: an
+  open manager consumes any message carrying no callback data, so plain text
+  got "send me photos" back instead of reaching the concierge, and `menuState`
+  is one of the four fields the Profiler reads to decide the chat is idle
+  enough to record an answer (§Phase 1b). The state lives in `bot_sessions`, so
+  **someone who tapped "My photos" once and walked away had a bot that never
+  answered them again** — no deadline, and the only thing that ever closed it
+  was tapping another menu button. A deadline says exactly what that tap says,
+  so expiring runs the **same close**: cards retired, staged arrays dropped,
+  redo mode off. Dropping the state alone would leave every card's 🗑 and the
+  panel's ➕/✅ on screen pointing at a session that no longer exists, which is
+  the orphaned-button bug this section already records. The window is longer
+  than any text claim (`MEDIA_CLAIM_TTL_MS`, 2 h) and is **re-armed on every
+  interaction with the manager**, so it bounds abandonment rather than the
+  length of an upload session; it must stay well under Telegram's 48 h edit
+  limit, past which the cards can no longer be retired at all and the manager
+  is dead on screen whatever the session says. One consequence to hold onto: a
+  verification-gated user in the "📷 upload different photos" redo (§1.4) who
+  leaves for two hours comes back to the verification card and re-enters with
+  one tap, because that gate is keyed on the manager being open.
 - **The About me editor shows the text it is about to replace (2026-08-08).**
   Whatever the user sends next replaces `psychologicalSummary` in full, which is
   why the concierge's own `update_bio` tool **refuses** a rewrite that collapses

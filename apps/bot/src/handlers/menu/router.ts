@@ -3,6 +3,7 @@ import { prisma } from "@gennety/db";
 import { t } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { AGENT_DENIAL_COPY, evaluateAgentAccess } from "../../services/agent-access.js";
+import { armMediaClaim } from "../../services/menu-text-claim.js";
 import { showMainMenu } from "./main.js";
 import { handleMyProfile } from "./my-profile.js";
 import { handleMyDate } from "./my-date.js";
@@ -105,6 +106,10 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
 
   // Edit photos: consumes raw photo messages.
   if (ctx.session.menuState === "edit_photos") {
+    // Every interaction with the manager re-arms its deadline, so the bound is
+    // on ABANDONMENT rather than on how long an upload session may take. The
+    // abandon path below sets `idle`, which supersedes this.
+    armMediaClaim(ctx.session, "edit_photos");
     if (!data || data === "menu:edit:photos:continue") {
       await handleEditPhotosUpload(ctx);
       return;
@@ -130,6 +135,7 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       ctx.session.photoManagerMsgId = null;
     }
     ctx.session.menuState = "idle";
+    ctx.session.menuClaimUntil = null;
     ctx.session.verifyPhotoRedo = false;
     ctx.session.pendingPhotos = [];
     ctx.session.pendingProfileMedia = [];
@@ -140,6 +146,7 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
 
   // Edit video: consumes a raw video message; Remove/Back are callbacks.
   if (ctx.session.menuState === "edit_video") {
+    armMediaClaim(ctx.session, "edit_video");
     if (!data) {
       await handleEditVideoUpload(ctx);
       return;
@@ -150,6 +157,7 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     }
     // Any other menu action mid-flow → reset state and fall through.
     ctx.session.menuState = "idle";
+    ctx.session.menuClaimUntil = null;
   }
 
   // Edit bio: consumes raw text messages.
