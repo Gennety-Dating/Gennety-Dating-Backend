@@ -52,13 +52,27 @@ export const WING_BBOX = { width: 88.63, height: 63.44 } as const;
  * lets one definition serve three butterflies at three scales (the loader) and a
  * butterfly in flight (the success mark) with no per-instance gradient.
  *
+ * **The radius is `√(w² + h²) / √2`, not the bbox width**, and that is the one
+ * number here that has already been got wrong once. The logo declares
+ * `r="100%"` with no `gradientUnits`, i.e. `objectBoundingBox`, where a radius
+ * is a fraction of the box's NORMALISED DIAGONAL rather than of either side.
+ * Converting to user space with the width (88.63) instead of the diagonal
+ * (77.07) stretched the sweep ~15% wider than the logo's: the magenta spread
+ * further across the wings and the dark outer stop barely showed, so the mark
+ * ran hotter and flatter than the brand. Invisible while the success butterfly
+ * was 29px, obvious the moment it became the mark itself at 190px.
+ *
+ * `cx` / `cy` were already right, and are worth stating so nobody "fixes" them
+ * to match: 30% and 100% of the same box give `bbox.x + 0.30w = -17.72` and
+ * `bbox.y + 1.00h = 32.51`, which is why the hotspot sits on the lower-left lobe.
+ *
  * @param id  Referenced as `fill="url(#id)"`. Each mark passes its own so two
  *            marks briefly coexisting on one page (a React transition from
  *            loading to success) cannot collide on a document-wide id.
  */
 export function logoWingGradient(id: string): string {
   return (
-    `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="-17.73" cy="32.51" r="88.63">` +
+    `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="-17.73" cy="32.51" r="77.07">` +
     `<stop offset="0%" stop-color="#FF00FF"/>` +
     `<stop offset="30%" stop-color="#C82356"/>` +
     `<stop offset="70%" stop-color="#8B253B"/>` +
