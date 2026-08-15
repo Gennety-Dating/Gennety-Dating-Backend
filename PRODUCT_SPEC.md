@@ -4280,6 +4280,25 @@ live only in the Telegram caption.
   and last reason; a blip that a retry rescues logs one line too, because a
   rescue is rare by definition and is the only early warning that the path is
   degrading before it starts costing users actual photographs.
+  **But the hop BEFORE that one could still blank a venue for a day, silently
+  (2026-08-15).** Those retries harden the delivery of bytes; the failure found
+  in the demo was one step earlier, in *resolving the refs*, and it never
+  reached the proxy at all — a card with no refs draws the category glyph
+  without making a request, so there was nothing for the proxy to retry and
+  nothing in the log to read. Google answers "this place has no photos" by
+  omitting the `photos` field, which is also what a partial 200 looks like, so
+  an empty array is **not** authoritative; caching it for the same 24 hours a
+  real answer earns meant one such response took a venue's pictures off the
+  board until the next process restart. Only a **non-empty** answer is trusted
+  for a day now — an empty one is held for the same few minutes an outright
+  failure is, and says so in the log. Measured rather than reasoned: the
+  long-running demo process served a Kyiv venue with zero refs while a fresh
+  process resolved six for it in the same minute and Google answered 20/20 with
+  photos; restarting the process put the board back to 12/12. The cost of the
+  short window is one Place Details call per genuinely photo-less venue per five
+  minutes, and only while a board is open — the catalog is fetched on open, not
+  on the ~4s state poll. **This is why an empty photo set must never be treated
+  as a fact about the venue**: it is a fact about one response.
 - **Never wedges.** Any render/send failure degrades per-side to the existing
   plain-text scheduled card, so one side's hiccup never denies the other their
   card and scheduling always completes.

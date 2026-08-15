@@ -515,10 +515,14 @@ export async function fetchPlacePhotoName(
  * a cover does — which is what lets the venue-change board show a curated
  * venue's photos at all (`services/venue-change.ts`), not just its first frame.
  *
- * Returns **null** when the lookup itself failed and an **array** (possibly
- * empty) when Google answered authoritatively. Callers that cache need that
- * distinction: "this place has no photos" is worth remembering for a day, while
- * "the request timed out" must be retried soon.
+ * Returns **null** when the lookup itself failed and an **array** when Google
+ * answered at all. That array can be EMPTY, and a caller must not read an empty
+ * one as authoritative: "this place has no photos" is expressed by an absent
+ * `photos` field, which is also what a partial 200 looks like, so the two are
+ * indistinguishable here. A caller that caches should give a day only to a
+ * non-empty answer and retry an empty one soon — see `lookupAndCachePhotos`
+ * (`services/venue-change.ts`), where trusting an empty array blanked a venue
+ * on the board for 24 hours.
  */
 export async function fetchPlacePhotoNames(
   apiKey: string | null | undefined,

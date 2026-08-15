@@ -582,10 +582,10 @@ export const VENUE_CHANGE_PREMIUM_MAX = 5;
 const PHOTO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
- * How long a FAILED lookup is remembered. Deliberately short: a timeout or a
- * Places outage must not cost the board its photos for a whole day, but it also
- * must not turn every board open into a retry storm against a service that is
- * already struggling.
+ * How long an EMPTY answer is remembered — a failed lookup, or a 200 that
+ * carried no photos. Deliberately short: a timeout or a Places outage must not
+ * cost the board its photos for a whole day, but it also must not turn every
+ * board open into a retry storm against a service that is already struggling.
  */
 const PHOTO_CACHE_FAILURE_TTL_MS = 5 * 60 * 1000;
 
@@ -652,14 +652,37 @@ async function withCuratedPhotos(venues: CatalogVenue[]): Promise<CatalogVenue[]
   });
 }
 
-/** One Place Details lookup, written into the shared cache. Never throws. */
+/**
+ * One Place Details lookup, written into the shared cache. Never throws.
+ *
+ * **Only a non-empty answer earns the day-long TTL.** An empty one is held for
+ * `PHOTO_CACHE_FAILURE_TTL_MS` like an outright failure, because the two are
+ * indistinguishable from the response: "this place has no photos" is expressed
+ * as an absent `photos` field, which is also what a partial 200 looks like. The
+ * old code trusted the array and cached it for 24h, so a single such answer
+ * blanked a venue for a day — silently, since a 200 logs nothing and the client
+ * draws its category glyph without ever calling the photo proxy. Measured in the
+ * demo (2026-08-15): the long-running process served one Kyiv venue with zero
+ * refs while a fresh process resolved six for it in the same minute and Google
+ * answered 20/20 with photos; a restart put it back to 12/12. That is the whole
+ * failure — it never reaches the proxy, so the 2026-08-08 retry cannot see it.
+ *
+ * The cost of the short TTL is one Place Details call per genuinely photo-less
+ * venue per 5 minutes, and only while someone has the board open — the catalog
+ * is fetched on open, not on the ~4s state poll.
+ */
 async function lookupAndCachePhotos(apiKey: string, placeId: string): Promise<string[]> {
   const refs = await fetchPlacePhotoNames(apiKey, placeId, VENUE_CHANGE_PHOTOS_PER_VENUE);
+  const found = refs != null && refs.length > 0;
+  if (refs != null && refs.length === 0) {
+    // Never silent, for the same reason the photo proxy stopped being silent:
+    // a systematic empty (a field-mask change, a quota, a stale place id) is
+    // otherwise indistinguishable from "this venue just has no pictures".
+    console.warn(`[venue-change] photo lookup for ${placeId} returned no photos`);
+  }
   photoCache.set(placeId, {
-    // A null answer means the lookup failed, not that the place has no
-    // photos — cache it briefly so we retry, rather than for a day.
     refs: refs ?? [],
-    expiresAt: Date.now() + (refs ? PHOTO_CACHE_TTL_MS : PHOTO_CACHE_FAILURE_TTL_MS),
+    expiresAt: Date.now() + (found ? PHOTO_CACHE_TTL_MS : PHOTO_CACHE_FAILURE_TTL_MS),
   });
   return refs ?? [];
 }

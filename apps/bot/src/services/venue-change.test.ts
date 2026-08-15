@@ -781,6 +781,37 @@ describe("buildVenueChangeCatalog — curated cover photos", () => {
     }
   });
 
+  it("retries an EMPTY answer minutes later, and never trusts it for a day", async () => {
+    // The defect this pins (demo, 2026-08-15): Google can answer 200 with the
+    // `photos` field absent, which is also how "this place has no photos" looks.
+    // Caching that as authoritative blanked a real venue on the board for 24h —
+    // silently, because a 200 logs nothing and a card with no refs never calls
+    // the photo proxy, so the 2026-08-08 retry could not see it either.
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-10T12:00:00Z"));
+      photoLookup.mockResolvedValueOnce([]).mockResolvedValueOnce(["places/p/photos/a"]);
+      const deps = { listCurated: async () => [curatedNoPhotos("c1")] };
+
+      const first = await buildVenueChangeCatalog(input, deps);
+      expect(first[0]!.photoRefs).toEqual([]);
+
+      // Inside the short window it is left alone, exactly like a failure.
+      vi.setSystemTime(new Date("2026-06-10T12:02:00Z"));
+      await buildVenueChangeCatalog(input, deps);
+      expect(photoLookup).toHaveBeenCalledTimes(1);
+
+      // Past it — and well inside the day a success would have earned — the
+      // venue gets its photos back rather than staying blank until tomorrow.
+      vi.setSystemTime(new Date("2026-06-10T12:10:00Z"));
+      const third = await buildVenueChangeCatalog(input, deps);
+      expect(photoLookup).toHaveBeenCalledTimes(2);
+      expect(third[0]!.photoRefs).toEqual(["places/p/photos/a"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("leaves rows that already carry photos alone (the Places fallback path)", async () => {
     const fromPlaces: CatalogVenue = {
       ...curatedNoPhotos("p1"),
