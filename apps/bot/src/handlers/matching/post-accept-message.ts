@@ -42,8 +42,16 @@ function messageIsNotModified(err: unknown): boolean {
 }
 
 /**
- * Keep one live post-accept CTA/status message per side. It starts as the
- * "accepted, waiting" receipt, becomes the ticket gate, then becomes Calendar.
+ * Keep one live post-accept CTA/status message per side: it starts as the
+ * "accepted, waiting" receipt and becomes the Calendar.
+ *
+ * It is NOT the Date Ticket card — that one is a separate, never-edited message
+ * this id has never pointed at (PRODUCT_SPEC §3.5b). The distinction is what
+ * decides whether an in-place edit is safe: editing is silent (Telegram raises
+ * no notification), so it only works while this card is still the NEWEST thing
+ * in the chat. Behind the ticket gate it is not — the ticket card and the settle
+ * notices landed below it — which is why `startScheduling` passes `forceResend`
+ * there, and why a counter-proposal always has.
  */
 export async function sendOrEditPostAcceptMessage(args: {
   api: Api<RawApi>;
