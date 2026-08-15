@@ -4,10 +4,10 @@
  * §3.7a). Sends two back-to-back runs for comparison:
  *   1. the classic edited-line path — leading STAR glyphs (✨💫🌟⭐🌠), the look
  *      users now see in product flows;
- *   2. the Bot API 10.1 rich `<tg-thinking>` shimmer — which, with no
- *      CUSTOM_EMOJI_AI_SPARKLE_ID set, falls back to CUSTOM_EMOJI_THINKING_ID
- *      (the "cloud"), so you can see the current animated glyph and decide
- *      whether to source a real stars custom-emoji id.
+ *   2. the Bot API 10.1 rich `<tg-thinking>` shimmer — whose glyph comes from
+ *      the step's own `AI_EMOJI` entry, falling back to
+ *      CUSTOM_EMOJI_THINKING_ID (the "cloud"), so you can see the current
+ *      animated glyph and decide whether to source a different id.
  *
  * Only send methods are used (sendMessage / editMessageText / deleteMessage /
  * explicit rich draft for demo #2) — no DB, no long polling, safe alongside
@@ -80,8 +80,8 @@ await runStatusSequence(api, chatId, steps, { rich: false, deleteAtEnd: false, w
 // 2) Explicit rich <tg-thinking> shimmer — dev-only comparison path.
 await api.sendMessage(
   chatId,
-  "🧪 Демо 2/2 — тот же набор в rich-шиммере (сейчас ведёт «облачко», т.к. " +
-    "CUSTOM_EMOJI_AI_SPARKLE_ID не задан):",
+  "🧪 Демо 2/2 — тот же набор в rich-шиммере (глиф беру из AI_EMOJI, иначе " +
+    "«облачко» из CUSTOM_EMOJI_THINKING_ID):",
 );
 await runStatusSequence(api, chatId, steps, { rich: true, deleteAtEnd: false, wait: slowWait });
 

@@ -128,23 +128,19 @@ export const env = {
   /// animated Telegram AI emoji recommended for `RichBlockThinking`
   /// (https://t.me/addemoji/AIActions). Rendered as `<tg-emoji>` inside
   /// `<tg-thinking>`, with the step's plain glyph (🧠/🔍/…) as the non-Premium /
-  /// pre-10.1 fallback. Empty → the plain glyph leads with no animation. Only
-  /// consulted by explicit rich-draft demos.
+  /// pre-10.1 fallback. Empty → the plain glyph leads with no animation.
+  ///
+  /// This is the LAST fallback of the per-step chain, read by `ai-stream.ts` on
+  /// the ordinary product paths (Profiler questions, verification, date card) —
+  /// not a demo-only knob, so emptying it changes what real users see.
+  ///
+  /// A per-step env slot per beat (`CUSTOM_EMOJI_AI_ROUTE/VENUE/CONFIRM/CARD/
+  /// SPARKLE_ID`) used to sit here and was removed 2026-08-14: the ids had
+  /// already moved into the baked `AI_EMOJI` map (`services/ai-emoji.ts`),
+  /// nothing ever read the slots, and production had one of them set — a
+  /// setting that looked live and did nothing. A step's icon is one edit in
+  /// that map; it is a product choice, not per-deployment config.
   CUSTOM_EMOJI_THINKING_ID: process.env.CUSTOM_EMOJI_THINKING_ID ?? "",
-  /// Optional per-step AIActions emoji ids for the multi-beat "thinking"
-  /// sequences (https://t.me/addemoji/AIActions, 48 variants). Each leads one
-  /// progress step instead of the single shared `CUSTOM_EMOJI_THINKING_ID`, so a
-  /// sequence can show a distinct animated AI icon per beat (e.g. route → check →
-  /// card → sparkle for the date-card render). Resolution order per step is
-  /// `StatusStep.emojiId` → these slots → `CUSTOM_EMOJI_THINKING_ID` → plain
-  /// glyph. Empty (default) → the step's plain Unicode glyph leads, no animation,
-  /// so nothing breaks before ids are filled in. Source ids with the
-  /// `list-ai-emojis` dev script. Only consulted by explicit rich-draft demos.
-  CUSTOM_EMOJI_AI_ROUTE_ID: process.env.CUSTOM_EMOJI_AI_ROUTE_ID ?? "",
-  CUSTOM_EMOJI_AI_VENUE_ID: process.env.CUSTOM_EMOJI_AI_VENUE_ID ?? "",
-  CUSTOM_EMOJI_AI_CONFIRM_ID: process.env.CUSTOM_EMOJI_AI_CONFIRM_ID ?? "",
-  CUSTOM_EMOJI_AI_CARD_ID: process.env.CUSTOM_EMOJI_AI_CARD_ID ?? "",
-  CUSTOM_EMOJI_AI_SPARKLE_ID: process.env.CUSTOM_EMOJI_AI_SPARKLE_ID ?? "",
   CUSTOM_EMOJI_LIKE_ID: process.env.CUSTOM_EMOJI_LIKE_ID ?? "",
   CUSTOM_EMOJI_DISLIKE_ID: process.env.CUSTOM_EMOJI_DISLIKE_ID ?? "",
   CUSTOM_EMOJI_MENU_ID: process.env.CUSTOM_EMOJI_MENU_ID ?? "",

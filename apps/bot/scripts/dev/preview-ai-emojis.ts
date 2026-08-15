@@ -1,7 +1,8 @@
 /**
  * Dev-only: send a NUMBERED preview of every animated custom emoji in a Telegram
  * pack (default AIActions) into a chat, so you can visually pick one for the
- * CUSTOM_EMOJI_AI_* / CUSTOM_EMOJI_THINKING_ID env slots. The pack's stickers are
+ * baked `AI_EMOJI` map (`src/services/ai-emoji.ts`) or for the
+ * `CUSTOM_EMOJI_THINKING_ID` env fallback. The pack's stickers are
  * all labelled 🙂, so `list-ai-emojis.ts` (ids only) isn't enough to choose — you
  * have to SEE them animate. Reply with the number you want and its id can be
  * read off the same line.

@@ -1,8 +1,9 @@
 /**
  * Dev-only: list the custom-emoji ids of a Telegram emoji pack (default
  * AIActions, https://t.me/addemoji/AIActions) so you can pick ids for the
- * CUSTOM_EMOJI_THINKING_ID / CUSTOM_EMOJI_AI_* env slots that lead the rich
- * "thinking" progress beats (the shine shimmer on the date-card render etc.).
+ * baked `AI_EMOJI` map (`src/services/ai-emoji.ts`) that leads the rich
+ * "thinking" progress beats (the shine shimmer on the date-card render etc.),
+ * or for the `CUSTOM_EMOJI_THINKING_ID` env fallback.
  *
  * Read-only Telegram call (getStickerSet) — no DB, no long polling, safe with
  * either bot token.
