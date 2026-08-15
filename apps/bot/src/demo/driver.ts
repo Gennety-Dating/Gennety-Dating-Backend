@@ -44,7 +44,13 @@ import {
   releaseMatchCooldown,
   seedDemoPartners,
 } from "./partners.js";
-import { decideDemoAction, type DemoAction, type DemoMatchSnapshot, type DemoSnapshot } from "./decide.js";
+import {
+  decideDemoAction,
+  offerableEnding,
+  type DemoAction,
+  type DemoMatchSnapshot,
+  type DemoSnapshot,
+} from "./decide.js";
 import {
   DEMO_AFTER_DATE_CALLBACK,
   DEMO_CONTINUE_CALLBACK,
@@ -84,7 +90,10 @@ const LOG = "[demo]";
  *   - `redoOffered` — the finished match a visitor has already been offered a
  *     way back from, so the offer is made once per ending rather than once per
  *     tick. Keyed by match id, so a later ending gets its own offer with no
- *     bookkeeping to reset.
+ *     bookkeeping to reset. Losing it on restart is NOT harmless the way the
+ *     others are — a terminal match is terminal forever, so the closing message
+ *     would go out again after every restart — which is why the ending also has
+ *     to be fresh (`DEMO_ENDING_OFFER_MAX_AGE_MS`).
  */
 const spokenBeats = new Map<string, Set<DemoBeat>>();
 const pendingSince = new Map<string, { key: string; at: number }>();
@@ -299,7 +308,6 @@ async function buildSnapshot(
   });
 
   const match = await loadDemoMatch(userId, partnerTelegramIds);
-  const alreadyOffered = redoOffered.get(userId);
 
   return {
     language: user.language,
@@ -310,8 +318,7 @@ async function buildSnapshot(
     awaitingPhotoUpload: await isAwaitingPhotoUpload(telegramId),
     spokenBeats: spokenBeats.get(userId) ?? new Set<DemoBeat>(),
     match: match.live,
-    finishedMatch:
-      match.finished && match.finished.id !== alreadyOffered ? match.finished : null,
+    finishedMatch: offerableEnding(match.finished, redoOffered.get(userId), Date.now()),
     hasEverMatched: match.hasEverMatched,
   };
 }
@@ -342,8 +349,12 @@ const LIVE_STATUSES = ["proposed", "negotiating", "negotiating_venue", "schedule
 
 interface DemoMatchLookup {
   live: DemoMatchSnapshot | null;
-  /** The most recent puppet match, once it is terminal. */
-  finished: { id: string; status: MatchStatus } | null;
+  /**
+   * The most recent puppet match, once it is terminal. `endedAt` is the row's
+   * `updatedAt`, which for a terminal match is when it went terminal: nothing
+   * writes to one afterwards (the peer-wait worker only ever stamps live rows).
+   */
+  finished: { id: string; status: MatchStatus; endedAt: Date } | null;
   /** Any puppet match at all — see `DemoSnapshot.hasEverMatched`. */
   hasEverMatched: boolean;
 }
@@ -362,6 +373,7 @@ async function loadDemoMatch(
     select: {
       id: true,
       status: true,
+      updatedAt: true,
       userAId: true,
       userBId: true,
       acceptedByA: true,
@@ -404,7 +416,7 @@ async function loadDemoMatch(
     // next, so the status travels with it.
     return {
       live: null,
-      finished: { id: row.id, status: row.status },
+      finished: { id: row.id, status: row.status, endedAt: row.updatedAt },
       hasEverMatched: true,
     };
   }

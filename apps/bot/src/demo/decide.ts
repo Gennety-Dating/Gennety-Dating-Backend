@@ -157,8 +157,10 @@ export interface DemoSnapshot {
   match: DemoMatchSnapshot | null;
   /**
    * A finished match with the puppet the visitor has NOT yet been offered a way
-   * back from. The driver filters out endings it has already spoken to, so this
-   * going null is what makes the offer one-shot.
+   * back from, and which ended recently enough to still be worth speaking to.
+   * The driver applies both filters, so this going null is what makes the offer
+   * one-shot — see `DEMO_ENDING_OFFER_MAX_AGE_MS` for why one filter was not
+   * enough.
    */
   finishedMatch: { id: string; status: MatchStatus } | null;
   /**
@@ -237,6 +239,57 @@ export const DEMO_PROXY_REPLY_WAIT_MS = 5_000;
  * turn a demo into an open-ended LLM bill.
  */
 export const DEMO_PROXY_MAX_PARTNER_MESSAGES = 8;
+/**
+ * How fresh an ending has to be for the demo to still speak to it.
+ *
+ * The offer is made one-shot by `redoOffered` in the driver, which is in memory
+ * (no demo-only schema, DEMO_MODE.md) and therefore forgotten on every restart —
+ * while a `completed` match stays `completed` forever. So the closing message
+ * went out again ~12s after EVERY restart of `gennety-demo`, indefinitely, until
+ * the visitor tapped the button or ran `/restart`. Measured in the demo's own
+ * `chat_events`: one genuine finale 17s after the match completed, and a second
+ * identical one 27s after a restart four hours later.
+ *
+ * This is the same trap `decideNarration` documents for the `intro` beat, with
+ * one difference that makes it worse: intro's window closes by itself when the
+ * visitor moves past onboarding, whereas a terminal match never stops being
+ * terminal. So the bound has to come from the clock rather than from a state
+ * change, and it is the driver — which has one — that applies it.
+ *
+ * Ten minutes against a ~15s normal case (a 12s beat on a 3s tick) is deliberate
+ * headroom for a slow send or a failure streak, since the cost of being too
+ * tight is a demo that ends in silence. The residual — a restart inside the
+ * window, after the message already went — is left open on purpose: it is the
+ * narrow case, and the button on the original message keeps working across any
+ * number of restarts (the callback handler reads only the database), so a
+ * visitor who is not re-offered has lost nothing.
+ */
+export const DEMO_ENDING_OFFER_MAX_AGE_MS = 10 * 60_000;
+
+/**
+ * Whether the demo should still speak to a finished match — i.e. what
+ * `DemoSnapshot.finishedMatch` is allowed to hold.
+ *
+ * Two filters, covering different failure modes rather than duplicating each
+ * other. `alreadyOfferedMatchId` (the driver's `redoOffered`) is exact but
+ * process-local: within one lifetime the offer is made once, full stop. The age
+ * bound is the restart-surviving backstop, because that map is empty after every
+ * deploy while a terminal match stays terminal forever.
+ *
+ * Lives here, taking `now` rather than reading the clock, so the rule is
+ * testable without a database or a bot — the same split `failure-tracker.ts`
+ * makes for the same reason.
+ */
+export function offerableEnding(
+  finished: { id: string; status: MatchStatus; endedAt: Date } | null,
+  alreadyOfferedMatchId: string | undefined,
+  now: number,
+): DemoSnapshot["finishedMatch"] {
+  if (!finished) return null;
+  if (finished.id === alreadyOfferedMatchId) return null;
+  if (now - finished.endedAt.getTime() > DEMO_ENDING_OFFER_MAX_AGE_MS) return null;
+  return { id: finished.id, status: finished.status };
+}
 
 export function decideDemoAction(snapshot: DemoSnapshot): DemoDecision {
   const narration = decideNarration(snapshot);

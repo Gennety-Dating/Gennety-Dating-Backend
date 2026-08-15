@@ -7,8 +7,10 @@ import {
   DEMO_EXPLORE_WAIT_MS,
   DEMO_PROXY_MAX_PARTNER_MESSAGES,
   DEMO_PROXY_REPLY_WAIT_MS,
+  DEMO_ENDING_OFFER_MAX_AGE_MS,
   DEMO_STEP_WAIT_MS,
   decideDemoAction,
+  offerableEnding,
   pickCounterSlots,
   type DemoMatchSnapshot,
   type DemoSnapshot,
@@ -602,6 +604,53 @@ describe("endings", () => {
     expect(decideDemoAction(snapshot({ hasEverMatched: false })).action).toEqual({
       kind: "pitch",
     });
+  });
+});
+
+describe("offerableEnding", () => {
+  const now = Date.UTC(2026, 7, 15, 12, 0, 0);
+  const ending = (agoMs: number) => ({
+    id: "m1",
+    status: "completed" as const,
+    endedAt: new Date(now - agoMs),
+  });
+
+  it("offers a fresh ending", () => {
+    expect(offerableEnding(ending(15_000), undefined, now)).toEqual({
+      id: "m1",
+      status: "completed",
+    });
+  });
+
+  it("stays quiet once this ending has been spoken to in this process", () => {
+    expect(offerableEnding(ending(15_000), "m1", now)).toBeNull();
+  });
+
+  it("still offers when the id belongs to an EARLIER ending", () => {
+    // A second run through the flow produces a second terminal row, and it gets
+    // its own offer — `redoOffered` is keyed by match id precisely so there is
+    // no bookkeeping to reset between runs.
+    expect(offerableEnding(ending(15_000), "m0", now)).toEqual({
+      id: "m1",
+      status: "completed",
+    });
+  });
+
+  it("stays quiet about an ending older than the window, whatever the memory says", () => {
+    // The reported bug: `redoOffered` is wiped by every restart while a
+    // `completed` match stays completed forever, so without this the closing
+    // message went out again ~12s after each restart, indefinitely.
+    expect(offerableEnding(ending(DEMO_ENDING_OFFER_MAX_AGE_MS + 1), undefined, now)).toBeNull();
+  });
+
+  it("has headroom well past the ~15s a real offer takes", () => {
+    // A 12s beat on a 3s tick, plus room for a slow send or a failure streak.
+    // Too tight and a demo ends in silence, which is the worse failure.
+    expect(DEMO_ENDING_OFFER_MAX_AGE_MS).toBeGreaterThan(20 * DEMO_STEP_WAIT_MS);
+  });
+
+  it("has nothing to say when there is no ending", () => {
+    expect(offerableEnding(null, undefined, now)).toBeNull();
   });
 });
 

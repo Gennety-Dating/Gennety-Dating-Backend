@@ -383,9 +383,29 @@ none should be — the schema is shared with production, and a demo-only table
 would ship to the real database on the next `db:push`. The cost is that a
 restart mid-demo can repeat one explanatory message. That is the right trade.
 
-Everything that must survive a restart already does, because it is real product
-state: the match row, the ticket status, the calendar picks, the lifecycle
-idempotency columns.
+**But "one explanatory message" is a claim each beat has to earn, and one of
+them did not.** The rest of the product state that matters — the match row, the
+ticket status, the calendar picks, the lifecycle idempotency columns — survives a
+restart because it is real product state. A forgotten in-memory guard is
+therefore harmless only when the *state it guards against* also moves on. Every
+narration beat is saved that way: its window closes by itself as the visitor
+progresses (`decideNarration` spells this out for `intro`, the one beat whose
+window needed an explicit upper bound).
+
+`redoOffered` was the exception, and it repeated far more than once. A terminal
+match is terminal **forever**, so nothing ever closed its window: the closing
+message went out again ~12 s after every single restart of `gennety-demo`,
+indefinitely, until the visitor tapped the button or ran `/restart`. Measured in
+the demo's own `chat_events` — one genuine finale 17 s after the match completed,
+then an identical one 27 s after a restart four hours later, same visitor, same
+match. The ending now also has to be **fresh**
+(`DEMO_ENDING_OFFER_MAX_AGE_MS`, 10 min) for the demo to speak to it, which is
+the clock-based equivalent of the state-based bound every other beat gets for
+free.
+
+The rule this leaves behind: **before relying on a map here, ask what closes the
+window when the map is gone.** If the answer is "nothing", the beat needs its own
+bound — not a schema column.
 
 ## The narration
 
@@ -452,7 +472,16 @@ idea whether a radar step exists at all.
   tick read the empty state as "the demo has not started" and pitched a fresh
   profile twelve seconds later whether or not anyone pressed anything. The rows
   now stay, `hasEverMatched` keeps the driver quiet, and the offer is made once
-  per ending (`redoOffered`, keyed by match id).
+  per ending (`redoOffered`, keyed by match id) **and only while that ending is
+  still fresh** — the map is wiped by every restart, so on its own it made the
+  offer once per *process* rather than once per ending (see "What is held in
+  memory" above).
+
+  **The button keeps working across restarts, which is why suppressing the
+  repeat costs nothing.** Its handler resolves the visitor from the database and
+  nothing else, so a visitor who scrolls back to the original message can still
+  start a second run days later — the freshness bound withholds a duplicate
+  *message*, never the way back.
 
   **The tap answers, and it keeps its button until a profile actually
   arrives.** It used to retire the keyboard first — double-tap protection — and
