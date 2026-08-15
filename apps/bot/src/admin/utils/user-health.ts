@@ -120,6 +120,14 @@ export interface HealthUserInput {
   status: string;
   onboardingStep: string;
   verificationStatus: string;
+  /**
+   * Ни одно правило здоровья пол не читает — он здесь ради разреза «Gender
+   * Ratio» (`gender-ratio.ts`), которому нужен тот же самый вердикт
+   * «тестовый / реальный». Второй скан таблицы ради одной колонки был бы
+   * платой за дубль, а своя копия правила исключения тестовых — источником
+   * расхождения.
+   */
+  gender: string | null;
   faceMatchScore: number | null;
   faceMatchedAt: Date | null;
   createdAt: Date;

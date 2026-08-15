@@ -30,6 +30,7 @@ function user(overrides: Partial<HealthUserInput> = {}): HealthUserInput {
     status: "active",
     onboardingStep: "completed",
     verificationStatus: "verified",
+    gender: "female",
     faceMatchScore: 0.97,
     faceMatchedAt: new Date(NOW.getTime() - 5 * DAY),
     createdAt: new Date(NOW.getTime() - 10 * DAY),

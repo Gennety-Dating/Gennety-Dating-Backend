@@ -1,5 +1,66 @@
 # Gennety Dating Deploy
 
+**PENDING — метрика Match→Ticket, Core metrics, поля матча (ТЗ Задачи 1–2,
+DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов, нет
+изменения Mini App** — только админ-API. **Но едет в одном релизе с блоком ниже
+(«вы встретились?»), которому `db:push` НУЖЕН**: `/admin/stats` читает
+`matches.date_attended_a`, так что без пуша схемы этот эндпоинт отдаст 500.
+Порядок: Deploy Full Server Code → `db:push` → `pnpm db:drift-check` →
+`pm2 restart` → редеплой дашборда (отдельный репозиторий).
+
+Проверено на живых данных до деплоя (сырым SQL, потому что колонок в проде ещё
+нет — пробник воспроизвёл ровно тот `P2022`, о котором предупреждает блок ниже):
+
+```
+conversion:      confirmed 0, netPct null, excludedSynthetic 13, excludedTest 1
+weeklyPaidDates: 0
+genderRatio:     6 M / 1 F / 16 unknown из 23 → 69.6% не назвали пол
+reg→match 7d:    4 реальных регистрации, 0 матчей
+```
+
+**Пять вещей, которые стоит знать до рестарта:**
+
+- **`netPct: null`, а не 0%, и это правильный ответ.** Знаменатель пуст: 13
+  матчей синтетические (партнёр-заглушка по построению всегда отказывает и
+  билет купить не может), а единственный `completed` в истории прода оказался
+  засеянной строкой с синтетическим участником. Раздел будет пустым, пока не
+  появятся продажи.
+- **`/admin/stats` и `/admin/matches` получают по одному новому запросу**
+  (`ticketLedger.groupBy` по возвратам). На `/admin/matches` он ограничен
+  строками страницы, не N+1. Семантика отказа та же, что у остальных девяти
+  запросов `collectStats`: падение любого — 500 на весь эндпоинт.
+- **`derived.activeRate` и соседи не тронуты**, но `derived` вырос на 11 полей.
+  Дашборд читает их через `.catch(() => null)` по секциям, так что старый фронт
+  не сломается — просто не покажет новое.
+- **`HEALTH_USER_SELECT` получил колонку `gender`.** Ни одно правило здоровья её
+  не читает; она нужна разрезу Gender Ratio, которому требуется тот же вердикт
+  «тестовый / реальный». Второй скан пользователей ради одной колонки был бы
+  платой за дубль.
+- **CAC/LTV/ROAS отдаются `null` намеренно.** Данных о расходах в продукте нет
+  вовсе; дизайн ввода — `AD_SPEND_TRACKING_DESIGN.md`, реализация не начата.
+  Показывать 0 вместо «нет данных» — единственная ошибка в этом разделе,
+  которая делает дашборд хуже, чем его отсутствие.
+
+Preflight: typecheck чист по всем 5 проектам, lint чист, **3704 теста бота, 0
+failed** (+33 новых).
+
+Проверка после деплоя:
+
+```sh
+KEY=$(ssh root@167.172.178.229 "sed -n 's/^ADMIN_API_KEY=//p' /opt/gennety/.env | tail -1 | tr -d '\"'")
+curl -s -H "Authorization: Bearer $KEY" https://api-admin.gennety.com/admin/stats \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['conversion']); print(d['genderRatio'])"
+# conversion.netPct должен быть null (не 0), excludedSynthetic > 0.
+curl -s -H "Authorization: Bearer $KEY" 'https://api-admin.gennety.com/admin/matches?limit=1' \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0])"
+# У строки должны быть noShow, attendance, refundReason, dateCompletedAt.
+```
+
+**Rollback:** откатить код и перезапустить. Откатывать больше нечего — своей
+схемы этот блок не добавляет, env не трогает, флага нет.
+
+---
+
 **PENDING — демо перестаёт слать финал после каждого рестарта (DEMO_MODE.md,
 DECISIONS.md).** **Только демо** — диff это `apps/bot/src/demo/**` плюс
 документация, так что **в `/opt/gennety` синкать нечего и прод НЕ

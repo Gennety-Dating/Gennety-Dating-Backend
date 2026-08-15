@@ -3,11 +3,26 @@ import { prisma } from "@gennety/db";
 import { classifyAllUsers } from "../utils/user-health-source.js";
 import {
   computeFunnel,
+  pct,
   rate,
   summarizeHealth,
+  type ClassifiedUser,
   type OnboardingFunnel,
   type UserHealthSummary,
 } from "../utils/user-health.js";
+import {
+  computeMatchConversion,
+  isConfirmed,
+  isGhostDuringScheduling,
+  isPaidDate,
+  paidDatesInWindow,
+  refundReasonFor,
+  type ConversionMatchInput,
+  type MatchConversionSummary,
+} from "../utils/match-conversion.js";
+import { loadConversionMatches } from "../utils/match-conversion-source.js";
+import { computeGenderRatio, type GenderRatio } from "../utils/gender-ratio.js";
+import { isNoShow, resolvePairAttendance } from "../../services/attendance.js";
 
 /**
  * Operational + top-level resource endpoints for the admin surface.
@@ -80,6 +95,13 @@ export interface AdminStats {
   userHealth: UserHealthSummary & { verified_real: number; scanned: number; truncated: boolean };
   /** Воронка онбординга. Все знаменатели — без тестовых аккаунтов. */
   funnel: OnboardingFunnel;
+  /**
+   * Нетто-конверсия «подтверждённый матч → оплаченное свидание».
+   * Синтетические матчи и тестовые пары вне знаменателя; `null` = нет данных.
+   */
+  conversion: MatchConversionSummary;
+  /** Пол новых пользователей, с явной долей незаполнивших. */
+  genderRatio: GenderRatio;
   generatedAt: string;
 }
 
@@ -88,7 +110,17 @@ export interface AdminStats {
  * apart — the composite endpoint is meant to be a superset, not a second
  * implementation of the same counters.
  */
-async function collectStats(): Promise<AdminStats> {
+async function collectStats(): Promise<{
+  stats: AdminStats;
+  /**
+   * Снимок матчей, на котором посчитана `conversion`. Отдаётся наружу, чтобы
+   * `/admin/dashboard` считал недельные числа на тех же строках, а не грузил
+   * их второй раз — и, что важнее, не разошёлся с `/admin/stats` в трактовке.
+   */
+  conversionMatches: ConversionMatchInput[];
+  /** Классифицированные пользователи — чтобы дашборд не сканировал их снова. */
+  classified: ClassifiedUser[];
+}> {
   const [
     userTotal,
     statusGroups,
@@ -149,7 +181,11 @@ async function collectStats(): Promise<AdminStats> {
     (u) => u.verdict.classification !== "test" && u.verificationStatus === "verified",
   ).length;
 
-  return {
+  // Снимок матчей переиспользует уже посчитанный вердикт здоровья, а не
+  // сканирует пользователей второй раз ради того же ответа.
+  const conversionMatches = await loadConversionMatches(health.users);
+
+  const stats: AdminStats = {
     users: { total: userTotal, byStatus },
     onboarding: { byStep },
     verification: { byStatus: byVerification },
@@ -163,8 +199,11 @@ async function collectStats(): Promise<AdminStats> {
       truncated: health.truncated,
     },
     funnel: computeFunnel(health.users),
+    conversion: computeMatchConversion(conversionMatches),
+    genderRatio: computeGenderRatio(health.users),
     generatedAt: new Date().toISOString(),
   };
+  return { stats, conversionMatches, classified: health.users };
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +250,7 @@ opsRouter.get("/admin/health", async (_req: Request, res: Response) => {
 /** Headline counters across users, onboarding, verification, matches, reports. */
 opsRouter.get("/admin/stats", async (_req: Request, res: Response) => {
   try {
-    res.json(await collectStats());
+    res.json((await collectStats()).stats);
   } catch (err) {
     console.error("[admin] stats error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -228,7 +267,7 @@ opsRouter.get("/admin/stats", async (_req: Request, res: Response) => {
  */
 opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
   try {
-    const [stats, recentMatches, recentUsers] = await Promise.all([
+    const [{ stats, conversionMatches, classified }, recentMatches, recentUsers] = await Promise.all([
       collectStats(),
       prisma.match.findMany({
         take: 10,
@@ -249,6 +288,22 @@ opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
     ]);
 
     const { matches, userHealth, funnel } = stats;
+    const nowTs = new Date();
+    const weekAgo = new Date(nowTs.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // Знаменатель — реальные регистрации за окно, не `users.total`: тестовые и
+    // синтетические аккаунты вне любой конверсии (та же дробь, что у воронки).
+    const recentRealUsers = classified.filter(
+      (u) => u.verdict.classification !== "test" && u.createdAt.getTime() >= weekAgo.getTime(),
+    ).length;
+    // Совпавшие за окно — по матчам реальных пар, созданным в этом окне.
+    const matchedLast7Days = new Set(
+      conversionMatches
+        .filter(
+          (m) =>
+            m.source !== "synthetic" && !m.isTestPair && m.createdAt.getTime() >= weekAgo.getTime(),
+        )
+        .map((m) => m.id),
+    ).size;
     // Progressed past `proposed` — the same definition the analytics funnel
     // uses, kept here so the two dashboards agree.
     const accepted =
@@ -261,6 +316,33 @@ opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
       ...stats,
       derived: {
         signupsLast7Days: recentUsers,
+        // ── Core metrics (ТЗ Задача 2) ────────────────────────────────────
+        // North Star: оплаченные СВИДАНИЯ за неделю, а не плательщики.
+        // Мужчина, оплативший за двоих, — одно свидание и один плательщик.
+        weeklyPaidDates: paidDatesInWindow(conversionMatches, weekAgo, nowTs),
+        // Нетто, с вычетом сорванных. `null` = нет данных, никогда не 0%.
+        matchToTicketConversionPct: stats.conversion.netPct,
+        matchToTicketGrossPct: stats.conversion.grossPct,
+        matchNoShowRatePct: stats.conversion.noShowRateOfPaidPct,
+        matchGhostRatePct: stats.conversion.ghostRateOfPaidPct,
+        /**
+         * Регистрация → матч за 7 дней.
+         *
+         * НЕ «install→match»: установки в продукте не трекаются вовсе — iOS
+         * ещё не вышел, а `referralSource` фиксируется уже на регистрации. Имя
+         * метрики называет то, что она измеряет; «install» здесь был бы одной
+         * метрикой под именем другой.
+         */
+        registeredToMatchRate7dPct: pct(matchedLast7Days, recentRealUsers),
+        registeredReal7d: recentRealUsers,
+        matchedLast7Days,
+        // ── Требуют данных о расходах (AD_SPEND_TRACKING_DESIGN.md) ───────
+        // null, а не 0: «нет данных» и «привлекли бесплатно» — разные
+        // утверждения, и второе было бы ложью.
+        cacPerPayingUsdCents: null,
+        cacPerActiveUsdCents: null,
+        ltvCac: null,
+        roas: null,
         // ИСПРАВЛЕНО: раньше делилось на users.total, т.е. вместе с тестовыми
         // аккаунтами (5/19 вместо 5/16). Знаменатель — реальные пользователи,
         // числитель — активные И верифицированные, т.е. те, кто действительно
@@ -339,6 +421,17 @@ opsRouter.get("/admin/matches", async (req: Request, res: Response) => {
           venueName: true,
           venueAddress: true,
           ticketStatus: true,
+          ticketPaidA: true,
+          ticketPaidB: true,
+          dateAttendedA: true,
+          dateAttendedB: true,
+          attendanceOutcomeA: true,
+          attendanceOutcomeB: true,
+          stallCheckInSentAtA: true,
+          stallCheckInSentAtB: true,
+          stallConfirmedAtA: true,
+          stallConfirmedAtB: true,
+          feedbackPromptedAt: true,
           dispatchedAt: true,
           createdAt: true,
           userA: participant,
@@ -348,16 +441,80 @@ opsRouter.get("/admin/matches", async (req: Request, res: Response) => {
       prisma.match.count({ where }),
     ]);
 
+    // Возвраты по показанным матчам — один запрос на страницу, не N+1.
+    const refundRows = await prisma.ticketLedger.groupBy({
+      by: ["matchId"],
+      where: { matchId: { in: rows.map((r) => r.id) }, reason: { in: ["refund", "gate_refunded"] } },
+      _count: { _all: true },
+    });
+    const refundedByMatch = new Map<string, number>();
+    for (const r of refundRows) if (r.matchId) refundedByMatch.set(r.matchId, r._count._all);
+
     // telegramId is a BigInt — JSON.stringify throws on it, so both
     // participants are serialized explicitly (same rule as /admin/users).
-    const data = rows.map((m) => ({
-      ...m,
-      agreedTime: m.agreedTime?.toISOString() ?? null,
-      dispatchedAt: m.dispatchedAt?.toISOString() ?? null,
-      createdAt: m.createdAt.toISOString(),
-      userA: { ...m.userA, telegramId: m.userA.telegramId.toString() },
-      userB: { ...m.userB, telegramId: m.userB.telegramId.toString() },
-    }));
+    const data = rows.map((m) => {
+      // Все события ТЗ 1.1 ВЫВОДЯТСЯ из колонок, которые продукт уже пишет —
+      // ничего не денормализовано (DECISIONS.md 2026-08-15). Практическое
+      // следствие: поля заполнены на всей истории матчей, а не с даты деплоя.
+      const refundedSlots = refundedByMatch.get(m.id) ?? 0;
+      const input: ConversionMatchInput = {
+        id: m.id,
+        source: m.source,
+        isTestPair: false, // на этом маршруте не нужен: он не считает конверсию
+        acceptedByA: m.acceptedByA,
+        acceptedByB: m.acceptedByB,
+        status: m.status,
+        ticketStatus: m.ticketStatus,
+        ticketPaidA: m.ticketPaidA,
+        ticketPaidB: m.ticketPaidB,
+        dateAttendedA: m.dateAttendedA,
+        dateAttendedB: m.dateAttendedB,
+        attendanceOutcomeA: m.attendanceOutcomeA,
+        attendanceOutcomeB: m.attendanceOutcomeB,
+        stallCheckInSentAtA: m.stallCheckInSentAtA,
+        stallCheckInSentAtB: m.stallCheckInSentAtB,
+        stallConfirmedAtA: m.stallConfirmedAtA,
+        stallConfirmedAtB: m.stallConfirmedAtB,
+        refundedSlots,
+        createdAt: m.createdAt,
+      };
+      // Оба слота закрыты — только тогда свидание оплачено (§3.5b жёсткий гейт).
+      const ticketPurchased = isPaidDate(input);
+      const settledAt =
+        ticketPurchased && m.ticketPaidA && m.ticketPaidB
+          ? new Date(Math.max(m.ticketPaidA.getTime(), m.ticketPaidB.getTime()))
+          : null;
+      return {
+        ...m,
+        agreedTime: m.agreedTime?.toISOString() ?? null,
+        dispatchedAt: m.dispatchedAt?.toISOString() ?? null,
+        createdAt: m.createdAt.toISOString(),
+        // ── выведенные поля (ТЗ 1.1) ───────────────────────────────────────
+        confirmed: isConfirmed(input),
+        ticketPurchased,
+        ticketPurchasedAt: settledAt?.toISOString() ?? null,
+        refunded: refundedSlots > 0,
+        refundedSlots,
+        refundReason: refundReasonFor(input),
+        /**
+         * `null` = никто не ответил, и это НЕ «явка была». Молчание после
+         * свидания — самый обычный исход, а `status='completed'` ставится по
+         * таймеру независимо от того, пришёл ли кто-нибудь.
+         */
+        noShow: isNoShow(input),
+        attendance: resolvePairAttendance(input),
+        ghostDuringScheduling: isGhostDuringScheduling(input),
+        /**
+         * Момент, когда свидание закрылось. Это `feedbackPromptedAt` — он
+         * ставится ровно в переходе в `completed`, так что отдельная колонка
+         * не нужна. Название честное: «дата закрыта», а не «свидание
+         * состоялось» — на второй вопрос отвечает `attendance`.
+         */
+        dateCompletedAt: m.feedbackPromptedAt?.toISOString() ?? null,
+        userA: { ...m.userA, telegramId: m.userA.telegramId.toString() },
+        userB: { ...m.userB, telegramId: m.userB.telegramId.toString() },
+      };
+    });
 
     res.json({ data, total, limit, offset });
   } catch (err) {

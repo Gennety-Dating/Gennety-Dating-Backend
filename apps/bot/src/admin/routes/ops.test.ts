@@ -66,6 +66,8 @@ vi.mock("@gennety/db", () => ({
       findUnique: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({}),
     },
+    // Возвраты по матчам — вход нетто-конверсии (`match-conversion.ts`).
+    ticketLedger: { groupBy: vi.fn().mockResolvedValue([]) },
     match: {
       groupBy: vi.fn().mockResolvedValue([{ status: "scheduled", _count: { _all: 1 } }]),
       count: vi.fn().mockResolvedValue(1),

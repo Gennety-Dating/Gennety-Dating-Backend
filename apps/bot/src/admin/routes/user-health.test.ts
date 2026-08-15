@@ -109,7 +109,11 @@ vi.mock("@gennety/db", () => ({
       findUnique: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({}),
     },
-    ticketLedger: { findMany: vi.fn().mockResolvedValue([]) },
+    ticketLedger: {
+      findMany: vi.fn().mockResolvedValue([]),
+      // Возвраты по матчам — вход нетто-конверсии (`match-conversion.ts`).
+      groupBy: vi.fn().mockResolvedValue([]),
+    },
     subscriptionLedger: { findMany: vi.fn().mockResolvedValue([]) },
     rematchPurchase: { findMany: vi.fn().mockResolvedValue([]) },
     venueChangePurchase: { findMany: vi.fn().mockResolvedValue([]) },

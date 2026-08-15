@@ -40,6 +40,7 @@ const HEALTH_USER_SELECT = {
   status: true,
   onboardingStep: true,
   verificationStatus: true,
+  gender: true,
   faceMatchScore: true,
   faceMatchedAt: true,
   createdAt: true,
@@ -56,6 +57,7 @@ type HealthUserRow = {
   status: string;
   onboardingStep: string;
   verificationStatus: string;
+  gender: string | null;
   faceMatchScore: number | null;
   faceMatchedAt: Date | null;
   createdAt: Date;
@@ -160,6 +162,7 @@ function toInput(
     status: row.status,
     onboardingStep: row.onboardingStep,
     verificationStatus: row.verificationStatus,
+    gender: row.gender,
     faceMatchScore: row.faceMatchScore,
     faceMatchedAt: row.faceMatchedAt,
     createdAt: row.createdAt,
