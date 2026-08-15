@@ -1156,6 +1156,33 @@ model Match {
   emergencyReason      String?   @map("emergency_reason")
   feedbackByA          String?   @map("feedback_by_a")
   feedbackByB          String?   @map("feedback_by_b")
+  /// Did the date actually happen — answered by each side in their own words
+  /// at T+24h (PRODUCT_SPEC §Phase 4 → "Did you actually meet?").
+  ///
+  /// Written ONLY by a human answer, never by the evidence classifier. That
+  /// separation is the whole design: the classifier picks how the question is
+  /// worded, so a wrong guess costs an odd sentence rather than a fabricated
+  /// metric. Null = not answered, which is NOT the same as "didn't happen" and
+  /// must never be rendered as `false`.
+  ///
+  /// Attendance is a property of the PAIR, so one credible `true` settles it
+  /// for the match; the two columns exist because the sides can disagree, and
+  /// a disagreement is a real state (`disputed`) that belongs on screen rather
+  /// than silently collapsed. `Match.status = 'completed'` cannot answer this:
+  /// it is stamped by the T+24h prompt whether or not anyone showed up.
+  dateAttendedA        Boolean?  @map("date_attended_a")
+  dateAttendedB        Boolean?  @map("date_attended_b")
+  /// Why it didn't happen, on the "no" branch: `no_show_partner` /
+  /// `no_show_self` / `both_rescheduled` / `other`. A plain string rather than
+  /// a Prisma enum, like every other match sub-state here (`ticketStatus`,
+  /// `coordMethod`, `venueChangeStatus`), so a new value costs no migration;
+  /// the whitelist lives in `services/attendance.ts`.
+  ///
+  /// Deliberately separate from `feedbackBy*`: that blob is LLM-distilled into
+  /// the answerer's `negativeConstraints`, and "she never turned up" is a fact
+  /// about one evening, not a trait to penalise future candidates on.
+  attendanceOutcomeA   String?   @map("attendance_outcome_a")
+  attendanceOutcomeB   String?   @map("attendance_outcome_b")
   venueFitByA          String?   @map("venue_fit_by_a")
   venueFitByB          String?   @map("venue_fit_by_b")
   venueFitReasonsByA   String[]  @default([]) @map("venue_fit_reasons_by_a")

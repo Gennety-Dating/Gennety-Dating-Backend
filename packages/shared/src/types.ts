@@ -77,6 +77,17 @@ export type MatchFlowState =
   | "awaiting_venue_details"
   | "awaiting_emergency_reason"
   | "awaiting_feedback"
+  /**
+   * The T+24h "did you actually meet?" question is open and the next plain
+   * message is its answer (PRODUCT_SPEC §Phase 4). Buttons are the primary
+   * path and stay deterministic; this state exists because the question is
+   * asked in ordinary prose, and prose invites a typed reply — without it
+   * "да, всё супер" would fall through to the concierge and the one fact the
+   * question exists to collect would be lost.
+   *
+   * Bounded like every other claim here (`services/match-flow-claim.ts`).
+   */
+  | "awaiting_attendance"
   | "awaiting_report_details"
   /**
    * Active in the anonymous pre-date proxy chat (Variant C). Entered ONLY by

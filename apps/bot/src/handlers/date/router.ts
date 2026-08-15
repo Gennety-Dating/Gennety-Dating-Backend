@@ -8,6 +8,11 @@ import {
 } from "./emergency.js";
 import { handleFeedbackVoiceStart, handleFeedbackVoiceText } from "./feedback.js";
 import {
+  handleAttendanceAnswer,
+  handleAttendanceOutcome,
+  handleAttendanceText,
+} from "./attendance.js";
+import {
   handleCoordMethod,
   handleCoordConsent,
   handleCoordEnter,
@@ -59,6 +64,16 @@ dateRouter.use(async (ctx, next) => {
     return;
   }
 
+  // "Did you actually meet?" — asked at T+24h before the feedback form.
+  if (data?.startsWith("attend:yes:") || data?.startsWith("attend:no:")) {
+    await handleAttendanceAnswer(ctx);
+    return;
+  }
+  if (data?.startsWith("attend:out:")) {
+    await handleAttendanceOutcome(ctx);
+    return;
+  }
+
   // Voice-feedback opt-in
   if (data?.startsWith("feedback:voice:")) {
     await handleFeedbackVoiceStart(ctx);
@@ -102,6 +117,20 @@ dateRouter.use(async (ctx, next) => {
       return;
     }
     releaseMatchFlowClaim(ctx.session);
+  }
+
+  // Free-text: the attendance question. Buttons are the primary path, but the
+  // question is asked in ordinary prose and prose invites a typed reply — so a
+  // short "да, встретились" is captured here rather than falling through to
+  // the concierge, which would lose the one fact the question exists for.
+  // Only an UNAMBIGUOUS short answer is consumed; anything else falls through
+  // deliberately, and the agent can see the open question in the timeline.
+  if (ctx.session.matchFlow === "awaiting_attendance" && ctx.message?.text) {
+    if (matchFlowClaimIsLive(ctx.session, "awaiting_attendance")) {
+      if (await handleAttendanceText(ctx)) return;
+    } else {
+      releaseMatchFlowClaim(ctx.session);
+    }
   }
 
   // Free-text or transcribed voice: feedback (shared with the form pipeline).

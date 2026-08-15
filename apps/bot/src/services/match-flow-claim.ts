@@ -35,6 +35,7 @@ const CLAIMABLE: readonly MatchFlowState[] = [
   "awaiting_report_details",
   "awaiting_emergency_reason",
   "awaiting_feedback",
+  "awaiting_attendance",
 ];
 
 /**
@@ -49,6 +50,11 @@ export const MATCH_FLOW_CLAIM_TTL_MS: Record<string, number> = {
   awaiting_emergency_reason: 30 * 60 * 1000,
   awaiting_report_details: 60 * 60 * 1000,
   awaiting_feedback: 24 * 60 * 60 * 1000,
+  // Same window as feedback, and for the same reason: it is asked a day after
+  // the date and writes only the answerer's own side of one match row. It is
+  // also the question most likely to be answered late — people open the chat
+  // the following evening, not the moment the DM lands.
+  awaiting_attendance: 24 * 60 * 60 * 1000,
 };
 
 /**
@@ -63,6 +69,10 @@ const OWN_CALLBACK_PREFIXES: Record<string, readonly string[]> = {
   awaiting_report_details: ["rc:", "rs:", "rb:", "report:category:", "report:skip:"],
   awaiting_emergency_reason: ["emerg:"],
   awaiting_feedback: ["feedback:"],
+  // `attend:` is the question's own yes/no and its outcome buttons; `feedback:`
+  // is exempt too because answering "yes" hands straight over to the feedback
+  // invitation, and that handover must not close the claim it arrived through.
+  awaiting_attendance: ["attend:", "feedback:"],
 };
 
 function isClaimable(state: MatchFlowState): boolean {

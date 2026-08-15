@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
-import { DEFAULT_SESSION } from "@gennety/shared";
+import { DEFAULT_SESSION, t } from "@gennety/shared";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -68,6 +68,11 @@ import {
   handleFeedbackVoiceText,
   recordPostDateFeedback,
 } from "./feedback.js";
+import {
+  handleAttendanceAnswer,
+  handleAttendanceOutcome,
+  handleAttendanceText,
+} from "./attendance.js";
 import { runDateLifecycleTick } from "../../services/date-lifecycle.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -676,7 +681,7 @@ describe("date-lifecycle tick", () => {
     );
   });
 
-  it("sends feedback prompts for dates 24h+ in the past", async () => {
+  it("asks whether the date happened at T+24h, before the feedback form", async () => {
     const agreedTime = new Date("2026-04-08T19:00:00Z");
     // now = 25h after the date
     const now = new Date(agreedTime.getTime() + 25 * 60 * 60 * 1000);
@@ -685,8 +690,9 @@ describe("date-lifecycle tick", () => {
       feedback: [
         {
           id: "match-2",
-          userA: { telegramId: 2001n, language: "en", theme: "light" },
-          userB: { telegramId: 2002n, language: "uk", theme: "dark" },
+          agreedTime,
+          userA: { id: "ua-2", telegramId: 2001n, language: "en", theme: "light" },
+          userB: { id: "ub-2", telegramId: 2002n, language: "uk", theme: "dark" },
         },
       ],
     });
@@ -697,24 +703,30 @@ describe("date-lifecycle tick", () => {
     const result = await runDateLifecycleTick(api, now);
 
     expect(result.feedbacks).toBe(1);
-    // 2 messages: feedback A, feedback B
+    // 2 messages: the attendance question to A and to B.
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
 
-    // Each feedback DM carries the new dual-input keyboard: a `web_app`
-    // button on row 1 (Mini App form) and a callback button on row 2
-    // (`feedback:voice:*`). The keyboard layout is the contract the rest
-    // of the system depends on.
+    // The T+24h DM is now the attendance question, NOT the feedback form:
+    // "how was the chemistry, 1-10" is a question ABOUT a date, and it reads
+    // as absurd to someone who was stood up. The form follows the "yes"
+    // answer (`handlers/date/attendance.ts`), so it must not be here.
     const callA = (api.sendMessage as any).mock.calls[0];
-    const replyMarkupA = callA[2].reply_markup as { inline_keyboard: unknown[][] };
-    const rows = replyMarkupA.inline_keyboard;
+    const rows = (callA[2].reply_markup as { inline_keyboard: unknown[][] }).inline_keyboard;
     expect(rows).toHaveLength(2);
-    const formBtn = rows[0]![0] as { web_app?: { url: string }; text: string };
-    const voiceBtn = rows[1]![0] as { callback_data?: string; text: string };
-    expect(formBtn.web_app?.url).toContain("/feedback.html");
-    expect(formBtn.web_app?.url).toContain("match=match-2");
-    expect(formBtn.web_app?.url).toContain("lang=en");
-    expect(formBtn.web_app?.url).toContain("theme=light");
-    expect(voiceBtn.callback_data).toBe("feedback:voice:match-2");
+    const yesBtn = rows[0]![0] as { callback_data?: string; text: string };
+    const noBtn = rows[1]![0] as { callback_data?: string; text: string };
+    expect(yesBtn.callback_data).toBe("attend:yes:match-2");
+    expect(noBtn.callback_data).toBe("attend:no:match-2");
+    // No Mini App button on this step at all.
+    expect(JSON.stringify(rows)).not.toContain("web_app");
+
+    // With no evidence at hand the neutral wording is used — and the evidence
+    // reader is fail-open, so an unmockable Prisma call degrades to exactly
+    // that rather than skipping the question.
+    expect(callA[1]).toBe(t("en", "attendanceAsk"));
+    expect(((api.sendMessage as any).mock.calls[1] as unknown[])[1]).toBe(
+      t("uk", "attendanceAsk"),
+    );
 
     // Transition to completed AND stamp feedbackPromptedAt (C-1 dedup marker).
     expect(mMatch.updateMany).toHaveBeenCalledWith(
@@ -830,5 +842,180 @@ describe("date-lifecycle tick", () => {
     expect(result.emergencies).toBe(0);
     expect(result.feedbacks).toBe(0);
     expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Attendance question — "did the date actually happen?"
+// ---------------------------------------------------------------------------
+
+describe("attendance question", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mMatch.update.mockResolvedValue({});
+  });
+
+  function stubParticipant() {
+    mMatch.findUnique.mockResolvedValue({
+      status: "completed",
+      userAId: "uid-A",
+      userBId: "uid-B",
+    });
+    mUser.findUnique.mockResolvedValue({ id: "uid-A", theme: "dark" });
+  }
+
+  it("records a yes and hands over to the feedback form", async () => {
+    stubParticipant();
+    const ctx = createCtx({ callbackData: "attend:yes:match-9" });
+
+    await handleAttendanceAnswer(ctx);
+
+    expect(mMatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "match-9" },
+        data: { dateAttendedA: true },
+      }),
+    );
+    // The form follows the answer rather than preceding it.
+    const kb = ctx.reply.mock.calls[0][1].reply_markup.inline_keyboard;
+    expect(JSON.stringify(kb)).toContain("web_app");
+    expect(JSON.stringify(kb)).toContain("feedback:voice:match-9");
+    // Claim released: the next free text belongs to feedback, not to us.
+    expect(ctx.session.matchFlow).toBe("idle");
+  });
+
+  it("records a no and asks what happened instead of asking for chemistry", async () => {
+    stubParticipant();
+    const ctx = createCtx({ callbackData: "attend:no:match-9" });
+
+    await handleAttendanceAnswer(ctx);
+
+    expect(mMatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { dateAttendedA: false } }),
+    );
+    const kb = JSON.stringify(ctx.reply.mock.calls[0][1].reply_markup.inline_keyboard);
+    expect(kb).toContain("attend:out:no_show_partner:match-9");
+    expect(kb).not.toContain("web_app");
+    // The claim stays open — the outcome is still part of this same question.
+    expect(ctx.session.matchFlow).toBe("awaiting_attendance");
+  });
+
+  it("writes side B when the answerer is the second participant", async () => {
+    mMatch.findUnique.mockResolvedValue({
+      status: "completed",
+      userAId: "uid-A",
+      userBId: "uid-B",
+    });
+    mUser.findUnique.mockResolvedValue({ id: "uid-B", theme: "light" });
+    const ctx = createCtx({ callbackData: "attend:yes:match-9" });
+
+    await handleAttendanceAnswer(ctx);
+
+    expect(mMatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { dateAttendedB: true } }),
+    );
+  });
+
+  it("ignores a tap from somebody who is not on the match", async () => {
+    mMatch.findUnique.mockResolvedValue({
+      status: "completed",
+      userAId: "uid-A",
+      userBId: "uid-B",
+    });
+    mUser.findUnique.mockResolvedValue({ id: "uid-STRANGER", theme: "dark" });
+    const ctx = createCtx({ callbackData: "attend:yes:match-9" });
+
+    await handleAttendanceAnswer(ctx);
+
+    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(ctx.reply).not.toHaveBeenCalled();
+  });
+
+  it("ignores a stale tap on a match that is no longer completed", async () => {
+    mMatch.findUnique.mockResolvedValue({
+      status: "cancelled",
+      userAId: "uid-A",
+      userBId: "uid-B",
+    });
+    const ctx = createCtx({ callbackData: "attend:no:match-9" });
+
+    await handleAttendanceAnswer(ctx);
+
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  it("stores the outcome and promises nothing it cannot deliver", async () => {
+    stubParticipant();
+    const ctx = createCtx({
+      callbackData: "attend:out:no_show_partner:match-9",
+      session: { matchFlow: "awaiting_attendance", activeMatchId: "match-9" },
+    });
+
+    await handleAttendanceOutcome(ctx);
+
+    expect(mMatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { attendanceOutcomeA: "no_show_partner" } }),
+    );
+    // No refund and no priority boost exist on this path today, so the closing
+    // copy must not imply either.
+    const said = ctx.reply.mock.calls[0][0] as string;
+    expect(said).toBe(t("en", "attendanceNoThanks"));
+    expect(ctx.session.matchFlow).toBe("idle");
+  });
+
+  it("refuses an outcome value that is not on the whitelist", async () => {
+    stubParticipant();
+    const ctx = createCtx({ callbackData: "attend:out:NOT_A_REASON:match-9" });
+
+    await handleAttendanceOutcome(ctx);
+
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  it("captures a short typed answer, since the question is asked in prose", async () => {
+    stubParticipant();
+    const ctx = createCtx({
+      messageText: "да",
+      session: {
+        matchFlow: "awaiting_attendance",
+        activeMatchId: "match-9",
+        matchFlowClaimUntil: Date.now() + 60_000,
+      },
+    });
+
+    expect(await handleAttendanceText(ctx)).toBe(true);
+    expect(mMatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { dateAttendedA: true } }),
+    );
+  });
+
+  it("hands an ambiguous reply to the agent rather than guessing", async () => {
+    stubParticipant();
+    const ctx = createCtx({
+      messageText: "ну как тебе сказать, посидели и разошлись",
+      session: {
+        matchFlow: "awaiting_attendance",
+        activeMatchId: "match-9",
+        matchFlowClaimUntil: Date.now() + 60_000,
+      },
+    });
+
+    expect(await handleAttendanceText(ctx)).toBe(false);
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  it("does not consume text once the claim has expired", async () => {
+    stubParticipant();
+    const ctx = createCtx({
+      messageText: "да",
+      session: {
+        matchFlow: "awaiting_attendance",
+        activeMatchId: "match-9",
+        matchFlowClaimUntil: Date.now() - 1000,
+      },
+    });
+
+    expect(await handleAttendanceText(ctx)).toBe(false);
+    expect(mMatch.update).not.toHaveBeenCalled();
   });
 });

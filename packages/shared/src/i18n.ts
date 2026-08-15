@@ -827,6 +827,31 @@ const translations = {
       "We'll take it into account to match your expectations even better next time.",
     feedbackBtnForm: "✍️ Open feedback form",
     feedbackBtnVoice: "🎤 Send voice instead",
+    // The T+24h attendance question (PRODUCT_SPEC §Phase 4). Asked BEFORE the
+    // feedback form, because that form's questions — chemistry 1–10, a second
+    // date — are questions ABOUT a date, and they are nonsense to someone who
+    // was stood up. Three wordings of ONE question: the evidence classifier
+    // picks the tone, never the answer, so a wrong guess costs a sentence
+    // rather than a fabricated fact.
+    attendanceAsk: "Before I ask how it went — did the two of you actually meet? 🙂",
+    attendanceAskLikelyMet:
+      "Sounds like yesterday actually happened 🙂 Just confirming — did you meet?",
+    attendanceAskLikelyNotMet:
+      "Looks like yesterday didn't work out. Did I get that right — you didn't meet?",
+    attendanceBtnYes: "Yes, we met",
+    attendanceBtnNo: "No, it didn't happen",
+    attendanceNoIntro: "Sorry it fell through. What happened?",
+    attendanceOutcomePartner: "They didn't come",
+    attendanceOutcomeSelf: "I couldn't make it",
+    attendanceOutcomeBoth: "We agreed to reschedule",
+    attendanceOutcomeOther: "Something else",
+    // Promises nothing. There is no priority boost and no refund on this path
+    // today, and a surface must not invent one (same rule the expiry card
+    // follows in §3.4).
+    attendanceNoThanks: "Thanks for telling me — noted. Sorry it went that way.",
+    attendanceAlreadyAnswered: "Already noted, thanks ✨",
+    attendancePushTitle: "Did you two meet?",
+    attendancePushBody: "One tap, and I'll know whether to ask how it went.",
     feedbackVoiceAsk:
       "Just record a voice note 🎙️\n\n" +
       "Tell us how the date went — was there chemistry? What did you like? " +
@@ -1950,6 +1975,22 @@ const translations = {
       "Учтём, чтобы в следующий раз лучше соответствовать твоим ожиданиям.",
     feedbackBtnForm: "✍️ Открыть форму",
     feedbackBtnVoice: "🎤 Записать голосом",
+    attendanceAsk: "Прежде чем спрашивать, как всё прошло — вы вчера встретились? 🙂",
+    attendanceAskLikelyMet:
+      "Похоже, вчера всё состоялось 🙂 Уточню на всякий случай: вы встретились?",
+    attendanceAskLikelyNotMet:
+      "Кажется, вчера встреча не сложилась. Правильно понял — вы не встретились?",
+    attendanceBtnYes: "Да, встретились",
+    attendanceBtnNo: "Нет, не вышло",
+    attendanceNoIntro: "Жаль, что так вышло. Что произошло?",
+    attendanceOutcomePartner: "Партнёр не пришёл",
+    attendanceOutcomeSelf: "Не получилось у меня",
+    attendanceOutcomeBoth: "Договорились перенести",
+    attendanceOutcomeOther: "Другое",
+    attendanceNoThanks: "Спасибо за ответ — зафиксировал. Жаль, что так получилось.",
+    attendanceAlreadyAnswered: "Уже отметил, спасибо ✨",
+    attendancePushTitle: "Вы встретились?",
+    attendancePushBody: "Одно касание — и я пойму, стоит ли спрашивать, как всё прошло.",
     feedbackVoiceAsk:
       "Просто запиши голосовое 🎙️\n\n" +
       "Расскажи, как прошло — была ли химия, что зашло, что не очень. " +
@@ -3029,6 +3070,22 @@ const translations = {
       "Врахуємо, щоб наступного разу краще відповідати твоїм очікуванням.",
     feedbackBtnForm: "✍️ Відкрити форму",
     feedbackBtnVoice: "🎤 Записати голосом",
+    attendanceAsk: "Перш ніж питати, як усе минуло — ви вчора зустрілися? 🙂",
+    attendanceAskLikelyMet:
+      "Схоже, вчора все відбулося 🙂 Уточню про всяк випадок: ви зустрілися?",
+    attendanceAskLikelyNotMet:
+      "Здається, вчора зустріч не склалася. Правильно зрозумів — ви не зустрілися?",
+    attendanceBtnYes: "Так, зустрілися",
+    attendanceBtnNo: "Ні, не вийшло",
+    attendanceNoIntro: "Шкода, що так вийшло. Що сталося?",
+    attendanceOutcomePartner: "Партнер не прийшов",
+    attendanceOutcomeSelf: "Не вийшло в мене",
+    attendanceOutcomeBoth: "Домовилися перенести",
+    attendanceOutcomeOther: "Інше",
+    attendanceNoThanks: "Дякую за відповідь — зафіксував. Шкода, що так вийшло.",
+    attendanceAlreadyAnswered: "Уже відмітив, дякую ✨",
+    attendancePushTitle: "Ви зустрілися?",
+    attendancePushBody: "Один дотик — і я зрозумію, чи варто питати, як усе минуло.",
     feedbackVoiceAsk:
       "Просто запиши голосове 🎙️\n\n" +
       "Розкажи, як пройшло — чи була хімія, що сподобалось, що не дуже. " +
@@ -4073,6 +4130,22 @@ const deTranslations: TranslationTable = {
     "Wir berücksichtigen das, um nächstes Mal noch besser zu deinen Erwartungen zu passen.",
   feedbackBtnForm: "✍️ Feedback-Formular öffnen",
   feedbackBtnVoice: "🎤 Stattdessen Sprachnachricht senden",
+  attendanceAsk: "Bevor ich frage, wie es war — habt ihr euch gestern tatsächlich getroffen? 🙂",
+  attendanceAskLikelyMet:
+    "Klingt, als hätte es gestern geklappt 🙂 Nur zur Sicherheit: Habt ihr euch getroffen?",
+  attendanceAskLikelyNotMet:
+    "Sieht aus, als hätte es gestern nicht geklappt. Richtig verstanden — ihr habt euch nicht getroffen?",
+  attendanceBtnYes: "Ja, wir haben uns getroffen",
+  attendanceBtnNo: "Nein, es kam nicht dazu",
+  attendanceNoIntro: "Schade, dass es nicht geklappt hat. Was ist passiert?",
+  attendanceOutcomePartner: "Die andere Person kam nicht",
+  attendanceOutcomeSelf: "Es lag an mir",
+  attendanceOutcomeBoth: "Wir haben verschoben",
+  attendanceOutcomeOther: "Etwas anderes",
+  attendanceNoThanks: "Danke für die Antwort — notiert. Schade, dass es so lief.",
+  attendanceAlreadyAnswered: "Schon notiert, danke ✨",
+  attendancePushTitle: "Habt ihr euch getroffen?",
+  attendancePushBody: "Ein Tippen, und ich weiß, ob ich nach dem Date fragen soll.",
   feedbackVoiceAsk:
     "Nimm einfach eine Sprachnachricht auf 🎙️\n\n" +
     "Erzähl, wie das Date lief - gab es Chemie? Was mochtest du? " +
@@ -5122,6 +5195,22 @@ const plTranslations: TranslationTable = {
     "Weźmiemy to pod uwagę, żeby następnym razem lepiej trafić w Twoje oczekiwania.",
   feedbackBtnForm: "✍️ Otwórz formularz feedbacku",
   feedbackBtnVoice: "🎤 Wyślij głosówkę zamiast tego",
+  attendanceAsk: "Zanim zapytam, jak było — spotkaliście się wczoraj? 🙂",
+  attendanceAskLikelyMet:
+    "Wygląda na to, że wczoraj się udało 🙂 Dla pewności: spotkaliście się?",
+  attendanceAskLikelyNotMet:
+    "Wygląda na to, że wczoraj nie wyszło. Dobrze rozumiem — nie spotkaliście się?",
+  attendanceBtnYes: "Tak, spotkaliśmy się",
+  attendanceBtnNo: "Nie, nie doszło do spotkania",
+  attendanceNoIntro: "Szkoda, że nie wyszło. Co się stało?",
+  attendanceOutcomePartner: "Druga osoba nie przyszła",
+  attendanceOutcomeSelf: "Z mojej strony nie wyszło",
+  attendanceOutcomeBoth: "Umówiliśmy się na inny raz",
+  attendanceOutcomeOther: "Coś innego",
+  attendanceNoThanks: "Dzięki za odpowiedź — zanotowałem. Szkoda, że tak wyszło.",
+  attendanceAlreadyAnswered: "Już zanotowałem, dzięki ✨",
+  attendancePushTitle: "Spotkaliście się?",
+  attendancePushBody: "Jedno tapnięcie i będę wiedział, czy pytać, jak było.",
   feedbackVoiceAsk:
     "Po prostu nagraj wiadomość głosową 🎙️\n\n" +
     "Opowiedz, jak poszła randka - była chemia? Co Ci się podobało? " +

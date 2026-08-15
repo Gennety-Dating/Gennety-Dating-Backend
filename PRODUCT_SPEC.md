@@ -4974,7 +4974,7 @@ columns on `matches`.
 | T − 30 min | **Anonymous proxy chat opens** (feature-flagged, Variant C only) — DM both the "Enter chat" button | `proxyOpenedAt` |
 | Date moment | (no automated action — users meet in person) | — |
 | T + 2 h | **Anonymous proxy chat auto-closes** (feature-flagged) | `proxyClosedAt` |
-| T + 24 h | **Feedback prompt** to both sides, each on its own rail (DM and/or push — see below); LLM parses positives/negatives and updates `negativeConstraints` accordingly | `feedbackPromptedAt` |
+| T + 24 h | **"Did you actually meet?"** on Telegram, then the **feedback prompt** — each side on its own rail (DM and/or push — see below); LLM parses positives/negatives and updates `negativeConstraints` accordingly | `feedbackPromptedAt` |
 
 ### Pre-date safety brief (both rails since 2026-08-12)
 
@@ -5001,6 +5001,84 @@ public lock screen. The second is this brief's own: a safety notice that
 announces where this woman will be tonight, to anyone who picks up her phone,
 argues against the thing it was sent for. The push says a checklist has arrived;
 the checklist stays in the DM and in the app.
+
+### Did you actually meet? (T+24h, Telegram-only, added 2026-08-15)
+
+The product could not tell whether a date happened. `Match.status = 'completed'`
+is stamped by the T+24h feedback prompt **whether or not anyone showed up**, and
+the form asks about chemistry (1–10) and a second date — questions *about* a
+date, which read as absurd to someone who was stood up. So no-show was
+unmeasurable, and the "share of no-shows among sold tickets" quality metric
+existed only on paper.
+
+Telegram now gets one plain question before the form, with two buttons.
+
+**The question is asked ALWAYS; evidence changes its wording, not whether it is
+asked.** The tempting design was the other one — read the proxy chat and what
+the user told the concierge, run it through a cheap model, and skip the question
+when it looks like they met. That is wrong, and the two failure modes are not
+symmetric. Asking someone who already told us reads as *an agent with no
+memory*: mildly annoying, recoverable. Deciding for someone who said nothing
+writes a fabricated fact into the one metric the feature exists for, and greets
+a person who was stood up with "how did your date go?".
+
+The "no memory" complaint is not actually about being asked — it is about being
+asked **as if nothing is known**. *"Yesterday you wrote that she never came —
+still right?"* both asks and remembers.
+
+So the rule that holds the whole thing up: **the evidence classifier never
+writes `dateAttended*`.** It picks one of three wordings. Wrong guess costs an
+odd sentence; only a human answer becomes data.
+
+- **Evidence, and its honest strength.** Definitive signals never reach the
+  classifier and shouldn't: an emergency cancellation leaves the match in
+  `cancelled`, which never reaches T+24h, and the partner's own answer is
+  already a fact read directly. What is left is what the user told the
+  concierge after `agreedTime` (strong but rare) and the pre-date proxy chat
+  (**a hint only** — "I'm at the door" is not "we met"; one of them may have
+  left). A pair with neither gets the neutral question and **no model call at
+  all**, which is the overwhelming majority, so the feature costs ~nothing in
+  tokens.
+- **Strictness is structural, not a request in the prompt.** Anything short of
+  a `high`-confidence unambiguous verdict collapses to the neutral wording.
+- **Privacy boundary.** `proxy_messages` hold the *other* user's words, which
+  the product deliberately keeps out of the agent's timeline
+  (`withRedactedSummary`). The classifier may read them server-side; its output
+  is a three-value enum, and no fragment of that text ever reaches the agent's
+  prompt or the user's screen. Quoting it back ("you said you were at the
+  door") would be a leak of one user to another, not a nicer sentence.
+- **"Yes"** records attendance and hands over to the existing feedback
+  invitation, unchanged.
+- **"No"** does *not* lead to the chemistry form. It asks what happened, with
+  four outcomes (`no_show_partner` / `no_show_self` / `both_rescheduled` /
+  `other`) — the distinction that separates "the date didn't happen" from
+  "somebody was left waiting", which matters both for the metric and for any
+  future refund decision. The closing message **promises nothing**: there is no
+  ticket refund and no priority boost on this path today, and a surface must
+  not invent one (the same rule the §3.4 expiry card follows).
+- **Attendance is a property of the PAIR.** One credible answer settles the
+  match; the two columns exist because the sides can disagree, and a
+  disagreement is a real state (`disputed`) that belongs on screen rather than
+  silently collapsed. `unknown` (nobody answered) is never rendered as "didn't
+  happen" — silence after a date is the ordinary case.
+- **Free text is captured, bounded.** The question is asked in prose, and prose
+  invites a typed reply, so an unambiguous short answer is recorded
+  (`awaiting_attendance`, 24h, `services/match-flow-claim.ts`). Matching is on
+  the **whole utterance**: "нет мы встретились" opens with "нет" and means yes.
+  Anything ambiguous falls through to the concierge, which can see the open
+  question in the timeline.
+
+**Known gap — the ticket.** §3.5b returns a ticket whenever a match dies
+*before* the date. A no-show is a match that reached `scheduled`, whose time
+passed with nothing cancelled — so today the ticket burns for **the person who
+showed up**. This feature is the first thing that makes such cases visible;
+whether to refund them is a separate founder decision, deliberately not taken
+here (0 tickets have ever been sold).
+
+**Telegram-only for now.** The push rail keeps sending the existing feedback
+invitation unchanged, so nothing regresses for app users — but they are not
+asked about attendance, and `/v1/me/feedback/pending` is untouched. The native
+question is a follow-up that owes a `/v1/*` addition.
 
 ### Post-date Feedback UX
 

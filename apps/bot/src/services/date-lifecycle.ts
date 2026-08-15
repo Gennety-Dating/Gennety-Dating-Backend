@@ -1,6 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
-import { prisma, type Theme } from "@gennety/db";
+import { prisma } from "@gennety/db";
 import {
   t,
   type Language,
@@ -24,34 +24,12 @@ import {
   startDateDayActivities,
 } from "./date-day-activity.js";
 import { sweepExpiredVenueChanges } from "../handlers/matching/venue-change.js";
-import { buildMiniAppUrl } from "./mini-app-url.js";
-
-/**
- * Build the post-date feedback DM keyboard: two stacked buttons, form first.
- * The form opens the Mini App (signed POST to `/v1/feedback/post-date`); the
- * voice button drops the user into `awaiting_feedback` so the next voice
- * note (or typed text) is captured.
- *
- * Inline `web_app` button labels can't carry custom_emoji entities, so the
- * leading glyph in each label is plain Unicode — same constraint we hit on
- * the main menu keyboard (PRODUCT_SPEC.md §2.1).
- */
-function buildFeedbackKeyboard(
-  matchId: string,
-  lang: Language,
-  theme: Theme,
-): InlineKeyboard {
-  const url = buildMiniAppUrl("feedback", {
-    baseUrl: env.WEBAPP_FEEDBACK_URL,
-    lang,
-    theme,
-    query: { match: matchId },
-  });
-  return new InlineKeyboard()
-    .webApp(t(lang, "feedbackBtnForm"), url)
-    .row()
-    .text(t(lang, "feedbackBtnVoice"), `feedback:voice:${matchId}`);
-}
+import { buildAttendanceKeyboard } from "./post-date-keyboards.js";
+import { attendanceQuestionKey } from "./attendance.js";
+import {
+  gatherAttendanceEvidence,
+  resolveAttendanceTone,
+} from "./attendance-evidence.js";
 
 /**
  * Date lifecycle cron — runs on a fixed interval (e.g. every 2 minutes).
@@ -541,6 +519,7 @@ export async function runDateLifecycleTick(
     },
     select: {
       id: true,
+      agreedTime: true,
       userA: { select: { id: true, telegramId: true, platform: true, language: true, theme: true } },
       userB: { select: { id: true, telegramId: true, platform: true, language: true, theme: true } },
     },
@@ -549,10 +528,6 @@ export async function runDateLifecycleTick(
   for (const match of pastDates) {
     const langA = (match.userA.language ?? "en") as Language;
     const langB = (match.userB.language ?? "en") as Language;
-    // Build the Mini App URLs before claiming the one-shot marker. A malformed
-    // optional feedback host must not consume the only retry opportunity.
-    const kbA = buildFeedbackKeyboard(match.id, langA, match.userA.theme);
-    const kbB = buildFeedbackKeyboard(match.id, langB, match.userB.theme);
     const feedbackClaim = await prisma.match.updateMany({
       where: {
         id: match.id,
@@ -566,14 +541,6 @@ export async function runDateLifecycleTick(
     // Bot API 7.6 message_effect — a soft "your moment matters" flourish on
     // the prompt itself. Empty env falls through to no effect.
     const effectId = env.MESSAGE_EFFECT_FEEDBACK_ID || undefined;
-    const optsA = {
-      reply_markup: kbA,
-      ...(effectId ? { message_effect_id: effectId } : {}),
-    };
-    const optsB = {
-      reply_markup: kbB,
-      ...(effectId ? { message_effect_id: effectId } : {}),
-    };
 
     // Each side is invited on ITS OWN rail. Two things were wrong here before:
     // the guard was `telegramId > 0`, which stopped being a reachability test
@@ -583,20 +550,43 @@ export async function runDateLifecycleTick(
     // form is the only place the product learns whether a date worked, so an
     // uninvited participant is a permanently missing answer.
     const feedbackSends: Array<Promise<unknown>> = [];
-    for (const [user, lang, opts] of [
-      [match.userA, langA, optsA],
-      [match.userB, langB, optsB],
+    for (const [user, lang] of [
+      [match.userA, langA],
+      [match.userB, langB],
     ] as const) {
       if (telegramReachable(user)) {
+        // Telegram is asked whether the date HAPPENED before being asked how
+        // it went (PRODUCT_SPEC §Phase 4). The form's own questions — chemistry
+        // 1–10, a second date — are questions about a date, and they read as
+        // absurd to someone who was stood up; until this step the product had
+        // no way to tell the two cases apart at all.
+        //
+        // Evidence is resolved AFTER the one-shot claim: it only picks the
+        // wording, it never throws, and it degrades to the neutral question —
+        // so it must not be able to consume the single retry opportunity.
+        // `agreedTime` is non-null by the query's own filter.
         feedbackSends.push(
-          api
-            .sendMessage(Number(user.telegramId), t(lang, "feedbackInvitation"), opts)
-            .catch((err: unknown) =>
-              console.warn(
-                `[date-lifecycle] feedback send failed for ${user.telegramId}:`,
-                err instanceof Error ? err.message : err,
-              ),
+          (async () => {
+            const evidence = await gatherAttendanceEvidence({
+              matchId: match.id,
+              userId: user.id,
+              agreedTime: match.agreedTime!,
+            });
+            const tone = await resolveAttendanceTone(evidence);
+            await api.sendMessage(
+              Number(user.telegramId),
+              t(lang, attendanceQuestionKey(tone)),
+              {
+                reply_markup: buildAttendanceKeyboard(match.id, lang),
+                ...(effectId ? { message_effect_id: effectId } : {}),
+              },
+            );
+          })().catch((err: unknown) =>
+            console.warn(
+              `[date-lifecycle] attendance ask failed for ${user.telegramId}:`,
+              err instanceof Error ? err.message : err,
             ),
+          ),
         );
       }
       if (pushReachable(user)) {
