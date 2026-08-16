@@ -1,6 +1,88 @@
 # Gennety Dating Deploy
 
-**PENDING — метрика Match→Ticket, Core metrics, поля матча (ТЗ Задачи 1–2,
+**Deployed 2026-08-15 — релиз из 25 коммитов: все 10 PENDING-блоков разом
+(`cd25c56`), плюс production Mini App и вкладка Core metrics в дашборде.**
+Полный деплой кода + аддитивный `db:push` + Mini App + демо + отдельный
+редеплой дашборда. Прод поднят с `bcb82c9` до `cd25c56`.
+
+Порядок был: worktree → preflight → schema diff → rsync → install/build →
+`db:push` → `db:drift-check` → `pm2 restart` → `deploy-webapp.sh` →
+`demo:deploy` → пуш дашборда. Дашборд **последним** намеренно: он читает
+`conversion`/`genderRatio`, и обратный порядок дал бы сломанную вкладку —
+то же правило, на котором обжёгся блок account-health 2026-08-07.
+
+**Схема:** ровно 4 `ADD COLUMN` (`matches.date_attended_a/_b`,
+`attendance_outcome_a/_b`), **ноль DROP** — план прочитан `migrate diff` до
+запуска. `db:drift-check` **OK**, колонки подтверждены запросом к
+`information_schema` до рестарта.
+
+**⚠️ `security:audit` снова упал на preflight — третий релиз подряд, и снова
+на протухшем оверрайде.** `nanoid` стоял на `3.3.17`, а advisory
+GHSA-2v37-7h3g-55p8 расширился до `<3.3.18`. Путь сборочный
+(`apps/video > @remotion/cli > … > postcss > nanoid`), рантайма бота не
+касается, но гейт pass/fail. Поднято до `3.3.18` (`cd25c56`), переаудит
+чистый. **Это уже не инцидент, а постоянный налог** — перечитывать пины
+оверрайдов каждый деплой, а не только когда добавляешь новый.
+
+**⚠️ Production Mini App едва не остался позади.** Бэкенд-деплой и
+`demo:deploy` прошли, а `deploy-webapp.sh` — нет, и три блока онбординга
+(марка успеха, падающие деньги, экран предпочтений) лежали бы на дроплете в
+исходниках при старом собранном бандле. Поймано сравнением хешей:
+прод отдавал `onboarding-y-xXMY4C.js` против собранного `onboarding-5tbpPWp0.js`,
+и `grep` по бандлу давал ноль вхождений новой марки. **`demo:deploy` не
+заменяет `deploy-webapp.sh`** — он собирает СВОЙ бандл в `/var/www/demo-app`
+и лишь возвращает `dist/` к прод-URL. После деплоя, который трогал
+`apps/webapp`, сверяй хеш ассета, а не факт «страница отдаёт 200».
+
+Preflight в изолированном worktree (в рабочем дереве шла параллельная правка
+венью-каталога): typecheck чист по 5 проектам, lint чист, **4289 тестов**
+(бот 3708 / shared 276 / webapp 305, 0 failed), `pnpm build`,
+`security:secrets` (1078 файлов), `security:audit` 0 advisories после фикса.
+
+rsync dry-run дал **176 удалений**, все прочитаны: артефакты Remotion
+(`apps/video/out`, включая вложенный дубль `apps/video/apps/video/out`) плюс
+`.DS_Store`. Оба бэкапа БД, оба ключа `keys/*.p8` и 16 снапшотов `.env.bak.*`
+проверены на месте ПОСЛЕ синка. Worktree пишет `.git` файлом, а
+`--exclude '.git/'` ловит только каталоги — указатель удалён вручную с
+дроплета, как предписывает секция «Prod anchor».
+
+**Проверено на живом проде (замерено, а не выведено):**
+
+- `/admin/stats` отдаёт оба новых блока: `conversion` с `netPct: null`,
+  `excludedSynthetic: 13`, `excludedTest: 1`; `genderRatio` 6 M / 1 F / 16
+  unknown из 23 (**69.6% не назвали пол**).
+- `/admin/dashboard.derived` — все 11 полей; `weeklyPaidDates: 0`,
+  `registeredToMatchRate7dPct: 0` при 4 реальных регистрациях,
+  `cacPerPaying`/`ltvCac`/`roas` — `null`.
+- `/admin/matches` — 9 выведенных полей на строке (`noShow: null`,
+  `attendance: "unknown"` — «не знаем», не «не встретились»).
+- Все 26 полей, которые читает новая вкладка дашборда, существуют в живом
+  ответе — сверено программно, потому что типы фронта написаны руками и TS
+  расхождение имён не поймает.
+- Компонент отрендерен в строку на живом продовом JSON: 13.7 кБ HTML, без
+  исключений. Тот же класс дефекта, что чинил `04d142d` в репозитории
+  дашборда.
+- Бот: `Bot @gennetybot started`, все 16 кронов + peer-wait воркер, рестарты
+  62 → **63**, `unstable restarts: 0`, **ноль ошибок от нового PID**, ноль
+  `P2022`/`P2023`/`ERR_MODULE_NOT_FOUND`. `/v1/ping` ok, admin `401`, **все 11
+  страниц Mini App 200**.
+- Демо переехало тем же исходником, изоляция подтверждена его баннером:
+  `@gennety_demo_bot`, база `aws-1-eu-west-1` (у прода `aws-0-`), оба
+  демо-подавления кронов на месте, рестарты 24 → 25. **Прод при этом не
+  тронут** — счётчик рестартов держался на 63.
+
+**Что этот релиз НЕ включает, и это решения, а не пробелы:** CAC/LTV/ROAS
+остаются `null` до реализации `AD_SPEND_TRACKING_DESIGN.md` (Задача 3 была
+«только дизайн»); явка спрашивается только в Telegram, у app-пользователей
+`attendance` остаётся `unknown`; билет при no-show не возвращается.
+
+**Rollback:** пересинкать чекаут на `bcb82c9`, перезапустить, оттуда же
+редеплоить Mini App и демо, и откатить `d6d8462` в репозитории дашборда.
+Аддитивные колонки могут остаться — старый код их не читает.
+
+---
+
+**Deployed 2026-08-15 (was PENDING) — метрика Match→Ticket, Core metrics, поля матча (ТЗ Задачи 1–2,
 DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов, нет
 изменения Mini App** — только админ-API. **Но едет в одном релизе с блоком ниже
 («вы встретились?»), которому `db:push` НУЖЕН**: `/admin/stats` читает
@@ -61,7 +143,7 @@ curl -s -H "Authorization: Bearer $KEY" 'https://api-admin.gennety.com/admin/mat
 
 ---
 
-**PENDING — демо перестаёт слать финал после каждого рестарта (DEMO_MODE.md,
+**Deployed 2026-08-15 (was PENDING) — демо перестаёт слать финал после каждого рестарта (DEMO_MODE.md,
 DECISIONS.md).** **Только демо** — диff это `apps/bot/src/demo/**` плюс
 документация, так что **в `/opt/gennety` синкать нечего и прод НЕ
 перезапускается**; весь деплой — `pnpm demo:deploy`. Нет изменения схемы, нет
@@ -111,7 +193,7 @@ ssh root@167.172.178.229 'pm2 restart gennety-demo && sleep 45 && pm2 logs genne
 
 ---
 
-**PENDING — «вы встретились?» на T+24h (PRODUCT_SPEC §Phase 4, DECISIONS.md).**
+**Deployed 2026-08-15 (was PENDING) — «вы встретились?» на T+24h (PRODUCT_SPEC §Phase 4, DECISIONS.md).**
 **Нет новых env, нет флагов, нет изменения Mini App** (`apps/webapp` не тронут) —
 только бот, **но нужен аддитивный `db:push` ДО рестарта**, плюс
 `pnpm demo:deploy` после.
@@ -246,7 +328,7 @@ V2-селектор вообще когда-либо исполнялся** (`ve
 
 ---
 
-**PENDING — пять env-слотов, которые ничего не включали (`75b2b46`,
+**Deployed 2026-08-15 (was PENDING) — пять env-слотов, которые ничего не включали (`75b2b46`,
 DECISIONS.md).** **Нет изменения схемы, нет env, нет флагов, нет изменения Mini
 App** — только `apps/bot/src/config.ts` и три dev-скрипта, так что это едет
 ближайшим обычным релизом. Ни байта поведения: удалены пять ключей
@@ -269,7 +351,7 @@ App** — только `apps/bot/src/config.ts` и три dev-скрипта, т
 
 ---
 
-**PENDING — пустой ответ Places больше не гасит площадку на сутки
+**Deployed 2026-08-15 (was PENDING) — пустой ответ Places больше не гасит площадку на сутки
 (PRODUCT_SPEC §3.7a, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых
 env, нет флагов, нет изменения Mini App** (`apps/webapp` не тронут) — только
 бот, так что полный деплой кода несёт это целиком, плюс `pnpm demo:deploy`.
@@ -326,7 +408,7 @@ ssh root@167.172.178.229 'pm2 logs gennety-demo --lines 200 --nostream | grep "r
 
 ---
 
-**PENDING — два claim'а на чат, которые не истекали (PRODUCT_SPEC §2.1 +
+**Deployed 2026-08-15 (was PENDING) — два claim'а на чат, которые не истекали (PRODUCT_SPEC §2.1 +
 §Phase 1b, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет
 флагов, нет изменения Mini App** (`apps/webapp` не тронут) — только бот, так что
 полный деплой кода несёт всё целиком, плюс `pnpm demo:deploy`.
@@ -393,7 +475,7 @@ psql "$DATABASE_URL" -c "select count(*) from bot_sessions where value::jsonb->>
 
 ---
 
-**PENDING — экран «кого ты хочешь видеть» перестаёт собираться на глазах
+**Deployed 2026-08-15 (was PENDING) — экран «кого ты хочешь видеть» перестаёт собираться на глазах
 (PRODUCT_SPEC §1.3, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых
 env, нет флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диff это `apps/webapp/**`
 плюс документация. То есть путь **Deploy Mini App Only**
@@ -456,7 +538,7 @@ curl -sI https://dating-calendar.gennety.com/onboarding.html | head -1
 
 ---
 
-**PENDING — марка успеха: бабочка вместо галочки (PRODUCT_SPEC → Cross-Cutting
+**Deployed 2026-08-15 (was PENDING) — марка успеха: бабочка вместо галочки (PRODUCT_SPEC → Cross-Cutting
 Concerns, DECISIONS.md).** Заменяет собой предыдущий PENDING-блок про «бабочка
 чертит галочку» — та марка так и не уехала, так что деплоится сразу эта.
 **Нет изменения схемы Prisma, нет новых env, нет флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА
@@ -529,7 +611,7 @@ curl -sI https://dating-calendar.gennety.com/verification.html | head -1
 
 ---
 
-**PENDING — на экране «сколько стоит найти отношения в 2026» падают деньги
+**Deployed 2026-08-15 (was PENDING) — на экране «сколько стоит найти отношения в 2026» падают деньги
 (PRODUCT_SPEC §1.1, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых
 env, нет флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диff это `apps/webapp/**`
 плюс документация. То есть путь **Deploy Mini App Only**
@@ -618,7 +700,7 @@ curl -sI https://dating-calendar.gennety.com/onboarding.html | head -1
 
 ---
 
-**PENDING — календарь после тикет-гейта приходит новым сообщением, а не
+**Deployed 2026-08-15 (was PENDING) — календарь после тикет-гейта приходит новым сообщением, а не
 невидимой правкой (PRODUCT_SPEC §3.5b / §3.6, DECISIONS.md).** **Нет изменения
 схемы Prisma, нет новых env, нет флагов, нет изменения Mini App**
 (`apps/webapp` не тронут) — только бот, так что полный деплой кода несёт всё
@@ -4581,10 +4663,9 @@ watch that the PID holds and the restart count stops climbing. Otherwise do a
 full deploy — but note that rsync copies the **working tree**, not git HEAD, so
 check `git status` first: an unrelated in-progress refactor ships with it.
 
-**Prod anchor, re-verified 2026-08-12 after the release at the top of this file.**
-Prod's **runtime tree** is at **`bcb82c9`** — verified by the 771-file md5 sweep
-below (767 identical; the only 4 differences are under `apps/bot/tmp/`, which
-the deploy rsync excludes by design), rather than asserted. Deliberately
+**Prod anchor, re-verified 2026-08-15 after the release at the top of this file.**
+Prod's **runtime tree** is at **`cd25c56`** — verified by the md5 sweep below
+across **791 files with zero differences**, rather than asserted. Deliberately
 anchored to the last commit that touched runtime code, not to `HEAD`: docs-only
 commits land on top constantly (this note's own release added one), and an
 anchor that counts them is stale the hour it is written.
@@ -4599,8 +4680,8 @@ revision of this note named them, and it was stale within the hour because a
 parallel session kept landing work. The set is a one-liner:
 
 ```sh
-git log --oneline bcb82c9..HEAD                # what prod is missing
-git diff --stat bcb82c9..HEAD -- apps packages # is any of it runtime code?
+git log --oneline cd25c56..HEAD                # what prod is missing
+git diff --stat cd25c56..HEAD -- apps packages # is any of it runtime code?
 ```
 
 **A demo-only release does not advance this anchor, and that is the trap.**
@@ -4622,14 +4703,25 @@ Two standing exclusions, both deliberate rather than forgotten:
   so an import is a separate, larger decision, not part of any deploy.
 - **`apps/video/**`** is the Remotion workspace and is not in the bot runtime.
 
-Anchor md5 as of 2026-08-12 — three files the last release actually changed,
-which is what makes them worth anchoring on (the last two did not exist on prod
-before it, so their mere presence is already the check):
+Anchor md5 as of 2026-08-15 — three modules this release added, so their mere
+presence on the droplet is already the check:
 
 ```
-385e9bcf2f613014218b454f60eccbf6  /opt/gennety/apps/bot/src/demo/config.ts
-4719c8140f7d383251eba1fe0ad365cc  /opt/gennety/apps/bot/src/services/match-drop-push.ts
-590170672b19a2efc35d7f04abe70de7  /opt/gennety/apps/bot/src/services/onboarding-stage.ts
+45673bfa9c3efba4b6884047f41d79b4  /opt/gennety/apps/bot/src/services/attendance.ts
+07a7d24733f28625435e8704be6bd62c  /opt/gennety/apps/bot/src/services/attendance-evidence.ts
+9d544405d02b6315103dca5813c9f585  /opt/gennety/apps/bot/src/admin/utils/match-conversion.ts
+```
+
+**The served Mini App bundle is a SEPARATE anchor and is not covered by the
+sweep below** — that sweep reads `/opt/gennety` source, while the bundle lives
+at `/var/www/dating-app` and only `deploy-webapp.sh` writes it. This release
+nearly shipped without it. Check the asset hash, never the status code:
+
+```sh
+curl -s https://dating-calendar.gennety.com/onboarding.html \
+  | grep -o '/assets/onboarding-[A-Za-z0-9_-]*\.js'
+# must match: ls apps/webapp/dist/assets/onboarding-*.js in the deployed tree
+# as of 2026-08-15: onboarding-5tbpPWp0.js
 ```
 
 The file below is kept as the counter-example, not as a check to run:
@@ -4639,9 +4731,10 @@ The file below is kept as the counter-example, not as a check to run:
 ```
 
 That file is a weak anchor on its own — it happened to be identical across the
-whole 84-commit range, so it matched prod both before and after this release and
+whole 84-commit range, so it matched prod both before and after that release and
 proved nothing. **Anchor on a file the release actually changed, or better, sweep
-the whole tree**, which is what settles it in one command:
+the whole tree**, which is what settles it in one command (2026-08-15: 791 files,
+zero differences):
 
 ```sh
 ssh root@167.172.178.229 'cd /opt/gennety && find apps packages -type f \
@@ -4654,7 +4747,9 @@ find apps packages -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.prisma" 
   | diff - /tmp/prod.md5 && echo "prod == this tree"
 ```
 
-728 files, zero differences, is what "prod is at this commit" should mean.
+Zero differences across the whole tree is what "prod is at this commit" should
+mean (791 files on 2026-08-15; the number grows with the repo — it is the diff
+being empty that matters, not the count).
 
 ---
 
