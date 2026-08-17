@@ -101,20 +101,25 @@ export const SHOTS: Shot[] = [
   },
   {
     beat:
-      "Type Radar. Held 6.5s, taken from the clip's fast stretch (7.0–13.5s) so " +
-      "FIVE faces go past. The opening of that clip sits on one man for 3.5s, " +
-      "which reads as a screenshot of a feature; several faces read as the AI " +
-      "learning a taste, which is the actual claim.",
+      "Type Radar. 6.4s, and WHICH 6.4s was decided face by face rather than " +
+      "by length — the founder vetoed specific profiles twice. The clip's " +
+      "opening holds one man for 3.5s (a screenshot of a feature, not an AI " +
+      "learning a taste); its middle carries a mirror selfie with the phone " +
+      "across the face; and one particular profile was named and excluded. " +
+      "This window is the radar's LAST stretch: four distinct men, none of " +
+      "them vetoed, closing on the «Що зачепило?» tags — the POSITIVE ones, " +
+      "which are the better beat anyway, because they show the AI being told " +
+      "what WORKED rather than counting rejections. See extract-hero-footage.sh.",
     from: 468,
-    durationInFrames: 195,
+    durationInFrames: 192,
     src: "radar-swipe",
-    trim: 210,
+    trim: 6,
     push: [1.0, 1.05],
     glow: 0.8,
   },
   {
     beat: "Готово — it saved what it learned. Short, on purpose.",
-    from: 663,
+    from: 660,
     durationInFrames: 48,
     src: "radar-done",
     trim: 30,
@@ -123,7 +128,7 @@ export const SHOTS: Shot[] = [
   },
   {
     beat: "Хочеш піти з ним на побачення? The turn the film pivots on.",
-    from: 697,
+    from: 694,
     durationInFrames: 108,
     src: "match-decision",
     trim: 6,
@@ -133,7 +138,7 @@ export const SHOTS: Shot[] = [
   },
   {
     beat: "The calendar opens. Planning starts, and the cuts tighten.",
-    from: 805,
+    from: 802,
     durationInFrames: 60,
     src: "cal-dates",
     trim: 36,
@@ -142,7 +147,7 @@ export const SHOTS: Shot[] = [
   },
   {
     beat: "13:00 lights up — the slot both sides marked. Nobody negotiated it.",
-    from: 865,
+    from: 862,
     durationInFrames: 66,
     src: "cal-overlap",
     trim: 30,
@@ -151,7 +156,7 @@ export const SHOTS: Shot[] = [
   },
   {
     beat: "The butterfly, then неділя, 16 серп. 13:00. The product's own brand moment.",
-    from: 931,
+    from: 928,
     durationInFrames: 102,
     src: "time-reveal",
     trim: 18,
@@ -165,7 +170,7 @@ export const SHOTS: Shot[] = [
       "concierge picks somewhere both people can actually reach. Trimmed to " +
       "1.5–3.3s of its clip: before that the Mini App is still loading, after it " +
       "a browser geolocation prompt covers the screen.",
-    from: 1033,
+    from: 1030,
     durationInFrames: 54,
     src: "place-map",
     trim: 45,
@@ -174,7 +179,7 @@ export const SHOTS: Shot[] = [
   },
   {
     beat: "Яке місце? — the last thing a human says before the concierge takes over.",
-    from: 1087,
+    from: 1084,
     durationInFrames: 60,
     src: "place-vibe",
     trim: 30,
@@ -185,7 +190,7 @@ export const SHOTS: Shot[] = [
     beat:
       "The date card: Error 404 — Chat not found. Try real life. " +
       "The product closes its own film.",
-    from: 1133,
+    from: 1130,
     durationInFrames: 144,
     src: "date-card",
     trim: 78,
@@ -197,8 +202,8 @@ export const SHOTS: Shot[] = [
 
 /** The end card is the one shot that is not footage; it lives in its own scene. */
 export const MARK: {from: number; durationInFrames: number} = {
-  from: 1263,
+  from: 1260,
   durationInFrames: 96,
 };
 
-export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1359 = 45.3s
+export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1356 = 45.2s

@@ -56,7 +56,14 @@ cut basics-height     "$BASICS" 14.6 19.2  # the height drum spinning
 
 echo "understanding (IMG_2590):"
 cut chat-question     "$PROFILE" 36.0 52.0 # ideal-Friday question + the honest answer
-cut radar-swipe       "$PROFILE" 65.5 83.0 # Type Radar — long, so the cut can use its fast stretch
+# The LAST stretch of the radar, not the first. Everything before ~81s was
+# ruled out by the founder screen by screen: the opening holds one man for
+# 3.5s, 74-75s is a mirror selfie with the phone across the face, and 75.5-76.5
+# is a specific profile they asked to see gone. This window carries four
+# distinct men and ends on the "Що зачепило?" tags — the POSITIVE ones, which
+# is the better beat anyway. Extracted with ~0.3s of head slack and ~0.6s of
+# tail slack; the shot itself is clip 0.2-6.6s.
+cut radar-swipe       "$PROFILE" 80.9 88.2
 cut radar-done        "$PROFILE" 88.5 93.0 # "Готово" — it saved what it learned
 
 echo "date journey (IMG_2604):"

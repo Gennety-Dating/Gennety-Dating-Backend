@@ -61,7 +61,7 @@ pnpm render:hero:preview                         # 40% scale, ~60s to render
 | | |
 |---|---|
 | Composition | `GennetyHero` |
-| Output | `out/gennety-hero.mp4`, 1080×1920, 30 fps, H.264, 1359 frames (45.4 s) |
+| Output | `out/gennety-hero.mp4`, 1080×1920, 30 fps, H.264, 1356 frames (45.2 s) |
 | Source | `src/hero/` |
 | Footage | `public/footage/` — 15 clips, 6.9 MB |
 | Sources | `IMG_2588` / `IMG_2590` / `IMG_2604`, outside the repo |
@@ -117,7 +117,20 @@ transition. A hard cut is `fadeIn: 0, fadeOut: 0`.
 recordings carry only incidental phone audio — see the plan §G. The path is
 wired: drop a track at `public/audio/score.m4a`, set `musicVolume: 0.8` in the
 `GennetyHero` `defaultProps` in `src/Root.tsx`. Time it against the cut's
-accents: **15.6 s**, **23.2 s**, **31.0 s**, **37.8 s**.
+accents: **15.6 s**, **23.1 s**, **30.9 s**, **37.7 s**.
+
+### The handset
+
+`ui/Iphone.tsx` draws it. Every dimension is a fraction of the screen's WIDTH,
+taken off a real iPhone 16 Pro — screen radius 0.145, Dynamic Island
+0.315 × 0.092 at 0.028 from the top, a 0.017 black display border inside a 0.008
+titanium rail. Those are measurements; the first version was proportioned by eye
+and read as a generic phone. Change one and check it against the device, not
+against how it looks alone on a black page.
+
+The status bar's backdrop is the clip's own top rows, mirrored upward and
+blurred, so the strip continues whatever is beneath it. That is what removes the
+seam on the Telegram screens and what makes the Dynamic Island visible at all.
 
 ### Re-cutting the footage
 

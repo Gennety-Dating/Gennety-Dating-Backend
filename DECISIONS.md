@@ -52,7 +52,8 @@ Newest entries go **on top**:
 **Kind:** founder decision + change of mind
 **What:** two corrections to `GennetyHero` after the founder watched the second
 cut. The drawn handset was rebuilt to real iPhone 16 Pro proportions, and the
-Type Radar shot moved to a different window of the same clip. 45.6 s (was 45.4).
+Type Radar shot moved to a different stretch of the same recording. 45.2 s
+(was 45.4).
 
 **Why the handset was wrong, and it is not a matter of taste.** The founder's
 words were that I had overlaid "a mockup of some unknown phone" when they had
@@ -78,25 +79,35 @@ make the Dynamic Island visible at all**: a black pill on a black strip is
 invisible, and an iPhone with no island is not an iPhone. On the genuinely dark
 screens it stays invisible, which is what a real handset does there.
 
-**Why Type Radar lost a profile rather than gaining one.** The founder said one
-of the profiles looked bad. It was a mirror selfie with the phone held across
-the face, at 8.5–10.0 s of that clip, swept in by yesterday's move to the fast
-stretch. The reason it has to go is specific to this shot: it is the product
-demonstrating taste, so a frame nobody would swipe right on argues against the
-claim. The window is now 10.0–16.8 s — **four** strong profiles back to back
-plus the «Що не сподобалось?» tag row, which is the beat that shows the AI being
-TOLD why rather than merely counting taps. **Four with the tags beats five with
-a bad one**, and yesterday's entry (which sold "five faces" as the goal) is
-wrong about what the shot is for.
+**Why the Type Radar window moved to the END of its clip, and it took two
+passes.** The founder first said a profile looked bad; I read that as the mirror
+selfie with the phone held across the face and moved the window to 10.0–16.8 s.
+They then sent a screenshot naming the actual profile — a different man, the one
+sitting at 75.5–76.5 s of the source, i.e. the FIRST face in the window I had
+just chosen. **The lesson is the cheap one: when a founder objects to "one of
+these", ask which before re-cutting around a guess.** One screenshot settled in
+seconds what an hour of frame-reading got wrong.
+
+The window is now source 81.1–87.5 — the radar's last stretch, four distinct men
+with neither vetoed profile, closing on the **«Що зачепило?»** tags. That
+closing beat is better than what it replaced and was found only because the veto
+forced the search past where I had stopped looking: the earlier windows ended on
+«Що не сподобалось?», so the film showed the AI being told what someone did NOT
+like, while this one shows it being told what worked. The clip is re-extracted
+(80.9–88.2 instead of 65.5–83.0); the other 14 reproduce byte-identically.
+
+**Why the shot is worth this much argument at all:** it is the one place the
+film claims the product has taste. A frame nobody would swipe right on is not a
+neutral filler frame there — it argues against the claim being made over it.
 
 **What it changes going forward:**
 - **A handset dimension is checked against the device, not against how it looks
   alone on a black page.** That is how the first version passed my own review.
-- **The Type Radar window is chosen by content.** Its three candidate stretches
-  are now written down in `timeline.ts` and in the extraction script with what
-  is wrong with each, because the failure mode is that a longer window looks
-  strictly better until you watch it.
-- The cascade is +9 frames from `radar-done` onward; the three dissolves are
+- **The Type Radar window is chosen face by face.** Every rejected stretch and
+  its reason now lives in `extract-hero-footage.sh` and in the shot's `beat`,
+  because the failure mode is that a longer window looks strictly better until
+  someone watches it.
+- The cascade is −12 frames from `radar-done` onward; the three dissolves are
   unchanged at 14 frames, and `place-map` keeps its 1.5–3.3 s window.
 
 **Recorded in:** `apps/video/src/hero/ui/Iphone.tsx` (the measurements and why

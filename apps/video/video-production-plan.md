@@ -1,6 +1,6 @@
 # Gennety — product film production plan (`GennetyHero`)
 
-> Delivered: 1080×1920, 30 fps, H.264, **45.4 s**, `out/gennety-hero.mp4`.
+> Delivered: 1080×1920, 30 fps, H.264, **45.2 s**, `out/gennety-hero.mp4`.
 > Cut entirely from three screen recordings of the running product.
 > This is the audit behind the cut — what exists, what each clip shows, what is
 > unusable and why, and the editorial decisions taken.
@@ -75,7 +75,7 @@ five distinct, purpose-built controls, none of which looks like a form.
 | 0:00–0:35 | Chat opening, "Open Gennety", hobbies and partner-qualities questions, heavy typing | ✗ keyboard-dominated |
 | **0:36–0:52** | **"Опиши ідеальний вечір п'ятниці — без обмежень щодо грошей і логістики. Тільки чесно — а не так, як «правильно» звучало б."** → answered *"Вечеря на даху с бокалом гарного вина"* | ✓ 36–52 |
 | 0:52–1:04 | More chat, "Обрати типаж" CTA appears | — |
-| **1:05–1:30** | **Type Radar** — full-screen portraits, "Не моє" / "Мій типаж", optional tag chips (Обличчя, Фігура, Волосся, Стиль, Тату, Борода, Загальний вайб) | ✓ 65.5–83 |
+| **1:05–1:30** | **Type Radar** — full-screen portraits, "Не моє" / "Мій типаж", optional tag chips (Обличчя, Фігура, Волосся, Стиль, Тату, Борода, Загальний вайб) | ✓ 80.9–88.2 — the LAST stretch; see §E for why |
 | 1:30–1:33 | "Готово — ми зберегли твої вподобання" | ✓ 88.5–93 |
 | 1:33–1:47 | Photo request | ✗ not needed |
 
@@ -159,7 +159,7 @@ re-shoot would buy.
 
 ---
 
-## E. The cut — 16 shots, 45.4 s
+## E. The cut — 16 shots, 45.2 s
 
 | # | Time | Beat | Source |
 |---|---|---|---|
@@ -169,16 +169,16 @@ re-shoot would buy.
 | 4 | 7.4–10.2 | Кого ти хочеш бачити — two columns of real photographs | basics-preference |
 | 5 | 10.2–12.6 | The height drum | basics-height |
 | 6 | 12.6–15.6 | An honest question, an honest answer | chat-question |
-| 7 | 15.6–22.1 | **Type Radar** — five faces go past | radar-swipe |
-| 8 | 22.1–23.7 | Готово | radar-done |
-| 9 | 23.2–26.8 | **Хочеш піти з ним на побачення?** The turn | match-decision |
-| 10 | 26.8–28.8 | The calendar opens | cal-dates |
-| 11 | 28.8–31.0 | **13:00 lights up** — the shared slot | cal-overlap |
-| 12 | 31.0–34.4 | **Butterfly → неділя, 16 серп. 13:00** | time-reveal |
-| 13 | 34.4–36.2 | **Звідки ти виїжджаєш** — the departure pin | place-map |
-| 14 | 36.2–38.2 | Яке місце? | place-vibe |
-| 15 | 37.8–42.6 | **The date card.** Longest shot in the film | date-card |
-| 16 | 42.1–45.4 | The mark | — |
+| 7 | 15.6–22.0 | **Type Radar** — four faces, then the «Що зачепило?» tags | radar-swipe |
+| 8 | 22.0–23.6 | Готово | radar-done |
+| 9 | 23.1–26.7 | **Хочеш піти з ним на побачення?** The turn | match-decision |
+| 10 | 26.7–28.7 | The calendar opens | cal-dates |
+| 11 | 28.7–30.9 | **13:00 lights up** — the shared slot | cal-overlap |
+| 12 | 30.9–34.3 | **Butterfly → неділя, 16 серп. 13:00** | time-reveal |
+| 13 | 34.3–36.1 | **Звідки ти виїжджаєш** — the departure pin | place-map |
+| 14 | 36.1–38.1 | Яке місце? | place-vibe |
+| 15 | 37.7–42.5 | **The date card.** Longest shot in the film | date-card |
+| 16 | 42.0–45.2 | The mark | — |
 
 **The phone does not move.** Centred, unrotated, 604 px wide in every shot. An
 earlier cut slid it left and right and varied its size between beats for
@@ -187,11 +187,26 @@ screen on every cut instead of reading what is on it. All the interest now comes
 from the camera push (1.03×–1.055× per shot, never above 1.08) and from what the
 product is doing.
 
-**Rhythm.** 2.2–2.8 s holds through the profile; **6.5 s** on the Type Radar,
-taken from that clip's fast stretch (7.0–13.5 s) so five distinct faces pass —
-its opening sits on one man for 3.5 s, which reads as a screenshot of a feature
-rather than as the AI learning a taste; 2.0–2.2 s cuts through the planning
-burst; 4.8 s on the card.
+**Rhythm.** 2.2–2.8 s holds through the profile; **6.4 s** on the Type Radar;
+2.0–2.2 s cuts through the planning burst; 4.8 s on the card.
+
+**The Type Radar window is chosen face by face, not by length**, and it took
+three attempts. The clip's opening holds one man for 3.5 s, which reads as a
+screenshot of a feature rather than as the AI learning a taste. Its middle
+(7.0–13.5 s of the old extraction) bought five faces and swept in a mirror
+selfie with the phone held across the face. The founder then named one further
+profile specifically, and it was the first face in the window that replaced it.
+The shot now runs the radar's LAST stretch — source 81.1–87.5 — four distinct
+men with neither vetoed profile, closing on the **«Що зачепило?»** tag row.
+
+That closing beat is the reason this ended up better than where it started: the
+earlier windows ended on «Що не сподобалось?», so the film showed the AI being
+told what somebody did NOT like, while this one shows it being told what worked.
+Only the veto pushed the search far enough down the clip to find it.
+
+The stakes are specific to this shot: it is the one place the film claims the
+product has taste, so a frame nobody would swipe right on is not neutral filler
+— it argues against the claim being made over it.
 
 **Three dissolves only** — into the match decision, into the date card, into the
 mark. Each is a 14-frame overlap in which **only the incoming shot fades**:
@@ -217,11 +232,31 @@ recording shown as a bare rectangle reads as a screenshot; inside a handset it
 reads as somebody using the product, which is the claim the film is making. It
 is drawn rather than composited from a stock mockup because no mockup asset
 exists here, a drawn one stays sharp at any size, and it can use the design
-system's own palette. Two details are load-bearing:
+system's own palette.
+
+**Its proportions are measured, not eyeballed.** The first version read as a
+generic handset — the founder's words were "a mockup of some unknown phone" —
+and rebuilding it was a matter of taking real numbers off an iPhone 16 Pro
+(402 pt wide) and expressing every dimension as a fraction of screen width:
+screen corner radius 62/402 ≈ **0.145** (was 0.098, which is a rounded rectangle
+rather than a squircle and is the single biggest tell); Dynamic Island
+125 × 36.7 pt ≈ **0.315 × 0.092** at 0.028 from the top (it had been derived
+from the status bar instead, which made it a flat slot); a ~0.017 black display
+border with a ~0.008 titanium rail outside it, as two layers, because from the
+front that rail is a bright hairline and one grey band reads as plastic.
+
+Three details are load-bearing:
 
 - **The status bar is ours.** The recorded one carries the red screen-recording
   pill. It is cropped away and a clean one drawn back — OS chrome, not Gennety
   UI, so this does not breach the no-redrawing rule.
+- **Its backdrop is the clip's own top edge, mirrored and blurred.** A flat
+  black strip is right on the Mini App screens and wrong on the Telegram ones,
+  whose translucent header runs under the status bar on a real phone: against
+  black it produced a hard horizontal seam. It is also what makes the Dynamic
+  Island visible at all — a black pill on a black strip is invisible, and an
+  iPhone with no island is not an iPhone. On the genuinely dark screens it stays
+  invisible, which is exactly what a real handset does there.
 - **The screen aperture is sized from the clip's real geometry** (`CLIP_W` /
   `CLIP_H`), so footage is never stretched to fit a handset that does not match
   it.
