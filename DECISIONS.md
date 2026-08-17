@@ -47,6 +47,64 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-17 — the status bar stops being ours: the recording keeps its own
+
+**Kind:** founder decision + change of mind
+**What:** the extraction crop is gone entirely — the clips are now the full
+576×1280 phone screen, status bar included — and `ui/Iphone.tsx` no longer draws
+one. The clock, the signal bars, the wifi arc, the battery and the Dynamic
+Island are the device's own. One opaque black rounded rect covers the red
+screen-recording pill, and nothing else in the frame is touched.
+
+**Why, and this is my third attempt at the same 84 pixels.** The founder's
+report was precise: the drawn strip "doesn't fit the colour of the screen —
+when the screens change it keeps its own colour, and you can see it isn't
+original, just put there." Then the part I should have reached on my own: *the
+Dynamic Island and those icons were already in the recordings you sent me.*
+
+They were. Build 1 cropped the whole strip and drew a flat black one — a hard
+seam wherever Telegram's translucent header ran underneath. Build 2 kept the
+drawn glyphs and painted the clip's own top rows behind them, mirrored and
+blurred; that fixed the colour and left the glyphs ours, which is what the
+founder was actually looking at. **Both builds were solving "how do I make my
+status bar match theirs" when the answer was to not have one.** The only reason
+either existed is the red recording pill, and a pill is a small object — it did
+not justify replacing the strip that contains it.
+
+**The cover is measured, and measuring it once was not enough.** A confident
+red threshold put the pill's outline at x 158–415 / y 15–74; covering exactly
+that left a faint dark-red ring on the black Mini App screens, where the
+stroke's antialiased edge has nothing to hide against. Re-scanned at a
+threshold low enough to catch that edge, it runs to **x 156–417, y 14–75** in
+all three recordings. It also must not be enlarged "to be safe": on the Telegram
+screens the island's edge is genuinely visible against a light blurred header,
+where excess reads as a black fringe. The shape works because it IS the Dynamic
+Island in its expanded recording state, so blacking it out leaves an island
+rather than a patch.
+
+**What it costs, recorded rather than discovered later:** the clock is real, so
+it reads 02:04 / 02:05 / 19:39 across the three recordings, and the battery goes
+from a green charging 90 % to a **red 17 %** at the same cut. That cut is the
+match decision, which is where the story jumps forward in time anyway, so the
+clock change reads as intended. The red battery is the one genuine wart and is
+accepted: drawing a replacement battery is the pasted-on problem again, one
+badge at a time.
+
+**What it changes going forward:**
+- **The rule this leaves: cover the offending object, do not replace the surface
+  it sits on.** Three builds and two founder reports to arrive at it.
+- `CLIP_H` is 1280 and there is no crop filter in `extract-hero-footage.sh`. A
+  future clip added by hand must match, or its status bar will not line up with
+  `PILL`.
+- Trim values are unaffected — the time windows did not move, only the framing —
+  so the cut is frame-for-frame identical to the previous render.
+
+**Recorded in:** `apps/video/src/hero/ui/Iphone.tsx` (`PILL` and the header
+comment), `scripts/extract-hero-footage.sh`, `video-production-plan.md` §C/§F,
+`README.md`.
+
+---
+
 ## 2026-08-17 — the handset is measured off a real iPhone, and Type Radar drops a face to gain a beat
 
 **Kind:** founder decision + change of mind
@@ -70,14 +128,17 @@ version by eye. Every dimension is now a fraction of screen width taken off a
   From the front that rail is a bright hairline; the single grey gradient band I
   had drawn reads as plastic.
 
-**The status bar's backdrop is now the clip's own top rows, mirrored and
-blurred**, and that is a fix for something the founder did not report. A flat
-black strip is right on the Mini App screens and wrong on the Telegram ones,
-whose translucent header runs under the status bar on a real phone — against
-black it left a hard horizontal seam. It also turned out to be **the only way to
-make the Dynamic Island visible at all**: a black pill on a black strip is
-invisible, and an iPhone with no island is not an iPhone. On the genuinely dark
-screens it stays invisible, which is what a real handset does there.
+**The status bar's backdrop became the clip's own top rows, mirrored and
+blurred** — a fix for something the founder had not reported, and *superseded
+the same day* by the entry above, which removes the drawn status bar entirely.
+It is left here because the reasoning is what led there: a flat black strip is
+right on the Mini App screens and wrong on the Telegram ones, whose translucent
+header runs under the status bar on a real phone. Chasing that colour match was
+the signal I misread — the strip did not need to match the recording, it needed
+to BE the recording.
+
+The Dynamic Island geometry below is likewise superseded: the island is now the
+device's own rather than drawn.
 
 **Why the Type Radar window moved to the END of its clip, and it took two
 passes.** The founder first said a profile looked bad; I read that as the mirror

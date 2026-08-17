@@ -30,18 +30,22 @@ done
 
 mkdir -p "$HERE/public/footage"
 
-# ONE crop profile: 576x1196 @ y=84 — the whole phone screen minus the iOS
-# status bar.
+# NO CROP. The full 576x1280 phone screen, status bar included.
 #
-# Only the status bar goes, and only because it carries the red screen-recording
-# pill, which is the single thing on screen that says "this is a demo". A clean
-# status bar is drawn back on in ui/Iphone.tsx. Everything else stays: the Mini
-# App nav row, Telegram's header, the pinned bar. An earlier version cropped
-# those away too and the result read as a cropped screenshot rather than as
-# somebody using a phone.
+# Two earlier versions cropped it (first the app chrome as well, then just the
+# iOS status bar at `crop=576:1196:0:84`) because that strip carries the red
+# screen-recording pill — the one element on screen that says "this is a demo".
+# Both drew a replacement status bar in ui/Iphone.tsx, and both read as pasted
+# on: a drawn strip keeps its own colour while the app behind it changes.
+#
+# The recording indicator is dealt with where it actually is instead — one
+# opaque black rounded rect over the pill's measured bounds (ui/Iphone.tsx
+# `PILL`), which is the Dynamic Island's own expanded shape. So the clock, the
+# signal bars, the wifi arc, the battery and the island are all the device's
+# own, in the device's own colours, over the real app. Nothing else is touched.
 cut() {
   ffmpeg -v error -y -ss "$3" -to "$4" -i "$2" \
-    -vf "crop=576:1196:0:84,fps=30" -an \
+    -vf "fps=30" -an \
     -c:v libx264 -crf 17 -preset slow -pix_fmt yuv420p \
     "$HERE/public/footage/$1.mp4"
   echo "  $1"

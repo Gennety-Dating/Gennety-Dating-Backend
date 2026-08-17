@@ -115,10 +115,12 @@ Stated plainly, because each of these constrained the cut:
    putting it inside a handset rather than blowing it up to fill the frame.
 2. **One thing that must never appear: the red screen-recording pill** in the
    iOS status bar. It is the single element on screen that says "this is a
-   demo". The extraction crop removes the status bar and only the status bar
-   (`crop=576:1196:0:84`); a clean one is drawn back in `ui/Iphone.tsx`.
-   Everything else stays — the Mini App nav row, Telegram's header, the pinned
-   bar — because they are what a person actually sees when using this product.
+   demo". It is covered where it actually sits — one opaque black rounded rect
+   over the pill's measured bounds — rather than cropped away, because the pill
+   IS the Dynamic Island in its expanded recording state, so blacking it out
+   leaves an island rather than a patch. Nothing else in the frame is touched:
+   the clock, the signal bars, the wifi arc, the battery and the island are the
+   device's own, in the device's own colours. See §F.
 3. **It is the `Gennety DEMO` bot**, not production. No dev badge is visible
    once cropped, but the film should not be described as production capture.
 4. **Keyboard dominance.** Most of `IMG_2590` is someone typing, with an
@@ -224,13 +226,14 @@ not repeated.
 nothing is rebuilt. The one new element is the end card (Priority 3 — a brand
 animation, not a product screen).
 
-**One crop profile**, applied at extraction: **576×1196 @ y=84** — the whole
-phone screen minus the iOS status bar, and nothing else.
+**No crop at all** at extraction: the full **576×1280** phone screen, status bar
+included. Two earlier versions cropped — first the app chrome as well, then just
+the status bar — and both had to draw something back. Neither survived review.
 
 **The footage plays inside a drawn iPhone** (`ui/Iphone.tsx`). A screen
 recording shown as a bare rectangle reads as a screenshot; inside a handset it
-reads as somebody using the product, which is the claim the film is making. It
-is drawn rather than composited from a stock mockup because no mockup asset
+reads as somebody using the product, which is the claim the film is making. The
+BODY is drawn rather than composited from a stock mockup because no mockup asset
 exists here, a drawn one stays sharp at any size, and it can use the design
 system's own palette.
 
@@ -239,27 +242,41 @@ generic handset — the founder's words were "a mockup of some unknown phone" �
 and rebuilding it was a matter of taking real numbers off an iPhone 16 Pro
 (402 pt wide) and expressing every dimension as a fraction of screen width:
 screen corner radius 62/402 ≈ **0.145** (was 0.098, which is a rounded rectangle
-rather than a squircle and is the single biggest tell); Dynamic Island
-125 × 36.7 pt ≈ **0.315 × 0.092** at 0.028 from the top (it had been derived
-from the status bar instead, which made it a flat slot); a ~0.017 black display
+rather than a squircle and is the single biggest tell); a ~0.017 black display
 border with a ~0.008 titanium rail outside it, as two layers, because from the
 front that rail is a bright hairline and one grey band reads as plastic.
 
-Three details are load-bearing:
+**The SCREEN, status bar included, is entirely the recording** — and that took
+three attempts to get right. The strip carries the red screen-recording pill, so
+the first two builds cropped it away and drew a replacement: first over a flat
+black band, then over the clip's own top rows mirrored and blurred. Both read as
+pasted on, and the founder's diagnosis was exact — a drawn strip keeps its own
+colour while the app behind it changes, so it announces itself as something
+added at the end. The mirrored backdrop fixed the colour and not the fact that
+the glyphs were ours.
 
-- **The status bar is ours.** The recorded one carries the red screen-recording
-  pill. It is cropped away and a clean one drawn back — OS chrome, not Gennety
-  UI, so this does not breach the no-redrawing rule.
-- **Its backdrop is the clip's own top edge, mirrored and blurred.** A flat
-  black strip is right on the Mini App screens and wrong on the Telegram ones,
-  whose translucent header runs under the status bar on a real phone: against
-  black it produced a hard horizontal seam. It is also what makes the Dynamic
-  Island visible at all — a black pill on a black strip is invisible, and an
-  iPhone with no island is not an iPhone. On the genuinely dark screens it stays
-  invisible, which is exactly what a real handset does there.
-- **The screen aperture is sized from the clip's real geometry** (`CLIP_W` /
-  `CLIP_H`), so footage is never stretched to fit a handset that does not match
-  it.
+Nothing is cropped now and nothing is redrawn. The clock, the signal bars, the
+wifi arc, the battery and the Dynamic Island are the device's own, over the real
+app, because they ARE that frame. **The single intervention is one opaque black
+rounded rect over the recording indicator**, at bounds measured off all three
+recordings — x 156–417, y 14–75, plus ~1px. It was measured twice: a confident
+red threshold missed the stroke's antialiased edge and left a faint dark-red
+ring on the black Mini App screens, where there is nothing for it to hide
+against. It must not be enlarged further either: on the Telegram screens the
+island sits against a light blurred header where its edge is genuinely visible,
+and excess reads as a black fringe.
+
+**What taking the real status bar costs, stated rather than discovered later:**
+the clock reads 02:04 in `IMG_2588`, 02:05 in `IMG_2590` and 19:39 in
+`IMG_2604`, and the battery goes from a green charging 90 % to a red 17 % at the
+same cut. That cut is shot 9 — the match decision — which is exactly where the
+story jumps forward in time anyway, so the clock change reads as intended. The
+red battery is the one genuine wart, and it is accepted: drawing a replacement
+battery is the pasted-on problem again, one badge at a time.
+
+**The screen aperture is sized from the clip's real geometry** (`CLIP_W` /
+`CLIP_H`, now the full 576×1280), so footage is never stretched to fit a handset
+that does not match it.
 
 `scripts/extract-hero-footage.sh` is the derivation and reproduces all 15 clips
 byte-identically.

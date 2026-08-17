@@ -121,28 +121,35 @@ accents: **15.6 s**, **23.1 s**, **30.9 s**, **37.7 s**.
 
 ### The handset
 
-`ui/Iphone.tsx` draws it. Every dimension is a fraction of the screen's WIDTH,
-taken off a real iPhone 16 Pro — screen radius 0.145, Dynamic Island
-0.315 × 0.092 at 0.028 from the top, a 0.017 black display border inside a 0.008
-titanium rail. Those are measurements; the first version was proportioned by eye
-and read as a generic phone. Change one and check it against the device, not
-against how it looks alone on a black page.
+`ui/Iphone.tsx` draws the BODY only. Every dimension is a fraction of the
+screen's WIDTH, taken off a real iPhone 16 Pro — screen radius 0.145, a 0.017
+black display border inside a 0.008 titanium rail. Those are measurements; the
+first version was proportioned by eye and read as a generic phone. Change one
+and check it against the device, not against how it looks alone on a black page.
 
-The status bar's backdrop is the clip's own top rows, mirrored upward and
-blurred, so the strip continues whatever is beneath it. That is what removes the
-seam on the Telegram screens and what makes the Dynamic Island visible at all.
+**The screen, status bar included, is entirely the recording.** Two earlier
+builds cropped the strip away (it carries the red screen-recording pill) and
+drew a replacement; both read as pasted on, because a drawn strip keeps its own
+colour while the app behind it changes. The single intervention now is `PILL` —
+one opaque black rounded rect over the recording indicator, at bounds measured
+off all three recordings. That shape is the Dynamic Island's own expanded state,
+so covering it leaves an island rather than a patch. **Do not enlarge it**: it
+is already 1px over the stroke's antialiased edge, and on the Telegram screens
+the island's edge is visible against a light header, where excess shows as a
+black fringe.
+
+Consequence worth knowing: the clock and battery are real, so they differ
+between recordings (02:04 / 02:05 / 19:39, and a red 17 % on the last one). The
+change lands on the match-decision cut, where the story jumps forward anyway.
 
 ### Re-cutting the footage
 
 `public/footage/` holds trimmed clips, not sources. Regenerate them with
 `./scripts/extract-hero-footage.sh [source-dir]` — it reproduces all 15
-byte-identically. There is **one** crop profile — `576×1196 @ y=84`, the whole
-phone screen minus the iOS status bar. Only the status bar goes, because it
-carries the red screen-recording pill; a clean one is drawn back in
-`ui/Iphone.tsx`. Everything else stays, which is what makes the footage read as
-somebody using a phone rather than as a cropped screenshot. The `trim` values in
-`timeline.ts` are measured against these in-points, so changing a window means
-re-checking them.
+byte-identically. There is **no crop at all**: the clips are the full 576×1280
+phone screen, status bar included, which is what makes the chrome read as the
+device's rather than as ours. The `trim` values in `timeline.ts` are measured
+against these in-points, so changing a window means re-checking them.
 
 ## Couple-photo finish
 
