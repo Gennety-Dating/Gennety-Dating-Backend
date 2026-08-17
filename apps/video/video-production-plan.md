@@ -1,6 +1,6 @@
 # Gennety — product film production plan (`GennetyHero`)
 
-> Delivered: 1080×1920, 30 fps, H.264, **44.0 s**, `out/gennety-hero.mp4`.
+> Delivered: 1080×1920, 30 fps, H.264, **45.4 s**, `out/gennety-hero.mp4`.
 > Cut entirely from three screen recordings of the running product.
 > This is the audit behind the cut — what exists, what each clip shows, what is
 > unusable and why, and the editorial decisions taken.
@@ -31,7 +31,7 @@ repainted.
 | `IMG_2604.MP4` | 576×1280 | 2:15 | 30 | Match decision → calendar → time lock → departure pin → venue → **date card** |
 
 All three are the **`Gennety DEMO`** bot, in **Ukrainian**, recorded 2026-08-16.
-Total 4:21 of source for a 44 s film — roughly a 6:1 shooting ratio, which is
+Total 4:21 of source for a 45 s film — roughly a 6:1 shooting ratio, which is
 why the plan is mostly about what to leave out.
 
 ### A.2 Brand assets already in the workspace
@@ -75,7 +75,7 @@ five distinct, purpose-built controls, none of which looks like a form.
 | 0:00–0:35 | Chat opening, "Open Gennety", hobbies and partner-qualities questions, heavy typing | ✗ keyboard-dominated |
 | **0:36–0:52** | **"Опиши ідеальний вечір п'ятниці — без обмежень щодо грошей і логістики. Тільки чесно — а не так, як «правильно» звучало б."** → answered *"Вечеря на даху с бокалом гарного вина"* | ✓ 36–52 |
 | 0:52–1:04 | More chat, "Обрати типаж" CTA appears | — |
-| **1:05–1:30** | **Type Radar** — full-screen portraits, "Не моє" / "Мій типаж", optional tag chips (Обличчя, Фігура, Волосся, Стиль, Тату, Борода, Загальний вайб) | ✓ 65.5–78 |
+| **1:05–1:30** | **Type Radar** — full-screen portraits, "Не моє" / "Мій типаж", optional tag chips (Обличчя, Фігура, Волосся, Стиль, Тату, Борода, Загальний вайб) | ✓ 65.5–83 |
 | 1:30–1:33 | "Готово — ми зберегли твої вподобання" | ✓ 88.5–93 |
 | 1:33–1:47 | Photo request | ✗ not needed |
 
@@ -90,7 +90,7 @@ five distinct, purpose-built controls, none of which looks like a form.
 | 0:26–0:31 | "Обери дату" — the date list | ✓ 26.5–31.5 |
 | **0:31–0:35** | **13:00 lights up** — the slot both sides marked, then "Підтвердити" | ✓ 30.8–35.6 |
 | **0:35–0:39** | **The butterfly, then "неділя, 16 серп. 13:00"** | ✓ 35.2–39.6 |
-| 0:39–0:46 | Locked-time card in chat, then the departure-point map | ✓ 41.5–46 (extracted, unused) |
+| 0:39–0:46 | Locked-time card in chat, then **the departure-point map** | ✓ 41.3–45.8 |
 | 0:46–0:48 | Browser geolocation permission dialog | ✗ dev artifact |
 | 0:48–0:54 | "Яке місце?" — free-text vibe + "Далі" | ✓ 48.5–53.5 |
 | 0:54–1:57 | Concierge working, repeated locked-time card | ✗ static repetition |
@@ -110,14 +110,15 @@ cut takes the length over the marginally better framing.
 
 Stated plainly, because each of these constrained the cut:
 
-1. **576×1280 against a 1080×1920 delivery.** Handled compositionally, not with
-   a filter: panel width per shot sets the upscale, and it ranges **1.03×**
-   (the quiet "Готово" beat at 566 px) to **1.54×** (the Type Radar hero at
-   878 px). Nothing is shown full-bleed, which would have meant 1.88×.
-2. **Chrome that must never appear.** An iOS status bar carrying a **red
-   recording dot**, Telegram's chat header, a pinned-message bar, and a
-   "Translate to English" strip. Two crop profiles remove them
-   (§F), and that crop is the entire reason a frame component exists.
+1. **576×1280 against a 1080×1920 delivery.** The screen is shown at 604 px in
+   every shot — a **1.05× upscale**, effectively native. That is the payoff of
+   putting it inside a handset rather than blowing it up to fill the frame.
+2. **One thing that must never appear: the red screen-recording pill** in the
+   iOS status bar. It is the single element on screen that says "this is a
+   demo". The extraction crop removes the status bar and only the status bar
+   (`crop=576:1196:0:84`); a clean one is drawn back in `ui/Iphone.tsx`.
+   Everything else stays — the Mini App nav row, Telegram's header, the pinned
+   bar — because they are what a person actually sees when using this product.
 3. **It is the `Gennety DEMO` bot**, not production. No dev badge is visible
    once cropped, but the film should not be described as production capture.
 4. **Keyboard dominance.** Most of `IMG_2590` is someone typing, with an
@@ -143,7 +144,7 @@ Stated plainly, because each of these constrained the cut:
 | Hobbies + partner-qualities questions | OUT — one honest question says it better than three |
 | First calendar pass (18:00/18:30/19:00) | OUT — the film shows the *overlap*, not the proposing |
 | "Збережено · Чекаємо співрозмовника" | OUT — a waiting state, and the film should not wait |
-| Departure-point map pin | OUT — extracted, then cut: it is a second "pick a place" beat and dilutes "Яке місце?" |
+| ~~Departure-point map pin~~ | **RESTORED** — cut once as a second "pick a place" beat, put back: without it the venue simply appears, and the point is that the concierge picks somewhere both people can reach |
 | Concierge working (1 minute) | OUT — static |
 | Post-card buttons (Maps / Змінити місце / Share) | OUT — the film ends on the card, not on a toolbar |
 | Visual intro (statistics, competitor cards) | **NOT AVAILABLE** — not in these recordings |
@@ -158,41 +159,49 @@ re-shoot would buy.
 
 ---
 
-## E. The cut — 15 shots, 44.0 s
+## E. The cut — 16 shots, 45.4 s
 
-| # | Time | Beat | Source | Panel |
-|---|---|---|---|---|
-| 1 | 0.0–2.8 | Твоє ім'я — the quietest way in | basics-name | 596 |
-| 2 | 2.8–5.2 | The age slider settling | basics-age | 654 |
-| 3 | 5.2–7.8 | Gender — and the burst the tap throws | basics-gender | 654, offset L |
-| 4 | 7.8–10.6 | Кого ти хочеш бачити — two columns of real photographs | basics-preference | **862** |
-| 5 | 10.6–13.0 | The height drum | basics-height | 654, offset R |
-| 6 | 13.0–16.2 | An honest question, an honest answer | chat-question | 792 |
-| 7 | 16.2–20.6 | **Type Radar** — the AI reading taste. Longest middle hold | radar-swipe | **878** |
-| 8 | 20.6–22.4 | Готово. Short on purpose | radar-done | **566** |
-| 9 | 22.1–25.9 | **Хочеш піти з ним на побачення?** The turn | match-decision | 792 |
-| 10 | 25.9–28.1 | The calendar opens; cuts tighten | cal-dates | 668, offset L |
-| 11 | 28.1–30.5 | **13:00 lights up** — nobody negotiated it | cal-overlap | 668, offset R |
-| 12 | 30.5–34.1 | **Butterfly → неділя, 16 серп. 13:00.** The peak | time-reveal | **826** |
-| 13 | 34.1–36.3 | Яке місце? | place-vibe | 620 |
-| 14 | 35.9–41.0 | **The date card.** Longest shot in the film | date-card | **886** |
-| 15 | 40.6–44.0 | The mark | — | — |
+| # | Time | Beat | Source |
+|---|---|---|---|
+| 1 | 0.0–2.6 | Твоє ім'я — the quietest way in | basics-name |
+| 2 | 2.6–4.8 | The age slider settling | basics-age |
+| 3 | 4.8–7.4 | Gender — and the burst the tap throws | basics-gender |
+| 4 | 7.4–10.2 | Кого ти хочеш бачити — two columns of real photographs | basics-preference |
+| 5 | 10.2–12.6 | The height drum | basics-height |
+| 6 | 12.6–15.6 | An honest question, an honest answer | chat-question |
+| 7 | 15.6–22.1 | **Type Radar** — five faces go past | radar-swipe |
+| 8 | 22.1–23.7 | Готово | radar-done |
+| 9 | 23.2–26.8 | **Хочеш піти з ним на побачення?** The turn | match-decision |
+| 10 | 26.8–28.8 | The calendar opens | cal-dates |
+| 11 | 28.8–31.0 | **13:00 lights up** — the shared slot | cal-overlap |
+| 12 | 31.0–34.4 | **Butterfly → неділя, 16 серп. 13:00** | time-reveal |
+| 13 | 34.4–36.2 | **Звідки ти виїжджаєш** — the departure pin | place-map |
+| 14 | 36.2–38.2 | Яке місце? | place-vibe |
+| 15 | 37.8–42.6 | **The date card.** Longest shot in the film | date-card |
+| 16 | 42.1–45.4 | The mark | — |
 
-**Rhythm.** Calm 2.4–2.8 s holds through the profile; a 4.4 s hold on the Type
-Radar; 2.2–2.4 s cuts through the planning burst (10→11→12); 5.0 s on the card.
+**The phone does not move.** Centred, unrotated, 604 px wide in every shot. An
+earlier cut slid it left and right and varied its size between beats for
+compositional variety; that variety cost legibility — the eye re-finds the
+screen on every cut instead of reading what is on it. All the interest now comes
+from the camera push (1.03×–1.055× per shot, never above 1.08) and from what the
+product is doing.
+
+**Rhythm.** 2.2–2.8 s holds through the profile; **6.5 s** on the Type Radar,
+taken from that clip's fast stretch (7.0–13.5 s) so five distinct faces pass —
+its opening sits on one man for 3.5 s, which reads as a screenshot of a feature
+rather than as the AI learning a taste; 2.0–2.2 s cuts through the planning
+burst; 4.8 s on the card.
+
 **Three dissolves only** — into the match decision, into the date card, into the
-mark — each at a change of register. The other eleven transitions are hard cuts.
-
-**Composition.** Panel width ranges 566–886 px and alternates centred / offset
-left / offset right, with ±1.1° rotations on four shots. Camera is one slow push
-per shot, never above 1.07.
+mark. Each is a 14-frame overlap in which **only the incoming shot fades**:
+sequences are layered in array order, so an incoming fade over a fully-opaque
+outgoing is a clean cross-dissolve, while fading both at once dips the picture to
+roughly 60 % mid-transition. The other twelve transitions are hard cuts.
 
 **Text.** None, apart from the wordmark and one line under it —
-**«Твій AI-метчмейкер»**. The product's own copy carries the entire argument, in
-its own typography, which is the whole reason the film works. The closing line
-is already on the date card and is not repeated.
-
----
+**«Твій AI-метчмейкер»**. The closing line is already on the date card and is
+not repeated.
 
 ## F. Technical strategy
 
@@ -200,16 +209,25 @@ is already on the date card and is not repeated.
 nothing is rebuilt. The one new element is the end card (Priority 3 — a brand
 animation, not a product screen).
 
-Two crop profiles, applied at extraction with `ffmpeg`, crop-first:
+**One crop profile**, applied at extraction: **576×1196 @ y=84** — the whole
+phone screen minus the iOS status bar, and nothing else.
 
-- `mini` — **576×1100 @ y=160**. Drops the status bar and the Mini App's
-  "Back / Close · ⌄ ···" row. Used for 11 shots.
-- `chat` — **576×860 @ y=320**. Additionally drops Telegram's header, the
-  pinned-message bar and "Translate to English". Used for the 3 chat shots.
+**The footage plays inside a drawn iPhone** (`ui/Iphone.tsx`). A screen
+recording shown as a bare rectangle reads as a screenshot; inside a handset it
+reads as somebody using the product, which is the claim the film is making. It
+is drawn rather than composited from a stock mockup because no mockup asset
+exists here, a drawn one stays sharp at any size, and it can use the design
+system's own palette. Two details are load-bearing:
 
-`ui/Screen.tsx` sizes each panel from its clip's own ratio, so the frame can
-never disagree with the footage inside it. `scripts/extract-hero-footage.sh` is
-the derivation and reproduces all 15 clips byte-identically.
+- **The status bar is ours.** The recorded one carries the red screen-recording
+  pill. It is cropped away and a clean one drawn back — OS chrome, not Gennety
+  UI, so this does not breach the no-redrawing rule.
+- **The screen aperture is sized from the clip's real geometry** (`CLIP_W` /
+  `CLIP_H`), so footage is never stretched to fit a handset that does not match
+  it.
+
+`scripts/extract-hero-footage.sh` is the derivation and reproduces all 15 clips
+byte-identically.
 
 **One scene component, not fifteen.** Every beat is the same object — a captured
 screen, framed — differing only in composition, camera and timing, all of which
@@ -227,8 +245,8 @@ is approved*).
 
 `<Audio>` is wired behind a `musicVolume` prop defaulting to `0`, envelope
 already shaped. Adding a track is one file at `public/audio/score.m4a` plus
-`musicVolume: 0.8`. Time it against the cut's four accents: **16.2 s** (Type
-Radar), **22.1 s** (the decision), **30.5 s** (the butterfly / 13:00), **35.9 s**
+`musicVolume: 0.8`. Time it against the cut's four accents: **15.6 s** (Type
+Radar), **23.2 s** (the decision), **31.0 s** (the butterfly / 13:00), **37.8 s**
 (the date card).
 
 No SFX. Taps and confirmations would have to be synthesised from nothing, and

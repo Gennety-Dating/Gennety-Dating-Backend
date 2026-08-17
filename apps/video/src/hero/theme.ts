@@ -20,10 +20,6 @@ export const OUTLINE = "#1a1a1a";
 export const asset = (path: string) => staticFile(path);
 
 /**
- * The captured Mini App screen, after the crop that removes the iOS status bar
- * and Telegram's Russian nav row. Every phone-framed shot is laid out from this
- * ratio, so the frame can never disagree with the footage inside it.
+ * Clip geometry now lives in `ui/Iphone.tsx` (CLIP_W / CLIP_H), next to the
+ * handset that is laid out from it.
  */
-export const SCREEN_W = 592;
-export const SCREEN_H = 1130;
-export const SCREEN_RATIO = SCREEN_W / SCREEN_H;

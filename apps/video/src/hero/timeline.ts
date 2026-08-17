@@ -1,42 +1,39 @@
 /**
  * The cut.
  *
- * Every shot is a real capture of the running product. `from`/`duration` are
- * composition frames at 30 fps; `trim` is frames into the source clip, measured
- * against the filmstrips in `video-production-plan.md` §B — do not nudge one
- * without re-reading the clip it points at.
+ * Every shot is a real capture of the running product, played inside a drawn
+ * iPhone. `from`/`durationInFrames` are composition frames at 30 fps; `trim` is
+ * frames into the source clip, measured against the filmstrips in
+ * `video-production-plan.md` §B — do not nudge one without re-reading the clip.
+ *
+ * **The phone does not move.** It is centred, unrotated and the same size in
+ * every shot. An earlier cut slid it left and right between beats for
+ * compositional variety, and that variety cost legibility: the eye re-finds the
+ * screen on every cut instead of reading what is on it. Interest comes from the
+ * camera push and from what the product is doing, not from where the handset
+ * sits. `y` exists for a shot that needs a vertical nudge; there is deliberately
+ * no horizontal equivalent.
  *
  * Overlapping `from` values are the ONLY thing that produces a dissolve. There
- * are three, all at a change of register: into the match decision, into the
- * date card, and into the mark. Everything else is a hard cut.
- *
- * Rhythm is an accelerando with a long payoff — calm 2.4–2.8s holds through the
- * profile, a 4.4s hold on the Type Radar (the film's "the AI is reading me"
- * beat), then 2.2s cuts through the planning burst, and 5s on the date card.
+ * are three, all at a change of register. Everything else is a hard cut.
  */
 
 export const FPS = 30;
 
-/** Screen aspect ratios of the two crop profiles (see the extraction script). */
-export const RATIO_MINIAPP = 576 / 1100; // Mini App: nav row cropped away
-export const RATIO_CHAT = 576 / 860; // Telegram chat: header + pinned + translate cropped
+/** The phone is this wide in every shot. Constant on purpose — see above. */
+export const SCREEN_WIDTH = 604;
 
 export type Shot = {
-  /** Composition frame this shot starts on. */
   from: number;
   durationInFrames: number;
   /** Clip under public/footage/, without the extension. */
   src: string;
   /** Frames into that clip. */
   trim: number;
-  ratio: number;
-  /** Panel width in composition px. Sets the upscale — the sources are 576 wide. */
-  width: number;
-  x?: number;
-  y?: number;
-  rotate?: number;
   /** Camera push: [start, end] scale. Never above 1.08. */
   push?: [number, number];
+  /** Vertical nudge only. Horizontal movement is deliberately not available. */
+  y?: number;
   glow?: number;
   /** Fade edges in frames. 0 = hard cut on that side. */
   fadeIn?: number;
@@ -47,201 +44,161 @@ export type Shot = {
 
 export const SHOTS: Shot[] = [
   {
-    beat: "Хто ти — the name field, and the quietest way into the product.",
+    beat: "Твоє ім'я — the quietest way into the product.",
     from: 0,
-    durationInFrames: 84,
+    durationInFrames: 78,
     src: "basics-name",
     trim: 18,
-    ratio: RATIO_MINIAPP,
-    width: 596,
-    push: [1.0, 1.045],
+    push: [1.0, 1.04],
     glow: 0.85,
     fadeIn: 20,
     fadeOut: 0,
   },
   {
     beat: "Скільки тобі років — the slider settling. A control, not a form field.",
-    from: 84,
-    durationInFrames: 72,
+    from: 78,
+    durationInFrames: 66,
     src: "basics-age",
     trim: 12,
-    ratio: RATIO_MINIAPP,
-    width: 654,
-    push: [1.0, 1.04],
+    push: [1.0, 1.035],
     glow: 0.85,
-    fadeIn: 0,
-    fadeOut: 0,
   },
   {
-    beat: "The gender question — and the burst the tap throws — flowers, hearts, a crown.",
-    from: 156,
+    beat: "The gender question, and the burst the tap throws — flowers, hearts, a crown.",
+    from: 144,
     durationInFrames: 78,
     src: "basics-gender",
     trim: 6,
-    ratio: RATIO_MINIAPP,
-    width: 654,
-    x: -76,
-    rotate: -1.1,
     push: [1.0, 1.04],
     glow: 0.85,
-    fadeIn: 0,
-    fadeOut: 0,
   },
   {
-    beat: "Кого ти хочеш бачити — two columns of real photographs, the most striking screen in onboarding.",
-    from: 234,
+    beat: "Кого ти хочеш бачити — two columns of real photographs.",
+    from: 222,
     durationInFrames: 84,
     src: "basics-preference",
     trim: 15,
-    ratio: RATIO_MINIAPP,
-    width: 862,
-    push: [1.0, 1.05],
-    glow: 0.7,
-    fadeIn: 0,
-    fadeOut: 0,
+    push: [1.0, 1.045],
+    glow: 0.8,
   },
   {
     beat: "The height drum, spinning. A control that behaves like an object.",
-    from: 318,
+    from: 306,
     durationInFrames: 72,
     src: "basics-height",
     trim: 33,
-    ratio: RATIO_MINIAPP,
-    width: 654,
-    x: 82,
-    rotate: 1.1,
-    push: [1.0, 1.04],
+    push: [1.0, 1.035],
     glow: 0.85,
-    fadeIn: 0,
-    fadeOut: 0,
   },
   {
-    beat: "The bot asks an honest question and gets an honest answer. The whole product in one exchange.",
-    from: 390,
-    durationInFrames: 96,
+    beat: "An honest question, an honest answer. The whole product in one exchange.",
+    from: 378,
+    durationInFrames: 90,
     src: "chat-question",
     trim: 336,
-    ratio: RATIO_CHAT,
-    width: 792,
     push: [1.0, 1.04],
-    glow: 0.6,
-    fadeIn: 0,
-    fadeOut: 0,
+    glow: 0.7,
   },
   {
-    beat: "Type Radar. The film's hero AI beat — held longest of the middle shots.",
-    from: 486,
-    durationInFrames: 132,
+    beat:
+      "Type Radar. Held 6.5s, taken from the clip's fast stretch (7.0–13.5s) so " +
+      "FIVE faces go past. The opening of that clip sits on one man for 3.5s, " +
+      "which reads as a screenshot of a feature; several faces read as the AI " +
+      "learning a taste, which is the actual claim.",
+    from: 468,
+    durationInFrames: 195,
     src: "radar-swipe",
-    trim: 60,
-    ratio: RATIO_MINIAPP,
-    width: 878,
-    push: [1.01, 1.06],
-    glow: 0.75,
-    fadeIn: 0,
-    fadeOut: 0,
+    trim: 210,
+    push: [1.0, 1.05],
+    glow: 0.8,
   },
   {
     beat: "Готово — it saved what it learned. Short, on purpose.",
-    from: 618,
-    durationInFrames: 54,
+    from: 663,
+    durationInFrames: 48,
     src: "radar-done",
     trim: 30,
-    ratio: RATIO_MINIAPP,
-    width: 566,
     push: [1.0, 1.03],
     glow: 0.85,
-    fadeIn: 0,
-    fadeOut: 12,
   },
   {
-    beat: "Verified, then: хочеш піти з ним на побачення? The turn the film pivots on.",
-    from: 662,
-    durationInFrames: 114,
+    beat: "Хочеш піти з ним на побачення? The turn the film pivots on.",
+    from: 697,
+    durationInFrames: 108,
     src: "match-decision",
     trim: 6,
-    ratio: RATIO_CHAT,
-    width: 792,
-    push: [1.0, 1.05],
-    glow: 0.7,
+    push: [1.0, 1.045],
+    glow: 0.75,
     fadeIn: 12,
-    fadeOut: 0,
   },
   {
     beat: "The calendar opens. Planning starts, and the cuts tighten.",
-    from: 776,
-    durationInFrames: 66,
+    from: 805,
+    durationInFrames: 60,
     src: "cal-dates",
     trim: 36,
-    ratio: RATIO_MINIAPP,
-    width: 668,
-    x: -70,
-    rotate: -1,
-    push: [1.0, 1.04],
+    push: [1.0, 1.035],
     glow: 0.8,
-    fadeIn: 0,
-    fadeOut: 0,
   },
   {
     beat: "13:00 lights up — the slot both sides marked. Nobody negotiated it.",
-    from: 842,
-    durationInFrames: 72,
+    from: 865,
+    durationInFrames: 66,
     src: "cal-overlap",
     trim: 30,
-    ratio: RATIO_MINIAPP,
-    width: 668,
-    x: 70,
-    rotate: 1,
-    push: [1.0, 1.05],
+    push: [1.0, 1.045],
     glow: 0.8,
-    fadeIn: 0,
-    fadeOut: 0,
   },
   {
-    beat: "The butterfly, then неділя 16 серп. 13:00. The product's own brand moment — the peak.",
-    from: 914,
-    durationInFrames: 108,
+    beat: "The butterfly, then неділя, 16 серп. 13:00. The product's own brand moment.",
+    from: 931,
+    durationInFrames: 102,
     src: "time-reveal",
     trim: 18,
-    ratio: RATIO_MINIAPP,
-    width: 826,
-    push: [1.0, 1.05],
+    push: [1.0, 1.045],
     glow: 1,
-    fadeIn: 0,
-    fadeOut: 0,
   },
   {
-    beat: "Яке місце? — the last thing a human has to say before the concierge takes over.",
-    from: 1022,
-    durationInFrames: 66,
-    src: "place-vibe",
-    trim: 30,
-    ratio: RATIO_MINIAPP,
-    width: 620,
+    beat:
+      "Звідки ти виїжджаєш — the departure pin. Cut from an earlier version and " +
+      "restored: without it the venue simply appears, and the point is that the " +
+      "concierge picks somewhere both people can actually reach. Trimmed to " +
+      "1.5–3.3s of its clip: before that the Mini App is still loading, after it " +
+      "a browser geolocation prompt covers the screen.",
+    from: 1033,
+    durationInFrames: 54,
+    src: "place-map",
+    trim: 45,
     push: [1.0, 1.04],
     glow: 0.8,
-    fadeIn: 0,
-    fadeOut: 14,
   },
   {
-    beat: "The date card: Error 404 — Chat not found. Try real life. The product closes its own film.",
-    from: 1078,
-    durationInFrames: 150,
+    beat: "Яке місце? — the last thing a human says before the concierge takes over.",
+    from: 1087,
+    durationInFrames: 60,
+    src: "place-vibe",
+    trim: 30,
+    push: [1.0, 1.035],
+    glow: 0.8,
+  },
+  {
+    beat:
+      "The date card: Error 404 — Chat not found. Try real life. " +
+      "The product closes its own film.",
+    from: 1133,
+    durationInFrames: 144,
     src: "date-card",
     trim: 78,
-    ratio: RATIO_CHAT,
-    width: 886,
-    push: [1.0, 1.07],
+    push: [1.0, 1.055],
     glow: 0.9,
     fadeIn: 14,
-    fadeOut: 16,
   },
 ];
 
 /** The end card is the one shot that is not footage; it lives in its own scene. */
 export const MARK: {from: number; durationInFrames: number} = {
-  from: 1218,
-  durationInFrames: 102,
+  from: 1263,
+  durationInFrames: 96,
 };
 
-export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1320 = 44.0s
+export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1359 = 45.3s

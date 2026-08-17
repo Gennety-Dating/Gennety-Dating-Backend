@@ -47,7 +47,7 @@ cut is approved.
 
 ## `GennetyHero` — the product film
 
-A second, separate deliverable: a **44 s** vertical product film cut entirely
+A second, separate deliverable: a **45 s** vertical product film cut entirely
 from **three screen recordings of the running product** — no UI is recreated.
 It shares this workspace's tooling and brand tokens and nothing else;
 `GennetyAd` is untouched.
@@ -61,7 +61,7 @@ pnpm render:hero:preview                         # 40% scale, ~60s to render
 | | |
 |---|---|
 | Composition | `GennetyHero` |
-| Output | `out/gennety-hero.mp4`, 1080×1920, 30 fps, H.264, 1320 frames (44.0 s) |
+| Output | `out/gennety-hero.mp4`, 1080×1920, 30 fps, H.264, 1359 frames (45.4 s) |
 | Source | `src/hero/` |
 | Footage | `public/footage/` — 15 clips, 6.9 MB |
 | Sources | `IMG_2588` / `IMG_2590` / `IMG_2604`, outside the repo |
@@ -88,7 +88,7 @@ src/hero/
   timeline.ts          THE CUT: every from/duration/trim/width, with reasons
   theme.ts             brand tokens
   motion.ts            fade / enter / push / ease — the whole motion system
-  ui/Screen.tsx        the panel a captured screen sits in
+  ui/Iphone.tsx        the drawn handset the footage plays inside
   ui/Butterfly.tsx     the brand mark, inlined from public/brand
   ui/Texture.tsx       vignette + grain
   scenes/ProductShot.tsx   one shot of footage, driven by timeline data
@@ -96,12 +96,20 @@ src/hero/
 ```
 
 There is **one** scene component for footage rather than one per beat: every
-beat is the same object — a captured screen, framed — and what differs is
-composition, camera and timing, all of which is data. To **retime or reframe**
-any shot, edit `SHOTS` in `timeline.ts`; nothing about the cut lives elsewhere.
+beat is the same object — a captured screen inside a phone — and what differs is
+which clip, where in it, how long, and how far the camera pushes. All of that is
+data. To **retime** any shot, edit `SHOTS` in `timeline.ts`; nothing about the
+cut lives elsewhere.
+
+**The phone is centred and the same size in every shot**, and `Shot` has no `x`
+or `rotate` field so it stays that way. An earlier cut moved it between beats for
+compositional variety and the variety cost legibility — the eye re-finds the
+screen on every cut instead of reading it. Interest comes from the camera push.
 
 Overlapping `from` values are the only thing that produces a dissolve (there are
-three). A hard cut is `fadeIn: 0, fadeOut: 0`.
+three, 14 frames each). In a dissolve only the **incoming** shot fades: sequences
+layer in array order, so fading both at once dips the picture to ~60% mid-
+transition. A hard cut is `fadeIn: 0, fadeOut: 0`.
 
 ### Audio
 
@@ -109,16 +117,19 @@ three). A hard cut is `fadeIn: 0, fadeOut: 0`.
 recordings carry only incidental phone audio — see the plan §G. The path is
 wired: drop a track at `public/audio/score.m4a`, set `musicVolume: 0.8` in the
 `GennetyHero` `defaultProps` in `src/Root.tsx`. Time it against the cut's
-accents: **16.2 s**, **22.1 s**, **30.5 s**, **35.9 s**.
+accents: **15.6 s**, **23.2 s**, **31.0 s**, **37.8 s**.
 
 ### Re-cutting the footage
 
 `public/footage/` holds trimmed clips, not sources. Regenerate them with
 `./scripts/extract-hero-footage.sh [source-dir]` — it reproduces all 15
-byte-identically. Every clip is crop-first, removing the iOS status bar (with
-its red recording dot), Telegram's chat header, the pinned-message bar and the
-"Translate to English" strip. The `trim` values in `timeline.ts` are measured
-against those exact in-points, so changing a window means re-checking them.
+byte-identically. There is **one** crop profile — `576×1196 @ y=84`, the whole
+phone screen minus the iOS status bar. Only the status bar goes, because it
+carries the red screen-recording pill; a clean one is drawn back in
+`ui/Iphone.tsx`. Everything else stays, which is what makes the footage read as
+somebody using a phone rather than as a cropped screenshot. The `trim` values in
+`timeline.ts` are measured against these in-points, so changing a window means
+re-checking them.
 
 ## Couple-photo finish
 

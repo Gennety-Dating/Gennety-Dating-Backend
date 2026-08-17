@@ -47,6 +47,64 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-16 — the film plays inside a drawn iPhone, and the phone stops moving
+
+**Kind:** founder decision
+**What:** four changes to `GennetyHero` after the founder watched the first cut —
+the footage now plays inside a drawn iPhone, the handset is static and centred at
+one size throughout, the crop is far lighter, and two content gaps are closed.
+Result is 45.4 s (was 44.0 s).
+
+**Why each, because three of the four reverse a call I made:**
+
+- **The phone was sliding around, and it cost legibility.** I had offset it left
+  and right and varied its width 566–886 px between beats, on the reasoning that
+  fifteen shots of the same object needs compositional variety. The founder's
+  read is the correct one: the eye re-finds the screen on every cut instead of
+  reading what is on it. It is now centred, unrotated and 604 px in every shot,
+  and `Shot` has **no `x` or `rotate` field** so it stays that way. Interest
+  comes from the camera push and from what the product is doing.
+- **The crop was far too aggressive.** Two profiles cut away the Mini App nav
+  row, Telegram's header, the pinned bar and "Translate to English" — which made
+  each shot read as a cropped screenshot. There is now **one** profile,
+  `576×1196 @ y=84`: the whole phone screen minus the iOS status bar, and the
+  status bar goes only because it carries the red screen-recording pill. A clean
+  one is drawn back on. Everything a real user sees stays.
+- **A screen recording in a bare rectangle reads as a screenshot.** Inside a
+  handset it reads as somebody using the product, which is the claim the film is
+  making. `ui/Iphone.tsx` draws it — titanium body, bezel, Dynamic Island, side
+  buttons, a synthetic status bar — rather than compositing a stock mockup: no
+  mockup asset exists here, a drawn one stays sharp at any size, and it uses the
+  design system's own palette. **This does not breach the no-redrawing rule**:
+  the status bar is OS chrome, not Gennety UI, and the aperture is sized from
+  the clip's real geometry so footage is never stretched.
+- **Two content gaps.** Type Radar showed two faces, which reads as a screenshot
+  of a feature; it now runs 6.5 s from that clip's *fast* stretch (7.0–13.5 s)
+  and five faces pass — the opening of the clip sits on one man for 3.5 s, which
+  is why the first attempt looked thin. And the departure-point map, which I had
+  cut as "a second pick-a-place beat", is restored: without it the venue simply
+  appears, and the point is that the concierge picks somewhere both people can
+  actually reach.
+
+**What it changes going forward:**
+- **The upscale problem is gone.** At 604 px the 576-wide source is shown at
+  **1.05×** — effectively native. That is the real payoff of the handset: an
+  earlier shot at 878 px was running 1.54×.
+- **In a dissolve, only the incoming shot fades.** Sequences layer in array
+  order, so an incoming fade over a fully-opaque outgoing is clean, while fading
+  both at once dips the picture to ~60% mid-transition — measured, then fixed.
+  All three dissolves are 14 frames.
+- **`place-map` is trimmed to 1.5–3.3 s of its clip**, which is the only window
+  carrying the pin, the "Точка на карті" label and the confirm button at once.
+  Before that the Mini App is still loading; after it a browser geolocation
+  prompt covers the screen.
+
+**Recorded in:** `apps/video/src/hero/timeline.ts` (the no-horizontal-movement
+rule is stated at the top), `ui/Iphone.tsx`, `video-production-plan.md` §C/§E/§F,
+`README.md`.
+
+---
+
 ## 2026-08-16 — `GennetyHero`: the product film, cut from the three supplied recordings
 
 **Kind:** founder decision + change of mind (a correction to my own earlier entry)

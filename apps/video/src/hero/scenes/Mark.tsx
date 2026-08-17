@@ -27,7 +27,7 @@ export const Mark: React.FC = () => {
   const {fps} = useVideoConfig();
   const duration = MARK.durationInFrames;
 
-  const opacity = fade(frame, duration, 14, 20);
+  const opacity = fade(frame, duration, 14, 22);
   const mark = enter(frame, fps, 2);
   const word = enter(frame, fps, 14);
   const line = enter(frame, fps, 26);
