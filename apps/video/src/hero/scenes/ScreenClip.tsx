@@ -1,6 +1,6 @@
 import React from "react";
 import {OffthreadVideo, useCurrentFrame} from "remotion";
-import {fade} from "../motion";
+import {crossfade, fade} from "../motion";
 import {asset} from "../theme";
 import type {Shot} from "../timeline";
 
@@ -29,7 +29,11 @@ import type {Shot} from "../timeline";
  */
 export const ScreenClip: React.FC<{shot: Shot}> = ({shot}) => {
   const frame = useCurrentFrame();
-  const opacity = fade(frame, shot.durationInFrames, shot.fadeIn ?? 0, shot.fadeOut ?? 0);
+  // Linear in, so the brightness change is spread evenly rather than dumped
+  // into the first two frames; `fade`'s eased out-edge is only used by the one
+  // shot that has an outEdge at all.
+  const opacity =
+    crossfade(frame, shot.fadeIn ?? 0) * fade(frame, shot.durationInFrames, 0, shot.fadeOut ?? 0);
 
   return (
     <OffthreadVideo

@@ -36,6 +36,28 @@ const OPEN = 18;
 const OUTRO = 14;
 
 /**
+ * How many frames shot `i` keeps playing UNDER its successor.
+ *
+ * A `fadeIn` is only honest if there is something behind it. Where two shots
+ * already overlap (the three dissolves) there is; where they butt up against
+ * each other there is not, and fading in over black would replace a bright
+ * flash with a dark one. So the outgoing shot is extended by exactly the
+ * incoming shot's fade, and no further.
+ *
+ * Derived rather than declared: the extension IS the next shot's `fadeIn`, so
+ * the two cannot drift apart, and `timeline.ts` keeps one knob instead of two.
+ * The footage has the slack — the tightest case is `time-reveal` at 126 of its
+ * 132 frames.
+ */
+const tail = (i: number): number => {
+  const shot = SHOTS[i];
+  const next = SHOTS[i + 1];
+  if (!next) return 0;
+  const gap = next.from - (shot.from + shot.durationInFrames);
+  return Math.max(0, (next.fadeIn ?? 0) - Math.max(0, -gap));
+};
+
+/**
  * `GennetyHero` — the product film.
  *
  * ~45.2s cut entirely from three screen recordings of the running product
@@ -77,10 +99,12 @@ export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}
       extrapolateRight: "clamp",
       easing: ease,
     }) *
+    // Linear, for the same reason ScreenClip's crossfades are: this is a
+    // handover between two lit pictures, not an arrival out of black. Eased, it
+    // moved 30% of the way in a single frame and read as a blink.
     interpolate(frame, [MARK.from, MARK.from + OUTRO], [1, 0], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
-      easing: ease,
     });
 
   return (
@@ -100,11 +124,11 @@ export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}
 
       <World opacity={worldOpacity}>
         <Iphone screenWidth={SCREEN_WIDTH} glow={glowAt(frame)}>
-          {SHOTS.map((shot) => (
+          {SHOTS.map((shot, i) => (
             <Sequence
               key={`${shot.src}-${shot.from}`}
               from={shot.from}
-              durationInFrames={shot.durationInFrames}
+              durationInFrames={shot.durationInFrames + tail(i)}
               premountFor={30}
               name={shot.src}
             >

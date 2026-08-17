@@ -10,7 +10,7 @@
  *
  * Run:  pnpm --filter @gennety/video exec tsx src/hero/camera.probe.ts
  */
-import {cameraAt, glowAt} from "./camera";
+import {CAMERA_HOLDS, cameraAt, glowAt} from "./camera";
 import {HERO_DURATION_IN_FRAMES, MARK, SCREEN_WIDTH, SHOTS} from "./timeline";
 import {CLIP_H, CLIP_W} from "./ui/Iphone";
 
@@ -85,7 +85,35 @@ console.log(
     `(camera peaks at ${maxScale.toFixed(3)})`,
 );
 
+// Rhythm: the reference is dead still ~52% of the time in holds of 1.5-5.0s.
+// A camera that never stops is the thing this replaced.
+const heldFrames = CAMERA_HOLDS.reduce((n, [a, b]) => n + (b - a + 1), 0);
+const holdLens = CAMERA_HOLDS.map(([a, b]) => (b - a) / 30).filter((s) => s > 0.2);
+console.log(
+  `\nrhythm\n  held              ${((heldFrames / N) * 100).toFixed(0)}% of the film ` +
+    `(reference: 52%)\n  hold lengths (s)  ${holdLens.map((s) => s.toFixed(1)).join(", ")}`,
+);
+
+// A move must never start faster than it averages: that is the "рывок".
+const moves: number[] = [];
+for (let i = 0; i < CAMERA_HOLDS.length - 1; i++) {
+  const a = CAMERA_HOLDS[i][1];
+  const b = CAMERA_HOLDS[i + 1][0];
+  if (b <= a) continue;
+  const span = Math.abs(cameraAt(b).scale - cameraAt(a).scale);
+  if (span < 1e-6) continue;
+  const first = Math.abs(cameraAt(a + 1).scale - cameraAt(a).scale);
+  moves.push(first / (span / (b - a)));
+}
+const worstLaunch = Math.max(...moves);
+console.log(
+  `  launch speed      ${worstLaunch.toFixed(2)}x the move's own average ` +
+    `(1.00 = fitted to the reference; our old curve was 4.5)`,
+);
+
 const failures: string[] = [];
+if (worstLaunch > 1.6) failures.push(`a move launches at ${worstLaunch.toFixed(2)}x average speed`);
+if (heldFrames / N < 0.35) failures.push("the camera is almost never still");
 if (tightest.px < 40) failures.push(`handset within ${tightest.px.toFixed(1)}px of an edge`);
 if ((SCREEN_WIDTH * maxScale) / CLIP_W > 1.35) failures.push("source upscaled past 1.35x");
 

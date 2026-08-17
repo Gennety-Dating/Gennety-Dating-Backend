@@ -7,7 +7,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import {relativeCameraTransform} from "../camera";
-import {enter, fade} from "../motion";
+import {crossfade, enter, fade} from "../motion";
 import {asset, INK, MUTED} from "../theme";
 import {MARK} from "../timeline";
 import {Butterfly} from "../ui/Butterfly";
@@ -40,7 +40,9 @@ export const Mark: React.FC = () => {
   // composition time.
   const camera = relativeCameraTransform(MARK.from + frame, MARK.from);
 
-  const opacity = fade(frame, duration, 14, 22);
+  // In: linear — it crossfades over the still-lit world (see GennetyHero).
+  // Out: eased — that edge really is a fade to black, and ends the film.
+  const opacity = crossfade(frame, 14) * fade(frame, duration, 0, 22);
   const mark = enter(frame, fps, 2);
   const word = enter(frame, fps, 14);
   const line = enter(frame, fps, 26);

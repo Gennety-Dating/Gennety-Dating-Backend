@@ -187,11 +187,15 @@ the whole film. An earlier cut slid it left and right between beats for
 compositional variety; that variety cost legibility — the eye re-finds the
 screen on every cut instead of reading what is on it.
 
-**The camera does.** Its apparent size and framing change continuously, because
-one global camera travels past a stationary object (`motion-audit.md`,
-`src/hero/camera.ts`). The per-shot `push` this section used to describe is
-gone: it restarted at scale 1.0 on the first frame of all fifteen shots, which
-is the reset the camera rebuild exists to remove.
+**The camera does.** One global camera holds nine framings and moves between
+them (`motion-audit.md`, `src/hero/camera.ts`); its cadence and its easing are
+measured off the founder's reference rather than chosen. The per-shot `push`
+this section used to describe is gone: it restarted at scale 1.0 on the first
+frame of all fifteen shots, which is the reset the rebuild exists to remove.
+
+**Six cuts additionally carry a 6-9 frame crossfade**, sized to a measured
+one-frame jump in screen brightness (up to 11.6 -> 34.2). They are still hard
+cuts; what was removed is a flash, not an edit.
 
 **Rhythm.** 2.2–2.8 s holds through the profile; **6.4 s** on the Type Radar;
 2.0–2.2 s cuts through the planning burst; 4.8 s on the card.

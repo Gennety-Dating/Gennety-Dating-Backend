@@ -52,6 +52,27 @@ export const fade = (frame: number, duration: number, inEdge = 14, outEdge = inE
 };
 
 /**
+ * A crossfade between two pictures — **linear, on purpose**.
+ *
+ * `fade()` above is for arriving out of black, and `ease` is right there: you
+ * want to be out of the black quickly. A crossfade is the opposite job. Its
+ * whole point is to spread a change evenly across its frames, and `ease` has an
+ * initial slope of 4.5, so it puts most of the change into the first two —
+ * which is a flash with a tail, i.e. the thing the crossfade was added to
+ * remove. Measured: with `ease`, a 9-frame fade over a 20-point brightness
+ * change still stepped 11.3 points on its second frame; linear puts 2.3 there.
+ *
+ * So: no easing. A crossfade that eases is a crossfade that does not work.
+ */
+export const crossfade = (frame: number, frames: number) =>
+  frames <= 0
+    ? 1
+    : interpolate(frame, [0, frames], [0, 1], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      });
+
+/**
  * Spring entrance for an element that genuinely arrives — a mark, a line.
  *
  * **Not the phone.** The handset used to spring in on any shot with a

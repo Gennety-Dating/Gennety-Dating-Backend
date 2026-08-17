@@ -27,8 +27,10 @@
  * Overlapping `from` values are the ONLY thing that produces a dissolve, and a
  * dissolve now crossfades the SCREEN inside one unmoving handset rather than
  * two handsets over each other. There are three, all at a change of register.
- * Everything else is a hard cut — which inside a phone is simply a screen
- * changing, and needs no help.
+ *
+ * Everything else is a hard cut, and stays one. Six of them additionally carry
+ * a 6-9 frame `fadeIn` — not to soften the edit, but to take out a measured
+ * one-frame jump in BRIGHTNESS. See the field's own note.
  */
 
 export const FPS = 30;
@@ -38,8 +40,8 @@ export const FPS = 30;
  *
  * It is also the resolution budget: the source clips are 576 px wide, so 604 is
  * a 1.05x blow-up — effectively native — and the camera's zoom range in
- * `camera.ts` (0.895 … 1.185) is chosen so the worst upscale anywhere is
- * ~1.21x. Raising this number spends that budget.
+ * `camera.ts` (0.86 … 1.25) is chosen so the worst upscale anywhere is ~1.31x.
+ * Raising this number spends that budget.
  */
 export const SCREEN_WIDTH = 604;
 
@@ -51,9 +53,21 @@ export type Shot = {
   /** Frames into that clip. */
   trim: number;
   /**
-   * Fade edges in frames, on the SCREEN CONTENT only. 0 = hard cut on that side.
-   * In a dissolve only the incoming shot fades — fading both dips the picture
-   * to ~60% through the middle of it.
+   * Crossfade IN over this many frames — screen content only, never the phone.
+   *
+   * The film guarantees the outgoing clip is still playing underneath for the
+   * whole fade: either the two shots already overlap (the three dissolves), or
+   * `GennetyHero` extends the outgoing shot to cover it. So only the incoming
+   * ever fades, over something fully opaque, and the picture cannot dip.
+   *
+   * Six shots carry a SHORT one (6-9 frames) and they are not dissolves — they
+   * are still hard cuts, with the one-frame brightness step taken out of them.
+   * Measured on the render: those six boundaries jumped the frame's mean
+   * luminance by 8-23 points in a single frame («рост» -> chat was 11.6 -> 34.2),
+   * and on a black page inside a motionless handset that reads as a flash. The
+   * reference does not have the problem because its screens change with real
+   * iOS transitions; six frames of ramp is the honest stand-in. A cut between
+   * two similarly-lit screens gets nothing, because it needs nothing.
    */
   fadeIn?: number;
   fadeOut?: number;
@@ -89,6 +103,7 @@ export const SHOTS: Shot[] = [
     durationInFrames: 84,
     src: "basics-preference",
     trim: 15,
+    fadeIn: 6,
   },
   {
     beat: "The height drum, spinning. A control that behaves like an object.",
@@ -96,6 +111,7 @@ export const SHOTS: Shot[] = [
     durationInFrames: 72,
     src: "basics-height",
     trim: 33,
+    fadeIn: 6,
   },
   {
     beat: "An honest question, an honest answer. The whole product in one exchange.",
@@ -103,6 +119,7 @@ export const SHOTS: Shot[] = [
     durationInFrames: 90,
     src: "chat-question",
     trim: 336,
+    fadeIn: 9,
   },
   {
     beat:
@@ -126,6 +143,7 @@ export const SHOTS: Shot[] = [
     durationInFrames: 48,
     src: "radar-done",
     trim: 30,
+    fadeIn: 6,
   },
   {
     beat: "Хочеш піти з ним на побачення? The turn the film pivots on.",
@@ -141,6 +159,7 @@ export const SHOTS: Shot[] = [
     durationInFrames: 60,
     src: "cal-dates",
     trim: 36,
+    fadeIn: 9,
   },
   {
     beat: "13:00 lights up — the slot both sides marked. Nobody negotiated it.",
@@ -167,6 +186,7 @@ export const SHOTS: Shot[] = [
     durationInFrames: 54,
     src: "place-map",
     trim: 45,
+    fadeIn: 6,
   },
   {
     beat: "Яке місце? — the last thing a human says before the concierge takes over.",

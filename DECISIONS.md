@@ -124,6 +124,85 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-17 — the reference is measured, not watched: hold/move cadence, fitted easing, and the flash that was not the camera
+
+**Kind:** founder decision + change of mind
+**What:** the founder supplied the reference the earlier entry said was missing —
+`IMG_2325 (1).MP4`, Ditto's iMessage-dating promo. It was tracked frame by frame
+rather than watched, and two things changed as a result: the camera's **cadence**
+(from perpetual drift to hold → move → hold, with an easing fitted to theirs),
+and a **brightness flash at six cuts** that turned out not to be the camera at
+all. Founder calls taken on the reference: **do not crop the handset**, **keep
+the background black**, and no roll.
+
+**Why the cadence changed — I had the rhythm backwards.** Tracking the handset's
+width through their film says it is **dead still ~48–52% of the time**, in holds
+of 1.5–5.0 s, and moves decisively in between. My first rebuild moved the camera
+on all 1356 frames. Both are "continuous"; only one is theirs. The reconciliation
+is that "continuous" in the brief means the framing **never resets** — it arrives
+somewhere and stays — not that something is always moving. Ours is now 61% held.
+
+**The easing is fitted, not chosen**, and the fitted number is the whole point.
+Their two cleanest moves were normalised and a cubic-bezier was least-squares
+fitted over a constrained monotone search: `bezier(0.20, 0.20, 0.20, 0.92)`, RMS
+0.053. Its **initial slope is 1.00** — the move leaves a hold at exactly its own
+average speed and decelerates from there. For comparison the film's existing
+`ease` scores 0.178 and launches at **4.5×** average, and a symmetric ease-in-out
+(what my spline produced) is the worst fit of everything tried at 0.251. That
+4.5× launch is the "рывок" the founder was describing.
+
+**The flash was a different bug, and only measuring the rendered pixels found
+it.** The camera was already continuous — 1–2 px per frame — and the founder
+still reported sharp blinking. Six cuts step the frame's mean **luminance** in a
+single frame: height→chat 11.6 → 34.2, decision→calendar 36.3 → 15.9, and four
+more between 8 and 16 points. On a black page inside a handset that no longer
+moves, a screen tripling in brightness between two frames IS a flash — and
+stabilising the phone made it *more* visible, because nothing else was moving.
+Fixed with a 6–9 frame crossfade on exactly those six cuts, sized to the measured
+jump. They are still hard cuts.
+
+**What it changes going forward — six things, and two of them are traps I fell
+into:**
+- **A crossfade must be LINEAR.** The first attempt reused `fade()`, whose `ease`
+  has an initial slope of 4.5, so a 9-frame fade put most of the change into its
+  first two frames and the flash survived at 11.3 points. A crossfade's whole job
+  is to distribute a change evenly; easing it defeats it. `crossfade()` exists
+  separately from `fade()` for that reason, and the same correction applies to
+  the world→end-card handover, which was moving 30% in one frame.
+- **A `fadeIn` needs something behind it.** `tail()` in `GennetyHero.tsx` extends
+  the outgoing shot by exactly the incoming shot's fade — derived, so the two
+  cannot drift apart — otherwise the incoming fades in over black and a bright
+  flash becomes a dark one.
+- **Do not measure a tracked object through a clipped window.** My first pass at
+  the reference clipped the search to `x ∈ [20,720]` to dodge the feed's
+  like/comment furniture; on every frame where the handset is wider than that, the
+  scan latched onto screen content and reported ~450 px for frames that are really
+  ~790 px. It manufactured a dozen "fast moves" that do not exist, and I nearly
+  reported them. Dodge furniture by ROW, and sanity-check the tracker against
+  actual frames before believing it.
+- **The zoom range is capped by the founder's no-crop rule, not by taste.** They
+  reach 5× by cropping the handset in 85% of frames. Whole-phone framing caps us
+  at ~1.45× (currently 0.86–1.25), and the binding constraint is the frame
+  height, not the source resolution. Do not "improve" the zoom by cropping.
+- **`camera.probe.ts` now guards the cadence too**: it fails if a move launches
+  above 1.6× its own average speed or if the camera is still for under 35% of the
+  film. Those exist so the rhythm cannot quietly drift back to perpetual motion.
+- **The reference contradicts one reading of the brief and that is recorded
+  rather than smoothed over.** The brief asks for "no snapping"; the reference
+  snaps 2.7× in 1.7 s. What it never does is reset.
+
+**Deliberately not done:** cropping the handset, the white background, and roll —
+all three are what give the reference its scale, and all three are founder calls
+in the other direction. Also not done: their move *durations* (0.3–0.7 s). At our
+framing a move that fast covers far more of the frame, and the founder's word was
+«плавным»; ours run 1.8–2.3 s.
+
+**Recorded in:** `apps/video/motion-audit.md` §5a (the measurement), §5b (the
+flash), §6 (before/after on the rendered pixels), `apps/video/src/hero/camera.ts`,
+`apps/video/src/hero/motion.ts` (`crossfade`).
+
+---
+
 ## 2026-08-17 — one camera for the whole film; the phone stops being redrawn per shot
 
 **Kind:** deviation from plan + change of mind

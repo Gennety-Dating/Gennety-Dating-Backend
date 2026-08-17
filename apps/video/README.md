@@ -103,9 +103,9 @@ src/hero/
   GennetyHero.tsx      assembly only — the shot list and the audio path
   timeline.ts          THE CUT: every from/duration/trim/width, with reasons
   theme.ts             brand tokens
-  camera.ts            THE CAMERA: one keyframed timeline for all 1356 frames
+  camera.ts            THE CAMERA: ten held framings + fitted ease-out moves
   camera.probe.ts      continuity check — run it after touching camera.ts
-  motion.ts            fade / enter / ease — opacity envelopes, nothing more
+  motion.ts            fade / crossfade / enter / ease — opacity envelopes only
   ui/World.tsx         the one camera transform
   ui/Iphone.tsx        the one drawn handset, fixed at world (0,0)
   ui/Butterfly.tsx     the brand mark, inlined from public/brand
@@ -117,10 +117,15 @@ src/hero/
 There is **one** scene component for footage rather than one per beat: every
 beat is the same object — a captured screen inside a phone — and what differs is
 which clip, where in it and how long. All of that is data. To **retime** any
-shot, edit `SHOTS` in `timeline.ts`; to **re-frame** the film, edit the
-seventeen keyframes in `camera.ts`. The two are independent by construction —
-the camera has no idea where the cuts are, so retiming the cut cannot
-desynchronise it.
+shot, edit `SHOTS` in `timeline.ts`; to **re-frame** the film, edit the ten
+held framings in `camera.ts`. The two are independent by construction — the
+camera has no idea where the cuts are, so retiming the cut cannot desynchronise
+it.
+
+**The camera holds still 61% of the time.** It is a list of framings it sits on,
+with eased moves between them — the cadence and the easing are both measured off
+the founder's reference (`motion-audit.md` §5a), not chosen. A camera that
+drifts on every frame was the first attempt and the wrong answer.
 
 **The phone never moves.** It sits at world (0, 0) at a constant 604 px, and
 `Shot` has no `push`, `x`, `y` or `rotate` field so it stays that way. What
