@@ -74,8 +74,30 @@ export interface CatalogVenue {
   editorialSummary: string | null;
 }
 
-/** Max alternatives returned to the Mini App — keeps the card list scannable. */
-export const VENUE_CHANGE_CATALOG_LIMIT = 12;
+/**
+ * Max alternatives returned to the Mini App.
+ *
+ * Raised 12 → 21 (founder decision 2026-08-18) for a more varied choice. The
+ * catalog carries it: measured over every possible board centre in the live
+ * Kyiv catalog, the median centre has ~138 candidates in range, and the share
+ * of centres that can fill a board barely moves (89% at 12, 86% at 21) — the
+ * few that cannot are the same outlying points that could not fill 12 either.
+ *
+ * **The cost is not scroll length, it is agreement.** This board is a
+ * coordination mechanism, not a browsable catalog: a change settles only when
+ * both sides heart the SAME venue. Widening the board lowers that collision
+ * probability — modelling k independent picks out of N, three hearts each goes
+ * from ~62% at 12 to ~39% at 21. Real overlap is higher (both are drawn to the
+ * nearest and the nicest, not to a uniform random pick), but the direction is
+ * the trade being made: more variety is paid for in rounds of hearting, and the
+ * pair lands more often in the both-picked-nothing-matched state, which shows
+ * no status at all (§3.6b) and waits on the 6h/12h reminder.
+ *
+ * Raising this alone does NOT buy variety, only more cafés — the reserves
+ * below are what make the extra slots land on different KINDS of place, so
+ * they move together with it.
+ */
+export const VENUE_CHANGE_CATALOG_LIMIT = 21;
 
 /** Per-venue photo cap so the catalog payload stays small. */
 export const VENUE_CHANGE_PHOTOS_PER_VENUE = 6;
@@ -563,16 +585,30 @@ export async function listPlacesVenuesNear(
  * Leading slots reserved for premium venues. Product intent (§Premium upsell):
  * a non-subscriber must see the locked tier immediately, at the top, before
  * anything else — not distance-sorted in with base where it can land mid-list.
+ *
+ * Raised 3 → 5 with the board's 12 → 21 widening, because this is a SHARE of
+ * the board rather than an absolute count: three pinned cards owned a quarter
+ * of a twelve-card board and would have owned an eighth of a twenty-one-card
+ * one, halving the reach of the mechanic without anyone deciding to. Fillable
+ * essentially always — 90% of Kyiv centres have at least five premium venues
+ * inside `VENUE_CHANGE_PREMIUM_RADIUS_KM` (median 41).
  */
-export const VENUE_CHANGE_PREMIUM_PINNED = 3;
+export const VENUE_CHANGE_PREMIUM_PINNED = 5;
 
 /**
  * Total premium cards allowed on the board (pinned + scattered). The premium
  * pool near a central venue can easily exceed the whole catalog limit, and a
  * board that is mostly padlocks reads as a paywall rather than a choice — the
  * user still needs real, pickable options. Anything past this is dropped.
+ *
+ * Raised 5 → 8 with the board's 12 → 21 widening, holding the paywall-wall
+ * guard proportional: eight of twenty-one is a slightly smaller share of the
+ * board than five of twelve was, so the ceiling has not been loosened in the
+ * sense that matters. Must stay above `VENUE_CHANGE_PREMIUM_PINNED`, or the
+ * scatter step below has nothing to distribute and every locked card stacks at
+ * the top — the exact shape this constant exists to prevent.
  */
-export const VENUE_CHANGE_PREMIUM_MAX = 5;
+export const VENUE_CHANGE_PREMIUM_MAX = 8;
 
 /**
  * How long a resolved photo set is trusted. Places photo names can rotate, so
@@ -802,17 +838,23 @@ function seededShuffle<T>(items: T[], seed: string): T[] {
  * Without a reservation the board is decided purely by proximity, and in a city
  * centre that means cafés: measured against the live Kyiv catalog, **38% of
  * possible boards carried no outdoor spot at all** and the rest averaged one
- * card in twelve — while the median board centre had **ten** parks sitting
+ * card (the board held twelve then) — while the median board centre had **ten** parks sitting
  * inside the same 3 km radius. So they were never out of reach, they were
  * losing a race they cannot win: a promenade is one venue over a kilometre of
  * riverfront, a cafe cluster is thirty doors on one street.
  *
- * Three, because the same measurement says 88% of centres have at least that
- * many in range, so the reservation is nearly always fillable — and because it
- * is a FLOOR, not a cap: an outdoor spot that would have earned a slot on
- * distance still takes one, so a green district shows more than three.
+ * Five since the board widened 12 → 21 (was three), and the re-measurement is
+ * what forced it: simulating both caps over every Kyiv centre, a bare widening
+ * left the average outdoor count flat at ~2.6 cards, i.e. all nine new slots
+ * went to cafés and restaurants — the precise failure this reservation exists
+ * to prevent, reappearing because the floor is absolute while the board around
+ * it grew. At five it comes back to ~4.2. Still nearly always fillable (81% of
+ * centres have at least five parks inside `VENUE_CHANGE_RADIUS_KM`, against
+ * 84% for three; the median centre has ten), and still a FLOOR, not a cap: an
+ * outdoor spot that would have earned a slot on distance still takes one, so a
+ * green district shows more than five.
  */
-export const VENUE_CHANGE_WALK_RESERVED = 3;
+export const VENUE_CHANGE_WALK_RESERVED = 5;
 
 /**
  * What counts as somewhere to walk rather than somewhere to sit.

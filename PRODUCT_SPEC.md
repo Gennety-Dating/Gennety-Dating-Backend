@@ -4246,7 +4246,7 @@ live only in the Telegram caption.
   curated branch never ran in production at all, so every board fell through to
   the Places sweep, whose search response already carries photos. The board now
   resolves each curated card's photos from its `placeId` in one Place Details
-  request (which returns the whole gallery, not just a cover), after the 12-card
+  request (which returns the whole gallery, not just a cover), after the board
   cap and cached in-process by place id — a day for a real answer, minutes for a
   failed lookup, so an outage costs pictures rather than becoming a retry storm.
   Best-effort by rule: an unresolved photo leaves the category glyph the client
@@ -4342,6 +4342,27 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   **except `premium`, which reaches `VENUE_CHANGE_PREMIUM_RADIUS_KM` (5 km)**
   (below) — **curated-first** with the Places fallback under the production
   quality gate.
+  **The board holds `VENUE_CHANGE_CATALOG_LIMIT` (21) alternatives, whatever the
+  radius turns up** — in a launched city that is a small fraction of what
+  qualifies (the median Kyiv board centre has ~138 candidates in range), so the
+  cap, not the catalog, is what decides board size. Raised 12 → 21 on
+  2026-08-18 for a wider choice; the share of centres that can fill a board
+  barely moves (89% → 86%, and the few that cannot could not fill 12 either).
+  **What it costs is agreement, not scrolling.** This board is a coordination
+  mechanism rather than a browsable catalog — a change settles only when both
+  sides heart the SAME venue — so widening it lowers the collision probability.
+  Modelling k independent picks out of N, three hearts each falls from ~62% at
+  12 to ~39% at 21; real overlap is higher (both are drawn to the nearest and
+  the nicest, not to a uniform random pick), but the direction is the trade
+  being made: more variety is paid for in extra rounds of hearting, and the pair
+  lands more often in the both-picked-nothing-matched state, which deliberately
+  shows no status at all (§3.6b) and waits on the 6h/12h reminder. Two
+  consequences follow that a future change to this number inherits. **The
+  reserves below are shares in effect and must move with it** — they are written
+  as absolute floors, so a bare widening spends every new slot on cafés (see the
+  walking-spot note). And **the per-board Places cost scales with it**: curated
+  rows carry no imagery, so photo resolution is one Place Details request per
+  card, bounded by exactly this cap.
   This board is the ONLY place `alternative`-tier venues (§3.7 — the operator's
   heavier-cuisine pool) ever appear: they are always included, unlocked, and
   priced like base, independent of `PREMIUM_FEATURE_ENABLED` and of whether
@@ -4363,7 +4384,7 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   things. Agreeing on the pinned one (`KEEP_KEY`) keeps the venue for free and
   closes the session; agreeing on the identical place under its own key took the
   **paid** path, charging `VENUE_CHANGE_STARS` to "change" to the venue the pair
-  already had. The exclusion is server-side and applied before the 12-card cap,
+  already had. The exclusion is server-side and applied before the board cap,
   so the freed slot goes to a real alternative and the like/confirm calls refuse
   that key as `invalid-venue` rather than trusting the client to hide it.
   **The pinned card has a photo too (2026-08-08).** It was the one card on this
@@ -4392,36 +4413,46 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   trade for a nicer venue someone is deliberately choosing; it is never imposed
   on the automatic assignment, which keeps its own commute rules (§3.7).
   **Board ordering is pin-then-scatter** (deliberate conversion mechanic): the
-  `VENUE_CHANGE_PREMIUM_PINNED` (3) nearest `premium` venues lead the list
+  `VENUE_CHANGE_PREMIUM_PINNED` (5) nearest `premium` venues lead the list
   unconditionally, so a non-subscriber meets the locked tier before anything
-  else; any further premium (to `VENUE_CHANGE_PREMIUM_MAX` (5) total) is then
+  else; any further premium (to `VENUE_CHANGE_PREMIUM_MAX` (8) total) is then
   **shuffled into the remainder** alongside base/alternative rather than stacked
   on top, so a locked card keeps resurfacing as the user scrolls instead of the
   board reading as a paywall wall. The tail shuffle is seeded by the match id,
   so the order is stable across re-fetches (Mini App reopen, post-unlock
   repaint) — an unseeded shuffle would re-deal the cards under the user.
   **The board is never a wall of tables (2026-08-09).**
-  `VENUE_CHANGE_WALK_RESERVED` (3) of the remaining slots are held for the
+  `VENUE_CHANGE_WALK_RESERVED` (5) of the remaining slots are held for the
   nearest **outdoor walking spots** — the `park` category, which is what the
   curated base uses for the whole open-air set: parks, embankments, Andriivskyi
   descent, Volodymyrska Hirka, the Lovers' Bridge. All of them are free, need no
   booking, and work as a place to meet at a time the couple picks. Before this
   the order was decided by proximity alone, and in a city centre that means
   cafés: measured across every possible board centre in the live Kyiv catalog,
-  **38% carried no outdoor spot at all** and the rest averaged one card in
-  twelve — while the median centre had **ten** parks sitting inside the same
+  **38% carried no outdoor spot at all** and the rest averaged one card (the
+  board held twelve then) — while the median centre had **ten** parks sitting
+  inside the same
   3 km radius. They were never out of reach; they were losing a race they cannot
   win, because a promenade is one venue along a kilometre of riverfront while a
   café cluster is thirty doors on one street. With the reservation that goes to
   **93% of boards and 2.8 cards**, with board size unchanged.
+  **The reservation is a SHARE of the board in effect, and had to be re-sized
+  when the board grew (2026-08-18).** It is written as an absolute floor, so
+  widening the board 12 → 21 without touching it left the average outdoor count
+  flat at ~2.6 cards — every one of the nine new slots went to cafés and
+  restaurants, i.e. the failure this rule exists to prevent, reappearing purely
+  because the surroundings changed. At **5** it returns to ~4.2 and stays nearly
+  always fillable (81% of Kyiv centres have at least five parks in range against
+  84% for three; the median centre has ten). Anything that moves
+  `VENUE_CHANGE_CATALOG_LIMIT` again owes this number the same re-measurement.
   Three properties are deliberate. It is a **floor, not a cap** — an outdoor
   spot that would have earned a slot on distance still takes one, so a green
-  district shows more than three. It **changes which cards make the cut, never
+  district shows more than five. It **changes which cards make the cut, never
   where they sit**: the held cards join the same shuffled tail as everything
   else, the exact opposite of the premium pin above, because the point is that
   one is on the board at all, not that it leads. And it **degrades rather than
-  shrinking**: the 7% of centres with no park in range keep a full board of
-  twelve, exactly as today. Ticketed, timed venues are a different product
+  shrinking**: the centres with no park in range keep a full board, exactly as
+  before. Ticketed, timed venues are a different product
   answer and stay out — `museum` remains excluded from this board outright, and
   the reservation is not a back door for it. The radius is untouched (widening
   it to 5 km rescues only 3 of those 8 centres, so it buys a second knob for

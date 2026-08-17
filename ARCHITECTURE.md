@@ -812,7 +812,7 @@ every curated pick silently shipped a photo-less date card); it is no longer rea
 or written and the column is kept only so the change stays additive.
 The §3.7b venue-change board resolves photos the same way but per board open
 (`withCuratedPhotos`, `services/venue-change.ts`), cached in-process by
-`placeId` and bounded by the 12-card cap.
+`placeId` and bounded by `VENUE_CHANGE_CATALOG_LIMIT` (21).
 
 **There is no uniqueness constraint on this table, and the seeder writes one row
 per `universityDomain`** — Kyiv holds 538 active rows for 127 real venues, five

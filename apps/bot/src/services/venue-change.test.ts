@@ -24,6 +24,7 @@ import {
   buildVenueChangeCatalog,
   listCuratedVenuesNear,
   capCatalog,
+  VENUE_CHANGE_CATALOG_LIMIT,
   VENUE_CHANGE_PREMIUM_PINNED,
   VENUE_CHANGE_PREMIUM_MAX,
   VENUE_CHANGE_WALK_RESERVED,
@@ -450,32 +451,39 @@ describe("buildVenueChangeCatalog", () => {
   });
 
   it("excludes before the cap, so the freed slot goes to a real alternative", async () => {
-    const many: CatalogVenue[] = Array.from({ length: 13 }, (_, i) => ({
-      ...curated[0]!,
-      placeId: `c${i}`,
-      name: `Venue ${i}`,
-      distanceKm: i * 0.1,
-    }));
+    const many: CatalogVenue[] = Array.from(
+      { length: VENUE_CHANGE_CATALOG_LIMIT + 1 },
+      (_, i) => ({
+        ...curated[0]!,
+        placeId: `c${i}`,
+        name: `Venue ${i}`,
+        distanceKm: i * 0.1,
+      }),
+    );
+    const last = `c${VENUE_CHANGE_CATALOG_LIMIT}`;
 
     const out = await buildVenueChangeCatalog(
       { ...input, excludeVenue: { placeId: "c0", name: "Venue 0", address: "1 St" } },
       { listCurated: async () => many },
     );
 
-    expect(out).toHaveLength(12);
+    expect(out).toHaveLength(VENUE_CHANGE_CATALOG_LIMIT);
     expect(out.map((v) => v.placeId)).not.toContain("c0");
-    // c12 would have been cut by the cap had c0 taken a slot.
-    expect(out.map((v) => v.placeId)).toContain("c12");
+    // The farthest venue would have been cut by the cap had c0 taken a slot.
+    expect(out.map((v) => v.placeId)).toContain(last);
   });
 
   it("caps the list length", async () => {
-    const many: CatalogVenue[] = Array.from({ length: 30 }, (_, i) => ({
-      ...curated[0],
-      placeId: `c${i}`,
-      distanceKm: i * 0.1,
-    }));
+    const many: CatalogVenue[] = Array.from(
+      { length: VENUE_CHANGE_CATALOG_LIMIT + 9 },
+      (_, i) => ({
+        ...curated[0],
+        placeId: `c${i}`,
+        distanceKm: i * 0.1,
+      }),
+    );
     const out = await buildVenueChangeCatalog(input, { listCurated: async () => many });
-    expect(out.length).toBe(12);
+    expect(out.length).toBe(VENUE_CHANGE_CATALOG_LIMIT);
   });
 });
 
@@ -507,11 +515,13 @@ describe("capCatalog (§Premium pin + scatter)", () => {
   });
 
   it("guarantees premium venues survive a dense base pool past the cap", () => {
-    // 15 nearby base venues (0.1..1.5 km) then 2 farther premium (2.0, 2.1 km).
-    const base = Array.from({ length: 15 }, (_, i) => venue(i + 1, "base"));
-    const premium = [venue(20, "premium"), venue(21, "premium")];
+    // A nearby base cluster that alone overflows the board, then 2 farther premium.
+    const base = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT + 3 }, (_, i) =>
+      venue(i + 1, "base"),
+    );
+    const premium = [venue(40, "premium"), venue(41, "premium")];
     const capped = capCatalog([...base, ...premium]);
-    expect(capped).toHaveLength(12);
+    expect(capped).toHaveLength(VENUE_CHANGE_CATALOG_LIMIT);
     expect(capped.filter((v) => v.tier === "premium")).toHaveLength(2);
     // Premium leads even though it's farther away — grouped by tier, not
     // globally distance-sorted (§Premium conversion visibility).
@@ -532,16 +542,20 @@ describe("capCatalog (§Premium pin + scatter)", () => {
   });
 
   it("caps total premium at VENUE_CHANGE_PREMIUM_MAX so the board isn't a paywall wall", () => {
-    const base = Array.from({ length: 12 }, (_, i) => venue(i + 1, "base"));
-    const premium = Array.from({ length: 8 }, (_, i) => venue(30 + i, "premium"));
+    const base = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT }, (_, i) => venue(i + 1, "base"));
+    const premium = Array.from({ length: VENUE_CHANGE_PREMIUM_MAX + 3 }, (_, i) =>
+      venue(40 + i, "premium"),
+    );
     const capped = capCatalog([...base, ...premium]);
-    expect(capped).toHaveLength(12);
+    expect(capped).toHaveLength(VENUE_CHANGE_CATALOG_LIMIT);
     expect(capped.filter((v) => v.tier === "premium").length).toBe(VENUE_CHANGE_PREMIUM_MAX);
   });
 
   it("pins exactly VENUE_CHANGE_PREMIUM_PINNED at the top and scatters the rest", () => {
-    const base = Array.from({ length: 12 }, (_, i) => venue(i + 1, "base"));
-    const premium = Array.from({ length: 5 }, (_, i) => venue(30 + i, "premium"));
+    const base = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT }, (_, i) => venue(i + 1, "base"));
+    const premium = Array.from({ length: VENUE_CHANGE_PREMIUM_MAX }, (_, i) =>
+      venue(40 + i, "premium"),
+    );
     const capped = capCatalog([...base, ...premium], "match-seed");
 
     const head = capped.slice(0, VENUE_CHANGE_PREMIUM_PINNED);
@@ -557,8 +571,10 @@ describe("capCatalog (§Premium pin + scatter)", () => {
   it("is deterministic for a given seed and differs across seeds", () => {
     // The Mini App re-fetches the catalog (reopen, post-unlock repaint); an
     // unseeded shuffle would re-deal the cards under the user every time.
-    const base = Array.from({ length: 12 }, (_, i) => venue(i + 1, "base"));
-    const premium = Array.from({ length: 5 }, (_, i) => venue(30 + i, "premium"));
+    const base = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT }, (_, i) => venue(i + 1, "base"));
+    const premium = Array.from({ length: VENUE_CHANGE_PREMIUM_MAX }, (_, i) =>
+      venue(40 + i, "premium"),
+    );
     const input = [...base, ...premium];
 
     const a1 = capCatalog(input, "match-1").map((v) => v.placeId);
@@ -576,18 +592,22 @@ describe("capCatalog (§Premium pin + scatter)", () => {
   });
 
   it("plain distance cap when there are no premium venues", () => {
-    const base = Array.from({ length: 15 }, (_, i) => venue(i + 1, "base"));
+    const base = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT + 3 }, (_, i) =>
+      venue(i + 1, "base"),
+    );
     const capped = capCatalog(base);
-    expect(capped).toHaveLength(12);
+    expect(capped).toHaveLength(VENUE_CHANGE_CATALOG_LIMIT);
     expect(capped.every((v) => v.tier === "base")).toBe(true);
   });
 
   it("treats `alternative` as ordinary board inventory, not a reserved tier", () => {
     // The heavier-cuisine pool competes on distance like base — it is not
     // scarce, locked, or slot-reserved the way §Premium is.
-    const alternative = Array.from({ length: 15 }, (_, i) => venue(i + 1, "alternative"));
+    const alternative = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT + 3 }, (_, i) =>
+      venue(i + 1, "alternative"),
+    );
     const capped = capCatalog(alternative);
-    expect(capped).toHaveLength(12);
+    expect(capped).toHaveLength(VENUE_CHANGE_CATALOG_LIMIT);
     expect(capped.every((v) => v.tier === "alternative")).toBe(true);
   });
 
@@ -596,69 +616,80 @@ describe("capCatalog (§Premium pin + scatter)", () => {
       Array.from({ length: count }, (_, i) => venue(startIndex + i, "base", "park"));
 
     it("keeps outdoor spots that a dense indoor cluster would have squeezed out", () => {
-      // The production shape: cafés fill every near slot (0.1–2.0 km) and the
-      // parks sit just beyond them. On pure distance the board is 12 cafés.
-      const cafes = Array.from({ length: 20 }, (_, i) => venue(i + 1, "base"));
-      const outdoor = parks(4, 40); // 4.0–4.3 km — farther than every café
+      // The production shape: cafés fill every near slot and the parks sit just
+      // beyond them. On pure distance the board would be cafés end to end.
+      const cafes = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT + 4 }, (_, i) =>
+        venue(i + 1, "base"),
+      );
+      const outdoor = parks(VENUE_CHANGE_WALK_RESERVED + 1, 60); // farther than every café
 
       const capped = capCatalog([...cafes, ...outdoor]);
 
-      expect(capped).toHaveLength(12);
+      expect(capped).toHaveLength(VENUE_CHANGE_CATALOG_LIMIT);
       expect(capped.filter((v) => v.category === "park")).toHaveLength(
         VENUE_CHANGE_WALK_RESERVED,
       );
       // And the nearest ones are the ones that got in.
-      expect(capped.filter((v) => v.category === "park").map((v) => v.placeId)).toEqual([
-        "base-40",
-        "base-41",
-        "base-42",
-      ]);
+      expect(capped.filter((v) => v.category === "park").map((v) => v.placeId)).toEqual(
+        outdoor.slice(0, VENUE_CHANGE_WALK_RESERVED).map((v) => v.placeId),
+      );
     });
 
     it("is a floor, not a cap — a green district still shows more than the reservation", () => {
-      // Nearest 8 are outdoor, so they earn their slots on distance anyway.
-      const outdoor = parks(8, 1);
-      const cafes = Array.from({ length: 20 }, (_, i) => venue(20 + i, "base"));
+      // The nearest venues are outdoor, so they earn their slots on distance anyway.
+      const green = VENUE_CHANGE_WALK_RESERVED + 3;
+      const outdoor = parks(green, 1);
+      const cafes = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT + 4 }, (_, i) =>
+        venue(30 + i, "base"),
+      );
 
       const capped = capCatalog([...outdoor, ...cafes]);
 
-      expect(capped).toHaveLength(12);
+      expect(capped).toHaveLength(VENUE_CHANGE_CATALOG_LIMIT);
       expect(capped.filter((v) => v.category === "park").length).toBeGreaterThan(
         VENUE_CHANGE_WALK_RESERVED,
       );
-      expect(capped.filter((v) => v.category === "park")).toHaveLength(8);
+      expect(capped.filter((v) => v.category === "park")).toHaveLength(green);
     });
 
     it("degrades rather than shrinking when fewer outdoor spots are in range", () => {
-      // 7% of Kyiv centres have no park inside the board radius at all; the
+      // Some Kyiv centres have no park inside the board radius at all; the
       // board must stay full there, not lose slots to an unfillable hold.
-      const cafes = Array.from({ length: 20 }, (_, i) => venue(i + 1, "base"));
-      const outdoor = parks(1, 40);
+      const cafes = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT + 4 }, (_, i) =>
+        venue(i + 1, "base"),
+      );
+      const outdoor = parks(1, 60);
 
       const capped = capCatalog([...cafes, ...outdoor]);
 
-      expect(capped).toHaveLength(12);
+      expect(capped).toHaveLength(VENUE_CHANGE_CATALOG_LIMIT);
       expect(capped.filter((v) => v.category === "park")).toHaveLength(1);
     });
 
     it("leaves a board with no outdoor spot at all exactly as it was", () => {
-      const cafes = Array.from({ length: 20 }, (_, i) => venue(i + 1, "base"));
+      const cafes = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT + 4 }, (_, i) =>
+        venue(i + 1, "base"),
+      );
       const capped = capCatalog(cafes);
       expect(capped.map((v) => v.placeId)).toEqual(
-        cafes.slice(0, 12).map((v) => v.placeId),
+        cafes.slice(0, VENUE_CHANGE_CATALOG_LIMIT).map((v) => v.placeId),
       );
     });
 
     it("never spends a pinned premium slot on the reservation", () => {
       // The two rules must not fight: premium owns the top of the board, the
       // reservation only decides who fills the tail.
-      const premium = Array.from({ length: 5 }, (_, i) => venue(30 + i, "premium"));
-      const cafes = Array.from({ length: 20 }, (_, i) => venue(i + 1, "base"));
-      const outdoor = parks(4, 40);
+      const premium = Array.from({ length: VENUE_CHANGE_PREMIUM_MAX }, (_, i) =>
+        venue(40 + i, "premium"),
+      );
+      const cafes = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT + 4 }, (_, i) =>
+        venue(i + 1, "base"),
+      );
+      const outdoor = parks(VENUE_CHANGE_WALK_RESERVED + 1, 60);
 
       const capped = capCatalog([...premium, ...cafes, ...outdoor], "match-seed");
 
-      expect(capped).toHaveLength(12);
+      expect(capped).toHaveLength(VENUE_CHANGE_CATALOG_LIMIT);
       expect(
         capped.slice(0, VENUE_CHANGE_PREMIUM_PINNED).every((v) => v.tier === "premium"),
       ).toBe(true);
@@ -671,12 +702,16 @@ describe("capCatalog (§Premium pin + scatter)", () => {
     it("holds no slot for a ticketed venue — the reservation is walking spots only", () => {
       // `museum` is excluded from this board outright; the reservation must not
       // become a back door for it, nor for indoor categories generally.
-      const cafes = Array.from({ length: 20 }, (_, i) => venue(i + 1, "base"));
-      const lounges = Array.from({ length: 4 }, (_, i) => venue(40 + i, "base", "lounge"));
+      const cafes = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT + 4 }, (_, i) =>
+        venue(i + 1, "base"),
+      );
+      const lounges = Array.from({ length: 4 }, (_, i) => venue(60 + i, "base", "lounge"));
 
       const capped = capCatalog([...cafes, ...lounges]);
 
-      expect(capped.map((v) => v.placeId)).toEqual(cafes.slice(0, 12).map((v) => v.placeId));
+      expect(capped.map((v) => v.placeId)).toEqual(
+        cafes.slice(0, VENUE_CHANGE_CATALOG_LIMIT).map((v) => v.placeId),
+      );
     });
   });
 });
@@ -862,12 +897,14 @@ describe("buildVenueChangeCatalog — curated cover photos", () => {
   });
 
   it("resolves photos only for the capped list, not the whole city catalog", async () => {
-    const many = Array.from({ length: 30 }, (_, i) => curatedNoPhotos(`c${i}`));
+    const many = Array.from({ length: VENUE_CHANGE_CATALOG_LIMIT + 9 }, (_, i) =>
+      curatedNoPhotos(`c${i}`),
+    );
 
     const out = await buildVenueChangeCatalog(input, { listCurated: async () => many });
 
-    expect(out).toHaveLength(12);
-    expect(photoLookup).toHaveBeenCalledTimes(12);
+    expect(out).toHaveLength(VENUE_CHANGE_CATALOG_LIMIT);
+    expect(photoLookup).toHaveBeenCalledTimes(VENUE_CHANGE_CATALOG_LIMIT);
   });
 
   // The pinned "keep this place" card is not a catalog row (the assigned venue
