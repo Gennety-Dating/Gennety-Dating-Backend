@@ -1,5 +1,7 @@
+import { DEFAULT_TIME_ZONE } from "@gennety/shared";
 import type { Language } from "@gennety/shared";
 import type { MatchStatus, OnboardingStep, UserStatus, VerificationStatus } from "@gennety/db";
+import { zonedParts } from "../services/profiler-schedule.js";
 import type { DemoBeat } from "./script.js";
 
 /**
@@ -560,7 +562,8 @@ function decideVenueChangeAction(match: DemoMatchSnapshot): DemoAction | null {
 }
 
 /**
- * Up to three slots the visitor did NOT mark, spread across different days.
+ * Up to three slots the visitor did NOT mark, spread across different days and
+ * landing in the EVENING.
  *
  * Different days on purpose: the point of the counter-proposal is that it reads
  * like a person with their own calendar, and three alternatives on the
@@ -574,30 +577,91 @@ export function pickCounterSlots(
 ): string[] {
   const taken = new Set(visitorSlots);
   const visitorDays = new Set(visitorSlots.map(dayKey));
-  const picked: string[] = [];
-  const usedDays = new Set<string>();
 
-  // First pass: days the visitor did not choose at all — the clearest signal
-  // that the other person simply has a different week.
+  const byDay = new Map<string, string[]>();
   for (const slot of proposedTimes) {
-    if (picked.length >= 3) break;
+    if (taken.has(slot)) continue;
     const day = dayKey(slot);
-    if (taken.has(slot) || visitorDays.has(day) || usedDays.has(day)) continue;
-    picked.push(slot);
-    usedDays.add(day);
+    const bucket = byDay.get(day);
+    if (bucket) bucket.push(slot);
+    else byDay.set(day, [slot]);
   }
 
-  // Second pass: any free slot, so a visitor who marked something on every day
-  // still gets a counter-proposal rather than silence.
-  if (picked.length === 0) {
-    for (const slot of proposedTimes) {
-      if (picked.length >= 3) break;
-      if (taken.has(slot)) continue;
-      picked.push(slot);
+  // First choice: days the visitor did not choose at all — the clearest signal
+  // that the other person simply has a different week. Falling back to any day
+  // with a free slot means a visitor who marked something on every day still
+  // gets a counter-proposal rather than silence.
+  const untouched = [...byDay.keys()].filter((day) => !visitorDays.has(day));
+  const days = untouched.length > 0 ? untouched : [...byDay.keys()];
+
+  const picked: string[] = [];
+  for (const day of days.slice(0, DEMO_COUNTER_TARGET_HOURS.length)) {
+    picked.push(pickEveningSlot(byDay.get(day)!, DEMO_COUNTER_TARGET_HOURS[picked.length]!));
+  }
+  return picked;
+}
+
+/**
+ * The hour a first date is actually planned for.
+ *
+ * The grid runs 13:00–19:30 Kyiv and `proposedTimes` arrives date-major and
+ * time-ascending, so taking the first free slot of a day — which is what this
+ * did until 2026-08-17 — countered with **13:00 every single time**, on every
+ * demo, forever. A puppet that only ever proposes the middle of a working
+ * afternoon does not read as a person with a job.
+ */
+const DEMO_EVENING_FROM_HOUR = 17;
+
+/**
+ * Which evening hour each successive counter-slot aims for.
+ *
+ * Rotated rather than fixed so three counter-proposals read as one person's
+ * real week instead of the same hour three days running, and indexed rather
+ * than randomised for the reason `preference-layout.ts` already states: a
+ * pattern re-rolled per render can never be reviewed twice and no test can pin
+ * it. Its length is also what caps the counter at three slots.
+ */
+const DEMO_COUNTER_TARGET_HOURS = [18, 19, 17];
+
+/**
+ * The free slot on one day closest to `targetHour`, preferring the evening.
+ *
+ * A day whose whole evening the visitor already took falls back to its own
+ * pool, where minimising the distance to a 17:00+ target lands on the LATEST
+ * remaining slot — still the closest thing to an evening left, and never the
+ * 13:00 this function exists to stop proposing.
+ */
+function pickEveningSlot(slots: string[], targetHour: number): string {
+  const evening = slots.filter((slot) => localHour(slot) >= DEMO_EVENING_FROM_HOUR);
+  const pool = evening.length > 0 ? evening : slots;
+
+  let best = pool[0]!;
+  let bestDistance = Infinity;
+  for (const slot of pool) {
+    const distance = Math.abs(localHour(slot) - targetHour);
+    // `<=` resolves a tie toward the later slot, which is the direction this
+    // whole function is moving in.
+    if (distance <= bestDistance) {
+      best = slot;
+      bestDistance = distance;
     }
   }
+  return best;
+}
 
-  return picked;
+/**
+ * A slot's wall-clock hour in the scheduling timezone, as a decimal so 19:30
+ * sorts above 19:00.
+ *
+ * `DEFAULT_TIME_ZONE` mirrors `CALENDAR_TIME_ZONE` in
+ * `handlers/matching/scheduler.ts`, which is where the grid is actually built —
+ * imported from `@gennety/shared` rather than from that module because this one
+ * must stay free of the Prisma import chain so the decision table is testable
+ * without a database.
+ */
+function localHour(iso: string): number {
+  const { hour, minute } = zonedParts(new Date(iso), DEFAULT_TIME_ZONE);
+  return hour + minute / 60;
 }
 
 function dayKey(iso: string): string {

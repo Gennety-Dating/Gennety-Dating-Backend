@@ -136,7 +136,7 @@ different snapshot, not as a broken hook.
 | active + verified, no match | explain matchmaking, create the match, dispatch the pitch | `createProposedMatch`, `dispatchMatches` |
 | `proposed`, visitor answered (either way) | accept | `applyMatchDecision` |
 | ticket gate, visitor paid | top up its wallet, then settle its own half | `grantTickets` → `useTicketFromBalance` |
-| calendar, visitor picked | counter with **different** slots | `processCalendarSlotsUpdate` |
+| calendar, visitor picked | counter with **different** slots, in the evening | `processCalendarSlotsUpdate` |
 | calendar, no overlap after 90s | give in and take one of theirs | `processCalendarSlotsUpdate` |
 | `negotiating_venue`, visitor confirmed | submit vibe + departure point | `interpretVenueIntent` → `confirmVenueIntent` |
 | board `liking`, visitor hearted | heart a **different** venue | `submitVenueLikes` |
@@ -155,6 +155,19 @@ different snapshot, not as a broken hook.
 The two "different first" steps matter: they are what make the negotiation read
 like a person with their own calendar and their own taste, rather than a bot
 that says yes. The 90-second give-in exists so a demo can never dead-end.
+
+**And the counter lands in the EVENING, one slot per day, at a rotating hour.**
+The grid runs 13:00–19:30 Kyiv and arrives date-major and time-ascending, so
+taking the first free slot of each day — which is what `pickCounterSlots` did
+until 2026-08-17 — proposed **13:00 every single time, on every demo**. A
+puppet that only ever offers the middle of a working afternoon does not read as
+someone with a job, which is the whole thing this step exists to demonstrate.
+It now aims each successive slot at 18:00 / 19:00 / 17:00 — rotated so three
+counters read as one person's week rather than one hour repeated, and indexed
+rather than randomised, by the rule `preference-layout.ts` already states: a
+pattern re-rolled per render can never be reviewed twice. A day whose evening
+the visitor has already taken falls back to its own latest free slot, never to
+its 13:00 opener.
 
 **The puppet is topped up before it pays, not seeded with a lump.** The §3.5b
 gate needs BOTH slots settled before the Calendar is sent, and the demo settles

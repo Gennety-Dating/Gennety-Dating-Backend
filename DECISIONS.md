@@ -47,6 +47,99 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-17 — the handset is measured off a real iPhone, and Type Radar drops a face to gain a beat
+
+**Kind:** founder decision + change of mind
+**What:** two corrections to `GennetyHero` after the founder watched the second
+cut. The drawn handset was rebuilt to real iPhone 16 Pro proportions, and the
+Type Radar shot moved to a different window of the same clip. 45.6 s (was 45.4).
+
+**Why the handset was wrong, and it is not a matter of taste.** The founder's
+words were that I had overlaid "a mockup of some unknown phone" when they had
+asked for an iPhone. Correct, and the cause is that I proportioned the first
+version by eye. Every dimension is now a fraction of screen width taken off a
+402 pt device:
+
+- **Screen corner radius 62/402 ≈ 0.145**, against the 0.098 I had used. This is
+  the single biggest tell — 0.098 is a rounded rectangle, not a squircle, and no
+  amount of bezel work compensates for it.
+- **Dynamic Island 0.315 × 0.092 at 0.028 from the top.** I had derived its
+  height from the status bar instead, which made it a flat slot.
+- **A 0.017 black display border inside a 0.008 titanium rail**, as two layers.
+  From the front that rail is a bright hairline; the single grey gradient band I
+  had drawn reads as plastic.
+
+**The status bar's backdrop is now the clip's own top rows, mirrored and
+blurred**, and that is a fix for something the founder did not report. A flat
+black strip is right on the Mini App screens and wrong on the Telegram ones,
+whose translucent header runs under the status bar on a real phone — against
+black it left a hard horizontal seam. It also turned out to be **the only way to
+make the Dynamic Island visible at all**: a black pill on a black strip is
+invisible, and an iPhone with no island is not an iPhone. On the genuinely dark
+screens it stays invisible, which is what a real handset does there.
+
+**Why Type Radar lost a profile rather than gaining one.** The founder said one
+of the profiles looked bad. It was a mirror selfie with the phone held across
+the face, at 8.5–10.0 s of that clip, swept in by yesterday's move to the fast
+stretch. The reason it has to go is specific to this shot: it is the product
+demonstrating taste, so a frame nobody would swipe right on argues against the
+claim. The window is now 10.0–16.8 s — **four** strong profiles back to back
+plus the «Що не сподобалось?» tag row, which is the beat that shows the AI being
+TOLD why rather than merely counting taps. **Four with the tags beats five with
+a bad one**, and yesterday's entry (which sold "five faces" as the goal) is
+wrong about what the shot is for.
+
+**What it changes going forward:**
+- **A handset dimension is checked against the device, not against how it looks
+  alone on a black page.** That is how the first version passed my own review.
+- **The Type Radar window is chosen by content.** Its three candidate stretches
+  are now written down in `timeline.ts` and in the extraction script with what
+  is wrong with each, because the failure mode is that a longer window looks
+  strictly better until you watch it.
+- The cascade is +9 frames from `radar-done` onward; the three dissolves are
+  unchanged at 14 frames, and `place-map` keeps its 1.5–3.3 s window.
+
+**Recorded in:** `apps/video/src/hero/ui/Iphone.tsx` (the measurements and why
+each one matters), `timeline.ts` (the radar shot's `beat`),
+`video-production-plan.md` §E/§F, `README.md`.
+
+---
+
+## 2026-08-17 — демо-партнёр предлагает вечер, а не 13:00 каждый раз
+
+**Kind:** founder decision
+**What:** `pickCounterSlots` (`apps/bot/src/demo/decide.ts`) выбирает встречное
+время в вечернем окне (17:00–19:30 Киев) вместо первого свободного слота дня.
+Целевой час чередуется по слотам: 18:00 / 19:00 / 17:00.
+**Why:** фаундер заметил, что кукла в демо «постоянно предлагает 13:00». Так и
+было, и это не совпадение: сетка приходит по дням и по возрастанию времени
+(`generateProposalSlots`, 13:00→19:30), а функция брала **первый** свободный
+слот каждого дня — то есть ровно 13:00, на каждом демо, всегда. Шаг существует
+ровно для того, чтобы переговоры читались как человек со своим календарём, а
+человек с работой не зовёт на первое свидание в середину рабочего дня.
+**What it changes going forward:**
+- **Чередование часов детерминированное (индекс, не `Math.random()`)** — то же
+  правило, что уже записано для `preference-layout.ts` и осыпания иконок:
+  паттерн, перекатываемый на каждый рендер, нельзя отревьюить дважды и нельзя
+  закрепить тестом. `DEMO_COUNTER_TARGET_HOURS` заодно и есть то, что
+  ограничивает встречное предложение тремя слотами.
+- **Второй проход перестал складывать три встречных слота в один день.**
+  Докстрока функции обещала «разные дни», а ветка «визитёр отметил что-то в
+  каждом дне» это обещание нарушала. Теперь один слот на день в обеих ветках.
+- **`decide.ts` получил первый импорт из `services/`** (`zonedParts`). Он чист
+  (`Intl`, без БД и сети), и это осознанная граница: тянуть
+  `handlers/matching/scheduler.ts` ради `CALENDAR_TIME_ZONE` нельзя — он
+  притащит Prisma и сломает свойство «таблица решений тестируется без базы».
+  Поэтому таймзона берётся из `DEFAULT_TIME_ZONE` в `@gennety/shared`, который
+  зеркалит `CALENDAR_TIME_ZONE`; если продукт когда-нибудь начнёт назначать
+  свидания вне Киева, эти две константы разъедутся и правило про вечер начнёт
+  считаться не в том часовом поясе.
+- Демо-only: `apps/bot/src/demo/**`, прод не затронут ни в одну сторону.
+**Recorded in:** DEMO_MODE.md → таблица состояний драйвера + «the counter lands
+in the EVENING», `apps/bot/src/demo/decide.ts`.
+
+---
+
 ## 2026-08-16 — the film plays inside a drawn iPhone, and the phone stops moving
 
 **Kind:** founder decision

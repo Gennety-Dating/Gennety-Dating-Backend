@@ -314,6 +314,71 @@ describe("calendar negotiation", () => {
   });
 });
 
+describe("pickCounterSlots — the counter lands in the evening", () => {
+  // The real grid: 13:00–19:30 Kyiv every 30 min, date-major and ascending
+  // (`generateProposalSlots`). September is UTC+3 in Kyiv, so 13:00 local is
+  // 10:00Z and the last slot, 19:30, is 16:30Z. Built here rather than imported
+  // because `scheduler.ts` pulls the Prisma chain into this pure test.
+  const day = (date: string) =>
+    Array.from({ length: 14 }, (_, i) => {
+      const minutes = 10 * 60 + i * 30;
+      const hh = String(Math.floor(minutes / 60)).padStart(2, "0");
+      const mm = String(minutes % 60).padStart(2, "0");
+      return `${date}T${hh}:${mm}:00.000Z`;
+    });
+  const grid = [
+    ...day("2026-09-01"),
+    ...day("2026-09-02"),
+    ...day("2026-09-03"),
+    ...day("2026-09-04"),
+  ];
+  /** 17:00 Kyiv, the earliest slot the puppet may propose, as a UTC hour. */
+  const eveningFromUtc = 14;
+  const utcHour = (iso: string) => Number(iso.slice(11, 13)) + Number(iso.slice(14, 16)) / 60;
+
+  it("never counters with 13:00 — every slot is 17:00 Kyiv or later", () => {
+    // The visitor takes the whole first day; the puppet answers on the others.
+    const picked = pickCounterSlots(grid, day("2026-09-01"));
+    expect(picked.length).toBe(3);
+    for (const slot of picked) expect(utcHour(slot)).toBeGreaterThanOrEqual(eveningFromUtc);
+  });
+
+  it("spreads the counter across days and varies the hour", () => {
+    const picked = pickCounterSlots(grid, day("2026-09-01"));
+    expect(new Set(picked.map((slot) => slot.slice(0, 10))).size).toBe(picked.length);
+    // Three evenings at the identical hour would read as a template, not a week.
+    expect(new Set(picked.map(utcHour)).size).toBeGreaterThan(1);
+  });
+
+  it("is deterministic — the same grid gives the same counter twice", () => {
+    expect(pickCounterSlots(grid, day("2026-09-01"))).toEqual(
+      pickCounterSlots(grid, day("2026-09-01")),
+    );
+  });
+
+  it("takes the latest slot left when the visitor already booked the evening", () => {
+    // Every day's evening is taken, so only 13:00–16:30 Kyiv remains free.
+    const visitor = grid.filter((slot) => utcHour(slot) >= eveningFromUtc);
+    const picked = pickCounterSlots(grid, visitor);
+    expect(picked.length).toBeGreaterThan(0);
+    for (const slot of picked) {
+      expect(visitor).not.toContain(slot);
+      // 16:30 Kyiv (13:30Z) is the latest thing left — never the 13:00 opener.
+      expect(utcHour(slot)).toBe(13.5);
+    }
+  });
+
+  it("still answers when the visitor marked something on every day", () => {
+    // One slot taken per day, so no day is untouched — the old second pass
+    // stacked three counters on one day here.
+    const visitor = grid.filter((slot) => slot.endsWith("T12:00:00.000Z"));
+    const picked = pickCounterSlots(grid, visitor);
+    expect(picked.length).toBe(3);
+    expect(new Set(picked.map((slot) => slot.slice(0, 10))).size).toBe(3);
+    for (const slot of picked) expect(utcHour(slot)).toBeGreaterThanOrEqual(eveningFromUtc);
+  });
+});
+
 describe("venue negotiation", () => {
   it("submits only after the visitor has confirmed their own intent", () => {
     const base = { status: "negotiating_venue" as const };
