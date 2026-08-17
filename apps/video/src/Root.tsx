@@ -6,12 +6,35 @@ import {
   gennetyAdSchema,
   type GennetyAdProps,
 } from "./compositions/GennetyAd";
+import {
+  GennetyHero,
+  gennetyHeroSchema,
+  HERO_DURATION_IN_FRAMES,
+  type GennetyHeroProps,
+} from "./hero/GennetyHero";
 
 const FPS = 30;
 
 export const RemotionRoot: React.FC = () => {
   return (
     <>
+      {/*
+        The product film. Built from real captures of the running product —
+        see apps/video/video-production-plan.md. Deliberately vertical-only:
+        it is cut for a phone-held feed, and a horizontal variant would need a
+        different edit rather than a crop of this one.
+      */}
+      <Composition<typeof gennetyHeroSchema, GennetyHeroProps>
+        id="GennetyHero"
+        component={GennetyHero}
+        schema={gennetyHeroSchema}
+        durationInFrames={HERO_DURATION_IN_FRAMES}
+        fps={FPS}
+        width={1080}
+        height={1920}
+        defaultProps={{musicVolume: 0, finishing: true}}
+      />
+
       <Composition<typeof gennetyAdSchema, GennetyAdProps>
         id="GennetyAdVertical"
         component={GennetyAd}

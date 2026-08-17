@@ -47,6 +47,92 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-16 — `GennetyHero`: the product film is cut from real captures, and the intro turned out to BE the pitch
+
+**Kind:** founder decision + change of mind + deviation from plan
+**What:** a second Remotion composition (`apps/video/src/hero/`, ~46 s,
+1080×1920) built from real screen recordings of the running product rather than
+recreated UI. `GennetyAd` is untouched. Full audit, recording map and quality
+notes: `apps/video/video-production-plan.md`.
+
+**Why the shape is what it is — the finding, not the feature.** The brief was
+"direct the real product into a cinematic film". Auditing the captures produced
+something stronger than an assembly order: **the Mini App's own visual intro is
+already the pitch.** It walks loneliness → the cost (75 hours / 9,500 swipes /
+$200, each counting up) → competitor cards → "So we built Gennety" → the AI
+matchmaker promise → the date, in the product's own typography and motion. So
+the film is camera direction over a performance the product already gives,
+bookended with real life. ~85 % of screen time is Priority 1 (recording), the
+logo beat is the only new animation, and **zero** production components are
+rendered directly — `Ticket3D` and friends are renderable and deliberately
+unused, because a deterministic re-render is a fidelity seam in exchange for a
+screen the story does not need.
+
+**What it changes going forward:**
+- **No product UI is redrawn, and the camera never repaints a product pixel** —
+  it is a CSS transform on a wrapper. A shot needing an unrecorded state gets
+  recorded, not rebuilt.
+- **Timing lives in `timeline.ts`, framing lives in the scene file.** Overlapping
+  `from` values are the ONLY thing that produces a dissolve; a hard cut passes
+  `fade(frame, duration, 0, 0)`. The first version of `fade` was symmetric, so
+  every scene opened from black — with six of nine transitions being hard cuts,
+  that put a one-frame dip on each, which reads as a blink rather than an edit.
+- **`TRIM` values are measured against specific contact sheets.** Re-extracting
+  footage with different windows means re-checking them; `scripts/extract-hero-footage.sh`
+  is the derivation and reproduces all 12 assets byte-identically.
+- **The 31 MB of clips in `public/footage/` are committed on purpose** — they are
+  derived, but the composition must render on a fresh clone, and the sources
+  (~500 MB) live outside the repo.
+
+**Change of mind — the soundtrack was planned, then measured, then dropped.**
+The plan's first draft made the audio from `Gennety Ad video.mp4` the score on
+the strength of a coarse check ("continuous, two silences"). A proper 5-second-
+window profile across all 123 s killed it: mean level −35…−50 dB for most of its
+length, one loud sting at 50–58 s, **30.4 LU** range. It is sparse sound design
+cut to a different film's picture — under this cut it is inaudible for ~30 of
+the 46 seconds, and normalising a −50 dB bed to broadcast level is +34 dB of
+gain onto a noise floor nobody has listened to. **The film ships silent with the
+audio path wired** (`musicVolume` defaults to 0), which is also this workspace's
+existing stated convention: sound direction is chosen after the visual cut is
+approved. Adding a track is one file swap plus one prop; the accents to time
+against are 16.5 s, 31.6 s and 36.9 s. The reference film's own music is
+categorically excluded — it is a competitor's licensed track.
+
+**Deviations from the plan, all three found by looking at frames:**
+1. **The second half of the product is richer than the audit assumed.** The
+   match reveal, mutual acceptance and venue selection were listed as never
+   captured. They exist — not as live states but as the intro's own explainer
+   carousel ("You both said yes", "You pick when", "We pick where", "Time and
+   place are set"), so the burst plays four cards instead of two.
+2. **Scene 3 stopped being a screen-only close-up.** Overscanning the screen to
+   132 % clipped the caption off both edges ("…crolling a TikTok fee") and put a
+   1.82× upscale on the 592 px capture. Framed large instead: caption whole,
+   1.49×.
+3. **Scene 6 changed source.** The planned window spends its length typing,
+   settles for ~0.4 s before the soft keyboard drags Telegram's Russian input bar
+   in, and carries a visible typo. The 30.4–34.0 s window holds a settled
+   question — *"Are you an early bird or a night owl?"* — clean, for three
+   seconds.
+
+**Deliberately not done:** the live match drop, Synergy score, ticket, calendar
+overlap and venue board have **no capture at all**, so the film ends at the
+promise and cuts to real life rather than dramatising states nobody recorded.
+Rebuilding them in Remotion is exactly what the brief forbids. Also no SFX:
+taps and confirmations would have to be synthesised from nothing, and invented
+UI sound over real product footage is the template-motion-graphics tell.
+
+**One constraint worth holding onto:** the primary capture is **592×1280**
+against a 1080×1920 delivery, and it is the DEV bot — "Gennety Deta dev" with a
+red `Beta Dev` badge, Russian Telegram chrome. Both are handled compositionally
+rather than with a filter: every clip is crop-first, and the device frame in
+`ui/Phone.tsx` exists to hide that chrome, not to decorate. That is why phone
+width is a real decision per shot — it sets the upscale.
+
+**Recorded in:** `apps/video/video-production-plan.md`, `apps/video/README.md`
+(§`GennetyHero`), `apps/video/src/hero/`.
+
+---
+
 ## 2026-08-15 — промпт Hermes слит в один файл; в нём нашлось десять протухших утверждений
 
 **Kind:** a document turned out to be wrong + change of mind
