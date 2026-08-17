@@ -1,13 +1,13 @@
 /**
- * React wrapper for the shared "butterfly draws the tick" success mark.
+ * React wrapper for the shared "butterfly spins away, tick draws" success mark.
  *
  * The markup is authored once, as a string, in `butterfly-success.ts` — the
  * vanilla-TS Mini Apps drop it into `innerHTML`, and this component is how the
  * React ones (Type Radar, and onboarding's final screen) render the same thing.
  * Re-writing it as JSX would give the animation two definitions to keep in step,
- * and here the geometry is the part that must not drift: the flight keyframes
- * are fitted to the tick's exact three points, so a divergent copy flies the
- * butterfly beside its own stroke.
+ * and here the geometry is the part that must not drift: the viewBox is sized
+ * to the widest frame of the SPIN rather than to the butterfly at rest, so a
+ * hand-copied copy is one that shears a wing a quarter-turn in.
  *
  * `dangerouslySetInnerHTML` is deliberate and contained to this one file. The
  * markup is a module-level constant apart from `label`, which

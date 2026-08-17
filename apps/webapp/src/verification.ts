@@ -341,7 +341,30 @@ function boot(): void {
       "already-verified",
     ];
     if (forced && (allowed as string[]).includes(forced)) {
-      renderScreen(root, forced as Screen, lang);
+      // Two review affordances for the success mark, both dev-only and both
+      // there because the beat is ~1.3s: it cannot be judged from one viewing,
+      // and it cannot be judged against the alternative without seeing them
+      // minutes apart. A TAP ANYWHERE replays, and `&mark=tick` renders the
+      // bare-checkmark variant — no butterfly, the tick alone — which is the
+      // other reading of "minimal and classic".
+      //
+      // The variant lives here as an injected stylesheet rather than as a class
+      // in butterfly-success.css: it is a question being asked, not a mode the
+      // product has, so it must not cost every user bytes in the real bundle.
+      // Whichever way it is answered, this whole block goes.
+      if (params.get("mark") === "tick") {
+        const style = document.createElement("style");
+        style.textContent = `
+          .bfs-fly { display: none; }
+          .bfs-tick { animation-delay: 80ms; animation-duration: 420ms; }
+          .bfs-mark::before { animation-delay: 60ms; animation-duration: 440ms; }
+          .bfs-label { animation-delay: 60ms; animation-duration: 440ms; }
+        `;
+        document.head.append(style);
+      }
+      const replay = () => renderScreen(root, forced as Screen, lang);
+      replay();
+      root.addEventListener("click", replay);
       return;
     }
   }

@@ -1,27 +1,31 @@
 /**
- * The shared Mini App success mark: the brand butterfly arrives.
+ * The shared Mini App success mark: the butterfly spins away, the tick draws.
  *
- * See butterfly-success.ts for what this replaced and why there is no tick.
+ * See butterfly-success.ts for what this replaced and why the tick is back.
  * This file owns motion, size and colour only.
  *
  * Motion notes (why it is built this way):
- *  - Two animations touch `transform` on the same element: the arrival, then
- *    the breath. `bfs-pop` runs `both` so it holds `scale(1)`, and the breath
- *    is declared SECOND and delayed past the arrival's full duration — later in
- *    the list wins the property, so the order and the delay are load-bearing
- *    rather than tidy. Swapping them freezes the mark at the breath's first
- *    keyframe instead of letting it arrive.
- *  - The overshoot lives in the KEYFRAMES and the timing function is a plain
- *    ease-out. A springy cubic-bezier on top of an overshooting keyframe set
- *    double-counts and produces a visible second bounce.
- *  - The BASE state is the FINAL pose — arrived, at rest, fully opaque.
- *    `animation: … both` covers the animated case, and the base is what reduced
- *    motion falls back to, so a viewer who asked for less motion gets exactly
- *    the resting mark with no override rule needed.
+ *  - ONE animation drives the whole butterfly (`bfs-spin`), rather than a
+ *    wind-up, a spin and a shrink layered on the same element. Three animations
+ *    all writing `transform` would leave only the last one in the list actually
+ *    applied — the property is not composited, the winner takes it — so the
+ *    phases are keyframes, not separate declarations.
+ *  - `bfs-spin` runs `linear` and the ACCELERATION lives in the spacing of its
+ *    keyframes: equal slices of time cover ever more degrees (roughly u^2.4 of
+ *    the total sweep). An ease-in timing function over one long rotation is the
+ *    obvious alternative and is worse here, because the wind-up has to swing the
+ *    other way first and a single easing cannot reverse direction.
+ *  - The BASE state of every animated element is its FINAL pose. `animation: …
+ *    both` covers the animated case, and the base is what reduced motion falls
+ *    back to — so the media query only has to say `animation: none` and no pose
+ *    is restated anywhere. The butterfly's final pose is `opacity: 0`: it is not
+ *    part of the resting frame at all, which is the whole point of this version.
  *  - Nothing here transforms an SVG child by position, so there is no
- *    `transform-box` / `transform-origin` hazard: `.bfs-fly` scales about the
- *    user-space origin, which is the butterfly's own centre because the wing
- *    paths are authored around it.
+ *    `transform-box` / `transform-origin` hazard: `.bfs-fly` rotates and scales
+ *    about the user-space origin, which is the butterfly's own centre because
+ *    the wing paths are authored around it. The tick is authored around the same
+ *    origin, so the point the butterfly vanishes into is the point the stroke
+ *    grows out of, by construction.
  */
 
 .bfs {
@@ -31,20 +35,26 @@
   gap: 18px;
   text-align: center;
 
-  /* The bloom behind the butterfly. Dark carries the brand alpha easily; on the
-     cream page the same value reads as a pink smudge, so light gets its own much
+  /* The bloom behind the mark. Dark carries the brand alpha easily; on the cream
+     page the same value reads as a pink smudge, so light gets its own much
      weaker value rather than a shared one. Same split, and the same reason, as
      the loading mark's glow. */
   --bfs-glow: rgba(139, 37, 59, 0.2);
 
-  /* The mark's on-screen width. One knob: the height and the bloom derive from
-     it, and the 76/104 ratio IS the viewBox, so a screen that ever needs a
-     different size cannot squash the butterfly by setting one dimension.
+  /* The tick's ink. Burgundy at rest on cream; LIFTED on the near-black page,
+     where #8b253b sinks into the background — the same correction the date card
+     makes to its accent on dark, for the same reason. This is the one colour on
+     the mark that has to differ per theme, which is why the tick alone takes its
+     paint from CSS instead of an attribute. */
+  --bfs-tick: var(--accent-bright, #b6304f);
 
-     190 rather than the 156 the drawn tick used. The butterfly is now the mark
-     rather than a passenger on it, and the logo is an abstract shape that needs
-     size to be read at all — at 29px, which is what it rendered at in flight,
-     it was a smudge. */
+  /* The mark's on-screen size — ONE knob, and now a SQUARE box. The butterfly
+     turns, so it needs the same clearance in both axes; the old 104:76 frame was
+     sized for a butterfly that never rotated. The rendered butterfly is a little
+     smaller than it was (143px against 162px) because the same width now buys a
+     taller viewBox, and that is an accepted trade: it is no longer the resting
+     frame, it is a gesture, and 143px is nowhere near the 29px at which the logo
+     stopped being readable. */
   --bfs-w: 190px;
 
   /* Falls back rather than depending on the token being declared. This mark is
@@ -57,20 +67,25 @@
 
 :root[data-theme="light"] .bfs {
   --bfs-glow: rgba(139, 37, 59, 0.09);
+  --bfs-tick: var(--accent, #8b253b);
   --bfs-caption: var(--text-muted, #6b6670);
 }
 
 .bfs-mark {
   position: relative;
   width: var(--bfs-w);
-  height: calc(var(--bfs-w) * 76 / 104);
+  /* Square, and deliberately not derived with a calc: the viewBox is square, so
+     a ratio here would be `* 118 / 118`. A test pins the two together. */
+  height: var(--bfs-w);
   display: grid;
   place-items: center;
 }
 
-/* Burgundy bloom, rising behind the butterfly and coming to rest on the exact
-   frame the caption does (140 + 560 = 700). Square and centred on the frame, so
-   it reads as the mark settling rather than as a light source somewhere. */
+/* Burgundy bloom, rising WITH the tick and coming to rest on the exact frame the
+   caption does (780 + 520 = 1300). Square and centred on the frame, so it reads
+   as the mark settling rather than as a light source somewhere. It deliberately
+   does not accompany the spin: a glow under a departing object reads as the
+   object being lit, and what is being lit here is the answer. */
 .bfs-mark::before {
   content: "";
   position: absolute;
@@ -78,26 +93,34 @@
   height: var(--bfs-w);
   border-radius: 50%;
   background: radial-gradient(circle, var(--bfs-glow) 0%, transparent 68%);
-  opacity: 0;
-  animation: bfs-bloom 560ms ease-out 140ms both;
+  opacity: 0.8;
+  animation: bfs-bloom 520ms ease-out 780ms both;
   pointer-events: none;
 }
 
 .bfs-svg {
   position: relative;
   width: var(--bfs-w);
-  height: calc(var(--bfs-w) * 76 / 104);
+  height: var(--bfs-w);
 }
 
-/* Arrival, then breath. See the header note: the declaration order and the
-   breath's delay are what let the second animation take over the property only
-   after the first has landed. */
+/* The whole butterfly life: appear, hold, wind back, spin away. Its final pose
+   is invisible, so the base is `opacity: 0` and reduced motion needs no rule. */
 .bfs-fly {
-  transform: scale(1);
+  opacity: 0;
+  animation: bfs-spin 920ms linear both;
+}
+
+/* Starts 80ms BEFORE the butterfly finishes vanishing. The overlap is what makes
+   this read as one object becoming another rather than as two animations queued
+   back to back — at that moment the butterfly is a ~0.2-scale blur sitting on
+   the tick's first few pixels. */
+.bfs-tick {
+  stroke: var(--bfs-tick);
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
   opacity: 1;
-  animation:
-    bfs-pop 520ms cubic-bezier(0.22, 0.9, 0.3, 1) both,
-    bfs-breath 3200ms ease-in-out 700ms infinite;
+  animation: bfs-draw 340ms cubic-bezier(0.32, 0.72, 0.3, 1) 840ms both;
 }
 
 .bfs-label {
@@ -105,41 +128,97 @@
   font-size: 15px;
   line-height: 1.45;
   color: var(--bfs-caption);
-  animation: bfs-label-in 380ms ease-out 320ms both;
+  animation: bfs-label-in 520ms ease-out 780ms both;
 }
 
 /* ── Keyframes ───────────────────────────────────────────────────────────── */
 
-/* Overshoots to POP_PEAK_SCALE and settles. That peak is what the viewBox is
-   sized to clear; a test walks the two against each other, because an SVG
-   crops silently and a clipped wing is a hard straight cut that reads as a bug.
-   Opacity finishes well before the scale so the mark is fully present while it
-   is still settling, rather than fading and growing at once. */
-@keyframes bfs-pop {
+/*
+ * Four phases in one timeline (920ms):
+ *
+ *   0 – 13%   appear, still. He asked for it to start from a static logo, and
+ *             that hold is what makes the wind-up read as a decision rather
+ *             than as the mark simply arriving mid-motion.
+ *  13 – 33%   wind back to +16°, easing out (the 22% stop is what fakes the
+ *             ease; the animation itself must stay linear for the spin).
+ *  33 – 100%  the spin: +16° → -1100°, just over three turns, accelerating.
+ *             The angle at each stop is the total sweep times u^2.4, so the
+ *             first third of the time covers ~5% of the rotation and the last
+ *             8% covers ~27% of it.
+ *
+ * Scale rides along: a small inhale to SPIN_PEAK_SCALE as the spin starts, then
+ * a collapse to a point. The shrink is deliberately slow at first and steep at
+ * the end — it has to stay large enough to be recognisable while it is still
+ * turning slowly, and only stop being an object once it is a blur.
+ *
+ * The viewBox is sized from the WIDEST interpolated frame, not from the peak
+ * scale: a rotating rectangle reaches (w + h) / 2√2 = 53.8 units at 45°, which
+ * happens around 52% here at scale ~1.02 → 54.9 against the frame's 59. A test
+ * walks every stop and the interpolation between them, because an SVG crops
+ * silently and a sheared wing reads as a rendering fault.
+ */
+@keyframes bfs-spin {
   0% {
     opacity: 0;
-    transform: scale(0.82);
+    transform: rotate(0deg) scale(1);
   }
-  62% {
+  13% {
     opacity: 1;
-    transform: scale(1.045);
+    transform: rotate(0deg) scale(1);
+  }
+  22% {
+    opacity: 1;
+    transform: rotate(11deg) scale(1.01);
+  }
+  33% {
+    opacity: 1;
+    transform: rotate(16deg) scale(1.02);
+  }
+  43% {
+    opacity: 1;
+    transform: rotate(4deg) scale(1.05);
+  }
+  53% {
+    opacity: 1;
+    transform: rotate(-46deg) scale(1.02);
+  }
+  63% {
+    opacity: 1;
+    transform: rotate(-148deg) scale(0.9);
+  }
+  73% {
+    opacity: 1;
+    transform: rotate(-312deg) scale(0.7);
+  }
+  83% {
+    opacity: 1;
+    transform: rotate(-544deg) scale(0.44);
+  }
+  92% {
+    opacity: 0.55;
+    transform: rotate(-805deg) scale(0.22);
   }
   100% {
-    opacity: 1;
-    transform: scale(1);
+    opacity: 0;
+    transform: rotate(-1100deg) scale(0.05);
   }
 }
 
-/* What keeps the resting frame alive rather than a static PNG. Deliberately
-   small: at the mark's size a 3.5% scale is a few pixels of travel over three
-   seconds, which is felt more than seen. */
-@keyframes bfs-breath {
-  0%,
-  100% {
-    transform: scale(1);
+/* The tick, drawn from its own start point outward. The easing decelerates onto
+   the tip, which is what makes a stroke read as being drawn by something rather
+   than as a mask sliding off it. Opacity comes up over the first frames only so
+   the round cap does not pop into existence at full strength. */
+@keyframes bfs-draw {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0;
   }
-  50% {
-    transform: scale(1.035);
+  12% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
   }
 }
 
@@ -169,21 +248,19 @@
   }
 }
 
-/* Reduced motion gets the resting mark and nothing else: the butterfly at full
-   size, the bloom at rest, no arrival and no breath. That falls out of the base
-   states above — killing the animations is enough, and no pose has to be
-   restated here, which is the whole reason the bases are the FINAL values
-   rather than the entry ones.
+/* Reduced motion gets the resting mark and nothing else: the drawn tick, the
+   bloom at rest, no butterfly and no spin. That falls out of the base states
+   above — killing the animations is enough, and no pose has to be restated here,
+   which is the whole reason the bases are the FINAL values rather than the entry
+   ones.
    One short fade of the whole thing is left, so the success still ARRIVES
    instead of being there as though the screen never changed. */
 @media (prefers-reduced-motion: reduce) {
   .bfs-fly,
+  .bfs-tick,
   .bfs-mark::before,
   .bfs-label {
     animation: none;
-  }
-  .bfs-mark::before {
-    opacity: 0.8;
   }
   .bfs {
     animation: bfs-fade-in 320ms ease-out both;
