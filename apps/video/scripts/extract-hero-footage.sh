@@ -1,85 +1,79 @@
 #!/usr/bin/env bash
 #
-# Regenerates public/footage/ and public/audio/ for the GennetyHero product film.
+# Regenerates public/footage/ for the GennetyHero product film.
 #
 # The clips ARE committed — the composition has to render on a fresh clone — but
-# they are derived, and this is the derivation. Every window here was chosen
-# against a contact sheet; the reasoning is in video-production-plan.md §B, and
-# the frame offsets in src/hero/timeline.ts are measured against these exact
-# in-points. Change a window and re-check TRIM.
+# they are derived, and this is the derivation. Every window was chosen against a
+# filmstrip; the reasoning is in video-production-plan.md §B, and the `trim`
+# values in src/hero/timeline.ts are measured against these exact in-points.
+# Change a window and re-check TRIM.
 #
-# The sources are the founder's own recordings and live OUTSIDE the repo.
+# Sources are the founder's own screen recordings and live OUTSIDE the repo:
+#   IMG_2588.MP4   19s   the five profile-basics screens
+#   IMG_2590.MP4  107s   conversational profiling -> Type Radar -> photo request
+#   IMG_2604.MP4  135s   match decision -> calendar -> venue -> date card
 #
 # Usage:  ./scripts/extract-hero-footage.sh [source-dir]
-#         source-dir defaults to ~/Downloads
+#         source-dir defaults to ~/Desktop
 set -euo pipefail
 
-SRC_DIR="${1:-$HOME/Downloads}"
+SRC_DIR="${1:-$HOME/Desktop}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-SRC_PRODUCT="$SRC_DIR/IMG_1798.MP4"        # 592x1280 — full onboarding walkthrough
-SRC_CHAT="$SRC_DIR/Gennety Ads.mp4"        # 1080x2336 — conversational profile, HD
-SRC_LIFE="$SRC_DIR/Gennety Ad video.mp4"   # 1920x1080 — produced brand film
+BASICS="$SRC_DIR/IMG_2588.MP4"
+PROFILE="$SRC_DIR/IMG_2590.MP4"
+DATE="$SRC_DIR/IMG_2604.MP4"
 
-for f in "$SRC_PRODUCT" "$SRC_CHAT" "$SRC_LIFE"; do
+for f in "$BASICS" "$PROFILE" "$DATE"; do
   [ -f "$f" ] || { echo "missing source: $f" >&2; exit 1; }
 done
 
-mkdir -p "$HERE/public/footage" "$HERE/public/audio"
+mkdir -p "$HERE/public/footage"
 
-# --- Mini App screens -------------------------------------------------------
-# crop=592:1130:0:150 drops the iOS status bar and Telegram's Russian nav row.
-# That crop is why src/hero/ui/Phone.tsx exists: it frames what is left.
-prod() {
-  ffmpeg -v error -y -ss "$2" -to "$3" -i "$SRC_PRODUCT" \
-    -vf "crop=592:1130:0:150,fps=30" -an \
+# Two crop profiles, and they are the reason ui/Screen.tsx exists at all.
+#
+#   mini  576x1100 @ y=160 — drops the iOS status bar (with its red recording
+#                            dot) and the Mini App's "Back / Close · ⌄ ···" row.
+#   chat  576x860  @ y=320 — additionally drops Telegram's chat header, the
+#                            pinned-message bar and the "Translate to English"
+#                            strip, none of which belong in a product film.
+mini() {
+  ffmpeg -v error -y -ss "$3" -to "$4" -i "$2" \
+    -vf "crop=576:1100:0:160,fps=30" -an \
     -c:v libx264 -crf 17 -preset slow -pix_fmt yuv420p \
     "$HERE/public/footage/$1.mp4"
   echo "  $1"
 }
-echo "product screens:"
-prod intro-stats    40.0  50.0   # 75 hours / 9,500 swipes / $200, each counting up
-prod intro-cards    60.5  73.0   # competitor carousel + rotating captions
-prod intro-turn     72.5  79.5   # "So we built Gennety"
-prod intro-promise  77.5  89.0   # the AI-matchmaker line typing out
-prod intro-date     88.0 101.5   # the outcome chain, incl. "You both said yes"
-prod intro-orb     103.5 112.5   # AI handoff — "Passing context to the bot"
-
-# --- HD chat ----------------------------------------------------------------
-# Crops below the user's bubble and above the input bar. The window is bounded:
-# the soft keyboard opens at ~34.0s and drags Telegram's Russian chrome in.
-echo "chat:"
-ffmpeg -v error -y -ss 30.4 -to 34.0 -i "$SRC_CHAT" \
-  -vf "crop=1080:620:0:505,fps=30" -an \
-  -c:v libx264 -crf 17 -preset slow -pix_fmt yuv420p \
-  "$HERE/public/footage/chat-question.mp4"
-echo "  chat-question"
-
-# --- Lifestyle --------------------------------------------------------------
-# Centre 9:16 crop, then ONE lanczos upscale to delivery size — doing it here
-# rather than letting the browser scale at render time.
-life() {
-  ffmpeg -v error -y -ss "$2" -to "$3" -i "$SRC_LIFE" \
-    -vf "crop=608:1080:656:0,scale=1080:1920:flags=lanczos,fps=30" -an \
-    -c:v libx264 -crf 18 -preset slow -pix_fmt yuv420p \
+chat() {
+  ffmpeg -v error -y -ss "$3" -to "$4" -i "$2" \
+    -vf "crop=576:860:0:320,fps=30" -an \
+    -c:v libx264 -crf 17 -preset slow -pix_fmt yuv420p \
     "$HERE/public/footage/$1.mp4"
   echo "  $1"
 }
-echo "lifestyle:"
-life life-rain     21.5 31.0
-life life-bench    61.0 71.0
-life life-field    83.0 89.0
-life life-festival 89.5 98.0
 
-# --- Music bed --------------------------------------------------------------
-# Extracted, but NOT used: the film renders silent by default. This source is
-# sparse sound design rather than a score (mean −35…−50 dB, 30.4 LU range), so
-# it is inaudible under most of the cut. Kept as a reference bed — see the plan
-# §A.4 and the musicVolume prop.
-echo "audio:"
-ffmpeg -v error -y -ss 52.0 -to 99.0 -i "$SRC_LIFE" -vn -ac 2 -ar 48000 \
-  -c:a aac -b:a 192k "$HERE/public/audio/score.m4a"
-echo "  score.m4a"
+echo "profile basics (IMG_2588):"
+mini basics-name       "$BASICS" 0.6  4.2   # "Твоє ім'я" typing out
+mini basics-age        "$BASICS" 4.6  8.0   # the age slider settling on 21
+mini basics-gender     "$BASICS" 8.4  11.9  # the question + the tap burst at ~10.3
+mini basics-preference "$BASICS" 11.0 15.4  # two columns of real photographs
+mini basics-height     "$BASICS" 14.6 19.2  # the height drum spinning
+
+echo "understanding (IMG_2590):"
+chat chat-question     "$PROFILE" 36.0 52.0 # ideal-Friday question + the honest answer
+mini radar-swipe       "$PROFILE" 65.5 78.0 # Type Radar, several cards + tag chips
+mini radar-done        "$PROFILE" 88.5 93.0 # "Готово" — it saved what it learned
+
+echo "date journey (IMG_2604):"
+# 13.0s, not 0.0s: the opening take runs into the calendar transition ~2s in,
+# while this stretch holds the whole decision thread stable for 7 seconds.
+chat match-decision    "$DATE" 13.0  20.0
+mini cal-dates         "$DATE" 26.5  31.5   # "Обери дату"
+mini cal-overlap       "$DATE" 30.8  35.6   # 13:00 lights up — the shared slot
+mini time-reveal       "$DATE" 35.2  39.6   # butterfly + "неділя, 16 серп. 13:00"
+mini place-map         "$DATE" 41.5  46.0   # departure pin (unused in the cut)
+mini place-vibe        "$DATE" 48.5  53.5   # "Яке місце?"
+chat date-card         "$DATE" 117.5 125.5  # Error 404: Chat not found. Try real life.
 
 echo
 echo "done. verify with: pnpm --filter @gennety/video render:hero:preview"

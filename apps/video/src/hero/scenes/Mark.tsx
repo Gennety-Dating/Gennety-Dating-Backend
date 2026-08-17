@@ -8,7 +8,7 @@ import {
 } from "remotion";
 import {enter, fade} from "../motion";
 import {asset, INK, MUTED} from "../theme";
-import {TIMELINE} from "../timeline";
+import {MARK} from "../timeline";
 import {Butterfly} from "../ui/Butterfly";
 
 /**
@@ -25,7 +25,7 @@ import {Butterfly} from "../ui/Butterfly";
 export const Mark: React.FC = () => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
-  const {duration} = TIMELINE.mark;
+  const duration = MARK.durationInFrames;
 
   const opacity = fade(frame, duration, 14, 20);
   const mark = enter(frame, fps, 2);
@@ -74,7 +74,7 @@ export const Mark: React.FC = () => {
           transform: `translateY(${(1 - line) * 10}px)`,
         }}
       >
-        Your AI matchmaker
+        Твій AI-метчмейкер
       </div>
     </AbsoluteFill>
   );

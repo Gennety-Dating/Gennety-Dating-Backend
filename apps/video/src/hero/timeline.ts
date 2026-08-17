@@ -1,83 +1,247 @@
 /**
  * The cut.
  *
- * `from`/`duration` are composition frames at 30 fps. Overlapping `from`
- * values are the only place a dissolve can come from — a scene whose `from`
- * lands before the previous scene ends cross-fades with it; everything else is
- * a hard cut. Overlaps are deliberately rare (three of nine transitions),
- * because the reference film cuts hard and dissolves only where the emotion
- * changes register.
+ * Every shot is a real capture of the running product. `from`/`duration` are
+ * composition frames at 30 fps; `trim` is frames into the source clip, measured
+ * against the filmstrips in `video-production-plan.md` §B — do not nudge one
+ * without re-reading the clip it points at.
  *
- * `trim` values are frames into the source clip, measured against the contact
- * sheets in `video-production-plan.md` §B. They are the reason each shot starts
- * on the beat it does — do not nudge one without re-reading the clip.
+ * Overlapping `from` values are the ONLY thing that produces a dissolve. There
+ * are three, all at a change of register: into the match decision, into the
+ * date card, and into the mark. Everything else is a hard cut.
+ *
+ * Rhythm is an accelerando with a long payoff — calm 2.4–2.8s holds through the
+ * profile, a 4.4s hold on the Type Radar (the film's "the AI is reading me"
+ * beat), then 2.2s cuts through the planning burst, and 5s on the date card.
  */
 
 export const FPS = 30;
 
-export type Shot = {from: number; duration: number};
+/** Screen aspect ratios of the two crop profiles (see the extraction script). */
+export const RATIO_MINIAPP = 576 / 1100; // Mini App: nav row cropped away
+export const RATIO_CHAT = 576 / 860; // Telegram chat: header + pinned + translate cropped
 
-export const TIMELINE = {
-  /** Rain, night, walking alone. The problem, stated without a word of UI. */
-  alone: {from: 0, duration: 122},
-  /**
-   * 75 hours → 9,500 swipes → $200. The product counts the cost itself.
-   * 210 frames, not fewer: each number counts UP, and a shorter shot cuts away
-   * mid-count so the figure the scene exists for never actually lands.
-   */
-  cost: {from: 110, duration: 210},
-  /** The competitor carousel rotating through faces like a feed. */
-  friction: {from: 320, duration: 150},
-  /** "So we built Gennety" → the brand mark. The pivot. */
-  turn: {from: 470, duration: 118},
-  /** The promise, typing itself out one line at a time. */
-  promise: {from: 588, duration: 166},
-  /** One real question the AI asks. HD, screen only. */
-  understanding: {from: 754, duration: 76},
-  /** The AI handoff orb. The most beautiful frame in the capture. */
-  handoff: {from: 830, duration: 118},
-  /** The outcome chain, cut as a burst. */
-  datePlan: {from: 948, duration: 168},
-  /** Phone gone. Sunset, field, festival. */
-  realLife: {from: 1106, duration: 172},
-  /** Butterfly, wordmark, one line. */
-  mark: {from: 1268, duration: 112},
-} as const satisfies Record<string, Shot>;
+export type Shot = {
+  /** Composition frame this shot starts on. */
+  from: number;
+  durationInFrames: number;
+  /** Clip under public/footage/, without the extension. */
+  src: string;
+  /** Frames into that clip. */
+  trim: number;
+  ratio: number;
+  /** Panel width in composition px. Sets the upscale — the sources are 576 wide. */
+  width: number;
+  x?: number;
+  y?: number;
+  rotate?: number;
+  /** Camera push: [start, end] scale. Never above 1.08. */
+  push?: [number, number];
+  glow?: number;
+  /** Fade edges in frames. 0 = hard cut on that side. */
+  fadeIn?: number;
+  fadeOut?: number;
+  /** Editorial note — why this shot is in the film at all. */
+  beat: string;
+};
 
-export const HERO_DURATION_IN_FRAMES =
-  TIMELINE.mark.from + TIMELINE.mark.duration; // 1380 = 46.0s
-
-/** Frames into each source clip where its shot begins. */
-export const TRIM = {
-  alone: 45,
-  /** 1.5s in — past the "what does it cost?" question, onto the first figure. */
-  cost: 45,
-  friction: 30,
-  turn: 81,
-  promise: 36,
-  /** 0.4s in — the question is settled from ~0.6s and holds for 3s. */
-  understanding: 12,
-  handoff: 42,
-  benchIn: 30,
-  fieldIn: 24,
-  festivalIn: 45,
-} as const;
-
-/**
- * Scene 8 is the film's one deliberate burst — four cards of the outcome chain
- * in 5.6s, mirroring the six-cuts-in-2.1s acceleration measured in the
- * reference at 37.6–39.7s. Each entry is a trim into `intro-date.mp4`.
- */
-export const DATE_CUTS: {trim: number; duration: number}[] = [
-  {trim: 90, duration: 48}, // "Skip straight to the date"
-  {trim: 150, duration: 48}, // "You both said yes"
-  {trim: 210, duration: 40}, // "You pick when"
-  {trim: 300, duration: 32}, // "Time and place are set"
+export const SHOTS: Shot[] = [
+  {
+    beat: "Хто ти — the name field, and the quietest way into the product.",
+    from: 0,
+    durationInFrames: 84,
+    src: "basics-name",
+    trim: 18,
+    ratio: RATIO_MINIAPP,
+    width: 596,
+    push: [1.0, 1.045],
+    glow: 0.85,
+    fadeIn: 20,
+    fadeOut: 0,
+  },
+  {
+    beat: "Скільки тобі років — the slider settling. A control, not a form field.",
+    from: 84,
+    durationInFrames: 72,
+    src: "basics-age",
+    trim: 12,
+    ratio: RATIO_MINIAPP,
+    width: 654,
+    push: [1.0, 1.04],
+    glow: 0.85,
+    fadeIn: 0,
+    fadeOut: 0,
+  },
+  {
+    beat: "The gender question — and the burst the tap throws — flowers, hearts, a crown.",
+    from: 156,
+    durationInFrames: 78,
+    src: "basics-gender",
+    trim: 6,
+    ratio: RATIO_MINIAPP,
+    width: 654,
+    x: -76,
+    rotate: -1.1,
+    push: [1.0, 1.04],
+    glow: 0.85,
+    fadeIn: 0,
+    fadeOut: 0,
+  },
+  {
+    beat: "Кого ти хочеш бачити — two columns of real photographs, the most striking screen in onboarding.",
+    from: 234,
+    durationInFrames: 84,
+    src: "basics-preference",
+    trim: 15,
+    ratio: RATIO_MINIAPP,
+    width: 862,
+    push: [1.0, 1.05],
+    glow: 0.7,
+    fadeIn: 0,
+    fadeOut: 0,
+  },
+  {
+    beat: "The height drum, spinning. A control that behaves like an object.",
+    from: 318,
+    durationInFrames: 72,
+    src: "basics-height",
+    trim: 33,
+    ratio: RATIO_MINIAPP,
+    width: 654,
+    x: 82,
+    rotate: 1.1,
+    push: [1.0, 1.04],
+    glow: 0.85,
+    fadeIn: 0,
+    fadeOut: 0,
+  },
+  {
+    beat: "The bot asks an honest question and gets an honest answer. The whole product in one exchange.",
+    from: 390,
+    durationInFrames: 96,
+    src: "chat-question",
+    trim: 336,
+    ratio: RATIO_CHAT,
+    width: 792,
+    push: [1.0, 1.04],
+    glow: 0.6,
+    fadeIn: 0,
+    fadeOut: 0,
+  },
+  {
+    beat: "Type Radar. The film's hero AI beat — held longest of the middle shots.",
+    from: 486,
+    durationInFrames: 132,
+    src: "radar-swipe",
+    trim: 60,
+    ratio: RATIO_MINIAPP,
+    width: 878,
+    push: [1.01, 1.06],
+    glow: 0.75,
+    fadeIn: 0,
+    fadeOut: 0,
+  },
+  {
+    beat: "Готово — it saved what it learned. Short, on purpose.",
+    from: 618,
+    durationInFrames: 54,
+    src: "radar-done",
+    trim: 30,
+    ratio: RATIO_MINIAPP,
+    width: 566,
+    push: [1.0, 1.03],
+    glow: 0.85,
+    fadeIn: 0,
+    fadeOut: 12,
+  },
+  {
+    beat: "Verified, then: хочеш піти з ним на побачення? The turn the film pivots on.",
+    from: 662,
+    durationInFrames: 114,
+    src: "match-decision",
+    trim: 6,
+    ratio: RATIO_CHAT,
+    width: 792,
+    push: [1.0, 1.05],
+    glow: 0.7,
+    fadeIn: 12,
+    fadeOut: 0,
+  },
+  {
+    beat: "The calendar opens. Planning starts, and the cuts tighten.",
+    from: 776,
+    durationInFrames: 66,
+    src: "cal-dates",
+    trim: 36,
+    ratio: RATIO_MINIAPP,
+    width: 668,
+    x: -70,
+    rotate: -1,
+    push: [1.0, 1.04],
+    glow: 0.8,
+    fadeIn: 0,
+    fadeOut: 0,
+  },
+  {
+    beat: "13:00 lights up — the slot both sides marked. Nobody negotiated it.",
+    from: 842,
+    durationInFrames: 72,
+    src: "cal-overlap",
+    trim: 30,
+    ratio: RATIO_MINIAPP,
+    width: 668,
+    x: 70,
+    rotate: 1,
+    push: [1.0, 1.05],
+    glow: 0.8,
+    fadeIn: 0,
+    fadeOut: 0,
+  },
+  {
+    beat: "The butterfly, then неділя 16 серп. 13:00. The product's own brand moment — the peak.",
+    from: 914,
+    durationInFrames: 108,
+    src: "time-reveal",
+    trim: 18,
+    ratio: RATIO_MINIAPP,
+    width: 826,
+    push: [1.0, 1.05],
+    glow: 1,
+    fadeIn: 0,
+    fadeOut: 0,
+  },
+  {
+    beat: "Яке місце? — the last thing a human has to say before the concierge takes over.",
+    from: 1022,
+    durationInFrames: 66,
+    src: "place-vibe",
+    trim: 30,
+    ratio: RATIO_MINIAPP,
+    width: 620,
+    push: [1.0, 1.04],
+    glow: 0.8,
+    fadeIn: 0,
+    fadeOut: 14,
+  },
+  {
+    beat: "The date card: Error 404 — Chat not found. Try real life. The product closes its own film.",
+    from: 1078,
+    durationInFrames: 150,
+    src: "date-card",
+    trim: 78,
+    ratio: RATIO_CHAT,
+    width: 886,
+    push: [1.0, 1.07],
+    glow: 0.9,
+    fadeIn: 14,
+    fadeOut: 16,
+  },
 ];
 
-/** Scene 9, warm and accelerating into the mark. */
-export const LIFE_CUTS: {src: string; trim: number; duration: number}[] = [
-  {src: "footage/life-bench.mp4", trim: TRIM.benchIn, duration: 70},
-  {src: "footage/life-field.mp4", trim: TRIM.fieldIn, duration: 42},
-  {src: "footage/life-festival.mp4", trim: TRIM.festivalIn, duration: 60},
-];
+/** The end card is the one shot that is not footage; it lives in its own scene. */
+export const MARK: {from: number; durationInFrames: number} = {
+  from: 1218,
+  durationInFrames: 102,
+};
+
+export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1320 = 44.0s

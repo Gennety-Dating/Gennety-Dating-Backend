@@ -47,74 +47,78 @@ cut is approved.
 
 ## `GennetyHero` — the product film
 
-A second, separate deliverable: a ~46 s vertical product film cut from **real
-screen recordings of the running product**, not from recreated UI. It shares
-this workspace's tooling and brand tokens and nothing else — `GennetyAd` is
-untouched.
+A second, separate deliverable: a **44 s** vertical product film cut entirely
+from **three screen recordings of the running product** — no UI is recreated.
+It shares this workspace's tooling and brand tokens and nothing else;
+`GennetyAd` is untouched.
 
 ```sh
 pnpm dev:video                                   # Studio, pick "GennetyHero"
 pnpm render:hero                                 # 1080×1920 → out/gennety-hero.mp4
-pnpm render:hero:preview                         # 40% scale, ~45s to render
+pnpm render:hero:preview                         # 40% scale, ~60s to render
 ```
 
 | | |
 |---|---|
 | Composition | `GennetyHero` |
-| Output | `out/gennety-hero.mp4`, 1080×1920, 30 fps, H.264, 1380 frames (46.0 s) |
+| Output | `out/gennety-hero.mp4`, 1080×1920, 30 fps, H.264, 1320 frames (44.0 s) |
 | Source | `src/hero/` |
-| Footage | `public/footage/` (11 clips), `public/audio/score.m4a` |
+| Footage | `public/footage/` — 15 clips, 6.9 MB |
+| Sources | `IMG_2588` / `IMG_2590` / `IMG_2604`, outside the repo |
 | Plan | [`video-production-plan.md`](video-production-plan.md) |
+
+The film runs: the profile a person fills in (name, age, gender, who they want
+to meet, height) → one honest question and its honest answer → Type Radar
+reading their taste → the match decision → the calendar landing on a shared
+13:00 → the venue → the date card, which closes on the product's own line,
+*Error 404: Chat not found. Try real life.* In Ukrainian, matching the capture.
 
 ### The one rule
 
-**No product UI is redrawn.** Every screen on camera is footage trimmed from a
-real capture; the camera is a CSS transform on a wrapper, so no product pixel is
-ever repainted. If a shot needs a state that was never recorded, the answer is
-to record it — not to rebuild it in React. `video-production-plan.md` §E records
-why even the renderable production components (`Ticket3D` and friends) are
-deliberately unused.
+**No product UI is redrawn.** Every screen on camera is footage; the camera is a
+CSS transform on a wrapper, so no product pixel is ever repainted. If a shot
+needs a state that was never recorded, the answer is to record it — not to
+rebuild it in React.
 
 ### Structure
 
 ```
 src/hero/
-  GennetyHero.tsx   assembly only — ten <Sequence>s and the audio path
-  timeline.ts       the cut: every from/duration/trim, with the reasons
-  theme.ts          brand tokens + the captured screen's ratio
-  motion.ts         fade / enter / push / ease — the whole motion system
-  ui/               Phone (device frame), Butterfly (brand mark), Texture
-  scenes/           one file per shot
+  GennetyHero.tsx      assembly only — the shot list and the audio path
+  timeline.ts          THE CUT: every from/duration/trim/width, with reasons
+  theme.ts             brand tokens
+  motion.ts            fade / enter / push / ease — the whole motion system
+  ui/Screen.tsx        the panel a captured screen sits in
+  ui/Butterfly.tsx     the brand mark, inlined from public/brand
+  ui/Texture.tsx       vignette + grain
+  scenes/ProductShot.tsx   one shot of footage, driven by timeline data
+  scenes/Mark.tsx      the end card
 ```
 
-To **retime** a shot, edit `TIMELINE` in `timeline.ts`. Overlapping `from`
-values are the only thing that produces a dissolve; everything else is a hard
-cut, and a hard-cut scene passes `fade(frame, duration, 0, 0)`. To **reframe**
-one, edit its scene file. Nothing about timing lives in a scene component.
+There is **one** scene component for footage rather than one per beat: every
+beat is the same object — a captured screen, framed — and what differs is
+composition, camera and timing, all of which is data. To **retime or reframe**
+any shot, edit `SHOTS` in `timeline.ts`; nothing about the cut lives elsewhere.
+
+Overlapping `from` values are the only thing that produces a dissolve (there are
+three). A hard cut is `fadeIn: 0, fadeOut: 0`.
 
 ### Audio
 
-**The film renders silent, on purpose.** There is no licensed track here, and
-the only first-party bed available (the sound design from `Gennety Ad video.mp4`)
-measured unusable — mean level −35…−50 dB across most of its length with a
-30.4 LU range, i.e. inaudible for ~30 of the 46 seconds. See the plan §A.4.
-
-The path is wired and the envelope is shaped. Adding a track is:
-
-1. drop it at `public/audio/score.m4a`
-2. set `musicVolume: 0.8` in the `GennetyHero` `defaultProps` in `src/Root.tsx`
-
-Time it against the cut's three accents: **16.5 s** (the brand turn), **31.6 s**
-(the outcome burst), **36.9 s** (real life).
+**The film renders silent, on purpose.** No licensed track exists here and the
+recordings carry only incidental phone audio — see the plan §G. The path is
+wired: drop a track at `public/audio/score.m4a`, set `musicVolume: 0.8` in the
+`GennetyHero` `defaultProps` in `src/Root.tsx`. Time it against the cut's
+accents: **16.2 s**, **22.1 s**, **30.5 s**, **35.9 s**.
 
 ### Re-cutting the footage
 
-`public/footage/` holds trimmed clips, not sources. The sources live outside the
-repo (see the plan §A.1) and are the founder's own recordings. Every clip was
-cut with `ffmpeg`, crop-first, to remove Telegram's Russian nav row and the red
-`Beta Dev` badge — that crop is the reason the device frame exists at all. The
-exact windows are in the plan §B; re-extracting with different ones means
-re-checking `TRIM` in `timeline.ts`, which is measured against them.
+`public/footage/` holds trimmed clips, not sources. Regenerate them with
+`./scripts/extract-hero-footage.sh [source-dir]` — it reproduces all 15
+byte-identically. Every clip is crop-first, removing the iOS status bar (with
+its red recording dot), Telegram's chat header, the pinned-message bar and the
+"Translate to English" strip. The `trim` values in `timeline.ts` are measured
+against those exact in-points, so changing a window means re-checking them.
 
 ## Couple-photo finish
 

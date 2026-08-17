@@ -47,89 +47,74 @@ Newest entries go **on top**:
 
 ---
 
-## 2026-08-16 — `GennetyHero`: the product film is cut from real captures, and the intro turned out to BE the pitch
+## 2026-08-16 — `GennetyHero`: the product film, cut from the three supplied recordings
 
-**Kind:** founder decision + change of mind + deviation from plan
-**What:** a second Remotion composition (`apps/video/src/hero/`, ~46 s,
-1080×1920) built from real screen recordings of the running product rather than
-recreated UI. `GennetyAd` is untouched. Full audit, recording map and quality
-notes: `apps/video/video-production-plan.md`.
+**Kind:** founder decision + change of mind (a correction to my own earlier entry)
+**What:** a second Remotion composition (`apps/video/src/hero/`, **44.0 s**,
+1080×1920) cut entirely from the three screen recordings the founder supplied —
+`IMG_2588` (profile basics), `IMG_2590` (conversational profiling → Type Radar),
+`IMG_2604` (match decision → calendar → venue → date card). `GennetyAd` is
+untouched. Audit and recording map: `apps/video/video-production-plan.md`.
 
-**Why the shape is what it is — the finding, not the feature.** The brief was
-"direct the real product into a cinematic film". Auditing the captures produced
-something stronger than an assembly order: **the Mini App's own visual intro is
-already the pitch.** It walks loneliness → the cost (75 hours / 9,500 swipes /
-$200, each counting up) → competitor cards → "So we built Gennety" → the AI
-matchmaker promise → the date, in the product's own typography and motion. So
-the film is camera direction over a performance the product already gives,
-bookended with real life. ~85 % of screen time is Priority 1 (recording), the
-logo beat is the only new animation, and **zero** production components are
-rendered directly — `Ticket3D` and friends are renderable and deliberately
-unused, because a deterministic re-render is a fidelity seam in exchange for a
-screen the story does not need.
+**Correcting the record first, because the earlier version of this entry was
+built on the wrong material.** The brief said recordings had been supplied. A
+filesystem sweep found nothing newer than July, and instead of asking, I guessed
+which older files were meant and built a film from `IMG_1798` / `Gennety Ads.mp4`
+/ `Gennety Ad video.mp4` — plus an unrelated competitor clip I decided was "the
+reference". Commit `4d21ebf` described that as "real product captures". It was
+not what was asked for. **The rule this leaves behind: when the premise of a
+brief cannot be found, that is a blocking question, not a gap to fill by
+inference.** I had even written "no recordings have been supplied" in my own
+analysis and then proceeded anyway.
+
+**What the real footage changed about the film.** The old cut was built around
+the Mini App's visual intro (statistics, competitor cards, "So we built
+Gennety"). **None of that is in these recordings.** What they carry instead is
+the half the previous audit had recorded as *never captured*: the match
+decision, the calendar landing on a shared slot, the venue, and the date card.
+So the film inverted — it no longer argues the problem, it demonstrates the
+product understanding someone and getting them to a real date, and it closes on
+the product's own line, *Error 404: Chat not found. Try real life.* It is in
+**Ukrainian**, matching the capture.
 
 **What it changes going forward:**
-- **No product UI is redrawn, and the camera never repaints a product pixel** —
-  it is a CSS transform on a wrapper. A shot needing an unrecorded state gets
-  recorded, not rebuilt.
-- **Timing lives in `timeline.ts`, framing lives in the scene file.** Overlapping
-  `from` values are the ONLY thing that produces a dissolve; a hard cut passes
-  `fade(frame, duration, 0, 0)`. The first version of `fade` was symmetric, so
-  every scene opened from black — with six of nine transitions being hard cuts,
-  that put a one-frame dip on each, which reads as a blink rather than an edit.
-- **`TRIM` values are measured against specific contact sheets.** Re-extracting
-  footage with different windows means re-checking them; `scripts/extract-hero-footage.sh`
-  is the derivation and reproduces all 12 assets byte-identically.
-- **The 31 MB of clips in `public/footage/` are committed on purpose** — they are
-  derived, but the composition must render on a fresh clone, and the sources
-  (~500 MB) live outside the repo.
+- **No product UI is redrawn** and the camera never repaints a product pixel —
+  it is a CSS transform on a wrapper. Fifteen shots, all footage; the only drawn
+  element is the end card.
+- **One scene component, not fifteen.** Every beat is the same object (a
+  captured screen, framed), differing only in composition, camera and timing —
+  all data in `timeline.ts`. Fifteen near-identical files would hide the cut;
+  one readable page expresses it. To retime or reframe anything, edit `SHOTS`.
+- **Two crop profiles are load-bearing, not styling.** The recordings carry an
+  iOS status bar with a **red recording dot**, Telegram's chat header, a pinned
+  bar and a "Translate to English" strip. `mini` (576×1100 @ y=160) and `chat`
+  (576×860 @ y=320) remove them, and that crop is the entire reason
+  `ui/Screen.tsx` exists. `trim` values are measured against those exact
+  in-points.
+- **Panel width per shot is the resolution decision.** Sources are 576 px wide
+  against a 1080 delivery, so width sets the upscale: 1.03× on the quietest beat
+  to 1.54× on the Type Radar hero. Nothing is full-bleed, which would be 1.88×.
+- **`scripts/extract-hero-footage.sh` reproduces all 15 clips byte-identically**
+  and is the only place the source windows live.
 
-**Change of mind — the soundtrack was planned, then measured, then dropped.**
-The plan's first draft made the audio from `Gennety Ad video.mp4` the score on
-the strength of a coarse check ("continuous, two silences"). A proper 5-second-
-window profile across all 123 s killed it: mean level −35…−50 dB for most of its
-length, one loud sting at 50–58 s, **30.4 LU** range. It is sparse sound design
-cut to a different film's picture — under this cut it is inaudible for ~30 of
-the 46 seconds, and normalising a −50 dB bed to broadcast level is +34 dB of
-gain onto a noise floor nobody has listened to. **The film ships silent with the
-audio path wired** (`musicVolume` defaults to 0), which is also this workspace's
-existing stated convention: sound direction is chosen after the visual cut is
-approved. Adding a track is one file swap plus one prop; the accents to time
-against are 16.5 s, 31.6 s and 36.9 s. The reference film's own music is
-categorically excluded — it is a competitor's licensed track.
-
-**Deviations from the plan, all three found by looking at frames:**
-1. **The second half of the product is richer than the audit assumed.** The
-   match reveal, mutual acceptance and venue selection were listed as never
-   captured. They exist — not as live states but as the intro's own explainer
-   carousel ("You both said yes", "You pick when", "We pick where", "Time and
-   place are set"), so the burst plays four cards instead of two.
-2. **Scene 3 stopped being a screen-only close-up.** Overscanning the screen to
-   132 % clipped the caption off both edges ("…crolling a TikTok fee") and put a
-   1.82× upscale on the 592 px capture. Framed large instead: caption whole,
-   1.49×.
-3. **Scene 6 changed source.** The planned window spends its length typing,
-   settles for ~0.4 s before the soft keyboard drags Telegram's Russian input bar
-   in, and carries a visible typo. The 30.4–34.0 s window holds a settled
-   question — *"Are you an early bird or a night owl?"* — clean, for three
-   seconds.
-
-**Deliberately not done:** the live match drop, Synergy score, ticket, calendar
-overlap and venue board have **no capture at all**, so the film ends at the
-promise and cuts to real life rather than dramatising states nobody recorded.
-Rebuilding them in Remotion is exactly what the brief forbids. Also no SFX:
-taps and confirmations would have to be synthesised from nothing, and invented
-UI sound over real product footage is the template-motion-graphics tell.
-
-**One constraint worth holding onto:** the primary capture is **592×1280**
-against a 1080×1920 delivery, and it is the DEV bot — "Gennety Deta dev" with a
-red `Beta Dev` badge, Russian Telegram chrome. Both are handled compositionally
-rather than with a filter: every clip is crop-first, and the device frame in
-`ui/Phone.tsx` exists to hide that chrome, not to decorate. That is why phone
-width is a real decision per shot — it sets the upscale.
+**Deliberately not done:**
+- **No music.** Nothing licensed exists here and the recordings carry only
+  incidental phone audio, so the film renders silent with the path wired
+  (`musicVolume` defaults to 0) — the workspace's own stated convention. The one
+  genuinely open deliverable.
+- **No "problem" act and no real-world ending.** Neither the visual intro nor
+  lifestyle footage is in these recordings, and neither was substituted from
+  elsewhere — that substitution is exactly the mistake above. Both are named as
+  open items in the plan §H, because a capture of the intro and any real footage
+  of two people meeting would each add a genuine act.
+- **The richest single frame is unused.** `IMG_2604` 0:00–0:02 shows the
+  verification line, the question, the "Да" and the green button at once — but it
+  holds for only ~2 s before the calendar slides over it, and this is the film's
+  emotional turn. The cut takes the steady 7-second stretch at 0:13 instead:
+  length beat framing.
 
 **Recorded in:** `apps/video/video-production-plan.md`, `apps/video/README.md`
-(§`GennetyHero`), `apps/video/src/hero/`.
+(§`GennetyHero`), `apps/video/src/hero/timeline.ts`.
 
 ---
 
