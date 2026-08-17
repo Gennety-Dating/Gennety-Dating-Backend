@@ -47,6 +47,84 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-17 — one camera for the whole film; the phone stops being redrawn per shot
+
+**Kind:** deviation from plan + change of mind
+**What:** `GennetyHero`'s motion system is rebuilt. There is now exactly ONE
+`<Iphone>` for all 1356 frames, fixed at world (0, 0), and exactly ONE camera —
+a keyframed timeline over absolute composition frames (`src/hero/camera.ts`).
+`push()` is deleted, `Shot` loses `push`/`y`, `Iphone` loses `scale`/`y`, and
+`ProductShot` is replaced by `ScreenClip`, which renders video into an aperture
+the phone already owns and has no transform at all. The cut is untouched: every
+`from`/`durationInFrames`/`trim` is byte-for-byte identical, so the film shows
+the same product frames at the same times.
+
+**Why, and the number is the argument.** The founder's report was that each
+scene zooms, then resets, then zooms again. It was literally that, and it was
+architectural rather than a matter of tuning: every shot mounted its own handset
+inside its own `<Sequence>`, so `useCurrentFrame()` restarted at 0 and `push()`
+was called with `from = 1` fifteen times. Measured off the rendered pixels rather
+than reasoned about — the handset is **22–32 px wider on the last frame of a shot
+than on the first frame of the next**, in one frame, at twelve of the fourteen
+boundaries. Worse, and this is what the eye actually reads: the easing was
+`Easing.linear`, so the zoom *rate* also stepped — +0.026 %/frame at f660,
++0.063 %/frame at f661. Nothing physical changes speed instantaneously, so the
+boundary read as a cut in the camera rather than in the content.
+
+**This reverses half of the 2026-08-16 founder decision above, deliberately.**
+That entry says the handset is "centred, unrotated and the same size in every
+shot", because sliding it between beats cost legibility. The half that is kept:
+the phone is still never moved or rotated per beat — it is now a stationary
+object, which is a *stronger* version of the same rule. The half that is
+reversed: its apparent size and framing now change continuously, because that is
+what a camera is. The old per-shot `push` was already changing its size; it was
+just doing it in a way that snapped back at every cut.
+
+**What it changes going forward — five things that are easy to undo by accident:**
+- **The camera must never be able to see a cut.** `cameraAt(frame)` takes an
+  absolute frame and nothing else, which is what makes
+  `camera(end of A) === camera(start of B)` true by construction instead of by
+  someone keeping two numbers in step. A per-scene transform anywhere below
+  `<World>` reintroduces the bug in full.
+- **The signatures are the guard, not the comments.** `push` and `y` are deleted
+  from `Shot`, `scale` and `y` from `Iphone`, and `push()` from `motion.ts`. Any
+  helper that takes a *duration* and returns a *scale* is the way back.
+- **Interpolation is PCHIP, not `interpolate()` + easing.** `interpolate` is C⁰:
+  position matches at a keyframe and velocity does not, and a velocity break is
+  the thing that reads as a snap. Monotone cubic Hermite additionally gives no
+  overshoot (a Catmull-Rom bulge on a zoom reads as a bounce), rest at every
+  direction change, and a genuine hold from two equal keyframes — which is how
+  the two deliberate pauses in the timeline are expressed.
+- **`SCREEN_WIDTH` is a resolution budget, not a layout number.** The source is
+  576 px; 604 is a 1.05x blow-up, and the camera's 0.895–1.185 range is chosen so
+  the worst upscale anywhere is ~1.24x. Raising either spends that budget, and
+  the 2026-08-17 entry below records why it matters.
+- **`camera.probe.ts` is the regression test.** It fails if a cut ever carries
+  the film's largest scale step, if the handset comes within 40 px of an edge, or
+  if the source is upscaled past 1.35x. Run it after touching a keyframe.
+
+**Deliberately not done:**
+- **No new transitions, no parallax, no particles.** The brief is explicit that
+  the fix is spatial architecture rather than more effects, and it is: twelve
+  hard cuts and three 14-frame dissolves, exactly as before.
+- **No rotation.** `CameraState.rotate` exists and interpolates, and every
+  keyframe is 0. A ±0.5° roll on a handset this size is either invisible or reads
+  as the *phone* leaning, which is the failure the 2026-08-16 decision was about.
+- **No reference-matched timing.** The brief describes a supplied reference video
+  for the motion language; a sweep of `~/Desktop`, `~/Downloads` and
+  `apps/video/out/` found only the three source recordings, the current render and
+  the older `GennetyAd` renders. Rather than guess which file was meant — the
+  mistake recorded in the 2026-08-16 entry below — the camera is derived from the
+  brief's own specification, and `motion-audit.md` says so in its first paragraph.
+  Re-timing against a reference is seventeen numbers in one file and touches no
+  scene.
+
+**Recorded in:** `apps/video/motion-audit.md` (the full audit, the arithmetic and
+the before/after measurements), `apps/video/src/hero/camera.ts`,
+`apps/video/README.md` → "The other one rule", `video-production-plan.md` §E.
+
+---
+
 ## 2026-08-17 — the status bar stops being ours: the recording keeps its own
 
 **Kind:** founder decision + change of mind

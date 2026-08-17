@@ -182,12 +182,16 @@ re-shoot would buy.
 | 15 | 37.7–42.5 | **The date card.** Longest shot in the film | date-card |
 | 16 | 42.0–45.2 | The mark | — |
 
-**The phone does not move.** Centred, unrotated, 604 px wide in every shot. An
-earlier cut slid it left and right and varied its size between beats for
+**The phone does not move.** Centred, unrotated, 604 px wide in world space for
+the whole film. An earlier cut slid it left and right between beats for
 compositional variety; that variety cost legibility — the eye re-finds the
-screen on every cut instead of reading what is on it. All the interest now comes
-from the camera push (1.03×–1.055× per shot, never above 1.08) and from what the
-product is doing.
+screen on every cut instead of reading what is on it.
+
+**The camera does.** Its apparent size and framing change continuously, because
+one global camera travels past a stationary object (`motion-audit.md`,
+`src/hero/camera.ts`). The per-shot `push` this section used to describe is
+gone: it restarted at scale 1.0 on the first frame of all fifteen shots, which
+is the reset the camera rebuild exists to remove.
 
 **Rhythm.** 2.2–2.8 s holds through the profile; **6.4 s** on the Type Radar;
 2.0–2.2 s cuts through the planning burst; 4.8 s on the card.
@@ -281,10 +285,12 @@ that does not match it.
 `scripts/extract-hero-footage.sh` is the derivation and reproduces all 15 clips
 byte-identically.
 
-**One scene component, not fifteen.** Every beat is the same object — a captured
-screen, framed — differing only in composition, camera and timing, all of which
-is data in `timeline.ts`. Fifteen near-identical files would hide the cut; one
-page that can be read top to bottom expresses it.
+**One scene component, not fifteen** — and, since the camera rebuild, one
+handset rather than fifteen. Every beat is the same object: a captured screen
+playing inside the film's single phone, differing only in which clip, where in
+it and how long, all of which is data in `timeline.ts`. Composition and camera
+are no longer per-beat at all; they live in `camera.ts`. Fifteen near-identical
+files would hide the cut; one page that can be read top to bottom expresses it.
 
 ---
 

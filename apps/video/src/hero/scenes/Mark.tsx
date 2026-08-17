@@ -6,6 +6,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import {relativeCameraTransform} from "../camera";
 import {enter, fade} from "../motion";
 import {asset, INK, MUTED} from "../theme";
 import {MARK} from "../timeline";
@@ -21,11 +22,23 @@ import {Butterfly} from "../ui/Butterfly";
  * caption would.
  *
  * So the only line here is the one the product cannot say about itself.
+ *
+ * **The camera does not stop for the end card.** The mark is not part of the
+ * world — it is not the phone, so it cannot sit inside `<World>` — but parking
+ * it dead centre while the world it replaced was still travelling would put the
+ * one hard stop of the whole film on its last three seconds. It therefore
+ * inherits the camera's motion RELATIVE to `MARK.from`: the same ~5% push and
+ * the same upward tilt the world is under across those frames, and nothing
+ * else. The film ends with the camera still moving.
  */
 export const Mark: React.FC = () => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const duration = MARK.durationInFrames;
+
+  // Sequence-local frame in, absolute frame out: the camera only ever speaks
+  // composition time.
+  const camera = relativeCameraTransform(MARK.from + frame, MARK.from);
 
   const opacity = fade(frame, duration, 14, 22);
   const mark = enter(frame, fps, 2);
@@ -47,6 +60,8 @@ export const Mark: React.FC = () => {
         justifyContent: "center",
         alignItems: "center",
         gap: 52,
+        transformOrigin: "50% 50%",
+        transform: camera,
       }}
     >
       <div style={{transform: `scale(${0.86 + mark * 0.14})`, opacity: mark}}>

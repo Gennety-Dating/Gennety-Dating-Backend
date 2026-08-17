@@ -1,26 +1,46 @@
 /**
- * The cut.
+ * The cut. **Only the cut** — this file no longer owns any motion.
  *
  * Every shot is a real capture of the running product, played inside a drawn
  * iPhone. `from`/`durationInFrames` are composition frames at 30 fps; `trim` is
  * frames into the source clip, measured against the filmstrips in
  * `video-production-plan.md` §B — do not nudge one without re-reading the clip.
  *
- * **The phone does not move.** It is centred, unrotated and the same size in
- * every shot. An earlier cut slid it left and right between beats for
- * compositional variety, and that variety cost legibility: the eye re-finds the
- * screen on every cut instead of reading what is on it. Interest comes from the
- * camera push and from what the product is doing, not from where the handset
- * sits. `y` exists for a shot that needs a vertical nudge; there is deliberately
- * no horizontal equivalent.
+ * **The phone does not move, and neither does the shot.** The handset is a
+ * single physical object at world (0, 0), the same size for the whole film; a
+ * shot is a video that plays on its screen. Everything the viewer reads as
+ * movement is one continuous camera, defined for the whole 45 seconds in
+ * `camera.ts`, which does not know where these boundaries are.
  *
- * Overlapping `from` values are the ONLY thing that produces a dissolve. There
- * are three, all at a change of register. Everything else is a hard cut.
+ * That is a change of ownership rather than a change of policy, and it
+ * deliberately keeps half of the 2026-08-16 founder decision recorded in
+ * DECISIONS.md while reversing the other half. Kept: the handset is never slid
+ * sideways or rotated per beat, because the eye then re-finds the screen on
+ * every cut instead of reading what is on it. Reversed: its apparent size and
+ * framing DO change, continuously, because that is what a camera is — and the
+ * old per-shot `push` was the thing that made a cut look like a jump, since
+ * every shot restarted it at exactly 1.0 (`../../motion-audit.md` §3).
+ *
+ * So `push` and `y` are gone from `Shot`, not merely unused. A per-shot
+ * transform is the bug; leaving the field would leave the way back to it.
+ *
+ * Overlapping `from` values are the ONLY thing that produces a dissolve, and a
+ * dissolve now crossfades the SCREEN inside one unmoving handset rather than
+ * two handsets over each other. There are three, all at a change of register.
+ * Everything else is a hard cut — which inside a phone is simply a screen
+ * changing, and needs no help.
  */
 
 export const FPS = 30;
 
-/** The phone is this wide in every shot. Constant on purpose — see above. */
+/**
+ * The phone's screen width in WORLD px. Constant for the whole film.
+ *
+ * It is also the resolution budget: the source clips are 576 px wide, so 604 is
+ * a 1.05x blow-up — effectively native — and the camera's zoom range in
+ * `camera.ts` (0.895 … 1.185) is chosen so the worst upscale anywhere is
+ * ~1.21x. Raising this number spends that budget.
+ */
 export const SCREEN_WIDTH = 604;
 
 export type Shot = {
@@ -30,12 +50,11 @@ export type Shot = {
   src: string;
   /** Frames into that clip. */
   trim: number;
-  /** Camera push: [start, end] scale. Never above 1.08. */
-  push?: [number, number];
-  /** Vertical nudge only. Horizontal movement is deliberately not available. */
-  y?: number;
-  glow?: number;
-  /** Fade edges in frames. 0 = hard cut on that side. */
+  /**
+   * Fade edges in frames, on the SCREEN CONTENT only. 0 = hard cut on that side.
+   * In a dissolve only the incoming shot fades — fading both dips the picture
+   * to ~60% through the middle of it.
+   */
   fadeIn?: number;
   fadeOut?: number;
   /** Editorial note — why this shot is in the film at all. */
@@ -49,10 +68,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 78,
     src: "basics-name",
     trim: 18,
-    push: [1.0, 1.04],
-    glow: 0.85,
-    fadeIn: 20,
-    fadeOut: 0,
   },
   {
     beat: "Скільки тобі років — the slider settling. A control, not a form field.",
@@ -60,8 +75,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 66,
     src: "basics-age",
     trim: 12,
-    push: [1.0, 1.035],
-    glow: 0.85,
   },
   {
     beat: "The gender question, and the burst the tap throws — flowers, hearts, a crown.",
@@ -69,8 +82,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 78,
     src: "basics-gender",
     trim: 6,
-    push: [1.0, 1.04],
-    glow: 0.85,
   },
   {
     beat: "Кого ти хочеш бачити — two columns of real photographs.",
@@ -78,8 +89,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 84,
     src: "basics-preference",
     trim: 15,
-    push: [1.0, 1.045],
-    glow: 0.8,
   },
   {
     beat: "The height drum, spinning. A control that behaves like an object.",
@@ -87,8 +96,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 72,
     src: "basics-height",
     trim: 33,
-    push: [1.0, 1.035],
-    glow: 0.85,
   },
   {
     beat: "An honest question, an honest answer. The whole product in one exchange.",
@@ -96,8 +103,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 90,
     src: "chat-question",
     trim: 336,
-    push: [1.0, 1.04],
-    glow: 0.7,
   },
   {
     beat:
@@ -114,8 +119,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 192,
     src: "radar-swipe",
     trim: 6,
-    push: [1.0, 1.05],
-    glow: 0.8,
   },
   {
     beat: "Готово — it saved what it learned. Short, on purpose.",
@@ -123,8 +126,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 48,
     src: "radar-done",
     trim: 30,
-    push: [1.0, 1.03],
-    glow: 0.85,
   },
   {
     beat: "Хочеш піти з ним на побачення? The turn the film pivots on.",
@@ -132,8 +133,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 108,
     src: "match-decision",
     trim: 6,
-    push: [1.0, 1.045],
-    glow: 0.75,
     fadeIn: 12,
   },
   {
@@ -142,8 +141,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 60,
     src: "cal-dates",
     trim: 36,
-    push: [1.0, 1.035],
-    glow: 0.8,
   },
   {
     beat: "13:00 lights up — the slot both sides marked. Nobody negotiated it.",
@@ -151,8 +148,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 66,
     src: "cal-overlap",
     trim: 30,
-    push: [1.0, 1.045],
-    glow: 0.8,
   },
   {
     beat: "The butterfly, then неділя, 16 серп. 13:00. The product's own brand moment.",
@@ -160,8 +155,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 102,
     src: "time-reveal",
     trim: 18,
-    push: [1.0, 1.045],
-    glow: 1,
   },
   {
     beat:
@@ -174,8 +167,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 54,
     src: "place-map",
     trim: 45,
-    push: [1.0, 1.04],
-    glow: 0.8,
   },
   {
     beat: "Яке місце? — the last thing a human says before the concierge takes over.",
@@ -183,8 +174,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 60,
     src: "place-vibe",
     trim: 30,
-    push: [1.0, 1.035],
-    glow: 0.8,
   },
   {
     beat:
@@ -194,8 +183,6 @@ export const SHOTS: Shot[] = [
     durationInFrames: 144,
     src: "date-card",
     trim: 78,
-    push: [1.0, 1.055],
-    glow: 0.9,
     fadeIn: 14,
   },
 ];

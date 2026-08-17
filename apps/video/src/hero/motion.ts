@@ -1,8 +1,18 @@
 import {Easing, interpolate, spring} from "remotion";
 
 /**
- * The film's whole motion system. Deliberately four functions — the brief's
- * rule is a small, reused set rather than per-scene easing invented ad hoc.
+ * Envelopes — opacity, and the one entrance the film still has.
+ *
+ * This used to be "the film's whole motion system". It is not any more: the
+ * camera moved out to `camera.ts`, where it is one global timeline rather than
+ * something a scene calls with its own local frame.
+ *
+ * What left with it was `push()`. It was a correct function asked the wrong
+ * question — its `frame` argument was always scene-local and its `from`
+ * argument was always 1, so it re-seated the camera at exactly 1.0 on the first
+ * frame of all fifteen shots. That is the reset (`../../motion-audit.md` §3),
+ * and it is deleted rather than deprecated: any function here that takes a
+ * duration and returns a scale is a way back to it.
  *
  * `ease`, `fade` and `enter` are identical to the helpers inside
  * `GennetyAd.tsx`, so the two films share a motion signature.
@@ -41,23 +51,17 @@ export const fade = (frame: number, duration: number, inEdge = 14, outEdge = inE
   return fadeIn * fadeOut;
 };
 
-/** Spring entrance for an element that arrives (a phone, a mark, a line). */
+/**
+ * Spring entrance for an element that genuinely arrives — a mark, a line.
+ *
+ * **Not the phone.** The handset used to spring in on any shot with a
+ * `fadeIn`, which meant it physically re-entered the frame three times
+ * mid-film. It is a permanent object now and arrives once, with the world.
+ */
 export const enter = (frame: number, fps: number, delay = 0) =>
   spring({
     frame: Math.max(0, frame - delay),
     fps,
     config: {damping: 18, mass: 0.8, stiffness: 130},
     durationInFrames: 34,
-  });
-
-/**
- * The camera. One slow push per shot, never more — capped well under the
- * "constant zooming" the brief rules out. `to` is the scale reached at the end
- * of the shot; nothing in this film exceeds 1.08.
- */
-export const push = (frame: number, duration: number, from = 1, to = 1.06) =>
-  interpolate(frame, [0, duration], [from, to], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.linear,
   });

@@ -1,9 +1,24 @@
 import React from "react";
-import {OffthreadVideo} from "remotion";
-import {asset, WINE} from "../theme";
+import {WINE} from "../theme";
 
 /**
  * An iPhone, drawn to the real proportions of a current Pro model.
+ *
+ * **There is exactly ONE of these in the film**, mounted outside every
+ * `<Sequence>` and never unmounted. It is a physical object in the world, not a
+ * decoration a scene draws: it sits at world (0, 0) at a constant size, and
+ * everything the viewer reads as movement is the camera moving relative to it
+ * (`../camera.ts`).
+ *
+ * That is why this component takes no `scale`, no `y` and no `src`. It used to
+ * take all three, one instance per shot, and the fifteen instances disagreeing
+ * about `scale` at every cut is the reset `../../motion-audit.md` is about. The
+ * signature is the guard: a scene cannot reintroduce a per-scene phone
+ * transform without changing this file.
+ *
+ * What DOES change is what is on the screen. The clips are passed as children
+ * and land inside the aperture, under the recording-pill cover and the glass —
+ * so a cut is a screen changing inside a handset that never moved.
  *
  * The film is a screen recording, and a screen recording shown as a bare
  * rectangle reads as a screenshot. Inside a handset it reads as somebody using
@@ -68,14 +83,13 @@ export const CLIP_H = 1280;
 const PILL = {x: 155, y: 12, w: 264, h: 66};
 
 export const Iphone: React.FC<{
-  src: string;
-  trimBefore: number;
-  /** Screen width in composition px. Everything else scales from it. */
+  /** Screen width in world px. Everything else is laid out from it. */
   screenWidth: number;
-  scale?: number;
-  y?: number;
+  /** Halo strength. Driven by the world's continuous lighting curve, not per shot. */
   glow?: number;
-}> = ({src, trimBefore, screenWidth, scale = 1, y = 0, glow = 0.8}) => {
+  /** The screen. One or more clips, crossfading; see `scenes/ScreenClip.tsx`. */
+  children?: React.ReactNode;
+}> = ({screenWidth, glow = 0.8, children}) => {
   const w = screenWidth;
   const k = w / CLIP_W;
   const screenHeight = CLIP_H * k;
@@ -97,7 +111,9 @@ export const Iphone: React.FC<{
         top: "50%",
         width: bodyWidth,
         height: bodyHeight,
-        transform: `translate(-50%, -50%) translateY(${y}px) scale(${scale})`,
+        // Centring only. No camera here — the camera is one transform, one
+        // level up, on the world (`ui/World.tsx`).
+        transform: "translate(-50%, -50%)",
       }}
     >
       {glow > 0 ? (
@@ -158,13 +174,13 @@ export const Iphone: React.FC<{
               background: "#000",
             }}
           >
-            <OffthreadVideo
-              src={asset(`footage/${src}.mp4`)}
-              trimBefore={trimBefore}
-              style={{width: "100%", height: "100%", objectFit: "cover", display: "block"}}
-            />
+            {/* The screen. Clips stack here and crossfade; the handset around
+                them does not know a cut happened. */}
+            {children}
 
-            {/* The only pixel of the capture that is covered. See PILL. */}
+            {/* The only pixel of the capture that is covered. It is at the same
+                place in every clip, so one cover serves the whole film rather
+                than being re-drawn per shot. See PILL. */}
             <div
               style={{
                 position: "absolute",

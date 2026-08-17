@@ -55,6 +55,7 @@ It shares this workspace's tooling and brand tokens and nothing else;
 ```sh
 pnpm dev:video                                   # Studio, pick "GennetyHero"
 pnpm render:hero                                 # 1080×1920 → out/gennety-hero.mp4
+pnpm render:hero:poc                             # frames 660-1030, four boundaries
 pnpm render:hero:preview                         # 40% scale, ~60s to render
 ```
 
@@ -65,7 +66,8 @@ pnpm render:hero:preview                         # 40% scale, ~60s to render
 | Source | `src/hero/` |
 | Footage | `public/footage/` — 15 clips, 6.9 MB |
 | Sources | `IMG_2588` / `IMG_2590` / `IMG_2604`, outside the repo |
-| Plan | [`video-production-plan.md`](video-production-plan.md) |
+| Plan | [`video-production-plan.md`](video-production-plan.md) — the cut |
+| Camera | [`motion-audit.md`](motion-audit.md) — the motion system |
 
 The film runs: the profile a person fills in (name, age, gender, who they want
 to meet, height) → one honest question and its honest answer → Type Radar
@@ -80,6 +82,20 @@ CSS transform on a wrapper, so no product pixel is ever repainted. If a shot
 needs a state that was never recorded, the answer is to record it — not to
 rebuild it in React.
 
+### The other one rule
+
+**One phone, one world, one camera.** There is exactly one `<Iphone>` in the
+film, mounted outside every `<Sequence>`, and exactly one camera transform, read
+from a single timeline over absolute composition frames. A scene owns the pixels
+on the screen and nothing else.
+
+That is not style, it is the fix for a real defect: the film used to mount a
+fresh handset per shot with its own `push()` starting at scale 1.0, so the
+camera snapped back 3–5% at twelve of the fourteen cuts. `motion-audit.md` has
+the arithmetic. The guard is the signatures — `Iphone` takes no `scale`/`y`,
+`Shot` has no `push`/`y` — so the way back to it is a deliberate edit, not a
+slip.
+
 ### Structure
 
 ```
@@ -87,24 +103,30 @@ src/hero/
   GennetyHero.tsx      assembly only — the shot list and the audio path
   timeline.ts          THE CUT: every from/duration/trim/width, with reasons
   theme.ts             brand tokens
-  motion.ts            fade / enter / push / ease — the whole motion system
-  ui/Iphone.tsx        the drawn handset the footage plays inside
+  camera.ts            THE CAMERA: one keyframed timeline for all 1356 frames
+  camera.probe.ts      continuity check — run it after touching camera.ts
+  motion.ts            fade / enter / ease — opacity envelopes, nothing more
+  ui/World.tsx         the one camera transform
+  ui/Iphone.tsx        the one drawn handset, fixed at world (0,0)
   ui/Butterfly.tsx     the brand mark, inlined from public/brand
   ui/Texture.tsx       vignette + grain
-  scenes/ProductShot.tsx   one shot of footage, driven by timeline data
+  scenes/ScreenClip.tsx    one shot, as screen content only
   scenes/Mark.tsx      the end card
 ```
 
 There is **one** scene component for footage rather than one per beat: every
 beat is the same object — a captured screen inside a phone — and what differs is
-which clip, where in it, how long, and how far the camera pushes. All of that is
-data. To **retime** any shot, edit `SHOTS` in `timeline.ts`; nothing about the
-cut lives elsewhere.
+which clip, where in it and how long. All of that is data. To **retime** any
+shot, edit `SHOTS` in `timeline.ts`; to **re-frame** the film, edit the
+seventeen keyframes in `camera.ts`. The two are independent by construction —
+the camera has no idea where the cuts are, so retiming the cut cannot
+desynchronise it.
 
-**The phone is centred and the same size in every shot**, and `Shot` has no `x`
-or `rotate` field so it stays that way. An earlier cut moved it between beats for
-compositional variety and the variety cost legibility — the eye re-finds the
-screen on every cut instead of reading it. Interest comes from the camera push.
+**The phone never moves.** It sits at world (0, 0) at a constant 604 px, and
+`Shot` has no `push`, `x`, `y` or `rotate` field so it stays that way. What
+changes is where the camera is looking from — continuously, across every cut.
+Sliding the handset itself between beats was tried and cost legibility: the eye
+re-finds the screen on every cut instead of reading it.
 
 Overlapping `from` values are the only thing that produces a dissolve (there are
 three, 14 frames each). In a dissolve only the **incoming** shot fades: sequences

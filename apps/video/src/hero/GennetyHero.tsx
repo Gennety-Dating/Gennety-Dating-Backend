@@ -1,11 +1,15 @@
 import React from "react";
-import {AbsoluteFill, Audio, interpolate, Sequence} from "remotion";
+import {AbsoluteFill, Audio, interpolate, Sequence, useCurrentFrame} from "remotion";
 import {z} from "zod";
+import {glowAt} from "./camera";
+import {ease} from "./motion";
 import {Mark} from "./scenes/Mark";
-import {ProductShot} from "./scenes/ProductShot";
+import {ScreenClip} from "./scenes/ScreenClip";
 import {asset, INK} from "./theme";
-import {HERO_DURATION_IN_FRAMES, MARK, SHOTS} from "./timeline";
+import {HERO_DURATION_IN_FRAMES, MARK, SCREEN_WIDTH, SHOTS} from "./timeline";
+import {Iphone} from "./ui/Iphone";
 import {Grain, Vignette} from "./ui/Texture";
+import {World} from "./ui/World";
 
 export const gennetyHeroSchema = z.object({
   /**
@@ -26,25 +30,59 @@ export type GennetyHeroProps = z.infer<typeof gennetyHeroSchema>;
 
 export {HERO_DURATION_IN_FRAMES};
 
+/** The film opens from black. 18 frames, on the world rather than on a shot. */
+const OPEN = 18;
+/** The world hands over to the end card across the last dissolve. */
+const OUTRO = 14;
+
 /**
  * `GennetyHero` — the product film.
  *
- * ~41.6s cut entirely from three screen recordings of the running product
- * (IMG_2588 / IMG_2590 / IMG_2604). Thirteen shots: the profile the user fills
+ * ~45.2s cut entirely from three screen recordings of the running product
+ * (IMG_2588 / IMG_2590 / IMG_2604). Fifteen shots: the profile the user fills
  * in, the question the bot asks, the Type Radar reading their taste, the match
  * decision, the calendar landing on a shared 13:00, the venue, and the date
  * card that closes with the product's own line — *Error 404: Chat not found.
  * Try real life.*
  *
  * Reasoning, recording map and quality audit: `video-production-plan.md`.
+ * Camera architecture and why it was rebuilt: `motion-audit.md`.
  *
- * Two rules hold it together:
+ * Three rules hold it together:
  *
- *  1. **No product UI is redrawn.** Every screen on camera is footage; the
- *     camera is a CSS transform on a wrapper.
- *  2. **The cut lives in `timeline.ts`**, not here. This file is assembly.
+ *  1. **No product UI is redrawn.** Every screen on camera is footage.
+ *  2. **The cut lives in `timeline.ts`**, the camera in `camera.ts`. This file
+ *     is assembly and owns neither.
+ *  3. **One phone, one world, one camera.** The tree below is deliberately
+ *     shallow: `World` carries the single camera transform, `Iphone` is the
+ *     single physical object inside it, and the fifteen `<Sequence>`s reach no
+ *     further than the pixels on its screen. A sequence cannot move the phone,
+ *     because nothing inside a sequence can see it.
+ *
+ * The `<Sequence>`s survive the refactor and are still worth having — they give
+ * each clip its own local frame for `trim`/`fade`, keep the other fourteen
+ * videos unmounted, and premount the next one so a cut never lands on a cold
+ * decoder. What they no longer do is own any geometry.
  */
 export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}) => {
+  const frame = useCurrentFrame();
+
+  // The world opens from black and hands over to the mark. Both are envelopes on
+  // the WORLD, never on a shot: the first shot used to carry a 20-frame fade-in
+  // of its own, which after the refactor would have been a black phone screen
+  // fading up inside an already-lit handset — a fault, not an opening.
+  const worldOpacity =
+    interpolate(frame, [0, OPEN], [0, 1], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+      easing: ease,
+    }) *
+    interpolate(frame, [MARK.from, MARK.from + OUTRO], [1, 0], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+      easing: ease,
+    });
+
   return (
     <AbsoluteFill style={{backgroundColor: INK}}>
       {musicVolume > 0 ? (
@@ -60,17 +98,21 @@ export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}
         />
       ) : null}
 
-      {SHOTS.map((shot) => (
-        <Sequence
-          key={`${shot.src}-${shot.from}`}
-          from={shot.from}
-          durationInFrames={shot.durationInFrames}
-          premountFor={30}
-          name={shot.src}
-        >
-          <ProductShot shot={shot} />
-        </Sequence>
-      ))}
+      <World opacity={worldOpacity}>
+        <Iphone screenWidth={SCREEN_WIDTH} glow={glowAt(frame)}>
+          {SHOTS.map((shot) => (
+            <Sequence
+              key={`${shot.src}-${shot.from}`}
+              from={shot.from}
+              durationInFrames={shot.durationInFrames}
+              premountFor={30}
+              name={shot.src}
+            >
+              <ScreenClip shot={shot} />
+            </Sequence>
+          ))}
+        </Iphone>
+      </World>
 
       <Sequence
         from={MARK.from}
