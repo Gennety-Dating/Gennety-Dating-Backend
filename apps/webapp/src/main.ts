@@ -1192,7 +1192,22 @@ function runConfetti(): void {
     piece.style.height = `${size}px`;
     const duration = Math.random() * 2 + 2;
     const delay = Math.random() * 1.5;
-    piece.style.animation = `fall ${duration}s linear ${delay}s infinite`;
+    // `backwards` is load-bearing, not a flourish. The pieces are staggered by
+    // up to 1.5s, and with the default `fill: none` a piece renders its OWN
+    // style during its delay — no transform, so it sits at y=0, opaque, pinned
+    // flush to the top edge until its turn comes. Measured on the real render
+    // at 390x844: 40/40 parked at the top edge at t=0, 33 still there at 400ms,
+    // 21 at 800ms. That is the "confetti sticks to the top for the first couple
+    // of seconds" report. With `backwards` the delay is spent holding the 0%
+    // keyframe instead — translateY(-10vh), i.e. above the screen — so a piece
+    // is invisible until it actually starts falling.
+    //
+    // It has to ride the SHORTHAND. An `animation-fill-mode` rule in
+    // onboarding-adjacent CSS would be silently dead: this shorthand is an
+    // inline style, and it resets fill-mode to `none` no matter what the
+    // stylesheet says. Verified — the CSS-only version of this fix changed
+    // nothing at all.
+    piece.style.animation = `fall ${duration}s linear ${delay}s infinite backwards`;
     confettiCanvasEl.appendChild(piece);
   }
 }

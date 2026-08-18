@@ -1014,6 +1014,11 @@
       }
       .confetti {
         position: absolute;
+        /* Explicit, so the fall always starts from the top edge rather than
+           from whatever static position the box would have inherited: the
+           `fall` keyframes offset from here, and a piece is only correctly
+           above the screen at 0% (-10vh) if "here" is 0. */
+        top: 0;
         border-radius: 2px;
         pointer-events: none;
       }
