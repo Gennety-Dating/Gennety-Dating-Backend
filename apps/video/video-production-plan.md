@@ -187,9 +187,10 @@ the whole film. An earlier cut slid it left and right between beats for
 compositional variety; that variety cost legibility — the eye re-finds the
 screen on every cut instead of reading what is on it.
 
-**The camera does.** One global camera holds nine framings and moves between
-them (`motion-audit.md`, `src/hero/camera.ts`); its cadence and its easing are
-measured off the founder's reference rather than chosen. The per-shot `push`
+**The camera does, and only along one axis.** One global camera holds six
+distances and steps closer between them — no pan, no roll, and the zoom never
+reverses (`motion-audit.md`, `src/hero/camera.ts`). Its cadence and easing are
+measured off the founder's reference; the one-direction rule is his. The per-shot `push`
 this section used to describe is gone: it restarted at scale 1.0 on the first
 frame of all fifteen shots, which is the reset the rebuild exists to remove.
 

@@ -184,74 +184,83 @@ That single property is what makes the transition rule from the brief
 — `camera(end of A) === camera(start of B)` — hold by construction rather than by
 maintenance. There is no value to match up, because there is only one value.
 
-### The interpolation: holds, and eased moves between them
+### The interpolation: holds, and eased steps between them
 
-The camera is **a list of framings it holds**, not a curve. Between two holds it
-moves; the rest of the time it is dead still. That is the reference's structure
-(§5a) and it is also the only way a viewer can read a screen.
+The camera is **a list of distances it holds**, not a curve. Between two holds it
+steps closer; the rest of the time it is dead still.
 
-The move's easing was **fitted to the reference, not chosen**. Its two cleanest
+The step's easing was **fitted to the reference, not chosen**. Its two cleanest
 camera moves were tracked frame by frame, normalised to 0..1, and a cubic-bezier
 easing was least-squares fitted over a constrained monotone search:
 
-| curve | RMS error vs the reference's own move |
-|---|---|
-| **fitted `bezier(0.20, 0.20, 0.20, 0.92)`** | **0.053** |
-| quad-out | 0.067 |
-| cubic-out `(0.33, 1, 0.68, 1)` | 0.086 |
-| the film's own `ease` `(0.22, 1, 0.36, 1)` | 0.178 |
-| symmetric ease-in-out (what a spline gives) | 0.251 |
-| linear | 0.217 |
+| curve | RMS error vs the reference's own move | launch slope |
+|---|---|---|
+| **`bezier(0.18, 0.12, 0.20, 0.96)` — shipped** | **0.0529** | **0.67** |
+| unconstrained best `(0.20, 0.20, 0.20, 0.92)` | 0.0525 | 1.00 |
+| quad-out | 0.067 | 1.84 |
+| cubic-out `(0.33, 1, 0.68, 1)` | 0.086 | 3.00 |
+| the film's own `ease` `(0.22, 1, 0.36, 1)` | 0.178 | 4.50 |
+| symmetric ease-in-out (what a spline gives) | 0.251 | 0.00 |
 
-The number that explains the feel is the **initial slope: 0.20 / 0.20 = 1.00**.
-The move leaves a hold at exactly the average speed of the whole move — no
-launch, no jerk — and decelerates for the rest of it. The film's old `ease`
-starts at **4.5x** its own average, which is the flick this replaces; cubic-out
-starts at 3.0. Symmetric ease-in-out, which is what the first rebuild's spline
-produced, is the worst fit of everything tried.
+The **launch slope** is the number that decides whether a move reads as a flick.
+The film's old `ease` leaves a standstill at 4.5x the move's own average speed;
+cubic-out at 3.0. The unconstrained best fit to the reference sits at 1.00 — no
+flick, but still a velocity step at the instant the camera sets off. Adding a
+gentle-launch constraint to the same search costs essentially nothing (0.0529
+against 0.0525) and buys 0.67, so the camera now eases **in** as well as out.
+There is no frame anywhere in the film where its speed changes abruptly.
 
-So: the camera does not snap. It sets off, eases down, and lands.
+### The camera timeline: a dolly, one direction
 
-### The camera timeline
+**The phone is static. Only the camera approaches.** (Founder, 2026-08-18.) That
+is stricter than the previous pass understood it, and it removed two things:
 
-Nine held framings plus the outro. **61% of the film is held** (the reference is
-52%; ours is deliberately a touch stiller because our handset is never cropped,
-so a move of the same size covers more of the frame).
+- **All lateral and vertical movement.** `x` and `y` are gone from `CameraState`,
+  not set to zero. A handset sliding around the frame is a handset that moves,
+  whichever object the code says is doing it — and the previous pass had
+  reintroduced a ±39 px drift by calling it camera work, three days after the
+  2026-08-16 decision that removed it.
+- **Every reversal in the zoom.** The previous pass ran the handset
+  545 → 647 → **583** → 723 → 786 → **558** → 660 → **609** → 761 px. Six changes
+  of direction — and at 29 s it was within 13 px of its opening size, i.e. the
+  film had visibly returned to a framing it already used. The founder read that
+  as «увеличивается, потом обратно… возвращается в исходное положение», which
+  the numbers support exactly.
 
-| hold | frames | time | x | y | scale | intent |
-|---|---|---|---|---|---|---|
-| 1 | 0–130 | 0:00–0:04.3 | 0 | −34 | 0.86 | establish — the whole handset with air around it |
-| 2 | 190–330 | 0:06.3–0:11.0 | −26 | 6 | 1.02 | in on the controls: the tap burst, the photo columns |
-| 3 | 392–560 | 0:13.1–0:18.7 | 14 | 26 | 0.92 | back out — the honest question is a tall conversation |
-| 4 | 624–708 | 0:20.8–0:23.6 | 34 | −2 | 1.14 | close on the radar's «Що зачепило?» tags |
-| 5 | 768–806 | 0:25.6–0:26.9 | 0 | −12 | **1.24** | the closest framing in the film — the decision |
-| 6 | 874–958 | 0:29.1–0:31.9 | −18 | 24 | **0.88** | the big breath out: planning opens |
-| 7 | 1014–1046 | 0:33.8–0:34.9 | 6 | −20 | 1.04 | the butterfly and 13:00 — the brand moment |
-| 8 | 1102–1156 | 0:36.7–0:38.5 | 30 | 14 | 0.96 | back out again for the map and «Яке місце?» |
-| 9 | 1216–1300 | 0:40.5–0:43.3 | 0 | −8 | 1.20 | the date card and its line |
-| 10 | 1356 | 0:45.2 | 0 | −18 | 1.25 | still travelling as the mark takes over |
+So the camera is a **dolly straight down the lens axis**: six held distances,
+five slow steps, one direction.
 
-Zoom range **0.86 → 1.25 = 1.45x** (was 1.32x). It cannot go further while the
-handset stays whole: at 1.25 there is already only ~80 px of vertical air, and
-the frame height — not the resolution — is the binding constraint. The reference
-gets 5x by cropping, which the founder ruled out.
+| hold | frames | time | scale | handset | covers |
+|---|---|---|---|---|---|
+| 1 | 0–210 | 0:00–0:07.0 | 0.88 | 558 px | the name, the age slider, the gender tap |
+| 2 | 300–540 | 0:10.0–0:18.0 | 0.96 | 609 px | the photo columns, the height drum, the question |
+| 3 | 640–830 | 0:21.3–0:27.7 | 1.05 | 666 px | the radar closing, and the decision |
+| 4 | 930–1090 | 0:31.0–0:36.3 | 1.12 | 710 px | the butterfly, 13:00, the departure map |
+| 5 | 1180–1290 | 0:39.3–0:43.0 | 1.19 | 755 px | the date card and its line |
+| 6 | 1356 | 0:45.2 | 1.24 | 786 px | still moving in as the mark takes over |
 
-Scale direction changes five times and the moves alternate in and out, so the
-"constant slow zoom-in" the brief rules out is impossible by construction.
+Each step is ~45 px of handset over ~3 s — about **0.5 px per frame**, roughly
+four times gentler than the pass before — and the film never revisits a distance
+it has already been at. **68% of the film is held**, in stretches of 3.7–8.0 s.
 
-**Where the moves sit is a choice.** They are placed to CROSS a cut, never to
-start on one — a move that begins exactly when the screen changes reads as the
-cut having caused it. Four of the nine cross a boundary mid-flight (144, 378,
-862, 1084); the rest happen inside a single shot.
+The five steps are placed to sit INSIDE a shot or to cross a cut mid-flight,
+never to start on one: a move that begins exactly when the screen changes reads
+as the cut having caused it.
+
+The ceiling is the frame, not the resolution. At 1.24 there is ~109 px of
+vertical air left, and the handset is never cropped (founder, 2026-08-17). The
+reference affords 5x by cropping in 85% of its frames; that is the trade being
+declined, and it is why this range is 1.41x rather than theirs.
 
 ### What the phone does
 
-Nothing. `<Iphone>` is centred at world (0, 0) with no transform of its own; the
-`scale` and `y` props are gone from its signature entirely, so a future scene
-*cannot* reintroduce a per-scene phone transform without changing the component.
-`Shot` likewise lost its `push` and `y` fields.
+Nothing at all, and now that is enforced in three places rather than one.
+`<Iphone>` is centred at world (0, 0) with no transform of its own and no
+`scale`/`y` props; `Shot` has no `push`/`y`; and `CameraState` itself has no
+`x`/`y`, so `World` renders a bare `scale()` with nothing to pan. Measured on the
+rendered pixels, the handset's centre holds to **±0.5 px** across the whole film.
 
-### Rotation is 0 at every keyframe, on purpose
+### Rotation is 0, on purpose
 
 `rotate` exists on `CameraState` because a camera has one, and the track
 interpolates like the others. Every keyframe is 0.
@@ -400,21 +409,24 @@ all three rhythms can be watched on the same 12 seconds.
 
 ### Measured on the rendered pixels
 
-**Handset width across a cut** — the original defect, and it stays fixed:
+**The founder's rule, checked on the film rather than on the code.** The
+handset's edges are read off each rendered frame and the two things he asked for
+are read straight out of them:
+
+```
+handset centre      539.0 .. 567.0 px  (frame centre 539.5)
+  ... excluding the outro crossfade, where the tracker sees the END CARD:
+handset centre      -0.5 .. +0.5 px from dead centre, for the whole film
+handset width       572 -> 756 px, and it never gets smaller
+width reversals     0   (the 8 flagged frames are all f1261-1267, the end card)
+```
+
+**The original defect, still fixed:**
 
 ```
                               step at the cut
 original per-scene camera     22-32 px
-now                            1 px   (largest at ANY of the 15 boundaries)
-```
-
-**The camera's own rhythm**, tracked across the whole film:
-
-```
-handset width      567 .. 787 px      zoom 1.39x observed (1.45x by construction)
-frame is still     59% of frames      holds read 2 px of drift across 91 frames
-peak move speed    9 px/frame         smooth, monotone, decelerating
-largest step       1 px at a cut
+now                            1.4 px  (worst of all 15 boundaries)
 ```
 
 **Brightness**, whole film, largest single-frame jumps:
@@ -422,40 +434,19 @@ largest step       1 px at a cut
 ```
 before   f585 27.97   f378 22.64 *CUT   f510 20.55   f802 20.38 *CUT
          f1261 16.02  f1030 15.80 *CUT  f660 14.71 *CUT  f306 10.02 *CUT
-now      f585 25.42   f510 15.05        f552 10.31   f1261 5.57
+now      f585 23.55   f510 16.37        f552 11.55   f1261 5.54
 ```
 
-**No cut appears in the list at all any more.** What is left — f510, f552, f585 —
-is inside the Type Radar shot and is the product's own content: profile cards
-being swiped. It was there before any of this work and is not ours to remove.
-
-### The machine check
-
-```sh
-pnpm --filter @gennety/video exec tsx src/hero/camera.probe.ts
-```
-
-```
-scale     peak speed -0.01272 x/frame @ f815
-          largest step across a CUT 0.00545 (43% of the film's largest step)
-framing   tightest margin 79.8 px (vertical) @ f1355
-resolution worst upscale 1.311x (camera peaks at 1.250)
-rhythm    held 61% of the film (reference: 52%)
-          hold lengths (s) 4.3, 4.7, 5.6, 2.8, 1.3, 2.8, 1.1, 1.8, 2.8
-          launch speed 1.11x the move's own average (reference 1.00; old curve 4.5)
-PASS
-```
-
-It **fails** if a move launches above 1.6x its own average speed, if the camera is
-still for less than 35 % of the film, if a cut carries the largest scale step, if
-the handset comes within 40 px of an edge, or if the source is upscaled past
-1.35x. The first two are new and exist so the cadence cannot quietly drift back
-to perpetual motion.
+Only two cuts appear anywhere in the top fourteen — f1084 at 4.55 and f862 at
+4.06 — and both were already at that level before any of this work. Everything
+above them (f510, f552, f585) is inside the Type Radar shot and is the product's
+own content: profile cards being swiped. Not ours to remove.
 
 ### What to look for by eye
 
-No step in the handset's width at a boundary; no flash when a screen changes; and
-the moves setting off without a flick and settling rather than stopping.
+The handset dead centre and never moving sideways; no step in its width at a
+boundary; no flash when a screen changes; and — the thing three passes were spent
+on — the phone never once smaller than it was a moment ago.
 
 ## 7. What was deliberately not done
 
@@ -469,6 +460,12 @@ the moves setting off without a flick and settling rather than stopping.
 - **No change to the cut.** Every `from`, `durationInFrames`, `trim` and `beat`
   in `timeline.ts` is byte-for-byte what it was. The film shows the same product
   frames at the same times; only the framing of them moved.
-- **No rotation**, for the reason in §5.
+- **No rotation, and no pan**, for the reason in §5. Both are movements of the
+  phone as far as a viewer is concerned.
+- **No pull-outs.** One was kept as late as the second pass, on the reasoning
+  that the calendar opening deserved a breath. Measured, that breath took the
+  handset back to 558 px against an opening 545 px — a framing the film had
+  already used, thirty seconds earlier. A reveal that lands somewhere the film
+  has been is not a reveal.
 - **No music.** Still `musicVolume: 0` by default and still the one genuinely
   open deliverable — see `video-production-plan.md` §G.

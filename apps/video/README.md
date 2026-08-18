@@ -103,7 +103,7 @@ src/hero/
   GennetyHero.tsx      assembly only — the shot list and the audio path
   timeline.ts          THE CUT: every from/duration/trim/width, with reasons
   theme.ts             brand tokens
-  camera.ts            THE CAMERA: ten held framings + fitted ease-out moves
+  camera.ts            THE CAMERA: six held distances, one-way dolly
   camera.probe.ts      continuity check — run it after touching camera.ts
   motion.ts            fade / crossfade / enter / ease — opacity envelopes only
   ui/World.tsx         the one camera transform
@@ -117,15 +117,18 @@ src/hero/
 There is **one** scene component for footage rather than one per beat: every
 beat is the same object — a captured screen inside a phone — and what differs is
 which clip, where in it and how long. All of that is data. To **retime** any
-shot, edit `SHOTS` in `timeline.ts`; to **re-frame** the film, edit the ten
-held framings in `camera.ts`. The two are independent by construction — the
+shot, edit `SHOTS` in `timeline.ts`; to **re-frame** the film, edit the six held
+distances in `camera.ts`. The two are independent by construction — the
 camera has no idea where the cuts are, so retiming the cut cannot desynchronise
 it.
 
-**The camera holds still 61% of the time.** It is a list of framings it sits on,
-with eased moves between them — the cadence and the easing are both measured off
-the founder's reference (`motion-audit.md` §5a), not chosen. A camera that
-drifts on every frame was the first attempt and the wrong answer.
+**The phone is static; only the camera approaches.** No pan, no roll, and the
+zoom never reverses — `CameraState` has no `x`/`y` at all, so there is nothing to
+set. The camera holds still 68% of the time and steps closer five times, one
+direction, 558 → 786 px of handset across the film. The cadence and the easing
+are measured off the founder's reference (`motion-audit.md` §5a); the
+one-direction rule is his (2026-08-18), after a version that oscillated read as
+the phone growing and then snapping back to where it began.
 
 **The phone never moves.** It sits at world (0, 0) at a constant 604 px, and
 `Shot` has no `push`, `x`, `y` or `rotate` field so it stays that way. What

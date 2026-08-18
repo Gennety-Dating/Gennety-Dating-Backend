@@ -40,7 +40,7 @@ export const FPS = 30;
  *
  * It is also the resolution budget: the source clips are 576 px wide, so 604 is
  * a 1.05x blow-up — effectively native — and the camera's zoom range in
- * `camera.ts` (0.86 … 1.25) is chosen so the worst upscale anywhere is ~1.31x.
+ * `camera.ts` (0.88 … 1.24) is chosen so the worst upscale anywhere is ~1.30x.
  * Raising this number spends that budget.
  */
 export const SCREEN_WIDTH = 604;

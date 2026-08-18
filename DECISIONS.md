@@ -280,6 +280,64 @@ smoothed rather than stepped». Замер на живом рендере (headl
 
 ---
 
+## 2026-08-18 — the phone is static and the camera only moves IN: no pan, no reversals
+
+**Kind:** founder decision
+**What:** `GennetyHero`'s camera becomes a pure one-way dolly. `CameraState`
+loses `x` and `y` entirely, so `World` renders a bare `scale()`; the zoom is
+monotone across all 1356 frames, 558 → 786 px of handset, six held distances and
+five slow steps. The easing was re-fitted with a gentle-launch constraint.
+
+**Why — the founder's words were «телефон… сначала увеличивается, потом обратно
+в одну секунду возвращается в исходное положение, потом опять приближается», and
+the numbers say exactly that.** The previous pass ran the handset
+545 → 647 → **583** → 723 → 786 → **558** → 660 → **609** → 761 px: six changes
+of direction, plus a lateral drift of −27 → +39 → −16 → +29 px. At 29 seconds it
+was 558 px against an opening 545 px — **the film had returned to its own first
+framing**. I had built that deliberately and called it "the frame breathes"; from
+the outside it is a reset, which is the one thing this whole piece of work exists
+to remove.
+
+The lateral drift was worse than a taste error: it re-broke the 2026-08-16
+founder decision that the handset is never slid between beats, three days after
+recording that I was keeping it. I kept it in `timeline.ts` and then reintroduced
+it in `camera.ts` under a different name. **Moving the camera sideways and moving
+the phone sideways are the same picture.**
+
+**What it changes going forward:**
+- **`CameraState` has no `x`/`y`, and that is the guard.** Not "set to zero" —
+  absent, so there is nothing for a later edit to set. Same reasoning as `Shot`
+  losing `push`.
+- **The zoom may never reverse**, and `camera.probe.ts` fails if it does. A
+  reversal means the film revisits a distance it has already used, and no amount
+  of easing makes that read as anything but a snap back.
+- **A pull-out is not available as a device here.** One survived to the second
+  pass on the argument that the calendar opening deserved a breath; measured, it
+  landed within 13 px of the opening framing. If a beat ever genuinely needs one,
+  it has to end somewhere the film has not been — which, with the handset never
+  cropped, it structurally cannot.
+- **The easing gained a gentle launch.** The same constrained fit to the
+  reference, with the added requirement that a move leaves a hold below its own
+  average speed: `bezier(0.18, 0.12, 0.20, 0.96)`, launch slope **0.67** against
+  1.00 unconstrained and 4.5 for the film's old `ease`. It cost nothing in
+  accuracy (RMS 0.0529 vs 0.0525) and removes the last velocity step in the film.
+- **The zoom range is 1.41x and cannot grow** while the handset stays whole: at
+  1.24 there is ~109 px of vertical air left. The reference's 5x is bought by
+  cropping, which is declined (2026-08-17).
+- **Verified on the rendered pixels, not on the code**: handset centre holds to
+  ±0.5 px for the whole film, width 572 → 756 with zero reversals, worst step at
+  any of the 15 cuts is 1.4 px.
+
+**Deliberately not done:** the reference's move *durations* (0.3–0.7 s). Ours run
+~3 s, about four times gentler than the previous pass, because the founder's
+complaint each time has been abruptness and the phone is never cropped, so the
+same percentage covers more of the frame.
+
+**Recorded in:** `apps/video/motion-audit.md` §5 (the dolly) and §6 (measured
+before/after), `apps/video/src/hero/camera.ts`, `apps/video/src/hero/ui/World.tsx`.
+
+---
+
 ## 2026-08-17 — the reference is measured, not watched: hold/move cadence, fitted easing, and the flash that was not the camera
 
 **Kind:** founder decision + change of mind

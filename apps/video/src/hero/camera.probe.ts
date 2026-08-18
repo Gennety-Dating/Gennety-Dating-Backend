@@ -22,8 +22,6 @@ const track = <T,>(fn: (f: number) => T) => Array.from({length: N}, (_, f) => fn
 
 const cams = track(cameraAt);
 const scale = cams.map((c) => c.scale);
-const x = cams.map((c) => c.x);
-const y = cams.map((c) => c.y);
 
 const diff = (v: number[]) => v.slice(1).map((n, i) => n - v[i]);
 
@@ -58,8 +56,6 @@ console.log(`GennetyHero camera — ${N} frames, ${boundaries.length} boundaries
 console.log(`boundaries: ${boundaries.join(", ")}`);
 
 report("scale", scale, "x");
-report("x", x, "px");
-report("y", y, "px");
 report("glow", track(glowAt), "");
 
 // Framing bound: the handset must never touch an edge.
@@ -69,8 +65,8 @@ const bodyH = (CLIP_H * SCREEN_WIDTH) / CLIP_W + (SCREEN_WIDTH * 0.017 + SCREEN_
 let tightest = {frame: 0, side: "", px: Infinity};
 for (let f = 0; f < N; f++) {
   const c = cams[f];
-  const marginX = (FRAME_W - bodyW * c.scale) / 2 - Math.abs(c.x * c.scale);
-  const marginY = (FRAME_H - bodyH * c.scale) / 2 - Math.abs(c.y * c.scale);
+  const marginX = (FRAME_W - bodyW * c.scale) / 2;
+  const marginY = (FRAME_H - bodyH * c.scale) / 2;
   if (marginX < tightest.px) tightest = {frame: f, side: "horizontal", px: marginX};
   if (marginY < tightest.px) tightest = {frame: f, side: "vertical", px: marginY};
 }
@@ -111,17 +107,33 @@ console.log(
     `(1.00 = fitted to the reference; our old curve was 4.5)`,
 );
 
+// The founder's rule, as a test: the dolly never reverses, so the film never
+// revisits a distance it has already been at. A reversal is what reads as
+// "it grew, then went back to where it started".
+const reversals = diff(scale).filter((d) => d < -1e-9).length;
+console.log(`  zoom reversals    ${reversals}  (must be 0 — the camera only moves in)`);
+console.log(
+  `  handset          ${(bodyW * Math.min(...scale)).toFixed(0)} -> ` +
+    `${(bodyW * maxScale).toFixed(0)} px wide, one direction`,
+);
+
 const failures: string[] = [];
+if (reversals > 0) failures.push(`the zoom reverses on ${reversals} frames`);
 if (worstLaunch > 1.6) failures.push(`a move launches at ${worstLaunch.toFixed(2)}x average speed`);
 if (heldFrames / N < 0.35) failures.push("the camera is almost never still");
 if (tightest.px < 40) failures.push(`handset within ${tightest.px.toFixed(1)}px of an edge`);
 if ((SCREEN_WIDTH * maxScale) / CLIP_W > 1.35) failures.push("source upscaled past 1.35x");
 
+// A cut must carry no discontinuity. This is a MAGNITUDE bound, not a rank one:
+// now that the dolly is uniform, a cut landing on the film's fastest frame is
+// meaningless (it is still ~1.4 px of handset), and ranking it would fail the
+// probe for a coincidence. 0.004 of scale is ~2.5 px of handset width.
 const scaleSteps = diff(scale).map(Math.abs);
 const worstCutStep = Math.max(...boundaries.map((f) => scaleSteps[f - 1]));
-if (worstCutStep > Math.max(...scaleSteps) * 1.001) {
-  failures.push("a cut carries the film's largest scale step");
-}
+console.log(
+  `\ncontinuity\n  worst step at a cut  ${(worstCutStep * bodyW).toFixed(2)} px of handset`,
+);
+if (worstCutStep > 0.004) failures.push(`a cut steps the camera by ${worstCutStep.toFixed(4)}`);
 
 console.log(failures.length === 0 ? "\nPASS" : `\nFAIL\n  - ${failures.join("\n  - ")}`);
 process.exit(failures.length === 0 ? 0 : 1);
