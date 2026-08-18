@@ -337,30 +337,48 @@ function isLive(snapshot: DemoSnapshot): boolean {
  * The three moments the demo has to speak for itself. Each is tied to a state
  * the product itself owns, so the beat lands at the right time without the
  * onboarding flow knowing demo mode exists — and, for the intro, late enough
- * that the visitor has told us which language to say it in.
+ * that the visitor has told us which language to say it in, but early enough
+ * that it is above the first question the chat asks them.
  */
 function decideNarration(snapshot: DemoSnapshot): DemoAction | null {
   const spoken = snapshot.spokenBeats;
 
-  // The intro waits for the onboarding Mini App to hand the chat back, because
-  // that Mini App is where the visitor picks their language (PRODUCT_SPEC §1.2:
-  // `consent` and `language` are Mini App-owned steps with no chat screens).
-  // Firing at `/start` meant `User.language` was still null and this longest,
-  // most explanatory message in the demo resolved to English for everyone —
-  // pushed at someone who had not yet been asked which language they read.
-  // Baking it into the Mini App instead was rejected: demo behaviour must not
-  // leak into `apps/webapp`.
+  // The intro waits for the LANGUAGE, not for the handoff.
+  //
+  // It used to wait for the onboarding Mini App to hand the chat back, and that
+  // put it in the wrong place: `/complete` resumes the chat inside its own
+  // request (`telegram-onboarding.ts` → `runAgentTurn` + `sendMarkdownSafe`),
+  // so the collector's first question — "чем тебе нравится заниматься?" — is
+  // already in the chat before this tick can run. The visitor read a profile
+  // question above the message explaining what the demo even is. No tick-based
+  // beat keyed on the handoff can win that race; the trigger has to move
+  // earlier, not the beat get faster.
+  //
+  // `POST /language` is the Mini App's FIRST write (PRODUCT_SPEC §1.2: the
+  // entry Mini App asks for the language before consent), so the language is
+  // known minutes before the handoff — the visitor still has the visual intro,
+  // the contact gate, the city, the theme and five profile screens ahead of
+  // them. The message therefore lands while they are inside the full-screen
+  // Mini App and is read when they come back out, directly above the question.
+  // That ordering is the whole point.
+  //
+  // Firing at `/start` is the other end of the same trade and is still wrong:
+  // `User.language` is null there, so the longest, most explanatory message in
+  // the demo resolved to English for everyone — pushed at someone who had not
+  // yet been asked which language they read. Baking it into the Mini App
+  // instead was rejected: demo behaviour must not leak into `apps/webapp`.
+  //
   // The upper bound is what makes the beat survive a restart. `spokenBeats` is
   // in memory (no demo-only schema, DEMO_MODE.md), so a deploy mid-demo forgets
   // what a visitor has read — and every other beat is saved by its own window
   // already having closed. Without one here, an active visitor would be handed
   // the whole "how this works" opener again on the next PM2 restart. Once they
   // are past onboarding the moment has genuinely passed: the matchmaking beat
-  // that precedes the pitch covers what happens from there.
+  // that precedes the pitch covers what happens from there. The window is now
+  // open for the Mini App phase too, so a restart during those few minutes can
+  // repeat it — the same accepted tradeoff, over a slightly longer stretch.
   if (!spoken.has("intro")) {
-    const beforeHandoff =
-      snapshot.onboardingStep === "consent" || snapshot.onboardingStep === "language";
-    return beforeHandoff || snapshot.status !== "onboarding"
+    return snapshot.language === null || snapshot.status !== "onboarding"
       ? null
       : { kind: "narrate", beat: "intro" };
   }

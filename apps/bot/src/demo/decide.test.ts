@@ -64,7 +64,7 @@ function match(overrides: Partial<DemoMatchSnapshot> = {}): DemoMatchSnapshot {
 
 describe("demo narration", () => {
   // The onboarding Mini App owns `consent` and `language` (PRODUCT_SPEC §1.2),
-  // so before it hands off there is no `User.language` and the intro would be
+  // so until it has asked there is no `User.language` and the intro would be
   // English for everyone — pushed at someone not yet asked what they read.
   it.each(["consent", "language"] as const)(
     "stays silent on %s, before the Mini App has asked for a language",
@@ -75,6 +75,25 @@ describe("demo narration", () => {
       expect(decision.action).toEqual({ kind: "none" });
     },
   );
+
+  it("opens with the intro as soon as the language is picked, still inside the Mini App", () => {
+    // The ordering guard. `/complete` resumes the chat inside its own request,
+    // so a beat keyed on the handoff lands UNDER the collector's first question
+    // — the visitor read "what do you like doing?" above the message explaining
+    // what the demo is. The language is written by the Mini App's first screen,
+    // minutes earlier, which is where this has to fire to sit above it.
+    const decision = decideDemoAction(
+      snapshot({
+        spokenBeats: new Set(),
+        status: "onboarding",
+        onboardingStep: "language",
+        language: "ru",
+        verificationStatus: "unverified",
+      }),
+    );
+    expect(decision.action).toEqual({ kind: "narrate", beat: "intro" });
+    expect(decision.waitMs).toBe(0);
+  });
 
   it("opens with the intro once the Mini App hands the chat back", () => {
     const decision = decideDemoAction(

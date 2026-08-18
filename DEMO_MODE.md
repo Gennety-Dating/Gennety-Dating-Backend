@@ -425,9 +425,9 @@ bound — not a schema column.
 The moments where the demo speaks as itself (`demo/script.ts`), each triggered
 by a state the product itself owns:
 
-1. **`/start`** — what the demo is; and that the bot is a conversational agent
-   you can talk to by text or voice at any point, which is the capability most
-   easily missed because it has no button.
+1. **The language is picked** — what the demo is; and that the bot is a
+   conversational agent you can talk to by text or voice at any point, which is
+   the capability most easily missed because it has no button.
 2. **The bot has asked for photos** — in the real product they are validated and
    later matched against your face; here they are not, so upload anything.
 3. **Onboarding done, liveness pending** — the check is real on screen and
@@ -452,6 +452,25 @@ by a state the product itself owns:
 Languages: `ru`, `uk`, `en` are written out; `de` and `pl` fall back to `en`.
 A deliberate scope call for long explanatory prose; adding the two blocks is the
 only change needed if a demo in those languages is ever required.
+
+**Message 1 waits for the LANGUAGE, not for the handoff.** It used to wait for
+the onboarding Mini App to hand the chat back, and that put it in the wrong
+place: `/complete` resumes the chat inside its own request, so the collector's
+first question — «чем тебе нравится заниматься?» — is already in the chat before
+the next tick can run. The visitor read a profile question above the message
+explaining what the demo even is. No tick-based beat keyed on the handoff can
+win that race, so the trigger moved earlier rather than the beat getting faster:
+`POST /language` is the Mini App's FIRST write (PRODUCT_SPEC §1.2 — the entry
+Mini App asks for the language before consent), so the message lands while the
+visitor is still inside the full-screen Mini App, minutes before the handoff,
+and is read when they come back out — directly above the question. That ordering
+is the whole point.
+
+Firing at `/start` is the other end of the same trade and is still wrong:
+`User.language` is null there, so the longest, most explanatory message in the
+demo resolved to English for everyone. The window is now open for the Mini App
+phase too, so a restart during those few minutes can repeat it — the same
+accepted `spokenBeats` tradeoff (below), over a slightly longer stretch.
 
 **Message 2 waits for the question, not for the collector.** The Type Radar gate
 intercepts the photos question *before* it is asked, so `currentQuestion` reaches
