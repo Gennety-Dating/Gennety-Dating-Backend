@@ -42,10 +42,20 @@ export default defineConfig({
     ///     stroke-draw keep the SAME keyframe stops. They are two animations on
     ///     two elements selling one illusion, so a drift between them is not a
     ///     styling nit but a butterfly flying beside its own stroke.
+    ///   - `onboarding.css` — that every surface which makes room for the soft
+    ///     keyboard follows the one shared curve, and that the curve cannot
+    ///     regress to something that puts a third of the travel in one frame.
+    ///     The shipped stylesheet is the only honest source for that: a TS
+    ///     mirror of the numbers would be the thing that drifts.
     /// Scoped rather than `css: true` so no other test starts paying for CSS
     /// processing.
     css: {
-      include: [/liveness-theme\.css/, /butterfly-loader\.css/, /butterfly-success\.css/],
+      include: [
+        /liveness-theme\.css/,
+        /butterfly-loader\.css/,
+        /butterfly-success\.css/,
+        /onboarding\.css/,
+      ],
     },
   },
   server: {

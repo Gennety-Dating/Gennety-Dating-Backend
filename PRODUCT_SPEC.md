@@ -166,8 +166,28 @@ out of Telegram-only workers.
   and snapped back when the field blurred on Continue. It is measured against
   the width now, the one axis a long name actually runs out of and the one the
   keyboard never touches. The Continue pill still rises above the keyboard;
-  that part was always right, and the shrink easing is smoothed rather than
-  stepped. The native iOS client already had purpose-built
+  that part was always right. **The rise itself was not (fixed 2026-08-18).**
+  That correction claimed the shrink easing was "smoothed rather than stepped",
+  and it was neither: measured on the real render at a 336px keyboard, the pill
+  covered **115px of its 336px travel in ONE 60Hz frame** — a third of the way
+  in 16ms, then a crawl through the last 7% over the following 80ms. The cause
+  is arithmetic rather than taste: `cubic-bezier(0.22, 1, 0.36, 1)` leaves at
+  **4.55x its own average speed** (its initial slope is `y1 / x1` = 1 / 0.22),
+  so the screen was always going to jump and then dawdle, in both directions —
+  which is exactly how it was reported. The shrink now runs on one shared token
+  (`--kb-ease`, `cubic-bezier(0.42, 0, 0.58, 1)` over 260ms): it starts at rest,
+  accelerates, decelerates to rest — the shape the keyboard itself moves in —
+  over about the time iOS spends animating it, so the pill travels WITH the
+  keyboard rather than after it. Measured again on the same render: worst frame
+  **38px (11.3%)**, three times gentler, and the guard is a curve test rather
+  than a screenshot (`keyboard-ease.test.ts`).
+  **It is one token because it is one keyboard.** The profile screens, the
+  gate cards (email / phone / city) and the city result list all shrink by the
+  same `--kb-height`, and before this they eased three different ways — the
+  gates at `200ms ease`, the profile screens at the 4.55x curve, and the result
+  list not at all, so it snapped a frame before the card around it settled. A
+  screen that made room differently from the gate one step earlier read as two
+  different keyboards. The native iOS client already had purpose-built
   controls here via the `ui_hint` contract; this is Telegram catching up, and
   the `/v1/*` surface is untouched.
   **The screens write through the collector** (`applyOnboardingFacts`,

@@ -215,6 +215,13 @@ const CRUMBLE_DELAY_MS = 250;
 // reads it, and only to know how long it is still visible after its scene has
 // been left; shorten the CSS without this and the notes vanish mid-crossfade.
 const SCENE_CROSSFADE_MS = 420;
+/**
+ * Smallest `--kb-height` change worth writing (see the keyboard-aware viewport
+ * effect). Deliberately tiny: it only exists to absorb a per-pixel ramp, and a
+ * bigger step would leave the pill sitting up to that many pixels off the top of
+ * the keyboard once the ramp settles.
+ */
+const KB_HEIGHT_STEP_PX = 2;
 // Pivot (scene 6): raise the Gennety logo almost the instant the line lands,
 // instead of sitting on the finished "So we built Gennety" text for the full
 // read-buffer hold. Just a short breath so it doesn't fire on the last keystroke.
@@ -422,16 +429,36 @@ function App(): ReactElement {
     const vv = window.visualViewport;
     if (!vv) return;
     const root = document.documentElement;
-    const apply = (): void => {
-      const keyboard = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      root.style.setProperty("--kb-height", `${Math.round(keyboard)}px`);
+    let written: number | null = null;
+    let frame = 0;
+    const write = (): void => {
+      frame = 0;
+      const next = Math.round(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+      if (written !== null && Math.abs(next - written) < KB_HEIGHT_STEP_PX) return;
+      written = next;
+      root.style.setProperty("--kb-height", `${next}px`);
     };
-    apply();
-    vv.addEventListener("resize", apply);
-    vv.addEventListener("scroll", apply);
+    // A CSS transition RESTARTS from wherever it currently is every time the
+    // value changes, so a value that churns is a transition that never gets to
+    // finish — and a rise that keeps restarting is what reads as stepped rather
+    // than as one movement. Both listeners can fire in the same frame (the
+    // keyboard resizes the visual viewport AND scrolls it), so they are
+    // coalesced into one write per frame instead of two style recalcs and two
+    // restarts. `KB_HEIGHT_STEP_PX` then absorbs a slow ramp: WebKit scrolls a
+    // focused field into view while the keyboard is still animating, and
+    // `offsetTop` is part of this sum, so that arrives as a stream of ~1px
+    // changes none of which is worth restarting an animation for.
+    const schedule = (): void => {
+      if (frame) return;
+      frame = requestAnimationFrame(write);
+    };
+    write();
+    vv.addEventListener("resize", schedule);
+    vv.addEventListener("scroll", schedule);
     return () => {
-      vv.removeEventListener("resize", apply);
-      vv.removeEventListener("scroll", apply);
+      if (frame) cancelAnimationFrame(frame);
+      vv.removeEventListener("resize", schedule);
+      vv.removeEventListener("scroll", schedule);
     };
   }, []);
 
