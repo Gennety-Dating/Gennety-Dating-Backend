@@ -31,7 +31,7 @@ export default defineConfig({
   },
   test: {
     /// Vitest stubs every CSS import to an empty string by default, which also
-    /// swallows an explicit `?raw` one. Three stylesheets are asserted on as
+    /// swallows an explicit `?raw` one. These stylesheets are asserted on as
     /// text, so they have to come through for real:
     ///   - `liveness-theme.css` — that it never restyles the biometric capture
     ///     surface (oval, light challenge, recording indicator).
@@ -47,6 +47,10 @@ export default defineConfig({
     ///     regress to something that puts a third of the travel in one frame.
     ///     The shipped stylesheet is the only honest source for that: a TS
     ///     mirror of the numbers would be the thing that drifts.
+    ///   - `location.css` — that the departure-point gate's copy and its
+    ///     demo-only action stay ONE flex column. Putting the button back
+    ///     beside the sentence is a one-line edit that looks harmless and
+    ///     shreds the sentence into a word-per-line strip.
     /// Scoped rather than `css: true` so no other test starts paying for CSS
     /// processing.
     css: {
@@ -55,6 +59,7 @@ export default defineConfig({
         /butterfly-loader\.css/,
         /butterfly-success\.css/,
         /onboarding\.css/,
+        /location\.css/,
       ],
     },
   },

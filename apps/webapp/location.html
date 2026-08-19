@@ -248,9 +248,18 @@
               <path d="M12 7.5v5.5M12 16.2v.3" stroke-linecap="round" />
             </svg>
           </span>
-          <span class="market-block-text" id="market-block-text"></span>
-          <!-- Demo only: the visitor may genuinely be abroad (DEMO_MODE.md). -->
-          <button type="button" class="market-block-jump" id="market-jump" hidden></button>
+          <!--
+            The copy and the demo action share ONE column, so the button lands
+            UNDER the sentence. It used to be a third child of the flex row:
+            `display: block` on a flex item does not take it out of the row, so
+            it became a third column and flex squeezed the sentence into a strip
+            a word wide. See `.market-block-body` in location.css.
+          -->
+          <div class="market-block-body">
+            <span class="market-block-text" id="market-block-text"></span>
+            <!-- Demo only: the visitor may genuinely be abroad (DEMO_MODE.md). -->
+            <button type="button" class="market-block-jump" id="market-jump" hidden></button>
+          </div>
         </div>
         <!-- Secondary text action: use the device's current position -->
         <button type="button" class="loc-btn" id="share-current">

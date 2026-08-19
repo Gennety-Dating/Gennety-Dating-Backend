@@ -226,19 +226,21 @@ input.search::placeholder {
 
 /* Departure-point gate (PRODUCT_SPEC §3.7). Sits directly above the two
    buttons so the reason is read on the way to the dead Confirm, not hunted for
-   afterwards. Deliberately quiet — an explanation, not an alarm: the user has
-   done nothing wrong, the city just isn't launched yet. */
+   afterwards. Quiet in COLOUR — an explanation, not an alarm: the user has done
+   nothing wrong, the city just isn't launched yet. Not quiet in SIZE, though:
+   it is the only thing on screen explaining why Confirm went dead, so it is set
+   at full-strength text rather than the dimmed grey the address readout uses. */
 .market-block {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
+  gap: 10px;
   margin: 2px 0 10px;
-  padding: 11px 12px;
+  padding: 13px 14px;
   border-radius: 14px;
   background: var(--fill);
-  color: var(--text-dim);
-  font-size: 13px;
-  line-height: 1.42;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
   text-align: left;
 }
 .market-block[hidden] {
@@ -246,23 +248,35 @@ input.search::placeholder {
 }
 .market-block-ico {
   flex: 0 0 auto;
-  margin-top: 1px;
+  margin-top: 2px;
   color: var(--accent-bright);
 }
-.market-block-text {
+/* The copy and the demo action are ONE column, which is what puts the button
+   under the sentence instead of beside it. Two things are load-bearing:
+   the wrapper (a bare `display: block` on the button does nothing about
+   wrapping — as a direct child of the flex row it just becomes a third column,
+   and flex then shrinks the sentence to a word-per-line strip to make room for
+   it), and `min-width: 0` (a flex item's default `min-width: auto` refuses to
+   shrink below its longest word, which is how a long city name would push the
+   block wider than the island). */
+.market-block-body {
   flex: 1 1 auto;
+  min-width: 0;
+}
+.market-block-text {
+  display: block;
 }
 /* Demo-only shortcut (DEMO_MODE.md) — a text action, never competing with
-   Confirm. Wraps under the copy so it never squeezes the sentence. */
+   Confirm. Sits under the copy, full width of the column. */
 .market-block-jump {
   display: block;
-  margin-top: 7px;
+  margin-top: 8px;
   padding: 0;
   border: 0;
   background: none;
   cursor: pointer;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--accent-bright);
   text-align: left;

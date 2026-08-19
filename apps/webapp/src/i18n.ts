@@ -139,7 +139,7 @@ const dict: Record<Lang, Strings> = {
     locSelectedPrefix: "Selected: ",
     locCustomPoint: "Custom point on map",
     locOutsideMarket:
-      "Gennety only works in {city} for now. Mark the spot in {city} you'll be setting off from — I look for a place within a short trip of you both.",
+      "Gennety only works in {city} for now. Mark the spot inside the city you'll be setting off from.",
     locJumpToCity: "Drop the pin in {city}",
     locShareCurrent: "Share my location",
     locSharingCurrent: "Locating…",
@@ -225,7 +225,7 @@ const dict: Record<Lang, Strings> = {
     locSelectedPrefix: "Выбрано: ",
     locCustomPoint: "Точка на карте",
     locOutsideMarket:
-      "Gennety пока работает только в {city}. Отметь точку в {city}, откуда будешь выезжать — я ищу место недалеко от вас обоих.",
+      "Gennety пока работает только в {city}. Отметь точку внутри города, откуда будешь выезжать.",
     locJumpToCity: "Поставить точку в {city}",
     locShareCurrent: "Поделиться геолокацией",
     locSharingCurrent: "Ищем геолокацию…",
@@ -311,7 +311,7 @@ const dict: Record<Lang, Strings> = {
     locSelectedPrefix: "Обрано: ",
     locCustomPoint: "Точка на карті",
     locOutsideMarket:
-      "Gennety поки працює лише в {city}. Познач точку в {city}, звідки будеш виїжджати — я шукаю місце неподалік від вас обох.",
+      "Gennety поки працює лише в {city}. Познач точку всередині міста, звідки будеш виїжджати.",
     locJumpToCity: "Поставити точку в {city}",
     locShareCurrent: "Поділитися геолокацією",
     locSharingCurrent: "Шукаємо геолокацію…",
@@ -397,7 +397,7 @@ const dict: Record<Lang, Strings> = {
     locSelectedPrefix: "Ausgewählt: ",
     locCustomPoint: "Eigener Punkt auf der Karte",
     locOutsideMarket:
-      "Gennety ist vorerst nur in {city} aktiv. Markiere den Punkt in {city}, von dem du losfährst - ich suche einen Ort in kurzer Entfernung für euch beide.",
+      "Gennety ist vorerst nur in {city} aktiv. Markiere den Punkt innerhalb der Stadt, von dem du losfährst.",
     locJumpToCity: "Punkt in {city} setzen",
     locShareCurrent: "Meinen Standort teilen",
     locSharingCurrent: "Standort wird gesucht...",
@@ -484,7 +484,7 @@ const dict: Record<Lang, Strings> = {
     locSelectedPrefix: "Wybrano: ",
     locCustomPoint: "Własny punkt na mapie",
     locOutsideMarket:
-      "Gennety działa na razie tylko w {city}. Zaznacz punkt w {city}, z którego wyruszysz - szukam miejsca blisko was obojga.",
+      "Gennety działa na razie tylko w {city}. Zaznacz punkt w granicach miasta, z którego wyruszysz.",
     locJumpToCity: "Zaznacz punkt w {city}",
     locShareCurrent: "Udostępnij lokalizację",
     locSharingCurrent: "Szukamy lokalizacji...",
