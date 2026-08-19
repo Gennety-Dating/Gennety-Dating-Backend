@@ -556,7 +556,10 @@ describe("splitReplyIntoBubbles", () => {
 
 describe("menu-agent offer_cancel_premium", () => {
   const telegramId = BigInt(2002);
-  const FUTURE = new Date("2026-08-19T12:00:00Z");
+  // Relative, never a literal: `isPremiumHeadActive` compares against the real
+  // clock, so a hardcoded "future" date silently becomes the past and the
+  // subscription reads as expired — the whole case then asserts nothing.
+  const FUTURE = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
   beforeEach(() => {
     vi.resetAllMocks();
