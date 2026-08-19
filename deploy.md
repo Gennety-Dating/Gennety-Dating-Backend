@@ -7459,6 +7459,16 @@ ships, while `apps/bot > …` does — but fix all of them anyway, because the g
 is pass/fail and one tolerated advisory turns it into a permanently red check
 nobody reads.
 
+**A brand-new transitive advisory is the same tax, and it landed again on
+2026-08-20** — `deepmerge-ts` <8.0.0 (GHSA-ggr8-5vv4-36mx, high) reaching in
+through `packages/db > prisma > @prisma/config`. Pinned to `8.0.1`. Build-time
+only (it is Prisma's config loader, not the bot's request path), but **verify
+the CLI still runs before trusting the pin**: the demo and production deploys
+both call `db:push`/`db:generate` through that exact dependency, so an override
+that satisfies `pnpm audit` and breaks Prisma would surface as a failed deploy
+rather than a failed preflight. `prisma --version` (which loads `@prisma/config`)
+plus `db:generate` is the whole check.
+
 Identity and profile-media validation preflight:
 
 ```sh
