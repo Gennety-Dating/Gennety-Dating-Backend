@@ -38,6 +38,52 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
   // matching the existing `statusButtonDaysHours` ("Do dropu: {d}d {h}h").
   "statusTimeDaysHours",
 ]);
+/**
+ * Keys that are legitimately byte-identical between Ukrainian and Russian.
+ * The two languages share a great deal of vocabulary, so an identical value is
+ * not automatically a missing translation — but it is not automatically fine
+ * either, and nothing used to tell the two apart. Every entry here must be a
+ * pure glyph/template, a fixed brand line, a word that is genuinely the same in
+ * both languages, or an explicit product decision — never "we forgot".
+ */
+const ALLOWED_IDENTICAL_UK_RU = new Set<string>([
+  // Pure glyphs / placeholder templates / a bare domain — no prose to translate.
+  "btnLike",
+  "btnDislike",
+  "myProfileBody",
+  "matchPhotoCaption",
+  "coordProxyRelayNamedPrefix",
+  "referralCardFooter",
+  "coordCardAskHead2",
+  "photoReceived",
+  // Deliberate fixed English brand line in all five locales (PRODUCT_SPEC §3.7a).
+  "dateCardSlogan",
+  // Fixed brand lines — "Gennety Premium" / "Реметч" are product names, and the
+  // Cyrillic spelling of Rematch is shared by both languages.
+  "menuPremium",
+  "premiumHubTitle",
+  "premiumInvoiceTitle",
+  "menuPremiumActive",
+  "rematchInvoiceTitle",
+  "rematchInvoiceLabel",
+  // Single words that are spelled identically in Ukrainian and Russian.
+  // Translating them would mean inventing a synonym nobody uses.
+  "menuBack",
+  "reportBackBtn",
+  "stallBtnCancelBack",
+  "matchBtnKeepDeciding",
+  "matchBtnDecline",
+  "menuPause",
+  "photoManagerDoneBtn",
+  "settingsTheme",
+  // Founder decision 2026-08-19 (DECISIONS.md): reviewed alongside the three
+  // "Думаю…" status beats that WERE rewritten, and deliberately kept. "Го!" is
+  // an English loanword equally at home in both languages, and "Погнали" /
+  // "Не задано" are real Ukrainian — changing them is taste, not a fix.
+  "philosophyContinue",
+  "referralGiftContinue",
+  "editPrefsNotSet",
+]);
 
 describe("t (translation)", () => {
   it("returns English string by default", () => {
@@ -140,6 +186,44 @@ describe("t (translation)", () => {
         leaked,
         `${leaked.length} ${lang} key(s) are byte-identical to English — either translate them, ` +
           `or add them to ALLOWED_IDENTICAL_TO_EN with a reason if there is genuinely nothing to translate.`,
+      ).toEqual([]);
+    },
+  );
+  // The de/pl guard above cannot see the ru/uk pair: those two are hand-written
+  // tables, not spreads of English, so a forgotten Ukrainian string does not
+  // fall back — it gets pasted from Russian instead, and reads to a Ukrainian
+  // user as untranslated even when the word is technically valid in both. That
+  // is exactly how three status beats shipped as "Думаю…" in both languages
+  // (found 2026-08-19). An identical value is allowed only with a stated reason.
+  it("uk is never a byte-identical copy of ru (hand-written-table guard)", () => {
+    const leaked = TRANSLATION_KEYS.filter(
+      (key) => !ALLOWED_IDENTICAL_UK_RU.has(key) && t("uk", key) === t("ru", key),
+    );
+    expect(
+      leaked,
+      `${leaked.length} uk key(s) are byte-identical to Russian — either translate them, ` +
+        `or add them to ALLOWED_IDENTICAL_UK_RU with a reason if the two languages genuinely ` +
+        `share the wording.`,
+    ).toEqual([]);
+  });
+
+  // A cheaper, allowlist-free signal for the same class of copy-paste: letters
+  // that exist in one alphabet and not the other. Ukrainian has no ы/э/ъ/ё and
+  // Russian has no і/ї/є/ґ, so a hit is never a judgement call — it is a letter
+  // the language does not contain. This is what would have caught "цей мэтч"
+  // (uk, `matchDeclineDismissed`) the day it was written.
+  const FOREIGN_LETTERS = {
+    uk: /[ыэъёЫЭЪЁ]/,
+    ru: /[іїєґІЇЄҐ]/,
+  } as const;
+  it.each(["uk", "ru"] as const)(
+    "%s uses no letters from the other Cyrillic alphabet",
+    (lang) => {
+      const re = FOREIGN_LETTERS[lang];
+      const leaked = TRANSLATION_KEYS.filter((key) => re.test(t(lang, key)));
+      expect(
+        leaked,
+        `${lang} key(s) contain letters that do not exist in that alphabet: ${leaked.join(", ")}`,
       ).toEqual([]);
     },
   );

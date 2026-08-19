@@ -744,7 +744,7 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupMustHaves: "Обов'язково",
     multiHint: "можна кілька",
     singleHint: "обери одне",
-    thinkingSteps: ["Зчитую вайб…", "Думаю…", "Виділяю деталі…"],
+    thinkingSteps: ["Зчитую вайб…", "Обмірковую…", "Виділяю деталі…"],
   },
   de: {
     step: "Schritt 2 von 2",
