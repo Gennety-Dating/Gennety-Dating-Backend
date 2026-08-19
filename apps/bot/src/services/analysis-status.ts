@@ -251,3 +251,33 @@ export function profilerBatchSteps(lang: Language): StatusStep[] {
     { text: t(lang, "profilerBatchSaved"), holdMs: 0 },
   ];
 }
+
+/**
+ * Shown after a paid Rematch is settled, covering the single-seeker engine run
+ * (PRODUCT_SPEC §3.11). THE money-critical wait: he has just paid and is
+ * watching an empty chat, and until this existed the most expensive step in the
+ * product was visually cheaper than uploading a photo during registration.
+ *
+ * Two properties make this script different from every other builder here.
+ *
+ * It runs **at least 10 seconds** (2.2 + 2.4 + 2.6 + 2.8 = 10.0s), and the
+ * caller passes {@link NEVER_CUT_SHORT}, so a fast engine run does NOT truncate
+ * it — `until` may only ever hold the last beat *longer*. `runRematch` usually
+ * answers in a second or two, so most of this is deliberate cover; that is the
+ * point, and `analysis-status.test.ts` pins the floor.
+ *
+ * And **no beat here is a labour illusion**. Real work runs underneath every
+ * line: `buildCandidateSql` (city, mutual gender, contact rail, the lifetime
+ * pair ban, the candidate cooldown) → embedding + vibe-axis scoring → greedy
+ * top-1. That is the opposite of the Type Radar close (`RADAR_THINKING_ENABLED`),
+ * which narrates nothing and says so — do not copy this script's confidence to a
+ * surface that has not earned it.
+ */
+export function rematchSearchSteps(lang: Language): StatusStep[] {
+  return [
+    { text: t(lang, "rematchSearchStep1"), holdMs: 2200, emojiId: AI_EMOJI.scan },
+    { text: t(lang, "rematchSearchStep2"), holdMs: 2400, emojiId: AI_EMOJI.matching },
+    { text: t(lang, "rematchSearchStep3"), holdMs: 2600, emojiId: AI_EMOJI.vibe },
+    { text: t(lang, "rematchSearchStep4"), holdMs: 2800, emojiId: AI_EMOJI.spark },
+  ];
+}

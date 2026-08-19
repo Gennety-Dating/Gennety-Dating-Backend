@@ -12,12 +12,16 @@
  * means we only mint an invoice for someone who actually wants one.
  */
 
-import { InlineKeyboard, type Api, type RawApi } from "grammy";
+import { InlineKeyboard, InputFile, type Api, type RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { t, buildRematchInvoicePayload, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import type { BotContext } from "../../session.js";
 import { checkRematchEligibility } from "../../services/rematch.js";
+import { renderRematchCard, type RematchCardTheme } from "../../services/rematch-card.js";
+
+/** Bot API caps a photo caption at 1024 chars; a plain text message gets 4096. */
+const CAPTION_LIMIT = 1024;
 
 /** Which pain moment produced this offer (selects the copy). */
 export type RematchOfferVariant = "famine" | "failed" | "neutral";
@@ -55,13 +59,17 @@ export async function sendRematchOfferIfEligible(
   if (!eligibility?.ok) return false;
 
   const user = await prisma.user
-    .findUnique({ where: { id: userId }, select: { telegramId: true, language: true } })
+    .findUnique({
+      where: { id: userId },
+      select: { telegramId: true, language: true, theme: true },
+    })
     .catch(() => null);
   // Telegram-only in v1: a mobile-only account carries a synthetic negative id
   // and has no Stars rail here.
   if (!user || user.telegramId <= 0n) return false;
 
   const lang = (user.language ?? "en") as Language;
+  const theme: RematchCardTheme = user.theme === "light" ? "light" : "dark";
   const OFFER_COPY = {
     famine: "rematchOfferFamine",
     failed: "rematchOfferFailed",
@@ -75,12 +83,53 @@ export async function sendRematchOfferIfEligible(
     REMATCH_BUY_CALLBACK,
   );
 
+  const chatId = Number(user.telegramId);
+  const extra = { reply_markup: keyboard };
+
+  const sendText = async (): Promise<boolean> => {
+    try {
+      await api.sendMessage(chatId, text, extra);
+      return true;
+    } catch (err) {
+      console.warn(`[rematch] offer send failed user=${userId}:`, (err as Error).message);
+      return false;
+    }
+  };
+
+  // Since 2026-08-20 the offer leads with a rendered card (PRODUCT_SPEC §3.11).
+  // Everything below is fail-open by construction, and the return value keeps
+  // meaning "an offer reached him" rather than "a picture did": this DM is the
+  // only way a paid feature is reached at all, so it degrades to exactly the
+  // plain text that shipped before the card existed rather than failing.
+  //
+  // A caption Telegram would truncate is worse than no card: the caption
+  // carries the terms and the price, and the card deliberately carries neither.
+  if (text.length > CAPTION_LIMIT) return sendText();
+
+  const png = await renderRematchCard({
+    overline: t(lang, "rematchCardOverline"),
+    headline: t(lang, "rematchCardHeadline"),
+    subline: t(lang, "rematchCardSubline"),
+    theme,
+  });
+  if (!png) return sendText();
+
   try {
-    await api.sendMessage(Number(user.telegramId), text, { reply_markup: keyboard });
+    // No `protect_content`, unlike every other card send in the product: those
+    // all render a partner's face (§3.7a) and this one renders an abstract
+    // motif, because at offer time nobody has been picked yet. Protecting it
+    // would only black it out of a screen recording for nothing.
+    await api.sendPhoto(chatId, new InputFile(png, "rematch-offer.png"), {
+      caption: text,
+      ...extra,
+    });
     return true;
   } catch (err) {
-    console.warn(`[rematch] offer send failed user=${userId}:`, (err as Error).message);
-    return false;
+    console.warn(
+      `[rematch] offer photo failed user=${userId}, falling back to text:`,
+      (err as Error).message,
+    );
+    return sendText();
   }
 }
 

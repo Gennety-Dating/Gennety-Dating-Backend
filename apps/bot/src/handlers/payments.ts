@@ -17,6 +17,8 @@ import { gateStarsForScope } from "../services/ticket-payment.js";
 import { recordChatEventForChat } from "../services/chat-events.js";
 import { activateOrExtendPremium, formatPremiumUntil } from "../services/premium.js";
 import { notifyFounderPurchase } from "../services/founder-notify.js";
+import { runStatusSequence, NEVER_CUT_SHORT } from "../services/ai-stream.js";
+import { rematchSearchSteps } from "../services/analysis-status.js";
 
 /**
  * Telegram Stars (XTR) payment handlers.
@@ -444,9 +446,38 @@ async function handleRematchSuccessfulPayment(
     externalPaymentId: payment.telegram_payment_charge_id,
   });
 
-  // (2) Re-validate + run. Any throw leaves the row `processing`, which the
-  // hourly sweep refunds — never a silent loss.
-  const run = await runRematch(user.id);
+  // (2) Re-validate + run, covered by the §3.11 search animation.
+  //
+  // The engine starts FIRST and the shimmer is laid over it, so the ten seconds
+  // are spent on work rather than in front of it.
+  //
+  // `NEVER_CUT_SHORT` is what makes the ten-second floor hold in the COMMON
+  // case, not the rare one: `runRematch` usually answers in a second or two, and
+  // the default `until` behaviour would then cut the script to half of its first
+  // beat — the exact "status looks broken" failure that flag was introduced for.
+  // With it, `until` may only ever hold the LAST beat longer.
+  //
+  // The animation deliberately does NOT extend over `dispatchMatches` below.
+  // The pitch carries its own rich compose stream (§3.3), so covering it too
+  // would put two drafts in one chat competing for the same space, and the
+  // pitch's own arrival would collapse ours instead of tearing it down cleanly.
+  const runPromise = runRematch(user.id);
+  // Mark handled so a rejection mid-animation is not an unhandledRejection. The
+  // real throw is re-raised at the await below, where the existing contract
+  // holds unchanged: the row stays `processing` and the hourly sweep refunds it.
+  runPromise.catch(() => {});
+
+  // A decorative status may never cost a paid match, so this swallows its own
+  // failures — same rule the venue-change banner push follows at its call site.
+  await runStatusSequence(ctx.api, Number(telegramId), rematchSearchSteps(lang), {
+    rich: true,
+    until: runPromise,
+    untilFromStepIndex: NEVER_CUT_SHORT,
+  }).catch((err) => {
+    console.warn("[rematch] search status failed:", err);
+  });
+
+  const run = await runPromise;
 
   // (3a) Nothing delivered → refund (D1). This is the ONLY refundable class:
   // a decline or a ghost later on is explicitly not refunded, and the offer copy
@@ -476,7 +507,16 @@ async function handleRematchSuccessfulPayment(
     },
   });
 
-  await ctx.reply(t(lang, "rematchFound", {})).catch(() => {});
+  // The payoff at the end of the search animation, and the only celebratory
+  // beat this flow has. The effect ships inert (empty env) — see config.ts for
+  // why it is here and not on the offer card that asks for the money.
+  const foundEffectId = env.MESSAGE_EFFECT_REMATCH_ID;
+  await ctx
+    .reply(
+      t(lang, "rematchFound", {}),
+      foundEffectId ? { message_effect_id: foundEffectId } : {},
+    )
+    .catch(() => {});
 
   const { dispatchMatches } = await import("../services/dispatch-queue.js");
   await dispatchMatches(ctx.api, [run.matchId]).catch((err) => {

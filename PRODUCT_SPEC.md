@@ -5076,6 +5076,71 @@ in v1. Full spec: [REMATCH_PRODUCT_SPEC.md](REMATCH_PRODUCT_SPEC.md).
     protects is the product: a woman must never learn the feature exists, and a
     playbook rule is not a boundary. The refusal string names no feature, since
     the tool result is fed back to the model verbatim.
+- **The search is shown, for at least ten seconds (2026-08-20).** This is the
+  one place in the product where a user has paid and is waiting *right now*, and
+  it was the driest surface we ship: the money moved and a second later a bare
+  line said "found someone". The engine run is now covered by a rich
+  `<tg-thinking>` shimmer — four beats, one animated AIActions glyph each
+  (`rematchSearchSteps`, `services/analysis-status.ts`) — that always plays in
+  full and only ever runs longer.
+  - **The floor is the requirement, not the implementation.** `runRematch`
+    usually answers in a second or two, so the shimmer is passed
+    `untilFromStepIndex: NEVER_CUT_SHORT`: `until` may hold the LAST beat
+    longer, never truncate the script. Without that flag a fast run collapses
+    the ten seconds into half of one beat, which reads as the status having
+    broken rather than as work finishing early — the exact failure that flag
+    was introduced for (§1.3). Nothing else in the code states the floor, so
+    `analysis-status.test.ts` is what holds it.
+  - **No beat is a labour illusion.** Real work runs under every line —
+    `buildCandidateSql` (city, mutual gender, contact rail, the lifetime pair
+    ban, the candidate cooldown) → embedding + vibe-axis scoring → greedy
+    top-1. That is the opposite of the Type Radar close
+    (`RADAR_THINKING_ENABLED`), which narrates nothing and says so; this
+    script's confidence is earned and must not be copied to a surface that has
+    not earned it.
+  - **It covers `runRematch` and stops there.** The pitch carries its own rich
+    compose stream (§3.3), so extending over `dispatchMatches` would put two
+    drafts in one chat competing for the same space and let the pitch's own
+    arrival collapse ours instead of a clean teardown. The chain reads: search
+    shimmer → "found someone" → the pitch's own shimmer → the profile.
+  - **A refusal now takes those ten seconds too**, and that is deliberate
+    rather than unavoidable-and-tolerated: until the run finishes we do not know
+    it IS a refusal, and the same ten seconds honestly show that we looked —
+    the argument §3.1 already makes for delivering the famine notice as a rich
+    stream instead of an instant line.
+  - **The shimmer can never cost a paid match.** It is decoration on a path
+    where money has already moved, so it swallows its own failures, and an
+    engine throw still leaves the purchase row `processing` for the hourly
+    sweep to refund exactly as before.
+  - The payoff line carries an optional message effect
+    (`MESSAGE_EFFECT_REMATCH_ID`, empty by default). Deliberately NOT on the
+    offer card: §3.5b records that a decorative flourish beside a request for
+    money reads as marketing rather than as a receipt.
+- **The offer leads with a rendered card (2026-08-20).** The DM that proposes
+  the purchase was plain text with a button while every other emotional beat —
+  the expiry notice, the coordination fork, the date card — already carried a
+  PNG. It now ships as one message: the card, the existing localized offer copy
+  as its caption, and the same buy button (`services/rematch-card.ts`, satori →
+  resvg, recipient's `User.theme`, the same 1080² silhouette and chrome as the
+  §3.4 expiry card).
+  - **ONE card, not three** (founder decision). The three offer copies stay the
+    caption and say what just HAPPENED; the card says what is being OFFERED, so
+    nothing is stated twice — the same split §3.4 applies to the expiry card.
+  - **The motif is abstract by necessity**: at offer time nobody has been picked
+    yet, so there is no partner to depict and no hint that could be dropped
+    without inventing one. It is the pool — concentric rings, muted dots, one
+    accented and ringed — and its geometry is **authored, never
+    `Math.random()`**, by the rule `preference-layout.ts` states.
+  - **It carries no price.** A PNG is immutable and Telegram caches it, while
+    the price lives in env; a baked-in figure would go stale silently on the one
+    screen that asks for money. Price stays in the caption and on the button.
+  - **No `protect_content`**, unlike every other card send (§3.7a): there is no
+    face on it, and protecting it would only black it out of a screen recording.
+  - **Fail-open in four places**, because this DM is the only way the feature is
+    reached at all (D4 leaves no menu row): an over-1024 caption skips the card
+    without even rendering, a null render, and a rejected `sendPhoto` each fall
+    through to exactly the plain text that shipped before — and "sent" keeps
+    meaning an offer reached him, not that a picture did.
 - **Cadence.** Every D3 limit now resolves as `env ?? CADENCE`
   (`rematchLimits()`): the profile is the source of truth and the env vars are
   ops overrides. Before 2026-08-09 four of the five `DropCadence` rematch fields

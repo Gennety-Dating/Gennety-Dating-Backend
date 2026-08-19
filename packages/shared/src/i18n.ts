@@ -1196,6 +1196,13 @@ const translations = {
       "The last one didn't work out. I went back to the search and found someone who fits you better.",
     rematchGiftNeutral:
       "I kept working on it — and there's someone I'd like you to meet.",
+    rematchSearchStep1: "🔍 Starting a deep search",
+    rematchSearchStep2: "Checking who is free in your city right now",
+    rematchSearchStep3: "Matching on character and interests",
+    rematchSearchStep4: "✨ Almost there — picking one",
+    rematchCardOverline: "YOUR MATCHMAKER",
+    rematchCardHeadline: "ONE MORE\nSEARCH",
+    rematchCardSubline: "A new person, picked the same way.",
   },
   ru: {
     // --- Onboarding ---
@@ -2298,6 +2305,13 @@ const translations = {
       "В прошлый раз не сложилось. Я вернулся к поиску и нашёл того, кто подходит тебе больше.",
     rematchGiftNeutral:
       "Я продолжал искать — и есть человек, которого хочу тебе показать.",
+    rematchSearchStep1: "🔍 Включаю глубокий поиск",
+    rematchSearchStep2: "Смотрю, кто сейчас свободен в твоём городе",
+    rematchSearchStep3: "Сверяю по характеру и интересам",
+    rematchSearchStep4: "✨ Почти — выбираю одного",
+    rematchCardOverline: "ТВОЙ МЭТЧМЕЙКЕР",
+    rematchCardHeadline: "ЕЩЁ ОДИН\nЗАХОД",
+    rematchCardSubline: "Новый человек, подбор тот же.",
   },
   uk: {
     // --- Onboarding ---
@@ -3398,6 +3412,13 @@ const translations = {
       "Минулого разу не склалося. Я повернувся до пошуку і знайшов того, хто підходить тобі більше.",
     rematchGiftNeutral:
       "Я продовжував шукати — і є людина, яку хочу тобі показати.",
+    rematchSearchStep1: "🔍 Вмикаю глибокий пошук",
+    rematchSearchStep2: "Дивлюся, хто зараз вільний у твоєму місті",
+    rematchSearchStep3: "Звіряю за характером та інтересами",
+    rematchSearchStep4: "✨ Майже — обираю одного",
+    rematchCardOverline: "ТВІЙ МЕТЧМЕЙКЕР",
+    rematchCardHeadline: "ЩЕ ОДИН\nЗАХІД",
+    rematchCardSubline: "Нова людина, добір той самий.",
   },
 } as const;
 
@@ -4475,6 +4496,13 @@ const deTranslations: TranslationTable = {
     "Letztes Mal hat es nicht geklappt. Ich bin zurück in die Suche und habe jemanden gefunden, der besser zu dir passt.",
   rematchGiftNeutral:
     "Ich habe weitergesucht — und da ist jemand, den du kennenlernen solltest.",
+  rematchSearchStep1: "🔍 Starte die Tiefensuche",
+  rematchSearchStep2: "Ich schaue, wer gerade in deiner Stadt frei ist",
+  rematchSearchStep3: "Ich gleiche Charakter und Interessen ab",
+  rematchSearchStep4: "✨ Gleich — ich wähle eine Person aus",
+  rematchCardOverline: "DEIN MATCHMAKER",
+  rematchCardHeadline: "NOCH EIN\nVERSUCH",
+  rematchCardSubline: "Eine neue Person, dieselbe Auswahl.",
 };
 
 const plTranslations: TranslationTable = {
@@ -5549,6 +5577,13 @@ const plTranslations: TranslationTable = {
     "Ostatnio nie wyszło. Wróciłem do szukania i znalazłem kogoś, kto pasuje ci bardziej.",
   rematchGiftNeutral:
     "Szukałem dalej — i jest ktoś, kogo chcę ci pokazać.",
+  rematchSearchStep1: "🔍 Włączam głębokie wyszukiwanie",
+  rematchSearchStep2: "Sprawdzam, kto jest teraz wolny w twoim mieście",
+  rematchSearchStep3: "Porównuję charakter i zainteresowania",
+  rematchSearchStep4: "✨ Już prawie — wybieram jedną osobę",
+  rematchCardOverline: "TWÓJ MATCHMAKER",
+  rematchCardHeadline: "NOWE\nPODEJŚCIE",
+  rematchCardSubline: "Nowa osoba, ten sam dobór.",
 };
 
 const translationsByLanguage: Record<Language, TranslationTable> = {

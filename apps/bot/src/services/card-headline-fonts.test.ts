@@ -4,6 +4,7 @@ import { Resvg } from "@resvg/resvg-js";
 
 import { loadFonts as timeCardFonts } from "./time-card.js";
 import { loadFonts as matchCardFonts } from "./match-card/index.js";
+import { loadFonts as rematchCardFonts } from "./rematch-card.js";
 
 /**
  * Headline-font coverage for the PNG cards that render localized display type.
@@ -91,6 +92,7 @@ const CARDS: ReadonlyArray<[string, string, () => SatoriFonts]> = [
   // Family name is the one each renderer actually asks for in its styles.
   ["time-card", "Unbounded", timeCardFonts],
   ["match-card", "Unbounded", matchCardFonts],
+  ["rematch-card", "Unbounded", rematchCardFonts],
 ];
 
 describe("card headline font coverage", () => {

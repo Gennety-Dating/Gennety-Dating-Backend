@@ -198,6 +198,22 @@ derived from these rows, so there is no counter to drift.
 > price — is the step that introduces one. Only its button mints the invoice.
 > Same rule §3.8 applies to the Premium hub.
 
+> **Amended 2026-08-20 — the offer is a rendered card, and the search is
+> visible.** Two additions, neither of which changes who is offered what:
+>
+> - The offer DM leads with a PNG (`services/rematch-card.ts`) carrying the
+>   existing copy as its caption and the same buy button. One card for all three
+>   variants: the caption says what HAPPENED, the card says what is OFFERED, and
+>   the motif is abstract because at offer time nobody has been picked yet. It
+>   carries no price (env-owned, and a PNG goes stale silently) and no
+>   `protect_content` (no face on it). Every failure — an over-long caption, a
+>   null render, a rejected `sendPhoto` — degrades to the exact plain text that
+>   shipped before, because this DM is the only way the feature is reached at
+>   all.
+> - Settlement plays a ≥10s `<tg-thinking>` search animation over the engine
+>   run (`rematchSearchSteps`, `NEVER_CUT_SHORT`), including before a refund.
+>   Full reasoning in PRODUCT_SPEC §3.11.
+
 1. **No-match DM** (Thursday 18:15, `no-match-notifier.ts`) — the offer follows
    as its **own** short DM rather than being folded into the no-match message.
    That message is a deliberately short, empathetic rich stream (§3.1); bolting a
@@ -304,6 +320,13 @@ untouched.
   change, and Premium.
 
 ## Env
+
+**`MESSAGE_EFFECT_REMATCH_ID`** (added 2026-08-20, optional, **empty by
+default**) — Bot API 7.6+ message effect on the "found someone" DM, the payoff
+at the end of the search animation. Ships inert like `MESSAGE_EFFECT_MATCH_ID` /
+`_TICKET_ID` / `_FEEDBACK_ID`: pick an id and set it in `/opt/gennety/.env`.
+Never put it on the offer card instead — PRODUCT_SPEC §3.5b records why a
+flourish beside a request for money reads as marketing rather than as a receipt.
 
 **Cadence note (rewritten 2026-08-09 — the previous version is now wrong).**
 Every D3 limit resolves as **`env ?? CADENCE`** through `rematchLimits()`

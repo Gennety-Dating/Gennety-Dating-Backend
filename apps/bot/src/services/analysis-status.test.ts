@@ -3,6 +3,7 @@ import { SUPPORTED_LANGUAGES, t, type Language } from "@gennety/shared";
 import {
   photoReviewSteps,
   photoUploadSteps,
+  rematchSearchSteps,
   venueSearchSteps,
   videoCheckSteps,
 } from "./analysis-status.js";
@@ -102,5 +103,56 @@ describe("videoCheckSteps", () => {
       t("ru", "videoCheckStep2"),
       t("ru", "videoCheckStep3"),
     ]);
+  });
+});
+
+/**
+ * The paid-Rematch search cover (PRODUCT_SPEC §3.11). Unlike every other script
+ * here, its DURATION is the product requirement rather than an implementation
+ * detail: the founder asked for the animation to run at least ten seconds so a
+ * sub-second engine run still reads as a real search. Nothing else in the code
+ * states that floor, so a well-meant "these holds feel long" edit would silently
+ * delete the feature — this test is the only thing that notices.
+ */
+describe("rematchSearchSteps", () => {
+  const total = (lang: Language): number =>
+    rematchSearchSteps(lang).reduce((sum, step) => sum + step.holdMs, 0);
+
+  it("runs for at least 10 seconds in every language", () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      expect(total(lang)).toBeGreaterThanOrEqual(10_000);
+    }
+  });
+
+  it("is identically paced across languages — only the copy is localised", () => {
+    const en = rematchSearchSteps("en");
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const steps = rematchSearchSteps(lang);
+      expect(steps.map((s) => s.holdMs)).toEqual(en.map((s) => s.holdMs));
+      expect(steps.map((s) => s.emojiId)).toEqual(en.map((s) => s.emojiId));
+    }
+  });
+
+  it("gives every beat its own AIActions glyph, and never repeats one", () => {
+    // A repeated glyph reads as the status having frozen rather than advanced —
+    // the one thing a cover script must never look like.
+    const ids = rematchSearchSteps("en").map((s) => s.emojiId);
+    expect(ids.every((id) => typeof id === "string" && id.length > 0)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids[0]).toBe(AI_EMOJI.scan);
+  });
+
+  it("has non-empty, distinct copy per beat in every language", () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const texts = rematchSearchSteps(lang).map((s) => s.text);
+      expect(texts.every((text) => text.trim().length > 0)).toBe(true);
+      expect(new Set(texts).size).toBe(texts.length);
+      // The copy must resolve — a missing key would render the key name itself.
+      expect(texts).not.toContain("rematchSearchStep1");
+    }
+  });
+
+  it("keeps the localised copy in step with i18n", () => {
+    expect(rematchSearchSteps("ru")[0]!.text).toBe(t("ru", "rematchSearchStep1"));
   });
 });

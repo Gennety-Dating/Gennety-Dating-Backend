@@ -184,6 +184,16 @@ export const env = {
   /// with another id (e.g. ❤️ `5159385139981059251`) or set empty to disable
   /// (the gift DM still sends, just without the animation).
   MESSAGE_EFFECT_GIFT_ID: process.env.MESSAGE_EFFECT_GIFT_ID ?? "5046509860389126442",
+  /// Optional Bot API 7.6+ message effect played on the paid-Rematch "found
+  /// someone" DM — the payoff at the end of the §3.11 search animation, and the
+  /// only celebratory beat that whole flow has.
+  ///
+  /// Deliberately NOT on the offer card that asks for the money: §3.5b records
+  /// the founder decision that a decorative flourish beside a request for
+  /// payment reads as marketing rather than as a receipt. Ships EMPTY like
+  /// `MESSAGE_EFFECT_MATCH_ID` / `_TICKET_ID` / `_FEEDBACK_ID`, so the feature
+  /// is inert until an id is chosen and set in `/opt/gennety/.env`.
+  MESSAGE_EFFECT_REMATCH_ID: process.env.MESSAGE_EFFECT_REMATCH_ID ?? "",
   WEBAPP_URL: process.env.WEBAPP_URL?.trim() || "https://example.invalid/calendar",
   /// URL of the post-date Feedback Mini App bundle. When unset, derived from
   /// `WEBAPP_URL` by appending `/feedback.html` — Caddy serves both the
