@@ -9,7 +9,7 @@
  * **The phone does not move, and neither does the shot.** The handset is a
  * single physical object at world (0, 0), the same size for the whole film; a
  * shot is a video that plays on its screen. Everything the viewer reads as
- * movement is one continuous camera, defined for the whole 45 seconds in
+ * movement is one continuous camera, defined for the whole 50 seconds in
  * `camera.ts`, which does not know where these boundaries are.
  *
  * That is a change of ownership rather than a change of policy, and it
@@ -26,9 +26,11 @@
  *
  * Overlapping `from` values are the ONLY thing that produces a dissolve, and a
  * dissolve now crossfades the SCREEN inside one unmoving handset rather than
- * two handsets over each other. There are three, all at a change of register.
+ * two handsets over each other. There are **two**, both at a change of
+ * register: into the match decision, and into the date card. (This comment said
+ * "three" until 2026-08-19; counted against the data it was never three.)
  *
- * Everything else is a hard cut, and stays one. Six of them additionally carry
+ * Everything else is a hard cut, and stays one. Nine of them additionally carry
  * a 6-9 frame `fadeIn` — not to soften the edit, but to take out a measured
  * one-frame jump in BRIGHTNESS. See the field's own note.
  */
@@ -56,13 +58,13 @@ export type Shot = {
    * Crossfade IN over this many frames — screen content only, never the phone.
    *
    * The film guarantees the outgoing clip is still playing underneath for the
-   * whole fade: either the two shots already overlap (the three dissolves), or
+   * whole fade: either the two shots already overlap (the two dissolves), or
    * `GennetyHero` extends the outgoing shot to cover it. So only the incoming
    * ever fades, over something fully opaque, and the picture cannot dip.
    *
-   * Six shots carry a SHORT one (6-9 frames) and they are not dissolves — they
+   * Nine shots carry a SHORT one (6-9 frames) and they are not dissolves — they
    * are still hard cuts, with the one-frame brightness step taken out of them.
-   * Measured on the render: those six boundaries jumped the frame's mean
+   * Measured on the render: those boundaries jumped the frame's mean
    * luminance by 8-23 points in a single frame («рост» -> chat was 11.6 -> 34.2),
    * and on a black page inside a motionless handset that reads as a flash. The
    * reference does not have the problem because its screens change with real
@@ -175,42 +177,80 @@ export const SHOTS: Shot[] = [
     src: "time-reveal",
     trim: 18,
   },
+  // ---------------------------------------------------------------------------
+  // The venue act (rebuilt 2026-08-19 from IMG_2730 / IMG_2731).
+  //
+  // It used to be 3.4s: a departure pin, then an EMPTY "Яке місце?" form with a
+  // keyboard under it. That showed the screen the concierge works on and never
+  // the work — the one field the whole feature turns on was blank on camera.
+  // Four shots now carry the actual sequence: you search a real address, the pin
+  // lands, you say what you want in your own words, and the product reads it
+  // back to you as structure. 9.3s, and it is the reason the film is 4.5s longer.
+  // ---------------------------------------------------------------------------
   {
     beat:
-      "Звідки ти виїжджаєш — the departure pin. Cut from an earlier version and " +
-      "restored: without it the venue simply appears, and the point is that the " +
-      "concierge picks somewhere both people can actually reach. Trimmed to " +
-      "1.5–3.3s of its clip: before that the Mini App is still loading, after it " +
-      "a browser geolocation prompt covers the screen.",
+      "Звідки ти виїжджаєш — the departure point, as a real search. Typing " +
+      "«Володимирська» and watching Places answer is what makes it a product " +
+      "rather than a map screenshot; the previous take had no query in it at all.",
     from: 1030,
-    durationInFrames: 54,
-    src: "place-map",
-    trim: 45,
+    durationInFrames: 78,
+    src: "place-search",
+    trim: 12,
     fadeIn: 6,
   },
   {
-    beat: "Яке місце? — the last thing a human says before the concierge takes over.",
-    from: 1084,
-    durationInFrames: 60,
-    src: "place-vibe",
-    trim: 30,
+    beat:
+      "The pin lands on the picked address and «Підтвердити» is there to press. " +
+      "Short on purpose — it is the receipt for the search above it, and the " +
+      "source only holds it steady for ~1.7s before the next screen slides in.",
+    from: 1108,
+    durationInFrames: 51,
+    src: "place-map",
+    trim: 5,
   },
   {
     beat:
-      "The date card: Error 404 — Chat not found. Try real life. " +
-      "The product closes its own film.",
-    from: 1130,
-    durationInFrames: 144,
+      "Яке місце? — and this time somebody answers it. «Ресторан на даху с " +
+      "гарним видом» finishes typing, «Далі» is pressed, and the button becomes " +
+      "«Зчитую вайб…». The keyboard leaves with it, so the shot ends calmer " +
+      "than it started — which is the handover to the concierge.",
+    from: 1159,
+    durationInFrames: 96,
+    src: "place-vibe",
+    trim: 12,
+    fadeIn: 6,
+  },
+  {
+    beat:
+      "«Ось що я вловив» — the free text parsed back into chips, with the ones " +
+      "it picked already ticked. Nobody reads the labels at this size and they " +
+      "do not need to: the frame says the sentence was UNDERSTOOD, which is the " +
+      "concierge's whole claim and the one thing the old venue beat never showed.",
+    from: 1255,
+    durationInFrames: 54,
+    src: "place-chips",
+    trim: 3,
+    fadeIn: 6,
+  },
+  {
+    beat:
+      "The date card: Error 404 — Chat not found. Try real life. Then the shot " +
+      "scrolls off it to what is underneath — 📍 Hey Guys, вулиця Дмитрівська 60, " +
+      "the grounded blurb, and Open in Maps / Change venue / Share. That scroll " +
+      "is why this take replaced the old one: it ends the venue story instead of " +
+      "ending on a poster.",
+    from: 1295,
+    durationInFrames: 114,
     src: "date-card",
-    trim: 78,
+    trim: 3,
     fadeIn: 14,
   },
 ];
 
 /** The end card is the one shot that is not footage; it lives in its own scene. */
 export const MARK: {from: number; durationInFrames: number} = {
-  from: 1260,
+  from: 1395,
   durationInFrames: 96,
 };
 
-export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1356 = 45.2s
+export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1491 = 49.7s

@@ -151,7 +151,7 @@ motion change and nothing else.
 
 ```
 AbsoluteFill (INK)
-└── World                       ← ONE camera transform, for the entire 1356 frames
+└── World                       ← ONE camera transform, for the entire 1491 frames
     └── Iphone                  ← ONE handset, fixed at world (0,0), never moves
         └── screen aperture
             ├── Sequence 0  → ScreenClip (basics-name)
@@ -235,13 +235,22 @@ five slow steps, one direction.
 | 1 | 0–210 | 0:00–0:07.0 | 0.88 | 558 px | the name, the age slider, the gender tap |
 | 2 | 300–540 | 0:10.0–0:18.0 | 0.96 | 609 px | the photo columns, the height drum, the question |
 | 3 | 640–830 | 0:21.3–0:27.7 | 1.05 | 666 px | the radar closing, and the decision |
-| 4 | 930–1090 | 0:31.0–0:36.3 | 1.12 | 710 px | the butterfly, 13:00, the departure map |
-| 5 | 1180–1290 | 0:39.3–0:43.0 | 1.19 | 755 px | the date card and its line |
-| 6 | 1356 | 0:45.2 | 1.24 | 786 px | still moving in as the mark takes over |
+| 4 | 930–1050 | 0:31.0–0:35.0 | 1.12 | 710 px | the butterfly, 13:00, the address search opening |
+| 5 | 1200–1310 | 0:40.0–0:43.7 | 1.19 | 755 px | the vibe typed out and read back |
+| 6 | 1491 | 0:49.7 | 1.24 | 786 px | still moving in as the mark takes over |
 
-Each step is ~45 px of handset over ~3 s — about **0.5 px per frame**, roughly
-four times gentler than the pass before — and the film never revisits a distance
-it has already been at. **68% of the film is held**, in stretches of 3.7–8.0 s.
+Each step is ~45 px of handset over ~3–6 s — well under **0.5 px per frame** —
+and the film never revisits a distance it has already been at. **59% of the film
+is held**, in stretches of 3.7–8.0 s.
+
+> The frame numbers in this table are absolute, so they move whenever the CUT
+> does. They were re-spaced on 2026-08-19, when the venue act grew from 3.4 s to
+> 9.3 s and the film from 1356 to 1491 frames. **Only the spacing changed** —
+> the same six distances, the same 0.88 → 1.24 range, the same fitted easing,
+> and the probe still reports zero reversals, a 0.76× launch and a 1.38 px worst
+> step at a cut. Holds 5 and 6 absorbed the extra length rather than a new beat
+> being added: a seventh distance inside the same range would have made every
+> step smaller than the eye can register anyway.
 
 The five steps are placed to sit INSIDE a shot or to cross a cut mid-flight,
 never to start on one: a move that begins exactly when the screen changes reads

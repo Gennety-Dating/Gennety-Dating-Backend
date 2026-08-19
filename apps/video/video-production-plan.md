@@ -1,7 +1,7 @@
 # Gennety — product film production plan (`GennetyHero`)
 
-> Delivered: 1080×1920, 30 fps, H.264, **45.2 s**, `out/gennety-hero.mp4`.
-> Cut entirely from three screen recordings of the running product.
+> Delivered: 1080×1920, 30 fps, H.264, **49.7 s**, `out/gennety-hero.mp4`.
+> Cut entirely from five screen recordings of the running product.
 > This is the audit behind the cut — what exists, what each clip shows, what is
 > unusable and why, and the editorial decisions taken.
 
@@ -29,10 +29,29 @@ repainted.
 | `IMG_2588.MP4` | 576×1280 | 0:19 | 30 | The five profile-basics screens: name, age, gender (+ tap burst), the photo preference fork, the height drum |
 | `IMG_2590.MP4` | 576×1280 | 1:47 | 30 | Conversational profiling in Telegram → **Type Radar** → the photo request |
 | `IMG_2604.MP4` | 576×1280 | 2:15 | 30 | Match decision → calendar → time lock → departure pin → venue → **date card** |
+| `IMG_2730.MP4` | 576×**1248** | 0:32 | **60** | The venue step end to end: map → address search → pin → the vibe typed out → «Ось що я вловив» chips |
+| `IMG_2731.MP4` | 576×1280 | 0:05 | 30 | The finished **date card**, scrolled down to its venue block and actions |
 
-All three are the **`Gennety DEMO`** bot, in **Ukrainian**, recorded 2026-08-16.
-Total 4:21 of source for a 45 s film — roughly a 6:1 shooting ratio, which is
-why the plan is mostly about what to leave out.
+All five are the **`Gennety DEMO`** bot, in **Ukrainian**. The first three were
+recorded 2026-08-16, the last two 2026-08-19. Total 4:58 of source for a 50 s
+film — roughly a 6:1 shooting ratio, which is why the plan is mostly about what
+to leave out.
+
+**`IMG_2730` is 576×1248 and 60 fps, and neither is a problem.** The frame rate
+is halved at extraction like everything else. The height differs because it is a
+different capture aspect, not a crop: its status bar sits at exactly the same
+rows as the other four (the recording pill is x 176–195, y 36–53 in all five,
+measured), and only the content below it is laid out 32 px shorter. So the one
+part that has to agree with the drawn `PILL` cover already does, and
+`scale=576:1280` stretches it 2.56 % on one axis and nothing else — invisible on
+a map, a keyboard and a form, and strictly better than the two alternatives
+(see the comment on `cut_scaled` in `scripts/extract-hero-footage.sh`).
+
+**The first three sources no longer exist on the founder's Desktop**, so the
+extraction script cannot regenerate their twelve clips. It skips a missing
+source with a warning instead of refusing to run (changed 2026-08-19), which is
+what lets it still regenerate the five that IMG_2730/IMG_2731 own. The twelve
+committed clips are the only surviving copy of those windows.
 
 ### A.2 Brand assets already in the workspace
 
@@ -161,7 +180,7 @@ re-shoot would buy.
 
 ---
 
-## E. The cut — 16 shots, 45.2 s
+## E. The cut — 18 shots, 49.7 s
 
 | # | Time | Beat | Source |
 |---|---|---|---|
@@ -177,10 +196,18 @@ re-shoot would buy.
 | 10 | 26.7–28.7 | The calendar opens | cal-dates |
 | 11 | 28.7–30.9 | **13:00 lights up** — the shared slot | cal-overlap |
 | 12 | 30.9–34.3 | **Butterfly → неділя, 16 серп. 13:00** | time-reveal |
-| 13 | 34.3–36.1 | **Звідки ти виїжджаєш** — the departure pin | place-map |
-| 14 | 36.1–38.1 | Яке місце? | place-vibe |
-| 15 | 37.7–42.5 | **The date card.** Longest shot in the film | date-card |
-| 16 | 42.0–45.2 | The mark | — |
+| 13 | 34.3–36.9 | **Звідки ти виїжджаєш** — typing a real address, autocomplete answering | place-search |
+| 14 | 36.9–38.6 | The pin lands, «Підтвердити →» | place-map |
+| 15 | 38.6–41.8 | **Яке місце?** — «Ресторан на даху с гарним видом», then «Зчитую вайб…» | place-vibe |
+| 16 | 41.8–43.6 | **«Ось що я вловив»** — the sentence parsed back into chips | place-chips |
+| 17 | 43.2–47.0 | **The date card**, then the scroll down to the venue block | date-card |
+| 18 | 46.5–49.7 | The mark | — |
+
+**The venue act was rebuilt on 2026-08-19** (shots 13–16). It used to be two
+shots and 3.4 s — a departure pin and an EMPTY «Яке місце?» form — which showed
+the screen the concierge works on and never the work: the one field the whole
+feature turns on was blank on camera. It is 9.3 s now, off `IMG_2730`, and it
+is the entire reason the film grew from 45.2 s to 49.7 s.
 
 **The phone does not move.** Centred, unrotated, 604 px wide in world space for
 the whole film. An earlier cut slid it left and right between beats for
@@ -194,9 +221,13 @@ measured off the founder's reference; the one-direction rule is his. The per-sho
 this section used to describe is gone: it restarted at scale 1.0 on the first
 frame of all fifteen shots, which is the reset the rebuild exists to remove.
 
-**Six cuts additionally carry a 6-9 frame crossfade**, sized to a measured
+**Nine cuts additionally carry a 6-14 frame crossfade**, sized to a measured
 one-frame jump in screen brightness (up to 11.6 -> 34.2). They are still hard
-cuts; what was removed is a flash, not an edit.
+cuts; what was removed is a flash, not an edit. Measured on the 1491-frame
+render, the worst brightness step across ANY of the seventeen boundaries is
+**0.02** of mean frame luminance, and the film's twelve largest steps are all
+inside a shot — the Type Radar swipe and the butterfly reveal, i.e. the
+product's own content.
 
 **Rhythm.** 2.2–2.8 s holds through the profile; **6.4 s** on the Type Radar;
 2.0–2.2 s cuts through the planning burst; 4.8 s on the card.
@@ -276,12 +307,23 @@ island sits against a light blurred header where its edge is genuinely visible,
 and excess reads as a black fringe.
 
 **What taking the real status bar costs, stated rather than discovered later:**
-the clock reads 02:04 in `IMG_2588`, 02:05 in `IMG_2590` and 19:39 in
-`IMG_2604`, and the battery goes from a green charging 90 % to a red 17 % at the
-same cut. That cut is shot 9 — the match decision — which is exactly where the
-story jumps forward in time anyway, so the clock change reads as intended. The
-red battery is the one genuine wart, and it is accepted: drawing a replacement
-battery is the pasted-on problem again, one badge at a time.
+the clock reads 02:04 in `IMG_2588`, 02:05 in `IMG_2590`, 19:39 in `IMG_2604`
+and 03:26 in `IMG_2730`/`IMG_2731`, and the battery goes from a green charging
+90 % to a red 17 % at the match-decision cut. That cut is shot 9, which is
+exactly where the story jumps forward in time anyway, so the clock change reads
+as intended. The red battery is the one genuine wart, and it is accepted:
+drawing a replacement battery is the pasted-on problem again, one badge at a
+time. **The pill cover was re-verified against all five sources** on
+2026-08-19 — a saturated-red scan (`r>170, g<95, b<95`, which excludes the brand
+burgundy) puts the indicator at x 176–194, y 34–53 in every clip, comfortably
+inside the drawn rect.
+
+**The chips screen scrolls the app's own burgundy button under the status bar**,
+so for most of shot 16 the strip either side of the island is burgundy rather
+than dark. That is not a fault and must not be "fixed": the island itself is
+still black there, the cover paints black on black, and what is left reads as an
+ordinary translucent iOS status bar over coloured content. Widening the cover to
+"tidy" the burgundy would put a black bar across a real button.
 
 **The screen aperture is sized from the clip's real geometry** (`CLIP_W` /
 `CLIP_H`, now the full 576×1280), so footage is never stretched to fit a handset
@@ -308,9 +350,9 @@ is approved*).
 
 `<Audio>` is wired behind a `musicVolume` prop defaulting to `0`, envelope
 already shaped. Adding a track is one file at `public/audio/score.m4a` plus
-`musicVolume: 0.8`. Time it against the cut's four accents: **15.6 s** (Type
-Radar), **23.2 s** (the decision), **31.0 s** (the butterfly / 13:00), **37.8 s**
-(the date card).
+`musicVolume: 0.8`. Time it against the cut's five accents: **15.6 s** (Type
+Radar), **23.2 s** (the decision), **31.0 s** (the butterfly / 13:00), **41.8 s**
+(«Ось що я вловив»), **43.2 s** (the date card).
 
 No SFX. Taps and confirmations would have to be synthesised from nothing, and
 invented UI sound over real product footage is the template-motion-graphics tell
@@ -319,6 +361,31 @@ the brief rules out.
 ---
 
 ## H. Open items
+
+0. **The date does not agree with itself (found 2026-08-19).** The calendar act
+   comes from `IMG_2604` and locks **неділя, 16 серпня**; the date card comes
+   from `IMG_2731` and reads **чт, 20 серпня**. Four shots carry a date and they
+   split 3–1:
+
+   | Shot | Source | Shows |
+   |---|---|---|
+   | 10 `cal-dates` | `IMG_2604` | субота 15 / **неділя 16** / понеділок 17 / вівторок 18 / середа 19 серпня |
+   | 11 `cal-overlap` | `IMG_2604` | «**неділя, 16 серп.**» above the 13:00 slot |
+   | 12 `time-reveal` | `IMG_2604` | «**неділя, 16 серп.** 13:00», the film's largest type |
+   | 17 `date-card` | `IMG_2731` | «**чт, 20 серпня** о 13:00» |
+
+   The **time** agrees (13:00 throughout), which is what the film emphasises,
+   and the mismatched line is small chat type against a hero-sized one thirteen
+   seconds earlier — so it is a defect a Ukrainian reader can catch rather than
+   one that leaps out. It is recorded here rather than patched because every
+   available patch is worse: trimming shot 17 before the date line enters also
+   trims the venue block it exists to show, and masking the line would be
+   redrawing product UI, which §F forbids.
+
+   **The fix is one recording, not a code change:** the calendar act
+   (Обери дату → the overlap → the lock confirmation) captured in the same demo
+   run that produced `IMG_2730`/`IMG_2731`, so all four shots read 20 серпня.
+   That replaces shots 10–12 and needs no change to `timeline.ts` beyond trims.
 
 1. **No music.** The one genuinely missing deliverable; needs a licensed track.
 2. **No "problem" act.** Nothing in these recordings covers the visual intro

@@ -60,12 +60,13 @@ const tail = (i: number): number => {
 /**
  * `GennetyHero` — the product film.
  *
- * ~45.2s cut entirely from three screen recordings of the running product
- * (IMG_2588 / IMG_2590 / IMG_2604). Fifteen shots: the profile the user fills
- * in, the question the bot asks, the Type Radar reading their taste, the match
- * decision, the calendar landing on a shared 13:00, the venue, and the date
- * card that closes with the product's own line — *Error 404: Chat not found.
- * Try real life.*
+ * ~49.7s cut entirely from five screen recordings of the running product
+ * (IMG_2588 / IMG_2590 / IMG_2604, plus IMG_2730 / IMG_2731 for the venue act).
+ * Seventeen shots: the profile the user fills in, the question the bot asks,
+ * the Type Radar reading their taste, the match decision, the calendar landing
+ * on a shared 13:00, the venue — searched, pinned, described in the user's own
+ * words and read back as structure — and the date card that closes with the
+ * product's own line, *Error 404: Chat not found. Try real life.*
  *
  * Reasoning, recording map and quality audit: `video-production-plan.md`.
  * Camera architecture and why it was rebuilt: `motion-audit.md`.
@@ -77,14 +78,14 @@ const tail = (i: number): number => {
  *     is assembly and owns neither.
  *  3. **One phone, one world, one camera.** The tree below is deliberately
  *     shallow: `World` carries the single camera transform, `Iphone` is the
- *     single physical object inside it, and the fifteen `<Sequence>`s reach no
- *     further than the pixels on its screen. A sequence cannot move the phone,
- *     because nothing inside a sequence can see it.
+ *     single physical object inside it, and the `<Sequence>`s reach no further
+ *     than the pixels on its screen. A sequence cannot move the phone, because
+ *     nothing inside a sequence can see it.
  *
  * The `<Sequence>`s survive the refactor and are still worth having — they give
- * each clip its own local frame for `trim`/`fade`, keep the other fourteen
- * videos unmounted, and premount the next one so a cut never lands on a cold
- * decoder. What they no longer do is own any geometry.
+ * each clip its own local frame for `trim`/`fade`, keep every other video
+ * unmounted, and premount the next one so a cut never lands on a cold decoder.
+ * What they no longer do is own any geometry.
  */
 export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}) => {
   const frame = useCurrentFrame();

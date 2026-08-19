@@ -17,6 +17,11 @@ import {Easing} from "remotion";
  *
  * ---
  *
+ * The frame numbers below are absolute and therefore change whenever the CUT
+ * gets longer. They were re-spaced on 2026-08-19, when the venue act grew from
+ * 3.4s to 9.3s and the film from 1356 to 1491 frames; the shape — six held
+ * distances, five slow steps, monotone — is untouched, and so is the range.
+ *
  * ## The one rule this file exists to enforce (founder, 2026-08-18)
  *
  * **The phone is static. Only the camera approaches or retreats.**
@@ -40,7 +45,7 @@ import {Easing} from "remotion";
  *    not a camera, it is a rhythm.
  *
  * So this is a **dolly straight down the lens axis**: nine seconds still, a slow
- * step closer, still again. 558 px to 786 px over 45 seconds, one direction,
+ * step closer, still again. 558 px to 786 px over 50 seconds, one direction,
  * and every framing in the film is one the film has not used before.
  *
  * `camera.probe.ts` fails if either rule is broken.
@@ -128,19 +133,19 @@ const BEATS = [
     note: "Closer again as the radar closes and the film turns on the decision.",
   },
   {
-    hold: [930, 1090],
+    hold: [930, 1050],
     scale: 1.12,
     glow: 0.92,
-    note: "The butterfly, «неділя, 16 серп. 13:00», and the departure map.",
+    note: "The butterfly, «неділя, 16 серп. 13:00», and the address search opening.",
   },
   {
-    hold: [1180, 1290],
+    hold: [1200, 1310],
     scale: 1.19,
     glow: 0.96,
-    note: "The date card and its line — the closest held framing.",
+    note: "The vibe typed out and read back — the venue act, held.",
   },
   {
-    hold: [1356, 1356],
+    hold: [1491, 1491],
     scale: 1.24,
     glow: 1.0,
     note: "Still moving in as the mark takes over. The film does not park.",
