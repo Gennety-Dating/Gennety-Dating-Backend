@@ -17,6 +17,13 @@ export interface TicketStrings {
    *
    * BUTTON labels keep theirs: 🎟️ there distinguishes the two payment rails
    * ("use a wallet ticket" vs "pay money"), which is a job, not decoration.
+   *
+   * No 🤍 either (founder decision 2026-08-19). It used to close this one line
+   * on the grounds that the heart IS the match rather than a restatement of
+   * the picture below — but it sits on the screen that asks for money, where a
+   * decorative glyph beside the headline is the one thing that reads as
+   * marketing rather than as a receipt. The mutual-match warmth is carried by
+   * the chat card's falling-hearts message effect, which is the moment for it.
    */
   heading: string;
   sub: string;
@@ -106,7 +113,7 @@ export interface TicketStrings {
 }
 
 const en: TicketStrings = {
-  heading: "It's a match 🤍",
+  heading: "It's a match",
   sub: "Claim your Date Ticket to unlock planning.",
   payBoth: "Pay for us both — {amount}",
   payBothWithTicket: "Pay for both 🎟️ + {amount}",
@@ -156,7 +163,7 @@ const en: TicketStrings = {
 };
 
 const ru: TicketStrings = {
-  heading: "Это мэтч 🤍",
+  heading: "Это мэтч",
   sub: "Забери свой билет на свидание, чтобы открыть планирование.",
   payBoth: "Оплатить за нас обоих — {amount}",
   payBothWithTicket: "Оплатить за двоих 🎟️ + {amount}",
@@ -209,7 +216,7 @@ const ru: TicketStrings = {
 };
 
 const uk: TicketStrings = {
-  heading: "Це метч 🤍",
+  heading: "Це метч",
   sub: "Забери свій квиток на побачення, щоб відкрити планування.",
   payBoth: "Сплатити за нас обох — {amount}",
   payBothWithTicket: "Сплатити за двох 🎟️ + {amount}",
@@ -259,7 +266,7 @@ const uk: TicketStrings = {
 };
 
 const de: TicketStrings = {
-  heading: "Es ist ein Match 🤍",
+  heading: "Es ist ein Match",
   sub: "Sichere dein Date Ticket, um die Planung freizuschalten.",
   payBoth: "Für uns beide zahlen — {amount}",
   payBothWithTicket: "Für beide zahlen 🎟️ + {amount}",
@@ -309,7 +316,7 @@ const de: TicketStrings = {
 };
 
 const pl: TicketStrings = {
-  heading: "To match 🤍",
+  heading: "To match",
   sub: "Odbierz Date Ticket, aby odblokować planowanie.",
   payBoth: "Zapłać za nas oboje — {amount}",
   payBothWithTicket: "Zapłać za oboje 🎟️ + {amount}",

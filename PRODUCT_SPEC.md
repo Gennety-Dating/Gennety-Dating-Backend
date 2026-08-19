@@ -3349,9 +3349,18 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   `waitingTitle`, `successTitle` and the cover card's `coverPartnerTitle` all
   printed 🎟️ above the same rendered ticket. **Button** labels keep theirs —
   🎟️ there is what tells "use a wallet ticket" apart from "pay money", which is
-  a job rather than decoration — and the two non-ticket glyphs stay (`heading`'s
-  🤍 is the match, `closedTitle`'s 📅 the calendar). A test holds the four
-  headings emoji-free in all five locales.
+  a job rather than decoration.
+  **The mutual-match heading lost its 🤍 too (founder decision 2026-08-19),
+  reversing the carve-out this bullet used to carry.** That carve-out held that
+  the heart was the match rather than a restatement of the ticket below, which
+  is true and turned out not to be the deciding question: this is the screen
+  that asks for money, and a decorative glyph beside the headline is the one
+  thing on it that reads as marketing rather than as a receipt. The warmth is
+  not lost — it is carried by the chat card this Mini App opens from, whose
+  falling-hearts `message_effect_id` (§3.4) is the moment for it. `closedTitle`'s
+  📅 stays: that one names the calendar the screen is handing over to, so it is a
+  label rather than an accent. Tests hold the four headings 🎟️-free and this one
+  🤍-free in all five locales.
 - **State machine.** The whole gate runs while `Match.status = negotiating`;
   `ticketStatus` is a sub-state so the scheduling/venue/lifecycle code is
   untouched. Blind-decision and all other invariants are unaffected.

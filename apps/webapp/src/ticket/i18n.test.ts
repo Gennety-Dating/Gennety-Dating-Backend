@@ -37,6 +37,15 @@ describe("Date Ticket i18n", () => {
     }
   });
 
+  it("keeps the white heart off the mutual-match heading", () => {
+    // Founder decision 2026-08-19: this is the screen that asks for money, and
+    // a decorative glyph beside the headline reads as marketing rather than as
+    // a receipt. The warmth lives in the chat card's falling-hearts effect.
+    for (const lang of languages) {
+      expect(strings(lang).heading).not.toContain("🤍");
+    }
+  });
+
   it("names whose window the countdown is, and carries localized units", () => {
     for (const lang of languages) {
       const s = strings(lang);
