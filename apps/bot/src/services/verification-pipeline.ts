@@ -973,7 +973,14 @@ async function surfaceVerifiedActivation(
   }
 }
 
-async function surfaceVerifiedActivationDefault(
+/**
+ * The visible landing sequence a freshly verified Telegram user gets: the
+ * Profiler heads-up, the main menu, then the pinned status banner. Exported
+ * only so that ordering and its `statusMessageId` / `platform` guards can be
+ * pinned by a test — production reaches it through the `surfaceVerifiedActivation`
+ * dep wired below, never by importing it.
+ */
+export async function surfaceVerifiedActivationDefault(
   api: Api<RawApi>,
   userId: string,
   telegramId: bigint,
@@ -988,6 +995,7 @@ async function surfaceVerifiedActivationDefault(
       status: true,
       verificationStatus: true,
       statusMessageId: true,
+      platform: true,
     },
   });
   if (!user) return;
@@ -1000,6 +1008,30 @@ async function surfaceVerifiedActivationDefault(
 
   const lang: Language = user.language ?? "en";
   const chatId = Number(user.telegramId);
+
+  // Heads-up that the Profiler is about to start asking (PRODUCT_SPEC §Phase 1b).
+  // Activation is the honest moment for it: the dispatch sweep filters on
+  // `status = 'active'`, so this is exactly when the questions become possible
+  // — and without a word here they arrive out of nowhere, days apart, with no
+  // hint of who is asking or why answering matters.
+  //
+  // The `platform` gate mirrors `workers/profiler.ts` on purpose rather than
+  // reusing the `telegramId > 0` check above: "Continue with Telegram" stores a
+  // REAL positive id on an app-only account the bot cannot message, so that test
+  // alone would promise questions this user is never asked. The copy is bound to
+  // what the Profiler actually feeds — icebreakers and the pre-date wingman hint
+  // — never to match quality, which it is deliberately no input to (§Phase 1b).
+  if (user.platform === "telegram" || user.platform === "both") {
+    try {
+      await api.sendMessage(chatId, t(lang, "profilerHeadsUp"));
+    } catch (err) {
+      console.warn(`${LOG_PREFIX} profiler heads-up send failed`, {
+        userId,
+        telegramId: String(user.telegramId),
+        err,
+      });
+    }
+  }
 
   try {
     await sendMainMenu(api, chatId, lang, user.telegramId);

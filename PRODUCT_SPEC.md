@@ -1265,6 +1265,16 @@ live" every time they opened their photos. The suppression is scoped to
 existing `statusMessageId` guard that already stops the menu + pinned banner
 from being re-sent on a rerun.
 
+**The landing sequence a passing Telegram user gets is three things, in order**
+(`surfaceVerifiedActivationDefault`): the §Phase 1b **Profiler heads-up**, the
+main menu, then the pinned status banner. The heads-up leads because it belongs
+under the "verified ✨" DM rather than below a keyboard, and because activation
+is the moment the Profiler's dispatch sweep can first reach this user. All
+three sit behind the same `statusMessageId` guard, so a photo-edit rerun
+repeats none of them, and behind the outcome gate above, so none of them can
+land under a shimmer still claiming the check is running. A failed heads-up is
+swallowed — it never costs the user their menu.
+
 **The DM waits for the "analysing your check" status to leave the screen
 (2026-08-02).** Passing liveness starts two independent async chains — the
 face-match pipeline, and the ~7s shimmer narrating it — and nothing connected
@@ -1393,6 +1403,31 @@ Telegram-only in v1.
   (`PROFILER_ENTRY_DELAY_MS`), armed at `finalize_onboarding`; the scheduler
   defers it out of the user's local quiet hours. Existing/legacy users are
   lazily seeded by the worker, their first batch landing at the next window.
+- **The user is warned it is coming (2026-08-19).** Until this, the first
+  Profiler question arrived out of nowhere, days after registration, with
+  nothing saying who was asking or why it mattered — the batches are paced to
+  local morning/evening windows, so a user meets them long after the chat has
+  gone quiet. A short heads-up now rides the **verification landing sequence**
+  (§1.4 → `surfaceVerifiedActivationDefault`, above the main menu, so it reads
+  under the "verified ✨" DM): while I look for someone, I'll ask the odd simple
+  question; answer honestly and don't sit on them.
+  **Activation is the honest moment for it, not `finalize_onboarding`** where
+  the schedule is armed: the dispatch sweep filters on `status = 'active'`, so
+  a user who never clears verification is never asked, and telling them
+  otherwise at finalize would promise something the gate withholds. It is
+  therefore also once-only for free — the sequence's existing `statusMessageId`
+  guard means a photo-edit rerun never repeats it.
+  **The copy is bound to what the Profiler actually feeds** — the icebreakers
+  and the pre-date wingman hint — and **must never claim it improves match
+  quality**, which it is deliberately no input to (this section's own rule). It
+  also names no cadence ("while I look for someone", never "this week"), because
+  the drop interval is a `DropCadence` profile and production runs `daily`
+  (§3.1); the same rule DEMO_MODE.md applies to its own narration.
+  Reachability mirrors this worker's `platform in (telegram, both)` filter
+  rather than the looser `telegramId > 0` test beside it — a "Continue with
+  Telegram" account carries a REAL positive id the bot cannot message (§1.1), so
+  that test alone would promise questions that never arrive. Telegram-only, like
+  the Profiler itself; the native client owns its own onboarding shell.
 - **Batches.** Questions are sent in **batches of 3** (`PROFILER_BATCH_SIZE_NORMAL`).
   **Every** question — the first of a batch and every follow-up — is delivered
   through the same **native Telegram AI-compose** path (Bot API 10.1 rich

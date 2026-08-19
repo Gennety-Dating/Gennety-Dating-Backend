@@ -240,6 +240,11 @@ const translations = {
       "you're set — your profile stays live in the meantime:",
     verifyOutcomeVerified:
       "Verified ✨ Profile is live. I'll message you when I find a match.",
+    profilerHeadsUp:
+      "While I'm looking for someone for you, I'll send you the odd simple question — " +
+      "what you're watching, how you spend your weekends, what you're into.\n\n" +
+      "Answer honestly and don't sit on them — the better I know you, the better I can " +
+      "set the two of you up for the date: what to open with, what to steer clear of.",
     verifyOutcomePendingReview:
       "🔍 We're double-checking your profile photos against your verification selfie. This usually takes a few hours — I'll message you the moment it's done.",
     verifyOutcomeRejected:
@@ -1424,6 +1429,11 @@ const translations = {
       "остаётся активным:",
     verifyOutcomeVerified:
       "Проверка пройдена ✨ Профиль активен. Напишу, когда найду метч.",
+    profilerHeadsUp:
+      "Пока я ищу тебе человека, я буду время от времени задавать простые вопросы — " +
+      "что смотришь, как проводишь выходные, что тебя цепляет.\n\n" +
+      "Отвечай честно и не откладывай — чем лучше я тебя знаю, тем лучше подготовлю " +
+      "вас обоих к встрече: с чего начать разговор и о чём лучше не заводить.",
     verifyOutcomePendingReview:
       "🔍 Мы дополнительно проверяем фото профиля по селфи из верификации. Обычно это занимает несколько часов — я напишу, как только проверка завершится.",
     verifyOutcomeRejected:
@@ -2521,6 +2531,11 @@ const translations = {
       "лишається активним:",
     verifyOutcomeVerified:
       "Перевірку пройдено ✨ Профіль активний. Напишу, коли знайду метч.",
+    profilerHeadsUp:
+      "Поки я шукаю тобі людину, я час від часу ставитиму прості запитання — " +
+      "що дивишся, як проводиш вихідні, що тебе чіпляє.\n\n" +
+      "Відповідай чесно й не відкладай — що краще я тебе знаю, то краще підготую " +
+      "вас обох до зустрічі: з чого почати розмову і чого краще не торкатися.",
     verifyOutcomePendingReview:
       "🔍 Ми додатково перевіряємо фото профілю за селфі з верифікації. Зазвичай це займає кілька годин — я напишу, щойно перевірка завершиться.",
     verifyOutcomeRejected:
@@ -3548,6 +3563,11 @@ const deTranslations: TranslationTable = {
     "10-Sekunden-Prüfung und du bist fertig - dein Profil bleibt solange online:",
   verifyOutcomeVerified:
     "Verifiziert ✨ Dein Profil ist live. Ich melde mich, wenn ich ein Match finde.",
+  profilerHeadsUp:
+    "Während ich jemanden für dich suche, stelle ich dir ab und zu eine einfache " +
+    "Frage — was du gerade schaust, wie du dein Wochenende verbringst, was dir wichtig ist.\n\n" +
+    "Antworte ehrlich und lass sie nicht liegen — je besser ich dich kenne, desto " +
+    "besser bereite ich euch beide auf das Date vor: womit ihr anfangt und was ihr lieber auslasst.",
   verifyOutcomePendingReview:
     "🔍 Wir prüfen deine Profilfotos noch einmal gegen dein Verifizierungs-Selfie. Das dauert normalerweise ein paar Stunden - ich melde mich, sobald es erledigt ist.",
   verifyOutcomeRejected:
@@ -4611,6 +4631,11 @@ const plTranslations: TranslationTable = {
     "twój profil w tym czasie pozostaje aktywny:",
   verifyOutcomeVerified:
     "Zweryfikowane ✨ Profil aktywny. Odezwę się, gdy znajdę dopasowanie.",
+  profilerHeadsUp:
+    "Kiedy szukam dla ciebie kogoś, będę od czasu do czasu zadawać proste pytania — " +
+    "co oglądasz, jak spędzasz weekendy, co cię wciąga.\n\n" +
+    "Odpowiadaj szczerze i nie odkładaj tego — im lepiej cię znam, tym lepiej " +
+    "przygotuję was oboje na spotkanie: od czego zacząć rozmowę i czego lepiej nie ruszać.",
   verifyOutcomePendingReview:
     "🔍 Jeszcze raz sprawdzamy zdjęcia z profilu względem selfie z weryfikacji. Zwykle zajmuje to kilka godzin - napiszę, gdy będzie gotowe.",
   verifyOutcomeRejected:
