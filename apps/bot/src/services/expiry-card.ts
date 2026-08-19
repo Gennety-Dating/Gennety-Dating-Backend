@@ -138,7 +138,7 @@ function motifSvg(
           <rect x="226" y="240" width="46" height="32" rx="10" fill="${accent}"/>
           <path d="M40 66 L252 190" stroke="${accent}" stroke-width="12"
                 stroke-linecap="round" fill="none"/>
-          <path d="M252 190 L206 182 M252 190 L244 144" stroke="${accent}" stroke-width="12"
+          <path d="M252 190 L205 191 M252 190 L230 148" stroke="${accent}" stroke-width="12"
                 stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
 
       /* You closed your side (solid check), theirs never closed (dashed, empty). */
