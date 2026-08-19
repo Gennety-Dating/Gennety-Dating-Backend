@@ -33,6 +33,7 @@ import { fileURLToPath } from "node:url";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { butterflyPng, type ButterflyMark } from "./match-card/collage.js";
+import { hourglassArt } from "./expiry-card-hourglass.js";
 import { grainPng } from "./date-card/image.js";
 
 /** Square poster: dominant enough for an emotional beat, lighter than the 1350 keepsake date card. */
@@ -104,7 +105,7 @@ function dataUri(buffer: Buffer): string {
  * than light. The date card gets away with it only because a photo covers the
  * seam. Authored in SVG, resvg resolves the falloff cleanly to zero alpha.
  *
- * Art is drawn in a 300×300 space and inset inside a 480×480 canvas so the
+ * Art is drawn in a 300×300 space and inset inside a 460×460 canvas so the
  * glow has room to fade out without clipping.
  */
 const MOTIF_BOX = 460;
@@ -114,20 +115,19 @@ const MOTIF_DISPLAY = 620;
 /** Transparent glow margin around the art, in display px — clawed back by negative margins. */
 const GLOW_BLEED = Math.round((MOTIF_DISPLAY * MOTIF_ART_INSET) / MOTIF_BOX);
 
-function motifSvg(variant: ExpiryCardVariant, accent: string, muted: string, theme: ExpiryCardTheme): string {
+function motifSvg(
+  variant: ExpiryCardVariant,
+  accent: string,
+  muted: string,
+  bg: string,
+  theme: ExpiryCardTheme,
+): string {
   const body = (() => {
     switch (variant) {
-      /* Hourglass, every grain already fallen: the window simply closed. */
+      /* Hourglass: the 24h window ran out. Drawn artwork rather than
+         primitives, so it lives in its own module — see expiry-card-hourglass.ts. */
       case "expired":
-        return `
-          <rect x="70" y="24" width="160" height="14" rx="7" fill="${accent}"/>
-          <rect x="70" y="262" width="160" height="14" rx="7" fill="${accent}"/>
-          <path d="M88 38 L212 38 L158 148 L142 148 Z" fill="none" stroke="${accent}"
-                stroke-width="9" stroke-linejoin="round"/>
-          <path d="M142 152 L158 152 L212 262 L88 262 Z" fill="none" stroke="${accent}"
-                stroke-width="9" stroke-linejoin="round"/>
-          <path d="M118 204 L182 204 L202 254 L98 254 Z" fill="${accent}"/>
-          <circle cx="150" cy="168" r="6" fill="${accent}" opacity="0.55"/>`;
+        return hourglassArt(accent, bg);
 
       /* Bars stepping down under a descending arrow: the rating actually moved. */
       case "penalty":
@@ -192,7 +192,7 @@ function motifPng(variant: ExpiryCardVariant, theme: ExpiryCardTheme): Buffer | 
   let png: Buffer | null = null;
   try {
     png = Buffer.from(
-      new Resvg(motifSvg(variant, p.accent, p.muted, theme), {
+      new Resvg(motifSvg(variant, p.accent, p.muted, p.bg, theme), {
         fitTo: { mode: "width", value: MOTIF_BOX * 2 },
       })
         .render()

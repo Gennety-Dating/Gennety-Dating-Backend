@@ -2795,9 +2795,29 @@ shipped: a bare `sendMessage`. It is now a square PNG
 (`services/expiry-card.ts`, satori + resvg, same design system as the date,
 time and match cards: recipient's `User.theme`, Gennety wordmark, tilted
 butterfly, burgundy accent, film grain on dark only) with one vector motif per
-branch of the asymmetry above — an hourglass with the sand run out, falling
-bars under a descending arrow, one closed circle beside one dashed and empty,
-and a heart split in two.
+branch of the asymmetry above — an hourglass mid-pour, falling bars under a
+descending arrow, one closed circle beside one dashed and empty, and a heart
+split in two.
+
+- **The hourglass is drawn artwork, not primitives (2026-08-19).** It was two
+  stroked triangles between two rounded bars, and beside the other three
+  motifs it read as a wireframe rather than as a mark. It is now an imported
+  vector (`services/expiry-card-hourglass.ts`): a looser hand-drawn line, sand
+  textured with knocked-out specks, grains mid-fall through the waist. Two
+  rules the import has to satisfy, both violated by the raw export and both
+  failing at runtime rather than at build time, so both are pinned by tests.
+  It takes `accent` and `bg` as **arguments** and bakes no palette of its own —
+  the export painted every knockout literal `white`, which is invisible on the
+  cream ground and glaring on the near-black, and those knockouts ARE the empty
+  glass, so they are painted in the card's own background. And it carries **no
+  background rect**, which the export also shipped and which would have covered
+  the burgundy glow the motif is composited onto.
+  **One thing it says that the copy does not:** the upper bulb is still part
+  full and the grains are still falling, i.e. time is running out rather than
+  already gone, while the headline reads "TIME'S UP". The mark is kept as the
+  artist drew it; the settled-sand alternative is a mirror of the upper cone
+  into the lower bulb and touches one function, so this is a live question
+  rather than a closed one (DECISIONS.md 2026-08-19).
 
 - **The card says WHAT HAPPENED; the caption adds only the consequence**
   (founder decision). Nothing is stated twice: the card carries "TIME'S UP /
