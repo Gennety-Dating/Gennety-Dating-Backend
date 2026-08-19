@@ -426,8 +426,8 @@ export function defaultVenueGeoTolerance(a: VenueIntentV2, b: VenueIntentV2): Ve
  * kept winning for everyone. Proximity restores the half that was missing.
  *
  * Both scales follow the active tolerance rather than being fixed, so a widened
- * pass still discriminates: at a 60 km limit a venue 5 km from both must still
- * outrank one 40 km from one of them. Freezing the scales at the tight defaults
+ * pass still discriminates: at a 21 km limit a venue 3 km from both must still
+ * outrank one 18 km from one of them. Freezing the scales at the tight defaults
  * would flatten every far candidate to the same floor and hand the decision
  * entirely to fit — exactly when commute matters most.
  */

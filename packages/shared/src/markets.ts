@@ -31,10 +31,30 @@ export interface Market {
   latitude: number;
   longitude: number;
   /**
-   * Radius (km) around the centroid treated as "inside this market" when a
-   * user asks the app to detect their city. Generous on purpose: it only
-   * decides whether we can PRE-SELECT the market from geolocation — a
-   * false negative just means the user taps the city themselves.
+   * Radius (km) around the centroid treated as "inside this market".
+   *
+   * NOT just a geolocation hint, whatever an older version of this comment
+   * said. Four things read it, and two of them are hard gates:
+   *   - `marketForCoordinates` — pre-selecting the city from geolocation
+   *     (a false negative is cheap: the user taps the city themselves);
+   *   - `checkDepartureOrigin` — the departure-point gate, which REFUSES a
+   *     pin outside it (PRODUCT_SPEC §3.7);
+   *   - `marketBoundingBox` — the box Google Places search is restricted to;
+   *   - the venue geo ladder's widest rung (`venue-intent-v2.ts`).
+   *
+   * Sized to the CITY, not to the commuter belt (founder decision
+   * 2026-08-18): ads and acquisition target Kyiv proper, so a departure point
+   * in the oblast is a person we cannot serve. It was 60 km until then, which
+   * reached Boryspil and beyond.
+   *
+   * A circle cannot express a city boundary and 21 km is the honest
+   * compromise, not a precise figure. Measured from this centroid, Vyshneve
+   * (oblast) sits 12.8 km out while Pushcha-Vodytsia (Kyiv) sits 14.9 km out —
+   * so no radius admits the whole city and excludes the near suburbs. 21 km
+   * covers Kyiv down to ~50.26°N, i.e. everything but the forest-and-cottage
+   * tail of Koncha-Zaspa at the oblast border, and still admits Vyshneve,
+   * Vyshhorod, Brovary and Irpin. Excluding those would cost four real Kyiv
+   * districts. The only exact answer is a boundary polygon.
    */
   radiusKm: number;
   /** Lower-case search aliases across the supported onboarding languages. */
@@ -47,7 +67,7 @@ const KYIV: Market = {
   countryCode: "UA",
   latitude: 50.4501,
   longitude: 30.5234,
-  radiusKm: 60,
+  radiusKm: 21,
   aliases: [
     "kyiv",
     "kiev",

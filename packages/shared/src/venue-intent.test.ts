@@ -435,12 +435,13 @@ describe("geo tolerance ladder (PRODUCT_SPEC §3.7)", () => {
   });
 
   it("still prefers the closer, fairer venue at the widest rung", () => {
-    // The reason the score scales follow the tolerance: at a 60 km limit a
-    // frozen 8 km scale would flatten both of these to the proximity floor and
-    // let fit alone decide, which is precisely when commute matters most.
-    const citywide = { commuteLimitKm: 60, fairnessDeltaKm: 60 };
-    const near = candidate({ id: "near", placeId: "near", distanceA: 5, distanceB: 5 });
-    const far = candidate({ id: "far", placeId: "far", distanceA: 40, distanceB: 5 });
+    // The reason the score scales follow the tolerance: at the widest rung
+    // (the market radius, 21 km for Kyiv) a frozen 8 km scale would flatten
+    // both of these to the proximity floor and let fit alone decide, which is
+    // precisely when commute matters most.
+    const citywide = { commuteLimitKm: 21, fairnessDeltaKm: 21 };
+    const near = candidate({ id: "near", placeId: "near", distanceA: 3, distanceB: 3 });
+    const far = candidate({ id: "far", placeId: "far", distanceA: 18, distanceB: 3 });
 
     const ranked = rankVenueCandidates([far, near], A, B, citywide);
 

@@ -62,15 +62,28 @@ describe("searchMarkets", () => {
 });
 
 describe("marketForCoordinates", () => {
-  it("recognises the city centre and its commuter belt", () => {
+  it("recognises the city, out to its own edges", () => {
     expect(marketForCoordinates(50.4501, 30.5234)?.cityKey).toBe("ua:kyiv"); // centre
-    expect(marketForCoordinates(50.5111, 30.7903)?.cityKey).toBe("ua:kyiv"); // Brovary, ~25 km
+    expect(marketForCoordinates(50.535, 30.36)?.cityKey).toBe("ua:kyiv"); // Pushcha-Vodytsia, ~15 km
+    expect(marketForCoordinates(50.27, 30.55)?.cityKey).toBe("ua:kyiv"); // Koncha-Zaspa, ~20 km
   });
 
   it("returns null outside every launched market", () => {
     expect(marketForCoordinates(49.8397, 24.0297)).toBeNull(); // Lviv
     expect(marketForCoordinates(52.52, 13.405)).toBeNull(); // Berlin
     expect(marketForCoordinates(49.4444, 32.0598)).toBeNull(); // Cherkasy, ~160 km
+    // Boryspil, ~33 km. A separate city that resolved to Kyiv under the old
+    // 60 km commuter-belt radius (narrowed to the city itself 2026-08-18).
+    expect(marketForCoordinates(50.35, 30.955)).toBeNull();
+  });
+
+  it("still admits the near suburbs a circle cannot separate out", () => {
+    // Not an endorsement — a statement of what 21 km can and cannot do.
+    // Vyshneve is 12.8 km from the centroid while Pushcha-Vodytsia (a Kyiv
+    // district, asserted above) is 14.9 km, so no radius takes the whole city
+    // and leaves the suburbs. Only a boundary polygon would. See `markets.ts`.
+    expect(marketForCoordinates(50.39, 30.37)?.cityKey).toBe("ua:kyiv"); // Vyshneve
+    expect(marketForCoordinates(50.585, 30.49)?.cityKey).toBe("ua:kyiv"); // Vyshhorod
   });
 
   it("returns null for unusable coordinates instead of guessing", () => {

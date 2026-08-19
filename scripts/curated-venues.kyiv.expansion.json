@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-07-28",
+  "checkedAt": "2026-08-15",
   "universityDomains": [
     "kneu.edu.ua",
     "knu.ua",
@@ -894,7 +894,6 @@
       "name": "Шоті",
       "category": "restaurant",
       "priority": 1,
-      "tier": "premium",
       "vibeTags": [
         "dinner",
         "cozy",
@@ -1033,7 +1032,6 @@
       "name": "Аргентина Гриль",
       "category": "restaurant",
       "priority": 1,
-      "tier": "premium",
       "vibeTags": [
         "dinner",
         "cozy",
@@ -1101,7 +1099,7 @@
       "name": "Très Branché",
       "category": "restaurant",
       "priority": 2,
-      "tier": "base",
+      "tier": "premium",
       "vibeTags": [
         "dinner",
         "wine",
@@ -1159,7 +1157,6 @@
       "name": "CAPULETI",
       "category": "restaurant",
       "priority": 2,
-      "tier": "premium",
       "vibeTags": [
         "dinner",
         "italian",
@@ -1198,9 +1195,7 @@
         "dinner",
         "cozy",
         "lively"
-      ],
-      "tier": "premium",
-      "note": "Tiered premium 2026-07-27: Place Details prices it EXPENSIVE (text search reported no price level)."
+      ]
     },
     {
       "placeId": "ChIJAZDNL_nO1EAR25Gfhq6vJ4g",
@@ -1218,6 +1213,7 @@
       "name": "Steakhouse",
       "category": "restaurant",
       "priority": 2,
+      "tier": "premium",
       "vibeTags": [
         "dinner",
         "cozy",
@@ -1432,7 +1428,6 @@
       "name": "Перець",
       "category": "restaurant",
       "priority": 2,
-      "tier": "premium",
       "vibeTags": [
         "dinner",
         "cozy",
@@ -1547,7 +1542,6 @@
       "name": "Вершки суспільства",
       "category": "restaurant",
       "priority": 2,
-      "tier": "premium",
       "vibeTags": [
         "dinner",
         "cozy",
@@ -1642,18 +1636,6 @@
         "cozy",
         "casual"
       ]
-    },
-    {
-      "placeId": "ChIJ0yHYdULP1EARrdsdNdCODfM",
-      "name": "Тірамісу",
-      "category": "restaurant",
-      "priority": 3,
-      "vibeTags": [
-        "dinner",
-        "cozy",
-        "lively"
-      ],
-      "allowQualityOverride": true
     },
     {
       "placeId": "ChIJCf0hmzbP1EARL6cbjd3G1i4",
@@ -1768,13 +1750,13 @@
     {
       "placeId": "ChIJ5SwRA-3P1EARTmBh7Vizr0E",
       "name": "Kim Kimchi Korean BBQ (Київ)",
-      "category": "cafe",
+      "category": "restaurant",
       "priority": 1,
       "tier": "alternative",
       "vibeTags": [
-        "coffee",
+        "dinner",
         "cozy",
-        "casual"
+        "lively"
       ]
     },
     {
@@ -1870,7 +1852,7 @@
     {
       "placeId": "ChIJvy6wlmzS1EARxvsvtyu_ZDM",
       "name": "Китайський чай NewTea.UA",
-      "category": "coffee_shop",
+      "category": "cafe",
       "priority": 2,
       "vibeTags": [
         "tea",
@@ -1917,7 +1899,6 @@
       "name": "Публіцист",
       "category": "restaurant",
       "priority": 1,
-      "tier": "premium",
       "vibeTags": [
         "dinner",
         "cozy",
@@ -2043,7 +2024,7 @@
       "placeId": "ChIJodr2XdbP1EARDpI0YsjpPbc",
       "name": "дублер",
       "category": "cafe",
-      "priority": 2,
+      "priority": 1,
       "vibeTags": [
         "coffee",
         "cozy",
@@ -2055,7 +2036,6 @@
       "name": "дилетант",
       "category": "cafe",
       "priority": 2,
-      "tier": "premium",
       "vibeTags": [
         "coffee",
         "cozy",
@@ -2291,12 +2271,12 @@
     {
       "placeId": "ChIJVb3WG6_P1EAREjzyGjt1CLY",
       "name": "GARAGE",
-      "category": "cafe",
+      "category": "lounge",
       "priority": 3,
       "vibeTags": [
-        "coffee",
-        "cozy",
-        "casual"
+        "drinks",
+        "evening",
+        "lively"
       ]
     },
     {
@@ -2313,12 +2293,12 @@
     {
       "placeId": "ChIJ69obD8rP1EARgQINx1wXlKo",
       "name": "Афтернун",
-      "category": "restaurant",
+      "category": "cafe",
       "priority": 2,
       "vibeTags": [
-        "dinner",
+        "coffee",
         "cozy",
-        "lively"
+        "casual"
       ]
     },
     {
@@ -2460,6 +2440,65 @@
       "placeId": "ChIJI6bN8ULP1EARcXPQNy6dFsk",
       "name": "Vicini Italiani",
       "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "italian",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJV4Y-G6DP1EARHDP4LKundhA",
+      "name": "Купол",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ0SDn4sjP1EARqEQCeHTNuvg",
+      "name": "Пиріжкова тітка Клара",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ-2SifnjP1EARoOX6vivIIW4",
+      "name": "Frou Frou",
+      "category": "restaurant",
+      "priority": 3,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJffwA-vnO1EARkYTZdSJJjPM",
+      "name": "Ресторан MARIO. Італійський ресторан",
+      "category": "lounge",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "italian",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJJ87ob9_P1EARKV3IR4C3uFA",
+      "name": "SARTO",
+      "category": "lounge",
       "priority": 2,
       "tier": "premium",
       "vibeTags": [
@@ -2708,7 +2747,22 @@
     {
       "name": "СУБОТА",
       "placeId": "ChIJTQjhTE_P1EARIGy6sv10gf8",
-      "reason": "Google rating 3.6 is below 4.0."
+      "reason": "Google rating 3.7 is below 4.0."
+    },
+    {
+      "name": "Bistro Dash",
+      "placeId": "ChIJY10eoh7P1EARcYVv5oP28tI",
+      "reason": "No confident Google Places match for the operator's name."
+    },
+    {
+      "name": "Bar on 8",
+      "placeId": "ChIJ22uP3VrO1EAR3WjugepFLnc",
+      "reason": "No confident Google Places match for the operator's name."
+    },
+    {
+      "name": "Тірамісу",
+      "placeId": "ChIJ0yHYdULP1EARrdsdNdCODfM",
+      "reason": "Google Places Details returns 404 — listing fully delisted (2026-08-14); does not resolve under any name or address via text search either."
     }
   ]
 }

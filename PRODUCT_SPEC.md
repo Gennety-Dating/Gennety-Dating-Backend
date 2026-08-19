@@ -586,8 +586,8 @@ kept counting down to a drop they could never be in. Now:
   cities the server must refuse. (`PLACES_API_KEY` is still required for
   venues.)
 - **Geolocation** answers one question — "are you inside a launched market?" —
-  as pure geometry against the market centroid + `radiusKm` (60 km for Kyiv,
-  generous so the commuter belt counts). Outside every market it resolves to
+  as pure geometry against the market centroid + `radiusKm` (21 km for Kyiv —
+  the city, not the commuter belt; see the note below). Outside every market it resolves to
   **nothing**, and the Mini App explains that Gennety has not launched there yet
   and leaves the choice open, rather than saving a city the person is not in.
   This also ends a real bug: the old reverse-geocode silently resolved ANY
@@ -603,6 +603,30 @@ kept counting down to a drop they could never be in. Now:
   (which the venue picker and city analytics read). iOS renders the constraint
   from `AppConfig.supportedCities` (`GET /v1/app/config`) instead of discovering
   it as a 400.
+
+**The radius is sized to the CITY, not the commuter belt (founder decision
+2026-08-18).** It was 60 km until then, which reached Boryspil and most of the
+oblast — while ads and acquisition target Kyiv proper, so an oblast pin is a
+person the product cannot serve. It is 21 km now, and that number is a
+compromise rather than a boundary: **a circle cannot draw a city.** Measured
+from the Kyiv centroid, Vyshneve (oblast) sits 12.8 km out while
+Pushcha-Vodytsia (a Kyiv district) sits 14.9 km, and Brovary (oblast) sits at
+20.0 km — the same distance as the southern edge of Holosiivskyi. So no radius
+takes the whole city and leaves the suburbs: 21 km covers Kyiv down to
+~50.26°N (everything but the forest-and-cottage tail of Koncha-Zaspa at the
+oblast border) and still admits Vyshneve, Vyshhorod, Brovary and Irpin.
+Tightening below ~13 km would exclude them at the cost of four real Kyiv
+districts. The only exact answer is a boundary polygon, which is a
+cross-client change (`Market` gains the outline, `/v1/*` + OpenAPI carry it,
+and the iOS client's `MapCircle` becomes a `MapPolygon`) and is deliberately
+not done.
+
+**One consequence to hold onto: the radius does NOT stop an oblast resident
+registering.** City *search* is a separate list (`searchMarkets`), so someone
+in Brovary who types "Kyiv" still registers with Kyiv — the radius only decides
+what geolocation pre-selects, and where a departure point may be dropped.
+Keeping the oblast out of the pool entirely is a different mechanism and is not
+built.
 
 **Launching a new city is a deliberate code change, not a flag.** A market is
 only real once its curated venue catalog (`curated_venues.cityKey`), ad
@@ -3964,8 +3988,8 @@ defers the same dead end to a screen that can no longer fix it.
   city — including on the "use my location" branch, which is the likeliest way
   to set a bad point. The native client repeats the server's haversine
   deliberately, R = 6371 and all: `CLLocation.distance` measures on the
-  ellipsoid and would disagree with this module by ~100 m at a 60 km radius,
-  producing a band where the client allows what the server refuses.
+  ellipsoid and would disagree with this module by tens of metres at a 21 km
+  radius, producing a band where the client allows what the server refuses.
 
 **Curated-first venue selection.** When all four pairs are present, the bot
 first consults the hand-curated venue base (`CuratedVenue`, currently scoped by
@@ -3986,8 +4010,8 @@ so a curated spot can never be something the live gate would reject.
 **A date is never lost to geometry (the geo ladder, added 2026-08-05).** The
 selector needs a venue within `maxCommuteKm` (8) of BOTH origins, with the two
 commutes within 3 km of each other. Two people at opposite ends of one city
-cannot satisfy that — Kyiv's market radius is 60 km and Troieshchyna ↔ Vyshneve
-is roughly 30 km apart — and the engine's answer used to be *no venue at all*.
+cannot satisfy that — Troieshchyna ↔ Vyshneve is roughly 30 km apart, more than
+twice the limit — and the engine's answer used to be *no venue at all*.
 That is legal input producing a cancelled date, so the selector now retries
 with progressively wider tolerances instead of failing:
 
@@ -4002,12 +4026,13 @@ price policy and every hard constraint (indoor/outdoor) are identical on each
 rung, so a widened run is a longer trip, never a worse venue. Rung 3 is bounded
 by the market radius, which the departure-point gate above guarantees both
 origins sit inside — so a pair inside a launched city can always be served,
-worst case a venue ~30 km from one of them. That is not a good date; a
-cancelled one is worse.
+worst case a venue ~21 km from one of them (it was ~60 km until the radius was
+narrowed to the city on 2026-08-18, which tightened this rung for free). That
+is not a good date; a cancelled one is worse.
 
 The scoring scales follow the active rung rather than staying fixed, so a
-widened pass still discriminates: at a 60 km cap a venue 5 km from both must
-still outrank one 40 km from one of them. The rung that actually produced the
+widened pass still discriminates: at a 21 km cap a venue 3 km from both must
+still outrank one 18 km from one of them. The rung that actually produced the
 pick is recorded in `venueSelectionReason` and in the `poolSizes` funnel
 (`geoRung`), so "how often does the engine have to stretch?" is a query rather
 than a guess — if it stops being rare, the city's catalog is too thin.

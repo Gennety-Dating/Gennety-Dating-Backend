@@ -179,9 +179,10 @@ describe("GET /v1/location/search", () => {
     const initData = signInitData(BOT_TOKEN);
     const prevKey = process.env.PLACES_API_KEY;
     process.env.PLACES_API_KEY = "test-key";
-    // The NE corner of Kyiv's bounding box: inside the rectangle we send,
-    // ~80 km from the centroid, so outside the 60 km market.
-    const corner = { latitude: 50.99, longitude: 31.36 };
+    // The NE corner of Kyiv's bounding box: inside the rectangle we send
+    // (Places refuses a circle for `locationRestriction`), ~28 km from the
+    // centroid, so outside the 21 km market circle the write gate enforces.
+    const corner = { latitude: 50.63, longitude: 30.81 };
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({

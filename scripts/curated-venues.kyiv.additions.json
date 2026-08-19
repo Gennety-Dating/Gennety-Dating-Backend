@@ -164,7 +164,8 @@
       "name": "Antwerpen"
     },
     {
-      "name": "Steakhouse"
+      "name": "Steakhouse",
+      "tier": "premium"
     },
     {
       "name": "Чорноморка",
@@ -328,9 +329,6 @@
     },
     {
       "name": "Volkonskiy"
-    },
-    {
-      "name": "Tiramisu Bar"
     },
     {
       "name": "Trishki Bilshe"
@@ -587,6 +585,20 @@
     {
       "name": "Vicini Italiani",
       "tier": "premium"
+    },
+    {
+      "name": "Frou Frou",
+      "tier": "premium"
+    },
+    {
+      "name": "Марио",
+      "query": "Марио ресторан Печерськ Київ",
+      "tier": "premium",
+      "acceptMatch": true
+    },
+    {
+      "name": "SARTO",
+      "tier": "premium"
     }
   ],
   "qualityOverrides": [
@@ -599,11 +611,6 @@
       "placeId": "ChIJH7CqRbLP1EARpTgOUH7srIs",
       "name": "Katimō Cafe",
       "note": "Operator waiver 2026-07-27: rating 3.6."
-    },
-    {
-      "placeId": "ChIJ0yHYdULP1EARrdsdNdCODfM",
-      "name": "Тірамісу (Tiramisu Bar)",
-      "note": "Operator waiver 2026-07-27: rating 3.4 on only 5 reviews — thin listing, re-check after the first date sent there."
     },
     {
       "placeId": "ChIJa3nRszvP1EARNO7bE_m5v4k",

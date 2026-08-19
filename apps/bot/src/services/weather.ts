@@ -89,7 +89,7 @@ const CACHE_GRID = 4;
  * rounding boundary (50.44 → 50.4, 50.45 → 50.5) — the opposite of bucketing.
  *
  * Collapsing a whole market to one forecast is deliberate: a launched market is
- * at most a 60 km radius (§1.3), which is one weather system at the precision
+ * at most a 21 km radius (§1.3), which is one weather system at the precision
  * "will it rain during the date" needs.
  */
 function cacheKey(lat: number, lng: number, at: Date, scope: string | null): string {

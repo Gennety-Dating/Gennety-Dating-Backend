@@ -14,15 +14,17 @@
         "lng": 30.5090285,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 2200,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 2203,
+        "priceLevel": null,
         "primaryType": "asian_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.6,
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -50,7 +52,9 @@
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -70,15 +74,17 @@
         "lng": 30.485758999999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 1526,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 1531,
+        "priceLevel": null,
         "primaryType": "italian_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 3,
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -98,7 +104,7 @@
         "lng": 30.5232043,
         "businessStatus": "CLOSED_TEMPORARILY",
         "rating": 4.4,
-        "reviews": 103,
+        "reviews": 104,
         "priceLevel": null,
         "primaryType": "restaurant",
         "suggestedCategory": "lounge",
@@ -128,7 +134,7 @@
         "lng": 30.525485500000002,
         "businessStatus": "OPERATIONAL",
         "rating": 4.9,
-        "reviews": 2656,
+        "reviews": 2680,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "eastern_european_restaurant",
         "suggestedCategory": "restaurant",
@@ -136,7 +142,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -155,8 +163,8 @@
         "lng": 30.515714600000003,
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.7,
-        "reviews": 3003,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 3001,
+        "priceLevel": null,
         "primaryType": "restaurant",
         "suggestedCategory": "lounge",
         "distanceKm": 1.5,
@@ -164,8 +172,7 @@
         "acceptMatch": false,
         "nameConfidence": 0.71,
         "flags": [
-          "status:CLOSED_PERMANENTLY",
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "status:CLOSED_PERMANENTLY"
         ]
       }
     ],
@@ -186,35 +193,20 @@
         "lng": 30.517460699999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 7360,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 7366,
+        "priceLevel": null,
         "primaryType": "chocolate_shop",
         "suggestedCategory": "cafe",
         "distanceKm": 1.4,
         "tier": "base",
         "acceptMatch": true,
         "nameConfidence": 0.38,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
-      {
-        "placeId": "ChIJa7h60vXO1EARxbFxRoU2ON0",
-        "name": "Львівська майстерня шоколаду",
-        "address": "бульвар Тараса Шевченка, 36/16, Київ, 01032",
-        "lat": 50.445498,
-        "lng": 30.5024392,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.6,
-        "reviews": 2670,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
-        "primaryType": "dessert_shop",
-        "suggestedCategory": "cafe",
-        "distanceKm": 1.6,
-        "tier": "base",
-        "acceptMatch": true,
-        "nameConfidence": 0.38
-      },
       {
         "placeId": "ChIJy2Wqv67P1EAR6JsW5tKNyVQ",
         "name": "Львівська майстерня шоколаду",
@@ -223,10 +215,27 @@
         "lng": 30.544610700000003,
         "businessStatus": "OPERATIONAL",
         "rating": 3.9,
-        "reviews": 539,
+        "reviews": 540,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
+        "distanceKm": 1.6,
+        "tier": "base",
+        "acceptMatch": true,
+        "nameConfidence": 0.38
+      },
+      {
+        "placeId": "ChIJa7h60vXO1EARxbFxRoU2ON0",
+        "name": "Львівська майстерня шоколаду",
+        "address": "бульвар Тараса Шевченка, 36/16, Київ, 01032",
+        "lat": 50.445498,
+        "lng": 30.5024392,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.6,
+        "reviews": 2669,
+        "priceLevel": null,
+        "primaryType": "dessert_shop",
+        "suggestedCategory": "cafe",
         "distanceKm": 1.6,
         "tier": "base",
         "acceptMatch": true,
@@ -240,7 +249,7 @@
         "lng": 30.513980999999994,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 2396,
+        "reviews": 2398,
         "priceLevel": null,
         "primaryType": "chocolate_shop",
         "suggestedCategory": "cafe",
@@ -266,7 +275,7 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
         "reviews": 1651,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "priceLevel": null,
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.6,
@@ -274,7 +283,7 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -294,7 +303,7 @@
         "lng": 30.524048399999995,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 4281,
+        "reviews": 4287,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "bar_and_grill",
         "suggestedCategory": "restaurant",
@@ -302,7 +311,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -322,8 +333,8 @@
         "lng": 30.5231781,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 2445,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 2451,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "french_restaurant",
         "suggestedCategory": "cafe",
         "distanceKm": 0.2,
@@ -331,7 +342,7 @@
         "acceptMatch": true,
         "nameConfidence": 0.23,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -351,7 +362,7 @@
         "lng": 30.5176834,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 3396,
+        "reviews": 3397,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "italian_restaurant",
         "suggestedCategory": "cafe",
@@ -359,7 +370,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -379,7 +392,7 @@
         "lng": 30.507968899999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 365,
+        "reviews": 370,
         "priceLevel": null,
         "primaryType": "eastern_european_restaurant",
         "suggestedCategory": "cafe",
@@ -387,7 +400,9 @@
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -399,7 +414,7 @@
         "lng": 30.525112399999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 305,
+        "reviews": 306,
         "priceLevel": null,
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
@@ -425,7 +440,7 @@
         "lng": 30.4856624,
         "businessStatus": "OPERATIONAL",
         "rating": 4.9,
-        "reviews": 4174,
+        "reviews": 4210,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "chinese_restaurant",
         "suggestedCategory": "restaurant",
@@ -433,7 +448,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -484,7 +501,7 @@
         "lng": 30.514969899999997,
         "businessStatus": "CLOSED_TEMPORARILY",
         "rating": 4.7,
-        "reviews": 2343,
+        "reviews": 2344,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
@@ -513,8 +530,8 @@
         "lng": 30.521026000000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 9148,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 9153,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "hamburger_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1,
@@ -522,7 +539,7 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -543,8 +560,8 @@
         "lng": 30.513840700000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 3684,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 3685,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "ukrainian_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.1,
@@ -552,7 +569,7 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -560,7 +577,8 @@
   },
   {
     "input": {
-      "name": "Kuvshin"
+      "name": "Kuvshin",
+      "tier": "premium"
     },
     "query": "Kuvshin Київ",
     "matches": [
@@ -572,16 +590,16 @@
         "lng": 30.515481899999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 2948,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 2952,
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
         "primaryType": "eastern_european_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 2.6,
-        "tier": "base",
+        "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 0.67,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -609,7 +627,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -629,15 +649,17 @@
         "lng": 30.4981212,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 980,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 983,
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
         "primaryType": "italian_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.8,
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -657,7 +679,7 @@
         "lng": 30.5142538,
         "businessStatus": "OPERATIONAL",
         "rating": 4.8,
-        "reviews": 1910,
+        "reviews": 1913,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
@@ -665,7 +687,9 @@
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 0.89,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -685,8 +709,8 @@
         "lng": 30.625054499999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 1537,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 1539,
+        "priceLevel": null,
         "primaryType": "argentinian_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 8.6,
@@ -694,7 +718,7 @@
         "acceptMatch": true,
         "nameConfidence": 0.32,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -717,14 +741,16 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
         "reviews": 60,
-        "priceLevel": null,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 10.3,
         "tier": "base",
         "acceptMatch": true,
         "nameConfidence": 0.4,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -744,7 +770,7 @@
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.6,
         "reviews": 686,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "priceLevel": null,
         "primaryType": "dessert_restaurant",
         "suggestedCategory": "cafe",
         "distanceKm": 0.2,
@@ -752,8 +778,7 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "status:CLOSED_PERMANENTLY",
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "status:CLOSED_PERMANENTLY"
         ]
       }
     ],
@@ -774,7 +799,7 @@
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.3,
         "reviews": 643,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": null,
         "primaryType": "european_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 0.3,
@@ -802,7 +827,7 @@
         "lng": 30.519235000000002,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 2341,
+        "reviews": 2345,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
@@ -810,7 +835,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -829,15 +856,17 @@
         "lng": 30.459468100000002,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 40,
-        "priceLevel": null,
+        "reviews": 42,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 9.2,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -865,7 +894,9 @@
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -884,7 +915,7 @@
         "lng": 30.5200958,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 2074,
+        "reviews": 2075,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
@@ -892,7 +923,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -912,7 +945,7 @@
         "lng": 30.5121607,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 968,
+        "reviews": 972,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "french_restaurant",
         "suggestedCategory": "restaurant",
@@ -920,7 +953,9 @@
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 0.78,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -939,7 +974,7 @@
         "lng": 30.5351197,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 3640,
+        "reviews": 3639,
         "priceLevel": "PRICE_LEVEL_EXPENSIVE",
         "primaryType": "brazilian_restaurant",
         "suggestedCategory": "cafe",
@@ -948,7 +983,8 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "price:PRICE_LEVEL_EXPENSIVE",
+          "already-in-catalog"
         ]
       }
     ],
@@ -986,8 +1022,8 @@
         "lng": 30.5204184,
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.6,
-        "reviews": 1792,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 1789,
+        "priceLevel": null,
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 0.2,
@@ -1009,27 +1045,63 @@
     "query": "Chef Dash ресторан Київ",
     "matches": [
       {
-        "placeId": "ChIJP3yrIxrP1EARHBdL7bxekxY",
-        "name": "Chef Dash",
-        "address": "вулиця Євгена Коновальця, 15/2, Київ, 03150",
-        "lat": 50.425171,
-        "lng": 30.524375399999997,
-        "businessStatus": "CLOSED_TEMPORARILY",
+        "placeId": "ChIJY10eoh7P1EARcYVv5oP28tI",
+        "name": "Bistro Dash",
+        "address": "вулиця Володимирська, 70, Київ, 01033",
+        "lat": 50.4381074,
+        "lng": 30.509666199999995,
+        "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 723,
+        "reviews": 17,
         "priceLevel": "PRICE_LEVEL_MODERATE",
-        "primaryType": "halal_restaurant",
+        "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
-        "distanceKm": 2.8,
+        "distanceKm": 1.7,
         "tier": "base",
         "acceptMatch": false,
-        "nameConfidence": 1,
+        "nameConfidence": 0.31,
         "flags": [
-          "status:CLOSED_TEMPORARILY"
+          "name-mismatch:0.31",
+          "reviews:17"
         ]
       }
     ],
-    "alternates": []
+    "alternates": [
+      {
+        "placeId": "ChIJEQKeZ__O1EARQ9tEzn0M2Ag",
+        "name": "Даш кафе",
+        "address": "Бессарабська площа, 2, Київ, 02000",
+        "lat": 50.442138,
+        "lng": 30.521244,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.4,
+        "reviews": 1416,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "primaryType": "halal_restaurant",
+        "suggestedCategory": "restaurant",
+        "distanceKm": 0.9,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 0.25
+      },
+      {
+        "placeId": "ChIJGYyNlBjP1EARudY4ItXgwz4",
+        "name": "Kebab Dash - Кебаб Даш",
+        "address": "вул. Антоновича, 111/17, Київ, 02000",
+        "lat": 50.4223159,
+        "lng": 30.5175834,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.5,
+        "reviews": 2256,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "primaryType": "halal_restaurant",
+        "suggestedCategory": "restaurant",
+        "distanceKm": 3.1,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 0.23
+      }
+    ]
   },
   {
     "input": {
@@ -1045,7 +1117,7 @@
         "lng": 30.519643400000003,
         "businessStatus": "CLOSED_TEMPORARILY",
         "rating": 4.4,
-        "reviews": 1289,
+        "reviews": 1288,
         "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
@@ -1074,7 +1146,7 @@
         "lng": 30.5159503,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 2546,
+        "reviews": 2547,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
@@ -1082,7 +1154,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1131,7 +1205,7 @@
         "lng": 30.5167462,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 478,
+        "reviews": 479,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "eastern_european_restaurant",
         "suggestedCategory": "restaurant",
@@ -1139,7 +1213,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1158,8 +1234,8 @@
         "lng": 30.486137399999997,
         "businessStatus": "CLOSED_TEMPORARILY",
         "rating": 4.6,
-        "reviews": 707,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 706,
+        "priceLevel": null,
         "primaryType": "italian_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 2.6,
@@ -1188,14 +1264,16 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
         "reviews": 217,
-        "priceLevel": null,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 0.6,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -1207,8 +1285,8 @@
         "lng": 30.546357099999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 111,
-        "priceLevel": null,
+        "reviews": 115,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 4.7,
@@ -1225,7 +1303,7 @@
         "businessStatus": "OPERATIONAL",
         "rating": 3.7,
         "reviews": 51,
-        "priceLevel": null,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 2.6,
@@ -1240,9 +1318,9 @@
         "lat": 50.439928099999996,
         "lng": 30.4885747,
         "businessStatus": "OPERATIONAL",
-        "rating": null,
-        "reviews": null,
-        "priceLevel": null,
+        "rating": 2.5,
+        "reviews": 4,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 2.7,
@@ -1266,8 +1344,8 @@
         "lng": 30.533982299999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 1285,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 1288,
+        "priceLevel": null,
         "primaryType": "italian_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 2.9,
@@ -1275,7 +1353,7 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -1296,15 +1374,17 @@
         "lng": 30.520479499999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 973,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 976,
+        "priceLevel": null,
         "primaryType": "italian_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.4,
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1323,15 +1403,17 @@
         "lng": 30.524071099999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 1435,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 1434,
+        "priceLevel": null,
         "primaryType": "confectionery",
         "suggestedCategory": "cafe",
         "distanceKm": 0.2,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.48,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1358,7 +1440,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.5,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1377,15 +1461,17 @@
         "lng": 30.5158843,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 1001,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 1004,
+        "priceLevel": null,
         "primaryType": "belgian_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.2,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1404,15 +1490,18 @@
         "lng": 30.5156147,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 76,
-        "priceLevel": null,
+        "reviews": 77,
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 0.6,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "price:PRICE_LEVEL_VERY_EXPENSIVE",
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -1424,8 +1513,8 @@
         "lng": 30.508606499999996,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 1791,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 1792,
+        "priceLevel": null,
         "primaryType": "steak_house",
         "suggestedCategory": "lounge",
         "distanceKm": 2.1,
@@ -1441,8 +1530,8 @@
         "lng": 30.520744099999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 3517,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 3526,
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.2,
@@ -1458,8 +1547,8 @@
         "lng": 30.498703599999995,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 1057,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 1058,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 2.1,
@@ -1489,7 +1578,7 @@
         "lng": 30.517530599999994,
         "businessStatus": "OPERATIONAL",
         "rating": 4.8,
-        "reviews": 407,
+        "reviews": 424,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "seafood_restaurant",
         "suggestedCategory": "cafe",
@@ -1497,25 +1586,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
-      },
-      {
-        "placeId": "ChIJy3gqpUvP1EARWs4eCSGAkxg",
-        "name": "Чорноморка Велика Васильківська",
-        "address": "вулиця Велика Васильківська, 49А, Київ, 03150",
-        "lat": 50.4344514,
-        "lng": 30.5164521,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.5,
-        "reviews": 3552,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
-        "primaryType": "seafood_restaurant",
-        "suggestedCategory": "cafe",
-        "distanceKm": 1.8,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJHbBFuYvP1EARexURbJxw6pA",
@@ -1525,7 +1598,7 @@
         "lng": 30.509191399999995,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 5904,
+        "reviews": 5923,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "seafood_restaurant",
         "suggestedCategory": "cafe",
@@ -1533,7 +1606,29 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
+      },
+      {
+        "placeId": "ChIJy3gqpUvP1EARWs4eCSGAkxg",
+        "name": "Чорноморка Велика Васильківська",
+        "address": "вулиця Велика Васильківська, 49А, Київ, 03150",
+        "lat": 50.4344514,
+        "lng": 30.5164521,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.5,
+        "reviews": 3566,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "primaryType": "seafood_restaurant",
+        "suggestedCategory": "cafe",
+        "distanceKm": 1.8,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 1,
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJoRZ2M4bP1EARUj-8d3fk4us",
@@ -1543,7 +1638,7 @@
         "lng": 30.4903593,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 2617,
+        "reviews": 2643,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "seafood_restaurant",
         "suggestedCategory": "cafe",
@@ -1551,7 +1646,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJheRifQDP1EARqfhPuvCquUk",
@@ -1581,7 +1678,7 @@
         "lng": 30.551770400000002,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 1125,
+        "reviews": 1158,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "cafe",
@@ -1589,7 +1686,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJ2c1uvLPP1EARKW00GY84fu0",
@@ -1599,7 +1698,7 @@
         "lng": 30.5492323,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 1615,
+        "reviews": 1636,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "seafood_restaurant",
         "suggestedCategory": "cafe",
@@ -1607,7 +1706,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJvTSrpsfO1EARyE3iPz2loCU",
@@ -1617,15 +1718,17 @@
         "lng": 30.4719584,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 4583,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 4598,
+        "priceLevel": null,
         "primaryType": "seafood_restaurant",
         "suggestedCategory": "cafe",
         "distanceKm": 4.6,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJn0ve4WbP1EARivQ9ojjB47A",
@@ -1635,7 +1738,7 @@
         "lng": 30.592268100000002,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 752,
+        "reviews": 787,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "seafood_restaurant",
         "suggestedCategory": "cafe",
@@ -1643,7 +1746,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1662,7 +1767,7 @@
         "lng": 30.516005600000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 2112,
+        "reviews": 2118,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "bar_and_grill",
         "suggestedCategory": "restaurant",
@@ -1670,7 +1775,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1719,7 +1826,7 @@
         "lng": 30.5265831,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 2491,
+        "reviews": 2505,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "eastern_european_restaurant",
         "suggestedCategory": "restaurant",
@@ -1727,7 +1834,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1748,7 +1857,7 @@
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.7,
         "reviews": 486,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 2.2,
@@ -1776,7 +1885,7 @@
         "lng": 30.624137500000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 755,
+        "reviews": 752,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
@@ -1784,7 +1893,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1803,15 +1914,17 @@
         "lng": 30.5243602,
         "businessStatus": "OPERATIONAL",
         "rating": 4.8,
-        "reviews": 421,
-        "priceLevel": null,
+        "reviews": 424,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "ukrainian_restaurant",
         "suggestedCategory": "cafe",
         "distanceKm": 4,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1830,7 +1943,7 @@
         "lng": 30.5144902,
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.6,
-        "reviews": 122,
+        "reviews": 121,
         "priceLevel": null,
         "primaryType": "eastern_european_restaurant",
         "suggestedCategory": "restaurant",
@@ -1859,7 +1972,7 @@
         "lng": 30.422367299999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 604,
+        "reviews": 605,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "italian_restaurant",
         "suggestedCategory": "restaurant",
@@ -1867,7 +1980,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.62,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1887,7 +2002,7 @@
         "lng": 30.508287099999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 1949,
+        "reviews": 1948,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "bakery",
         "suggestedCategory": "cafe",
@@ -1895,7 +2010,9 @@
         "tier": "base",
         "acceptMatch": true,
         "nameConfidence": 0.4,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -1916,7 +2033,7 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.8,
         "reviews": 157,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 0.1,
@@ -1937,28 +2054,11 @@
         "lng": 30.515667099999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 2157,
+        "reviews": 2159,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 0.6,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 0
-      },
-      {
-        "placeId": "ChIJ-SwcnC7N1EARrzZc87REG58",
-        "name": "SM Bar",
-        "address": "вулиця Білоруська, 32, Київ, 02000",
-        "lat": 50.4644749,
-        "lng": 30.4741134,
-        "businessStatus": "OPERATIONAL",
-        "rating": 5,
-        "reviews": 15,
-        "priceLevel": null,
-        "primaryType": "coffee_shop",
-        "suggestedCategory": "coffee_shop",
-        "distanceKm": 3.8,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0
@@ -1971,11 +2071,28 @@
         "lng": 30.4618243,
         "businessStatus": "OPERATIONAL",
         "rating": 4.8,
-        "reviews": 71,
-        "priceLevel": null,
+        "reviews": 72,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 5.1,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 0
+      },
+      {
+        "placeId": "ChIJ-SwcnC7N1EARrzZc87REG58",
+        "name": "SM Bar",
+        "address": "вулиця Білоруська, 32, Київ, 02000",
+        "lat": 50.4644749,
+        "lng": 30.4741134,
+        "businessStatus": "OPERATIONAL",
+        "rating": 5,
+        "reviews": 16,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "primaryType": "coffee_shop",
+        "suggestedCategory": "coffee_shop",
+        "distanceKm": 3.8,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0
@@ -1997,8 +2114,8 @@
         "lng": 30.5524364,
         "businessStatus": "OPERATIONAL",
         "rating": 4.2,
-        "reviews": 177,
-        "priceLevel": null,
+        "reviews": 179,
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 2.3,
@@ -2027,15 +2144,17 @@
         "lng": 30.508606499999996,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 1791,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 1792,
+        "priceLevel": null,
         "primaryType": "steak_house",
         "suggestedCategory": "lounge",
         "distanceKm": 2.1,
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -2055,7 +2174,7 @@
         "businessStatus": "CLOSED_TEMPORARILY",
         "rating": 4.7,
         "reviews": 438,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": null,
         "primaryType": "vegan_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 3,
@@ -2084,7 +2203,7 @@
         "lng": 30.5225804,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 2117,
+        "reviews": 2116,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "korean_barbecue_restaurant",
         "suggestedCategory": "restaurant",
@@ -2092,7 +2211,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -2106,45 +2227,6 @@
     "query": "La Coupole Restaurant Київ",
     "matches": [
       {
-        "placeId": "ChIJYafZxs5x5kcRiDaXQXadCBY",
-        "name": "La Coupole",
-        "address": "102 Bd du Montparnasse, 75014 Paris, Франція",
-        "lat": 48.8422546,
-        "lng": 2.3279506,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.4,
-        "reviews": 16311,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
-        "primaryType": "french_restaurant",
-        "suggestedCategory": "cafe",
-        "distanceKm": 2025.6,
-        "tier": "premium",
-        "acceptMatch": true,
-        "nameConfidence": 1,
-        "flags": [
-          "far:2025.6km"
-        ]
-      }
-    ],
-    "alternates": [
-      {
-        "placeId": "ChIJLSxcTwBx5kcR3Dusp_ATL0E",
-        "name": "RESTAURANT LA COUPOLE",
-        "address": "Montparnasse 2 - Gare TGV, 75015 Paris, Франція",
-        "lat": 48.838762,
-        "lng": 2.317214,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.3,
-        "reviews": 3,
-        "priceLevel": null,
-        "primaryType": "restaurant",
-        "suggestedCategory": "restaurant",
-        "distanceKm": 2026.5,
-        "tier": "premium",
-        "acceptMatch": true,
-        "nameConfidence": 0.94
-      },
-      {
         "placeId": "ChIJV4Y-G6DP1EARHDP4LKundhA",
         "name": "Купол",
         "address": "вулиця Лаврська, 13, Київ, 01015",
@@ -2152,31 +2234,53 @@
         "lng": 30.5551149,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 800,
+        "reviews": 801,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 2.9,
         "tier": "premium",
         "acceptMatch": true,
-        "nameConfidence": 0.27
-      },
+        "nameConfidence": 0.27,
+        "flags": [
+          "already-in-catalog"
+        ]
+      }
+    ],
+    "alternates": [
       {
-        "placeId": "ChIJf1z3BEHO1EARe_Ixk1oq6PI",
-        "name": "Руккола",
-        "address": "вулиця Петра Сагайдачного, 22/1, Київ, 01001",
-        "lat": 50.46185,
-        "lng": 30.520664300000004,
+        "placeId": "ChIJz_0M0lnO1EARRFhXcjKAsC8",
+        "name": "Лє Космополіт",
+        "address": "вулиця Володимирська, 47, Київ, 01034",
+        "lat": 50.447777800000004,
+        "lng": 30.5144444,
         "businessStatus": "OPERATIONAL",
-        "rating": 3.9,
-        "reviews": 4760,
+        "rating": 4.3,
+        "reviews": 629,
         "priceLevel": "PRICE_LEVEL_MODERATE",
-        "primaryType": "italian_restaurant",
+        "primaryType": "belgian_restaurant",
         "suggestedCategory": "restaurant",
-        "distanceKm": 1.3,
+        "distanceKm": 0.7,
         "tier": "premium",
         "acceptMatch": true,
-        "nameConfidence": 0.17
+        "nameConfidence": 0.14
+      },
+      {
+        "placeId": "ChIJO0qisFzN1EARhAEjoGwWTr8",
+        "name": "Cloud Rooftop",
+        "address": "вулиця Бакинська, 37Д, Київ, 02000",
+        "lat": 50.4829511,
+        "lng": 30.4512101,
+        "businessStatus": "OPERATIONAL",
+        "rating": 5,
+        "reviews": 163,
+        "priceLevel": null,
+        "primaryType": null,
+        "suggestedCategory": null,
+        "distanceKm": 6.3,
+        "tier": "premium",
+        "acceptMatch": true,
+        "nameConfidence": 0.07
       }
     ]
   },
@@ -2210,23 +2314,6 @@
     ],
     "alternates": [
       {
-        "placeId": "ChIJVVVRoa7H1EARoOCmQjkNQRw",
-        "name": "Perfetto",
-        "address": "Столичне шосе, 104, Київ, 02000",
-        "lat": 50.337607,
-        "lng": 30.548735200000003,
-        "businessStatus": "OPERATIONAL",
-        "rating": null,
-        "reviews": null,
-        "priceLevel": null,
-        "primaryType": "cafe",
-        "suggestedCategory": "cafe",
-        "distanceKm": 12.6,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 1
-      },
-      {
         "placeId": "ChIJG2kmL3bN1EARkyR2Or7FrDw",
         "name": "Perfetto",
         "address": "вулиця Олександра Довженка, 2, Київ, 02000",
@@ -2239,6 +2326,23 @@
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 5.5,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 1
+      },
+      {
+        "placeId": "ChIJVVVRoa7H1EARoOCmQjkNQRw",
+        "name": "Perfetto",
+        "address": "Столичне шосе, 104, Київ, 02000",
+        "lat": 50.337607,
+        "lng": 30.548735200000003,
+        "businessStatus": "OPERATIONAL",
+        "rating": null,
+        "reviews": null,
+        "priceLevel": null,
+        "primaryType": "cafe",
+        "suggestedCategory": "cafe",
+        "distanceKm": 12.6,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1
@@ -2259,8 +2363,8 @@
         "lng": 30.504560500000004,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 1202,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 1203,
+        "priceLevel": null,
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 7.1,
@@ -2268,7 +2372,7 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -2310,28 +2414,11 @@
         "lng": 30.522693600000004,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 385,
-        "priceLevel": null,
-        "primaryType": "restaurant",
-        "suggestedCategory": "restaurant",
-        "distanceKm": 0.9,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 0.14
-      },
-      {
-        "placeId": "ChIJ6w_xPIzP1EARb_nAnF4kulY",
-        "name": "Моменти",
-        "address": "Русанівська набережна, 10, Київ, 02000",
-        "lat": 50.440051999999994,
-        "lng": 30.592207100000003,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.4,
-        "reviews": 1804,
+        "reviews": 390,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
-        "distanceKm": 5,
+        "distanceKm": 0.9,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.14
@@ -2343,12 +2430,29 @@
         "lat": 50.4312198,
         "lng": 30.5163798,
         "businessStatus": "OPERATIONAL",
-        "rating": 4.3,
-        "reviews": 37,
-        "priceLevel": null,
+        "rating": 4.4,
+        "reviews": 43,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "family_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 2.2,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 0.11
+      },
+      {
+        "placeId": "ChIJISmvdvjO1EAR_Uc3Ca3FY_g",
+        "name": "Domino's Pizza",
+        "address": "вулиця Терещенківська, 4А, Київ, 01004",
+        "lat": 50.4434924,
+        "lng": 30.5148158,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.1,
+        "reviews": 1165,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "primaryType": "pizza_restaurant",
+        "suggestedCategory": "restaurant",
+        "distanceKm": 1,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.11
@@ -2370,14 +2474,16 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
         "reviews": 207,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": null,
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 2,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.72,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -2389,8 +2495,8 @@
         "lng": 30.4552185,
         "businessStatus": "OPERATIONAL",
         "rating": 4.8,
-        "reviews": 80,
-        "priceLevel": null,
+        "reviews": 81,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 5.1,
@@ -2406,7 +2512,7 @@
         "lng": 30.510562399999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 76,
+        "reviews": 77,
         "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
@@ -2424,7 +2530,7 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
         "reviews": 1787,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.9,
@@ -2448,7 +2554,7 @@
         "lng": 30.476721899999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 1365,
+        "reviews": 1373,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "italian_restaurant",
         "suggestedCategory": "restaurant",
@@ -2456,7 +2562,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -2476,8 +2584,8 @@
         "lng": 30.424875399999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.8,
-        "reviews": 86,
-        "priceLevel": null,
+        "reviews": 87,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "sushi_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 8.8,
@@ -2498,7 +2606,7 @@
         "lng": 30.4886158,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 342,
+        "reviews": 341,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "sushi_restaurant",
         "suggestedCategory": "restaurant",
@@ -2506,23 +2614,6 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 0.2
-      },
-      {
-        "placeId": "ChIJyTHGo63P1EARo3IPp7Wid5Q",
-        "name": "PITA KYIV",
-        "address": "вулиця Євгена Чикаленка, 39, Київ, 01004",
-        "lat": 50.4406405,
-        "lng": 30.5165072,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.5,
-        "reviews": 1137,
-        "priceLevel": null,
-        "primaryType": "restaurant",
-        "suggestedCategory": "restaurant",
-        "distanceKm": 1.2,
-        "tier": "alternative",
-        "acceptMatch": false,
-        "nameConfidence": 0
       }
     ]
   },
@@ -2541,7 +2632,7 @@
         "lng": 30.537898100000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 1779,
+        "reviews": 1783,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
@@ -2549,7 +2640,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -2562,7 +2655,7 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
         "reviews": 105,
-        "priceLevel": null,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "fast_food_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 8.9,
@@ -2578,8 +2671,8 @@
         "lng": 30.4982433,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 260,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 261,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 4.3,
@@ -2611,7 +2704,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.71,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -2624,13 +2719,47 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
         "reviews": 17,
-        "priceLevel": null,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.7,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.38
+      },
+      {
+        "placeId": "ChIJGYyNlBjP1EARudY4ItXgwz4",
+        "name": "Kebab Dash - Кебаб Даш",
+        "address": "вул. Антоновича, 111/17, Київ, 02000",
+        "lat": 50.4223159,
+        "lng": 30.5175834,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.5,
+        "reviews": 2256,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "primaryType": "halal_restaurant",
+        "suggestedCategory": "restaurant",
+        "distanceKm": 3.1,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 0.38
+      },
+      {
+        "placeId": "ChIJk052hNjP1EARlpRzQ5Qu-Uw",
+        "name": "Jan Dash - Джан Даш",
+        "address": "вулиця Еспланадна, 34/2, Київ, 02000",
+        "lat": 50.4361945,
+        "lng": 30.5203305,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.6,
+        "reviews": 39,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "primaryType": "eastern_european_restaurant",
+        "suggestedCategory": "restaurant",
+        "distanceKm": 1.6,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 0.35
       }
     ]
   },
@@ -2650,7 +2779,7 @@
         "lng": 30.508185700000002,
         "businessStatus": "OPERATIONAL",
         "rating": 4.8,
-        "reviews": 216,
+        "reviews": 217,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
@@ -2658,7 +2787,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 0.48,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -2678,7 +2809,7 @@
         "lng": 30.521265,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 917,
+        "reviews": 920,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
@@ -2686,7 +2817,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -2705,7 +2838,7 @@
         "lng": 30.420668,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 949,
+        "reviews": 952,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "lounge",
@@ -2713,7 +2846,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -2733,7 +2868,7 @@
         "businessStatus": "CLOSED_TEMPORARILY",
         "rating": 4.6,
         "reviews": 543,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.7,
@@ -2762,7 +2897,7 @@
         "lng": 30.468351799999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 1994,
+        "reviews": 2008,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "korean_restaurant",
         "suggestedCategory": "restaurant",
@@ -2770,7 +2905,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 0.83,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -2791,7 +2928,7 @@
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.6,
         "reviews": 1839,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": null,
         "primaryType": "european_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.8,
@@ -2820,7 +2957,7 @@
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.5,
         "reviews": 103,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": null,
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.2,
@@ -2849,15 +2986,17 @@
         "lng": 30.496388999999994,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 695,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 694,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 2,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -2878,7 +3017,7 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
         "reviews": 279,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "priceLevel": null,
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 5.2,
@@ -2886,7 +3025,7 @@
         "acceptMatch": true,
         "nameConfidence": 0.19,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -2906,15 +3045,17 @@
         "lng": 30.5230665,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 185,
-        "priceLevel": null,
+        "reviews": 186,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.2,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -2926,8 +3067,8 @@
         "lng": 30.498424499999995,
         "businessStatus": "OPERATIONAL",
         "rating": 3.9,
-        "reviews": 105,
-        "priceLevel": null,
+        "reviews": 106,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 6.7,
@@ -2951,7 +3092,7 @@
         "lng": 30.521048999999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 455,
+        "reviews": 459,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "spanish_restaurant",
         "suggestedCategory": "cafe",
@@ -2959,7 +3100,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.67,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -2978,15 +3121,17 @@
         "lng": 30.448348300000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 3270,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 3275,
+        "priceLevel": null,
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 9,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3013,7 +3158,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.56,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3032,7 +3179,7 @@
         "lng": 30.456944399999994,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 1297,
+        "reviews": 1299,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "cafe",
@@ -3040,7 +3187,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.6,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3060,8 +3209,8 @@
         "lng": 30.38027,
         "businessStatus": "CLOSED_TEMPORARILY",
         "rating": 4.3,
-        "reviews": 779,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 780,
+        "priceLevel": null,
         "primaryType": "lebanese_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 10.2,
@@ -3090,7 +3239,7 @@
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.5,
         "reviews": 882,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 4,
@@ -3119,8 +3268,8 @@
         "lng": 30.5139876,
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.5,
-        "reviews": 1556,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 1554,
+        "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.4,
@@ -3150,14 +3299,16 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
         "reviews": 710,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": null,
         "primaryType": "chinese_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 2.4,
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3205,7 +3356,7 @@
         "lng": 30.5126718,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 1080,
+        "reviews": 1079,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
@@ -3213,7 +3364,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.6,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3233,7 +3386,7 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.2,
         "reviews": 307,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 2.7,
@@ -3241,28 +3394,11 @@
         "acceptMatch": false,
         "nameConfidence": 0.78,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
     "alternates": [
-      {
-        "placeId": "ChIJKbVbpR7P1EARUef_llu8KZg",
-        "name": "Волконський",
-        "address": "вулиця Велика Васильківська, 81, Київ, 02000",
-        "lat": 50.4259442,
-        "lng": 30.5177289,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.3,
-        "reviews": 263,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
-        "primaryType": "cafe",
-        "suggestedCategory": "cafe",
-        "distanceKm": 2.7,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 0.78
-      },
       {
         "placeId": "ChIJf-l87RLP1EARUsFy-d1lunE",
         "name": "Волконський",
@@ -3272,10 +3408,27 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
         "reviews": 467,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 3.2,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 0.78
+      },
+      {
+        "placeId": "ChIJKbVbpR7P1EARUef_llu8KZg",
+        "name": "Волконський",
+        "address": "вулиця Велика Васильківська, 81, Київ, 02000",
+        "lat": 50.4259442,
+        "lng": 30.5177289,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.3,
+        "reviews": 263,
+        "priceLevel": null,
+        "primaryType": "cafe",
+        "suggestedCategory": "cafe",
+        "distanceKm": 2.7,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.78
@@ -3289,95 +3442,13 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.2,
         "reviews": 276,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.3,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.78
-      }
-    ]
-  },
-  {
-    "input": {
-      "name": "Tiramisu Bar"
-    },
-    "query": "Tiramisu Bar Київ",
-    "matches": [
-      {
-        "placeId": "ChIJ0yHYdULP1EARrdsdNdCODfM",
-        "name": "Тірамісу",
-        "address": "вул. Андрія Верхогляда, 12, Київ, 02000",
-        "lat": 50.4127125,
-        "lng": 30.545558499999995,
-        "businessStatus": "OPERATIONAL",
-        "rating": 3.4,
-        "reviews": 5,
-        "priceLevel": null,
-        "primaryType": "restaurant",
-        "suggestedCategory": "restaurant",
-        "distanceKm": 4.4,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 1,
-        "flags": [
-          "rating:3.4",
-          "reviews:5"
-        ]
-      }
-    ],
-    "alternates": [
-      {
-        "placeId": "ChIJ22uP3VrO1EAR3WjugepFLnc",
-        "name": "Bar on 8",
-        "address": "вулиця Алли Тарасової, 5, Київ, 01001",
-        "lat": 50.453076599999996,
-        "lng": 30.5181963,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.5,
-        "reviews": 240,
-        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-        "primaryType": "bar",
-        "suggestedCategory": "lounge",
-        "distanceKm": 0.5,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 0.27
-      },
-      {
-        "placeId": "ChIJZZjzMlbO1EAREY6IYK_ghvA",
-        "name": "ZMIST Театральна",
-        "address": "вулиця Євгена Чикаленка, 20А, Київ, 01004",
-        "lat": 50.444935699999995,
-        "lng": 30.517311799999995,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.6,
-        "reviews": 1828,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
-        "primaryType": "bar",
-        "suggestedCategory": "lounge",
-        "distanceKm": 0.7,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 0.26
-      },
-      {
-        "placeId": "ChIJT02XEgDP1EAR8pxvYFkFSlc",
-        "name": "Rumbabar",
-        "address": "вулиця Хрещатик, 19, Київ, 01001",
-        "lat": 50.447015,
-        "lng": 30.5227225,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.8,
-        "reviews": 1412,
-        "priceLevel": null,
-        "primaryType": "restaurant",
-        "suggestedCategory": "restaurant",
-        "distanceKm": 0.3,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 0.25
       }
     ]
   },
@@ -3395,7 +3466,7 @@
         "lng": 30.5139909,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 2277,
+        "reviews": 2289,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
@@ -3403,7 +3474,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.47,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3422,15 +3495,17 @@
         "lng": 30.507341,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 3050,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 3074,
+        "priceLevel": null,
         "primaryType": "ukrainian_restaurant",
         "suggestedCategory": "cafe",
         "distanceKm": 6.9,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3449,7 +3524,7 @@
         "lng": 30.4686471,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 993,
+        "reviews": 991,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "cafe",
@@ -3457,7 +3532,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3476,15 +3553,17 @@
         "lng": 30.502354800000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 93,
-        "priceLevel": null,
+        "reviews": 94,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.5,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3511,7 +3590,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3530,8 +3611,8 @@
         "lng": 24.0260124,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 2085,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 2084,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 467.7,
@@ -3539,7 +3620,8 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "far:467.7km"
+          "far:467.7km",
+          "already-in-catalog"
         ]
       }
     ],
@@ -3552,8 +3634,8 @@
         "lng": 24.0158335,
         "businessStatus": "OPERATIONAL",
         "rating": 4,
-        "reviews": 99,
-        "priceLevel": null,
+        "reviews": 110,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 469.4,
@@ -3562,18 +3644,18 @@
         "nameConfidence": 1
       },
       {
-        "placeId": "ChIJnz93gkzdOkcRDN942CQkE4U",
-        "name": "KREDENS CAFE (Viking Park)",
-        "address": "БЦ Viking Park, вулиця Зелена, 151, Львів, Львівська область, 79000",
-        "lat": 49.8095565,
-        "lng": 24.061517799999997,
+        "placeId": "ChIJz04b_gnnOkcR92iEdAuDSuE",
+        "name": "KREDENS CAFE (Victoria Gardens)",
+        "address": "KREDENS CAFE, вул. Кульпарківська, 222А, Львів, Львівська область, 79000",
+        "lat": 49.807331,
+        "lng": 23.979678,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 1714,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
-        "primaryType": "cafe",
-        "suggestedCategory": "cafe",
-        "distanceKm": 465.9,
+        "reviews": 774,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "primaryType": "coffee_shop",
+        "suggestedCategory": "coffee_shop",
+        "distanceKm": 471.7,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1
@@ -3586,7 +3668,7 @@
         "lng": 24.0317553,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 1670,
+        "reviews": 1668,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
@@ -3614,7 +3696,7 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.1,
         "reviews": 117,
-        "priceLevel": null,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "cafe",
         "distanceKm": 1.8,
@@ -3635,7 +3717,7 @@
         "lng": 30.464350699999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 391,
+        "reviews": 392,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "cafe",
@@ -3652,7 +3734,7 @@
         "lng": 30.522169700000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 7146,
+        "reviews": 7150,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
@@ -3662,21 +3744,21 @@
         "nameConfidence": 0.17
       },
       {
-        "placeId": "ChIJqyXPtxLO1EARV8RYhv7MRpY",
-        "name": "Буглама",
-        "address": "вулиця Костянтинівська, 57, Київ, 04071",
-        "lat": 50.4704753,
-        "lng": 30.5058796,
+        "placeId": "ChIJ7cSgQq_P1EARxMEOtHEQvn4",
+        "name": "Мама Манана",
+        "address": "вулиця Нижній Вал, 23, Київ, 04071",
+        "lat": 50.466250699999996,
+        "lng": 30.511824400000002,
         "businessStatus": "OPERATIONAL",
-        "rating": 4.5,
-        "reviews": 1111,
+        "rating": 4.9,
+        "reviews": 13505,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "eastern_european_restaurant",
         "suggestedCategory": "restaurant",
-        "distanceKm": 2.6,
+        "distanceKm": 2,
         "tier": "alternative",
         "acceptMatch": false,
-        "nameConfidence": 0.14
+        "nameConfidence": 0.17
       }
     ]
   },
@@ -3694,15 +3776,17 @@
         "lng": 30.477149999999995,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 3029,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 3084,
+        "priceLevel": null,
         "primaryType": "family_restaurant",
         "suggestedCategory": "lounge",
         "distanceKm": 8.5,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3722,8 +3806,8 @@
         "lng": 30.493333899999996,
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.4,
-        "reviews": 1145,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 1144,
+        "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 2.2,
@@ -3751,15 +3835,17 @@
         "lng": 30.517669899999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 1184,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 1189,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 1.3,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3778,7 +3864,7 @@
         "lng": 30.5237892,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 1117,
+        "reviews": 1116,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
@@ -3786,7 +3872,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3805,15 +3893,17 @@
         "lng": 30.520652499999994,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 711,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 713,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.8,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -3833,15 +3923,17 @@
         "lng": 30.515670200000002,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 1929,
-        "priceLevel": null,
+        "reviews": 1931,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "korean_barbecue_restaurant",
-        "suggestedCategory": "cafe",
+        "suggestedCategory": "restaurant",
         "distanceKm": 1.5,
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -3853,8 +3945,8 @@
         "lng": 30.4162769,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 1699,
-        "priceLevel": null,
+        "reviews": 1707,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "korean_barbecue_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 9.6,
@@ -3870,8 +3962,8 @@
         "lng": 30.516971899999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 1762,
-        "priceLevel": null,
+        "reviews": 1797,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "asian_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 0.7,
@@ -3917,7 +4009,7 @@
         "lng": 30.518269999999994,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 819,
+        "reviews": 820,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "ukrainian_restaurant",
         "suggestedCategory": "restaurant",
@@ -3942,8 +4034,8 @@
         "lng": 30.5110217,
         "businessStatus": "OPERATIONAL",
         "rating": 4.8,
-        "reviews": 603,
-        "priceLevel": null,
+        "reviews": 612,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.8,
@@ -3973,7 +4065,7 @@
         "businessStatus": "OPERATIONAL",
         "rating": 3.8,
         "reviews": 215,
-        "priceLevel": null,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.5,
@@ -3981,7 +4073,8 @@
         "acceptMatch": true,
         "nameConfidence": 0.4,
         "flags": [
-          "rating:3.8"
+          "rating:3.8",
+          "already-in-catalog"
         ]
       }
     ],
@@ -4060,7 +4153,7 @@
         "lng": 30.4692769,
         "businessStatus": "OPERATIONAL",
         "rating": 4.1,
-        "reviews": 491,
+        "reviews": 493,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
@@ -4068,7 +4161,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -4080,8 +4175,8 @@
         "lng": 30.508185100000002,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 1140,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 1141,
+        "priceLevel": null,
         "primaryType": "lebanese_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 2.1,
@@ -4097,8 +4192,8 @@
         "lng": 30.5209355,
         "businessStatus": "OPERATIONAL",
         "rating": 3.8,
-        "reviews": 1018,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 1020,
+        "priceLevel": null,
         "primaryType": "italian_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 5.3,
@@ -4114,7 +4209,7 @@
         "lng": 30.5163576,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 2134,
+        "reviews": 2137,
         "priceLevel": "PRICE_LEVEL_EXPENSIVE",
         "primaryType": "italian_restaurant",
         "suggestedCategory": "restaurant",
@@ -4139,15 +4234,17 @@
         "lng": 30.5196361,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 922,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 925,
+        "priceLevel": null,
         "primaryType": "dessert_shop",
         "suggestedCategory": "cafe",
         "distanceKm": 0.5,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.57,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4183,7 +4280,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.67,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4202,7 +4301,7 @@
         "lng": 30.5068526,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 793,
+        "reviews": 795,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "dessert_restaurant",
         "suggestedCategory": "cafe",
@@ -4210,7 +4309,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.5,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4252,8 +4353,8 @@
         "lng": 30.4548015,
         "businessStatus": "OPERATIONAL",
         "rating": 4.1,
-        "reviews": 647,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 650,
+        "priceLevel": null,
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 7.2,
@@ -4269,14 +4370,31 @@
         "lng": 30.5099195,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 277,
-        "priceLevel": null,
+        "reviews": 281,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "bar",
         "suggestedCategory": "lounge",
         "distanceKm": 1,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.16
+      },
+      {
+        "placeId": "ChIJh9cpCGnP1EARr-jdmAWQ10s",
+        "name": "NOIR CAFE",
+        "address": "вулиця Михайла Бойчука, 12, Київ, 01103",
+        "lat": 50.4148436,
+        "lng": 30.548489800000002,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.4,
+        "reviews": 624,
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+        "primaryType": "european_restaurant",
+        "suggestedCategory": "cafe",
+        "distanceKm": 4.3,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 0
       }
     ]
   },
@@ -4294,7 +4412,7 @@
         "lng": 30.544188,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 2645,
+        "reviews": 2653,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "italian_restaurant",
         "suggestedCategory": "restaurant",
@@ -4302,7 +4420,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4321,7 +4441,7 @@
         "lng": 30.5233299,
         "businessStatus": "CLOSED_PERMANENTLY",
         "rating": 4.2,
-        "reviews": 305,
+        "reviews": 304,
         "priceLevel": null,
         "primaryType": "ukrainian_restaurant",
         "suggestedCategory": "restaurant",
@@ -4351,14 +4471,16 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
         "reviews": 66,
-        "priceLevel": null,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 4.8,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.73,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -4387,7 +4509,7 @@
         "lng": 30.611932499999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 1058,
+        "reviews": 1065,
         "priceLevel": null,
         "primaryType": "store",
         "suggestedCategory": null,
@@ -4415,15 +4537,17 @@
         "lng": 30.5317981,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 186,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 182,
+        "priceLevel": null,
         "primaryType": "tea_store",
         "suggestedCategory": "cafe",
         "distanceKm": 4.2,
         "tier": "base",
         "acceptMatch": true,
         "nameConfidence": 0.25,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4471,15 +4595,17 @@
         "lng": 30.499741599999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 478,
+        "reviews": 480,
         "priceLevel": null,
         "primaryType": "tea_store",
-        "suggestedCategory": "coffee_shop",
+        "suggestedCategory": "cafe",
         "distanceKm": 7.2,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4499,7 +4625,7 @@
         "lng": 30.514683100000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 1848,
+        "reviews": 1852,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "lounge",
@@ -4507,7 +4633,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4526,15 +4654,17 @@
         "lng": 30.5043428,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 230,
-        "priceLevel": null,
+        "reviews": 235,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 2.6,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4553,15 +4683,17 @@
         "lng": 30.5098711,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 284,
-        "priceLevel": null,
+        "reviews": 291,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4580,8 +4712,8 @@
         "lng": 30.5006716,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 1116,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 1125,
+        "priceLevel": null,
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.7,
@@ -4589,7 +4721,7 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -4609,7 +4741,7 @@
         "lng": 30.5093605,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 1116,
+        "reviews": 1133,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "pizza_restaurant",
         "suggestedCategory": "restaurant",
@@ -4617,7 +4749,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 0.74,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4637,15 +4771,17 @@
         "lng": 30.5139279,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 151,
-        "priceLevel": null,
+        "reviews": 153,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.8,
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4664,7 +4800,7 @@
         "lng": 30.4892392,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 519,
+        "reviews": 520,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "mediterranean_restaurant",
         "suggestedCategory": "restaurant",
@@ -4672,7 +4808,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4691,15 +4829,17 @@
         "lng": 30.505833899999995,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 145,
-        "priceLevel": null,
+        "reviews": 156,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.3,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -4711,7 +4851,7 @@
         "lng": 30.5922786,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 2839,
+        "reviews": 2844,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
@@ -4736,15 +4876,17 @@
         "lng": 30.508119299999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 179,
-        "priceLevel": null,
+        "reviews": 184,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.1,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4763,7 +4905,7 @@
         "lng": 30.5114524,
         "businessStatus": "OPERATIONAL",
         "rating": 4.2,
-        "reviews": 599,
+        "reviews": 606,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
@@ -4771,14 +4913,17 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
   },
   {
     "input": {
-      "name": "Cafe Markó"
+      "name": "Cafe Markó",
+      "tier": "premium"
     },
     "query": "Cafe Markó Київ",
     "matches": [
@@ -4790,15 +4935,17 @@
         "lng": 30.5179782,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 223,
-        "priceLevel": null,
+        "reviews": 228,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 0.4,
-        "tier": "base",
+        "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4819,14 +4966,16 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
         "reviews": 552,
-        "priceLevel": null,
+        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 3.5,
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4846,15 +4995,17 @@
         "lng": 30.5197129,
         "businessStatus": "OPERATIONAL",
         "rating": 4.8,
-        "reviews": 75,
-        "priceLevel": null,
+        "reviews": 82,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.2,
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -4866,8 +5017,8 @@
         "lng": 30.547625200000002,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 905,
-        "priceLevel": null,
+        "reviews": 917,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.9,
@@ -4879,7 +5030,8 @@
   },
   {
     "input": {
-      "name": "Good Girl"
+      "name": "Good Girl",
+      "tier": "premium"
     },
     "query": "Good Girl Київ",
     "matches": [
@@ -4891,16 +5043,16 @@
         "lng": 30.531949,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 777,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 782,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.5,
-        "tier": "base",
+        "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -4919,16 +5071,18 @@
         "lat": 50.4203327,
         "lng": 30.531867499999997,
         "businessStatus": "OPERATIONAL",
-        "rating": 4.5,
-        "reviews": 623,
-        "priceLevel": null,
+        "rating": 4.6,
+        "reviews": 632,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 3.4,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -4947,8 +5101,8 @@
         "lng": 30.505765499999995,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 782,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 785,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 2.7,
@@ -4956,7 +5110,7 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -4977,15 +5131,17 @@
         "lng": 30.520744099999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 3517,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 3526,
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.2,
         "tier": "premium",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5004,15 +5160,17 @@
         "lng": 30.506729900000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 207,
-        "priceLevel": null,
+        "reviews": 210,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.2,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5032,15 +5190,17 @@
         "lng": 30.520406,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 899,
-        "priceLevel": null,
+        "reviews": 929,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1.3,
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 0.6,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5059,15 +5219,17 @@
         "lng": 30.5253004,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 645,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 646,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 1.1,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5086,15 +5248,17 @@
         "lng": 30.5203125,
         "businessStatus": "OPERATIONAL",
         "rating": 4.2,
-        "reviews": 127,
-        "priceLevel": null,
+        "reviews": 130,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 0.4,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -5106,8 +5270,8 @@
         "lng": 30.488360300000004,
         "businessStatus": "OPERATIONAL",
         "rating": 4.9,
-        "reviews": 330,
-        "priceLevel": null,
+        "reviews": 331,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "hookah_bar",
         "suggestedCategory": "lounge",
         "distanceKm": 2.9,
@@ -5123,7 +5287,7 @@
         "lng": 30.5337928,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 930,
+        "reviews": 932,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "cafe",
@@ -5165,15 +5329,17 @@
         "lng": 30.516409300000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 2063,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 2067,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.6,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5192,7 +5358,7 @@
         "lng": 30.520747800000002,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 999,
+        "reviews": 1008,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
@@ -5200,7 +5366,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -5212,8 +5380,8 @@
         "lng": 30.516409300000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 2063,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 2067,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.6,
@@ -5229,8 +5397,8 @@
         "lng": 30.519470799999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 877,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 882,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 1.4,
@@ -5239,18 +5407,18 @@
         "nameConfidence": 1
       },
       {
-        "placeId": "ChIJx_eD_crJ1EARrJkSgNqqeTY",
-        "name": "TAKAVA Coffee-Buffet Respublica",
-        "address": "Кільцева дорога, 1, Київ, 02000",
-        "lat": 50.373219,
-        "lng": 30.445881999999997,
+        "placeId": "ChIJOQ4wBRrF1EARX-97kLXOPK8",
+        "name": "TAKAVA 3.0 River Mall",
+        "address": "Дніпровська набережна, 12, Київ, 02081",
+        "lat": 50.4045525,
+        "lng": 30.6112943,
         "businessStatus": "OPERATIONAL",
-        "rating": 4,
-        "reviews": 173,
-        "priceLevel": null,
+        "rating": 3.6,
+        "reviews": 604,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
-        "distanceKm": 10.2,
+        "distanceKm": 8,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1
@@ -5272,8 +5440,8 @@
         "lng": 30.5156718,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 949,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 947,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "french_restaurant",
         "suggestedCategory": "cafe",
         "distanceKm": 1.4,
@@ -5281,7 +5449,7 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -5302,8 +5470,8 @@
         "lng": 30.509128399999994,
         "businessStatus": "OPERATIONAL",
         "rating": 4.2,
-        "reviews": 1651,
-        "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+        "reviews": 1652,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "french_restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 1,
@@ -5311,7 +5479,7 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "price:PRICE_LEVEL_EXPENSIVE"
+          "already-in-catalog"
         ]
       }
     ],
@@ -5331,8 +5499,8 @@
         "lng": 30.5114479,
         "businessStatus": "OPERATIONAL",
         "rating": 3.6,
-        "reviews": 217,
-        "priceLevel": null,
+        "reviews": 221,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 0.9,
@@ -5340,7 +5508,8 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "rating:3.6"
+          "rating:3.6",
+          "already-in-catalog"
         ]
       }
     ],
@@ -5361,7 +5530,7 @@
         "lng": 30.506420799999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 794,
+        "reviews": 797,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "vietnamese_restaurant",
         "suggestedCategory": "restaurant",
@@ -5369,7 +5538,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5389,7 +5560,7 @@
         "lng": 30.505980899999997,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 1090,
+        "reviews": 1096,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
@@ -5397,7 +5568,9 @@
         "tier": "alternative",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5417,15 +5590,17 @@
         "lng": 30.5257025,
         "businessStatus": "OPERATIONAL",
         "rating": 4.3,
-        "reviews": 176,
-        "priceLevel": null,
+        "reviews": 180,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "family_restaurant",
         "suggestedCategory": "cafe",
         "distanceKm": 3.9,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5444,15 +5619,17 @@
         "lng": 30.511674600000003,
         "businessStatus": "OPERATIONAL",
         "rating": 4.5,
-        "reviews": 959,
-        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "reviews": 960,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 2.1,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5472,15 +5649,17 @@
         "lng": 30.5424687,
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
-        "reviews": 159,
-        "priceLevel": null,
+        "reviews": 163,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 3.7,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5502,7 +5681,7 @@
         "lng": 30.448598999999994,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 2673,
+        "reviews": 2773,
         "priceLevel": null,
         "primaryType": "meal_delivery",
         "suggestedCategory": "restaurant",
@@ -5510,7 +5689,9 @@
         "tier": "alternative",
         "acceptMatch": true,
         "nameConfidence": 0.25,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5529,7 +5710,7 @@
         "lng": 30.527352900000004,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 395,
+        "reviews": 398,
         "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
@@ -5537,7 +5718,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5557,14 +5740,16 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
         "reviews": 504,
-        "priceLevel": null,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "restaurant",
         "suggestedCategory": "restaurant",
         "distanceKm": 2.1,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5583,15 +5768,17 @@
         "lng": 30.5247054,
         "businessStatus": "OPERATIONAL",
         "rating": 4.2,
-        "reviews": 173,
-        "priceLevel": null,
+        "reviews": 181,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 1.3,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -5602,9 +5789,9 @@
         "lat": 50.4470664,
         "lng": 30.519118300000002,
         "businessStatus": "OPERATIONAL",
-        "rating": 4.1,
-        "reviews": 44,
-        "priceLevel": null,
+        "rating": 4.2,
+        "reviews": 48,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 0.5,
@@ -5620,8 +5807,8 @@
         "lng": 30.5183973,
         "businessStatus": "OPERATIONAL",
         "rating": 3.9,
-        "reviews": 20,
-        "priceLevel": null,
+        "reviews": 22,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 3,
@@ -5636,9 +5823,9 @@
         "lat": 50.4716409,
         "lng": 30.4015584,
         "businessStatus": "OPERATIONAL",
-        "rating": 4.6,
-        "reviews": 11,
-        "priceLevel": null,
+        "rating": 4.7,
+        "reviews": 12,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "coffee_shop",
         "suggestedCategory": "coffee_shop",
         "distanceKm": 9,
@@ -5662,7 +5849,7 @@
         "lng": 30.5315639,
         "businessStatus": "OPERATIONAL",
         "rating": 4.2,
-        "reviews": 519,
+        "reviews": 522,
         "priceLevel": null,
         "primaryType": "coworking_space",
         "suggestedCategory": "coffee_shop",
@@ -5670,7 +5857,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5692,12 +5881,14 @@
         "reviews": 310,
         "priceLevel": null,
         "primaryType": "grocery_store",
-        "suggestedCategory": "cafe",
+        "suggestedCategory": "lounge",
         "distanceKm": 3.5,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5715,9 +5906,9 @@
         "lat": 50.4384185,
         "lng": 30.505872099999998,
         "businessStatus": "OPERATIONAL",
-        "rating": 3.6,
-        "reviews": 135,
-        "priceLevel": null,
+        "rating": 3.7,
+        "reviews": 138,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.8,
@@ -5725,7 +5916,7 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "rating:3.6"
+          "rating:3.7"
         ]
       }
     ],
@@ -5745,15 +5936,17 @@
         "lng": 30.5043959,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 442,
-        "priceLevel": null,
+        "reviews": 454,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "bakery",
         "suggestedCategory": "cafe",
         "distanceKm": 2.9,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": [
@@ -5764,9 +5957,9 @@
         "lat": 50.4424997,
         "lng": 30.5445463,
         "businessStatus": "OPERATIONAL",
-        "rating": 4.7,
-        "reviews": 66,
-        "priceLevel": null,
+        "rating": 4.8,
+        "reviews": 68,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "bakery",
         "suggestedCategory": "cafe",
         "distanceKm": 1.7,
@@ -5790,15 +5983,17 @@
         "lng": 30.519224200000004,
         "businessStatus": "OPERATIONAL",
         "rating": 4.4,
-        "reviews": 215,
+        "reviews": 216,
         "priceLevel": null,
-        "primaryType": "restaurant",
-        "suggestedCategory": "restaurant",
+        "primaryType": "cafe",
+        "suggestedCategory": "cafe",
         "distanceKm": 2,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       }
     ],
     "alternates": []
@@ -5821,15 +6016,17 @@
         "lng": 30.523996300000004,
         "businessStatus": "OPERATIONAL",
         "rating": 4.8,
-        "reviews": 63,
-        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "reviews": 64,
+        "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 0.5,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJR4Nmog3b1EAR57YaBKbRZKM",
@@ -5839,7 +6036,7 @@
         "lng": 30.511403700000002,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 573,
+        "reviews": 574,
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
@@ -5847,7 +6044,9 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJ__-vsEbO1EARfClE88iwARU",
@@ -5858,14 +6057,16 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.6,
         "reviews": 1265,
-        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.2,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJ7xqC-_7O1EAR7w0cRgOzrYs",
@@ -5875,15 +6076,17 @@
         "lng": 30.519906499999998,
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
-        "reviews": 945,
-        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "reviews": 946,
+        "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.2,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJfwbn12nO1EARNPG4tVzKTFo",
@@ -5894,14 +6097,16 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
         "reviews": 1341,
-        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "priceLevel": "PRICE_LEVEL_MODERATE",
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 1.5,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJSb3CLWvO1EARh3zoxTwsplg",
@@ -5919,7 +6124,49 @@
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
+      },
+      {
+        "placeId": "ChIJwdvpWALP1EARE-qdDeC17ZM",
+        "name": "Пиріжкова Тітка Клара",
+        "address": "вулиця Мечникова, 22А, Київ, 01021",
+        "lat": 50.4380326,
+        "lng": 30.536475900000003,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.5,
+        "reviews": 409,
+        "priceLevel": null,
+        "primaryType": "cafe",
+        "suggestedCategory": "cafe",
+        "distanceKm": 1.6,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 1,
+        "flags": [
+          "already-in-catalog"
+        ]
+      },
+      {
+        "placeId": "ChIJ856qEbfP1EAR0s8NrOiZIV8",
+        "name": "Пиріжкова Тітка Клара",
+        "address": "вулиця Січових Стрільців, 11, Київ, 02000",
+        "lat": 50.4558696,
+        "lng": 30.503818799999994,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.4,
+        "reviews": 50,
+        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "primaryType": "cafe",
+        "suggestedCategory": "cafe",
+        "distanceKm": 1.5,
+        "tier": "base",
+        "acceptMatch": false,
+        "nameConfidence": 1,
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJVVWFavPO1EARx7LOCAmle-E",
@@ -5930,50 +6177,16 @@
         "businessStatus": "OPERATIONAL",
         "rating": 4.7,
         "reviews": 1426,
-        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
+        "priceLevel": null,
         "primaryType": "cafe",
         "suggestedCategory": "cafe",
         "distanceKm": 2.3,
         "tier": "base",
         "acceptMatch": false,
         "nameConfidence": 1,
-        "flags": []
-      },
-      {
-        "placeId": "ChIJwdvpWALP1EARE-qdDeC17ZM",
-        "name": "Пиріжкова Тітка Клара",
-        "address": "вулиця Мечникова, 22А, Київ, 01021",
-        "lat": 50.4380326,
-        "lng": 30.536475900000003,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.5,
-        "reviews": 408,
-        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
-        "primaryType": "cafe",
-        "suggestedCategory": "cafe",
-        "distanceKm": 1.6,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 1,
-        "flags": []
-      },
-      {
-        "placeId": "ChIJ856qEbfP1EAR0s8NrOiZIV8",
-        "name": "Пиріжкова Тітка Клара",
-        "address": "вулиця Січових Стрільців, 11, Київ, 02000",
-        "lat": 50.4558696,
-        "lng": 30.503818799999994,
-        "businessStatus": "OPERATIONAL",
-        "rating": 4.4,
-        "reviews": 51,
-        "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
-        "primaryType": "cafe",
-        "suggestedCategory": "cafe",
-        "distanceKm": 1.5,
-        "tier": "base",
-        "acceptMatch": false,
-        "nameConfidence": 1,
-        "flags": []
+        "flags": [
+          "already-in-catalog"
+        ]
       },
       {
         "placeId": "ChIJa3nRszvP1EARNO7bE_m5v4k",
@@ -5982,7 +6195,7 @@
         "lat": 50.4463351,
         "lng": 30.4975239,
         "businessStatus": "OPERATIONAL",
-        "rating": 3.9,
+        "rating": 4,
         "reviews": 39,
         "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
         "primaryType": "coffee_shop",
@@ -5992,8 +6205,186 @@
         "acceptMatch": false,
         "nameConfidence": 1,
         "flags": [
-          "rating:3.9"
+          "already-in-catalog"
         ]
+      }
+    ],
+    "alternates": []
+  },
+  {
+    "input": {
+      "name": "Porto Maltese",
+      "tier": "premium"
+    },
+    "query": "Porto Maltese Київ",
+    "matches": [
+      {
+        "placeId": "ChIJzwdw7RLP1EARQCg6rI3Hz7k",
+        "name": "Porto Maltese",
+        "address": "бульвар Лесі Українки, 30В, Київ, 02000",
+        "lat": 50.423744299999996,
+        "lng": 30.5422085,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4,
+        "reviews": 81,
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+        "primaryType": "restaurant",
+        "suggestedCategory": "restaurant",
+        "distanceKm": 3.2,
+        "tier": "premium",
+        "acceptMatch": false,
+        "nameConfidence": 1,
+        "flags": [
+          "already-in-catalog"
+        ]
+      }
+    ],
+    "alternates": []
+  },
+  {
+    "input": {
+      "name": "SHO",
+      "tier": "premium"
+    },
+    "query": "SHO Київ",
+    "matches": [
+      {
+        "placeId": "ChIJ5Yz1ZwfP1EARSNjYL9MgxvA",
+        "name": "SHO",
+        "address": "вулиця Мечникова, 18, Київ, 01021",
+        "lat": 50.437625999999995,
+        "lng": 30.5352159,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.5,
+        "reviews": 2906,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "primaryType": "ukrainian_restaurant",
+        "suggestedCategory": "restaurant",
+        "distanceKm": 1.6,
+        "tier": "premium",
+        "acceptMatch": false,
+        "nameConfidence": 1,
+        "flags": [
+          "already-in-catalog"
+        ]
+      }
+    ],
+    "alternates": []
+  },
+  {
+    "input": {
+      "name": "Vicini Italiani",
+      "tier": "premium"
+    },
+    "query": "Vicini Italiani Київ",
+    "matches": [
+      {
+        "placeId": "ChIJI6bN8ULP1EARcXPQNy6dFsk",
+        "name": "Vicini Italiani",
+        "address": "вул. Андрія Верхогляда, 16, Київ, 01103",
+        "lat": 50.411121099999995,
+        "lng": 30.5458301,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.3,
+        "reviews": 358,
+        "priceLevel": "PRICE_LEVEL_MODERATE",
+        "primaryType": "italian_restaurant",
+        "suggestedCategory": "restaurant",
+        "distanceKm": 4.6,
+        "tier": "premium",
+        "acceptMatch": false,
+        "nameConfidence": 1,
+        "flags": [
+          "already-in-catalog"
+        ]
+      }
+    ],
+    "alternates": []
+  },
+  {
+    "input": {
+      "name": "Frou Frou",
+      "tier": "premium"
+    },
+    "query": "Frou Frou Київ",
+    "matches": [
+      {
+        "placeId": "ChIJ-2SifnjP1EARoOX6vivIIW4",
+        "name": "Frou Frou",
+        "address": "вулиця Князів Острозьких, 44, Київ, 02000",
+        "lat": 50.433215399999995,
+        "lng": 30.544732099999997,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4,
+        "reviews": 471,
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+        "primaryType": "restaurant",
+        "suggestedCategory": "restaurant",
+        "distanceKm": 2.4,
+        "tier": "premium",
+        "acceptMatch": false,
+        "nameConfidence": 1,
+        "flags": [
+          "already-in-catalog"
+        ]
+      }
+    ],
+    "alternates": []
+  },
+  {
+    "input": {
+      "name": "Марио",
+      "query": "Марио ресторан Печерськ Київ",
+      "tier": "premium",
+      "acceptMatch": true
+    },
+    "query": "Марио ресторан Печерськ Київ",
+    "matches": [
+      {
+        "placeId": "ChIJffwA-vnO1EARkYTZdSJJjPM",
+        "name": "Ресторан MARIO. Італійський ресторан",
+        "address": "вул. Павла Скоропадського, 14А, Київ, 02000",
+        "lat": 50.4409888,
+        "lng": 30.5086138,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.3,
+        "reviews": 916,
+        "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+        "primaryType": "italian_restaurant",
+        "suggestedCategory": "lounge",
+        "distanceKm": 1.5,
+        "tier": "premium",
+        "acceptMatch": true,
+        "nameConfidence": 0.15,
+        "flags": []
+      }
+    ],
+    "alternates": []
+  },
+  {
+    "input": {
+      "name": "SARTO",
+      "tier": "premium"
+    },
+    "query": "SARTO Київ",
+    "matches": [
+      {
+        "placeId": "ChIJJ87ob9_P1EARKV3IR4C3uFA",
+        "name": "SARTO",
+        "address": "вулиця Хрещатик, 15/4, Київ, 02000",
+        "lat": 50.4474915,
+        "lng": 30.5257431,
+        "businessStatus": "OPERATIONAL",
+        "rating": 4.5,
+        "reviews": 83,
+        "priceLevel": null,
+        "primaryType": "italian_restaurant",
+        "suggestedCategory": "lounge",
+        "distanceKm": 0.3,
+        "tier": "premium",
+        "acceptMatch": false,
+        "nameConfidence": 1,
+        "flags": []
       }
     ],
     "alternates": []

@@ -295,40 +295,15 @@ function boot(): void {
   const lang: Lang = pickLang(params.get("lang") ?? app?.initDataUnsafe?.user?.language_code);
   document.documentElement?.setAttribute("lang", lang);
 
-  // Initial paint — verification.html ships the loading screen inline, but
-  // we re-render so language picks land before the network call returns.
-  renderScreen(root, "loading", lang);
-
-  if (!app) {
-    // Opened outside Telegram (e.g. bookmarked URL) — surface a clear
-    // "this needs Telegram" state rather than hanging on /init.
-    renderScreen(root, "unavailable", lang);
-    return;
-  }
-
-  app.ready();
-  app.expand();
-  // Bot API 8.0+ — immersive fullscreen for the capture. Older clients
-  // gracefully fall through to expanded-but-not-fullscreen. Paint Telegram's
-  // chrome to match the active theme so it doesn't flash the wrong color.
-  const bootTheme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
-  const chromeColor = bootTheme === "light" ? "#f5f5f5" : "#030303";
-  try {
-    app.requestFullscreen?.();
-    app.setHeaderColor?.(chromeColor);
-    app.setBackgroundColor?.(chromeColor);
-    app.setBottomBarColor?.(chromeColor);
-  } catch (err) {
-    console.warn("[verification] fullscreen/chrome setup failed (non-fatal)", err);
-  }
-  // Fullscreen floats Telegram's close ×/menu ⋯ over the page and `env()` does
-  // not account for them, so the consent copy would slide under the chrome.
-  // Mirrors the real reserve into --tg-content-top/bottom for the CSS above.
-  wireContentInsets(app);
-
   // Dev-only screen preview: `?screen=loading|success|retry|error|...` renders
   // that state and skips the liveness session, so every themed status screen
   // can be reviewed without burning a real check. Inert in production builds.
+  //
+  // Deliberately checked BEFORE the `!app` bailout below and touches nothing
+  // on `app`: a forced preview is the one path meant to work with no Telegram
+  // WebApp present at all, so a bookmarked/plain-browser tab can render it —
+  // the real flow past this point genuinely needs `app` and keeps failing
+  // closed to "unavailable" without it.
   if (import.meta.env.DEV) {
     const forced = params.get("screen");
     const allowed: Screen[] = [
@@ -368,6 +343,38 @@ function boot(): void {
       return;
     }
   }
+
+  // Initial paint — verification.html ships the loading screen inline, but
+  // we re-render so language picks land before the network call returns.
+  renderScreen(root, "loading", lang);
+
+  if (!app) {
+    // Opened outside Telegram (e.g. bookmarked URL) — surface a clear
+    // "this needs Telegram" state rather than hanging on /init.
+    renderScreen(root, "unavailable", lang);
+    return;
+  }
+
+  app.ready();
+  app.expand();
+  // Bot API 8.0+ — immersive fullscreen for the capture. Older clients
+  // gracefully fall through to expanded-but-not-fullscreen. Paint Telegram's
+  // chrome to match the active theme so it doesn't flash the wrong color.
+  const bootTheme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  const chromeColor = bootTheme === "light" ? "#f5f5f5" : "#030303";
+  try {
+    app.requestFullscreen?.();
+    app.setHeaderColor?.(chromeColor);
+    app.setBackgroundColor?.(chromeColor);
+    app.setBottomBarColor?.(chromeColor);
+  } catch (err) {
+    console.warn("[verification] fullscreen/chrome setup failed (non-fatal)", err);
+  }
+  // Fullscreen floats Telegram's close ×/menu ⋯ over the page and `env()` does
+  // not account for them, so the consent copy would slide under the chrome.
+  // Mirrors the real reserve into --tg-content-top/bottom for the CSS above.
+  wireContentInsets(app);
+
   // Catch accidental swipe-down dismissals during capture.
   try {
     (app as unknown as { enableClosingConfirmation?: () => void }).enableClosingConfirmation?.();

@@ -28,10 +28,24 @@ describe("checkDepartureOrigin", () => {
     expect(checkDepartureOrigin(KYIV, KYIV.latitude, KYIV.longitude)).toEqual({ ok: true });
   });
 
-  it("accepts a point well inside the commuter belt", () => {
-    // ~35 km north of the centroid — Kyiv's radius is 60 km, so a real suburb
-    // must pass. This is the case the generous radius exists for.
-    expect(checkDepartureOrigin(KYIV, KYIV.latitude + 0.32, KYIV.longitude).ok).toBe(true);
+  it("accepts a point at the city's own edge", () => {
+    // Bortnychi, ~17 km south-east — a real Kyiv district, comfortably inside.
+    expect(checkDepartureOrigin(KYIV, 50.38, 30.73).ok).toBe(true);
+    // Koncha-Zaspa, ~20 km south. This is the southern extremity of Kyiv and
+    // the reason the radius is 21 km rather than 18: the city is longer than
+    // the near suburbs are far, so trimming to exclude Brovary would cut real
+    // districts. See `markets.ts`.
+    expect(checkDepartureOrigin(KYIV, 50.27, 30.55).ok).toBe(true);
+  });
+
+  it("refuses a separate city in the same oblast", () => {
+    // Boryspil, ~33 km out. It passed under the old 60 km commuter-belt radius,
+    // which is what the 2026-08-18 narrowing was for: ads target Kyiv proper,
+    // so an oblast departure point is someone we cannot serve.
+    const result = checkDepartureOrigin(KYIV, 50.35, 30.955);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a refusal");
+    expect(result.distanceKm).toBeGreaterThan(KYIV.radiusKm);
   });
 
   it("refuses another country and reports the distance", () => {

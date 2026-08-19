@@ -18,11 +18,13 @@ import { distanceKm, findMarketByCityKey, type Market } from "@gennety/shared";
  * interpret/confirm pair shared by Telegram and iOS, and the raw Telegram
  * location pin), so no client can route around it.
  *
- * The radius comes from the market's own `radiusKm` — 60 km for Kyiv, i.e. the
- * whole commuter belt. `markets.ts` documents that value as the "are you inside
- * this market?" answer for onboarding geolocation, where a false negative is
- * cheap; here it is a hard gate, which is why the generous figure matters: it
- * must never refuse someone who genuinely lives in the metro area.
+ * The radius comes from the market's own `radiusKm` — 21 km for Kyiv, i.e. the
+ * city rather than the commuter belt (it was 60 km until 2026-08-18, which
+ * reached Boryspil). This is the strictest reader of that number: geolocation
+ * can afford a false negative because the user just taps the city themselves,
+ * whereas here a refusal is the whole point. So the figure is a product
+ * decision about who we serve, not a tolerance — see `markets.ts` for why a
+ * circle cannot draw a city and what 21 km costs at each edge.
  */
 
 export type DepartureOriginCheck =
