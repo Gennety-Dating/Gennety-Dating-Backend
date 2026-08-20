@@ -1372,11 +1372,11 @@ const translations = {
 
     // --- Persona verification CTA (end of onboarding) ---
     verifyPitch:
-      "Финальный шаг. Нам нужно убедиться, что вы реальный человек.\n\n" +
-      "Селфи, которое мы сделаем во время верификации, мы сравним с каждой фотографией в вашем профиле. " +
-      "Фото, на которых не вы, будут отклонены.\n\n" +
-      "Отказ от верификации значительно снизит ваш стартовый ELO-рейтинг, " +
-      "и алгоритм будет предлагать вам меньше встреч.",
+      "Финальный шаг. Нам нужно убедиться, что ты реальный человек.\n\n" +
+      "Селфи, которое мы сделаем во время верификации, мы сравним с каждой фотографией в твоём профиле. " +
+      "Фото, на которых не ты, будут отклонены.\n\n" +
+      "Отказ от верификации значительно снизит твой стартовый ELO-рейтинг, " +
+      "и алгоритм будет предлагать тебе меньше встреч.",
     verifyPitchMandatory:
       "Финальный шаг. Мы подтверждаем, что каждый участник — реальный человек.\n\n" +
       "Селфи, сделанное во время верификации, мы сравним с каждой фотографией в твоём профиле — " +
@@ -1702,7 +1702,7 @@ const translations = {
     stallBtnStillOn: "🟢 Да, всё в силе",
     stallBtnPlansChanged: "Планы изменились",
     stallPeerAsked:
-      "Напомнил {name} про вас — жду ответа.\n\n" +
+      "Напомнил {name} про тебя — жду ответа.\n\n" +
       "От тебя пока ничего не нужно. Висеть в неизвестности не оставлю — вернусь с новостями в любом случае.",
     stallStillOnAck: "Понял, всё в силе ✨",
     stallPeerStillOn: "{name} на связи, всё в силе ✨",
@@ -1854,7 +1854,7 @@ const translations = {
     dateCardWhen: "КОГДА",
     dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
     dateCardShareCaption:
-      "Делитесь смело — лицо вашего мэтча скрыто, чтобы сохранить его приватность 💞",
+      "Делись смело — лицо твоего мэтча скрыто, чтобы сохранить его приватность 💞",
     dateCardShareFailed:
       "Не получилось подготовить карточку для отправки — попробуйте через минуту.",
     matchSchedulePickedPrefix: "Ты выбрал: ",
@@ -1880,7 +1880,7 @@ const translations = {
     peerWaitT1Sent: "Передали {name}, ждём ответа",
     peerWaitT2Waiting: "{name} ещё думает над ответом",
     peerWaitT3Quiet: "{name} пока молчит, ждём",
-    peerWaitT4Nudged: "Напомнили {name} о вас, ждём ответа",
+    peerWaitT4Nudged: "Напомнили {name} о тебе, ждём ответа",
     peerWaitT5Deadline: "{name} долго не отвечает",
     peerWaitAnon: "Ждём вторую сторону",
     venueSearching: "🔍 Ищу удобное место…",
@@ -1923,7 +1923,7 @@ const translations = {
     venueBothKeepDm: "Вы оба остаётесь в {venue} — ничего не меняется, до встречи.",
     venueDeclinedKeepDm: "Остаётесь в {venue}, как и планировали.",
     venueChangeRefunded:
-      "Смена места не прошла, звёзды вернулись к вам. Свидание в силе — в том месте, о котором договаривались изначально.",
+      "Смена места не прошла, звёзды вернулись к тебе. Свидание в силе — в том месте, о котором договаривались изначально.",
     venuePayPromptDm: "Вы вместе выбрали новое место для свидания.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 Посмотреть и решить",
     venueWishText:
@@ -1942,8 +1942,8 @@ const translations = {
     venueSettledCard: "Готово — у вашего свидания новое место 📍 {venue}",
     venueSettledPaidByM: "{name} оплатил смену места ❤️ Ваше свидание теперь в {venue}",
     venueSettledPaidByF: "{name} оплатила смену места ❤️ Ваше свидание теперь в {venue}",
-    venueExpressPartnerFromF: "{name} выбрала для вас место поуютнее. Новое место: 📍 {venue}",
-    venueExpressPartnerFromM: "{name} выбрал для вас новое место. Новое место: 📍 {venue}",
+    venueExpressPartnerFromF: "{name} выбрала для тебя место поуютнее. Новое место: 📍 {venue}",
+    venueExpressPartnerFromM: "{name} выбрал для тебя новое место. Новое место: 📍 {venue}",
     venueLapsedDm: "Смену места так и не закрепили — встречаетесь в {venue}, как и планировали.",
     venueKeepOriginalDm: "Твой мэтч решил ничего не менять — встречаетесь в {venue}, как и планировали.",
     venueInvoiceTitle: "Смена места свидания",
@@ -2014,7 +2014,7 @@ const translations = {
       "Минуты вполне хватит.",
     feedbackThanks: "Спасибо за фидбэк ✨ Используем для улучшения.",
     feedbackPushTitle: "Как прошло свидание?",
-    feedbackPushBody: "Минута вашего времени — и в следующий раз мы подберём точнее.",
+    feedbackPushBody: "Минута твоего времени — и в следующий раз мы подберём точнее.",
     matchDropPushTitle: "Твоя пара найдена",
     matchDropPushBody: "Нажми, чтобы увидеть, кого выбрал твой AI ✨",
     // --- Reporting & Moderation ---
@@ -2811,7 +2811,7 @@ const translations = {
     stallBtnStillOn: "🟢 Так, все в силі",
     stallBtnPlansChanged: "Плани змінилися",
     stallPeerAsked:
-      "Нагадав {name} про вас — чекаю відповіді.\n\n" +
+      "Нагадав {name} про тебе — чекаю відповіді.\n\n" +
       "Від тебе поки нічого не потрібно. Висіти в невідомості не залишу — повернуся з новинами в будь-якому разі.",
     stallStillOnAck: "Зрозумів, усе в силі ✨",
     stallPeerStillOn: "{name} на зв'язку, усе в силі ✨",
@@ -2953,7 +2953,7 @@ const translations = {
     dateCardWhen: "КОЛИ",
     dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
     dateCardShareCaption:
-      "Діліться сміливо — обличчя вашого метчу приховане, щоб зберегти його приватність 💞",
+      "Ділися сміливо — обличчя твого метчу приховане, щоб зберегти його приватність 💞",
     dateCardShareFailed:
       "Не вдалося підготувати картку для надсилання — спробуйте за хвилину.",
     matchSchedulePickedPrefix: "Ти обрав: ",
@@ -2987,7 +2987,7 @@ const translations = {
     peerWaitT1Sent: "Передали {name}, чекаємо відповіді",
     peerWaitT2Waiting: "{name} ще думає над відповіддю",
     peerWaitT3Quiet: "{name} поки мовчить, чекаємо",
-    peerWaitT4Nudged: "Нагадали {name} про вас, чекаємо відповіді",
+    peerWaitT4Nudged: "Нагадали {name} про тебе, чекаємо відповіді",
     peerWaitT5Deadline: "{name} довго не відповідає",
     peerWaitAnon: "Чекаємо на іншу сторону",
     venueSearching: "🔍 Шукаю зручне місце…",
@@ -3030,7 +3030,7 @@ const translations = {
     venueBothKeepDm: "Ви обоє залишаєтесь у {venue} — нічого не змінюється, до зустрічі.",
     venueDeclinedKeepDm: "Залишаєтесь у {venue}, як і планували.",
     venueChangeRefunded:
-      "Зміна місця не пройшла, тож зірки повернулися до вас. Побачення в силі — у тому місці, про яке домовлялися спочатку.",
+      "Зміна місця не пройшла, тож зірки повернулися до тебе. Побачення в силі — у тому місці, про яке домовлялися спочатку.",
     venuePayPromptDm: "Ви разом обрали нове місце для побачення.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 Подивитися й вирішити",
     venueWishText:
@@ -3049,8 +3049,8 @@ const translations = {
     venueSettledCard: "Готово — у вашого побачення нове місце 📍 {venue}",
     venueSettledPaidByM: "{name} оплатив зміну місця ❤️ Ваше побачення тепер у {venue}",
     venueSettledPaidByF: "{name} оплатила зміну місця ❤️ Ваше побачення тепер у {venue}",
-    venueExpressPartnerFromF: "{name} обрала для вас затишніше місце. Нове місце: 📍 {venue}",
-    venueExpressPartnerFromM: "{name} обрав для вас нове місце. Нове місце: 📍 {venue}",
+    venueExpressPartnerFromF: "{name} обрала для тебе затишніше місце. Нове місце: 📍 {venue}",
+    venueExpressPartnerFromM: "{name} обрав для тебе нове місце. Нове місце: 📍 {venue}",
     venueLapsedDm: "Зміну місця так і не закріпили — зустрічаєтесь у {venue}, як і планували.",
     venueKeepOriginalDm: "Твій метч вирішив нічого не змінювати — зустрічаєтесь у {venue}, як і планували.",
     venueInvoiceTitle: "Зміна місця побачення",
@@ -3121,7 +3121,7 @@ const translations = {
       "Хвилини цілком вистачить.",
     feedbackThanks: "Дякую за фідбек ✨ Використаємо для покращення.",
     feedbackPushTitle: "Як пройшло побачення?",
-    feedbackPushBody: "Хвилина вашого часу — і наступного разу ми підберемо точніше.",
+    feedbackPushBody: "Хвилина твого часу — і наступного разу ми підберемо точніше.",
     matchDropPushTitle: "Твою пару знайдено",
     matchDropPushBody: "Натисни, щоб побачити, кого обрав твій AI ✨",
     // --- Reporting & Moderation ---
