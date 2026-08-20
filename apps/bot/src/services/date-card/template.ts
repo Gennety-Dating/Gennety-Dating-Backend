@@ -9,7 +9,9 @@
  * overlapping tilted polaroid of the partner; a bold Archivo Black headline
  * slogan whose last line is the burgundy accent; a compact venue detail block.
  * The "Gennety" wordmark sits top-left and the brand butterfly logo sits
- * top-right (slightly tilted, nudged toward the edge like the polaroid).
+ * top-right (slightly tilted, nudged toward the edge like the polaroid), and a
+ * "made with Gennety" credit is stamped into the hero photo's lower-left corner
+ * (see `photoCredit` for why it is on the photo and not beside the address).
  *
  * NOTE: rendered text is kept emoji-free on purpose — the bundled fonts have no
  * color-emoji glyphs and satori would drop them. Emoji live only in the
@@ -254,7 +256,9 @@ function venueSection(input: CardElementInput): CardNode {
           overflow: "hidden",
           boxShadow: "0 34px 80px rgba(0,0,0,0.6)",
         },
-        [venueImage],
+        // The credit lives INSIDE the photo box so the box's own
+        // `overflow: hidden` + 30px radius clip it to the photograph.
+        [venueImage, photoCredit()],
       ),
       // Partner polaroid — lower-right, tilted, no caption text. Wide bottom
       // frame margin for an authentic polaroid look.
@@ -278,29 +282,106 @@ function venueSection(input: CardElementInput): CardNode {
   );
 }
 
+/**
+ * Bottom block: venue name over its address.
+ *
+ * Both lines are single-line and ellipsized, and that is structural rather than
+ * styling. The block sits at the end of a fixed 1350px card behind a `flexGrow`
+ * spacer, and the spacer is all the slack there is — measured at 46px on the
+ * 3-line date-card slogan, i.e. ONE extra wrapped line (40px) and nothing more.
+ * A venue whose name or address wrapped would push this block up into the
+ * partner polaroid, so the card's silhouette would change with the venue's
+ * paperwork. Measured against the real curated catalog (2101 addresses), the
+ * full content width holds ~62 characters, which is p88 — so the ellipsis is
+ * the long tail, not the common case. Nothing is lost when it fires: the
+ * scheduled DM prints the name and the full address verbatim in its caption
+ * one line below the photo, and the exact place rides the "Open in Maps"
+ * button.
+ */
 function detailsSection(input: CardElementInput, p: Palette): CardNode {
-  const venueColumn = el("div", { display: "flex", flexDirection: "column" }, [
+  /** One clipped line: needs the width bound AND `overflow` for satori to ellipsize. */
+  const line = (text: string, style: Record<string, unknown>): CardNode =>
     el(
       "div",
-      { display: "flex", fontFamily: "Archivo Black", fontSize: "54px", color: p.ink },
-      input.venueName,
-    ),
-    el(
-      "div",
-      { display: "flex", marginTop: "6px", fontFamily: "Roboto", fontSize: "30px", color: p.muted },
-      input.venueAddress,
-    ),
-  ]);
-
-  const credit = el(
-    "div",
-    { display: "flex", fontFamily: "Roboto", fontSize: "22px", color: p.muted },
-    "made with Gennety",
-  );
+      {
+        display: "flex",
+        width: "100%",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        ...style,
+      },
+      text,
+    );
 
   return el(
     "div",
-    { display: "flex", justifyContent: "space-between", alignItems: "flex-end" },
-    [venueColumn, el("div", { display: "flex", flexDirection: "column", alignItems: "flex-end" }, [credit])],
+    { display: "flex", flexDirection: "column", width: "100%" },
+    [
+      line(input.venueName, { fontFamily: "Archivo Black", fontSize: "54px", color: p.ink }),
+      line(input.venueAddress, {
+        marginTop: "6px",
+        fontFamily: "Roboto",
+        fontSize: "30px",
+        color: p.muted,
+      }),
+    ],
+  );
+}
+
+/**
+ * "made with Gennety", stamped into the hero photo's lower-left corner.
+ *
+ * It used to be a flex sibling of the venue name/address, right-aligned on the
+ * address's baseline — and yoga defaults `flex-shrink` to 0, so a long address
+ * did not yield: it grew until it hit the content width and laid the credit out
+ * AFTER itself, off the canvas. Measured on the reported card (a 57-character
+ * Kyiv address, around p75 of the real catalog): the credit's right edge landed
+ * at x=1127 on a 1080px card — 47px past the card's own edge, hard-clipped.
+ * Anything past ~45 characters did it, which is over half the catalog.
+ *
+ * Absolute positioning is the fix rather than a shrink factor: an element out
+ * of the flow cannot be pushed by ANY text length, so the failure is gone by
+ * construction instead of by tuning. It also hands the address block the full
+ * content width back, which is what keeps ~88% of real addresses on one line.
+ *
+ * Placement is deliberate on three counts. The photo's lower-LEFT is the one
+ * corner the tilted polaroid (lower-right) never reaches. The inset aligns the
+ * credit with the card's own left text column — the wordmark and the venue name
+ * — so it reads as set, not as dropped. And it is ALWAYS here, never
+ * conditionally beside the address: satori exposes no text metrics before a
+ * render, so "does it fit" cannot be answered honestly, and a credit that moved
+ * with the venue's address length would make one layout look like two.
+ */
+function photoCredit(): CardNode {
+  return el(
+    "div",
+    {
+      display: "flex",
+      position: "absolute",
+      left: "44px",
+      bottom: "26px",
+      // A duotone photo runs from near-black (#1C0710) to cream (#F7E7EB), so
+      // neither a light nor a dark credit is legible on its own — and a text
+      // shadow does not rescue it either: rendered over the cream end, white
+      // text with a soft dark shadow is barely readable, which is why this is a
+      // scrim rather than the subtler treatment. A fill, not an outline, per the
+      // design system. The 0.6 is measured on the real render, not picked: over
+      // the cream end the scrim resolves to rgb(100,96,96) and carries the 0.95
+      // white at 5.79:1 — above WCAG AA for body text — while over the dark end
+      // it is 17.99:1 and the pill itself all but disappears, reading as a
+      // watermark rather than a chip. The first pass at 0.46 rendered the cream
+      // case as a muddy grey blob, which is how the number was arrived at.
+      paddingLeft: "18px",
+      paddingRight: "18px",
+      paddingTop: "8px",
+      paddingBottom: "10px",
+      borderRadius: "999px",
+      backgroundColor: "rgba(3,3,3,0.6)",
+      fontFamily: "Roboto",
+      fontSize: "22px",
+      color: "rgba(255,255,255,0.95)",
+    },
+    "made with Gennety",
   );
 }

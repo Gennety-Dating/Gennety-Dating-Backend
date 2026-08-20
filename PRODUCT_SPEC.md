@@ -4300,6 +4300,33 @@ live only in the Telegram caption.
   sub-second flash of its first line, leaving the venue-search shimmer above it
   as the last thing visibly on screen.
 
+- **The bottom block cannot be pushed around by the venue's paperwork
+  (2026-08-20).** The venue name and address are each clipped to ONE line, and
+  the "made with Gennety" credit is stamped into the hero photo's lower-left
+  corner rather than sitting beside the address. Both rules exist because the
+  block sits at the end of a fixed 1350px card behind a `flexGrow` spacer, and
+  that spacer is the only slack there is — 46px, i.e. one wrapped line and
+  nothing more. The credit used to be a flex sibling of the address, and yoga
+  defaults `flex-shrink` to **0**, so a long address did not yield: it grew to
+  the content width and laid the credit out after itself, **off the canvas**.
+  Measured on the reported card — a 57-character Kyiv address, around p75 of the
+  real curated catalog — the credit's right edge landed at x=1127 on a 1080px
+  card, hard-clipped; anything past ~45 characters did it, which is over half
+  the catalog. Absolute positioning is the fix rather than a shrink factor: an
+  element out of the flow cannot be pushed by any text length, so the failure is
+  gone by construction, and the address gets the full content width back —
+  which is what keeps **~88%** of real addresses on one line (952px holds ~62
+  characters against a p90 of 64). The credit is **always** on the photo, never
+  conditionally beside the address: satori exposes no text metrics before a
+  render, so "does it fit" cannot be answered honestly, and a credit that moved
+  with the address length would make one layout look like two. **Nothing is lost
+  when the ellipsis fires**: the scheduled DM prints the name and the full
+  address verbatim in its caption one line below the photo, and the exact place
+  rides the "Open in Maps" button. The credit sits on a scrim because a duotone
+  photo runs from near-black to cream and neither a light nor a dark credit is
+  legible over both — measured on the real render, the scrim carries it at
+  5.79:1 over the cream end and 17.99:1 over the dark.
+
 - **Two renders, one layout.** The **private** card is sent with
   `protect_content: true` (blocks forwarding / saving / download) and carries
   the same `date_time`-entity caption + Maps / venue-change keyboard, plus a
