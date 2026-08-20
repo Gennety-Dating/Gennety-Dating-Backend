@@ -31,24 +31,66 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
- * Start the 24h TTL clock for a match whose dispatch threw mid-way but where at
- * least one side already received the pitch. Idempotent: only stamps a row that
- * is still un-stamped (`dispatchedAt = null`) and has a recorded pitch
- * (`pitchMessageIdA`/`B`). Without this, a one-sided delivery would leave
- * `dispatchedAt` null and the row would never satisfy the expiry query
- * (`dispatchedAt: { not: null, lt: cutoff }`), stranding it in `proposed`.
+ * Dispose of a match whose dispatch threw, so it can never be left both live
+ * and un-stamped.
+ *
+ * The invariant: **a dispatch attempt leaves the row either carrying a TTL or
+ * terminal.** Every other consumer of a `proposed` row — the expiry sweep, the
+ * countdown worker, both nudge cadences — filters on `dispatchedAt: { not: null }`,
+ * so a row that keeps `dispatchedAt = null` is invisible to all of them at once.
+ * It never expires, never nudges, never counts down; meanwhile the
+ * single-live-match rule (§3.2 filter 8) keeps BOTH participants out of every
+ * drop. That is not a degraded match, it is a permanent silent hole: production
+ * held one for 123 hours, and the user on the other side of it received nothing
+ * for five days while everyone else got a pitch every evening (DECISIONS.md
+ * 2026-08-20).
+ *
+ * Two outcomes, decided by whether anyone actually received a pitch:
+ *
+ *   - **At least one side did** (`pitchMessageIdA`/`B` recorded) → start the TTL.
+ *     The delivered side can act on a real card, and the 24h window is the right
+ *     way to close it if they don't.
+ *   - **Nobody did** → cancel. Stamping here would be worse than the hole it
+ *     closes: the expiry path classifies a non-answering side as *silent*,
+ *     increments `silentIgnoreCount` and sends "24 hours passed with no answer",
+ *     which is a penalty for ghosting a message that was never sent. A match that
+ *     reached nobody is not a match — retiring it frees both slots, penalises
+ *     nobody, and tells nobody about a card they never saw.
+ *
+ * Both branches are compare-and-set on the state they read, so a decision or a
+ * cancellation that landed while Telegram was timing out always wins.
+ *
+ * Best-effort by construction: this runs inside the caller's `catch`, and its
+ * own failure must not mask the delivery error that got us here.
  */
-async function stampDispatchedIfDelivered(matchId: string): Promise<void> {
+async function disposeUndeliveredMatch(matchId: string): Promise<void> {
   const m = await prisma.match.findUnique({
     where: { id: matchId },
     select: { dispatchedAt: true, pitchMessageIdA: true, pitchMessageIdB: true },
   });
   if (!m || m.dispatchedAt !== null) return;
-  if (m.pitchMessageIdA === null && m.pitchMessageIdB === null) return;
-  await prisma.match.updateMany({
+
+  if (m.pitchMessageIdA !== null || m.pitchMessageIdB !== null) {
+    await prisma.match.updateMany({
+      where: { id: matchId, status: "proposed", dispatchedAt: null },
+      data: { dispatchedAt: new Date() },
+    });
+    return;
+  }
+
+  const cancelled = await prisma.match.updateMany({
     where: { id: matchId, status: "proposed", dispatchedAt: null },
-    data: { dispatchedAt: new Date() },
+    data: { status: "cancelled" },
   });
+  if (cancelled.count > 0) {
+    // Loud on purpose. A pair the product created and could not deliver is an
+    // ops signal — the batch's own `failed=N` line says a send failed, not that
+    // two people were just taken out of the pool and put back.
+    console.error(
+      `[dispatch] matchId=${matchId} reached NEITHER side — cancelled so both ` +
+        "participants are freed for the next drop",
+    );
+  }
 }
 
 /**
@@ -144,17 +186,17 @@ export async function dispatchMatches(
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      // A throw here can still mean ONE side received the pitch (the other
-      // side's send failed every retry, e.g. that user blocked the bot).
-      // `sendMatchProposal` is per-side idempotent, so the delivered side is
-      // never re-DMed — but if we never stamp `dispatchedAt`, the 24h TTL
-      // expiry query (`dispatchedAt: { not: null }`) excludes this row forever
-      // and the match is stranded in `proposed`: it never expires, and the
-      // delivered side can accept into a dead end. Salvage by starting the TTL
-      // clock whenever at least one pitch is on record.
-      await stampDispatchedIfDelivered(matchId).catch((e) => {
+      // A throw here says nothing about how much was delivered: it can mean ONE
+      // side received the pitch (the other's send failed every retry, e.g. that
+      // user blocked the bot) or that nobody did. `sendMatchProposal` is per-side
+      // idempotent, so a delivered side is never re-DMed — but the row must not
+      // be left `proposed` with `dispatchedAt = null`, which is invisible to the
+      // expiry sweep, the countdown and both nudge cadences at once while still
+      // occupying both participants' single live-match slot. `disposeUndeliveredMatch`
+      // starts the TTL when a pitch is on record and retires the row when none is.
+      await disposeUndeliveredMatch(matchId).catch((e) => {
         console.warn(
-          `[dispatch] dispatchedAt salvage failed matchId=${matchId}:`,
+          `[dispatch] disposal failed matchId=${matchId}:`,
           e,
         );
       });

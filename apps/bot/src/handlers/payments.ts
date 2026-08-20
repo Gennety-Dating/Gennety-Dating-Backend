@@ -520,9 +520,16 @@ async function handleRematchSuccessfulPayment(
 
   const { dispatchMatches } = await import("../services/dispatch-queue.js");
   await dispatchMatches(ctx.api, [run.matchId]).catch((err) => {
-    // The pair exists and is stamped; the pitch failing to render is a delivery
-    // problem, not a payment problem. Surfaced loudly for ops rather than
-    // reversed — reversing would strand an already-created live match.
+    // A delivery problem, not a payment problem: the purchase stays `settled`
+    // and is surfaced loudly for ops rather than reversed.
+    //
+    // What makes that safe is `disposeUndeliveredMatch` inside the queue, which
+    // guarantees the row is left either carrying a TTL or terminal — never live
+    // and un-stamped, which used to take BOTH participants out of every drop
+    // permanently and left the buyer unable to even re-buy. When the pitch
+    // reached nobody the pair is retired here, so the buyer is free to purchase
+    // again immediately; whether that case should also refund is a pricing
+    // decision (§3.11 refunds only "the engine found nobody"), not this one.
     console.error(`[rematch] dispatch failed match=${run.matchId}:`, err);
   });
 }

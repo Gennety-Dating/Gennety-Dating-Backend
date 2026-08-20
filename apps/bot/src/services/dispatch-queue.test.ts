@@ -149,7 +149,17 @@ describe("dispatchMatches", () => {
     expect(arg.data.dispatchedAt).toBeInstanceOf(Date);
   });
 
-  it("does not stamp dispatchedAt when neither side got the pitch", async () => {
+  it("cancels the match — never stamps a TTL — when neither side got the pitch", async () => {
+    // The row must not survive as `proposed` with dispatchedAt=null: every
+    // consumer of a proposal (expiry sweep, countdown, both nudge cadences)
+    // filters `dispatchedAt: { not: null }`, so such a row is invisible to all
+    // of them while still occupying both participants' single live-match slot —
+    // i.e. both users silently drop out of every drop, forever. Production held
+    // one for 123 hours (DECISIONS.md 2026-08-20).
+    //
+    // Stamping instead would be a different bug: the expiry path classifies a
+    // non-answering side as *silent* and penalises them for ghosting a message
+    // that was never sent.
     mSendPitch.mockRejectedValue(new Error("network down"));
     mMatchFindUnique.mockResolvedValue({
       dispatchedAt: null,
@@ -160,6 +170,52 @@ describe("dispatchMatches", () => {
     const result = await dispatchMatches({} as any, ["m1"], 0);
 
     expect(result.failed).toBe(1);
+    expect(mMatchUpdateMany).toHaveBeenCalledTimes(1);
+    const arg = mMatchUpdateMany.mock.calls[0]![0] as {
+      where: { id: string; status: string; dispatchedAt: null };
+      data: { status?: string; dispatchedAt?: Date };
+    };
+    // Compare-and-set on the state it read, so a decision that landed while
+    // Telegram was timing out wins instead of being clobbered.
+    expect(arg.where).toMatchObject({ id: "m1", status: "proposed", dispatchedAt: null });
+    expect(arg.data.status).toBe("cancelled");
+    expect(arg.data.dispatchedAt).toBeUndefined();
+  });
+
+  it("leaves an already-dispatched row alone when a later send throws", async () => {
+    // Re-dispatch of a row that already carries a TTL must neither re-stamp it
+    // nor cancel it: the pitch is on record and the 24h window is running.
+    mSendPitch.mockRejectedValue(new Error("Forbidden: bot was blocked by the user"));
+    mMatchFindUnique.mockResolvedValue({
+      dispatchedAt: new Date("2026-08-01T10:00:00Z"),
+      pitchMessageIdA: null,
+      pitchMessageIdB: null,
+    });
+
+    const result = await dispatchMatches({} as any, ["m1"], 0);
+
+    expect(result.failed).toBe(1);
     expect(mMatchUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not cancel a match that was decided while the pitch was in flight", async () => {
+    // The CAS is the whole guard: `status: "proposed"` in the WHERE means a row
+    // that moved on (mutual accept from the app rail, an emergency cancel) is
+    // reported as untouched rather than dragged back to `cancelled`.
+    mSendPitch.mockRejectedValue(new Error("network down"));
+    mMatchFindUnique.mockResolvedValue({
+      dispatchedAt: null,
+      pitchMessageIdA: null,
+      pitchMessageIdB: null,
+    });
+    mMatchUpdateMany.mockResolvedValue({ count: 0 });
+
+    const result = await dispatchMatches({} as any, ["m1"], 0);
+
+    expect(result.failed).toBe(1);
+    expect(mMatchUpdateMany).toHaveBeenCalledTimes(1);
+    expect(
+      (mMatchUpdateMany.mock.calls[0]![0] as { where: { status: string } }).where.status,
+    ).toBe("proposed");
   });
 });

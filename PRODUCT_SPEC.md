@@ -2729,6 +2729,34 @@ for the dashboard's algorithm-quality view.
   actually delivered, the queue sends those gift pre-rolls first, waits
   `MATCH_PREROLL_DELAY_MS` (default 2 min), then reveals the match cards so the
   gift effect and pitch stream do not visually stack.
+- **A dispatch attempt leaves the match either carrying a TTL or terminal —
+  never live and un-stamped (2026-08-20).** `Match.dispatchedAt` is what the
+  expiry sweep, the countdown worker and both nudge cadences all filter on
+  (`dispatchedAt: { not: null }`), so a `proposed` row that keeps it null is
+  invisible to every one of them at once — it never expires, never nudges,
+  never counts down — while the single-live-match rule (§3.2 filter 8) keeps
+  BOTH participants out of every drop. That is not a degraded match but a
+  permanent silent hole, and production held one for **123 hours**: the user on
+  the other side of it received nothing for five days while everyone else got a
+  pitch every evening. `disposeUndeliveredMatch` closes it at the one place all
+  three creation paths (drop batch, demo driver, paid Rematch) funnel through:
+  a pitch on record for either side starts the TTL, and **a pitch that reached
+  nobody retires the row**, freeing both slots.
+  **The trigger is wider than "the user blocked the bot".** `pitchMessageIdA/B`
+  is written only AFTER the partner photo album, so a 403 on the media leaves no
+  trace on that side; and a `mobile` participant (a synthetic stand-in, an iOS
+  account) returns early without one either. Hence the production shape —
+  *"Pitch delivery failed for 1 side(s)"* with **both** ids null.
+  **Stamping instead of retiring would be a different bug, not a safer one:**
+  the expiry path classifies a non-answering side as *silent*, increments
+  `silentIgnoreCount` and sends "24 hours passed with no answer", i.e. it
+  penalises someone for ghosting a message that was never sent. Nobody is
+  notified about a card they never saw. The retirement is a compare-and-set on
+  `status = 'proposed'`, so a decision arriving from the app rail while Telegram
+  was timing out wins rather than being clobbered; a `proposed` row can never
+  hold a paid ticket (§3.5b), so nothing is refunded. The **lifetime pair ban
+  (§3.2 filter 6) still applies** — the row survives, as it would under any
+  disposal — so the two are not re-paired later.
 - For Telegram users the pitch streams through the native rich AI-compose draft
   path (`streamDraftsToChat(..., { rich: true })` → `streamRichDraftsToChat`):
   the headline/deadline/pitch chunks render as growing rich-message drafts with a
