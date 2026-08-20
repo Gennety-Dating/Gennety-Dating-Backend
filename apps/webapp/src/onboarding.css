@@ -3367,26 +3367,18 @@ button {
   flex-direction: column;
   align-items: center;
   width: 100%;
-  /* Shrink by the soft keyboard (`--kb-height`, set from visualViewport in
-     onboarding.tsx) so the floating pill never ends up underneath it, and by
-     Telegram's floating close × / menu ⋯ reserve (`--tg-content-top`). */
-  height: calc(100% - var(--kb-height, 0px));
+  /* Full height, and deliberately NOT `calc(100% - var(--kb-height))`: only one
+     of these five screens can raise a keyboard, so only that one makes room for
+     it (`.ob-basics--name`, below). Four screens once subtracted a keyboard they
+     can never see, which cost them nothing while the field was focused and
+     everything on the way OUT of it — see the note on the name screen. */
+  height: 100%;
   padding:
     calc(var(--tg-content-top, 0px) + 4.5rem)
     1.5rem
     calc(var(--tg-content-bottom, 0px) + 1.75rem);
   box-sizing: border-box;
   text-align: center;
-  /* The keyboard appearing is a step change in `--kb-height`, and with it the
-     pill jumps up and the centred control jumps with it. Ease the shrink so
-     the rise reads as the screen making room rather than as a glitch. (Only
-     covers the floating-keyboard path; where the WebView resizes the layout
-     viewport itself, the browser owns that animation.)
-
-     The shared keyboard curve, NOT a per-screen one: see `--kb-ease`. This
-     screen is where it was first got wrong — an easeOut launching at 4.55x its
-     average speed put a third of the pill's travel into a single frame. */
-  transition: height var(--kb-ease-ms) var(--kb-ease);
 }
 
 .ob-basics-title {
@@ -3473,6 +3465,38 @@ button {
 }
 
 /* ── Name ──────────────────────────────────────────────────────────────── */
+/* The only profile screen with a text field, so the only one that makes room
+   for the soft keyboard. Scoped here rather than on `.ob-basics` because the
+   shrink is a property of THIS screen, not of the frame the five share: while
+   it sat on the frame, whichever screen came next inherited whatever was left
+   of the keyboard and played it out after the cut.
+
+   That was invisible until the curve changed, and the arithmetic is why. The
+   keyboard does not leave in one step — iOS ramps `visualViewport` down over
+   ~250ms, so `--kb-height` arrives as a stream of small writes and a CSS
+   transition RESTARTS on each one. An easeOut leaves at 4.55x its average
+   speed, so each restart nearly caught its target and the height tracked the
+   ramp: 43px of the 336 still owed when the keyboard was gone. `--kb-ease`
+   starts at REST, so every restart cancels itself in its own slow launch and
+   the height barely moves for the whole ramp — 315px still owed at that same
+   moment, and a 250ms tail after the last write (against 133ms). By then the
+   next screen is usually mounted, and it was inheriting two thirds of a
+   keyboard: measured on the age screen at 375x812, the readout and slider
+   arrived 165px high and the pill 331px high, while the title — top-anchored —
+   sat still. Three elements, three speeds, on a screen with no keyboard.
+
+   Nothing here is wrong with `--kb-ease` itself: it is right for the screen
+   that owns the field, which is now the only screen it reaches. */
+.ob-basics--name {
+  height: calc(100% - var(--kb-height, 0px));
+  /* The shared keyboard curve, NOT a per-screen one: see `--kb-ease`. This
+     screen is where it was first got wrong — an easeOut launching at 4.55x its
+     average speed put a third of the pill's travel into a single frame. (Only
+     covers the floating-keyboard path; where the WebView resizes the layout
+     viewport itself, the browser owns that animation.) */
+  transition: height var(--kb-ease-ms) var(--kb-ease);
+}
+
 /* The one control on this screen that raises the keyboard, so it is the one
    whose size may NOT be measured against the viewport HEIGHT: opening the
    keyboard shrinks that height (directly where the WebView resizes the layout

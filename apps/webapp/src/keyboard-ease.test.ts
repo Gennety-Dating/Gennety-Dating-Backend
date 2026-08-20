@@ -61,6 +61,17 @@ function worstFrameShare(points: [number, number, number, number], durationMs: n
   return worst;
 }
 
+/**
+ * The declarations of the first rule whose selector list is exactly `selector`,
+ * with comments stripped — the prose beside a rule explains what it deliberately
+ * does NOT do, so reading it would answer the opposite of the question asked.
+ */
+function ruleBody(selector: string): string {
+  const m = new RegExp(`(?:^|\\})\\s*${selector.replace(".", "\\.")}\\s*\\{([^}]*)\\}`, "m").exec(CSS);
+  if (!m) throw new Error(`no \`${selector} { ... }\` rule in the stylesheet`);
+  return m[1]!.replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
 const EASE = customProperty("kb-ease");
 const DURATION = Number(/(\d+)ms/.exec(customProperty("kb-ease-ms"))![1]);
 
@@ -84,6 +95,22 @@ describe("the shared keyboard-following curve", () => {
     // keyboard; much longer and it trails behind it.
     expect(DURATION).toBeGreaterThanOrEqual(200);
     expect(DURATION).toBeLessThanOrEqual(320);
+  });
+
+  it("only reaches the screens that can actually raise a keyboard", () => {
+    // The shrink belongs to a screen with a text field, not to the frame the
+    // five profile screens share. On the frame, whichever screen came next
+    // inherited whatever was left of the keyboard and finished the motion after
+    // the cut — measured on the age screen at 375x812, its readout and slider
+    // arrived 165px high and its pill 331px high while the top-anchored title
+    // sat still. Of the five, only the name screen has a field.
+    for (const selector of [".ob-basics", ".ob-basics--name"]) {
+      const block = ruleBody(selector);
+      const shrinks = block.includes("--kb-height");
+      expect(shrinks, `${selector} { ... } reads --kb-height: ${shrinks}`).toBe(
+        selector === ".ob-basics--name",
+      );
+    }
   });
 
   it("is the only curve any keyboard-driven shrink uses", () => {

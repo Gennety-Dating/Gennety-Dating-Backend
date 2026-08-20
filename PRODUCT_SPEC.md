@@ -181,15 +181,38 @@ out of Telegram-only workers.
   keyboard rather than after it. Measured again on the same render: worst frame
   **38px (11.3%)**, three times gentler, and the guard is a curve test rather
   than a screenshot (`keyboard-ease.test.ts`).
-  **It is one token because it is one keyboard.** The profile screens, the
+  **It is one token because it is one keyboard.** The name screen, the
   gate cards (email / phone / city) and the city result list all shrink by the
   same `--kb-height`, and before this they eased three different ways — the
   gates at `200ms ease`, the profile screens at the 4.55x curve, and the result
   list not at all, so it snapped a frame before the card around it settled. A
   screen that made room differently from the gate one step earlier read as two
-  different keyboards. The native iOS client already had purpose-built
-  controls here via the `ui_hint` contract; this is Telegram catching up, and
-  the `/v1/*` surface is untouched.
+  different keyboards.
+  **And only the screen with a field makes room at all (2026-08-20).** The
+  shrink sat on the frame all five profile screens share, so whichever screen
+  came next inherited whatever was left of the keyboard and finished the motion
+  after the cut. That was invisible until the curve changed, and the arithmetic
+  is why: the keyboard does not LEAVE in one step — iOS ramps `visualViewport`
+  down over ~250ms, `--kb-height` therefore arrives as a stream of small
+  writes, and a CSS transition **restarts on every one of them**. The old
+  easeOut left at 4.55x its average speed, so each restart nearly caught its
+  target and the rendered height tracked the ramp — 43px of the 336 still owed
+  at the moment the keyboard was gone. `--kb-ease` starts at REST, so every
+  restart cancels itself inside its own slow launch and the height barely moves
+  for the whole ramp: **315px still owed at that same moment**, and a 250ms
+  tail after the last write against 133ms. By then the next screen is usually
+  mounted — the save is one round trip — and it was inheriting two thirds of a
+  keyboard. Measured on the age screen at 375×812: the readout and the slider
+  arrived **165px** high, the pill **331px** high, and the top-anchored title
+  did not move at all. Three elements, three speeds, on a screen that has no
+  keyboard and never will. The four keyboard-less screens (age, gender,
+  preference, height) now sit at full height always, so the keyboard simply
+  slides off and reveals a screen that is already in its final position, which
+  is what a native app does. Nothing about `--kb-ease` changes: it is right for
+  the screen that owns the field, and that is now the only screen it reaches
+  (`keyboard-ease.test.ts` holds the scoping as well as the curve). The native
+  iOS client already had purpose-built controls here via the `ui_hint`
+  contract; this is Telegram catching up, and the `/v1/*` surface is untouched.
   **The screens write through the collector** (`applyOnboardingFacts`,
   `POST /v1/telegram-onboarding/profile`), not straight to Prisma, so the
   canonical columns, `onboarding_progress.currentQuestion` and the funnel
