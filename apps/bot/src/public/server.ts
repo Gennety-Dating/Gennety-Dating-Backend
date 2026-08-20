@@ -1,6 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import { allowCrossOriginImage } from "./cross-origin-image.js";
 import type { Api, RawApi } from "grammy";
 import { env } from "../config.js";
 import {
@@ -170,7 +171,7 @@ app.get("/v1/maptiles/:z/:x/:y", mapTileLimiter, async (req, res) => {
     const buf = Buffer.concat(chunks, totalBytes);
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "public, max-age=604800, immutable");
-    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    allowCrossOriginImage(res);
     res.status(200).end(buf);
   } catch {
     res.status(502).end();

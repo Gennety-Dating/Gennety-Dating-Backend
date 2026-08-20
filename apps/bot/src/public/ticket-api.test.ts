@@ -20,8 +20,10 @@ const getTicketState = vi.fn();
 const applyTicketPayment = vi.fn();
 const useTicketFromBalance = vi.fn();
 const notePartnerPaidSeen = vi.fn().mockResolvedValue(undefined);
+const getTicketPhoto = vi.fn();
 vi.mock("../handlers/matching/ticket-gate.js", () => ({
   getTicketState: (...a: unknown[]) => getTicketState(...a),
+  getTicketPhoto: (...a: unknown[]) => getTicketPhoto(...a),
   applyTicketPayment: (...a: unknown[]) => applyTicketPayment(...a),
   useTicketFromBalance: (...a: unknown[]) => useTicketFromBalance(...a),
   notePartnerPaidSeen: (...a: unknown[]) => notePartnerPaidSeen(...a),
@@ -37,6 +39,16 @@ vi.mock("../services/ticket-payment.js", () => ({
 }));
 
 vi.mock("../services/ticket-analytics.js", () => ({ emitTicketEvent: vi.fn() }));
+
+const downloadProfileImage = vi.fn();
+vi.mock("../services/storage.js", () => ({
+  downloadProfileImage: (...a: unknown[]) => downloadProfileImage(...a),
+}));
+
+const toAvatarThumbnail = vi.fn();
+vi.mock("../services/avatar-thumbnail.js", () => ({
+  toAvatarThumbnail: (...a: unknown[]) => toAvatarThumbnail(...a),
+}));
 
 const { createTicketRouter } = await import("./routes/ticket.js");
 const fakeApi = {} as Parameters<typeof createTicketRouter>[0];
@@ -86,6 +98,9 @@ beforeEach(() => {
   notePartnerPaidSeen.mockResolvedValue(undefined);
   createTicketIntent.mockReset();
   verifyTicketPayment.mockReset();
+  getTicketPhoto.mockReset();
+  downloadProfileImage.mockReset();
+  toAvatarThumbnail.mockReset();
   env.TICKET_STARS_ENABLED = false;
 });
 
@@ -395,5 +410,25 @@ describe("GET /v1/matches/:id/ticket/photo/:side", () => {
       `/v1/matches/${VALID_UUID}/ticket/photo/self?a=${encodeURIComponent("user=%7B%22id%22%3A1%7D&hash=deadbeef")}`,
     );
     expect(res.status).toBe(401);
+  });
+
+  // The Mini App is served from a DIFFERENT host to this API, so an avatar is a
+  // cross-origin no-cors subresource: helmet's default `same-origin` CORP makes
+  // the browser discard a perfectly good 200 and the client falls back to a
+  // monogram. Nothing else in this suite can see that — supertest, curl and
+  // every server-side probe ignore CORP entirely — which is exactly how the bug
+  // survived two rounds of diagnosis. See public/cross-origin-image.ts.
+  it("serves the avatar with a cross-origin resource policy", async () => {
+    getTicketPhoto.mockResolvedValueOnce({ ok: true, ref: "file_123" });
+    downloadProfileImage.mockResolvedValueOnce(Buffer.from("original-bytes"));
+    toAvatarThumbnail.mockResolvedValueOnce(Buffer.from("thumb-bytes"));
+
+    const res = await request(buildApp()).get(
+      `/v1/matches/${VALID_UUID}/ticket/photo/partner?a=${encodeURIComponent(signInitData(BOT_TOKEN))}`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toBe("image/jpeg");
+    expect(res.headers["cross-origin-resource-policy"]).toBe("cross-origin");
   });
 });

@@ -346,6 +346,21 @@ describe("GET /v1/venue-change/photo", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("ETIMEDOUT"));
     warn.mockRestore();
   });
+
+  // The board is served from a different host to this API, so a card thumbnail
+  // is a cross-origin no-cors subresource. Without an explicit CORP the browser
+  // discards the 200 and the client swaps in the category glyph — the same
+  // symptom as an upstream failure, which is what the retries above were built
+  // for. See public/cross-origin-image.ts.
+  it("serves the photo with a cross-origin resource policy", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jpeg()));
+
+    const res = await photoRequest();
+
+    expect(res.status).toBe(200);
+    expect(res.headers["cross-origin-resource-policy"]).toBe("cross-origin");
+  });
 });
 
 describe("POST /v1/venue-change/like", () => {

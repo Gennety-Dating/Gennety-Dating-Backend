@@ -20,6 +20,7 @@ import {
 } from "../../handlers/matching/venue-change.js";
 import { recordMiniAppAction } from "../../services/chat-events.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
+import { allowCrossOriginImage } from "../cross-origin-image.js";
 
 /** Chat-timeline shorthand — every action on this board is one surface. */
 function noteBoardAction(telegramId: number, matchId: string, what: string): void {
@@ -201,6 +202,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
           );
         }
         res.setHeader("Content-Type", result.contentType);
+        allowCrossOriginImage(res);
         // Cache so the same image used as a card thumbnail and a detail hero
         // isn't re-fetched from Google. Private — it's tied to the signed ref.
         res.setHeader("Cache-Control", "private, max-age=86400");

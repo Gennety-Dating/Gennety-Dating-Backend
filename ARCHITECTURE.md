@@ -969,7 +969,7 @@ auth) are deliberately outside the spec.
 | POST | `/v1/feedback/post-date` | Post-date Feedback Mini App submission (Telegram `initData` HMAC auth) |
 | GET  | `/v1/venue-change/state` | Venue board snapshot (v2) — open/closed + reason, original venue (incl. its `photoRefs`, since the assigned venue is excluded from the catalog and the pinned card has no row to take pictures from — PRODUCT_SPEC §3.7b), both sides' like keys, agreed venue (hidden from the partner during an express mint), the caller's payment action (`pay`/`pay_or_decline`/`pay_or_offer`/`wait`), price (only for paying actions), offer/decline stamps, express availability, settled view. Polled ~4 s by the Mini App, so the photo refs come from the stored `Match.venuePhotoName` and only fall back to a (cached) Place Details lookup when the row carries none. Telegram `initData` HMAC auth. |
 | GET  | `/v1/venue-change/catalog` | Venue alternatives within 3 km of the original venue (curated-first, Places fallback), with display fields — `photoRefs` (Google Places photo resource names; empty for curated rows, which show a category placeholder), `rating`/`userRatingCount`/`editorialSummary`. Both participants. Telegram `initData` HMAC auth. |
-| GET  | `/v1/venue-change/photo` | Board/detail image proxy — streams a Google Places photo for `ref=<places/.../photos/...>` (validated shape) so `PLACES_API_KEY` stays server-side. `<img>` can't send headers, so initData rides the `tma` query param (HMAC-verified, same as the header path). 404 when no `PLACES_API_KEY`. **The 10s budget covers up to 3 attempts**, not one: the droplet hits occasional `ETIMEDOUT` reaching Google's CDN, and a tile that fails is glyph-for-the-session on the client (PRODUCT_SPEC §3.7b). Only transient outcomes retry — a thrown fetch, 5xx, 429, 408; a 4xx, a non-image body and an over-ceiling file are permanent, which is why the body read is classified separately from the network error rather than sharing one `catch`. Every 502 is logged with its attempt count and last reason; the non-OK and non-image branches used to return silently. |
+| GET  | `/v1/venue-change/photo` | Board/detail image proxy — streams a Google Places photo for `ref=<places/.../photos/...>` (validated shape) so `PLACES_API_KEY` stays server-side. `<img>` can't send headers, so initData rides the `tma` query param (HMAC-verified, same as the header path). 404 when no `PLACES_API_KEY`. **The 10s budget covers up to 3 attempts**, not one: the droplet hits occasional `ETIMEDOUT` reaching Google's CDN, and a tile that fails is glyph-for-the-session on the client (PRODUCT_SPEC §3.7b). Only transient outcomes retry — a thrown fetch, 5xx, 429, 408; a 4xx, a non-image body and an over-ceiling file are permanent, which is why the body read is classified separately from the network error rather than sharing one `catch`. Every 502 is logged with its attempt count and last reason; the non-OK and non-image branches used to return silently. Sets `Cross-Origin-Resource-Policy: cross-origin` — the board is on another host, so without it the browser drops the bytes and the card falls back to its glyph (see *Cross-origin image proxies*). |
 | POST | `/v1/venue-change/like` | Full like-set submission (calendar `pick` semantics) — body `{matchId, keys[]}`, every key server-resolved against the catalog. Response `{agreed, overlapCandidates}`; a single overlap auto-agrees, several ask the actor to confirm. First like claims the initiator + pings the partner once. Telegram `initData` HMAC auth. |
 | POST | `/v1/venue-change/confirm` | Resolve a multi-overlap — body `{matchId, key}`; the key must be liked by BOTH sides. Telegram `initData` HMAC auth. |
 | POST | `/v1/venue-change/offer-pay` | Her one-shot "ask him to lock it in" — sends the wish-card PNG (date-card layout, her polaroid; text fallback) to his chat with pay/decline buttons. Hetero female initiator only. Telegram `initData` HMAC auth. |
@@ -1170,6 +1170,39 @@ table degrades to the two older stores with `sources.timeline = false` instead
 of failing the request. The feature-flagged pre-date proxy chat
 (`proxy_messages`) is deliberately **not** exposed here — it is match-scoped
 moderation evidence, not a dialog.
+
+## Cross-origin image proxies (CORP)
+
+`helmet()` sets `Cross-Origin-Resource-Policy: same-origin` on every public API
+response, and **every Mini App is served from a different host to the API it
+reads from** — `dating-calendar.gennety.com` against `dating-api.gennety.com`,
+`demo-app` against `demo-api`. That split is forced rather than chosen (initData
+is HMAC-signed with a bot token, so only the process holding that token can
+verify it), so an image this API serves to a Mini App is cross-origin by
+construction and the browser discards it unless the route relaxes CORP for its
+own bytes. `public/cross-origin-image.ts` owns that one line and the reasoning;
+three routes call it — the map-tile proxy, the Date Ticket avatars
+(`/v1/matches/:id/ticket/photo/:side`) and the venue-change board photos
+(`/v1/venue-change/photo`).
+
+**CORS and CORP are different gates, and the asymmetry is the whole trap.** A
+`fetch()` is governed by CORS, which `PUBLIC_CORS_ORIGIN` already passes; an
+`<img>` is a no-cors subresource governed by CORP, which does not. So a Mini App
+loads its JSON state perfectly and cannot draw a single photo — and the route
+answers a clean `200 image/jpeg` to curl, to a server-side probe and to every
+supertest in this repo, because none of them enforce CORP. The only symptom is
+the client's own `onerror` fallback (the ticket avatar's monogram, the board
+card's category glyph), which is indistinguishable from the image merely having
+failed to load. The Date Ticket avatars were diagnosed twice on that evidence —
+once as response size (2026-08-07), once as upstream flakiness (2026-08-08) —
+before anyone compared the response headers of the working map-tile proxy with a
+broken one. Both earlier fixes were real improvements and neither was the cause.
+
+The guard is a test per route asserting the header on a 200, since nothing else
+in the stack can see it. Three image routes deliberately do NOT get it — the
+founder report's media (same-origin with its own page), the referral card
+(fetched by Telegram's servers) and `/v1/matches/partner-photo` (native iOS over
+URLSession); none is loaded by a browser on another origin.
 
 ## Rate Limiting & Token Budget
 

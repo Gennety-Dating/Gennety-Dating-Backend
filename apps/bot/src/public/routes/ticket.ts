@@ -23,6 +23,7 @@ import {
 } from "../../services/ticket-payment.js";
 import type { TicketStateView } from "../../handlers/matching/ticket-gate.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
+import { allowCrossOriginImage } from "../cross-origin-image.js";
 
 /**
  * Per-scope Star (XTR) prices surfaced to the gate Mini App so it can render
@@ -508,6 +509,7 @@ function writeAvatarCache(ref: string, bytes: Buffer): void {
 
 function sendAvatar(res: Response, bytes: Buffer): void {
   res.setHeader("Content-Type", "image/jpeg");
+  allowCrossOriginImage(res);
   res.setHeader("Cache-Control", "private, max-age=300");
   res.status(200).end(bytes);
 }
