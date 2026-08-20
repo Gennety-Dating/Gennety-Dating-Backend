@@ -13,18 +13,18 @@
      the two states of one light source stay adjacent and cannot drift. */
   --back-graphite: #1b1d20;
   --back-sheen:
-    inset 0 1px 0 rgba(255, 255, 255, 0.17),
-    inset 0 10px 20px -13px rgba(255, 255, 255, 0.55),
-    inset 0 -10px 20px -13px rgba(255, 255, 255, 0.42),
-    inset 10px 0 20px -13px rgba(255, 255, 255, 0.48),
-    inset -10px 0 20px -13px rgba(255, 255, 255, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 10px 20px -13px rgba(255, 255, 255, 0.26),
+    inset 0 -10px 20px -13px rgba(255, 255, 255, 0.2),
+    inset 10px 0 20px -13px rgba(255, 255, 255, 0.23),
+    inset -10px 0 20px -13px rgba(255, 255, 255, 0.23),
     0 6px 16px rgba(0, 0, 0, 0.3);
   --back-sheen-lit:
-    inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    inset 0 10px 20px -13px rgba(255, 255, 255, 0.7),
-    inset 0 -10px 20px -13px rgba(255, 255, 255, 0.54),
-    inset 10px 0 20px -13px rgba(255, 255, 255, 0.62),
-    inset -10px 0 20px -13px rgba(255, 255, 255, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    inset 0 10px 20px -13px rgba(255, 255, 255, 0.36),
+    inset 0 -10px 20px -13px rgba(255, 255, 255, 0.27),
+    inset 10px 0 20px -13px rgba(255, 255, 255, 0.31),
+    inset -10px 0 20px -13px rgba(255, 255, 255, 0.31),
     0 6px 16px rgba(0, 0, 0, 0.3);
 
   /* The one motion in this app that is not ours: a screen making room for the
@@ -1180,9 +1180,13 @@ button {
       at 56px a graphite disc still reads as secondary next to the burgundy
       CTA even on the cream page.
 
-   Sized to the 56px circle rather than copied verbatim from the wider pills:
-   the offsets are ~a sixth of the diameter, so the light hugs the rim instead
-   of meeting in the middle and flattening into a plain lighter disc. */
+   Both the geometry AND the intensity are sized to the 56px circle rather than
+   copied verbatim from the wider pills. Offsets are ~a sixth of the diameter, so
+   the light hugs the rim instead of meeting in the middle and flattening into a
+   plain lighter disc; and the alphas are roughly half the pills' — on a disc this
+   small the same alpha covers a far larger fraction of the shape, so what reads
+   as a rim on a 300px-wide row reads as a glowing button here. Keep it a hint
+   that the edge is lit, not the loudest thing in the footer. */
 .howitworks-back {
   flex-shrink: 0;
   width: 3.5rem;
