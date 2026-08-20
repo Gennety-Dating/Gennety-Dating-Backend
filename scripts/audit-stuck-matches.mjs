@@ -179,14 +179,47 @@ console.log(`  in any negotiating / negotiating_venue : ${lockedAll.size}`);
 console.log(`  in a >3d-idle (hung) one               : ${lockedStuck.size}\n`);
 
 // ── Sanity checks on the stages that DO have a TTL ───────────────────────────
+//
+// The `proposed` count is deliberately SPLIT, because one line here once pointed
+// at the wrong suspect for 123 hours. A row with `dispatchedAt = null` is not a
+// symptom of a sick cron — the cron is healthy and *structurally cannot see it*:
+// the expiry sweep, the countdown worker and both nudge cadences all filter
+// `dispatchedAt: { not: null }`. Reading "proposed older than 24h (expiry
+// cron?)" sends you to check a cron you will find working, and the real cause
+// (a pitch that reached nobody, so the row was never stamped) stays invisible
+// while it holds BOTH participants out of every drop. `disposeUndeliveredMatch`
+// makes new ones impossible; these two lines are what would catch a regression
+// or a row left over from before that shipped.
+const strandedProposed = matches.filter(
+  (m) => m.status === "proposed" && m.dispatchedAt == null,
+);
 const staleProposed = matches.filter(
-  (m) => m.status === "proposed" && ageDays(m.dispatchedAt ?? m.createdAt) > 1.05,
+  (m) => m.status === "proposed" && m.dispatchedAt != null && ageDays(m.dispatchedAt) > 1.05,
 );
 const staleScheduled = matches.filter(
   (m) => m.status === "scheduled" && m.agreedTime && new Date(m.agreedTime).getTime() + DAY < now,
 );
 console.log("Sanity (should be ~0 if the crons are running):");
-console.log(`  proposed older than 24h (expiry cron?)          : ${staleProposed.length}`);
-console.log(`  scheduled past agreedTime+24h (lifecycle tick?) : ${staleScheduled.length}\n`);
+console.log(`  proposed, never stamped — INVISIBLE to every sweep : ${strandedProposed.length}`);
+console.log(`  proposed past its deadline (expiry cron?)          : ${staleProposed.length}`);
+console.log(`  scheduled past agreedTime+24h (lifecycle tick?)    : ${staleScheduled.length}\n`);
+
+if (strandedProposed.length > 0) {
+  // Loud, and it names the harm rather than the column: two people per row are
+  // out of the matching pool with nothing in the product able to free them.
+  console.log(
+    `  ⚠ ${strandedProposed.length} stranded row(s) hold ` +
+      `${new Set(strandedProposed.flatMap((m) => [m.userAId, m.userBId])).size} user(s) ` +
+      "out of every drop, permanently. They pre-date `disposeUndeliveredMatch`\n" +
+      "    (services/dispatch-queue.ts) and must be retired by hand — no ticket can\n" +
+      "    be attached to a `proposed` row, so nothing is refunded and nobody is notified:\n\n" +
+      "      UPDATE matches SET status='cancelled'\n" +
+      "       WHERE status='proposed' AND dispatched_at IS NULL;\n",
+  );
+  for (const m of strandedProposed) {
+    console.log(`      ${m.id}  created ${fmtAge(m.createdAt)} ago  ${m.userAId} ↔ ${m.userBId}`);
+  }
+  console.log();
+}
 
 await prisma.$disconnect();

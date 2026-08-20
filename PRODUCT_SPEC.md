@@ -2558,6 +2558,20 @@ real men and `N` synthetic women a drop covers `min(M, N)` of them, and full
 coverage for `D` drops needs `N ≥ max(M, D)`. When they run out the user simply
 falls back to the ordinary famine path, which needs no handling.
 
+**Re-seeding has one hard precondition: the dispatch-disposal fix (§3.3) must be
+live first.** A synthetic carries `platform: "mobile"`, so its side of a pitch
+returns early without recording a `pitchMessageId` — which means a synthetic
+pair has exactly ONE Telegram-reachable side, and a failure there (the user
+blocked the bot, a 403 on the photo album) leaves *both* ids null. That is
+precisely the shape that used to leave the row `proposed` with `dispatchedAt`
+null: invisible to the expiry sweep, the countdown and both nudge cadences at
+once, while holding both participants out of every drop for good. It is not a
+hypothetical — it is what production ran into, and the tester on the other side
+of it got nothing for five days. Seeding restarts match creation, so seeding
+onto a deployment without `disposeUndeliveredMatch` re-arms that bug on the
+same cohort it was found on. Check `pnpm audit:stuck-matches --prod` reads zero
+stranded rows before and after.
+
 **Pairs are stamped `Match.source = "synthetic"` and write no
 `MatchScoreLog`** — the outcome says nothing about scoring quality, so it is
 kept out of the algorithm A/B rather than filtered out of it later. The admin
@@ -3225,6 +3239,21 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   deliberately does NOT stamp `partnerPaidSeenAt`, keeping his read-receipt honest
   (it still waits for a genuine open — e.g. tapping the nudge button). All three
   are idempotent and best-effort (a DM failure never blocks settlement).
+- **The gate's deadline is armed by the transition, not by the card (2026-08-20).**
+  `ticketExpiresAt` is written in the SAME compare-and-set that flips the match to
+  `negotiating`, on both rails, not by `sendTicketOffer` a few statements later.
+  It is the only column the hourly ticket-expiry sweep filters on
+  (`{ not: null }`), and the §3.5c stall chain deliberately exempts a
+  `negotiating` row with no `proposedTimes` on the grounds that "the gate has its
+  own deadline" — so a row that reaches `negotiating` without one is invisible to
+  **both** at once and strands both participants permanently, the same hole an
+  un-stamped `dispatchedAt` opens one stage earlier (§3.3). Nothing between the
+  two writes can throw today, but that is a property of `updateEloScores`
+  catching its own errors rather than of anything local; arming it inside the CAS
+  makes the hole unreachable by construction. `sendTicketOffer` re-stamps a fresh
+  window, so the ordinary path is unchanged, and the write is conditional on
+  `TICKET_FEATURE_ENABLED` — with the gate off there is no deadline to arm,
+  `startScheduling` writes `proposedTimes`, and the stall chain owns the row.
 - **`ticketStatus` lifecycle.** `pending` → `partial` (one paid; `ticketExpiresAt`
   is the second side's deadline) → `completed`; or `refund_pending` → `refunded`
   / `expired` on timeout. `refund_pending` is an internal retry state and renders

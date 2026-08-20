@@ -75,6 +75,16 @@ vi.mock("../../utils/elo-calculator.js", () => ({
   updateEloScores: (...args: unknown[]) => mUpdateEloScores(...args),
 }));
 
+// The ticket gate is inert in every test but one: TICKET_FEATURE_ENABLED is
+// absent from the env mock above, so `sendTicketOffer` is unreachable. Mocked
+// anyway because `decision.ts` now imports `ticketGateDeadline` at module level
+// to arm the gate's deadline inside the transition CAS (§3.5b / §3.3).
+const TICKET_DEADLINE = new Date("2026-04-11T19:00:00.000Z");
+vi.mock("./ticket-gate.js", () => ({
+  sendTicketOffer: vi.fn().mockResolvedValue(undefined),
+  ticketGateDeadline: vi.fn(() => TICKET_DEADLINE),
+}));
+
 // Keep the scheduler handoff inert during decision tests — we assert the
 // transition via the match.update mock instead of following the side effect.
 vi.mock("./scheduler.js", () => ({
@@ -138,6 +148,8 @@ import { buildDeclineReasonKeyboard, handleDeclineReasonCallback } from "./decli
 import { buildMatchKeyboard, sendMatchProposal } from "./pitch.js";
 import { appendNegativeConstraint, normalizeReason } from "./negative-constraints.js";
 import { startScheduling } from "./scheduler.js";
+import { sendTicketOffer } from "./ticket-gate.js";
+import { env } from "../../config.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 import { tryFinalize } from "./venue-negotiation.js";
 import {
@@ -1433,6 +1445,51 @@ describe("matching decision flow", () => {
     // sides — a no-op re-render for the first decider, who already saw this
     // mode from their own earlier accept.
     expect(mRefreshStatusBanners).toHaveBeenCalledWith(ctx.api, ["uid-A", "uid-B"]);
+  });
+
+  it("arms the ticket-gate deadline in the SAME transition when tickets are on", async () => {
+    // The hole this closes: `ticketExpiresAt` is the only column the hourly
+    // ticket-expiry sweep filters on, and the §3.5c stall chain deliberately
+    // exempts a `negotiating` row with no `proposedTimes` because "the gate has
+    // its own deadline". A row that reached `negotiating` without one was
+    // therefore invisible to BOTH — the same permanent strand an un-stamped
+    // `dispatchedAt` used to cause one stage earlier (§3.3). Arming it inside
+    // the compare-and-set makes that unreachable rather than merely unlikely.
+    const previous = env.TICKET_FEATURE_ENABLED;
+    (env as { TICKET_FEATURE_ENABLED?: boolean }).TICKET_FEATURE_ENABLED = true;
+    try {
+      mMatch.findUnique.mockResolvedValueOnce(
+        matchRow({ acceptedByA: true, acceptedByB: null }),
+      );
+      mClaimMatchDecision.mockResolvedValueOnce({
+        claimed: true,
+        status: "proposed",
+        acceptedByA: true,
+        acceptedByB: true,
+      });
+      mMatch.updateMany.mockResolvedValueOnce({ count: 1 });
+      mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
+
+      await handleMatchDecision(
+        createCtx({
+          session: { onboardingStep: "completed" },
+          callbackData: "match:accept:match-1",
+          fromId: 1002,
+        }),
+      );
+
+      expect(mMatch.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "match-1", status: "proposed" },
+          data: { status: "negotiating", ticketExpiresAt: TICKET_DEADLINE },
+        }),
+      );
+      // The gate still owns the card; only the deadline moved earlier.
+      expect(sendTicketOffer).toHaveBeenCalledWith(expect.anything(), "match-1");
+      expect(startScheduling).not.toHaveBeenCalled();
+    } finally {
+      (env as { TICKET_FEATURE_ENABLED?: boolean }).TICKET_FEATURE_ENABLED = previous;
+    }
   });
 
   it("first decline keeps match in 'proposed' and sends BLIND nudge (no reveal)", async () => {

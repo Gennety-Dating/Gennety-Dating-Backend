@@ -85,7 +85,13 @@ export interface AdminStats {
   users: { total: number; byStatus: Record<string, number> };
   onboarding: { byStep: Record<string, number> };
   verification: { byStatus: Record<string, number> };
-  matches: { total: number; byStatus: Record<string, number>; live: number };
+  matches: {
+    total: number;
+    byStatus: Record<string, number>;
+    live: number;
+    /** `proposed` rows with no `dispatchedAt` — invisible to every sweep. Expect 0. */
+    strandedProposed: number;
+  };
   reports: { total: number; byTier: Record<number, number>; unreviewedTier3: number };
   /**
    * Здоровье базы: живые / застрявшие / холодные / подозрительные / тестовые
@@ -130,6 +136,7 @@ async function collectStats(): Promise<{
     matchGroups,
     tierGroups,
     unreviewedTier3,
+    strandedProposed,
     health,
   ] = await Promise.all([
     prisma.user.count(),
@@ -140,6 +147,13 @@ async function collectStats(): Promise<{
     prisma.match.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.report.groupBy({ by: ["tier"], _count: { _all: true } }),
     prisma.report.count({ where: { tier: 3, adminReviewed: false } }),
+    // A `proposed` row that was never stamped. Must be 0: every consumer of a
+    // proposal filters `dispatchedAt: { not: null }`, so such a row is invisible
+    // to the expiry sweep, the countdown and both nudge cadences at once while
+    // still holding BOTH participants out of every drop (§3.3). Surfaced here
+    // rather than only in `scripts/audit-stuck-matches.mjs` because the script
+    // has to be remembered and this number is already on the dashboard.
+    prisma.match.count({ where: { status: "proposed", dispatchedAt: null } }),
     classifyAllUsers(),
   ]);
 
@@ -189,7 +203,7 @@ async function collectStats(): Promise<{
     users: { total: userTotal, byStatus },
     onboarding: { byStep },
     verification: { byStatus: byVerification },
-    matches: { total: matchTotal, byStatus: byMatchStatus, live },
+    matches: { total: matchTotal, byStatus: byMatchStatus, live, strandedProposed },
     reports: { total: byTier[1] + byTier[2] + byTier[3], byTier, unreviewedTier3 },
     userHealth: {
       ...summarizeHealth(health.users),

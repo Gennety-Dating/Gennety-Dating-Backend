@@ -45,6 +45,26 @@ type Side = "A" | "B";
 
 const PARTIAL_WINDOW_MS = Math.max(1, Math.round(env.TICKET_PAYMENT_WINDOW_HOURS * 3_600_000));
 
+/**
+ * When the gate's payment window closes, from `now`.
+ *
+ * Exported because the deadline is armed by the SAME compare-and-set that flips
+ * the match to `negotiating` (`handlers/matching/decision.ts` and its mobile
+ * twin in `public/matches-service.ts`), not by `sendTicketOffer` alone.
+ *
+ * That matters more than it looks. `ticketExpiresAt` is what the hourly
+ * ticket-expiry sweep filters on (`{ not: null }`), and the §3.5c stall chain
+ * deliberately exempts a `negotiating` row with no `proposedTimes` on the
+ * grounds that "the gate has its own deadline". Both are true only while the
+ * deadline is actually set — a row that reaches `negotiating` without one is
+ * invisible to both at once, which is the same permanent hole `dispatchedAt`
+ * used to open one stage earlier (§3.3). Arming it inside the transition makes
+ * that unreachable by construction rather than by nothing throwing in between.
+ */
+export function ticketGateDeadline(now: Date = new Date()): Date {
+  return new Date(now.getTime() + PARTIAL_WINDOW_MS);
+}
+
 interface TicketUser {
   id: string;
   telegramId: bigint;
@@ -342,7 +362,7 @@ function buildTicketKeyboard(
  * reopen the ticket card to discover her match covered her. PRODUCT_SPEC §3.5b.
  */
 export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promise<void> {
-  const expiresAt = new Date(Date.now() + PARTIAL_WINDOW_MS);
+  const expiresAt = ticketGateDeadline();
   await prisma.match.update({
     where: { id: matchId },
     data: {
@@ -644,7 +664,7 @@ async function settleTicket(
         ticketStatus: "pending",
         OR: [{ ticketPaidA: null }, { ticketPaidB: null }],
       },
-      data: { ticketStatus: "partial", ticketExpiresAt: new Date(Date.now() + PARTIAL_WINDOW_MS) },
+      data: { ticketStatus: "partial", ticketExpiresAt: ticketGateDeadline() },
     });
   }
 

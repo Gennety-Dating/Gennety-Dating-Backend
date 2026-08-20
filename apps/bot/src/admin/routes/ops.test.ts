@@ -56,6 +56,9 @@ const { MOCK_MATCH } = vi.hoisted(() => ({
   },
 }));
 
+// Set per-test; read by the where-aware `match.count` mock below.
+let strandedProposedCount = 0;
+
 vi.mock("@gennety/db", () => ({
   prisma: {
     $queryRaw: vi.fn().mockResolvedValue([{ "?column?": 1 }]),
@@ -70,7 +73,13 @@ vi.mock("@gennety/db", () => ({
     ticketLedger: { groupBy: vi.fn().mockResolvedValue([]) },
     match: {
       groupBy: vi.fn().mockResolvedValue([{ status: "scheduled", _count: { _all: 1 } }]),
-      count: vi.fn().mockResolvedValue(1),
+      // Where-aware, for the same reason `findMany` below is: `/admin/stats`
+      // makes TWO match counts — the total, and the stranded-proposal probe
+      // (`dispatchedAt: null`). A mock answering both with the same number
+      // cannot tell either of them apart.
+      count: vi.fn().mockImplementation((args?: { where?: { dispatchedAt?: null } }) =>
+        Promise.resolve(args?.where && "dispatchedAt" in args.where ? strandedProposedCount : 1),
+      ),
       // Select-aware, because real Prisma is: `/admin/dashboard` does NOT
       // select the user relations, so a mock that returns them regardless
       // would hand the handler BigInts it never asked for and fake a 500.
@@ -156,6 +165,29 @@ describe("GET /admin/stats", () => {
     const res = await get("/admin/stats");
     expect(res.body.matches.byStatus.scheduled).toBe(1);
     expect(res.body.matches.live).toBe(1);
+  });
+
+  it("surfaces stranded proposals — rows no sweep can see", async () => {
+    // A `proposed` row with no `dispatchedAt` is invisible to the expiry sweep,
+    // the countdown worker and both nudge cadences at once, while still holding
+    // BOTH participants out of every drop (§3.3). `disposeUndeliveredMatch` makes
+    // new ones impossible; this counter is how a regression — or a row left over
+    // from before that shipped — becomes visible without running a script.
+    strandedProposedCount = 2;
+    try {
+      const res = await get("/admin/stats");
+      expect(res.body.matches.strandedProposed).toBe(2);
+      // Not folded into `live`: that number answers "is anything in flight",
+      // and these rows are precisely the ones that are not.
+      expect(res.body.matches.live).toBe(1);
+    } finally {
+      strandedProposedCount = 0;
+    }
+  });
+
+  it("reports zero stranded proposals on a healthy database", async () => {
+    const res = await get("/admin/stats");
+    expect(res.body.matches.strandedProposed).toBe(0);
   });
 });
 

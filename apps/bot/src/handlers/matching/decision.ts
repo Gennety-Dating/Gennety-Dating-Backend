@@ -5,7 +5,7 @@ import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { createMatchEventBestEffort } from "../../services/match-events.js";
 import { startScheduling } from "./scheduler.js";
-import { sendTicketOffer } from "./ticket-gate.js";
+import { sendTicketOffer, ticketGateDeadline } from "./ticket-gate.js";
 import { updateEloScores } from "../../utils/elo-calculator.js";
 import { buildDeclineReasonKeyboard } from "./decline-feedback.js";
 import { syncTelegramUsername } from "../../utils/username.js";
@@ -389,9 +389,26 @@ async function handleAccept(
     // Atomic transition: only one concurrent caller wins the race.
     // The WHERE clause ensures only a match still in "proposed" state
     // can be flipped to "negotiating", preventing double startScheduling.
+    // The gate's deadline is armed HERE, in the same compare-and-set that
+    // creates the state needing it, rather than left to `sendTicketOffer`
+    // below. `ticketExpiresAt` is the only thing the hourly ticket-expiry
+    // sweep filters on, and the §3.5c stall chain exempts a `negotiating` row
+    // with no `proposedTimes` precisely because "the gate has its own
+    // deadline" — so a row that lands here without one is invisible to both
+    // at once and strands BOTH participants for good, exactly as an
+    // un-stamped `dispatchedAt` used to one stage earlier (§3.3). Nothing
+    // between this write and `sendTicketOffer` can throw today, but that is a
+    // property of a remote function's internal catch, not of this code;
+    // atomicity makes it unreachable instead of merely unlikely.
+    // `sendTicketOffer` re-stamps a fresh window, so the common path is
+    // unchanged. Conditional on the flag: with tickets off there is no gate,
+    // `startScheduling` writes `proposedTimes`, and the stall chain owns it.
     const transitioned = await prisma.match.updateMany({
       where: { id: match.id, status: "proposed" },
-      data: { status: "negotiating" },
+      data: {
+        status: "negotiating",
+        ...(env.TICKET_FEATURE_ENABLED ? { ticketExpiresAt: ticketGateDeadline() } : {}),
+      },
     });
     if (transitioned.count === 0) {
       // The other caller already transitioned and owns the ticket/calendar
