@@ -85,7 +85,7 @@ describe("renderRematchCard", () => {
   it(
     "renders the same bytes twice from a cold module — the motif is authored, not random",
     async () => {
-      // `preference-layout.ts` / `onboarding-crumble.ts` state the rule: a
+      // `preference-layout.ts` states the rule: a
       // pattern re-rolled per render can never be reviewed twice and no test can
       // pin it. Resetting modules clears the motif cache, so this compares two
       // genuinely independent rasterizations rather than one cache hit.

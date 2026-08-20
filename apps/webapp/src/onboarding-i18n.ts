@@ -4,22 +4,20 @@ export interface OnboardingStrings {
   back: string;
   next: string;
   more: string;
-  // Intro typewriter scenes, in play order (each is one auto-advancing screen).
-  // Scene indices map to onboarding.tsx's visual dispatch (see onboarding-route).
-  wasteLines: string[][]; // scene 0 — "modern apps eat your time" (+ app-icon reveal)
-  burnoutLines: string[][]; // scene 1 — "we burn out first"
-  cost2026Lines: string[][]; // scene 2 — "what does a relationship cost in 2026?"
-  statHookLines: string[][]; // scene 4 — "only 3% ..." (after the stats drum)
-  exhaustionLines: string[]; // scene 5 — swipe-simulator cycling lines
-  statLabels: [string, string, string];
-  statFootnote: string;
-  pivotLines: string[][]; // scene 6 — "we see these problems / so we built Gennety"
-  matchmakerLines: string[][]; // scene 7 — "you get a personal AI matchmaker"
-  howItWorksSteps: Array<{ title: string; body: string }>;
+  // Intro scenes, in play order (each is one auto-advancing screen). Scene
+  // indices map to onboarding.tsx's visual dispatch (see onboarding-route).
+  //
+  // The six market-critique scenes that used to open this sequence — "apps eat
+  // your time" + the competitor-icon rise, the burnout line + their crumble,
+  // "what does a relationship cost", the statistics drum, "only 3% reach a
+  // date", and the swipe simulator — were removed on 2026-08-20 (founder
+  // decision, DECISIONS.md). Their strings went with them: a user who has
+  // pressed Start has already decided to try, so arguing that the old apps are
+  // bad is advertising's job, done before the install.
+  pivotLines: string[][]; // scene 0 — "dating should lead to a meeting / so we built Gennety"
+  matchmakerLines: string[][]; // scene 1 — "you get a personal AI matchmaker"
+  howItWorksSteps: Array<{ title: string; body: string }>; // scene 2
   dateFlowSteps: Array<{ title: string; body: string }>;
-  profileName: string;
-  profileRole: string;
-  profileAlt: string;
   consentTitle: string;
   consentLead: string;
   consentTermsPrefix: string;
@@ -128,26 +126,14 @@ const en: OnboardingStrings = {
   back: "Go back",
   next: "Next",
   more: "Learn more",
-  wasteLines: [["Modern dating apps eat up so much time on endless scrolling through profile after profile"]],
-  burnoutLines: [["We burn out before we ever find our person"]],
-  cost2026Lines: [["What does it cost to find a relationship in 2026?"]],
-  statHookLines: [["Only 3% of people who use dating apps ever make it to a date"]],
-  exhaustionLines: [
-    "Endlessly browsing people like products.",
-    "It feels more like scrolling a TikTok feed",
-    "where people spend weeks searching",
-    "and chats that lead nowhere",
-  ],
-  statLabels: ["hours", "swipes", "in in-app purchases"],
-  statFootnote: "That's what the average user of modern dating apps spends to find a relationship.",
-  pivotLines: [["We see these problems"], ["So we built ", "Gennety"]],
+  pivotLines: [["Dating should lead to a meeting, not to a chat log"], ["So we built ", "Gennety"]],
   matchmakerLines: [
     ["You get a personal AI matchmaker that works around the clock to find the person who perfectly fits you"],
   ],
   howItWorksSteps: [
     {
       title: "Quick start",
-      body: "Import your memory from ChatGPT or another AI chat and answer a few questions, so we understand who's right for you.",
+      body: "A couple of minutes in the chat: tell us who you are and who you're looking for. The more honest you are, the sharper the match.",
     },
     {
       title: "We search 24/7",
@@ -184,9 +170,6 @@ const en: OnboardingStrings = {
       body: "The next day we'll ask how it went. Your honest feedback quietly sharpens who we pick for you next.",
     },
   ],
-  profileName: "Alexander, 28",
-  profileRole: "Tech founder",
-  profileAlt: "Portrait of a young professional",
   consentTitle: "One quick formality",
   consentLead: "Gennety matches people using deep context, so we need your explicit consent before continuing.",
   consentTermsPrefix: "I accept the",
@@ -315,26 +298,14 @@ const ru: OnboardingStrings = {
   back: "Назад",
   next: "Дальше",
   more: "Подробнее",
-  wasteLines: [["Современные приложения для знакомств съедают кучу времени на бесконечный перебор анкет"]],
-  burnoutLines: [["Мы выгораем раньше, чем находим своего человека"]],
-  cost2026Lines: [["Сколько стоит найти отношения в 2026 году?"]],
-  statHookLines: [["Только 3% людей, которые пользуются приложениями для знакомств, доходят до свидания"]],
-  exhaustionLines: [
-    "Бесконечный перебор людей, как товаров.",
-    "Больше похоже на скроллинг TikTok-ленты",
-    "в которой люди тратят недели на поиск",
-    "и переписки, которые ни к чему не приводят",
-  ],
-  statLabels: ["часов", "свайпов", "на покупки внутри приложений"],
-  statFootnote: "Столько тратит средний пользователь современных приложений для знакомств, чтобы найти отношения.",
-  pivotLines: [["Мы видим эти проблемы"], ["Поэтому мы создали ", "Gennety"]],
+  pivotLines: [["Знакомства должны вести к встрече, а не к переписке"], ["Поэтому мы создали ", "Gennety"]],
   matchmakerLines: [
     ["У тебя будет личный AI-матчмейкер, который работает круглосуточно и находит идеально подходящую тебе пару"],
   ],
   howItWorksSteps: [
     {
       title: "Быстрый вход",
-      body: "Импортируй память из ChatGPT или другого AI-чата и ответь на несколько вопросов, чтобы мы лучше понимали, какой человек тебе подойдёт.",
+      body: "Пара минут в чате: расскажи, кто ты и кого ищешь. Чем честнее — тем точнее подбор.",
     },
     {
       title: "Мы ищем 24/7",
@@ -371,9 +342,6 @@ const ru: OnboardingStrings = {
       body: "На следующий день спросим, как всё прошло. Твой честный отзыв тихо улучшает то, кого мы подберём дальше.",
     },
   ],
-  profileName: "Александр, 28",
-  profileRole: "Основатель tech-стартапа",
-  profileAlt: "Портрет молодого профессионала",
   consentTitle: "Сначала короткая формальность",
   consentLead: "Gennety подбирает людей по глубокому контексту, поэтому нам нужно явное согласие перед продолжением.",
   consentTermsPrefix: "Я принимаю",
@@ -502,26 +470,14 @@ const uk: OnboardingStrings = {
   back: "Назад",
   next: "Далі",
   more: "Детальніше",
-  wasteLines: [["Сучасні застосунки для знайомств зʼїдають купу часу на безкінечний перебір анкет"]],
-  burnoutLines: [["Ми вигораємо раніше, ніж знаходимо свою людину"]],
-  cost2026Lines: [["Скільки коштує знайти стосунки у 2026 році?"]],
-  statHookLines: [["Лише 3% людей, які користуються застосунками для знайомств, доходять до побачення"]],
-  exhaustionLines: [
-    "Нескінченний перебір людей, наче товарів.",
-    "Більше схоже на скролінг стрічки TikTok",
-    "де люди витрачають тижні на пошук",
-    "і листування, які ні до чого не ведуть",
-  ],
-  statLabels: ["годин", "свайпів", "на покупки в застосунках"],
-  statFootnote: "Стільки витрачає середній користувач сучасних застосунків для знайомств, щоб знайти стосунки.",
-  pivotLines: [["Ми бачимо ці проблеми"], ["Тому ми створили ", "Gennety"]],
+  pivotLines: [["Знайомства мають вести до зустрічі, а не до листування"], ["Тому ми створили ", "Gennety"]],
   matchmakerLines: [
     ["У тебе буде особистий AI-матчмейкер, який працює цілодобово й знаходить ідеально підходящу тобі пару"],
   ],
   howItWorksSteps: [
     {
       title: "Швидкий вхід",
-      body: "Імпортуй памʼять з ChatGPT чи іншого AI-чату та дай відповідь на кілька запитань, щоб ми краще розуміли, яка людина тобі підійде.",
+      body: "Пара хвилин у чаті: розкажи, хто ти і кого шукаєш. Що чесніше — то точніший підбір.",
     },
     {
       title: "Ми шукаємо 24/7",
@@ -558,9 +514,6 @@ const uk: OnboardingStrings = {
       body: "Наступного дня спитаємо, як усе минуло. Твій чесний відгук тихо покращує те, кого ми підберемо далі.",
     },
   ],
-  profileName: "Олександр, 28",
-  profileRole: "Засновник tech-стартапу",
-  profileAlt: "Портрет молодого професіонала",
   consentTitle: "Спочатку коротка формальність",
   consentLead: "Gennety підбирає людей за глибоким контекстом, тому нам потрібна твоя явна згода.",
   consentTermsPrefix: "Я приймаю",
@@ -690,26 +643,14 @@ const de: OnboardingStrings = {
   back: "Zurück",
   next: "Weiter",
   more: "Mehr erfahren",
-  wasteLines: [["Moderne Dating-Apps fressen so viel Zeit mit endlosem Scrollen, Profil um Profil"]],
-  burnoutLines: [["Wir brennen aus, bevor wir unseren Menschen finden"]],
-  cost2026Lines: [["Was kostet es, 2026 eine Beziehung zu finden?"]],
-  statHookLines: [["Nur 3% der Menschen, die Dating-Apps nutzen, schaffen es je zu einem Date"]],
-  exhaustionLines: [
-    "Endloses Durchblättern von Menschen wie Produkten.",
-    "Es fühlt sich eher an wie das Scrollen durch einen TikTok-Feed",
-    "in dem man Wochen mit Suchen verbringt",
-    "und Chats, die zu nichts führen",
-  ],
-  statLabels: ["Stunden", "Swipes", "für In-App-Käufe"],
-  statFootnote: "So viel gibt ein durchschnittlicher Nutzer moderner Dating-Apps aus, um eine Beziehung zu finden.",
-  pivotLines: [["Wir sehen diese Probleme"], ["Deshalb haben wir ", "Gennety gebaut"]],
+  pivotLines: [["Dating sollte zu einem Treffen führen, nicht zu einem Chatverlauf"], ["Deshalb haben wir ", "Gennety gebaut"]],
   matchmakerLines: [
     ["Du bekommst einen persönlichen KI-Matchmaker, der rund um die Uhr die Person findet, die perfekt zu dir passt"],
   ],
   howItWorksSteps: [
     {
       title: "Schneller Einstieg",
-      body: "Importiere dein Gedächtnis aus ChatGPT oder einem anderen KI-Chat und beantworte ein paar Fragen, damit wir besser verstehen, wer zu dir passt.",
+      body: "Ein paar Minuten im Chat: Erzähl uns, wer du bist und wen du suchst. Je ehrlicher, desto genauer die Auswahl.",
     },
     {
       title: "Wir suchen rund um die Uhr",
@@ -746,9 +687,6 @@ const de: OnboardingStrings = {
       body: "Am nächsten Tag fragen wir, wie es gelaufen ist. Dein ehrliches Feedback schärft leise, wen wir als Nächstes für dich auswählen.",
     },
   ],
-  profileName: "Alexander, 28",
-  profileRole: "Tech-Gründer",
-  profileAlt: "Porträt eines jungen Berufstätigen",
   consentTitle: "Eine kurze Formalität",
   consentLead: "Gennety matcht Menschen anhand von tiefem Kontext. Deshalb brauchen wir vorab deine ausdrückliche Zustimmung.",
   consentTermsPrefix: "Ich akzeptiere die",
@@ -878,26 +816,14 @@ const pl: OnboardingStrings = {
   back: "Wstecz",
   next: "Dalej",
   more: "Więcej",
-  wasteLines: [["Współczesne aplikacje randkowe pochłaniają mnóstwo czasu na bezustanne przewijanie profilu za profilem"]],
-  burnoutLines: [["Wypalamy się, zanim znajdziemy swojego człowieka"]],
-  cost2026Lines: [["Ile kosztuje znalezienie związku w 2026 roku?"]],
-  statHookLines: [["Tylko 3% osób, które korzystają z aplikacji randkowych, dochodzi do randki"]],
-  exhaustionLines: [
-    "Niekończące się przeglądanie ludzi jak produktów.",
-    "Bardziej przypomina to przewijanie feedu TikToka",
-    "w którym ludzie spędzają tygodnie na szukaniu",
-    "i rozmowy, które prowadzą donikąd",
-  ],
-  statLabels: ["godzin", "przesunięć", "na zakupy w aplikacjach"],
-  statFootnote: "Tyle wydaje przeciętny użytkownik nowoczesnych aplikacji randkowych, aby znaleźć związek.",
-  pivotLines: [["Widzimy te problemy"], ["Dlatego stworzyliśmy ", "Gennety"]],
+  pivotLines: [["Randkowanie powinno prowadzić do spotkania, a nie do historii czatu"], ["Dlatego stworzyliśmy ", "Gennety"]],
   matchmakerLines: [
     ["Dostajesz osobistego AI-matchmakera, który działa całą dobę i znajduje osobę idealnie do ciebie dopasowaną"],
   ],
   howItWorksSteps: [
     {
       title: "Szybki start",
-      body: "Zaimportuj pamięć z ChatGPT lub innego czatu AI i odpowiedz na kilka pytań, żebyśmy lepiej rozumieli, kto do ciebie pasuje.",
+      body: "Kilka minut na czacie: opowiedz, kim jesteś i kogo szukasz. Im szczerzej, tym trafniejsze dopasowanie.",
     },
     {
       title: "Szukamy 24/7",
@@ -934,9 +860,6 @@ const pl: OnboardingStrings = {
       body: "Następnego dnia zapytamy, jak poszło. Twoja szczera opinia po cichu poprawia to, kogo dobierzemy dalej.",
     },
   ],
-  profileName: "Aleksander, 28",
-  profileRole: "Założyciel startupu tech",
-  profileAlt: "Portret młodego profesjonalisty",
   consentTitle: "Krótka formalność",
   consentLead: "Gennety dobiera ludzi na podstawie głębokiego kontekstu, dlatego potrzebujemy Twojej wyraźnej zgody.",
   consentTermsPrefix: "Akceptuję",

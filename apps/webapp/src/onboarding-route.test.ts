@@ -231,6 +231,18 @@ describe("theme picker routing (after the city gate)", () => {
   });
 });
 
+describe("intro length", () => {
+  // The intro is exactly three scenes: Pivot, Matchmaker, How-it-works
+  // (founder decision 2026-08-20, DECISIONS.md). The six market-critique
+  // scenes that used to open it are gone, and nothing about the deletion
+  // stops one being added back a scene at a time — this is the only place
+  // that states the intended length, so growing it has to be deliberate.
+  it("is three scenes", () => {
+    expect(VISUAL_LAST_INDEX).toBe(2);
+    expect(VISUAL_DONE).toBe(3);
+  });
+});
+
 describe("bootPhaseFromRemote — visual animation resume", () => {
   it("starts at scene 0 when there is no stored progress", () => {
     expect(bootPhaseFromRemote(visualReadyUser(), null)).toEqual({

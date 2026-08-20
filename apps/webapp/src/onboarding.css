@@ -8,14 +8,6 @@
   color: var(--text);
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
-  /* Scrim used by anything that fades page content into the page background —
-     the drum-roll windows and the bottom CTA dock. It must BE the background,
-     not black: a hardcoded black scrim reads as an ugly dark plate on the light
-     theme. The zero-alpha stop repeats the same rgb so the fade never greys out
-     on the way to transparent. */
-  --scene-scrim: rgba(3, 3, 3, 0.86);
-  --scene-scrim-0: rgba(3, 3, 3, 0);
-
   /* The back arrow's graphite + its inner-edge sheen (see `.howitworks-back`).
      Theme-independent by design — both live here rather than beside the rule so
      the two states of one light source stay adjacent and cannot drift. */
@@ -56,8 +48,6 @@
 }
 
 :root[data-theme="light"] {
-  --scene-scrim: rgba(245, 245, 245, 0.92);
-  --scene-scrim-0: rgba(245, 245, 245, 0);
 }
 
 html,
@@ -447,11 +437,11 @@ button {
    positioned in the lower third so the centered line above it never shifts,
    with `.is-shown` (toggled from JS after the copy lands) fading it in.
 
-   Every scene now passes an invisible `.intro-reveal-cue` through here rather
-   than real content — the icons and the logo both need to outlive their scene,
-   so they moved to the persistent overlays (`.intro-icons`, `.pivot-logo`) and
-   this slot is left doing only the timing. The positioning below is what those
-   overlays were matched to, so it still describes where they sit. */
+   The Pivot scene passes an invisible `.intro-reveal-cue` through here rather
+   than real content — the logo has to outlive its scene, so it lives in the
+   persistent `.pivot-logo` overlay and this slot is left doing only the timing.
+   The positioning below is what that overlay was matched to, so it still
+   describes where it sits. */
 .intro-reveal {
   position: absolute;
   left: 0;
@@ -475,163 +465,7 @@ button {
   bottom: auto;
 }
 
-/* The PNGs already carry rounded corners on a transparent background, so the
-   shadow rides the alpha (drop-shadow), not the box. Kept soft + low so the
-   icons read as clean tiles, never as outlined boxes.
-
-   An icon paints nothing until `.is-ready` — AppIcon adds it once decode()
-   resolves. A PNG paints its scanlines as they arrive, and a half-decoded icon
-   is a rectangular slab, so anything painted before decode is a box rather than
-   the tile (see AppIcon). opacity:0 (not visibility) keeps the slot's layout and
-   its iconRise/iconFloat transforms untouched; the short fade means a cold icon
-   arrives a beat late instead of snapping in. */
-.app-icon {
-  display: block;
-  object-fit: contain;
-  opacity: 0;
-  transition: opacity 200ms ease;
-}
-
-.app-icon.is-ready {
-  opacity: 1;
-}
-
-/* ── The competitor icons (scenes 0–1) ─────────────────────────────────────
-   A persistent overlay ABOVE the scene stack, on the same pattern as
-   `.pivot-logo` below and for the same reason: the icons rise on Waste and have
-   to survive the crossfade into Burnout, where they crumble. Rendered inside
-   either scene they would leave with it, and a second copy rising on Burnout
-   would read as a new row rather than the same one.
-
-   Positioned exactly where the scene-0 reveal slot used to put them, so the
-   handoff from one scene to the next moves nothing at all — the stillness is
-   what sells them as the same three objects. */
-.intro-icons {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 15%;
-  z-index: 1;
-  display: flex;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 480ms ease;
-  pointer-events: none;
-}
-
-.intro-icons.is-shown {
-  opacity: 1;
-}
-
-/* ── Reveal arc (scene 0) ──────────────────────────────────────────────────
-   Three icons fanned along a shallow upward arc: the middle sits highest and a
-   touch larger, the sides dip and tilt outward. Each slot holds that resting
-   pose in CSS vars so the entrance keyframe can spring INTO it. */
-.app-icon-row--reveal {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(8px, 3vw, 18px);
-}
-
-.app-icon-slot {
-  --ty: 0px;
-  --rot: 0deg;
-  --sc: 1;
-  display: block;
-  transform: translateY(var(--ty)) rotate(var(--rot)) scale(var(--sc));
-  opacity: 0;
-  will-change: transform, opacity;
-}
-
-.app-icon-slot:nth-child(1) {
-  --ty: 22px;
-  --rot: -13deg;
-  --sc: 0.92;
-}
-.app-icon-slot:nth-child(2) {
-  --ty: -10px;
-  --rot: 0deg;
-  --sc: 1.1;
-  z-index: 2;
-}
-.app-icon-slot:nth-child(3) {
-  --ty: 22px;
-  --rot: 13deg;
-  --sc: 0.92;
-}
-
-/* The figure is the icon's box, and it exists so the float can survive the
-   crumble swap: it never unmounts, so its animation keeps its phase while the
-   <img> inside is replaced by the tile grid. It also owns the drop-shadow for
-   the same reason — a shadow that disappeared at the swap would give the trick
-   away on the light theme.
-
-   Ungated, unlike the old rule on the img: `drop-shadow` traces the alpha it is
-   given, and a not-yet-decoded icon is `opacity: 0`, i.e. no alpha to trace. So
-   the shadow fades in with the icon instead of needing its own `.is-ready`. */
-.app-icon-figure {
-  /* Published as a variable because the tiles have to do absolute px maths
-     against the icon's real size — see `.app-icon-shard`. */
-  --icon-size: clamp(66px, 20vw, 88px);
-  position: relative;
-  display: block;
-  width: var(--icon-size);
-  height: var(--icon-size);
-  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.16));
-  will-change: transform;
-}
-
-.app-icon-row--reveal .app-icon {
-  width: 100%;
-  height: 100%;
-}
-
 /* Staggered spring entrance — the slot springs from below into its arc pose. */
-.intro-icons.is-shown .app-icon-slot {
-  animation: iconRise 820ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-.intro-icons.is-shown .app-icon-slot:nth-child(1) {
-  animation-delay: 40ms;
-}
-.intro-icons.is-shown .app-icon-slot:nth-child(2) {
-  animation-delay: 170ms;
-}
-.intro-icons.is-shown .app-icon-slot:nth-child(3) {
-  animation-delay: 300ms;
-}
-
-/* Gentle continuous float on the figure — composes over the slot's arc pose
-   and only breathes after the entrance has settled. Deliberately left running
-   through the crumble: the tiles fall from a still-breathing icon, and stopping
-   it would snap the icon back to its rest position on the swap frame. */
-.intro-icons.is-shown .app-icon-slot .app-icon-figure {
-  animation: iconFloat 4.2s ease-in-out 1000ms infinite;
-}
-.intro-icons.is-shown .app-icon-slot:nth-child(2) .app-icon-figure {
-  animation-duration: 4.8s;
-  animation-delay: 1180ms;
-}
-.intro-icons.is-shown .app-icon-slot:nth-child(3) .app-icon-figure {
-  animation-duration: 4.5s;
-  animation-delay: 1100ms;
-}
-
-/* ── The crumble (scene 1) ─────────────────────────────────────────────────
-   Each tile is a crop of the icon's own PNG: the background is blown up to the
-   full grid and shifted so this tile shows its own slice (`background-position`
-   comes from onboarding-crumble.ts, which is where that sprite math is tested).
-   At rest the tiles reassemble the icon pixel for pixel — that is what makes
-   replacing the <img> with this grid invisible, and it is the whole reason the
-   effect is tiles rather than a particle canvas.
-
-   No `will-change` here on purpose: that would promote 90 tiles to permanent
-   compositor layers for the sake of a 1.7s animation. The animation promotes
-   what it needs and releases it afterwards. */
-.app-icon-shards {
-  position: absolute;
-  inset: 0;
-}
 
 /* Sized and cropped in absolute px against `--icon-size`, never in percentages
    of the tile itself. Two measured reasons, both of which showed up as a grid
@@ -649,20 +483,6 @@ button {
    extra pixel keeps the same crop offset, so it paints exactly the pixel the
    neighbour paints there. Inflate the box while the background is a percentage
    and the image rescales instead, smearing the seam rather than closing it. */
-.app-icon-shard {
-  position: absolute;
-  left: calc(var(--col) * var(--icon-size) / var(--cols));
-  top: calc(var(--row) * var(--icon-size) / var(--rows));
-  width: calc(var(--icon-size) / var(--cols) + 1px);
-  height: calc(var(--icon-size) / var(--rows) + 1px);
-  background-image: var(--icon-src);
-  background-repeat: no-repeat;
-  background-size: var(--icon-size) var(--icon-size);
-  background-position:
-    calc(-1 * var(--col) * var(--icon-size) / var(--cols))
-    calc(-1 * var(--row) * var(--icon-size) / var(--rows));
-  animation: iconCrumble var(--dur) cubic-bezier(0.4, 0, 1, 1) var(--delay) both;
-}
 
 /* `both` fill is load-bearing: before its delay elapses a tile holds frame 0,
    so the icon sits intact while the rows above it are already falling.
@@ -670,33 +490,6 @@ button {
    Ease-in is the gravity. It also holds the opacity keyframe back — 55% of
    eased progress lands about three quarters of the way through in wall-clock
    time, so a tile falls solid and only dissolves near the end of its arc. */
-@keyframes iconCrumble {
-  0% {
-    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
-    opacity: 1;
-  }
-  55% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate3d(var(--dx), var(--dy), 0) rotate(var(--rot)) scale(var(--sc));
-    opacity: 0;
-  }
-}
-
-@keyframes iconRise {
-  0% {
-    opacity: 0;
-    transform: translateY(calc(var(--ty) + 48px)) rotate(var(--rot)) scale(calc(var(--sc) * 0.55));
-  }
-  55% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(var(--ty)) rotate(var(--rot)) scale(var(--sc));
-  }
-}
 
 @keyframes iconFloat {
   0%,
@@ -708,170 +501,13 @@ button {
   }
 }
 
-/* ── The money fall (scene 2) ──────────────────────────────────────────────
-   Banknotes drifting down behind the "what does it cost in 2026?" question.
-   Geometry is seeded in onboarding-money.ts and arrives as custom properties;
-   everything here is transform + opacity, so it runs on the compositor.
-
-   This lands one screen after the icon crumble, so "things falling" is the
-   second use of that verb in a row. What separates them is physics: a crumb
-   drops on an ease-in and is gone, a note falls LINEARLY (paper reaches
-   terminal velocity almost at once — an accelerating banknote reads as a
-   falling brick) while tumbling about its long axis. */
-.money-fall {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
 /* Colour tokens per theme. Dark is the easy case; on the cream page a
    cream note would vanish, so the paper steps DOWN in lightness and the
    burgundy edge does the work of separating it from the background. */
-.money-fall {
-  --money-paper: #efe9dc;
-  --money-edge: rgba(139, 37, 59, 0.5);
-  --money-ink: #8b253b;
-  --money-gold: #e3b45c;
-  /* Base note width; every note scales off this by its layer. */
-  --money-w: clamp(46px, 13vw, 62px);
-}
-
-:root[data-theme="light"] .money-fall,
-:root:not([data-theme="dark"]) .money-fall {
-  --money-paper: #eadfcb;
-  --money-edge: rgba(139, 37, 59, 0.6);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .money-fall {
-    --money-paper: #efe9dc;
-    --money-edge: rgba(139, 37, 59, 0.5);
-  }
-}
 
 /* The faller. `perspective` lives HERE rather than on the container because it
    applies to direct children only, and the tumble is on the child — set it one
    level up and the rotation flattens into a horizontal squash. */
-.money-bill {
-  position: absolute;
-  top: 0;
-  left: var(--x);
-  width: calc(var(--money-w) * var(--sc));
-  perspective: 420px;
-  opacity: 0;
-  transform: translate3d(-50%, -24vh, 0);
-}
-
-/* Infinite, with a NEGATIVE `--phase` per note (onboarding-money.ts) so each
-   one starts part-way down its own loop. That is what fills the frame top to
-   bottom on the first frame: released together they enter from above the top
-   edge as a curtain and leave the lower half of the screen empty for a second,
-   which is exactly how the first build looked. */
-.money-fall.is-falling .money-bill {
-  animation: moneyFall var(--dur) linear var(--phase) infinite both;
-}
-/* The travel is 140vh through a 100vh frame, so a note is off-screen for its
-   first ~17% and last ~11%. The fades are tucked INSIDE those margins (6% /
-   93%), which means a note is at full opacity for its entire visible life —
-   at 9%/84% they were dimming on screen and roughly a quarter of the notes
-   were invisible at any moment, which read as the fall thinning out. */
-@keyframes moneyFall {
-  0% {
-    opacity: 0;
-    transform: translate3d(-50%, -24vh, 0);
-  }
-  6% {
-    opacity: var(--op);
-  }
-  93% {
-    opacity: var(--op);
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(calc(-50% + var(--drift)), 116vh, 0);
-  }
-}
-
-.money-bill-spin {
-  display: block;
-  transform-style: preserve-3d;
-}
-
-.money-fall.is-falling .money-bill-spin {
-  animation: moneyTumble var(--spin) linear var(--spin-delay) infinite both;
-}
-
-/* Mostly-Y axis, with real X and a little Z so the note is never PERFECTLY
-   edge-on: a pure Y rotation disappears completely twice a cycle, which reads
-   as the note blinking out rather than turning. The X term was raised from
-   0.18 to 0.34 after a frozen frame caught five of fourteen notes as razor
-   slivers at once — the tilt is what keeps a turning note readable as paper. */
-@keyframes moneyTumble {
-  from {
-    transform: rotate3d(0.34, 1, 0.08, 0deg);
-  }
-  to {
-    transform: rotate3d(0.34, 1, 0.08, 360deg);
-  }
-}
-
-.money-note {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-/* Reduced motion: no fall, no tumble — the notes simply fade in where they
-   would have been passing, scattered down the frame by the seeded `--rest`
-   (a single constant here would stack all fourteen on one line). The screen
-   still says "money", it just stops moving. */
-@media (prefers-reduced-motion: reduce) {
-  .money-bill,
-  .money-fall.is-falling .money-bill {
-    animation: none;
-    opacity: 0;
-    transform: translate3d(-50%, var(--rest), 0);
-    transition: opacity 320ms ease;
-  }
-  .money-fall.is-falling .money-bill {
-    opacity: var(--op);
-  }
-  .money-fall.is-falling .money-bill-spin {
-    animation: none;
-  }
-}
-
-/* ── Stats row (above the numbers) ─────────────────────────────────────────
-   The three cleaned tiles sit in one liquid-glass tray above the metric drum:
-   a frosted translucent pane with a specular top edge and soft depth (the
-   shared glass kit). The icons carry NO drop-shadow of their own here, so there
-   are no grey/dark frames — the glass is the only surface. */
-.app-icon-row--stats {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(12px, 4vw, 20px);
-  padding: clamp(10px, 2.6vw, 15px) clamp(16px, 4.5vw, 24px);
-  border-radius: 26px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    var(--glass-shadow);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  margin-bottom: clamp(1.25rem, 4dvh, 2.25rem);
-}
-
-.app-icon-tile {
-  display: block;
-}
-
-.app-icon-row--stats .app-icon {
-  width: clamp(40px, 12vw, 52px);
-  height: clamp(40px, 12vw, 52px);
-}
 
 /* ── Persistent Gennety logo (Pivot → Matchmaker) ──────────────────────────
    Rendered ABOVE the scene stack, so it stays put while the copy crossfades
@@ -951,10 +587,7 @@ button {
   .intro-reveal {
     transition: opacity 260ms ease;
   }
-  .app-icon-slot {
-    opacity: 1;
-    animation: none;
-  }
+  
   /* The overlay still fades in/out via opacity; just drop the spring + float. */
   .pivot-logo {
     transition: opacity 300ms ease;
@@ -963,24 +596,11 @@ button {
   .pivot-logo.is-risen .pivot-logo-icon {
     animation: none;
   }
-  .intro-icons {
-    transition: opacity 260ms ease;
-  }
-  .intro-icons.is-shown .app-icon-slot,
-  .intro-icons.is-shown .app-icon-slot .app-icon-figure {
-    animation: none;
-  }
-  /* No falling tiles: the icons simply go out with the overlay's fade. They
-     still render (frame 0 is the intact icon), so nothing disappears early —
-     `.is-crumbling` just takes the group's opacity to 0 over the same hold the
-     crumble would have used. */
-  .app-icon-shard {
-    animation: none;
-  }
-  .intro-icons.is-crumbling {
-    opacity: 0;
-    transition: opacity 700ms ease;
-  }
+  
+  
+  
+  
+  
 }
 
 .top-app-bar {
@@ -1043,21 +663,6 @@ button {
   height: 2.5rem;
 }
 
-.exhaustion-main {
-  width: 100%;
-  max-width: 48rem;
-  height: 100%;
-  margin: 0 auto;
-  padding: calc(4.75rem + env(safe-area-inset-top, 0)) max(1.25rem, env(safe-area-inset-left, 0)) calc(7.25rem + env(safe-area-inset-bottom, 0)) max(1.25rem, env(safe-area-inset-right, 0));
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 1;
-  overflow: hidden;
-}
-
 /* Soft ambient wash behind the scene. Kept faint (and near-invisible on the
    light theme, see the override below) so it reads as atmosphere, never as a
    coloured smudge behind the card. */
@@ -1072,54 +677,6 @@ button {
   filter: blur(110px);
   transform: translate(-50%, -50%);
   pointer-events: none;
-}
-
-/* Tinder-style auto-swiping deck (Profile scene): two stacked cards — the front
-   swipes out left/right ~1×/s while the one behind rises to take its place.
-   No backlight glow behind the deck: as the front card swiped away it exposed
-   and re-covered a burgundy halo every cycle, which read as a flickering light
-   (and a dirty pink shadow on the light theme). The card's own soft shadow is
-   the only depth cue. */
-.swipe-deck {
-  position: relative;
-  width: min(66vw, 16rem, 31dvh);
-  aspect-ratio: 3 / 4;
-  margin-bottom: clamp(1rem, 2.4dvh, 2.25rem);
-  flex: 0 0 auto;
-}
-
-.profile-card {
-  position: absolute;
-  inset: 0;
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-  background: #1a1a1a;
-  box-shadow: 0 24px 48px -18px rgba(0, 0, 0, 0.55);
-  will-change: transform, opacity;
-}
-
-.profile-card.is-back {
-  z-index: 1;
-  transform: translateX(0) translateY(12px) rotate(0deg) scale(0.94);
-  transition: transform 460ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.profile-card.is-back.is-rising {
-  transform: translateX(0) translateY(0) rotate(0deg) scale(1);
-}
-
-.profile-card.is-front {
-  z-index: 2;
-  transform: translateX(0) translateY(0) rotate(0deg) scale(1);
-}
-
-.profile-card.is-front.is-leaving-left {
-  animation: swipeOutLeft 460ms cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
-}
-
-.profile-card.is-front.is-leaving-right {
-  animation: swipeOutRight 460ms cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
 }
 
 @keyframes swipeOutLeft {
@@ -1144,192 +701,6 @@ button {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .profile-card {
-    transition: none;
-    animation: none;
-  }
-}
-
-.profile-card-image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.profile-card-gradient {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.2), transparent);
-}
-
-.profile-card-foot {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 0 0.85rem 0.85rem;
-}
-
-.profile-card-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.mock-action {
-  border: 0;
-  border-radius: 9999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 150ms ease;
-}
-
-.mock-action:hover {
-  transform: scale(1.1);
-}
-
-.mock-action:active {
-  transform: scale(0.95);
-}
-
-.mock-action-small {
-  width: 2rem;
-  height: 2rem;
-}
-
-.mock-action-large {
-  width: 2.5rem;
-  height: 2.5rem;
-}
-
-.mock-action-yellow {
-  background: rgba(234, 179, 8, 0.2);
-  color: #eab308;
-  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.6), -1px -1px 4px rgba(255, 255, 255, 0.05);
-}
-
-.mock-action-red {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.7), -1px -1px 5px rgba(255, 255, 255, 0.05);
-}
-
-.mock-action-blue {
-  background: rgba(96, 165, 250, 0.2);
-  color: #60a5fa;
-  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.6), -1px -1px 4px rgba(255, 255, 255, 0.05);
-}
-
-.mock-action-green {
-  background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
-  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.7), -1px -1px 5px rgba(255, 255, 255, 0.05);
-}
-
-.mock-action-purple {
-  background: rgba(139, 37, 59, 0.2);
-  color: #8B253B;
-  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.6), -1px -1px 4px rgba(255, 255, 255, 0.05);
-}
-
-.profile-card-caption {
-  text-align: left;
-}
-
-.profile-card-name {
-  margin: 0;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  color: #fff;
-  font-size: clamp(1.05rem, 2.6dvh, 1.4rem);
-  line-height: 1.1;
-  font-weight: 700;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
-}
-
-.profile-card-age {
-  font-weight: 400;
-  opacity: 0.92;
-}
-
-.profile-card-verified {
-  align-self: center;
-  font-size: 1rem;
-  color: #4aa3ff;
-  font-variation-settings: "FILL" 1;
-}
-
-.profile-card-meta {
-  margin: 0.3rem 0 0;
-  display: flex;
-  align-items: center;
-  gap: 0.15rem;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 0.72rem;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
-}
-
-.profile-card-meta .material-symbols-outlined {
-  font-size: 0.9rem;
-}
-
-.profile-card-tags {
-  margin-top: 0.45rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.28rem;
-}
-
-.profile-card-tags span {
-  padding: 0.16rem 0.5rem;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(4px);
-  color: #fff;
-  font-size: 0.64rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.exhaustion-copy {
-  width: 100%;
-  max-width: 40rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: clamp(0.75rem, 1.8dvh, 1.25rem);
-  text-align: center;
-  min-height: min(31dvh, 15rem);
-  justify-content: center;
-}
-
-.exhaustion-drum {
-  min-height: min(27dvh, 13rem);
-}
-
-.exhaustion-copy p {
-  margin: 0;
-  transition: opacity 300ms ease;
-}
-
-.copy-headline {
-  color: var(--text);
-  font-size: clamp(1.75rem, 4.6dvh, 3rem);
-  line-height: 1.18;
-  font-weight: 700;
-  letter-spacing: 0;
-}
-
 .copy-title {
   color: var(--text-muted);
   font-size: clamp(1.125rem, 2.8dvh, 1.5rem);
@@ -1347,51 +718,6 @@ button {
 .copy-purple {
   color: #8B253B;
   text-shadow: 0 0 20px rgba(139, 37, 59, 0.3);
-}
-
-.drum-window {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  text-align: center;
-  perspective: 900px;
-  animation: drumRollIn 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.drum-window::before,
-.drum-window::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  z-index: 2;
-  height: 28%;
-  pointer-events: none;
-}
-
-.drum-window::before {
-  top: 0;
-  background: linear-gradient(to bottom, var(--scene-scrim), var(--scene-scrim-0));
-}
-
-.drum-window::after {
-  bottom: 0;
-  background: linear-gradient(to top, var(--scene-scrim), var(--scene-scrim-0));
-}
-
-.profile-drum-window {
-  min-height: clamp(7.5rem, 19dvh, 10rem);
-  padding: 0.25rem 0;
-}
-
-.profile-drum-window .copy-headline {
-  max-width: 36rem;
-  font-size: clamp(1.45rem, 3.6dvh, 2.35rem);
-  line-height: 1.18;
 }
 
 .howitworks-main {
@@ -1777,8 +1103,8 @@ button {
   gap: clamp(0.9rem, 2.4dvh, 1.4rem);
   padding: 1.25rem max(1.25rem, env(safe-area-inset-left, 0)) calc(1.5rem + env(safe-area-inset-bottom, 0)) max(1.25rem, env(safe-area-inset-right, 0));
   background: linear-gradient(to top, #000, rgba(0, 0, 0, 0.8), transparent);
-  /* No own entry animation: the dock rides the scene-stage crossfade. A separate
-     ctaRiseIn replayed on every mount and, together with the back arrow's fly-in,
+  /* No own entry animation: the dock rides the scene-stage crossfade. A rise of
+     its own replayed on every mount and, together with the back arrow's fly-in,
      read as a flicker when switching how-it-works -> date-flow. */
 }
 
@@ -1943,18 +1269,6 @@ button {
   }
 }
 
-.stat-drum-window {
-  min-height: clamp(10.5rem, 32dvh, 16rem);
-  flex-direction: column;
-  padding: 1rem 0;
-  overflow: visible;
-}
-
-.stat-drum-window::before,
-.stat-drum-window::after {
-  content: none;
-}
-
 .cycle-dots {
   position: relative;
   z-index: 2;
@@ -2002,44 +1316,6 @@ button {
 .howitworks-dock .cycle-dots span.is-active,
 .howitworks-dock .cycle-dots.is-complete span.is-active {
   background: rgba(255, 255, 255, 0.85);
-}
-
-.dots-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(2.75rem + env(safe-area-inset-bottom, 0));
-  z-index: 31;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-  transition:
-    bottom 320ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.dots-dock.with-cta {
-  bottom: calc(5.75rem + env(safe-area-inset-bottom, 0));
-}
-
-.dots-dock .cycle-dots {
-  margin-top: 0;
-}
-
-.bottom-cta {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
-  display: flex;
-  justify-content: center;
-  padding: 1rem max(1.25rem, env(safe-area-inset-left, 0)) calc(1.25rem + env(safe-area-inset-bottom, 0)) max(1.25rem, env(safe-area-inset-right, 0));
-  /* Fades the scene into the page background under the button. It sits on the
-     themed page (not on a photo), so it must follow the theme — a black plate
-     under the CTA is what made the light theme look broken. */
-  background: linear-gradient(to top, var(--bg), var(--scene-scrim) 45%, var(--scene-scrim-0));
-  animation: ctaRiseIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .pill-cta {
@@ -2091,79 +1367,6 @@ button {
   transform: none;
 }
 
-.trap-body {
-  width: 100%;
-  height: 100%;
-  background: var(--surface);
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  position: relative;
-}
-
-.trap-body::before,
-.trap-body::after {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  width: 18rem;
-  height: 18rem;
-  border-radius: 9999px;
-  pointer-events: none;
-  filter: blur(80px);
-}
-
-.trap-body::before {
-  top: 8%;
-  left: -5rem;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.trap-body::after {
-  right: -5rem;
-  bottom: 12%;
-  background: rgba(139, 37, 59, 0.16);
-}
-
-.trap-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.trap-bg img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.3;
-  filter: blur(64px);
-  transform: scale(1.1);
-}
-
-.trap-bg-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.3;
-  filter: blur(64px);
-  transform: scale(1.1);
-}
-
-.trap-main {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 28rem;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  padding: calc(1.5rem + env(safe-area-inset-top, 0)) max(1.25rem, env(safe-area-inset-left, 0)) calc(6.75rem + env(safe-area-inset-bottom, 0)) max(1.25rem, env(safe-area-inset-right, 0));
-}
-
 .glass-panel {
   flex: 1;
   margin: auto 0;
@@ -2196,112 +1399,8 @@ button {
   pointer-events: none;
 }
 
-.stats-native-panel {
-  flex: 1;
-  margin: auto 0;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: visible;
-  padding: 0;
-}
-
-.stat-wrap {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  text-align: center;
-}
-
-.stat-value {
-  margin: 0 0 4px;
-  color: var(--text);
-  font-size: clamp(4rem, 12dvh, 6.5rem);
-  line-height: 1;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-shadow: 0 0 30px rgba(255, 255, 255, 0.3), 0 0 50px rgba(139, 37, 59, 0.2);
-}
-
-.stat-value.small {
-  font-size: clamp(3.875rem, 12dvh, 6rem);
-}
-
-.stat-label {
-  margin: 0;
-  color: var(--text);
-  opacity: 0.9;
-  font-size: clamp(1.5rem, 5.4dvh, 3rem);
-  line-height: 1.16;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-shadow: 0 0 30px rgba(139, 37, 59, 0.3);
-}
-
-.stat-label.sentence {
-  font-size: clamp(1.125rem, 3dvh, 1.5rem);
-  line-height: 1.34;
-  font-weight: 400;
-}
-
 /* Footnote + the small competitor-logo row, stacked and centered below the
    metric drum. */
-.stat-footnote-block {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.stat-footnote {
-  max-width: 23rem;
-  margin: 0 auto;
-  text-align: center;
-  color: var(--text);
-  /* Enlarged from 13px so the "what this actually costs you" line reads as the
-     point of the screen, not a caption. */
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 1.5;
-  letter-spacing: 0.01em;
-}
-
-.trap-cta-wrap {
-  margin: 2rem 0 1.5rem;
-  position: relative;
-  z-index: 1;
-}
-
-.trap-cta {
-  width: 100%;
-  height: 3.5rem;
-  border: 0;
-  border-radius: 9999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-fg);
-  font-size: 24px;
-  line-height: 32px;
-  font-weight: 600;
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
-  transition:
-    transform 300ms ease,
-    background 300ms ease;
-}
-
-.trap-cta:hover {
-  background: var(--surface-2);
-  transform: scale(0.98);
-}
-
-.trap-cta:active {
-  transform: scale(0.95);
-}
 
 .gate-main {
   width: 100%;
@@ -2696,35 +1795,6 @@ button {
   }
 }
 
-@keyframes drumRollIn {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, 22px, 0) rotateX(-32deg);
-    filter: blur(9px);
-  }
-  58% {
-    opacity: 1;
-    transform: translate3d(0, -2px, 0) rotateX(4deg);
-    filter: blur(0);
-  }
-  100% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) rotateX(0);
-    filter: blur(0);
-  }
-}
-
-@keyframes ctaRiseIn {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, 14px, 0);
-  }
-  100% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
 @keyframes orbSix {
   0% {
     transform: scale(0.72) rotate(0deg);
@@ -2754,24 +1824,13 @@ button {
 }
 
 @media (max-height: 760px) {
-  .exhaustion-main {
-    padding-top: calc(4rem + env(safe-area-inset-top, 0));
-    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0));
-  }
+  
 
-  .profile-card {
-    width: min(54vw, 12.5rem, 24dvh);
-    margin-bottom: 1rem;
-  }
+  
 
-  .exhaustion-copy {
-    gap: 0.75rem;
-    min-height: min(29dvh, 12rem);
-  }
+  
 
-  .copy-headline {
-    font-size: clamp(1.5rem, 4.2dvh, 2.25rem);
-  }
+  
 
   .copy-title {
     font-size: clamp(1rem, 2.7dvh, 1.25rem);
@@ -2783,10 +1842,7 @@ button {
     line-height: 1.35;
   }
 
-  .trap-main {
-    padding-top: calc(1rem + env(safe-area-inset-top, 0));
-    padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0));
-  }
+  
 
   .glass-panel {
     padding: 1.5rem;
@@ -2802,17 +1858,11 @@ button {
     min-height: 50px;
   }
 
-  .stat-value {
-    font-size: clamp(3.75rem, 13dvh, 6.25rem);
-  }
+  
 
-  .stat-value.small {
-    font-size: clamp(3.25rem, 11dvh, 5rem);
-  }
+  
 
-  .stat-label {
-    font-size: clamp(1.25rem, 4.6dvh, 2.5rem);
-  }
+  
 }
 
 /* ── Theme picker (onboarding step right after the city gate) ──────────────
@@ -3027,7 +2077,6 @@ button {
    NOT `.howitworks-dock .pill-cta`: that one sits on the always-dark date-flow
    photo, where white glass is already the high-contrast choice. */
 :root[data-theme="light"] .ai-memory-primary,
-:root[data-theme="light"] .bottom-cta .pill-cta,
 :root[data-theme="light"] .howitworks-foot .pill-cta {
   border: 1px solid rgba(0, 0, 0, 0.6);
   background:
@@ -3041,7 +2090,6 @@ button {
 }
 
 :root[data-theme="light"] .ai-memory-primary:hover,
-:root[data-theme="light"] .bottom-cta .pill-cta:hover,
 :root[data-theme="light"] .howitworks-foot .pill-cta:hover {
   background:
     radial-gradient(130% 85% at 50% -20%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 55%),
@@ -3085,13 +2133,6 @@ button {
    deep drop shadow reads as a dirty halo, so it becomes a clean two-layer soft
    shadow (a tight contact shadow + a wide diffuse one) — modern light-theme
    elevation, no hard edge. */
-:root[data-theme="light"] .profile-card {
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  background: var(--surface);
-  box-shadow:
-    0 2px 6px rgba(17, 12, 20, 0.06),
-    0 18px 40px -20px rgba(17, 12, 20, 0.22);
-}
 
 /* On the light page the burgundy ambient wash turns to a pink smudge behind the
    card; drop it to a barely-there neutral lift instead. */

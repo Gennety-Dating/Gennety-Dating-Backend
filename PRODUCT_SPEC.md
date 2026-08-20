@@ -225,93 +225,44 @@ out of Telegram-only workers.
   didn't deliver, the chat asks for — which is what keeps a cached older bundle,
   the iOS rail and a legacy mid-flight account from dead-ending at the handoff.
   The change is additive by construction.
-  **The competitor icons survive into the second intro screen and crumble there
-  (2026-08-12).** The three dating-app icons rise on the "these apps eat your
-  time" screen and used to vanish with it, so the next line — "we burn out
-  before we find our person" — was a bare sentence on an empty screen. They now
-  live in a shell-level overlay alongside the Pivot logo, at the identical
-  position on both screens (measured, not eyeballed: the row's box is unchanged
-  to the pixel across the scene change — **stillness is what reads as the same
-  three objects rather than a second showing of them**), and once the burnout
-  line finishes typing they break into tiles and fall. The copy claims these
-  apps wear you down; this is the one screen in the intro that acts it out
-  rather than asserting it.
-  Each icon becomes a 5x6 grid of tiles, and the tile is a **crop of the icon's
-  own PNG** — `background-size` blows the image up by the grid and
-  `background-position` picks the tile — so at rest the tiles reassemble the
-  icon pixel for pixel and swapping the `<img>` for the grid is invisible.
-  That is why this is tiles rather than a particle canvas: there is no
-  cross-fade needed to hide a seam. The fall is staggered **by row**, so the
-  icon erodes from its top edge downward, and the raised middle icon leads the
-  two dipped ones — the wave falls down the whole composition rather than three
-  icons animating in lockstep. Geometry is **seeded, never `Math.random()`**
-  (`onboarding-crumble.ts`), by the rule `preference-layout.ts` already states:
-  a pattern re-rolled per render can never be reviewed twice and no test can
-  pin it.
-  Two constraints are structural rather than styling. The float lives on a
-  wrapper that never unmounts, because putting it on the `<img>` restarts it at
-  the swap and jumps the icon by the float's amplitude at the exact moment the
-  swap must be invisible. And the tiles are sized and cropped in **absolute px
-  against the icon's real size, with a 1px overlap** — percentages of a tile
-  round per tile (a tile is a fractional number of pixels wide), and 30
-  antialiased boxes laid edge to edge under the outer icons' ~13° tilt drew a
-  visible grid of hairline seams over the icon before it had begun to fall.
-  Costs ~0.4s more than the 1.5s hold this screen already sat on, and is
-  skipped under `prefers-reduced-motion`, where the icons simply fade instead.
-  Telegram-only; the native iOS client owns its own intro.
-  **Money falls through the screen that asks what a relationship costs
-  (2026-08-12).** Scene 2 — "Сколько стоит найти отношения в 2026 году?" — was
-  the only one of the first three with nothing but type: scene 0 raises the
-  competitor icons, scene 1 crumbles them, and the screen that actually poses
-  the money question held a line and moved on. Fourteen banknotes now drift
-  down behind the question in three depth layers, and the question stays on
-  screen underneath them.
-  **The fall begins with the SCREEN, not with the finished line (2026-08-13).**
-  It shipped on the same reveal mechanism scene 0 uses, which waits for the copy
-  to land — so the money arrived after ~1.4s of typing plus a hold, i.e. about
-  two seconds of bare screen, and read as a late effect rather than as the
-  screen's own weather. That mechanism is right for the other scenes and wrong
-  here, and the difference is what the visual IS: the icons and the crumble are
-  objects the copy has just earned, so waiting for the sentence is the point;
-  money is weather, and weather is already happening when you walk into it. The
-  scene therefore carries no reveal cue at all — a plain hold on the finished
-  question is the whole of its timing, which also makes it **shorter** than the
-  cued version (~3.8s against ~4.4s) while showing the fall for all of it
-  instead of the last 2.4s. It also **stops** one crossfade after the scene is
-  left; the cued version only ever switched the fall on, so fourteen animated
-  notes and three blurred layers went on compositing behind every later screen,
-  the stats kill sequence included.
-  Four things decide the shape of it. **It falls rather than rains** — the
-  screen asks what this COSTS, so the money leaves downward with weight; a
-  jackpot shower reads as winning, which is the opposite claim, and the count
-  is bounded by a test. **It was already falling**: every note starts at a
-  negative offset into its own loop, so the frame is populated top to bottom
-  the instant the fall begins — released together they enter from above the top
-  edge as a curtain and leave the lower half of the screen empty for a second,
-  which is how the first build actually looked. That became load-bearing rather
-  than merely nicer once the fall moved to start with the scene: there is no
-  longer a couple of seconds of typing for a curtain to fill during, so the
-  frame has to be full on the first frame anyone sees. **Paper flutters where rubble
-  drops** — this lands one screen after the crumble, so "things falling" is the
-  second use of that verb in a row, and what separates them is physics rather
-  than styling: a tile falls on an ease-in and is gone, a note falls *linearly*
-  (paper reaches terminal velocity almost at once) while tumbling about its long
-  axis. And **every note stays behind the copy**: depth comes from size,
-  opacity, blur and speed, never from crossing the words. The near layer is
-  deliberately faint bokeh for that reason — at a sharper setting one of its
-  notes washed out a line of the question as it passed, and since it falls
-  through the whole frame it cannot be routed around the type.
-  Geometry is **seeded, never `Math.random()`** (`onboarding-money.ts`), by the
-  same rule `preference-layout.ts` states; the hash it shares with the crumble
-  now lives in `seeded-noise.ts` rather than in two copies. The scene
-  deliberately cuts mid-fall — the hold is shorter than a note's loop, and
-  `.scene-stage` crossfades — so the money is still coming down as the stats
-  screen, which is the ANSWER to this question, fades in over it. Under
-  `prefers-reduced-motion` the notes hold a seeded scatter down the frame with
-  no fall and no tumble. Costs ~0.36s more than the bare 2.04s line hold this
-  screen sat on, and ~3 kB of bundle. Telegram-only; the native iOS client owns
-  its own intro. Demo mode (DEMO_MODE.md) builds the same bundle, so it
-  inherits this for free — no gate, no paid step, no puppet branch.
+  **The intro is three scenes, and the six that argued about the market are
+  gone (founder decision 2026-08-20, DECISIONS.md).** What plays now is Pivot
+  ("dating should lead to a meeting, not to a chat log" → "so we built
+  Gennety", with the brand mark rising as the line lands), Matchmaker ("you get
+  a personal AI matchmaker…"), then the tap-paced How-it-works — about **15
+  seconds** of auto-advancing copy against the ~50 seconds it replaces
+  (measured, not estimated: scene boundaries at ~7.7s and ~15.2s).
+  Deleted with them: the competitor-icon rise and its tile-by-tile crumble, the
+  "what does a relationship cost in 2026" screen and its falling banknotes, the
+  statistics drum, the "only 3% reach a date" line, and the swipe simulator —
+  along with `onboarding-crumble.ts`, `onboarding-money.ts`, `seeded-noise.ts`
+  and the three competitor PNGs. **Deleted rather than flagged off**, by the
+  rule this file already applies to the dropped preference design: a decision
+  that is made stops being a configuration, and the alternative lives in git
+  history.
+  The reasoning is about WHO is watching. Someone who has pressed Start has
+  already decided to try; arguing that the old apps are bad is advertising's
+  job, and it is finished before the install. It was also being argued to the
+  wrong people at the wrong moment — the intro plays AFTER the contact gate
+  (§1.1 order: language → consent → phone/email → city → theme → intro), so the
+  film was shown to users who had already handed over a phone number, while the
+  58% who leave before touching anything never heard a word about the product.
+  Two smaller things ride along. The intro no longer opens on "we see these
+  problems", a line that referred to problems no screen states any more. And
+  How-it-works stops promising an import of ChatGPT memory: that branch is
+  behind `AI_MEMORY_EXPORT_ENABLED`, off in production since 2026-07-26, so the
+  screen was making a promise the flow never keeps — a guard now holds the copy
+  ChatGPT-free until re-enabling the feature earns the sentence back.
+  **The intro's position in the flow is deliberately unchanged.** Moving the
+  hook ahead of the gates is a separate decision the founder has not taken; the
+  three surviving scenes still play where the nine did.
+  One consequence to hold onto: a visual-progress value stored before this cut
+  is on the old nine-scene scale and is read on the new one, which is
+  **deliberately not migrated** (`onboarding-route.ts` states the arithmetic).
+  An old value ≥ 3 skips the intro instead of resuming a scene that no longer
+  exists; 0–2 lands on the three that survived. Nobody in production is in that
+  state, and the cost of being wrong is one explainer not shown, never a broken
+  screen.
   **The two tap-to-answer screens burst on tap (2026-08-06).** Gender and
   preference are the only screens in the set where a single tap commits the
   answer — no slider to drag, no drum to spin, no Continue pill afterwards — so
@@ -408,8 +359,7 @@ out of Telegram-only workers.
   the user is typing a name and the bitmaps are in hand by the time the screen
   appears. Measured rather than assumed: on the name screen all twelve are
   already requested. `decode()` is what matters, not `img.src =` — the latter
-  only starts the fetch — and it is the same idiom the intro's competitor icons
-  are warmed with. It is skipped for someone resumed PAST the screen, who would
+  only starts the fetch. It is skipped for someone resumed PAST the screen, who would
   otherwise pay half a megabyte for a picture they are never shown.
   **A gate is the insurance, and it spans the whole screen rather than a
   column.** Someone resumed straight onto this screen gets no head start, so the

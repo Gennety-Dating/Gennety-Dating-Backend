@@ -14,22 +14,6 @@ describe("onboarding i18n", () => {
   it("provides every dynamic onboarding label in all supported languages", () => {
     for (const lang of languages) {
       const s = onboardingStrings(lang);
-      const typewriterFields = [
-        s.wasteLines,
-        s.burnoutLines,
-        s.cost2026Lines,
-        s.statHookLines,
-      ];
-      for (const field of typewriterFields) {
-        expect(field.length).toBeGreaterThan(0);
-        for (const line of field) {
-          expect(line.length).toBeGreaterThan(0);
-          for (const part of line) expect(part.length).toBeGreaterThan(0);
-        }
-      }
-      // The stat-hook line is a single typed line (the "statistically," opener
-      // and its pause were removed), so no comma split remains.
-      expect(s.statHookLines[0]).toHaveLength(1);
       expect(s.pivotLines).toHaveLength(2);
       for (const line of s.pivotLines) {
         expect(line.length).toBeGreaterThan(0);
@@ -44,6 +28,13 @@ describe("onboarding i18n", () => {
       for (const step of s.howItWorksSteps) {
         expect(step.title.length).toBeGreaterThan(0);
         expect(step.body.length).toBeGreaterThan(0);
+        // How-it-works must not promise the AI-memory import: the branch is
+        // behind `AI_MEMORY_EXPORT_ENABLED`, which production has had OFF
+        // since 2026-07-26, so the choice screen is skipped and the promise
+        // is never kept. The failure is silent — the intro simply lies — so
+        // the copy is guarded rather than trusted to be re-read when the flag
+        // moves. Re-enabling the feature is what re-earns this sentence.
+        expect(step.body).not.toMatch(/ChatGPT/i);
       }
       expect(s.dateFlowSteps).toHaveLength(6);
       for (const step of s.dateFlowSteps) {
@@ -51,8 +42,6 @@ describe("onboarding i18n", () => {
         expect(step.body.length).toBeGreaterThan(0);
       }
       expect(s.more.length).toBeGreaterThan(0);
-      expect(s.exhaustionLines).toHaveLength(4);
-      expect(s.statLabels).toHaveLength(3);
       expect(s.consentTitle.length).toBeGreaterThan(0);
       expect(s.emailTitle.length).toBeGreaterThan(0);
       expect(s.otpLead("student@example.edu")).toContain("student@example.edu");

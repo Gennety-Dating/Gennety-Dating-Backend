@@ -106,7 +106,7 @@ const RINGS = [44, 88, 132] as const;
 /**
  * Candidate dots, authored in polar coordinates rather than randomised.
  *
- * Same rule `preference-layout.ts` and `onboarding-crumble.ts` state: a pattern
+ * Same rule `preference-layout.ts` states: a pattern
  * re-rolled per render can never be reviewed twice and no test can pin it. These
  * angles were chosen so no dot collides with the chosen one and none sits on the
  * vertical axis, where it would read as a deliberate marker rather than as noise.

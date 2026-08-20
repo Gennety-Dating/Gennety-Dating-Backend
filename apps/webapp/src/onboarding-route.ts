@@ -5,12 +5,16 @@ type RemoteUser = TelegramOnboardingState["user"];
 
 /**
  * Final visual scene index. Play order:
- * 0 Waste (typewriter + app-icon reveal), 1 Burnout (typewriter),
- * 2 Cost-2026 (typewriter), 3 Stats drum, 4 Stat-hook (typewriter),
- * 5 Profile swipe simulator, 6 Pivot (typewriter + rising Gennety icon),
- * 7 Matchmaker (typewriter), 8 HowItWorks.
+ * 0 Pivot (typewriter + rising Gennety icon), 1 Matchmaker (typewriter),
+ * 2 HowItWorks.
+ *
+ * Six scenes used to precede these — the competitor-icon rise, the crumble, the
+ * cost question, the statistics drum, the "only 3%" line and the swipe
+ * simulator — and were removed on 2026-08-20 (founder decision, DECISIONS.md).
+ * They argued that the old apps are bad, which is advertising's job and is over
+ * by the time someone presses Start; what stays is what the product IS.
  */
-export const VISUAL_LAST_INDEX = 8;
+export const VISUAL_LAST_INDEX = 2;
 /**
  * Sentinel persisted once the user has clicked past the last visual scene.
  * On the next launch it means "skip the animation, resume the post-visual
@@ -133,6 +137,16 @@ export function postVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPh
  * - `>= VISUAL_DONE` → the animation was already completed; jump to the
  *   post-visual phase.
  * - otherwise → resume at the clamped stored scene index.
+ *
+ * A value stored before the 2026-08-20 cut is on the old nine-scene scale and
+ * is read on this one, which is deliberately NOT migrated. The two scales are
+ * indistinguishable in storage (an old `3` was the statistics drum, a new `3`
+ * is the done sentinel), so telling them apart would mean a versioned key —
+ * and the failure it would buy back is bounded and rare: an old value ≥ 3 skips
+ * the intro rather than replaying a scene that no longer exists, and 0–2 lands
+ * on the three scenes that survived. Nobody in production is in that state (the
+ * eight accounts past the contact gate all finished the Mini App), and the cost
+ * of being wrong is one 13-second explainer not shown, never a broken screen.
  */
 export function bootPhaseFromRemote(
   user: RemoteUser | null,

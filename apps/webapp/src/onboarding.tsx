@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import {
   acceptTelegramOnboardingConsent,
@@ -57,19 +57,8 @@ import {
   type OnboardingStrings,
 } from "./onboarding-i18n.js";
 import { typewriterLineHoldMs } from "./onboarding-timing.js";
-import {
-  CRUMBLE_COLS,
-  CRUMBLE_ICON_SHARDS,
-  CRUMBLE_ROWS,
-  CRUMBLE_TOTAL_MS,
-  type Shard,
-} from "./onboarding-crumble.js";
-import { MONEY_BILLS, MONEY_VIEW_MS } from "./onboarding-money.js";
 import { ButterflySuccess } from "./butterfly-success-react.js";
 import { onSuccessSettle } from "./butterfly-success.js";
-import bumbleIcon from "./app-icons/bumble.png";
-import tinderIcon from "./app-icons/tinder.png";
-import badooIcon from "./app-icons/badoo.png";
 import gennetyIcon from "./brand/gennety-icon.png";
 import "./theme.css";
 import "./onboarding.css";
@@ -104,117 +93,41 @@ const PREVIEW_BASICS =
 /**
  * Dev-QA standalone preview of the visual intro scenes (`?preview=intro[:n]`,
  * default scene 0). Same reasoning as the basics preview above: these sit
- * behind the initData gate plus language/consent/city/theme, so reviewing the
- * icon rise and the crumble otherwise means walking a full registration on the
- * dev bot behind an HTTPS tunnel, per iteration.
+ * behind the initData gate plus language/consent/city/theme, so reviewing them
+ * otherwise means walking a full registration on the dev bot behind an HTTPS
+ * tunnel, per iteration.
  *
- * Scenes 0–1 are the pair worth opening it on: `?preview=intro` watches the
- * icons rise and then crumble across the scene change, `?preview=intro:1` drops
- * straight onto the crumble. `import.meta.env.DEV`-gated, so it is absent from
- * the production bundle.
+ * `?preview=intro` opens on the Pivot line and its rising Gennety mark, which
+ * carries across into `?preview=intro:1` (Matchmaker); `?preview=intro:2` is
+ * How-it-works. `import.meta.env.DEV`-gated, so it is absent from the
+ * production bundle.
  */
 const PREVIEW_INTRO =
   import.meta.env.DEV && (params.get("preview") ?? "").startsWith("intro");
-
-const TRAP_BACKGROUND =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuDT22v5JOFjqN2g1VkI86PnzZJ_vTS3whfVoE4pTqZMVY_zqEjFKQf0fGlab3jjVTIxx1gKK5zx4u10XcEtFiFDqeEsGaLjoNTdZMWbR46RULeC47iOvuiqYHU8PJrKZ9kQVqufAHWY-pv_0RSTu1V7cSz_tLD89uoBf8RE9OxG9ZhXIGcEKvxkjcwB3oa3Kf9KjRlxyoUZcBMol4eX5hJ6Oh2_fhyciV6tYxlSEoexfNp4Pr7iGISmsLdSC0fp35_bW0OO_cj0xmGN";
-const DRUM_CYCLE_INTERVAL_MS = 2500; // Stats (screen 1) auto-cycle interval
-const PROFILE_CYCLE_INTERVAL_MS = 3000; // Profile (screen 2) text auto-cycle interval
-const PROFILE_SWIPE_INTERVAL_MS = 1000; // Profile (screen 2) Tinder-style card swipe cadence
-
-interface ProfileCardData {
-  name: string;
-  age: number;
-  photo: string;
-  distanceKm: number;
-  bio: string;
-  interests: string[];
-}
-
-// Demo Tinder-style cards for the Profile scene. Photos live in
-// `apps/webapp/public/profiles/` (1.jpg..9.jpg, in this order); a missing
-// file degrades gracefully to the dark card background.
-//
-// Card order is deliberately gender-interleaved as (male, male, female) ×3.
-// The deck swipes each card the opposite direction of the last (see
-// `ProfileDeck`), so a strictly alternating M/F order would lock every man to
-// one direction and every woman to the other. Grouping the men in pairs keeps
-// each gender to a run of at most two in a row (holds cyclically as the deck
-// loops) and spreads both genders across left and right swipes.
-const PROFILE_CARDS: ProfileCardData[] = [
-  { name: "Leo", age: 24, photo: "/profiles/1.jpg", distanceKm: 3, bio: "Night-owl builder running on energy drinks", interests: ["Coding", "Gaming", "Techno", "eSports"] },
-  { name: "Max", age: 22, photo: "/profiles/2.jpg", distanceKm: 2, bio: "Vinyl crates and midnight drives", interests: ["Indie music", "Vinyl", "Skating", "Film"] },
-  { name: "Alina", age: 23, photo: "/profiles/3.jpg", distanceKm: 4, bio: "Pilates in the a.m., wine in the p.m.", interests: ["Pilates", "Fashion", "Travel", "Wine"] },
-  { name: "Daniel", age: 25, photo: "/profiles/4.jpg", distanceKm: 1, bio: "Gym rat who actually cooks", interests: ["Gym", "Cooking", "Football", "Beaches"] },
-  { name: "Tom", age: 27, photo: "/profiles/5.jpg", distanceKm: 6, bio: "Weekends on the water, always", interests: ["Fishing", "Boating", "BBQ", "Road trips"] },
-  { name: "Mia", age: 21, photo: "/profiles/6.jpg", distanceKm: 3, bio: "Golden-hour chaser & playlist maker", interests: ["Photography", "Coffee", "Indie music", "Sunsets"] },
-  { name: "Chris", age: 28, photo: "/profiles/7.jpg", distanceKm: 5, bio: "Low-key nights and good coffee", interests: ["Coffee", "Cinema", "Cooking", "Vinyl"] },
-  { name: "Sasha", age: 20, photo: "/profiles/8.jpg", distanceKm: 2, bio: "Hoodie weather and lo-fi beats", interests: ["Lo-fi", "Streetwear", "Skating", "Gaming"] },
-  { name: "Lena", age: 24, photo: "/profiles/9.jpg", distanceKm: 4, bio: "Loud laughs and cozy sweaters", interests: ["Dancing", "Baking", "Travel", "Dogs"] },
-];
 
 // Intro typewriter ("live human typing") timings. Tuned ~2.5x faster than the
 // original cinematic pacing while keeping the human cadence and beats.
 const INTRO_TYPE_CHAR_MS = 26; // base per-character speed (~30 chars/sec with the jitter below)
 const INTRO_TYPE_JITTER_MS = 14; // random extra per character for an organic cadence
 const INTRO_PUNCT_PAUSE_MS = 73; // small beat after sentence punctuation
-const INTRO_LINE_HOLD_MS = 1500; // Intro (screen 0): hold a completed line before it fades
-const PIVOT_LINE_HOLD_MS = 1440; // Pivot (screen 3): unchanged between-line hold
+const INTRO_LINE_HOLD_MS = 1500; // default hold on a completed line before it fades
+const PIVOT_LINE_HOLD_MS = 1440; // Pivot (scene 0): between-line hold
 const INTRO_LINE_FADE_MS = 200; // fade-out before the next line types in
-const INTRO_FINAL_HOLD_MS = 2040; // hold on the closing hook question (+1s read buffer)
+const INTRO_FINAL_HOLD_MS = 2040; // hold on a closing line (+1s read buffer)
 const INTRO_SKIP_HOLD_MS = 600; // hold on the final line when the user taps to skip
-// Per-part pre-type pauses, indexed [lineIndex][partIndex]. Single-line
-// typewriter screens (waste / burnout / cost-2026 / matchmaker) only need a
-// no-op leading pause.
+// Per-part pre-type pauses, indexed [lineIndex][partIndex]. A single-line
+// typewriter screen (matchmaker) only needs a no-op leading pause.
 const SINGLE_LINE_PAUSES: number[][] = [[0]];
-// Stat-hook screen (after the Stats drum): the "only 3% ..." payload types
-// straight through as one line.
-const STAT_HOOK_PAUSES: number[][] = [[0]];
 // Pivot scene ("we built Gennety") — a short beat before the brand name.
 const PIVOT_PART_PAUSES_MS: number[][] = [[0], [0, 160]];
 const MATCHMAKER_PART_PAUSES_MS: number[][] = SINGLE_LINE_PAUSES;
 
-// Reveal timings for the two typewriter screens that raise an image once the
-// line finishes typing: scene 0 raises the three dating-app icons, scene 6
-// (Pivot) raises the Gennety star. `delay` waits after the text lands before
-// the image rises; `view` holds it on screen before the scene auto-advances.
-// Scene 0 raises the dating-app icon row once the "waste" line lands. The old
-// pacing sat on the finished long line for the full 2.2s long-line read buffer
-// and *then* waited another 1s before the icons rose — ~3.2s of dead air. Cut
-// both: a short breath on the finished line (like the Pivot's PIVOT_FINAL_HOLD_MS)
-// plus a brief reveal delay ≈ 0.75s total, so the icons follow the text closely.
-const ICON_REVEAL_FINAL_HOLD_MS = 300;
-const ICON_REVEAL_DELAY_MS = 450;
-const ICON_REVEAL_VIEW_MS = 2400;
+// Reveal timing for the one typewriter screen that raises an image once its
+// line finishes typing: scene 0 (Pivot) raises the Gennety star. `delay` waits
+// after the text lands before the image rises; `view` holds it on screen before
+// the scene auto-advances.
 const LOGO_RISE_DELAY_MS = 150;
 const LOGO_RISE_VIEW_MS = 2200;
-// Burnout (scene 1): the icons raised on scene 0 stay on screen (they live in
-// the shell-level overlay, like the Pivot logo) and crumble away once this
-// line lands — the copy says these apps wear you down, and this is the screen
-// acting it out. A short breath so it doesn't fire on the last keystroke, then
-// the scene holds for exactly as long as the last crumb is still falling
-// (`CRUMBLE_TOTAL_MS` is measured from the tiles themselves, so retuning the
-// crumble moves this hold with it). Net cost to the funnel is ~+400ms over the
-// plain 1.5s line hold this screen used to sit on.
-const CRUMBLE_FINAL_HOLD_MS = 250;
-const CRUMBLE_DELAY_MS = 250;
-// Cost-2026 (scene 2): the money falls from the moment the SCREEN arrives, not
-// once the line has landed — deliberately unlike every other reveal in this
-// file. The others hand over an object the copy has just earned (the icons rise
-// on "these apps eat your time", the crumble follows "we burn out"), so waiting
-// for the line is the point. Money is weather: it is already happening when you
-// walk into it. Gated behind the line it read as ~2s of empty screen and then a
-// late effect, which is exactly how it was reported.
-//
-// So this scene carries no reveal cue at all. `finalHoldMs` alone holds the
-// finished question while the notes keep coming, which also makes the scene
-// ~560ms SHORTER than the cued version while showing the fall for its whole
-// ~3.8s instead of the last 2.4s.
-//
-// Mirrors `.scene-stage`'s opacity transition in onboarding.css. Only the money
-// reads it, and only to know how long it is still visible after its scene has
-// been left; shorten the CSS without this and the notes vanish mid-crossfade.
-const SCENE_CROSSFADE_MS = 420;
 /**
  * Smallest `--kb-height` change worth writing (see the keyboard-aware viewport
  * effect). Deliberately tiny: it only exists to absorb a per-pixel ramp, and a
@@ -222,37 +135,25 @@ const SCENE_CROSSFADE_MS = 420;
  * the keyboard once the ramp settles.
  */
 const KB_HEIGHT_STEP_PX = 2;
-// Pivot (scene 6): raise the Gennety logo almost the instant the line lands,
+// Pivot (scene 0): raise the Gennety logo almost the instant the line lands,
 // instead of sitting on the finished "So we built Gennety" text for the full
 // read-buffer hold. Just a short breath so it doesn't fire on the last keystroke.
 const PIVOT_FINAL_HOLD_MS = 300;
-// Matchmaker (scene 7): the copy here is longer, so hold it well past the
+// Matchmaker (scene 1): the copy here is longer, so hold it well past the
 // default read buffer (~1.8s more than the standard long-line hold) before it
 // advances to How-it-works — the time freed up by the faster logo above is
 // spent here, where there's more to read.
 const MATCHMAKER_FINAL_HOLD_MS = 4000;
 
-// Competitor app icons (scene 0 arc + stats tray) and the Gennety icon (Pivot).
-// Imported as Vite assets so their emitted filenames are content-hashed — a
-// changed icon busts the `immutable`-cached URL automatically, instead of
-// serving a stale PNG from a fixed `public/` path.
-const APP_ICONS: Array<{ key: string; src: string; label: string }> = [
-  { key: "bumble", src: bumbleIcon, label: "Bumble" },
-  { key: "tinder", src: tinderIcon, label: "Tinder" },
-  { key: "badoo", src: badooIcon, label: "Badoo" },
-];
+// The Gennety icon raised by the Pivot scene. Imported as a Vite asset so its
+// emitted filename is content-hashed — a changed icon busts the
+// `immutable`-cached URL automatically, instead of serving a stale PNG from a
+// fixed `public/` path.
 const GENNETY_ICON_SRC = gennetyIcon;
 const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
 const TERMS_OF_SERVICE_URL = "https://gennety.com/terms";
 
 type RemoteUser = TelegramOnboardingState["user"];
-
-interface StatCopy {
-  value: string;
-  label: string;
-  valueSmall?: boolean;
-  labelSentence?: boolean;
-}
 
 const LANGUAGE_OPTIONS: Array<{ value: OnboardingLanguage; label: string; sub: string }> = [
   { value: "en", label: "English", sub: "Continue in English" },
@@ -323,18 +224,6 @@ function App(): ReactElement {
   // out on the way to "How it works". The Pivot scene's reveal cue flips this
   // true once its line has landed.
   const [logoRisen, setLogoRisen] = useState(false);
-  // Waste → Burnout: the three competitor icons live in the same kind of
-  // shell-level overlay as the logo above, for the same reason — they have to
-  // survive the scene crossfade, and a second copy rising on scene 1 would read
-  // as a new row of icons rather than the same one. Scene 0's reveal cue rises
-  // them; scene 1's cue crumbles them once its line has landed.
-  const [iconsRisen, setIconsRisen] = useState(false);
-  const [iconsCrumbling, setIconsCrumbling] = useState(false);
-  // Cost-2026: unlike the two above this one does NOT outlive its scene, so it
-  // lives inside scene 2 rather than in a shell overlay. The flag only starts
-  // the fall — the notes are mounted with the scene, so the animation is not
-  // paying for fourteen elements entering the tree on the beat it must be crisp.
-  const [moneyFalling, setMoneyFalling] = useState(false);
   // Stable per language: the typewriter scenes key their run on the `lines`
   // array identity, so a mid-scene parent re-render (e.g. the logo rising)
   // must not hand them a fresh object and restart the typing.
@@ -343,22 +232,6 @@ function App(): ReactElement {
   useEffect(() => {
     document.documentElement?.setAttribute("lang", lang);
   }, [lang]);
-
-  // Warm the competitor icons during the boot round-trip (the reveal DOM only
-  // mounts once /state resolves, so this buys scene 0 a real head start).
-  // `img.src =` alone only starts the fetch, so decode() is what actually leaves
-  // a paintable bitmap in the cache. This is a head start, not the guarantee —
-  // AppIcon gates each icon on its own decode, so a preload that loses the race
-  // just delays an icon instead of flashing a half-decoded slab.
-  useEffect(() => {
-    for (const icon of APP_ICONS) {
-      const img = new Image();
-      img.src = icon.src;
-      void img.decode().catch(() => {
-        // Warming is best-effort; AppIcon's own gate is what the reveal waits on.
-      });
-    }
-  }, []);
 
   useEffect(() => {
     configureTelegramChrome();
@@ -613,7 +486,6 @@ function App(): ReactElement {
     });
   }, [remoteUser]);
   const nextVisualSilently = useCallback(() => nextVisual(false), [nextVisual]);
-  const nextVisualWithHaptic = useCallback(() => nextVisual(), [nextVisual]);
 
   const onState = useCallback(
     (state: TelegramOnboardingState) => {
@@ -632,42 +504,11 @@ function App(): ReactElement {
     }
   }, [phase.kind, remoteUser, routeFromRemote]);
 
-  // Re-arm the logo each time the Pivot scene (index 6) is (re)entered so paging
+  // Re-arm the logo each time the Pivot scene (index 0) is (re)entered so paging
   // back replays the rise; the Pivot reveal cue sets it true again after the
-  // line lands, and it stays true across the Matchmaker scene (index 7).
+  // line lands, and it stays true across the Matchmaker scene (index 1).
   useEffect(() => {
-    if (phase.kind === "visual" && phase.index === 6) setLogoRisen(false);
-  }, [phase]);
-
-  // Same re-arm for the competitor icons, but over the two scenes they span.
-  // Paging back to Waste (0) has to take them off screen and replay the rise;
-  // paging back to Burnout (1) has to put the crumbled icons back so the fall
-  // plays again rather than the screen sitting there already empty.
-  useEffect(() => {
-    if (phase.kind !== "visual") return;
-    if (phase.index === 0) {
-      setIconsRisen(false);
-      setIconsCrumbling(false);
-    } else if (phase.index === 1) {
-      setIconsCrumbling(false);
-    }
-  }, [phase]);
-
-  // The money runs while its scene is on screen, and for one crossfade after it
-  // is left. Neither bound is incidental. Stopping at the phase change snaps the
-  // notes out while the stage is still fading, when the whole point is that the
-  // fall carries under the stats screen; never stopping (what the reveal-gated
-  // version did — it only ever set this true) leaves fourteen animated notes and
-  // three blurred layers compositing behind EVERY later screen, the stats kill
-  // sequence included. Paging back needs no re-arm: the loop is continuous, so
-  // arriving mid-fall is the intended look rather than a state to reset.
-  useEffect(() => {
-    if (phase.kind === "visual" && phase.index === 2) {
-      setMoneyFalling(true);
-      return;
-    }
-    const timer = window.setTimeout(() => setMoneyFalling(false), SCENE_CROSSFADE_MS);
-    return () => window.clearTimeout(timer);
+    if (phase.kind === "visual" && phase.index === 0) setLogoRisen(false);
   }, [phase]);
 
   // The basics screens (name/age/gender/preference/height) already have
@@ -684,68 +525,6 @@ function App(): ReactElement {
       <Scene active={phase.kind === "visual" && phase.index === 0}>
         <TypewriterScene
           active={phase.kind === "visual" && phase.index === 0}
-          lines={strings.wasteLines}
-          pauses={SINGLE_LINE_PAUSES}
-          onNext={nextVisualSilently}
-          finalHoldMs={ICON_REVEAL_FINAL_HOLD_MS}
-          // The icon row itself is the persistent overlay below; this invisible
-          // cue reuses the reveal timing to rise it, exactly like the Pivot.
-          reveal={<span className="intro-reveal-cue" aria-hidden="true" />}
-          revealDelayMs={ICON_REVEAL_DELAY_MS}
-          revealViewMs={ICON_REVEAL_VIEW_MS}
-          onReveal={() => setIconsRisen(true)}
-        />
-      </Scene>
-      <Scene active={phase.kind === "visual" && phase.index === 1}>
-        <TypewriterScene
-          active={phase.kind === "visual" && phase.index === 1}
-          lines={strings.burnoutLines}
-          pauses={SINGLE_LINE_PAUSES}
-          onNext={nextVisualSilently}
-          finalHoldMs={CRUMBLE_FINAL_HOLD_MS}
-          // Same cue mechanism, one screen on: the icons are already up, so
-          // what the landed line triggers here is the crumble.
-          reveal={<span className="intro-reveal-cue" aria-hidden="true" />}
-          revealDelayMs={CRUMBLE_DELAY_MS}
-          revealViewMs={CRUMBLE_TOTAL_MS}
-          onReveal={() => setIconsCrumbling(true)}
-        />
-      </Scene>
-      <Scene active={phase.kind === "visual" && phase.index === 2}>
-        {/* Sibling of the copy rather than a child of it: `.hook-main` is
-            capped at 28rem and clips its overflow, so money rendered inside it
-            would fall down a column instead of across the screen. Declared
-            FIRST so DOM order paints it behind the question — the notes are
-            depth, and the question is what the screen is for. */}
-        <MoneyFall falling={moneyFalling} />
-        <TypewriterScene
-          active={phase.kind === "visual" && phase.index === 2}
-          lines={strings.cost2026Lines}
-          pauses={SINGLE_LINE_PAUSES}
-          onNext={nextVisualSilently}
-          // No reveal cue: the fall is already running (the effect above starts
-          // it with the scene), so all this scene owes is a hold on the finished
-          // question while the notes keep coming.
-          finalHoldMs={MONEY_VIEW_MS}
-        />
-      </Scene>
-      <Scene active={phase.kind === "visual" && phase.index === 3}>
-        <StatsCycleScene active={phase.kind === "visual" && phase.index === 3} onNext={nextVisualWithHaptic} />
-      </Scene>
-      <Scene active={phase.kind === "visual" && phase.index === 4}>
-        <TypewriterScene
-          active={phase.kind === "visual" && phase.index === 4}
-          lines={strings.statHookLines}
-          pauses={STAT_HOOK_PAUSES}
-          onNext={nextVisualSilently}
-        />
-      </Scene>
-      <Scene active={phase.kind === "visual" && phase.index === 5}>
-        <ProfileCycleScene active={phase.kind === "visual" && phase.index === 5} onNext={nextVisualWithHaptic} />
-      </Scene>
-      <Scene active={phase.kind === "visual" && phase.index === 6}>
-        <TypewriterScene
-          active={phase.kind === "visual" && phase.index === 6}
           lines={strings.pivotLines}
           pauses={PIVOT_PART_PAUSES_MS}
           lineHoldMs={PIVOT_LINE_HOLD_MS}
@@ -759,9 +538,9 @@ function App(): ReactElement {
           onReveal={() => setLogoRisen(true)}
         />
       </Scene>
-      <Scene active={phase.kind === "visual" && phase.index === 7}>
+      <Scene active={phase.kind === "visual" && phase.index === 1}>
         <TypewriterScene
-          active={phase.kind === "visual" && phase.index === 7}
+          active={phase.kind === "visual" && phase.index === 1}
           lines={strings.matchmakerLines}
           pauses={MATCHMAKER_PART_PAUSES_MS}
           finalHoldMs={MATCHMAKER_FINAL_HOLD_MS}
@@ -771,9 +550,9 @@ function App(): ReactElement {
           mainClassName="hook-main--lower"
         />
       </Scene>
-      <Scene active={phase.kind === "visual" && phase.index === 8}>
+      <Scene active={phase.kind === "visual" && phase.index === 2}>
         <HowItWorksScene
-          active={phase.kind === "visual" && phase.index === 8}
+          active={phase.kind === "visual" && phase.index === 2}
           onMore={() => setPhase({ kind: "detail", index: 0 })}
         />
       </Scene>
@@ -898,23 +677,9 @@ function App(): ReactElement {
       <Scene active={phase.kind === "done"}>
         <DoneScene active={phase.kind === "done"} />
       </Scene>
-      {/* Only mounted across the two scenes it spans — past Burnout the icons
-          are gone for good, and leaving 90 spent tiles in the tree for the rest
-          of onboarding buys nothing. Mounting at scene 0 is what the old
-          in-scene reveal did too, so the decode head start is unchanged. */}
-      {phase.kind === "visual" && phase.index <= 1 ? (
-        <div
-          className={`intro-icons${
-            (phase.index === 0 && iconsRisen) || phase.index === 1 ? " is-shown" : ""
-          }${iconsCrumbling ? " is-crumbling" : ""}`}
-          aria-hidden="true"
-        >
-          <AppIconRow variant="reveal" crumbling={iconsCrumbling} />
-        </div>
-      ) : null}
       {phase.kind === "visual" ? (
         <div
-          className={`pivot-logo ${phase.index === 6 || phase.index === 7 ? (logoRisen ? "is-risen" : "") : ""}`}
+          className={`pivot-logo ${phase.index === 0 || phase.index === 1 ? (logoRisen ? "is-risen" : "") : ""}`}
           aria-hidden="true"
         >
           <span className="pivot-logo-slot">
@@ -1049,241 +814,11 @@ function useIntroStream(
   return { display, lineIndex, fading, done, skip };
 }
 
-// One competitor icon, held back until its PNG is fully decoded.
-//
-// A non-interlaced PNG paints incrementally as its scanlines arrive, so a
-// half-arrived icon paints as a rectangular slab — the decoded top rows at full
-// width with a hard flat bottom. That slab, not the element box, is what the
-// reveal's `drop-shadow` traces, which is why scene 0 used to flash a dark
-// square on the light theme (on the near-black theme the same 16% shadow is
-// invisible). `decode()` is the only signal that the whole bitmap is paintable;
-// `complete`/`onLoad` fire too late to help and `img.src =` alone just starts
-// the fetch. Until then the img must paint NOTHING at all — opacity 0 with no
-// filter, which also covers the alt text and any UA placeholder.
-//
-// Failure resolves the gate too, so a broken icon can never leave the row
-// permanently blank: the onError guard below hides that slot as it always did.
-function AppIcon(props: { src: string; alt: string; shards?: Shard[] | null }): ReactElement {
-  const [ready, setReady] = useState(false);
-
-  // A ref, not onLoad: an icon already warmed by the mount-time preload can be
-  // decoded before React ever attaches a load listener, and onLoad would never
-  // fire. decode() settles correctly whether the bitmap is already in hand or
-  // still on the wire.
-  const gate = useCallback((img: HTMLImageElement | null) => {
-    if (!img) return;
-    const settle = () => setReady(true);
-    try {
-      // Reject settles too: a row of icons that never paint would be a worse
-      // bug than the flash this gate exists to remove.
-      void img.decode().then(settle, settle);
-    } catch {
-      // No decode() on this WebView — paint immediately rather than never.
-      settle();
-    }
-  }, []);
-
-  // Crumbling (scene 1): the icon becomes a grid of tiles, each one a crop of
-  // the very same PNG — `background-size` blows the image up by the grid
-  // dimensions and `background-position` picks this tile out of it. At rest the
-  // tiles reassemble the icon exactly, so this swap is invisible; only then
-  // does the keyframe throw them. Gated on `ready` because an icon that never
-  // decoded has no bitmap to crop, and the <img> below is already invisible in
-  // that case anyway.
-  if (props.shards && ready) {
-    return (
-      <span
-        className="app-icon-shards"
-        style={{
-          ["--cols" as string]: String(CRUMBLE_COLS),
-          ["--rows" as string]: String(CRUMBLE_ROWS),
-          ["--icon-src" as string]: `url(${props.src})`,
-        }}
-      >
-        {props.shards.map((shard) => (
-          <span
-            key={`${shard.col}:${shard.row}`}
-            className="app-icon-shard"
-            style={{
-              ["--col" as string]: String(shard.col),
-              ["--row" as string]: String(shard.row),
-              ["--dx" as string]: `${shard.dxPx}px`,
-              ["--dy" as string]: `${shard.dyPx}px`,
-              ["--rot" as string]: `${shard.rotDeg}deg`,
-              ["--sc" as string]: String(shard.endScale),
-              ["--delay" as string]: `${shard.delayMs}ms`,
-              ["--dur" as string]: `${shard.durationMs}ms`,
-            }}
-          />
-        ))}
-      </span>
-    );
-  }
-
-  return (
-    <img
-      ref={gate}
-      className={`app-icon${ready ? " is-ready" : ""}`}
-      src={props.src}
-      alt={props.alt}
-      onError={(e) => {
-        e.currentTarget.style.visibility = "hidden";
-      }}
-    />
-  );
-}
-
-// Row of competitor app icons. `reveal` is the large row that rises on scene 0;
-// `stats` is the larger liquid-glass tray shown above the numbers on the stats
-// scene. The icons are bundled assets (see the imports at the top); the onError
-// guard just hides a slot rather than showing a broken-image glyph.
-function AppIconRow(props: { variant: "reveal" | "stats"; crumbling?: boolean }): ReactElement {
-  return (
-    <div className={`app-icon-row app-icon-row--${props.variant}`}>
-      {APP_ICONS.map((icon, index) => {
-        const shards = props.crumbling ? (CRUMBLE_ICON_SHARDS[index] ?? null) : null;
-        const art = <AppIcon src={icon.src} alt={icon.label} shards={shards} />;
-        // The reveal nests three transforms so none of them fight: the slot
-        // carries the arc position + staggered spring entrance, the figure
-        // carries the gentle float, and the tiles inside carry the crumble.
-        //
-        // The figure exists purely so the float survives the crumble swap. It
-        // never unmounts, so its animation keeps its phase — put the float on
-        // the <img> instead and replacing that img restarts the float from
-        // zero, which jumps the icon by the float's amplitude at the exact
-        // moment the swap is supposed to be invisible.
-        return props.variant === "reveal" ? (
-          <span key={icon.key} className="app-icon-slot">
-            <span className="app-icon-figure">{art}</span>
-          </span>
-        ) : (
-          <span key={icon.key} className="app-icon-tile">
-            {art}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-// Banknotes drifting down behind the cost-2026 question (scene 2). Geometry —
-// which note, where, how fast, how it tumbles — is all seeded in
-// onboarding-money.ts; this only reads it into custom properties, so every
-// pixel of motion runs as a compositor keyframe in onboarding.css.
-//
-// Three nested transforms so none of them fight, the same arrangement the icon
-// row uses: the outer span carries the FALL, the inner one the TUMBLE (its own
-// period, started mid-cycle so the notes are never edge-on in unison), and the
-// note itself a fixed in-plane tilt. `perspective` sits on the faller because
-// it applies to direct children only — put it on the container and the tumble
-// flattens into a horizontal squash.
-function MoneyFall(props: { falling: boolean }): ReactElement {
-  return (
-    <div className={`money-fall${props.falling ? " is-falling" : ""}`} aria-hidden="true">
-      {MONEY_BILLS.map((bill, index) => (
-        <span
-          key={index}
-          className="money-bill"
-          style={
-            {
-              "--x": `${bill.xPct}%`,
-              "--drift": `${bill.driftVw}vw`,
-              "--phase": `${bill.phaseMs}ms`,
-              "--dur": `${bill.durationMs}ms`,
-              "--sc": bill.scale,
-              "--op": bill.opacity,
-              "--rest": `${bill.restVh}vh`,
-            } as CSSProperties
-          }
-        >
-          <span
-            className="money-bill-spin"
-            style={
-              {
-                "--spin": `${bill.spinMs}ms`,
-                "--spin-delay": `${bill.spinDelayMs}ms`,
-              } as CSSProperties
-            }
-          >
-            <BankNote tiltDeg={bill.tiltDeg} blurPx={bill.blurPx} />
-          </span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-// One note. Authored vector, never an emoji — same rule as `icons.ts`: a
-// platform emoji is Apple's art on iOS and Google's on Android, and this one
-// spends its whole life rotating, which rasterizes a font glyph.
-//
-// It reads as money from the SHAPE (a landscape rectangle with an engraved
-// oval and corner seals is unmistakably a banknote) plus one gold mark, so no
-// green is needed — green would be the only green in the product, against a
-// palette that spends colour on meaning. `blur` sits on the leaf <svg> because
-// `filter` on an ancestor flattens the 3D tumble above it.
-function BankNote(props: { tiltDeg: number; blurPx: number }): ReactElement {
-  return (
-    <svg
-      className="money-note"
-      viewBox="0 0 40 22"
-      role="presentation"
-      style={
-        {
-          transform: `rotate(${props.tiltDeg}deg)`,
-          filter: props.blurPx > 0 ? `blur(${props.blurPx}px)` : undefined,
-        } as CSSProperties
-      }
-    >
-      <rect
-        x="0.5"
-        y="0.5"
-        width="39"
-        height="21"
-        rx="2.2"
-        fill="var(--money-paper)"
-        stroke="var(--money-edge)"
-        strokeWidth="0.9"
-      />
-      <rect
-        x="2.8"
-        y="2.8"
-        width="34.4"
-        height="16.4"
-        rx="1.3"
-        fill="none"
-        stroke="var(--money-ink)"
-        strokeWidth="0.7"
-        opacity="0.5"
-      />
-      <ellipse
-        cx="20"
-        cy="11"
-        rx="6.2"
-        ry="6.9"
-        fill="none"
-        stroke="var(--money-ink)"
-        strokeWidth="0.85"
-        opacity="0.75"
-      />
-      <path
-        d="M20 6.6v8.8M18 8.4h4M18 13.6h4"
-        stroke="var(--money-gold)"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <circle cx="6.8" cy="11" r="1.4" fill="var(--money-ink)" opacity="0.4" />
-      <circle cx="33.2" cy="11" r="1.4" fill="var(--money-ink)" opacity="0.4" />
-    </svg>
-  );
-}
-
 // One typewriter screen. Types `lines` out with the "live human" cadence, then
 // auto-advances. If `reveal` is set, once the line lands the scene waits
-// `revealDelayMs`, rises the image in, holds it `revealViewMs`, then advances
-// (scene 0's app icons use this to raise the dating-app row; the Pivot screen
-// passes an invisible cue whose `onReveal` rises the persistent logo overlay).
+// `revealDelayMs`, rises the image in, holds it `revealViewMs`, then advances —
+// the Pivot screen passes an invisible cue whose `onReveal` rises the
+// persistent logo overlay.
 function TypewriterScene(props: {
   active: boolean;
   lines: string[][];
@@ -1356,69 +891,6 @@ function TypewriterScene(props: {
         </div>
       ) : null}
     </main>
-  );
-}
-
-function useTimedCycle(
-  active: boolean,
-  length: number,
-  intervalMs: number = DRUM_CYCLE_INTERVAL_MS,
-): { index: number; canContinue: boolean } {
-  const [index, setIndex] = useState(0);
-  const [canContinue, setCanContinue] = useState(false);
-
-  useEffect(() => {
-    if (!active) {
-      setIndex(0);
-      setCanContinue(false);
-      return;
-    }
-
-    setIndex(0);
-    setCanContinue(false);
-    const timer = window.setInterval(() => {
-      setIndex((current) => {
-        const next = (current + 1) % length;
-        if (next === 0) setCanContinue(true);
-        return next;
-      });
-    }, intervalMs);
-
-    return () => window.clearInterval(timer);
-  }, [active, length, intervalMs]);
-
-  return { index, canContinue };
-}
-
-function ProfileCycleScene(props: {
-  active: boolean;
-  onNext: () => void;
-}): ReactElement {
-  const s = useOnboardingStrings();
-  const cycle = useTimedCycle(props.active, s.exhaustionLines.length, PROFILE_CYCLE_INTERVAL_MS);
-  const copy = s.exhaustionLines[cycle.index] ?? s.exhaustionLines[0]!;
-
-  return (
-    <>
-      <main className="exhaustion-main">
-        <div className="lavender-glow" />
-        <ProfileDeck active={props.active} />
-        <div className="exhaustion-copy exhaustion-drum">
-          <div key={copy} className="drum-window profile-drum-window">
-            <p key={copy} className="copy-headline drum-copy-item">
-              {copy}
-            </p>
-          </div>
-        </div>
-      </main>
-      {/* Docked near the bottom (rising above the CTA when it appears) instead
-          of floating under the centered copy, so the screen indicator sits close
-          to the Next button. */}
-      <div className={`dots-dock ${cycle.canContinue ? "with-cta" : ""}`}>
-        <CycleDots total={s.exhaustionLines.length} active={cycle.index} complete={cycle.canContinue} />
-      </div>
-      {cycle.canContinue ? <BottomCta onClick={props.onNext} label={s.next} /> : null}
-    </>
   );
 }
 
@@ -1644,50 +1116,6 @@ function DateFlowScene(props: {
   );
 }
 
-function StatsCycleScene(props: {
-  active: boolean;
-  onNext: () => void;
-}): ReactElement {
-  const s = useOnboardingStrings();
-  const statCopy: StatCopy[] = [
-    { value: "75", label: s.statLabels[0] },
-    { value: "9500", label: s.statLabels[1] },
-    { value: "$200", valueSmall: true, label: s.statLabels[2], labelSentence: true },
-  ];
-  const cycle = useTimedCycle(props.active, statCopy.length);
-  const copy = statCopy[cycle.index] ?? statCopy[0]!;
-
-  return (
-    <div className="trap-body">
-      <div className="trap-bg" aria-hidden="true">
-        <img alt="" className="trap-bg-image" src={TRAP_BACKGROUND} />
-      </div>
-      <main className="trap-main">
-        <div className="stats-native-panel">
-          <div className="stat-wrap stat-drum-wrap">
-            <AppIconRow variant="stats" />
-            <div key={`${copy.value}-${copy.label}`} className="drum-window stat-drum-window">
-              <h1 className={`stat-value ${copy.valueSmall ? "small" : ""}`}>
-                <CountUpText value={copy.value} />
-              </h1>
-              <h2 className={`stat-label ${copy.labelSentence ? "sentence" : ""}`}>
-                {copy.label}
-              </h2>
-            </div>
-          </div>
-        </div>
-        <div className="stat-footnote-block">
-          <p className="stat-footnote">{s.statFootnote}</p>
-        </div>
-      </main>
-      <div className={`dots-dock ${cycle.canContinue ? "with-cta" : ""}`}>
-        <CycleDots total={statCopy.length} active={cycle.index} complete={cycle.canContinue} />
-      </div>
-      {cycle.canContinue ? <BottomCta onClick={props.onNext} label={s.next} /> : null}
-    </div>
-  );
-}
-
 function CycleDots(props: { total: number; active: number; complete: boolean }): ReactElement {
   return (
     <div className={`cycle-dots ${props.complete ? "is-complete" : ""}`} aria-hidden="true">
@@ -1698,207 +1126,6 @@ function CycleDots(props: { total: number; active: number; complete: boolean }):
   );
 }
 
-function ProfileDeck(props: { active: boolean }): ReactElement {
-  const total = PROFILE_CARDS.length;
-  const [index, setIndex] = useState(0);
-  const [leaving, setLeaving] = useState(false);
-  const [dir, setDir] = useState<"left" | "right">("right");
-
-  useEffect(() => {
-    if (!props.active) {
-      setIndex(0);
-      setLeaving(false);
-      setDir("right");
-      return;
-    }
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    const timer = window.setInterval(() => {
-      if (reduce) {
-        setIndex((cur) => (cur + 1) % total);
-        setDir((cur) => (cur === "right" ? "left" : "right"));
-      } else {
-        setLeaving(true);
-      }
-    }, PROFILE_SWIPE_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, [props.active, total]);
-
-  // Warm the image cache once so a freshly-mounted back card never flashes its
-  // dark placeholder before the photo paints.
-  useEffect(() => {
-    for (const card of PROFILE_CARDS) {
-      const img = new Image();
-      img.src = card.photo;
-    }
-  }, []);
-
-  const handleExitEnd = useCallback(() => {
-    setIndex((cur) => (cur + 1) % total);
-    setDir((cur) => (cur === "right" ? "left" : "right"));
-    setLeaving(false);
-  }, [total]);
-
-  const front = PROFILE_CARDS[index] ?? PROFILE_CARDS[0]!;
-  const back = PROFILE_CARDS[(index + 1) % total] ?? PROFILE_CARDS[0]!;
-
-  return (
-    <div className="swipe-deck">
-      {/* Keyed by profile index (not slot) so the back card's already-painted
-          element is reused as the next front — without this React remounts a
-          blank card on every advance and it flashes its dark placeholder. */}
-      <ProfileCard key={(index + 1) % total} data={back} variant="back" rising={leaving} />
-      <ProfileCard
-        key={index}
-        data={front}
-        variant="front"
-        leaving={leaving}
-        dir={dir}
-        onExitEnd={handleExitEnd}
-      />
-    </div>
-  );
-}
-
-function ProfileCard(props: {
-  data: ProfileCardData;
-  variant: "front" | "back";
-  rising?: boolean;
-  leaving?: boolean;
-  dir?: "left" | "right";
-  onExitEnd?: () => void;
-}): ReactElement {
-  const { data } = props;
-  const className = [
-    "profile-card",
-    `is-${props.variant}`,
-    props.rising ? "is-rising" : "",
-    props.leaving ? `is-leaving-${props.dir}` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  return (
-    <div
-      className={className}
-      onAnimationEnd={(event) => {
-        if (props.leaving && event.animationName.startsWith("swipeOut")) props.onExitEnd?.();
-      }}
-    >
-      <img className="profile-card-image" src={data.photo} alt="" />
-      <div className="profile-card-gradient" />
-      <div className="profile-card-foot">
-        <div className="profile-card-caption">
-          <h2 className="profile-card-name">
-            {data.name}
-            <span className="profile-card-age">{data.age}</span>
-            <span className="profile-card-verified material-symbols-outlined" aria-hidden="true">
-              verified
-            </span>
-          </h2>
-          <p className="profile-card-meta">
-            <span className="material-symbols-outlined" aria-hidden="true">
-              location_on
-            </span>
-            {data.distanceKm} km
-          </p>
-          <div className="profile-card-tags">
-            {data.interests.slice(0, 3).map((tag) => (
-              <span key={tag}>{tag}</span>
-            ))}
-          </div>
-        </div>
-        <div className="profile-card-actions">
-          <MockAction icon="undo" tone="yellow" small />
-          <MockAction icon="close" tone="red" />
-          <MockAction icon="star" tone="blue" small />
-          <MockAction icon="favorite" tone="green" />
-          <MockAction icon="bolt" tone="purple" small />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MockAction(props: { icon: string; tone: "yellow" | "red" | "blue" | "green" | "purple"; small?: boolean }): ReactElement {
-  return (
-    <button
-      className={`mock-action ${props.small ? "mock-action-small" : "mock-action-large"} mock-action-${props.tone}`}
-      type="button"
-      aria-hidden="true"
-      tabIndex={-1}
-    >
-      <span className="material-symbols-outlined">{props.icon}</span>
-    </button>
-  );
-}
-
-function BottomCta(props: { onClick: () => void; label: string; disabled?: boolean }): ReactElement {
-  return (
-    <div className="bottom-cta fixed bottom-0 w-full p-margin bg-gradient-to-t from-black via-black/80 to-transparent z-20 flex justify-center pb-xl">
-      <button
-        className="pill-cta font-label-md text-label-md uppercase tracking-wider px-12 py-4 rounded-full transition-all duration-300 transform hover:scale-105 active:scale-95 font-bold"
-        disabled={props.disabled}
-        onClick={props.onClick}
-      >
-        {props.label}
-      </button>
-    </div>
-  );
-}
-
-function CountUpText(props: { value: string }): ReactElement {
-  const parsed = parseCountValue(props.value);
-  const [display, setDisplay] = useState(() => formatCountValue(parsed, 1));
-
-  useEffect(() => {
-    const durationMs = 1250;
-    const startedAt = performance.now();
-    let frame = 0;
-
-    function tick(now: number): void {
-      const progress = Math.min(1, (now - startedAt) / durationMs);
-      const eased = easeOutQuint(progress);
-      const current = Math.round(1 + (parsed.target - 1) * eased);
-      setDisplay(formatCountValue(parsed, current));
-      if (progress < 1) {
-        frame = window.requestAnimationFrame(tick);
-        return;
-      }
-      setDisplay(formatCountValue(parsed, parsed.target));
-    }
-
-    setDisplay(formatCountValue(parsed, 1));
-    frame = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(frame);
-  }, [props.value]);
-
-  return <>{display}</>;
-}
-
-interface ParsedCountValue {
-  prefix: string;
-  suffix: string;
-  target: number;
-}
-
-function parseCountValue(value: string): ParsedCountValue {
-  const match = value.match(/\d+/);
-  if (!match) return { prefix: "", suffix: "", target: 1 };
-  const target = Math.max(1, Number.parseInt(match[0], 10));
-  return {
-    prefix: value.slice(0, match.index),
-    suffix: value.slice((match.index ?? 0) + match[0].length),
-    target,
-  };
-}
-
-function formatCountValue(parsed: ParsedCountValue, value: number): string {
-  return `${parsed.prefix}${Math.min(parsed.target, Math.max(1, value))}${parsed.suffix}`;
-}
-
-function easeOutQuint(progress: number): number {
-  return 1 - (1 - progress) ** 5;
-}
 
 function ConsentGate(props: { onState: (state: TelegramOnboardingState) => void }): ReactElement {
   const s = useOnboardingStrings();

@@ -85,8 +85,7 @@ let warmed = false;
  * the download happens while the user is busy and the screen arrives finished.
  *
  * `img.src =` alone only starts the fetch, so `decode()` is what actually
- * leaves a paintable bitmap behind; same reasoning, same idiom as the
- * competitor icons warmed at boot in onboarding.tsx. Best-effort by
+ * leaves a paintable bitmap behind. Best-effort by
  * construction — the screen's own gate is what it waits on, so losing this race
  * delays the photographs rather than breaking anything.
  *
