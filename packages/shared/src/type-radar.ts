@@ -180,7 +180,14 @@ export function reasonChipsForPhoto(photo: RadarPhoto, verdict: Verdict): Reason
 // ── Photo sets (band-invariant attribute assignments) ───────────────────────
 // Balanced fractional-factorial plan: each attribute value appears 4–6×, with
 // attribute pairs decorrelated by construction. Scene is a balanced nuisance
-// factor (4 photos per scene), not a preference dimension.
+// factor, not a preference dimension — `scene` is never scored and is never
+// serialized to a client; it exists so the backdrop cannot become a hidden
+// attribute. It was 4/4/4 per set until 2026-08-20, when a founder review moved
+// f10 and m12 from `park` to `cafe` (the regenerated photos are shot indoors),
+// leaving 5 cafe / 4 street / 3 park in both sets. Accepted rather than
+// rebalanced: closing it would mean regenerating a third, already-approved
+// photo, and `type-radar.test.ts` still holds the property that actually
+// matters — every attribute value spans at least two scenes.
 
 export const FEMALE_PHOTOS: RadarPhoto[] = [
   { id: "f01", set: "female", scene: "cafe", attrs: { hairColor: "blonde", hairLength: "long", build: "slim", style: "elegant", tattoos: "no" } },
@@ -192,7 +199,7 @@ export const FEMALE_PHOTOS: RadarPhoto[] = [
   { id: "f07", set: "female", scene: "street", attrs: { hairColor: "brunette", hairLength: "long", build: "slim", style: "sporty", tattoos: "yes" } },
   { id: "f08", set: "female", scene: "street", attrs: { hairColor: "blonde", hairLength: "long", build: "curvy", style: "edgy", tattoos: "no" } },
   { id: "f09", set: "female", scene: "street", attrs: { hairColor: "red", hairLength: "short", build: "athletic", style: "elegant", tattoos: "no" } },
-  { id: "f10", set: "female", scene: "park", attrs: { hairColor: "brunette", hairLength: "short", build: "slim", style: "edgy", tattoos: "no" } },
+  { id: "f10", set: "female", scene: "cafe", attrs: { hairColor: "brunette", hairLength: "short", build: "slim", style: "edgy", tattoos: "no" } },
   { id: "f11", set: "female", scene: "park", attrs: { hairColor: "blonde", hairLength: "short", build: "curvy", style: "sporty", tattoos: "yes" } },
   { id: "f12", set: "female", scene: "park", attrs: { hairColor: "red", hairLength: "long", build: "athletic", style: "elegant", tattoos: "yes" } },
 ];
@@ -209,7 +216,7 @@ export const MALE_PHOTOS: RadarPhoto[] = [
   { id: "m09", set: "male", scene: "park", attrs: { hairColor: "dark", beard: "beard", build: "lean", style: "sporty", tattoos: "no" } },
   { id: "m10", set: "male", scene: "cafe", attrs: { hairColor: "light", beard: "clean", build: "big", style: "edgy", tattoos: "no" } },
   { id: "m11", set: "male", scene: "park", attrs: { hairColor: "dark", beard: "clean", build: "big", style: "classic", tattoos: "yes" } },
-  { id: "m12", set: "male", scene: "park", attrs: { hairColor: "light", beard: "beard", build: "big", style: "edgy", tattoos: "no" } },
+  { id: "m12", set: "male", scene: "cafe", attrs: { hairColor: "light", beard: "beard", build: "big", style: "edgy", tattoos: "no" } },
 ];
 
 export function photosForSet(set: RadarSet): RadarPhoto[] {
