@@ -2765,6 +2765,98 @@ button {
   }
 }
 
+/* ── Gender: two square portraits ────────────────────────────────────────
+   The two options sit side by side rather than stacked, each a nearly square
+   button with a drawn portrait inside it. Everything about how the button
+   LOOKS — the tone gradient, the inner edge light, the lift and halo on tap,
+   the way the other option recedes — still comes from `.ob-choice`, which the
+   element also carries. Only the shape and the contents are new. */
+.ob-choice-stack--gender {
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  width: min(100%, 23rem);
+}
+
+.ob-gender {
+  --gender-reveal: 520ms;
+  min-height: 0;
+  padding: 0;
+  /* Square-ish rather than square: the drawings are head-and-shoulders, and a
+     little extra height is what buys the label a strip of its own. */
+  aspect-ratio: 88 / 100;
+  border-radius: 32px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+/* The portrait layer.
+   Full-bleed, and the bottom of the drawing DISSOLVES into the button's own
+   gradient with a mask. That is doing two jobs at once: it is the soft handover
+   from photo to button colour the screen was designed around, and it is what
+   hides the source crop — these portraits are cut off mid-chest by their own
+   frame, so with a hard edge the shirt would simply stop on a straight line
+   across the button. It also leaves the label sitting on clean gradient, so no
+   scrim is needed over it.
+
+   `overflow: hidden` lives here and NOT on the button: the tap halo is a
+   `::after` at `inset: -2px` that scales past the button's own edge, and
+   clipping the button would swallow it.
+
+   `z-index` is load-bearing rather than tidy. An element with an animated
+   `filter` gets its own compositor layer in Chromium and floats above a
+   positioned sibling, so without it the portrait would ride over its own label
+   the moment the colour starts blooming — the same trap the metrics screen's
+   icons hit. */
+.ob-gender-art {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(180deg, #000 58%, transparent 90%);
+  mask-image: linear-gradient(180deg, #000 58%, transparent 90%);
+}
+
+.ob-gender-shot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Anchored to the top: the head is what the drawing is about, and the bottom
+     is the part the mask is dissolving anyway. */
+  object-position: 50% 0;
+  /* At rest the people are a warm monochrome and every saturated pixel on the
+     screen belongs to the two buttons. Deliberately not a flat `grayscale(1)`,
+     which reads as an image that failed to load; the trace of sepia reads as
+     ink on ivory, i.e. as a choice. */
+  filter: grayscale(1) sepia(0.22) brightness(1.02);
+  transition: filter var(--gender-reveal) ease;
+}
+
+/* The tap is what brings them to life. Only the picked one blooms — the other
+   is dimmed by `.ob-choice:disabled:not(.is-firing)` and stays monochrome. */
+.ob-gender.is-firing .ob-gender-shot {
+  filter: none;
+}
+
+.ob-gender-label {
+  position: relative;
+  z-index: 2;
+  padding-bottom: 1.05rem;
+}
+
+/* The neutral rest state exists only as the setup for the reveal. With the
+   reveal gone it would be a desaturated picture for no reason, so the colour
+   is simply always there. */
+@media (prefers-reduced-motion: reduce) {
+  .ob-gender-shot {
+    filter: none;
+    transition: none;
+  }
+}
+
 /* ── Preference: the two-column fork ────────────────────────────────────
    "Who do you want to meet?" is the one screen in the set that SHOWS the
    answer instead of naming it. Men and women are two tall columns splitting

@@ -6,6 +6,8 @@ import { basicsStepIndex } from "./onboarding-basics-route.js";
 import { burstFromEvent } from "./onboarding-burst.js";
 import type { BurstTone } from "./onboarding-burst.js";
 import { errorCopy } from "./onboarding-errors.js";
+import { GENDER_AVATARS } from "./gender-avatars.js";
+import { GENDER_ADVANCE_HOLD_MS } from "./onboarding-timing.js";
 import type { OnboardingStrings } from "./onboarding-i18n.js";
 import { placeScatter } from "./preference-layout.js";
 import type { ScatterSlot } from "./preference-layout.js";
@@ -45,7 +47,8 @@ export interface BasicsGateProps {
   limits: TelegramProfileLimits;
   strings: OnboardingStrings;
   /** Persists one screen's answer; rejects with the server's reason. */
-  onSave: (patch: TelegramProfilePatch) => Promise<void>;
+  /** `holdMs` floors how long the screen stays put before advancing. */
+  onSave: (patch: TelegramProfilePatch, holdMs?: number) => Promise<void>;
 }
 
 export function BasicsGate(props: BasicsGateProps): ReactElement {
@@ -70,12 +73,12 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
   }, [warmPhotos]);
 
   const save = useCallback(
-    async (patch: TelegramProfilePatch): Promise<void> => {
+    async (patch: TelegramProfilePatch, holdMs = 0): Promise<void> => {
       if (busy) return;
       setBusy(true);
       setError(null);
       try {
-        await props.onSave(patch);
+        await props.onSave(patch, holdMs);
         app?.HapticFeedback?.selectionChanged();
       } catch (err) {
         setError(errorCopy(err, strings));
@@ -122,7 +125,9 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
             { value: "male", label: strings.basicsGenderMale, tone: "male" },
             { value: "female", label: strings.basicsGenderFemale, tone: "female" },
           ]}
-          onPick={(gender) => void save({ gender: gender as "male" | "female" })}
+          onPick={(gender) =>
+            void save({ gender: gender as "male" | "female" }, GENDER_ADVANCE_HOLD_MS)
+          }
         />
       );
     case "preference":
@@ -342,7 +347,21 @@ function useChoiceTap(
   return { firing, fire };
 }
 
-/** Gender: two plain rows, the option's own label doing all the work. */
+/**
+ * Gender: two nearly square buttons side by side, each carrying a drawn
+ * portrait of the person the option is about.
+ *
+ * The portraits sit at rest as a warm monochrome and bloom into colour on the
+ * tap that commits the answer, so the colour of a person is the reward for
+ * choosing rather than decoration — and until then every saturated pixel on the
+ * screen belongs to the two buttons. Because the same tap also ends the screen,
+ * the advance is floored at `GENDER_ADVANCE_HOLD_MS`; without it the reaction
+ * would be cut off wherever the save happened to return.
+ *
+ * The button keeps `.ob-choice` alongside its own class, so the gradient, the
+ * inner edge light, the lift, the halo and the dim-the-other-option rule are
+ * the ones already shipped rather than a second copy of them.
+ */
 function ChoiceScreen(props: {
   title: string;
   options: ChoiceOption[];
@@ -355,21 +374,30 @@ function ChoiceScreen(props: {
 
   return (
     <BasicsShell title={props.title} error={props.error} modifier="ob-basics--choice">
-      <div className="ob-choice-stack">
-        {props.options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={`ob-choice ob-choice--${option.tone} ${
-              props.selected === option.value ? "is-selected" : ""
-            } ${firing === option.value ? "is-firing" : ""}`}
-            disabled={props.busy}
-            aria-pressed={props.selected === option.value}
-            onClick={(event) => fire(event, option.value, option.tone)}
-          >
-            {option.label}
-          </button>
-        ))}
+      <div className="ob-choice-stack ob-choice-stack--gender">
+        {props.options.map((option) => {
+          const avatar = option.tone === "neutral" ? null : GENDER_AVATARS[option.tone];
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={`ob-choice ob-gender ob-choice--${option.tone} ${
+                props.selected === option.value ? "is-selected" : ""
+              } ${firing === option.value ? "is-firing" : ""}`}
+              disabled={props.busy}
+              aria-pressed={props.selected === option.value}
+              onClick={(event) => fire(event, option.value, option.tone)}
+            >
+              {avatar ? (
+                <span className="ob-gender-art">
+                  {/* Decorative: the button's accessible name is its label. */}
+                  <img className="ob-gender-shot" src={avatar} alt="" draggable={false} />
+                </span>
+              ) : null}
+              <span className="ob-gender-label">{option.label}</span>
+            </button>
+          );
+        })}
       </div>
     </BasicsShell>
   );

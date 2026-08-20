@@ -453,10 +453,18 @@ function App(): ReactElement {
    * propagate to the screen, which shows the reason and does NOT advance.
    */
   const saveBasics = useCallback(
-    async (patch: TelegramProfilePatch): Promise<void> => {
+    async (patch: TelegramProfilePatch, holdMs = 0): Promise<void> => {
+      // A screen may ask to be held before it is replaced, so that a reaction
+      // the tap started (the gender screen's colour bloom) is not cut off by
+      // the scene change. The timer starts HERE, before the request, so the two
+      // run in parallel and the tap costs `max(request, hold)` rather than
+      // their sum — the hold is a floor, not an addition.
+      const held =
+        holdMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, holdMs)) : null;
       // Dev-QA preview: no server, so keep the answers in memory and let the
       // same routing walk to the next screen.
       if (PREVIEW_BASICS) {
+        if (held) await held;
         setRemoteUser((current) => {
           const merged = {
             ...(current ?? ({} as RemoteUser)),
@@ -470,6 +478,7 @@ function App(): ReactElement {
       }
       if (!app?.initData) throw new Error(strings.genericError);
       const state = await saveTelegramOnboardingProfile(app.initData, patch);
+      if (held) await held;
       setRemoteUser(state.user);
       setFlowToken(state.flowToken);
       setPhase(postVisualPhaseFromRemote(state.user));

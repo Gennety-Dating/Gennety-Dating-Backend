@@ -279,6 +279,43 @@ out of Telegram-only workers.
   the palette is the button's own gradient plus one gold, and it is skipped
   outright under `prefers-reduced-motion` or on a client with no Web Animations
   API. Telegram-only; the native iOS client owns its own controls here.
+  **The gender screen shows two people rather than two rows (2026-08-20).**
+  It was two stacked rows carrying two words — the plainest control in the set,
+  on the one question in it that is about who you ARE. It is now two nearly
+  square, heavily rounded buttons side by side, each carrying a drawn portrait
+  over the button's own burgundy/blue gradient, with the label at the bottom.
+  Same collector write, same burst, same tones as before: this is the control
+  changing, not the question.
+
+  **The portraits are monochrome at rest and bloom into colour on the tap**
+  (founder decision) — a warm ink-on-ivory, not a flat `grayscale(1)`, which
+  reads as an image that failed to load. So until the user chooses, every
+  saturated pixel on the screen belongs to the two buttons, and the colour of a
+  person is the reward for choosing rather than decoration. Same rule the
+  loading mark states from the other side: structure stays neutral, colour is
+  spent only on what carries meaning. Under `prefers-reduced-motion` the colour
+  is simply always there — the neutral state exists only as the setup for the
+  reveal, so without the reveal it would be a desaturated picture for no reason.
+
+  **Because the same tap also ends the screen, the advance is floored**
+  (`GENDER_ADVANCE_HOLD_MS`, 600 ms): otherwise the bloom is cut off wherever
+  the save happened to return, which is the failure the whole idea dies of. The
+  hold starts BEFORE the request rather than after it, so the two run in
+  parallel and a tap costs `max(request, hold)` rather than their sum. It is
+  still real time added to the onboarding funnel for every user, so it is a
+  named constant with a stated ceiling a test enforces — the same treatment the
+  success mark's timings get, and for the same reason: a number like this
+  otherwise creeps one retune at a time.
+
+  **The bottom of each drawing dissolves into the button's gradient**, and that
+  mask is load-bearing rather than styling. The portraits are cropped mid-chest
+  by their own frame, so the artwork ends on a hard horizontal edge with no
+  silhouette; without the fade the shirt simply stops on a straight line across
+  the button. It is also what leaves the label sitting on clean colour, so this
+  screen needs no scrim over its word — unlike the preference columns, whose
+  photographs run all the way down. Telegram-only; the native iOS client owns
+  its own controls here.
+
   **"Who do you want to meet?" shows the answer instead of naming it
   (2026-08-06).** It was three stacked rows carrying three words, which asked
   the one question in the set that is *about people* and put no people on the
