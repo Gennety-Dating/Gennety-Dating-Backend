@@ -4625,9 +4625,20 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   place, and until now the largest a venue was ever shown was a 340px rail tile
   — you could not actually see the room you were agreeing to meet in. It opens
   on the tapped photo (never rewound to the first) and paints instantly from the
-  copy the rail already decoded, then sharpens the slide being looked at to the
-  photo proxy's 1600px ceiling; the upgrade is per slide, so a 10-photo venue
-  never pulls ten full-size images on one tap. Vertical swipes are disabled
+  copy the rail already decoded — **the same copy, at the same width, so opening
+  a photo costs nothing (2026-08-20)**. It used to paint the rail's 1000px copy
+  and then sharpen the slide being looked at to the proxy's 1600px ceiling,
+  which was right about latency and meant every enlarged photograph was bought
+  **twice**: the width is part of the proxy URL, so it is both a separate client
+  cache entry and a separately billed Place Photo request. The rail and the
+  viewer now share one width (`VENUE_PHOTO_WIDTH`, 1200), which costs nothing to
+  raise — Place Photo is billed per request, not per byte — and 1200 is chosen
+  to satisfy the fullscreen case rather than the tile: a 390pt phone at DPR 3 is
+  1170 physical pixels, so simply dropping to the old rail width would have made
+  "fullscreen" softer than what it replaced. The 240px card thumbnail is
+  deliberately left as its own width: it is a genuinely different image at a
+  genuinely different size, and there are 21 of them on a board against the
+  handful a user opens. Vertical swipes are disabled
   while it is open — a fixed overlay has no scroll of its own, which is exactly
   when Telegram reads a downward drag as "close the Mini App", so dragging a
   photo would otherwise drop the user out of the app. A venue with no photos

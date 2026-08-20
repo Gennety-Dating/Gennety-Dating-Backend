@@ -104,10 +104,12 @@ Newest entries go **on top**:
   что убирает дублирование между партнёрами, но он дороже в реализации, чем
   блоки 2 и 3 вместе, а экономит меньше блока 2.
 
-**Recorded in:** PRODUCT_SPEC.md §3.7a, ARCHITECTURE.md → `curated_venues`,
-`packages/db/prisma/schema.prisma` (`CuratedVenue.photoRefs`),
-`apps/bot/src/services/venue-revalidation.ts`, deploy.md (два PENDING-блока —
-у них разные пути деплоя).
+**Recorded in:** PRODUCT_SPEC.md §3.7a + §3.7b, ARCHITECTURE.md →
+`curated_venues`, `packages/db/prisma/schema.prisma` (`CuratedVenue.photoRefs`),
+`apps/bot/src/services/venue-revalidation.ts`,
+`apps/webapp/src/venue-photo-width.test.ts` (гвард на одну ширину), deploy.md
+(два PENDING-блока — у них РАЗНЫЕ пути деплоя: блок 2 это полный деплой сервера
+с `db:push`, блок 3 — только Mini App, без рестарта).
 
 ---
 

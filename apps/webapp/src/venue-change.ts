@@ -784,19 +784,26 @@ function thumbUrl(v: VenuePhotoSet): string | null {
   if (v.photoRefs[0]) return photoUrl(v.photoRefs[0], 240);
   return null;
 }
-function galleryUrls(v: VenuePhotoSet): string[] {
-  return v.photoRefs.map((ref) => photoUrl(ref, 1000));
-}
 /**
- * Width the fullscreen viewer asks the proxy for. The rail behind it runs at
- * 1000, which is already under a modern phone's PHYSICAL width once DPR is
- * applied — so a "fullscreen" copy of that same bitmap would be no easier to
- * read than the 340px tile the user just tapped, and the feature would be
- * pointless. 1600 is the proxy's own ceiling (`clampWidth`, routes/venue-change.ts).
+ * The ONE width the gallery and the fullscreen viewer share.
+ *
+ * They used to differ — 1000 in the rail, 1600 fullscreen — and the width is
+ * part of the proxy URL, so the same photograph was two different cache entries
+ * and two separately billed Place Photo requests: every enlarged photo was
+ * bought twice. Place Photo is billed per REQUEST, not per byte, so serving the
+ * rail a slightly larger file costs nothing and lets the viewer paint from
+ * cache instead of buying the picture again.
+ *
+ * 1200 rather than 1000 because this now has to satisfy the fullscreen case:
+ * a 390pt phone at DPR 3 is 1170 physical pixels, and dropping the viewer to
+ * the old rail width would have made "fullscreen" visibly softer than what it
+ * replaced. Anything above ~1200 is spent on a screen that cannot resolve it.
+ * The proxy's own ceiling is 1600 (`clampWidth`, routes/venue-change.ts), so
+ * this stays well inside it.
  */
-const VIEWER_PHOTO_WIDTH = 1600;
-function viewerUrls(v: VenuePhotoSet): string[] {
-  return v.photoRefs.map((ref) => photoUrl(ref, VIEWER_PHOTO_WIDTH));
+const VENUE_PHOTO_WIDTH = 1200;
+function galleryUrls(v: VenuePhotoSet): string[] {
+  return v.photoRefs.map((ref) => photoUrl(ref, VENUE_PHOTO_WIDTH));
 }
 /**
  * A photo tile that says "loading" instead of looking empty.
@@ -1575,13 +1582,13 @@ function railIndex(rail: HTMLElement, gap: number): number {
  *
  * Three things are deliberate:
  *
- *  - **It opens instantly, then sharpens.** The tile behind it already decoded
- *    the 1000px copy, so the viewer paints that from cache and only then swaps
- *    in the 1600px one (`VIEWER_PHOTO_WIDTH`) for the slide being looked at.
- *    Opening straight onto the big file would put a spinner in front of a photo
- *    the user can already see.
- *  - **The upgrade is per slide, never the whole set.** A 10-photo venue would
- *    otherwise pull ten full-size images on a tap.
+ *  - **It opens instantly, from cache, and buys nothing.** It renders the exact
+ *    same URLs the gallery behind it already decoded (`VENUE_PHOTO_WIDTH`), so
+ *    opening a photo costs zero Place Photo requests. It used to paint the
+ *    1000px copy and then swap in a 1600px one per slide viewed — correct about
+ *    latency, and it meant every enlarged photograph was billed a second time.
+ *    Serving one width to both is what removed that, at no visual cost: 1200
+ *    covers a 390pt phone at DPR 3.
  *  - **Vertical swipes are turned off while it is open.** A fixed overlay has
  *    no vertical scroll of its own, which is precisely when Telegram reads a
  *    downward drag as "close the Mini App" — dragging a photo would drop the
@@ -1600,11 +1607,9 @@ function openPhotoViewer(v: VenuePhotoSet, start: number): void {
   closePhotoViewer();
 
   const low = galleryUrls(v);
-  const high = viewerUrls(v);
   if (low.length === 0) return;
   const index = Math.min(Math.max(start, 0), low.length - 1);
 
-  const upgraded = new Set<number>();
   const slides = low.map((u) =>
     photoTile(u, "vc-viewer-shot", () => categoryIcon(v.category, "icon vc-viewer-glyph")),
   );
@@ -1616,23 +1621,6 @@ function openPhotoViewer(v: VenuePhotoSet, start: number): void {
   };
   paintCounter(index);
   if (low.length === 1) counter.style.display = "none";
-
-  /** Swap slide `i` up to the sharper copy once it decodes. Once per slide. */
-  const sharpen = (i: number): void => {
-    const url = high[i];
-    const node = slides[i];
-    if (!url || !node || upgraded.has(i)) return;
-    upgraded.add(i);
-    const img = new Image();
-    img.decoding = "async";
-    img.onload = () => {
-      // Only ever replace a photo with a photo. If the 1000px copy failed the
-      // tile is showing the category glyph, and painting a background behind
-      // that glyph would look broken rather than better.
-      if (node.classList.contains("is-loaded")) node.style.backgroundImage = `url("${url}")`;
-    };
-    img.src = url;
-  };
 
   const closeBtn = el(
     "button",
@@ -1682,14 +1670,12 @@ function openPhotoViewer(v: VenuePhotoSet, start: number): void {
   // Reading clientWidth forces layout, so the rail is measurable already —
   // the viewer must open ON the tapped photo, never scrolled back to the first.
   rail.scrollLeft = index * rail.clientWidth;
-  sharpen(index);
 
   rail.addEventListener(
     "scroll",
     () => {
       const i = Math.min(Math.max(railIndex(rail, 0), 0), low.length - 1);
       paintCounter(i);
-      sharpen(i);
     },
     { passive: true },
   );
