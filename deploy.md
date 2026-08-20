@@ -1,6 +1,81 @@
 # Gennety Dating Deploy
 
-**PENDING — дедлайн тикет-гейта армируется переходом + счётчик застрявших строк
+**Deployed 2026-08-20 — релиз из 49 коммитов: все 26 PENDING-блоков разом
+(`c577665`).** Полный деплой кода + аддитивный `db:push` + Mini App + демо.
+Прод поднят с `cd25c56` до `c577665`.
+
+Порядок: worktree-проверка якоря → preflight → `migrate diff` → rsync →
+install/build → `db:push` → `db:drift-check` → `pm2 restart` →
+`deploy-webapp.sh` → `demo:deploy`.
+
+**Схема:** ровно один `ADD COLUMN` (`curated_venues.photo_refs`), **ноль
+DROP** — план прочитан `migrate diff` и локально, и на дроплете до запуска.
+`db:drift-check` **OK**.
+
+**Якорь подтверждён побайтово с обеих сторон.** До деплоя: прод == `cd25c56`,
+791 файл, ноль расхождений. После: прод == `c577665`, 814 файлов, единственные
+четыре расхождения — `apps/bot/tmp/*`, который rsync исключает по дизайну (те же
+четыре, что и в релизе 2026-08-07).
+
+**Главное содержимое релиза — два бага одного класса «строка, невидимая своему
+же механизму починки»:**
+
+- **§3.3 — матч, не доехавший ни до кого, перестаёт быть бессмертным.**
+  `disposeUndeliveredMatch`; в проде до деплоя таких строк было **0**
+  (проверено `pnpm audit:stuck-matches --prod`), после — тоже 0.
+- **§3.5b — дедлайн тикет-гейта армируется переходом**, а не карточкой.
+- **§3.1c** получает предусловие: пересев синтетиков — только на деплой с
+  `disposeUndeliveredMatch`.
+
+**⚠️ Две операционные вещи, которые стоит знать до следующего раза:**
+
+- **`pnpm build` на дроплете переживает разрыв ssh, а `deploy-demo.sh` — нет.**
+  Первый запуск демо-деплоя оборвался ровно на `vite build` и **рестарта не
+  сделал** (restart count не сдвинулся — это и есть признак). Причина не OOM:
+  памяти 894 МБ свободно, в dmesg чисто; сборка Remotion + Vite на 1–2 vCPU
+  просто идёт минутами, дольше любого разумного таймаута команды. Запускать под
+  `nohup` и ждать по исчезновению процесса, а **не** по появлению строки в логе.
+- **Полный набор тестов нестабилен под параллелизмом.** Один прогон из трёх дал
+  2 падения (`calendar-native.test.ts` 404→400 и таймаут `DELETE /v1/me` на
+  10 с); оба файла проходят изолированно, следующие два полных прогона —
+  4376/4376 зелёных. Это тот же класс, что задокументирован для
+  `date-card/render.test.ts` 2026-08-02. **Красный preflight с этими двумя
+  именами — перепрогнать, а не чинить.** Настоящее лечение — отдельный
+  low-concurrency vitest-проект для тяжёлых файлов; это решение про воркфлоу, и
+  оно не принято.
+
+Preflight: typecheck чист по 5 проектам, lint чист, **4376 тестов** (бот 3774 /
+shared 280 / webapp 322) — 0 failed, `pnpm build` чист, `security:secrets`
+(1120 файлов), **`security:audit` 0 advisories**, дерево чистое и вровень с
+`origin/main`.
+
+rsync dry-run показал **11** удалений, все прочитаны и сверены с
+`git log --diff-filter=D`: 2 устаревших артефакта `apps/video/build` плюс 9
+файлов, удалённых коммитом `dda1d2e` (три PNG конкурентов + их каталог,
+`seeded-noise.ts`, `onboarding-money.ts` + тест, `onboarding-crumble.ts` + тест).
+Оба ключа `keys/*.p8` и оба бэкапа БД проверены на месте ПОСЛЕ синка.
+
+**Проверено на живом проде (замерено, а не выведено):**
+
+- `Bot @gennetybot started`, **все 18 кронов** зарегистрированы, включая
+  ежевечерний `Drop matching "0 18 * * *"` и `Synthetic test partner`;
+  `:3100`/`:3101` слушают.
+- Рестарт 63 → **64**, `unstable restarts: 0`, **ноль** `P2022` / `P2023` /
+  `ERR_MODULE_NOT_FOUND` / unhandled от нового PID.
+- **`/admin/stats` отдаёт новое поле:** `matches.strandedProposed: 0` рядом с
+  `live: 0`. Это и есть проверка §3.3 без запуска скрипта.
+- `disposeUndeliveredMatch` присутствует в задеплоенном файле (3 вхождения).
+- `/v1/ping` ok, admin `401`, **все 11 страниц Mini App 200**, и хеш бандла на
+  проде совпал с собранным (`onboarding-70-bgwTm.js`) — проверка по хешу, а не
+  по коду 200, ровно как предписывает секция про якорь бандла.
+
+**Rollback:** пересинкать чекаут на `cd25c56`, перезапустить, оттуда же
+редеплоить Mini App и демо. Аддитивная колонка может остаться — старый код её
+не читает.
+
+---
+
+**Deployed 2026-08-20 (was PENDING) — дедлайн тикет-гейта армируется переходом + счётчик застрявших строк
 в `/admin/stats` (PRODUCT_SPEC §3.5b / §3.1c, DECISIONS.md).** **Нет изменения
 схемы Prisma, нет новых env, нет флагов, нет изменения Mini App** — только бот,
 плюс **редеплой дашборда** (отдельный репозиторий), если нужно отрисовать новое
@@ -31,7 +106,7 @@ curl -s -H "Authorization: Bearer $KEY" https://api-admin.gennety.com/admin/stat
 
 ---
 
-**PENDING — матч, не доехавший ни до кого, перестаёт быть бессмертным
+**Deployed 2026-08-20 (was PENDING) — матч, не доехавший ни до кого, перестаёт быть бессмертным
 (PRODUCT_SPEC §3.3, ARCHITECTURE → `matches`, DECISIONS.md).** **Нет изменения
 схемы Prisma, нет новых env, нет флагов, нет изменения Mini App**
 (`apps/webapp` не тронут) — только бот, так что полный деплой кода несёт это
@@ -97,7 +172,7 @@ UPDATE matches SET status='cancelled'
 
 ---
 
-**PENDING — фотографии в Mini App перестают блокироваться CORP (ARCHITECTURE.md
+**Deployed 2026-08-20 (was PENDING) — фотографии в Mini App перестают блокироваться CORP (ARCHITECTURE.md
 → «Cross-origin image proxies», DECISIONS.md).** **Нет изменения схемы Prisma,
 нет новых env, нет флагов, нет изменения Mini App** (`apps/webapp` не тронут) —
 только бот, так что полный деплой кода несёт это целиком, плюс `pnpm demo:deploy`.
@@ -151,7 +226,7 @@ curl -sI https://demo-api.gennety.com/v1/maptiles/3/4/2  | grep -i cross-origin-
 
 ---
 
-**PENDING — галерея и полноэкранный просмотр площадки сводятся на одну ширину
+**Deployed 2026-08-20 (was PENDING) — галерея и полноэкранный просмотр площадки сводятся на одну ширину
 (PRODUCT_SPEC §3.7b, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых
 env, нет флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — дифф это
 `apps/webapp/**` плюс документация. Путь **Deploy Mini App Only**
@@ -197,7 +272,7 @@ pnpm demo:deploy
 
 ---
 
-**PENDING — фотографии площадок переезжают из памяти процесса в БД
+**Deployed 2026-08-20 (was PENDING) — фотографии площадок переезжают из памяти процесса в БД
 (PRODUCT_SPEC §3.7a, ARCHITECTURE → `curated_venues`, DECISIONS.md).** **Нет
 новых env, нет флагов, нет изменения Mini App** (`apps/webapp` не тронут) — но
 нужен **аддитивный `db:push` ДО рестарта**, так что порядок: Deploy Full Server
@@ -263,7 +338,7 @@ pm2 logs gennety-bot --lines 200 --nostream | grep 'venue-revalidation'
 
 ---
 
-**PENDING — закреплённый баннер перестаёт опережать карточку свидания
+**Deployed 2026-08-20 (was PENDING) — закреплённый баннер перестаёт опережать карточку свидания
 (PRODUCT_SPEC §2.1, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env,
 нет флагов, нет изменения Mini App** (`apps/webapp` не тронут) — только бот, так
 что полный деплой кода несёт это целиком, плюс `pnpm demo:deploy`.
@@ -314,7 +389,7 @@ pm2 logs gennety-bot --lines 200 --nostream | grep 'push refresh failed'
 
 ---
 
-**PENDING — «made with Gennety» больше не уезжает за край дата-карточки
+**Deployed 2026-08-20 (was PENDING) — «made with Gennety» больше не уезжает за край дата-карточки
 (PRODUCT_SPEC §3.7a, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых
 env, нет флагов, нет изменения Mini App** (`apps/webapp` не тронут) — только бот,
 так что полный деплой кода несёт это целиком, плюс `pnpm demo:deploy`.
@@ -425,7 +500,7 @@ done
 
 ---
 
-**PENDING — интро сокращено до трёх экранов: шесть сцен критики рынка удалены
+**Deployed 2026-08-20 (was PENDING) — интро сокращено до трёх экранов: шесть сцен критики рынка удалены
 (PRODUCT_SPEC §1.1, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых
 env, нет флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диф это `apps/webapp/**`
 плюс три комментария в `apps/bot` и документация. Путь **Deploy Mini App Only**
@@ -496,7 +571,7 @@ curl -s https://dating-calendar.gennety.com/onboarding.html \
 
 ---
 
-**PENDING — новые актёры на фото второго экрана «Как это работает»
+**Deployed 2026-08-20 (was PENDING) — новые актёры на фото второго экрана «Как это работает»
 (`apps/webapp/public/how-it-works/2.jpg`).** **Нет изменения схемы Prisma, нет
 новых env, нет флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — один ассет в
 `apps/webapp/public/`. Путь **Deploy Mini App Only**
@@ -533,7 +608,7 @@ curl -s https://dating-calendar.gennety.com/how-it-works/2.jpg | md5
 
 ---
 
-**PENDING — стрелка «Назад» в онбординге: графит + свечение от краёв внутрь
+**Deployed 2026-08-20 (was PENDING) — стрелка «Назад» в онбординге: графит + свечение от краёв внутрь
 (DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов и НЕТ
 ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диff это `apps/webapp/**` плюс документация. Путь
 **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`); рсинкать в
@@ -599,7 +674,7 @@ curl -sI https://dating-calendar.gennety.com/onboarding.html | head -1
 
 ---
 
-**PENDING — под клавиатуру освобождает место только экран имени, а не все пять
+**Deployed 2026-08-20 (was PENDING) — под клавиатуру освобождает место только экран имени, а не все пять
 экранов профиля (PRODUCT_SPEC §1.1, DECISIONS.md).** **Нет изменения схемы
 Prisma, нет новых env, нет флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диff это
 `apps/webapp/**` плюс документация. Путь **Deploy Mini App Only**
@@ -658,7 +733,7 @@ curl -s https://dating-calendar.gennety.com/onboarding.html \
 
 ---
 
-**PENDING — анимация поиска Rematch (≥10 с) + PNG-карточка на оффере
+**Deployed 2026-08-20 (was PENDING) — анимация поиска Rematch (≥10 с) + PNG-карточка на оффере
 (PRODUCT_SPEC §3.11, REMATCH_PRODUCT_SPEC.md, DECISIONS.md).** **Нет изменения
 схемы Prisma, нет изменения Mini App** (`apps/webapp` не тронут) — только бот,
 плюс **одна новая опциональная env, уезжающая ПУСТОЙ**. Полный деплой кода несёт
@@ -714,7 +789,7 @@ psql "$DATABASE_URL" -c "select status, count(*) from rematch_purchases group by
 
 ---
 
-**PENDING — экран выбора пола: два портрета вместо двух строк (PRODUCT_SPEC
+**Deployed 2026-08-20 (was PENDING) — экран выбора пола: два портрета вместо двух строк (PRODUCT_SPEC
 §1.3, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов и
 НЕТ ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диф это `apps/webapp/**` плюс документация.
 Путь **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`); рсинкать в
@@ -772,7 +847,7 @@ curl -s https://dating-calendar.gennety.com/onboarding.html \
 
 ---
 
-**PENDING — украинский «Думаю…» → «Обмірковую…», единое написание «метч», плюс
+**Deployed 2026-08-20 (was PENDING) — украинский «Думаю…» → «Обмірковую…», единое написание «метч», плюс
 два гварда на i18n (DECISIONS.md).** **Нет изменения схемы Prisma, нет новых
 env, нет флагов** — но правка задевает `apps/webapp/src/location.ts`, поэтому
 релиз **не только серверный**: Deploy Full Server Code → `pnpm db:drift-check`
@@ -831,7 +906,7 @@ curl -s https://dating-calendar.gennety.com/location.html \
 
 ---
 
-**PENDING — песочные часы на карточке истечения: рисованная иконка вместо
+**Deployed 2026-08-20 (was PENDING) — песочные часы на карточке истечения: рисованная иконка вместо
 примитивов (PRODUCT_SPEC §3.4, DECISIONS.md).** **Нет изменения схемы Prisma,
 нет новых env, нет флагов, нет изменения Mini App** (`apps/webapp` не тронут) —
 только бот, так что полный деплой кода несёт это целиком, плюс
@@ -884,7 +959,7 @@ pm2 logs gennety-bot --lines 200 --nostream | grep -E '\[expiry-card\]|\[expiry-
 
 ---
 
-**PENDING — стрелка на карточке `penalty` перерисована симметрично
+**Deployed 2026-08-20 (was PENDING) — стрелка на карточке `penalty` перерисована симметрично
 (PRODUCT_SPEC §3.4).** **Нет изменения схемы Prisma, нет новых env, нет флагов,
 нет изменения Mini App** — один `<path>` в `expiry-card.ts`, едет тем же
 полным деплоем кода, что и блок про песочные часы выше (плюс `pnpm demo:deploy`).
@@ -908,7 +983,7 @@ Preflight: typecheck бота чист, **`expiry-card.test.ts` — 14/14 зел
 
 ---
 
-**PENDING — пользователя предупреждают, что вопросы Profiler'а будут приходить
+**Deployed 2026-08-20 (was PENDING) — пользователя предупреждают, что вопросы Profiler'а будут приходить
 (PRODUCT_SPEC §1.4 + §Phase 1b, DECISIONS.md).** **Нет изменения схемы Prisma,
 нет новых env, нет флагов, нет изменения Mini App** (`apps/webapp` не тронут) —
 только бот, так что полный деплой кода несёт это целиком, плюс
@@ -956,7 +1031,7 @@ pm2 logs gennety-bot --lines 200 --nostream | grep 'profiler heads-up send faile
 
 ---
 
-**PENDING — радиус рынка 60 → 21 км: Киев вместо агломерации (PRODUCT_SPEC §1.3,
+**Deployed 2026-08-20 (was PENDING) — радиус рынка 60 → 21 км: Киев вместо агломерации (PRODUCT_SPEC §1.3,
 DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов** — одно
 число в `packages/shared/src/markets.ts`. Но оно и серверное, и клиентское, так
 что нужен полный деплой кода **и** редеплой Mini App: Deploy Full Server Code →
@@ -1010,7 +1085,7 @@ curl -s https://dating-api.gennety.com/v1/app/config | python3 -m json.tool | gr
 
 ---
 
-**PENDING — баннер «точка вне города» перестаёт ломать текст в столбик
+**Deployed 2026-08-20 (was PENDING) — баннер «точка вне города» перестаёт ломать текст в столбик
 (DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов и НЕТ
 ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диff это `apps/webapp/**` плюс документация. Путь
 **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`); рсинкать в
@@ -1058,7 +1133,7 @@ curl -sI https://dating-calendar.gennety.com/location.html | head -1
 
 ---
 
-**PENDING — с заголовка экрана оплаты билета уходит 🤍 (PRODUCT_SPEC §3.5b,
+**Deployed 2026-08-20 (was PENDING) — с заголовка экрана оплаты билета уходит 🤍 (PRODUCT_SPEC §3.5b,
 DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов и НЕТ
 ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диff это `apps/webapp/src/ticket/**` плюс
 документация. Путь **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`);
@@ -1099,7 +1174,7 @@ curl -sI https://dating-calendar.gennety.com/ticket.html | head -1
 
 ---
 
-**PENDING — вступление демо встаёт НАД первым вопросом чата (DEMO_MODE.md,
+**Deployed 2026-08-20 (was PENDING) — вступление демо встаёт НАД первым вопросом чата (DEMO_MODE.md,
 DECISIONS.md).** **Только демо** — диff это `apps/bot/src/demo/**` плюс
 документация, так что **в `/opt/gennety` синкать нечего и прод НЕ
 перезапускается**; весь деплой — `pnpm demo:deploy`. Нет изменения схемы, нет
@@ -1145,7 +1220,7 @@ ssh root@167.172.178.229 'pm2 describe gennety-bot | grep -E "restarts"'
 
 ---
 
-**PENDING — конфетти на экране согласованного времени перестают прилипать к
+**Deployed 2026-08-20 (was PENDING) — конфетти на экране согласованного времени перестают прилипать к
 верху экрана (DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет
 флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диff это `apps/webapp/**` плюс
 документация. Путь **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`);
@@ -1202,7 +1277,7 @@ curl -sI https://dating-calendar.gennety.com/ | head -1
 
 ---
 
-**PENDING — кнопка «Продолжить» перестаёт прыгать над клавиатурой
+**Deployed 2026-08-20 (was PENDING) — кнопка «Продолжить» перестаёт прыгать над клавиатурой
 (PRODUCT_SPEC §1.1, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых
 env, нет флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диff это `apps/webapp/**`
 плюс документация. Путь **Deploy Mini App Only**
@@ -1265,7 +1340,7 @@ curl -sI https://dating-calendar.gennety.com/onboarding.html | head -1
 
 ---
 
-**PENDING — доска смены места: 21 карточка вместо 12 (PRODUCT_SPEC §3.7b,
+**Deployed 2026-08-20 (was PENDING) — доска смены места: 21 карточка вместо 12 (PRODUCT_SPEC §3.7b,
 DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов, нет
 изменения Mini App** (`apps/webapp` не тронут — список рендерится по
 `items.length`, фиксированной сетки нет) — только бот, так что полный деплой
@@ -1319,7 +1394,7 @@ ssh root@167.172.178.229 'pm2 logs gennety-bot --lines 200 --nostream | grep "\[
 
 ---
 
-**PENDING — марка успеха: логотип раскручивается и уходит, остаётся галочка
+**Deployed 2026-08-20 (was PENDING) — марка успеха: логотип раскручивается и уходит, остаётся галочка
 (PRODUCT_SPEC → Cross-Cutting Concerns, DECISIONS.md).** **Нет изменения схемы
 Prisma, нет новых env, нет флагов и НЕТ ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — диff это
 `apps/webapp/**` плюс документация. То есть путь **Deploy Mini App Only**
@@ -1384,7 +1459,7 @@ curl -sI https://dating-calendar.gennety.com/verification.html | head -1
 
 ---
 
-**PENDING — демо-партнёр предлагает вечер вместо 13:00 (DEMO_MODE.md,
+**Deployed 2026-08-20 (was PENDING) — демо-партнёр предлагает вечер вместо 13:00 (DEMO_MODE.md,
 DECISIONS.md).** **Только демо** — диff это `apps/bot/src/demo/**` плюс
 документация, так что **в `/opt/gennety` синкать нечего и прод НЕ
 перезапускается**; весь деплой — `pnpm demo:deploy`. Нет изменения схемы, нет
@@ -6090,9 +6165,11 @@ watch that the PID holds and the restart count stops climbing. Otherwise do a
 full deploy — but note that rsync copies the **working tree**, not git HEAD, so
 check `git status` first: an unrelated in-progress refactor ships with it.
 
-**Prod anchor, re-verified 2026-08-15 after the release at the top of this file.**
-Prod's **runtime tree** is at **`cd25c56`** — verified by the md5 sweep below
-across **791 files with zero differences**, rather than asserted. Deliberately
+**Prod anchor, re-verified 2026-08-20 after the release at the top of this file.**
+Prod's **runtime tree** is at **`c577665`** — verified by the md5 sweep below
+across **814 files**, with the only four differences being `apps/bot/tmp/*`,
+which the deploy rsync excludes by design (the same four as the 2026-08-07
+release). Rather than asserted. Deliberately
 anchored to the last commit that touched runtime code, not to `HEAD`: docs-only
 commits land on top constantly (this note's own release added one), and an
 anchor that counts them is stale the hour it is written.
@@ -6107,8 +6184,8 @@ revision of this note named them, and it was stale within the hour because a
 parallel session kept landing work. The set is a one-liner:
 
 ```sh
-git log --oneline cd25c56..HEAD                # what prod is missing
-git diff --stat cd25c56..HEAD -- apps packages # is any of it runtime code?
+git log --oneline c577665..HEAD                # what prod is missing
+git diff --stat c577665..HEAD -- apps packages # is any of it runtime code?
 ```
 
 **A demo-only release does not advance this anchor, and that is the trap.**
@@ -6130,13 +6207,24 @@ Two standing exclusions, both deliberate rather than forgotten:
   so an import is a separate, larger decision, not part of any deploy.
 - **`apps/video/**`** is the Remotion workspace and is not in the bot runtime.
 
-Anchor md5 as of 2026-08-15 — three modules this release added, so their mere
-presence on the droplet is already the check:
+Anchor md5 as of 2026-08-20 — two modules this release added plus the one it
+changed, so their mere presence (and content) on the droplet is already the check:
 
 ```
-45673bfa9c3efba4b6884047f41d79b4  /opt/gennety/apps/bot/src/services/attendance.ts
-07a7d24733f28625435e8704be6bd62c  /opt/gennety/apps/bot/src/services/attendance-evidence.ts
-9d544405d02b6315103dca5813c9f585  /opt/gennety/apps/bot/src/admin/utils/match-conversion.ts
+59f7097650bcdaffc074fd946eda0ea8  /opt/gennety/apps/bot/src/services/rematch-card.ts
+0d53712b54e74d9b3433faef9df64b65  /opt/gennety/apps/webapp/src/gender-avatars.ts
+96554faf00cc59aa167bdf54740ebe5b  /opt/gennety/apps/bot/src/services/dispatch-queue.ts
+```
+
+The third is the one worth checking by CONTENT rather than presence: the file
+existed before, and what this release changed inside it is
+`disposeUndeliveredMatch` — the guarantee that a dispatch attempt never leaves a
+match live-and-unstamped (§3.3). A stale copy of that file is the one regression
+that reintroduces a permanent, silent hole:
+
+```sh
+ssh root@167.172.178.229 'grep -c disposeUndeliveredMatch /opt/gennety/apps/bot/src/services/dispatch-queue.ts'
+# 3 = the fix is live (definition + call site + its own comment). 0 = stale file.
 ```
 
 **The served Mini App bundle is a SEPARATE anchor and is not covered by the
