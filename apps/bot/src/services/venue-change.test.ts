@@ -30,6 +30,7 @@ import {
   VENUE_CHANGE_WALK_RESERVED,
   isWithinRadius,
   resolveVenuePhotoRefs,
+  VENUE_CHANGE_PHOTOS_PER_VENUE,
   __resetVenuePhotoCacheForTests,
   type CatalogVenue,
   type VenueBoardEligibilityInput,
@@ -258,6 +259,7 @@ describe("listCuratedVenuesNear — dedup + per-tier radius", () => {
       tier: string;
       km: number;
       universityDomain: string;
+      photoRefs: string[];
     }> = {},
   ) {
     const km = over.km ?? 0.5;
@@ -276,6 +278,7 @@ describe("listCuratedVenuesNear — dedup + per-tier radius", () => {
       rating: 4.6,
       userRatingCount: 200,
       universityDomain: over.universityDomain ?? "knu.ua",
+      photoRefs: over.photoRefs ?? [],
     };
   }
 
@@ -288,6 +291,22 @@ describe("listCuratedVenuesNear — dedup + per-tier radius", () => {
 
   beforeEach(() => {
     findMany.mockReset();
+  });
+
+  it("surfaces the photo refs stored on the row, sliced to what the board shows", async () => {
+    // The read half of moving photos into the catalog: the re-validation cron
+    // fills `photoRefs` from the Place Details call it already makes, so the
+    // board reads them straight off the row instead of paying a lookup per
+    // venue per process. The row deliberately stores more than the board shows
+    // (`CURATED_PHOTO_REFS_MAX` = 10 against 6), and the slice is on READ so
+    // raising the product number is not a nine-day wait for a re-scan.
+    const stored = Array.from({ length: 9 }, (_, i) => `places/place-1/photos/${i}`);
+    findMany.mockResolvedValue([row({ photoRefs: stored })]);
+
+    const out = await listCuratedVenuesNear(scope);
+
+    expect(out).toHaveLength(1);
+    expect(out[0]!.photoRefs).toEqual(stored.slice(0, VENUE_CHANGE_PHOTOS_PER_VENUE));
   });
 
   it("collapses the per-university-domain copies of one venue into one card", async () => {
@@ -749,10 +768,25 @@ describe("buildVenueChangeCatalog — curated cover photos", () => {
     process.env.PLACES_API_KEY = "test-places-key";
   });
 
-  it("fills in photos for curated rows, which store none of their own", async () => {
-    // The regression this exists for: once the catalog was scoped by cityKey the
-    // curated branch started winning, and curated rows hardcode `photoRefs: []`
-    // — so every board went photo-less by construction.
+  it("spends nothing on a curated row that already carries its refs", async () => {
+    // The whole point of storing them: the re-validation cron fills `photoRefs`
+    // out of the Place Details call it already makes, so a warm catalog reaches
+    // the board with its pictures in hand and the per-venue lookup — which was
+    // paid again after every deploy, since its only cache was process memory —
+    // never happens at all.
+    const stored = ["places/stored/photos/a", "places/stored/photos/b"];
+    const out = await buildVenueChangeCatalog(input, {
+      listCurated: async () => [{ ...curatedNoPhotos("c1"), photoRefs: stored }],
+    });
+
+    expect(out[0]!.photoRefs).toEqual(stored);
+    expect(photoLookup).not.toHaveBeenCalled();
+  });
+
+  it("still fills in photos for a row the cron has not reached yet", async () => {
+    // A venue seeded since the last scan touched it — a full Kyiv cycle is ~9
+    // days at 30 rows a night — so the fallback is what keeps that window
+    // invisible rather than a stretch of photo-less cards.
     const out = await buildVenueChangeCatalog(input, {
       listCurated: async () => [curatedNoPhotos("c1")],
     });

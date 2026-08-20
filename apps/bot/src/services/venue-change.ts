@@ -466,6 +466,10 @@ export async function listCuratedVenuesNear(
       // rows (the board shows no rating for them), only used to gate.
       rating: true,
       userRatingCount: true,
+      // Filled by the re-validation cron out of the Place Details call it
+      // already makes. Empty only until that scan has reached the row, which is
+      // what `withCuratedPhotos` still covers.
+      photoRefs: true,
     },
     // Freshest copy first, so the dedup below keeps the one the re-validation
     // cron confirmed most recently. The per-domain copies are identical today
@@ -512,8 +516,11 @@ export async function listCuratedVenuesNear(
       category: r.category,
       tier: r.tier,
       distanceKm: round1(distanceKm),
-      // Curated rows store no imagery and no public rating/blurb in our base.
-      photoRefs: [],
+      // Sliced on READ, not on write: the row deliberately stores more than the
+      // board shows, so changing the product number below never means waiting
+      // out a full re-scan of the catalog.
+      photoRefs: r.photoRefs.slice(0, VENUE_CHANGE_PHOTOS_PER_VENUE),
+      // Curated rows carry no public rating/blurb in our base.
       rating: null,
       userRatingCount: null,
       editorialSummary: null,
@@ -649,13 +656,17 @@ export function __resetVenuePhotoCacheForTests(): void {
 /**
  * Fill in `photoRefs` for curated rows, which store no imagery of their own.
  *
- * This is what puts pictures back on the board. Curated rows have always
- * carried `photoRefs: []`, and it went unnoticed because until the catalog was
- * scoped by `cityKey` the curated branch never matched in production at all —
- * every board fell through to the Places sweep, which carries photos in its
- * search response. Once curated started winning, the board lost its imagery by
- * construction. Every curated row does hold a stable `placeId`, so the photos
- * are one Place Details request away (verified: 127/127 Kyiv venues have one).
+ * **This is now the FALLBACK, not the main path.** Curated rows carry their own
+ * `photoRefs`, refreshed by the re-validation cron inside the Place Details
+ * call it already makes per venue per night, so a board whose venues have all
+ * been scanned reaches this function with nothing left to do and spends
+ * nothing. What is left for it is the gap: a venue seeded since the last scan
+ * reached it (a full Kyiv cycle is ~9 days at 30 rows a night), and the Places
+ * sweep's own rows in a city with no curated catalog.
+ *
+ * Keeping it is what makes the cron's slow fill invisible rather than a
+ * nine-day window of photo-less cards. Deleting it once the catalog is warm
+ * would be a regression the first time a venue is added.
  *
  * Runs AFTER the cap, so it is bounded by `VENUE_CHANGE_CATALOG_LIMIT` rather
  * than by the size of the city's catalog, and every result is cached by place

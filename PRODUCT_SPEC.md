@@ -4373,16 +4373,30 @@ live only in the Telegram caption.
   path always fell through to a photo-less card. Operator-supplied photos are
   not part of the product today; if reintroduced they must be an explicit
   override with a seeding path, never a silently-null field.
-  **The §3.7b board resolves them the same way, per board open (2026-08-03).**
-  A curated venue's board card and its detail gallery were blank for the same
-  structural reason as the date card once was — curated rows carry no imagery —
-  and it went unnoticed because until the catalog was scoped by `cityKey` the
-  curated branch never ran in production at all, so every board fell through to
-  the Places sweep, whose search response already carries photos. The board now
-  resolves each curated card's photos from its `placeId` in one Place Details
-  request (which returns the whole gallery, not just a cover), after the board
-  cap and cached in-process by place id — a day for a real answer, minutes for a
-  failed lookup, so an outage costs pictures rather than becoming a retry storm.
+  **The §3.7b board reads its photos off the venue row, and pays nothing for
+  them (2026-08-20).** A curated venue's board card and detail gallery were
+  blank for the same structural reason as the date card once was — curated rows
+  carried no imagery — and it went unnoticed because until the catalog was
+  scoped by `cityKey` the curated branch never ran in production at all, so
+  every board fell through to the Places sweep, whose search response already
+  carries photos. The first fix had the board resolve each card's photos from
+  its `placeId` per board open, cached in process. That worked and was paid for
+  repeatedly: process memory is thrown away on every deploy, so the next board
+  re-bought the whole city, and the cache could not be shared with anything
+  else.
+  The refs now live on `CuratedVenue.photoRefs`, filled by the nightly
+  re-validation cron out of the Place Details call it **already makes** per
+  venue for hours and rating. Place Details is billed by the most expensive
+  field requested rather than by their sum, so folding `photos` into that
+  existing request costs at most what it already cost — which holds whichever
+  SKU tier `photos` belongs to, so the saving needs no pricing assumption. The
+  board's own lookup survives as the **fallback** for a venue the scan has not
+  reached yet (a full Kyiv cycle is ~9 days at 30 rows a night); deleting it
+  would put photo-less cards on the board the first time a venue is added.
+  The row deliberately stores more refs than the board shows (10 against
+  `VENUE_CHANGE_PHOTOS_PER_VENUE`), and the slice is on READ, so raising that
+  product number later is a one-line change rather than a nine-day wait for the
+  catalog to be re-scanned.
   Best-effort by rule: an unresolved photo leaves the category glyph the client
   already draws, and a board is never held up or failed for imagery. Only the
   board *read* pays for this; the like/confirm calls rebuild the same catalog

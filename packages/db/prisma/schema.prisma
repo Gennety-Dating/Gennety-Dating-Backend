@@ -1874,6 +1874,25 @@ model CuratedVenue {
   editorialSummary String?   @map("editorial_summary")
   /// unknown | provider | operator_confirmed | always_open
   hoursConfidence  String    @default("unknown") @map("hours_confidence")
+  /// Google Places photo resource names (`places/X/photos/Y`) for this venue,
+  /// refreshed by the re-validation cron inside the SAME Place Details call it
+  /// already makes for hours and rating. Google bills Place Details by the most
+  /// expensive field requested rather than by the sum, so carrying `photos` in
+  /// that existing request costs strictly less than the separate lookup it
+  /// replaces — and the venue-change board then reads its pictures from here
+  /// instead of paying one lookup per venue per process (a cache that went cold
+  /// on every deploy).
+  ///
+  /// Empty until the cron has reached the row — a full Kyiv cycle is ~9 days at
+  /// 30 rows a night — which is why `withCuratedPhotos` survives as the runtime
+  /// fallback rather than being deleted with the old path.
+  ///
+  /// An EMPTY Places answer must never overwrite a stored value: an absent
+  /// `photos` field is indistinguishable from a partial 200, and trusting one
+  /// blanked a venue on the board for a day once already (`venue-change.ts` →
+  /// `lookupAndCachePhotos`). Distinct from the retired `photoUrl` below: these
+  /// are provider pointers we re-resolve, not operator-owned imagery.
+  photoRefs        String[]  @default([]) @map("photo_refs")
   /// RETIRED 2026-07-25 — no longer read or written. Intended for a hand-filled
   /// operator photo, but no row was ever populated (0/537 in production), so it
   /// only ever produced photo-less date cards for curated picks. Venue imagery

@@ -640,6 +640,13 @@ export interface PlaceDetails {
   priceLevel: string | null;
   primaryType: string | null;
   editorialSummary: string | null;
+  /**
+   * Photo resource names, in Google's own order (cover first). EMPTY means
+   * "this response carried no photos", which is NOT the same as "this venue has
+   * none" — see `fetchPlacePhotoNames` for why the two are indistinguishable.
+   * A caller that persists these must therefore treat empty as "no news".
+   */
+  photoRefs: string[];
 }
 
 const PLACE_DETAILS_FIELD_MASK = [
@@ -652,6 +659,13 @@ const PLACE_DETAILS_FIELD_MASK = [
   "priceLevel",
   "primaryType",
   "editorialSummary",
+  // Carried here rather than fetched separately. Place Details is billed by the
+  // most expensive field requested, not by their sum, so folding `photos` into
+  // a request that already asks for `rating`/`regularOpeningHours` costs at
+  // most what that request already cost — and saves the whole second lookup
+  // `fetchPlacePhotoNames` used to make per venue per process. That holds
+  // whichever SKU tier `photos` belongs to, so it needs no pricing assumption.
+  "photos",
 ].join(",");
 
 /**
@@ -689,6 +703,9 @@ export async function fetchPlaceDetails(
     priceLevel: p.priceLevel ?? null,
     primaryType: p.primaryType ?? null,
     editorialSummary: p.editorialSummary?.text ?? null,
+    photoRefs: (p.photos ?? [])
+      .map((photo) => photo.name)
+      .filter((name): name is string => typeof name === "string" && name.length > 0),
   };
 }
 

@@ -803,16 +803,31 @@ not only on the built row: `sync-venues:kyiv --apply` rebuilds rows from Places
 and carries over only what the manifest declares (`facetTags`,
 `hardCapabilities`, and now `hoursConfidence` + `reviewNote`).
 
-Curated rows deliberately store **no imagery**: venue
-photos come exclusively from Google Places, resolved from `placeId` when a venue
-is actually assigned (`fetchPlacePhotoName`), so the pointer is always fresh and
-only ever costs one request per scheduled date. The legacy operator-supplied
-`photoUrl` column is **retired 2026-07-25** (never populated — 0/537 rows — so
-every curated pick silently shipped a photo-less date card); it is no longer read
-or written and the column is kept only so the change stays additive.
-The §3.7b venue-change board resolves photos the same way but per board open
-(`withCuratedPhotos`, `services/venue-change.ts`), cached in-process by
-`placeId` and bounded by `VENUE_CHANGE_CATALOG_LIMIT` (21).
+Venue imagery comes exclusively from Google Places — never from the operator.
+The legacy operator-supplied `photoUrl` column is **retired 2026-07-25** (never
+populated — 0/537 rows — so every curated pick silently shipped a photo-less
+date card); it is no longer read or written and the column is kept only so the
+change stays additive. What replaced it is **`photoRefs`, a stored array of
+Places photo resource names refreshed by the re-validation cron** (2026-08-20):
+that cron already issues one Place Details call per venue per night, and Place
+Details is billed by the most expensive field requested rather than by their
+sum, so carrying `photos` in it costs at most what it already cost.
+
+That is what the §3.7b venue-change board reads. It used to resolve the same
+refs itself, one Place Details call per venue per board open, cached only in
+process memory (`withCuratedPhotos`) — so every deploy threw the whole city
+away and the next board paid for all of it again. `withCuratedPhotos` survives
+as the **fallback**, not the main path: it covers a venue the nightly scan has
+not reached yet (a full Kyiv cycle is ~9 days at 30 rows a night) and the Places
+sweep's own rows in a city with no curated catalog. The date card is unchanged
+and still resolves its single cover from `placeId` at assignment
+(`fetchPlacePhotoName`), which is one request per scheduled date.
+
+**An empty Places answer never overwrites stored refs.** An absent `photos`
+field is indistinguishable from a partial 200, so the cron treats empty as "no
+news" — the same rule it already applies to `rating`/`priceLevel`. Writing one
+through would blank a venue on the board until its next scan, i.e. ~9 days,
+against the 5 minutes the in-process cache held an empty answer for.
 
 **There is no uniqueness constraint on this table, and the seeder writes one row
 per `universityDomain`** — Kyiv holds 538 active rows for 127 real venues, five

@@ -18,7 +18,18 @@ import {
  *     (`MIN_RATING` / `MIN_RATING_COUNT`) → `active = false`.
  *   - healthy → refresh `openingHours`, `utcOffsetMinutes`, the quality/price
  *     metadata the V2 eligibility gate reads (`rating`, `userRatingCount`,
- *     `priceLevel`, `primaryType`, `editorialSummary`), and `lastVerifiedAt`.
+ *     `priceLevel`, `primaryType`, `editorialSummary`), the venue-change
+ *     board's `photoRefs`, and `lastVerifiedAt`.
+ *
+ * The photo refs are the reason this worker is now load-bearing for a surface
+ * it has nothing else to do with. The board used to resolve them itself, one
+ * Place Details call per venue, cached only in process memory — so every deploy
+ * threw the whole city away and the next board open paid for all of it again.
+ * This call was already being made, daily, per venue; Place Details bills by the
+ * most expensive field requested rather than by their sum, so carrying `photos`
+ * in it costs at most what it already cost and removes that second lookup
+ * entirely. What the board keeps is a fallback for rows this scan has not
+ * reached yet (`withCuratedPhotos`), not a parallel source of truth.
  *
  * Safety: an infra failure (fetch throws) NEVER deactivates a row — we don't
  * punish a venue for our own outage; it's retried next tick. A successful fetch
@@ -30,6 +41,16 @@ import {
  */
 
 export const DEFAULT_VENUE_REVALIDATION_BATCH = 30;
+
+/**
+ * How many photo refs to keep per venue. Google returns ~10 for a typical
+ * place in the one response, and the board shows at most
+ * `VENUE_CHANGE_PHOTOS_PER_VENUE` (6) — the surplus is stored deliberately, so
+ * raising that product number later is a read-side change rather than a
+ * nine-day wait for the whole catalog to be re-scanned. Capped anyway: an
+ * unbounded array on a row nobody audits is how a column quietly grows.
+ */
+export const CURATED_PHOTO_REFS_MAX = 10;
 
 export interface VenueRevalidationOptions {
   /** Cap rows touched per tick. Default 30 — bounds Places cost. */
@@ -127,6 +148,15 @@ export async function venueRevalidationTick(
           ...(details.primaryType != null ? { primaryType: details.primaryType } : {}),
           ...(details.editorialSummary != null
             ? { editorialSummary: details.editorialSummary }
+            : {}),
+          // Same rule as the fields above, and here it is the one that bites:
+          // an absent `photos` field is indistinguishable from a partial 200,
+          // so an empty answer is "no news" and must leave the stored refs
+          // alone. Writing it through would blank the venue on the board until
+          // its next scan — nine days for a full Kyiv cycle, against the five
+          // minutes the old in-process cache held an empty answer for.
+          ...(details.photoRefs.length > 0
+            ? { photoRefs: details.photoRefs.slice(0, CURATED_PHOTO_REFS_MAX) }
             : {}),
           lastVerifiedAt: new Date(),
         },

@@ -11,7 +11,10 @@ vi.mock("@gennety/db", () => ({
 }));
 
 import { prisma } from "@gennety/db";
-import { venueRevalidationTick } from "./venue-revalidation.js";
+import {
+  venueRevalidationTick,
+  CURATED_PHOTO_REFS_MAX,
+} from "./venue-revalidation.js";
 import type { PlaceDetails } from "./venue.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -29,6 +32,7 @@ function details(overrides: Partial<PlaceDetails> = {}): PlaceDetails {
     priceLevel: "PRICE_LEVEL_MODERATE",
     primaryType: "cafe",
     editorialSummary: "A cosy neighbourhood cafe.",
+    photoRefs: ["places/p1/photos/a", "places/p1/photos/b"],
     ...overrides,
   };
 }
@@ -129,6 +133,33 @@ describe("venueRevalidationTick", () => {
     expect("editorialSummary" in arg.data).toBe(false);
     // The hours refresh still happens — those are always written.
     expect(arg.data.lastVerifiedAt).toBeInstanceOf(Date);
+  });
+
+  it("stores the venue's photo refs, capped, so the board never has to look them up", async () => {
+    mFindMany.mockResolvedValue([{ id: "v7", placeId: "p7", name: "Photogenic" }]);
+    const many = Array.from({ length: 14 }, (_, i) => `places/p7/photos/${i}`);
+    await venueRevalidationTick({
+      apiKey: "k",
+      fetchDetails: async () => details({ photoRefs: many }),
+    });
+    const arg = mUpdate.mock.calls[0]![0] as { data: Record<string, unknown> };
+    expect(arg.data.photoRefs).toEqual(many.slice(0, CURATED_PHOTO_REFS_MAX));
+    // Google's own order is the cover-first order the board renders.
+    expect((arg.data.photoRefs as string[])[0]).toBe("places/p7/photos/0");
+  });
+
+  it("does NOT erase stored photo refs when Places answers with none", async () => {
+    // The one that actually bites. An absent `photos` field is indistinguishable
+    // from a partial 200, so writing an empty array through would blank the
+    // venue on the board until its next scan — ~9 days for a full Kyiv cycle,
+    // against the 5 minutes the old in-process cache held an empty answer for.
+    mFindMany.mockResolvedValue([{ id: "v8", placeId: "p8", name: "Sparse Photos" }]);
+    await venueRevalidationTick({
+      apiKey: "k",
+      fetchDetails: async () => details({ photoRefs: [] }),
+    });
+    const arg = mUpdate.mock.calls[0]![0] as { data: Record<string, unknown> };
+    expect("photoRefs" in arg.data).toBe(false);
   });
 
   it("does NOT deactivate on an infra failure — counts it as failed and retries later", async () => {
