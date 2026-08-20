@@ -16,6 +16,25 @@
   --scene-scrim: rgba(3, 3, 3, 0.86);
   --scene-scrim-0: rgba(3, 3, 3, 0);
 
+  /* The back arrow's graphite + its inner-edge sheen (see `.howitworks-back`).
+     Theme-independent by design — both live here rather than beside the rule so
+     the two states of one light source stay adjacent and cannot drift. */
+  --back-graphite: #1b1d20;
+  --back-sheen:
+    inset 0 1px 0 rgba(255, 255, 255, 0.17),
+    inset 0 10px 20px -13px rgba(255, 255, 255, 0.55),
+    inset 0 -10px 20px -13px rgba(255, 255, 255, 0.42),
+    inset 10px 0 20px -13px rgba(255, 255, 255, 0.48),
+    inset -10px 0 20px -13px rgba(255, 255, 255, 0.48),
+    0 6px 16px rgba(0, 0, 0, 0.3);
+  --back-sheen-lit:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 10px 20px -13px rgba(255, 255, 255, 0.7),
+    inset 0 -10px 20px -13px rgba(255, 255, 255, 0.54),
+    inset 10px 0 20px -13px rgba(255, 255, 255, 0.62),
+    inset -10px 0 20px -13px rgba(255, 255, 255, 0.62),
+    0 6px 16px rgba(0, 0, 0, 0.3);
+
   /* The one motion in this app that is not ours: a screen making room for the
      soft keyboard. Every surface that shrinks by `--kb-height` follows the SAME
      curve and duration, because they are all following the same object — a
@@ -1813,8 +1832,31 @@ button {
   font-size: 1.6rem;
 }
 
-/* Secondary circular back affordance — pairs with the primary white pill in the
-   final how-it-works step and across the "Подробнее" date-flow walkthrough. */
+/* ── The back arrow ─────────────────────────────────────────────────────
+   The secondary circular affordance that pairs with the primary white pill in
+   the final how-it-works step and across the "Подробнее" date-flow walkthrough.
+
+   Deep graphite, borderless, and lit ONLY by the house inner-edge sheen: four
+   inset shadows pulled back past the edge by a negative spread, so only their
+   soft falloff survives just inside the rim and the light reads as coming FROM
+   the border INWARD. Same recipe as the "both" pill on the preference screen,
+   referral's `.ref-share` and the height drum's `.ob-wheel-capsule`.
+
+   Two things follow from that and are not styling choices:
+
+   1. There is NO `inset 0 0 0 1px` rim any more. That hairline is a stroke —
+      it drew the outline this button is meant not to have, and it competed
+      with the sheen for the same few pixels of rim.
+   2. The graphite is the SAME on both themes, and the light-theme override
+      that used to flip this to frosted grey is deleted. The effect needs a
+      dark base to exist at all: light bleeding inward has nothing to bleed
+      into on a pale fill. Identical reasoning to `--pref-both-bg` above, and
+      at 56px a graphite disc still reads as secondary next to the burgundy
+      CTA even on the cream page.
+
+   Sized to the 56px circle rather than copied verbatim from the wider pills:
+   the offsets are ~a sixth of the diameter, so the light hugs the rim instead
+   of meeting in the middle and flattening into a plain lighter disc. */
 .howitworks-back {
   flex-shrink: 0;
   width: 3.5rem;
@@ -1824,34 +1866,23 @@ button {
   border-radius: 9999px;
   display: grid;
   place-items: center;
-  color: #f4f4f5;
-  /* Liquid glass, tuned so it can't show the iOS hairline. No backdrop-filter
-     (its border-radius seam drew the dark top edge). A centre-symmetric fill so
-     the rim brightness is equal all round (a top->bottom gradient made the rim
-     read as a white line at the bottom). Rim + soft top sheen are inset shadows,
-     so there's no hard border edge to seam. No own entry animation (it rides the
-     scene crossfade, so the arrow no longer flies in a beat late). */
-  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.19), rgba(255, 255, 255, 0.08) 70%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
-    inset 0 2px 3px rgba(255, 255, 255, 0.15),
-    0 6px 18px rgba(0, 0, 0, 0.42);
+  color: rgba(255, 255, 255, 0.92);
+  background: var(--back-graphite);
+  box-shadow: var(--back-sheen);
   transition:
     transform 200ms ease,
-    background 200ms ease,
     box-shadow 200ms ease;
 }
 
+/* Hover/press lift the sheen rather than dimming the fill — the light answers
+   the touch, which is the whole point of putting it inside the shape. */
 .howitworks-back:hover {
-  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.11) 70%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
-    inset 0 2px 3px rgba(255, 255, 255, 0.2),
-    0 6px 18px rgba(0, 0, 0, 0.42);
+  box-shadow: var(--back-sheen-lit);
 }
 
 .howitworks-back:active {
   transform: scale(0.92);
+  box-shadow: var(--back-sheen-lit);
 }
 
 .howitworks-back .material-symbols-outlined {
@@ -3067,26 +3098,6 @@ button {
 :root[data-theme="light"] .lavender-glow {
   background: rgba(17, 12, 20, 0.05);
   filter: blur(120px);
-}
-
-/* The circular back affordance is white liquid glass — correct over the dark
-   date-flow photo (`.howitworks-dock`), invisible on the pale page under the
-   how-it-works hero photo. On light it flips to ink-on-frosted-grey. */
-:root[data-theme="light"] .howitworks-foot .howitworks-back {
-  color: var(--text);
-  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.07), rgba(0, 0, 0, 0.04) 70%);
-  box-shadow:
-    inset 0 0 0 1px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 6px 16px rgba(0, 0, 0, 0.12);
-}
-
-:root[data-theme="light"] .howitworks-foot .howitworks-back:hover {
-  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.11), rgba(0, 0, 0, 0.06) 70%);
-  box-shadow:
-    inset 0 0 0 1px rgba(0, 0, 0, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 6px 16px rgba(0, 0, 0, 0.16);
 }
 
 /* Error text: the dark-theme rose is too pale to read on the light page. */
