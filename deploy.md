@@ -27,6 +27,25 @@ DROP** — план прочитан `migrate diff` и локально, и на
 - **§3.1c** получает предусловие: пересев синтетиков — только на деплой с
   `disposeUndeliveredMatch`.
 
+**Демо задеплоено и проверено отдельно** (первый заход оборвался, см. ниже):
+схема применена к демо-БД (`aws-1-eu-west-1` — не продовая `aws-0`),
+`db:drift-check` OK, рестарт 27 → **28**, баннер изоляции называет
+`@gennety_demo_bot` и демо-базу, оба демо-подавления кронов на месте
+(`Drop matching NOT scheduled`, `No-match notice NOT scheduled`), демо-бандл
+Mini App собран с `VITE_API_BASE_URL=https://demo-api.gennety.com` и выложен,
+`demo-app/onboarding.html` 200, `demo-api` ping ok, ноль ошибок от нового PID.
+
+**⚠️ И одна ловушка, в которую этот релиз чуть не наступил.** Доводя демо
+руками, легко забыть последний шаг самого `deploy-demo.sh`: он пересобирает
+`dist/` ОБРАТНО на прод-базу. Без этого локальный `apps/webapp/dist/` остаётся
+demo-указывающим, и следующий `deploy-webapp.sh` отправит demo-бандл на
+**боевой** хост. Проверка — по содержимому, а не по памяти:
+
+```sh
+grep -rlo 'demo-api.gennety.com' apps/webapp/dist/assets/ | wc -l   # обязан быть 0
+grep -rlo 'dating-api.gennety.com' apps/webapp/dist/assets/ | wc -l # > 0
+```
+
 **⚠️ Две операционные вещи, которые стоит знать до следующего раза:**
 
 - **`pnpm build` на дроплете переживает разрыв ssh, а `deploy-demo.sh` — нет.**
