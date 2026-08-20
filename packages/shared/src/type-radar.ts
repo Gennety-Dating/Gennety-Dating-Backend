@@ -188,6 +188,15 @@ export function reasonChipsForPhoto(photo: RadarPhoto, verdict: Verdict): Reason
 // rebalanced: closing it would mean regenerating a third, already-approved
 // photo, and `type-radar.test.ts` still holds the property that actually
 // matters — every attribute value spans at least two scenes.
+//
+// One caveat that outranks all of the above: `scene` is DECLARED here and has
+// never been verified against the rendered images. A full audit of band A on
+// 2026-08-20 found roughly 5 of 24 backdrops actually matching their declared
+// scene (f03 says `park` and is a wine bar; m04 says `street` and is a
+// bookshop). Nothing reads the field at runtime, so this costs no behaviour —
+// but the decorrelation above is an intent, not an enforced property, and the
+// test asserts it over the declarations rather than over the photographs. Do
+// not cite `scene` as evidence that a backdrop cannot confound an attribute.
 
 export const FEMALE_PHOTOS: RadarPhoto[] = [
   { id: "f01", set: "female", scene: "cafe", attrs: { hairColor: "blonde", hairLength: "long", build: "slim", style: "elegant", tattoos: "no" } },

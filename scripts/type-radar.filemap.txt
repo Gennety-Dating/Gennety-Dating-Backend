@@ -2,7 +2,45 @@ TYPE RADAR — SAVE-AS FILE MAP (name each generated image exactly this)
 Folder: apps/webapp/public/radar/<band>/<id>.jpg   (v1 = band 'a' only, 24 files)
 The id is the ONLY link between an image and its attributes — a wrong name silently corrupts learning. QA each against its brief.
 2026-08-20: f04/f07/f10/m12 regenerated after founder review; f10 and m12 moved park -> cafe (scene is now 5 cafe / 4 street / 3 park per set — see type-radar.ts).
-KNOWN DEFECTS, not yet fixed: f08 shows a tattoo while its row says tattoos=no (it teaches the OPPOSITE of the attribute); m11 reads athletic while its row says build=big.
+
+2026-08-20 FULL AUDIT — all 24 band-A images compared against their declared rows.
+The factorial PLAN is clean (frequencies 4-6, no pair correlation, 2 isolation pairs in
+the male set). Everything below is a gap between the plan and what the renders show.
+
+BLOCKING — one attribute value does not exist on screen at all:
+  female build: 4 cards declare `curvy` (f04 f06 f08 f11) and NOT ONE reads curvy;
+  4 declare `athletic` (f02 f05 f09 f12) and NOT ONE reads athletic. All 12 women read
+  slim (f05 unreadable — oversized tee hides the torso). So the female `build` column
+  teaches nothing, while the `figure` reason chip is offered on every card and credits
+  it. Fixing this needs 8 regenerated photos, i.e. a founder decision, not a data patch.
+
+WRONG ROW — the card teaches the opposite of its label:
+  f08 tattoos=no  ->  a solid dark forearm tattoo, and the card crop makes it MORE
+                      prominent than the source (verified by rendering the crop).
+                      f08 is also curvy->slim and its "edgy" is a plain black tee:
+                      3 of 5 values wrong. Regenerate rather than patch the row.
+  m11 build=big   ->  reads athletic/V-shaped, not heavyset.
+  m09 build=lean  ->  reads athletic.
+
+WEAK BUT NOT WRONG:
+  f11 tattoos=yes — present, but a thin single line; the weakest tattoo in the deck.
+  f12 hairLength=long — shoulder-length, borderline against the `short` bobs.
+  m01 build=lean, m03 build=athletic, m05 build=big — all three read one step off.
+  style=edgy is carried by a plain black tee on f03 f05 f08 m06 m10; only f10 (leather
+  jacket) and m12 (overshirt) render `edgy` as a look rather than as an absence.
+
+ISOLATION PAIRS (the deck's only single-variable comparisons) — both compromised:
+  m05 vs m09 isolates `build` (big vs lean): both read athletic, so it isolates nothing.
+  m10 vs m12 isolates `beard`: after the 2026-08-20 regeneration m12 also changed
+  clothing register (oversized overshirt + wide trousers vs m10's plain tee), so beard
+  is now confounded with outfit. Caused by that regeneration; recorded, not reverted.
+
+SCENE IS DECLARED-ONLY, NOT VERIFIED: roughly 5 of 24 backdrops match their declared
+  scene (f03 declares park and is a wine bar; m04 declares street and is a bookshop;
+  f09/f11/m05 are a bedroom and two bathroom mirror selfies). Costs nothing at runtime
+  — nothing reads `scene` — but the decorrelation guarantee it exists for is not real.
+
+CLEAN — all five values match the render: f01 f07 f10 m02 m04 m06 m07 m08 m12.
 ================================================================================
 
 ################################################################################
