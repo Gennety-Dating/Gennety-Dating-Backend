@@ -221,14 +221,6 @@ export async function deliverScheduledConfirmation(
   });
   if (!match || !match.agreedTime) return;
 
-  // The pinned banner prints its FIRST countdown + venue name exactly here —
-  // the moment a match becomes `scheduled` (§2.1 mode "date"), flipping from
-  // the no-countdown "planning" mode it showed throughout negotiation. Pushed
-  // before any of the slower per-side work below (blurb generation, card
-  // rendering), so a hiccup downstream can never delay it, and independently
-  // of whether that work ever reaches the founder-feed/cache steps at the end.
-  await refreshStatusBanners(api, [match.userA.id, match.userB.id]).catch(() => {});
-
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
   // Each side's date card renders in that recipient's chosen theme.
@@ -283,6 +275,25 @@ export async function deliverScheduledConfirmation(
   // screenshot/forward-protected with a Share button; any render failure falls
   // back to the plain-text card per-side, so one render hiccup never denies the
   // other person their card and scheduling never wedges.
+  //
+  // The pinned banner is pushed HERE, per side, in `.finally` — it prints its
+  // FIRST countdown + venue name the moment a match becomes `scheduled` (§2.1
+  // mode "date"), flipping from the no-countdown "planning" mode it showed
+  // throughout negotiation. It used to be pushed at the TOP of this function,
+  // ahead of the blurb and the render, so that a downstream hiccup could not
+  // delay it. That bought the wrong property: `dateCardSteps` runs
+  // `NEVER_CUT_SHORT` for ~6.3s on top of blurb generation, so the pin carried
+  // the settled date and venue for seven seconds or more while the chat was
+  // still saying "putting your date card together" — every time, not as a race.
+  //
+  // A pin that is AHEAD of the chat is a wrong state on screen, and the
+  // once-a-minute tick cannot correct it: the banner is not stale, it is
+  // premature. Being skipped is not a wrong state — the push is an optimization
+  // on top of that tick, which owns recovery (`status-banner-refresh.ts`), so a
+  // send that throws costs at most a minute of lag. Hence `.finally` (the
+  // banner follows an ATTEMPTED confirmation, not a successful one) and per
+  // side rather than per pair, so one unreachable chat can neither delay nor
+  // skip the other person's banner.
   const [resultA, resultB] = await Promise.all([
     sendScheduledConfirmation(api, {
       telegramId: match.userA.telegramId,
@@ -296,7 +307,7 @@ export async function deliverScheduledConfirmation(
       partnerPhotoRef: match.userB.profile?.photos?.[0] ?? null,
       venue,
       agreedTime: match.agreedTime,
-    }),
+    }).finally(() => refreshStatusBanners(api, [match.userA.id]).catch(() => {})),
     sendScheduledConfirmation(api, {
       telegramId: match.userB.telegramId,
       text: textB,
@@ -309,7 +320,7 @@ export async function deliverScheduledConfirmation(
       partnerPhotoRef: match.userA.profile?.photos?.[0] ?? null,
       venue,
       agreedTime: match.agreedTime,
-    }),
+    }).finally(() => refreshStatusBanners(api, [match.userB.id]).catch(() => {})),
   ]);
   const dateCardFileIdA = resultA.fileId;
   const dateCardFileIdB = resultB.fileId;

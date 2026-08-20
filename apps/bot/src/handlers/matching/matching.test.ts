@@ -2072,15 +2072,34 @@ describe("venue negotiation finalization", () => {
         }),
       }),
     );
-    // The pinned banner prints its FIRST countdown + venue name exactly here —
-    // pushed rather than left to the once-a-minute status-timer tick.
-    expect(mRefreshStatusBanners).toHaveBeenCalledWith(api, ["uid-A", "uid-B"]);
-
     const finalCalls = api.sendMessage.mock.calls.filter((call: unknown[]) => {
       const opts = call[2] as { entities?: unknown[] } | undefined;
       return Array.isArray(opts?.entities);
     });
     expect(finalCalls).toHaveLength(2);
+
+    // The pinned banner prints its FIRST countdown + venue name here — pushed
+    // rather than left to the once-a-minute status-timer tick, and pushed PER
+    // SIDE so one unreachable chat cannot delay or skip the other's.
+    expect(mRefreshStatusBanners).toHaveBeenCalledWith(api, ["uid-A"]);
+    expect(mRefreshStatusBanners).toHaveBeenCalledWith(api, ["uid-B"]);
+
+    // ...and never BEFORE the confirmation it describes. Pushing it up front
+    // (where it used to live) left the pin carrying the settled date and venue
+    // while the chat was still narrating the card render — a pin ahead of the
+    // chat is a wrong state the once-a-minute tick cannot correct, because the
+    // banner is not stale, it is premature.
+    const lastConfirmation = Math.max(
+      ...finalCalls.map(
+        (call: unknown[]) =>
+          api.sendMessage.mock.invocationCallOrder[
+            api.sendMessage.mock.calls.indexOf(call)
+          ] as number,
+      ),
+    );
+    for (const order of mRefreshStatusBanners.mock.invocationCallOrder) {
+      expect(order).toBeGreaterThan(lastConfirmation);
+    }
 
     type MapsButton = { text: string; url: string };
     const getOnlyButton = (call: unknown[]): MapsButton => {

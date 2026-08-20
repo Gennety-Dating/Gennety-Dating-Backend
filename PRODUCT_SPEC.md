@@ -2223,6 +2223,31 @@ both read the process-wide bot handle via `getMainBotApi()`
 `proxy-chat.ts` already use for this exact shape of problem, and both no-op
 before the bot has finished booting.
 
+**A push may never precede the message it describes (2026-08-20).** The banner
+is pinned above every conversation, so it is read *next to* the chat rather
+than in place of it — and the first venue assignment pushed the moment the
+`scheduled` commit landed, ahead of the per-side work that actually tells the
+pair where they are going. That work is not incidental: `dateCardSteps` plays
+`NEVER_CUT_SHORT` for ~6.3 s on top of blurb generation, so the pin carried the
+settled date and venue name for **seven seconds or more** while the chat was
+still saying "putting your date card together" — every time, not as a race. The
+pinned message was announcing a decision the product was still narrating.
+
+The push now rides `.finally` on each side's own confirmation. Two properties
+decide that shape. **A pin ahead of the chat is a wrong state on screen, and
+the tick cannot correct it** — the banner is not stale, it is premature, so the
+usual "the worker reaches them within a minute" recovery does not apply.
+**Being skipped is not a wrong state**: the push is an optimization on top of a
+tick that owns recovery, so a confirmation that throws costs at most a minute
+of lag. That is why the ordering is worth more than the up-front push it
+replaces, why `.finally` is right (the banner follows an *attempted*
+confirmation, not a successful one), and why it fires **per side** rather than
+per pair — one unreachable chat must neither delay nor skip the other person's
+banner. The other four call sites already satisfied this by construction: the
+venue-change settles push after their cards, and the decision/TTL/cancellation
+transitions are followed by ordinary sends rather than by a multi-second
+status sequence.
+
 The banner is otherwise self-healing: active Telegram users with a null/stale
 message id
 get a replacement, deleted messages are recreated in the same tick, and an
