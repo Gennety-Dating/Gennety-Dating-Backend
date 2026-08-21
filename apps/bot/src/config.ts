@@ -277,6 +277,16 @@ export const env = {
   /// to be PRIVATE; the chat endpoint fetches signed URLs (5 min TTL) just
   /// long enough for the OpenAI vision call to dereference them.
   SUPABASE_CHAT_BUCKET: process.env.SUPABASE_CHAT_BUCKET ?? "chat-attachments",
+  /// Supabase Storage bucket for voice prompts uploaded by a NATIVE client
+  /// (VOICE_PROMPT_PRODUCT_SPEC.md). Telegram-recorded prompts never land here
+  /// — those live as a `file_id`, Telegram is the store. Expected to be
+  /// PRIVATE; playback goes through short-lived signed URLs.
+  ///
+  /// Must be named explicitly in `.env.demo`. The demo env is assembled as
+  /// production's `.env` plus that file, so any bucket it does not name is
+  /// INHERITED from production — which is exactly how the demo spent its first
+  /// day writing into production storage (deploy.md, 2026-08-06).
+  SUPABASE_VOICE_BUCKET: process.env.SUPABASE_VOICE_BUCKET ?? "voice-prompts",
 
   // ── AWS Rekognition Face Liveness (identity provider) ────────
   /// Master switch for the Face Liveness step — the provider that captures the
@@ -343,6 +353,13 @@ export const env = {
   /// product default; set explicitly to "false" only for local emergency tests.
   PROFILE_MEDIA_VALIDATION_ENABLED:
     process.env.PROFILE_MEDIA_VALIDATION_ENABLED !== "false",
+
+  /// Voice prompts (VOICE_PROMPT_PRODUCT_SPEC.md). Default OFF: this adds a
+  /// step to a live onboarding funnel and a message to every pitch, so it ships
+  /// dark and is flipped deliberately. With it off the collector never asks,
+  /// the pitch sends nothing extra, and the `/v1/*` routes 404 — an existing
+  /// row keeps its data and simply stops being read.
+  VOICE_PROMPT_ENABLED: process.env.VOICE_PROMPT_ENABLED === "true",
   /// Deprecated emergency rollback toggle. Upload handlers now fail closed and
   /// never publish media after a provider or local-processing failure.
   PROFILE_MEDIA_VALIDATION_FAIL_OPEN:

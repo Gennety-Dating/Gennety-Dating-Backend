@@ -79,6 +79,45 @@ export const VIDEO_IDENTITY_MATCH_THRESHOLD = 0.5;
 export const VIDEO_SAMPLE_TARGET_FRAMES = 12;
 
 /**
+ * Voice prompt bounds (VOICE_PROMPT_PRODUCT_SPEC.md).
+ *
+ * Unlike the profile video, this clip is not merely display-only: its
+ * transcript reaches the matching embedding, and the audio itself plays inside
+ * a pitch. So both ends of the duration range are product decisions rather than
+ * platform limits.
+ *
+ * The FLOOR exists because anything under three seconds is a misfire — a
+ * mis-held mic button, not an answer — and shipping one into a pitch reads as
+ * a broken feature rather than as a short person.
+ *
+ * The CEILING is the listener's, not the recorder's. The copy asks for ~15
+ * seconds; 60 is where a voice note stops being something a stranger will
+ * press play on. It is deliberately far below `voiceHandler`'s own
+ * MAX_VOICE_DURATION_SEC (300), which bounds a transcription request rather
+ * than a profile element, so the two must not be conflated.
+ *
+ * The BYTE ceiling is a safety-path limit in the same sense as the profile
+ * video's: the validation path downloads the clip via Bot API `getFile`, so it
+ * has to stay well inside the 20 MB cloud limit. 2 MB is ~4x the worst case a
+ * 60-second Opus voice note actually produces, so it only ever catches
+ * something pathological.
+ */
+export const VOICE_PROMPT_MIN_DURATION_SECONDS = 3;
+export const VOICE_PROMPT_MAX_DURATION_SECONDS = 60;
+export const VOICE_PROMPT_TARGET_DURATION_SECONDS = 15;
+export const VOICE_PROMPT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Peaks in the precomputed waveform.
+ *
+ * Telegram draws its own waveform and ignores this entirely; it exists so the
+ * native iOS player can render bars before a single audio byte is fetched.
+ * Forty is what fits a full-width iOS row at a legible bar width — fewer reads
+ * as a chart, more as noise.
+ */
+export const VOICE_PROMPT_WAVEFORM_BUCKETS = 40;
+
+/**
  * Ticket store bundles for the pre-purchase Mini App. `priceCents` is the
  * TOTAL charged for the bundle; per-ticket price is `priceCents / count`.
  * Payment is mocked in v1 (`TICKET_PAYMENT_MODE=mock`).

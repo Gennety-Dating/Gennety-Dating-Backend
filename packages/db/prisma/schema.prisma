@@ -343,6 +343,7 @@ model User {
   sessions                  UserSession[]
   clientEvents              ClientEvent[]
   profilerAnswers           ProfilerAnswer[]
+  voicePrompt               VoicePrompt?
   ticketLedger              TicketLedger[]
   subscriptionLedger        SubscriptionLedger[]
   rematchPurchases          RematchPurchase[]
@@ -973,6 +974,67 @@ model ProfilerAnswer {
   @@unique([userId, questionId])
   @@index([userId])
   @@map("profiler_answers")
+}
+
+/// One optional voice prompt per user (VOICE_PROMPT_PRODUCT_SPEC.md).
+///
+/// A short self-recorded clip the partner hears inside the pitch, right before
+/// the accept/decline question. Deliberately NOT an entry in
+/// `Profile.profileMedia`: a Telegram voice note cannot join a media group, so
+/// it is a separate `sendVoice` regardless, and keeping it out leaves the
+/// `photos[i] <-> photoFaceScores[i]` invariant and every media parser
+/// untouched.
+///
+/// `@@unique` on `userId` is what enforces "0 or 1" in the database rather than
+/// in application code; a re-record overwrites the row, so there is no history
+/// and no reconciliation.
+model VoicePrompt {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  /// Telegram `file_id` of the accepted voice note. On the Telegram rail this
+  /// is the ONLY copy — Telegram is the store and we hold the pointer, exactly
+  /// as profile photos and the profile video already work.
+  telegramFileId String? @map("telegram_file_id")
+  /// Supabase object path, written only when a native client uploaded bytes
+  /// directly. Null on a Telegram-originated prompt. MUST be covered by
+  /// `collectOwnedPaths` in services/account-deletion.ts — a miss there leaves
+  /// audio in the bucket after an erasure request, silently.
+  storagePath String? @map("storage_path")
+
+  durationSec Int     @map("duration_sec")
+  mimeType    String? @map("mime_type")
+  fileSize    Int?    @map("file_size")
+
+  /// Normalized 0..100 amplitude peaks, VOICE_PROMPT_WAVEFORM_BUCKETS long.
+  /// Telegram draws its own waveform and ignores this; it exists so the native
+  /// player can render bars before fetching any audio, and so that shipping it
+  /// later never needs a backfill over recordings whose source bytes are gone.
+  waveform Int[] @default([]) @map("waveform")
+
+  /// Whisper transcript. Two jobs, and the second is why this column is
+  /// load-bearing rather than an audit nicety: it is moderation evidence, AND
+  /// it is the matching signal — `refreshDirtyEmbeddings` reads it straight
+  /// from here and appends it to the embedding input, the same way it already
+  /// treats `partnerPreferences` and `negativeConstraints`. It is deliberately
+  /// NOT folded into `psychologicalSummary`: that field is replaced wholesale
+  /// by the About-me editor, and a transcript changes on every re-record, so
+  /// folding would mean both a silent wipe and a weight that multiplies.
+  ///
+  /// Never rendered to the partner. The product ships a person's voice, not a
+  /// machine's reading of it.
+  transcript String? @map("transcript")
+
+  /// Safety-validation bookkeeping, mirroring profile media.
+  validationVersion Int?      @map("validation_version")
+  validatedAt       DateTime? @map("validated_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("voice_prompts")
 }
 
 enum MatchStatus {

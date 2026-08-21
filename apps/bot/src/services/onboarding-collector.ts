@@ -39,6 +39,7 @@ export const ONBOARDING_FIELDS = [
   "ai_memory",
   "context_dump",
   "photos",
+  "voice_prompt",
 ] as const;
 
 export type OnboardingField = (typeof ONBOARDING_FIELDS)[number];
@@ -55,6 +56,7 @@ export const ONBOARDING_QUESTIONS = [
   "ai_memory",
   "context_dump",
   "photos",
+  "voice_prompt",
   "complete",
 ] as const;
 
@@ -156,6 +158,7 @@ interface CollectorUser {
     psychologicalSummary: string | null;
     photos: string[];
   } | null;
+  voicePrompt: { id: string } | null;
   onboardingProgress: {
     completedFields: string[];
     skippedFields: string[];
@@ -196,6 +199,7 @@ const USER_SELECT = {
       photos: true,
     },
   },
+  voicePrompt: { select: { id: true } },
   onboardingProgress: {
     select: {
       completedFields: true,
@@ -375,6 +379,15 @@ function progressFromUser(user: CollectorUser): MutableProgress {
     if (aiMemory === "declined") skipped.add("context_dump");
   }
   if ((user.profile?.photos.length ?? 0) >= MIN_PHOTOS) completed.add("photos");
+  // Same masking the AI-memory branch above uses: with the feature off the
+  // question resolves as already-handled, so the canonical order runs
+  // photos → complete and nothing about an existing recording is rewritten.
+  if (!env.VOICE_PROMPT_ENABLED) {
+    completed.add("voice_prompt");
+    skipped.add("voice_prompt");
+  } else if (user.voicePrompt) {
+    completed.add("voice_prompt");
+  }
 
   return { completed, skipped, asked };
 }
@@ -402,6 +415,7 @@ export function nextOnboardingQuestion(
   if (!progress.completed.has("ai_memory")) return "ai_memory";
   if (!progress.completed.has("context_dump")) return "context_dump";
   if (!progress.completed.has("photos")) return "photos";
+  if (!progress.completed.has("voice_prompt")) return "voice_prompt";
   return "complete";
 }
 
@@ -932,6 +946,7 @@ export function validateFactValue(
       return { value: raw };
     case "context_dump":
     case "photos":
+    case "voice_prompt":
       return { reason: "synthetic_field_not_extractable" };
   }
 }
@@ -1023,6 +1038,7 @@ function updatesForCandidates(
         break;
       case "context_dump":
       case "photos":
+      case "voice_prompt":
         break;
     }
   }
@@ -1455,7 +1471,7 @@ export async function applyOnboardingFacts(
 
 export async function markOnboardingField(
   telegramId: bigint,
-  field: "context_dump" | "photos",
+  field: "context_dump" | "photos" | "voice_prompt",
   skipped = false,
 ): Promise<CollectorSnapshot> {
   const user = (await prisma.user.findUniqueOrThrow({
@@ -1533,6 +1549,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     ai_memory: "Would you like to import context from an AI chat? Answer yes or no.",
     context_dump: contextDumpInstruction("en"),
     photos: `Send at least ${MIN_PHOTOS} clear photos of yourself.`,
+    voice_prompt:
+      "Last thing — and it's optional.\n\nRecord a voice note, about 15 seconds. Whoever I find for you hears it alongside your profile — before they decide.\n\nA voice carries what writing can't: how you joke, how you build a sentence, the tempo you live at.\n\nOne rule: don't read your profile aloud — it's already on their screen. Better: whatever's got you hooked right now, or the story you always end up telling friends.\n\nAnd don't rehearse. The first take is always the most alive.",
     complete: "Your onboarding is complete.",
   },
   ru: {
@@ -1547,6 +1565,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     ai_memory: "Хочешь импортировать контекст из AI-чата? Ответь да или нет.",
     context_dump: contextDumpInstruction("ru"),
     photos: `Пришли минимум ${MIN_PHOTOS} чёткие фотографии, где хорошо видно тебя.`,
+    voice_prompt:
+      "И последнее — по желанию.\n\nЗапиши голосовое секунд на 15. Человек, которого я тебе найду, услышит его вместе с твоей анкетой — до того, как решит.\n\nГолос выдаёт то, что не пишется: как ты шутишь, как строишь фразу, в каком темпе живёшь.\n\nОдно правило: не пересказывай анкету — она и так будет на экране. Лучше расскажи, что тебя сейчас затянуло, или историю, которую ты обычно рассказываешь друзьям.\n\nИ не репетируй. Первый дубль всегда живее.",
     complete: "Онбординг завершён.",
   },
   uk: {
@@ -1561,6 +1581,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     ai_memory: "Хочеш імпортувати контекст з AI-чату? Відповідай так або ні.",
     context_dump: contextDumpInstruction("uk"),
     photos: `Надішли щонайменше ${MIN_PHOTOS} чіткі фотографії, де добре видно тебе.`,
+    voice_prompt:
+      "І останнє — за бажанням.\n\nЗапиши голосове секунд на 15. Людина, яку я тобі знайду, почує його разом з твоєю анкетою — до того, як вирішить.\n\nГолос видає те, що не пишеться: як ти жартуєш, як будуєш фразу, у якому темпі живеш.\n\nОдне правило: не переказуй анкету — вона й так буде на екрані. Краще розкажи, що тебе зараз затягнуло, або історію, яку ти зазвичай розповідаєш друзям.\n\nІ не репетируй. Перший дубль завжди живіший.",
     complete: "Онбординг завершено.",
   },
   de: {
@@ -1575,6 +1597,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     ai_memory: "Möchtest du Kontext aus einem AI-Chat importieren? Antworte mit Ja oder Nein.",
     context_dump: contextDumpInstruction("de"),
     photos: `Sende mindestens ${MIN_PHOTOS} klare Fotos von dir.`,
+    voice_prompt:
+      "Zum Schluss — freiwillig.\n\nNimm eine Sprachnachricht auf, etwa 15 Sekunden. Die Person, die ich für dich finde, hört sie zusammen mit deinem Profil — bevor sie entscheidet.\n\nEine Stimme trägt, was sich nicht schreiben lässt: wie du witzelst, wie du einen Satz baust, in welchem Tempo du lebst.\n\nEine Regel: lies nicht dein Profil vor — das steht ohnehin schon da. Besser: was dich gerade packt, oder die Geschichte, die du deinen Freunden immer erzählst.\n\nUnd probe nicht. Der erste Take ist immer der lebendigste.",
     complete: "Dein Onboarding ist abgeschlossen.",
   },
   pl: {
@@ -1589,6 +1613,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     ai_memory: "Chcesz zaimportować kontekst z czatu AI? Odpowiedz tak lub nie.",
     context_dump: contextDumpInstruction("pl"),
     photos: `Wyślij co najmniej ${MIN_PHOTOS} wyraźne zdjęcia, na których dobrze Cię widać.`,
+    voice_prompt:
+      "I ostatnia rzecz — nieobowiązkowa.\n\nNagraj wiadomość głosową, jakieś 15 sekund. Osoba, którą ci znajdę, usłyszy ją razem z twoim profilem — zanim zdecyduje.\n\nGłos niesie to, czego nie da się napisać: jak żartujesz, jak budujesz zdanie, w jakim tempie żyjesz.\n\nJedna zasada: nie czytaj profilu na głos — i tak będzie na ekranie. Lepiej: co cię teraz wciągnęło, albo historia, którą zawsze opowiadasz znajomym.\n\nI nie ćwicz. Pierwsze podejście jest zawsze najbardziej żywe.",
     complete: "Onboarding został zakończony.",
   },
 };
@@ -1661,7 +1687,7 @@ type NotUnderstoodHintKey =
   | "name_only"
   | Exclude<
       OnboardingQuestion,
-      "first_name_age" | "context_dump" | "photos" | "complete"
+      "first_name_age" | "context_dump" | "photos" | "voice_prompt" | "complete"
     >;
 
 const NOT_UNDERSTOOD_LEAD: Record<Language, string> = {
@@ -1757,6 +1783,7 @@ export function onboardingNotUnderstoodText(
   if (
     question === "context_dump" ||
     question === "photos" ||
+    question === "voice_prompt" ||
     question === "complete"
   ) {
     return null;

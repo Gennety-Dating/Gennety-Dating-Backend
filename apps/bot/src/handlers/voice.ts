@@ -5,6 +5,7 @@ import { env } from "../config.js";
 import { transcribeVoice } from "../services/whisper.js";
 import { recordChatEventForChat } from "../services/chat-events.js";
 import { readResponseBuffer } from "../utils/bounded-response.js";
+import { isAwaitingVoicePrompt } from "../services/voice-prompt-claim.js";
 
 const MAX_VOICE_DURATION_SEC = 300;
 const MAX_VOICE_BYTES = 20 * 1024 * 1024;
@@ -27,6 +28,25 @@ export const voiceHandler = new Composer<BotContext>();
 voiceHandler.on("message:voice", async (ctx, next) => {
   const voice = ctx.message.voice;
   const language = ctx.session.language;
+
+  // The onboarding voice-prompt step owns this recording, so hand it through
+  // untouched (VOICE_PROMPT_PRODUCT_SPEC.md §1.4).
+  //
+  // The early return sits BEFORE this handler's own bounds on purpose. Those
+  // bounds describe a TRANSCRIPTION REQUEST — 300 seconds, 20 MB, and error
+  // copy that says the transcription failed — while a voice prompt is a profile
+  // element with its own, much tighter product bounds and its own wording. One
+  // owner per concern: letting this handler reject first would mean two
+  // rejection points disagreeing about the same recording, and letting it
+  // transcribe first would couple a perfectly good clip to Whisper being up.
+  //
+  // `ctx.message.voice` survives either way — this handler only ever mutates
+  // `text` — so the downstream handler still has the file_id. What it must not
+  // inherit is a `text` that the fact collector will mine for profile facts.
+  if (isAwaitingVoicePrompt(ctx.session)) {
+    await next();
+    return;
+  }
 
   if (voice.duration > MAX_VOICE_DURATION_SEC) {
     await ctx.reply(t(language, "voiceTooLong"));

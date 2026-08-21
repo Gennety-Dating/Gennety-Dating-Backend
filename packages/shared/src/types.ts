@@ -108,6 +108,26 @@ export interface SessionData {
   language: Language;
   /** Whether the agent is currently expecting a photo upload */
   expectingPhoto: boolean;
+  /**
+   * True while the onboarding voice-prompt step is waiting for a recording
+   * (VOICE_PROMPT_PRODUCT_SPEC.md §4.1).
+   *
+   * This is a claim on incoming VOICE, and it is the one thing standing between
+   * the feature and `voiceHandler` — which is mounted ahead of every router
+   * (`bot.ts`), transcribes any `message:voice` through Whisper and replaces
+   * `ctx.message.text` with the transcript. Without the flag the recording the
+   * user was just asked for arrives at the collector as a sentence and gets
+   * mined for profile facts.
+   *
+   * Deliberately UNBOUNDED, unlike the text and media claims in
+   * `menu-text-claim.ts`. Those bound a sub-flow that the user can walk away
+   * from while the product moves on; this is a linear onboarding question, so
+   * "still waiting" a week later is the correct state — the same reasoning
+   * `expectingPhoto` above already runs on. It is cleared by answering, by
+   * skipping, and by finalization, and the predicate additionally refuses once
+   * onboarding is complete, so it cannot leak into the post-onboarding chat.
+   */
+  expectingVoicePrompt: boolean;
   /** Temporary storage for collected photos during conversational onboarding */
   pendingPhotos: string[];
   /** Structured media aligned 1:1 with pendingPhotos; empty legacy sessions normalize from pendingPhotos */
@@ -245,6 +265,7 @@ export const DEFAULT_SESSION: SessionData = {
   onboardingStep: "consent",
   language: "en",
   expectingPhoto: false,
+  expectingVoicePrompt: false,
   pendingPhotos: [],
   pendingProfileMedia: [],
   pendingPhotoUniqueIds: [],

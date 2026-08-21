@@ -5,6 +5,8 @@ import {
   MAX_HEIGHT_CM,
   MIN_PHOTOS,
   MAX_PHOTOS,
+  VOICE_PROMPT_MIN_DURATION_SECONDS,
+  VOICE_PROMPT_MAX_DURATION_SECONDS,
 } from "@gennety/shared";
 import type { OnboardingQuestion } from "../services/onboarding-collector.js";
 
@@ -30,7 +32,13 @@ export type UiHintControl =
   | "text"
   | "multiline_text"
   | "magic_prompt" // context_dump: copy-prompt CTA + large paste field
-  | "photo_upload";
+  | "photo_upload"
+  // voice_prompt: hold-to-record button, live level meter, preview + re-record.
+  // `min`/`max` are SECONDS here rather than a count, which is the one place
+  // this contract reuses those fields for a different unit — the control name
+  // is what disambiguates them, and a client that does not know the control
+  // falls back to a text field and ignores both.
+  | "voice_record";
 
 export interface UiHint {
   control: UiHintControl;
@@ -55,6 +63,12 @@ const QUESTION_HINTS: Partial<Record<OnboardingQuestion, UiHint>> = {
   ai_memory: { control: "choice_chips", options: ["accepted", "declined"] },
   context_dump: { control: "magic_prompt" },
   photos: { control: "photo_upload", min: MIN_PHOTOS, max: MAX_PHOTOS },
+  voice_prompt: {
+    control: "voice_record",
+    min: VOICE_PROMPT_MIN_DURATION_SECONDS,
+    max: VOICE_PROMPT_MAX_DURATION_SECONDS,
+    skippable: true,
+  },
 };
 
 /**
