@@ -16,3 +16,24 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     res.status(401).json({ error: "Invalid or expired token" });
   }
 }
+
+/**
+ * JWT, если он есть, и никакого отказа, если его нет.
+ *
+ * Нужен ровно одному маршруту — приёму клиентской воронки: события онбординга
+ * случаются ДО того, как аккаунт существует, и требовать там токен значило бы
+ * не собирать ровно ту часть воронки, ради которой она заведена. Битый или
+ * протухший токен здесь тоже не ошибка: человек просто остаётся анонимным, а
+ * ронять сбор телеметрии из-за истёкшего access-токена незачем.
+ */
+export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+  const header = req.headers.authorization;
+  if (header?.startsWith("Bearer ")) {
+    try {
+      req.userId = verifyAccessToken(header.slice(7)).sub;
+    } catch {
+      // анонимный вызов
+    }
+  }
+  next();
+}

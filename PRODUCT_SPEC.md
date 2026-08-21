@@ -5917,7 +5917,8 @@ excluding an otherwise-complete user from matching.
   them. Now: OTP challenges (`email_otps`, `phone_otps`) are deleted after
   **7 days**; refresh sessions (`user_sessions`) **30 days** after they became
   unusable; relayed proxy-chat messages (`proxy_messages`) after **90 days**;
-  chat-timeline events (`chat_events`, §2.1) after **30 days**.
+  chat-timeline events (`chat_events`, §2.1) after **30 days**; client funnel
+  events (`client_events`, iOS 6.2) after **90 days**.
   Two of these are load-bearing rather than housekeeping:
   - `phone_otps` is keyed by NUMBER, not by user, because the phone funnel
     starts before a `User` row exists. A number belonging to someone who never
@@ -5939,6 +5940,14 @@ excluding an otherwise-complete user from matching.
     anything it uses. Since 2026-07-31 it also covers onboarding (§2.1), so the
     30-day sweep is additionally what bounds the retention of a typed OTP code
     and of the ≤300-char AI-memory excerpt.
+  - `client_events` is swept by **`receivedAt`, not `occurredAt`** — the second
+    is the device clock, so a phone with a wrong date would otherwise either
+    outlive the window or be erased on the day it was received. Its 90 days are
+    a **promise, not a technical figure**: that is the number the iOS privacy
+    manifest and the App Privacy questionnaire state, and the sweep exists so
+    the statement is true. Rows belonging to a signed-in person also leave
+    earlier, by cascade on account deletion; the window covers what a cascade
+    cannot reach — events recorded before an account existed at all.
 - `researchOptIn` is opt-in; default false. Audit is via `User.consentedAt`,
   `User.termsAcceptedAt`.
 

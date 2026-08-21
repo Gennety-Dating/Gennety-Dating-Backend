@@ -157,6 +157,25 @@ export const accountDeleteLimiter = make({
   message: { error: "Too many account-deletion attempts, try again later." },
 });
 
+/**
+ * Client analytics batches — 60/hour per install (falls back to IP).
+ *
+ * Keyed by `installId` from the BODY rather than by user: the funnel starts
+ * before an account exists, so `req.userId` is null for exactly the events this
+ * endpoint exists to collect. A batch carries up to 200 events, so 60/hour is
+ * far above the client's own cadence (one batch per 30s at worst) and still
+ * bounds a broken or hostile client.
+ */
+export const clientEventsLimiter = make({
+  windowMs: 3_600_000,
+  limit: 60,
+  keyGenerator: (req): string => {
+    const installId = (req.body as { installId?: unknown } | undefined)?.installId;
+    return `client-ev:${typeof installId === "string" && installId ? installId.slice(0, 64) : ipKey(req)}`;
+  },
+  message: { error: "Too many event batches, try again later." },
+});
+
 /** Profile photo upload — 10/hour per user (falls back to IP). */
 export const photoUploadLimiter = make({
   windowMs: 3_600_000,

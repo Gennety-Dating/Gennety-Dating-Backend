@@ -575,6 +575,54 @@ recorded as the event, not the digits. The AI-memory export branch is retired
 (`AI_MEMORY_EXPORT_ENABLED=false` and the feature is not offered), so no pasted
 export reaches this table; if it is ever revived it must be masked here first.
 
+### `client_events`
+
+Клиентская воронка нативного приложения (iOS 6.2). Одна строка на событие;
+`props` — `Json` с не более чем одним скаляром. Колонки: `id` (UUID **от
+клиента**), `userId` (nullable, cascade), `installId`, `type`, `props`,
+`occurredAt`, `receivedAt`, `appVersion`/`appBuild`/`osVersion`/`locale`.
+Индексы `(type, occurredAt)`, `(installId, occurredAt)`, `(receivedAt)`.
+
+**Правило, из которого следует всё остальное: сюда попадает только то, чего
+сервер не видит в принципе.** Уход с шага онбординга ДО отправки, отказ в
+системном разрешении, исход нативной проверки живости, показ пейволла и
+тикет-гейта без покупки, фатальная клиентская ошибка. Регистрация,
+верификация, матч, решение и свидание — это вызовы API, они уже наблюдаются, и
+дублирующее событие создало бы второй источник правды, при расхождении с
+которым никто не знает, какому верить. Перечень закрыт с обеих сторон
+(`services/client-events.ts` → `CLIENT_EVENT_TYPES`, дословно совпадает с
+`AnalyticsEvent.type` в iOS-репо).
+
+**`id` генерирует клиент, и он же ключ идемпотентности.** Батч, записанный до
+того, как оборвалась сеть, при повторной доставке не задваивает строки:
+первичный ключ ловит это на уровне БД, а `createMany({ skipDuplicates: true })`
+не даёт повтору уронить весь запрос. Дубль ВНУТРИ одного батча снимается
+отдельно, до вставки: `skipDuplicates` разрешает конфликт со строками в
+таблице, а не с соседней строкой того же `createMany`.
+
+**Две отметки времени, и обе несущие.** `occurredAt` — часы устройства, то есть
+единственное, что знает клиент: батч уходит и до авторизации, так что
+серверного времени в нём взяться неоткуда. `receivedAt` (`@default(now())`) —
+наши часы, и по ним же считается ретеншен. Телефон со сбитой датой искажает
+воронку ровно до тех пор, пока анализ смотрит только на первую; свип по
+`occurredAt` такую строку либо пережил бы, либо стёр в день приёма.
+
+**PII и свободный текст сюда не попадают, и это свойство конструкции, а не
+договорённости.** Значения `props` проверяются по ФОРМЕ
+(`^[a-z0-9_]{1,32}$`), а не по списку: короткий `snake_case` не вмещает ни
+имени, ни телефона, ни координаты, а проверка по списку значений отбрасывала
+бы события нового клиента до ближайшего деплоя сервера. Ключ у каждого типа
+ровно один (`PROP_KEY`), лишний — повод отбросить событие.
+
+**Неизвестный `type` отбрасывается и считается в `dropped`, но НЕ роняет
+батч.** Клиент и сервер выкатываются независимо, сборка из App Store живёт
+месяцами; любая другая трактовка означала бы, что одна сторона ломается о
+вторую.
+
+Каскад от `users` намеренный — строка с `user_id` удалённого аккаунта не
+является стёртыми данными; события, снятые до авторизации, `user_id` не имеют
+вовсе и уходят по ретеншену (90 дней, `workers/retention.ts`).
+
 ### `media_validation_rejections`
 
 Append-only audit of upload-time profile-media rejections. Stores only
@@ -869,7 +917,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `*/5 * * * *` | UTC | Embedding refresh (dirty-flag scan, ≤20 rows/tick) | `workers/embedding-refresh.ts` |
 | `0 * * * *` | UTC | Auto-unsuspend elapsed Tier-2 suspensions | `services/match-engine.ts` (`autoUnsuspendElapsed`) |
 | `30 3 * * *` | Europe/Kyiv | GDPR Article 9 selfie scrub (90 d post-`verifiedAt`) | `services/selfie-retention.ts` |
-| `45 3 * * *` | Europe/Kyiv | Data retention: OTP challenges (7 d), dead refresh sessions (30 d past unusable), proxy-chat messages (90 d), chat-timeline events (30 d), plus **orphaned `bot_sessions`** — rows whose Telegram chat id matches no user, untouched for 7 d (a raw anti-join: that table has no relation to `users`, so nothing cascades into it; the age floor is what stops it racing a chat mid-`/start`, where the session legitimately exists before the user row). Batched ≤1000 rows/table/tick | `workers/retention.ts` (`retentionTick`) |
+| `45 3 * * *` | Europe/Kyiv | Data retention: OTP challenges (7 d), dead refresh sessions (30 d past unusable), proxy-chat messages (90 d), chat-timeline events (30 d), **client funnel events (90 d, by `receivedAt` — `occurredAt` is the device clock)**, plus **orphaned `bot_sessions`** — rows whose Telegram chat id matches no user, untouched for 7 d (a raw anti-join: that table has no relation to `users`, so nothing cascades into it; the age floor is what stops it racing a chat mid-`/start`, where the session legitimately exists before the user row). Batched ≤1000 rows/table/tick | `workers/retention.ts` (`retentionTick`) |
 | `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours refresh, ≤30 rows/tick) | `services/venue-revalidation.ts` |
 | `0 * * * *` (only when `TICKET_FEATURE_ENABLED`) | UTC | Date Ticket expiry: retry durable Stars refunds, reverse stalled `partial` payments, then open the Calendar for free | `workers/ticket-expiry.ts` → `handlers/matching/ticket-gate.ts` |
 | `0 * * * *` (only when `REMATCH_FEATURE_ENABLED`) | UTC | Rematch refunds: retry `refund_failed` rows and refund purchases abandoned mid-run (`processing` past 5 min). What makes "never keep money without delivering a match" durable | `services/rematch-refund.ts` (`sweepRematchRefunds`) |
@@ -960,6 +1008,7 @@ auth) are deliberately outside the spec.
 | POST | `/v1/tickets/store/intent` | Create a (mock) bundle payment intent (`count: 1\|3\|6`). **404 (PAY-1) while `TICKET_STARS_ENABLED` is on.** `initData` HMAC auth. |
 | POST | `/v1/tickets/store/confirm` | Confirm bundle "payment" → credit `ticketBalance` (+`TicketLedger`). **404 (PAY-1) while `TICKET_STARS_ENABLED` is on.** `initData` HMAC auth. |
 | GET  | `/v1/countdown` | Status banner / next-batch countdown |
+| POST | `/v1/client/events` | Клиентская воронка нативного приложения (iOS 6.2). **JWT необязателен** — половина событий случается до того, как аккаунт существует, и требовать токен значило бы не собирать именно их; без токена человек опознаётся только анонимным `installId`. Битый или протухший токен оставляет вызов анонимным, а не роняет его (`optionalAuth`). Тело: `installId` + до 200 событий; ответ `{ok, accepted, dropped}`. 400 на битый батч (для превышения потолка — с машинным `code: "too_many_events"`), 404 при выключенном `CLIENT_EVENTS_ENABLED` (гейт стоит ДО авторизации), 429 по лимиту 60 батчей/час на установку. См. `client_events`. |
 | POST | `/v1/tickets/appstore/transaction` | Native-app StoreKit 2 purchase report (JWT — mounted before the initData `/v1/tickets` router): client JWS is decoded ONLY for the transactionId, the authoritative state comes from the App Store Server API; wallet credit exactly-once via `TicketLedger.externalPaymentId = appstore:<txId>`. 404 while `TICKET_FEATURE_ENABLED` off; 503 without `APPSTORE_*` config. |
 | POST | `/v1/webhooks/appstore` | App Store Server Notifications V2. The signedPayload only names a transaction, consequences are applied after an authoritative API re-fetch (a forged webhook can at worst trigger a harmless lookup). REFUND/REVOKE claw back the store credit exactly-once (`appstore:<txId>:refund`, balance may go negative — honest accounting). 500 on lookup outage so Apple retries. |
 | GET  | `/v1/calendar/state` | Calendar Mini App snapshot — slot allowlist, both sides' picks, agreed time (Telegram `initData` HMAC auth; polled by the Mini App for live peer visibility) |

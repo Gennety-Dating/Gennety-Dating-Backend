@@ -5,10 +5,19 @@ const phoneOtp = { findMany: vi.fn(), deleteMany: vi.fn() };
 const userSession = { findMany: vi.fn(), deleteMany: vi.fn() };
 const proxyMessage = { findMany: vi.fn(), deleteMany: vi.fn() };
 const chatEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
+const clientEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
 const $executeRaw = vi.fn();
 
 vi.mock("@gennety/db", () => ({
-  prisma: { emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, $executeRaw },
+  prisma: {
+    emailOtp,
+    phoneOtp,
+    userSession,
+    proxyMessage,
+    chatEvent,
+    clientEvent,
+    $executeRaw,
+  },
 }));
 
 const {
@@ -17,13 +26,14 @@ const {
   SESSION_RETENTION_MS,
   PROXY_MESSAGE_RETENTION_MS,
   CHAT_EVENT_RETENTION_MS,
+  CLIENT_EVENT_RETENTION_MS,
   ORPHAN_SESSION_RETENTION_MS,
 } = await import("./retention.js");
 
 const NOW = new Date("2026-08-01T03:45:00.000Z");
 
 beforeEach(() => {
-  for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent]) {
+  for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent]) {
     model.findMany.mockReset().mockResolvedValue([]);
     model.deleteMany.mockReset().mockResolvedValue({ count: 0 });
   }
@@ -40,9 +50,10 @@ describe("retentionTick", () => {
       sessions: 0,
       proxyMessages: 0,
       chatEvents: 0,
+      clientEvents: 0,
       orphanBotSessions: 0,
     });
-    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent]) {
+    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent]) {
       expect(model.deleteMany).not.toHaveBeenCalled();
     }
   });
@@ -113,9 +124,36 @@ describe("retentionTick", () => {
     expect(CHAT_EVENT_RETENTION_MS).toBe(30 * 24 * 60 * 60 * 1000);
   });
 
+  it("sweeps the client funnel by RECEIPT time, on the 90 days the manifest promises", async () => {
+    // `occurredAt` — часы устройства: телефон со сбитой датой либо пережил бы
+    // ретеншен, либо был бы стёрт в день приёма. Считаем по своим часам.
+    await retentionTick(NOW);
+    expect(clientEvent.findMany.mock.calls[0][0]).toMatchObject({
+      where: { receivedAt: { lt: new Date(NOW.getTime() - CLIENT_EVENT_RETENTION_MS) } },
+      orderBy: { receivedAt: "asc" },
+    });
+    // Срок — обещание из privacy manifest приложения, а не техническая величина.
+    expect(CLIENT_EVENT_RETENTION_MS).toBe(90 * 24 * 60 * 60 * 1000);
+  });
+
+  it("names the client funnel in the log line — иначе свип не оставляет следа", async () => {
+    // Строка лога — единственный признак, что свип отработал. Пока
+    // `clientEvents` не входил в сумму, тик, удаливший ТОЛЬКО события клиента,
+    // молчал целиком.
+    clientEvent.findMany.mockResolvedValue([{ id: "c1" }]);
+    clientEvent.deleteMany.mockResolvedValue({ count: 1 });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const result = await retentionTick(NOW);
+
+    expect(result.clientEvents).toBe(1);
+    expect(log).toHaveBeenCalledOnce();
+    expect(String(log.mock.calls[0][0])).toContain("clientEvents=1");
+  });
+
   it("batches each table so one tick cannot run away", async () => {
     await retentionTick(NOW);
-    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent]) {
+    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent]) {
       expect(model.findMany.mock.calls[0][0].take).toBe(1_000);
     }
   });
@@ -134,6 +172,7 @@ describe("retentionTick", () => {
       sessions: 0,
       proxyMessages: 2,
       chatEvents: 0,
+      clientEvents: 0,
       orphanBotSessions: 0,
     });
   });

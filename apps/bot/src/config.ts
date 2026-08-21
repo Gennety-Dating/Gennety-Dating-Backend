@@ -528,6 +528,12 @@ export const env = {
   /// (Telegram Stars recurring / iOS StoreKit), and waives the change fee for
   /// subscribers. Standalone per-user entitlement (`services/premium.ts`).
   PREMIUM_FEATURE_ENABLED: process.env.PREMIUM_FEATURE_ENABLED === "true",
+  /// Приём клиентской воронки нативного приложения (`POST /v1/client/events`).
+  /// Дефолт — ВЫКЛЮЧЕНО, и это не осторожность: privacy manifest приложения
+  /// сейчас заявляет, что аналитических данных мы не собираем. Включение сбора
+  /// раньше правки манифеста и анкеты App Privacy сделало бы это заявление
+  /// ложным (iOS `docs/appstore-review-notes.md` §7).
+  CLIENT_EVENTS_ENABLED: process.env.CLIENT_EVENTS_ENABLED === "true",
   /// Telegram Stars (XTR) monthly price of a Gennety Premium subscription
   /// (`subscription_period` is fixed at 30 days by Telegram). 750⭐ is what
   /// Telegram's own Star store charges for $17.99, which is why the two values

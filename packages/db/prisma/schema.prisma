@@ -341,6 +341,7 @@ model User {
   onboardingProgress        OnboardingProgress?
   onboardingStepEvents      OnboardingStepEvent[]
   sessions                  UserSession[]
+  clientEvents              ClientEvent[]
   profilerAnswers           ProfilerAnswer[]
   ticketLedger              TicketLedger[]
   subscriptionLedger        SubscriptionLedger[]
@@ -1912,6 +1913,55 @@ model CuratedVenue {
   @@index([universityDomain, category, active])
   @@index([cityKey, tier, active])
   @@map("curated_venues")
+}
+
+/// Клиентская воронка нативного приложения (iOS 6.2).
+///
+/// Сюда попадает ТОЛЬКО то, чего сервер не видит в принципе: уход с шага
+/// онбординга до отправки, отказ в системном разрешении, исход нативной
+/// проверки живости, показ пейволла и тикет-гейта без покупки, фатальная
+/// клиентская ошибка. Всё, что является вызовом API, сервер уже наблюдает, и
+/// дублирующее событие здесь создало бы второй источник правды.
+///
+/// `id` — UUID, сгенерированный клиентом, и он же ключ идемпотентности:
+/// повторная доставка батча (сеть отвалилась после записи, но до ответа) не
+/// задваивает строки.
+///
+/// **Две отметки времени, и обе нужны.** `occurredAt` — часы устройства, то
+/// есть единственное, что знает клиент, и поправить их нечем: батч уходит и до
+/// авторизации, так что серверного времени в нём взяться неоткуда. `receivedAt`
+/// — наши часы. Сбитые часы телефона искажают воронку ровно до тех пор, пока
+/// анализ смотрит только на первую.
+///
+/// Связь с `users` есть и каскадная — намеренно, по тому же правилу, что
+/// заведено для `bot_sessions` в `account-deletion.ts`: строка с `user_id`
+/// удалённого аккаунта — это не стёртые данные. События, снятые до
+/// авторизации, `user_id` не имеют вовсе и уходят по ретеншену.
+model ClientEvent {
+  /// UUID от клиента. Первичный ключ, поэтому повтор батча — no-op.
+  id         String   @id @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  /// Анонимный идентификатор установки. До авторизации — единственное, чем
+  /// человек опознаётся; это НЕ `identifierForVendor` и не рекламный id.
+  installId  String   @map("install_id")
+  type       String
+  /// Только скаляры из закрытых перечней клиента. Формат значений проверяется
+  /// на приёме (`^[a-z0-9_]{1,32}$`), поэтому свободному тексту и PII сюда не
+  /// попасть, даже если клиент однажды пришлёт их по ошибке.
+  props      Json     @default("{}")
+  occurredAt DateTime @map("occurred_at")
+  receivedAt DateTime @default(now()) @map("received_at")
+  appVersion String?  @map("app_version")
+  appBuild   String?  @map("app_build")
+  osVersion  String?  @map("os_version")
+  locale     String?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([type, occurredAt])
+  @@index([installId, occurredAt])
+  @@index([receivedAt])
+  @@map("client_events")
 }
 
 /// Snapshot of a weekly founder matches report (gated by `FOUNDER_NOTIFY_ENABLED`).

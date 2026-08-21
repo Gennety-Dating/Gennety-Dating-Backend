@@ -23,6 +23,7 @@ import { liveActivityRouter } from "./routes/live-activity.js";
 import { accountStatusRouter } from "./routes/account-status.js";
 import { ticketsAppStoreRouter } from "./routes/tickets-appstore.js";
 import { premiumAppStoreRouter } from "./routes/premium-appstore.js";
+import { clientEventsRouter } from "./routes/client-events.js";
 import { appStoreWebhookRouter } from "./routes/appstore-webhook.js";
 import { founderReportRouter } from "./routes/founder-report.js";
 import { verificationRouter } from "./routes/verification.js";
@@ -354,6 +355,11 @@ app.use("/v1/radar", (req, res, next) => {
 // BEFORE the generic initData-authed /v1/premium router so this more-specific
 // prefix wins. App Store Server Notifications V2 land on /v1/webhooks/appstore.
 app.use("/v1/premium/appstore", premiumAppStoreRouter);
+
+// Клиентская воронка нативного приложения (iOS 6.2) — JWT необязателен,
+// потому что половина событий случается до того, как аккаунт существует.
+// Флаг по умолчанию выключен: см. `config.ts → CLIENT_EVENTS_ENABLED`.
+app.use("/v1/client", clientEventsRouter);
 
 // Gennety Premium Mini App — TMA-authed, feature-flagged. The invoice mint
 // pulls the bot api via getBotApi() at request time, so no injection here.

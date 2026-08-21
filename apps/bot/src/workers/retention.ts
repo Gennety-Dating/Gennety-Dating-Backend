@@ -68,6 +68,20 @@ export const PROXY_MESSAGE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 export const CHAT_EVENT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
+ * Клиентская воронка нативного приложения (`client_events`, iOS 6.2).
+ *
+ * 90 дней — не техническая величина, а обещание: столько заявлено в privacy
+ * manifest приложения и в анкете App Privacy, и срок здесь существует затем,
+ * чтобы это заявление было правдой. Воронка читается когортами по неделям, то
+ * есть квартал перекрывает любой осмысленный вопрос к ней с запасом.
+ *
+ * Строки авторизованных людей уходят и раньше — каскадом при удалении
+ * аккаунта. Этот срок закрывает то, до чего каскаду не дотянуться: события,
+ * снятые до того, как аккаунт вообще появился.
+ */
+export const CLIENT_EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
  * Chat sessions whose account no longer exists.
  *
  * `bot_sessions` is keyed by Telegram CHAT id with no relation to `users`, so
@@ -100,6 +114,7 @@ export interface RetentionSweepResult {
   sessions: number;
   proxyMessages: number;
   chatEvents: number;
+  clientEvents: number;
   orphanBotSessions: number;
 }
 
@@ -126,6 +141,7 @@ export async function retentionTick(
   const sessionCutoff = new Date(now.getTime() - SESSION_RETENTION_MS);
   const proxyCutoff = new Date(now.getTime() - PROXY_MESSAGE_RETENTION_MS);
   const chatEventCutoff = new Date(now.getTime() - CHAT_EVENT_RETENTION_MS);
+  const clientEventCutoff = new Date(now.getTime() - CLIENT_EVENT_RETENTION_MS);
 
   const emailOtps = await deleteOldest(
     (take) =>
@@ -188,6 +204,20 @@ export async function retentionTick(
     (ids) => prisma.chatEvent.deleteMany({ where: { id: { in: ids } } }),
   );
 
+  // Считается по `receivedAt`, а не по `occurredAt`: вторая — часы устройства,
+  // и телефон со сбитой датой иначе либо пережил бы ретеншен, либо был бы
+  // стёрт в день приёма.
+  const clientEvents = await deleteOldest(
+    (take) =>
+      prisma.clientEvent.findMany({
+        where: { receivedAt: { lt: clientEventCutoff } },
+        select: { id: true },
+        orderBy: { receivedAt: "asc" },
+        take,
+      }),
+    (ids) => prisma.clientEvent.deleteMany({ where: { id: { in: ids } } }),
+  );
+
   // Raw, because there is no relation to traverse: the join is
   // `users.telegram_id::text = bot_sessions.key`, which is exactly the coupling
   // the schema does not express. Anti-join rather than "load all keys and diff
@@ -207,12 +237,18 @@ export async function retentionTick(
   `;
 
   const total =
-    emailOtps + phoneOtps + sessions + proxyMessages + chatEvents + orphanBotSessions;
+    emailOtps +
+    phoneOtps +
+    sessions +
+    proxyMessages +
+    chatEvents +
+    clientEvents +
+    orphanBotSessions;
   if (total > 0) {
     console.log(
       `[retention] emailOtps=${emailOtps} phoneOtps=${phoneOtps} ` +
         `sessions=${sessions} proxyMessages=${proxyMessages} chatEvents=${chatEvents} ` +
-        `orphanBotSessions=${orphanBotSessions}`,
+        `clientEvents=${clientEvents} orphanBotSessions=${orphanBotSessions}`,
     );
   }
   return {
@@ -221,6 +257,7 @@ export async function retentionTick(
     sessions,
     proxyMessages,
     chatEvents,
+    clientEvents,
     orphanBotSessions,
   };
 }
