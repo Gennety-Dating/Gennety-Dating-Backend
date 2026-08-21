@@ -5183,10 +5183,32 @@ in v1. Full spec: [REMATCH_PRODUCT_SPEC.md](REMATCH_PRODUCT_SPEC.md).
   reveals have landed, never to a first decider whose match is still live. It
   states before payment that it buys an introduction, not a date.
 - **Money rule.** Payment buys a pitch. A decline, a ghost, or a failed
-  negotiation is **not** refunded (stated in the offer copy). The only refundable
-  outcome is "the engine found nobody", and it is automatic. The flow is
-  check → pay → re-check → deliver-or-refund, with a durable hourly retry so a
-  failed refund is never announced as successful and never silently kept.
+  negotiation is **not** refunded (stated in the offer copy). Two outcomes ARE
+  refundable, both automatic, and the line between them and the rest is whether
+  a pitch was ever *shown to anybody*:
+  - **The engine found nobody** — his city pool is finite and the lifetime pair
+    ban permanently consumes one candidate per rematch, so this is expected.
+  - **The pitch reached NEITHER side** (added 2026-08-21). The engine found
+    someone, the pair was created, and delivery failed for both — she blocked
+    the bot, a 403 on the photo album, or her side is `mobile` and has no
+    Telegram chat at all (§3.3). He paid for an introduction that was never put
+    in front of anyone, so the thing he bought did not happen; that is a
+    *stronger* refund claim than an empty pool, not a weaker one. **A pitch that
+    reached ONE side is a delivered pitch and is never refunded**, even though
+    the dispatch is reported as failed — the product was supplied.
+    The refund is not the whole restoration and the copy does not pretend it is:
+    `disposeUndeliveredMatch` frees both live-match slots and flipping the
+    purchase off `settled` frees his weekly cap, but the §3.2 filter 6 pair ban
+    was written at creation, so **the candidate is spent for him even unseen**.
+    Un-banning her is deliberately not done — the product deletes no match row
+    anywhere — and that permanent cost is the argument for returning the Stars
+    rather than only the slot.
+  The flow is check → pay → re-check → deliver-or-refund, with a durable hourly
+  retry so a failed refund is never announced as successful and never silently
+  kept. An outcome the server cannot determine — the dispatch queue itself threw,
+  so delivery is *unknown* rather than known-empty — is never refunded: reversing
+  a charge for a card the partner may be reading is the one error this rail must
+  not make.
 - **Limits.** 2 purchases per rolling 7 days with a 24 h cooldown between them
   (the cooldown is what stops decline-and-instantly-retry, preserving the weight
   of a decision); a candidate who already received a rematch pitch within 7 days

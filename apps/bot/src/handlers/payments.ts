@@ -398,9 +398,12 @@ async function handleRematchSuccessfulPayment(
   if (!user) return;
   const lang = (user.language ?? "en") as Language;
 
-  const { runRematch, REMATCH_PROCESSING, REMATCH_SETTLED } = await import(
-    "../services/rematch.js"
-  );
+  const {
+    runRematch,
+    REMATCH_PROCESSING,
+    REMATCH_SETTLED,
+    REMATCH_REFUNDED_UNDELIVERED,
+  } = await import("../services/rematch.js");
   const { refundRematchPurchase, refundStatusForReason } = await import(
     "../services/rematch-refund.js"
   );
@@ -519,19 +522,46 @@ async function handleRematchSuccessfulPayment(
     .catch(() => {});
 
   const { dispatchMatches } = await import("../services/dispatch-queue.js");
-  await dispatchMatches(ctx.api, [run.matchId]).catch((err) => {
-    // A delivery problem, not a payment problem: the purchase stays `settled`
-    // and is surfaced loudly for ops rather than reversed.
-    //
-    // What makes that safe is `disposeUndeliveredMatch` inside the queue, which
-    // guarantees the row is left either carrying a TTL or terminal — never live
-    // and un-stamped, which used to take BOTH participants out of every drop
-    // permanently and left the buyer unable to even re-buy. When the pitch
-    // reached nobody the pair is retired here, so the buyer is free to purchase
-    // again immediately; whether that case should also refund is a pricing
-    // decision (§3.11 refunds only "the engine found nobody"), not this one.
+  const delivery = await dispatchMatches(ctx.api, [run.matchId]).catch((err) => {
+    // The queue itself threw, so we do not know what was delivered. Leave the
+    // purchase `settled` and surface it for ops: refunding on an unknown
+    // outcome could reverse a pitch the partner is looking at right now.
     console.error(`[rematch] dispatch failed match=${run.matchId}:`, err);
+    return null;
   });
+
+  // (3c) Delivered to NOBODY → refund (§3.11, founder decision 2026-08-21).
+  //
+  // A pitch that reached one side is a delivered pitch and is never refunded —
+  // a decline or a ghost after that is explicitly his risk, and the offer copy
+  // says so. This branch is the opposite case: he paid for an introduction that
+  // was never shown to anyone, so the thing he bought did not happen. That is a
+  // stronger claim than "the engine found nobody", which already refunds.
+  //
+  // `disposeUndeliveredMatch` has already retired the pair, so the slot is free
+  // and the refund also frees his weekly cap (it counts `settled` rows only).
+  // What he does NOT get back is the candidate: the lifetime pair ban (§3.2
+  // filter 6) is written at creation, so she is spent for him even unseen —
+  // which is the argument for returning the Stars rather than only the slot.
+  if (delivery?.undelivered.includes(run.matchId)) {
+    console.error(
+      `[rematch] pitch reached nobody match=${run.matchId} purchase=${purchase.id} — refunding`,
+    );
+    const refunded = await refundRematchPurchase(
+      ctx.api,
+      // The row is `settled` by now; the refund helper is status-agnostic on
+      // input and a failure parks it in `refund_failed`, which the hourly sweep
+      // already retries.
+      { ...purchase, status: REMATCH_SETTLED },
+      telegramId,
+      REMATCH_REFUNDED_UNDELIVERED,
+    );
+    await ctx
+      .reply(
+        t(lang, refunded ? "rematchUndelivered" : "rematchUndeliveredPending", {}),
+      )
+      .catch(() => {});
+  }
 }
 
 /**

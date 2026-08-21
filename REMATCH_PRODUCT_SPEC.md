@@ -147,6 +147,15 @@ The flow is therefore **check → pay → re-check → deliver-or-refund**:
    f. **Refund call itself failed** → mark `refund_failed` and leave it to the
       durable retry sweep (below). We never announce a refund that did not
       happen — the same rule `ticket-expiry` already follows.
+   g. **Found, but the pitch reached NEITHER side** (added 2026-08-21) →
+      `dispatchMatches` reports the match in `undelivered` (its
+      `disposeUndeliveredMatch` has already retired the pair, §3.3) → refund →
+      mark `refunded_undelivered`. He paid for an introduction nobody was shown,
+      which is a stronger refund claim than an empty pool. **One side reached is
+      NOT this case** — that is a delivered pitch and is never refunded, even
+      though the dispatch reports `failed`. Nor is a queue that *threw*: delivery
+      is then unknown, and reversing a charge for a card the partner may be
+      reading is the one error this rail must not make.
 
 **Refund retry.** A small hourly worker (`workers/rematch-refund-retry.ts`,
 registered only when `REMATCH_FEATURE_ENABLED`, mirroring how `ticket-expiry` is
@@ -172,7 +181,7 @@ pattern):
 |---|---|
 | `id`, `userId`, `createdAt` | Buyer + when. `@@index([userId, createdAt])` backs the D3 limit query. |
 | `externalPaymentId` **unique** | `telegram_payment_charge_id` — exactly-once settle **and** the key `refundStarPayment` needs later. |
-| `status` | `processing` \| `settled` \| `refunded_no_candidate` \| `refunded_ineligible` \| `refund_failed`. `@@index([status, createdAt])` backs the sweep. Only `settled` consumes D3 quota — a refunded run delivered nothing, so it must not cost an attempt. |
+| `status` | `processing` \| `settled` \| `refunded_no_candidate` \| `refunded_ineligible` \| `refunded_undelivered` \| `refund_failed`. `@@index([status, createdAt])` backs the sweep. Only `settled` consumes D3 quota — a refunded run delivered nothing, so it must not cost an attempt, and that falls out for free: flipping off `settled` frees the weekly cap in the same write that returns the Stars. |
 | `amountStars`, `amountCents` | Frozen price at purchase time (prices are env-tunable). |
 | `resultMatchId` | The delivered match, when settled. |
 | `framing` | Which gift framing her pitch used — for copy A/B later. |

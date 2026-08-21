@@ -86,6 +86,16 @@ export const REMATCH_PROCESSING = "processing";
 export const REMATCH_SETTLED = "settled";
 export const REMATCH_REFUNDED_NO_CANDIDATE = "refunded_no_candidate";
 export const REMATCH_REFUNDED_INELIGIBLE = "refunded_ineligible";
+/**
+ * The engine found someone and the pitch reached NOBODY, so the run is
+ * refunded (§3.11, founder decision 2026-08-21).
+ *
+ * A plain string like every other value here, so a new one costs no migration
+ * (ARCHITECTURE → `rematch_purchases`). Distinct from `refunded_no_candidate`
+ * on purpose: the two say opposite things about the pool, and this one is the
+ * only refund that means the product failed rather than the city being thin.
+ */
+export const REMATCH_REFUNDED_UNDELIVERED = "refunded_undelivered";
 export const REMATCH_REFUND_FAILED = "refund_failed";
 
 /** Why a rematch purchase/run was refused. */

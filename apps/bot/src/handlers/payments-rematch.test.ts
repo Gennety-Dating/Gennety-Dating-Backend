@@ -45,6 +45,7 @@ vi.mock("../services/rematch.js", () => ({
   runRematch: vi.fn(),
   REMATCH_PROCESSING: "processing",
   REMATCH_SETTLED: "settled",
+  REMATCH_REFUNDED_UNDELIVERED: "refunded_undelivered",
 }));
 vi.mock("../services/rematch-refund.js", () => ({
   refundRematchPurchase: vi.fn(),
@@ -88,7 +89,7 @@ beforeEach(() => {
   updatePurchase.mockResolvedValue({});
   engine.mockResolvedValue({ ok: true, matchId: MATCH_ID, partnerId: "her-1", framing: "neutral" });
   refund.mockResolvedValue(true);
-  dispatch.mockResolvedValue(undefined);
+  dispatch.mockResolvedValue({ dispatched: 1, failed: 0, errors: [], undelivered: [] });
   status.mockResolvedValue(undefined);
 });
 
@@ -214,5 +215,74 @@ describe("rematch found effect", () => {
     // Celebrating a refund would be the worst possible read of the animation.
     expect(reply).toHaveBeenCalledTimes(1);
     expect(reply.mock.calls[0]![1]).toBeUndefined();
+  });
+});
+
+describe("a pitch that reached nobody", () => {
+  const undelivered = {
+    dispatched: 0,
+    failed: 1,
+    errors: [{ matchId: MATCH_ID, error: "Pitch delivery failed for 1 side(s)" }],
+    undelivered: [MATCH_ID],
+  };
+
+  it("refunds the purchase — he paid for an introduction nobody was shown", async () => {
+    dispatch.mockResolvedValueOnce(undelivered);
+    const { ctx, reply } = payCtx();
+    await handleSuccessfulPayment(ctx);
+
+    expect(refund).toHaveBeenCalledTimes(1);
+    // The audit row must say WHY. `refunded_no_candidate` would claim the city
+    // is empty, which is the opposite of what happened.
+    expect(refund.mock.calls[0]![3]).toBe("refunded_undelivered");
+    // ...and it refunds the charge that was actually taken.
+    expect(refund.mock.calls[0]![1]).toMatchObject({ externalPaymentId: "charge-1" });
+    // Two messages: the payoff line, then the reversal. Only the payoff may
+    // carry the effect.
+    expect(reply).toHaveBeenCalledTimes(2);
+    expect(reply.mock.calls[1]![1]).toBeUndefined();
+  });
+
+  it("never announces a refund the provider did not make", async () => {
+    dispatch.mockResolvedValueOnce(undelivered);
+    refund.mockResolvedValueOnce(false);
+    const { ctx, reply } = payCtx();
+    await handleSuccessfulPayment(ctx);
+
+    // The row is parked in `refund_failed` for the hourly sweep, so the copy
+    // must promise the Stars are COMING, not that they are back.
+    expect(reply).toHaveBeenCalledTimes(2);
+    expect(reply.mock.calls[1]![0]).not.toBe(reply.mock.calls[0]![0]);
+  });
+
+  it("does NOT refund when one side got the card", async () => {
+    // The single most important negative: a delivered pitch is the product.
+    // A decline or a ghost after this is his risk, and the offer copy says so.
+    dispatch.mockResolvedValueOnce({
+      dispatched: 0,
+      failed: 1,
+      errors: [{ matchId: MATCH_ID, error: "Pitch delivery failed for 1 side(s)" }],
+      undelivered: [],
+    });
+    const { ctx, reply } = payCtx();
+    await handleSuccessfulPayment(ctx);
+
+    expect(refund).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT refund when the queue itself threw", async () => {
+    // Unknown is not undelivered: the partner may be reading the card right now.
+    dispatch.mockRejectedValueOnce(new Error("queue exploded"));
+    const { ctx } = payCtx();
+
+    await expect(handleSuccessfulPayment(ctx)).resolves.toBeUndefined();
+    expect(refund).not.toHaveBeenCalled();
+  });
+
+  it("does NOT refund the ordinary delivered path", async () => {
+    const { ctx } = payCtx();
+    await handleSuccessfulPayment(ctx);
+    expect(refund).not.toHaveBeenCalled();
   });
 });

@@ -27,7 +27,11 @@ import { notifyFounderPurchaseRefunded } from "./founder-notify.js";
 export const REMATCH_PROCESSING_STALE_MS = 5 * 60 * 1000;
 
 /** Terminal statuses that mean "his Stars are back". */
-const REFUNDED_STATUSES = ["refunded_no_candidate", "refunded_ineligible"] as const;
+const REFUNDED_STATUSES = [
+  "refunded_no_candidate",
+  "refunded_ineligible",
+  "refunded_undelivered",
+] as const;
 
 /**
  * Map a failed run to the status its refund should land in, so the audit row

@@ -21,6 +21,17 @@ export interface DispatchResult {
   dispatched: number;
   failed: number;
   errors: Array<{ matchId: string; error: string }>;
+  /**
+   * Matches whose pitch reached **neither** side and were therefore retired
+   * (see `disposeUndeliveredMatch`).
+   *
+   * Reported rather than left for the caller to re-derive, because by the time
+   * `dispatchMatches` returns the row is already `cancelled` and carries no
+   * pitch ids — the evidence that nobody was reached is gone. A caller that
+   * took money for this pitch needs that distinction: `errors` alone cannot
+   * tell "one side got the card" from "nobody did" (§3.11, D1).
+   */
+  undelivered: string[];
 }
 
 /**
@@ -63,19 +74,21 @@ function delay(ms: number): Promise<void> {
  * Best-effort by construction: this runs inside the caller's `catch`, and its
  * own failure must not mask the delivery error that got us here.
  */
-async function disposeUndeliveredMatch(matchId: string): Promise<void> {
+async function disposeUndeliveredMatch(
+  matchId: string,
+): Promise<"stamped" | "cancelled" | "noop"> {
   const m = await prisma.match.findUnique({
     where: { id: matchId },
     select: { dispatchedAt: true, pitchMessageIdA: true, pitchMessageIdB: true },
   });
-  if (!m || m.dispatchedAt !== null) return;
+  if (!m || m.dispatchedAt !== null) return "noop";
 
   if (m.pitchMessageIdA !== null || m.pitchMessageIdB !== null) {
     await prisma.match.updateMany({
       where: { id: matchId, status: "proposed", dispatchedAt: null },
       data: { dispatchedAt: new Date() },
     });
-    return;
+    return "stamped";
   }
 
   const cancelled = await prisma.match.updateMany({
@@ -90,7 +103,11 @@ async function disposeUndeliveredMatch(matchId: string): Promise<void> {
       `[dispatch] matchId=${matchId} reached NEITHER side — cancelled so both ` +
         "participants are freed for the next drop",
     );
+    return "cancelled";
   }
+  // The CAS claimed nothing: a decision or a cancellation won the race, so this
+  // is not an undelivered pair and must not be reported as one.
+  return "noop";
 }
 
 /**
@@ -112,6 +129,7 @@ export async function dispatchMatches(
 ): Promise<DispatchResult> {
   let dispatched = 0;
   const errors: DispatchResult["errors"] = [];
+  const undelivered: string[] = [];
   const preRolledSides = new Map<string, { A?: boolean; B?: boolean }>();
 
   if (prerollDelayMs > 0 && matchIds.length > 0) {
@@ -194,12 +212,17 @@ export async function dispatchMatches(
       // expiry sweep, the countdown and both nudge cadences at once while still
       // occupying both participants' single live-match slot. `disposeUndeliveredMatch`
       // starts the TTL when a pitch is on record and retires the row when none is.
-      await disposeUndeliveredMatch(matchId).catch((e) => {
+      const disposal = await disposeUndeliveredMatch(matchId).catch((e) => {
         console.warn(
           `[dispatch] disposal failed matchId=${matchId}:`,
           e,
         );
+        // Unknown rather than undelivered. A caller holding money must not
+        // refund on a disposal we could not complete: the row may still be
+        // live with a delivered side.
+        return "noop" as const;
       });
+      if (disposal === "cancelled") undelivered.push(matchId);
       errors.push({ matchId, error: message });
       console.error(
         `[dispatch] ${i + 1}/${matchIds.length} matchId=${matchId} FAILED: ${message}`,
@@ -213,8 +236,9 @@ export async function dispatchMatches(
   }
 
   console.log(
-    `[dispatch] done: dispatched=${dispatched} failed=${errors.length}`,
+    `[dispatch] done: dispatched=${dispatched} failed=${errors.length}` +
+      (undelivered.length > 0 ? ` undelivered=${undelivered.length}` : ""),
   );
 
-  return { dispatched, failed: errors.length, errors };
+  return { dispatched, failed: errors.length, errors, undelivered };
 }

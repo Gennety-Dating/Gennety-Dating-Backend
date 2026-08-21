@@ -730,7 +730,11 @@ the unique `externalPaymentId` (Telegram Stars `telegram_payment_charge_id`)
 makes a redelivered `successful_payment` exactly-once **and** preserves the
 charge key `refundStarPayment` needs later. Columns: `userId`, `status`
 (`processing` → `settled` | `refunded_no_candidate` | `refunded_ineligible` |
-`refund_failed` — string, not a Prisma enum), `amountStars`/`amountCents` (price
+`refunded_undelivered` | `refund_failed` — string, not a Prisma enum, which is
+why the fourth value cost no migration. `refunded_undelivered` is the pitch that
+reached NEITHER side, §3.11 — deliberately distinct from `refunded_no_candidate`
+because the two say opposite things about the pool, and it is the only refund
+that means the product failed rather than the city being thin), `amountStars`/`amountCents` (price
 frozen at purchase), `resultMatchId` (free-form, no FK, so deleting a match never
 breaks the payment trail), `framing` (which gift framing the partner's pitch
 used), `resolvedAt`/`refundError`, `createdAt`. Rows are written ONLY from the

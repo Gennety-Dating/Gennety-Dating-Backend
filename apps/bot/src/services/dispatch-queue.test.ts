@@ -180,6 +180,27 @@ describe("dispatchMatches", () => {
     expect(arg.where).toMatchObject({ id: "m1", status: "proposed", dispatchedAt: null });
     expect(arg.data.status).toBe("cancelled");
     expect(arg.data.dispatchedAt).toBeUndefined();
+    // Reported, because by now the evidence is gone: the row is `cancelled`
+    // and carries no pitch ids, so a caller holding the buyer's Stars could
+    // not re-derive "nobody saw it" from the database (§3.11 refund, D1).
+    expect(result.undelivered).toEqual(["m1"]);
+  });
+
+  it("reports nothing undelivered when one side got the pitch", async () => {
+    // The single most important negative for the paid path: a delivered pitch
+    // is the product. This asserts the salvage branch stays OUT of the refund
+    // list even though the dispatch itself failed.
+    mSendPitch.mockRejectedValue(new Error("Forbidden: bot was blocked by the user"));
+    mMatchFindUnique.mockResolvedValue({
+      dispatchedAt: null,
+      pitchMessageIdA: 4242,
+      pitchMessageIdB: null,
+    });
+
+    const result = await dispatchMatches({} as any, ["m1"], 0);
+
+    expect(result.failed).toBe(1);
+    expect(result.undelivered).toEqual([]);
   });
 
   it("leaves an already-dispatched row alone when a later send throws", async () => {
@@ -196,6 +217,7 @@ describe("dispatchMatches", () => {
 
     expect(result.failed).toBe(1);
     expect(mMatchUpdateMany).not.toHaveBeenCalled();
+    expect(result.undelivered).toEqual([]);
   });
 
   it("does not cancel a match that was decided while the pitch was in flight", async () => {
@@ -217,5 +239,8 @@ describe("dispatchMatches", () => {
     expect(
       (mMatchUpdateMany.mock.calls[0]![0] as { where: { status: string } }).where.status,
     ).toBe("proposed");
+    // A lost race is NOT an undelivered pair. Reporting it would refund a
+    // buyer whose match is alive and being acted on.
+    expect(result.undelivered).toEqual([]);
   });
 });

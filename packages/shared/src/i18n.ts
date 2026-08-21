@@ -1183,6 +1183,10 @@ const translations = {
       "I looked — there's nobody new for you in your city right now. Your Stars are back. You stay in the next round.",
     rematchRefundPending:
       "I found nobody new, and the refund didn't go through on the first try. I'm on it — your Stars will be back shortly.",
+    rematchUndelivered:
+      "I found someone, but I couldn't deliver the profile — that one's on us. Your Stars are back, and it didn't use up a rematch.",
+    rematchUndeliveredPending:
+      "I found someone, but I couldn't deliver the profile, and the refund didn't go through on the first try. I'm on it — your Stars will be back shortly.",
     rematchRefunded: "Your Stars for the rematch are back ✨",
     rematchLimitReached:
       "You've used your rematches for now. The next one opens in a few days — your next match is still coming.",
@@ -2294,6 +2298,10 @@ const translations = {
       "Посмотрел — новых вариантов в твоём городе сейчас нет. Звёзды вернул. В следующем раунде ты остаёшься.",
     rematchRefundPending:
       "Никого нового не нашёл, а возврат с первого раза не прошёл. Уже занимаюсь — звёзды вернутся в ближайшее время.",
+    rematchUndelivered:
+      "Нашёл человека, но доставить анкету не смог — это на нашей стороне. Звёзды вернул, и попытка не засчиталась.",
+    rematchUndeliveredPending:
+      "Нашёл человека, но доставить анкету не смог, а возврат с первого раза не прошёл. Уже занимаюсь — звёзды вернутся в ближайшее время.",
     rematchRefunded: "Звёзды за реметч вернулись ✨",
     rematchLimitReached:
       "Реметчи на сейчас закончились. Следующий откроется через пару дней — обычный мэтч всё равно будет.",
@@ -3401,6 +3409,10 @@ const translations = {
       "Подивився — нових варіантів у твоєму місті зараз немає. Зірки повернув. У наступному раунді ти лишаєшся.",
     rematchRefundPending:
       "Нікого нового не знайшов, а повернення з першого разу не пройшло. Уже займаюся — зірки повернуться найближчим часом.",
+    rematchUndelivered:
+      "Знайшов людину, але доставити анкету не зміг — це на нашому боці. Зірки повернув, і спроба не зарахувалася.",
+    rematchUndeliveredPending:
+      "Знайшов людину, але доставити анкету не зміг, а повернення з першого разу не пройшло. Уже займаюся — зірки повернуться найближчим часом.",
     rematchRefunded: "Зірки за реметч повернулися ✨",
     rematchLimitReached:
       "Реметчі на зараз закінчилися. Наступний відкриється за кілька днів — звичайний метч усе одно буде.",
@@ -4485,6 +4497,10 @@ const deTranslations: TranslationTable = {
     "Ich habe geschaut — in deiner Stadt gibt es gerade niemand Neues für dich. Deine Stars sind zurück. Für die nächste Runde bist du dabei.",
   rematchRefundPending:
     "Ich habe niemanden Neues gefunden, und die Rückerstattung hat beim ersten Versuch nicht geklappt. Ich kümmere mich — deine Stars sind gleich zurück.",
+  rematchUndelivered:
+    "Ich habe jemanden gefunden, konnte das Profil aber nicht zustellen — das liegt an uns. Deine Stars sind zurück, und der Versuch zählt nicht.",
+  rematchUndeliveredPending:
+    "Ich habe jemanden gefunden, konnte das Profil aber nicht zustellen, und die Rückerstattung hat beim ersten Versuch nicht geklappt. Ich kümmere mich — deine Stars sind gleich zurück.",
   rematchRefunded: "Deine Stars für den Rematch sind zurück ✨",
   rematchLimitReached:
     "Deine Rematches sind für den Moment aufgebraucht. Der nächste geht in ein paar Tagen — dein nächstes Match kommt trotzdem.",
@@ -5566,6 +5582,10 @@ const plTranslations: TranslationTable = {
     "Sprawdziłem — w twoim mieście nie ma teraz nikogo nowego. Gwiazdki wróciły. W kolejnej rundzie zostajesz.",
   rematchRefundPending:
     "Nie znalazłem nikogo nowego, a zwrot za pierwszym razem nie przeszedł. Zajmuję się tym — gwiazdki wrócą niedługo.",
+  rematchUndelivered:
+    "Znalazłem kogoś, ale nie udało mi się dostarczyć profilu — to po naszej stronie. Gwiazdki wróciły, a próba się nie liczy.",
+  rematchUndeliveredPending:
+    "Znalazłem kogoś, ale nie udało mi się dostarczyć profilu, a zwrot za pierwszym razem nie przeszedł. Zajmuję się tym — gwiazdki wrócą niedługo.",
   rematchRefunded: "Gwiazdki za rematch wróciły ✨",
   rematchLimitReached:
     "Rematche na teraz się skończyły. Następny otworzy się za kilka dni — kolejna para i tak będzie.",
