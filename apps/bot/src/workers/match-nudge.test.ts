@@ -22,6 +22,15 @@ vi.mock("../utils/elo-calculator.js", () => ({
   applySilentIgnorePenalty: vi.fn().mockResolvedValue(495),
 }));
 
+// The app rail. `services/match-stall.ts` imports the same module for its
+// cancellation notices, so this one mock covers every push in the tick.
+vi.mock("../services/push.js", () => ({
+  sendPushToUser: vi.fn(),
+  sendPushToUsers: vi.fn(),
+  sendLiveActivityUpdateToUser: vi.fn(),
+  sendLiveActivityStartToUser: vi.fn(),
+}));
+
 // Mutable so a test can flip the Date Ticket gate. The scheduling reminder is
 // deliberately blind to it — a pair still inside the gate is recognised by an
 // empty `proposedTimes`, which holds under either flag (see the worker).
@@ -42,12 +51,18 @@ vi.mock("../config.js", () => ({ env: mockEnv }));
 
 import { prisma } from "@gennety/db";
 import { t } from "@gennety/shared";
+import { sendPushToUser } from "../services/push.js";
 import {
   matchNudgeTick,
+  DEADLINE_NUDGE_PUSH_TYPE,
+  MATCH_NUDGE_PUSH_TYPE,
+  PLANNING_NUDGE_PUSH_TYPE,
   PROPOSAL_NUDGE1_MS,
   PROPOSAL_NUDGE2_MS,
   PROPOSAL_DEADLINE_NUDGE_LEAD_MS,
 } from "./match-nudge.js";
+
+const mPush = sendPushToUser as unknown as ReturnType<typeof vi.fn>;
 
 // 24h TTL — the active (weekly, "fixed") cadence profile's flat proposal
 // window. Matches services/proposal-deadline.ts's deadlineFor() under
@@ -712,5 +727,459 @@ describe("matchNudgeTick — stall phase scoping (audit regression)", () => {
     const api = createMockApi();
 
     expect((await matchNudgeTick(api, { now: DAY_TIME })).stallCheckIns).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The app rail (§4.3, the shape §5.4 established on the safety brief).
+//
+// All three reminder cadences used to collect their recipients with
+// `telegramId > 0n` and then send a DM and nothing else — one filter answering
+// two different questions. The predicates deciding WHO is owed a reminder
+// (`acceptedBy*`, `schedulingOwedKind`) are unchanged; `platform` decides which
+// rail carries it, and both are attempted.
+//
+// These route `findMany` by each query's own filters rather than by call order:
+// five queries run per tick, and an order-dependent chain silently re-points at
+// a different branch the next time a handler is added.
+// ---------------------------------------------------------------------------
+
+function routeQueries(rows: {
+  proposal?: unknown[];
+  scheduling?: unknown[];
+  deadline?: unknown[];
+  venue?: unknown[];
+}) {
+  (prisma.match.findMany as ReturnType<typeof vi.fn>).mockImplementation(
+    (args: { where?: Record<string, unknown> }) => {
+      const where = args?.where ?? {};
+      const status = where.status;
+      if (status === "negotiating") return Promise.resolve(rows.scheduling ?? []);
+      if (status === "negotiating_venue") return Promise.resolve(rows.venue ?? []);
+      if (status === "proposed") {
+        // The deadline sweep is the only `proposed` query filtering on its own
+        // stamp; the 3h/10h cadence filters on `proposalNudge2SentAt`.
+        return Promise.resolve(
+          "proposalDeadlineNudgeSentAt" in where ? (rows.deadline ?? []) : (rows.proposal ?? []),
+        );
+      }
+      return Promise.resolve([]); // the stall chain: not this slice
+    },
+  );
+}
+
+/** A participant with an explicit rail. `theme` is read only by the calendar CTA. */
+function railUser(id: string, telegramId: bigint, platform: string | null, name: string) {
+  return { id, telegramId, platform, language: "en", firstName: name, theme: "dark" };
+}
+type RailUser = ReturnType<typeof railUser>;
+
+// Dispatched so ~90 minutes remain: inside [TTL - lead, TTL).
+const DEADLINE_DISPATCH = new Date(
+  DAY_TIME.getTime() - (TTL_MS - PROPOSAL_DEADLINE_NUDGE_LEAD_MS) - 30 * 60_000,
+);
+
+interface RailCadence {
+  name: string;
+  matchId: string;
+  counter: "proposalNudges" | "schedNudges" | "deadlineNudges";
+  pushType: string;
+  stampField: string;
+  /**
+   * Does the idempotency claim run BEFORE the recipient list is built? The two
+   * proposal-phase cadences claim first and therefore stamp even when nobody is
+   * reachable (so the row is not re-evaluated every tick); the planning cadence
+   * builds `owing` first and skips the claim entirely. Both orderings are
+   * pre-existing and neither moved with the rails.
+   */
+  stampsWithNoReachableRecipient: boolean;
+  route: (a: RailUser, b: RailUser) => void;
+}
+
+const RAIL_CADENCES: RailCadence[] = [
+  {
+    name: "decision reminder (3h/10h)",
+    matchId: "match-1",
+    counter: "proposalNudges",
+    pushType: MATCH_NUDGE_PUSH_TYPE,
+    stampField: "proposalNudge1SentAt",
+    stampsWithNoReachableRecipient: true,
+    route: (userA, userB) =>
+      routeQueries({ proposal: [makeProposedMatch({ userA, userB })] }),
+  },
+  {
+    name: "planning reminder (6h/12h)",
+    matchId: "match-2",
+    counter: "schedNudges",
+    pushType: PLANNING_NUDGE_PUSH_TYPE,
+    stampField: "schedNudge1SentAt",
+    stampsWithNoReachableRecipient: false,
+    route: (userA, userB) =>
+      routeQueries({ scheduling: [makeNegotiatingMatch({ userA, userB })] }),
+  },
+  {
+    name: "deadline heads-up (~2h out)",
+    matchId: "match-1",
+    counter: "deadlineNudges",
+    pushType: DEADLINE_NUDGE_PUSH_TYPE,
+    stampField: "proposalDeadlineNudgeSentAt",
+    stampsWithNoReachableRecipient: true,
+    route: (userA, userB) =>
+      routeQueries({
+        deadline: [
+          makeProposedMatch({
+            dispatchedAt: DEADLINE_DISPATCH,
+            proposalDeadlineNudgeSentAt: null,
+            userA,
+            userB,
+          }),
+        ],
+      }),
+  },
+];
+
+describe.each(RAIL_CADENCES)("matchNudgeTick — $name reaches both surfaces", (cadence) => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnv.TICKET_FEATURE_ENABLED = false;
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    mPush.mockResolvedValue(true);
+  });
+
+  const run = (api: ReturnType<typeof createMockApi>) =>
+    matchNudgeTick(api, {
+      fetchFn: vi.fn().mockResolvedValue(openaiOk("A short nudge.")),
+      now: DAY_TIME,
+    });
+
+  // A REAL positive id on an app-only account is the case an id-based filter
+  // gets wrong while reporting success (§1.1). `platform` is the only answer.
+  it("pushes to a recipient living in the app, and sends them no DM", async () => {
+    cadence.route(
+      railUser("she", 424242n, "mobile", "Carol"),
+      railUser("him", 12n, "telegram", "Dan"),
+    );
+    const api = createMockApi();
+
+    const result = await run(api);
+
+    expect(mPush).toHaveBeenCalledTimes(1);
+    expect(mPush.mock.calls[0][0]).toBe("she");
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0][0]).toBe(12);
+    expect(result[cadence.counter]).toBe(2);
+  });
+
+  // The ORDINARY mobile shape — a synthetic negative id (ARCHITECTURE →
+  // `users`) — as opposed to the Telegram-login case above. Both must reach the
+  // app, and only a `platform` test gets both right: any id-based filter, old
+  // (`telegramId > 0n`) or shared (`stallReachableFor`), drops this one.
+  it("pushes to a mobile account carrying a synthetic negative id", async () => {
+    cadence.route(
+      railUser("she", -7n, "mobile", "Carol"),
+      railUser("him", 12n, "telegram", "Dan"),
+    );
+    const api = createMockApi();
+
+    const result = await run(api);
+
+    expect(mPush).toHaveBeenCalledTimes(1);
+    expect(mPush.mock.calls[0][0]).toBe("she");
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(result[cadence.counter]).toBe(2);
+  });
+
+  it("sends only a DM to a recipient on Telegram", async () => {
+    cadence.route(
+      railUser("she", 11n, "telegram", "Carol"),
+      railUser("him", 12n, "telegram", "Dan"),
+    );
+    const api = createMockApi();
+
+    const result = await run(api);
+
+    expect(mPush).not.toHaveBeenCalled();
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    expect(result[cadence.counter]).toBe(2);
+  });
+
+  // The counter is denominated in people, not messages: a `both` recipient is
+  // one reminder delivered twice. Counting legs would double them and stop the
+  // daily figure comparing with the days before this change.
+  it("carries both rails for a `both` account, and still counts one person", async () => {
+    cadence.route(
+      railUser("she", 11n, "both", "Carol"),
+      railUser("him", 12n, "telegram", "Dan"),
+    );
+    const api = createMockApi();
+
+    const result = await run(api);
+
+    expect(mPush).toHaveBeenCalledTimes(1);
+    expect(mPush.mock.calls[0][0]).toBe("she");
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    expect(result[cadence.counter]).toBe(2);
+  });
+
+  // A row predating the `platform` column: the id is the fallback, so no
+  // existing Telegram user loses anything.
+  it("still DMs a row with no platform and a positive id", async () => {
+    cadence.route(
+      railUser("she", 11n, null, "Carol"),
+      railUser("him", 12n, null, "Dan"),
+    );
+    const api = createMockApi();
+
+    const result = await run(api);
+
+    expect(mPush).not.toHaveBeenCalled();
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    expect(result[cadence.counter]).toBe(2);
+  });
+
+  it("says nothing at all when neither rail reaches anybody", async () => {
+    cadence.route(
+      railUser("she", -11n, null, "Carol"),
+      railUser("him", -12n, null, "Dan"),
+    );
+    const api = createMockApi();
+
+    const result = await run(api);
+
+    expect(mPush).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(result[cadence.counter]).toBe(0);
+
+    // The deliberate asymmetry, pinned so a future edit has to mean it.
+    if (cadence.stampsWithNoReachableRecipient) {
+      expect(prisma.match.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { [cadence.stampField]: DAY_TIME } }),
+      );
+    } else {
+      expect(prisma.match.updateMany).not.toHaveBeenCalled();
+    }
+  });
+
+  it("a failed push takes neither the DM nor the idempotency stamp", async () => {
+    cadence.route(
+      railUser("she", 11n, "both", "Carol"),
+      railUser("him", 12n, "telegram", "Dan"),
+    );
+    mPush.mockRejectedValue(new Error("APNs unavailable"));
+    const api = createMockApi();
+
+    const result = await run(api);
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    expect(prisma.match.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { [cadence.stampField]: DAY_TIME } }),
+    );
+    expect(result[cadence.counter]).toBe(2); // her DM still landed
+  });
+
+  it("a failed DM takes neither the push nor the idempotency stamp", async () => {
+    cadence.route(
+      railUser("she", 11n, "both", "Carol"),
+      railUser("him", 12n, "telegram", "Dan"),
+    );
+    const api = createMockApi();
+    api.sendMessage.mockRejectedValue(new Error("403 Forbidden: bot was blocked"));
+
+    const result = await run(api);
+
+    expect(mPush).toHaveBeenCalledTimes(1);
+    expect(prisma.match.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { [cadence.stampField]: DAY_TIME } }),
+    );
+    // She was still reached, by push. He was not reached at all.
+    expect(result[cadence.counter]).toBe(1);
+  });
+
+  // `sendPushToUser` resolves false — no token registered, APNs unconfigured,
+  // APNs refused. Nothing was delivered, so nobody was reminded.
+  it("does not count a push that never landed", async () => {
+    cadence.route(
+      railUser("she", 424242n, "mobile", "Carol"),
+      railUser("him", 12n, "telegram", "Dan"),
+    );
+    mPush.mockResolvedValue(false);
+    const api = createMockApi();
+
+    const result = await run(api);
+
+    expect(mPush).toHaveBeenCalledTimes(1);
+    expect(result[cadence.counter]).toBe(1); // his DM only
+  });
+
+  it("carries the frozen type and payload the client routes on", async () => {
+    cadence.route(
+      railUser("she", 424242n, "mobile", "Carol"),
+      railUser("him", 12n, "telegram", "Dan"),
+    );
+    const api = createMockApi();
+
+    await run(api);
+
+    const payload = mPush.mock.calls[0][1] as {
+      title: string;
+      body: string;
+      data: Record<string, unknown>;
+      collapseId?: string;
+    };
+    expect(payload.data).toEqual({ type: cadence.pushType, matchId: cadence.matchId });
+    expect(payload.title.length).toBeGreaterThan(0);
+    expect(payload.body.length).toBeGreaterThan(0);
+    // No action buttons and no collapse key: these are ordinary notifications
+    // whose next step is "open the app".
+    expect(payload.collapseId).toBeUndefined();
+  });
+});
+
+describe("matchNudgeTick — rails, the cases that are not per-cadence", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnv.TICKET_FEATURE_ENABLED = false;
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    mPush.mockResolvedValue(true);
+  });
+
+  // Quiet hours are about the person, not the transport. None of these three
+  // types is time-sensitive, so none of them has any claim on someone's night.
+  it("quiet hours silence the pushes too, not just the DMs", async () => {
+    routeQueries({
+      proposal: [
+        makeProposedMatch({
+          userA: railUser("she", 424242n, "mobile", "Carol"),
+          userB: railUser("him", 12n, "mobile", "Dan"),
+        }),
+      ],
+      scheduling: [
+        makeNegotiatingMatch({
+          userA: railUser("her", 3n, "mobile", "Eve"),
+          userB: railUser("his", 4n, "mobile", "Frank"),
+        }),
+      ],
+      deadline: [
+        makeProposedMatch({
+          dispatchedAt: DEADLINE_DISPATCH,
+          proposalDeadlineNudgeSentAt: null,
+          userA: railUser("x", 5n, "mobile", "Gina"),
+          userB: railUser("y", 6n, "mobile", "Hank"),
+        }),
+      ],
+    });
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: QUIET_TIME });
+
+    expect(mPush).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(prisma.match.findMany).not.toHaveBeenCalled();
+    expect(result.proposalNudges + result.schedNudges + result.deadlineNudges).toBe(0);
+  });
+
+  // The push copy has to be true in BOTH planning branches — the calendar was
+  // never opened, and both picked with nothing overlapping — so there is one
+  // string, and it says "open the calendar" rather than "pick a time".
+  it("pushes the same planning copy when both picked and nothing overlaps", async () => {
+    routeQueries({
+      scheduling: [
+        makeNegotiatingMatch({
+          availableTimesA: [SCHED_SLOT],
+          availableTimesB: [SCHED_SLOT_2],
+          userA: railUser("she", 424242n, "mobile", "Carol"),
+          userB: railUser("him", 12n, "telegram", "Dan"),
+        }),
+      ],
+    });
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { fetchFn: vi.fn(), now: DAY_TIME });
+
+    expect(result.schedNudges).toBe(2);
+    expect(mPush).toHaveBeenCalledTimes(1);
+    expect(mPush.mock.calls[0][1]).toMatchObject({
+      title: t("en", "planningNudgePushTitle"),
+      body: t("en", "planningNudgePushBody"),
+      data: { type: PLANNING_NUDGE_PUSH_TYPE },
+    });
+    // The DM branch is unchanged: static copy plus the way back into the grid.
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      12,
+      t("en", "matchScheduleNoOverlapYet"),
+      expect.objectContaining({ reply_markup: expect.anything() }),
+    );
+  });
+
+  // One deadline, one figure. A push and a DM disagreeing about how long is
+  // left is worse than either of them alone.
+  it("quotes the deadline push the same number of hours as the DM", async () => {
+    routeQueries({
+      deadline: [
+        makeProposedMatch({
+          dispatchedAt: DEADLINE_DISPATCH,
+          proposalDeadlineNudgeSentAt: null,
+          userA: railUser("she", 11n, "both", "Carol"),
+          userB: railUser("him", 12n, "telegram", "Dan"),
+        }),
+      ],
+    });
+    const api = createMockApi();
+
+    await matchNudgeTick(api, { now: DAY_TIME });
+
+    const dm = api.sendMessage.mock.calls[0][1] as string;
+    const hours = Number(/(\d+)/.exec(dm)?.[1]);
+    expect(hours).toBeGreaterThan(0);
+    expect(dm).toBe(t("en", "pitchDeadlineNudge", { hours }));
+    expect((mPush.mock.calls[0][1] as { body: string }).body).toBe(
+      t("en", "deadlineNudgePushBody", { hours }),
+    );
+  });
+
+  it("speaks each recipient's own language on both rails", async () => {
+    routeQueries({
+      proposal: [
+        makeProposedMatch({
+          userA: { ...railUser("she", 424242n, "mobile", "Carol"), language: "uk" },
+          userB: { ...railUser("him", 12n, "mobile", "Dan"), language: "de" },
+        }),
+      ],
+    });
+    const api = createMockApi();
+
+    await matchNudgeTick(api, {
+      fetchFn: vi.fn().mockResolvedValue(openaiOk("nudge")),
+      now: DAY_TIME,
+    });
+
+    const bodies = mPush.mock.calls.map((c) => (c[1] as { body: string }).body);
+    expect(bodies).toContain(t("uk", "matchNudgePushBody"));
+    expect(bodies).toContain(t("de", "matchNudgePushBody"));
+  });
+
+  // Boundary guard, and it pins two things at once. `stallReachableFor` is
+  // SHARED with the venue nudge, the check-in and the cancellation, where
+  // `telegramId > 0n` is the RIGHT test — that chain is an inline keyboard an
+  // app user has nothing to answer with. So the venue step is deliberately
+  // untouched by this slice: it still gains no push rail, and it still decides
+  // on the id's sign, which for this fixture (a `mobile` account carrying a real
+  // positive id) means it still sends the DM it always sent. Swapping that
+  // helper for `telegramReachable` while adding rails here would silently start
+  // cancelling matches on people who were never asked.
+  it("leaves the venue step on its own predicate — no push rail, no rewrite", async () => {
+    routeQueries({
+      venue: [makeVenueMatch({ userA: railUser("she", 424242n, "mobile", "Alice") })],
+    });
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(mPush).not.toHaveBeenCalled();
+    expect(result.venueNudges).toBe(1);
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0][0]).toBe(424242);
   });
 });
