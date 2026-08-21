@@ -13,6 +13,8 @@ import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
 import { isUniqueViolation } from "./ticket-wallet.js";
 import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
 import { transitionAccountStatus } from "./account-status-transitions.js";
+import { sendPushToUser } from "./push.js";
+import { pushReachable, telegramReachable } from "./telegram-reach.js";
 import {
   buildCitySwitchKeyboard,
   isMarketPending,
@@ -54,6 +56,10 @@ import {
  * instead of being handed a list from `runDropBatch` — this keeps the
  * cron safe to re-run / fire late without state coupling.
  */
+
+/** Matches the client's `PushPayload` type strings. No `matchId` rides with
+ *  it — this is the notification that there is no match. */
+export const NO_MATCH_PUSH_TYPE = "match.none";
 
 export const DEFAULT_NOTIFY_DELAY_MS = 2000;
 
@@ -165,11 +171,27 @@ function templateKeyForTier(tier: number): TranslationKey {
 
 /**
  * Find all `active` users with no dispatched match in the last
- * `RECENT_MATCH_WINDOW_MS`, send each the tier-appropriate DM, and record
- * a `NoMatchNotice` row for analytics + idempotency.
+ * `RECENT_MATCH_WINDOW_MS`, tell each of them on whichever rail(s) they own,
+ * and record a `NoMatchNotice` row for analytics + idempotency.
  *
- * Mobile-only accounts (`telegramId <= 0`) are skipped — push goes via
- * the Expo path; not in scope for this service.
+ * **The rail is `platform`, not the sign of `telegramId`.** This loop used to
+ * drop every account with a synthetic negative id under a comment saying push
+ * "goes via the Expo path" — a rail retired 2026-07-18 that had never carried
+ * this notice even while it existed. An app-only user was simply never told
+ * how their drop went: the same mechanic-on-one-surface-only hole as
+ * `pitch.ts` (the drop itself) and `pre-date-safety.ts` (the brief).
+ *
+ * WHO is told and WHAT CARRIES it are two separate questions. The candidate
+ * query answers the first ("the matcher found this person nobody"); the
+ * `telegramReachable` / `pushReachable` pair answers the second, and a user on
+ * `both` is told twice, once per rail. Only someone on NEITHER rail is
+ * `skipped` — collapsing the two questions into one id test is the defect
+ * §5.4 fixed and this is its tenth site.
+ *
+ * The push is a single frozen empathetic line, identical across all four DM
+ * branches (tier / market-pending / pause / discount). It names no partner,
+ * quotes no discount percentage and carries no city-switch button: those
+ * belong to the DM, where their conditions are actually checked.
  */
 export async function sendNoMatchNotices(
   api: Api<RawApi>,
@@ -218,6 +240,12 @@ export async function sendNoMatchNotices(
     select: {
       id: true,
       telegramId: true,
+      // Load-bearing: the rail predicates read `platform`, and a row that
+      // doesn't select it arrives as `undefined` — which `telegramReachable`
+      // reads as "pre-column row, assume Telegram" and `pushReachable` reads
+      // as "no app rail". The result is not an exception; it is a notice
+      // addressed to a chat the user will never open.
+      platform: true,
       language: true,
       profile: { select: { homeCityKey: true, homeCity: true } },
     },
@@ -237,8 +265,21 @@ export async function sendNoMatchNotices(
   for (let i = 0; i < candidates.length; i++) {
     const u = candidates[i]!;
 
-    // Mobile-first account — handled by the push path, not Telegram.
-    if (u.telegramId <= 0n) {
+    const viaTelegram = telegramReachable(u);
+    const viaPush = pushReachable(u);
+
+    // Not "mobile-first" — unreachable, full stop. Someone on neither rail
+    // (a legacy row with a synthetic negative id and no app rail claimed) is
+    // the only person this service genuinely cannot tell anything, and is now
+    // the only one it counts as `skipped`.
+    //
+    // Deliberately BEFORE the claim, so no `NoMatchNotice` row is written for
+    // them. That row is both the analytics record of a notice and the anchor
+    // `resolveSinceDate` falls back to for a never-matched user, so claiming
+    // one for a notice nobody received would age a famine streak on silence —
+    // and could hand them tier 2 (and its discount line) as the first thing
+    // they ever hear from us if they later join a rail.
+    if (!viaTelegram && !viaPush) {
       result.skipped++;
       continue;
     }
@@ -344,33 +385,83 @@ export async function sendNoMatchNotices(
         }
       }
 
-      if (marketPending) {
-        // Plain send, not the rich "we really looked" stream — nothing was
-        // searched for this user, so that beat would be a lie. It also carries
-        // the switch button, which the draft-stream primitive cannot attach.
-        await api.sendMessage(Number(u.telegramId), body, {
-          reply_markup: buildCitySwitchKeyboard(lang),
+      // Each rail is attempted on its own and absorbs its own failure: a
+      // blocked bot must not cost the push, and a dead APNs token must not
+      // cost the DM — nor the claim, nor the pause.
+      let delivered = false;
+      let dmError: unknown;
+
+      if (viaTelegram) {
+        try {
+          if (marketPending) {
+            // Plain send, not the rich "we really looked" stream — nothing was
+            // searched for this user, so that beat would be a lie. It also carries
+            // the switch button, which the draft-stream primitive cannot attach.
+            await api.sendMessage(Number(u.telegramId), body, {
+              reply_markup: buildCitySwitchKeyboard(lang),
+            });
+          } else if (pausedNow) {
+            // Plain send — this states a fact ("the pool is empty, you're
+            // paused") rather than performing empathy for a search that, this
+            // time, genuinely didn't run. Mirrors the market-pending treatment.
+            await api.sendMessage(Number(u.telegramId), body);
+          } else {
+            // Deliberately SHORT stream (anti-drumroll): one "thinking" lead beat —
+            // "we really looked" — then the full empathetic body as the persisted
+            // send. We never spell out bad news slowly. Streams via the native rich
+            // AI-compose path (`rich: true`): the lead beat (`thinkingIndex: 0`)
+            // renders as a `<tg-thinking>` shimmer, the body is the plain final
+            // `sendMessage`. The templates carry no Markdown (emoji + `•` bullets +
+            // newlines only), so the plain final send renders identically —
+            // `parse_mode` is intentionally dropped. Degrades to the classic edited
+            // stream on clients without rich-draft support.
+            await streamImpl(
+              api,
+              Number(u.telegramId),
+              [t(lang, "noMatchStreamStart"), body],
+              { rich: true, thinkingIndex: 0, thinkingEmojiId: AI_EMOJI.think },
+            );
+          }
+          delivered = true;
+        } catch (err) {
+          dmError = err;
+        }
+      }
+
+      if (viaPush) {
+        // One line, identical under every branch above — including the two
+        // that read differently in the DM. It cannot mention the city switch
+        // (there is no button on a notification, §5.2) and it cannot quote the
+        // famine discount, whose eligibility is decided per-user above and
+        // whose offer lives in the DM. `sendPushToUser` resolves `false`
+        // instead of throwing when there is no token / APNs is unconfigured /
+        // APNs refused, so `false` here is a genuine "was not told" rather
+        // than a swallowed exception.
+        const pushed = await sendPushToUser(u.id, {
+          title: t(lang, "noMatchPushTitle"),
+          body: t(lang, "noMatchPushBody"),
+          data: { type: NO_MATCH_PUSH_TYPE },
+        }).catch((err: unknown) => {
+          console.warn(
+            `[no-match-notify] push failed for ${u.id}:`,
+            err instanceof Error ? err.message : err,
+          );
+          return false;
         });
-      } else if (pausedNow) {
-        // Plain send — this states a fact ("the pool is empty, you're
-        // paused") rather than performing empathy for a search that, this
-        // time, genuinely didn't run. Mirrors the market-pending treatment.
-        await api.sendMessage(Number(u.telegramId), body);
-      } else {
-        // Deliberately SHORT stream (anti-drumroll): one "thinking" lead beat —
-        // "we really looked" — then the full empathetic body as the persisted
-        // send. We never spell out bad news slowly. Streams via the native rich
-        // AI-compose path (`rich: true`): the lead beat (`thinkingIndex: 0`)
-        // renders as a `<tg-thinking>` shimmer, the body is the plain final
-        // `sendMessage`. The templates carry no Markdown (emoji + `•` bullets +
-        // newlines only), so the plain final send renders identically —
-        // `parse_mode` is intentionally dropped. Degrades to the classic edited
-        // stream on clients without rich-draft support.
-        await streamImpl(
-          api,
-          Number(u.telegramId),
-          [t(lang, "noMatchStreamStart"), body],
-          { rich: true, thinkingIndex: 0, thinkingEmojiId: AI_EMOJI.think },
+        if (pushed) delivered = true;
+      }
+
+      // What "the notice failed" means now that there are two rails: NOTHING
+      // arrived. One rail landing means a person who knows how their drop
+      // went, so the claim stands, the pause stands, and they are counted
+      // once — `notified` counts people, not messages. Zero rails landing is
+      // precisely the event the single-rail version called a failed send, and
+      // it takes the same two rollbacks below, both of which exist only to
+      // undo state the user was never told about.
+      if (!delivered) {
+        throw (
+          dmError ??
+          new Error("push not delivered (no token, APNs unconfigured, or refused)")
         );
       }
 
@@ -390,7 +481,14 @@ export async function sendNoMatchNotices(
       // a market-pending user (a paid re-run cannot find them anyone either)
       // and for a user just paused (same reason — the pool has nothing for
       // them, paid or not).
-      if (!marketPending && !pausedNow) {
+      // `viaTelegram` because the offer IS a Telegram DM carrying a Stars
+      // button — Rematch has no app rail in v1 (`rematch.ts` self-gates on a
+      // synthetic negative id for exactly that reason). Without this guard the
+      // push-only branch would newly reach a send that can only fail: an
+      // app-only account that signed in THROUGH Telegram carries a real
+      // positive id the sender's own check waves through, on a chat the bot
+      // cannot open. Nobody loses an offer they could have received.
+      if (!marketPending && !pausedNow && viaTelegram) {
         await sendRematchOfferIfEligible(api, u.id, "famine", now).catch(() => {});
       }
     } catch (err) {

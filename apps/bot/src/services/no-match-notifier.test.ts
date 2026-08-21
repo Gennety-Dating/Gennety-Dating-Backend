@@ -33,10 +33,28 @@ vi.mock("./account-status-transitions.js", () => ({
   transitionAccountStatus: vi.fn(),
 }));
 
+// §4.3: the app rail. Mocked rather than exercised — `push.ts` owns token
+// lookup and APNs, and both have their own tests; what matters here is WHO it
+// is called for and WHAT it carries.
+vi.mock("./push.js", () => ({ sendPushToUser: vi.fn() }));
+
+// The Rematch offer is a Telegram DM with a Stars button; mocked so the
+// push-only cases below can assert it is not even attempted there, without
+// dragging in env flags, the card renderer and InlineKeyboard.
+vi.mock("../handlers/matching/rematch.js", () => ({
+  sendRematchOfferIfEligible: vi.fn(),
+}));
+
 import { prisma } from "@gennety/db";
-import { sendNoMatchNotices, getDropDate } from "./no-match-notifier.js";
+import {
+  sendNoMatchNotices,
+  getDropDate,
+  NO_MATCH_PUSH_TYPE,
+} from "./no-match-notifier.js";
 import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
 import { transitionAccountStatus } from "./account-status-transitions.js";
+import { sendPushToUser } from "./push.js";
+import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
 import { CADENCE, FAMINE_PAUSE_AFTER_DAYS } from "@gennety/shared";
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -49,6 +67,8 @@ const mProfileUpdateMany = (prisma.profile as unknown as { updateMany: MockFn })
 const mTransaction = (prisma as unknown as { $transaction: MockFn }).$transaction;
 const mGrant = grantFamineDiscountIfEligible as unknown as MockFn;
 const mTransition = transitionAccountStatus as unknown as MockFn;
+const mPush = sendPushToUser as unknown as MockFn;
+const mRematch = sendRematchOfferIfEligible as unknown as MockFn;
 
 function makeApi() {
   return {
@@ -118,6 +138,10 @@ describe("sendNoMatchNotices", () => {
     // never throws "not a function" against an un-primed mock.
     mTransition.mockResolvedValue({ kind: "changed" });
     mProfileUpdateMany.mockResolvedValue({ count: 1 });
+    // §4.3 defaults: APNs accepted it. Every fixture WITHOUT a `platform` is a
+    // pre-column Telegram row, so the push leg isn't reached at all there.
+    mPush.mockResolvedValue(true);
+    mRematch.mockResolvedValue(false);
   });
 
   it("(D4) throttles candidate selection to famineNoticeIntervalMs, not the exact drop day", async () => {
@@ -460,10 +484,16 @@ describe("sendNoMatchNotices", () => {
     expect(result.tier2).toBe(1);
   });
 
-  it("skips mobile-only accounts (negative telegramId) without DB writes", async () => {
+  // §4.3: a negative id is no longer what makes this a skip — the absence of
+  // BOTH rails is. This row claims no `platform`, so there is no app rail to
+  // fall back to, and it stays the one case the service genuinely cannot
+  // reach. No `NoMatchNotice` is written for it: that row is the anchor the
+  // next tier is measured from, and a notice nobody received must not age a
+  // famine streak.
+  it("skips a user reachable on neither rail, without a DB write or a push", async () => {
     mUserFindMany.mockResolvedValueOnce([
       { id: "tg", telegramId: 555n, language: "en" },
-      { id: "mobile", telegramId: -42n, language: "en" },
+      { id: "nowhere", telegramId: -42n, platform: null, language: "en" },
     ]);
     mMatchFindFirst.mockResolvedValue(null);
     mNoticeFindFirst.mockResolvedValue(null);
@@ -476,6 +506,7 @@ describe("sendNoMatchNotices", () => {
     expect(result.skipped).toBe(1);
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(stream).toHaveBeenCalledTimes(1);
+    expect(mPush).not.toHaveBeenCalled();
     expect(mNoticeCreate).toHaveBeenCalledTimes(1);
     expect(mNoticeCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ userId: "tg" }) }),
@@ -653,5 +684,296 @@ describe("sendNoMatchNotices", () => {
 
     const [, body] = api.sendMessage.mock.calls[0]!;
     expect(body).toMatch(/quality bar/);
+  });
+
+  /**
+   * §4.3 — "no match this drop" reaches the app.
+   *
+   * The same class of defect `pre-date-safety.ts` fixed in §5.4: one filter
+   * (`telegramId <= 0n`) was answering two different questions — whether this
+   * person should be told, and which rail can tell them. The candidate query
+   * answers the first. `telegramReachable` / `pushReachable` answer the second,
+   * per user, and `both` means both.
+   */
+  describe("§4.3: the app rail", () => {
+    function dispatchedDaysAgo(days: number, now: Date = NOW): Date {
+      return new Date(getDropDate(now).getTime() - days * DAY_MS);
+    }
+
+    it("pushes to a user on the app and sends them no DM", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "app", telegramId: -42n, platform: "mobile", language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce(null);
+      mNoticeFindFirst.mockResolvedValueOnce(null);
+      const api = makeApi();
+      const stream = makeStream();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+      // Told, counted, and tiered exactly like anyone else — the rail is not
+      // the product, it is the transport.
+      expect(result.notified).toBe(1);
+      expect(result.tier1).toBe(1);
+      expect(result.skipped).toBe(0);
+      expect(api.sendMessage).not.toHaveBeenCalled();
+      expect(stream).not.toHaveBeenCalled();
+      expect(mPush).toHaveBeenCalledTimes(1);
+      expect(mPush.mock.calls[0]![0]).toBe("app"); // internal id, not telegramId
+      // The idempotency row still lands, so a re-run doesn't re-notify.
+      expect(mNoticeCreate).toHaveBeenCalledWith({
+        data: { userId: "app", tier: 1, dropDate: getDropDate(NOW) },
+      });
+    });
+
+    it("DMs a Telegram user and sends them no push", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "tg", telegramId: 555n, platform: "telegram", language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce(null);
+      mNoticeFindFirst.mockResolvedValueOnce(null);
+      const api = makeApi();
+      const stream = makeStream();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+      expect(result.notified).toBe(1);
+      expect(stream).toHaveBeenCalledTimes(1);
+      expect(mPush).not.toHaveBeenCalled();
+    });
+
+    it("carries both rails for a user on Telegram AND the app", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "both", telegramId: 777n, platform: "both", language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce(null);
+      mNoticeFindFirst.mockResolvedValueOnce(null);
+      const api = makeApi();
+      const stream = makeStream();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+      expect(stream).toHaveBeenCalledTimes(1);
+      expect(mPush).toHaveBeenCalledTimes(1);
+      // One person, one notice — `notified` counts people, not messages.
+      expect(result.notified).toBe(1);
+      expect(mNoticeCreate).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps DMing a row older than the platform column", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "legacy", telegramId: 111n, platform: null, language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce(null);
+      mNoticeFindFirst.mockResolvedValueOnce(null);
+      const api = makeApi();
+      const stream = makeStream();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+      expect(result.notified).toBe(1);
+      expect(stream).toHaveBeenCalledTimes(1);
+      expect(mPush).not.toHaveBeenCalled();
+    });
+
+    // The silent half of the defect. `platform` missing from the SELECT does
+    // not throw — it arrives `undefined`, which `telegramReachable` reads as
+    // "pre-column row, assume Telegram" for EVERY candidate, so the whole app
+    // side is addressed on a rail it cannot hear.
+    it("selects platform in the candidate query", async () => {
+      mUserFindMany.mockResolvedValueOnce([]);
+
+      await sendNoMatchNotices(makeApi() as never, NOW, 0, makeStream() as never);
+
+      const arg = mUserFindMany.mock.calls[0]![0] as {
+        select: Record<string, unknown>;
+      };
+      expect(arg.select.platform).toBe(true);
+    });
+
+    // The type is the client's routing key for the tap, and the payload's
+    // shape is part of the frozen contract: there is no match, so there is
+    // no `matchId` to carry.
+    it("sends the type the client routes on, with no matchId", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "app", telegramId: -42n, platform: "mobile", language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce(null);
+      mNoticeFindFirst.mockResolvedValueOnce(null);
+
+      await sendNoMatchNotices(makeApi() as never, NOW, 0, makeStream() as never);
+
+      expect(NO_MATCH_PUSH_TYPE).toBe("match.none");
+      const payload = mPush.mock.calls[0]![1] as { data: Record<string, unknown> };
+      expect(payload.data).toEqual({ type: "match.none" });
+      expect(payload.data).not.toHaveProperty("matchId");
+    });
+
+    // Direct analogue of the pre-date-safety guard: one rail's failure is not
+    // allowed to cost the other rail, the claim, or the pause.
+    it("survives a push failure without losing the DM or the claim", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "both", telegramId: 777n, platform: "both", language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce(null);
+      mNoticeFindFirst.mockResolvedValueOnce(null);
+      mPush.mockRejectedValueOnce(new Error("apns down"));
+      const api = makeApi();
+      const stream = makeStream();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+      expect(result.notified).toBe(1);
+      expect(result.failed).toBe(0);
+      expect(stream).toHaveBeenCalledTimes(1);
+      expect(mNoticeDeleteMany).not.toHaveBeenCalled();
+    });
+
+    it("treats a false from the push as delivered-elsewhere when the DM landed", async () => {
+      // No token / APNs unconfigured — `sendPushToUser` resolves `false`
+      // rather than throwing. The person still heard it on Telegram, so the
+      // notice is not rolled back and they are not re-notified next run.
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "both", telegramId: 777n, platform: "both", language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce(null);
+      mNoticeFindFirst.mockResolvedValueOnce(null);
+      mPush.mockResolvedValueOnce(false);
+      const api = makeApi();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
+
+      expect(result.notified).toBe(1);
+      expect(result.failed).toBe(0);
+      expect(mNoticeDeleteMany).not.toHaveBeenCalled();
+    });
+
+    it("counts a user as notified when the DM fails but the push lands", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "both", telegramId: 777n, platform: "both", language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce(null);
+      mNoticeFindFirst.mockResolvedValueOnce(null);
+      const api = makeApi();
+      const stream = makeStream();
+      stream.mockRejectedValueOnce(new Error("bot was blocked"));
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+      expect(result.notified).toBe(1);
+      expect(result.failed).toBe(0);
+      expect(mPush).toHaveBeenCalledTimes(1);
+      expect(mNoticeDeleteMany).not.toHaveBeenCalled();
+    });
+
+    // (NOMATCH-1) The other half of the rule: nothing arrived on ANY rail is
+    // the same event the single-rail version called a failed send.
+    it("rolls the claim back when the only rail the user has does not deliver", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "app", telegramId: -42n, platform: "mobile", language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce(null);
+      mNoticeFindFirst.mockResolvedValueOnce(null);
+      mPush.mockResolvedValueOnce(false);
+      const api = makeApi();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
+
+      expect(result.notified).toBe(0);
+      expect(result.failed).toBe(1);
+      expect(result.skipped).toBe(0);
+      expect(mNoticeDeleteMany).toHaveBeenCalledWith({
+        where: { userId: "app", dropDate: getDropDate(NOW) },
+      });
+    });
+
+    // (NOMATCH-2) An app-side user must not be paused by a notice they never
+    // got, for exactly the reason a Telegram user must not: this notifier only
+    // ever selects `active`, so it would never revisit them.
+    it("resumes an app-side account paused by a push that never landed", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "app", telegramId: -42n, platform: "mobile", language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce({
+        dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
+      });
+      mPush.mockResolvedValueOnce(false);
+
+      const result = await sendNoMatchNotices(
+        makeApi() as never,
+        NOW,
+        0,
+        makeStream() as never,
+      );
+
+      expect(result.paused).toBe(0);
+      expect(result.failed).toBe(1);
+      expect(mTransition).toHaveBeenCalledWith({ id: "app" }, "resume");
+      expect(mNoticeDeleteMany).toHaveBeenCalled();
+    });
+
+    it("pauses an app-side account when the push does land", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "app", telegramId: -42n, platform: "mobile", language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce({
+        dispatchedAt: dispatchedDaysAgo(FAMINE_PAUSE_AFTER_DAYS),
+      });
+      const api = makeApi();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
+
+      expect(result.paused).toBe(1);
+      expect(result.notified).toBe(1);
+      expect(api.sendMessage).not.toHaveBeenCalled();
+      expect(mPush).toHaveBeenCalledTimes(1);
+      expect(mTransition).not.toHaveBeenCalledWith({ id: "app" }, "resume");
+    });
+
+    // The market-pending DM carries a city-switch button; the push cannot
+    // carry a button (§5.2) and does not claim to. It is still sent: someone
+    // on the app has to learn how the drop went the same as someone on
+    // Telegram, and silence is not an answer.
+    it("still tells a market-pending user on the app, on the one copy", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        {
+          id: "app",
+          telegramId: -42n,
+          platform: "mobile",
+          language: "en",
+          profile: { homeCityKey: "de:berlin", homeCity: "Berlin" },
+        },
+      ]);
+      mMatchFindFirst.mockResolvedValueOnce({ dispatchedAt: dispatchedForTier(3) });
+      const api = makeApi();
+
+      const result = await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
+
+      expect(result.notified).toBe(1);
+      expect(api.sendMessage).not.toHaveBeenCalled();
+      expect(mPush).toHaveBeenCalledTimes(1);
+      expect(mPush.mock.calls[0]![1]).toMatchObject({
+        data: { type: NO_MATCH_PUSH_TYPE },
+      });
+      // Still not in a drop, so still no famine discount and no pause.
+      expect(mGrant).not.toHaveBeenCalled();
+      expect(mTransition).not.toHaveBeenCalled();
+      expect(mNoticeCreate).toHaveBeenCalledTimes(1);
+    });
+
+    // Rematch is a Telegram DM with a Stars button and has no app rail in v1.
+    it("does not attempt the Rematch offer on the push-only rail", async () => {
+      mUserFindMany.mockResolvedValueOnce([
+        { id: "app", telegramId: -42n, platform: "mobile", language: "en" },
+        { id: "tg", telegramId: 555n, platform: "telegram", language: "en" },
+      ]);
+      mMatchFindFirst.mockResolvedValue(null);
+      mNoticeFindFirst.mockResolvedValue(null);
+
+      await sendNoMatchNotices(makeApi() as never, NOW, 0, makeStream() as never);
+
+      expect(mRematch).toHaveBeenCalledTimes(1);
+      expect(mRematch.mock.calls[0]![1]).toBe("tg");
+    });
   });
 });

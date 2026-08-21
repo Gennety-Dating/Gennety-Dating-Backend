@@ -5,6 +5,8 @@ import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { openaiFetch } from "../services/openai-fetch.js";
 import { deadlineFor } from "../services/proposal-deadline.js";
+import { sendPushToUser } from "../services/push.js";
+import { pushReachable, telegramReachable } from "../services/telegram-reach.js";
 import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
 import { buildLocationMapKeyboard } from "../handlers/matching/venue-negotiation.js";
 import { buildCalendarCta } from "../handlers/matching/scheduler.js";
@@ -46,7 +48,18 @@ import { isQuietHours } from "./quiet-hours.js";
  *    the next move is the user's own, a "we're coordinating" status tells them
  *    to sit still while the flow is blocked on them.
  *
- * Quiet hours (23:00–09:00 Europe/Kyiv) block all sends.
+ * Quiet hours (23:00–09:00 Europe/Kyiv) block all sends — **including the
+ * pushes**. These reminders are ordinary notifications with no claim on
+ * someone's night, so the guard sits at the top of the tick, before any query.
+ *
+ * All three cadences reach BOTH surfaces. Until then each of them collected its
+ * recipients with `telegramId > 0n`, which is two separate questions collapsed
+ * into one filter: WHO is owed the reminder (whose move is it) and WHICH RAIL
+ * reaches them. That collapse is the defect §5.4 fixed on the safety brief — a
+ * person living in the app was dropped entirely, and a person who signed in
+ * through Telegram (a REAL positive id on an account the bot cannot message,
+ * §1.1) was dropped on a rail that reported success. The predicates deciding
+ * whose move it is are untouched here; only the rail is.
  */
 
 /**
@@ -67,6 +80,38 @@ export const SCHED_NUDGE2_MS = CADENCE.schedNudgeOffsetsMs[1];
  */
 export const PROPOSAL_DEADLINE_NUDGE_LEAD_MS = CADENCE.proposalDeadlineNudgeLeadMs;
 
+/**
+ * Push types for the three reminder cadences. These match the client's
+ * `PushPayload` type strings, and the type is also what `buildAlertPayload`
+ * derives the APNs category from — so it is contract, not a label.
+ *
+ * **None of them is time-sensitive** (`TIME_SENSITIVE_PUSH_TYPES`, which stays a
+ * closed set of two): a reminder inside a day-long decision window is not
+ * urgency, and under a daily cadence it would pierce Focus every evening.
+ * **None of them carries an action button** either — the next step is "open the
+ * app", which an ordinary notification already is.
+ */
+export const MATCH_NUDGE_PUSH_TYPE = "match.nudge";
+export const PLANNING_NUDGE_PUSH_TYPE = "match.planning";
+export const DEADLINE_NUDGE_PUSH_TYPE = "match.deadline";
+
+/**
+ * Run one recipient's rails and report whether ANY of them landed.
+ *
+ * Each leg catches its own failure, so a blocked Telegram chat can never take
+ * the push down with it — and neither can take down the idempotency stamp,
+ * which was claimed before any of this ran.
+ *
+ * The boolean is what all three counters are denominated in: **people told, not
+ * messages sent**. A `both` user is one reminder delivered twice, not two
+ * reminders; counting legs would double them and quietly break comparison with
+ * every day before this change, which is the only thing these numbers are for.
+ */
+async function anyRailLanded(legs: Array<Promise<boolean>>): Promise<boolean> {
+  if (legs.length === 0) return false;
+  return (await Promise.all(legs)).some(Boolean);
+}
+
 export interface NudgeOptions {
   fetchFn?: typeof fetch;
   now?: Date;
@@ -74,6 +119,12 @@ export interface NudgeOptions {
 }
 
 export interface NudgeResult {
+  /**
+   * The three two-rail cadences count **people reminded**, not messages sent —
+   * a `both` user who got a DM and a push is one. A recipient whose every rail
+   * failed counts as zero, exactly as a failed DM always did. `venueNudges` and
+   * the stall counters are single-rail and unchanged.
+   */
   proposalNudges: number;
   schedNudges: number;
   deadlineNudges: number;
@@ -156,8 +207,11 @@ async function handleDeadlineNudges(
       dispatchedAt: true,
       acceptedByA: true,
       acceptedByB: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
+      // `id` is the internal `User.id` that `sendPushToUser` takes (never the
+      // telegramId), and `platform` is the rail. Neither was selected while
+      // this cadence only ever produced a DM.
+      userA: { select: { id: true, telegramId: true, platform: true, language: true } },
+      userB: { select: { id: true, telegramId: true, platform: true, language: true } },
     },
   });
 
@@ -191,31 +245,61 @@ async function handleDeadlineNudges(
       Math.round((deadline.getTime() - now.getTime()) / (60 * 60 * 1000)),
     );
 
-    // Target only genuinely undecided Telegram sides. A side that already
-    // declined committed irreversibly (row stays `proposed` under the blind
-    // rule) — never nag them; an accepted side is done too.
-    const targets: Array<{ telegramId: bigint; language: string | null }> = [];
-    if (match.acceptedByA == null && match.userA.telegramId > 0n) {
-      targets.push(match.userA);
-    }
-    if (match.acceptedByB == null && match.userB.telegramId > 0n) {
-      targets.push(match.userB);
-    }
+    // Target only genuinely undecided sides. A side that already declined
+    // committed irreversibly (row stays `proposed` under the blind rule) —
+    // never nag them; an accepted side is done too. That is WHO; the rail each
+    // of them is told on is the separate question answered per leg below.
+    const targets: Array<{
+      id: string;
+      telegramId: bigint;
+      platform: string | null;
+      language: string | null;
+    }> = [];
+    if (match.acceptedByA == null) targets.push(match.userA);
+    if (match.acceptedByB == null) targets.push(match.userB);
 
     for (const target of targets) {
       const lang: Language = (target.language as Language) ?? "en";
-      try {
-        await api.sendMessage(
-          Number(target.telegramId),
-          t(lang, "pitchDeadlineNudge", { hours: hoursLeft }),
-        );
-        count++;
-      } catch (err) {
-        console.warn(
-          `[match-nudge] deadline send failed for ${target.telegramId}:`,
-          (err as Error).message,
+      const legs: Promise<boolean>[] = [];
+
+      if (telegramReachable(target)) {
+        legs.push(
+          api
+            .sendMessage(
+              Number(target.telegramId),
+              t(lang, "pitchDeadlineNudge", { hours: hoursLeft }),
+            )
+            .then(() => true)
+            .catch((err: unknown) => {
+              console.warn(
+                `[match-nudge] deadline send failed for ${target.telegramId}:`,
+                err instanceof Error ? err.message : err,
+              );
+              return false;
+            }),
         );
       }
+
+      if (pushReachable(target)) {
+        legs.push(
+          sendPushToUser(target.id, {
+            title: t(lang, "deadlineNudgePushTitle"),
+            // The same figure the DM quotes. One deadline, one number — a push
+            // and a DM disagreeing about how long is left is worse than either
+            // alone.
+            body: t(lang, "deadlineNudgePushBody", { hours: hoursLeft }),
+            data: { type: DEADLINE_NUDGE_PUSH_TYPE, matchId: match.id },
+          }).catch((err: unknown) => {
+            console.warn(
+              `[match-nudge] deadline push failed for ${target.id}:`,
+              err instanceof Error ? err.message : err,
+            );
+            return false;
+          }),
+        );
+      }
+
+      if (await anyRailLanded(legs)) count++;
     }
   }
 
@@ -255,8 +339,14 @@ async function handleProposalNudges(
       acceptedByB: true,
       pitchForA: true,
       pitchForB: true,
-      userA: { select: { telegramId: true, language: true, firstName: true } },
-      userB: { select: { telegramId: true, language: true, firstName: true } },
+      // `id` (the internal `User.id` `sendPushToUser` takes) and `platform`
+      // (the rail) — neither was selected while this cadence was DM-only.
+      userA: {
+        select: { id: true, telegramId: true, platform: true, language: true, firstName: true },
+      },
+      userB: {
+        select: { id: true, telegramId: true, platform: true, language: true, firstName: true },
+      },
     },
     take: batchSize,
   });
@@ -289,35 +379,61 @@ async function handleProposalNudges(
     if (claim.count === 0) continue;
 
     const targets: Array<{
+      id: string;
       telegramId: bigint;
+      platform: string | null;
       language: string | null;
       firstName: string | null;
       pitch: string | null;
     }> = [];
 
-    if (!match.acceptedByA && match.userA.telegramId > 0n) {
-      targets.push({ ...match.userA, pitch: match.pitchForA });
-    }
-    if (!match.acceptedByB && match.userB.telegramId > 0n) {
-      targets.push({ ...match.userB, pitch: match.pitchForB });
-    }
+    // Not having accepted is WHO is owed the reminder — unchanged. The rail is
+    // decided per leg below; folding `telegramId > 0n` in here is what dropped
+    // every app-side recipient of this cadence.
+    if (!match.acceptedByA) targets.push({ ...match.userA, pitch: match.pitchForA });
+    if (!match.acceptedByB) targets.push({ ...match.userB, pitch: match.pitchForB });
 
     for (const target of targets) {
-      try {
-        const text = await generateProposalNudge(
-          { ...target, nudgeIndex },
-          fetchFn,
-        );
-        await api.sendMessage(Number(target.telegramId), text, {
-          parse_mode: "Markdown",
-        });
-        count++;
-      } catch (err) {
-        console.warn(
-          `[match-nudge] proposal send failed for ${target.telegramId}:`,
-          (err as Error).message,
+      const lang: Language = (target.language as Language) ?? "en";
+      const legs: Promise<boolean>[] = [];
+
+      if (telegramReachable(target)) {
+        legs.push(
+          (async () => {
+            const text = await generateProposalNudge({ ...target, nudgeIndex }, fetchFn);
+            await api.sendMessage(Number(target.telegramId), text, {
+              parse_mode: "Markdown",
+            });
+            return true;
+          })().catch((err: unknown) => {
+            console.warn(
+              `[match-nudge] proposal send failed for ${target.telegramId}:`,
+              err instanceof Error ? err.message : err,
+            );
+            return false;
+          }),
         );
       }
+
+      if (pushReachable(target)) {
+        // Static copy on this rail, deliberately: the generated line is written
+        // for a chat the reader is already in, and a lock screen is public.
+        legs.push(
+          sendPushToUser(target.id, {
+            title: t(lang, "matchNudgePushTitle"),
+            body: t(lang, "matchNudgePushBody"),
+            data: { type: MATCH_NUDGE_PUSH_TYPE, matchId: match.id },
+          }).catch((err: unknown) => {
+            console.warn(
+              `[match-nudge] proposal push failed for ${target.id}:`,
+              err instanceof Error ? err.message : err,
+            );
+            return false;
+          }),
+        );
+      }
+
+      if (await anyRailLanded(legs)) count++;
     }
 
   }
@@ -457,6 +573,13 @@ async function handleSchedulingNudges(
     // the cancellation instead of three queries with three ideas about it.
     select: {
       ...STALL_MATCH_SELECT,
+      // Widened locally, additively, on top of the shared select: `platform` is
+      // the rail and this cadence now has two of them. `STALL_MATCH_SELECT`
+      // itself is NOT edited — the check-in and the 48h cancellation read it
+      // too — and the extra field changes nothing for `stallPhaseOf` /
+      // `schedulingOwedKind`, which never look at the participants.
+      userA: { select: { ...STALL_MATCH_SELECT.userA.select, platform: true } },
+      userB: { select: { ...STALL_MATCH_SELECT.userB.select, platform: true } },
       schedulingIteration: true,
       schedNudge1SentAt: true,
       schedNudge2SentAt: true,
@@ -479,7 +602,16 @@ async function handleSchedulingNudges(
       .map((side) => ({ side, owed: schedulingOwedKind(match, side) }))
       .filter((entry): entry is { side: MatchSide; owed: SchedulingOwed } => entry.owed !== null)
       .map((entry) => ({ ...entry, user: entry.side === "A" ? match.userA : match.userB }))
-      .filter((entry) => stallReachableFor(entry.user.telegramId));
+      // NOT `stallReachableFor`. That predicate is right for the stall chain,
+      // whose question is an inline keyboard in a Telegram chat that an app user
+      // has nothing to answer with — but a reminder is just a reminder, and it
+      // reaches the app perfectly well. `schedulingOwedKind` above already said
+      // whose move it is; this only drops someone no rail can reach at all.
+      .filter(({ user }) => telegramReachable(user) || pushReachable(user));
+    // Nobody reachable → no claim, so the stamp is not spent on a reminder that
+    // was never sent and the next tick re-evaluates. Deliberately unlike the
+    // two proposal-phase cadences, whose claim is upstream of their recipient
+    // list; both orderings are pre-existing and neither is changed here.
     if (owing.length === 0) continue;
 
     const anchor = match.schedulingOpenedAt ?? match.dispatchedAt!;
@@ -505,29 +637,59 @@ async function handleSchedulingNudges(
 
     for (const { owed, user } of owing) {
       const lang = (user.language ?? "en") as Language;
-      try {
-        if (owed === "no-overlap") {
-          // Static copy + the way in, exactly like the venue nudge. A generated
-          // "pick a time" line would be flatly wrong here — this person DID
-          // pick; what they need is to widen the selection or take one of the
-          // partner's slots, and the Calendar card scrolled away hours ago.
-          await api.sendMessage(Number(user.telegramId), t(lang, "matchScheduleNoOverlapYet"), {
-            reply_markup: buildCalendarCta(match.id, lang, user.theme),
-          });
-        } else {
-          const text = await generateSchedulingNudge(
-            { ...user, nudgeIndex, iteration: match.schedulingIteration },
-            fetchFn,
-          );
-          await api.sendMessage(Number(user.telegramId), text, { parse_mode: "Markdown" });
-        }
-        count++;
-      } catch (err) {
-        console.warn(
-          `[match-nudge] scheduling send failed for ${user.telegramId}:`,
-          (err as Error).message,
+      const legs: Promise<boolean>[] = [];
+
+      if (telegramReachable(user)) {
+        legs.push(
+          (async () => {
+            if (owed === "no-overlap") {
+              // Static copy + the way in, exactly like the venue nudge. A
+              // generated "pick a time" line would be flatly wrong here — this
+              // person DID pick; what they need is to widen the selection or
+              // take one of the partner's slots, and the Calendar card scrolled
+              // away hours ago.
+              await api.sendMessage(Number(user.telegramId), t(lang, "matchScheduleNoOverlapYet"), {
+                reply_markup: buildCalendarCta(match.id, lang, user.theme),
+              });
+            } else {
+              const text = await generateSchedulingNudge(
+                { ...user, nudgeIndex, iteration: match.schedulingIteration },
+                fetchFn,
+              );
+              await api.sendMessage(Number(user.telegramId), text, { parse_mode: "Markdown" });
+            }
+            return true;
+          })().catch((err: unknown) => {
+            console.warn(
+              `[match-nudge] scheduling send failed for ${user.telegramId}:`,
+              err instanceof Error ? err.message : err,
+            );
+            return false;
+          }),
         );
       }
+
+      if (pushReachable(user)) {
+        // ONE copy for both `owed` branches, and that is a constraint on the
+        // copy rather than a shortcut: it has to be true whether the calendar
+        // was never opened or both picked and nothing lined up. So it says
+        // "open the calendar", never "pick a time".
+        legs.push(
+          sendPushToUser(user.id, {
+            title: t(lang, "planningNudgePushTitle"),
+            body: t(lang, "planningNudgePushBody"),
+            data: { type: PLANNING_NUDGE_PUSH_TYPE, matchId: match.id },
+          }).catch((err: unknown) => {
+            console.warn(
+              `[match-nudge] scheduling push failed for ${user.id}:`,
+              err instanceof Error ? err.message : err,
+            );
+            return false;
+          }),
+        );
+      }
+
+      if (await anyRailLanded(legs)) count++;
     }
   }
 
