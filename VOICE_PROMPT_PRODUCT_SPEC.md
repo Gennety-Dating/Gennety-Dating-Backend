@@ -1,6 +1,7 @@
 # Voice Prompts — Architecture & Implementation Plan
 
-> **Status:** proposal, awaiting founder decisions (§0). No code written.
+> **Status:** plan approved (§0, founder 2026-08-21). No code written yet —
+> M3 carries one open sub-decision (§5.5) that should be settled before it starts.
 > Product invariants: [PRODUCT_SPEC.md](PRODUCT_SPEC.md). Agent rules:
 > [AGENTS.md](AGENTS.md). Decision journal: [DECISIONS.md](DECISIONS.md).
 >
@@ -10,17 +11,26 @@
 
 ---
 
-## 0. Blocking decisions (founder)
+## 0. Decisions taken (founder, 2026-08-21)
 
-Three questions change what gets built. Everything else in this document is
-settled by existing repo precedent.
+| # | Question | Decision |
+|---|---|---|
+| 1 | The Hinge like/comment loop | **A — one-way only.** No like, no comment, no reaction. The voice prompt improves the accept/decline decision and does nothing else. |
+| 2 | Does the transcript feed matching? | **Yes.** Folded into `psychologicalSummary` → the embedding (`V_explicit`, 0.65). In v1 scope, with the legal work that implies. |
+| 3 | Surfaces | **Telegram + iOS together.** One release, full parity, the whole native audio stack up front. |
 
-1. **The like/comment interaction loop** — as specified it is not buildable
-   here (§1.2). Pick A, B, or C from §7.
-2. **Does the transcript feed matching?** (§5.4) — this is the same shape of
-   decision as the 2026-08-01 `ethnicity` removal: content that influences
-   `V_explicit` needs a stated legal basis and a privacy-policy line.
-3. **Surface order** — Telegram-only v1, or Telegram + iOS together (§2).
+Consequences, so they are not rediscovered later:
+
+- Decision 1 **deletes** the interaction milestone. §7 records what was
+  rejected and why, so a future session does not rebuild it.
+- Decision 2 **promotes** the transcript work from "gated" to critical path and
+  brings a privacy-policy version bump with it (§5.4). It also makes
+  `psychologicalSummary` a field with two writers, which is the single most
+  delicate part of this build (§5.5).
+- Decision 3 **promotes** the iOS milestone into v1: presigned upload, signed
+  playback, native recorder, waveform renderer and a global playback
+  coordinator (§6.2). It also puts audio bytes at rest in our own bucket,
+  which Telegram-only would not have done (§5.6).
 
 ---
 
@@ -131,7 +141,7 @@ stealing it.
 
 ## 2. Recommended architecture: one data model, two renderings
 
-| | Telegram (v1) | iOS (v2) |
+| | Telegram | iOS |
 |---|---|---|
 | Record | Native Telegram voice note | `AVAudioRecorder` + custom live visualiser |
 | Store | Telegram `file_id` | Same row; bytes served by signed URL |
@@ -140,11 +150,16 @@ stealing it.
 | Concurrency | Native | `AudioPlaybackCoordinator` singleton |
 | Build cost | Low | High |
 
-**Store the amplitude peaks anyway, from day one, even though Telegram never
-reads them.** The marginal cost at ingest is ~zero — we already have the decoded
-buffer in hand for moderation, and `ffmpeg` is already a required production
-dependency. The retrofit cost is high: backfilling means re-downloading every
-voice prompt through the Bot API. Pay the free version now.
+Both ship in v1 (decision 3). The peaks are computed once at ingest, from the
+buffer already downloaded for moderation, and serve iOS only — Telegram renders
+its own waveform and ignores them. `ffmpeg` is already a required production
+dependency, so this costs nothing beyond the code that reads its output.
+
+**The two rails converge on one row.** A Telegram-recorded prompt has a
+`telegramFileId` and no `storagePath`; an iOS-recorded one has the reverse. The
+render path picks whichever it has, so a user who records on one surface is
+audible on the other only if the bytes exist in a form that surface can play —
+see §5.6 for the one case where they do not.
 
 ---
 
@@ -214,9 +229,11 @@ model VoicePrompt {
   /// exists so the native iOS player never needs a backfill.
   waveform Int[] @default([]) @map("waveform")
 
-  /// Whisper transcript. Retained because it is the moderation evidence and
-  /// (pending the §0.2 decision) the matching signal. Never shown to the
-  /// partner — the product ships audio, not a transcript of a stranger.
+  /// Whisper transcript. Two jobs: moderation evidence, and (decision 2) the
+  /// matching signal folded into psychologicalSummary. Durable here precisely
+  /// so that fold is DERIVED and can be re-applied after an About-me edit
+  /// replaces the bio wholesale (§5.5). Never shown to the partner — the
+  /// product ships audio, not a transcript of a stranger.
   transcript String? @map("transcript")
 
   validationVersion Int?      @map("validation_version")
@@ -389,36 +406,97 @@ transcript check must reject contact-info solicitation
 (`audio_contact_info`). Photos cannot leak this way, so no existing rule covers
 it.
 
-### 5.4 Transcript as a matching signal — **decision required**
+### 5.4 Transcript feeds matching — **decision 2, in scope**
 
-The transcript can fold into `Profile.psychologicalSummary`, which is the
-dominant embedding input (`V_explicit`, weight 0.65). That would make this
-product's voice prompt strictly more than Hinge's: not only a human vibe check
-but real matching signal.
+The transcript folds into `Profile.psychologicalSummary`, the dominant embedding
+input (`V_explicit`, weight 0.65). This makes our voice prompt strictly more
+than Hinge's: not only a human vibe check, but real matching signal.
 
-Two things make it a decision rather than an implementation detail:
+Precedent to copy: `appendVibeToSummary` (`services/profile-analysis.ts`) already
+folds the raw Friday-night answer into the summary and re-marks the embedding
+dirty. Raw text, not an LLM distillation — that is the established treatment for
+short first-person answers, and a 30-second transcript is ~75–90 words, a
+proportionate addition to a summary that often runs to thousands of characters.
 
-1. **Mechanical.** Any write to `psychologicalSummary` sets
-   `embeddingDirty = true`, which **withholds the user from matching until the
-   embedding is rebuilt**. It must therefore attempt the immediate 30-second
-   user-scoped refresh. The `appendNegativeConstraint` bug (DECISIONS 2026-08-08)
-   is exactly this mistake: it marked dirty and walked away, silently removing
-   users from the pool for up to five minutes and causing paid Rematch runs to
-   refund with "nobody found".
+**Three writes must be correct, and each has already burned this repo once.**
 
-2. **Legal.** This is the same shape as the 2026-08-01 `ethnicity` removal —
-   content feeding an Art. 22 automated decision needs a stated basis. Voice
-   *content* is ordinary personal data; a voice *print* used for identification
-   would be Art. 9 biometric. We transcribe and discard the acoustic model, so
-   the honest position is "we do not voice-print" — but it needs to be written
-   into `legal/privacy-policy.md`, carried by `LEGAL_DOCS_VERSION`, and recorded
-   in `legal/dpia.md`.
+1. **Record / re-record → replace the block, never append.**
+   `appendVibeToSummary` achieves idempotency with `summary.includes(block)`,
+   which works only because the vibe answers never change after finalize. A
+   voice transcript changes on **every re-record**, so exact-match idempotency
+   fails and a second block is appended instead of the first being replaced.
+   Three re-records would triple the voice text's weight in the embedding.
+   The voice block therefore needs **explicit delimiters** and a find-and-
+   replace, not an append:
 
-**Recommendation:** ship v1 with the transcript stored for moderation only, and
-gate the matching contribution behind its own decision plus a policy version
-bump. Storing it now costs nothing and keeps the option open.
+   ```
+   <!--voice-prompt-->
+   Asked "Best story I tell at parties": <transcript>
+   <!--/voice-prompt-->
+   ```
 
----
+2. **Every write attempts the immediate refresh.** `embeddingDirty = true`
+   is not a scheduling hint — `findCandidatesFor` fail-closes on the seeker's
+   own dirty flag, so marking dirty and walking away **withholds the user from
+   matching** until the 5-minute cron catches up. That is precisely the
+   `appendNegativeConstraint` bug (DECISIONS 2026-08-08): a user who explained a
+   decline and then bought a paid Rematch was told nobody was found, and
+   refunded, when the engine had refused to look. Call
+   `refreshUserEmbedding(userId)` (`workers/embedding-refresh.ts`) on the same
+   path, best-effort, exactly as `negative-constraints.ts:129` now does.
+
+3. **Deleting the prompt removes the block**, re-dirties, and refreshes. A
+   deleted voice prompt that keeps influencing matching is a ghost the user
+   cannot see or clear.
+
+### 5.5 The `psychologicalSummary` collision — the delicate part of this build
+
+`handlers/menu/edit-profile.ts:192` writes `psychologicalSummary: text` — a
+**full replacement** of whatever the user typed into the "About me" editor. So
+the moment decision 2 lands, that field has two writers, and the user's editor
+silently wipes the voice block.
+
+This is survivable only because the transcript is durable in
+`voice_prompts.transcript`: the block is **derived**, so it can be re-applied.
+The About-me save path must re-append it after replacing the body.
+
+**The judgment call inside that**, which is worth stating rather than burying:
+if a user deliberately deletes the voice block out of their bio text, we put it
+back. That is defensible — the voice prompt is still on their profile, and an
+embedding that stops reflecting a live profile element is stale in a way nobody
+asked for. Their lever for removing it is deleting the voice prompt, which
+removes the block properly (§5.4 rule 3). But it is a real behaviour, and the
+editor preview shows the block, so a user WILL see it and may try to edit it.
+
+If that reads as too surprising, the alternative is to stop folding into
+`psychologicalSummary` and instead compose the embedding input at refresh time
+from `summary + voiceTranscript` — one more read in `refreshUserEmbedding`, no
+second writer, no collision, and the bio stays purely the user's. That is the
+cleaner architecture and the reason it is not the default recommendation is only
+that it diverges from the `appendVibeToSummary` precedent. **Worth deciding
+before M3 starts.**
+
+### 5.6 What decision 3 adds that Telegram-only would not have
+
+Shipping iOS in v1 puts **audio bytes at rest in our own Supabase bucket**. On
+the Telegram rail we hold a `file_id` and Telegram is the store; on the iOS rail
+we are the store. Three duties follow:
+
+- `collectOwnedPaths` (`services/account-deletion.ts`) must scan
+  `voicePrompt.storagePath`, or GDPR erasure leaves the audio behind. It already
+  scans `photos`, `profileMedia` and `pendingPhotoCandidates`; this is one more
+  source, and missing it is silent.
+- A new bucket, `SUPABASE_VOICE_BUCKET` (private), following the existing
+  three. **It must be set explicitly in `.env.demo`** — the demo env is
+  generated as production's `.env` plus that file, so any key it does not name
+  inherits production's value. That is exactly how the demo pointed at the
+  production Supabase project for a day (deploy.md, 2026-08-06).
+- **One cross-rail gap, stated rather than hidden:** an iOS-recorded `.m4a` in
+  our bucket is not a Telegram `file_id`. To play it to a Telegram user we must
+  upload it once through `sendVoice` and cache the returned `file_id` on the
+  row — the same mint-once-and-cache pattern `sendSkipNudge` already uses. Until
+  that upload happens the prompt is iOS-only. Do this lazily at first pitch, not
+  at record time, so we never pay for a prompt nobody is shown.
 
 ## 6. Component Hierarchy
 
@@ -466,29 +544,24 @@ playback failure → fall back to the transcript-free static bars and a retry ta
 
 ---
 
-## 7. The interaction loop — three buildable options
+## 7. The interaction loop — rejected (decision 1)
 
-**Option A — Ship it one-way (recommended for v1).**
-The voice prompt improves the accept/decline decision and nothing else. Zero new
-mechanics, zero invariant risk. AGENTS.md: *"the smallest change that fits
-existing boundaries."*
+**Decision: A — one-way only.** The voice prompt improves the accept/decline
+decision and does nothing else. No like, no comment, no reaction, no relay.
 
-**Option B — Post-decision reaction.**
-The listener may react to the voice prompt, but the reaction is withheld until
-**both** sides have committed and the match is mutual, surfacing in the "It's
-mutual 🤍" moment. Blind decision is preserved by construction: nothing is
-revealed before both answers exist. Small build, reuses the §3.4 reveal path.
+Recorded here so it is not rebuilt: two alternatives were designed and turned
+down, and both remain buildable if the question is ever reopened.
 
-**Option C — Voice reply as icebreaker fuel, never relayed.**
-The listener records a reply. It is transcribed, fed to the §Phase 4 icebreaker
-and wingman-hint generator, and **never delivered to the partner**. The gesture
-gets a home, the AI gets better material for the T-5h icebreakers, and no
-user-to-user channel opens. Maps onto machinery that already exists.
+- **B — reaction revealed post-decision.** Withhold the listener's reaction
+  until both sides have committed and the match is mutual, surfacing it in the
+  "It's mutual 🤍" moment. Blind-decision safe by construction, because nothing
+  is revealed before both answers exist.
+- **C — voice reply as icebreaker fuel.** The listener records a reply; it is
+  transcribed, fed to the §Phase 4 icebreaker and wingman generator, and never
+  delivered to the partner. No user-to-user channel opens.
 
-B and C compose. Neither is Hinge's loop — Hinge's loop requires a chat inbox,
-which this product deliberately does not have.
-
----
+Hinge's actual loop needs a chat inbox, which this product deliberately does not
+have. Neither B nor C is that loop; do not read either as a route back to it.
 
 ## 8. Demo mode impact check (AGENTS.md, mandatory)
 
@@ -508,50 +581,59 @@ exactly this reason). Add an `--audio=<dir>` arm to that script.
 
 ## 9. Implementation Roadmap
 
+All six milestones are v1 (decisions 2 and 3). M0–M2 and M4 parallelise across
+the backend and the iOS client; M3 is the one that must not be rushed.
+
 ### M0 — Foundation
 - [ ] `packages/shared/src/voice-prompts.ts` — catalog, 8–10 prompts × 5 locales
-- [ ] Constants: duration/size/bucket bounds
+- [ ] Constants: duration / size / bucket bounds, served via config not inlined
 - [ ] `VoicePrompt` Prisma model + additive `db:push` + `db:drift-check`
+- [ ] `SUPABASE_VOICE_BUCKET` (private) — and **in `.env.demo` explicitly** (§5.6)
 - [ ] `VOICE_PROMPT_ENABLED=false` in `.env.example` **and** `.env.local.example`
-- [ ] Unit tests: catalog id stability, locale completeness
+- [ ] Tests: catalog id stability, locale completeness
 
-### M1 — Ingest & moderation (Telegram)
-- [ ] `services/profile-media-validation/audio-waveform.ts` (ffmpeg → peaks)
+### M1 — Ingest & moderation
+- [ ] `profile-media-validation/audio-waveform.ts` (ffmpeg → 40 peaks)
 - [ ] `voice-prompt-validation.ts` — transcript → moderation → contact-info rule
-- [ ] `services/voice-prompt.ts` ingest orchestration + held status shimmer
-- [ ] **`voiceHandler` claim check** — the collision in §1.4; regression test
-      confirmed red before green
+- [ ] `services/voice-prompt.ts` — ingest orchestration + held status shimmer
+- [ ] **`voiceHandler` claim check** (§1.4) — regression test confirmed red first
 - [ ] Rejection reasons + localized copy ×5
-- [ ] Re-record rate limit (audio costs a Whisper + moderation call per attempt)
+- [ ] Re-record rate limit — every attempt costs a Whisper + a moderation call
 
-### M2 — Surfaces (Telegram)
+### M2 — Telegram surfaces
 - [ ] `handlers/menu/voice-prompt.ts` — add / replace / delete
-- [ ] Optional onboarding step, after photos, skippable
-- [ ] Pitch render: `sendVoice` after the photo card, via `PROTECT_PARTNER_MEDIA`
+- [ ] Optional onboarding step after photos, skippable
+- [ ] Pitch: `sendVoice` after the photo card, via `PROTECT_PARTNER_MEDIA`
+- [ ] Lazy `file_id` mint for iOS-recorded prompts (§5.6), cached on the row
 - [ ] My Profile shows the active prompt
 - [ ] Demo seeder `--audio` arm (§8)
 
-### M3 — Transcript → matching *(gated on §0.2)*
-- [ ] Fold transcript into `psychologicalSummary`
-- [ ] **Immediate embedding refresh** — not just `embeddingDirty = true`
+### M3 — Transcript → matching  ⚠️ the delicate one
+- [ ] **Settle §5.5 first**: fold into `psychologicalSummary`, or compose at
+      refresh time. This decides whether the field gets a second writer.
+- [ ] Delimited, find-and-replace block — **not** an append (§5.4 rule 1)
+- [ ] `refreshUserEmbedding` on every write path (§5.4 rule 2)
+- [ ] Delete-prompt removes the block and refreshes (§5.4 rule 3)
+- [ ] About-me editor re-applies the block after replacement (§5.5)
 - [ ] `legal/privacy-policy.md` + `dpia.md` + `LEGAL_DOCS_VERSION` bump
+- [ ] State plainly that we transcribe and do **not** voice-print
 
-### M4 — iOS parity
-- [ ] `/v1/*` endpoints + `openapi/gennety-v1.yaml` in the same commit
+### M4 — iOS (parallel with M1–M2)
+- [ ] `/v1/*` endpoints + `openapi/gennety-v1.yaml` in the **same commit**
 - [ ] `./scripts/generate-api.sh` emits zero `skipping` lines (§4.2)
-- [ ] Native recorder, player, `AudioPlaybackCoordinator`
+- [ ] `collectOwnedPaths` covers `storagePath` (§5.6) — silent if missed
+- [ ] Recorder: permission gate, live visualiser, 3s floor / 30s stop, preview
+- [ ] Player: precomputed bars, scrubber, `AudioPlaybackCoordinator`
 - [ ] Task recorded in `Gennety-iOS/IMPLEMENTATION_PLAN.md`
 
-### M5 — Interaction loop *(gated on §0.1)*
-
-### M6 — QA & docs
-- [ ] E2E on `@gennetytestbot`: record → moderate → pitch → play
+### M5 — QA, demo & docs
+- [ ] E2E on `@gennetytestbot`: record → moderate → pitch → play, both rails
 - [ ] Rejection paths: too short, too long, unsafe, contact-info, provider down
+- [ ] **Embedding regression**: record → re-record ×3 → confirm ONE block and a
+      refreshed vector, not three blocks and a stale one
 - [ ] Adoption + completion analytics per `promptId`
-- [ ] PRODUCT_SPEC §1.3/§3.3 + ARCHITECTURE + DECISIONS entries, same commit
-- [ ] deploy.md PENDING block: flag, schema step, demo redeploy
-
----
+- [ ] PRODUCT_SPEC + ARCHITECTURE + DECISIONS entries, same commit
+- [ ] deploy.md PENDING block: flag, schema step, new bucket, demo redeploy
 
 ## 10. Open risks
 
@@ -562,3 +644,8 @@ exactly this reason). Add an `--audio=<dir>` arm to that script.
 | Whisper cost per re-record | Per-day re-record cap; 30s audio is a cheap Whisper call but not free |
 | Voice used to bypass no-chat | `audio_contact_info` rejection rule (§5.3) |
 | iOS ships without audio and the surfaces diverge | Additive contract; `SerializedMatch.voicePrompt` optional — an old client ignores it |
+| Re-record multiplies the voice text's weight in the embedding | Delimited find-and-replace block, never an append (§5.4) — covered by an explicit M5 regression test |
+| A user is withheld from matching after recording | `refreshUserEmbedding` on every write path (§5.4 rule 2) |
+| About-me edit silently wipes the voice signal | Block is derived from a durable transcript and re-applied (§5.5) |
+| GDPR erasure leaves audio in the bucket | `collectOwnedPaths` covers `storagePath` (§5.6) |
+| Demo inherits the production voice bucket | `SUPABASE_VOICE_BUCKET` named explicitly in `.env.demo` (§5.6) |
