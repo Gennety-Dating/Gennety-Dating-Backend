@@ -286,3 +286,17 @@
 /* The trailing "›" is retired. The whole row is the button, so the chevron was
    restating that — and it sat a few pixels from the saving pill, which is the
    thing on this row actually worth looking at. */
+
+/* "Premium covers your own dates" — a framing line for the bundles below, so
+   it reads as quiet context rather than a second offer competing with them.
+   `--accent-bright` for the same reason the ticket gate's plate uses it: the
+   plain burgundy sinks into the near-black theme. */
+.store-premium-note {
+  margin: -2px auto 16px;
+  max-width: 420px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--accent-bright);
+}

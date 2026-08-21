@@ -356,6 +356,15 @@ export function App(): ReactElement {
               )}
             </header>
 
+            {/* Premium closed this slot, and nothing else on the screen says
+                so — "waiting on them" with no account of why YOUR half is done
+                reads as the gate having skipped you. Drawn from the live
+                subscription rather than from the slot, so a lapse quietly stops
+                claiming it instead of asserting something stale. */}
+            {state.myPremiumActive && state.iPaid && (sc === "waiting" || sc === "cover-partner") && (
+              <p className="tkt-premium-note">{s.premiumCovered}</p>
+            )}
+
             {sc === "success" && state.iCoveredPartner && (
               <div className="tkt-covered-hero">
                 <Avatar
@@ -406,6 +415,17 @@ export function App(): ReactElement {
                 <div className="tkt-cover-copy">
                   <h2>{s.coverPartnerTitle}</h2>
                   <p>{fill(s.coverPartnerSub, { name: state.partnerName ?? s.matchFallback })}</p>
+                  {/* Stated here rather than left to be discovered on the
+                      button: this is the one screen where a subscriber could
+                      reasonably assume covering her is included too, and it is
+                      the screen where he decides. */}
+                  {state.myPremiumActive && (
+                    <p className="tkt-cover-premium">
+                      {fill(s.premiumCoverNotIncluded, {
+                        name: state.partnerName ?? s.matchFallback,
+                      })}
+                    </p>
+                  )}
                 </div>
               </section>
             )}

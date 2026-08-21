@@ -25,6 +25,7 @@ import {
   discountedCents,
 } from "../../services/ticket-discount.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
+import { isPremiumHeadActive } from "../../services/premium.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 
 /**
@@ -76,6 +77,10 @@ interface TicketUser {
   ticketDiscountPct: number;
   ticketDiscountExpiresAt: Date | null;
   ticketDiscountConsumedAt: Date | null;
+  /** Gennety Premium head (§3.8). An active subscription settles this user's
+   *  OWN ticket slot for free — see `settlePremiumSlots`. Read straight off the
+   *  loaded row so no surface needs a second query to decide. */
+  premiumUntil: Date | null;
   /** Ordered static profile photos (Telegram file_id / Supabase path). Used to
    *  surface the first photo as an avatar in the ticket Mini App. */
   profile: { photos: string[] } | null;
@@ -117,8 +122,8 @@ const TICKET_SELECT = {
   calendarMessageIdB: true,
   userAId: true,
   userBId: true,
-  userA: { select: { id: true, telegramId: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, profile: { select: { photos: true } } } },
-  userB: { select: { id: true, telegramId: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, profile: { select: { photos: true } } } },
+  userA: { select: { id: true, telegramId: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, premiumUntil: true, profile: { select: { photos: true } } } },
+  userB: { select: { id: true, telegramId: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, premiumUntil: true, profile: { select: { photos: true } } } },
 } as const;
 
 function loadTicketMatch(matchId: string): Promise<TicketMatch | null> {
@@ -182,6 +187,19 @@ export interface TicketStateView {
   myPhotoUrl: string | null;
   /** Relative proxy path to the partner's first profile photo (null if none). */
   partnerPhotoUrl: string | null;
+  /**
+   * The actor holds an active Gennety Premium subscription RIGHT NOW (§3.8) —
+   * i.e. their own slot is covered by it and costs nothing.
+   *
+   * Deliberately a statement about the subscription rather than about the slot,
+   * because nothing on the row records HOW a slot was settled and no column was
+   * added for it. That makes it honest by construction in the one case that
+   * matters: a subscription which lapsed after the slot was claimed reads
+   * `false` here, the slot stays settled (§3.5b — a paid slot is never revoked),
+   * and the client simply renders no "covered by Premium" plate rather than a
+   * claim the product can no longer stand behind.
+   */
+  myPremiumActive: boolean;
 }
 
 export function buildTicketStateView(match: TicketMatch, side: Side): TicketStateView {
@@ -223,6 +241,11 @@ export function buildTicketStateView(match: TicketMatch, side: Side): TicketStat
       : match.ticketPriceCents,
     myPhotoUrl: firstPhotoRef(me) ? `/v1/matches/${match.id}/ticket/photo/self` : null,
     partnerPhotoUrl: firstPhotoRef(peer) ? `/v1/matches/${match.id}/ticket/photo/partner` : null,
+    // NOT gated on PREMIUM_FEATURE_ENABLED, deliberately: `services/premium.ts`
+    // states that an entitlement a user already paid for stays valid whatever
+    // the flag says, and the flag gates new purchase surfaces instead. Gating
+    // here would strip a benefit from someone still inside a paid period.
+    myPremiumActive: isPremiumHeadActive(me),
   };
 }
 
@@ -235,12 +258,70 @@ export type TicketStateResult =
 export async function getTicketState(
   telegramId: bigint,
   matchId: string,
+  api?: Api<RawApi>,
 ): Promise<TicketStateResult> {
   const match = await loadTicketMatch(matchId);
   if (!match) return { ok: false, reason: "match-not-found" };
   const side = sideForTelegramId(match, telegramId);
   if (!side) return { ok: false, reason: "not-participant" };
+
+  // Self-healing for a subscription bought AFTER the gate opened — the case the
+  // counterfactual upsell on this very screen is designed to produce.
+  //
+  // Doing it here rather than hooking premium activation is deliberate: Premium
+  // is granted through FOUR rails (Telegram Stars, App Store, and the referral
+  // and promo comp grants via `grantComplimentaryPremiumMonths`), and a hook on
+  // each is four places to forget. This screen is polled, so a settle lands
+  // within seconds whichever rail was used. The guard reads the row already in
+  // hand, so an ordinary poll costs no extra query, and the claim itself is the
+  // same CAS as everywhere else — a read racing `sendTicketOffer`, or two polls
+  // racing each other, claim zero slots rather than double-settling.
+  if (api && premiumCanSettle(match, side)) {
+    const fresh = await settlePremiumOnRead(api, matchId);
+    if (fresh) return { ok: true, state: buildTicketStateView(fresh, side) };
+  }
+
   return { ok: true, state: buildTicketStateView(match, side) };
+}
+
+/** Cheap pre-check on an already-loaded row: could a premium settle do anything? */
+function premiumCanSettle(match: TicketMatch, side: Side): boolean {
+  if (match.status !== "negotiating") return false;
+  if (!OPEN_GATE_STATUSES.includes(match.ticketStatus as (typeof OPEN_GATE_STATUSES)[number])) {
+    return false;
+  }
+  if ((side === "A" ? match.ticketPaidA : match.ticketPaidB) !== null) return false;
+  return isPremiumHeadActive(selfUser(match, side));
+}
+
+/**
+ * Settle premium slots from a state READ and complete the gate if that closed
+ * it, returning the fresh row when anything actually changed.
+ *
+ * The completion belongs here rather than in `settlePremiumSlots` because the
+ * two callers need opposite ordering: `sendTicketOffer` must put the mutual
+ * reveal on screen BEFORE the Calendar, while a read has no such card to wait
+ * for — the ticket card went out long ago. Without it, a pair whose second slot
+ * is closed by a late subscription would sit fully paid in `partial` until the
+ * hourly expiry sweep refunded them out of a date they had already secured.
+ */
+async function settlePremiumOnRead(
+  api: Api<RawApi>,
+  matchId: string,
+): Promise<TicketMatch | null> {
+  const claimed = await settlePremiumSlots(matchId);
+  if (claimed.length === 0) return null;
+  const after = await loadTicketMatch(matchId);
+  if (!after) return null;
+  if (
+    after.ticketPaidA !== null &&
+    after.ticketPaidB !== null &&
+    after.ticketStatus !== "completed"
+  ) {
+    await completeTicketGateAndUnlockScheduling(api, matchId);
+    return loadTicketMatch(matchId);
+  }
+  return after;
 }
 
 // ── Photo ref (for GET /v1/matches/:id/ticket/photo/:side) ──────────────────
@@ -347,6 +428,112 @@ function buildTicketKeyboard(
   return { inline_keyboard: kb.inline_keyboard };
 }
 
+/** `TicketLedger.reason` for a slot covered by an active subscription. */
+const PREMIUM_GATE_REASON = "premium_gate";
+
+/**
+ * Settle the ticket slot of every side holding an active Gennety Premium
+ * subscription (PRODUCT_SPEC §3.5b / §3.8 — "unlimited dates"). Returns the
+ * sides this call actually claimed, so the caller can tell a fresh settle from
+ * an idempotent re-run.
+ *
+ * Three properties are load-bearing:
+ *
+ * 1. **It spends nothing.** Premium does NOT go through `useTicketFromBalance`:
+ *    if a subscription silently drained the wallet, a subscriber would be
+ *    paying for the very thing the subscription promises, which is the exact
+ *    opposite of unlimited. Bought tickets are left alone — under the founder's
+ *    decision they remain the way a man covers his date's slot.
+ *
+ * 2. **It is not `settleTicket`.** That function DMs `ticketGateWaiting` to the
+ *    payer and `ticketPeerTookTheirs` ("{name} just grabbed their ticket —
+ *    yours is the last one") to the peer. Here nobody grabbed anything: the
+ *    slot closes at the instant of mutual accept, so those lines would describe
+ *    an action that never happened and would land alongside the ticket card.
+ *
+ * 3. **It never completes the gate itself.** The caller does that, AFTER it has
+ *    put the "It's mutual 🤍" card on screen — the same rule §2.1 states for the
+ *    pinned banner: a state change may not be announced before the message that
+ *    describes it. Completing here would let the Calendar overtake the reveal.
+ *
+ * Race-safety is the same compare-and-set every other slot claim uses: guarded
+ * on the match still being `negotiating`, the gate still open (`OPEN_GATE_
+ * STATUSES` — `status` alone does not close it, see there), and THIS side's slot
+ * still null. So a second call, two concurrent state reads, or a read racing
+ * `sendTicketOffer` all claim zero slots rather than double-settling.
+ */
+export async function settlePremiumSlots(matchId: string): Promise<Side[]> {
+  const match = await loadTicketMatch(matchId);
+  if (!match) return [];
+  if (match.status !== "negotiating") return [];
+  if (!OPEN_GATE_STATUSES.includes(match.ticketStatus as (typeof OPEN_GATE_STATUSES)[number])) {
+    return [];
+  }
+
+  const now = new Date();
+  const claimed: Side[] = [];
+
+  for (const side of ["A", "B"] as const) {
+    const user = side === "A" ? match.userA : match.userB;
+    if (!isPremiumHeadActive(user, now)) continue;
+    const paidField = side === "A" ? "ticketPaidA" : "ticketPaidB";
+    if ((side === "A" ? match.ticketPaidA : match.ticketPaidB) !== null) continue;
+
+    const claim = await prisma.match.updateMany({
+      where: {
+        id: matchId,
+        status: "negotiating",
+        ticketStatus: { in: [...OPEN_GATE_STATUSES] },
+        [paidField]: null,
+      },
+      data: { [paidField]: now },
+    });
+    if (claim.count === 0) continue;
+    claimed.push(side);
+
+    // Zero-delta audit row, mirroring the Stars gate's own `gate_payment`
+    // record. Without it the admin purchase view cannot tell "Premium covered
+    // this date" from "the gate lapsed and the Calendar opened for free" — and
+    // that is precisely the number that says whether the subscription is paying
+    // for the dates it hands out. Best-effort: an audit write must never cost
+    // someone the date their subscription just paid for.
+    await prisma.ticketLedger
+      .create({
+        data: {
+          userId: user.id,
+          delta: 0,
+          reason: PREMIUM_GATE_REASON,
+          matchId,
+          bundleSize: 1,
+        },
+      })
+      .catch((error: unknown) => {
+        console.error("[ticket-gate] premium ledger row failed", matchId, side, error);
+      });
+
+    emitTicketEvent("premium_gate_settled", { matchId, userId: user.id });
+  }
+
+  if (claimed.length === 0) return [];
+
+  // Exactly one slot left open → this is the gate's first settle, so the other
+  // side gets the same fresh window a paying first mover gives them. Guarded
+  // the same way `settleTicket` guards its own `pending → partial` flip, so a
+  // concurrent real payment cannot have its deadline stomped.
+  const after = await loadTicketMatch(matchId);
+  if (after && after.ticketPaidA !== null && after.ticketPaidB !== null) return claimed;
+  await prisma.match.updateMany({
+    where: {
+      id: matchId,
+      status: "negotiating",
+      ticketStatus: "pending",
+      OR: [{ ticketPaidA: null }, { ticketPaidB: null }],
+    },
+    data: { ticketStatus: "partial", ticketExpiresAt: ticketGateDeadline() },
+  });
+  return claimed;
+}
+
 /**
  * Replace the immediate `startScheduling` handoff: arm the ticket gate and DM
  * both Telegram-resident users the premium ticket Mini App button. The match
@@ -372,8 +559,32 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
     },
   });
 
-  const match = await loadTicketMatch(matchId);
+  let match = await loadTicketMatch(matchId);
   if (!match) return;
+
+  // Gennety Premium covers a subscriber's own slot (§3.5b / §3.8). Settled
+  // BEFORE anything is sent, so each side's card opens on the screen that is
+  // actually true for them — a covered woman on "waiting", a covered man on
+  // "cover-partner", which is the one screen where he still has a choice.
+  //
+  // Guarded on the row already in hand so a pair with no subscription pays for
+  // no extra query at all: the overwhelmingly common path stays exactly the two
+  // statements it was before this feature existed.
+  if (isPremiumHeadActive(match.userA) || isPremiumHeadActive(match.userB)) {
+    const claimed = await settlePremiumSlots(matchId);
+    if (claimed.length > 0) {
+      const fresh = await loadTicketMatch(matchId);
+      if (!fresh) return;
+      match = fresh;
+    }
+  }
+
+  // Both sides subscribe → the gate is already closed and nobody is being asked
+  // for anything. The card still goes out, because it is the message that
+  // carries the mutual reveal — but as a pure moment, with no keyboard: a
+  // payment button pointing at a settled gate is the dead affordance §2.1
+  // forbids, and the durable way back into the date is the My Date hub.
+  const bothCovered = match.ticketPaidA !== null && match.ticketPaidB !== null;
 
   emitTicketEvent("ticket_offer_sent", { matchId });
 
@@ -388,16 +599,24 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
     sends.push(
       api.sendMessage(
         toTelegramChatId(user.telegramId),
-        t(langOf(user), "ticketCardCaption"),
+        t(langOf(user), bothCovered ? "ticketCardCaptionPremium" : "ticketCardCaption"),
         {
           parse_mode: "Markdown",
-          reply_markup: buildTicketKeyboard(matchId, langOf(user), user.theme),
+          ...(bothCovered
+            ? {}
+            : { reply_markup: buildTicketKeyboard(matchId, langOf(user), user.theme) }),
           ...(mutualEffectId ? { message_effect_id: mutualEffectId } : {}),
         },
       ),
     );
   }
   await Promise.all(sends);
+
+  // Only now — the Calendar must never overtake the reveal it follows. Same
+  // rule §2.1 states for the pinned banner: a state change is not announced
+  // before the message that describes it. `settlePremiumSlots` deliberately
+  // leaves completion to this line for exactly that reason.
+  if (bothCovered) await completeTicketGateAndUnlockScheduling(api, matchId);
 }
 
 // ── Payment apply (called from POST confirm) ────────────────────────────────

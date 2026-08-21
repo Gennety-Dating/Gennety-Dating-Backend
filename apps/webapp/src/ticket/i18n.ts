@@ -39,6 +39,19 @@ export interface TicketStrings {
   payPartner: string;
   coverPartnerTitle: string;
   coverPartnerSub: string;
+  /**
+   * Why this user's own slot is already settled when they never paid for it
+   * (§3.5b — Premium covers a subscriber's own ticket). Without it a covered
+   * woman opens the card, reads "waiting on them", and is given no account at
+   * all of why hers is done.
+   */
+  premiumCovered: string;
+  /**
+   * Shown to a covered MALE on the cover screen. Premium closes his slot and
+   * deliberately not hers, so the one thing he could still misread — that
+   * covering her is included too — is stated where he is about to decide.
+   */
+  premiumCoverNotIncluded: string;
   justWait: string;
   /**
    * The way back from the waiting screen after he declined the cover offer.
@@ -126,6 +139,8 @@ const en: TicketStrings = {
   payPartner: "Pay for your date — {amount}",
   coverPartnerTitle: "Cover your date?",
   coverPartnerSub: "Your ticket's set. Want to cover {name}'s too, or let them grab it?",
+  premiumCovered: "Premium covers your ticket ✨",
+  premiumCoverNotIncluded: "Premium covers yours only — {name}'s is one ticket's price.",
   justWait: "I'll let them grab it",
   coverReconsider: "Actually — cover their ticket",
   balanceLabel: "Balance",
@@ -176,6 +191,8 @@ const ru: TicketStrings = {
   payPartner: "Оплатить за пару — {amount}",
   coverPartnerTitle: "Оплатить за пару?",
   coverPartnerSub: "Твой билет уже есть. Оплатить и за {name} или пусть берёт сам(а)?",
+  premiumCovered: "Твой билет покрыт Premium ✨",
+  premiumCoverNotIncluded: "Premium покрывает только твой — билет {name} стоит одну цену.",
   justWait: "Пусть берёт сам(а)",
   coverReconsider: "Всё-таки оплатить за пару",
   balanceLabel: "Баланс",
@@ -229,6 +246,8 @@ const uk: TicketStrings = {
   payPartner: "Сплатити за пару — {amount}",
   coverPartnerTitle: "Сплатити за пару?",
   coverPartnerSub: "Твій квиток уже є. Сплатити й за {name} чи нехай бере сам(а)?",
+  premiumCovered: "Твій квиток покритий Premium ✨",
+  premiumCoverNotIncluded: "Premium покриває лише твій — квиток {name} коштує одну ціну.",
   justWait: "Нехай бере сам(а)",
   coverReconsider: "Все-таки сплатити за пару",
   balanceLabel: "Баланс",
@@ -279,6 +298,8 @@ const de: TicketStrings = {
   payPartner: "Für dein Date zahlen — {amount}",
   coverPartnerTitle: "Date übernehmen?",
   coverPartnerSub: "Dein Ticket steht. Auch {name} übernehmen oder selbst holen lassen?",
+  premiumCovered: "Premium deckt dein Ticket ✨",
+  premiumCoverNotIncluded: "Premium deckt nur deins — das von {name} kostet einen Ticketpreis.",
   justWait: "Sollen sie selbst holen",
   coverReconsider: "Doch für dein Date zahlen",
   balanceLabel: "Guthaben",
@@ -329,6 +350,8 @@ const pl: TicketStrings = {
   payPartner: "Zapłać za swoją randkę — {amount}",
   coverPartnerTitle: "Pokryć randkę?",
   coverPartnerSub: "Twój bilet jest. Pokryć też {name} czy niech weźmie sam(a)?",
+  premiumCovered: "Premium pokrywa twój bilet ✨",
+  premiumCoverNotIncluded: "Premium pokrywa tylko twój — bilet {name} kosztuje jedną cenę.",
   justWait: "Niech weźmie sam(a)",
   coverReconsider: "Jednak zapłać za swoją randkę",
   balanceLabel: "Saldo",

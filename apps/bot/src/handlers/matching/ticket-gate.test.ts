@@ -58,6 +58,7 @@ import {
   notePartnerPaidSeen,
   refundAndFallbackToScheduling,
   retryPendingStarsGateRefunds,
+  settlePremiumSlots,
   ticketUrl,
 } from "./ticket-gate.js";
 import { startScheduling, sendCalendarCard } from "./scheduler.js";
@@ -119,6 +120,7 @@ function matchRow(overrides: Record<string, unknown> = {}) {
       ticketDiscountPct: 0,
       ticketDiscountExpiresAt: null,
       ticketDiscountConsumedAt: null,
+      premiumUntil: null,
       profile: { photos: ["alex-photo"] },
     },
     userB: {
@@ -132,6 +134,7 @@ function matchRow(overrides: Record<string, unknown> = {}) {
       ticketDiscountPct: 0,
       ticketDiscountExpiresAt: null,
       ticketDiscountConsumedAt: null,
+      premiumUntil: null,
       profile: { photos: ["bea-photo"] },
     },
     ...overrides,
@@ -841,5 +844,160 @@ describe("ticket expiry — durable provider and wallet refunds", () => {
     await expect(retryPendingStarsGateRefunds(api)).resolves.toBe(0);
 
     expect(api.refundStarPayment).not.toHaveBeenCalled();
+  });
+});
+
+// ── Gennety Premium covers a subscriber's own slot (§3.5b / §3.8) ───────────
+
+/** A subscription that is still live, vs one that has already run out. */
+const ACTIVE_PREMIUM = new Date(Date.now() + 30 * 24 * 3_600_000);
+const LAPSED_PREMIUM = new Date(Date.now() - 24 * 3_600_000);
+
+function premiumRow(a: Date | null, b: Date | null, overrides: Record<string, unknown> = {}) {
+  const base = matchRow(overrides) as Record<string, any>;
+  base.userA = { ...base.userA, premiumUntil: a };
+  base.userB = { ...base.userB, premiumUntil: b };
+  return base;
+}
+
+describe("premium covers the subscriber's own ticket slot", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mMatch.findUnique.mockReset();
+    mMatch.update.mockResolvedValue({});
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    mStartScheduling.mockResolvedValue(undefined);
+    mLedger.create.mockResolvedValue({ id: "ledger-premium" });
+  });
+
+  it("settles only the subscriber's own slot and leaves the gate half-open", async () => {
+    // A subscribes; B does not. One slot closes, the other still has to be paid.
+    mMatch.findUnique
+      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null)) // sendTicketOffer's own load
+      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null)) // settlePremiumSlots
+      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null, { ticketPaidA: new Date() }))
+      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null, { ticketPaidA: new Date() }));
+    const api = createApi();
+
+    await sendTicketOffer(api, "match-1");
+
+    const paidClaims = mMatch.updateMany.mock.calls.filter((c) =>
+      Object.prototype.hasOwnProperty.call((c[0] as any).data, "ticketPaidA"),
+    );
+    expect(paidClaims).toHaveLength(1);
+    // B is NOT a subscriber, so nothing may touch their slot.
+    const bClaims = mMatch.updateMany.mock.calls.filter((c) =>
+      Object.prototype.hasOwnProperty.call((c[0] as any).data, "ticketPaidB"),
+    );
+    expect(bClaims).toHaveLength(0);
+
+    // First settle → the other side gets the same fresh window a paying first
+    // mover gives them, so the row is never left in `pending` with one slot gone.
+    const partial = mMatch.updateMany.mock.calls.find(
+      (c) => (c[0] as any).data?.ticketStatus === "partial",
+    );
+    expect(partial).toBeDefined();
+    expect((partial![0] as any).data.ticketExpiresAt).toBeInstanceOf(Date);
+
+    // The gate is still open, so both cards keep their button.
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    for (const call of api.sendMessage.mock.calls) {
+      expect(call[1]).toBe(t("en", "ticketCardCaption"));
+      expect((call[2] as any).reply_markup).toBeDefined();
+    }
+    expect(mStartScheduling).not.toHaveBeenCalled();
+  });
+
+  it("writes a zero-delta `premium_gate` ledger row rather than spending a ticket", async () => {
+    mMatch.findUnique
+      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null))
+      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null))
+      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null, { ticketPaidA: new Date() }))
+      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, null, { ticketPaidA: new Date() }));
+
+    await sendTicketOffer(createApi(), "match-1");
+
+    // The audit row is what lets the admin view tell "Premium covered this date"
+    // from "the gate lapsed and the Calendar opened for free".
+    const row = mLedger.create.mock.calls.find(
+      (c) => (c[0] as any).data?.reason === "premium_gate",
+    );
+    expect(row).toBeDefined();
+    expect((row![0] as any).data).toMatchObject({ userId: "uid-A", delta: 0, matchId: "match-1" });
+
+    // A subscription that drained the wallet would be charging for the very
+    // thing it promises — the opposite of unlimited.
+    expect(spendTickets).not.toHaveBeenCalled();
+  });
+
+  it("closes the gate for two subscribers and puts the mutual reveal BEFORE the Calendar", async () => {
+    const bothPaid = { ticketPaidA: new Date(), ticketPaidB: new Date() };
+    mMatch.findUnique
+      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, ACTIVE_PREMIUM))
+      .mockResolvedValueOnce(premiumRow(ACTIVE_PREMIUM, ACTIVE_PREMIUM))
+      .mockResolvedValue(premiumRow(ACTIVE_PREMIUM, ACTIVE_PREMIUM, bothPaid));
+    const api = createApi();
+
+    // Order is recorded when a send RESOLVES, not when it is called: the sends
+    // are kicked off in a loop and awaited together, so call order would stay
+    // "card first" even if the Calendar were handed off before the cards had
+    // actually landed — which is precisely the bug this guards.
+    const delivered: string[] = [];
+    api.sendMessage.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      delivered.push("card");
+      return { message_id: 700 };
+    });
+    mStartScheduling.mockImplementation(async () => {
+      delivered.push("calendar");
+    });
+
+    await sendTicketOffer(api, "match-1");
+
+    // Nobody is being asked for anything, so the card carries no keyboard — a
+    // payment button pointing at a settled gate is a dead affordance (§2.1) —
+    // but it still carries the reveal and its effect.
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    for (const call of api.sendMessage.mock.calls) {
+      expect(call[1]).toBe(t("en", "ticketCardCaptionPremium"));
+      expect((call[2] as any).reply_markup).toBeUndefined();
+      expect((call[2] as any).message_effect_id).toBe("fx-hearts");
+    }
+
+    // The Calendar may never overtake the reveal it follows (§2.1).
+    expect(delivered).toEqual(["card", "card", "calendar"]);
+  });
+
+  it("claims nothing on a second run, so a poll racing the offer cannot double-settle", async () => {
+    mMatch.findUnique.mockResolvedValue(
+      premiumRow(ACTIVE_PREMIUM, null, { ticketPaidA: new Date() }),
+    );
+
+    const claimed = await settlePremiumSlots("match-1");
+
+    expect(claimed).toEqual([]);
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(mLedger.create).not.toHaveBeenCalled();
+  });
+
+  it("does not settle for a subscription that has already run out", async () => {
+    mMatch.findUnique.mockResolvedValue(premiumRow(LAPSED_PREMIUM, LAPSED_PREMIUM));
+
+    const claimed = await settlePremiumSlots("match-1");
+
+    expect(claimed).toEqual([]);
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses to settle once the gate is closed, whatever the subscription says", async () => {
+    // `status` alone does not close the gate — the expiry sweep leaves the match
+    // `negotiating` and only flips `ticketStatus`. A stale poll must not claim a
+    // slot for a date that no longer costs anything.
+    mMatch.findUnique.mockResolvedValue(
+      premiumRow(ACTIVE_PREMIUM, ACTIVE_PREMIUM, { ticketStatus: "refunded" }),
+    );
+
+    expect(await settlePremiumSlots("match-1")).toEqual([]);
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
 });

@@ -16,6 +16,12 @@ export type TicketAnalyticsEvent =
   | "ticket_offer_sent"
   | "ticket_intent_created"
   | "ticket_paid"
+  /// A slot settled by an active Gennety Premium subscription rather than by
+  /// money or a wallet ticket (PRODUCT_SPEC §3.5b). Distinct from `ticket_paid`
+  /// on purpose: it is the only way to measure whether the subscription is
+  /// paying for the dates it covers, and a reader must be able to tell it from
+  /// a gate that simply lapsed into free scheduling.
+  | "premium_gate_settled"
   | "ticket_both_paid"
   | "ticket_refunded"
   // Famine single-ticket discount lifecycle (PRODUCT_SPEC §3.5b). Not tied to a

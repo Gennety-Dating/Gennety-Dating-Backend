@@ -16,6 +16,13 @@ export type Lang = "en" | "ru" | "uk" | "de" | "pl";
 export interface StoreStrings {
   title: string;
   sub: string;
+  /**
+   * Why a Premium subscriber would still buy a ticket (§3.5b). Deliberately not
+   * "you have Premium" — that they know. What they cannot know is that the
+   * store still has a purpose: their own dates are covered, and a ticket is
+   * what it takes to cover their date's.
+   */
+  premiumNote: string;
   perTicket: string;
   bestValue: string;
   /** Per-ticket saving badge on multi-ticket bundles. `{pct}` = whole percent. */
@@ -35,6 +42,7 @@ export interface StoreStrings {
 const en: StoreStrings = {
   title: "Get Date Tickets",
   sub: "One ticket = one date. Stock up so you're always ready.",
+  premiumNote: "Premium covers your own dates. Tickets are for covering your date's.",
   perTicket: "{amount} / ticket",
   bestValue: "Best value",
   save: "Save {pct}%",
@@ -52,6 +60,7 @@ const en: StoreStrings = {
 const ru: StoreStrings = {
   title: "Билеты на свидания",
   sub: "Один билет = одно свидание. Запасись, чтобы всегда быть готовым.",
+  premiumNote: "Premium покрывает твои свидания. Билеты — чтобы оплатить за спутницу.",
   perTicket: "{amount} / билет",
   bestValue: "Выгоднее всего",
   save: "Скидка {pct}%",
@@ -69,6 +78,7 @@ const ru: StoreStrings = {
 const uk: StoreStrings = {
   title: "Квитки на побачення",
   sub: "Один квиток = одне побачення. Запасись, щоб завжди бути готовим.",
+  premiumNote: "Premium покриває твої побачення. Квитки — щоб сплатити за супутницю.",
   perTicket: "{amount} / квиток",
   bestValue: "Найвигідніше",
   save: "Знижка {pct}%",
@@ -86,6 +96,7 @@ const uk: StoreStrings = {
 const de: StoreStrings = {
   title: "Date-Tickets holen",
   sub: "Ein Ticket = ein Date. Leg dir welche zu, dann bist du immer bereit.",
+  premiumNote: "Premium deckt deine eigenen Dates. Tickets sind für das deiner Begleitung.",
   perTicket: "{amount} / Ticket",
   bestValue: "Bester Preis",
   save: "{pct}% sparen",
@@ -103,6 +114,7 @@ const de: StoreStrings = {
 const pl: StoreStrings = {
   title: "Zdobądź bilety na randki",
   sub: "Jeden bilet = jedna randka. Zrób zapas, żeby zawsze być gotowym.",
+  premiumNote: "Premium pokrywa twoje randki. Bilety są po to, by pokryć bilet partnerki.",
   perTicket: "{amount} / bilet",
   bestValue: "Najlepsza cena",
   save: "Oszczędź {pct}%",

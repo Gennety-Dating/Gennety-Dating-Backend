@@ -794,6 +794,16 @@ export interface TicketState {
   stars?: { self: number; both: number; partner: number } | null;
   /** Drives the "invite a friend instead" referral cross-promo link. */
   referralEnabled?: boolean;
+  /**
+   * An active Gennety Premium subscription covers MY own slot, so it cost me
+   * nothing — the server settled it before this screen was ever drawn.
+   *
+   * It describes the subscription rather than the slot, which is what keeps it
+   * honest after a lapse: the flag goes false, the slot stays settled, and the
+   * plate simply stops being drawn instead of claiming something the product no
+   * longer stands behind. Covering the PARTNER is never free.
+   */
+  myPremiumActive?: boolean;
 }
 
 /**
@@ -911,6 +921,13 @@ export interface WalletState {
   bundleStars?: Record<string, number> | null;
   /** Drives the "invite a friend instead" referral cross-promo link. */
   referralEnabled?: boolean;
+  /**
+   * The wallet holder subscribes to Gennety Premium, so their OWN dates cost
+   * nothing (§3.5b). Tickets are still worth buying — covering a partner is
+   * not included — which is what the plate on this screen says. Bundles stay on
+   * sale either way.
+   */
+  premiumActive?: boolean;
 }
 
 export interface StoreBundle {

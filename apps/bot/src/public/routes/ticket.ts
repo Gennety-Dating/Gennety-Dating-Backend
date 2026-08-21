@@ -103,7 +103,7 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    const result = await getTicketState(BigInt(auth.user.id), matchId);
+    const result = await getTicketState(BigInt(auth.user.id), matchId, api);
     if (!result.ok) {
       res.status(result.reason === "not-participant" ? 403 : 404).json({ error: result.reason });
       return;

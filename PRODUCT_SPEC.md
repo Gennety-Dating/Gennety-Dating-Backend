@@ -3119,6 +3119,61 @@ An optional premium step sits between mutual accept and the Calendar. It is
 gated by `TICKET_FEATURE_ENABLED` (default **off** → the bot hands off straight
 to the Calendar exactly as documented in §3.6).
 
+**Gennety Premium covers a subscriber's OWN slot, and only that (2026-08-22).**
+An active subscription (§3.8) settles that side's ticket at the moment the gate
+arms, spending no money and — the part that is easy to get backwards — **no
+wallet ticket**: routing Premium through `useTicketFromBalance` would make a
+subscriber pay, out of their own wallet, for the one thing the subscription
+promises. Bought tickets are left untouched and never expire into the
+subscription.
+
+**Covering the partner is deliberately NOT included.** It costs one ticket's
+price, which is the already-existing `partner` scope rather than any new
+pricing. The reason is not the arithmetic: the §3.5b goodwill loop — his
+confirmation, her surprise reveal, the "she saw it ❤️" read-receipt — is built
+on the fact that he SPENT something for her, so a free cover would make the
+reveal a claim about a gesture that cost nothing, the same defect as an expiry
+card announcing a rating drop that never happened. (Secondarily, at a daily
+cadence one subscription would otherwise monetize away the entire female side
+of that man's matches, and men paying while women are gifted is the revenue
+model.)
+
+Three consequences worth stating, because each is a place the obvious
+implementation is wrong:
+
+- **The card is still sent, always.** It carries the "It's mutual 🤍" reveal
+  and its `message_effect_id`, so skipping it for a covered pair would delete
+  the moment rather than the payment. What changes is only what it opens on: a
+  covered woman lands on `waiting`, a covered man on `cover-partner` — the one
+  screen where he still has a choice — and when BOTH subscribe it carries the
+  reveal with **no keyboard at all** (`ticketCardCaptionPremium`), because a
+  payment button pointing at a settled gate is the dead affordance §2.1
+  forbids. The durable way back into that date is the My Date hub.
+- **The Calendar never overtakes the reveal.** With both sides covered the gate
+  completes only AFTER both cards are delivered — the same rule §2.1 states for
+  the pinned banner, and the reason `settlePremiumSlots` deliberately does not
+  complete the gate itself.
+- **A settled slot is permanent.** `ticketPaid{A,B}` is a timestamp, not an
+  entitlement check, so a subscription that lapses between the settle and the
+  date revokes nothing and is never re-verified. The alternative would have the
+  product cancelling dates two people had already agreed to.
+
+**Self-healing for a subscription bought AFTER the gate opened.** Premium is
+granted through four rails (Telegram Stars, App Store, and the referral and
+promo comp grants), so instead of a hook on each, the gate's own state read
+settles a premium caller's slot — the screen is polled, so it lands within
+seconds whichever rail was used, and the claim is the same compare-and-set as
+every other slot, so a read racing the offer settles nothing twice. The read
+also completes the gate when that closed it; without that, a pair whose second
+slot was closed by a late subscription would sit fully paid in `partial` until
+the expiry sweep refunded them out of a date they had already secured.
+
+**Every premium settle writes a zero-delta `premium_gate` row to
+`ticket_ledger`.** Without it the admin purchase view cannot tell "Premium
+covered this date" from "the gate lapsed and the Calendar opened for free" —
+which is precisely the number that says whether the subscription is paying for
+the dates it hands out.
+
 **Both surfaces, since 2026-08-06.** This section used to say the gate was
 Telegram-only and that the mobile mutual-accept path scheduled directly. The
 second half had not been true for some time — `matches-service.ts` calls
@@ -5078,7 +5133,19 @@ user already paid for stays valid regardless of the flag.
   `cancelled` ledger row's `note` for churn analysis. Telegram-only (the menu
   agent is Telegram-only); iOS cancels natively via Apple.
 
-**Benefit #1 — venue-change (v1).** Inside the §3.7b board:
+**Benefit #1 — unlimited dates (2026-08-22).** An active subscription covers the
+subscriber's own Date Ticket at the §3.5b gate, every time, with no per-date
+charge and no wallet spend — see that section for the mechanics and for why
+covering a partner stays priced. It leads the benefit list on every surface
+that describes the subscription (the Premium Mini App's three benefit cards,
+the menu hub's `premiumHubBody`, and `premiumWelcomeDm`), because it is the one
+perk that changes what the product COSTS rather than what it looks like. The
+break-even is ~2.6 dates a month at `TICKET_PRICE_CENTS`; there is deliberately
+**no cap and no fine print** — a ceiling that never binds is an obligation with
+none of the benefit — and the trigger for revisiting it is a metric (a
+subscriber exceeding ~4 dates in a month), never a mechanism.
+
+**Benefit #2 — venue-change (v1).** Inside the §3.7b board:
 
 - **Premium venues.** Curated venues carry a `tier` (`base` | `premium`).
   Premium venues are hand-picked nicer spots that **may exceed the ≤ MODERATE

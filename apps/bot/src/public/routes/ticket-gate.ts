@@ -48,7 +48,7 @@ export function createNativeTicketGateRouter(api: Api<RawApi>): Router {
   router.use(requireAuth);
 
   router.get("/", async (req: Request, res: Response): Promise<void> => {
-    const view = await loadState(req, res);
+    const view = await loadState(req, res, api);
     if (!view) return;
     // Read-receipt for the goodwill cover (§3.5b takt 2): she just opened the
     // reveal → tell him once that she saw it, and release the Calendar that
@@ -131,8 +131,19 @@ interface LoadedState {
   telegramId: bigint;
 }
 
-/** Resolve + authorize the gate state, answering the error itself on failure. */
-async function loadState(req: Request, res: Response): Promise<LoadedState | null> {
+/**
+ * Resolve + authorize the gate state, answering the error itself on failure.
+ *
+ * `api` is passed only by the GET read, which is what lets `getTicketState`
+ * settle a slot for a caller who became a Premium subscriber after the gate
+ * opened (§3.5b). Withheld elsewhere on purpose: the settle is a write, and it
+ * belongs on the polled read rather than bolted onto every action.
+ */
+async function loadState(
+  req: Request,
+  res: Response,
+  api?: Api<RawApi>,
+): Promise<LoadedState | null> {
   const matchId = matchIdOf(req);
   if (!matchId) {
     res.status(404).json({ error: "match-not-found" });
@@ -143,7 +154,7 @@ async function loadState(req: Request, res: Response): Promise<LoadedState | nul
     res.status(404).json({ error: "user-not-found" });
     return null;
   }
-  const result = await getTicketState(telegramId, matchId);
+  const result = await getTicketState(telegramId, matchId, api);
   if (!result.ok) {
     res.status(result.reason === "not-participant" ? 403 : 404).json({ error: result.reason });
     return null;
@@ -193,6 +204,11 @@ async function nativeState(
     balance: state.myBalance,
     priceCents: state.priceCents,
     expiresAt: state.expiresAt,
+    // Whether an active subscription is what covers this caller's own slot
+    // (§3.8). The client renders the "covered by Premium" plate from it; the
+    // slot itself is already settled server-side either way, so a client that
+    // ignores the field is merely quieter, never wrong.
+    myPremiumActive: state.myPremiumActive,
     serverNow: new Date().toISOString(),
   };
 }

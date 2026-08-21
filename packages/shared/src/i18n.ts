@@ -655,6 +655,8 @@ const translations = {
     // --- Date Ticket (premium post-accept gate) ---
     ticketCardCaption:
       "It's mutual 🤍 Get your *Date Ticket* to unlock planning.",
+    ticketCardCaptionPremium:
+      "It's mutual 🤍 Premium covers both your tickets — straight to picking a time.",
     ticketButton: "🎟️ Get your date ticket",
     ticketViewButton: "🎟️ View your date ticket",
     ticketStatusButton: "Open date",
@@ -1143,14 +1145,14 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Free venue changes* — swap your date spot as often as you like, no fee\n• *Premium venues* — a hand-picked tier of nicer places, unlocked in the venue board\n\nMore to come.",
+      "*Gennety Premium*\n\n• *Unlimited dates* — your ticket is covered every time, however often you go\n• *Premium venues* — a hand-picked tier of nicer places, unlocked in the venue board\n• *Free venue changes* — swap your date spot as often as you like, no fee\n\nMore to come.",
     premiumHubActiveNote: "You're Premium ✨ Active until {date}.",
     premiumOpenCta: "Learn more",
     premiumCancelHint:
       "You can cancel anytime — just tell me here, and I'll do it once you confirm.",
     premiumManageNote: "Manage or cancel anytime in Telegram → Settings → Subscriptions.",
     premiumWelcomeDm:
-      "Welcome to Gennety Premium ✨\n\nVenue changes are on us now, and the premium venue tier is unlocked. Active until {date}.",
+      "Welcome to Gennety Premium ✨\n\nYour dates are covered from now on — no ticket needed. Venue changes are on us, and the premium venue tier is unlocked. Active until {date}.",
     premiumInvoiceTitle: "Gennety Premium",
     premiumInvoiceDesc:
       "Monthly subscription — free venue changes + premium venues. Renews every 30 days; cancel anytime.",
@@ -1864,6 +1866,8 @@ const translations = {
     // --- Date Ticket (премиум-шаг после взаимного метча) ---
     ticketCardCaption:
       "Взаимно 🤍 Получи *билет на свидание*, чтобы открыть планирование.",
+    ticketCardCaptionPremium:
+      "Взаимно 🤍 Premium покрывает оба билета — сразу переходим ко времени.",
     ticketButton: "🎟️ Получить билет на свидание",
     ticketViewButton: "🎟️ Посмотреть свой билет на свидание",
     ticketStatusButton: "Открыть свидание",
@@ -2285,14 +2289,14 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты\n• *Премиум-заведения* — отобранный тир мест получше, открывается в подборе\n\nДальше — больше.",
+      "*Gennety Premium*\n\n• *Безлимитные свидания* — твой билет покрыт каждый раз, сколько бы свиданий ни было\n• *Премиум-заведения* — отобранный тир мест получше, открывается в подборе\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты\n\nДальше — больше.",
     premiumHubActiveNote: "У тебя Premium ✨ Активен до {date}.",
     premiumOpenCta: "Подробнее",
     premiumCancelHint:
       "Отменить можно в любой момент — просто напиши мне, и я отменю подписку после твоего подтверждения.",
     premiumManageNote: "Управлять и отменить — в Telegram → Настройки → Подписки.",
     premiumWelcomeDm:
-      "Добро пожаловать в Gennety Premium ✨\n\nСмена места теперь бесплатна, а премиум-заведения открыты. Активно до {date}.",
+      "Добро пожаловать в Gennety Premium ✨\n\nТвои свидания теперь покрыты — билет не нужен. Смена места бесплатна, премиум-заведения открыты. Активно до {date}.",
     premiumInvoiceTitle: "Gennety Premium",
     premiumInvoiceDesc:
       "Месячная подписка — бесплатная смена места + премиум-заведения. Продление каждые 30 дней; отмена в любой момент.",
@@ -2985,6 +2989,8 @@ const translations = {
     // --- Date Ticket (преміум-крок після взаємного метчу) ---
     ticketCardCaption:
       "Взаємно 🤍 Отримай *квиток на побачення*, щоб відкрити планування.",
+    ticketCardCaptionPremium:
+      "Взаємно 🤍 Premium покриває обидва квитки — одразу переходимо до часу.",
     ticketButton: "🎟️ Отримати квиток на побачення",
     ticketViewButton: "🎟️ Переглянути свій квиток на побачення",
     ticketStatusButton: "Відкрити побачення",
@@ -3414,14 +3420,14 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати\n• *Преміум-заклади* — відібраний тір кращих місць, відкривається в підборі\n\nДалі — більше.",
+      "*Gennety Premium*\n\n• *Безлімітні побачення* — твій квиток покритий щоразу, скільки б побачень не було\n• *Преміум-заклади* — відібраний тір кращих місць, відкривається в підборі\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати\n\nДалі — більше.",
     premiumHubActiveNote: "У тебе Premium ✨ Активний до {date}.",
     premiumOpenCta: "Детальніше",
     premiumCancelHint:
       "Скасувати можна будь-коли — просто напиши мені, і я скасую підписку після твого підтвердження.",
     premiumManageNote: "Керувати та скасувати — у Telegram → Налаштування → Підписки.",
     premiumWelcomeDm:
-      "Ласкаво просимо до Gennety Premium ✨\n\nЗміна місця тепер безкоштовна, а преміум-заклади відкриті. Активно до {date}.",
+      "Ласкаво просимо до Gennety Premium ✨\n\nТвої побачення тепер покриті — квиток не потрібен. Зміна місця безкоштовна, преміум-заклади відкриті. Активно до {date}.",
     premiumInvoiceTitle: "Gennety Premium",
     premiumInvoiceDesc:
       "Місячна підписка — безкоштовна зміна місця + преміум-заклади. Продовження кожні 30 днів; скасування будь-коли.",
@@ -4100,6 +4106,8 @@ const deTranslations: TranslationTable = {
   matchScheduleBtnCalendar: "📅 Kalender öffnen",
   ticketCardCaption:
     "Beidseitig 🤍 Hol dir dein *Date-Ticket*, um die Planung zu öffnen.",
+  ticketCardCaptionPremium:
+    "Beidseitig 🤍 Premium deckt beide Tickets — direkt zur Zeitwahl.",
   ticketButton: "🎟️ Date-Ticket holen",
   ticketViewButton: "🎟️ Dein Date-Ticket ansehen",
   ticketStatusButton: "Date öffnen",
@@ -4520,14 +4528,14 @@ const deTranslations: TranslationTable = {
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "*Gennety Premium*\n\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr\n• *Premium-Orte* — eine handverlesene Auswahl schönerer Orte, im Ortsboard freigeschaltet\n\nDa kommt noch mehr.",
+    "*Gennety Premium*\n\n• *Unbegrenzte Dates* — dein Ticket ist jedes Mal abgedeckt, egal wie oft\n• *Premium-Orte* — eine handverlesene Auswahl schönerer Orte, im Ortsboard freigeschaltet\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr\n\nDa kommt noch mehr.",
   premiumHubActiveNote: "Du bist Premium ✨ Aktiv bis {date}.",
   premiumOpenCta: "Mehr erfahren",
   premiumCancelHint:
     "Du kannst jederzeit kündigen — schreib es mir einfach hier, ich erledige es nach deiner Bestätigung.",
   premiumManageNote: "Verwalten oder kündigen jederzeit in Telegram → Einstellungen → Abos.",
   premiumWelcomeDm:
-    "Willkommen bei Gennety Premium ✨\n\nOrtswechsel gehen jetzt auf uns, und die Premium-Orte sind frei. Aktiv bis {date}.",
+    "Willkommen bei Gennety Premium ✨\n\nDeine Dates sind ab jetzt abgedeckt — kein Ticket nötig. Ortswechsel gehen auf uns, und die Premium-Orte sind frei. Aktiv bis {date}.",
   premiumInvoiceTitle: "Gennety Premium",
   premiumInvoiceDesc:
     "Monatliches Abo — kostenlose Ortswechsel + Premium-Orte. Verlängert alle 30 Tage; jederzeit kündbar.",
@@ -5199,6 +5207,8 @@ const plTranslations: TranslationTable = {
   matchScheduleBtnCalendar: "📅 Otwórz kalendarz",
   ticketCardCaption:
     "Wzajemnie ✨ Odbierz *bilet na randkę*, żeby otworzyć planowanie.",
+  ticketCardCaptionPremium:
+    "Wzajemnie ✨ Premium pokrywa oba bilety — od razu wybieracie czas.",
   ticketButton: "🎟️ Odbierz bilet na randkę",
   ticketViewButton: "🎟️ Zobacz swój bilet na randkę",
   ticketStatusButton: "Otwórz randkę",
@@ -5623,14 +5633,14 @@ const plTranslations: TranslationTable = {
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "*Gennety Premium*\n\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat\n• *Miejsca premium* — wyselekcjonowany zestaw lepszych miejsc, odblokowany w tablicy miejsc\n\nDalej — więcej.",
+    "*Gennety Premium*\n\n• *Nielimitowane randki* — twój bilet jest pokryty za każdym razem, ile byś ich nie miał\n• *Miejsca premium* — wyselekcjonowany zestaw lepszych miejsc, odblokowany w tablicy miejsc\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat\n\nDalej — więcej.",
   premiumHubActiveNote: "Masz Premium ✨ Aktywne do {date}.",
   premiumOpenCta: "Dowiedz się więcej",
   premiumCancelHint:
     "Możesz anulować w każdej chwili — po prostu napisz do mnie, a anuluję po Twoim potwierdzeniu.",
   premiumManageNote: "Zarządzaj lub anuluj w Telegram → Ustawienia → Subskrypcje.",
   premiumWelcomeDm:
-    "Witaj w Gennety Premium ✨\n\nZmiany miejsca są teraz na nasz koszt, a miejsca premium odblokowane. Aktywne do {date}.",
+    "Witaj w Gennety Premium ✨\n\nTwoje randki są od teraz pokryte — bilet niepotrzebny. Zmiany miejsca na nasz koszt, miejsca premium odblokowane. Aktywne do {date}.",
   premiumInvoiceTitle: "Gennety Premium",
   premiumInvoiceDesc:
     "Miesięczna subskrypcja — darmowe zmiany miejsca + miejsca premium. Odnawia się co 30 dni; anulujesz kiedy chcesz.",

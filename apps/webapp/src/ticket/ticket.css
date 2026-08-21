@@ -968,6 +968,29 @@ body {
   line-height: 1.45;
   color: var(--text-dim);
 }
+/* What Premium does NOT cover — a footnote to the ask above it, so it sits a
+   step quieter than the sub it qualifies. */
+.tkt-cover-premium {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
+/* "Premium covers your ticket ✨" — a statement of fact about a slot that is
+   already closed, so it is a quiet centred line and never a button-shaped
+   object: there is nothing here to act on. `--accent-bright` rather than the
+   plain accent because this sits on the page in both themes, and the plain
+   burgundy sinks into the near-black one (the same correction the date card
+   and the success mark already make). */
+.tkt-premium-note {
+  margin: -4px auto 18px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--accent-bright);
+}
 
 /* ── Mock payment ─────────────────────────────────────────────────────── */
 .mock-pay {

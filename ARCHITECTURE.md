@@ -637,7 +637,7 @@ Append-only audit of every ticket-wallet movement or payment/refund transition
 (`userId`, `delta`, `reason` ∈ `photo_bonus`/`video_bonus`/`student_bonus`/
 `referral_milestone`/`promo`/`welcome_gift`/`store_purchase`/`spend_match`/`refund`/`gate_payment`/
 `gate_processing`/`gate_settled`/`gate_surplus_pending`/
-`gate_refund_pending`/`gate_refunded`, plus the retired legacy
+`gate_refund_pending`/`gate_refunded`/**`premium_gate`**, plus the retired legacy
 `verification_bonus` that survives only on historical rows and is never written
 anymore, optional
 `matchId`/`amountCents`/**`amountStars`**/`bundleSize`/`externalPaymentId`,
@@ -667,6 +667,19 @@ settlement reason advances atomically with the match-slot CAS to `gate_settled`
 or a durable refund/surplus state. The hourly worker retries pending provider
 refunds and wallet credits; a `gate_payment` row still unprocessed after five
 minutes is treated as an abandoned pre-transaction charge and safely refunded.
+**`premium_gate`** (added 2026-08-22) is a **zero-delta** row marking a date
+slot covered by an active Gennety Premium subscription (PRODUCT_SPEC §3.5b).
+Zero-delta because Premium spends nothing — not money, and deliberately not a
+wallet ticket, which would have a subscriber paying for the very thing the
+subscription promises. It exists purely so a reader can tell "Premium covered
+this date" from "the gate lapsed and the Calendar opened for free": those two
+are otherwise indistinguishable on the row, and the difference is the whole
+measure of whether the subscription pays for the dates it hands out. Written
+best-effort by `settlePremiumSlots` (`handlers/matching/ticket-gate.ts`) — an
+audit write must never cost someone the date their subscription just paid for —
+so it is a strong signal rather than a guarantee. `reason` is a plain `String`
+column, so the value needed no migration.
+
 **`amountStars`** (added 2026-08-01) freezes the Stars actually charged on a
 paid row, exactly as `rematch_purchases` / `venue_change_purchases` already do.
 Star prices are env-tunable (`TICKET_BUNDLE_STARS`), so a reader must never
@@ -1044,7 +1057,7 @@ auth) are deliberately outside the spec.
 | GET  | `/v1/matches/:id/calendar` | **Native** slot grid + both sides' marks (JWT) — the twin of the `initData`-authed `/v1/calendar/state`. Carries `timeZone` (the pair's dating city) because the grid is a set of instants and the client must draw them on the city's wall clock, not the device's. Poll ~4s while open. A closed calendar answers **409**, not 404 — the match exists and the caller is on it. |
 | POST | `/v1/matches/:id/calendar` | Replace this side's availability with the FULL set (`slots`), so unmarking needs no second verb; answers with the new state so no re-fetch is needed. Delegates to `processCalendarSlotsUpdate` verbatim — auto-lock on a single overlap, `overlapCandidates` on several, first-mover notification — so the two surfaces cannot drift on when a date locks in. JWT. |
 | GET  | `/v1/matches/:id/venue-intent` | Venue Intent V2 draft/confirmation. Carries **`market`** — the caller's launched city, so the native client centres its map on it and refuses an out-of-radius departure pin BEFORE Confirm. Served, not bundled: a second market needs no client release. The field existed from 2026-08-05 but was declared `oneOf: [$ref, "null"]`, which swift-openapi-generator drops silently, so it did not reach iOS until the schema became a bare `$ref` on 2026-08-06. |
-| GET  | `/v1/matches/:id/ticket-gate` | **Native** Date Ticket gate state (JWT). Narrower than the Mini App's `/ticket/state` on purpose — no `paymentMode`, `starsEnabled`, `stars` or `selfDiscountPct`: those describe rails iOS does not have, and shipping them invites the client to branch on a currency it can never charge in. Carries the server-computed `canCoverPartner` and a signed partner-photo URL. Mounted BEFORE the `initData`-authed `/ticket` prefix. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
+| GET  | `/v1/matches/:id/ticket-gate` | **Native** Date Ticket gate state (JWT). Narrower than the Mini App's `/ticket/state` on purpose — no `paymentMode`, `starsEnabled`, `stars` or `selfDiscountPct`: those describe rails iOS does not have, and shipping them invites the client to branch on a currency it can never charge in. Carries the server-computed `canCoverPartner`, a signed partner-photo URL, and **`myPremiumActive`** — whether an active subscription is what covers this caller's own slot (§3.5b), which the client renders as a plate. It states the SUBSCRIPTION rather than the slot, because nothing on the row records how a slot was settled; that is what keeps it honest after a lapse (the flag goes false, the slot stays settled, the plate simply stops being drawn). This GET also settles a premium caller's slot as a side effect, which is what makes a subscription bought mid-gate take effect without a hook on each of the four premium rails. Mounted BEFORE the `initData`-authed `/ticket` prefix. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
 | POST | `/v1/matches/:id/ticket-gate/use` | Spend wallet ticket(s) (`scope: self\|both\|partner`) and answer with the new state — the client re-renders straight from it. JWT. **The wallet is the only rail on iOS**: StoreKit credits it via `/v1/tickets/appstore/transaction`, the gate spends from it, and a settle that claims fewer slots than it paid for refunds the surplus. |
 | POST | `/v1/matches/:id/ticket-gate/seen` | Read-receipt for the "your match covered you" reveal — stamps `partnerPaidSeenAt`, DMs the payer once, and releases the covered side's held-back Calendar. Idempotent; a no-op for anyone who was not covered. JWT. |
 | GET  | `/v1/tickets/wallet` | Ticket store Mini App — current balance + per-ticket price + active famine discount (`discountPct`/`discountExpiresAt`, applies to the "1 ticket" bundle), plus `starsEnabled` + `bundleStars` when `TICKET_STARS_ENABLED`. `initData` HMAC auth; feature-flagged (`TICKET_FEATURE_ENABLED`, else 404). |

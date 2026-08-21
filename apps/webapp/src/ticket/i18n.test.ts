@@ -59,4 +59,16 @@ describe("Date Ticket i18n", () => {
       expect(s.timeSoon).not.toContain("{n}");
     }
   });
+
+  it("explains a Premium-covered slot, and says what Premium does NOT cover", () => {
+    for (const lang of languages) {
+      const s = strings(lang);
+      // Without this line a covered user reads "waiting on them" with no account
+      // of why THEIR half is already done.
+      expect(s.premiumCovered.trim().length).toBeGreaterThan(0);
+      // The one thing a subscriber could reasonably misread on the cover screen
+      // is that covering her is included too — so it names her explicitly.
+      expect(s.premiumCoverNotIncluded).toContain("{name}");
+    }
+  });
 });

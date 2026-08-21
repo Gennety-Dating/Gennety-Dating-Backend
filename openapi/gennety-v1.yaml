@@ -2966,7 +2966,7 @@ components:
       required:
         [status, iPaid, partnerPaid, bothPaid, partnerPaidForMe, iCoveredPartner,
          canCoverPartner, partnerFirstName, partnerPhotoUrl, balance, priceCents,
-         expiresAt, serverNow]
+         expiresAt, myPremiumActive, serverNow]
       properties:
         status:
           type: string
@@ -2984,6 +2984,19 @@ components:
         iCoveredPartner:
           type: boolean
           description: THIS caller covered the partner's ticket.
+        myPremiumActive:
+          type: boolean
+          description: |
+            An active Gennety Premium subscription covers this caller's OWN
+            slot, so it costs them nothing — the server has already settled it.
+            Render the "covered by Premium" plate from this.
+
+            It states the subscription, not the slot: nothing on the row records
+            HOW a slot was settled. That is what keeps it honest when a
+            subscription lapses after the fact — the flag goes false, the slot
+            stays settled (a paid slot is never revoked), and the plate simply
+            stops being drawn. Covering the PARTNER is never free; that is still
+            one ticket's price, and `canCoverPartner` governs it.
         canCoverPartner:
           type: boolean
           description: |

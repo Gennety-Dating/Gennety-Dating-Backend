@@ -211,3 +211,38 @@ describe("formatting helpers", () => {
     expect(msUntil(null)).toBe(0);
   });
 });
+
+describe("Gennety Premium covers the subscriber's own slot", () => {
+  // The server settles a subscriber's slot before this screen is ever drawn, so
+  // from here Premium looks exactly like "iPaid". These pin the consequence the
+  // founder actually chose (Variant A): the subscription closes YOUR half and
+  // deliberately not your date's.
+  it("drops a covered male onto the cover screen, where his choice still is", () => {
+    const s = state({ myGender: "male", iPaid: true, myPremiumActive: true, ticketStatus: "partial" });
+    expect(deriveScreen(s)).toBe("cover-partner");
+  });
+
+  it("prices covering her at ONE ticket, never the doubled both-scope", () => {
+    // He never paid for his own slot, so `both` (2x) would be charging him for a
+    // slot Premium already closed — `settleTicket` could only ever claim the one
+    // remaining, i.e. a straight overcharge.
+    const buttons = deriveCoverPartnerButtons(
+      state({ myGender: "male", iPaid: true, myPremiumActive: true, myBalance: 0 }),
+    );
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]!).toMatchObject({ action: "pay", scope: "partner", amountCents: 699 });
+    expect(buttons.some((b) => b.scope === "both")).toBe(false);
+  });
+
+  it("lets him spend a wallet ticket on her slot when he has one", () => {
+    const buttons = deriveCoverPartnerButtons(
+      state({ myGender: "male", iPaid: true, myPremiumActive: true, myBalance: 2 }),
+    );
+    expect(buttons[0]!).toMatchObject({ action: "use", scope: "partner", ticketCost: 1 });
+  });
+
+  it("sends a covered female straight to waiting — she has nothing to decide", () => {
+    const s = state({ myGender: "female", iPaid: true, myPremiumActive: true, ticketStatus: "partial" });
+    expect(deriveScreen(s)).toBe("waiting");
+  });
+});

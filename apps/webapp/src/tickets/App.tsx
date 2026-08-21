@@ -78,6 +78,10 @@ export function App(): ReactElement {
   // call site) since it never changes what screen is shown, only whether a
   // quiet secondary link appears on it.
   const [referralEnabled, setReferralEnabled] = useState(false);
+  // Same reasoning as `referralEnabled` above: it changes no screen, only
+  // whether one explanatory plate is drawn, so it is kept out of `Phase`
+  // rather than threaded through every `setPhase` call site.
+  const [premiumActive, setPremiumActive] = useState(false);
   // The action bar floats over the scroll; this measures it so the scroll
   // reserves exactly its height at the end (see ../ticket/action-bar.ts). On
   // this screen the bar only exists after a purchase, and the hook clears the
@@ -88,6 +92,7 @@ export function App(): ReactElement {
     try {
       const wallet = await fetchWalletState(initData);
       setReferralEnabled(Boolean(wallet.referralEnabled));
+      setPremiumActive(Boolean(wallet.premiumActive));
       setPhase({
         kind: "view",
         balance: wallet.balance,
@@ -171,6 +176,7 @@ export function App(): ReactElement {
       const wallet = await confirmStorePurchase(initData, current.bundle.count, current.intent.clientSecret);
       haptic("success");
       setReferralEnabled(Boolean(wallet.referralEnabled));
+      setPremiumActive(Boolean(wallet.premiumActive));
       setPhase({
         kind: "view",
         balance: wallet.balance,
@@ -247,6 +253,13 @@ export function App(): ReactElement {
               : s.sub}
           </p>
         </header>
+
+        {/* What tickets are FOR once dates stop costing them (§3.5b). Not
+            "you have Premium" — the subscriber knows that; the thing they
+            cannot know is that the store still has a job. Shown before the
+            bundles so it frames them, and never on the post-purchase screen,
+            where the receipt is the message. */}
+        {premiumActive && !bought && <p className="store-premium-note">{s.premiumNote}</p>}
 
         {/* The store's card carries no names — it is the product, not anyone's
             ticket. It used to print "Участник & Твоя пара", which is the only

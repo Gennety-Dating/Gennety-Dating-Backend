@@ -116,7 +116,10 @@ describe("GET /v1/matches/:id/ticket-gate", () => {
       where: { id: USER_ID },
       select: { telegramId: true },
     });
-    expect(getTicketState).toHaveBeenCalledWith(-42n, VALID_UUID);
+    // See the Mini App twin: the api handle carries the Premium settle-on-read,
+    // so the native GET has to pass it too or an iOS subscriber's slot never
+    // closes when the subscription lands mid-gate.
+    expect(getTicketState).toHaveBeenCalledWith(-42n, VALID_UUID, expect.anything());
   });
 
   it("decides canCoverPartner server-side: offered to a man, never to a woman", async () => {

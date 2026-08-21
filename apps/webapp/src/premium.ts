@@ -47,6 +47,8 @@ interface Copy {
   crest: string;
   title: string;
   sub: string;
+  // Benefits, in display order. Unlimited dates leads: it is the one perk that
+  // changes what the product costs rather than what it looks like.
   b1t: string; // benefit 1 title
   b1d: string; // benefit 1 detail (short, always visible)
   b1x: string; // benefit 1 explanation (revealed on tap)
@@ -54,6 +56,9 @@ interface Copy {
   b2d: string;
   b2x: string;
   b2link: string; // "see the actual premium places" link label
+  b3t: string;
+  b3d: string;
+  b3x: string;
   more: string;
   price: (p: string) => string;
   subscribe: (p: string) => string;
@@ -68,9 +73,12 @@ const COPY: Record<Lang, Copy> = {
     crest: "✨",
     title: "Gennety Premium",
     sub: "The good stuff, unlocked.",
-    b1t: "Free venue changes",
-    b1d: "Swap your date spot as often as you like — no fee.",
-    b1x: "Changing the venue normally costs a small fee each time. With Premium every swap on the venue board is free, right up until the date — rethink the spot as many times as you both want.",
+    b1t: "Unlimited dates",
+    b1d: "Every date is covered — no ticket, no per-date fee.",
+    b1x: "A date normally costs one Date Ticket each. With Premium your own place at the table is always covered, however often you go — and buying a ticket for your date, if you want to, still costs one ticket.",
+    b3t: "Free venue changes",
+    b3d: "Swap your date spot as often as you like — no fee.",
+    b3x: "Changing the venue normally costs a small fee each time. With Premium every swap on the venue board is free, right up until the date — rethink the spot as many times as you both want.",
     b2t: "Premium venues",
     b2d: "A hand-picked tier of nicer places in the venue board",
     b2x: "Premium unlocks a separate tier of hand-picked spots — nicer, more memorable places that stay locked for everyone else. They show up on the venue board the moment your subscription is active.",
@@ -87,9 +95,12 @@ const COPY: Record<Lang, Copy> = {
     crest: "✨",
     title: "Gennety Premium",
     sub: "Лучшее — открыто.",
-    b1t: "Бесплатная смена места",
-    b1d: "Меняй место свидания сколько угодно — без оплаты.",
-    b1x: "Обычно каждая смена места стоит небольшую сумму. С Premium любая замена в подборе мест — бесплатна, вплоть до самого свидания. Пересматривайте место столько раз, сколько захотите вдвоём.",
+    b1t: "Безлимитные свидания",
+    b1d: "Каждое свидание покрыто — без билета и без оплаты за раз.",
+    b1x: "Обычно свидание стоит по одному билету с человека. С Premium твоё место всегда покрыто, сколько бы свиданий ни было — а оплатить билет за спутницу, если захочешь, по-прежнему стоит один билет.",
+    b3t: "Бесплатная смена места",
+    b3d: "Меняй место свидания сколько угодно — без оплаты.",
+    b3x: "Обычно каждая смена места стоит небольшую сумму. С Premium любая замена в подборе мест — бесплатна, вплоть до самого свидания. Пересматривайте место столько раз, сколько захотите вдвоём.",
     b2t: "Премиум-заведения",
     b2d: "Отобранный тир мест получше в подборе",
     b2x: "Premium открывает отдельный тир заведений — места получше, отобранные вручную, которые для остальных закрыты. Они появляются в подборе сразу, как только подписка активна.",
@@ -106,9 +117,12 @@ const COPY: Record<Lang, Copy> = {
     crest: "✨",
     title: "Gennety Premium",
     sub: "Найкраще — відкрито.",
-    b1t: "Безкоштовна зміна місця",
-    b1d: "Змінюй місце побачення скільки завгодно — без оплати.",
-    b1x: "Зазвичай кожна зміна місця коштує невелику суму. З Premium будь-яка заміна в підборі місць — безкоштовна, аж до самого побачення. Переглядайте місце стільки разів, скільки захочете вдвох.",
+    b1t: "Безлімітні побачення",
+    b1d: "Кожне побачення покрите — без квитка й без оплати за раз.",
+    b1x: "Зазвичай побачення коштує по одному квитку з людини. З Premium твоє місце завжди покрите, скільки б побачень не було — а сплатити квиток за супутницю, якщо захочеш, і далі коштує один квиток.",
+    b3t: "Безкоштовна зміна місця",
+    b3d: "Змінюй місце побачення скільки завгодно — без оплати.",
+    b3x: "Зазвичай кожна зміна місця коштує невелику суму. З Premium будь-яка заміна в підборі місць — безкоштовна, аж до самого побачення. Переглядайте місце стільки разів, скільки захочете вдвох.",
     b2t: "Преміум-заклади",
     b2d: "Відібраний тір кращих місць у підборі",
     b2x: "Premium відкриває окремий тір закладів — кращі місця, відібрані вручну, які для інших закриті. Вони з’являються в підборі щойно підписка активна.",
@@ -125,9 +139,12 @@ const COPY: Record<Lang, Copy> = {
     crest: "✨",
     title: "Gennety Premium",
     sub: "Das Beste, freigeschaltet.",
-    b1t: "Kostenlose Ortswechsel",
-    b1d: "Wechsle den Date-Ort so oft du willst — ohne Gebühr.",
-    b1x: "Normalerweise kostet jeder Ortswechsel eine kleine Gebühr. Mit Premium ist jeder Wechsel im Ortsboard kostenlos — bis zum Date. Überdenkt den Ort so oft ihr beide wollt.",
+    b1t: "Unbegrenzte Dates",
+    b1d: "Jedes Date ist abgedeckt — kein Ticket, keine Gebühr pro Date.",
+    b1x: "Ein Date kostet normalerweise pro Person ein Date-Ticket. Mit Premium ist dein eigener Platz immer abgedeckt, egal wie oft — und das Ticket deiner Begleitung zu übernehmen kostet weiterhin ein Ticket.",
+    b3t: "Kostenlose Ortswechsel",
+    b3d: "Wechsle den Date-Ort so oft du willst — ohne Gebühr.",
+    b3x: "Normalerweise kostet jeder Ortswechsel eine kleine Gebühr. Mit Premium ist jeder Wechsel im Ortsboard kostenlos — bis zum Date. Überdenkt den Ort so oft ihr beide wollt.",
     b2t: "Premium-Orte",
     b2d: "Eine handverlesene Auswahl schönerer Orte im Ortsboard",
     b2x: "Premium schaltet eine eigene Kategorie handverlesener Orte frei — schönere, besondere Plätze, die für alle anderen gesperrt bleiben. Sie erscheinen im Ortsboard, sobald dein Abo aktiv ist.",
@@ -144,9 +161,12 @@ const COPY: Record<Lang, Copy> = {
     crest: "✨",
     title: "Gennety Premium",
     sub: "To, co najlepsze — odblokowane.",
-    b1t: "Darmowa zmiana miejsca",
-    b1d: "Zmieniaj miejsce randki ile chcesz — bez opłat.",
-    b1x: "Zwykle każda zmiana miejsca kosztuje niewielką opłatę. Z Premium każda zmiana w tablicy miejsc jest darmowa — aż do samej randki. Zmieniajcie miejsce tyle razy, ile chcecie.",
+    b1t: "Nielimitowane randki",
+    b1d: "Każda randka jest pokryta — bez biletu i bez opłaty za randkę.",
+    b1x: "Randka zwykle kosztuje po jednym bilecie od osoby. Z Premium twoje miejsce jest zawsze pokryte, niezależnie od liczby randek — a pokrycie biletu partnerki, jeśli zechcesz, nadal kosztuje jeden bilet.",
+    b3t: "Darmowa zmiana miejsca",
+    b3d: "Zmieniaj miejsce randki ile chcesz — bez opłat.",
+    b3x: "Zwykle każda zmiana miejsca kosztuje niewielką opłatę. Z Premium każda zmiana w tablicy miejsc jest darmowa — aż do samej randki. Zmieniajcie miejsce tyle razy, ile chcecie.",
     b2t: "Miejsca premium",
     b2d: "Wyselekcjonowany zestaw lepszych miejsc w tablicy",
     b2x: "Premium odblokowuje osobny poziom ręcznie wybranych miejsc — lepszych i bardziej wyjątkowych, zamkniętych dla pozostałych. Pojawiają się w tablicy, gdy tylko subskrypcja jest aktywna.",
@@ -379,8 +399,9 @@ function renderOffer(state: PremiumState): void {
   const cards: Array<
     [IconName, "twinkle" | "flutter", string, string, string, { label: string; href: string }?]
   > = [
-    ["map", "flutter", s.b1t, s.b1d, s.b1x],
+    ["heart", "twinkle", s.b1t, s.b1d, s.b1x],
     ["star", "twinkle", s.b2t, s.b2d, s.b2x, { label: s.b2link, href: PLACES_URL }],
+    ["map", "flutter", s.b3t, s.b3d, s.b3x],
   ];
   for (const [ico, anim, tt, dd, xx, link] of cards) {
     list.append(benefitCard(ico, anim, tt, dd, xx, link));

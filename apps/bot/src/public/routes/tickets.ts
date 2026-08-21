@@ -15,6 +15,7 @@ import {
   consumeActiveDiscount,
 } from "../../services/ticket-discount.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
+import { isPremiumActive } from "../../services/premium.js";
 
 /**
  * Ticket store / wallet Mini App endpoints (pre-purchase bundles, not tied to a
@@ -56,6 +57,13 @@ export function createTicketStoreRouter(): Router {
       // Drives the "invite a friend instead" referral cross-promo link, shown
       // client-side only when the wallet is actually empty.
       referralEnabled: env.REFERRAL_FEATURE_ENABLED,
+      // Gennety Premium covers the subscriber's OWN date slots (§3.5b), so the
+      // store stops being the way they get onto a date and becomes the way they
+      // cover their partner's ticket. The plate says that; the bundles stay on
+      // sale, because with covering still priced this is the only place to buy
+      // the ticket it takes — and the welcome gift, referral rewards and famine
+      // discount all keep landing in the same wallet.
+      premiumActive: await isPremiumActive(user.id),
     });
   });
 

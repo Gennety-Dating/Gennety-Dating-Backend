@@ -114,7 +114,11 @@ describe("GET /v1/matches/:id/ticket/state", () => {
     expect(res.body.ok).toBe(true);
     expect(res.body.ticketStatus).toBe("pending");
     expect(res.body.partnerName).toBe("Sam");
-    expect(getTicketState).toHaveBeenCalledWith(5986970093n, VALID_UUID);
+    // The third argument is the bot handle, and it is not incidental: it is
+    // what lets the state read settle a slot for a caller who bought Premium
+    // after the gate opened (§3.5b). Asserted rather than loosened, so dropping
+    // it silently disables that self-healing path.
+    expect(getTicketState).toHaveBeenCalledWith(5986970093n, VALID_UUID, fakeApi);
     // An uncovered viewer must not trigger the read-receipt (§3.5b takt 2).
     expect(notePartnerPaidSeen).not.toHaveBeenCalled();
   });
