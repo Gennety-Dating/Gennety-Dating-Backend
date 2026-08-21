@@ -20,6 +20,18 @@ export type MediaValidationReason =
   | "video_identity_reference_missing"
   | "video_too_long"
   | "video_too_large_to_check"
+  /**
+   * The recording is shorter than a person answering a question — almost
+   * always a mis-held mic button rather than a terse answer.
+   */
+  | "voice_too_short"
+  | "voice_too_long"
+  /**
+   * The transcript hands out a way to contact the speaker off-platform. Audio
+   * is the only profile surface that can do this — a photo cannot dictate a
+   * phone number — so this rule exists nowhere else (see audio-contact-info.ts).
+   */
+  | "audio_contact_info"
   | "processing_unavailable";
 
 export interface ValidatedPhoto {
