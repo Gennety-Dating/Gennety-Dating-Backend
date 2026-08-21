@@ -1,5 +1,77 @@
 # Gennety Dating Deploy
 
+**PENDING — приём клиентской воронки нативного приложения
+(`POST /v1/client/events`, iOS 6.2; PRODUCT_SPEC §GDPR, ARCHITECTURE →
+`client_events`, DECISIONS.md ×4).** **Нет изменения Mini App**
+(`apps/webapp` не тронут) — но нужен **аддитивный `db:push` ДО рестарта** и
+**одна новая env, которая уезжает ВЫКЛЮЧЕННОЙ**. Порядок: Deploy Full Server
+Code → `db:push` → `pnpm db:drift-check` → `pm2 restart` → `pnpm demo:deploy`.
+
+Новая таблица `client_events` читается и пишется маршрутом и **свипом
+ретеншена**, который идёт по крону каждую ночь, — то есть база без неё бросит
+`P2022` на первом же ночном тике, а не только на первом батче. Сначала
+убедиться, что план аддитивный (ожидается один `CREATE TABLE`, три
+`CREATE INDEX`, один FK, **ноль `DROP`**):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # должен вернуть 0 до pm2 restart
+```
+
+**Шесть вещей, которые стоит знать до рестарта:**
+
+- **Фича уезжает ИНЕРТНОЙ, и включать её этим деплоем нельзя.**
+  `CLIENT_EVENTS_ENABLED` по умолчанию `false`, в прод-`.env` строки нет, и
+  маршрут отвечает 404 (гейт стоит ДО авторизации). Причина не в осторожности:
+  privacy manifest приложения **сейчас заявляет, что аналитических данных мы
+  не собираем**. Флип флага — связка из трёх правок в одном ходе (env +
+  `App/PrivacyInfo.xcprivacy` + анкета App Privacy в App Store Connect), и
+  порядок обратный обычному: сначала манифест и анкета, потом флаг.
+- **Ночной свип ретеншена получает пятую таблицу** — `client_events` старше
+  **90 дней**, по `receivedAt`. Это тот же батч ≤1000 строк/таблицу/тик, нового
+  крона нет. До включения флага таблица пуста, то есть свип бесплатен.
+- **Строка лога ретеншена поменяла форму** — в неё добавился `clientEvents=N`.
+  Пока флаг выключен, строка не печатается вовсе (сумма нулевая).
+- **`optionalAuth` — новая middleware, и она нужна ровно одному маршруту.**
+  Не подключать её никуда больше не глядя: она НЕ отказывает при битом или
+  протухшем токене, что для любого другого эндпоинта означало бы тихую потерю
+  авторизации вместо 401.
+- **Клиентская половина уже написана и ждёт этот эндпоинт** (iOS-репо, задача
+  6.2), но её транспорт — заглушка за протоколом. Живой отправки после этого
+  деплоя не будет ни при каком флаге, пока в iOS-репо не подключат настоящий
+  транспорт и не выйдет сборка.
+- **Контракт прогнан через генератор Swift-клиента**, а не только через
+  `openapi:lint`: тот этот класс дефекта не видит (DECISIONS 2026-08-10).
+  Ноль строк `Schema "null" is not supported`, операция `postClientEvents`
+  сгенерирована, enum типов приехал без `_empty_`.
+
+Preflight по этому изменению: typecheck чист по 5 проектам, `openapi:lint`
+valid (9 warnings — базовая линия), **полный набор 4407 тестов** (бот 3805 /
+shared 280 / webapp 322), 0 failed. Полный прогон здесь не формальность — он
+уронил 12 тестов в `workers/retention.test.ts`, файле, который правка не
+трогала (DECISIONS.md).
+
+Проверка после деплоя — при выключенном флаге правильный ответ 404, и это же
+доказывает, что маршрут смонтирован:
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  https://dating-api.gennety.com/v1/client/events \
+  -H 'content-type: application/json' -d '{"installId":"probe","events":[]}'
+# 404 = смонтирован и корректно инертен. 200 = флаг включён раньше манифеста.
+psql "$DATABASE_URL" -c "select count(*) from client_events;"
+# Таблица существует и пуста. Ошибка «relation does not exist» = db:push не прошёл.
+```
+
+**Rollback:** откатить код и перезапустить. Таблица может остаться — старый код
+её не читает; свип ретеншена исчезает вместе с кодом.
+
+---
+
 **Deployed 2026-08-20 — релиз из 49 коммитов: все 26 PENDING-блоков разом
 (`c577665`).** Полный деплой кода + аддитивный `db:push` + Mini App + демо.
 Прод поднят с `cd25c56` до `c577665`.
@@ -6037,6 +6109,33 @@ Two consequences worth holding onto:
 An earlier agent report suggested `ticket_1` might have inherited $16.99, which
 would have charged one ticket the price of three; direct inspection shows $6.99.
 The ladder is strictly decreasing, so nothing blocks enabling the rail.
+
+**Re-verified 2026-08-21 by a second browser agent.** Everything above was
+already in place and nothing had to be created: app record, four products, key
+`5UCTX65L56` / issuer `49fd72b2-faf4-4673-a9b4-50e6027c46a8` (identical to the
+env), both webhook URLs. Three things it adds to this file:
+
+- **The App Group and both extension App IDs exist** — `group.com.gennety.ios`,
+  `com.gennety.ios.widgets`, `com.gennety.ios.notifications`. They were created
+  after the 2026-08-03 pass and had never been recorded here.
+- **What it did NOT confirm: App Groups enabled on the *widgets* App ID.** The
+  report places the capabilities "on the main App ID" and says nothing about the
+  extension. That entitlement is what lets the widget read `StatusSnapshot` out
+  of the shared container, and its absence does not show up on the simulator —
+  it surfaces at signing, i.e. the first TestFlight upload. Check it before 6.3
+  rather than during.
+- **`ticket_1` had a pending price change and the agent put it into effect
+  (2026-08-20).** US base is unchanged at $6.99, but the product is now priced
+  **manually across all 175 storefronts**. Manual pricing means Apple stops
+  re-deriving foreign prices when exchange rates move — a change of behaviour,
+  not bookkeeping, and one an agent made rather than one that was decided. Worth
+  a founder call whether this ladder goes back to Apple's automatic pricing.
+
+Cosmetic mismatch, no action: the subscription group is `Gennety Subscriptions`
+in App Store Connect and `Gennety Premium` in the local `Gennety.storekit`. A
+group's reference name never crosses into code; product ids match. The release
+blocker is unchanged — the group is still unsubmitted, so `premium_monthly`
+remains unpurchasable until a build clears review.
 
 **These differ from `TICKET_BUNDLES` (`packages/shared/src/constants.ts`:
 $7.00 / $16.47 / $26.94), and that is tolerated, not an oversight.** Apple owns
