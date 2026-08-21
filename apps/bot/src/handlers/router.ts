@@ -28,6 +28,7 @@ import {
   isVerificationGated,
 } from "../services/verification-gate.js";
 import { RADAR_SKIP_CALLBACK, handleRadarSkip } from "./onboarding/type-radar.js";
+import { voicePromptRouter } from "./onboarding/voice-prompt.js";
 import {
   ONBOARDING_PHOTO_BACK_CALLBACK,
   ONBOARDING_PHOTO_DELETE_CALLBACK,
@@ -139,6 +140,19 @@ router.use(async (ctx, next) => {
   }
   await next();
 });
+
+// The onboarding voice-prompt step (VOICE_PROMPT_PRODUCT_SPEC.md §4.1).
+//
+// Mounted here, ahead of the completed-user delegation, for the same reason
+// the Type Radar Skip is caught above: it fires while `onboardingStep` is
+// still `conversational`. It also has to sit ahead of the step switch at the
+// bottom, which would otherwise hand the recording to `handleConversational` —
+// and that path reads `ctx.message.text`, which is deliberately absent here
+// because `voiceHandler` was told not to transcribe it.
+//
+// Both of its handlers no-op unless the step is genuinely waiting, so an
+// ordinary voice note anywhere else in onboarding falls straight through.
+router.use(voicePromptRouter);
 
 // Completed users → delegate to the post-onboarding menu router.
 router.use(async (ctx, next) => {

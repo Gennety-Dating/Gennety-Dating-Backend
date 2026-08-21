@@ -113,6 +113,12 @@ export interface AgentTurnResult {
    */
   typeRadarRequested?: boolean;
   /**
+   * The collector's next question is the voice prompt, so the caller owes the
+   * skip button and the claim on incoming voice. Mirrors `typeRadarRequested`:
+   * the agent names the state, the surface renders the affordance.
+   */
+  voicePromptRequested?: boolean;
+  /**
    * When true, the handler must switch the session into context-dump-buffering
    * mode so that the pasted response can be acknowledged and then sent to the
    * agent after a short processing delay.
@@ -345,6 +351,9 @@ async function runCollectorTurn(
     await appendCollectorHistory(telegramId, input, reply, false, false);
     return {
       reply,
+      // The question is re-posed verbatim, so its affordances are owed again —
+      // otherwise asking "who hears this?" costs the user the skip button.
+      voicePromptRequested: snapshot.currentQuestion === "voice_prompt",
       expectingPhoto: snapshot.currentQuestion === "photos",
       onboardingComplete: false,
       verificationRequired: false,
@@ -469,6 +478,11 @@ async function runCollectorTurn(
     contextPromptRequested,
     contextDumpStarted,
     contextDumpSaved,
+    // `onboardingComplete` is checked because the finalize branch above runs in
+    // the same turn: a snapshot that reached `complete` must not also ask for a
+    // recording, or the user gets the skip button under "you're all set".
+    voicePromptRequested:
+      !onboardingComplete && snapshot.currentQuestion === "voice_prompt",
   };
 }
 

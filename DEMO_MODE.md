@@ -716,6 +716,32 @@ restarts `gennety-demo`, and builds + ships a second Mini App bundle pointed at
 That last step is what makes "the demo updates with production" true: one extra
 command per release, same source, no parallel implementation. See deploy.md.
 
+## Voice prompts: the recording is shown, the playback is not
+
+The demo puppet has **no voice prompt** (founder decision 2026-08-21), so a
+visitor walks the recording step in full — the ask, the recommendations, the
+skip button, the ingest and its verdict — and never hears one in the pitch,
+because the puppet's pitch simply omits a message it has nothing to fill.
+
+That is the feature's own fail-open path (PRODUCT_SPEC §1.3b: a missing clip
+skips the message, since the pitch must never fail for want of optional audio)
+exercised on every demo run rather than never, which is a small bonus.
+
+Stated plainly so it is not read as an oversight: **the demo cannot show what
+the feature looks like to the person receiving it.** Closing that gap costs one
+OGG per puppet, minted *through the demo bot* — Telegram `file_id`s are per-bot,
+the same trap `scripts/seed-demo-partners.mjs` already resolves an upload chat
+for — and it is not being done.
+
+`VOICE_PROMPT_ENABLED=true` in `.env.demo` so the step is part of the
+walkthrough, and `SUPABASE_VOICE_BUCKET=voice-prompts-demo` is named there
+**explicitly**: the demo env is production's `.env` plus that file, so a bucket
+it does not name is inherited from production — which is exactly how the demo
+spent its first day writing into production storage.
+
+`demo/decide.ts` needs no branch: the step is one-sided, so there is nothing for
+the puppet to answer.
+
 ## The rule for future work
 
 **Any change to a product flow, a Mini App screen, a gate, or a paid step must

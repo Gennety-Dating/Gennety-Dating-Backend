@@ -36,6 +36,7 @@ import { createTicketRouter } from "./routes/ticket.js";
 import { createNativeTicketGateRouter } from "./routes/ticket-gate.js";
 import { createNativeCalendarRouter } from "./routes/calendar-native.js";
 import { createProxyChatRouter } from "./routes/proxy-chat.js";
+import { createVoicePromptRouter } from "./routes/voice-prompt.js";
 import { createNativeFeedbackRouter } from "./routes/feedback-native.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createRadarRouter } from "./routes/radar.js";
@@ -108,6 +109,7 @@ let ticketRouter: ReturnType<typeof createTicketRouter> | null = null;
 let nativeTicketGateRouter: ReturnType<typeof createNativeTicketGateRouter> | null = null;
 let nativeCalendarRouter: ReturnType<typeof createNativeCalendarRouter> | null = null;
 let proxyChatRouter: ReturnType<typeof createProxyChatRouter> | null = null;
+let voicePromptRouter: ReturnType<typeof createVoicePromptRouter> | null = null;
 let nativeFeedbackRouter: ReturnType<typeof createNativeFeedbackRouter> | null = null;
 let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
@@ -404,6 +406,18 @@ app.use("/v1/auth/phone", phoneAuthRouter);
 // Mounted before the generic auth router so `/v1/auth/telegram` resolves here.
 app.use("/v1/auth", telegramAuthRouter);
 app.use("/v1/auth", authRouter);
+// Voice prompts for the native client (VOICE_PROMPT_PRODUCT_SPEC.md §4.2).
+// Same more-specific-prefix rule as the two mounts below. 404s while the
+// feature is off, which is also what tells an older client to hide the step.
+app.use("/v1/me/voice-prompt", (req, res, next) => {
+  if (!env.VOICE_PROMPT_ENABLED) {
+    res.status(404).json({ error: "voice-prompt-disabled" });
+    return;
+  }
+  if (!voicePromptRouter) voicePromptRouter = createVoicePromptRouter();
+  voicePromptRouter(req, res, next);
+});
+
 // Mount /v1/me/verification BEFORE /v1/me so Express tries the more-specific
 // prefix first — both routers match `/v1/me/verification/*` otherwise.
 app.use("/v1/me/verification", verificationRouter);

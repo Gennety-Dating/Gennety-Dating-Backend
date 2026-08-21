@@ -44,6 +44,14 @@ const translations = {
     askPhotos:
       "Almost done! Send {min}–{max} different photos. Every photo must clearly show you, and explicit content isn't allowed. A profile video may include friends or scenery, but you must appear clearly in several moments.",
     photoReceived: "Photo {n}/{max}",
+    voicePromptSkipButton: "Without a voice note",
+    voicePromptSaved: "Saved ✨ They'll hear it right before they decide.",
+    voicePromptTooShort: "That was barely a second — the mic button needs holding. Try again, aim for about 15 seconds.",
+    voicePromptTooLong: "A bit long — keep it under a minute, otherwise it doesn't get listened to. Record another one?",
+    voicePromptUnsafe: "I can't put that on a profile. Record a different one — or skip, it's optional.",
+    voicePromptContactInfo: "Leave out handles and phone numbers — I'll arrange the meeting myself, that's the whole point. Record another one about you instead.",
+    voicePromptUnavailable: "I couldn't process that recording. Send it again in a moment.",
+    voicePromptPitchCaption: "{name} recorded this for you",
     photoRejected:
       "Your face needs to be visible in the photo. Try another shot.",
     photoDuplicate:
@@ -733,6 +741,8 @@ const translations = {
     verifyAnalyzeStep1: "🔍 Matching your selfie…",
     verifyAnalyzeStep2: "🧬 Reading facial features…",
     verifyAnalyzeStep3: "⏳ Finalizing the check…",
+    voiceCheckStep1: "🎧 Listening to your recording…",
+    voiceCheckStep2: "Making sure it's all good…",
     videoCheckStep1: "🎬 Looking through your video…",
     videoCheckStep2: "🙂 Checking it's you…",
     videoCheckStep3: "✨ Almost ready…",
@@ -1265,6 +1275,14 @@ const translations = {
     askPhotos:
       "Почти всё! Пришли {min}–{max} разных фото. На каждом должен быть хорошо виден ты, откровенный контент запрещён. В видео могут быть друзья или пейзажи, но ты должен хорошо появляться в нескольких моментах.",
     photoReceived: "Фото {n}/{max}",
+    voicePromptSkipButton: "Без голосового",
+    voicePromptSaved: "Сохранил ✨ Он услышит его прямо перед тем, как решить.",
+    voicePromptTooShort: "Это меньше секунды — кнопку микрофона надо держать. Попробуй ещё раз, целься секунд на 15.",
+    voicePromptTooLong: "Длинновато — уложись в минуту, иначе такое просто не дослушивают. Запишешь ещё раз?",
+    voicePromptUnsafe: "Такое я не могу поставить в анкету. Запиши другое — или пропусти, это по желанию.",
+    voicePromptContactInfo: "Ники и номера лучше не называть — встречу я организую сам, в этом весь смысл. Запиши лучше что-нибудь про себя.",
+    voicePromptUnavailable: "Не смог обработать запись. Пришли её ещё раз через минуту.",
+    voicePromptPitchCaption: "{name} записал(а) для тебя голосовое",
     photoRejected:
       "На фото должно быть видно твоё лицо. Попробуй другой снимок.",
     photoDuplicate:
@@ -1918,6 +1936,8 @@ const translations = {
     verifyAnalyzeStep1: "🔍 Сверяю селфи с фото…",
     verifyAnalyzeStep2: "🧬 Анализирую черты лица…",
     verifyAnalyzeStep3: "⏳ Завершаю проверку…",
+    voiceCheckStep1: "🎧 Слушаю твою запись…",
+    voiceCheckStep2: "Проверяю, что всё в порядке…",
     videoCheckStep1: "🎬 Просматриваю твоё видео…",
     videoCheckStep2: "🙂 Проверяю, что это ты…",
     videoCheckStep3: "✨ Почти готово…",
@@ -2386,6 +2406,14 @@ const translations = {
     askPhotos:
       "Майже все! Надішли {min}–{max} різних фото. На кожному маєш бути добре видимий ти, відвертий контент заборонений. У відео можуть бути друзі або краєвиди, але ти маєш добре з'являтися в кількох моментах.",
     photoReceived: "Фото {n}/{max}",
+    voicePromptSkipButton: "Без голосового",
+    voicePromptSaved: "Зберіг ✨ Він почує його прямо перед тим, як вирішити.",
+    voicePromptTooShort: "Це менше секунди — кнопку мікрофона треба тримати. Спробуй ще раз, цілься секунд на 15.",
+    voicePromptTooLong: "Задовго — вклади́ся в хвилину, інакше таке просто не дослуховують. Запишеш ще раз?",
+    voicePromptUnsafe: "Таке я не можу поставити в анкету. Запиши інше — або пропусти, це за бажанням.",
+    voicePromptContactInfo: "Ніки та номери краще не називати — зустріч я організую сам, у цьому весь сенс. Запиши краще щось про себе.",
+    voicePromptUnavailable: "Не зміг обробити запис. Надішли його ще раз за хвилину.",
+    voicePromptPitchCaption: "{name} записав(ла) для тебе голосове",
     photoRejected:
       "На фото має бути видно твоє обличчя. Спробуй інший знімок.",
     photoDuplicate:
@@ -3037,6 +3065,8 @@ const translations = {
     verifyAnalyzeStep1: "🔍 Звіряю селфі з фото…",
     verifyAnalyzeStep2: "🧬 Аналізую риси обличчя…",
     verifyAnalyzeStep3: "⏳ Завершую перевірку…",
+    voiceCheckStep1: "🎧 Слухаю твій запис…",
+    voiceCheckStep2: "Перевіряю, що все гаразд…",
     videoCheckStep1: "🎬 Переглядаю твоє відео…",
     videoCheckStep2: "🙂 Перевіряю, що це ти…",
     videoCheckStep3: "✨ Майже готово…",
@@ -3514,6 +3544,14 @@ const deTranslations: TranslationTable = {
   askPhotos:
     "Fast fertig! Sende {min}-{max} verschiedene Fotos. Auf jedem musst du klar zu sehen sein; explizite Inhalte sind nicht erlaubt. Ein Profilvideo darf Freunde oder Landschaften zeigen, aber du musst in mehreren Momenten klar erscheinen.",
   photoReceived: "Foto {n}/{max}",
+  voicePromptSkipButton: "Ohne Sprachnachricht",
+  voicePromptSaved: "Gespeichert ✨ Die Person hört sie direkt vor ihrer Entscheidung.",
+  voicePromptTooShort: "Das war kaum eine Sekunde — die Mikrofontaste muss gehalten werden. Versuch's nochmal, ziel auf etwa 15 Sekunden.",
+  voicePromptTooLong: "Etwas lang — bleib unter einer Minute, sonst hört das niemand zu Ende. Nochmal aufnehmen?",
+  voicePromptUnsafe: "Das kann ich nicht ins Profil stellen. Nimm etwas anderes auf — oder überspring es, es ist freiwillig.",
+  voicePromptContactInfo: "Lass Namen und Nummern weg — das Treffen organisiere ich selbst, darum geht es ja. Erzähl lieber etwas über dich.",
+  voicePromptUnavailable: "Ich konnte die Aufnahme nicht verarbeiten. Schick sie gleich nochmal.",
+  voicePromptPitchCaption: "{name} hat das für dich aufgenommen",
   photoRejected:
     "Dein Gesicht muss auf dem Foto sichtbar sein. Versuch ein anderes Bild.",
   photoDuplicate:
@@ -4130,6 +4168,8 @@ const deTranslations: TranslationTable = {
   verifyAnalyzeStep1: "🔍 Gleiche dein Selfie ab…",
   verifyAnalyzeStep2: "🧬 Lese Gesichtszüge…",
   verifyAnalyzeStep3: "⏳ Schließe die Prüfung ab…",
+  voiceCheckStep1: "🎧 Ich höre deine Aufnahme…",
+  voiceCheckStep2: "Prüfe, ob alles passt…",
   videoCheckStep1: "🎬 Ich sehe dein Video durch…",
   videoCheckStep2: "🙂 Prüfe, ob du das bist…",
   videoCheckStep3: "✨ Fast fertig…",
@@ -4602,6 +4642,14 @@ const plTranslations: TranslationTable = {
   askPhotos:
     "Prawie gotowe! Wyślij {min}-{max} różnych zdjęć. Na każdym musisz być wyraźnie widoczny; treści erotyczne są niedozwolone. Wideo profilowe może pokazywać znajomych lub krajobrazy, ale musisz pojawić się wyraźnie w kilku momentach.",
   photoReceived: "Zdjęcie {n}/{max}",
+  voicePromptSkipButton: "Bez wiadomości głosowej",
+  voicePromptSaved: "Zapisałem ✨ Usłyszy ją tuż przed decyzją.",
+  voicePromptTooShort: "To ledwie sekunda — przycisk mikrofonu trzeba przytrzymać. Spróbuj jeszcze raz, celuj w jakieś 15 sekund.",
+  voicePromptTooLong: "Trochę za długo — zmieść się w minucie, inaczej nikt tego nie dosłucha. Nagrasz jeszcze raz?",
+  voicePromptUnsafe: "Tego nie mogę umieścić w profilu. Nagraj coś innego — albo pomiń, to nieobowiązkowe.",
+  voicePromptContactInfo: "Nicków i numerów lepiej nie podawaj — spotkanie organizuję ja, o to właśnie chodzi. Opowiedz lepiej coś o sobie.",
+  voicePromptUnavailable: "Nie udało mi się przetworzyć nagrania. Wyślij je jeszcze raz za chwilę.",
+  voicePromptPitchCaption: "{name} nagrał(a) to dla ciebie",
   photoRejected:
     "Na zdjęciu musi być widoczna Twoja twarz. Spróbuj innego ujęcia.",
   photoDuplicate:
@@ -5219,6 +5267,8 @@ const plTranslations: TranslationTable = {
   verifyAnalyzeStep1: "🔍 Porównuję twoje selfie…",
   verifyAnalyzeStep2: "🧬 Analizuję rysy twarzy…",
   verifyAnalyzeStep3: "⏳ Kończę weryfikację…",
+  voiceCheckStep1: "🎧 Słucham twojego nagrania…",
+  voiceCheckStep2: "Sprawdzam, czy wszystko gra…",
   videoCheckStep1: "🎬 Przeglądam twój film…",
   videoCheckStep2: "🙂 Sprawdzam, czy to ty…",
   videoCheckStep3: "✨ Prawie gotowe…",

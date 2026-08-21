@@ -1,5 +1,86 @@
 # Gennety Dating Deploy
 
+**PENDING — Voice Prompts (PRODUCT_SPEC §1.3b, VOICE_PROMPT_PRODUCT_SPEC.md,
+DECISIONS.md ×2).** Ships **DARK** — `VOICE_PROMPT_ENABLED` is unset in
+`/opt/gennety/.env` and stays unset in this deploy. **No Mini App change**
+(`apps/webapp` untouched) — but it needs an **additive `db:push` BEFORE the
+restart**, a **new Supabase bucket**, and one **`.env.demo`** line, so the
+sequence is: create the bucket → Deploy Full Server Code → `db:push` →
+`pnpm db:drift-check` → `pm2 restart` → `pnpm demo:deploy`.
+
+One new table, `voice_prompts`, is SELECTED on every pitch dispatch and on every
+embedding refresh, so a DB missing it throws `P2022` on the first drop after the
+restart — the PM2 crash-loop this file warns about. Verify additive first
+(expect one `CREATE TABLE`, one unique index, one FK, **zero `DROP`**):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+**Create a PRIVATE `voice-prompts` bucket** in the production Supabase project
+(and `voice-prompts-demo` in the demo one). Nothing writes to it while the flag
+is off and nothing on the Telegram rail ever writes to it at all — a
+Telegram-recorded prompt is a `file_id` and Telegram is its store — but
+`SUPABASE_VOICE_BUCKET` defaults to `voice-prompts`, and account deletion
+now issues a delete against it on every erasure. A missing bucket makes that
+call fail, and a failed storage phase **blocks the deletion** by design.
+
+**Seven things worth knowing before the restart:**
+
+- **With the flag off, nothing changes at all, and that is checkable.** The
+  collector marks `voice_prompt` complete+skipped — the same masking
+  `ai_memory` already uses — so the canonical order stays `photos → complete`.
+  The pitch sender returns before touching Telegram, `/v1/me/voice-prompt`
+  404s, and `SerializedMatch.partnerVoicePrompt` is null. The full suite passes
+  identically either way.
+- **`voiceHandler` gains an early return, and it is live REGARDLESS of the
+  flag** — the predicate reads the flag first, so with it off the branch is
+  unreachable. Worth stating because that handler sits ahead of every router
+  and touches every voice note in the product; the regression tests for both
+  guards were confirmed red before green.
+- **Flipping the flag on adds a step to a LIVE onboarding funnel.** Watch
+  `GET /admin/analytics/onboarding-funnel` for the `voice_prompt` step
+  afterwards — a skip rate is expected and fine, a drop-off is not.
+- **It also adds a Whisper + a moderation call per recording**, and per
+  re-record. A 15-second Opus clip is a cheap Whisper call, not a free one.
+- **`GET /v1/matches/current` gains one relation on both sides** plus a signed
+  URL when the partner has a stored clip. No new query.
+- **Deletion now deletes from a fourth bucket.** `collectOwnedPaths` covers
+  `storagePath`, and the path is written `${userId}/…` so that filter matches
+  it — a miss there is silent, which is why it has a test.
+- **Nothing exercises the pitch half until a pair matches.** Verify on
+  `@gennetytestbot` (`VOICE_PROMPT_ENABLED=true` is already in
+  `.env.local.example`), or in the demo, where the recording step runs on every
+  walkthrough — the puppet has no prompt, so playback is deliberately never
+  shown (DEMO_MODE.md).
+
+Preflight for this change: typecheck clean across 5 projects, lint clean,
+**full suite green**, `openapi:lint` valid, and the Swift generator run in the
+iOS repo emits **zero** `Schema "null" is not supported … skipping` lines —
+that is the gate for a contract change, not `openapi:lint` (DECISIONS
+2026-08-10).
+
+Post-deploy check — with the flag off the correct answer is 404, which is also
+the proof the route is mounted:
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/me/voice-prompt
+# 404 = mounted and correctly inert. 401 = the flag is ON (auth ran first).
+psql "$DATABASE_URL" -c "select count(*) from voice_prompts;"
+# Table exists and is empty. "relation does not exist" = db:push did not run.
+```
+
+**Rollback:** unset the flag and restart — the feature goes inert with no code
+change. To roll the code back, revert and restart; the additive table can stay
+(nothing reads it once the code is gone). The bucket can stay either way.
+
+---
+
 **Deployed 2026-08-21 — релиз `57cb108`: возврат за недоставленный реметч +
 приём клиентской воронки (`client_events`).** Полный деплой кода + аддитивный
 `db:push`. **Mini App НЕ передеплоивался** — в диапазоне `c577665..57cb108` нет

@@ -311,6 +311,71 @@ export async function createChatImageSignedUrl(
   return createSignedUrl(env.SUPABASE_CHAT_BUCKET, path, expiresInSeconds);
 }
 
+/**
+ * Upload a native-client voice prompt.
+ *
+ * Only the native rail ever reaches this: a Telegram-recorded prompt is a
+ * `file_id` and Telegram is its store, so nothing is written here for it. The
+ * path is `${userId}/…` on purpose — `collectOwnedPaths` in account-deletion.ts
+ * filters on exactly that prefix, so a key outside it would survive an erasure
+ * request silently.
+ */
+export async function uploadVoicePrompt(
+  userId: string,
+  buffer: Buffer,
+  mime: string,
+): Promise<UploadResult> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Supabase Storage not configured");
+  }
+
+  const safeMime = mime === "audio/mp4" || mime === "audio/m4a" ? "audio/mp4" : "audio/ogg";
+  const ext = safeMime === "audio/mp4" ? "m4a" : "ogg";
+  const path = `${userId}/${Date.now()}.${ext}`;
+
+  const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_VOICE_BUCKET}/${path}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": safeMime,
+      "x-upsert": "true",
+    },
+    body: new Uint8Array(buffer),
+    signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Supabase upload failed: ${res.status} ${body}`);
+  }
+  return { path };
+}
+
+/** Short-lived signed URL for playing a voice prompt in the native client. */
+export async function createVoicePromptSignedUrl(
+  path: string,
+  expiresInSeconds: number = 300,
+): Promise<string | null> {
+  return createSignedUrl(env.SUPABASE_VOICE_BUCKET, path, expiresInSeconds);
+}
+
+/** Download a stored voice prompt (validation, or minting a Telegram file_id). */
+export async function downloadVoicePrompt(path: string): Promise<Buffer | null> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_VOICE_BUCKET}/${path}`;
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+      signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 /** Download a private Aether attachment for server-side validation/copying. */
 export async function downloadChatImage(path: string): Promise<Buffer | null> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;

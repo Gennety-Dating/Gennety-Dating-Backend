@@ -10,6 +10,7 @@ import {
 } from "../services/geo.js";
 import { resolveVenue } from "../services/curated-venue.js";
 import { proxyChatWindow } from "../services/proxy-chat.js";
+import { createVoicePromptSignedUrl } from "../services/storage.js";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
 import {
   applyReportAction,
@@ -167,6 +168,20 @@ export interface SerializedMatch {
    * a time neither side meant. `CalendarState.timeZone` exists for the same
    * reason, and the server-rendered Telegram card already makes this choice.
    */
+  /**
+   * The partner's voice prompt (VOICE_PROMPT_PRODUCT_SPEC.md §4.2), or null
+   * when they skipped the step or the feature is off.
+   *
+   * Carries the precomputed bars so the card can render before a byte of audio
+   * is fetched — the entire point of computing peaks at ingest — and a signed,
+   * short-TTL URL to play. It deliberately carries NO transcript: the product
+   * ships the partner's voice, not a machine's reading of it.
+   */
+  partnerVoicePrompt: {
+    durationSec: number;
+    waveform: number[];
+    audioUrl: string | null;
+  } | null;
   timeZone: string | null;
   /**
    * Server's current wall-clock at the time of this response, ISO. The
@@ -333,6 +348,9 @@ export async function getCurrentMatchForUser(
           gender: true,
           universityDomain: true,
           profile: { select: { timeZone: true } },
+          voicePrompt: {
+            select: { durationSec: true, waveform: true, storagePath: true },
+          },
         },
       },
       userB: {
@@ -342,6 +360,9 @@ export async function getCurrentMatchForUser(
           gender: true,
           universityDomain: true,
           profile: { select: { timeZone: true } },
+          voicePrompt: {
+            select: { durationSec: true, waveform: true, storagePath: true },
+          },
         },
       },
     },
@@ -449,8 +470,35 @@ export async function getCurrentMatchForUser(
     proxyChatOpensAt: proxyWindow?.opensAt.toISOString() ?? null,
     proxyChatClosesAt: proxyWindow?.closesAt.toISOString() ?? null,
     proposalDeadlineAt,
+    partnerVoicePrompt: await serializePartnerVoicePrompt(partner.voicePrompt),
     timeZone: me.profile?.timeZone ?? null,
     serverTimeAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Shape the partner's prompt for the native card.
+ *
+ * Returns null while the feature is off even if a row exists, so switching it
+ * off is complete rather than partial — a client that already downloaded a
+ * signed URL is a different matter, but no new one is handed out.
+ *
+ * A Telegram-recorded prompt has no `storagePath` (Telegram is its store), so
+ * `audioUrl` is null there and the native client renders the bars without a
+ * play button until `ensureTelegramFileIdForVoicePrompt`'s mirror image exists
+ * for this direction. The bars are still worth sending: they say a recording
+ * exists, which is the difference between a quiet card and a wrong one.
+ */
+async function serializePartnerVoicePrompt(
+  prompt: { durationSec: number; waveform: number[]; storagePath: string | null } | null,
+): Promise<SerializedMatch["partnerVoicePrompt"]> {
+  if (!env.VOICE_PROMPT_ENABLED || !prompt) return null;
+  return {
+    durationSec: prompt.durationSec,
+    waveform: prompt.waveform,
+    audioUrl: prompt.storagePath
+      ? await createVoicePromptSignedUrl(prompt.storagePath)
+      : null,
   };
 }
 

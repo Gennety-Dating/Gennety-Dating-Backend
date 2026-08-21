@@ -68,6 +68,7 @@ const ALLOWED_IDENTICAL_UK_RU = new Set<string>([
   "rematchInvoiceLabel",
   // Single words that are spelled identically in Ukrainian and Russian.
   // Translating them would mean inventing a synonym nobody uses.
+  "voicePromptSkipButton",
   "menuBack",
   "reportBackBtn",
   "stallBtnCancelBack",

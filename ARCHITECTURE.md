@@ -789,6 +789,44 @@ Deliberately NOT read by the matching engine. Written by
 `workers/profiler.ts`. The question bank is first-party data in
 `packages/shared/profiler-questions.ts`.
 
+### `voice_prompts`
+
+One optional recording per user (`@@unique([userId])`, `onDelete: Cascade`) —
+PRODUCT_SPEC §1.3b, VOICE_PROMPT_PRODUCT_SPEC.md. Columns: `telegramFileId` /
+`storagePath` (exactly one is set — Telegram is the store on its rail, our
+bucket on the native one), `durationSec`, `mimeType`, `fileSize`, `waveform`
+(normalized 0..100 peaks), `transcript`, `validationVersion`/`validatedAt`.
+
+**Not an entry in `Profile.profileMedia`.** A Telegram voice note cannot join a
+media group, so it is a separate `sendVoice` regardless; keeping it out leaves
+`parseProfileMediaItem`, `sendProfileMediaCard` and the
+`photos[i] ↔ photoFaceScores[i]` invariant completely untouched. The unique
+constraint enforces "0 or 1" in the database rather than in application code,
+and a re-record overwrites the row — there is no history and nothing to
+reconcile.
+
+**`transcript` is an embedding input, and its home is the whole design.**
+`refreshDirtyEmbeddings` (`workers/embedding-refresh.ts`) reads it straight from
+this column and appends it to the composed input, exactly as it already does for
+`partnerPreferences` and `negativeConstraints` — neither of which is folded into
+`psychologicalSummary` either. Folding was the first draft and was reversed
+(DECISIONS 2026-08-21) for two reasons that are properties of the data rather
+than of taste: `handlers/menu/edit-profile.ts` replaces `psychologicalSummary`
+wholesale, so the About-me editor would silently wipe it; and a transcript
+changes on every re-record, so `appendVibeToSummary`'s `includes()` idempotency
+would append rather than replace and multiply the voice's weight in the vector.
+
+**`storagePath` must stay covered by `collectOwnedPaths`**
+(`services/account-deletion.ts`). A native-uploaded clip leaves BYTES in
+`SUPABASE_VOICE_BUCKET`; the row cascades away on deletion and the audio would
+not, silently. The path is written as `${userId}/…` precisely so that filter
+matches it.
+
+Written by `services/voice-prompt.ts` (the single writer, which also marks the
+profile dirty and refreshes in one place) and read by `handlers/matching/pitch.ts`,
+`workers/embedding-refresh.ts` and `public/routes/voice-prompt.ts`. Inert unless
+`VOICE_PROMPT_ENABLED`.
+
 ### `no_match_notices`
 
 Audit row for the empathetic "no match this week" DM. `tier` is the
@@ -973,6 +1011,8 @@ auth) are deliberately outside the spec.
 | PATCH | `/v1/me/preferences` | `matchRadius`, gender preference |
 | POST | `/v1/me/push-token` | Register the device push token (native iOS sends `platform: "apns"`; delivery is direct APNs) |
 | POST | `/v1/me/live-activity-token` | Register an ActivityKit push token — `activityType ∈ {match_decision, date_day}`, `kind ∈ {start, update}`; upsert per (user, type, kind). `DELETE /:activityType/:kind` drops it when the activity ends locally. Backs `sendLiveActivityUpdateToUser` in `services/push.ts`. |
+| GET/POST/DELETE | `/v1/me/voice-prompt` | Read / commit / remove the caller's voice prompt (PRODUCT_SPEC §1.3b). Safety-only validation — no identity gate, no voice printing. A refused clip is **422**, not 400: the request is well-formed and the CONTENT is refused, and `retryable` says whether re-recording is the fix. 404 while `VOICE_PROMPT_ENABLED` is off, which is also how the client learns to hide the step. |
+| POST | `/v1/me/voice-prompt/upload-url` | Bounds for an upload (max bytes, min/max duration). Served rather than bundled so a change to the bounds needs no client release. |
 | GET  | `/v1/me/photos` / POST / DELETE | Photo CRUD with content-sniffed image types and face-match gate. Add/delete array mutations serialize on the user row; the database rechecks limit/duplicate state, and failed post-upload commits clean the new storage object. |
 | GET  | `/v1/me/verification` | Read current verification state |
 | GET  | `/v1/me/verification/native-init` | Mint an AWS Face Liveness session for the native iOS client: `{sessionId, region, credentials, language}`, flips status to `pending`. Credentials are STS-minted and clamped to `rekognition:StartFaceLivenessSession`. **The session expires 3 minutes later** — present the detector immediately. (JWT twin of the Mini App init. The Persona hosted-URL endpoint `/v1/me/verification/url` was removed with the provider.) |

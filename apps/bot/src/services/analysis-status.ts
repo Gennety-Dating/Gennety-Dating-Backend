@@ -129,6 +129,21 @@ export function photoReviewSteps(lang: Language, frames: number): StatusStep[] {
   ];
 }
 
+/**
+ * The held beat over a voice-prompt ingest.
+ *
+ * Real work runs under both lines — a Bot API download, a Whisper call and a
+ * moderation call — so this is narration of something, not a labour illusion.
+ * Two beats rather than the video check's three because a 15-second Opus clip
+ * is a fraction of the work a profile video is.
+ */
+export function voiceCheckSteps(lang: Language): StatusStep[] {
+  return [
+    { text: t(lang, "voiceCheckStep1"), holdMs: 1800, emojiId: AI_EMOJI.scan },
+    { text: t(lang, "voiceCheckStep2"), holdMs: 2400, emojiId: AI_EMOJI.spark },
+  ];
+}
+
 export function videoCheckSteps(lang: Language): StatusStep[] {
   return [
     { text: t(lang, "videoCheckStep1"), holdMs: 2800, emojiId: AI_EMOJI.video },

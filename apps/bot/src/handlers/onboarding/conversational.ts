@@ -44,6 +44,7 @@ import { withTyping } from "../../utils/with-typing.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
 import { dispatchToChat } from "../../chat-queue.js";
 import { sendVerificationCTA } from "./verification.js";
+import { armVoicePromptStep, sendVoicePromptAsk } from "./voice-prompt.js";
 import {
   getMessageLivePhoto,
   getMessageVideo,
@@ -459,6 +460,16 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     return;
   }
 
+  // The voice-prompt step (VOICE_PROMPT_PRODUCT_SPEC.md §4.1). Same shape as
+  // the radar gate above: the agent names the state, this surface renders the
+  // affordance — the skip button, and the claim that keeps `voiceHandler` from
+  // transcribing the recording into ordinary text.
+  if (result.voicePromptRequested === true && ctx.chat?.id !== undefined) {
+    armVoicePromptStep(ctx);
+    await sendVoicePromptAsk(ctx.api, ctx.chat.id, ctx.session.language, result.reply);
+    return;
+  }
+
   if (result.contextDumpSaved && ctx.chat?.id !== undefined) {
     await runStatusSequence(ctx.api, ctx.chat.id, profileAnalysisSteps(ctx.session.language), {
       rich: true,
@@ -468,19 +479,34 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   await sendAgentReply(ctx, result.reply);
 
   if (result.onboardingComplete) {
-    // When verification is required (Sumsub configured), send the liveness
-    // CTA instead of the main menu — the user is not yet `active` and
-    // showing the "next match" banner would be misleading. The webhook
-    // flips them to active + pins the banner on GREEN.
-    if (result.verificationRequired) {
-      const sent = await sendVerificationCTA(ctx);
-      if (sent) return;
-      // Fall through to the normal flow if CTA couldn't be sent (misconfig,
-      // Sumsub outage) — better to let the user into the app than to stall.
-    }
-    await showMainMenu(ctx);
-    await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
+    await finishOnboarding(ctx, telegramId, result.verificationRequired);
   }
+}
+
+/**
+ * The tail every path that finalizes onboarding shares.
+ *
+ * Extracted when the voice-prompt step became a second finalizing surface
+ * (VOICE_PROMPT_PRODUCT_SPEC.md §4.1). Two copies would drift on the one branch
+ * that matters: a user whose verification CTA cannot be sent must still land in
+ * the menu rather than staring at a chat that has stopped responding.
+ */
+export async function finishOnboarding(
+  ctx: BotContext,
+  telegramId: bigint,
+  verificationRequired: boolean,
+): Promise<void> {
+  // When verification is required, send the liveness CTA instead of the main
+  // menu — the user is not yet `active`, and showing the "next match" banner
+  // would be misleading. Passing verification flips them to active + pins it.
+  if (verificationRequired) {
+    const sent = await sendVerificationCTA(ctx);
+    if (sent) return;
+    // Fall through if the CTA couldn't be sent (misconfig, provider outage) —
+    // better to let the user into the app than to stall.
+  }
+  await showMainMenu(ctx);
+  await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
 }
 
 // ---------------------------------------------------------------------------

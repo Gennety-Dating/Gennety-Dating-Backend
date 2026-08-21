@@ -209,6 +209,61 @@ async function sendPartnerMedia(
  * still answer the pitch in words, since the classifier keys off the live
  * proposal rather than this message.
  */
+/**
+ * Play the partner's voice prompt, immediately before the decision question.
+ *
+ * This displaces the verified trust card as the closer, which that card's own
+ * comment claims — deliberately. The trust card is a fact about safety; the
+ * voice is the person, and the last thing before *yes or no* should be the
+ * person. Both are conditional, so the ordering only matters when both exist.
+ *
+ * A voice note cannot join a media group, so it is its own message regardless
+ * of what the photos did. `protect_content` rides the shared
+ * `PROTECT_PARTNER_MEDIA` constant rather than a literal, so demo mode drops
+ * the protection for a filmed walkthrough exactly as it does for the photos
+ * (DEMO_MODE.md) — a hardcoded `true` here would record silence.
+ *
+ * Fail-open by rule: a missing or unplayable file just skips the message. The
+ * pitch must never fail for want of an optional clip, and a partner who
+ * skipped the step is the ordinary case rather than an error.
+ */
+/**
+ * Fold the partner's voice transcript into the summary the pitch generator
+ * reads.
+ *
+ * Composed at the call site rather than stored that way, for exactly the reason
+ * §5.5 gives: `psychologicalSummary` has one writer, and the transcript changes
+ * on every re-record. The generator is simply handed the current state.
+ */
+function summaryWithVoicePrompt(
+  summary: string | null | undefined,
+  transcript: string | null | undefined,
+): string | null {
+  if (!transcript) return summary ?? null;
+  const line = `Voice prompt (what they recorded, in their own words): ${transcript}`;
+  return summary ? `${summary}\n${line}` : line;
+}
+
+async function sendPartnerVoicePrompt(
+  api: Api<RawApi>,
+  chatId: number,
+  lang: Language,
+  fileId: string | null | undefined,
+  partnerFirstName: string | null,
+): Promise<void> {
+  if (!env.VOICE_PROMPT_ENABLED || !fileId) return;
+  try {
+    await api.sendVoice(chatId, fileId, {
+      caption: t(lang, "voicePromptPitchCaption", {
+        name: partnerFirstName ?? "",
+      }),
+      protect_content: PROTECT_PARTNER_MEDIA,
+    });
+  } catch (err) {
+    console.warn("sendPartnerVoicePrompt failed, skipping:", err);
+  }
+}
+
 async function sendDecisionQuestion(
   api: Api<RawApi>,
   chatId: number,
@@ -402,6 +457,14 @@ export async function sendMatchProposal(
           profile: {
             select: { psychologicalSummary: true, photos: true, profileMedia: true },
           },
+          // The partner's voice prompt, played as the last thing before the
+          // decision question (VOICE_PROMPT_PRODUCT_SPEC.md §6.1).
+          // `telegramFileId` plays the clip; `transcript` is what lets the
+          // pitch REFERENCE what was said. The second is load-bearing rather
+          // than convenient: dropping the prompt catalog (§3.1) means the
+          // frame a Hinge prompt would have supplied comes from the pitch
+          // itself, so the generator has to be able to see the content.
+          voicePrompt: { select: { telegramFileId: true, transcript: true } },
         },
       },
       userB: {
@@ -419,6 +482,14 @@ export async function sendMatchProposal(
           profile: {
             select: { psychologicalSummary: true, photos: true, profileMedia: true },
           },
+          // The partner's voice prompt, played as the last thing before the
+          // decision question (VOICE_PROMPT_PRODUCT_SPEC.md §6.1).
+          // `telegramFileId` plays the clip; `transcript` is what lets the
+          // pitch REFERENCE what was said. The second is load-bearing rather
+          // than convenient: dropping the prompt catalog (§3.1) means the
+          // frame a Hinge prompt would have supplied comes from the pitch
+          // itself, so the generator has to be able to see the content.
+          voicePrompt: { select: { telegramFileId: true, transcript: true } },
         },
       },
     },
@@ -451,8 +522,14 @@ export async function sendMatchProposal(
     const resultA = await pitch({
       selfFirstName: match.userA.firstName,
       otherFirstName: match.userB.firstName,
-      selfSummary: match.userA.profile?.psychologicalSummary ?? null,
-      otherSummary: match.userB.profile?.psychologicalSummary ?? null,
+      selfSummary: summaryWithVoicePrompt(
+        match.userA.profile?.psychologicalSummary,
+        match.userA.voicePrompt?.transcript,
+      ),
+      otherSummary: summaryWithVoicePrompt(
+        match.userB.profile?.psychologicalSummary,
+        match.userB.voicePrompt?.transcript,
+      ),
       otherOccupation: match.userB.major,
       language: langA,
     });
@@ -465,8 +542,14 @@ export async function sendMatchProposal(
     const resultB = await pitch({
       selfFirstName: match.userB.firstName,
       otherFirstName: match.userA.firstName,
-      selfSummary: match.userB.profile?.psychologicalSummary ?? null,
-      otherSummary: match.userA.profile?.psychologicalSummary ?? null,
+      selfSummary: summaryWithVoicePrompt(
+        match.userB.profile?.psychologicalSummary,
+        match.userB.voicePrompt?.transcript,
+      ),
+      otherSummary: summaryWithVoicePrompt(
+        match.userA.profile?.psychologicalSummary,
+        match.userA.voicePrompt?.transcript,
+      ),
       otherOccupation: match.userA.major,
       language: langB,
     });
@@ -649,6 +732,13 @@ export async function sendMatchProposal(
       data: { pitchMessageIdA: result.message_id },
     });
     if (partnerBVerified) await sendVerifiedTrustCard(api, chatA, langA);
+    await sendPartnerVoicePrompt(
+      api,
+      chatA,
+      langA,
+      match.userB.voicePrompt?.telegramFileId,
+      match.userB.firstName,
+    );
     await sendDecisionQuestion(api, chatA, langA, match.userB.gender);
   })();
   const sendB = (async () => {
@@ -691,6 +781,13 @@ export async function sendMatchProposal(
       data: { pitchMessageIdB: result.message_id },
     });
     if (partnerAVerified) await sendVerifiedTrustCard(api, chatB, langB);
+    await sendPartnerVoicePrompt(
+      api,
+      chatB,
+      langB,
+      match.userA.voicePrompt?.telegramFileId,
+      match.userA.firstName,
+    );
     await sendDecisionQuestion(api, chatB, langB, match.userA.gender);
   })();
   // The app rail (§5.3). Started alongside the Telegram sends rather than after

@@ -980,6 +980,107 @@ Hard rules enforced by the collector:
   `editMessageText`. They degrade to the classic edited-message stream when a
   client can't render rich drafts.
 
+### 1.3b Voice prompt (feature-flagged, the last onboarding question)
+
+Gated by `VOICE_PROMPT_ENABLED` (default **off** → the collector marks the step
+complete+skipped, exactly as it masks `ai_memory`, and the canonical order runs
+`photos → complete` with nothing changed). Full design:
+[VOICE_PROMPT_PRODUCT_SPEC.md](VOICE_PROMPT_PRODUCT_SPEC.md).
+
+An optional 15-second recording the partner hears **inside the pitch, right
+before the accept/decline question**. It is the only profile element that
+carries tone, humour and cadence without opening a chat, so it argues for the
+product's own thesis rather than against it.
+
+**It is the LAST collector question, and that is a constraint rather than a
+preference.** Past `finalize_onboarding` the §1.4 verification gate locks every
+surface except verification and photo re-upload, so a question asked later never
+reaches the user. The order becomes `… photos → voice_prompt → complete`. Two
+things fall out for free: the photo stage's **Continue** already resolves
+through `nextOnboardingQuestion`, so "done with photos" leads into the ask with
+no new mechanism, and the persistent "🗂 My photos" reply keyboard is already
+removed by the first message the bot sends after the stage ends — which is now
+this one.
+
+**One message, one quiet skip button, and no accept button** — recording IS the
+acceptance; an explicit "yes" would cost a tap and still leave the recording to
+ask for. The copy's central instruction is a **prohibition** ("don't read your
+profile aloud"), because that is the default failure and the bio is already on
+the partner's screen; the hook is the stake, stated plainly — *the person I find
+for you hears this before they decide*.
+
+**There is no prompt catalog** (founder decision 2026-08-21). A Hinge prompt is a
+frame for ten seconds of a stranger's voice in a FEED; this product has no feed,
+delivers one person per day inside a pitch that already argues who they are, and
+— because the transcript reaches the embedding — lets the pitch generator name
+what was said in its own words. The frame arrives anyway, per side, in the right
+language.
+
+**Recording, and why `voiceHandler` has to be told.** `handlers/voice.ts` is
+mounted ahead of every router and replaces `ctx.message.text` with a Whisper
+transcript, so without a claim the recording the user was just asked for would
+reach the fact collector as a typed sentence and be mined for profile facts. The
+claim (`services/voice-prompt-claim.ts`) makes that handler return early —
+**before its own bounds**, since those describe a transcription request (300 s,
+20 MB, "transcription failed") while this is a profile element with its own
+product bounds and its own wording.
+
+**Validation is safety-only**, exactly like the profile video: no identity gate,
+no comparison against the verification selfie, and **no voice-printing anywhere
+in this product**. Cheap local bounds run before any provider call, so a
+mis-held mic button costs nothing; then Whisper, then moderation. Bounds:
+`VOICE_PROMPT_MIN_DURATION_SECONDS` (3 — anything shorter is a misfire, not a
+terse answer) to `VOICE_PROMPT_MAX_DURATION_SECONDS` (60 — where a stranger
+stops pressing play), and `VOICE_PROMPT_MAX_FILE_SIZE_BYTES` (2 MB).
+
+**One rejection reason exists only because the medium is audio.**
+`audio_contact_info` refuses a clip that hands out a way to contact the speaker
+off-platform — a photo cannot dictate a phone number, but thirty seconds of
+speech can route the whole match around the product, which is a NO-IN-APP-CHAT
+bypass no other surface can perform. Deterministic rather than an LLM call,
+because the failure modes are asymmetric: a miss degrades to the status quo, a
+false positive destroys a recording someone just made. So a bare platform name
+never triggers ("I work in Instagram" passes); what does is a real contact token
+(a handle, a link, a 7+ digit run) or a platform name **plus** an invitation to
+write there. A provider that cannot answer is `processing_unavailable` and
+retryable — we decline to publish audio we could not read, we do not tell the
+user their recording was bad.
+
+**The transcript feeds matching, and lives in its own column.**
+`voice_prompts.transcript` is read by `refreshDirtyEmbeddings` and appended to
+the embedding input at refresh time — the same treatment `partnerPreferences`
+and `negativeConstraints` already get. It is deliberately NOT folded into
+`psychologicalSummary`: that field is replaced wholesale by the About-me editor
+(§2.1), so folding would mean a silent wipe on every bio edit; and a transcript
+changes on **every re-record**, so `appendVibeToSummary`'s `includes()`
+idempotency would append rather than replace and multiply the voice's weight in
+the vector. Every write path attempts `refreshUserEmbedding` immediately —
+`embeddingDirty` is fail-closed, so marking dirty and walking away withholds the
+user from matching until the cron (the `appendNegativeConstraint` bug). Deleting
+the prompt re-dirties and refreshes too: a deleted recording that keeps
+influencing matching is a ghost the user cannot see or clear.
+
+**Playback in the pitch** sits between the verified trust card and the decision
+question (§3.3). That displaces the trust card as the closer, deliberately: the
+card is a fact about safety, the voice is the person, and the last thing before
+*yes or no* should be the person. It is its own `sendVoice` — a voice note
+cannot join a media group — carrying a one-line caption naming the partner and
+`protect_content: PROTECT_PARTNER_MEDIA`, the shared constant, so demo mode
+drops the protection for a filmed walkthrough instead of recording silence.
+Fail-open by rule: a missing or unplayable clip skips the message, because the
+pitch must never fail for want of optional audio.
+
+**Both surfaces.** The native rail is `/v1/me/voice-prompt` (JWT) plus
+`SerializedMatch.partnerVoicePrompt`, carrying the precomputed waveform so the
+card draws bars before fetching audio, and no transcript — the product ships a
+person's voice, not a machine's reading of it. On Telegram none of that HTTP
+surface is needed: `sendVoice` is the recorder, the waveform, the player and the
+store.
+
+**Already-registered accounts are never asked** (founder decision): the step
+lives in the collector's question order, so it is reachable only by an account
+still in onboarding, and there is no retro-ask surface in v1.
+
 ### 1.4 Identity verification (Phase 6.3 in code)
 
 **Biometric consent is its own screen (added 2026-08-01).** Before any liveness

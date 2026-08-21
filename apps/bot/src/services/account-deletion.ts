@@ -68,6 +68,11 @@ export async function deleteUserAccount(
             pendingPhotoCandidates: true,
           },
         },
+        // A voice prompt uploaded by a native client leaves BYTES in our own
+        // bucket — unlike a Telegram-recorded one, which is only a file_id.
+        // Missing this select is silent: the row cascades away and the audio
+        // stays, so an erasure request is not honoured and nothing says so.
+        voicePrompt: { select: { storagePath: true } },
       },
     }),
     prisma.message.findMany({
@@ -109,11 +114,16 @@ export async function deleteUserAccount(
     chatImages.map((row) => row.imageUrl),
     user.id,
   );
+  const voicePaths = collectOwnedPaths(
+    [user.voicePrompt?.storagePath ?? null],
+    user.id,
+  );
 
   const cleanup = await Promise.all([
     removeStorageObjects(env.SUPABASE_SELFIE_BUCKET, selfiePaths),
     removeStorageObjects(env.SUPABASE_PHOTO_BUCKET, profilePaths),
     removeStorageObjects(env.SUPABASE_CHAT_BUCKET, chatPaths),
+    removeStorageObjects(env.SUPABASE_VOICE_BUCKET, voicePaths),
   ]);
   const failedObjects = cleanup.flatMap((result) => result.failedObjects);
   if (failedObjects.length > 0) {

@@ -1132,6 +1132,117 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/voice-prompt:
+    get:
+      tags: [me]
+      operationId: getMyVoicePrompt
+      summary: The caller's own voice prompt, if they recorded one
+      description: |
+        404 while `VOICE_PROMPT_ENABLED` is off — which is also how a client
+        learns to hide the step, rather than shipping a screen that saves
+        nothing.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  voicePrompt:
+                    $ref: "#/components/schemas/MyVoicePrompt"
+        "404": { description: Feature disabled }
+    post:
+      tags: [me]
+      operationId: setMyVoicePrompt
+      summary: Commit a recording as the caller's voice prompt
+      description: |
+        Replaces whatever was there — there is no history and nothing to
+        reconcile. Validation is safety-only (no identity gate, no voice
+        printing): the clip is transcribed, the transcript is moderated, and
+        it is refused if it hands out a way to contact the speaker off-platform.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [audio, durationSec]
+              properties:
+                audio:
+                  type: string
+                  description: base64 audio bytes, at most `VOICE_PROMPT_MAX_FILE_SIZE_BYTES`
+                durationSec: { type: integer, minimum: 1 }
+                mimeType: { type: string }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  voicePrompt:
+                    $ref: "#/components/schemas/MyVoicePrompt"
+        "400": { description: Malformed request }
+        "422":
+          description: |
+            The request is well-formed and the CONTENT is refused. `error`
+            carries the reason (`voice_too_short`, `voice_too_long`,
+            `unsafe_content`, `audio_contact_info`, `processing_unavailable`)
+            and `retryable` says whether re-recording is the fix or whether the
+            same clip is worth sending again.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  retryable: { type: boolean }
+        "404": { description: Feature disabled }
+        "503": { description: Storage unavailable }
+    delete:
+      tags: [me]
+      operationId: deleteMyVoicePrompt
+      summary: Remove the voice prompt
+      description: |
+        Also re-embeds: a deleted recording must stop influencing matching, or
+        it becomes a ghost the user cannot see or clear.
+      responses:
+        "200": { description: Removed }
+        "404": { description: Feature disabled }
+
+  /v1/me/voice-prompt/upload-url:
+    post:
+      tags: [me]
+      operationId: getVoicePromptUploadUrl
+      summary: Bounds for a voice-prompt upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contentType]
+              properties:
+                contentType: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadUrl:
+                    type: [string, "null"]
+                    description: Reserved for a true presigned PUT; null means POST the bytes.
+                  maxBytes: { type: integer }
+                  minDurationSec: { type: integer }
+                  maxDurationSec: { type: integer }
+        "400": { description: Not an audio content type }
+        "404": { description: Feature disabled }
+
   /v1/me/photos:
     get:
       tags: [me]
@@ -3204,6 +3315,44 @@ components:
         error: { type: string, enum: [origin-outside-market] }
         market: { $ref: "#/components/schemas/Market" }
 
+    MyVoicePrompt:
+      type: object
+      description: |
+        The caller's own recording. Absent (not null-in-a-union) when there is
+        none — declaring it `oneOf: [$ref, "null"]` is the shape
+        swift-openapi-generator SKIPS in silence, and this repo has paid for
+        that three times (`SerializedUser.gender`, `VenueIntentState.market`,
+        `PendingFeedback`).
+      required: [durationSec, waveform]
+      properties:
+        durationSec: { type: integer }
+        waveform:
+          type: array
+          items: { type: integer }
+          description: |
+            Normalized 0..100 peaks. Precomputed server-side at ingest so the
+            player can draw bars before fetching any audio — which is the whole
+            reason they exist.
+        audioUrl:
+          type: [string, "null"]
+          description: Short-TTL signed URL. Null for a Telegram-recorded prompt, whose bytes live at Telegram.
+        createdAt: { type: string, format: date-time }
+
+    PartnerVoicePrompt:
+      type: object
+      description: |
+        The partner's recording, as shown on the match card. Deliberately
+        carries no transcript: the product ships a person's voice, not a
+        machine's reading of it.
+      required: [durationSec, waveform]
+      properties:
+        durationSec: { type: integer }
+        waveform:
+          type: array
+          items: { type: integer }
+        audioUrl:
+          type: [string, "null"]
+
     SerializedMatch:
       type: object
       description: Mirrors `SerializedMatch` in `public/matches-service.ts`
@@ -3316,6 +3465,8 @@ components:
           type: [string, "null"]
           format: date-time
           description: 24h decision deadline; only for dispatched `proposed` matches
+        partnerVoicePrompt:
+          $ref: "#/components/schemas/PartnerVoicePrompt"
         timeZone:
           type: [string, "null"]
           description: |

@@ -120,6 +120,9 @@ async function refreshDirtyEmbeddings(
       negativeConstraints: true,
       hobbies: true,
       embeddingDirtyAt: true,
+      // The voice prompt's transcript is an embedding input that deliberately
+      // does NOT live in `psychologicalSummary` — see the append below.
+      user: { select: { voicePrompt: { select: { transcript: true } } } },
     },
   });
 
@@ -151,6 +154,18 @@ async function refreshDirtyEmbeddings(
       }
       if (row.negativeConstraints) {
         text += `\nDealbreakers: ${row.negativeConstraints}`;
+      }
+      // The voice prompt (VOICE_PROMPT_PRODUCT_SPEC.md §5.5). Composed here,
+      // from its own column, for the same reason the two fields above are:
+      // `psychologicalSummary` is replaced wholesale by the About-me editor,
+      // so folding it in would mean a silent wipe on every bio edit. And
+      // unlike the vibe answers, a transcript CHANGES on every re-record —
+      // `appendVibeToSummary`'s `includes()` idempotency would append rather
+      // than replace, tripling the voice's weight after three re-records.
+      // Read at refresh time, the weight is constant by construction.
+      const transcript = row.user?.voicePrompt?.transcript;
+      if (transcript) {
+        text += `\nVoice prompt: ${transcript}`;
       }
 
       const embeddingPromise = client.embed(text.slice(0, 8000));
