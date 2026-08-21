@@ -1,6 +1,57 @@
 # Gennety Dating Deploy
 
-**PENDING — реметч, чей питч не дошёл ни до кого, возвращает звёзды
+**Deployed 2026-08-21 — релиз `57cb108`: возврат за недоставленный реметч +
+приём клиентской воронки (`client_events`).** Полный деплой кода + аддитивный
+`db:push`. **Mini App НЕ передеплоивался** — в диапазоне `c577665..57cb108` нет
+ни одного файла под `apps/webapp` (две новые i18n-строки живут в
+`@gennety/shared`, от которого вебапп намеренно не зависит). Демо задеплоено.
+
+Порядок: worktree-снимок → preflight → `migrate diff` → rsync → install/build →
+`db:push` → `db:drift-check` → `pm2 restart` → `demo:deploy`.
+
+**Схема:** ровно один `CREATE TABLE client_events` + 3 индекса + 1 FK, **ноль
+`DROP`** — план прочитан до запуска. `db:drift-check` **OK** ДО рестарта, что
+важно именно здесь: ночной свип ретеншена читает новую таблицу, то есть база без
+неё бросила бы `P2022` на первом же тике, а не только на первом батче.
+
+**Деплоено из изолированного worktree**, потому что в дереве параллельно шла
+чужая сессия (два docs-коммита Voice Prompts, `c304d71` + `1bd8e40`, приехали
+попутно). Оставленный worktree'ем файл-указатель `/opt/gennety/.git` удалён
+вручную — документированный `--exclude '.git/'` ловит только каталоги.
+
+**Проверено на живом проде (замерено, а не выведено):**
+
+- Прод **байт-в-байт равен `57cb108`** по всем 818 файлам (md5-свип, ноль
+  расхождений — включая `apps/bot/tmp/`, которого в этом релизе не оказалось).
+- Все 18 кронов + peer-wait воркер, `:3100`/`:3101` слушают, рестарт 64 → **65**,
+  `unstable restarts: 0`, **в error-лог с момента рестарта не записано ни строки**
+  (последняя запись 08:00 при рестарте в 08:27).
+- `POST /v1/client/events` → **404**, то есть маршрут смонтирован и корректно
+  инертен: `CLIENT_EVENTS_ENABLED` в прод-`.env` НЕ добавлялась, и добавлять её
+  этим релизом нельзя (privacy manifest приложения пока заявляет, что аналитику
+  мы не собираем). `client_events` существует и пуста.
+- `rematch_purchases` пуста — покупок за всю историю ноль, так что рельса
+  возврата уехала живой и ни разу не исполненной. Проверять на `@gennetytestbot`.
+- `strandedProposed: 0` держится; строк `pitch reached nobody` / `undelivered=` в
+  логе нет.
+- Демо: схема применена к `aws-1-eu-west-1` (у прода `aws-0`), баннер изоляции
+  называет `@gennety_demo_bot`, оба демо-подавления кронов на месте, рестарт
+  28 → 29, `demo-api` ping ok, `demo-app/onboarding.html` 200. **Продовый бот при
+  этом не перезапускался** — счётчик держится на 65.
+- Ловушка с demo-указывающим `dist/` проверена по СОДЕРЖИМОМУ, а не по памяти:
+  0 файлов с `demo-api`, 4 с `dating-api`.
+
+rsync dry-run дал **273** удаления, все прочитаны и все под `apps/video/{build,out}`
+(артефакты Remotion + `.DS_Store`); вне этого каталога — ноль. Оба ключа
+`keys/*.p8`, оба бэкапа БД и все 18 снапшотов `.env.bak.*` проверены на месте
+ПОСЛЕ синка.
+
+**Rollback:** пересинкать чекаут на `c577665`, перезапустить, оттуда же
+редеплоить демо. Аддитивная таблица может остаться — старый код её не читает.
+
+---
+
+**Deployed 2026-08-21 — реметч, чей питч не дошёл ни до кого, возвращает звёзды
 (PRODUCT_SPEC §3.11, REMATCH_PRODUCT_SPEC шаг g, DECISIONS.md).** **Нет изменения
 схемы Prisma, нет новых env, нет флагов, нет изменения Mini App** (`apps/webapp`
 не тронут — он намеренно не зависит от `@gennety/shared`, поэтому две новые
@@ -62,7 +113,7 @@ psql "$DATABASE_URL" -c "select status, count(*) from rematch_purchases group by
 
 ---
 
-**PENDING — приём клиентской воронки нативного приложения
+**Deployed 2026-08-21 (was PENDING) — приём клиентской воронки нативного приложения
 (`POST /v1/client/events`, iOS 6.2; PRODUCT_SPEC §GDPR, ARCHITECTURE →
 `client_events`, DECISIONS.md ×4).** **Нет изменения Mini App**
 (`apps/webapp` не тронут) — но нужен **аддитивный `db:push` ДО рестарта** и
@@ -6345,11 +6396,10 @@ watch that the PID holds and the restart count stops climbing. Otherwise do a
 full deploy — but note that rsync copies the **working tree**, not git HEAD, so
 check `git status` first: an unrelated in-progress refactor ships with it.
 
-**Prod anchor, re-verified 2026-08-20 after the release at the top of this file.**
-Prod's **runtime tree** is at **`c577665`** — verified by the md5 sweep below
-across **814 files**, with the only four differences being `apps/bot/tmp/*`,
-which the deploy rsync excludes by design (the same four as the 2026-08-07
-release). Rather than asserted. Deliberately
+**Prod anchor, re-verified 2026-08-21 after the release at the top of this file.**
+Prod's **runtime tree** is at **`57cb108`** — verified by the md5 sweep below
+across **818 files**, with **zero** differences (the `apps/bot/tmp/*` files that
+the rsync excludes by design were absent this time). Measured, not asserted. Deliberately
 anchored to the last commit that touched runtime code, not to `HEAD`: docs-only
 commits land on top constantly (this note's own release added one), and an
 anchor that counts them is stale the hour it is written.
@@ -6364,8 +6414,8 @@ revision of this note named them, and it was stale within the hour because a
 parallel session kept landing work. The set is a one-liner:
 
 ```sh
-git log --oneline c577665..HEAD                # what prod is missing
-git diff --stat c577665..HEAD -- apps packages # is any of it runtime code?
+git log --oneline 57cb108..HEAD                # what prod is missing
+git diff --stat 57cb108..HEAD -- apps packages # is any of it runtime code?
 ```
 
 **A demo-only release does not advance this anchor, and that is the trap.**
@@ -6392,19 +6442,22 @@ changed, so their mere presence (and content) on the droplet is already the chec
 
 ```
 59f7097650bcdaffc074fd946eda0ea8  /opt/gennety/apps/bot/src/services/rematch-card.ts
-0d53712b54e74d9b3433faef9df64b65  /opt/gennety/apps/webapp/src/gender-avatars.ts
-96554faf00cc59aa167bdf54740ebe5b  /opt/gennety/apps/bot/src/services/dispatch-queue.ts
+891bab6736e5598ce42f944ed7b27014  /opt/gennety/apps/bot/src/services/client-events.ts
 ```
 
-The third is the one worth checking by CONTENT rather than presence: the file
-existed before, and what this release changed inside it is
-`disposeUndeliveredMatch` — the guarantee that a dispatch attempt never leaves a
-match live-and-unstamped (§3.3). A stale copy of that file is the one regression
-that reintroduces a permanent, silent hole:
+`dispatch-queue.ts` is the one worth checking by CONTENT rather than presence:
+the file long predates both releases, and what they changed inside it is the
+guarantee that a dispatch attempt never leaves a match live-and-unstamped (§3.3)
+plus the `undelivered` report the paid Rematch refund reads (§3.11). A stale copy
+of that file reintroduces a permanent silent hole AND silently stops refunding:
 
 ```sh
 ssh root@167.172.178.229 'grep -c disposeUndeliveredMatch /opt/gennety/apps/bot/src/services/dispatch-queue.ts'
-# 3 = the fix is live (definition + call site + its own comment). 0 = stale file.
+# 4 = the 2026-08-20 fix is live (definition, call site, and two comments —
+#     the 2026-08-21 refund block added the fourth mention, so a `3` means the
+#     dispatch fix landed and the refund one did not).
+ssh root@167.172.178.229 'grep -c undelivered /opt/gennety/apps/bot/src/services/dispatch-queue.ts'
+# 7 = the 2026-08-21 refund report is live. 0 on either = stale file.
 ```
 
 **The served Mini App bundle is a SEPARATE anchor and is not covered by the
