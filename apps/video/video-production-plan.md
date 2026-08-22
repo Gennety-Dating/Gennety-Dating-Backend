@@ -371,14 +371,29 @@ was first cut.
    is the one card in the act that states a fact rather than building a
    construction, so it is the one that can carry a picture without the picture
    competing with a pause.
-2. **A clean run of two or three shots with NO text**, immediately before the
-   mark — the founder's «чтобы не закрывать картинку текстом». Placement is the
-   one thing worth confirming: it can sit before the Telegram card (…promise →
-   b-roll → Telegram → mark) or after it (…Telegram → b-roll → mark). The first
-   keeps the product as the last thing you see; the second keeps the people.
+2. **A clean run with NO text**, before the Telegram card — the founder's
+   «чтобы не закрывать картинку текстом». **Order settled 2026-08-22: promise →
+   b-roll → Telegram → mark**, i.e. the run sits before the product card rather
+   than after it, so the product stays the last thing on screen. The people are
+   the argument; the product is the answer. The reverse was the alternative.
 
-**What to generate.** Six to eight clips is enough to choose from — expect half
-to be unusable, which is normal and is why the count is not four.
+**What to generate — the brief and the twelve prompts are
+[`broll-prompts.md`](broll-prompts.md)**, written to be pasted verbatim. Three
+decisions in it are worth surfacing here because they constrain the cut rather
+than the generation:
+
+- **It is ONE day, midday to sunset**, not a relationship over months. The
+  product's own claim is one real date, so a single day is that promise made
+  literal; it also locks the wardrobe, which is most of the character-consistency
+  problem solved for free, and it lets the LIGHT carry the arc whether or not any
+  individual shot lands.
+- **Twelve shots, of which eight to ten reach the cut.** Expect to regenerate
+  three or four — that is why the count is not eight.
+- **The «снимают друг друга» beat uses a film camera, not a phone.** Same
+  gesture, opposite meaning, and no glowing rectangle in a film that has just
+  said «тобі треба їх видалити».
+
+The table below is the constraint summary; the file carries the reasoning.
 
 | | |
 |---|---|
@@ -393,9 +408,16 @@ to be unusable, which is normal and is why the count is not four.
 **Two things to expect once the clips exist**, both stated now so they are not
 surprises:
 
-- **The film gets longer.** Two or three clean shots at ~2 s is +4–6 s on top of
-  62.8 s, i.e. **~67–69 s**. The b-roll behind the promise card costs nothing —
-  it plays under a card that already exists.
+- **The film gets longer, and by more than the first estimate.** That estimate
+  assumed two or three clean shots; the founder wants ten or more, so the clean
+  run is an ACT rather than a tail: eight to ten shots at 1.2–2.5 s lands
+  **~76–80 s** against 62.8 s now. Fine for a site and a presentation, long for
+  paid social. Taken knowingly (2026-08-22). The shots under the promise card
+  cost nothing — they play under a card that already exists.
+- **The run is shaped, not evenly spaced.** Longer shots first (~2.5 s),
+  tightening toward ~1.2 s, then the final walking-away shot held ~3 s. An
+  accelerating montage that stops is what makes an ending land; ten equal cuts
+  is a slideshow.
 - **Brightness.** Sunlit footage against a near-black film is the largest
   luminance step the cut will contain, by a wide margin. It will need a fade
   rather than a hard cut, sized against the measured step — the same treatment
