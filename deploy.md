@@ -9610,8 +9610,21 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   `/opt/gennety/keys/AuthKey_XXXXXX.p8` — NOT committed; scp it manually),
   `APNS_KEY_ID` (the key's 10-char id), `APNS_TEAM_ID` (Apple Developer
   Team ID), `APNS_BUNDLE_ID` (default `com.gennety.ios`),
-  `APNS_ENVIRONMENT` (`sandbox` default — dev/TestFlight builds use the
-  sandbox host; set `production` for App Store builds). With any of the
+  `APNS_ENVIRONMENT` (`sandbox` default). **Corrected 2026-08-22 — this line
+  used to say "dev/TestFlight builds use the sandbox host", and the TestFlight
+  half of that is wrong.** What picks the host is the `aps-environment`
+  entitlement of the *installed binary*, not how the tester got it: a build
+  installed over the cable from Xcode is signed with a development profile
+  (`development` → sandbox host), while a build that went through TestFlight or
+  the App Store is signed with a distribution profile (`production` → the live
+  host). So TestFlight sits on the production side of this switch. Sending to
+  the wrong host does not degrade, it fails: APNs answers `BadDeviceToken`, and
+  a device token does not say which environment minted it, so nothing upstream
+  can catch the mismatch. **One `APNS_ENVIRONMENT` therefore serves one half at
+  a time** — the moment iOS goes to TestFlight (iOS 6.3), a phone on the cable
+  stops receiving and vice versa. Fixing that for real means storing the
+  environment next to the token at registration, or retrying the other host on
+  `BadDeviceToken`; neither exists yet. With any of the
   first three empty, pushes are dropped with a warning and everything else
   works. **Requires `db:push` of the additive `live_activity_tokens` table
   first** (non-destructive). `EXPO_ACCESS_TOKEN` is retired and can be
