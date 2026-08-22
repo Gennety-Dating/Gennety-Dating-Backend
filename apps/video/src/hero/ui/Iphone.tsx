@@ -36,24 +36,35 @@ import {WINE} from "../theme";
  * asset exists in this repo, a drawn one stays sharp at any size, and it can
  * use the design system's own palette.
  *
- * **The SCREEN, including its status bar, is entirely the recording.** That is
- * the part worth stating, because two earlier versions got it wrong in the same
- * way. The recordings carry an iOS status bar with a red screen-recording pill
- * in it — the one element on screen that says "this is a demo" — so the first
- * two builds cropped the whole strip away and drew a replacement. It never
- * looked native: a drawn strip keeps its own colour while the app behind it
- * changes, so it read as something pasted on at the end, which is exactly what
- * it was. The second build painted the clip's own top rows behind it, mirrored
- * and blurred, which fixed the colour and not the fact that the glyphs were
- * ours. The founder's read on both was correct.
+ * **The SCREEN is the recording, and its status bar is too — with exactly one
+ * exception, the Dynamic Island.** That is the part worth stating, because
+ * three earlier versions got it wrong in three different ways. The recordings
+ * carry an iOS status bar with a screen-recording indicator in it — the one
+ * element that says "this is a demo" — so the first two builds cropped the
+ * whole strip away and drew a replacement. Neither looked native: a drawn strip
+ * keeps its own colour while the app behind it changes, so it read as something
+ * pasted on at the end, which is what it was.
  *
- * So nothing is cropped and nothing is redrawn. The clock, the signal bars, the
- * wifi arc, the battery and the Dynamic Island are the device's own, in the
- * device's own colours, sitting over whatever the app is showing — because they
- * ARE that frame. The single intervention is `PILL`: an opaque black rounded
- * rect laid over the recording indicator, at the pill's own measured bounds.
- * That shape is the Dynamic Island in its expanded recording state, so covering
- * it with black leaves an island rather than a patch.
+ * The third build stopped cropping and laid an opaque black rounded rect over
+ * the indicator at its own measured bounds. That removed the red and left an
+ * island — but **iOS EXPANDS the Dynamic Island while it is recording**, and
+ * the cover was drawn to those expanded bounds, so it reproduced a shape 38%
+ * wider than a real island and then added a few pixels of its own. The founder
+ * read the result as an island that was simply too big, which is exactly what
+ * it was.
+ *
+ * So the island is now the one thing that is NOT the recording. The footage has
+ * it erased (`scripts/extract-hero-footage.sh` → `island_erase`, where the
+ * measurements are), and `ISLAND` below draws a correct one. Everything else in
+ * that strip — the clock, the signal bars, the wifi arc, the battery — is still
+ * the device's own, in the device's own colours, over the real app.
+ *
+ * **Redrawing it does not reopen the failure the first two builds hit**, and
+ * the difference is worth being precise about: a status BAR carries glyphs and
+ * colour that have to agree with the app behind them, which is why a drawn one
+ * always looked pasted on. A Dynamic Island at rest is a featureless black
+ * pill. There is nothing about it to get wrong, and nothing behind it to
+ * disagree with.
  *
  * The body's proportions are measurements, not taste. Everything is a fraction
  * of the screen's WIDTH, taken from an iPhone 16 Pro (402 pt wide):
@@ -74,21 +85,32 @@ export const CLIP_W = 576;
 export const CLIP_H = 1280;
 
 /**
- * The screen-recording indicator, in source pixels.
+ * The Dynamic Island, drawn at rest, in source pixels.
  *
- * Measured, not estimated, and measured TWICE — the first pass used a
- * confident red threshold, got x 158–415 / y 15–74, and left a visible dark-red
- * ring on the black Mini App screens, where the stroke's antialiased edge has
- * nothing to hide against. Re-scanned at a threshold low enough to catch that
- * edge, the outline runs to **x 156–417, y 14–75** in all three recordings.
- * Plus ~1px of margin. The stroke also pulses, so some frames show only the dot
- * at 176–195 / 36–53 — the cover has to fit the larger state.
+ * **Not a cover.** The footage has no island in it at all — it is erased during
+ * extraction and the background painted through, so this is the only island in
+ * the film and it can be any size we like. What it should be is the size a real
+ * one is, which is the whole point of the change.
  *
- * Do not enlarge it further to be safe: on the Telegram screens the island sits
- * against a light blurred header, where its edge is genuinely visible and any
- * excess reads as a black fringe.
+ * The width is a fraction of the SCREEN width rather than an absolute, because
+ * that is how Apple specifies it and because these recordings are scaled
+ * (576x1280 is 20:9; no shipping iPhone has that aspect, so the capture was
+ * resized and no device's pixel dimensions can be assumed). A current Pro model
+ * puts the island at 125 x 36.4 pt on a 393-402 pt screen — 0.311-0.318 of the
+ * width — which lands at 179-183 px here. 181 is the middle of that, and its
+ * aspect (3.48) matches the real 3.43.
+ *
+ * `y` is measured rather than derived: iOS grows the island DOWNWARD and
+ * outward when it expands for a recording, so the expanded shape's top edge is
+ * the resting one. It sat at y 17 in every clip.
+ *
+ * For contrast, the expanded recording island this replaces measured
+ * **253 x 56 at x 160, y 17**, with a red outline reaching x 156-417 — and the
+ * red dot inside it at x 176-195, near the LEFT end. That last number is why a
+ * smaller cover was never an option and the footage had to be repainted: any
+ * centred pill narrow enough to look right leaves the dot showing.
  */
-const PILL = {x: 155, y: 12, w: 264, h: 66};
+const ISLAND = {w: 181, h: 52, y: 17};
 
 export const Iphone: React.FC<{
   /** Screen width in world px. Everything else is laid out from it. */
@@ -186,17 +208,18 @@ export const Iphone: React.FC<{
                 them does not know a cut happened. */}
             {children}
 
-            {/* The only pixel of the capture that is covered. It is at the same
-                place in every clip, so one cover serves the whole film rather
-                than being re-drawn per shot. See PILL. */}
+            {/* The Dynamic Island. Centred rather than positioned, because the
+                footage it sits on has been repainted and there is nothing left
+                underneath to line up with. See ISLAND. */}
             <div
               style={{
                 position: "absolute",
-                left: PILL.x * k,
-                top: PILL.y * k,
-                width: PILL.w * k,
-                height: PILL.h * k,
-                borderRadius: (PILL.h * k) / 2,
+                left: "50%",
+                top: ISLAND.y * k,
+                width: ISLAND.w * k,
+                height: ISLAND.h * k,
+                marginLeft: (-ISLAND.w * k) / 2,
+                borderRadius: (ISLAND.h * k) / 2,
                 background: "#000",
               }}
             />

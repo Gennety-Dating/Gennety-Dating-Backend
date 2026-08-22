@@ -177,16 +177,26 @@ black display border inside a 0.008 titanium rail. Those are measurements; the
 first version was proportioned by eye and read as a generic phone. Change one
 and check it against the device, not against how it looks alone on a black page.
 
-**The screen, status bar included, is entirely the recording.** Two earlier
-builds cropped the strip away (it carries the red screen-recording pill) and
-drew a replacement; both read as pasted on, because a drawn strip keeps its own
-colour while the app behind it changes. The single intervention now is `PILL` —
-one opaque black rounded rect over the recording indicator, at bounds measured
-off all three recordings. That shape is the Dynamic Island's own expanded state,
-so covering it leaves an island rather than a patch. **Do not enlarge it**: it
-is already 1px over the stroke's antialiased edge, and on the Telegram screens
-the island's edge is visible against a light header, where excess shows as a
-black fringe.
+**The screen, status bar included, is the recording — except the Dynamic
+Island.** Two early builds cropped the strip away (it carries the recording
+indicator) and drew a replacement; both read as pasted on, because a drawn strip
+keeps its own colour while the app behind it changes. A third laid an opaque
+black rounded rect over the indicator — which removed the red and reproduced the
+shape underneath it, and **iOS expands the island while it is recording**, so
+the film carried an island 253px wide where a real one is ~181.
+
+So the island is erased from the footage during extraction (`island_erase`, a
+horizontal gradient between the two columns either side of it — the background
+behind a status bar is always a blur or a flat fill, with no horizontal
+structure to smear) and `ISLAND` in `ui/Iphone.tsx` draws a correct one. That is
+not the failure the first two builds hit: a status BAR carries glyphs and colour
+that must agree with the app behind them, while an island at rest is a
+featureless black pill with nothing to get wrong.
+
+**The erase is not optional on the dark clips either.** The red recording dot
+sits at x 176–195, near the island's LEFT end, so any centred pill narrow enough
+to look right leaves it exposed — measured at RGB (245,62,49) against black on
+all eighteen.
 
 Consequence worth knowing: the clock and battery are real, so they differ
 between recordings (02:04 / 02:05 / 19:39, and a red 17 % on the last one). The

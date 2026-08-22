@@ -58,14 +58,68 @@ mkdir -p "$HERE/public/footage"
 # Both drew a replacement status bar in ui/Iphone.tsx, and both read as pasted
 # on: a drawn strip keeps its own colour while the app behind it changes.
 #
-# The recording indicator is dealt with where it actually is instead — one
-# opaque black rounded rect over the pill's measured bounds (ui/Iphone.tsx
-# `PILL`), which is the Dynamic Island's own expanded shape. So the clock, the
-# signal bars, the wifi arc, the battery and the island are all the device's
-# own, in the device's own colours, over the real app. Nothing else is touched.
+# So the clock, the signal bars, the wifi arc and the battery are the device's
+# own, in the device's own colours, over the real app. The ONE thing that is
+# not is the Dynamic Island — see `ISLAND` below.
+
+# ── ISLAND ────────────────────────────────────────────────────────────────────
+#
+# **iOS expands the Dynamic Island while it is recording the screen, and the
+# expanded shape is what made the film look wrong** (founder, 2026-08-22:
+# «сделать классического размера, а не как сейчас… она выглядит ненатурально»).
+#
+# Measured on the frames rather than estimated: the recording island occupies
+# **x 160-412, y 17-72** (253 x 56) with a red outline reaching x 156-417,
+# y 14-75, against a classic island of ~183 x 52. So it is 38% too wide, in
+# every clip, because the phone was recording in every clip.
+#
+# The previous fix was a black rounded rect at the expanded bounds (a `PILL` in
+# ui/Iphone.tsx). That removed the red and kept an island — but an island 264px
+# wide, i.e. it made iOS's own over-wide shape *slightly wider still*. It also
+# only mattered on the seven clips whose status bar is not black; on the other
+# eleven the whole strip measures RGB ~(3,3,3) and neither the island nor the
+# cover is visible at all.
+#
+# **This erases the island from the footage and lets Remotion draw a correct
+# one.** The erase is a horizontal gradient between the two columns immediately
+# outside the island — x 146 and x 427, the only pixels in that band that belong
+# to neither the island nor the clock/battery — stretched across it. That works
+# because what sits behind the status bar is always a blur or a flat fill, so it
+# carries no horizontal structure to smear; verified on all seven clips where
+# the strip is not black.
+#
+# Two details are load-bearing:
+#
+#   - **The crop is 1px wide and the filter chain converts to rgb24 first.**
+#     A 1px crop of yuv420p is invalid (the chroma planes would be half a
+#     pixel) and ffmpeg reports it as `width '0'`, which reads like a syntax
+#     error rather than a format one.
+#   - **hstack of the two 1px columns, THEN scale, is what makes it a
+#     gradient.** Stretching one column alone paints a flat band, and the two
+#     sides genuinely differ (Telegram's header measures (92,94,102) on the
+#     left against (75,94,113) on the right). Bilinear across the pair
+#     interpolates between them while each column keeps its own vertical
+#     gradient.
+#
+# It also removes the red recording dot, which is the reason a smaller cover
+# was never an option: the dot sits at **x 176-195**, near the island's LEFT
+# end, so any centred pill narrow enough to look classic leaves it exposed —
+# measured at RGB (245,62,49) against black on all eighteen clips.
+# Takes the label of the stream to erase; leaves the result on [out].
+# Written as a function rather than a string because both callers need it at a
+# different point in their chain, and a shell substring edit on a filtergraph
+# is the kind of clever nobody can read six months later.
+island_erase() {
+  echo "[$1]format=rgb24,split=3[base][sl][sr];\
+[sl]crop=w=1:h=72:x=146:y=6[lc];\
+[sr]crop=w=1:h=72:x=427:y=6[rc];\
+[lc][rc]hstack=inputs=2,scale=w=272:h=72:flags=bilinear[grad];\
+[base][grad]overlay=x=154:y=6[out]"
+}
+
 cut() {
   ffmpeg -v error -y -ss "$3" -to "$4" -i "$2" \
-    -vf "fps=30" -an \
+    -filter_complex "[0:v]fps=30[f];$(island_erase f)" -map "[out]" -an \
     -c:v libx264 -crf 17 -preset slow -pix_fmt yuv420p \
     "$HERE/public/footage/$1.mp4"
   echo "  $1"
@@ -86,9 +140,14 @@ cut() {
 # part that actually breaks — pushes the pill 2.4px outside the drawn cover,
 # leaving the red hairline that cover exists to remove. A 2.56% stretch on one
 # axis is invisible on a map, a keyboard and a form; a red hairline is not.
+#
+# The island erase runs AFTER the scale here, not before, so its band is the
+# same rows in every clip in the film. Scaling first moves this source's island
+# down by 2.56% (y 17-72 becomes y 17.4-73.8) and its outline to y 76.9 — still
+# comfortably inside the 6-78 band the erase covers.
 cut_scaled() {
   ffmpeg -v error -y -ss "$3" -to "$4" -i "$2" \
-    -vf "fps=30,scale=576:1280" -an \
+    -filter_complex "[0:v]fps=30,scale=576:1280[s];$(island_erase s)" -map "[out]" -an \
     -c:v libx264 -crf 17 -preset slow -pix_fmt yuv420p \
     "$HERE/public/footage/$1.mp4"
   echo "  $1"
@@ -204,17 +263,46 @@ if have "$TG"; then
   # The proof under the title card: home screen -> Telegram -> Gennety is the
   # chat at the top -> Start -> the Mini App takes over.
   #
-  # **Sped 2.4x HERE, not in Remotion** (founder: «чтобы не растягивать видео,
+  # **Sped HERE, not in Remotion** (founder: «чтобы не растягивать видео,
   # стоит ускорить именно это видео»). Baking it into the clip means the file is
   # an ordinary 30 fps clip like the other seventeen and decodes like them; the
   # alternative asks the renderer to resample on the fly for the one shot with
-  # no reason to be special. 8.75s of source becomes 3.65s on screen.
+  # no reason to be special.
+  #
+  # **1.35x, not the 2.4x it shipped at, and the speed is not what changed.**
+  # The founder read the first cut as far too fast, and the cause was that
+  # nearly half the source is a frozen screen: measured frame-to-frame, the
+  # recording holds still for 0.0-0.85, 1.40-2.35, 4.15-4.85, 5.60-6.68 and
+  # 8.15-8.53 — **3.96s of dead air out of 8.93s**. Speeding the clip up
+  # therefore had to drag the six moments that carry the beat along with it,
+  # and it bought nothing, because the frozen stretches are the same picture
+  # however fast you play them.
+  #
+  # So the holds are cut and the action is slowed. The five windows below are
+  # every stretch where something actually moves, and the cuts between them
+  # land inside frozen frames — measured at 0.006-0.03 mean frame difference
+  # against 20-58 for a real transition, i.e. the joins are not merely
+  # unobtrusive, there is nothing there to see. Verified again on the finished
+  # clip: the worst step at any of the four joins is 1.34, which is the level
+  # of an ordinary cut elsewhere in the film, inside a 348px handset.
+  #
+  # The result is 4.13s of screen time carrying 4.13s of ACTION, against 3.65s
+  # carrying about 2.05s. The beats get twice as long; the film grows by half a
+  # second.
   #
   # `setpts` must come BEFORE `fps` — the other way round resamples first and
-  # then throws away 60% of the frames it just made.
-  echo "opening Telegram (IMG_2775, 2.4x):"
-  ffmpeg -v error -y -ss 0.15 -to 8.90 -i "$TG" \
-    -vf "setpts=PTS/2.4,fps=30" -an \
+  # then throws away the frames it just made. `trim` is per-segment and its
+  # `setpts=PTS-STARTPTS` rebases each one, or concat stacks their original
+  # timestamps and the clip plays back at the wrong length.
+  echo "opening Telegram (IMG_2775, holds cut, 1.35x):"
+  ffmpeg -v error -y -i "$TG" -filter_complex "\
+[0:v]trim=0.60:1.45,setpts=PTS-STARTPTS[k1];\
+[0:v]trim=2.25:4.20,setpts=PTS-STARTPTS[k2];\
+[0:v]trim=4.78:5.70,setpts=PTS-STARTPTS[k3];\
+[0:v]trim=6.68:8.20,setpts=PTS-STARTPTS[k4];\
+[0:v]trim=8.53:8.93,setpts=PTS-STARTPTS[k5];\
+[k1][k2][k3][k4][k5]concat=n=5:v=1:a=0[cat];\
+[cat]setpts=PTS/1.35,fps=30[f];$(island_erase f)" -map "[out]" -an \
     -c:v libx264 -crf 17 -preset slow -pix_fmt yuv420p \
     "$HERE/public/footage/tg-open.mp4"
   echo "  tg-open"

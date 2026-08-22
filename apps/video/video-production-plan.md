@@ -1,8 +1,8 @@
 # Gennety — product film production plan (`GennetyHero`)
 
-> Delivered: 1080×1920, 30 fps, H.264, **62.2 s**, `out/gennety-hero.mp4`.
+> Delivered: 1080×1920, 30 fps, H.264, **62.8 s**, `out/gennety-hero.mp4`.
 > Its first 44 s are cut entirely from seven screen recordings of the running
-> product; the last 18 s are the title act (§E.1), the only drawn part.
+> product; the last 19 s are the title act (§E.1), the only drawn part.
 > This is the audit behind the cut — what exists, what each clip shows, what is
 > unusable and why, and the editorial decisions taken.
 
@@ -34,7 +34,7 @@ repainted.
 | `IMG_2731.MP4` | 576×1280 | 0:05 | 30 | The finished **date card** and its venue block |
 | `IMG_2771.MP4` | 576×1280 | 0:06 | 30 | The ideal-Friday question, answered, **sent**, and «Обмірковую…» |
 | `IMG_2772.MP4` | 576×1280 | 0:09 | 30 | The whole **calendar act**: dates → the shared 17:00 → the lock |
-| `IMG_2775.MP4` | 576×1280 | 0:09 | 30 | Opening Telegram and finding Gennety already there — **sped 2.4×** for the title act |
+| `IMG_2775.MP4` | 576×1280 | 0:09 | 30 | Opening Telegram and finding Gennety already there — **holds cut, 1.35×** for the title act |
 
 All seven are the **`Gennety DEMO`** bot, from four separate runs: 2026-08-16
 (`2588`/`2590`/`2604`), 2026-08-19 (`2730`/`2731`) and 2026-08-21
@@ -54,9 +54,9 @@ still comes from that run.
 **`IMG_2730` is 576×1248 and 60 fps, and neither is a problem.** The frame rate
 is halved at extraction like everything else. The height differs because it is a
 different capture aspect, not a crop: its status bar sits at exactly the same
-rows as the other six (the recording pill is x 176–195, y 36–53 in all seven,
+rows as the other six (the recording dot is x 176–195, y 36–53 in all seven,
 measured), and only the content below it is laid out 32 px shorter. So the one
-part that has to agree with the drawn `PILL` cover already does, and
+part that has to agree with the drawn island already does, and
 `scale=576:1280` stretches it 2.56 % on one axis and nothing else — invisible on
 a map, a keyboard and a form, and strictly better than the two alternatives
 (see the comment on `cut_scaled` in `scripts/extract-hero-footage.sh`).
@@ -241,7 +241,7 @@ screen in the app says it — no screen ever will.
 | A | 43.6–48.0 | «Щоб бути щасливим, / тобі не треба завантажувати застосунок для знайомств» | The claim, in two parts with a 0.7 s beat between them |
 | B | 48.2–51.8 | «Щоб бути щасливим, / **тобі треба їх видалити**» | The turn. The only burgundy in the act |
 | C | 52.1–55.1 | «Кожного дня у тебе є шанс на побачення» | The promise. One part, no beat — it is a fact, not a construction |
-| D | 54.6–59.5 | Gennety · «Вже в Telegram» · the app being opened | The proof, `IMG_2775` at 2.4× |
+| D | 54.6–60.0 | Gennety · «Вже в Telegram» · the app being opened | The proof, `IMG_2775`, holds cut, 1.35× |
 | E | 59.0–62.2 | The mark | Unchanged |
 
 **Cards A and B are separated by black, C and D are not.** The founder asked for
@@ -350,6 +350,57 @@ roughly 60 % mid-transition. The other twelve transitions are hard cuts.
 **«Твій AI-метчмейкер»**. The closing line is already on the date card and is
 not repeated.
 
+### E.2 The real-world act — commissioned, not yet shot
+
+**Status: the brief only.** The founder is generating the footage
+(2026-08-22: «люди как будто бы вместе: они бегают, что-то снимают друг друга,
+обнимаются, бегают по пляжу, кушают вместе мороженое, дурачатся, играют вместе
+в теннис, падают на траву или на песок»). Nothing here is built; this section
+exists so the generated clips arrive usable rather than nearly usable.
+
+**Why the film wants it.** Every frame so far is a screen. The slogan argues
+that the point is not the app — and then the last thing on screen is the app.
+Cutting out to two people who are actually together is the one shot that makes
+the argument instead of stating it. It is also §H item 5, open since the film
+was first cut.
+
+**Where it lands — two places, and they are different jobs.**
+
+1. **Behind «Кожного дня у тебе є шанс на побачення»** (the promise card, the
+   third slogan). Footage under the type, with a scrim so the words hold. This
+   is the one card in the act that states a fact rather than building a
+   construction, so it is the one that can carry a picture without the picture
+   competing with a pause.
+2. **A clean run of two or three shots with NO text**, immediately before the
+   mark — the founder's «чтобы не закрывать картинку текстом». Placement is the
+   one thing worth confirming: it can sit before the Telegram card (…promise →
+   b-roll → Telegram → mark) or after it (…Telegram → b-roll → mark). The first
+   keeps the product as the last thing you see; the second keeps the people.
+
+**What to generate.** Six to eight clips is enough to choose from — expect half
+to be unusable, which is normal and is why the count is not four.
+
+| | |
+|---|---|
+| Aspect | **9:16 vertical**, ideally 1080×1920. Anything else gets cropped, and a crop is what puts a head half out of frame. |
+| Length | 3–5 s each. Longer is fine; the cut takes 1.5–2.5 s from each. |
+| Frame rate | Any — everything is resampled to 30 fps at extraction. |
+| Grade | **Warm.** Golden hour, sunlit, film-like. The film's palette is near-black, burgundy and white; a cold teal grade fights it and cannot be corrected back without the skin going grey. |
+| Motion | Slow and handheld. **No fast whips or crash zooms** — the camera in this film holds still 62 % of the time (`camera.probe.ts`), and a violent b-roll move reads as a different film spliced in. |
+| Framing | Leave the centre and the lower third uncluttered on at least two clips; those are the ones that go under the type. |
+| Never | On-screen text, watermarks, logos, brand-visible clothing, phones in shot. **A phone in a shot about not needing the app is the one thing that would actively hurt.** |
+
+**Two things to expect once the clips exist**, both stated now so they are not
+surprises:
+
+- **The film gets longer.** Two or three clean shots at ~2 s is +4–6 s on top of
+  62.8 s, i.e. **~67–69 s**. The b-roll behind the promise card costs nothing —
+  it plays under a card that already exists.
+- **Brightness.** Sunlit footage against a near-black film is the largest
+  luminance step the cut will contain, by a wide margin. It will need a fade
+  rather than a hard cut, sized against the measured step — the same treatment
+  §F records for the world→title handover.
+
 ## F. Technical strategy
 
 **Every shot is RECORDING.** No production component is rendered directly, and
@@ -385,16 +436,47 @@ colour while the app behind it changes, so it announces itself as something
 added at the end. The mirrored backdrop fixed the colour and not the fact that
 the glyphs were ours.
 
-Nothing is cropped now and nothing is redrawn. The clock, the signal bars, the
-wifi arc, the battery and the Dynamic Island are the device's own, over the real
-app, because they ARE that frame. **The single intervention is one opaque black
-rounded rect over the recording indicator**, at bounds measured off all three
-recordings — x 156–417, y 14–75, plus ~1px. It was measured twice: a confident
-red threshold missed the stroke's antialiased edge and left a faint dark-red
-ring on the black Mini App screens, where there is nothing for it to hide
-against. It must not be enlarged further either: on the Telegram screens the
-island sits against a light blurred header where its edge is genuinely visible,
-and excess reads as a black fringe.
+Nothing is cropped now. The clock, the signal bars, the wifi arc and the battery
+are the device's own, over the real app, because they ARE that frame. **The one
+exception is the Dynamic Island**, and it took a fourth attempt (2026-08-22).
+
+The third build laid an opaque black rounded rect over the recording indicator
+at its measured bounds — x 156–417, y 14–75. That removed the red and kept an
+island, but it reproduced the shape underneath, and **iOS expands the Dynamic
+Island while it is recording the screen**: measured at **253 × 56** against a
+classic ~181 × 52, i.e. 38% too wide, in every clip, because the phone was
+recording in every clip. The cover then added ~11px of its own on top. The
+founder's read — "не как сейчас… выглядит ненатурально" — was exact.
+
+**The island is now erased from the footage and redrawn.** The erase
+(`island_erase` in the extraction script) stretches a horizontal gradient
+between the two columns immediately outside it — x 146 and x 427, the only
+pixels in that band belonging to neither the island nor the clock/battery —
+across the whole box. It works because what sits behind a status bar is always a
+blur or a flat fill, carrying no horizontal structure to smear. `ISLAND` in
+`ui/Iphone.tsx` then draws a correct one: 181 × 52 at y 17, the width taken as a
+fraction of the screen (Apple specifies 125 pt on a 393–402 pt screen) because
+these recordings are scaled and no device's pixel dimensions can be assumed.
+
+**Redrawing it does not reopen the pasted-on failure**, and the distinction is
+the point: a status BAR carries glyphs and colour that have to agree with the
+app behind them; an island at rest is a featureless black pill.
+
+Three things worth knowing before touching it:
+
+- **The erase is mandatory on the dark clips too**, which is not obvious — on
+  eleven of the eighteen the whole strip measures RGB ~(3,3,3) and neither the
+  island nor a cover is visible at all. But the red recording DOT sits at
+  **x 176–195**, near the island's LEFT end, so any centred pill narrow enough
+  to look classic leaves it exposed. Measured at RGB (245,62,49) against black
+  on all eighteen.
+- **Thirteen clips were erased in place**, not re-cut, because their sources are
+  gone from the founder's Desktop (`scripts/erase-island-in-place.sh`). That
+  costs one extra H.264 generation on those thirteen — imperceptible on flat UI
+  colour at CRF 17, and a reason not to re-run it for no gain.
+- **The two erase implementations must stay byte-identical.** A clip erased by
+  the extraction script and one erased in place have to line up under the same
+  drawn island.
 
 **What taking the real status bar costs, stated rather than discovered later:**
 the clock reads 02:04 in `IMG_2588`, 02:05 in `IMG_2590`, 19:39 in `IMG_2604`
@@ -498,19 +580,22 @@ the brief rules out.
    than fixing blind: 62 s is fine on a site or in a deck and long for paid
    social. The cheapest 8 s, if it is ever wanted, are the two slogan holds and
    the Telegram card's tail — not the footage.
-3. **The app-launch flash inside the Telegram card.** At 2.4× the iOS launch
-   animation compresses into ~2 frames, which is a measured 7.9-point step in
-   mean luminance — the largest thing in the film that is not the Type Radar.
-   It is the product doing what a product does and it is inside a 348 px
-   handset, so it is left alone; dropping to 2.0× would soften it at the cost of
-   ~0.7 s.
+3. **The app-launch flash inside the Telegram card — softened, not gone.** The
+   iOS launch animation compresses into a couple of frames; at 2.4× it measured
+   a 7.9-point step in mean luminance, and at the 1.35× the clip now runs at it
+   measures **7.0**. It remains the largest step in the film that is not the
+   Type Radar. It is the product doing what a product does, inside a 348 px
+   handset, so it is left alone — and the cheap lever for it is gone now that
+   the speed is set by the beats rather than by a length budget.
 4. **No "problem" act.** Nothing in these recordings covers the visual intro
    (the statistics and competitor cards). A capture of it would let the film
    open on *why* — though the slogan act now says a good deal of it at the end
    instead, which is a different and arguably better place for it.
-5. **No real-world ending.** Lifestyle footage would let the film cut out of the
-   app and land on two people meeting — the literal argument of both the date
-   card's line and the slogan.
+5. **No real-world ending — but it is now a commissioned gap rather than an
+   open one.** Lifestyle footage lets the film cut out of the app and land on
+   two people meeting, which is the literal argument of both the date card's
+   line and the slogan. The founder is generating it (2026-08-22); the brief and
+   the two places it lands are §E.2.
 6. **576×1280 source.** A production-bot capture at native resolution would
    remove the only compromise in the film's framing.
 7. **`Gennety DEMO`, not production.** Cropped out of frame, but worth knowing

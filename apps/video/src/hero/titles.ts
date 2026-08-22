@@ -212,12 +212,20 @@ export const SLOGAN_TOP = Math.round((FRAME_H - ANCHOR_LINES * TYPE_SIZE * LINE_
  * is already 30 fps at its final speed decodes like every other clip in the
  * film, and the alternative asks the renderer to resample on the fly for the
  * one shot that has no reason to be special.
+ *
+ * **`durationInFrames` is derived from the clip, not chosen.** The card has to
+ * hold `phoneAt` + the clip's own length + a tail, so re-cutting the clip moves
+ * this number and, through `MARK`, the length of the film. Working it out by
+ * hand is how a card ends up cutting its own footage off two frames early.
  */
+const TG_CLIP_FRAMES = 124; // public/footage/tg-open.mp4 — ffprobe nb_frames
+const TG_TAIL = 14; // beat after the app lands, before the mark takes over
+
 export const TELEGRAM = {
   from: 1638,
-  durationInFrames: 146,
+  durationInFrames: 24 + TG_CLIP_FRAMES + TG_TAIL,
   line: "Вже в Telegram",
-  /** Clip under public/footage/. IMG_2775 at 2.4×. */
+  /** Clip under public/footage/. IMG_2775, dead air cut, 1.35×. */
   src: "tg-open",
   /** Local frame the handset rises at — and the clip starts with it. */
   phoneAt: 24,
@@ -225,14 +233,26 @@ export const TELEGRAM = {
   screenWidth: 348,
   note:
     "The proof of the line above it: Telegram opens, Gennety is the chat at the " +
-    "top, Start, and the app takes over. Sped 2.4× because it is evidence, not " +
-    "a scene — the founder's own call.",
+    "top, Start, and the app takes over. It shipped at 2.4× and the founder read " +
+    "it as far too fast; the cause was that 3.96s of the 8.93s source is a frozen " +
+    "screen, so speed was dragging the six moments that carry the beat along with " +
+    "it. The holds are cut and the rest runs at 1.35× — same screen time to within " +
+    "half a second, twice the action.",
 } as const;
 
-/** The mark, unchanged, now the last card of the act rather than a lone outro. */
+/**
+ * The mark, unchanged, now the last card of the act rather than a lone outro.
+ *
+ * It overlaps the Telegram card by `MARK_OVERLAP` and that overlap is what the
+ * crossfade plays over, so `from` is derived rather than written down — the
+ * Telegram card's length moves whenever its clip is re-cut, and a hand-kept
+ * number here would silently become a gap or a hard cut.
+ */
+const MARK_OVERLAP = 14;
+
 export const MARK: {from: number; durationInFrames: number} = {
-  from: 1770,
+  from: TELEGRAM.from + TELEGRAM.durationInFrames - MARK_OVERLAP,
   durationInFrames: 96,
 };
 
-export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1866 = 62.2s
+export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1882 = 62.7s
