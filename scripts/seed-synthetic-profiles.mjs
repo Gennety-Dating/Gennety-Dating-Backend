@@ -81,8 +81,14 @@ const photosDir = args.get("photos");
 
 const MANIFEST = resolve(root, "scripts/synthetic-profiles.json");
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
-/** `MIN_PHOTOS` — a profile under this is not a usable anketa. */
-const MIN_PHOTOS = 3;
+/**
+ * `MIN_PHOTOS` — a profile under this is not a usable anketa. A hand-kept copy
+ * of the shared constant: this script is plain ESM run by `node` and cannot
+ * import the TypeScript package, so it must be raised whenever
+ * `packages/shared/src/constants.ts` moves. It only warns (a short profile is
+ * still seeded), so a drift here costs a missing warning, never a bad write.
+ */
+const MIN_PHOTOS = 4;
 
 function readImages(dir) {
   if (!existsSync(dir)) return [];

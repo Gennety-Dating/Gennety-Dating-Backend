@@ -5,6 +5,7 @@ vi.mock("../config.js", () => ({
   env: { PHONE_AUTH_ENABLED: true, AI_MEMORY_EXPORT_ENABLED: false },
 }));
 
+import { MIN_PHOTOS } from "@gennety/shared";
 import {
   resolveOnboardingStage,
   type OnboardingStageFlags,
@@ -203,7 +204,7 @@ describe("resolveOnboardingStage — conversational phase", () => {
   });
 
   it("names the photo minimum rather than leaving it vague", () => {
-    expect(chat("photos").description).toMatch(/at least 3/);
+    expect(chat("photos").description).toContain(`at least ${MIN_PHOTOS}`);
   });
 
   it("degrades to a generic chat line for a legacy row with no progress", () => {

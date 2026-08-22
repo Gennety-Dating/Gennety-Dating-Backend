@@ -11,7 +11,7 @@
 > идентификация мигрировала с Persona на **AWS Rekognition Face Liveness**
 > (26.07, нет вебхука/hosted-fallback, mandatory без Skip), онбординг работает
 > по **Registration v2** (student email-OTP / general phone-контакт), фото
-> `MIN_PHOTOS=3`/`MAX_PHOTOS=10` (бонус за 6+), venue-негоциация — **Venue
+> `MIN_PHOTOS=4`/`MAX_PHOTOS=10` (бонус за 6+), venue-негоциация — **Venue
 > Intent V2** (departure → vibe → чипы → confirm), **Venue Change v2** (платная
 > shared-доска сердечек вместо female-only комментария), плюс новые
 > платные/бонусные ветки — **Premium, Referral, Promo Codes, Type Radar** —
@@ -170,7 +170,7 @@ Registration v2 (не через email-обход). Placeholder существу
   (имя+возраст→пол→предпочтение→рост→хобби→требования→нац/этнос→**vibe
   (friday_vibe/vibe_focus)**→**Type Radar (опц., скипаемо)**→AI-memory→фото),
   голосовой ввод (Whisper), ветки AI-memory `accepted`/`declined`/`undecided`,
-  фото `MIN_PHOTOS=3`/`MAX_PHOTOS=10` + дедуп + usable-face/obstruction гейт +
+  фото `MIN_PHOTOS=4`/`MAX_PHOTOS=10` + дедуп + usable-face/obstruction гейт +
   альбомы, Live Photos + видео, тикет-бонусы (6+ фото, видео), студенческий
   бонус (+2 тикета при верификации email), re-engagement.
 - **Верификация (AWS Rekognition Face Liveness):** Verification Mini App —

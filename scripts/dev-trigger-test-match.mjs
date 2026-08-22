@@ -47,6 +47,10 @@ function loadEnvFile(path, override) {
 loadEnvFile(resolve(root, ".env.local"), true);
 loadEnvFile(resolve(root, ".env"), false);
 
+// Deliberately BELOW the product's own `MIN_PHOTOS` and not a stale copy of it:
+// this is only a sanity check that both dev accounts have enough photos to
+// render a pitch card. Raising it to the product floor would make the tool
+// refuse test accounts it currently drives just fine.
 const MIN_PHOTOS = 2;
 const OPEN_STATUSES = ["proposed", "negotiating", "negotiating_venue", "scheduled"];
 

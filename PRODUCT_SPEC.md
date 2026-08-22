@@ -717,13 +717,25 @@ Hard rules enforced by the collector:
   skin tone or any ethnic proxy (`TYPE_RADAR_PRODUCT_SPEC.md`).
 - "No hobbies" / a single hobby is a valid answer; the agent must NOT chain
   "one more, one more" requests.
-- `MIN_PHOTOS` (3, lowered from 4 on 2026-07-27) is a hard floor; anything
+- `MIN_PHOTOS` (**4** since 2026-08-22 — it was 4 until 2026-07-27, spent that
+  period at 3, and is back at 4 by founder decision) is a hard floor; anything
   beyond up to `MAX_PHOTOS` (10) is
   purely optional. In Telegram conversational onboarding, the media stage is
   deterministic rather than LLM-owned:
   before the minimum, the bot reports exactly how many valid photos are still
-  needed; once 3 photos are valid, it keeps the stage open and shows one
-  **Continue** action instead of finalizing automatically. The user may keep
+  needed; once 4 photos are valid, it keeps the stage open and shows one
+  **Continue** action instead of finalizing automatically.
+  **The number is written in exactly one place** (`packages/shared/src/constants.ts`)
+  and read by the collector, the photo stage, both photo managers, the §1.4
+  activation gate, `/v1/me/photos`, the `ui_hint` contract and
+  `/v1/onboarding/interview.minPhotos` — so the native client renders the floor
+  rather than knowing it, and moving it moves every surface at once.
+  **Accounts that finished onboarding at the old floor are never demoted**: the
+  verification pipeline writes `status` only when it ACTIVATES, so a legacy
+  three-photo profile stays `active` and matchable, and merely cannot delete its
+  way further down. It is asked for the missing photo the next time its photo
+  set is re-verified (any photo edit fires that rerun), which is the one place
+  the raised floor reaches an existing user at all. The user may keep
   sending photos one-by-one or as a Telegram album, send a short profile video,
   tap Continue, or type a localized equivalent such as "done" / "дальше".
   **Continue means "I'm done sending photos", never "finalize" (2026-08-08).**

@@ -1486,8 +1486,10 @@ describe("Album (media_group_id) photo coalescing", () => {
     expect(shared.expectingPhoto).toBe(true);
     expect(agentMock).not.toHaveBeenCalled();
 
-    // One below the bonus threshold: progress toward 6.
-    for (let n = MIN_PHOTOS + 1; n <= 4; n++) await uploadPhoto(n);
+    // One below the bonus threshold: progress toward 6. The loop bridges from
+    // the floor up to the fifth photo, so it is empty when MIN_PHOTOS is 4 —
+    // deliberately expressed against the fifth rather than a bare `<= 4`.
+    for (let n = MIN_PHOTOS + 1; n < 5; n++) await uploadPhoto(n);
     const fifth = await uploadPhoto(5);
     expect(fifth.api.sendMessage).toHaveBeenCalledWith(
       99001,

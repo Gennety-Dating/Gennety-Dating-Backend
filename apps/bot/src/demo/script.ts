@@ -1,4 +1,4 @@
-import type { Language } from "@gennety/shared";
+import { MIN_PHOTOS, type Language } from "@gennety/shared";
 
 /**
  * What the demo says out loud.
@@ -104,19 +104,19 @@ const SCRIPT: Record<DemoBeat, BeatCopy> = {
       "📷 Небольшая ремарка перед фотографиями.\n\n" +
       "В настоящем продукте это важный шаг: фото проверяются и потом " +
       "сверяются с вашим лицом при верификации. В демо этого нет — загрузите " +
-      "любые три картинки, какие под рукой. Свои, чужие, пейзажи — всё " +
+      `любые ${MIN_PHOTOS} картинки, какие под рукой. Свои, чужие, пейзажи — всё ` +
       "подойдёт, ничего не проверяется.",
     uk:
       "📷 Невелика ремарка перед фотографіями.\n\n" +
       "У справжньому продукті це важливий крок: фото перевіряються, а потім " +
       "звіряються з вашим обличчям під час верифікації. У демо цього немає — " +
-      "завантажте будь-які три картинки, які є під рукою. Свої, чужі, " +
+      `завантажте будь-які ${MIN_PHOTOS} картинки, які є під рукою. Свої, чужі, ` +
       "пейзажі — усе підійде, нічого не перевіряється.",
     en:
       "📷 One note before the photos.\n\n" +
       "In the real product this step matters: photos are validated and later " +
       "matched against your face during verification. Not here — upload any " +
-      "three images you have to hand. Yours, someone else's, landscapes — " +
+      `${MIN_PHOTOS} images you have to hand. Yours, someone else's, landscapes — ` +
       "anything works, nothing is checked.",
   },
 

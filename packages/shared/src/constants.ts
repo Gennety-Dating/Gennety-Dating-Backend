@@ -26,8 +26,24 @@ export const OTP_TTL_MS = 10 * 60 * 1000;
 /** OTP digit length */
 export const OTP_LENGTH = 6;
 
-/** Min/max photos allowed during onboarding */
-export const MIN_PHOTOS = 3;
+/**
+ * Min/max photos allowed during onboarding.
+ *
+ * `MIN_PHOTOS` is a hard floor, and the ONE place it is written: the collector,
+ * the photo stage, the photo managers, the verification pipeline's activation
+ * gate, `/v1/me/photos`, the `ui_hint` contract and the onboarding state
+ * endpoint all read it, so raising it moves every surface at once (a bound in
+ * two places eventually disagrees with itself — the same rule the age/height
+ * limits follow).
+ *
+ * Two consequences of ever changing it, both learned rather than guessed:
+ * accounts that finished onboarding at the OLD minimum are never demoted —
+ * `persistOutcome` writes `status` only when activating, so a legacy profile
+ * stays `active` and simply cannot delete its way further down — and the value
+ * must stay below `PHOTO_BONUS_TICKET_THRESHOLD`, or the bonus is earned by
+ * clearing the mandatory floor and stops being a reward for anything.
+ */
+export const MIN_PHOTOS = 4;
 export const MAX_PHOTOS = 10;
 
 /**

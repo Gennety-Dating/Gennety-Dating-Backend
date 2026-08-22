@@ -430,7 +430,11 @@ by a state the product itself owns:
    conversational agent you can talk to by text or voice at any point, which is
    the capability most easily missed because it has no button.
 2. **The bot has asked for photos** — in the real product they are validated and
-   later matched against your face; here they are not, so upload anything.
+   later matched against your face; here they are not, so upload anything. The
+   count in that sentence is interpolated from `MIN_PHOTOS`, not written out:
+   the beat sits directly under the bot's own request, so the two disagreeing
+   about how many photos to send is the exact defect a hardcoded numeral
+   produces the next time the floor moves.
 3. **Onboarding done, liveness pending** — the check is real on screen and
    always passes.
 4. **Verified** — how matching actually works, then the first profile with an

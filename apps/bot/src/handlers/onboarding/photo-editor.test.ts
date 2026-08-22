@@ -140,19 +140,22 @@ describe("onboarding photo editor — opening", () => {
 
 describe("onboarding photo editor — deleting", () => {
   it("deletes below MIN_PHOTOS — the user is not in the matching pool yet", async () => {
+    // Sized off MIN_PHOTOS, and every parallel array with it: the point of the
+    // test is "exactly at the floor, and the delete still goes through", which
+    // a hardcoded length would silently stop expressing when the floor moves.
     const photos = Array.from({ length: MIN_PHOTOS }, (_, i) => `p${i + 1}`);
     consensusMocks.removeProfilePhotoByRef.mockResolvedValue({
       photos: photos.slice(1),
       profileMedia: [],
-      uploadedPhotoHashes: ["h2", "h3"],
-      photoFaceScores: [0.8, 0.7],
+      uploadedPhotoHashes: photos.slice(1).map((_, i) => `h${i + 2}`),
+      photoFaceScores: photos.slice(1).map((_, i) => 0.8 - i * 0.1),
     });
     const ctx = createCtx(
       {
         pendingPhotos: [...photos],
-        pendingPhotoScores: [0.9, 0.8, 0.7],
-        pendingPhotoHashes: ["h1", "h2", "h3"],
-        pendingPhotoUniqueIds: ["", "", ""],
+        pendingPhotoScores: photos.map((_, i) => 0.9 - i * 0.1),
+        pendingPhotoHashes: photos.map((_, i) => `h${i + 1}`),
+        pendingPhotoUniqueIds: photos.map(() => ""),
         photoCards: photos.map((ref, i) => ({ msgId: 700 + i, ref })),
       },
       700,
@@ -168,7 +171,7 @@ describe("onboarding photo editor — deleting", () => {
       "uuid-user",
       "p1",
     );
-    expect(ctx.session.pendingPhotos).toEqual(["p2", "p3"]);
+    expect(ctx.session.pendingPhotos).toEqual(photos.slice(1));
   });
 
   it("keeps photos, scores and hashes aligned 1:1 after a delete", async () => {

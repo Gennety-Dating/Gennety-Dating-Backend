@@ -6,7 +6,7 @@ vi.mock("@gennety/db", () => ({
 }));
 
 import { prisma } from "@gennety/db";
-import { t } from "@gennety/shared";
+import { MIN_PHOTOS, t } from "@gennety/shared";
 import { VERIFY_PHOTOS_CALLBACK } from "../../services/verification-keyboard.js";
 import { blockIfVerificationGated, sendVerificationGateNotice } from "./verification.js";
 
@@ -146,7 +146,9 @@ describe("blockIfVerificationGated", () => {
     findUnique.mockResolvedValue({
       id: "u5",
       verificationStatus: "verified",
-      profile: { photos: ["a", "b", "c"] },
+      // At the floor, so nothing is owed — sized off MIN_PHOTOS so the case
+      // stays "verified and complete" when the floor moves.
+      profile: { photos: Array.from({ length: MIN_PHOTOS }, (_, i) => `p${i}`) },
     });
     const { api } = makeApi();
 
@@ -174,7 +176,7 @@ describe("blockIfVerificationGated", () => {
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     const [, text, extra] = (api.sendMessage as ReturnType<typeof vi.fn>).mock
       .calls[0]!;
-    expect(String(text)).toContain("2");
+    expect(String(text)).toContain(String(MIN_PHOTOS - 1));
     // The photo manager, not a pointless second liveness check.
     expect(JSON.stringify(extra)).toContain("verify:photos");
   });
