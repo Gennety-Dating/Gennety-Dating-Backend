@@ -4,11 +4,19 @@ import {WINE} from "../theme";
 /**
  * An iPhone, drawn to the real proportions of a current Pro model.
  *
- * **There is exactly ONE of these in the film**, mounted outside every
- * `<Sequence>` and never unmounted. It is a physical object in the world, not a
- * decoration a scene draws: it sits at world (0, 0) at a constant size, and
- * everything the viewer reads as movement is the camera moving relative to it
+ * **There is exactly ONE of these in the WORLD**, mounted outside every
+ * `<Sequence>` and never unmounted. It is a physical object, not a decoration a
+ * scene draws: it sits at world (0, 0) at a constant size, and everything the
+ * viewer reads as movement is the camera moving relative to it
  * (`../camera.ts`).
+ *
+ * That sentence used to say "in the film", and it was narrowed on 2026-08-21
+ * rather than waived. The title act's Telegram card mounts a second one
+ * (`../scenes/TelegramCard.tsx`) — outside the world, after the camera has
+ * ended, at a fixed size. The defect the rule exists to prevent is fifteen
+ * handsets disagreeing about `scale` at every cut (`../../motion-audit.md` §3),
+ * and the guard against it is the signature below, not the instance count: a
+ * card cannot give a handset a transform without editing this file.
  *
  * That is why this component takes no `scale`, no `y` and no `src`. It used to
  * take all three, one instance per shot, and the fifteen instances disagreeing

@@ -18,12 +18,15 @@ import {Easing} from "remotion";
  * ---
  *
  * The frame numbers below are absolute and therefore move whenever the CUT
- * does. They were re-spaced twice in three days — 2026-08-19 when the venue act
- * grew from 3.4s to 9.3s (1356 -> 1491 frames), and 2026-08-21 when the calendar
- * act was re-shot shorter and the date card trimmed (1491 -> 1405). The shape —
- * six held distances, five slow steps, monotone — is untouched both times, and
- * so is the 0.88 … 1.24 range. Re-run `camera.probe.ts` after any re-space; it
- * is what proves the shape survived.
+ * does. They were re-spaced three times in three days (2026-08-19, and twice on
+ * 2026-08-21), and the shape — six held distances, five slow steps, monotone —
+ * survived all three, as did the 0.88 … 1.24 range. Re-run `camera.probe.ts`
+ * after any re-space; it is what proves that.
+ *
+ * **The table ends with the WORLD, not with the film.** The last beat sits on
+ * `timeline.ts`'s `WORLD_END` — the final frame any footage is on screen — and
+ * the 543 frames of drawn title act after it are governed by `titleTransform`
+ * below instead. A dolly needs something to approach; a title card is not it.
  *
  * ## The one rule this file exists to enforce (founder, 2026-08-18)
  *
@@ -101,7 +104,8 @@ type Beat = {
 };
 
 /**
- * The dolly. Six held distances, five slow steps between them.
+ * The dolly. Six held distances, five slow steps between them, ending with the
+ * world — the title act after it has its own creep (`titleTransform`).
  *
  * Monotone by construction and by test: 558 → 609 → 666 → 710 → 755 → 786 px of
  * handset. Each step is ~45 px over ~3 s — about 0.5 px per frame, roughly four
@@ -142,16 +146,16 @@ const BEATS = [
     note: "The butterfly, «вівторок, 25 серп. 17:00», and the address search opening.",
   },
   {
-    hold: [1140, 1265],
+    hold: [1140, 1240],
     scale: 1.19,
     glow: 0.96,
     note: "The vibe typed out and read back — the venue act, held.",
   },
   {
-    hold: [1405, 1405],
+    hold: [1323, 1323],
     scale: 1.24,
     glow: 1.0,
-    note: "Still moving in as the mark takes over. The film does not park.",
+    note: "Still moving in as the world hands over. The film does not park.",
   },
 ] as const satisfies readonly Beat[];
 
@@ -191,13 +195,32 @@ export const glowAt = (frame: number): number => {
 export const CAMERA_HOLDS = BEATS.map((b) => b.hold);
 
 /**
- * The camera's motion RELATIVE to a frame, as a ready-made CSS transform.
+ * The title act's own creep, as a ready-made CSS transform.
  *
- * The end card is not part of the world — it is not the phone — but the camera
- * must not stop for it. Wrapping the mark in this makes it inherit the same
- * slow approach the world is under across the last three seconds, so the film
- * ends still moving rather than parking on a static card. With the dolly pure,
- * this is a scale and nothing else.
+ * **The camera above governs the WORLD, and ends with it** (its last beat is
+ * the last frame any footage is on screen). Everything after that is drawn
+ * type, and a phone-dolly is the wrong instrument for it — there is no phone to
+ * dolly toward. What survives from the mark's old rule is its intent, which was
+ * never about the dolly: *the film must not park*. A title card holding dead
+ * still for four seconds is a slide, not a shot.
+ *
+ * So each card creeps 3.2 % across its own life, and — this is the part that
+ * matters — **relative to its OWN start, not to the act's**. Two of the cards
+ * open on the same two words, and if the second one inherited an act-wide drift
+ * it would render those words 1–2 % larger than the first. At that size the eye
+ * reads the difference as a mistake rather than as motion, and the anaphora
+ * (`titles.ts` → SETUP) is the one thing in the act that has to be exact.
+ *
+ * Linear, not eased: a creep with an ease-in has a visible start, which is the
+ * opposite of what a creep is for.
+ *
+ * This replaces `relativeCameraTransform`, which the mark used to read the
+ * world camera through. That was correct while the mark crossfaded straight out
+ * of the world; it no longer does — four cards sit in between.
  */
-export const relativeCameraTransform = (frame: number, since: number): string =>
-  `scale(${(cameraAt(frame).scale / cameraAt(since).scale).toFixed(5)})`;
+const TITLE_CREEP = 0.032;
+
+export const titleTransform = (frame: number, duration: number): string => {
+  const t = duration <= 1 ? 0 : Math.min(1, Math.max(0, frame / (duration - 1)));
+  return `scale(${(1 + TITLE_CREEP * t).toFixed(5)})`;
+};

@@ -11,10 +11,21 @@
  * Run:  pnpm --filter @gennety/video exec tsx src/hero/camera.probe.ts
  */
 import {CAMERA_HOLDS, cameraAt, glowAt} from "./camera";
-import {HERO_DURATION_IN_FRAMES, MARK, SCREEN_WIDTH, SHOTS} from "./timeline";
+import {SCREEN_WIDTH, SHOTS, WORLD_END} from "./timeline";
+import {HERO_DURATION_IN_FRAMES} from "./titles";
 import {CLIP_H, CLIP_W} from "./ui/Iphone";
 
-const N = HERO_DURATION_IN_FRAMES;
+/**
+ * **The probe walks the WORLD, not the film.**
+ *
+ * `camera.ts` governs the phone and ends with it; everything after `WORLD_END`
+ * is the drawn title act, which has no phone and its own creep. Measuring the
+ * camera's rhythm across those 543 frames would report a camera that had gone
+ * quiet — held% would fall from 62% to 45% — when what actually happened is
+ * that it finished. The film's own length is printed for context and nothing
+ * else is derived from it.
+ */
+const N = WORLD_END;
 const FRAME_W = 1080;
 const FRAME_H = 1920;
 
@@ -25,9 +36,9 @@ const scale = cams.map((c) => c.scale);
 
 const diff = (v: number[]) => v.slice(1).map((n, i) => n - v[i]);
 
-const boundaries = [
-  ...new Set([...SHOTS.map((s) => s.from), MARK.from].filter((f) => f > 0 && f < N)),
-].sort((a, b) => a - b);
+const boundaries = [...new Set(SHOTS.map((s) => s.from).filter((f) => f > 0 && f < N))].sort(
+  (a, b) => a - b,
+);
 
 const report = (label: string, v: number[], unit: string) => {
   const d1 = diff(v);
@@ -52,7 +63,10 @@ const report = (label: string, v: number[], unit: string) => {
   );
 };
 
-console.log(`GennetyHero camera — ${N} frames, ${boundaries.length} boundaries`);
+console.log(
+  `GennetyHero camera — the world is ${N} of the film's ${HERO_DURATION_IN_FRAMES} frames, ` +
+    `${boundaries.length} boundaries`,
+);
 console.log(`boundaries: ${boundaries.join(", ")}`);
 
 report("scale", scale, "x");

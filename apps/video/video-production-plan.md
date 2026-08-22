@@ -1,7 +1,8 @@
 # Gennety — product film production plan (`GennetyHero`)
 
-> Delivered: 1080×1920, 30 fps, H.264, **46.8 s**, `out/gennety-hero.mp4`.
-> Cut entirely from six screen recordings of the running product.
+> Delivered: 1080×1920, 30 fps, H.264, **62.2 s**, `out/gennety-hero.mp4`.
+> Its first 44 s are cut entirely from seven screen recordings of the running
+> product; the last 18 s are the title act (§E.1), the only drawn part.
 > This is the audit behind the cut — what exists, what each clip shows, what is
 > unusable and why, and the editorial decisions taken.
 
@@ -33,11 +34,14 @@ repainted.
 | `IMG_2731.MP4` | 576×1280 | 0:05 | 30 | The finished **date card** and its venue block |
 | `IMG_2771.MP4` | 576×1280 | 0:06 | 30 | The ideal-Friday question, answered, **sent**, and «Обмірковую…» |
 | `IMG_2772.MP4` | 576×1280 | 0:09 | 30 | The whole **calendar act**: dates → the shared 17:00 → the lock |
+| `IMG_2775.MP4` | 576×1280 | 0:09 | 30 | Opening Telegram and finding Gennety already there — **sped 2.4×** for the title act |
 
-All six are the **`Gennety DEMO`** bot, in **Ukrainian**, from four separate
-runs: 2026-08-16 (`2588`/`2590`/`2604`), 2026-08-19 (`2730`/`2731`) and
-2026-08-21 (`2771`/`2772`). Total 5:13 of source for a 47 s film — roughly a
-6:1 shooting ratio, which is why the plan is mostly about what to leave out.
+All seven are the **`Gennety DEMO`** bot, from four separate runs: 2026-08-16
+(`2588`/`2590`/`2604`), 2026-08-19 (`2730`/`2731`) and 2026-08-21
+(`2771`/`2772`/`2775`). Everything the product says is **Ukrainian**, except
+`IMG_2775`, which is the bot before a language has been chosen and is therefore
+English on screen — correctly, since that is the state a new arrival meets.
+Total 5:22 of source, and the title act adds 18 s that were never shot.
 
 **`IMG_2604` is down to one shot**, and that is a decision rather than attrition.
 Its venue step and date card went to `IMG_2730`/`IMG_2731` on 2026-08-19 (§E),
@@ -50,7 +54,7 @@ still comes from that run.
 **`IMG_2730` is 576×1248 and 60 fps, and neither is a problem.** The frame rate
 is halved at extraction like everything else. The height differs because it is a
 different capture aspect, not a crop: its status bar sits at exactly the same
-rows as the other five (the recording pill is x 176–195, y 36–53 in all six,
+rows as the other six (the recording pill is x 176–195, y 36–53 in all seven,
 measured), and only the content below it is laid out 32 px shorter. So the one
 part that has to agree with the drawn `PILL` cover already does, and
 `scale=576:1280` stretches it 2.56 % on one axis and nothing else — invisible on
@@ -195,7 +199,7 @@ re-shoot would buy.
 
 ---
 
-## E. The cut — 18 shots, 46.8 s
+## E. The cut — 17 shots of footage, 0:00–0:44
 
 | # | Time | Beat | Source clip | From |
 |---|---|---|---|---|
@@ -216,7 +220,6 @@ re-shoot would buy.
 | 15 | 37.0–40.2 | **Яке місце?** — «Ресторан на даху с гарним видом», then «Зчитую вайб…» | place-vibe | `2730` |
 | 16 | 40.2–42.0 | **«Ось що я вловив»** — the sentence parsed back into chips | place-chips | `2730` |
 | 17 | 41.5–44.1 | **The date card** and the venue block under it | date-card | `2731` |
-| 18 | 43.6–46.8 | The mark | — | drawn |
 
 **The film states a date and a time exactly once**, in shots 11–12, and that is
 structural rather than lucky. The venue act carries no date at all — the windows
@@ -224,6 +227,61 @@ were chosen inside the Mini App, which never shows one — and shot 17 is trimme
 to stop 0.1 s before its own date line scrolls into frame (§H.0). So nothing
 downstream can contradict the calendar, and re-shooting the calendar alone is
 enough to move the film's date.
+
+### E.1 The title act — 0:43.6–1:02.2
+
+Five drawn cards. **The only typography in the film that is not the product's
+own**, and the reason it earns the exception is the same reason the rest of the
+film has none: the interface carries the story wherever it can, and here it
+cannot. The slogan is an argument against the product's whole category, and no
+screen in the app says it — no screen ever will.
+
+| # | Time | Card | What it does |
+|---|---|---|---|
+| A | 43.6–48.0 | «Щоб бути щасливим, / тобі не треба завантажувати застосунок для знайомств» | The claim, in two parts with a 0.7 s beat between them |
+| B | 48.2–51.8 | «Щоб бути щасливим, / **тобі треба їх видалити**» | The turn. The only burgundy in the act |
+| C | 52.1–55.1 | «Кожного дня у тебе є шанс на побачення» | The promise. One part, no beat — it is a fact, not a construction |
+| D | 54.6–59.5 | Gennety · «Вже в Telegram» · the app being opened | The proof, `IMG_2775` at 2.4× |
+| E | 59.0–62.2 | The mark | Unchanged |
+
+**Cards A and B are separated by black, C and D are not.** The founder asked for
+the text to disappear and be written again — «затем текст исчезает, и в центре
+появляется снова текст» — so A and B do not overlap at all and five frames of
+pure `INK` sit between them. That blink is what makes the repeat land as a
+second sentence rather than as one line being edited in place. C into D is a
+crossfade instead: "every day you have a chance" and "already in Telegram" are
+one thought, and the act has already spent its budget for hard blinks.
+
+**Four decisions in it are measured rather than chosen**, and each is recorded
+next to the number it produced in `src/hero/titles.ts`:
+
+1. **The line breaks.** Unbounded 700 is a wide face — «тобі не треба
+   завантажувати» is 18.6 em, which as one line caps at 49 px inside a 936 px
+   box, i.e. not "big bold text" on a 1080-wide frame by any reading. The breaks
+   were chosen by summing the font's own advance widths; the widest surviving
+   line is «завантажувати» and it is what sets the type size.
+2. **Tracking is POSITIVE (0.03 em), which is the opposite of the reflex.** It
+   shipped at −0.02 em and «Вже» rendered with the В fused to the ж and the ж
+   fused to the е. Going to the font's own metrics did not fix it either: a
+   column scan of the render put the В|ж junction at 2 rows of contact and ж|е
+   at 8. Letters touching is normal in this face — «Кожного дня» has three such
+   pairs and reads perfectly — but ж between В and е does not resolve the way ж
+   between о and н does.
+3. **Cards A and B anchor their first line to the same y**, rather than each
+   centring its own block. They open on the same two words, and a centred block
+   puts that shared line one whole line lower on B, which reads as the words
+   having moved rather than returned.
+4. **The first card fades in over 14 frames.** A card is an opaque `INK` fill
+   drawn over the world, so without it the date card was replaced in a single
+   frame — measured at 46.0 → 7.6 of mean luminance, the largest brightness step
+   in the film by a factor of 1.6 over anything the product itself does.
+
+**The Telegram card mounts the film's second `<Iphone>`**, and §F's "exactly
+one" was narrowed rather than waived: that rule protects against per-shot
+handsets disagreeing about scale at a cut, and this one is outside the world,
+after the camera has ended, at a fixed size, with no transform of its own.
+
+---
 
 **The venue act was rebuilt on 2026-08-19** (shots 13–16). It used to be two
 shots and 3.4 s — a departure pin and an EMPTY «Яке місце?» form — which showed
@@ -234,7 +292,8 @@ feature turns on was blank on camera. It is 9.3 s now, off `IMG_2730`.
 9.5 s take) because its date had passed, and shot 6 came from the same run so
 the profiling beat and the calendar beat share a session. Between them the film
 went 49.7 s → 46.8 s: the new calendar take is 2.6 s tighter than the old one
-and the date card lost 1.2 s to the trim above.
+and the date card lost 1.2 s to the trim above. The title act then added 15.4 s
+on top, taking the film to 62.2 s.
 
 **The phone does not move.** Centred, unrotated, 604 px wide in world space for
 the whole film. An earlier cut slid it left and right between beats for
@@ -339,13 +398,14 @@ and excess reads as a black fringe.
 
 **What taking the real status bar costs, stated rather than discovered later:**
 the clock reads 02:04 in `IMG_2588`, 02:05 in `IMG_2590`, 19:39 in `IMG_2604`
-02:47 in `IMG_2771`, 02:53 in `IMG_2772` and 03:26 in `IMG_2730`/`IMG_2731`,
+02:47 in `IMG_2771`, 02:53 in `IMG_2772`, 03:26 in `IMG_2730`/`IMG_2731` and
+03:56 in `IMG_2775`,
 and the battery runs a green charging 90 %, a red 11 % across the question and
 the calendar, and 50 % across the venue act. That cut is shot 9, which is
 exactly where the story jumps forward in time anyway, so the clock change reads
 as intended. The red battery is the one genuine wart, and it is accepted:
 drawing a replacement battery is the pasted-on problem again, one badge at a
-time. **The pill cover was re-verified against all six sources** on
+time. **The pill cover was re-verified against all seven sources** on
 2026-08-21 — a saturated-red scan (`r>170, g<95, b<95`, which excludes the brand
 burgundy) puts the indicator at x 176–194, y 34–53 in every clip, comfortably
 inside the drawn rect. That scan has to exclude the battery badge as well as the
@@ -386,7 +446,10 @@ is approved*).
 already shaped. Adding a track is one file at `public/audio/score.m4a` plus
 `musicVolume: 0.8`. Time it against the cut's five accents: **15.6 s** (Type
 Radar), **23.1 s** (the decision), **30.7 s** (the butterfly / 17:00), **40.2 s**
-(«Ось що я вловив»), **41.5 s** (the date card).
+(«Ось що я вловив»), **41.5 s** (the date card), and then the title act's own
+five landings — **43.6**, **48.2**, **52.1**, **54.6**, **59.0 s**. The act is
+the one stretch with no product audio to work against at all, so it is where a
+track has the most to do and the least to fight.
 
 No SFX. Taps and confirmations would have to be synthesised from nothing, and
 invented UI sound over real product footage is the template-motion-graphics tell
@@ -428,14 +491,27 @@ the brief rules out.
      calendar date, which the product does not offer — so treat a re-shoot of
      shots 10–12 as routine maintenance rather than a defect.
 
-1. **No music.** The one genuinely missing deliverable; needs a licensed track.
-2. **No "problem" act.** Nothing in these recordings covers the visual intro
+1. **No music.** The one genuinely missing deliverable; needs a licensed track,
+   and the title act (§E.1) is now 18 s of it with nothing else on the soundtrack.
+2. **The film is 62 s.** It was 45 s before the venue act and the slogan were
+   added, and every second of the growth was asked for. Worth knowing rather
+   than fixing blind: 62 s is fine on a site or in a deck and long for paid
+   social. The cheapest 8 s, if it is ever wanted, are the two slogan holds and
+   the Telegram card's tail — not the footage.
+3. **The app-launch flash inside the Telegram card.** At 2.4× the iOS launch
+   animation compresses into ~2 frames, which is a measured 7.9-point step in
+   mean luminance — the largest thing in the film that is not the Type Radar.
+   It is the product doing what a product does and it is inside a 348 px
+   handset, so it is left alone; dropping to 2.0× would soften it at the cost of
+   ~0.7 s.
+4. **No "problem" act.** Nothing in these recordings covers the visual intro
    (the statistics and competitor cards). A capture of it would let the film
-   open on *why*, which is the strongest thing it currently lacks.
-3. **No real-world ending.** Lifestyle footage would let the film cut out of the
-   app at 41 s and land on two people meeting — the literal argument of the date
-   card's own line.
-4. **576×1280 source.** A production-bot capture at native resolution would
+   open on *why* — though the slogan act now says a good deal of it at the end
+   instead, which is a different and arguably better place for it.
+5. **No real-world ending.** Lifestyle footage would let the film cut out of the
+   app and land on two people meeting — the literal argument of both the date
+   card's line and the slogan.
+6. **576×1280 source.** A production-bot capture at native resolution would
    remove the only compromise in the film's framing.
-5. **`Gennety DEMO`, not production.** Cropped out of frame, but worth knowing
+7. **`Gennety DEMO`, not production.** Cropped out of frame, but worth knowing
    before this is described as a production capture anywhere public.

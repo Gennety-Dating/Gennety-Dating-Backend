@@ -279,10 +279,16 @@ export const SHOTS: Shot[] = [
   },
 ];
 
-/** The end card is the one shot that is not footage; it lives in its own scene. */
-export const MARK: {from: number; durationInFrames: number} = {
-  from: 1309,
-  durationInFrames: 96,
-};
-
-export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1405 = 46.8s
+/**
+ * The last frame any footage is on screen — i.e. where the WORLD ends.
+ *
+ * Everything after it is the drawn title act (`titles.ts`), which has no phone
+ * in it and therefore no camera. This is what `camera.ts`'s last beat is
+ * anchored to and what `camera.probe.ts` measures over: before the title act
+ * existed, "the film" and "the world" were the same span and the distinction
+ * cost nothing. They are 543 frames apart now, and measuring the camera's
+ * rhythm across seventeen seconds it does not govern would report a camera that
+ * had gone quiet rather than one that had finished.
+ */
+export const WORLD_END =
+  SHOTS[SHOTS.length - 1].from + SHOTS[SHOTS.length - 1].durationInFrames; // 1323

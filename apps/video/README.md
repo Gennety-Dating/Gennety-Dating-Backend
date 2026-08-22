@@ -47,8 +47,9 @@ cut is approved.
 
 ## `GennetyHero` — the product film
 
-A second, separate deliverable: a **47 s** vertical product film cut entirely
-from **six screen recordings of the running product** — no UI is recreated.
+A second, separate deliverable: a **62 s** vertical product film. Its first 44 s
+are cut entirely from **seven screen recordings of the running product** — no UI
+is recreated — and its last 18 s are the title act, the only drawn part.
 It shares this workspace's tooling and brand tokens and nothing else;
 `GennetyAd` is untouched.
 
@@ -62,10 +63,10 @@ pnpm render:hero:preview                         # 40% scale, ~60s to render
 | | |
 |---|---|
 | Composition | `GennetyHero` |
-| Output | `out/gennety-hero.mp4`, 1080×1920, 30 fps, H.264, 1405 frames (46.8 s) |
+| Output | `out/gennety-hero.mp4`, 1080×1920, 30 fps, H.264, 1866 frames (62.2 s) |
 | Source | `src/hero/` |
-| Footage | `public/footage/` — 17 clips, 5.4 MB |
-| Sources | `IMG_2588` / `2590` / `2604` / `2730` / `2731` / `2771` / `2772`, outside the repo |
+| Footage | `public/footage/` — 18 clips, 6.1 MB |
+| Sources | `IMG_2588` / `2590` / `2604` / `2730` / `2731` / `2771` / `2772` / `2775`, outside the repo |
 | Plan | [`video-production-plan.md`](video-production-plan.md) — the cut |
 | Camera | [`motion-audit.md`](motion-audit.md) — the motion system |
 
@@ -75,6 +76,13 @@ reading their taste → the match decision → the calendar landing on a shared
 17:00 → the venue, searched and described in the user's own words and read back
 as structure → the date card, which closes on the product's own line, *Error
 404: Chat not found. Try real life.* In Ukrainian, matching the capture.
+
+Then the **title act** — the slogan in two halves («Щоб бути щасливим, тобі не
+треба завантажувати застосунок для знайомств» / «…тобі треба їх видалити»), the
+promise, «Вже в Telegram» over the app being opened, and the mark. It is the one
+place the film speaks in its own voice, because the argument it makes there is
+against the product's own category and no screen in the app can make it. Plan
+§E.1 owns it; the data is `src/hero/titles.ts`.
 
 > **The film states a date exactly once** — «вівторок, 25 серп. 17:00», in the
 > calendar act. The venue act carries none, and the date card is trimmed to stop
@@ -111,6 +119,7 @@ src/hero/
   timeline.ts          THE CUT: every from/duration/trim/width, with reasons
   theme.ts             brand tokens
   camera.ts            THE CAMERA: six held distances, one-way dolly
+  titles.ts            THE TITLE ACT: five drawn cards, their copy and timing
   camera.probe.ts      continuity check — run it after touching camera.ts
   motion.ts            fade / crossfade / enter / ease — opacity envelopes only
   ui/World.tsx         the one camera transform
@@ -118,7 +127,10 @@ src/hero/
   ui/Butterfly.tsx     the brand mark, inlined from public/brand
   ui/Texture.tsx       vignette + grain
   scenes/ScreenClip.tsx    one shot, as screen content only
+  scenes/Slogan.tsx    a title card, revealed part by part
+  scenes/TelegramCard.tsx  wordmark + line + the app being opened
   scenes/Mark.tsx      the end card
+  ui/fonts.ts          holds the render until Unbounded 700 is loaded
 ```
 
 There is **one** scene component for footage rather than one per beat: every
@@ -154,7 +166,8 @@ transition. A hard cut is `fadeIn: 0, fadeOut: 0`.
 recordings carry only incidental phone audio — see the plan §G. The path is
 wired: drop a track at `public/audio/score.m4a`, set `musicVolume: 0.8` in the
 `GennetyHero` `defaultProps` in `src/Root.tsx`. Time it against the cut's
-accents: **15.6 s**, **23.1 s**, **30.7 s**, **40.2 s**, **41.5 s**.
+accents: **15.6 s**, **23.1 s**, **30.7 s**, **40.2 s**, **41.5 s**, then the
+title act's five landings at **43.6**, **48.2**, **52.1**, **54.6**, **59.0 s**.
 
 ### The handset
 

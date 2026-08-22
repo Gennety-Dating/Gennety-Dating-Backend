@@ -16,6 +16,7 @@
 #   IMG_2731.MP4    5s   the finished date card with its venue block
 #   IMG_2771.MP4    6s   the ideal-Friday question, answered and sent
 #   IMG_2772.MP4    9s   the calendar act: dates -> the shared slot -> the lock
+#   IMG_2775.MP4    9s   opening Telegram and finding Gennety already there
 #
 # **A missing source is a WARNING, not an error** (changed 2026-08-19). The
 # first three are already gone from the founder's Desktop, and refusing to run
@@ -37,6 +38,7 @@ VENUE="$SRC_DIR/IMG_2730.MP4"
 CARD="$SRC_DIR/IMG_2731.MP4"
 ASK="$SRC_DIR/IMG_2771.MP4"
 CAL="$SRC_DIR/IMG_2772.MP4"
+TG="$SRC_DIR/IMG_2775.MP4"
 
 MISSING=()
 
@@ -196,6 +198,26 @@ if have "$CARD"; then
   # the same run as IMG_2772.
   echo "the finished date card (IMG_2731):"
   cut date-card         "$CARD" 0.80 3.62
+fi
+
+if have "$TG"; then
+  # The proof under the title card: home screen -> Telegram -> Gennety is the
+  # chat at the top -> Start -> the Mini App takes over.
+  #
+  # **Sped 2.4x HERE, not in Remotion** (founder: «чтобы не растягивать видео,
+  # стоит ускорить именно это видео»). Baking it into the clip means the file is
+  # an ordinary 30 fps clip like the other seventeen and decodes like them; the
+  # alternative asks the renderer to resample on the fly for the one shot with
+  # no reason to be special. 8.75s of source becomes 3.65s on screen.
+  #
+  # `setpts` must come BEFORE `fps` — the other way round resamples first and
+  # then throws away 60% of the frames it just made.
+  echo "opening Telegram (IMG_2775, 2.4x):"
+  ffmpeg -v error -y -ss 0.15 -to 8.90 -i "$TG" \
+    -vf "setpts=PTS/2.4,fps=30" -an \
+    -c:v libx264 -crf 17 -preset slow -pix_fmt yuv420p \
+    "$HERE/public/footage/tg-open.mp4"
+  echo "  tg-open"
 fi
 
 echo

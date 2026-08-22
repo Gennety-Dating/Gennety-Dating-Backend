@@ -5,8 +5,12 @@ import {glowAt} from "./camera";
 import {ease} from "./motion";
 import {Mark} from "./scenes/Mark";
 import {ScreenClip} from "./scenes/ScreenClip";
+import {Slogan} from "./scenes/Slogan";
+import {TelegramCard} from "./scenes/TelegramCard";
 import {asset, INK} from "./theme";
-import {HERO_DURATION_IN_FRAMES, MARK, SCREEN_WIDTH, SHOTS} from "./timeline";
+import {SCREEN_WIDTH, SHOTS} from "./timeline";
+import {HERO_DURATION_IN_FRAMES, MARK, SLOGANS, TELEGRAM, TITLE_FROM} from "./titles";
+import "./ui/fonts";
 import {Iphone} from "./ui/Iphone";
 import {Grain, Vignette} from "./ui/Texture";
 import {World} from "./ui/World";
@@ -32,7 +36,7 @@ export {HERO_DURATION_IN_FRAMES};
 
 /** The film opens from black. 18 frames, on the world rather than on a shot. */
 const OPEN = 18;
-/** The world hands over to the end card across the last dissolve. */
+/** The world hands over to the title act across the last dissolve. */
 const OUTRO = 14;
 
 /**
@@ -60,7 +64,8 @@ const tail = (i: number): number => {
 /**
  * `GennetyHero` — the product film.
  *
- * ~46.8s cut entirely from six screen recordings of the running product
+ * ~62.2s. The first 44s are cut entirely from seven screen recordings of the
+ * running product
  * (IMG_2588 / IMG_2590 / IMG_2604, IMG_2730 / IMG_2731 for the venue act, and
  * IMG_2771 / IMG_2772 for the question and the calendar). Seventeen shots: the
  * profile the user fills in, the question the bot asks and the answer landing,
@@ -69,14 +74,19 @@ const tail = (i: number): number => {
  * words and read back as structure — and the date card that closes with the
  * product's own line, *Error 404: Chat not found. Try real life.*
  *
+ * Then the **title act** (`titles.ts`): the slogan in two halves, the promise,
+ * «Вже в Telegram» over the app being opened, and the mark. That is the only
+ * drawn typography in the film, and §E of the plan says why it earns the
+ * exception.
+ *
  * Reasoning, recording map and quality audit: `video-production-plan.md`.
  * Camera architecture and why it was rebuilt: `motion-audit.md`.
  *
  * Three rules hold it together:
  *
  *  1. **No product UI is redrawn.** Every screen on camera is footage.
- *  2. **The cut lives in `timeline.ts`**, the camera in `camera.ts`. This file
- *     is assembly and owns neither.
+ *  2. **The cut lives in `timeline.ts`**, the camera in `camera.ts`, the title
+ *     act in `titles.ts`. This file is assembly and owns none of them.
  *  3. **One phone, one world, one camera.** The tree below is deliberately
  *     shallow: `World` carries the single camera transform, `Iphone` is the
  *     single physical object inside it, and the `<Sequence>`s reach no further
@@ -104,7 +114,7 @@ export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}
     // Linear, for the same reason ScreenClip's crossfades are: this is a
     // handover between two lit pictures, not an arrival out of black. Eased, it
     // moved 30% of the way in a single frame and read as a blink.
-    interpolate(frame, [MARK.from, MARK.from + OUTRO], [1, 0], {
+    interpolate(frame, [TITLE_FROM, TITLE_FROM + OUTRO], [1, 0], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
@@ -116,7 +126,7 @@ export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}
           src={asset("audio/score.m4a")}
           volume={(f) =>
             musicVolume *
-            interpolate(f, [0, 30, MARK.from, HERO_DURATION_IN_FRAMES - 6], [0, 1, 1, 0], {
+            interpolate(f, [0, 30, TITLE_FROM, HERO_DURATION_IN_FRAMES - 6], [0, 1, 1, 0], {
               extrapolateLeft: "clamp",
               extrapolateRight: "clamp",
             })
@@ -139,6 +149,39 @@ export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}
           ))}
         </Iphone>
       </World>
+
+      {/*
+        The title act. Five drawn cards, no footage except the one clip inside
+        the Telegram card — data in `titles.ts`, exactly as the cut is data in
+        `timeline.ts`. They are siblings of `<World>` rather than children of it
+        because none of them is the phone, and the world's camera has ended by
+        the time the first one is lit.
+
+        Two of the four gaps between them are deliberately EMPTY — the cards do
+        not overlap, so a few frames of black sit between statement and turn.
+        The founder asked for the text to disappear and be written again, and
+        that blink is the difference between two sentences and one being edited.
+      */}
+      {SLOGANS.map((card) => (
+        <Sequence
+          key={card.from}
+          from={card.from}
+          durationInFrames={card.durationInFrames}
+          premountFor={30}
+          name={`slogan-${card.from}`}
+        >
+          <Slogan card={card} />
+        </Sequence>
+      ))}
+
+      <Sequence
+        from={TELEGRAM.from}
+        durationInFrames={TELEGRAM.durationInFrames}
+        premountFor={30}
+        name="telegram"
+      >
+        <TelegramCard />
+      </Sequence>
 
       <Sequence
         from={MARK.from}

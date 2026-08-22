@@ -6,39 +6,39 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import {relativeCameraTransform} from "../camera";
+import {titleTransform} from "../camera";
 import {crossfade, enter, fade} from "../motion";
 import {asset, INK, MUTED} from "../theme";
-import {MARK} from "../timeline";
+import {MARK} from "../titles";
 import {Butterfly} from "../ui/Butterfly";
 
 /**
  * Scene 10 — the mark.
  *
- * Butterfly, wordmark, one line. This and the logo beat inside scene 4 are the
- * only typography in the film that is not the product's own — the brief's rule
- * is that the interface carries the story, and it does: "no swiping" and "one
- * real date" are both already said on screen, in the app's words, better than a
- * caption would.
+ * Butterfly, wordmark, one line.
  *
- * So the only line here is the one the product cannot say about itself.
+ * It used to be the only typography in the film that was not the product's own,
+ * on the rule that the interface carries the story. The slogan act added four
+ * more cards (`titles.ts`) — and on the same rule, not against it: the slogan is
+ * an argument against the product's own category, which is precisely the thing
+ * no screen in the app can say. This line is the other one.
  *
- * **The camera does not stop for the end card.** The mark is not part of the
- * world — it is not the phone, so it cannot sit inside `<World>` — but parking
- * it dead centre while the world it replaced was still travelling would put the
- * one hard stop of the whole film on its last three seconds. It therefore
- * inherits the camera's motion RELATIVE to `MARK.from`: the same ~5% push and
- * the same upward tilt the world is under across those frames, and nothing
- * else. The film ends with the camera still moving.
+ * **The camera does not stop for the end card**, and that rule now covers the
+ * four title cards before it too: the mark is simply the last of them, and they
+ * all creep 3.2% across their own life (`camera.ts` → `titleTransform`). Parking
+ * dead centre would put the one hard stop of the whole film on its final
+ * seconds. The film ends with something still moving.
  */
 export const Mark: React.FC = () => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const duration = MARK.durationInFrames;
 
-  // Sequence-local frame in, absolute frame out: the camera only ever speaks
-  // composition time.
-  const camera = relativeCameraTransform(MARK.from + frame, MARK.from);
+  // The act's own creep, relative to this card's start — see `camera.ts`. This
+  // used to read the WORLD camera relative to `MARK.from`, which was right while
+  // the mark crossfaded straight out of the last shot. It no longer does: four
+  // title cards sit between them now, so there is no world motion to inherit.
+  const camera = titleTransform(frame, duration);
 
   // In: linear — it crossfades over the still-lit world (see GennetyHero).
   // Out: eased — that edge really is a fade to black, and ends the film.

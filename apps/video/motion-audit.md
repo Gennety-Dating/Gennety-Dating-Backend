@@ -151,7 +151,7 @@ motion change and nothing else.
 
 ```
 AbsoluteFill (INK)
-└── World                       ← ONE camera transform, for the entire 1405 frames
+└── World                       ← ONE camera transform, for the world's 1323 frames
     └── Iphone                  ← ONE handset, fixed at world (0,0), never moves
         └── screen aperture
             ├── Sequence 0  → ScreenClip (basics-name)
@@ -236,21 +236,31 @@ five slow steps, one direction.
 | 2 | 300–540 | 0:10.0–0:18.0 | 0.96 | 609 px | the photo columns, the height drum, the question |
 | 3 | 640–830 | 0:21.3–0:27.7 | 1.05 | 666 px | the radar closing, and the decision |
 | 4 | 930–1010 | 0:31.0–0:33.7 | 1.12 | 710 px | the butterfly, 17:00, the address search opening |
-| 5 | 1140–1265 | 0:38.0–0:42.2 | 1.19 | 755 px | the vibe typed out and read back |
-| 6 | 1405 | 0:46.8 | 1.24 | 786 px | still moving in as the mark takes over |
+| 5 | 1140–1240 | 0:38.0–0:41.3 | 1.19 | 755 px | the vibe typed out and read back |
+| 6 | 1323 | 0:44.1 | 1.24 | 792 px | still moving in as the world hands over |
 
 Each step is ~45 px of handset over ~3–6 s — well under **0.5 px per frame** —
 and the film never revisits a distance it has already been at. **59% of the film
 is held**, in stretches of 3.7–8.0 s.
 
 > The frame numbers in this table are absolute, so they move whenever the CUT
-> does. They were re-spaced twice in three days — 2026-08-19 (the venue act grew
-> from 3.4 s to 9.3 s; 1356 → 1491 frames) and 2026-08-21 (the calendar act was
-> re-shot shorter and the date card trimmed; 1491 → 1405). **Only the spacing
-> changed both times** — the same six distances, the same 0.88 → 1.24 range, the
-> same fitted easing, and the probe still reports zero reversals, a 0.76× launch
-> and a 1.38 px worst step at a cut. No seventh distance was added: inside the
-> same range it would make every step smaller than the eye can register.
+> does. They were re-spaced three times in three days — 2026-08-19 (the venue act
+> grew from 3.4 s to 9.3 s), 2026-08-21 (the calendar act re-shot shorter and the
+> date card trimmed), and again the same day when the table's end moved from the
+> film's last frame to the WORLD's. **Only the spacing ever changed** — the same
+> six distances, the same 0.88 → 1.24 range, the same fitted easing, and the probe
+> still reports zero reversals, a 0.77× launch and a 1.38 px worst step at a cut.
+> No seventh distance was added: inside the same range it would make every step
+> smaller than the eye can register.
+>
+> **The table now ends with the world rather than with the film**, and that is
+> the one change that is not spacing. The 543 frames after it are the drawn title
+> act, which has no phone in it and therefore nothing for a dolly to approach;
+> those cards creep 3.2 % across their own life instead (`camera.ts` →
+> `titleTransform`), which keeps the film's *no parking* rule without pretending
+> there is still a camera. `camera.probe.ts` measures over the world for the same
+> reason: walking it across seventeen seconds it does not govern would report a
+> camera that had gone quiet, when what happened is that it finished.
 
 The five steps are placed to sit INSIDE a shot or to cross a cut mid-flight,
 never to start on one: a move that begins exactly when the screen changes reads
