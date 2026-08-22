@@ -1125,8 +1125,14 @@ async function explainRefusal(visitorId: string, partnerId: string): Promise<str
         );
       }
     }
-    const live = [...row.matchesAsA, ...row.matchesAsB];
-    if (live.length > 0) reasons.push(`${label} already occupies live match ${live[0]!.id}`);
+    // Visitor only. The puppet is exempt from the single-live-match invariant
+    // (`match-engine.ts`), so its live matches cannot be a cause — and naming
+    // one here would point the next reader at the wrong suspect, which is
+    // exactly how this was first read as "the demo is one-visitor-at-a-time".
+    if (label === "visitor") {
+      const live = [...row.matchesAsA, ...row.matchesAsB];
+      if (live.length > 0) reasons.push(`${label} already occupies live match ${live[0]!.id}`);
+    }
   }
 
   return reasons.length > 0 ? reasons.join("; ") : "no obvious cause — read loadEligibleUsersForIds()";

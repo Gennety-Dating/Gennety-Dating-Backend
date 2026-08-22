@@ -15,6 +15,8 @@ import {
 export type TypePrefTags = Partial<Record<RadarSet, PreferenceVector>>;
 import { env } from "../config.js";
 import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
+import { DEMO_MODE_ENABLED } from "../demo/config.js";
+import { demoPuppetIdsAmong } from "../demo/partners.js";
 import { refreshAllDirtyEmbeddings } from "../workers/embedding-refresh.js";
 import { expireStaleMatches, type MatchExpiry } from "./match-expiry.js";
 import {
@@ -1172,12 +1174,32 @@ export async function createProposedMatch(
       "SELECT user_id FROM profiles WHERE user_id = ANY($1::uuid[]) ORDER BY user_id FOR UPDATE",
       participantIds,
     );
+    // Demo mode (DEMO_MODE.md) — the one demo branch this allocator carries.
+    //
+    // The puppet is a stage prop every visitor is shown, not a person who can
+    // be double-booked, so the single-live-match invariant protects nobody on
+    // its side: there is no real date to collide with. Left in force it makes
+    // the demo one-visitor-at-a-time, and worse, a `scheduled` match never
+    // expires on its own — one abandoned walkthrough held the puppet for a
+    // full day and every visitor after it got the "I'm stuck" message instead
+    // of a profile.
+    //
+    // Read once, used by both checks below. Everything else stays: the visitor
+    // is still held to the invariant, and the lifetime pair ban still stops
+    // the SAME visitor being shown the same puppet twice.
+    const puppetIds = DEMO_MODE_ENABLED ? await demoPuppetIdsAmong(tx, participantIds) : [];
+    const invariantIds =
+      puppetIds.length === 0
+        ? participantIds
+        : participantIds.filter((id) => !puppetIds.includes(id));
+
     // `synthetic: "any"` — this re-check re-validates two ALREADY-CHOSEN
     // participants, so the real/synthetic split (a pool-admission question,
     // decided by whichever planner produced the pair) does not apply here.
     // Filtering synthetics out would make every fill pair refuse itself.
     const currentParticipants = await loadEligibleUsersForIds(tx, participantIds, {
       synthetic: "any",
+      ignoreLiveMatchesFor: puppetIds,
     });
     if (currentParticipants.length !== participantIds.length) return null;
     if (expectedAllocationFingerprints) {
@@ -1197,8 +1219,8 @@ export async function createProposedMatch(
           {
             status: { in: [...ACTIVE_MATCH_STATUSES] },
             OR: [
-              { userAId: { in: participantIds } },
-              { userBId: { in: participantIds } },
+              { userAId: { in: invariantIds } },
+              { userBId: { in: invariantIds } },
             ],
           },
           // Lifetime pair ban must survive a stale plan too, even if a prior
@@ -1554,6 +1576,15 @@ type SyntheticScope = "exclude" | "only" | "any";
 
 interface LoadEligibleOptions {
   synthetic?: SyntheticScope;
+  /**
+   * Ids allowed to stay eligible while already holding a live match.
+   *
+   * Empty everywhere except the demo allocator (see `createProposedMatch`),
+   * and empty is not merely the default — it is the shape: with no exemption
+   * the `where` is rebuilt byte-for-byte as it was before this option existed,
+   * so the production query and the guard test pinning it are untouched.
+   */
+  ignoreLiveMatchesFor?: readonly string[];
 }
 
 function syntheticWhere(scope: SyntheticScope) {
@@ -1577,6 +1608,18 @@ async function loadEligibleUsersForIds(
     ...(requestedIds ? { id: { in: [...requestedIds] } } : {}),
     ...syntheticWhere(options.synthetic ?? "exclude"),
   };
+  const liveMatchFree = {
+    matchesAsA: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
+    matchesAsB: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
+  };
+  const exemptFromLiveMatch = options.ignoreLiveMatchesFor ?? [];
+  // Applied to BOTH scans below — the cooldown one and the never-matched one.
+  // No exemption rebuilds the previous clause exactly; the OR form appears only
+  // when a caller names ids.
+  const liveMatchWhere =
+    exemptFromLiveMatch.length === 0
+      ? liveMatchFree
+      : { OR: [{ id: { in: [...exemptFromLiveMatch] } }, liveMatchFree] };
 
   const users = await db.user.findMany({
     where: {
@@ -1602,8 +1645,7 @@ async function loadEligibleUsersForIds(
         latitude: { not: null },
         longitude: { not: null },
       },
-      matchesAsA: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
-      matchesAsB: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
+      ...liveMatchWhere,
     },
     select: {
       id: true,
@@ -1655,8 +1697,7 @@ async function loadEligibleUsersForIds(
         latitude: { not: null },
         longitude: { not: null },
       },
-      matchesAsA: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
-      matchesAsB: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
+      ...liveMatchWhere,
     },
     select: {
       id: true,

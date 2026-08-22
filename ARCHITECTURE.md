@@ -267,7 +267,10 @@ Columns (≈ 40). Drives the entire matching → scheduling → date lifecycle. 
 [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3–4 for the state machine.
 
 Application invariant: a user occupies at most one live row across `proposed`,
-`negotiating`, `negotiating_venue`, and `scheduled`. Eligibility queries exclude
+`negotiating`, `negotiating_venue`, and `scheduled`. (One exception, and it is
+not reachable in production: the demo puppet is excused from it, because it is a
+prop shared by every visitor rather than a person who can be double-booked —
+DEMO_MODE.md → "The guarded branches in production code".) Eligibility queries exclude
 both match relations, and `createProposedMatch` locks both user rows in sorted
 order before re-checking and inserting. If legacy/corrupt data contains several
 live rows, all current-match surfaces choose explicitly by product progression:

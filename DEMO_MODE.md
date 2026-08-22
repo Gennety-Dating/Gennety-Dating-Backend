@@ -19,8 +19,9 @@ Everything on screen is production code. What the demo changes is only:
 | | Production | Demo |
 |---|---|---|
 | The other person | a real matched user | a fixed synthetic profile |
+| Who that person can date | one live match at a time | the puppet is shared — every visitor gets their own live match with it |
 | Liveness verdict | AWS decides | always passes |
-| Photo validation | strict | off — any three images, faces optional |
+| Photo validation | strict | off — any `MIN_PHOTOS` images, faces optional |
 | Contact rail | real email OTP / phone share | auto-satisfied; any OTP code is printed, never sent |
 | Departure point | must be inside Kyiv | **same gate**, plus a one-tap "drop the pin in Kyiv" |
 | Date Ticket | Telegram Stars | the existing **mock** rail (real screens, real prices, no charge) |
@@ -578,7 +579,7 @@ and both are mounted only when `DEMO_MODE_ENABLED`.
 
 ## The guarded branches in production code
 
-Eight, each a single `if`, each commented at the site:
+Nine, each a single `if`, each commented at the site:
 
 | File | What it does |
 |---|---|
@@ -590,17 +591,57 @@ Eight, each a single `if`, each commented at the site:
 | `handlers/onboarding/conversational.ts` | skips the legacy single-face gate on upload |
 | `handlers/menu/edit-profile.ts` | the same, in the photo manager |
 | `services/venue-intent-v2.ts` | adds `demoMode: true` to the venue-intent state |
+| `services/match-engine.ts` | exempts the puppet from the single-live-match invariant (below) |
 
 **Why the last two exist — `PROFILE_MEDIA_VALIDATION_ENABLED=false` does not
 mean "nothing is checked".** It selects the *pre-rollout* validator instead of
 the current one: a `validateSingleFace` call that rejects scenery as `no_face`,
 plus (in the photo manager) a `gateProfilePhoto` identity check. So a demo
-visitor who was just told to upload any three images they have to hand had
+visitor who was just told to upload any few images they have to hand had
 their landscape photos refused with "your face must be visible" — and the
 refusal left **no `media_validation_rejections` row**, because only the new
 validator writes those, which is what made it look like nothing had been
 rejected at all. The env var alone could never have delivered the promise in
 the table at the top of this file; these two branches are what do.
+
+**Why the allocator carries one — the puppet may hold several live matches at
+once.** `createProposedMatch` enforces the single-live-match invariant
+(PRODUCT_SPEC §3.2 filter 8) in two places: the eligibility re-read drops a
+participant who already holds a live row, and an explicit conflict query
+refuses the pair. Both are exactly right for a person — being double-booked
+means being sent on two dates — and both protect nobody on the puppet's side,
+because there is no date and no person there.
+
+Left in force they made the demo **one visitor at a time**, and worse than that
+sounds: a `scheduled` match never expires on its own (the row lingers until the
+T+24h feedback flow closes it, which in demo needs the visitor to walk to the
+end). One abandoned walkthrough therefore held the puppet for a full day, and
+every visitor after it got the "I'm stuck" message instead of a profile —
+observed live, `puppet already occupies live match …` three times, then the
+give-up.
+
+Three properties keep the exemption narrow, and each is pinned by a test
+(`services/match-engine-demo-puppet.test.ts`):
+
+- **The visitor is still held to the invariant.** Only the puppet's side is
+  excused, so a visitor who somehow holds a live match is refused exactly as
+  before. Two people can watch the demo at once; one person cannot be given two
+  simultaneous dates.
+- **The lifetime pair ban is untouched.** The same visitor still never sees the
+  same puppet twice — which is why the redo button deletes its own match rows
+  (`clearDemoMatches`) rather than relying on this.
+- **With the flag off the query is rebuilt byte-for-byte**, so the production
+  allocator — which also runs the real Thursday drop and the paid Rematch — has
+  the same shape, the same plan, and the same guard test pinning it
+  (`match-engine-eligibility.test.ts`). `demoPuppetIdsAmong` is not even called.
+
+Identification is the reserved `telegramId` band (`-777_000_00x`) and nothing
+else: a demo-only column is forbidden here, and the flag itself cannot be set
+in production — `assertDemoIsolation()` refuses to boot.
+
+One consequence for debugging: the driver's `explainRefusal` no longer reports
+the puppet's live matches as a cause, because they are not one. A refusal
+naming a live match now always means the VISITOR.
 
 Plus two `if (DEMO_MODE_ENABLED)` blocks in `index.ts`: the isolation assert +
 banner + driver, and **not** scheduling the drop-matching or no-match crons.
@@ -664,7 +705,7 @@ PUBLIC_PORT=3102                  ADMIN_API_KEY=
 WEBAPP_URL=https://demo-app.gennety.com
 PUBLIC_BASE_URL=https://demo-api.gennety.com
 OTP_LOG_TO_CONSOLE=true                  # no mail is sent to typed addresses
-PROFILE_MEDIA_VALIDATION_ENABLED=false   # any three photos
+PROFILE_MEDIA_VALIDATION_ENABLED=false   # any images, faces optional
 FOUNDER_NOTIFY_ENABLED=false             # enforced by assertDemoIsolation
 TICKET_FEATURE_ENABLED=true  TICKET_STARS_ENABLED=false  TICKET_PAYMENT_MODE=mock
 VENUE_CHANGE_FEATURE_ENABLED=true   PREMIUM_FEATURE_ENABLED=true

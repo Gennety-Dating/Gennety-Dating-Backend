@@ -1,4 +1,4 @@
-import { prisma, type Gender, type GenderPreference } from "@gennety/db";
+import { prisma, type Gender, type GenderPreference, type Prisma } from "@gennety/db";
 import { DEFAULT_MARKET, cityKeyToTimeZone } from "@gennety/shared";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 import { getBalance, grantTickets } from "../services/ticket-wallet.js";
@@ -347,6 +347,35 @@ export async function findDemoPartnerId(telegramId: bigint): Promise<string | nu
 }
 
 /** True when this user id belongs to one of the puppets. */
+/**
+ * Which of these user ids are puppets.
+ *
+ * Exists because the allocator has to ask that question INSIDE its own
+ * transaction, against the locked rows, so `isDemoPartner` above — which opens
+ * its own `prisma` connection and takes one id — cannot answer it. Takes the
+ * transaction client and the whole participant list instead.
+ *
+ * Identification is the reserved `telegramId` band and nothing else. There is
+ * deliberately no column to check: DEMO_MODE.md forbids a demo-only field in
+ * `schema.prisma`, because the schema is shared and would ship to the
+ * production database. A negative id in this band exists only in the demo
+ * database, and only `seedDemoPartners()` writes one.
+ */
+export async function demoPuppetIdsAmong(
+  db: Pick<Prisma.TransactionClient, "user">,
+  userIds: readonly string[],
+): Promise<string[]> {
+  if (userIds.length === 0) return [];
+  const rows = await db.user.findMany({
+    where: {
+      id: { in: [...userIds] },
+      telegramId: { in: DEMO_PARTNERS.map((partner) => partner.telegramId) },
+    },
+    select: { id: true },
+  });
+  return rows.map((row) => row.id);
+}
+
 export async function isDemoPartner(userId: string): Promise<boolean> {
   const row = await prisma.user.findUnique({
     where: { id: userId },
