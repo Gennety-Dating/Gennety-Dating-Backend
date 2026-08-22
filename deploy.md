@@ -9758,7 +9758,19 @@ Required/high-impact env keys:
   under review (its only other cause is Iran/Syria/Cuba). Account type and
   sending permission are separate states, so **`type: Full` is not evidence
   that SMS works** — only a real send is. Twilio's guidance is to wait and to
-  contact support if it persists past **72 hours**. Our side degrades
+  contact support if it persists past **72 hours**.
+  **Re-checked 2026-08-22 from the iOS device pass: still 403, and the review
+  window is long gone.** The account reports `type: Full`, `status: active`,
+  `$20.00` — identical to 2026-08-05 — while `pm2 logs gennety-bot` shows
+  `[phone-verification] twilio start returned 403` on every attempt. The 72-hour
+  window closed **2026-08-08**; nobody opened a support ticket, so seventeen
+  days of "under review" have produced no change and there is no reason to
+  expect the eighteenth to differ. **Waiting is no longer a strategy — this
+  needs a support ticket**, and the ticket is now the oldest unaddressed item
+  blocking launch: with `TELEGRAM_GATEWAY_TOKEN` unset (still true today) the
+  phone rail has no fallback, so **no new user can register on any surface that
+  uses it**, including the native iOS app, whose sign-in cannot be reached at
+  all. Our side degrades
   correctly: `twilioStartVerification` returns null on the 403, the Gateway
   fallback is unconfigured, and the route answers a visible
   `503 "Code delivery unavailable"` rather than a phantom code-entry screen.
