@@ -47,8 +47,8 @@ cut is approved.
 
 ## `GennetyHero` — the product film
 
-A second, separate deliverable: a **50 s** vertical product film cut entirely
-from **five screen recordings of the running product** — no UI is recreated.
+A second, separate deliverable: a **47 s** vertical product film cut entirely
+from **six screen recordings of the running product** — no UI is recreated.
 It shares this workspace's tooling and brand tokens and nothing else;
 `GennetyAd` is untouched.
 
@@ -62,26 +62,25 @@ pnpm render:hero:preview                         # 40% scale, ~60s to render
 | | |
 |---|---|
 | Composition | `GennetyHero` |
-| Output | `out/gennety-hero.mp4`, 1080×1920, 30 fps, H.264, 1491 frames (49.7 s) |
+| Output | `out/gennety-hero.mp4`, 1080×1920, 30 fps, H.264, 1405 frames (46.8 s) |
 | Source | `src/hero/` |
-| Footage | `public/footage/` — 17 clips, 7.8 MB |
-| Sources | `IMG_2588` / `IMG_2590` / `IMG_2604` / `IMG_2730` / `IMG_2731`, outside the repo |
+| Footage | `public/footage/` — 17 clips, 5.4 MB |
+| Sources | `IMG_2588` / `2590` / `2604` / `2730` / `2731` / `2771` / `2772`, outside the repo |
 | Plan | [`video-production-plan.md`](video-production-plan.md) — the cut |
 | Camera | [`motion-audit.md`](motion-audit.md) — the motion system |
 
 The film runs: the profile a person fills in (name, age, gender, who they want
 to meet, height) → one honest question and its honest answer → Type Radar
 reading their taste → the match decision → the calendar landing on a shared
-13:00 → the venue, searched and described in the user's own words and read back
+17:00 → the venue, searched and described in the user's own words and read back
 as structure → the date card, which closes on the product's own line, *Error
 404: Chat not found. Try real life.* In Ukrainian, matching the capture.
 
-> **Known continuity break (2026-08-19).** The calendar act comes from
-> `IMG_2604` and locks **неділя, 16 серпня**; the date card comes from
-> `IMG_2731` and reads **чт, 20 серпня**. Three shots carry the earlier date
-> (`cal-dates`, `cal-overlap`, `time-reveal`) and one carries the later one, so
-> the fix is one new recording of the calendar act from the same session as
-> `IMG_2730`/`IMG_2731` — not a code change. See §G of the production plan.
+> **The film states a date exactly once** — «вівторок, 25 серп. 17:00», in the
+> calendar act. The venue act carries none, and the date card is trimmed to stop
+> 0.1 s before its own date line scrolls in. That is what makes the date
+> re-shootable from one 9 s recording; it is also perishable, so treat a re-shoot
+> of the calendar as maintenance. Production plan §H.0 has the rules.
 
 ### The one rule
 
@@ -132,7 +131,7 @@ it.
 
 **The phone is static; only the camera approaches.** No pan, no roll, and the
 zoom never reverses — `CameraState` has no `x`/`y` at all, so there is nothing to
-set. The camera holds still 59% of the time and steps closer five times, one
+set. The camera holds still 61% of the time and steps closer five times, one
 direction, 558 → 786 px of handset across the film. The cadence and the easing
 are measured off the founder's reference (`motion-audit.md` §5a); the
 one-direction rule is his (2026-08-18), after a version that oscillated read as
@@ -155,7 +154,7 @@ transition. A hard cut is `fadeIn: 0, fadeOut: 0`.
 recordings carry only incidental phone audio — see the plan §G. The path is
 wired: drop a track at `public/audio/score.m4a`, set `musicVolume: 0.8` in the
 `GennetyHero` `defaultProps` in `src/Root.tsx`. Time it against the cut's
-accents: **15.6 s**, **23.1 s**, **30.9 s**, **41.8 s**, **43.2 s**.
+accents: **15.6 s**, **23.1 s**, **30.7 s**, **40.2 s**, **41.5 s**.
 
 ### The handset
 

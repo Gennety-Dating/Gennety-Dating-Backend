@@ -17,10 +17,13 @@ import {Easing} from "remotion";
  *
  * ---
  *
- * The frame numbers below are absolute and therefore change whenever the CUT
- * gets longer. They were re-spaced on 2026-08-19, when the venue act grew from
- * 3.4s to 9.3s and the film from 1356 to 1491 frames; the shape — six held
- * distances, five slow steps, monotone — is untouched, and so is the range.
+ * The frame numbers below are absolute and therefore move whenever the CUT
+ * does. They were re-spaced twice in three days — 2026-08-19 when the venue act
+ * grew from 3.4s to 9.3s (1356 -> 1491 frames), and 2026-08-21 when the calendar
+ * act was re-shot shorter and the date card trimmed (1491 -> 1405). The shape —
+ * six held distances, five slow steps, monotone — is untouched both times, and
+ * so is the 0.88 … 1.24 range. Re-run `camera.probe.ts` after any re-space; it
+ * is what proves the shape survived.
  *
  * ## The one rule this file exists to enforce (founder, 2026-08-18)
  *
@@ -45,7 +48,7 @@ import {Easing} from "remotion";
  *    not a camera, it is a rhythm.
  *
  * So this is a **dolly straight down the lens axis**: nine seconds still, a slow
- * step closer, still again. 558 px to 786 px over 50 seconds, one direction,
+ * step closer, still again. 558 px to 786 px over 47 seconds, one direction,
  * and every framing in the film is one the film has not used before.
  *
  * `camera.probe.ts` fails if either rule is broken.
@@ -105,7 +108,7 @@ type Beat = {
  * times gentler than the pass before this one, and the film never revisits a
  * distance it has already been at.
  *
- * 67% of the film is held. The remaining third is these five steps, and each is
+ * 61% of the film is held. The rest is these five steps, and each is
  * placed to sit INSIDE a shot or to cross a cut mid-flight — never to start on
  * one, because a move that begins exactly when the screen changes reads as the
  * cut having caused it.
@@ -133,19 +136,19 @@ const BEATS = [
     note: "Closer again as the radar closes and the film turns on the decision.",
   },
   {
-    hold: [930, 1050],
+    hold: [930, 1010],
     scale: 1.12,
     glow: 0.92,
-    note: "The butterfly, «неділя, 16 серп. 13:00», and the address search opening.",
+    note: "The butterfly, «вівторок, 25 серп. 17:00», and the address search opening.",
   },
   {
-    hold: [1200, 1310],
+    hold: [1140, 1265],
     scale: 1.19,
     glow: 0.96,
     note: "The vibe typed out and read back — the venue act, held.",
   },
   {
-    hold: [1491, 1491],
+    hold: [1405, 1405],
     scale: 1.24,
     glow: 1.0,
     note: "Still moving in as the mark takes over. The film does not park.",

@@ -116,11 +116,16 @@ export const SHOTS: Shot[] = [
     fadeIn: 6,
   },
   {
-    beat: "An honest question, an honest answer. The whole product in one exchange.",
+    beat:
+      "An honest question, an honest answer. The whole product in one exchange " +
+      "— and since 2026-08-21 the exchange COMPLETES on camera: «Вечеря на даху " +
+      "з бокалом гарного вина» is sent, and «Обмірковую…» appears under it. The " +
+      "previous take stopped while the sentence was still in the input bar, so " +
+      "the film asked its best question and never showed it landing.",
     from: 378,
     durationInFrames: 90,
     src: "chat-question",
-    trim: 336,
+    trim: 3,
     fadeIn: 9,
   },
   {
@@ -138,6 +143,7 @@ export const SHOTS: Shot[] = [
     durationInFrames: 192,
     src: "radar-swipe",
     trim: 6,
+    fadeIn: 6,
   },
   {
     beat: "Готово — it saved what it learned. Short, on purpose.",
@@ -155,27 +161,48 @@ export const SHOTS: Shot[] = [
     trim: 6,
     fadeIn: 12,
   },
+  // ---------------------------------------------------------------------------
+  // The calendar act (re-shot 2026-08-21 from IMG_2772, all three from one take).
+  //
+  // The previous take (IMG_2604) locked неділя, 16 серпня — a date that had
+  // passed by the time anyone would watch this, which is a product film opening
+  // on a promise already behind the viewer. That, not a rendering fault, is why
+  // it was replaced; the shots themselves were fine.
+  //
+  // It is also the film's ONLY statement of a date and time, by construction:
+  // the venue act carries none, and `date-card` is trimmed to stop before its
+  // own date line. So this act cannot be contradicted by anything downstream.
+  // ---------------------------------------------------------------------------
   {
-    beat: "The calendar opens. Planning starts, and the cuts tighten.",
+    beat:
+      "The calendar opens on three days carrying a МЕТЧ badge. Planning starts, " +
+      "and the cuts tighten.",
     from: 802,
-    durationInFrames: 60,
+    durationInFrames: 54,
     src: "cal-dates",
-    trim: 36,
+    trim: 6,
     fadeIn: 9,
   },
   {
-    beat: "13:00 lights up — the slot both sides marked. Nobody negotiated it.",
-    from: 862,
-    durationInFrames: 66,
+    beat:
+      "17:00 — the slot both sides marked. The ЗБІГ toggle goes on and «Зберегти» " +
+      "becomes «Підтвердити», which is the whole negotiation: nobody argued, the " +
+      "overlap just existed. The 2s of dead hold before this is elided by the cut.",
+    from: 856,
+    durationInFrames: 48,
     src: "cal-overlap",
-    trim: 30,
+    trim: 3,
+    fadeIn: 6,
   },
   {
-    beat: "The butterfly, then неділя, 16 серп. 13:00. The product's own brand moment.",
-    from: 928,
-    durationInFrames: 102,
+    beat:
+      "Зберігаємо… then the butterfly, then вівторок, 25 серп. 17:00. The " +
+      "product's own brand moment, and the one place in the film a date is " +
+      "stated at all.",
+    from: 904,
+    durationInFrames: 76,
     src: "time-reveal",
-    trim: 18,
+    trim: 4,
   },
   // ---------------------------------------------------------------------------
   // The venue act (rebuilt 2026-08-19 from IMG_2730 / IMG_2731).
@@ -192,7 +219,7 @@ export const SHOTS: Shot[] = [
       "Звідки ти виїжджаєш — the departure point, as a real search. Typing " +
       "«Володимирська» and watching Places answer is what makes it a product " +
       "rather than a map screenshot; the previous take had no query in it at all.",
-    from: 1030,
+    from: 980,
     durationInFrames: 78,
     src: "place-search",
     trim: 12,
@@ -203,7 +230,7 @@ export const SHOTS: Shot[] = [
       "The pin lands on the picked address and «Підтвердити» is there to press. " +
       "Short on purpose — it is the receipt for the search above it, and the " +
       "source only holds it steady for ~1.7s before the next screen slides in.",
-    from: 1108,
+    from: 1058,
     durationInFrames: 51,
     src: "place-map",
     trim: 5,
@@ -214,7 +241,7 @@ export const SHOTS: Shot[] = [
       "гарним видом» finishes typing, «Далі» is pressed, and the button becomes " +
       "«Зчитую вайб…». The keyboard leaves with it, so the shot ends calmer " +
       "than it started — which is the handover to the concierge.",
-    from: 1159,
+    from: 1109,
     durationInFrames: 96,
     src: "place-vibe",
     trim: 12,
@@ -226,7 +253,7 @@ export const SHOTS: Shot[] = [
       "it picked already ticked. Nobody reads the labels at this size and they " +
       "do not need to: the frame says the sentence was UNDERSTOOD, which is the " +
       "concierge's whole claim and the one thing the old venue beat never showed.",
-    from: 1255,
+    from: 1205,
     durationInFrames: 54,
     src: "place-chips",
     trim: 3,
@@ -234,13 +261,18 @@ export const SHOTS: Shot[] = [
   },
   {
     beat:
-      "The date card: Error 404 — Chat not found. Try real life. Then the shot " +
-      "scrolls off it to what is underneath — 📍 Hey Guys, вулиця Дмитрівська 60, " +
-      "the grounded blurb, and Open in Maps / Change venue / Share. That scroll " +
-      "is why this take replaced the old one: it ends the venue story instead of " +
-      "ending on a poster.",
-    from: 1295,
-    durationInFrames: 114,
+      "The date card: Error 404 — Chat not found. Try real life — with the venue " +
+      "block sitting under it the whole hold: 📍 Hey Guys, вулиця Дмитрівська 60, " +
+      "and the grounded blurb. That is why this take replaced the old one; it " +
+      "ends the venue story instead of ending on a poster.\n\n" +
+      "It STOPS before its own date line, and the number is measured: at 3.65s " +
+      "of the source the scroll brings «чт, 20 серпня о 13:00» into frame, and " +
+      "this take is from the 20-серпня run while the calendar above is from the " +
+      "25-серпня one. Ending short is what keeps the film stating a date exactly " +
+      "once. The cost is the card's three actions, which arrive after that line — " +
+      "recoverable the moment a date card exists from the IMG_2772 run.",
+    from: 1245,
+    durationInFrames: 78,
     src: "date-card",
     trim: 3,
     fadeIn: 14,
@@ -249,8 +281,8 @@ export const SHOTS: Shot[] = [
 
 /** The end card is the one shot that is not footage; it lives in its own scene. */
 export const MARK: {from: number; durationInFrames: number} = {
-  from: 1395,
+  from: 1309,
   durationInFrames: 96,
 };
 
-export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1491 = 49.7s
+export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1405 = 46.8s

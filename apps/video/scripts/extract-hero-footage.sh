@@ -11,9 +11,11 @@
 # Sources are the founder's own screen recordings and live OUTSIDE the repo:
 #   IMG_2588.MP4   19s   the five profile-basics screens
 #   IMG_2590.MP4  107s   conversational profiling -> Type Radar -> photo request
-#   IMG_2604.MP4  135s   match decision -> calendar -> time reveal -> date card
+#   IMG_2604.MP4  135s   match decision -> Type Radar close (calendar + card retired)
 #   IMG_2730.MP4   32s   the venue step, end to end (60fps, 576x1248)
 #   IMG_2731.MP4    5s   the finished date card with its venue block
+#   IMG_2771.MP4    6s   the ideal-Friday question, answered and sent
+#   IMG_2772.MP4    9s   the calendar act: dates -> the shared slot -> the lock
 #
 # **A missing source is a WARNING, not an error** (changed 2026-08-19). The
 # first three are already gone from the founder's Desktop, and refusing to run
@@ -33,6 +35,8 @@ PROFILE="$SRC_DIR/IMG_2590.MP4"
 DATE="$SRC_DIR/IMG_2604.MP4"
 VENUE="$SRC_DIR/IMG_2730.MP4"
 CARD="$SRC_DIR/IMG_2731.MP4"
+ASK="$SRC_DIR/IMG_2771.MP4"
+CAL="$SRC_DIR/IMG_2772.MP4"
 
 MISSING=()
 
@@ -99,7 +103,7 @@ fi
 
 if have "$PROFILE"; then
   echo "understanding (IMG_2590):"
-  cut chat-question     "$PROFILE" 36.0 52.0 # ideal-Friday question + the honest answer
+  # NOTE: `chat-question` moved to IMG_2771 on 2026-08-21 — see that block.
   # The LAST stretch of the radar, not the first. Everything before ~81s was
   # ruled out by the founder screen by screen: the opening holds one man for
   # 3.5s, 74-75s is a mirror selfie with the phone across the face, and 75.5-76.5
@@ -112,17 +116,15 @@ if have "$PROFILE"; then
 fi
 
 if have "$DATE"; then
-  echo "date journey (IMG_2604):"
+  echo "the decision (IMG_2604):"
   # 13.0s, not 0.0s: the opening take runs into the calendar transition ~2s in,
   # while this stretch holds the whole decision thread stable for 7 seconds.
   cut match-decision    "$DATE" 13.0  20.0
-  cut cal-dates         "$DATE" 26.5  31.5   # "Обери дату"
-  cut cal-overlap       "$DATE" 30.8  35.6   # 13:00 lights up — the shared slot
-  cut time-reveal       "$DATE" 35.2  39.6   # butterfly + "неділя, 16 серп. 13:00"
-  # NOTE: this source no longer owns the venue step or the date card. Its
-  # `place-map` (departure pin) and `place-vibe` (an EMPTY "Яке місце?" form)
-  # were replaced by IMG_2730 below on 2026-08-19, and its `date-card` by
-  # IMG_2731. Nothing here regenerates them; the windows are recorded in git.
+  # NOTE: this source owns ONE shot now. Its venue step and date card went to
+  # IMG_2730/IMG_2731 on 2026-08-19, and its calendar act (`cal-dates`,
+  # `cal-overlap`, `time-reveal` — неділя 16 серпня, 13:00) went to IMG_2772 on
+  # 2026-08-21, because that date had passed and a product film must not open on
+  # a date already behind the viewer. The retired windows are in git.
 fi
 
 if have "$VENUE"; then
@@ -148,14 +150,52 @@ if have "$VENUE"; then
   cut_scaled place-chips  "$VENUE" 26.1 28.15 # "Ось що я вловив" + the parsed chips
 fi
 
+if have "$ASK"; then
+  # Replaces IMG_2590's take of the same beat. It is the same question and the
+  # same answer, one run later; what it adds is the END of the exchange — the
+  # answer actually sent, and the bot's «Обмірковую…» under it. The old window
+  # stopped while the sentence was still in the input bar, so the film asked a
+  # question and never showed it landing.
+  echo "the question that does the work (IMG_2771):"
+  cut chat-question     "$ASK" 2.7  6.2
+fi
+
+if have "$CAL"; then
+  # The calendar act, all three shots, from one 9.5s take:
+  #   0.9-2.7   «Обери дату» — 23/24/25 серпня carrying МЕТЧ badges
+  #   2.8-4.8   the slot sheet opens on «вівторок, 25 серп.», 17:00 already lit
+  #   4.9-6.5   the ЗБІГ toggle goes on, «Зберегти» becomes «Підтвердити»
+  #   6.6-7.7   «Зберігаємо…»
+  #   7.8-9.5   the butterfly, then the tick, over «вівторок, 25 серп. 17:00»
+  #
+  # The 2.0s of dead hold at 2.8-4.8 is elided by the cut between shots, which
+  # is what a cut is for.
+  echo "the calendar act (IMG_2772):"
+  cut cal-dates         "$CAL" 0.80 3.05  # «Обери дату» — three days carry МЕТЧ
+  cut cal-overlap       "$CAL" 4.80 6.60  # 17:00 is the shared slot; ЗБІГ goes on
+  cut time-reveal       "$CAL" 6.50 9.46  # saving -> butterfly -> вівторок, 25 серп. 17:00
+fi
+
 if have "$CARD"; then
-  # Replaces IMG_2604's date card. Same card, but this take scrolls DOWN off it
-  # to the venue block underneath — 📍 Hey Guys, вулиця Дмитрівська 60, the
-  # grounded blurb, and the three actions — which is what makes it the end of
-  # the venue story rather than a poster. Head slack only; the source ends at
-  # 4.87s and the shot runs to 4.75.
+  # Replaces IMG_2604's date card. Same card, and the venue block — 📍 Hey Guys,
+  # вулиця Дмитрівська 60, the grounded blurb — sits under it and is on screen
+  # for the whole hold, which is what makes this the end of the venue story
+  # rather than a poster.
+  #
+  # **It STOPS at 3.62s, and that number is measured rather than chosen**
+  # (2026-08-21). At 3.65s the scroll brings «чт, 20 серпня о 13:00» into frame,
+  # and this take is from the 20-серпня run while the calendar act above is from
+  # the 25-серпня one. Ending before that line is what makes the film state a
+  # date exactly once — in the calendar — instead of twice, differently. The
+  # last clean frame is 3.617s; the shot runs to 3.55s.
+  #
+  # The cost, stated: the three actions the card carries (Відкрити в картах /
+  # Змінити місце / Поділитися карткою) arrive AFTER the date line, so they are
+  # out of the film. That is the trade — three buttons for a film that does not
+  # contradict itself — and it is reversible the moment a date card exists from
+  # the same run as IMG_2772.
   echo "the finished date card (IMG_2731):"
-  cut date-card         "$CARD" 0.85 4.87
+  cut date-card         "$CARD" 0.80 3.62
 fi
 
 echo

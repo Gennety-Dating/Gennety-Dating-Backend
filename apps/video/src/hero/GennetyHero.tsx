@@ -39,15 +39,15 @@ const OUTRO = 14;
  * How many frames shot `i` keeps playing UNDER its successor.
  *
  * A `fadeIn` is only honest if there is something behind it. Where two shots
- * already overlap (the three dissolves) there is; where they butt up against
+ * already overlap (the two dissolves) there is; where they butt up against
  * each other there is not, and fading in over black would replace a bright
  * flash with a dark one. So the outgoing shot is extended by exactly the
  * incoming shot's fade, and no further.
  *
  * Derived rather than declared: the extension IS the next shot's `fadeIn`, so
  * the two cannot drift apart, and `timeline.ts` keeps one knob instead of two.
- * The footage has the slack — the tightest case is `time-reveal` at 126 of its
- * 132 frames.
+ * The footage has the slack, and it is checked after every re-extraction — the
+ * tightest case is `cal-dates` at 66 of its 68 frames.
  */
 const tail = (i: number): number => {
   const shot = SHOTS[i];
@@ -60,11 +60,12 @@ const tail = (i: number): number => {
 /**
  * `GennetyHero` — the product film.
  *
- * ~49.7s cut entirely from five screen recordings of the running product
- * (IMG_2588 / IMG_2590 / IMG_2604, plus IMG_2730 / IMG_2731 for the venue act).
- * Seventeen shots: the profile the user fills in, the question the bot asks,
+ * ~46.8s cut entirely from six screen recordings of the running product
+ * (IMG_2588 / IMG_2590 / IMG_2604, IMG_2730 / IMG_2731 for the venue act, and
+ * IMG_2771 / IMG_2772 for the question and the calendar). Seventeen shots: the
+ * profile the user fills in, the question the bot asks and the answer landing,
  * the Type Radar reading their taste, the match decision, the calendar landing
- * on a shared 13:00, the venue — searched, pinned, described in the user's own
+ * on a shared 17:00, the venue — searched, pinned, described in the user's own
  * words and read back as structure — and the date card that closes with the
  * product's own line, *Error 404: Chat not found. Try real life.*
  *
