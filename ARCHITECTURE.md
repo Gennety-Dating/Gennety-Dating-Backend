@@ -1429,7 +1429,15 @@ derivation because each type exists only inside the minutes that make it urgent
 than adding a field.** Deliberately outside the set: `match.proposed` (a 24-hour
 window is not urgency, and under the daily cadence it would pierce Focus nightly),
 `proxy.message` (a message every couple of minutes is spam at that level),
-`feedback.due`. **The level has a client-side precondition that fails silently**:
+`feedback.due`, and — added 2026-08-22 — the four §4.3 map types that finally
+reached the app rail: `match.none`, `match.nudge`, `match.planning`,
+`match.deadline`. That is the first test of the rule above rather than a
+restatement of it: four new senders arrived at once and the set stayed at two,
+because a daily decision window is a window, not an emergency, and a nightly
+Focus breach is precisely what the 2026-08-12 decision refused. **The set is
+therefore load-bearing by staying small** — anything that grows it is a claim on
+someone's Do Not Disturb, and a test pins its whole membership rather than one
+member. **The level has a client-side precondition that fails silently**:
 without `com.apple.developer.usernotifications.time-sensitive` in the app,
 iOS ignores it entirely and the notification arrives ordinary — measured
 by differential probe, `timeSensitiveSetting` reads `notSupported` without the
