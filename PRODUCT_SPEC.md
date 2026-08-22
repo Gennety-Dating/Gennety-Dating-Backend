@@ -1115,15 +1115,26 @@ user from matching until the cron (the `appendNegativeConstraint` bug). Deleting
 the prompt re-dirties and refreshes too: a deleted recording that keeps
 influencing matching is a ghost the user cannot see or clear.
 
-**Playback in the pitch** sits between the verified trust card and the decision
-question (§3.3). That displaces the trust card as the closer, deliberately: the
-card is a fact about safety, the voice is the person, and the last thing before
-*yes or no* should be the person. It is its own `sendVoice` — a voice note
+**Playback in the pitch** sits between the pitch message and the decision
+question (§3.3). That puts the voice after the verified trust note — which since
+2026-08-22 is a blockquote at the END of the pitch message rather than a bubble
+of its own — and the ordering is the point rather than an accident of where the
+messages fell: the note is a fact about safety, the voice is the person, and the
+last thing before *yes or no* should be the person. Folding the note into the
+pitch only made that truer. It is its own `sendVoice` — a voice note
 cannot join a media group — carrying a one-line caption naming the partner and
 `protect_content: PROTECT_PARTNER_MEDIA`, the shared constant, so demo mode
 drops the protection for a filmed walkthrough instead of recording silence.
 Fail-open by rule: a missing or unplayable clip skips the message, because the
 pitch must never fail for want of optional audio.
+
+**The decision question stays its own message**, and deliberately not the voice
+note's caption even though a caption would save a bubble. It is the pitch's
+central call to action, it reads quieter under a player, and — decisively —
+`sendPartnerVoicePrompt` returns early for a partner with no recording, so a
+question living in that caption would vanish for everyone who skipped the step.
+The wording is also load-bearing: `decision-text.ts` matches replies against a
+closed keyword set that this copy is written to elicit.
 
 **Both surfaces.** The native rail is `/v1/me/voice-prompt` (JWT) plus
 `SerializedMatch.partnerVoicePrompt`, carrying the precomputed waveform so the
@@ -2859,6 +2870,18 @@ for the dashboard's algorithm-quality view.
 
 ### 3.3 The Pitch & Synergy
 
+**The pitch is FOUR messages per side (2026-08-22), and each one earns its
+bubble:** the album (cards + the partner's motion) → the streamed pitch, whose
+persisted message also carries the verified trust note → the voice prompt → the
+decision question. It used to be six. Nothing was dropped to get there — the
+video moved into the album it could always have shared, and the trust note into
+the message it already sat under. The two optional beats (trust note, voice) are
+folded in or skipped rather than adding bubbles, so a partner with neither still
+produces a clean three-message pitch. Hiding media behind a Mini App button was
+considered and refused: a media group cannot carry an inline button at all, a
+Mini App has no `protect_content` (§3.7a), and a web `<audio>` element loses the
+native voice player the product deliberately relies on (§1.3b).
+
 - The orchestrator generates a personalised pitch + **Synergy Score**
   (clamped to a motivating 70..99 range) + a 1–2 sentence positive
   rationale. The score is pair-level (one number, taken from side A's
@@ -2873,22 +2896,38 @@ for the dashboard's algorithm-quality view.
 - **Match card set (feature-flagged, `MATCH_CARD_FEATURE_ENABLED`, default
   off).** When on, the partner photo media-group that leads the pitch is
   replaced by a rendered collage **card set** (`services/match-card`,
-  satori/resvg/canvas — same stack as §3.7a): card 1 is the partner photo with
-  an opaque rounded panel (name/age, one vibe line + one short paragraph from a
-  dedicated compact copy pass — NOT the streamed pitch), each following card is
-  one nearly full-bleed torn-collage photo; branding beyond the first card is
-  limited to butterfly accents. The "paper" set renders in the **recipient's
-  `User.theme`** (light cream / dark near-black card + panel; the burgundy
-  accent, white photo frames and wine halftone dots are theme-agnostic). Sent
-  as one protected album with the same
+  satori/resvg/canvas — same stack as §3.7a): **two** tilted near-native-aspect
+  photos per card, so ten profile photos become five cards. The opaque rounded
+  panel (name/age, one vibe line + one short paragraph from a dedicated compact
+  copy pass — NOT the streamed pitch) rides the FIRST card on an even photo
+  count and the LAST one on an odd count, where the leftover solo photo leaves
+  it room; branding beyond the panel is limited to butterfly accents. (Corrected
+  2026-08-22: this section used to describe one photo per card with the panel
+  always on card 1, which the code has never done — `match-card/index.ts`.) The
+  "paper" set renders in the **recipient's `User.theme`** (light cream / dark
+  near-black card + panel; the burgundy accent, white photo frames and wine
+  halftone dots are theme-agnostic). Sent as one protected album with the same
   name/age/✓ caption; collage jitter is seeded by match id + side. Any copy /
   render / send failure falls back to the plain protected media group, so
   pitch dispatch never wedges. Telegram-only.
-- A successful PNG Match Card album is followed by the profile's motion-only
-  assets: the standalone profile video and the video part of each Live Photo,
-  protected with `protect_content`. Static photos/poster frames are not sent a
-  second time. A rejected motion group falls back to individual videos, and a
-  motion-delivery failure never blocks the pitch stream.
+- **The partner's motion rides in that same album (2026-08-22).** The standalone
+  profile video and the video part of each Live Photo are appended after the
+  cards in ONE `sendMediaGroup`, sharing its `protect_content`. Static
+  photos/poster frames are not sent a second time — they are already inside the
+  rendered PNGs, which is what `motionOnlyProfileMedia` exists to express.
+  Until this change the motion followed as its **own message**, which cost the
+  pitch a bubble for no platform reason: a Telegram media group may mix photos
+  and videos, and the classic fallback path has always relied on exactly that.
+  **Accepted tradeoff** (founder decision): the card set is a designed
+  composition and the video arrives as a raw frame with a play button in the
+  last tile. A branded poster via `thumbnail` was declined — Telegram is not
+  known to apply a custom thumbnail to a video referenced by `file_id`.
+  **The 10-item group cap is Telegram's and is enforced rather than risked**:
+  exceeding it fails the whole send, which would cost the user the photos as
+  well as the video, so only `10 − cards` motion items join the album and any
+  surplus follows as its own message exactly as before. That surplus is
+  unreachable in every ordinary case (five cards at most, one video per
+  profile) and exists for a profile made almost entirely of Live Photos.
 - **The app rail gets a push, and until 2026-08-12 it got nothing at all**
   (`services/match-drop-push.ts`, iOS §5.3). `pitch.ts` skips anyone it cannot
   address as a Telegram chat, with a comment saying their pitch "goes via the
@@ -2949,11 +2988,31 @@ for the dashboard's algorithm-quality view.
   re-rendering the live countdown button against the same `pitchMessageId{A,B}`.
   Degrades to the classic edited-message stream when a client can't render rich
   drafts.
+- **That persisted message is formatted with `MessageEntity[]`, never
+  `parse_mode` (2026-08-22).** It carries the synergy label in bold and, for a
+  verified partner, the trust note as a trailing blockquote — the message that
+  used to be its own bubble. Entities are a one-way door here and the right one:
+  the body is model-written, so MarkdownV2 would need every special character in
+  a generated pitch escaped, and a stray `_` or `[` would fail the send and cost
+  the user the whole pitch. It also fixes a live defect — no `parse_mode` was
+  ever set on this message, so the header's old `*…*` markers had always
+  rendered as **literal asterisks** on the most-read message in the product, in
+  all five languages. Hence `matchSynergyLabel` is its own i18n key: the
+  composer needs the label's exact bounds, and parsing `*…*` back out of the
+  interpolated string is unsafe because the reason is model-written and may
+  contain an asterisk of its own. Offsets are UTF-16 code units (the header
+  opens with `💎`, two of them) and a wrong offset raises no error — it silently
+  highlights the wrong span — so they are covered by tests that slice the entity
+  back out. If the note would push the body past Telegram's 4096-character
+  ceiling it steps out into its own message instead; that is insurance against a
+  future generator change rather than a reachable branch, because exceeding the
+  limit throws and the throw costs the entire pitch.
 - An explicit `matchDeadlineNotice` follows the headline: **24 h** to reply,
   decision is final once committed.
 - **Conversational decision (no Accept button, 2026-07-05).** The pitch
   message itself carries only the `[Report]` affordance — there is NO permanent
-  Accept/Decline keyboard. After the pitch (and trust card) the bot asks a
+  Accept/Decline keyboard. After the pitch (and the voice prompt, when the
+  partner recorded one) the bot asks a
   natural question in the recipient's locale — "Want to go on a date with
   him/her? Just answer yes or no." (`matchDecisionQuestionM/F`, gendered by the
   partner) — and the

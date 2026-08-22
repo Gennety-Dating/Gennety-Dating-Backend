@@ -787,6 +787,25 @@ spent its first day writing into production storage.
 `demo/decide.ts` needs no branch: the step is one-sided, so there is nothing for
 the puppet to answer.
 
+## The pitch album's video slot is not exercised here either
+
+Same shape as the voice prompt above, and worth stating for the same reason.
+Since 2026-08-22 the partner's profile video rides inside the match-card album
+rather than following it as its own message (PRODUCT_SPEC §3.3) — and the demo
+puppet has **no video**: `scripts/seed-demo-partners.mjs` writes
+`profileMedia` as photos only, so `motionOnlyProfileMedia` returns an empty
+list and the album is cards alone.
+
+So of that change the demo shows the two halves that live in text — the trust
+note folded into the pitch message, and the synergy label finally rendering
+bold instead of wrapped in literal asterisks (the puppet IS verified,
+`demo/partners.ts`) — and **not** the video tile. That half is verified on
+`@gennetytestbot`.
+
+Nothing about it needs a demo branch: the demo reaches the pitch through the
+ordinary `dispatchMatches` → `sendMatchProposal`, and `PROTECT_PARTNER_MEDIA`
+already rides the album that now carries the video.
+
 ## The rule for future work
 
 **Any change to a product flow, a Mini App screen, a gate, or a paid step must

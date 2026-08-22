@@ -15,6 +15,10 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
   "btnDislike",
   "myProfileBody",
   "matchPhotoCaption",
+  // "💎 {label} — {reason}" carries no words at all: the translated noun lives
+  // in `matchSynergyLabel`, which the pitch needs as its own key to bold it via
+  // a MessageEntity (the final pitch message has no `parse_mode`).
+  "matchSynergyHeader",
   "coordProxyRelayNamedPrefix",
   // A coordination-card headline line that is just the product name plus a
   // question mark. pl phrases the ask as "Udostępnić / Telegram?", so its
@@ -52,6 +56,10 @@ const ALLOWED_IDENTICAL_UK_RU = new Set<string>([
   "btnDislike",
   "myProfileBody",
   "matchPhotoCaption",
+  // See the note in ALLOWED_IDENTICAL_TO_EN: the header is placeholders only,
+  // and the translated noun lives in `matchSynergyLabel` (which is NOT
+  // allowlisted — "Синергия" and "Синергія" genuinely differ).
+  "matchSynergyHeader",
   "coordProxyRelayNamedPrefix",
   "referralCardFooter",
   "coordCardAskHead2",

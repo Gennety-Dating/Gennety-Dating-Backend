@@ -153,6 +153,91 @@ export function buildPhotoCaption(
   };
 }
 
+/** Telegram's hard ceiling for a `sendMessage` body. */
+const MAX_MESSAGE_LENGTH = 4096;
+
+export interface FinalPitchMessage {
+  /** Body of the persisted pitch message. */
+  text: string;
+  /** Formatting for `text` — see why this is entities and not markdown below. */
+  entities: MessageEntity[];
+  /**
+   * Trust copy that did NOT fit under the length ceiling and still owes its
+   * own message. Null in every ordinary case.
+   */
+  overflowTrustCard: string | null;
+}
+
+/**
+ * Compose the ONE persisted pitch message: synergy header, pitch text, and —
+ * for a verified partner — the trust note as a blockquote.
+ *
+ * Formatting is `MessageEntity[]`, never `parse_mode`, and that is a one-way
+ * door taken deliberately. Telegram accepts one or the other, and the pitch
+ * body is model-written: under MarkdownV2 a stray `_` or `[` in a generated
+ * pitch would fail the whole send, costing the user the pitch entirely. It
+ * also fixes a live defect — the final message has never carried a
+ * `parse_mode` (none is set in `ai-stream.ts`, and the bot is constructed
+ * without one), so the header's old `*…*` markers rendered as literal
+ * asterisks on the most-read message in the product.
+ *
+ * The trust note rides here rather than in its own bubble so the pitch costs
+ * one message instead of two. That also strengthens PRODUCT_SPEC §1.3b: the
+ * voice prompt stays the last thing before "yes or no", because the card is a
+ * fact about safety and the voice is the person.
+ *
+ * Offsets are UTF-16 code units, which is what `String.prototype.length` and
+ * `indexOf` already count — the `💎` in the header is two of them, and that
+ * falls out of `indexOf` rather than needing arithmetic. A wrong offset does
+ * NOT raise an error, it silently highlights the wrong span, so this is
+ * covered by tests that slice the result back out.
+ */
+export function composeFinalPitchMessage(input: {
+  lang: Language;
+  synergyScore: number | null;
+  synergyReason: string | null;
+  /** Last (complete) pitch chunk from `splitPitchIntoDrafts`. */
+  pitchTail: string;
+  partnerVerified: boolean;
+}): FinalPitchMessage {
+  const entities: MessageEntity[] = [];
+  let text = input.pitchTail;
+
+  if (input.synergyScore != null && input.synergyReason) {
+    const label = t(input.lang, "matchSynergyLabel", { score: input.synergyScore });
+    const header = t(input.lang, "matchSynergyHeader", {
+      label,
+      reason: input.synergyReason,
+    });
+    // Fail-open: a translation that dropped `{label}` loses the bold rather
+    // than emitting an entity pointing at the wrong span.
+    const boldOffset = header.indexOf(label);
+    if (boldOffset >= 0) {
+      entities.push({ type: "bold", offset: boldOffset, length: label.length });
+    }
+    text = `${header}\n\n${input.pitchTail}`;
+  }
+
+  if (!input.partnerVerified) return { text, entities, overflowTrustCard: null };
+
+  const quote = t(input.lang, "matchVerifiedQuote");
+  const separator = "\n\n";
+  // Insurance rather than an expected path: the arithmetic says this cannot
+  // trigger today (the generator caps the pitch well under the ceiling), but
+  // the body is model-written and exceeding the limit does not degrade — it
+  // THROWS, and that throw becomes an AggregateError that costs the user the
+  // whole pitch. Same convention as `rematch.ts` / `coordination-card/send.ts`.
+  if (text.length + separator.length + quote.length > MAX_MESSAGE_LENGTH) {
+    return { text, entities, overflowTrustCard: quote };
+  }
+  entities.push({
+    type: "blockquote",
+    offset: text.length + separator.length,
+    length: quote.length,
+  });
+  return { text: `${text}${separator}${quote}`, entities, overflowTrustCard: null };
+}
+
 /**
  * Send the partner's photo(s) as a leading visual card before the AI
  * pitch streams in. Without this the user has no visual to anchor their
@@ -279,27 +364,28 @@ async function sendDecisionQuestion(
 }
 
 /**
- * Send the closing trust card — a blockquote-formatted note from the
- * Gennety team explaining that the partner has cleared face-match
- * verification. Only emitted when `partner.verificationStatus` is
- * `verified`; unverified partners get no message (no shaming, matches
- * PRODUCT_SPEC.md §1.4).
+ * Fallback for the trust note when it could not ride inside the pitch message.
  *
- * Uses a `blockquote` MessageEntity instead of MarkdownV2 so the body
- * text doesn't need character escaping.
+ * The note normally lives at the end of the persisted pitch (see
+ * `composeFinalPitchMessage`), which is what keeps the pitch at one message
+ * instead of two. This path exists only for a pitch long enough that appending
+ * the note would breach Telegram's 4096-character ceiling — insurance against a
+ * generator change, not an expected branch.
+ *
+ * Unverified partners never reach here at all: they get no message, so there is
+ * no negative signal (PRODUCT_SPEC.md §1.4).
  */
-async function sendVerifiedTrustCard(
+async function sendTrustCardOverflow(
   api: Api<RawApi>,
   chatId: number,
-  lang: Language,
+  text: string,
 ): Promise<void> {
-  const text = t(lang, "matchVerifiedQuote");
   try {
     await api.sendMessage(chatId, text, {
       entities: [{ type: "blockquote", offset: 0, length: text.length }],
     });
   } catch (err) {
-    console.warn("sendVerifiedTrustCard failed, skipping trust card:", err);
+    console.warn("sendTrustCardOverflow failed, skipping trust card:", err);
   }
 }
 
@@ -603,16 +689,27 @@ export async function sendMatchProposal(
   // dropping the header entirely.
   const reasonForA = synergyReasonA || synergyReasonB;
   const reasonForB = synergyReasonB || synergyReasonA;
-  const synergyHeaderA =
-    synergyScore != null && reasonForA
-      ? t(langA, "matchSynergyHeader", { score: synergyScore, reason: reasonForA })
-      : "";
-  const synergyHeaderB =
-    synergyScore != null && reasonForB
-      ? t(langB, "matchSynergyHeader", { score: synergyScore, reason: reasonForB })
-      : "";
-  const finalA = synergyHeaderA ? `${synergyHeaderA}\n\n${lastA}` : lastA;
-  const finalB = synergyHeaderB ? `${synergyHeaderB}\n\n${lastB}` : lastB;
+  // Verification is read here rather than beside the photo captions below
+  // because the final pitch message carries the trust note (see
+  // `composeFinalPitchMessage`), and that message is assembled first.
+  const partnerBVerified = match.userB.verificationStatus === "verified";
+  const partnerAVerified = match.userA.verificationStatus === "verified";
+  const composedA = composeFinalPitchMessage({
+    lang: langA,
+    synergyScore,
+    synergyReason: reasonForA,
+    pitchTail: lastA,
+    partnerVerified: partnerBVerified,
+  });
+  const composedB = composeFinalPitchMessage({
+    lang: langB,
+    synergyScore,
+    synergyReason: reasonForB,
+    pitchTail: lastB,
+    partnerVerified: partnerAVerified,
+  });
+  const finalA = composedA.text;
+  const finalB = composedB.text;
   // The deadline notice is streamed right after the headline so the user
   // sees the irreversibility warning before any analysis fluff. The live
   // countdown rides the keyboard button (below), so the FINAL chunk is just
@@ -672,8 +769,6 @@ export async function sendMatchProposal(
   const photosForB = match.userA.profile?.photos ?? [];
   const mediaForA = match.userB.profile?.profileMedia ?? [];
   const mediaForB = match.userA.profile?.profileMedia ?? [];
-  const partnerBVerified = match.userB.verificationStatus === "verified";
-  const partnerAVerified = match.userA.verificationStatus === "verified";
   const captionForA = buildPhotoCaption(langA, match.userB.firstName, match.userB.age, {
     verified: partnerBVerified,
     customEmojiVerifiedId: env.CUSTOM_EMOJI_VERIFIED_ID,
@@ -687,10 +782,12 @@ export async function sendMatchProposal(
   // not Telegram drafts. Sending to a negative chat id used to throw and
   // crash the entire weekly-batch dispatch loop.
   //
-  // The verified trust card lands AFTER the pitch as the closing message —
-  // last argument the user reads before tapping Accept/Decline. Skipped
-  // entirely when the partner isn't `verified` so unverified partners
-  // get no negative signal.
+  // Per side the chat reads: album (cards + the partner's motion) → the
+  // streamed pitch, whose persisted message also carries the verified trust
+  // note → the voice prompt → the decision question. Four messages, and the
+  // two optional ones (trust note, voice) are folded in or skipped rather than
+  // adding bubbles. The voice stays last before "yes or no" by design
+  // (PRODUCT_SPEC §1.3b).
   const sendA = (async () => {
     if (!isTelegramTarget(match.userA.telegramId) || match.pitchMessageIdA != null) {
       return;
@@ -699,22 +796,25 @@ export async function sendMatchProposal(
     if (!shouldSkipWelcomeGiftPreroll(options, "A")) {
       await deliverWelcomeGiftPreroll(api, match.userA.id, chatA, langA, match.userA.gender);
     }
-    // Collage card set first (feature-flagged); `false` → classic photo album.
-    const cardsSentA = await sendPartnerMatchCards(api, chatA, {
+    // Collage card set first (feature-flagged); `{ sent: false }` → classic
+    // photo album. On success the partner's motion rides INSIDE that album, so
+    // only what did not fit Telegram's 10-item cap still needs its own send.
+    const cardsA = await sendPartnerMatchCards(api, chatA, {
       matchId,
       side: "A",
       partnerFirstName: match.userB.firstName,
       partnerAge: match.userB.age,
       partnerSummary: match.userB.profile?.psychologicalSummary ?? null,
       photos: photosForA,
+      profileMedia: normalizeProfileMedia(mediaForA, photosForA),
       language: langA,
       theme: themeA,
       caption: captionForA,
     });
-    if (!cardsSentA) {
+    if (!cardsA.sent) {
       await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
-    } else {
-      await sendMotionProfileMedia(api, chatA, normalizeProfileMedia(mediaForA, photosForA), {
+    } else if (cardsA.motionOverflow.length > 0) {
+      await sendMotionProfileMedia(api, chatA, cardsA.motionOverflow, {
         protect: PROTECT_PARTNER_MEDIA,
       }).catch((err) => {
         console.warn("sendMotionProfileMedia failed for side A, skipping:", err);
@@ -725,13 +825,16 @@ export async function sendMatchProposal(
       rich: true,
       thinkingIndex,
       thinkingEmojiId: AI_EMOJI.spark,
+      ...(composedA.entities.length ? { entities: composedA.entities } : {}),
     });
     if (!result) throw new Error("Pitch stream returned no final message for side A");
     await prisma.match.update({
       where: { id: matchId },
       data: { pitchMessageIdA: result.message_id },
     });
-    if (partnerBVerified) await sendVerifiedTrustCard(api, chatA, langA);
+    if (composedA.overflowTrustCard) {
+      await sendTrustCardOverflow(api, chatA, composedA.overflowTrustCard);
+    }
     await sendPartnerVoicePrompt(
       api,
       chatA,
@@ -749,21 +852,22 @@ export async function sendMatchProposal(
     if (!shouldSkipWelcomeGiftPreroll(options, "B")) {
       await deliverWelcomeGiftPreroll(api, match.userB.id, chatB, langB, match.userB.gender);
     }
-    const cardsSentB = await sendPartnerMatchCards(api, chatB, {
+    const cardsB = await sendPartnerMatchCards(api, chatB, {
       matchId,
       side: "B",
       partnerFirstName: match.userA.firstName,
       partnerAge: match.userA.age,
       partnerSummary: match.userA.profile?.psychologicalSummary ?? null,
       photos: photosForB,
+      profileMedia: normalizeProfileMedia(mediaForB, photosForB),
       language: langB,
       theme: themeB,
       caption: captionForB,
     });
-    if (!cardsSentB) {
+    if (!cardsB.sent) {
       await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
-    } else {
-      await sendMotionProfileMedia(api, chatB, normalizeProfileMedia(mediaForB, photosForB), {
+    } else if (cardsB.motionOverflow.length > 0) {
+      await sendMotionProfileMedia(api, chatB, cardsB.motionOverflow, {
         protect: PROTECT_PARTNER_MEDIA,
       }).catch((err) => {
         console.warn("sendMotionProfileMedia failed for side B, skipping:", err);
@@ -774,13 +878,16 @@ export async function sendMatchProposal(
       rich: true,
       thinkingIndex,
       thinkingEmojiId: AI_EMOJI.spark,
+      ...(composedB.entities.length ? { entities: composedB.entities } : {}),
     });
     if (!result) throw new Error("Pitch stream returned no final message for side B");
     await prisma.match.update({
       where: { id: matchId },
       data: { pitchMessageIdB: result.message_id },
     });
-    if (partnerAVerified) await sendVerifiedTrustCard(api, chatB, langB);
+    if (composedB.overflowTrustCard) {
+      await sendTrustCardOverflow(api, chatB, composedB.overflowTrustCard);
+    }
     await sendPartnerVoicePrompt(
       api,
       chatB,

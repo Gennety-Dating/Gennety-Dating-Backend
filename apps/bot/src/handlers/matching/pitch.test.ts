@@ -93,7 +93,7 @@ function payload(overrides: { telegramIdA?: bigint; telegramIdB?: bigint } = {})
 beforeEach(() => {
   vi.clearAllMocks();
   mUpdate.mockResolvedValue({ id: "match-1" });
-  mCards.mockResolvedValue(false);
+  mCards.mockResolvedValue({ sent: false });
   mMedia.mockResolvedValue(undefined);
   mMotion.mockResolvedValue(undefined);
 });
@@ -175,7 +175,7 @@ describe("sendMatchProposal — welcome-gift pre-roll", () => {
     expect(stream).toHaveBeenCalledTimes(2);
   });
 
-  it("sends protected motion media after successful static Match Cards", async () => {
+  it("hands the partner's motion to the card album instead of a follow-up message", async () => {
     const row = payload();
     Object.assign(row.userB.profile, {
       profileMedia: [
@@ -184,28 +184,36 @@ describe("sendMatchProposal — welcome-gift pre-roll", () => {
       ],
     });
     mFindUnique.mockResolvedValue(row);
-    mCards.mockResolvedValue(true);
+    mCards.mockResolvedValue({ sent: true, motionOverflow: [] });
     mGrant.mockResolvedValue({ granted: false, balance: 1 });
     const api = makeApi();
     const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
 
     await sendMatchProposal(api, "match-1", { streamImpl: stream });
 
-    expect(mMotion).toHaveBeenCalledWith(
+    // The album owns the motion now, so the card sender must actually receive
+    // it — a `profileMedia` that never arrives would silently drop the video.
+    expect(mCards).toHaveBeenCalledWith(
       api,
       1001,
-      expect.arrayContaining([
-        expect.objectContaining({ type: "live_photo", livePhoto: "motion-b" }),
-        expect.objectContaining({ type: "video", video: "video-b" }),
-      ]),
-      { protect: true },
+      expect.objectContaining({
+        profileMedia: expect.arrayContaining([
+          expect.objectContaining({ type: "live_photo", livePhoto: "motion-b" }),
+          expect.objectContaining({ type: "video", video: "video-b" }),
+        ]),
+      }),
     );
+    // …and nothing follows it: this is the message the change removes.
+    expect(mMotion).not.toHaveBeenCalled();
     expect(mMedia).not.toHaveBeenCalled();
   });
 
-  it("does not block pitch delivery when a motion follow-up fails", async () => {
+  it("still delivers the pitch when the overflow motion send fails", async () => {
     mFindUnique.mockResolvedValue(payload());
-    mCards.mockResolvedValue(true);
+    mCards.mockResolvedValue({
+      sent: true,
+      motionOverflow: [{ type: "video", video: "spilled-video" }],
+    });
     mMotion.mockRejectedValue(new Error("motion unavailable"));
     mGrant.mockResolvedValue({ granted: false, balance: 1 });
     const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
@@ -214,6 +222,20 @@ describe("sendMatchProposal — welcome-gift pre-roll", () => {
       sendMatchProposal(makeApi(), "match-1", { streamImpl: stream }),
     ).resolves.toBeUndefined();
     expect(stream).toHaveBeenCalledTimes(2);
+    // Asserted so the test cannot pass vacuously: before the overflow path
+    // existed, a `true` card result simply stopped calling this at all.
+    expect(mMotion).toHaveBeenCalled();
+  });
+
+  it("sends no follow-up message when the album took all the motion", async () => {
+    mFindUnique.mockResolvedValue(payload());
+    mCards.mockResolvedValue({ sent: true, motionOverflow: [] });
+    mGrant.mockResolvedValue({ granted: false, balance: 1 });
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(makeApi(), "match-1", { streamImpl: stream });
+
+    expect(mMotion).not.toHaveBeenCalled();
   });
 });
 

@@ -1219,7 +1219,7 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     expect(finalA).not.toContain("/99");
   });
 
-  it("renders the verified badge in the partner caption + sends the trust card after the pitch", async () => {
+  it("renders the verified badge in the caption + folds the trust note into the pitch message", async () => {
     // Side A is the recipient; the badge describes the *partner* (B).
     mMatch.findUnique.mockResolvedValue(
       findUniquePayload({ verificationB: "verified" }),
@@ -1247,27 +1247,38 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     // caption on the first item only.
     expect(mediaA[1]).toEqual({ type: "photo", media: "file-b-2" });
 
-    // Trust card to side A's chat with a blockquote entity covering the
-    // entire body (the conversational decision question follows it, so
-    // filter by the entity rather than counting all sendMessage calls).
-    const messagesA = api.sendMessage.mock.calls.filter((c: unknown[]) => c[0] === 1001);
-    const trustCalls = messagesA.filter(
-      (c: unknown[]) => (c[2] as { entities?: unknown[] } | undefined)?.entities,
-    );
-    expect(trustCalls).toHaveLength(1);
-    const [, body, opts] = trustCalls[0]!;
-    expect(body).toContain("face-match");
-    expect((opts as { entities: unknown[] }).entities).toEqual([
-      { type: "blockquote", offset: 0, length: (body as string).length },
-    ]);
-    // The conversational closer lands after the trust card.
-    const questionA = messagesA[messagesA.length - 1]!;
-    expect(questionA[1]).toContain("go on a date");
+    // The trust note rides INSIDE the persisted pitch message now rather than
+    // arriving as its own bubble — that is the message this change removes.
+    // Offsets are covered exhaustively by the `composeFinalPitchMessage` unit
+    // tests; here we only assert the wiring reaches the stream.
+    const streamCallA = stream.mock.calls.find((c: unknown[]) => c[1] === 1001);
+    expect(streamCallA).toBeDefined();
+    const draftsA = streamCallA![2] as string[];
+    const finalA = draftsA[draftsA.length - 1]!;
+    expect(finalA).toContain("face-match");
+    const entitiesA = (streamCallA![3] as { entities?: Array<Record<string, number | string>> })
+      .entities;
+    const quoteEntity = entitiesA?.find((e) => e.type === "blockquote");
+    expect(quoteEntity).toBeDefined();
+    expect(
+      finalA.slice(
+        quoteEntity!.offset as number,
+        (quoteEntity!.offset as number) + (quoteEntity!.length as number),
+      ),
+    ).toContain("face-match");
 
-    // Side B's partner (A) is unverified → no trust card, no badge for B —
-    // only the decision question reaches B's chat.
+    // Side A's chat therefore gets ONE plain message: the decision question.
+    const messagesA = api.sendMessage.mock.calls.filter((c: unknown[]) => c[0] === 1001);
+    expect(messagesA).toHaveLength(1);
+    expect(messagesA[0]![1]).toContain("go on a date");
+
+    // Side B's partner (A) is unverified → no trust note in B's pitch, no badge
+    // in B's caption — only the decision question reaches B's chat.
     const mediaCallB = api.sendPhoto.mock.calls.find((c: unknown[]) => c[0] === 1002);
     expect(mediaCallB![2]).toEqual({ caption: "Alice, 22", protect_content: true });
+    const streamCallB = stream.mock.calls.find((c: unknown[]) => c[1] === 1002);
+    const draftsB = streamCallB![2] as string[];
+    expect(draftsB[draftsB.length - 1]!).not.toContain("face-match");
     const messagesB = api.sendMessage.mock.calls.filter((c: unknown[]) => c[0] === 1002);
     expect(messagesB).toHaveLength(1);
     expect(messagesB[0]![1]).toContain("go on a date");

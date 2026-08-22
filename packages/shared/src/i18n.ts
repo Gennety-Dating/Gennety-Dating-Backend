@@ -510,7 +510,14 @@ const translations = {
     matchVerifiedQuote:
       "We verified this person. They passed our face-match check — " +
       "the photos in this profile match their real identity and belong to them.",
-    matchSynergyHeader: "💎 *Synergy {score}/99* — {reason}",
+    // The bold span is applied as a `bold` MessageEntity by the pitch, NOT by
+    // markdown: the final pitch message carries `entities` (for the verified
+    // blockquote) and Telegram accepts `entities` OR `parse_mode`, never both.
+    // Hence the label is its own key — the composer needs its exact bounds, and
+    // parsing `*…*` out of the interpolated string is unsafe because {reason}
+    // is model-written and may contain an asterisk of its own.
+    matchSynergyLabel: "Synergy {score}/99",
+    matchSynergyHeader: "💎 {label} — {reason}",
     pitchCountdownHours: "⏳ {hours}h left to reply",
     pitchCountdownMinutes: "⏳ {minutes} min left to reply",
     pitchDeadlineBtnHm: "⏳ Time left to reply: {h}h {m}m",
@@ -1721,7 +1728,8 @@ const translations = {
     matchVerifiedQuote:
       "Мы проверили этого пользователя. Он успешно прошёл проверку лица, " +
       "что означает: фотографии в профиле соответствуют его личности и принадлежат лично ему.",
-    matchSynergyHeader: "💎 *Синергия {score}/99* — {reason}",
+    matchSynergyLabel: "Синергия {score}/99",
+    matchSynergyHeader: "💎 {label} — {reason}",
     pitchCountdownHours: "⏳ Осталось {hours}ч на ответ",
     pitchCountdownMinutes: "⏳ Осталось {minutes} мин на ответ",
     pitchDeadlineBtnHm: "⏳ Осталось на ответ: {h}ч {m}м",
@@ -2854,7 +2862,8 @@ const translations = {
     matchVerifiedQuote:
       "Ми перевірили цього користувача. Він успішно пройшов перевірку обличчя — " +
       "фотографії в профілі відповідають його особистості та належать саме йому.",
-    matchSynergyHeader: "💎 *Синергія {score}/99* — {reason}",
+    matchSynergyLabel: "Синергія {score}/99",
+    matchSynergyHeader: "💎 {label} — {reason}",
     pitchCountdownHours: "⏳ Залишилось {hours}год на відповідь",
     pitchCountdownMinutes: "⏳ Залишилось {minutes} хв на відповідь",
     pitchDeadlineBtnHm: "⏳ Залишилось на відповідь: {h}год {m}хв",
@@ -3973,7 +3982,8 @@ const deTranslations: TranslationTable = {
   matchVerifiedQuote:
     "Wir haben diese Person verifiziert. Sie hat unseren Face-Match-Check bestanden - " +
     "die Fotos in diesem Profil passen zu ihrer echten Identität.",
-  matchSynergyHeader: "💎 *Synergie {score}/99* — {reason}",
+  matchSynergyLabel: "Synergie {score}/99",
+  matchSynergyHeader: "💎 {label} — {reason}",
   pitchCountdownHours: "⏳ Noch {hours}h zum Antworten",
   pitchCountdownMinutes: "⏳ Noch {minutes} Min zum Antworten",
   pitchDeadlineBtnHm: "⏳ Zeit zum Antworten: {h}h {m}m",
@@ -5071,7 +5081,8 @@ const plTranslations: TranslationTable = {
   matchVerifiedQuote:
     "Zweryfikowaliśmy tę osobę. Przeszła naszą weryfikację twarzy - " +
     "zdjęcia w profilu pasują do jej prawdziwej tożsamości.",
-  matchSynergyHeader: "💎 *Synergia {score}/99* — {reason}",
+  matchSynergyLabel: "Synergia {score}/99",
+  matchSynergyHeader: "💎 {label} — {reason}",
   pitchCountdownHours: "⏳ Zostało {hours}h na odpowiedź",
   pitchCountdownMinutes: "⏳ Zostało {minutes} min na odpowiedź",
   pitchDeadlineBtnHm: "⏳ Zostało na odpowiedź: {h}h {m}m",
