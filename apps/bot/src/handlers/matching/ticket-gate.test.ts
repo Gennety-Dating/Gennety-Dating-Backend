@@ -33,6 +33,7 @@ vi.mock("../../config.js", () => ({
     // table has to exist here like it does in the real config.
     TICKET_BUNDLE_STARS: { 1: 350, 3: 830, 6: 1350 },
     MESSAGE_EFFECT_MUTUAL_ID: "fx-hearts",
+    PREMIUM_FEATURE_ENABLED: true,
   },
 }));
 
@@ -59,6 +60,7 @@ import {
   refundAndFallbackToScheduling,
   retryPendingStarsGateRefunds,
   settlePremiumSlots,
+  getTicketState,
   ticketUrl,
 } from "./ticket-gate.js";
 import { startScheduling, sendCalendarCard } from "./scheduler.js";
@@ -999,5 +1001,40 @@ describe("premium covers the subscriber's own ticket slot", () => {
 
     expect(await settlePremiumSlots("match-1")).toEqual([]);
     expect(mMatch.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("the pay-step counterfactual flag", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mMatch.findUnique.mockReset();
+  });
+
+  it("is true for a non-subscriber and false for a subscriber", async () => {
+    mMatch.findUnique.mockResolvedValue(premiumRow(ACTIVE_PREMIUM, null));
+
+    const covered = await getTicketState(1001n, "match-1"); // A subscribes
+    const paying = await getTicketState(1002n, "match-1"); // B does not
+
+    expect(covered.ok && covered.state.myPremiumActive).toBe(true);
+    expect(covered.ok && covered.state.premiumWouldCoverMe).toBe(false);
+    expect(paying.ok && paying.state.myPremiumActive).toBe(false);
+    expect(paying.ok && paying.state.premiumWouldCoverMe).toBe(true);
+  });
+
+  it("is withheld entirely when the Premium feature is off", async () => {
+    // The split from `myPremiumActive` is the point: that one reports an
+    // entitlement the flag may not revoke, while this opens a NEW purchase
+    // surface — exactly what the flag exists to close.
+    const { env } = await import("../../config.js");
+    const previous = env.PREMIUM_FEATURE_ENABLED;
+    (env as { PREMIUM_FEATURE_ENABLED: boolean }).PREMIUM_FEATURE_ENABLED = false;
+    try {
+      mMatch.findUnique.mockResolvedValue(premiumRow(null, null));
+      const res = await getTicketState(1001n, "match-1");
+      expect(res.ok && res.state.premiumWouldCoverMe).toBe(false);
+    } finally {
+      (env as { PREMIUM_FEATURE_ENABLED: boolean }).PREMIUM_FEATURE_ENABLED = previous;
+    }
   });
 });

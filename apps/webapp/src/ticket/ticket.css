@@ -977,6 +977,59 @@ body {
   color: var(--text-faint);
 }
 
+/* The Premium counterfactual at the pay step — "your ticket is free with
+   Premium", sitting between the ticket card and the pay buttons.
+
+   Its whole design problem is rank. It has to be noticed at the moment money
+   is about to move, and it must not read as a second way to pay: the burgundy
+   hero button is a few pixels below it, and this screen's standing rule is
+   exactly one loud button on it. So it is deliberately NOT the venue board's
+   `.vc-premium-hint`, which is a filled accent button — that one is the
+   loudest object on its own screen and has no hero to compete with.
+
+   What it is instead: a full-width glass row at `--fill` (white 6% on dark,
+   black 5% on light, so it reads at one weight in both themes without an
+   outline — the design system takes depth from fills and light, never from
+   borders). The only accent on it is the padlock, so the row is legible as
+   "about Premium" at a glance while its type stays ordinary.
+
+   One step above the referral chip below it and several below the pay button:
+   a 46px row against that chip's 30px pill and the hero's 52px. That ladder is
+   the whole point — three tap targets in one column, in three plainly
+   different weights, so the eye never has to rank them itself. */
+.tkt-premium-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 46px;
+  margin: 16px 0 0;
+  padding: 0 16px;
+  border: none;
+  border-radius: 14px;
+  background: var(--fill);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.tkt-premium-hint:active {
+  transform: scale(0.985);
+}
+.tkt-premium-hint svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  /* The one accented thing on the row. `--accent-bright` rather than the plain
+     accent for the same reason the date card and the success mark lift theirs:
+     burgundy sinks into the near-black theme. */
+  color: var(--accent-bright);
+}
+
 /* "Premium covers your ticket ✨" — a statement of fact about a slot that is
    already closed, so it is a quiet centred line and never a button-shaped
    object: there is nothing here to act on. `--accent-bright` rather than the

@@ -15,11 +15,23 @@ import { referralHintText, type ReferralLang } from "./referral-hint.js";
 export interface ReferralChipProps {
   lang: ReferralLang;
   onTap: () => void;
+  /**
+   * Halve the top gap because another secondary row sits directly above — the
+   * Premium counterfactual. Two equal rows at equal spacing read as a list of
+   * two options rather than as an offer plus its footnote, which is the exact
+   * complaint §3.9 records against the venue board's own stacked pair. Mirrors
+   * the vanilla twin's `tight`, so the two rails cannot drift.
+   */
+  tight?: boolean;
 }
 
-export function ReferralChip({ lang, onTap }: ReferralChipProps): ReactElement {
+export function ReferralChip({ lang, onTap, tight }: ReferralChipProps): ReactElement {
   return (
-    <button type="button" className="gn-referral" onClick={onTap}>
+    <button
+      type="button"
+      className={tight ? "gn-referral gn-referral--tight" : "gn-referral"}
+      onClick={onTap}
+    >
       <LetterMark />
       <span>{referralHintText(lang)}</span>
     </button>

@@ -804,6 +804,15 @@ export interface TicketState {
    * longer stands behind. Covering the PARTNER is never free.
    */
   myPremiumActive?: boolean;
+  /**
+   * A subscription would have covered MY slot and I do not have one — the
+   * in-flow counterfactual at the pay step.
+   *
+   * Render it on the OFFER screen only. On the cover screen the money buys the
+   * partner's ticket, which Premium never covers, so the same line there would
+   * be false about the button beneath it.
+   */
+  premiumWouldCoverMe?: boolean;
 }
 
 /**

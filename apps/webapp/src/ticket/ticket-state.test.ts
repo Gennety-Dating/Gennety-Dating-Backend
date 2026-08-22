@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TicketState } from "../api.js";
+import appSource from "./App.tsx?raw";
 import {
   deriveScreen,
   deriveOfferButtons,
@@ -244,5 +245,33 @@ describe("Gennety Premium covers the subscriber's own slot", () => {
   it("sends a covered female straight to waiting — she has nothing to decide", () => {
     const s = state({ myGender: "female", iPaid: true, myPremiumActive: true, ticketStatus: "partial" });
     expect(deriveScreen(s)).toBe("waiting");
+  });
+});
+
+describe("the pay-step Premium counterfactual belongs to the offer screen only", () => {
+  // The rule lives in JSX, so it is asserted against the source: there is no
+  // pure function to call, and the failure it guards is silent — a line that
+  // reads "your ticket is free with Premium" directly above a button that buys
+  // the PARTNER's ticket, which Premium never covers.
+  it("is rendered only when the screen is `offer`", () => {
+    const marker = "state.premiumWouldCoverMe && (";
+    const at = appSource.indexOf(marker);
+    expect(at).toBeGreaterThan(-1);
+    // The condition immediately preceding it must pin the screen. Reached the
+    // cover screen, the same flag is still true — see the next test — so the
+    // flag alone is not a gate.
+    const condition = appSource.slice(Math.max(0, at - 40), at);
+    expect(condition).toContain('sc === "offer"');
+  });
+
+  it("stays true on the cover screen, which is why the screen check is the gate", () => {
+    const s = state({
+      myGender: "male",
+      iPaid: true,
+      premiumWouldCoverMe: true,
+      ticketStatus: "partial",
+    });
+    expect(deriveScreen(s)).toBe("cover-partner");
+    expect(s.premiumWouldCoverMe).toBe(true);
   });
 });

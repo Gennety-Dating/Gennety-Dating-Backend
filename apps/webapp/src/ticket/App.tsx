@@ -31,7 +31,7 @@ import { Confetti } from "./Confetti.js";
 import { PartialTimer } from "./PartialTimer.js";
 import { PartnerPaidCard } from "./PartnerPaidCard.js";
 import { Avatar } from "./Avatar.js";
-import { HeartMark } from "./marks.js";
+import { HeartMark, LockMark } from "./marks.js";
 import { returnParams } from "../return-to.js";
 import { ReferralChip } from "../referral-hint-react.js";
 
@@ -390,6 +390,36 @@ export function App(): ReactElement {
               strings={s}
             />
 
+            {/* The counterfactual, at the one moment it is both true and
+                useful: this date is about to cost something, and on a
+                subscription it would not have.
+
+                Three placement rules, each one a mistake this codebase has
+                already made somewhere else. It is in the SCROLL, never in the
+                sticky action bar — that footer is `flex: none`, so anything
+                added there grows it and pushes the pay button the user came
+                for up the screen (§3.9). It is NOT burgundy: the venue board's
+                own counterfactual is a filled accent button because it is the
+                loudest thing on that screen, whereas here the hero pay button
+                is directly below, and two burgundy blocks would be two
+                answers to one question. And it renders on `offer` ONLY — on
+                the cover screen the money buys the partner's ticket, which
+                Premium never covers, so the same line one screen later would
+                be false about the button under it. */}
+            {sc === "offer" && state.premiumWouldCoverMe && (
+              <button
+                type="button"
+                className="tkt-premium-hint"
+                onClick={() => {
+                  haptic("light");
+                  location.href = `premium.html?${returnParams("ticket-gate", { match: matchId, lang })}`;
+                }}
+              >
+                <LockMark />
+                <span>{s.premiumWouldCover}</span>
+              </button>
+            )}
+
             {/* Referral cross-promo: a quiet secondary way to get a ticket
                 without paying, shown only while the wallet is genuinely empty
                 and only at the offer step — by "cover-partner" he already
@@ -399,6 +429,10 @@ export function App(): ReactElement {
             {sc === "offer" && state.myBalance === 0 && state.referralEnabled && (
               <ReferralChip
                 lang={lang}
+                // Tightened when the Premium row sits directly above, so the
+                // two read as an offer plus its footnote rather than as a menu
+                // of two alternatives — the same pairing the venue board makes.
+                tight={Boolean(state.premiumWouldCoverMe)}
                 onTap={() => {
                   haptic("light");
                   location.href = `referral.html?${returnParams("ticket-gate", { match: matchId, lang })}`;

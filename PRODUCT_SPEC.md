@@ -2528,7 +2528,20 @@ change, not a migration.
   stream — one "thinking" lead beat (`noMatchStreamStart`, a `<tg-thinking>`
   shimmer) then the full message as the plain final `sendMessage` — so bad news
   is never spelled out slowly. Degrades to the classic edited stream when a
-  client can't render rich drafts. Telegram-only (mobile/Expo accounts are skipped here).
+  client can't render rich drafts.
+  **Both rails since 2026-08-22.** The service used to skip anyone with
+  `telegramId <= 0n` under a comment saying "push goes via the Expo path" — a
+  rail removed 2026-07-18 and never built, so an app-only user simply never
+  learned a drop had passed them by. Gender-free but the same shape as the
+  §Phase 4 safety brief: the QUERY selects who was left unpaired, and
+  `platform` selects the rail (`telegramReachable` / `pushReachable`), so a
+  `both` account hears it twice and only an account reachable on neither rail
+  is `skipped`. The push (`match.none`) is **one empathetic line and nothing
+  else**: it names no partner, and it deliberately carries no famine discount —
+  the discount's conditions are checked in the DM that grants it, so a push
+  promising it could promise wrongly. The four DM branches (famine tier,
+  market-pending with its city button, pool-exhaustion pause, discount) do not
+  travel to the lock screen, but none of them cancels the push either.
   When `TICKET_FEATURE_ENABLED` and the famine streak reaches **tier ≥ 2**
   (2nd consecutive week+), the same DM also grants and announces a one-time
   **single-ticket discount** (see §3.5b — *Famine discount*).
@@ -3117,8 +3130,36 @@ profile halves the proposal/venue offsets and is inert in production:
   the *deadline* rather than dispatch. Sent only to sides still genuinely
   undecided (`acceptedBy* IS NULL`
   — a side that already declined committed irreversibly and is never nagged),
-  Telegram-only, static i18n copy so the "Xh" stays accurate. Idempotent via
+  static i18n copy so the "Xh" stays accurate. Idempotent via
   `Match.proposalDeadlineNudgeSentAt`.
+
+**All three cadences reach both rails since 2026-08-22.** Every one of them
+picked recipients with `telegramId > 0n` and sent a DM and nothing else, so an
+app-only user was reminded of nothing — the tenth instance of one mechanic
+existing on one surface only, and the same defect §Phase 4's safety brief
+records: **whose move it is and how to reach them are two different questions**,
+and collapsing them into one filter is what dropped the app side. The
+who-owes-the-move predicates are untouched (`sideOwesAction` /
+`schedulingOwedKind`, shared with the §3.5c stall chain, so all three still
+agree); only the rail is now `platform`-derived. Push types `match.nudge`,
+`match.planning`, `match.deadline`, each carrying `{ type, matchId }`.
+
+Three properties are worth stating because they are easy to break later:
+
+- **The copy on the lock screen is static, and the model-written line stays in
+  the DM.** Planning gets ONE push copy covering both branches of
+  `schedulingOwedKind` — it must be true both when the calendar was never
+  opened and when both sides picked and nothing lined up, so it does not say
+  "pick a time".
+- **The counters count PEOPLE, not messages.** A `both` recipient increments by
+  one, and only when at least one rail actually landed; otherwise the numbers
+  stop comparing with previous days, which is the only thing they are for.
+- **Where the idempotency claim sits is unchanged, and it differs by cadence.**
+  Decision and deadline claim ABOVE the recipient list, so the stamp is spent
+  even when nobody is reachable (the row is not re-evaluated every tick, as in
+  `pre-date-safety.ts`); planning builds `owing` first, so an empty list spends
+  nothing. Moving a claim for the sake of symmetry is a separate decision and
+  was not taken here.
 
 Each cadence has its own timestamp column(s)
 (`proposalNudge1/2SentAt`, `schedNudge1/2SentAt`, `proposalDeadlineNudgeSentAt`)
@@ -3179,6 +3220,39 @@ every other slot, so a read racing the offer settles nothing twice. The read
 also completes the gate when that closed it; without that, a pair whose second
 slot was closed by a late subscription would sit fully paid in `partial` until
 the expiry sweep refunded them out of a date they had already secured.
+
+**The gate carries the counterfactual, and only where it is true (founder
+decision 2026-08-22).** A user without a subscription sees one quiet line under
+the ticket card — "your ticket is free with Premium" — opening the Premium
+screen rather than a payment sheet. This is the same in-flow device
+`premiumWouldWaive` already runs at the venue board's pay step, at the moment
+of maximum willingness to pay, and the founder's reasoning is that a per-date
+charge is exactly the cost a user cannot feel in aggregate until something
+names it.
+
+Four rules keep it from becoming the marketing §3.5b otherwise forbids on this
+screen:
+
+- **The `offer` screen only.** On the cover screen the money buys the
+  PARTNER's ticket, which Premium never covers, so the same line one screen
+  later would be false about the button directly beneath it. Guarded against
+  the source, because the failure is silent.
+- **Never burgundy.** The venue board's counterfactual is a filled accent
+  button because it is the loudest thing on its own screen; here the hero pay
+  button sits a few pixels below, and this screen's rule is exactly one loud
+  button. It is a glass row whose only accent is the padlock — one step above
+  the referral chip, several below the pay button, so three tap targets in one
+  column read in three plainly different weights.
+- **Never in the action bar.** That footer is `flex: none`, so anything added
+  there grows it and pushes up the button the user came to tap — the regression
+  §3.9 records against the referral chip on the Premium screen.
+- **Telegram-only, deliberately.** It is withheld from the `/v1/*` gate state
+  entirely rather than shipped and hidden client-side: `premium_monthly` cannot
+  currently be bought on iOS at all (the subscription group has never been
+  submitted, see deploy.md), so an upsell there would point at a product with
+  no purchase path. It is gated on `PREMIUM_FEATURE_ENABLED` — unlike
+  `myPremiumActive`, which reports an entitlement the flag may not revoke,
+  this opens a NEW purchase surface, which is what the flag exists to close.
 
 **Every premium settle writes a zero-delta `premium_gate` row to
 `ticket_ledger`.** Without it the admin purchase view cannot tell "Premium

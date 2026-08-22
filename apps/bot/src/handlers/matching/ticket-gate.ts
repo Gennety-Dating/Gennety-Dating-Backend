@@ -200,6 +200,22 @@ export interface TicketStateView {
    * claim the product can no longer stand behind.
    */
   myPremiumActive: boolean;
+  /**
+   * The actor is about to give something up for their OWN slot and a
+   * subscription would have covered it — i.e. the in-flow counterfactual is
+   * true for them right now (§3.5b / §3.8).
+   *
+   * Gated on `PREMIUM_FEATURE_ENABLED`, unlike `myPremiumActive` above, and the
+   * split is the point: that field reports an entitlement someone already paid
+   * for, which the flag may not revoke, while this one opens a NEW purchase
+   * surface, which is exactly what the flag exists to close.
+   *
+   * It says nothing about the PARTNER's slot, because Premium does not cover
+   * that (§3.5b). The client must therefore never render it on the cover
+   * screen: there the money buys her ticket, and "free with Premium" would be
+   * a straightforwardly false claim about the very button under it.
+   */
+  premiumWouldCoverMe: boolean;
 }
 
 export function buildTicketStateView(match: TicketMatch, side: Side): TicketStateView {
@@ -246,6 +262,7 @@ export function buildTicketStateView(match: TicketMatch, side: Side): TicketStat
     // the flag says, and the flag gates new purchase surfaces instead. Gating
     // here would strip a benefit from someone still inside a paid period.
     myPremiumActive: isPremiumHeadActive(me),
+    premiumWouldCoverMe: env.PREMIUM_FEATURE_ENABLED && !isPremiumHeadActive(me),
   };
 }
 

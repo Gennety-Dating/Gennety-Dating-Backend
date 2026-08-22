@@ -60,6 +60,21 @@ describe("Date Ticket i18n", () => {
     }
   });
 
+  it("keeps the pay-step counterfactual to one short line, about YOUR ticket", () => {
+    for (const lang of languages) {
+      const line = strings(lang).premiumWouldCover;
+      // It shares a row with a 16px padlock inside a ~350px screen, so a long
+      // translation turns the row into a paragraph — the exact regression §3.9
+      // records against the referral chip's old copy.
+      expect(line.length).toBeLessThanOrEqual(40);
+      expect(line).not.toContain("\n");
+      // Premium covers the subscriber's OWN slot and never their date's, so a
+      // bare "free" (which is what the venue board can honestly say, since
+      // there the whole fee vanishes) would over-promise here.
+      expect(line.toLowerCase()).toContain("premium");
+    }
+  });
+
   it("explains a Premium-covered slot, and says what Premium does NOT cover", () => {
     for (const lang of languages) {
       const s = strings(lang);

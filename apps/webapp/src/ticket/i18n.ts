@@ -52,6 +52,14 @@ export interface TicketStrings {
    * covering her is included too — is stated where he is about to decide.
    */
   premiumCoverNotIncluded: string;
+  /**
+   * The counterfactual at the pay step: this date would have cost nothing on a
+   * subscription. Says "YOUR ticket", never a bare "free" — Premium covers the
+   * subscriber's own slot and deliberately not their date's, so the venue
+   * board's own wording ("Free with Gennety Premium", where the whole fee does
+   * vanish) would over-promise here.
+   */
+  premiumWouldCover: string;
   justWait: string;
   /**
    * The way back from the waiting screen after he declined the cover offer.
@@ -141,6 +149,7 @@ const en: TicketStrings = {
   coverPartnerSub: "Your ticket's set. Want to cover {name}'s too, or let them grab it?",
   premiumCovered: "Premium covers your ticket ✨",
   premiumCoverNotIncluded: "Premium covers yours only — {name}'s is one ticket's price.",
+  premiumWouldCover: "Your ticket is free with Premium",
   justWait: "I'll let them grab it",
   coverReconsider: "Actually — cover their ticket",
   balanceLabel: "Balance",
@@ -193,6 +202,7 @@ const ru: TicketStrings = {
   coverPartnerSub: "Твой билет уже есть. Оплатить и за {name} или пусть берёт сам(а)?",
   premiumCovered: "Твой билет покрыт Premium ✨",
   premiumCoverNotIncluded: "Premium покрывает только твой — билет {name} стоит одну цену.",
+  premiumWouldCover: "С Premium твой билет бесплатный",
   justWait: "Пусть берёт сам(а)",
   coverReconsider: "Всё-таки оплатить за пару",
   balanceLabel: "Баланс",
@@ -248,6 +258,7 @@ const uk: TicketStrings = {
   coverPartnerSub: "Твій квиток уже є. Сплатити й за {name} чи нехай бере сам(а)?",
   premiumCovered: "Твій квиток покритий Premium ✨",
   premiumCoverNotIncluded: "Premium покриває лише твій — квиток {name} коштує одну ціну.",
+  premiumWouldCover: "З Premium твій квиток безкоштовний",
   justWait: "Нехай бере сам(а)",
   coverReconsider: "Все-таки сплатити за пару",
   balanceLabel: "Баланс",
@@ -300,6 +311,7 @@ const de: TicketStrings = {
   coverPartnerSub: "Dein Ticket steht. Auch {name} übernehmen oder selbst holen lassen?",
   premiumCovered: "Premium deckt dein Ticket ✨",
   premiumCoverNotIncluded: "Premium deckt nur deins — das von {name} kostet einen Ticketpreis.",
+  premiumWouldCover: "Mit Premium ist dein Ticket frei",
   justWait: "Sollen sie selbst holen",
   coverReconsider: "Doch für dein Date zahlen",
   balanceLabel: "Guthaben",
@@ -352,6 +364,7 @@ const pl: TicketStrings = {
   coverPartnerSub: "Twój bilet jest. Pokryć też {name} czy niech weźmie sam(a)?",
   premiumCovered: "Premium pokrywa twój bilet ✨",
   premiumCoverNotIncluded: "Premium pokrywa tylko twój — bilet {name} kosztuje jedną cenę.",
+  premiumWouldCover: "Z Premium twój bilet jest darmowy",
   justWait: "Niech weźmie sam(a)",
   coverReconsider: "Jednak zapłać za swoją randkę",
   balanceLabel: "Saldo",

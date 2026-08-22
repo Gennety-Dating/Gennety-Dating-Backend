@@ -25,6 +25,33 @@ export function HeartMark(): ReactElement {
 }
 
 /**
+ * Padlock — the Premium counterfactual at the pay step (React twin of
+ * `icons.ts`'s `lock`, same path data). Stroked rather than filled, so it sits
+ * a step quieter than the filled marks around it: the row it leads is a
+ * footnote to the pay button, not a rival to it.
+ */
+export function LockMark(): ReactElement {
+  return (
+    <svg viewBox={BOX} aria-hidden="true" focusable="false" shapeRendering="geometricPrecision">
+      <path
+        d="M6 10.5h12a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 18 19.5H6A1.5 1.5 0 0 1 4.5 18v-6A1.5 1.5 0 0 1 6 10.5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.7}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 10.5V8a4 4 0 0 1 8 0v2.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.7}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/**
  * Envelope with a heart seal — the "invite a friend instead" referral
  * cross-promo link (React twin of `icons.ts`'s `letter`, same path data).
  */
