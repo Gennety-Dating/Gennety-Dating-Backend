@@ -353,8 +353,27 @@ you hears this before they decide*. Recommendations are concrete and few; the
 closing line ("don't rehearse, the first take is the liveliest") exists to stop
 the re-record spiral that turns an optional step into a funnel leak.
 
-Copy lives in `packages/shared/src/i18n.ts` in all five languages, deterministic
-template like the rest of onboarding — not model output.
+**Two rules the first version broke (2026-08-22).** A recommendation must FIT
+the duration the same message names — it said 15 seconds and suggested telling a
+story, which is two incompatible asks in adjacent sentences. And "optional" is
+only true if the message says where the exit is: the skip button was under it
+and never named, so the claim read as a dead end. Both are pinned by
+`voice-prompt-ask.test.ts` as far as they can be — the label must appear in the
+Telegram ask, and the five languages must name one number between them.
+
+**The pointer at the button is Telegram's, not the shared copy's.** The question
+text is what `runAgentTurn` returns, and §5 serves that same string to the
+native rail, where this keyboard does not exist. So the shared copy says the
+step can be skipped and `sendVoicePromptAsk` appends the line naming the button,
+interpolated from `voicePromptSkipButton` so the two cannot drift.
+
+Copy lives in the collector's own question table
+([`onboarding-collector.ts`](apps/bot/src/services/onboarding-collector.ts)) in
+all five languages — deterministic template like the rest of onboarding, not
+model output. Only the surrounding strings (skip label and hint, the
+confirmation, the rejections, the pitch caption) are in
+`packages/shared/src/i18n.ts`; an earlier revision of this line said the ask
+itself lived there, and it never did.
 
 ```mermaid
 sequenceDiagram

@@ -1550,7 +1550,7 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     context_dump: contextDumpInstruction("en"),
     photos: `Send at least ${MIN_PHOTOS} clear photos of yourself.`,
     voice_prompt:
-      "Last thing — and it's optional.\n\nRecord a voice note, about 15 seconds. Whoever I find for you hears it alongside your profile — before they decide.\n\nA voice carries what writing can't: how you joke, how you build a sentence, the tempo you live at.\n\nOne rule: don't read your profile aloud — it's already on their screen. Better: whatever's got you hooked right now, or the story you always end up telling friends.\n\nAnd don't rehearse. The first take is always the most alive.",
+      "Last thing — optional, you can skip this step.\n\nRecord about 15 seconds. Whoever I find for you hears it before they decide, and a voice carries what writing can't: how you joke, the tempo you live at.\n\nOne rule: don't read your profile aloud — it's already on their screen. Say what's got you hooked right now. And don't rehearse: the first take is always the most alive.",
     complete: "Your onboarding is complete.",
   },
   ru: {
@@ -1566,7 +1566,7 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     context_dump: contextDumpInstruction("ru"),
     photos: `Пришли минимум ${MIN_PHOTOS} чёткие фотографии, где хорошо видно тебя.`,
     voice_prompt:
-      "И последнее — по желанию.\n\nЗапиши голосовое секунд на 15. Человек, которого я тебе найду, услышит его вместе с твоей анкетой — до того, как решит.\n\nГолос выдаёт то, что не пишется: как ты шутишь, как строишь фразу, в каком темпе живёшь.\n\nОдно правило: не пересказывай анкету — она и так будет на экране. Лучше расскажи, что тебя сейчас затянуло, или историю, которую ты обычно рассказываешь друзьям.\n\nИ не репетируй. Первый дубль всегда живее.",
+      "И последнее — по желанию, этот шаг можно пропустить.\n\nЗапиши секунд на 15. Человек, которого я тебе найду, услышит это до того, как решит, — голос выдаёт то, что не пишется: как ты шутишь, в каком темпе живёшь.\n\nОдно правило: не пересказывай анкету — она и так будет на экране. Скажи, что тебя сейчас затянуло. И не репетируй: первый дубль всегда живее.",
     complete: "Онбординг завершён.",
   },
   uk: {
@@ -1582,7 +1582,7 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     context_dump: contextDumpInstruction("uk"),
     photos: `Надішли щонайменше ${MIN_PHOTOS} чіткі фотографії, де добре видно тебе.`,
     voice_prompt:
-      "І останнє — за бажанням.\n\nЗапиши голосове секунд на 15. Людина, яку я тобі знайду, почує його разом з твоєю анкетою — до того, як вирішить.\n\nГолос видає те, що не пишеться: як ти жартуєш, як будуєш фразу, у якому темпі живеш.\n\nОдне правило: не переказуй анкету — вона й так буде на екрані. Краще розкажи, що тебе зараз затягнуло, або історію, яку ти зазвичай розповідаєш друзям.\n\nІ не репетируй. Перший дубль завжди живіший.",
+      "І останнє — за бажанням, цей крок можна пропустити.\n\nЗапиши секунд на 15. Людина, яку я тобі знайду, почує це до того, як вирішить, — голос видає те, що не пишеться: як ти жартуєш, у якому темпі живеш.\n\nОдне правило: не переказуй анкету — вона й так буде на екрані. Скажи, що тебе зараз затягнуло. І не репетируй: перший дубль завжди живіший.",
     complete: "Онбординг завершено.",
   },
   de: {
@@ -1598,7 +1598,7 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     context_dump: contextDumpInstruction("de"),
     photos: `Sende mindestens ${MIN_PHOTOS} klare Fotos von dir.`,
     voice_prompt:
-      "Zum Schluss — freiwillig.\n\nNimm eine Sprachnachricht auf, etwa 15 Sekunden. Die Person, die ich für dich finde, hört sie zusammen mit deinem Profil — bevor sie entscheidet.\n\nEine Stimme trägt, was sich nicht schreiben lässt: wie du witzelst, wie du einen Satz baust, in welchem Tempo du lebst.\n\nEine Regel: lies nicht dein Profil vor — das steht ohnehin schon da. Besser: was dich gerade packt, oder die Geschichte, die du deinen Freunden immer erzählst.\n\nUnd probe nicht. Der erste Take ist immer der lebendigste.",
+      "Zum Schluss — freiwillig, du kannst diesen Schritt überspringen.\n\nNimm etwa 15 Sekunden auf. Die Person, die ich für dich finde, hört sie, bevor sie entscheidet — eine Stimme trägt, was sich nicht schreiben lässt: wie du witzelst, in welchem Tempo du lebst.\n\nEine Regel: lies nicht dein Profil vor — das steht ohnehin schon da. Erzähl, was dich gerade packt. Und probe nicht: der erste Take ist immer der lebendigste.",
     complete: "Dein Onboarding ist abgeschlossen.",
   },
   pl: {
@@ -1614,7 +1614,7 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     context_dump: contextDumpInstruction("pl"),
     photos: `Wyślij co najmniej ${MIN_PHOTOS} wyraźne zdjęcia, na których dobrze Cię widać.`,
     voice_prompt:
-      "I ostatnia rzecz — nieobowiązkowa.\n\nNagraj wiadomość głosową, jakieś 15 sekund. Osoba, którą ci znajdę, usłyszy ją razem z twoim profilem — zanim zdecyduje.\n\nGłos niesie to, czego nie da się napisać: jak żartujesz, jak budujesz zdanie, w jakim tempie żyjesz.\n\nJedna zasada: nie czytaj profilu na głos — i tak będzie na ekranie. Lepiej: co cię teraz wciągnęło, albo historia, którą zawsze opowiadasz znajomym.\n\nI nie ćwicz. Pierwsze podejście jest zawsze najbardziej żywe.",
+      "I ostatnia rzecz — nieobowiązkowa, ten krok można pominąć.\n\nNagraj jakieś 15 sekund. Osoba, którą ci znajdę, usłyszy to, zanim zdecyduje — głos niesie to, czego nie da się napisać: jak żartujesz, w jakim tempie żyjesz.\n\nJedna zasada: nie czytaj profilu na głos — i tak będzie na ekranie. Powiedz, co cię teraz wciągnęło. I nie ćwicz: pierwsze podejście jest zawsze najbardziej żywe.",
     complete: "Onboarding został zakończony.",
   },
 };

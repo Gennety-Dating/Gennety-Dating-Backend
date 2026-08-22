@@ -45,6 +45,15 @@ const translations = {
       "Almost done! Send {min}–{max} different photos. Every photo must clearly show you, and explicit content isn't allowed. A profile video may include friends or scenery, but you must appear clearly in several moments.",
     photoReceived: "Photo {n}/{max}",
     voicePromptSkipButton: "Without a voice note",
+    /**
+     * The Telegram-only pointer at the skip button, appended by
+     * `sendVoicePromptAsk` — NOT part of the shared question text, which the
+     * native rail serves verbatim over `/v1/onboarding/interview` and where no
+     * such button exists. `{button}` is interpolated from
+     * `voicePromptSkipButton` so the copy cannot name a label the keyboard
+     * stopped using; a test enforces that.
+     */
+    voicePromptSkipHint: "To skip: the “{button}” button below.",
     voicePromptSaved: "Saved ✨ They'll hear it right before they decide.",
     voicePromptTooShort: "That was barely a second — the mic button needs holding. Try again, aim for about 15 seconds.",
     voicePromptTooLong: "A bit long — keep it under a minute, otherwise it doesn't get listened to. Record another one?",
@@ -1285,6 +1294,7 @@ const translations = {
       "Почти всё! Пришли {min}–{max} разных фото. На каждом должен быть хорошо виден ты, откровенный контент запрещён. В видео могут быть друзья или пейзажи, но ты должен хорошо появляться в нескольких моментах.",
     photoReceived: "Фото {n}/{max}",
     voicePromptSkipButton: "Без голосового",
+    voicePromptSkipHint: "Пропустить — кнопка «{button}» ниже.",
     voicePromptSaved: "Сохранил ✨ Он услышит его прямо перед тем, как решить.",
     voicePromptTooShort: "Это меньше секунды — кнопку микрофона надо держать. Попробуй ещё раз, целься секунд на 15.",
     voicePromptTooLong: "Длинновато — уложись в минуту, иначе такое просто не дослушивают. Запишешь ещё раз?",
@@ -2419,6 +2429,7 @@ const translations = {
       "Майже все! Надішли {min}–{max} різних фото. На кожному маєш бути добре видимий ти, відвертий контент заборонений. У відео можуть бути друзі або краєвиди, але ти маєш добре з'являтися в кількох моментах.",
     photoReceived: "Фото {n}/{max}",
     voicePromptSkipButton: "Без голосового",
+    voicePromptSkipHint: "Пропустити — кнопка «{button}» нижче.",
     voicePromptSaved: "Зберіг ✨ Він почує його прямо перед тим, як вирішити.",
     voicePromptTooShort: "Це менше секунди — кнопку мікрофона треба тримати. Спробуй ще раз, цілься секунд на 15.",
     voicePromptTooLong: "Задовго — вклади́ся в хвилину, інакше таке просто не дослуховують. Запишеш ще раз?",
@@ -3560,6 +3571,7 @@ const deTranslations: TranslationTable = {
     "Fast fertig! Sende {min}-{max} verschiedene Fotos. Auf jedem musst du klar zu sehen sein; explizite Inhalte sind nicht erlaubt. Ein Profilvideo darf Freunde oder Landschaften zeigen, aber du musst in mehreren Momenten klar erscheinen.",
   photoReceived: "Foto {n}/{max}",
   voicePromptSkipButton: "Ohne Sprachnachricht",
+  voicePromptSkipHint: "Überspringen: der Button „{button}“ unten.",
   voicePromptSaved: "Gespeichert ✨ Die Person hört sie direkt vor ihrer Entscheidung.",
   voicePromptTooShort: "Das war kaum eine Sekunde — die Mikrofontaste muss gehalten werden. Versuch's nochmal, ziel auf etwa 15 Sekunden.",
   voicePromptTooLong: "Etwas lang — bleib unter einer Minute, sonst hört das niemand zu Ende. Nochmal aufnehmen?",
@@ -4661,6 +4673,7 @@ const plTranslations: TranslationTable = {
     "Prawie gotowe! Wyślij {min}-{max} różnych zdjęć. Na każdym musisz być wyraźnie widoczny; treści erotyczne są niedozwolone. Wideo profilowe może pokazywać znajomych lub krajobrazy, ale musisz pojawić się wyraźnie w kilku momentach.",
   photoReceived: "Zdjęcie {n}/{max}",
   voicePromptSkipButton: "Bez wiadomości głosowej",
+  voicePromptSkipHint: "Pominąć — przycisk „{button}” poniżej.",
   voicePromptSaved: "Zapisałem ✨ Usłyszy ją tuż przed decyzją.",
   voicePromptTooShort: "To ledwie sekunda — przycisk mikrofonu trzeba przytrzymać. Spróbuj jeszcze raz, celuj w jakieś 15 sekund.",
   voicePromptTooLong: "Trochę za długo — zmieść się w minucie, inaczej nikt tego nie dosłucha. Nagrasz jeszcze raz?",

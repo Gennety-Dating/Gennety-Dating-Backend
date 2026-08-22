@@ -154,6 +154,25 @@ function rejectionText(language: Language, reason: MediaValidationReason): strin
   }
 }
 
+/**
+ * The ask text plus the Telegram-only line naming the skip button.
+ *
+ * The question text itself is surface-neutral on purpose: `runAgentTurn`
+ * returns the same string to the native rail over `/v1/onboarding/interview`,
+ * where this keyboard does not exist and the client draws its own skip. So the
+ * shared copy says the step CAN be skipped and this layer says WHERE — the same
+ * split `conversational.ts` already states for the radar gate ("the agent names
+ * the state, this surface renders the affordance").
+ *
+ * The label is interpolated rather than written out, so the sentence cannot
+ * name a button the keyboard stopped using.
+ */
+export function voicePromptAskText(language: Language, question: string): string {
+  return `${question}\n\n${t(language, "voicePromptSkipHint", {
+    button: t(language, "voicePromptSkipButton"),
+  })}`;
+}
+
 /** Send the ask and arm the step. Exported for the conversational handler. */
 export async function sendVoicePromptAsk(
   api: Api,
@@ -161,7 +180,7 @@ export async function sendVoicePromptAsk(
   language: Language,
   text: string,
 ): Promise<void> {
-  await api.sendMessage(chatId, text, {
+  await api.sendMessage(chatId, voicePromptAskText(language, text), {
     reply_markup: voicePromptKeyboard(language),
   });
 }

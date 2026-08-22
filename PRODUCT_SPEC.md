@@ -1064,6 +1064,28 @@ profile aloud"), because that is the default failure and the bio is already on
 the partner's screen; the hook is the stake, stated plainly — *the person I find
 for you hears this before they decide*.
 
+**The copy must not ask for more than the time it names, and it must point at
+the way out (2026-08-22).** It shipped doing neither. It said *about 15 seconds*
+and then suggested "the story you always end up telling friends" — a story does
+not fit in fifteen seconds at any length, so the message asked for two
+incompatible things in adjacent sentences. And it opened on *it's optional*
+without ever saying where the exit was: the skip button existed, sat under the
+message, and was never named, so a reader scanning the text for how to leave
+found nothing. The suggestion is now one that fits the time (*what's got you
+hooked right now*), and the ask is three paragraphs rather than five — an
+optional step is the wrong place to spend a screen.
+
+**Where the pointer at the button lives is a rail question, not a wording one.**
+The question text is what `runAgentTurn` returns, and the native client is
+served that same string over `/v1/onboarding/interview`, where this keyboard
+does not exist and the app draws its own skip. So the shared copy says the step
+CAN be skipped, and the Telegram layer (`sendVoicePromptAsk`) appends the line
+saying WHERE — the same split the radar gate already runs on. That line
+interpolates `voicePromptSkipButton` rather than repeating it, so the sentence
+cannot name a button the keyboard stopped using, and a test holds all of it:
+the label appears in the Telegram ask, appears in no shared question text, and
+the durations named across the five languages are one number.
+
 **There is no prompt catalog** (founder decision 2026-08-21). A Hinge prompt is a
 frame for ten seconds of a stranger's voice in a FEED; this product has no feed,
 delivers one person per day inside a pitch that already argues who they are, and
