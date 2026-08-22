@@ -305,23 +305,29 @@ out of Telegram-only workers.
   the palette is the button's own gradient plus one gold, and it is skipped
   outright under `prefers-reduced-motion` or on a client with no Web Animations
   API. Telegram-only; the native iOS client owns its own controls here.
-  **The gender screen shows two people rather than two rows (2026-08-20).**
-  It was two stacked rows carrying two words — the plainest control in the set,
-  on the one question in it that is about who you ARE. It is now two nearly
-  square, heavily rounded buttons side by side, each carrying a drawn portrait
-  over the button's own burgundy/blue gradient, with the label at the bottom.
-  Same collector write, same burst, same tones as before: this is the control
-  changing, not the question.
+  **The gender screen shows two people rather than two rows (2026-08-20,
+  reworked to photographs 2026-08-22).** It was two stacked rows carrying two
+  words — the plainest control in the set, on the one question in it that is
+  about who you ARE. It is now two heavily rounded 3:4 buttons side by side,
+  each carrying a background-removed **photograph** over the button's own
+  burgundy/blue gradient, with the label at the bottom. Same collector write,
+  same burst, same tones: this is the control changing, not the question.
+
+  **Photographs rather than illustration, and that is a consistency decision
+  rather than a taste one** (founder, 2026-08-22). A drawn pair shipped here
+  first. The screen one step later — "who do you want to meet?" — is
+  photographs, so an illustrated fork followed by a photographic one read as a
+  seam between two products rather than as two steps of one flow.
 
   **The portraits are monochrome at rest and bloom into colour on the tap**
-  (founder decision) — a warm ink-on-ivory, not a flat `grayscale(1)`, which
-  reads as an image that failed to load. So until the user chooses, every
-  saturated pixel on the screen belongs to the two buttons, and the colour of a
-  person is the reward for choosing rather than decoration. Same rule the
-  loading mark states from the other side: structure stays neutral, colour is
-  spent only on what carries meaning. Under `prefers-reduced-motion` the colour
-  is simply always there — the neutral state exists only as the setup for the
-  reveal, so without the reveal it would be a desaturated picture for no reason.
+  (founder decision) — a warm print, not a flat `grayscale(1)`, which reads as
+  a photograph that failed to load. So until the user chooses, every saturated
+  pixel on the screen belongs to the two buttons, and the colour of a person is
+  the reward for choosing rather than decoration. Same rule the loading mark
+  states from the other side: structure stays neutral, colour is spent only on
+  what carries meaning. Under `prefers-reduced-motion` the colour is simply
+  always there — the neutral state exists only as the setup for the reveal, so
+  without the reveal it would be a desaturated picture for no reason.
 
   **Because the same tap also ends the screen, the advance is floored**
   (`GENDER_ADVANCE_HOLD_MS`, 600 ms): otherwise the bloom is cut off wherever
@@ -333,14 +339,25 @@ out of Telegram-only workers.
   success mark's timings get, and for the same reason: a number like this
   otherwise creeps one retune at a time.
 
-  **The bottom of each drawing dissolves into the button's gradient**, and that
-  mask is load-bearing rather than styling. The portraits are cropped mid-chest
-  by their own frame, so the artwork ends on a hard horizontal edge with no
-  silhouette; without the fade the shirt simply stops on a straight line across
-  the button. It is also what leaves the label sitting on clean colour, so this
-  screen needs no scrim over its word — unlike the preference columns, whose
-  photographs run all the way down. Telegram-only; the native iOS client owns
-  its own controls here.
+  **The shipped artwork is not a crop of its source, and could not be.** Each
+  figure is PLACED into a canvas the shape of the button by measured landmarks
+  (`prepare.mjs`, outside the repo). The arithmetic is worth keeping, because it
+  is what rules out the obvious approach: at `object-fit: cover` in a 3:4 box the
+  visible source height is 0.75x the visible width, so fitting a head that
+  occupies the top 60% of a 9:16 photograph needs at least 80% of that
+  photograph's width — and the camera in the woman's raised hand starts at 82%
+  of it. Every crop that cleared the camera cut her chin; every crop that kept
+  her chin kept a slice of camera. Placing by landmarks separates the two
+  questions, so dropping the camera column stops being coupled to where the face
+  sits.
+
+  **The bottom of each photograph dissolves into the button's gradient**, which
+  is the handover from person to colour and what leaves the label on clean
+  colour rather than needing a scrim over it. It begins BELOW the chin, and a
+  test holds it there against the placement constant: the fade and the artwork
+  live in different files — the prep script is outside the repo — so nothing
+  else stops the fade from being moved back up and quietly eating a face.
+  Telegram-only; the native iOS client owns its own controls here.
 
   **"Who do you want to meet?" shows the answer instead of naming it
   (2026-08-06).** It was three stacked rows carrying three words, which asked

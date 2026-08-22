@@ -2792,9 +2792,9 @@ button {
   --gender-reveal: 520ms;
   min-height: 0;
   padding: 0;
-  /* Square-ish rather than square: the drawings are head-and-shoulders, and a
-     little extra height is what buys the label a strip of its own. */
-  aspect-ratio: 88 / 100;
+  /* Taller than wide. The portraits are head-and-shoulders, so the height is
+     what carries the person; a square button spent it on empty gradient. */
+  aspect-ratio: 3 / 4;
   border-radius: 32px;
   display: flex;
   align-items: flex-end;
@@ -2802,13 +2802,12 @@ button {
 }
 
 /* The portrait layer.
-   Full-bleed, and the bottom of the drawing DISSOLVES into the button's own
-   gradient with a mask. That is doing two jobs at once: it is the soft handover
-   from photo to button colour the screen was designed around, and it is what
-   hides the source crop — these portraits are cut off mid-chest by their own
-   frame, so with a hard edge the shirt would simply stop on a straight line
-   across the button. It also leaves the label sitting on clean gradient, so no
-   scrim is needed over it.
+   Full-bleed, and the bottom of the photograph DISSOLVES into the button's own
+   gradient with a mask — the soft handover from person to colour the screen was
+   designed around, and what leaves the label sitting on clean gradient rather
+   than needing a scrim over it. It starts below the chin: the figure is placed
+   in the asset by measured landmarks (gender-avatars.ts), so where the face
+   ends is a known number rather than something the mask has to be safe about.
 
    `overflow: hidden` lives here and NOT on the button: the tap halo is a
    `::after` at `inset: -2px` that scales past the button's own edge, and
@@ -2826,22 +2825,24 @@ button {
   border-radius: inherit;
   overflow: hidden;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(180deg, #000 58%, transparent 90%);
-  mask-image: linear-gradient(180deg, #000 58%, transparent 90%);
+  -webkit-mask-image: linear-gradient(180deg, #000 76%, transparent 99%);
+  mask-image: linear-gradient(180deg, #000 76%, transparent 99%);
 }
 
 .ob-gender-shot {
   display: block;
   width: 100%;
   height: 100%;
+  /* The asset is already the button's own 3:4 and the figure is already placed
+     inside it, so this crops nothing today. It is `cover` rather than `fill` so
+     that a future tweak to the button's ratio degrades to a crop instead of
+     stretching a face. */
   object-fit: cover;
-  /* Anchored to the top: the head is what the drawing is about, and the bottom
-     is the part the mask is dissolving anyway. */
   object-position: 50% 0;
   /* At rest the people are a warm monochrome and every saturated pixel on the
      screen belongs to the two buttons. Deliberately not a flat `grayscale(1)`,
-     which reads as an image that failed to load; the trace of sepia reads as
-     ink on ivory, i.e. as a choice. */
+     which reads as a photograph that failed to load; the trace of sepia reads
+     as a warm print, i.e. as a choice. */
   filter: grayscale(1) sepia(0.22) brightness(1.02);
   transition: filter var(--gender-reveal) ease;
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 // `?raw` rather than `node:fs`: this package compiles with `types: []`, so a
 // Node builtin would break `pnpm typecheck` even though vitest runs it happily.
 import CSS from "./onboarding.css?raw";
+import { GENDER_ART_CHIN_PCT } from "./gender-avatars.js";
 import {
   GENDER_ADVANCE_HOLD_CEILING_MS,
   GENDER_ADVANCE_HOLD_MS,
@@ -57,15 +58,29 @@ describe("gender screen", () => {
   });
 
   /**
-   * The drawings are cropped mid-chest by their own frame, so the bottom of the
-   * artwork is a hard horizontal edge rather than a silhouette. The mask is what
-   * dissolves it into the button's gradient — and what leaves the label sitting
-   * on clean colour instead of needing a scrim.
+   * The bottom of the photograph dissolves into the button's gradient — the
+   * handover from person to colour, and what leaves the label on clean colour
+   * instead of needing a scrim over it.
    */
   it("dissolves the bottom of the artwork into the button", () => {
     const art = block(".ob-gender-art {");
     expect(art).toMatch(/mask-image:\s*linear-gradient\(180deg/);
     expect(art).toMatch(/-webkit-mask-image:/);
+  });
+
+  /**
+   * And it must begin BELOW the chin. The figure is placed in the asset by
+   * measured landmarks, so where the face ends is a known number rather than
+   * something the fade has to be safe about — but the two live in different
+   * files (the prep script is outside the repo), so nothing else stops the fade
+   * from being moved back up and quietly dissolving a face.
+   */
+  it("starts the fade below the face", () => {
+    const stop = /mask-image:\s*linear-gradient\(180deg,\s*#000\s+(\d+)%/.exec(
+      block(".ob-gender-art {"),
+    );
+    expect(stop, "could not read the mask's first stop").not.toBeNull();
+    expect(Number(stop?.[1])).toBeGreaterThanOrEqual(GENDER_ART_CHIN_PCT);
   });
 
   /**
