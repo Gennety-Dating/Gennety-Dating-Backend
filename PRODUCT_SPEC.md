@@ -213,6 +213,32 @@ out of Telegram-only workers.
   (`keyboard-ease.test.ts` holds the scoping as well as the curve). The native
   iOS client already had purpose-built controls here via the `ui_hint`
   contract; this is Telegram catching up, and the `/v1/*` surface is untouched.
+  **And the room is made against the SHELL, not against `window.innerHeight`
+  (2026-08-22).** Everything above describes how much the screen shrinks; this
+  is what it shrinks *from*, and getting it wrong made the name screen collapse
+  into the top third — the field and its pill stacked under the header with a
+  hand's width of dead black above the keyboard. Clients disagree about how a
+  keyboard arrives: it FLOATS over an untouched layout viewport (iOS Safari's
+  own behaviour), or the WebView is RESIZED for it (what Telegram's client
+  does), and in the second case `100dvh` — and the shell below it — has
+  **already** made room, so there is nothing left to reserve. `--kb-height` was
+  measured against `window.innerHeight` and recomputed only when
+  `visualViewport` fired, so on that path a full keyboard's worth of
+  reservation was banked from the first event and then spent a second time on
+  an already-shrunk screen. Measured on the reported render (393x852, a 298px
+  keyboard): the screen came out **235px tall inside the 554px above the
+  keyboard**, one keyboard short of the room it had. It is measured against the
+  shell's own live height now — the element `calc(100% - var(--kb-height))`
+  actually resolves against — so a layout viewport that has already shrunk
+  shrinks the reference with it and the inset falls to zero on its own, with no
+  branch on which kind of client this is. The shell is observed
+  (`ResizeObserver`) as well as the viewport, because its box can change
+  without `visualViewport` moving at all, which is the whole reason a stale
+  value could survive. Reproduced and fixed on a real render rather than
+  reasoned about: same probe, same page — old code 388px of the 554 available,
+  new code 554px, and the floating case unchanged at 554 in both
+  (`keyboard-viewport.ts`, `keyboard-viewport.test.ts`). The same correction
+  reaches the email / phone / city gate cards, which subtract the same value.
   **The screens write through the collector** (`applyOnboardingFacts`,
   `POST /v1/telegram-onboarding/profile`), not straight to Prisma, so the
   canonical columns, `onboarding_progress.currentQuestion` and the funnel

@@ -40,6 +40,7 @@ import {
   type OnboardingPhase,
 } from "./onboarding-route.js";
 import { BasicsGate } from "./onboarding-basics.js";
+import { isWorthWriting, keyboardInset } from "./keyboard-viewport.js";
 import {
   BASICS_STEPS,
   nextBasicsStep,
@@ -128,13 +129,6 @@ const MATCHMAKER_PART_PAUSES_MS: number[][] = SINGLE_LINE_PAUSES;
 // the scene auto-advances.
 const LOGO_RISE_DELAY_MS = 150;
 const LOGO_RISE_VIEW_MS = 2200;
-/**
- * Smallest `--kb-height` change worth writing (see the keyboard-aware viewport
- * effect). Deliberately tiny: it only exists to absorb a per-pixel ramp, and a
- * bigger step would leave the pill sitting up to that many pixels off the top of
- * the keyboard once the ramp settles.
- */
-const KB_HEIGHT_STEP_PX = 2;
 // Pivot (scene 0): raise the Gennety logo almost the instant the line lands,
 // instead of sitting on the finished "So we built Gennety" text for the full
 // read-buffer hold. Just a short breath so it doesn't fire on the last keystroke.
@@ -211,6 +205,10 @@ function configureTelegramChrome(): void {
 }
 
 function App(): ReactElement {
+  // The element every screen's `height: 100%` chains up to, and therefore the
+  // reference the soft-keyboard inset is measured against. See the
+  // keyboard-aware viewport effect below.
+  const shellRef = useRef<HTMLDivElement>(null);
   const [lang, setLang] = useState<Lang>(() =>
     initialOnboardingLanguage(params.get("lang"), app?.initDataUnsafe?.user?.language_code),
   );
@@ -290,14 +288,22 @@ function App(): ReactElement {
       });
   }, []);
 
-  // Keyboard-aware viewport. Telegram's WebView (notably iOS) floats the
-  // on-screen keyboard over the page without shrinking the layout viewport,
-  // so a vertically centered gate card — and the city search results below
-  // its input — end up hidden behind the keyboard. `visualViewport` reports
-  // the real visible height; we mirror the keyboard's height into the
-  // `--kb-height` custom property so the gates can shrink their centered area
-  // and scroll region to stay above it. No-ops on clients without
+  // Keyboard-aware viewport. A vertically centred gate card — and the city
+  // search results below its input, and the name screen's action pill — has to
+  // stay above the soft keyboard, so the keyboard's height is mirrored into
+  // `--kb-height` for the CSS to spend. No-ops on clients without
   // `visualViewport`, where `--kb-height` stays 0 and layout is unchanged.
+  //
+  // Clients disagree about how the keyboard arrives, and the reference is what
+  // decides whether both cases come out right: it FLOATS over an untouched
+  // layout viewport (iOS Safari), or the WebView is RESIZED for it (Telegram's
+  // client), in which case `100dvh` — and the shell below it — has already made
+  // room and there is nothing left to reserve. So the height is measured
+  // against the SHELL, live, rather than against `window.innerHeight`: the shell
+  // is the element `calc(100% - var(--kb-height))` actually resolves against, so
+  // a layout viewport that has already shrunk shrinks the reference with it and
+  // the inset falls to zero on its own. See `keyboard-viewport.ts` for the
+  // arithmetic and the measurements.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -306,21 +312,28 @@ function App(): ReactElement {
     let frame = 0;
     const write = (): void => {
       frame = 0;
-      const next = Math.round(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
-      if (written !== null && Math.abs(next - written) < KB_HEIGHT_STEP_PX) return;
+      const shell = shellRef.current;
+      if (!shell) return;
+      const next = keyboardInset({
+        shellHeight: shell.clientHeight,
+        viewportHeight: vv.height,
+        viewportOffsetTop: vv.offsetTop,
+      });
+      if (!isWorthWriting(written, next)) return;
       written = next;
       root.style.setProperty("--kb-height", `${next}px`);
     };
     // A CSS transition RESTARTS from wherever it currently is every time the
     // value changes, so a value that churns is a transition that never gets to
     // finish — and a rise that keeps restarting is what reads as stepped rather
-    // than as one movement. Both listeners can fire in the same frame (the
-    // keyboard resizes the visual viewport AND scrolls it), so they are
-    // coalesced into one write per frame instead of two style recalcs and two
-    // restarts. `KB_HEIGHT_STEP_PX` then absorbs a slow ramp: WebKit scrolls a
-    // focused field into view while the keyboard is still animating, and
-    // `offsetTop` is part of this sum, so that arrives as a stream of ~1px
-    // changes none of which is worth restarting an animation for.
+    // than as one movement. Several of these can fire in the same frame (the
+    // keyboard resizes the visual viewport AND scrolls it, and the client may
+    // resize the WebView on top of that), so they are coalesced into one write
+    // per frame instead of one style recalc and one restart each.
+    // `KB_HEIGHT_STEP_PX` then absorbs a slow ramp: WebKit scrolls a focused
+    // field into view while the keyboard is still animating, and `offsetTop` is
+    // part of this sum, so that arrives as a stream of ~1px changes none of
+    // which is worth restarting an animation for.
     const schedule = (): void => {
       if (frame) return;
       frame = requestAnimationFrame(write);
@@ -328,10 +341,24 @@ function App(): ReactElement {
     write();
     vv.addEventListener("resize", schedule);
     vv.addEventListener("scroll", schedule);
+    // The shell's own box is the other half of the subtraction, and it can
+    // change without the visual viewport moving at all — which is exactly the
+    // case that used to strand a full keyboard's worth of reservation on an
+    // already-shrunk screen. Observing the element covers every route to that
+    // (a WebView resize, a rotation, Telegram's own chrome) without having to
+    // guess which event a given client fires.
+    const observer =
+      typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+    if (shellRef.current) observer?.observe(shellRef.current);
+    window.addEventListener("resize", schedule);
+    window.addEventListener("orientationchange", schedule);
     return () => {
       if (frame) cancelAnimationFrame(frame);
       vv.removeEventListener("resize", schedule);
       vv.removeEventListener("scroll", schedule);
+      observer?.disconnect();
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("orientationchange", schedule);
     };
   }, []);
 
@@ -528,7 +555,10 @@ function App(): ReactElement {
 
   return (
     <OnboardingI18nContext.Provider value={strings}>
-      <div className="onboarding-shell bg-surface text-on-surface min-h-screen antialiased">
+      <div
+        ref={shellRef}
+        className="onboarding-shell bg-surface text-on-surface min-h-screen antialiased"
+      >
       {chrome}
       {bootError ? <div className="gate-meta" style={{ position: "fixed", top: 12, left: 20, right: 20, zIndex: 60 }}>{bootError}</div> : null}
       <Scene active={phase.kind === "visual" && phase.index === 0}>
