@@ -1,5 +1,51 @@
 # Gennety Dating Deploy
 
+**PENDING — зазор между стрелкой «Назад» и кнопкой «Дальше» в онбординге
+(DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов и НЕТ
+ИЗМЕНЕНИЙ СЕРВЕРА ВООБЩЕ** — дифф это `apps/webapp/src/onboarding.css` плюс
+документация. Путь **Deploy Mini App Only** (`./scripts/deploy-webapp.sh`);
+рсинкать в `/opt/gennety` нечего, **`pm2 restart` не нужен**. Обязательно ещё
+`pnpm demo:deploy` — демо собирает свой бандл из того же исходника.
+
+Одно число: `.howitworks-actions` gap 0.7rem → 1rem. Три вещи, которые стоит
+знать до редеплоя:
+
+- **Меняются ДЕВЯТЬ экранов, а не один** — три «как это работает» и шесть
+  «Подробнее»: это одно общее правило (см. DECISIONS.md, почему его нельзя
+  разводить по поверхностям).
+- **Исходная жалоба была про геометрию, а причина тональная.** Замерено: до
+  правки обе строки совпадали до пикселя (стрелка x=41.4, пилюля x=108.6, зазор
+  11.19px на 390×844). Тесно читается на СВЕТЛОЙ теме, где пилюля «как это
+  работает» тёмная и стоит вплотную к графитовой стрелке.
+- **Пилюля ужимается, а не переносится, на узком экране.** Она `flex-shrink: 1`
+  при `width: min(100%, 15rem)`; на 320px после правки ей остаётся ~219px против
+  ~164px, которые занимает «ПОДРОБНЕЕ» с паддингами. Запас есть, но следующая
+  прибавка к зазору его тратит.
+
+Preflight по этому изменению: typecheck вебаппа чист, **327 тестов вебаппа
+зелёные**.
+
+Проверка после редеплоя — строка транзиентная и ничего не логирует, поэтому
+глазами (и по хешу бандла, а не по коду 200):
+
+```sh
+./scripts/deploy-webapp.sh
+pnpm demo:deploy
+curl -s https://dating-calendar.gennety.com/onboarding.html \
+  | grep -o '/assets/onboarding-[A-Za-z0-9_-]*\.js'
+# хеш обязан совпасть с ls apps/webapp/dist/assets/onboarding-*.js
+# Дев-превью, обе темы (два тапа «Дальше» доводят до стрелки):
+#   http://localhost:5173/onboarding.html?preview=intro:2&lang=ru&theme=light
+#   http://localhost:5173/onboarding.html?preview=intro:2&lang=ru&theme=dark
+# Затем «Подробнее» — на шести экранах разбора зазор обязан быть ТАКИМ ЖЕ.
+```
+
+**Rollback:** передеплоить Mini App с предыдущего чекаута и оттуда же
+`pnpm demo:deploy`. Откатывать больше нечего — ни схемы, ни env, ни флага, ни
+серверного состояния.
+
+---
+
 **PENDING — Voice Prompts (PRODUCT_SPEC §1.3b, VOICE_PROMPT_PRODUCT_SPEC.md,
 DECISIONS.md ×2).** Ships **DARK** — `VOICE_PROMPT_ENABLED` is unset in
 `/opt/gennety/.env` and stays unset in this deploy. **No Mini App change**

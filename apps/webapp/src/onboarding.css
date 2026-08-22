@@ -1112,11 +1112,22 @@ button {
   margin-top: 0;
 }
 
+/* ONE row, two surfaces: the how-it-works footer on the themed page and the
+   date-flow dock over the blurred photo. Both render this exact rule, so the
+   arrow and the pill sit in identical positions on every one of those screens
+   (measured at 390px: arrow x=41.4, pill x=108.6) — a gap set on only one of
+   them would create the very mismatch this spacing exists to avoid.
+
+   Widened 0.7rem -> 1rem because 11px reads as cramped on the LIGHT theme,
+   where the how-it-works pill inverts to smoked dark glass and sits beside the
+   graphite arrow: two dark shapes with one thin sliver of cream between them.
+   The date-flow pill is white on a dark photo, so the same gap reads as an
+   obvious separation there. Distance is the fix that helps both. */
 .howitworks-actions {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.7rem;
+  gap: 1rem;
   width: 100%;
 }
 
