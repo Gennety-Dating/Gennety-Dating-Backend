@@ -351,13 +351,23 @@ out of Telegram-only workers.
   questions, so dropping the camera column stops being coupled to where the face
   sits.
 
-  **The bottom of each photograph dissolves into the button's gradient**, which
-  is the handover from person to colour and what leaves the label on clean
-  colour rather than needing a scrim over it. It begins BELOW the chin, and a
-  test holds it there against the placement constant: the fade and the artwork
-  live in different files — the prep script is outside the repo — so nothing
-  else stops the fade from being moved back up and quietly eating a face.
-  Telegram-only; the native iOS client owns its own controls here.
+  **Each photograph dissolves into the button's gradient on three sides**
+  (founder decision 2026-08-22) — the handover from person to colour, and what
+  leaves the label on clean colour rather than needing a scrim over it. Three
+  rather than one: the bottom fade alone still let the shoulders run straight
+  into the button's edge and stop there, which reads as a cut-out pasted on
+  instead of someone standing inside the frame. The top is deliberately left
+  alone — the head has its own headroom, so there is no edge there to soften,
+  and fading a crown looks like a mistake.
+
+  Two properties of that fade are load-bearing rather than styling. It is
+  **eased, not linear**: a two-stop linear alpha ramp has a visible kink where
+  it begins, and the eye reads that line as the edge of the photograph — the
+  exact thing being removed. And the bottom ramp **begins BELOW the chin**, held
+  there by a test against the placement constant, because the fade and the
+  artwork live in different files (the prep script is outside the repo) and
+  nothing else stops the fade from being moved back up and quietly eating a
+  face. Telegram-only; the native iOS client owns its own controls here.
 
   **"Who do you want to meet?" shows the answer instead of naming it
   (2026-08-06).** It was three stacked rows carrying three words, which asked

@@ -2802,12 +2802,30 @@ button {
 }
 
 /* The portrait layer.
-   Full-bleed, and the bottom of the photograph DISSOLVES into the button's own
-   gradient with a mask — the soft handover from person to colour the screen was
-   designed around, and what leaves the label sitting on clean gradient rather
-   than needing a scrim over it. It starts below the chin: the figure is placed
-   in the asset by measured landmarks (gender-avatars.ts), so where the face
-   ends is a known number rather than something the mask has to be safe about.
+   Full-bleed, and the photograph DISSOLVES into the button's own gradient on
+   three sides — the soft handover from person to colour the screen was designed
+   around, and what leaves the label sitting on clean gradient rather than
+   needing a scrim over it.
+
+   Three sides, not one. The bottom fade alone still let the shoulders run
+   straight into the button's edge and stop there, which reads as a cut-out
+   pasted on rather than as someone standing inside the frame. The top is
+   deliberately left alone: the head has its own headroom, so there is no edge
+   there to soften, and fading a crown looks like a mistake.
+
+   The two ramps are split across the two elements rather than composited on one
+   with `mask-composite`, which older WebKit does not have — and its fallback is
+   `add`, i.e. a UNION, which would silently mean no fade at all. Nested masks
+   multiply, so the corners fall off faster than either axis alone, which is
+   what a corner should do.
+
+   The bottom ramp starts below the chin: the figure is placed in the asset by
+   measured landmarks (gender-avatars.ts), so where the face ends is a known
+   number rather than something the mask has to be safe about.
+
+   Both ramps are eased (smootherstep) rather than linear. A two-stop linear
+   alpha ramp has a visible kink where it begins — the eye reads that line as
+   the edge of the photograph, which is the exact thing being removed.
 
    `overflow: hidden` lives here and NOT on the button: the tap halo is a
    `::after` at `inset: -2px` that scales past the button's own edge, and
@@ -2825,8 +2843,17 @@ button {
   border-radius: inherit;
   overflow: hidden;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(180deg, #000 76%, transparent 99%);
-  mask-image: linear-gradient(180deg, #000 76%, transparent 99%);
+  --fade-v: linear-gradient(
+    180deg,
+    #000 70%,
+    rgba(0, 0, 0, 0.942) 76%,
+    rgba(0, 0, 0, 0.683) 82%,
+    rgba(0, 0, 0, 0.317) 88%,
+    rgba(0, 0, 0, 0.058) 94%,
+    transparent 100%
+  );
+  -webkit-mask-image: var(--fade-v);
+  mask-image: var(--fade-v);
 }
 
 .ob-gender-shot {
@@ -2845,6 +2872,25 @@ button {
      as a warm print, i.e. as a choice. */
   filter: grayscale(1) sepia(0.22) brightness(1.02);
   transition: filter var(--gender-reveal) ease;
+  /* The side halves of the same dissolve — see `.ob-gender-art` for why they
+     live on a second element. */
+  --fade-h: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.058) 3.6%,
+    rgba(0, 0, 0, 0.317) 7.2%,
+    rgba(0, 0, 0, 0.683) 10.8%,
+    rgba(0, 0, 0, 0.942) 14.4%,
+    #000 18%,
+    #000 82%,
+    rgba(0, 0, 0, 0.942) 85.6%,
+    rgba(0, 0, 0, 0.683) 89.2%,
+    rgba(0, 0, 0, 0.317) 92.8%,
+    rgba(0, 0, 0, 0.058) 96.4%,
+    transparent 100%
+  );
+  -webkit-mask-image: var(--fade-h);
+  mask-image: var(--fade-h);
 }
 
 /* The tap is what brings them to life. Only the picked one blooms — the other

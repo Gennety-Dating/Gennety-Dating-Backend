@@ -62,10 +62,15 @@ describe("gender screen", () => {
    * handover from person to colour, and what leaves the label on clean colour
    * instead of needing a scrim over it.
    */
-  it("dissolves the bottom of the artwork into the button", () => {
+  it("dissolves the artwork into the button on three sides", () => {
     const art = block(".ob-gender-art {");
-    expect(art).toMatch(/mask-image:\s*linear-gradient\(180deg/);
-    expect(art).toMatch(/-webkit-mask-image:/);
+    expect(art).toMatch(/--fade-v:\s*linear-gradient\(\s*180deg/);
+    expect(art).toMatch(/-webkit-mask-image:\s*var\(--fade-v\)/);
+    // The sides matter as much as the bottom: without them the shoulders run
+    // into the button's edge and stop, which is what reads as a pasted cut-out.
+    const shot = block(".ob-gender-shot {");
+    expect(shot).toMatch(/--fade-h:\s*linear-gradient\(\s*90deg/);
+    expect(shot).toMatch(/-webkit-mask-image:\s*var\(--fade-h\)/);
   });
 
   /**
@@ -76,7 +81,7 @@ describe("gender screen", () => {
    * from being moved back up and quietly dissolving a face.
    */
   it("starts the fade below the face", () => {
-    const stop = /mask-image:\s*linear-gradient\(180deg,\s*#000\s+(\d+)%/.exec(
+    const stop = /--fade-v:\s*linear-gradient\(\s*180deg,\s*#000\s+(\d+)%/.exec(
       block(".ob-gender-art {"),
     );
     expect(stop, "could not read the mask's first stop").not.toBeNull();
