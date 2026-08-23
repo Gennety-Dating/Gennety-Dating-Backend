@@ -18,7 +18,7 @@ Everything on screen is production code. What the demo changes is only:
 
 | | Production | Demo |
 |---|---|---|
-| The other person | a real matched user | a fixed synthetic profile |
+| The other person | a real matched user | a fixed synthetic profile, named in the visitor's own language |
 | Who that person can date | one live match at a time | the puppet is shared — every visitor gets their own live match with it |
 | Liveness verdict | AWS decides | always passes |
 | Photo validation | strict | off — any `MIN_PHOTOS` images, faces optional |
@@ -260,6 +260,57 @@ fifteen-minute demo account is that.
 Because the allocator returns a bare `null` for a dozen distinct reasons, the
 driver names the cause in the log rather than reporting "refused" — in a demo,
 a refusal means the chat has stopped in front of whoever is watching.
+
+### The puppet is named in the visitor's language
+
+`User.firstName` is a plain database column, printed verbatim by every surface
+that names the partner — the pitch, the match-card caption, the date card, the
+proxy chat, the concierge. Nothing translates it. So one Russian row put
+«Артём» in the middle of an otherwise entirely English, German or Polish
+pitch: the whole message was localized except the one word naming the person.
+
+So there is one row per **(language, gender)** — ten in all — and which one a
+visitor meets is decided by their own `User.language`
+(`pickDemoPartner`, falling back to `en` before they have chosen):
+
+| | ru | uk | en | de | pl |
+|---|---|---|---|---|---|
+| man, 29 | Артём | Назар | Ethan | Jonas | Kacper |
+| woman, 25 | Ева | Христина | Chloe | Lena | Zuzanna |
+
+Four things about that shape are load-bearing rather than tidy:
+
+- **Renaming ONE shared row per visitor is the obvious cheaper fix and is
+  wrong.** Two people can walk the demo at once (the puppet is deliberately
+  exempt from the single-live-match invariant, below), so they would flip the
+  name under each other — and by then the old name is already baked into every
+  message sent before the flip. A name has to be a property of a row, not of
+  whoever asked last.
+- **Only the NAME varies. The persona is shared per gender**
+  (`DEMO_PARTNER_PERSONAS`): same age, height, hobbies, bio, vibe axes, Elo.
+  The bio is the pitch generator's *input*, and that generator already writes
+  in the recipient's language, so a second copy of it per language would be
+  five prose texts to keep in step for nothing the visitor can see. Nothing
+  renders `hobbies` or the summary raw to a demo visitor.
+- **Photos are uploaded once per gender and written to all five rows.**
+  `file_id`s are per-bot, so a per-row upload would send the same image five
+  times into a real person's chat for an identical result. One face, five
+  names — and two visitors on different languages never see each other.
+- **Russian keeps the original `…001` / `…002` ids**, so a re-seed does not
+  orphan photos already uploaded against those rows. The rest of the band is
+  the language in the tens digit and the gender in the last (1 = male,
+  2 = female).
+
+The roster is derived from `SUPPORTED_LANGUAGES`, so adding a language to the
+product is a compile error in two small tables rather than a visitor silently
+meeting someone named in a stranger's language. `partners.test.ts` pins the
+completeness, the id band and the picker.
+
+**One thing this deliberately does not solve:** the demo market is Kyiv, so a
+German or Polish visitor is introduced to a Jonas or a Kacper who lives in
+Kyiv. Being named in your own language is worth more in a walkthrough than
+demographic plausibility, and the alternative — a Ukrainian name for everyone
+— is the thing being fixed.
 
 ### Blind decision, preserved
 
@@ -639,7 +690,7 @@ Three properties keep the exemption narrow, and each is pinned by a test
   the same shape, the same plan, and the same guard test pinning it
   (`match-engine-eligibility.test.ts`). `demoPuppetIdsAmong` is not even called.
 
-Identification is the reserved `telegramId` band (`-777_000_00x`) and nothing
+Identification is the reserved `telegramId` band (`-777_000_0xx`) and nothing
 else: a demo-only column is forbidden here, and the flag itself cannot be set
 in production — `assertDemoIsolation()` refuses to boot.
 
@@ -737,7 +788,7 @@ hand) and are opposites in every way that matters:
 | Who sees it | the demo visitor, always | a real tester, only when nobody real is left |
 | What it does | accepts, then walks the whole flow | declines, every time |
 | Driven by | `demo/driver.ts`, re-deriving state each tick | `workers/synthetic-partner.ts`, one decision |
-| Reserved ids | `-777_000_00x` | `-778_000_00x` |
+| Reserved ids | `-777_000_0xx` | `-778_000_00x` |
 
 **Demo mode is unaffected by the synthetic fill and needs no branch for it.**
 The drop cron is not scheduled at all under `DEMO_MODE_ENABLED` (that is the

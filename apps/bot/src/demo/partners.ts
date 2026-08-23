@@ -1,13 +1,20 @@
 import { prisma, type Gender, type GenderPreference, type Prisma } from "@gennety/db";
-import { DEFAULT_MARKET, cityKeyToTimeZone } from "@gennety/shared";
+import {
+  DEFAULT_MARKET,
+  SUPPORTED_LANGUAGES,
+  cityKeyToTimeZone,
+  type Language,
+} from "@gennety/shared";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 import { getBalance, grantTickets } from "../services/ticket-wallet.js";
 
 /**
  * The puppet on the other side of every demo match.
  *
- * Two fixed profiles — one man, one woman — picked by what the visitor said
- * they are looking for. They are ordinary `User` + `Profile` rows, not a
+ * Two people — one man, one woman — picked by what the visitor said they are
+ * looking for, each seeded once per supported language so the partner is
+ * NAMED in the language the pitch is written in (`DEMO_PARTNER_NAMES`).
+ * They are ordinary `User` + `Profile` rows, not a
  * special case anywhere in the product: the pitch generator, the calendar, the
  * venue selector and the date lifecycle all read them exactly as they read a
  * real person. That is the whole point of demo mode.
@@ -24,18 +31,62 @@ import { getBalance, grantTickets } from "../services/ticket-wallet.js";
  */
 
 /**
- * Fixed synthetic ids. Mobile users get a random negative id in `[-2^48, -1]`
- * (`public/mobile-user.ts`), so these two are formally in the same space; the
+ * Fixed synthetic ids, one row per (language, gender).
+ *
+ * Mobile users get a random negative id in `[-2^48, -1]`
+ * (`public/mobile-user.ts`), so these are formally in the same space; the
  * chance of a collision is ~2^-47 per row and the demo database has no mobile
  * users at all. Fixed rather than random so re-seeding is idempotent and the
  * rows are recognisable at a glance in the database.
+ *
+ * The band widened from `-777_000_00x` to `-777_000_0xx` when the puppet
+ * gained a name per language: the tens digit is the language, the last digit
+ * the gender (1 = male, 2 = female). Russian deliberately keeps `…001` /
+ * `…002`, so a re-seed does not orphan the photos already uploaded against
+ * those two rows — Telegram `file_id`s are per-bot and cannot be checked into
+ * the repo, so losing them costs a manual re-upload.
  */
-export const DEMO_PARTNER_MALE_TELEGRAM_ID = -777_000_001n;
-export const DEMO_PARTNER_FEMALE_TELEGRAM_ID = -777_000_002n;
+const DEMO_PARTNER_TELEGRAM_IDS: Record<Language, { male: bigint; female: bigint }> = {
+  ru: { male: -777_000_001n, female: -777_000_002n },
+  uk: { male: -777_000_011n, female: -777_000_012n },
+  en: { male: -777_000_021n, female: -777_000_022n },
+  de: { male: -777_000_031n, female: -777_000_032n },
+  pl: { male: -777_000_041n, female: -777_000_042n },
+};
 
-export interface DemoPartnerDefinition {
-  telegramId: bigint;
-  firstName: string;
+/**
+ * The one thing that varies by language — and the whole reason there are ten
+ * rows here instead of two.
+ *
+ * `User.firstName` is a database column, read verbatim by every surface that
+ * names the partner: the pitch, the match-card caption, the date card, the
+ * proxy chat, the concierge. Nothing translates it. So a single Russian row
+ * put «Артём» in front of an English, German and Polish visitor alike, in a
+ * message that was otherwise entirely in their own language. The name has to
+ * BE different, which means the ROW has to be different, and which row a
+ * visitor meets is decided by their own `User.language`.
+ *
+ * Renaming one shared row per visitor is the cheaper-looking alternative and
+ * is wrong: two people can walk the demo at once (DEMO_MODE.md — the puppet is
+ * deliberately exempt from the single-live-match invariant), so they would
+ * flip the name under each other, and by then the old name is already baked
+ * into every message that was sent before the flip.
+ *
+ * Everything ELSE about the person is shared per gender (`DEMO_PARTNER_PERSONAS`
+ * below). The bio is the pitch generator's INPUT, and that generator already
+ * writes in the recipient's language, so a second copy of it per language
+ * would be five prose texts to keep in step for nothing the visitor can see.
+ */
+const DEMO_PARTNER_NAMES: Record<Language, { male: string; female: string }> = {
+  ru: { male: "Артём", female: "Ева" },
+  uk: { male: "Назар", female: "Христина" },
+  en: { male: "Ethan", female: "Chloe" },
+  de: { male: "Jonas", female: "Lena" },
+  pl: { male: "Kacper", female: "Zuzanna" },
+};
+
+/** Who this person is, independent of what language calls them. */
+export interface DemoPartnerPersona {
   age: number;
   gender: Gender;
   preference: GenderPreference;
@@ -62,15 +113,20 @@ export interface DemoPartnerDefinition {
   eloScore: number;
 }
 
+export interface DemoPartnerDefinition extends DemoPartnerPersona {
+  telegramId: bigint;
+  firstName: string;
+  language: Language;
+}
+
 /**
- * Everything a demo visitor sees about their "match" is in this block. Change a
- * name, an age or a bio here and re-run `pnpm demo:seed` — nothing else in the
- * codebase encodes who these two people are.
+ * Everything a demo visitor sees about their "match" is in this block plus the
+ * name table above. Change a bio, an age or a name here and re-run
+ * `pnpm demo:seed` — nothing else in the codebase encodes who these two people
+ * are.
  */
-export const DEMO_PARTNERS: readonly DemoPartnerDefinition[] = [
+export const DEMO_PARTNER_PERSONAS: readonly DemoPartnerPersona[] = [
   {
-    telegramId: DEMO_PARTNER_MALE_TELEGRAM_ID,
-    firstName: "Артём",
     age: 29,
     gender: "male",
     preference: "women",
@@ -99,8 +155,6 @@ export const DEMO_PARTNERS: readonly DemoPartnerDefinition[] = [
     eloScore: 520,
   },
   {
-    telegramId: DEMO_PARTNER_FEMALE_TELEGRAM_ID,
-    firstName: "Ева",
     age: 25,
     gender: "female",
     preference: "men",
@@ -130,29 +184,59 @@ export const DEMO_PARTNERS: readonly DemoPartnerDefinition[] = [
 ];
 
 /**
+ * The ten rows the demo database actually holds: each persona once per
+ * supported language, carrying that language's name and its own reserved id.
+ *
+ * Derived from `SUPPORTED_LANGUAGES` rather than written out, so adding a
+ * language to the product is a compile error in the two tables above instead
+ * of a visitor silently meeting a partner named in someone else's language.
+ */
+export const DEMO_PARTNERS: readonly DemoPartnerDefinition[] = SUPPORTED_LANGUAGES.flatMap(
+  (language) =>
+    DEMO_PARTNER_PERSONAS.map((persona) => ({
+      ...persona,
+      language,
+      telegramId: DEMO_PARTNER_TELEGRAM_IDS[language][persona.gender],
+      firstName: DEMO_PARTNER_NAMES[language][persona.gender],
+    })),
+);
+
+/**
  * Which puppet this visitor should meet.
  *
  * Reads the visitor's own `preference` first — that is the question the product
  * actually asked them ("who do you want to see?") — and falls back to the
  * opposite of their gender when preference is `both` or missing, so the demo
  * always has someone to show rather than dead-ending.
+ *
+ * The language then picks WHICH copy of that person, so the partner is named
+ * in the same language as the message introducing them. `en` is the fallback
+ * for a visitor who has not chosen one yet — the product's own i18n default,
+ * and the one answer that is not "the founder's own language".
  */
 export function pickDemoPartner(visitor: {
   gender: Gender | null;
   preference: GenderPreference | null;
+  language: Language | null;
 }): DemoPartnerDefinition {
-  const male = DEMO_PARTNERS.find((p) => p.gender === "male")!;
-  const female = DEMO_PARTNERS.find((p) => p.gender === "female")!;
+  const wanted = wantedGender(visitor);
+  const language = visitor.language ?? "en";
+  return DEMO_PARTNERS.find((p) => p.language === language && p.gender === wanted)!;
+}
 
-  if (visitor.preference === "men") return male;
-  if (visitor.preference === "women") return female;
+function wantedGender(visitor: {
+  gender: Gender | null;
+  preference: GenderPreference | null;
+}): Gender {
+  if (visitor.preference === "men") return "male";
+  if (visitor.preference === "women") return "female";
   // `both`, or an incomplete profile: show the opposite gender, which is what
   // a visitor demoing a straight-dating product almost always expects.
-  return visitor.gender === "female" ? male : female;
+  return visitor.gender === "female" ? "male" : "female";
 }
 
 /**
- * Create or refresh both puppets. Idempotent — safe to call on every demo boot.
+ * Create or refresh every puppet. Idempotent — safe to call on every demo boot.
  *
  * Deliberately does NOT touch `photos` / `profileMedia` / `photoFaceScores`:
  * those are uploaded separately by `scripts/seed-demo-partners.mjs` (Telegram
@@ -174,7 +258,11 @@ async function upsertDemoPartner(partner: DemoPartnerDefinition): Promise<void> 
     age: partner.age,
     gender: partner.gender,
     preference: partner.preference,
-    language: "ru" as const,
+    // The row's own language, so the puppet is an ordinary person from the
+    // visitor's locale rather than a Russian account with a German name.
+    // Nothing messages a puppet (negative `telegramId`, `platform: mobile`),
+    // so this is descriptive rather than load-bearing.
+    language: partner.language,
     platform: "mobile" as const,
     status: "active" as const,
     onboardingStep: "completed" as const,

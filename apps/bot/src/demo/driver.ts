@@ -968,10 +968,14 @@ async function startDemoMatch(
 ): Promise<DemoActionOutcome> {
   const visitor = await prisma.user.findUnique({
     where: { id: userId },
-    select: { gender: true, preference: true },
+    select: { gender: true, preference: true, language: true },
   });
   if (!visitor) return refused("visitor-row-missing");
 
+  // Read off the row rather than the `lang` argument: that one is the language
+  // the narration is being written in, while this decides which of the ten
+  // puppet rows the visitor is paired with — and the pairing is durable, so it
+  // has to follow the same source of truth every other surface reads.
   const definition = pickDemoPartner(visitor);
   const partner = await prisma.user.findUnique({
     where: { telegramId: definition.telegramId },

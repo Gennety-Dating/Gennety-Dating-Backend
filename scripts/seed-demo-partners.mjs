@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 /**
- * Seed the two demo-mode partner profiles, and optionally their photos.
+ * Seed the demo-mode partner profiles, and optionally their photos.
+ *
+ * Two people, one row each per supported language — the same person named in
+ * the visitor's own language (DEMO_MODE.md). Photos are uploaded once per
+ * GENDER and written to all five of that gender's rows.
  *
  *   pnpm demo:seed                       # profiles only (idempotent)
  *   pnpm demo:seed -- --photos=./photos  # profiles + upload photos
@@ -9,8 +13,8 @@
  * Telegram `file_id`s are per-bot: production's ids are meaningless to the demo
  * bot and vice versa. Pass a directory laid out as
  *
- *     <dir>/male/*.jpg      → Артём
- *     <dir>/female/*.jpg    → Ева
+ *     <dir>/male/*.jpg      → Артём / Назар / Ethan / Jonas / Kacper
+ *     <dir>/female/*.jpg    → Ева / Христина / Chloe / Lena / Zuzanna
  *
  * Each image is sent to the founder's own chat with the demo bot (that is the
  * only way to mint a `file_id`), and the resulting ids are written to
@@ -162,7 +166,9 @@ async function main() {
   console.log("→ Seeding demo partner profiles…");
   await seedDemoPartners();
   for (const partner of DEMO_PARTNERS) {
-    console.log(`   ✓ ${partner.firstName}, ${partner.age} (${partner.gender})`);
+    console.log(
+      `   ✓ [${partner.language}] ${partner.firstName}, ${partner.age} (${partner.gender})`,
+    );
   }
 
   const photosDir = args.get("photos");
@@ -192,41 +198,51 @@ async function main() {
     process.exit(1);
   }
 
-  for (const partner of DEMO_PARTNERS) {
-    const dir = resolve(root, photosDir, partner.gender);
+  // One upload per GENDER, not per row. There are five rows per gender — the
+  // same person named once per supported language (DEMO_MODE.md) — and they
+  // share one face, so uploading per row would send the same image five times
+  // into a real person's chat and burn five times the rate-limit budget for an
+  // identical `file_id` set.
+  const genders = [...new Set(DEMO_PARTNERS.map((p) => p.gender))];
+  for (const gender of genders) {
+    const rows = DEMO_PARTNERS.filter((p) => p.gender === gender);
+    const label = rows.map((p) => p.firstName).join(" / ");
+    const dir = resolve(root, photosDir, gender);
     const files = readImages(dir);
     if (files.length === 0) {
-      console.log(`   … no images in ${dir} — leaving ${partner.firstName}'s photos alone`);
+      console.log(`   … no images in ${dir} — leaving ${label} photos alone`);
       continue;
     }
 
-    console.log(`→ Uploading ${files.length} photo(s) for ${partner.firstName}…`);
+    console.log(`→ Uploading ${files.length} photo(s) for ${gender} (${label})…`);
     const fileIds = [];
     for (const file of files) {
       fileIds.push(await uploadPhoto(token, chatId, file));
       await new Promise((r) => setTimeout(r, 400)); // stay well under Telegram's rate limit
     }
 
-    const user = await prisma.user.findUnique({
-      where: { telegramId: partner.telegramId },
-      select: { id: true },
-    });
-    if (!user) throw new Error(`${partner.firstName} was not seeded`);
+    for (const partner of rows) {
+      const user = await prisma.user.findUnique({
+        where: { telegramId: partner.telegramId },
+        select: { id: true },
+      });
+      if (!user) throw new Error(`${partner.firstName} (${partner.language}) was not seeded`);
 
-    await prisma.profile.update({
-      where: { userId: user.id },
-      data: {
-        photos: fileIds,
-        // Kept in lockstep with `photos`: several readers rely on the
-        // `photos[i] ↔ photoFaceScores[i]` alignment, and `profileMedia`
-        // normalizes from `photos` when empty.
-        photoFaceScores: fileIds.map(() => 1),
-        uploadedPhotoHashes: fileIds.map(() => ""),
-        acceptedPhotoCount: fileIds.length,
-        profileMedia: fileIds.map((photo) => ({ type: "photo", photo })),
-      },
-    });
-    console.log(`   ✓ ${partner.firstName}: ${fileIds.length} photo(s)`);
+      await prisma.profile.update({
+        where: { userId: user.id },
+        data: {
+          photos: fileIds,
+          // Kept in lockstep with `photos`: several readers rely on the
+          // `photos[i] ↔ photoFaceScores[i]` alignment, and `profileMedia`
+          // normalizes from `photos` when empty.
+          photoFaceScores: fileIds.map(() => 1),
+          uploadedPhotoHashes: fileIds.map(() => ""),
+          acceptedPhotoCount: fileIds.length,
+          profileMedia: fileIds.map((photo) => ({ type: "photo", photo })),
+        },
+      });
+    }
+    console.log(`   ✓ ${label}: ${fileIds.length} photo(s) each`);
   }
 
   await prisma.$disconnect();
