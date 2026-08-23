@@ -1502,6 +1502,42 @@ native rail are unchanged and DM immediately. Both directions are bounded, so
 a status that dies before its teardown can never swallow a verdict and a run
 that hangs can never keep a shimmer alive forever.
 
+**Every verification outcome reaches both rails (2026-08-23).** The pipeline
+used to pick recipients with `telegramId > 0n` and send a DM and nothing else.
+That is not reachability: "Continue with Telegram" stores a REAL positive id on
+an app-only account the bot cannot open a chat with, so the DM came back
+`400: chat not found`, and no push existed on this path at all. A `platform =
+mobile` user whose face-match was rejected therefore learned **neither that it
+failed nor that it passed** — and the app screen holding them can only re-run
+liveness against the same photos, so if the photos were the problem it could
+never clear. Found by walking registration on a real iPhone; the rule it broke
+was already written ninety lines below it, in `surfaceVerifiedActivationDefault`.
+The rail is now `platform`-derived via `telegramReachable` / `pushReachable`
+(`services/telegram-reach.ts`), and every announcement the DM ever carried has a
+push twin: the three terminal outcomes, the retry nudge, the under-`MIN_PHOTOS`
+ask, and the photos-came-off notice. The decision logic is untouched — only who
+hears about it. Three properties are worth stating:
+
+- **One push type, `verification.outcome`, with the outcome in `data.status`.**
+  Every one of them lands on the same surface the app already renders, and an
+  unrouted type is a notification that opens nothing when tapped — so extra
+  types would buy nothing and cost the client a route each. `status` is
+  `verified` / `pending_review` / `rejected` / `retry` / `photos_needed` /
+  `photos_dropped`.
+- **Not time-sensitive.** `TIME_SENSITIVE_PUSH_TYPES` stays the closed pair of
+  two (ARCHITECTURE → APNs). A verdict someone is waiting on is the most
+  tempting thing to add and still not an emergency.
+- **The push is NOT held behind the outcome gate**, unlike the DM. That gate
+  coordinates with a shimmer running in a Telegram chat; a lock-screen banner
+  does not land there, so holding it would only make a `both` user's push up to
+  30 s late for a symmetry that buys nothing.
+- **The copy is its own, not the DM reused.** The DM leans on an inline keyboard
+  directly beneath it ("tap 📷 below to swap them") which has no counterpart on
+  a lock screen, and it is long enough that iOS would truncate the sentence
+  carrying the verdict. Meaning stays in lockstep — a `both` user gets both
+  rails for one event — so a rejection leads with "these aren't your photos"
+  on both.
+
 **Verification gate (the app stays locked).** `status='onboarding'` with
 `onboardingStep='completed'` means the profile is finished but liveness is not,
 and since verification is mandatory that user is NOT in the app yet. The one

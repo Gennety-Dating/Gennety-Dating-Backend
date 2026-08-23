@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { TIME_SENSITIVE_PUSH_TYPES } from "./apns.js";
 import {
   runFaceMatchVerification,
+  VERIFICATION_PUSH_TYPE,
   type PersistOutcomeInput,
   type PersistRetryableInput,
   type PipelineConfig,
@@ -36,6 +38,7 @@ interface Harness {
   persisted: PersistOutcomeInput[];
   retryPersisted: PersistRetryableInput[];
   notifications: Array<{ telegramId: bigint; message: string; kind: string }>;
+  pushes: Array<{ userId: string; title: string; body: string; data?: Record<string, unknown> }>;
   activationSurfaces: Array<{ userId: string; telegramId: bigint }>;
   referralSettles: string[];
   drops: Array<{ userId: string; photosSnapshot: string[]; dropIndexes: number[] }>;
@@ -54,6 +57,11 @@ function makeHarness(
   const user: PipelineUserRow = {
     id: USER_ID,
     telegramId: 999_001n,
+    // Default fixture is a Telegram account, matching the positive id above.
+    // The rail cases override it — and `platform` is what actually decides
+    // reachability, so a fixture that leaves the two disagreeing is the bug
+    // this column exists to catch.
+    platform: "telegram",
     status: "onboarding",
     gender: "male",
     language: "en",
@@ -92,6 +100,7 @@ function makeHarness(
   const persisted: PersistOutcomeInput[] = [];
   const retryPersisted: PersistRetryableInput[] = [];
   const notifications: Array<{ telegramId: bigint; message: string; kind: string }> = [];
+  const pushes: Harness["pushes"] = [];
   const activationSurfaces: Array<{ userId: string; telegramId: bigint }> = [];
   const referralSettles: string[] = [];
   const drops: Harness["drops"] = [];
@@ -111,6 +120,15 @@ function makeHarness(
     }),
     notify: vi.fn(async (telegramId: bigint, message: string, kind: string) => {
       notifications.push({ telegramId, message, kind });
+    }),
+    sendPush: vi.fn(async (userId: string, payload) => {
+      pushes.push({
+        userId,
+        title: payload.title,
+        body: payload.body,
+        ...(payload.data ? { data: payload.data } : {}),
+      });
+      return true;
     }),
     surfaceVerifiedActivation: vi.fn(async (input) => {
       activationSurfaces.push(input);
@@ -138,6 +156,7 @@ function makeHarness(
     persisted,
     retryPersisted,
     notifications,
+    pushes,
     activationSurfaces,
     referralSettles,
     drops,
@@ -730,10 +749,12 @@ describe("runFaceMatchVerification — idempotency", () => {
 
 describe("runFaceMatchVerification — DM behavior", () => {
   it("does not DM when telegramId is non-positive (mobile-only user)", async () => {
-    const h = makeHarness({ user: { telegramId: -1n } });
+    const h = makeHarness({ user: { telegramId: -1n, platform: "mobile" } });
     await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
     expect(h.notifications).toHaveLength(0);
     expect(h.activationSurfaces).toHaveLength(0);
+    // ...but they are not left in silence: the app rail carries the verdict.
+    expect(h.pushes).toHaveLength(1);
   });
 
   it("swallows DM errors (does not change the pipeline outcome)", async () => {
@@ -937,5 +958,176 @@ describe("runFaceMatchVerification — downloadProfileImage contract", () => {
     expect(downloader).toHaveBeenCalledTimes(2);
     expect(downloader).toHaveBeenNthCalledWith(1, TG_FILE_ID);
     expect(downloader).toHaveBeenNthCalledWith(2, SUPA_PATH);
+  });
+});
+
+describe("runFaceMatchVerification — which rail hears the outcome", () => {
+  // The live defect, 2026-08-23: an account created through "Continue with
+  // Telegram" on the phone carries a REAL positive `telegramId` (an OIDC sub),
+  // so the old `telegramId > 0n` test said "DM them" and grammY answered
+  // `400: chat not found`. There was no push rail at all, so the user learned
+  // neither that their face-match failed nor that it passed — and the app
+  // screen they were stuck on can only re-run liveness against the same photos.
+  it("a Telegram-login app account is pushed, never DM'd", async () => {
+    const h = makeHarness({
+      user: { telegramId: 1_108_826_262_071_689_767n, platform: "mobile" },
+      compareScores: [{ ok: true, similarity: 0.4, faceFound: true }],
+    });
+
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(outcome.kind).toBe("rejected");
+    expect(h.notifications).toEqual([]);
+    expect(h.pushes).toHaveLength(1);
+    expect(h.pushes[0]!.userId).toBe(USER_ID);
+    expect(h.pushes[0]!.data).toEqual({
+      type: VERIFICATION_PUSH_TYPE,
+      status: "rejected",
+    });
+  });
+
+  it("leads a rejection with 'these aren't your photos' on the lock screen too", async () => {
+    // The DM orders the recoveries photos-first (`photoRedoFirst`) because the
+    // likelier fix is swapping the photos, not re-running liveness. A push that
+    // said only "verification failed" would send the same user back into the
+    // loop the DM exists to break.
+    const h = makeHarness({
+      user: { platform: "mobile" },
+      compareScores: [{ ok: true, similarity: 0.4, faceFound: true }],
+    });
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(h.pushes[0]!.title).toContain("don't match");
+    expect(h.pushes[0]!.body).toContain("swap them");
+  });
+
+  it("tells a `both` account on both rails — the gates are independent", async () => {
+    const h = makeHarness({ user: { platform: "both" } });
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(h.notifications).toHaveLength(1);
+    expect(h.notifications[0]!.kind).toBe("verified");
+    expect(h.pushes).toHaveLength(1);
+    expect(h.pushes[0]!.data).toMatchObject({ status: "verified" });
+  });
+
+  it("does not push a Telegram-only account", async () => {
+    const h = makeHarness({ user: { platform: "telegram" } });
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(h.notifications).toHaveLength(1);
+    expect(h.pushes).toEqual([]);
+  });
+
+  it("treats a row with no platform as Telegram (pre-column accounts)", async () => {
+    const h = makeHarness({ user: { platform: null } });
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(h.notifications).toHaveLength(1);
+    expect(h.pushes).toEqual([]);
+  });
+
+  it("pushes the retry nudge, so the app rail can escape the gate too", async () => {
+    const h = makeHarness({
+      user: { platform: "mobile" },
+      selfie: { ok: false, error: "reference_expired" },
+    });
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(h.notifications).toEqual([]);
+    expect(h.pushes).toHaveLength(1);
+    expect(h.pushes[0]!.data).toMatchObject({ status: "retry" });
+  });
+
+  it("pushes the photo-count ask, with both numbers in the copy", async () => {
+    // The most stuck state there is: verified for good, but held out of the
+    // pool until the profile is refilled — and on mobile this branch used to
+    // send nothing whatsoever, so the user had no way to learn what was wrong.
+    const h = makeHarness({
+      user: { platform: "mobile" },
+      compareScores: [
+        { ok: true, similarity: 0.93, faceFound: true },
+        { ok: true, similarity: 0.3, faceFound: true },
+        { ok: true, similarity: 0.25, faceFound: true },
+        { ok: true, similarity: 0.22, faceFound: true },
+      ],
+    });
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(h.pushes).toHaveLength(1);
+    expect(h.pushes[0]!.data).toMatchObject({ status: "photos_needed" });
+    expect(h.pushes[0]!.title).toContain("3");
+    expect(h.pushes[0]!.body).toContain("4-photo minimum");
+  });
+
+  it("pushes the photos-came-off notice as its own second notification", async () => {
+    // Photos vanishing from a profile with no explanation would be its own bug.
+    // Five photos so that dropping one still clears MIN_PHOTOS — otherwise this
+    // silently becomes the photos-needed case above.
+    const h = makeHarness({
+      user: {
+        platform: "mobile",
+        profile: { photos: ["a", "b", "c", "d", "e"], eloSeededAt: null },
+      },
+      photoBuffers: {
+        a: Buffer.from("a"),
+        b: Buffer.from("b"),
+        c: Buffer.from("c"),
+        d: Buffer.from("d"),
+        e: Buffer.from("e"),
+      },
+      compareScores: [
+        { ok: true, similarity: 0.93, faceFound: true },
+        { ok: true, similarity: 0.92, faceFound: true },
+        { ok: true, similarity: 0.91, faceFound: true },
+        { ok: true, similarity: 0.9, faceFound: true },
+        { ok: true, similarity: 0.2, faceFound: true },
+      ],
+    });
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(h.pushes.map((push) => push.data)).toEqual([
+      { type: VERIFICATION_PUSH_TYPE, status: "verified" },
+      { type: VERIFICATION_PUSH_TYPE, status: "photos_dropped" },
+    ]);
+  });
+
+  it("never opens the Telegram shell for an app account with a real id", async () => {
+    // `surfaceVerifiedActivation` sends a main menu and pins a banner. Gating
+    // it on `telegramId > 0n` aimed both at a chat that was never opened.
+    const h = makeHarness({ user: { platform: "mobile" } });
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(h.activationSurfaces).toEqual([]);
+  });
+
+  it("keeps each rail's failure to itself", async () => {
+    const h = makeHarness({ user: { platform: "both" } });
+    h.deps.sendPush = vi.fn(async () => {
+      throw new Error("APNs down");
+    });
+
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(outcome.kind).toBe("verified");
+    expect(h.notifications).toHaveLength(1);
+  });
+
+  it("skips the app rail entirely when no sendPush dep is wired", async () => {
+    const h = makeHarness({ user: { platform: "mobile" } });
+    delete h.deps.sendPush;
+
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(outcome.kind).toBe("verified");
+    expect(h.notifications).toEqual([]);
+    expect(h.pushes).toEqual([]);
+  });
+
+  it("does not claim the right to pierce Focus", () => {
+    // A verification verdict is news, not an emergency. The closed set stays at
+    // two (ARCHITECTURE → APNs, 2026-08-12); this is the sender that would have
+    // been most tempting to add, since the user is actively waiting on it.
+    expect(TIME_SENSITIVE_PUSH_TYPES.has(VERIFICATION_PUSH_TYPE)).toBe(false);
   });
 });

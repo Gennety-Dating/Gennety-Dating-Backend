@@ -19,8 +19,15 @@ import { notifyFounderNewUser } from "./founder-notify.js";
 import { settleReferralOnVerified } from "./referral-notify.js";
 import {
   terminalVerificationMessage,
+  terminalVerificationPush,
+  verificationPhotosDroppedPush,
+  verificationPhotosNeededPush,
   verificationRetryMessage,
+  verificationRetryPush,
+  type PushCopy,
 } from "./verification-messages.js";
+import { pushReachable, telegramReachable } from "./telegram-reach.js";
+import { sendPushToUser, type PushPayload } from "./push.js";
 import {
   buildVerificationKeyboard,
   VERIFY_PHOTOS_CALLBACK,
@@ -190,7 +197,8 @@ export interface PipelineDeps {
   downloadProfileImage: (pathOrFileId: string) => Promise<Buffer | null>;
   compareFaces: typeof compareFaces;
   /**
-   * DM the user with the outcome. No-op when telegramId ≤ 0 (mobile-only user).
+   * DM the user with the outcome. Callers gate on `telegramReachable` before
+   * reaching this — it is never invoked for an account the bot cannot message.
    * `message` is already localized to the user's language; `kind` is passed so
    * the production wiring can attach the right affordances without re-deriving
    * them from the copy (a `rejected` or `retry` DM carries the verify /
@@ -201,6 +209,18 @@ export interface PipelineDeps {
     message: string,
     kind: TerminalVerificationStatus | "retry" | "photos_needed",
   ) => Promise<void>;
+  /**
+   * Push the same outcome to the native app. The second half of the answer to
+   * "who hears about this run": `notify` covers the Telegram rail, this one
+   * covers `mobile` / `both`, and the two gates are independent — a `both`
+   * account gets told twice, once on each surface.
+   *
+   * Optional so tests and any non-push wiring can omit it; when absent the app
+   * rail is simply skipped, which is what shipped before this dep existed and
+   * is exactly the defect it removes. Resolves `false` rather than throwing on
+   * a dead token or an unconfigured APNs.
+   */
+  sendPush?: (userId: string, payload: PushPayload) => Promise<boolean>;
   /**
    * Surface the post-verification Telegram app shell after a green face-match:
    * main menu + pinned "next match" status banner. Kept as a hook so the pure
@@ -301,6 +321,14 @@ export interface PersistRetryableInput {
 export interface PipelineUserRow {
   id: string;
   telegramId: bigint;
+  /**
+   * Which rails this account actually has (`telegram` | `mobile` | `both`).
+   * The reachability test, NOT `telegramId > 0n` — "Continue with Telegram"
+   * stores a real positive id on an app-only account the bot cannot open a
+   * chat with. See `telegram-reach.ts`; null means a row predating the column,
+   * which the helper reads as Telegram.
+   */
+  platform: string | null;
   status: string;
   gender: string | null;
   /** Drives the localized outcome DM; `en` when unset. */
@@ -437,7 +465,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath: null,
       shouldActivate: false,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
+    await sendOutcomeMessage(deps, user, "pending_review");
     return { kind: "pending_review", userId, reason: "no_profile_photos" };
   }
 
@@ -479,7 +507,7 @@ export async function runFaceMatchVerification(
     // reference is genuinely gone, the photo-edit handler already asks them
     // once per upload burst via `triggerVerificationRerun`'s pre-check.
     if (!keptVerified) {
-      await sendRetryMessage(deps, user.telegramId, user.language);
+      await sendRetryMessage(deps, user);
     }
     return { kind: "retry_required", userId, reason, keptVerified };
   }
@@ -591,7 +619,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath,
       shouldActivate: false,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
+    await sendOutcomeMessage(deps, user, "pending_review");
     return { kind: "pending_review", userId, reason: "no_source_face" };
   }
 
@@ -608,7 +636,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath,
       shouldActivate: false,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
+    await sendOutcomeMessage(deps, user, "pending_review");
     return { kind: "pending_review", userId, reason: infraError, scores };
   }
 
@@ -653,7 +681,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath,
       shouldActivate: false,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
+    await sendOutcomeMessage(deps, user, "pending_review");
     return {
       kind: "pending_review",
       userId,
@@ -703,7 +731,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath,
       shouldActivate: false,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "rejected", user.language);
+    await sendOutcomeMessage(deps, user, "rejected");
     return { kind: "rejected", userId, score: minDetected, scores };
   }
 
@@ -814,20 +842,19 @@ export async function runFaceMatchVerification(
       // "you're live" when they are not. It always sends, including on a
       // re-confirm rerun — the photo count is what changed, and it is the only
       // thing standing between them and matching.
-      if (user.telegramId > 0n) {
-        try {
-          await deps.notify(
-            user.telegramId,
-            t(user.language ?? "en", "verifyPhotosBelowMinimum", {
-              min: MIN_PHOTOS,
-              need: MIN_PHOTOS - projectedPhotoCount,
-            }),
-            "photos_needed",
-          );
-        } catch (err) {
-          console.warn(`${LOG_PREFIX} below-minimum DM failed`, { userId, err });
-        }
-      }
+      const need = MIN_PHOTOS - projectedPhotoCount;
+      await announce(deps, user, {
+        dm: t(user.language ?? "en", "verifyPhotosBelowMinimum", {
+          min: MIN_PHOTOS,
+          need,
+        }),
+        dmKind: "photos_needed",
+        push: verificationPhotosNeededPush(user.language ?? "en", {
+          min: MIN_PHOTOS,
+          need,
+        }),
+        status: "photos_needed",
+      });
       // No menu, no pinned banner: `status` is still `onboarding`, so the
       // verification gate owns every surface until the photos are back.
       console.warn(`${LOG_PREFIX} verified but below photo minimum`, {
@@ -840,24 +867,28 @@ export async function runFaceMatchVerification(
     }
 
     if (options.previousVerificationStatus !== "verified") {
-      await sendOutcomeMessage(deps, user.telegramId, "verified", user.language);
+      await sendOutcomeMessage(deps, user, "verified");
     }
     // Say it out loud when the photo set shrank — including on a re-confirm
     // rerun that stays otherwise silent. Photos vanishing from a profile with
     // no explanation would be its own bug, and this is the user's cue to add
     // replacements.
-    if (droppedCount > 0 && user.telegramId > 0n) {
-      try {
-        await deps.notify(
-          user.telegramId,
-          t(user.language ?? "en", "verifyPhotosDropped"),
-          "verified",
-        );
-      } catch (err) {
-        console.warn(`${LOG_PREFIX} dropped-photo DM failed`, { userId, err });
-      }
+    if (droppedCount > 0) {
+      await announce(deps, user, {
+        dm: t(user.language ?? "en", "verifyPhotosDropped"),
+        // Not a DM kind of its own: this message asks for nothing, so it wants
+        // no keyboard, and `verified` is the kind the wiring already reads that
+        // way. The push side does distinguish it (`status: "photos_dropped"`),
+        // because there the two are separate notifications on a lock screen.
+        dmKind: "verified",
+        push: verificationPhotosDroppedPush(user.language ?? "en"),
+        status: "photos_dropped",
+      });
     }
-    if (user.telegramId > 0n) {
+    // Same reachability question as the announcement above, same answer:
+    // `telegramId > 0n` would send a main menu into a chat a Telegram-login app
+    // user never opened. The surface itself keeps its own guards.
+    if (telegramReachable(user)) {
       await surfaceVerifiedActivation(deps, {
         userId,
         telegramId: user.telegramId,
@@ -904,7 +935,7 @@ export async function runFaceMatchVerification(
     verifiedSelfiePath,
     shouldActivate: false,
   });
-  await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
+  await sendOutcomeMessage(deps, user, "pending_review");
   return {
     kind: "pending_review",
     userId,
@@ -915,46 +946,138 @@ export async function runFaceMatchVerification(
 }
 
 /**
- * Send the terminal-outcome DM in the user's own language. The copy lives in
- * shared i18n (`verifyOutcome*`) — it used to be hardcoded English here, which
- * meant a Russian-speaking user whose photos were rejected got an English wall
- * of text pointing at a Settings entry that no longer exists.
+ * The single push type every verification announcement carries. One type, not
+ * one per outcome: the tap destination is the same surface in all of them (the
+ * verification state the app already renders), and each extra type is a route
+ * the client has to learn before a notification becomes tappable at all — an
+ * unrouted type opens nothing. Which outcome it was travels in `data.status`,
+ * so the client can refine the destination later without a contract change.
+ *
+ * Deliberately NOT in `TIME_SENSITIVE_PUSH_TYPES` (`services/apns.ts`, a closed
+ * set of two): a verification verdict is news, not an emergency, and piercing
+ * Focus for it would be exactly the claim on someone's Do Not Disturb the
+ * 2026-08-12 decision refused.
  */
-async function sendOutcomeMessage(
-  deps: Pick<PipelineDeps, "notify">,
-  telegramId: bigint,
-  kind: TerminalVerificationStatus,
-  language: Language | null,
-): Promise<void> {
-  if (telegramId <= 0n) return; // mobile-only user — no Telegram chat to DM
-  try {
-    await deps.notify(
-      telegramId,
-      terminalVerificationMessage(language ?? "en", kind),
-      kind,
-    );
-  } catch (err) {
-    console.warn(`${LOG_PREFIX} outcome DM failed`, { telegramId: String(telegramId), err });
-  }
+export const VERIFICATION_PUSH_TYPE = "verification.outcome";
+
+/** What `data.status` can say — one value per thing that actually happened. */
+export type VerificationPushStatus =
+  | TerminalVerificationStatus
+  | "retry"
+  | "photos_needed"
+  | "photos_dropped";
+
+/** The slice of the user row an announcement needs: who, where, in what language. */
+type AnnounceTarget = Pick<PipelineUserRow, "id" | "telegramId" | "platform" | "language">;
+
+interface Announcement {
+  /** Already-localized DM body. */
+  dm: string;
+  /** Passed through to `notify` so the wiring can attach the right buttons. */
+  dmKind: TerminalVerificationStatus | "retry" | "photos_needed";
+  /** Lock-screen twin of `dm`. */
+  push: PushCopy;
+  /** Rides along in `data.status`. */
+  status: VerificationPushStatus;
 }
 
 /**
- * DM the "run the check" nudge for a run that could not reach a verdict. Same
- * copy and same affordances as the ordinary verification reminder — from the
- * user's side nothing happened yet, and the one thing that moves them forward
- * is starting a fresh liveness check.
+ * Tell the user, on every rail they actually have.
+ *
+ * This function exists because the version it replaced asked the wrong
+ * question. It gated on `telegramId > 0n`, which is not reachability: signing
+ * in through "Continue with Telegram" stores a REAL positive id on an app-only
+ * account, so the DM went out to a chat that was never opened and came back
+ * `400: chat not found` — and there was no push rail at all. A `mobile` user
+ * whose face-match was rejected therefore learned neither that it failed nor
+ * that it passed, and sat on a screen whose only button re-runs liveness
+ * against the same photos. Found by walking registration on a real iPhone,
+ * 2026-08-23; the rule it breaks was already written down ninety lines below,
+ * in `surfaceVerifiedActivationDefault`.
+ *
+ * The two gates are independent, not a fallback chain: `both` is two rails for
+ * one event, and each leg swallows its own failure so a blocked Telegram chat
+ * cannot take the push down with it (or the reverse).
+ */
+async function announce(
+  deps: Pick<PipelineDeps, "notify" | "sendPush">,
+  user: AnnounceTarget,
+  announcement: Announcement,
+): Promise<void> {
+  const legs: Array<Promise<unknown>> = [];
+
+  if (telegramReachable(user)) {
+    legs.push(
+      deps.notify(user.telegramId, announcement.dm, announcement.dmKind).catch((err: unknown) => {
+        console.warn(`${LOG_PREFIX} outcome DM failed`, {
+          userId: user.id,
+          telegramId: String(user.telegramId),
+          status: announcement.status,
+          err,
+        });
+      }),
+    );
+  }
+
+  if (deps.sendPush && pushReachable(user)) {
+    legs.push(
+      deps
+        .sendPush(user.id, {
+          title: announcement.push.title,
+          body: announcement.push.body,
+          data: { type: VERIFICATION_PUSH_TYPE, status: announcement.status },
+        })
+        .catch((err: unknown) => {
+          console.warn(`${LOG_PREFIX} outcome push failed`, {
+            userId: user.id,
+            status: announcement.status,
+            err,
+          });
+        }),
+    );
+  }
+
+  await Promise.all(legs);
+}
+
+/**
+ * Announce a terminal outcome in the user's own language. The copy lives in
+ * shared i18n (`verifyOutcome*` for the DM, `verifyPush*` for the push) — it
+ * used to be hardcoded English here, which meant a Russian-speaking user whose
+ * photos were rejected got an English wall of text pointing at a Settings entry
+ * that no longer exists.
+ */
+async function sendOutcomeMessage(
+  deps: Pick<PipelineDeps, "notify" | "sendPush">,
+  user: AnnounceTarget,
+  kind: TerminalVerificationStatus,
+): Promise<void> {
+  const language = user.language ?? "en";
+  await announce(deps, user, {
+    dm: terminalVerificationMessage(language, kind),
+    dmKind: kind,
+    push: terminalVerificationPush(language, kind),
+    status: kind,
+  });
+}
+
+/**
+ * Announce the "run the check" nudge for a run that could not reach a verdict.
+ * Same copy and same affordances as the ordinary verification reminder — from
+ * the user's side nothing happened yet, and the one thing that moves them
+ * forward is starting a fresh liveness check.
  */
 async function sendRetryMessage(
-  deps: Pick<PipelineDeps, "notify">,
-  telegramId: bigint,
-  language: Language | null,
+  deps: Pick<PipelineDeps, "notify" | "sendPush">,
+  user: AnnounceTarget,
 ): Promise<void> {
-  if (telegramId <= 0n) return; // mobile-only user — no Telegram chat to DM
-  try {
-    await deps.notify(telegramId, verificationRetryMessage(language ?? "en"), "retry");
-  } catch (err) {
-    console.warn(`${LOG_PREFIX} retry DM failed`, { telegramId: String(telegramId), err });
-  }
+  const language = user.language ?? "en";
+  await announce(deps, user, {
+    dm: verificationRetryMessage(language),
+    dmKind: "retry",
+    push: verificationRetryPush(language),
+    status: "retry",
+  });
 }
 
 async function surfaceVerifiedActivation(
@@ -1177,6 +1300,12 @@ export async function runFaceMatchVerificationDefault(
           ...(keyboard ? { reply_markup: keyboard } : {}),
         });
       },
+      // The app rail. Deliberately NOT held behind `options.outcomeGate` the way
+      // `notify` is: that gate coordinates with a shimmer running in a Telegram
+      // chat, and a push does not land there — a `both` user would just get the
+      // lock-screen banner up to 30 s late for the sake of a symmetry that buys
+      // nothing.
+      sendPush: (uid: string, payload: PushPayload) => sendPushToUser(uid, payload),
       surfaceVerifiedActivation: async (input) => {
         // Same gate as `notify`: the menu + pinned banner are the landing the
         // user reads after the success DM, so they must not appear over a
@@ -1196,6 +1325,9 @@ export async function runFaceMatchVerificationDefault(
             select: {
               id: true,
               telegramId: true,
+              // The rail, not a decoration: `announce` reads it to decide who
+              // hears about this run at all (`telegram-reach.ts`).
+              platform: true,
               status: true,
               gender: true,
               language: true,

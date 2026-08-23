@@ -1437,7 +1437,11 @@ because a daily decision window is a window, not an emergency, and a nightly
 Focus breach is precisely what the 2026-08-12 decision refused. **The set is
 therefore load-bearing by staying small** — anything that grows it is a claim on
 someone's Do Not Disturb, and a test pins its whole membership rather than one
-member. **The level has a client-side precondition that fails silently**:
+member. `verification.outcome` (2026-08-23, PRODUCT_SPEC §1.4) is the second
+test and the harder one, because unlike a nudge the user is *actively waiting*
+on that verdict — which is an argument for delivering it, not for taking their
+Do Not Disturb; the set stayed at two again. **The level has a client-side
+precondition that fails silently**:
 without `com.apple.developer.usernotifications.time-sensitive` in the app,
 iOS ignores it entirely and the notification arrives ordinary — measured
 by differential probe, `timeSensitiveSetting` reads `notSupported` without the

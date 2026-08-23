@@ -60,3 +60,75 @@ export function livenessRetryMessage(
       return t(language, "verifyRetryTechnical");
   }
 }
+
+/**
+ * Lock-screen copy for the native rail. A push is a title plus a body, not the
+ * DM string reused: the DM leans on an inline keyboard right below it ("tap 📷
+ * below to swap them") that has no counterpart on a lock screen, and it is long
+ * enough that iOS would truncate the sentence carrying the actual verdict.
+ *
+ * Meaning is kept in lockstep with `terminalVerificationMessage` on purpose —
+ * a `both` user gets both rails for the same event, and two rails disagreeing
+ * about what happened is worse than either alone. Rejection therefore leads
+ * with "these aren't your photos" here too (the DM's `photoRedoFirst` ordering,
+ * `verification-pipeline.ts`), and a pass stays a single short confirmation.
+ */
+export interface PushCopy {
+  title: string;
+  body: string;
+}
+
+export function terminalVerificationPush(
+  language: Language,
+  status: TerminalVerificationStatus,
+): PushCopy {
+  switch (status) {
+    case "verified":
+      return {
+        title: t(language, "verifyPushVerifiedTitle"),
+        body: t(language, "verifyPushVerifiedBody"),
+      };
+    case "pending_review":
+      return {
+        title: t(language, "verifyPushPendingReviewTitle"),
+        body: t(language, "verifyPushPendingReviewBody"),
+      };
+    case "rejected":
+      return {
+        title: t(language, "verifyPushRejectedTitle"),
+        body: t(language, "verifyPushRejectedBody"),
+      };
+  }
+}
+
+/** Push twin of `verificationRetryMessage` — same "start the check" ask. */
+export function verificationRetryPush(language: Language): PushCopy {
+  return {
+    title: t(language, "verifyPushRetryTitle"),
+    body: t(language, "verifyPushRetryBody"),
+  };
+}
+
+/**
+ * Push twin of `verifyPhotosBelowMinimum`: verified, but held out of the pool
+ * until the profile is refilled. Both numbers travel with it — the title names
+ * what to do and the body says why, so a user who only reads the banner still
+ * knows the count.
+ */
+export function verificationPhotosNeededPush(
+  language: Language,
+  counts: { min: number; need: number },
+): PushCopy {
+  return {
+    title: t(language, "verifyPushPhotosNeededTitle", counts),
+    body: t(language, "verifyPushPhotosNeededBody", counts),
+  };
+}
+
+/** Push twin of `verifyPhotosDropped` — photos vanished, and here is why. */
+export function verificationPhotosDroppedPush(language: Language): PushCopy {
+  return {
+    title: t(language, "verifyPushPhotosDroppedTitle"),
+    body: t(language, "verifyPushPhotosDroppedBody"),
+  };
+}

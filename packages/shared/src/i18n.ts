@@ -272,6 +272,27 @@ const translations = {
     verifyPhotosBelowMinimum:
       "You're verified ✅ — that part is done for good.\n\n" +
       "But some photos didn't match your selfie, so I took them off, and now your profile is under the {min}-photo minimum. Add {need} more of yourself and I'll start looking for a match right away 📷",
+    // --- Native-app push copy for the same verification outcomes (§1.4). Own
+    // strings rather than reused DM copy: these land on a lock screen, so they
+    // need a title, they must stay short, and they cannot point at a Telegram
+    // keyboard ("tap 📷 below") that does not exist in the app.
+    verifyPushVerifiedTitle: "Verified ✨",
+    verifyPushVerifiedBody: "Your profile is live. I'll message you when I find a match.",
+    verifyPushRejectedTitle: "Your photos don't match",
+    verifyPushRejectedBody:
+      "The photos on your profile aren't the person in your verification selfie. If they aren't you, swap them and I'll re-check automatically.",
+    verifyPushPendingReviewTitle: "Checking your photos",
+    verifyPushPendingReviewBody:
+      "We're comparing your profile photos with your verification selfie. Usually a few hours — I'll let you know.",
+    verifyPushRetryTitle: "One step left",
+    verifyPushRetryBody:
+      "Your profile is ready — only verification is missing. It takes about a minute, and matching starts right after.",
+    verifyPushPhotosNeededTitle: "Add {need} more photos",
+    verifyPushPhotosNeededBody:
+      "You're verified, but your profile is under the {min}-photo minimum. Add {need} of yourself and I'll start looking.",
+    verifyPushPhotosDroppedTitle: "Some photos came off",
+    verifyPushPhotosDroppedBody:
+      "A few didn't match your verification selfie, so I removed them. Everything else is live.",
     verifyMiniAppLoading: "Opening verification…",
     verifyMiniAppFinishing: "Almost done. Checking results…",
     verifyMiniAppError:
@@ -1506,6 +1527,27 @@ const translations = {
     verifyPhotosBelowMinimum:
       "Верификация пройдена ✅ — это уже навсегда.\n\n" +
       "Но часть фото не совпала с селфи, я их убрал, и теперь в профиле меньше {min} фотографий. Добавь ещё {need} своих — и я сразу начну искать тебе пару 📷",
+    // --- Native-app push copy for the same verification outcomes (§1.4). Own
+    // strings rather than reused DM copy: these land on a lock screen, so they
+    // need a title, they must stay short, and they cannot point at a Telegram
+    // keyboard ("tap 📷 below") that does not exist in the app.
+    verifyPushVerifiedTitle: "Проверка пройдена ✨",
+    verifyPushVerifiedBody: "Профиль активен. Напишу, когда найду мэтч.",
+    verifyPushRejectedTitle: "Фото не совпали",
+    verifyPushRejectedBody:
+      "На фото в профиле не тот человек, что на селфи из верификации. Если это не ты — замени их, я перепроверю автоматически.",
+    verifyPushPendingReviewTitle: "Проверяем фото",
+    verifyPushPendingReviewBody:
+      "Сверяем фото профиля с селфи из верификации. Обычно несколько часов — напишу, как только закончим.",
+    verifyPushRetryTitle: "Остался один шаг",
+    verifyPushRetryBody:
+      "Профиль готов — не хватает только верификации. Это примерно минута, подбор начнётся сразу после.",
+    verifyPushPhotosNeededTitle: "Добавь ещё {need} фото",
+    verifyPushPhotosNeededBody:
+      "Верификация пройдена, но в профиле меньше {min} фотографий. Добавь ещё {need} своих — и я начну искать.",
+    verifyPushPhotosDroppedTitle: "Часть фото убрана",
+    verifyPushPhotosDroppedBody:
+      "Некоторые не совпали с селфи из верификации, я убрал их из профиля. Всё остальное на месте.",
     verifyMiniAppLoading: "Открываем верификацию…",
     verifyMiniAppFinishing: "Готово. Проверяем результат…",
     verifyMiniAppError:
@@ -2641,6 +2683,27 @@ const translations = {
     verifyPhotosBelowMinimum:
       "Верифікацію пройдено ✅ — це вже назавжди.\n\n" +
       "Але частина фото не збіглася з селфі, я їх прибрав, і тепер у профілі менше ніж {min} фотографій. Додай ще {need} своїх — і я одразу почну шукати тобі пару 📷",
+    // --- Native-app push copy for the same verification outcomes (§1.4). Own
+    // strings rather than reused DM copy: these land on a lock screen, so they
+    // need a title, they must stay short, and they cannot point at a Telegram
+    // keyboard ("tap 📷 below") that does not exist in the app.
+    verifyPushVerifiedTitle: "Перевірку пройдено ✨",
+    verifyPushVerifiedBody: "Профіль активний. Напишу, коли знайду метч.",
+    verifyPushRejectedTitle: "Фото не збіглися",
+    verifyPushRejectedBody:
+      "На фото в профілі не та людина, що на селфі з верифікації. Якщо це не ти — заміни їх, я перевірю автоматично.",
+    verifyPushPendingReviewTitle: "Перевіряємо фото",
+    verifyPushPendingReviewBody:
+      "Звіряємо фото профілю із селфі з верифікації. Зазвичай кілька годин — напишу, щойно завершимо.",
+    verifyPushRetryTitle: "Лишився один крок",
+    verifyPushRetryBody:
+      "Профіль готовий — бракує лише верифікації. Це приблизно хвилина, підбір почнеться одразу після.",
+    verifyPushPhotosNeededTitle: "Додай ще {need} фото",
+    verifyPushPhotosNeededBody:
+      "Верифікацію пройдено, але в профілі менше ніж {min} фотографій. Додай ще {need} своїх — і я почну шукати.",
+    verifyPushPhotosDroppedTitle: "Частину фото прибрано",
+    verifyPushPhotosDroppedBody:
+      "Деякі не збіглися із селфі з верифікації, я прибрав їх із профілю. Усе інше на місці.",
     verifyMiniAppLoading: "Відкриваємо верифікацію…",
     verifyMiniAppFinishing: "Готово. Перевіряємо результат…",
     verifyMiniAppError:
@@ -3706,6 +3769,27 @@ const deTranslations: TranslationTable = {
   verifyPhotosBelowMinimum:
     "Du bist verifiziert ✅ — das ist dauerhaft erledigt.\n\n" +
     "Ein paar Fotos passten allerdings nicht zu deinem Selfie, die habe ich entfernt, und jetzt liegt dein Profil unter dem Minimum von {min} Fotos. Lad noch {need} von dir hoch, dann suche ich sofort nach einem Match 📷",
+  // --- Native-app push copy for the same verification outcomes (§1.4). Own
+  // strings rather than reused DM copy: these land on a lock screen, so they
+  // need a title, they must stay short, and they cannot point at a Telegram
+  // keyboard ("tap 📷 below") that does not exist in the app.
+  verifyPushVerifiedTitle: "Verifiziert ✨",
+  verifyPushVerifiedBody: "Dein Profil ist live. Ich melde mich, wenn ich ein Match finde.",
+  verifyPushRejectedTitle: "Deine Fotos passen nicht",
+  verifyPushRejectedBody:
+    "Auf den Profilfotos ist nicht die Person aus deinem Verifizierungs-Selfie. Wenn du das nicht bist, tausch sie aus — ich prüfe automatisch erneut.",
+  verifyPushPendingReviewTitle: "Wir prüfen deine Fotos",
+  verifyPushPendingReviewBody:
+    "Wir gleichen deine Profilfotos mit deinem Verifizierungs-Selfie ab. Meist ein paar Stunden — ich melde mich.",
+  verifyPushRetryTitle: "Nur noch ein Schritt",
+  verifyPushRetryBody:
+    "Dein Profil ist fertig — es fehlt nur die Verifizierung. Dauert etwa eine Minute, das Matching startet direkt danach.",
+  verifyPushPhotosNeededTitle: "Noch {need} Fotos",
+  verifyPushPhotosNeededBody:
+    "Du bist verifiziert, aber dein Profil liegt unter dem Minimum von {min} Fotos. Lad noch {need} von dir hoch, dann suche ich los.",
+  verifyPushPhotosDroppedTitle: "Ein paar Fotos sind weg",
+  verifyPushPhotosDroppedBody:
+    "Sie passten nicht zu deinem Verifizierungs-Selfie, deshalb habe ich sie entfernt. Alles andere ist online.",
   verifyMiniAppLoading: "Verifizierung wird geöffnet…",
   verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft…",
   verifyMiniAppError: "Verifizierung konnte nicht gestartet werden. Versuch es gleich noch mal.",
@@ -4807,6 +4891,27 @@ const plTranslations: TranslationTable = {
   verifyPhotosBelowMinimum:
     "Jesteś zweryfikowany ✅ — to już na stałe.\n\n" +
     "Ale część zdjęć nie pasowała do selfie, więc je zdjąłem i teraz w profilu jest mniej niż {min} zdjęć. Dodaj jeszcze {need} swoich, a od razu zacznę szukać pary 📷",
+  // --- Native-app push copy for the same verification outcomes (§1.4). Own
+  // strings rather than reused DM copy: these land on a lock screen, so they
+  // need a title, they must stay short, and they cannot point at a Telegram
+  // keyboard ("tap 📷 below") that does not exist in the app.
+  verifyPushVerifiedTitle: "Zweryfikowane ✨",
+  verifyPushVerifiedBody: "Profil jest aktywny. Odezwę się, gdy znajdę dopasowanie.",
+  verifyPushRejectedTitle: "Zdjęcia nie pasują",
+  verifyPushRejectedBody:
+    "Na zdjęciach w profilu nie ma osoby z selfie z weryfikacji. Jeśli to nie Ty, podmień je — sprawdzę ponownie automatycznie.",
+  verifyPushPendingReviewTitle: "Sprawdzamy zdjęcia",
+  verifyPushPendingReviewBody:
+    "Porównujemy zdjęcia z profilu z selfie z weryfikacji. Zwykle kilka godzin — napiszę, gdy skończymy.",
+  verifyPushRetryTitle: "Został jeden krok",
+  verifyPushRetryBody:
+    "Profil jest gotowy — brakuje tylko weryfikacji. To około minuty, dobieranie par zacznie się zaraz potem.",
+  verifyPushPhotosNeededTitle: "Dodaj jeszcze {need} zdjęć",
+  verifyPushPhotosNeededBody:
+    "Jesteś zweryfikowany, ale w profilu jest mniej niż {min} zdjęć. Dodaj jeszcze {need} swoich, a zacznę szukać.",
+  verifyPushPhotosDroppedTitle: "Część zdjęć zniknęła",
+  verifyPushPhotosDroppedBody:
+    "Nie pasowały do selfie z weryfikacji, więc je zdjąłem. Reszta jest widoczna.",
   verifyMiniAppLoading: "Otwieramy weryfikację…",
   verifyMiniAppFinishing: "Już prawie. Sprawdzamy wynik…",
   verifyMiniAppError: "Nie udało się uruchomić weryfikacji. Spróbuj ponownie.",
