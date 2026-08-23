@@ -23,17 +23,6 @@
  * by landmarks decouples the two, and dropping the camera column becomes a
  * separate decision from where the face sits.
  *
- * **The asset feathers its own edges, and the button's fade cannot do it.** The
- * button's fade is anchored to the button; these figures do not reach it. The
- * man's content lands at x 61..558 of 540 and the woman's at 60..408, so the
- * straight vertical lines that read as a pasted cut-out — the source
- * photograph's frame cutting through a shoulder or an arm, and on her right the
- * clip column that drops the camera cutting through her hair — all sit 11-24%
- * in, where the button's fade still holds over 77% opacity and never touched
- * them. `prepare.mjs` therefore feathers any edge that falls INSIDE the button,
- * and leaves an edge that runs past it to the CSS fade, which already takes
- * that one to zero.
- *
  * Prepared by `~/Desktop/gennety-gender-avatars/prepare.mjs`. Never copy an
  * original in by hand: they are 2000x3555 PNGs against ~47 KB of WebP here, on
  * the onboarding path. Same rule and same reason as the preference photographs.

@@ -415,19 +415,6 @@ out of Telegram-only workers.
   alone — the head has its own headroom, so there is no edge there to soften,
   and fading a crown looks like a mistake.
 
-  **The button's fade cannot reach the edges that actually needed softening,
-  so the asset feathers its own** (2026-08-23). Anchored to the button, that
-  fade only ever touches content that runs to the button's edge — and these
-  figures do not: the man's content lands at 11..103% of the button's width and
-  the woman's at 11..76%. The straight vertical lines that read as a pasted
-  cut-out are the source photograph's own frame cutting through a shoulder and
-  an arm, plus the clip column that drops the camera cutting through her hair,
-  and every one of them sits 11-24% in, where the button's fade still holds
-  over 77% opacity. `prepare.mjs` feathers any edge falling inside the button
-  and leaves an edge that runs past it to the CSS fade. This is also why the
-  right side of the man's button read as correct while his left did not: one
-  edge was clipped by the button and one was not.
-
   Two properties of that fade are load-bearing rather than styling. It is
   **eased, not linear**: a two-stop linear alpha ramp has a visible kink where
   it begins, and the eye reads that line as the edge of the photograph — the
