@@ -63,7 +63,7 @@ English cut unchanged.
 
 ## 3. The sources
 
-Six recordings, all `576×1280 @ 30 fps` — the same geometry as the Ukrainian
+Seven recordings, all `576×1280 @ 30 fps` — the same geometry as the Ukrainian
 sources, so `cut()` applies to all of them and **`cut_scaled()` is not needed**
 (that helper exists only for IMG_2730, which was 576×1248).
 
@@ -75,6 +75,7 @@ sources, so `cut()` applies to all of them and **`cut_scaled()` is not needed**
   IMG_2795.MP4   67.0s  You're in → date planning → Pick a date → 17:00 → locked in → map
   IMG_2796.MP4   75.9s  the venue act end to end → the finished date card
   IMG_2798.MP4   35.0s  the Type Radar («Choose your type») → All set
+  IMG_2802.MP4    8.2s  home screen → Telegram → Gennety → Start → the Mini App
 ```
 
 ### 3.1 `IMG_2790` — content map (measured at 1 s)
@@ -121,7 +122,7 @@ Card changes measured by frame-to-frame difference (peak, /255 mean):
 21.7–…       back in chat, "Checking your ratings" / "Reading your preferences"
 ```
 
-### 3.3 The other four, in one line each
+### 3.3 The middle four, in one line each
 
 - **`IMG_2791`** — "Describe your ideal Friday night" answered with *"A private
   high floor pant house in Tokyo on a rainy night"*, sent, then "Thinking…".
@@ -142,29 +143,74 @@ Card changes measured by frame-to-frame difference (peak, /255 mean):
   finished date card: *One Tea Tree, Reitarska St 30*, the review blurb, the
   peak-time note, **Wed 26 August at 17:00**, and three actions.
 
+### 3.4 `IMG_2802` — the Telegram open (added 2026-08-23, after the first draft)
+
+8.23 s, and **4.46 s of it is a frozen screen** — 54 %, against 44 % in the
+Ukrainian source. Cutting the holds is therefore an even bigger lever here than
+it was there. Measured stretches:
+
+```
+0.00–0.60  HOLD   home screen, Telegram icon with a 22 badge
+0.77–0.97  the app-open zoom
+1.13–1.67  HOLD   the chat list                          ⚠️ see §4.1
+1.83–2.13  opening the Gennety chat
+2.33–2.77  HOLD   the bot chat: the couple photo, "What can this bot do?", Start
+2.90–3.40  Start pressed; the bot answers
+3.57–4.03  HOLD   "Let's open Gennety in a full-screen Mini App" + Open Gennety
+4.13–4.67  the Mini App opening and loading
+5.00–5.30  HOLD   "Synchronizing — Checking your onboarding state…"
+5.45–8.23  the phone-number step and an iOS "Share Phone Number?" alert  ⚠️ §4.1
+```
+
 ---
 
 ## 4. Gaps and decisions — resolve these before cutting
 
-### 4.1 There is no English `tg-open` — **this is the one real blocker**
+### 4.1 The Telegram open exists — and two things in it must not ship
 
-The Ukrainian film ends on the Telegram card: home screen → open Telegram →
-Gennety is the chat at the top → Start → the Mini App takes over. Nothing in the
-English set contains it. `IMG_2790` opens *already inside* the chat with a Start
-button, which is half of it and has no app-open in it.
+`IMG_2802` (8.2 s) is the missing beat, recorded after the first draft of this
+brief: home screen → Telegram → the Gennety chat → Start → Open Gennety → the
+Mini App takes over. The frame-by-frame map is §3.4. **The bot chat itself is
+clean** — English throughout, the couple photo, "What can this bot do? Gennety
+will organise your best date ever", `/start`, "Let's open Gennety in a
+full-screen Mini App", and the Open Gennety button, all legible at the 348 px
+the Telegram card renders a handset at.
 
-**Ask the founder for one more recording** before building the title act:
+Two stretches are not clean, and one of them is not a style problem.
 
-> ~9 seconds, phone UI language English. Start on the home screen. Open
-> Telegram. The Gennety chat is at the top of the list — open it. Press Start.
-> Let the Mini App take over and stop as soon as it has. Do not hurry; dead air
-> is cut in extraction (the Ukrainian source was 8.9 s of which 3.96 s was
-> frozen, and cutting the holds is what fixed it).
+**(a) The chat list, 1.13–2.13 s — do not use it.** Checked by rendering the
+frame at exactly the 348 px the card delivers, not by guessing at full size.
+Three rows carry Russian text, and one of them is the founder's own
+notification bot showing a **live signup with a real person's name, age, gender,
+sought gender and city**. That is not an alphabet problem and no amount of
+"nobody reads it at that size" makes it acceptable in a marketing film. The
+same rows also expose internal tooling by name — `Gennety dev`,
+`Gennety Playbook`, `gennety alerts`, `my Hermes Workspace`.
 
-Build everything else first; the Telegram card is the last 5 s of the film and
-does not block the other seventeen shots. If the founder declines, the fallback
-is `IMG_2790` 0.0–3.5 s — the chat and the Start button, no app-open — and the
-card's line has to stop claiming something the picture no longer shows.
+**Elide it.** Cut from the app-open zoom straight into the chat: `0.40–1.10` then
+`1.95–…`. The beat still reads — you open Telegram, you are in the Gennety chat,
+you press Start — and the film's grammar is elision, sixteen hard cuts of it.
+The cost, stated: the Ukrainian card showed *Gennety is the chat at the top*,
+and the English one will not. That is worth one line of the founder's time:
+
+> If you want the chat list back, re-record just that second with a list that is
+> safe to publish — a clean Telegram account, or the internal chats archived.
+> Do not simply mute them; muted chats still show their last message.
+
+**(b) The tail, 5.45–8.23 s — cut it.** The recording continues past the app
+taking over into "Your phone number" and then an iOS **"Share Phone Number?"**
+system alert. The card's beat is *this is a real thing you can open right now*,
+and it lands when the product appears. A permission dialog is not a payoff, and
+ending a product film on an OS alert is the one frame in it that belongs to
+Apple rather than to Gennety. **End at ~5.45 s**, on "Synchronizing".
+
+**(c) One thing to raise with the founder rather than decide.** The bot chat
+carries a Telegram **"Translate to English"** bar across the whole shot
+(2.0–4.7 s), and at 348 px it is plainly readable. It is there because Telegram
+detected the chat's earlier history as non-English. In a film selling an English
+product, a banner offering to translate the product's own chat argues against
+the film. It is one bar and it is dismissible from the chat's ⋯ menu, so the fix
+is a fifteen-second re-record of the same take — cheap, but not yours to spend.
 
 ### 4.2 The Russian keyboard in `basics-name`
 
@@ -339,12 +385,37 @@ Copy these **byte-identical** from `extract-hero-footage.sh`:
 
 You do **not** need `cut_scaled()`. Every English source is already 576×1280.
 
-The Telegram clip, when it arrives, gets the same treatment as the Ukrainian
-one: profile it for frozen stretches, `trim`/`concat` the moving parts, then
-`setpts=PTS/N,fps=30` — **`setpts` before `fps`**, and `setpts=PTS-STARTPTS` on
-every segment or `concat` stacks the original timestamps. Aim for ~1.3–1.4×
-after the holds are cut; the Ukrainian clip shipped at 2.4× and the founder read
-it as far too fast, and the cause was dead air, not speed.
+### 7.1 `en/tg-open` — the one clip that is not a plain `cut()`
+
+Same construction as the Ukrainian one: `trim`/`concat` the moving parts, with
+`setpts=PTS-STARTPTS` on **every** segment or `concat` stacks their original
+timestamps and the clip plays back at the wrong length.
+
+Starting windows, from the §3.4 profile — verify against a filmstrip before
+committing, and note that k1→k2 elides the chat list on purpose (§4.1):
+
+```
+k1  0.40 – 1.10   home screen, Telegram launching        0.70 s
+k2  1.95 – 2.90   the chat is open; the Start button      0.95 s
+k3  3.30 – 3.65   Start pressed, the bot answers          0.35 s
+k4  3.98 – 4.75   Open Gennety → the Mini App loading     0.77 s
+k5  5.15 – 5.45   "Synchronizing"                         0.30 s
+                                                          3.07 s
+```
+
+**Do not speed it up.** This is a change from the Ukrainian clip's 1.35× and the
+reason is in the numbers: that source was 44 % dead air and still had 5 s of
+action to compress, while this one is 54 % dead and leaves about 3 s once the
+holds are gone. Cutting the holds already does the whole job here, and the
+founder's note on the Ukrainian version was that it read as too fast. If you do
+add a ramp, `setpts` goes **before** `fps` — the other way round resamples first
+and then throws away the frames it just made.
+
+At 1.0× the clip is ~92 frames, which makes the Telegram card
+`24 + 92 + 14 = 130` frames against the Ukrainian 162. Do not hand-write that
+number: `titles.ts` derives `durationInFrames` from the clip's own `nb_frames`
+precisely so a re-cut cannot silently desync the card or the mark that follows
+it. Read it with `ffprobe` and update the constant.
 
 ---
 
@@ -447,7 +518,11 @@ pnpm --filter @gennety/video exec remotion render GennetyHeroEnglish out/gennety
 
 And by eye, at full size:
 
-- [ ] no Cyrillic anywhere on any screen in the film;
+- [ ] no Cyrillic anywhere on any screen in the film — **checked at the size
+      each shot is delivered at**, which for the Telegram card is a 348 px
+      handset, not the 604 px one the world uses;
+- [ ] no real person's data on screen anywhere (§4.1a), and no internal chat,
+      bot or workspace named;
 - [ ] no red recording dot and no expanded island on any frame;
 - [ ] the Type Radar shows **at most four cards**, all of them from the first two
       or the last two;
