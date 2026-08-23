@@ -350,6 +350,28 @@ and cancellation of every in-flight match are committed in the same database
 transaction; partner compensation and Telegram/Expo notifications run only
 after commit and never weaken the cancellation safety gate.
 
+### `user_blocks`
+
+One user's block of another (App Store guideline 1.2). Sibling of `reports` and
+deliberately unlike it: no text, no tier, no moderation queue, no consequence
+for the blocked account. Unique `(blockerId, blockedId)` makes a retry the same
+row rather than a second one or an error. `matchId` is the surface the block was
+filed from, kept for moderation context, nullable with `SetNull` — a block must
+outlive the match that produced it. `onDelete: Cascade` from `users` on both
+sides.
+
+**Directional in storage, symmetric in every consumer.** The row records who
+blocked whom because the blocker's own list has to show and undo it; the
+candidate SQL (`buildCandidateSql`) and the drop batch (`loadExcludedPairs`)
+both read it in both directions. That symmetry is what stops the block from
+leaking its own existence by being one-sided.
+
+Writing it and cancelling a live match between the two happen in one
+transaction (`services/user-block.ts` → `claimMatchCancellation`); ticket
+refunds and the partner's cancellation notice run only after commit, on the same
+rail freeze and moderation use. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md)
+§Blocking.
+
 ### `email_otps`
 
 Mobile-side OTP store. **Distinct from `users.emailOtp`**: keyed by `email`

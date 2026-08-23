@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   userFindMany: vi.fn(),
   matchFindMany: vi.fn(),
+  userBlockFindMany: vi.fn(),
   queryRawUnsafe: vi.fn(),
 }));
 
@@ -18,6 +19,8 @@ vi.mock("@gennety/db", () => ({
   prisma: {
     user: { findMany: mocks.userFindMany },
     match: { findMany: mocks.matchFindMany },
+    // The fill pass excludes blocked pairs alongside historical ones (6.8).
+    userBlock: { findMany: mocks.userBlockFindMany },
     $queryRawUnsafe: mocks.queryRawUnsafe,
     $transaction: vi.fn(),
   },
@@ -91,6 +94,7 @@ function stubVectors(distance = 0.4) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.matchFindMany.mockResolvedValue([]);
+  mocks.userBlockFindMany.mockResolvedValue([]);
 });
 
 describe("candidate SQL excludes synthetic profiles", () => {
@@ -184,6 +188,24 @@ describe("previewSyntheticFill", () => {
     // The founder chose to keep the ban as-is for synthetics too, which is why
     // N profiles buy exactly N drops per person (PRODUCT_SPEC §3.1c).
     expect(plan.pairs).toEqual([]);
+  });
+
+  it("respects a block the same way it respects the lifetime pair ban", async () => {
+    // The fill pass is the one place a pair can be proposed without going
+    // through `buildCandidateSql`, so the block has to be enforced here too.
+    mocks.userFindMany
+      .mockResolvedValueOnce([row(UUID.man1, "male")])
+      .mockResolvedValueOnce([row(UUID.synthA, "female")]);
+    mocks.userBlockFindMany.mockResolvedValue([
+      { blockerId: UUID.synthA, blockedId: UUID.man1 },
+    ]);
+    mocks.queryRawUnsafe.mockResolvedValue([
+      { a_id: UUID.man1, b_id: UUID.synthA, distance: 0.1 },
+    ]);
+
+    const plan = await previewSyntheticFill([UUID.man1]);
+
+    expect(plan.pairs).toHaveLength(0);
   });
 
   it("asks for the synthetic side with syntheticAt: { not: null }", async () => {

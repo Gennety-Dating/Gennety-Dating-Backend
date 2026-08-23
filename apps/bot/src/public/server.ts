@@ -36,6 +36,7 @@ import { createTicketRouter } from "./routes/ticket.js";
 import { createNativeTicketGateRouter } from "./routes/ticket-gate.js";
 import { createNativeCalendarRouter } from "./routes/calendar-native.js";
 import { createProxyChatRouter } from "./routes/proxy-chat.js";
+import { createUserBlocksRouter } from "./routes/user-blocks.js";
 import { createVoicePromptRouter } from "./routes/voice-prompt.js";
 import { createNativeFeedbackRouter } from "./routes/feedback-native.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
@@ -423,6 +424,8 @@ app.use("/v1/me/voice-prompt", (req, res, next) => {
 app.use("/v1/me/verification", verificationRouter);
 // Live Activity token registration (same more-specific-prefix rule).
 app.use("/v1/me/live-activity-token", liveActivityRouter);
+// Blocked-users list (6.8). Same more-specific-prefix rule as the mounts above.
+app.use("/v1/me/blocks", createUserBlocksRouter());
 // Pause/resume + freeze (native app). Same mount as meRouter, tried first;
 // unmatched /v1/me/* paths fall through to the main router below.
 app.use("/v1/me", accountStatusRouter);

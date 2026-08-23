@@ -19,6 +19,7 @@ import { DEMO_MODE_ENABLED } from "../demo/config.js";
 import { demoPuppetIdsAmong } from "../demo/partners.js";
 import { refreshAllDirtyEmbeddings } from "../workers/embedding-refresh.js";
 import { expireStaleMatches, type MatchExpiry } from "./match-expiry.js";
+import { loadBlockedPairKeys } from "./user-block.js";
 import {
   hasTrackVerifiedContact,
   TRACK_VERIFIED_CONTACT_SQL,
@@ -521,6 +522,15 @@ export function buildCandidateSql(): string {
         SELECT 1 FROM matches m
          WHERE LEAST(m.user_a_id, m.user_b_id)    = LEAST($1::uuid, u.id)
            AND GREATEST(m.user_a_id, m.user_b_id) = GREATEST($1::uuid, u.id)
+      )
+      -- Blocks, in both directions (6.8). Redundant with the lifetime pair ban
+      -- directly above for as long as a block can only be filed from a match —
+      -- and deliberately not left to it: the ban is a product decision under
+      -- periodic review (REMATCH_PRODUCT_SPEC.md), a block is a promise.
+      AND NOT EXISTS (
+        SELECT 1 FROM user_blocks b
+         WHERE (b.blocker_id = $1::uuid AND b.blocked_id = u.id)
+            OR (b.blocker_id = u.id     AND b.blocked_id = $1::uuid)
       )
     ORDER BY distance ASC
     LIMIT $7
@@ -1879,6 +1889,25 @@ async function loadHistoricalMatchPairs(
 }
 
 /**
+ * Every pair the batch may not create: already matched once (the lifetime ban)
+ * or blocked by either side (6.8). Both halves speak the same both-directions
+ * `"a:b"` key convention, so the callers keep a single membership test.
+ *
+ * The two are unioned rather than checked in sequence because they are the same
+ * question — "may these two be shown each other" — and a second `if` at each
+ * call site is how the synthetic-fill pass came to be one edit behind the main
+ * pass more than once.
+ */
+async function loadExcludedPairs(userIds: string[]): Promise<Set<string>> {
+  const [historical, blocked] = await Promise.all([
+    loadHistoricalMatchPairs(userIds),
+    loadBlockedPairKeys(userIds),
+  ]);
+  for (const key of blocked) historical.add(key);
+  return historical;
+}
+
+/**
  * Drop batch: global greedy matching algorithm.
  *
  * 0. Expire stale proposals (preflight — see below).
@@ -2057,7 +2086,7 @@ export async function previewDropBatch(): Promise<DropBatchPlan> {
   }
 
   const userIds = users.map((u) => u.id);
-  const historicalPairs = await loadHistoricalMatchPairs(userIds);
+  const excludedPairs = await loadExcludedPairs(userIds);
 
   const userMap = new Map<string, BatchUser>();
   for (const u of users) {
@@ -2070,7 +2099,7 @@ export async function previewDropBatch(): Promise<DropBatchPlan> {
   for (const [key, distance] of distances) {
     const [aId, bId] = key.split(":");
     if (!aId || !bId) continue;
-    if (historicalPairs.has(`${aId}:${bId}`)) continue;
+    if (excludedPairs.has(`${aId}:${bId}`)) continue;
 
     const a = userMap.get(aId);
     const b = userMap.get(bId);
@@ -2151,7 +2180,7 @@ export async function previewSyntheticFill(
   const pool = [...real, ...synthetic];
   const userMap = new Map(pool.map((u) => [u.id, u]));
 
-  const historicalPairs = await loadHistoricalMatchPairs(pool.map((u) => u.id));
+  const excludedPairs = await loadExcludedPairs(pool.map((u) => u.id));
   const distances = await computePairwiseDistances(pool);
 
   const scoredPairs: ScoredPair[] = [];
@@ -2160,7 +2189,7 @@ export async function previewSyntheticFill(
     if (!aId || !bId) continue;
     // Exactly one synthetic side — see the header.
     if (syntheticIds.has(aId) === syntheticIds.has(bId)) continue;
-    if (historicalPairs.has(`${aId}:${bId}`)) continue;
+    if (excludedPairs.has(`${aId}:${bId}`)) continue;
 
     const a = userMap.get(aId);
     const b = userMap.get(bId);

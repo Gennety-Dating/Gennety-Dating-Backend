@@ -59,6 +59,80 @@ type CancellationDb = Pick<typeof prisma, "match">;
  * atomic safety operation. No network calls or cross-transaction writes occur
  * here.
  */
+/** The exact row shape both claim paths load. */
+type ClaimableMatch = {
+  id: string;
+  userAId: string;
+  userBId: string;
+  userA: { telegramId: bigint; language: Language | null; platform: string };
+  userB: { telegramId: bigint; language: Language | null; platform: string };
+};
+
+const CLAIMABLE_MATCH_SELECT = {
+  id: true,
+  userAId: true,
+  userBId: true,
+  userA: { select: { telegramId: true, language: true, platform: true } },
+  userB: { select: { telegramId: true, language: true, platform: true } },
+} as const;
+
+/**
+ * Cancel ONE already-loaded in-flight match on behalf of `userId` and describe
+ * what the surviving partner is owed. Returns null when the row was no longer
+ * in flight by the time the claim ran (someone else got there first).
+ *
+ * Extracted so the whole-user sweep below and the single-match block path
+ * (`services/user-block.ts`) can never drift on the two things that are easy
+ * to get subtly different: the status guard on the claiming write, and the
+ * fact that the refund plan is read AFTER it inside the same transaction.
+ */
+async function claimOneMatch(
+  match: ClaimableMatch,
+  userId: string,
+  db: CancellationDb,
+  options: CancelOptions,
+): Promise<CancelledPartner | null> {
+  try {
+    const claimed = await db.match.updateMany({
+      where: {
+        id: match.id,
+        status: { in: [...IN_FLIGHT_MATCH_STATUSES] },
+      },
+      data: { status: "cancelled" },
+    });
+    if (claimed.count === 0) return null;
+  } catch (err) {
+    console.warn("[cancel-in-flight] match cancel failed:", err);
+    if (options.strict) throw err;
+    return null;
+  }
+
+  // Read the refund plan AFTER the cancelling write above, in the same
+  // transaction: that write holds the match row lock, so the ticket-expiry
+  // rail's own `negotiating`-guarded claim cannot interleave and decide to
+  // refund the same slot.
+  let ticketRefunds: TicketRefundCredit[] = [];
+  try {
+    ticketRefunds = await planMatchTicketRefunds(match.id, db);
+  } catch (err) {
+    // A refund plan is never worth failing the cancellation over — the
+    // cancellation is the safety-critical half.
+    console.warn("[cancel-in-flight] ticket refund plan failed:", err);
+  }
+
+  const isA = match.userAId === userId;
+  const partnerUserId = isA ? match.userBId : match.userAId;
+  const partner = isA ? match.userB : match.userA;
+  return {
+    matchId: match.id,
+    partnerUserId,
+    partnerTelegramId: partner.telegramId,
+    partnerLanguage: (partner.language ?? "en") as Language,
+    partnerPlatform: partner.platform,
+    ticketRefunds,
+  };
+}
+
 export async function claimInFlightMatchCancellations(
   userId: string,
   db: CancellationDb = prisma,
@@ -69,59 +143,44 @@ export async function claimInFlightMatchCancellations(
       status: { in: [...IN_FLIGHT_MATCH_STATUSES] },
       OR: [{ userAId: userId }, { userBId: userId }],
     },
-    select: {
-      id: true,
-      userAId: true,
-      userBId: true,
-      userA: { select: { telegramId: true, language: true, platform: true } },
-      userB: { select: { telegramId: true, language: true, platform: true } },
-    },
+    select: CLAIMABLE_MATCH_SELECT,
   });
   const cancelled: CancelledPartner[] = [];
 
   for (const match of matches) {
-    try {
-      const claimed = await db.match.updateMany({
-        where: {
-          id: match.id,
-          status: { in: [...IN_FLIGHT_MATCH_STATUSES] },
-        },
-        data: { status: "cancelled" },
-      });
-      if (claimed.count === 0) continue;
-    } catch (err) {
-      console.warn("[cancel-in-flight] match cancel failed:", err);
-      if (options.strict) throw err;
-      continue;
-    }
-
-    // Read the refund plan AFTER the cancelling write above, in the same
-    // transaction: that write holds the match row lock, so the ticket-expiry
-    // rail's own `negotiating`-guarded claim cannot interleave and decide to
-    // refund the same slot.
-    let ticketRefunds: TicketRefundCredit[] = [];
-    try {
-      ticketRefunds = await planMatchTicketRefunds(match.id, db);
-    } catch (err) {
-      // A refund plan is never worth failing the cancellation over — the
-      // cancellation is the safety-critical half.
-      console.warn("[cancel-in-flight] ticket refund plan failed:", err);
-    }
-
-    const isA = match.userAId === userId;
-    const partnerUserId = isA ? match.userBId : match.userAId;
-    const partner = isA ? match.userB : match.userA;
-    cancelled.push({
-      matchId: match.id,
-      partnerUserId,
-      partnerTelegramId: partner.telegramId,
-      partnerLanguage: (partner.language ?? "en") as Language,
-      partnerPlatform: partner.platform,
-      ticketRefunds,
-    });
+    const entry = await claimOneMatch(match, userId, db, options);
+    if (entry) cancelled.push(entry);
   }
 
   return cancelled;
+}
+
+/**
+ * Cancel ONE match by id, on behalf of a participant. The block path needs
+ * exactly this and not the sweep above: blocking a partner from a match that
+ * has already ended must not take down the LIVE date the blocker has with
+ * somebody else.
+ *
+ * Returns null when the match does not exist, `userId` is not on it, or it was
+ * never in flight — all three are ordinary outcomes here, because a block is
+ * filed just as often on a finished date as on a live one.
+ */
+export async function claimMatchCancellation(
+  matchId: string,
+  userId: string,
+  db: CancellationDb = prisma,
+  options: CancelOptions = {},
+): Promise<CancelledPartner | null> {
+  const match = await db.match.findFirst({
+    where: {
+      id: matchId,
+      status: { in: [...IN_FLIGHT_MATCH_STATUSES] },
+      OR: [{ userAId: userId }, { userBId: userId }],
+    },
+    select: CLAIMABLE_MATCH_SELECT,
+  });
+  if (!match) return null;
+  return claimOneMatch(match, userId, db, options);
 }
 
 /** Run best-effort compensation and cross-platform delivery after DB commit. */

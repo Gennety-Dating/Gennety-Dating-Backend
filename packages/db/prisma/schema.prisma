@@ -360,6 +360,9 @@ model User {
   reportsFiled   Report[] @relation("ReportReporter")
   reportsAgainst Report[] @relation("ReportReported")
 
+  blocksFiled   UserBlock[] @relation("UserBlockBlocker")
+  blocksAgainst UserBlock[] @relation("UserBlockBlocked")
+
   messages Message[]
 
   noMatchNotices NoMatchNotice[]
@@ -1553,6 +1556,7 @@ model Match {
 
   events             MatchEvent[]
   reports            Report[]
+  blocks             UserBlock[]
   scoreLog           MatchScoreLog?
   proxyMessages      ProxyMessage[]
   venueSelectionLogs VenueSelectionLog[]
@@ -1711,6 +1715,43 @@ model Report {
   @@index([reportedId, tier, createdAt])
   @@index([tier, adminReviewed, createdAt])
   @@map("reports")
+}
+
+/// One user blocking another (App Store guideline 1.2: a product carrying
+/// user-generated content must offer BOTH a report and a block). Sibling of
+/// `Report` and deliberately separate from it: a report is an accusation
+/// addressed to moderation, a block is a boundary that needs no accusation and
+/// no review.
+///
+/// **Directional in storage, symmetric in effect.** The row records who blocked
+/// whom, because that is what the blocker's own list must show and un-do. Every
+/// consumer — the candidate SQL, the drop batch — reads it in both directions,
+/// so neither side is ever offered the other again.
+///
+/// **The blocked side is never told.** They receive the ordinary cancellation
+/// notice a freeze produces, which is why blocking is safe to offer to someone
+/// who is frightened of the person they are blocking.
+///
+/// `matchId` is the surface the block was filed from, kept for moderation
+/// context only. Nullable with `SetNull`, because a block must outlive the
+/// match that produced it — the boundary is between two people, not two rows.
+model UserBlock {
+  id        String   @id @default(uuid()) @db.Uuid
+  blockerId String   @map("blocker_id") @db.Uuid
+  blockedId String   @map("blocked_id") @db.Uuid
+  matchId   String?  @map("match_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blocker User   @relation("UserBlockBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User   @relation("UserBlockBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  match   Match? @relation(fields: [matchId], references: [id], onDelete: SetNull)
+
+  /// Makes re-blocking idempotent instead of a second row.
+  @@unique([blockerId, blockedId])
+  /// The reverse direction is read on every candidate query, so it is indexed
+  /// too — `blockerId` alone is already covered by the unique above.
+  @@index([blockedId])
+  @@map("user_blocks")
 }
 
 /// Append-only upload-time validation rejection log. Contains only coarse

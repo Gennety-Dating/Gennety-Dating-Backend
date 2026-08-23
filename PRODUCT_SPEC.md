@@ -2605,6 +2605,14 @@ Supported first-class flows:
   verification-rerun path as a normal profile-photo upload.
 - Match decision, vibe-location, safety-ack, report endpoints under
   `/v1/matches/:id/*`.
+- **Blocking** — `POST /v1/matches/:id/block`, plus `GET /v1/me/blocks` and
+  `DELETE /v1/me/blocks/:userId` for the list and the undo. App Store
+  guideline 1.2 requires a product carrying user content to offer BOTH a report
+  and a block, and the two are deliberately independent here: a report is an
+  accusation addressed to moderation, a block is a boundary that needs no
+  accusation and no review. See §Blocking below. **iOS-only entry point for
+  now** — the effect is server-side and therefore cross-platform, but the
+  Telegram surface has no button yet (recorded decision, 2026-08-23).
 - **Post-date feedback** — `GET /v1/me/feedback/pending` +
   `POST /v1/me/feedback/post-date`. The GET has no Telegram equivalent: there
   the T+24h DM carries the link, while `/v1/matches/current` stops returning
@@ -6203,6 +6211,57 @@ Other safeguards:
   `DATE_COMPLETED` row, so read completion from `Match.status`. Emergency
   cancellation's small peer boost is applied directly by
   `handlers/date/emergency.ts` and does not increment `eloMatchesPlayed`.
+
+### Blocking (2026-08-23)
+
+A **block is not a report**, and the separation is the design. A report is an
+accusation addressed to moderation: it carries text, gets triaged into a tier,
+and can cost the reported person a strike, a suspension or their account. A
+block carries nothing, accuses nobody, and reaches no queue. A person who is
+frightened of the human being they just met must be able to make them go away
+without first building a case — and App Store guideline 1.2 requires the
+product to offer both.
+
+`POST /v1/matches/:id/block` — the match is the handle, because with no browsing
+and no user-to-user chat a match is the only way two people ever meet here, and
+the client is never handed a bare user id. Three effects, in order:
+
+1. **The boundary is recorded** (`user_blocks`, unique on
+   `(blocker_id, blocked_id)`, so a retry is the same row). Directional in
+   storage — the blocker's list must show and undo it — and symmetric in every
+   consumer.
+2. **A live match between the two is cancelled**, through the same rail a freeze
+   uses (`claimMatchCancellation` → `deliverCancelledPartnerEffects`): tickets
+   go back to whoever paid, the partner receives the ordinary cancellation
+   notice. Without this the button would be a lie — the blocked person would
+   still be at the venue at eight. A block filed on a match that already ended
+   cancels nothing, and **never touches a live date the blocker has with
+   someone else**.
+3. **The proxy chat closes** as a consequence, not as a separate rule: that
+   window is gated on `status = "scheduled"`.
+
+**The blocked side is never told.** No DM, no push, no visible state change
+beyond the ordinary "your date was cancelled". That is what makes the button
+safe to press.
+
+**On matching the block is redundant today and load-bearing tomorrow.** The
+lifetime pair ban already guarantees two people who have matched are never
+paired again, so a block filed from a match changes nothing about the pool right
+now. It is enforced anyway, in both directions, in `buildCandidateSql` and in
+the batch's `loadExcludedPairs` — because the ban is a product decision under
+periodic review (REMATCH_PRODUCT_SPEC.md circles it every time) and a block is a
+promise to a user that must survive such a revision.
+
+`GET /v1/me/blocks` returns a first name and a date and nothing else: enough to
+recognise a mistake and undo it, no more. It never reveals who blocked THIS
+user — that direction is not readable by anybody.
+`DELETE /v1/me/blocks/:userId` removes the record only; the cancelled date is
+not restored, and the two stay apart under the lifetime ban regardless.
+
+**Entry point is iOS-only for now.** The effect is server-side and therefore
+applies to both surfaces, but the Telegram bot has no Block button yet. Explicit
+decision, not an accident of where the code was written (DECISIONS.md
+2026-08-23) — Telegram gets it in its own slice.
 
 ## Cross-Cutting Concerns
 

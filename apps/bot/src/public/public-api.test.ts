@@ -245,12 +245,21 @@ type FounderReportRow = {
   dataJson: unknown;
 };
 
+type UserBlockRow = {
+  id: string;
+  blockerId: string;
+  blockedId: string;
+  matchId: string | null;
+  createdAt: Date;
+};
+
 const db = {
   users: new Map<string, UserRow>(),
   otps: [] as OtpRow[],
   sessions: new Map<string, SessionRow>(),
   matches: new Map<string, MatchRow>(),
   reports: [] as ReportRow[],
+  userBlocks: [] as UserBlockRow[],
   matchEvents: [] as MatchEventRow[],
   messages: [] as MessageRow[],
   founderReports: [] as FounderReportRow[],
@@ -267,6 +276,7 @@ function resetDb(): void {
   db.sessions.clear();
   db.matches.clear();
   db.reports.length = 0;
+  db.userBlocks.length = 0;
   db.matchEvents.length = 0;
   db.messages.length = 0;
   db.founderReports.length = 0;
@@ -618,6 +628,57 @@ vi.mock("@gennety/db", async () => {
         }),
       },
 
+      // ----- userBlock -----
+      userBlock: {
+        upsert: vi.fn(async ({ where, create }: any) => {
+          const key = where.blockerId_blockedId;
+          const existing = db.userBlocks.find(
+            (row) => row.blockerId === key.blockerId && row.blockedId === key.blockedId,
+          );
+          // `update: {}` — a repeat block is the same row, untouched.
+          if (existing) return existing;
+          const row: UserBlockRow = {
+            id: crypto.randomUUID(),
+            blockerId: create.blockerId,
+            blockedId: create.blockedId,
+            matchId: create.matchId ?? null,
+            createdAt: new Date(),
+          };
+          db.userBlocks.push(row);
+          return row;
+        }),
+        deleteMany: vi.fn(async ({ where }: any) => {
+          const before = db.userBlocks.length;
+          db.userBlocks = db.userBlocks.filter(
+            (row) => !(row.blockerId === where.blockerId && row.blockedId === where.blockedId),
+          );
+          return { count: before - db.userBlocks.length };
+        }),
+        findMany: vi.fn(async ({ where, orderBy }: any) => {
+          let rows = db.userBlocks.filter((row) => {
+            if (where?.blockerId !== undefined) return row.blockerId === where.blockerId;
+            return true;
+          });
+          if (orderBy?.createdAt === "desc") {
+            rows = [...rows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          }
+          return rows.map((row) => ({
+            ...row,
+            blocked: { firstName: userById(row.blockedId)?.firstName ?? null },
+          }));
+        }),
+        findFirst: vi.fn(async ({ where }: any) => {
+          const pairs: { blockerId: string; blockedId: string }[] = where.OR ?? [where];
+          return (
+            db.userBlocks.find((row) =>
+              pairs.some(
+                (p) => row.blockerId === p.blockerId && row.blockedId === p.blockedId,
+              ),
+            ) ?? null
+          );
+        }),
+      },
+
       // ----- message -----
       message: {
         findMany: vi.fn(async ({ where, select }: any) => {
@@ -749,6 +810,7 @@ vi.mock("@gennety/db", async () => {
         [...db.matches.entries()].map(([key, value]) => [key, structuredClone(value)]),
       ),
       reports: structuredClone(db.reports),
+      userBlocks: structuredClone(db.userBlocks),
       matchEvents: structuredClone(db.matchEvents),
       messages: structuredClone(db.messages),
       founderReports: structuredClone(db.founderReports),
@@ -762,6 +824,7 @@ vi.mock("@gennety/db", async () => {
     db.sessions = snapshot.sessions;
     db.matches = snapshot.matches;
     db.reports = snapshot.reports;
+    db.userBlocks = snapshot.userBlocks;
     db.matchEvents = snapshot.matchEvents;
     db.messages = snapshot.messages;
     db.founderReports = snapshot.founderReports;
@@ -2175,6 +2238,84 @@ describe("DELETE /v1/me/photos/:index", () => {
   });
 });
 
+describe("/v1/me/blocks", () => {
+  // Same convention as `/v1/matches/*` below: these cases count rows, and the
+  // rest of the file shares one `db` without clearing it.
+  beforeEach(resetDb);
+
+  it("lists only the caller's own direction, newest first", async () => {
+    const alice = await seedUser({ firstName: "Alice" });
+    const bob = await seedUser({ firstName: "Bob" });
+    const carol = await seedUser({ firstName: "Carol" });
+    const withBob = await seedMatch(alice.id, bob.id, { status: "completed" });
+    const withCarol = await seedMatch(alice.id, carol.id, { status: "completed" });
+    // Somebody blocking Alice must not show up in Alice's list.
+    const dave = await seedUser({ firstName: "Dave" });
+    const daveMatch = await seedMatch(dave.id, alice.id, { status: "completed" });
+
+    const auth = `Bearer ${signAccess(alice.id)}`;
+    await request(app).post(`/v1/matches/${withBob.id}/block`).set("Authorization", auth);
+    await request(app).post(`/v1/matches/${withCarol.id}/block`).set("Authorization", auth);
+    await request(app)
+      .post(`/v1/matches/${daveMatch.id}/block`)
+      .set("Authorization", `Bearer ${signAccess(dave.id)}`);
+
+    const res = await request(app).get("/v1/me/blocks").set("Authorization", auth);
+
+    expect(res.status).toBe(200);
+    expect(res.body.blocks).toHaveLength(2);
+    expect(res.body.blocks.map((b: { firstName: string }) => b.firstName).sort()).toEqual([
+      "Bob",
+      "Carol",
+    ]);
+    expect(res.body.blocks[0]).toHaveProperty("blockedAt");
+  });
+
+  it("lifts one block and answers 404 the second time", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "completed" });
+    const auth = `Bearer ${signAccess(alice.id)}`;
+    await request(app).post(`/v1/matches/${match.id}/block`).set("Authorization", auth);
+
+    const first = await request(app).delete(`/v1/me/blocks/${bob.id}`).set("Authorization", auth);
+    expect(first.status).toBe(204);
+    expect(db.userBlocks).toHaveLength(0);
+
+    const again = await request(app).delete(`/v1/me/blocks/${bob.id}`).set("Authorization", auth);
+    expect(again.status).toBe(404);
+  });
+
+  it("cannot lift somebody else's block", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const eve = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "completed" });
+    await request(app)
+      .post(`/v1/matches/${match.id}/block`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+    const res = await request(app)
+      .delete(`/v1/me/blocks/${bob.id}`)
+      .set("Authorization", `Bearer ${signAccess(eve.id)}`);
+
+    expect(res.status).toBe(404);
+    expect(db.userBlocks).toHaveLength(1);
+  });
+
+  it("answers 404 rather than 500 for a malformed user id", async () => {
+    const alice = await seedUser();
+    const res = await request(app)
+      .delete("/v1/me/blocks/not-a-uuid")
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+    expect(res.status).toBe(404);
+  });
+
+  it("requires auth", async () => {
+    expect((await request(app).get("/v1/me/blocks")).status).toBe(401);
+  });
+});
+
 describe("POST /v1/me/push-token", () => {
   beforeEach(resetDb);
 
@@ -2885,6 +3026,84 @@ describe("/v1/matches/*", () => {
 
     expect(res.status).toBe(500);
     expect(db.reports).toHaveLength(0);
+  });
+
+  it("POST /:id/block records the block and cancels a live date", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "scheduled" });
+
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/block`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, dateCancelled: true });
+    expect(db.userBlocks).toHaveLength(1);
+    expect(db.userBlocks[0]).toMatchObject({ blockerId: alice.id, blockedId: bob.id });
+    // The point of the whole feature: the date does not proceed.
+    expect(db.matches.get(match.id)?.status).toBe("cancelled");
+  });
+
+  it("POST /:id/block on a finished match blocks without cancelling anything", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "completed" });
+
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/block`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, dateCancelled: false });
+    expect(db.userBlocks).toHaveLength(1);
+    expect(db.matches.get(match.id)?.status).toBe("completed");
+  });
+
+  it("POST /:id/block enforces IDOR: non-participant is 403", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const eve = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/block`)
+      .set("Authorization", `Bearer ${signAccess(eve.id)}`);
+
+    expect(res.status).toBe(403);
+    expect(db.userBlocks).toHaveLength(0);
+    expect(db.matches.get(match.id)?.status).toBe("proposed");
+  });
+
+  it("POST /:id/block is idempotent — a retry is 200, not a second row", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+    const auth = `Bearer ${signAccess(alice.id)}`;
+
+    const first = await request(app).post(`/v1/matches/${match.id}/block`).set("Authorization", auth);
+    const again = await request(app).post(`/v1/matches/${match.id}/block`).set("Authorization", auth);
+
+    expect(first.status).toBe(200);
+    expect(again.status).toBe(200);
+    // The date was already cancelled by the first call, so the second finds
+    // nothing in flight — and says so rather than claiming a fresh cancellation.
+    expect(again.body).toEqual({ ok: true, dateCancelled: false });
+    expect(db.userBlocks).toHaveLength(1);
+  });
+
+  it("POST /:id/block never touches the blocker's OTHER live match", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const carol = await seedUser();
+    const past = await seedMatch(alice.id, bob.id, { status: "completed" });
+    const live = await seedMatch(alice.id, carol.id, { status: "scheduled" });
+
+    await request(app)
+      .post(`/v1/matches/${past.id}/block`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+    expect(db.matches.get(live.id)?.status).toBe("scheduled");
   });
 
   it("POST /:id/safety-ack flips only the caller's side", async () => {

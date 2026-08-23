@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth-middleware.js";
+import { getBotApi } from "../server.js";
+import { blockMatchPartner } from "../../services/user-block.js";
 import { agentTextLimiter } from "../rate-limit.js";
 import { classifyMatchDecisionForUser } from "../../services/decision-intent.js";
 import { countPartnerPhotos, partnerPhotoUrls } from "../partner-photos.js";
@@ -299,4 +301,24 @@ matchesRouter.post("/:id/report", async (req: Request, res: Response): Promise<v
     return;
   }
   res.status(204).end();
+});
+
+/**
+ * Block the partner of this match (App Store guideline 1.2). Sibling of
+ * `/report` above and independent of it: reporting accuses, blocking only
+ * withdraws, and a user must be able to do the second without the first.
+ *
+ * Idempotent by design — re-blocking answers 200 with the same body, because a
+ * client that never saw its first response must be able to retry.
+ */
+matchesRouter.post("/:id/block", async (req: Request, res: Response): Promise<void> => {
+  const result = await blockMatchPartner(paramId(req), req.userId!, getBotApi());
+  if (result.outcome === "forbidden") {
+    res.status(403).json({ error: "Not a participant of this match" });
+    return;
+  }
+  // `dateCancelled` is the one thing the client cannot derive: it decides
+  // whether to say "you will not be matched again" or "your date was cancelled
+  // and your ticket returned".
+  res.json({ ok: true, dateCancelled: result.dateCancelled });
 });

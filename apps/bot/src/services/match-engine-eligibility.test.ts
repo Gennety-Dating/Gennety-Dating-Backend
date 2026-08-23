@@ -136,4 +136,14 @@ describe("match allocation active-slot guard", () => {
     expect(sql).toContain("active_match.user_a_id = u.id OR active_match.user_b_id = u.id");
     expect(sql).toContain("p.embedding_dirty = false");
   });
+
+  it("excludes blocked pairs in BOTH directions (6.8)", () => {
+    // Symmetry is the whole assertion: the blocker must not be shown the
+    // blocked person, and the blocked person must not be shown the blocker —
+    // otherwise the block would leak its own existence by being one-sided.
+    const sql = buildCandidateSql();
+    expect(sql).toContain("FROM user_blocks b");
+    expect(sql).toContain("b.blocker_id = $1::uuid AND b.blocked_id = u.id");
+    expect(sql).toContain("b.blocker_id = u.id     AND b.blocked_id = $1::uuid");
+  });
 });

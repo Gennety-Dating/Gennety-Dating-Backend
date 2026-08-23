@@ -4,6 +4,8 @@ vi.mock("@gennety/db", () => ({
   prisma: {
     match: {
       findMany: vi.fn(),
+      // Read by `claimMatchCancellation`, which loads exactly one row.
+      findFirst: vi.fn(),
       // Read by the ticket-refund planner. Defaults to an unpaid gate, so the
       // cancellation assertions below stay about cancellation.
       findUnique: vi.fn(),
@@ -32,12 +34,14 @@ import { applyEmergencyCancellationPeerBoost } from "../utils/elo-calculator.js"
 import { sendPushToUser } from "./push.js";
 import {
   cancelInFlightMatchesForUser,
+  claimMatchCancellation,
   IN_FLIGHT_MATCH_STATUSES,
 } from "./cancel-in-flight-matches.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as {
   findMany: MockFn;
+  findFirst: MockFn;
   findUnique: MockFn;
   updateMany: MockFn;
 };
@@ -394,5 +398,63 @@ describe("cancelInFlightMatchesForUser — Date Ticket refunds", () => {
 
     expect(result).toHaveLength(1);
     expect(mComp).toHaveBeenCalledWith(PARTNER);
+  });
+});
+
+/**
+ * The single-match claim the block path uses. Its whole reason for existing is
+ * the narrowing: blocking somebody from a date that already happened must not
+ * take down the live date the blocker has with a different person.
+ */
+describe("claimMatchCancellation", () => {
+  const OTHER_MATCH = "m2";
+
+  beforeEach(() => {
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    mMatch.findUnique.mockResolvedValue(null);
+  });
+
+  it("loads only the named match, and only in-flight, and only for a participant", async () => {
+    mMatch.findFirst.mockResolvedValue(null);
+
+    expect(await claimMatchCancellation(OTHER_MATCH, LEAVING)).toBeNull();
+
+    const where = mMatch.findFirst.mock.calls[0]![0].where;
+    expect(where.id).toBe(OTHER_MATCH);
+    expect(where.status).toEqual({ in: [...IN_FLIGHT_MATCH_STATUSES] });
+    expect(where.OR).toEqual([{ userAId: LEAVING }, { userBId: LEAVING }]);
+    // Nothing matched, so nothing was cancelled.
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("cancels the one match and names the surviving partner", async () => {
+    mMatch.findFirst.mockResolvedValue({
+      id: "m1",
+      userAId: LEAVING,
+      userBId: PARTNER,
+      userA: { telegramId: 100n, language: "en", platform: "telegram" },
+      userB: { telegramId: 200n, language: "mobile", platform: "mobile" },
+    });
+
+    const result = await claimMatchCancellation("m1", LEAVING);
+
+    expect(result).toMatchObject({ matchId: "m1", partnerUserId: PARTNER });
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "m1", status: { in: [...IN_FLIGHT_MATCH_STATUSES] } },
+      data: { status: "cancelled" },
+    });
+  });
+
+  it("returns null when somebody else claimed the row first", async () => {
+    mMatch.findFirst.mockResolvedValue({
+      id: "m1",
+      userAId: LEAVING,
+      userBId: PARTNER,
+      userA: { telegramId: 100n, language: "en", platform: "telegram" },
+      userB: { telegramId: 200n, language: "en", platform: "telegram" },
+    });
+    mMatch.updateMany.mockResolvedValue({ count: 0 });
+
+    expect(await claimMatchCancellation("m1", LEAVING)).toBeNull();
   });
 });

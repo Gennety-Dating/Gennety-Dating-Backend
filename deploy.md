@@ -1,5 +1,68 @@
 # Gennety Dating Deploy
 
+**PENDING — блокировка пользователя (6.8; PRODUCT_SPEC §Blocking, ARCHITECTURE
+→ `user_blocks`, DECISIONS.md 2026-08-23).** **Нет изменения Mini App**
+(`apps/webapp` не тронут), **нет новых env, нет флагов** — но нужен
+**аддитивный `db:push` ДО рестарта**. Порядок: Deploy Full Server Code →
+`db:push` → `pnpm db:drift-check` → `pm2 restart` → `pnpm demo:deploy`.
+
+Новая таблица `user_blocks` читается **на каждом батче подбора** и на каждом
+запросе кандидатов (`buildCandidateSql`), то есть база без неё уронит не только
+новые маршруты, а весь матчинг на первом же тике. `db:push` строго до рестарта.
+План проверен `migrate diff` локально — **один `CREATE TABLE`, два
+`CREATE INDEX`, три FK, ноль `DROP`**:
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # должен вернуть 0 до pm2 restart
+```
+
+**Четыре вещи, которые стоит знать до рестарта:**
+
+- **Фича уезжает ЖИВОЙ, флага у неё нет.** Три маршрута
+  (`POST /v1/matches/:id/block`, `GET /v1/me/blocks`,
+  `DELETE /v1/me/blocks/:userId`) начинают отвечать сразу. Это осознанно:
+  guideline 1.2 — блокер сабмита, а выключенная блокировка равна отсутствующей.
+  Кнопки в приложении при этом ещё нет до следующей сборки, так что живого
+  трафика на них не будет.
+- **`buildCandidateSql` изменился** — в него добавлен `NOT EXISTS` по
+  `user_blocks` в обе стороны. Запрос идёт по индексам
+  (`user_blocks_blocker_id_blocked_id_key` и `user_blocks_blocked_id_idx`), а
+  таблица после деплоя пуста, так что цена нулевая. Но это ЕДИНСТВЕННОЕ место,
+  где правка трогает горячий путь подбора.
+- **`claimInFlightMatchCancellations` переписан на общее тело** с новым
+  `claimMatchCancellation` (по одному матчу). Поведение сметающей версии не
+  менялось — те же статусы, тот же порядок «сначала claim, потом план
+  возвратов», — но это рельса заморозки/удаления/модерации, и регресс здесь
+  стоил бы отменённого свидания. Покрыто тестами с обеих сторон.
+- **Блокируемая сторона не узнаёт ничего.** Если матч был живой, партнёру
+  уходит обычное уведомление об отмене (то же, что при freeze) и возвращаются
+  тикеты. Отдельного «вас заблокировали» нет и не должно появиться.
+
+Preflight по этому изменению: typecheck чист по 5 проектам, lint чист,
+`openapi:lint` valid (9 warnings — базовая линия, новых нет), **полный набор
+бота 3996 тестов / 258 файлов, 0 failed** (+30 новых).
+
+Проверка после деплоя — таблица существует и пуста, маршруты смонтированы:
+
+```sh
+psql "$DATABASE_URL" -c "select count(*) from user_blocks;"
+# 0 строк. Ошибка «relation does not exist» = db:push не прошёл.
+curl -s -o /dev/null -w '%{http_code}\n' -X GET \
+  https://dating-api.gennety.com/v1/me/blocks
+# 401 = смонтирован (без JWT иначе и быть не может). 404 = маршрут не поднялся.
+```
+
+**Rollback:** откатить код и перезапустить. Таблицу можно оставить — старый код
+её не читает. Уже поставленные блоки при этом перестанут действовать на подбор,
+но пары всё равно защищены пожизненным баном.
+
+---
+
 **PENDING — маскот вместо орба на входном экране онбординга (PRODUCT_SPEC §1.1,
 DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env, нет флагов и НЕТ
 ИЗМЕНЕНИЙ РАНТАЙМА СЕРВЕРА** — единственный файл вне `apps/webapp` это
