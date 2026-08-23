@@ -107,6 +107,7 @@ vi.mock("../../config.js", () => ({
     BOT_USERNAME: "gennetytestbot",
     WEBAPP_URL: "https://test.invalid/calendar",
     TICKET_FEATURE_ENABLED: true,
+    VOICE_PROMPT_ENABLED: true,
     MESSAGE_EFFECT_TICKET_ID: "",
     PROFILE_MEDIA_VALIDATION_ENABLED: false,
     PROFILE_MEDIA_VALIDATION_FAIL_OPEN: false,
@@ -118,6 +119,9 @@ vi.mock("../../config.js", () => ({
 }));
 
 import { prisma } from "@gennety/db";
+import type { InlineKeyboard } from "grammy";
+import { isAwaitingVoicePrompt } from "../../services/voice-prompt-claim.js";
+import { ONBOARDING_VOICE_PROMPT_SKIP_CALLBACK } from "./voice-prompt.js";
 import { sendOnboardingEntry } from "./mini-app-entry.js";
 import {
   handleConversational,
@@ -2445,5 +2449,94 @@ describe("Onboarding photo stage — editor entry", () => {
 
     expect(ctx.session.onboardingPhotoEdit).toBe(false);
     expect(agentMock).toHaveBeenCalled();
+  });
+});
+
+/**
+ * The wire between the agent asking for a recording and `voiceHandler` leaving
+ * that recording alone (VOICE_PROMPT_PRODUCT_SPEC.md §4.1).
+ *
+ * Every other half of this step is covered — the claim predicate in isolation,
+ * the ask copy, the ingest, the collector's question order — and the one line
+ * that connects them is not. Deleting `armVoicePromptStep(ctx)` from
+ * `handleConversational` keeps all of those green while production loops
+ * forever: `voiceHandler` is mounted ahead of every router, sees no claim,
+ * transcribes the recording into `ctx.message.text`, and the fact collector
+ * takes it as typed input. `voice_prompt` is a synthetic field, so it rejects
+ * with `synthetic_field_not_extractable`, `currentQuestion` stays put, and the
+ * agent asks again — while the transcript's OTHER sentences are mined into the
+ * profile. Observed live on a dev bot running a build that had the question and
+ * not the handler: three turns, `next: 'voice_prompt'` each time, and one of
+ * them wrote `accepted: [ 'gender', 'preference' ]` out of a voice prompt about
+ * what the user was into that week.
+ *
+ * So the assertion is deliberately made through `isAwaitingVoicePrompt` rather
+ * than by reading the session field: what has to hold is "voiceHandler will
+ * defer", and that predicate IS voiceHandler's condition.
+ */
+describe("voice-prompt step — the claim is armed with the ask", () => {
+  const agentMock = runAgentTurn as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-voice",
+      language: "en",
+      theme: "dark",
+      isEmailVerified: true,
+    });
+  });
+
+  function askTurn() {
+    agentMock.mockResolvedValueOnce({
+      reply: "Last thing — optional, you can skip this step.",
+      expectingPhoto: false,
+      onboardingComplete: false,
+      contextPromptRequested: false,
+      contextDumpStarted: false,
+      voicePromptRequested: true,
+    });
+    return createMockCtx({
+      session: { onboardingStep: "conversational" },
+      messageText: "done with photos",
+    });
+  }
+
+  it("leaves the step owning incoming voice, so voiceHandler defers", async () => {
+    const ctx = askTurn();
+
+    await handleConversational(ctx);
+
+    expect(isAwaitingVoicePrompt(ctx.session)).toBe(true);
+  });
+
+  it("sends the ask with the skip button on it", async () => {
+    const ctx = askTurn();
+
+    await handleConversational(ctx);
+
+    expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
+    const [chatId, text, options] = (ctx.api.sendMessage as ReturnType<typeof vi.fn>)
+      .mock.calls[0] as [number, string, { reply_markup?: InlineKeyboard }];
+    expect(chatId).toBe(12345);
+    expect(text).toContain("Last thing");
+    // A question with no way out is the failure the ask copy already carries a
+    // line about: the sentence names the button, so the button has to exist.
+    expect(
+      JSON.stringify(options?.reply_markup?.inline_keyboard ?? []),
+    ).toContain(ONBOARDING_VOICE_PROMPT_SKIP_CALLBACK);
+  });
+
+  it("does not claim voice on an ordinary turn", async () => {
+    // The claim is not a mode the step drifts into: every other question in the
+    // collector must leave voice to Whisper and the concierge.
+    const ctx = createMockCtx({
+      session: { onboardingStep: "conversational" },
+      messageText: "I like climbing",
+    });
+
+    await handleConversational(ctx);
+
+    expect(isAwaitingVoicePrompt(ctx.session)).toBe(false);
   });
 });
