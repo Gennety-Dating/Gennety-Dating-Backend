@@ -8,6 +8,40 @@
 
 ---
 
+## Where everything is
+
+Absolute paths, because this brief may arrive in a session with no working
+directory set. **Start here:**
+
+```sh
+cd "/Users/pro/Desktop/Gennety Dating"      # the repo. All relative paths below are from here.
+ls "/Users/pro/Desktop/EN mp4"              # the seven source recordings (§3)
+```
+
+`CLAUDE.md` and `AGENTS.md` at that root carry the repo's standing rules and
+load automatically once you are inside it. The three that bite on this job:
+work on `main` and never create a branch; **commit and push after every change**
+(durable and pre-authorised — do not ask first); and stage with **explicit
+paths, never `git add -A`**, because parallel sessions share this working tree.
+
+The sources live outside the repo and are never committed. The derived clips in
+`apps/video/public/footage/` are.
+
+## Three things this brief cannot decide for you
+
+Do everything that does not depend on them, and raise these when you reach them
+rather than at the start:
+
+1. **The "Translate to English" bar** in the Telegram clip (§4.1c) — a
+   fifteen-second re-record, and it is the founder's time to spend.
+2. **"Now on Telegram" vs "Already on Telegram"** (§9) — the literal line does
+   not fit and the fix costs the act its single type size.
+3. **Anything you have to look at.** §11's last checks are by eye at full size.
+   Render, then say what you looked at and what you saw. Do not report a cut as
+   verified because it type-checked.
+
+---
+
 ## 0. The task in one paragraph
 
 `GennetyHero` is the Gennety product film: 62.8 s, 1080×1920, 30 fps, cut from
