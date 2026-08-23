@@ -1,0 +1,40 @@
+<!--
+  Gennety butterfly, corrected bottom (variant B).
+
+  The shipped logo (butterfly-logo.svg) joins its lower wings across a 4-unit
+  horizontal bar — `C -5 75, 25 100, 48 65  L 52 65  C 75 100, ...` — while the
+  top joins at a single point. This file converges them on (50, 65) instead, so
+  both ends of the silhouette meet the same way.
+
+  NOTHING IMPORTS THIS FILE, deliberately. Every product surface — the date,
+  match, wish, referral, coordination and expiry cards, the Mini App loading and
+  success marks, and the video workspace — keeps reading butterfly-logo.svg with
+  the bar. Correcting the shipped logo is a separate decision the founder has
+  not taken (DECISIONS.md, 2026-08-23); until then this exists so the two shapes
+  can be compared side by side, and so the corrected geometry has one home.
+
+  The only place the corrected shape is actually drawn today is the welcome
+  mascot, which carries its own copy as `MASCOT_BODY`
+  (apps/webapp/src/mascot-welcome.ts) because that module is in a different
+  workspace and cannot import an asset from apps/bot.
+
+  The bbox is unchanged — the notch is interior — so WING_BBOX and the gradient
+  radius in brand-butterfly.ts would need no re-measurement if this ever ships.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <radialGradient id="butterfly-radial-glow" cx="30%" cy="100%" r="100%">
+      <stop offset="0%" stop-color="#FF00FF" />
+      <stop offset="30%" stop-color="#C82356" />
+      <stop offset="70%" stop-color="#8B253B" />
+      <stop offset="100%" stop-color="#3B0B1E" />
+    </radialGradient>
+  </defs>
+  <path d="M 50 35 
+            C 20 0, -10 30, 15 55 
+            C -5 75, 25 100, 50 65 
+            C 75 100, 105 75, 85 55 
+            C 110 30, 80 0, 50 35 
+            Z" 
+         fill="url(#butterfly-radial-glow)" />
+</svg>

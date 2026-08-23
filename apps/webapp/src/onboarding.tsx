@@ -33,6 +33,7 @@ import { wireContentInsets } from "./telegram-insets.js";
 import { errorCopy } from "./onboarding-errors.js";
 import {
   bootPhaseFromRemote,
+  shouldPlayWelcome,
   postVisualPhaseFromRemote,
   preVisualPhaseFromRemote,
   VISUAL_DONE,
@@ -49,6 +50,8 @@ import {
 import {
   clearOnboardingProgress,
   loadOnboardingProgress,
+  loadWelcomeSeen,
+  saveWelcomeSeen,
   saveOnboardingProgress,
 } from "./device-storage.js";
 import { type Lang, monthsPhrase } from "./i18n.js";
@@ -59,7 +62,8 @@ import {
 } from "./onboarding-i18n.js";
 import { typewriterLineHoldMs } from "./onboarding-timing.js";
 import { ButterflySuccess } from "./butterfly-success-react.js";
-import { onSuccessSettle } from "./butterfly-success.js";
+import { onSuccessSettle, prefersReducedMotion } from "./butterfly-success.js";
+import { mountMascotWelcome, LOOP_FLOOR_MS, type MascotHandle } from "./mascot-welcome.js";
 import gennetyIcon from "./brand/gennety-icon.png";
 import "./theme.css";
 import "./onboarding.css";
@@ -105,6 +109,19 @@ const PREVIEW_BASICS =
  */
 const PREVIEW_INTRO =
   import.meta.env.DEV && (params.get("preview") ?? "").startsWith("intro");
+
+/**
+ * Dev-QA preview of the welcome mascot (`?preview=welcome` to watch it run,
+ * `?preview=welcome:loop:<ms>` / `?preview=welcome:greet:<ms>` for one
+ * deterministic frame).
+ *
+ * The mascot only ever plays on a brand-new account's very first launch, so
+ * reviewing it otherwise means resetting a test account per iteration; the
+ * frame form is what makes it screenshot-able at a fixed time.
+ * `import.meta.env.DEV`-gated, so it is absent from the production bundle.
+ */
+const PREVIEW_WELCOME =
+  import.meta.env.DEV && (params.get("preview") ?? "").startsWith("welcome");
 
 // Intro typewriter ("live human typing") timings. Tuned ~2.5x faster than the
 // original cinematic pacing while keeping the human cadence and beats.
@@ -222,6 +239,21 @@ function App(): ReactElement {
   // out on the way to "How it works". The Pivot scene's reveal cue flips this
   // true once its line has landed.
   const [logoRisen, setLogoRisen] = useState(false);
+  /**
+   * Welcome mascot (PRODUCT_SPEC §1.1). "loop" is the loading state itself —
+   * he shuffles profiles with his back to us while /state is in flight — and
+   * "off" is every launch that has already been greeted, plus reduced motion,
+   * where the ordinary loading screen shows instead.
+   *
+   * The initial value is decided synchronously so the mascot is on the FIRST
+   * paint: waiting for the storage read would show the orb for a beat and then
+   * swap, which is worse than either alone. Whether the loop resolves into the
+   * greeting is decided later, once /state and the marker have both answered.
+   */
+  const [welcome, setWelcome] = useState<"loop" | "off">(() =>
+    prefersReducedMotion() ? "off" : "loop",
+  );
+  const mascotRef = useRef<MascotHandle | null>(null);
   // Stable per language: the typewriter scenes key their run on the `lines`
   // array identity, so a mid-scene parent re-render (e.g. the logo rising)
   // must not hand them a fresh object and restart the typing.
@@ -251,6 +283,11 @@ function App(): ReactElement {
       });
       return;
     }
+    if (PREVIEW_WELCOME) {
+      // `welcome:<phase>:<ms>` freezes one frame; bare `welcome` runs it live.
+      setPhase({ kind: "language" });
+      return;
+    }
     if (PREVIEW_INTRO) {
       const raw = Number.parseInt((params.get("preview") ?? "").split(":")[1] ?? "0", 10);
       const index = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), VISUAL_LAST_INDEX) : 0;
@@ -261,14 +298,21 @@ function App(): ReactElement {
       setBootError(strings.errors["Missing tma initData"] ?? strings.genericError);
       return;
     }
+    // Both storage reads start WITH the request rather than after it: each
+    // carries its own 2s timeout, so running them in series would put up to
+    // four seconds of worst case on the boot path for values the fetch does
+    // not depend on.
+    const bootStart = performance.now();
+    const progressRead = loadOnboardingProgress();
+    const welcomeRead = loadWelcomeSeen();
     void fetchTelegramOnboardingState(app.initData, source)
       .then(async (state) => {
         // Resume the client-only visual animation where the user left off
         // (server state is authoritative for everything up to the city gate).
-        // Loaded before the state setters so user + phase batch into one
+        // Awaited before the state setters so user + phase batch into one
         // render — otherwise the syncing-fallback effect could briefly route
         // the animation back to scene 0.
-        const storedProgress = await loadOnboardingProgress();
+        const [storedProgress, welcomed] = await Promise.all([progressRead, welcomeRead]);
         reconcileTheme(state.user.theme);
         setRemoteUser(state.user);
         setFlowToken(state.flowToken);
@@ -278,14 +322,56 @@ function App(): ReactElement {
         // Claim button hits the real, idempotent endpoint and then routes on).
         if (new URLSearchParams(location.search).get("preview") === "referral-gift") {
           setPhase({ kind: "referralGift" });
+          setWelcome("off");
         } else {
-          setPhase(bootPhaseFromRemote(state.user, storedProgress));
+          const boot = bootPhaseFromRemote(state.user, storedProgress);
+          // The phase is set FIRST and the mascot keeps covering it: the real
+          // screen plays its own 420ms transition underneath, so the curtain
+          // reveals a settled screen rather than one mid-fade.
+          setPhase(boot);
+          void finishWelcome(
+            shouldPlayWelcome(boot, welcomed, prefersReducedMotion()),
+            bootStart,
+          );
         }
       })
       .catch((err: unknown) => {
         setBootError(errorCopy(err, onboardingStrings(lang)));
         app?.HapticFeedback?.notificationOccurred("error");
+        // Uncover the error. The syncing screen underneath is the failure
+        // surface — an opaque mascot over it would leave the user watching a
+        // cheerful loop with no idea anything had gone wrong.
+        void finishWelcome(false, 0);
       });
+  }, []);
+
+  /**
+   * Resolve the loading loop: either into the full greeting, or into a plain
+   * fade for everyone who has been greeted before.
+   *
+   * `LOOP_FLOOR_MS` is only spent when there IS a greeting — a turn-around
+   * reads as "he noticed you" only if it interrupted something. On every other
+   * launch the overlay leaves the moment the screen behind it is ready.
+   */
+  const finishWelcome = useCallback(async (greet: boolean, bootStart: number): Promise<void> => {
+    const mascot = mascotRef.current;
+    if (!mascot) {
+      setWelcome("off");
+      return;
+    }
+    if (!greet) {
+      await mascot.fadeOut();
+      setWelcome("off");
+      return;
+    }
+    const shortfall = LOOP_FLOOR_MS - (performance.now() - bootStart);
+    if (shortfall > 0) await new Promise((resolve) => setTimeout(resolve, shortfall));
+    if (!mascotRef.current) return;
+    await mascotRef.current.playGreeting();
+    // Written after the fact rather than before: a greeting cut short by an
+    // unmount should not count as delivered.
+    void saveWelcomeSeen();
+    setWelcome("off");
   }, []);
 
   // Keyboard-aware viewport. A vertically centred gate card — and the city
@@ -733,8 +819,68 @@ function App(): ReactElement {
           </span>
         </div>
       ) : null}
+      {welcome !== "off" ? (
+        <MascotWelcomeOverlay
+          ariaLabel={strings.syncingTitle}
+          handleRef={mascotRef}
+          preview={PREVIEW_WELCOME ? (params.get("preview") ?? "") : null}
+        />
+      ) : null}
       </div>
     </OnboardingI18nContext.Provider>
+  );
+}
+
+/**
+ * Mounts the mascot into a stable div once and hands the caller its handle.
+ *
+ * The animation writes attributes on its own DOM every frame, so React must
+ * not own that subtree — hence the empty `<div ref>` and the imperative mount,
+ * the same split `ButterflySuccess` makes for the same reason. `aria-label`
+ * lives inside the mounted markup and is set once: a language correction
+ * arriving from /state mid-greeting must not restart the animation.
+ */
+function MascotWelcomeOverlay(props: {
+  ariaLabel: string;
+  handleRef: { current: MascotHandle | null };
+  preview: string | null;
+}): ReactElement {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const { ariaLabel, handleRef, preview } = props;
+  // Read once: see the doc above.
+  const labelRef = useRef(ariaLabel);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const mascot = mountMascotWelcome(host, labelRef.current);
+    handleRef.current = mascot;
+    if (preview) {
+      // `welcome:<phase>:<ms>` — one deterministic frame for screenshots.
+      const [, phase, ms] = preview.split(":");
+      if (phase === "loop" || phase === "greet") {
+        mascot.renderAt(phase, Number.parseInt(ms ?? "0", 10) || 0);
+      } else {
+        mascot.startLoop();
+        setTimeout(() => void mascot.playGreeting(), LOOP_FLOOR_MS);
+      }
+    } else {
+      mascot.startLoop();
+    }
+    return () => {
+      handleRef.current = null;
+      mascot.destroy();
+    };
+  }, [handleRef, preview]);
+
+  return (
+    <div
+      ref={hostRef}
+      className="mw-host"
+      // A tap skips the greeting. During the loop it is deliberately inert:
+      // we are still loading, and there is nothing to skip to.
+      onClick={() => handleRef.current?.skip()}
+    />
   );
 }
 

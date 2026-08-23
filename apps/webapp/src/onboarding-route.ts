@@ -187,3 +187,32 @@ function unresolvedEmailPhase(user: RemoteUser): OnboardingPhase | null {
   }
   return { kind: "email" };
 }
+
+/**
+ * Whether the welcome mascot's full greeting should play on this launch
+ * (PRODUCT_SPEC §1.1). The mascot's card-shuffling loop is the loading
+ * indicator regardless — this gate only decides whether the loop resolves into
+ * the turn-around, the wink and the curtain, or simply fades.
+ *
+ * Three conditions, and the third is the one that is easy to omit:
+ *
+ * - The user has not been greeted before (a DeviceStorage marker, so it is
+ *   per-device and a storage reset replays it once — accepted, same fate as the
+ *   visual-scene progress above).
+ * - Motion is allowed. Under `prefers-reduced-motion` there is no reduced
+ *   variant of a 3.7s character performance; the product falls back to the
+ *   ordinary loading screen instead.
+ * - **The boot phase is the very start of registration.** An account resuming
+ *   mid-flow — at the city gate, at a profile screen — has met the product
+ *   already, and a first-meeting greeting there reads as the app having
+ *   forgotten them. The marker alone cannot express this: a user who reinstalls
+ *   halfway through has no marker and is not a new user.
+ */
+export function shouldPlayWelcome(
+  bootPhase: OnboardingPhase,
+  welcomed: boolean,
+  reducedMotion: boolean,
+): boolean {
+  if (welcomed || reducedMotion) return false;
+  return bootPhase.kind === "language" || bootPhase.kind === "consent";
+}

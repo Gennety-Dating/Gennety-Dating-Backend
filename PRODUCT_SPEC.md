@@ -251,6 +251,61 @@ out of Telegram-only workers.
   didn't deliver, the chat asks for — which is what keeps a cached older bundle,
   the iOS rail and a legacy mid-flight account from dead-ending at the handoff.
   The change is additive by construction.
+  **The Mini App boots behind a mascot, not a spinner (2026-08-23).** The
+  loading screen for the very first `/state` call is the Gennety butterfly with
+  eyes and gloved hands, shuffling through profile cards with its back turned —
+  the loading indicator IS a picture of what the server is doing. When state
+  arrives it notices it is being watched, turns, peers, rocks back, winks, and
+  then **pulls the screen aside like a curtain**, revealing the first real
+  screen underneath. The hand and the curtain edge read the same number, so the
+  transition is one continuous motion rather than a cut, and the screen behind
+  is already settled: the phase is set the instant `/state` resolves, so its
+  ordinary 420 ms scene transition plays underneath the still-opaque mascot.
+
+  **The full greeting plays ONCE per user** (founder decision), marked in
+  DeviceStorage (`gennety.onboarding.welcomed`). Every later launch still gets
+  the shuffling loop as its loading state and then simply fades — a 3.7 s
+  performance on every resume would be charm the first time and a toll the
+  fourth. Three conditions gate it (`shouldPlayWelcome`), and the third is the
+  one a marker alone cannot express: the boot phase must be the **very start**
+  of registration. Someone reinstalling halfway through has no marker and is
+  not a new user, and a first-meeting greeting at the city gate reads as the app
+  having forgotten them.
+
+  **A tap skips it**, from the moment the greeting starts; during the loop a tap
+  is deliberately inert, because there is nothing to skip to — the app is still
+  loading. **Under `prefers-reduced-motion` the mascot is not mounted at all**
+  and the ordinary loading screen shows instead: there is no reduced variant of
+  a character performance, and the same rule the onboarding tap-burst follows.
+  The syncing screen it covers is also the **error surface** — a boot failure
+  fades the mascot out rather than leaving a cheerful loop over a message
+  explaining that nothing is happening.
+
+  **It is the product's first per-frame animation, and that is deliberate**
+  (`apps/webapp/src/mascot-welcome.ts`). The loading and success marks are pure
+  CSS keyframes and that remains the house rule; three properties here cannot be
+  keyframes at all. The glove's angle is taken from the ARM's tangent at the
+  wrist, so the palm turns with the arm instead of being a sticker dragged
+  around. The hands grab REAL cards — each flies to where a specific card will
+  be at the moment of contact and then rides it — so the target is solved per
+  frame against a stream that has its own clock. And the hands are anchored in
+  the body's coordinate space and sample it ~60 ms late, which is what gives the
+  rock-back its whip. Everything that can be a curve still is: the module
+  evaluates real `cubic-bezier()`, so its easings are the ones a stylesheet
+  would have.
+
+  **The body carries the CORRECTED logo and the shipped logo is untouched.**
+  The mascot converges the two lower wings on a single point; every product
+  surface keeps the 4-unit horizontal bar between them (founder decision
+  2026-08-23, DECISIONS.md). The corrected geometry has one home for comparison
+  at `apps/bot/src/assets/brand/butterfly-logo-v2.svg`, which nothing imports.
+  So the product now draws two slightly different butterflies, knowingly, until
+  that decision is taken.
+
+  Telegram-only: the native client owns its own launch screen. Demo mode builds
+  the same bundle and inherits this for free — no gate, no paid step, no puppet
+  branch.
+
   **The intro is three scenes, and the six that argued about the market are
   gone (founder decision 2026-08-20, DECISIONS.md).** What plays now is Pivot
   ("dating should lead to a meeting, not to a chat log" → "so we built

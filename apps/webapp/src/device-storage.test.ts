@@ -222,3 +222,53 @@ describe("onboarding visual progress (DeviceStorage)", () => {
     expect(await mod.loadOnboardingProgress()).toBe(5);
   });
 });
+
+describe("welcome mascot once-marker", () => {
+  it("loadWelcomeSeen is false on a fresh install (localStorage rail)", async () => {
+    const mod = await importModule();
+    expect(await mod.loadWelcomeSeen()).toBe(false);
+  });
+
+  it("loadWelcomeSeen is true once the marker is written", async () => {
+    (globalThis as any).window.localStorage.getItem = vi.fn(() => "1");
+    const mod = await importModule();
+    expect(await mod.loadWelcomeSeen()).toBe(true);
+  });
+
+  it("saveWelcomeSeen writes the marker", async () => {
+    const mod = await importModule();
+    await mod.saveWelcomeSeen();
+    expect((globalThis as any).window.localStorage.setItem).toHaveBeenCalledWith(
+      "gennety.onboarding.welcomed",
+      "1",
+    );
+  });
+
+  it("reads through DeviceStorage when the client supports it", async () => {
+    (globalThis as any).window = {
+      Telegram: { WebApp: { DeviceStorage: { setItem: mockSetItem, getItem: mockGetItem, removeItem: mockRemoveItem } } },
+    };
+    mockGetItem.mockImplementation((_key, cb) => cb(null, "1"));
+    const mod = await importModule();
+    expect(await mod.loadWelcomeSeen()).toBe(true);
+    expect(mockGetItem).toHaveBeenCalledWith("gennety.onboarding.welcomed", expect.any(Function));
+  });
+
+  // A DeviceStorage that never calls back must not hang the boot, and the
+  // fallback must be "already greeted" — a caller that cannot tell whether the
+  // user has seen the mascot has to stay quiet rather than replay it.
+  it("times out to true when DeviceStorage never answers", async () => {
+    vi.useFakeTimers();
+    try {
+      (globalThis as any).window = {
+        Telegram: { WebApp: { DeviceStorage: { setItem: mockSetItem, getItem: vi.fn(() => {}), removeItem: mockRemoveItem } } },
+      };
+      const mod = await importModule();
+      const pending = mod.loadWelcomeSeen();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(await pending).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

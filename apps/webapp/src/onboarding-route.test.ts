@@ -5,6 +5,7 @@ import {
   DATEFLOW_LAST_INDEX,
   postVisualPhaseFromRemote,
   preVisualPhaseFromRemote,
+  shouldPlayWelcome,
   VISUAL_DONE,
   VISUAL_LAST_INDEX,
 } from "./onboarding-route.js";
@@ -498,5 +499,37 @@ describe("Telegram onboarding profile screens", () => {
         user({ ...ready, homeLocation: null, profileBasics: { ...NO_BASICS } }),
       ),
     ).toEqual({ kind: "city" });
+  });
+});
+
+describe("shouldPlayWelcome", () => {
+  it("greets a brand-new user on the first screen", () => {
+    expect(shouldPlayWelcome({ kind: "language" }, false, false)).toBe(true);
+    expect(shouldPlayWelcome({ kind: "consent" }, false, false)).toBe(true);
+  });
+
+  it("never greets twice", () => {
+    expect(shouldPlayWelcome({ kind: "language" }, true, false)).toBe(false);
+  });
+
+  it("stays out of the way under prefers-reduced-motion", () => {
+    expect(shouldPlayWelcome({ kind: "language" }, false, true)).toBe(false);
+  });
+
+  // The marker alone cannot express this: someone who reinstalls halfway
+  // through registration has no marker and is not a new user.
+  it("does not greet an account resuming mid-flow, marker or not", () => {
+    for (const phase of [
+      { kind: "city" } as const,
+      { kind: "theme" } as const,
+      { kind: "phone" } as const,
+      { kind: "visual", index: 0 } as const,
+      { kind: "basics", step: "name" } as const,
+      { kind: "loading" } as const,
+      { kind: "done" } as const,
+      { kind: "syncing" } as const,
+    ]) {
+      expect(shouldPlayWelcome(phase, false, false), `${phase.kind} must not greet`).toBe(false);
+    }
   });
 });

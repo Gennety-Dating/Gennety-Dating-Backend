@@ -38,6 +38,13 @@ function key(matchId: string): string {
 // user, so a static key (DeviceStorage is already per-bot/per-user) is enough.
 const ONBOARDING_VISUAL_KEY = "gennety.onboarding.visual";
 
+// Welcome-mascot once-marker. Deliberately a SECOND key rather than another
+// sentinel on the visual-progress one: that value is a scene index the router
+// clamps and resumes from, and folding a boolean into it would make every
+// arithmetic read of it ambiguous. Same no-versioning rule as above — a lost
+// flag replays a 3.7s greeting once, which is bounded and rare.
+const ONBOARDING_WELCOME_KEY = "gennety.onboarding.welcomed";
+
 // Snapshot of the peer's slot set at the user's last successful save.
 // Used to NEW-badge slots the peer has added since the user last "acted".
 function peerSeenKey(matchId: string): string {
@@ -246,4 +253,68 @@ function normalizeIsoList(values: string[]): string[] | null {
     return !Number.isNaN(new Date(value).getTime());
   });
   return normalized.length > 0 ? normalized : null;
+}
+
+/**
+ * Read the welcome-mascot once-marker.
+ *
+ * This runs on the onboarding boot path, so it carries the same timeout race
+ * as `loadOnboardingProgress` — a client that exposes DeviceStorage and never
+ * calls back must not hang the app on its loading screen. Failing to
+ * `true` rather than `false` is the deliberate direction: if we cannot tell
+ * whether the user has been greeted, do not greet them again.
+ */
+export async function loadWelcomeSeen(): Promise<boolean> {
+  const ds = storage();
+  const raw = ds
+    ? await new Promise<string | null>((resolve) => {
+        let settled = false;
+        const finish = (value: string | null): void => {
+          if (settled) return;
+          settled = true;
+          resolve(value);
+        };
+        const timer = setTimeout(() => finish("1"), DEVICE_STORAGE_TIMEOUT_MS);
+        ds.getItem(ONBOARDING_WELCOME_KEY, (err, value) => {
+          clearTimeout(timer);
+          if (err) {
+            console.warn("DeviceStorage getItem failed:", err);
+            finish("1");
+            return;
+          }
+          finish(value ?? null);
+        });
+      })
+    : (() => {
+        try {
+          return window.localStorage.getItem(ONBOARDING_WELCOME_KEY);
+        } catch {
+          return null;
+        }
+      })();
+
+  return raw !== null && raw.trim() !== "";
+}
+
+/**
+ * Mark the welcome mascot as played. Fire-and-forget by design: the greeting
+ * has already happened by the time this is called, so a failed write costs one
+ * replay on the next launch and must never delay the screen underneath.
+ */
+export async function saveWelcomeSeen(): Promise<void> {
+  const ds = storage();
+  if (!ds) {
+    try {
+      window.localStorage.setItem(ONBOARDING_WELCOME_KEY, "1");
+    } catch {
+      // ignore
+    }
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    ds.setItem(ONBOARDING_WELCOME_KEY, "1", (err) => {
+      if (err) console.warn("DeviceStorage setItem failed:", err);
+      resolve();
+    });
+  });
 }
