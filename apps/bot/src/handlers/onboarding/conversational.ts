@@ -90,6 +90,7 @@ import {
 } from "../../services/photo-stage-panel.js";
 import {
   MESSAGE_REACTION,
+  onboardingReactionFor,
   reactToMessage,
 } from "../../services/message-reactions.js";
 
@@ -389,28 +390,16 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     ),
   );
 
-  if (
-    ctx.message?.text &&
-    result.acceptedOnboardingFields?.includes("hobbies")
-  ) {
+  // One rule for both rails (`onboardingReactionFor`): 👍 on the hobbies
+  // answer, ❤ on the closing vibe question — the most personal onboarding
+  // answer, warm-reacted regardless of what the user actually said. The native
+  // client receives the same verdict in `InterviewState.reaction`.
+  const reaction = onboardingReactionFor(result.acceptedOnboardingFields);
+  if (ctx.message?.text && reaction) {
     await reactToMessage(
       ctx.api,
       { chatId: ctx.chat?.id, messageId: ctx.message.message_id },
-      MESSAGE_REACTION.like,
-    );
-  }
-
-  // The closing vibe question ("the experience itself, or who's with you?") is
-  // the most personal onboarding answer — always warm-react to it, regardless
-  // of what the user actually answered.
-  if (
-    ctx.message?.text &&
-    result.acceptedOnboardingFields?.includes("vibe_focus")
-  ) {
-    await reactToMessage(
-      ctx.api,
-      { chatId: ctx.chat?.id, messageId: ctx.message.message_id },
-      MESSAGE_REACTION.heart,
+      reaction === "heart" ? MESSAGE_REACTION.heart : MESSAGE_REACTION.like,
     );
   }
 

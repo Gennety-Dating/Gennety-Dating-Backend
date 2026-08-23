@@ -3212,6 +3212,17 @@ components:
         uiHint:
           $ref: "#/components/schemas/UiHint"
           description: Null/absent → plain text field
+        reaction:
+          type: string
+          enum: [like, heart]
+          description: >-
+            The bot's reaction to the user message this state answers — the
+            native twin of the Telegram message reaction (`like` 👍 on the
+            hobbies answer, `heart` ❤ on the closing vibe answer). Present
+            only when there is one; absent otherwise and always absent from
+            `GET` state. Deliberately not nullable: `enum: [..., null]` makes
+            swift-openapi-generator emit a phantom `_empty_` case (see
+            `PendingFeedback.venueFit` history) — absence expresses "none".
 
     ChatMessage:
       type: object

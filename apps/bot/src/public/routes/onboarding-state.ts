@@ -1,6 +1,7 @@
 import { prisma, type OnboardingStep } from "@gennety/db";
 import { MIN_PHOTOS } from "@gennety/shared";
 import { uiHintForQuestion, type UiHint } from "../ui-hints.js";
+import type { OnboardingReaction } from "../../services/message-reactions.js";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -24,6 +25,14 @@ export interface InterviewStateDto {
    * `currentQuestion`; null for legacy pre-collector users.
    */
   uiHint: UiHint | null;
+  /**
+   * The bot's reaction to the user message that this state answers — the
+   * native equivalent of the Telegram message reaction (`like` 👍 on the
+   * hobbies answer, `heart` ❤ on the closing vibe answer). Present only in
+   * the response to an answer; `GET` state never carries it, because the
+   * reaction is an event on the exchange, not a property of the history.
+   */
+  reaction?: OnboardingReaction;
 }
 
 const STEP_ORDER: OnboardingStep[] = ["consent", "language", "conversational", "completed"];
@@ -75,6 +84,7 @@ export interface StateContext {
   currentQuestion?: string | null;
   question?: string | null;
   acknowledgement?: string | null;
+  reaction?: OnboardingReaction | null;
 }
 
 export function buildInterviewState(ctx: StateContext): InterviewStateDto {
@@ -99,6 +109,9 @@ export function buildInterviewState(ctx: StateContext): InterviewStateDto {
     question,
     completed: ctx.step === "completed",
     ...(ctx.acknowledgement !== undefined ? { acknowledgement: ctx.acknowledgement } : {}),
+    // Absent, not null, when there is no reaction: `enum: [..., null]` in the
+    // spec makes the Swift generator emit a phantom `_empty_` case.
+    ...(ctx.reaction ? { reaction: ctx.reaction } : {}),
     messages,
     expectingPhoto,
     photoCount: ctx.photoCount,

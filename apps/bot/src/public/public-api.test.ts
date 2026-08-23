@@ -2381,6 +2381,44 @@ describe("/v1/onboarding/interview", () => {
     expect(res.body.question).toBe("echo:Alice, 22");
   });
 
+  it("POST /answer carries the bot's reaction when the agent accepted hobbies", async () => {
+    const user = await seedUser({ onboardingStep: "conversational" });
+    vi.mocked(runAgentTurnMock).mockResolvedValueOnce({
+      reply: "Noted.",
+      expectingPhoto: false,
+      onboardingComplete: false,
+      contextPromptRequested: false,
+      contextDumpStarted: false,
+      acceptedOnboardingFields: ["hobbies"],
+    } as never);
+    const res = await request(app)
+      .post("/v1/onboarding/interview/answer")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ text: "Climbing and old cinemas" });
+    expect(res.status).toBe(200);
+    expect(res.body.reaction).toBe("like");
+  });
+
+  it("POST /answer omits `reaction` (not null) when there is none, and GET never carries it", async () => {
+    const user = await seedUser({
+      onboardingStep: "conversational",
+      messageHistory: [{ role: "assistant", content: "How old are you?" }],
+    });
+    const answered = await request(app)
+      .post("/v1/onboarding/interview/answer")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ text: "22" });
+    expect(answered.status).toBe(200);
+    // Absence, not null: a nullable enum would give the Swift client a
+    // phantom `_empty_` case.
+    expect("reaction" in answered.body).toBe(false);
+
+    const state = await request(app)
+      .get("/v1/onboarding/interview")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+    expect("reaction" in state.body).toBe(false);
+  });
+
   it("POST /answer refuses to start before terms are accepted", async () => {
     const user = await seedUser({
       onboardingStep: "consent",

@@ -11,6 +11,7 @@ import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
 import { agentTextLimiter, voiceLimiter } from "../rate-limit.js";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
+import { onboardingReactionFor } from "../../services/message-reactions.js";
 import { hasTrackVerifiedContact } from "../../services/contact-verification.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 import { serializeUser } from "./serializers.js";
@@ -90,7 +91,13 @@ onboardingRouter.post("/interview/answer", agentTextLimiter, async (req: Request
   );
 
   const ctx = await loadStateContext(req.userId!);
-  res.json(buildInterviewState({ ...ctx, question: result.reply }));
+  res.json(
+    buildInterviewState({
+      ...ctx,
+      question: result.reply,
+      reaction: onboardingReactionFor(result.acceptedOnboardingFields),
+    }),
+  );
 });
 
 /**
@@ -196,6 +203,13 @@ onboardingRouter.post(
       canPresentTypeRadar: false,
     });
     const ctx = await loadStateContext(req.userId!);
-    res.json(buildInterviewState({ ...ctx, question: result.reply, acknowledgement: transcript }));
+    res.json(
+      buildInterviewState({
+        ...ctx,
+        question: result.reply,
+        acknowledgement: transcript,
+        reaction: onboardingReactionFor(result.acceptedOnboardingFields),
+      }),
+    );
   },
 );

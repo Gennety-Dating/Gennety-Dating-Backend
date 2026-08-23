@@ -47,6 +47,34 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-23 — `InterviewState.reaction`: реакция на обмен, а не свойство истории
+
+**Kind:** deviation from plan
+**What:** нативный клиент получает реакцию бота на ответ в онбординге
+(👍 `hobbies`, ❤ `vibe_focus`) одним аддитивным полем `reaction` в ответе на
+`POST /v1/onboarding/interview/answer` (и `/voice`). Поле присутствует только
+когда реакция есть; `GET …/interview` его не несёт никогда. Правило вынесено в
+`onboardingReactionFor()` и стало общим для обеих рельс — Telegram-хендлер
+теперь зовёт его же.
+**Why not in history, as the iOS plan asked** (`docs/onboarding-chat-polish-plan.md`
+§2.5 в iOS-репо предлагал `messages[].reaction` с хранением): история
+интервью — это `user.messageHistory`, сырые сообщения OpenAI, и они уходят в
+LLM как есть (`runAgentTurn` кастует их в `ChatMessage` без фильтра). Чужой
+ключ на сообщении либо отвергается API, либо потребует фильтра на каждом
+вызове; плюс история **скрабится** (контекст-дамп вырезается из user-turn), и
+индексы в ней не стабильны. Отдельная колонка — миграция ради двух эмодзи.
+Реакция здесь — событие на обмене, как и в Telegram, где её хранит Telegram, а
+не мы: при переоткрытии экрана её нет, и это принятая цена — онбординг
+проходится за одну сессию.
+**Trap avoided:** `enum: [like, heart, null]` заставил бы swift-openapi-generator
+выпустить фантомный кейс `_empty_` (прецедент `PendingFeedback.venueFit`).
+Отсутствие реакции выражается отсутствием свойства; в DTO это спред по
+truthiness, в тесте — `"reaction" in body === false`.
+**Recorded in:** `apps/bot/src/services/message-reactions.ts`,
+`apps/bot/src/public/routes/onboarding-state.ts`, `openapi/gennety-v1.yaml`
+→ `InterviewState.reaction`, тесты `message-reactions.test.ts` и
+`public-api.test.ts`.
+
 ## 2026-08-23 — рыжих в деке две, а не четыре: цвет волос выравнивается по пулу, а не по симметрии
 
 **Kind:** founder decision + change of mind (моё)
