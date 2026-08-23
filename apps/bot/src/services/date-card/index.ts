@@ -11,6 +11,7 @@ import { blurFacesInPhoto } from "./face-blur.js";
 import { toPngBuffer, duotonePng, grainPng } from "./image.js";
 import { resolveVenuePhoto } from "./photo-source.js";
 import { buildCardElement, CARD_W, CARD_H, type CardNode, type CardTheme } from "./template.js";
+import { resolveCreditPlacement } from "./credit-placement.js";
 
 /**
  * Date-card renderer (PRODUCT_SPEC.md §3.7). Produces a shareable PNG for a
@@ -133,6 +134,9 @@ export async function renderDateCard(
       logo,
       venueName: input.venueName,
       venueAddress: input.venueAddress,
+      // Beside the address when it fits, on the photo when it does not — the
+      // measurement lives next to the layout constants it depends on.
+      creditPlacement: resolveCreditPlacement(input.venueAddress),
       slogan: input.slogan ?? t(input.language, "dateCardSlogan"),
       theme: input.theme,
     });

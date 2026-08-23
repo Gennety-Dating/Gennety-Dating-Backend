@@ -9,9 +9,11 @@
  * overlapping tilted polaroid of the partner; a bold Archivo Black headline
  * slogan whose last line is the burgundy accent; a compact venue detail block.
  * The "Gennety" wordmark sits top-left and the brand butterfly logo sits
- * top-right (slightly tilted, nudged toward the edge like the polaroid), and a
- * "made with Gennety" credit is stamped into the hero photo's lower-left corner
- * (see `photoCredit` for why it is on the photo and not beside the address).
+ * top-right (slightly tilted, nudged toward the edge like the polaroid). The
+ * "made with Gennety" credit sits beside the venue address when the address
+ * leaves room for it, and is stamped into the hero photo's lower-left corner
+ * when it does not — the caller resolves which (`credit-placement.ts`) and this
+ * file only renders the branch it is handed.
  *
  * NOTE: rendered text is kept emoji-free on purpose — the bundled fonts have no
  * color-emoji glyphs and satori would drop them. Emoji live only in the
@@ -24,8 +26,24 @@
 
 export const CARD_W = 1080;
 export const CARD_H = 1350;
+/** Card's own horizontal padding; `CONTENT_W` is derived from it. */
+export const CARD_PADDING_X = 64;
+
+/** The credit's text and size, exported so it can be measured before a render. */
+export const CREDIT_TEXT = "made with Gennety";
+export const CREDIT_FONT_PX = 22;
+export const ADDRESS_FONT_PX = 30;
 
 const BURGUNDY = "#8B253B";
+
+/**
+ * Where the credit goes on one card. Resolved by `credit-placement.ts`, which
+ * measures the address; `addressWidth` is the fixed width the address line is
+ * clipped to in order to reserve the credit's room.
+ */
+export type CreditPlacement =
+  | { kind: "photo" }
+  | { kind: "inline"; addressWidth: number };
 
 export type CardTheme = "light" | "dark";
 
@@ -91,6 +109,8 @@ export interface CardElementInput {
   slogan: string;
   /** Recipient's chosen theme — drives the light/dark chrome palette. */
   theme: CardTheme;
+  /** Resolved by `resolveCreditPlacement` — this file does not measure. */
+  creditPlacement: CreditPlacement;
 }
 
 export function buildCardElement(input: CardElementInput): CardNode {
@@ -102,7 +122,7 @@ export function buildCardElement(input: CardElementInput): CardNode {
       flexDirection: "column",
       width: `${CARD_W}px`,
       height: `${CARD_H}px`,
-      padding: "70px 64px",
+      padding: `70px ${CARD_PADDING_X}px`,
       backgroundColor: p.bg,
       fontFamily: "Roboto",
       color: p.ink,
@@ -256,9 +276,9 @@ function venueSection(input: CardElementInput): CardNode {
           overflow: "hidden",
           boxShadow: "0 34px 80px rgba(0,0,0,0.6)",
         },
-        // The credit lives INSIDE the photo box so the box's own
-        // `overflow: hidden` + 30px radius clip it to the photograph.
-        [venueImage, photoCredit()],
+        // When the credit is on the photo it lives INSIDE this box, so the
+        // box's own `overflow: hidden` + 30px radius clip it to the photograph.
+        input.creditPlacement.kind === "photo" ? [venueImage, photoCredit()] : [venueImage],
       ),
       // Partner polaroid — lower-right, tilted, no caption text. Wide bottom
       // frame margin for an authentic polaroid look.
@@ -283,7 +303,8 @@ function venueSection(input: CardElementInput): CardNode {
 }
 
 /**
- * Bottom block: venue name over its address.
+ * Bottom block: venue name over its address, with the credit beside the address
+ * when it fits (`creditPlacement`).
  *
  * Both lines are single-line and ellipsized, and that is structural rather than
  * styling. The block sits at the end of a fixed 1350px card behind a `flexGrow`
@@ -291,21 +312,30 @@ function venueSection(input: CardElementInput): CardNode {
  * 3-line date-card slogan, i.e. ONE extra wrapped line (40px) and nothing more.
  * A venue whose name or address wrapped would push this block up into the
  * partner polaroid, so the card's silhouette would change with the venue's
- * paperwork. Measured against the real curated catalog (2101 addresses), the
- * full content width holds ~62 characters, which is p88 — so the ellipsis is
- * the long tail, not the common case. Nothing is lost when it fires: the
- * scheduled DM prints the name and the full address verbatim in its caption
- * one line below the photo, and the exact place rides the "Open in Maps"
- * button.
+ * paperwork. Measured over the real curated catalog (333 distinct venues across
+ * the three launched-city files), the full content width holds the address for
+ * 98.5% of them, so the ellipsis is the long tail rather than the common case.
+ * Nothing is lost when it fires: the scheduled DM prints the name and the full
+ * address verbatim in its caption one line below the photo, and the exact place
+ * rides the "Open in Maps" button.
+ *
+ * Only the ADDRESS shares its line with the credit; the venue name keeps the
+ * full content width in both branches. That is deliberate rather than
+ * incidental — at their own sizes the name outgrows the address in the tail
+ * (p90 927px against 799px), so putting the whole COLUMN beside the credit, as
+ * the pre-2026-08-20 layout did, would have cut the inline branch from 79.6% of
+ * that catalog to 59.8% and started ellipsizing names that are fine today.
+ * Within Kyiv alone — the one launched market — the address goes inline for
+ * 95.6% of venues, so the photo corner is genuinely the long tail there.
  */
 function detailsSection(input: CardElementInput, p: Palette): CardNode {
   /** One clipped line: needs the width bound AND `overflow` for satori to ellipsize. */
-  const line = (text: string, style: Record<string, unknown>): CardNode =>
+  const line = (text: string, width: string, style: Record<string, unknown>): CardNode =>
     el(
       "div",
       {
         display: "flex",
-        width: "100%",
+        width,
         whiteSpace: "nowrap",
         overflow: "hidden",
         textOverflow: "ellipsis",
@@ -314,17 +344,52 @@ function detailsSection(input: CardElementInput, p: Palette): CardNode {
       text,
     );
 
+  const inline = input.creditPlacement.kind === "inline" ? input.creditPlacement : null;
+
+  const address = line(
+    input.venueAddress,
+    // A FIXED width in the inline branch, and this is what makes the credit's
+    // box independent of the address. Measured on the real render rather than
+    // assumed: with `100%` here the row does NOT overflow the card (yoga shrinks
+    // both children), it degrades quietly instead — the address ellipsizes ~70px
+    // early, the credit is squeezed from 188px to 157px and wraps onto two
+    // lines, and the row grows 40px -> 58px, which pushes the whole block up
+    // into the polaroid. So this is not the 2026-08-20 off-canvas failure in
+    // miniature; it is the silhouette drift the block's own comment forbids.
+    inline ? `${inline.addressWidth}px` : "100%",
+    { fontFamily: "Roboto", fontSize: `${ADDRESS_FONT_PX}px`, color: p.muted },
+  );
+
+  // The credit is a plain muted line here, not the scrimmed pill it wears on
+  // the photo: this ground is the card's own background, so it needs no scrim
+  // and a chip floating on cream would read as pasted on.
+  const addressRow = inline
+    ? el("div", { display: "flex", width: "100%", marginTop: "6px", alignItems: "flex-end" }, [
+        address,
+        el(
+          "div",
+          {
+            display: "flex",
+            marginLeft: "auto",
+            fontFamily: "Roboto",
+            fontSize: `${CREDIT_FONT_PX}px`,
+            color: p.muted,
+          },
+          CREDIT_TEXT,
+        ),
+      ])
+    : el("div", { display: "flex", width: "100%", marginTop: "6px" }, [address]);
+
   return el(
     "div",
     { display: "flex", flexDirection: "column", width: "100%" },
     [
-      line(input.venueName, { fontFamily: "Archivo Black", fontSize: "54px", color: p.ink }),
-      line(input.venueAddress, {
-        marginTop: "6px",
-        fontFamily: "Roboto",
-        fontSize: "30px",
-        color: p.muted,
+      line(input.venueName, "100%", {
+        fontFamily: "Archivo Black",
+        fontSize: "54px",
+        color: p.ink,
       }),
+      addressRow,
     ],
   );
 }
@@ -345,13 +410,18 @@ function detailsSection(input: CardElementInput, p: Palette): CardNode {
  * construction instead of by tuning. It also hands the address block the full
  * content width back, which is what keeps ~88% of real addresses on one line.
  *
- * Placement is deliberate on three counts. The photo's lower-LEFT is the one
- * corner the tilted polaroid (lower-right) never reaches. The inset aligns the
- * credit with the card's own left text column — the wordmark and the venue name
- * — so it reads as set, not as dropped. And it is ALWAYS here, never
- * conditionally beside the address: satori exposes no text metrics before a
- * render, so "does it fit" cannot be answered honestly, and a credit that moved
- * with the venue's address length would make one layout look like two.
+ * Placement is deliberate on two counts. The photo's lower-LEFT is the one
+ * corner the tilted polaroid (lower-right) never reaches, and the inset aligns
+ * the credit with the card's own left text column — the wordmark and the venue
+ * name — so it reads as set, not as dropped.
+ *
+ * This is the FALLBACK branch, reached when the address is too long to leave
+ * the credit room (2026-08-23; it was unconditional between 2026-08-20 and
+ * then). What changed is not the geometry but that "does it fit" became
+ * answerable: `credit-placement.ts` measures the address in the same font file
+ * satori is handed. What did NOT change is why absolute positioning is used
+ * here rather than a shrink factor — an element out of the flow cannot be
+ * pushed by any text length.
  */
 function photoCredit(): CardNode {
   return el(
@@ -379,9 +449,9 @@ function photoCredit(): CardNode {
       borderRadius: "999px",
       backgroundColor: "rgba(3,3,3,0.6)",
       fontFamily: "Roboto",
-      fontSize: "22px",
+      fontSize: `${CREDIT_FONT_PX}px`,
       color: "rgba(255,255,255,0.95)",
     },
-    "made with Gennety",
+    CREDIT_TEXT,
   );
 }

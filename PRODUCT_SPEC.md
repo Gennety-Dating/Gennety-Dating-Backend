@@ -4871,30 +4871,57 @@ live only in the Telegram caption.
 
 - **The bottom block cannot be pushed around by the venue's paperwork
   (2026-08-20).** The venue name and address are each clipped to ONE line, and
-  the "made with Gennety" credit is stamped into the hero photo's lower-left
-  corner rather than sitting beside the address. Both rules exist because the
-  block sits at the end of a fixed 1350px card behind a `flexGrow` spacer, and
-  that spacer is the only slack there is — 46px, i.e. one wrapped line and
-  nothing more. The credit used to be a flex sibling of the address, and yoga
-  defaults `flex-shrink` to **0**, so a long address did not yield: it grew to
-  the content width and laid the credit out after itself, **off the canvas**.
-  Measured on the reported card — a 57-character Kyiv address, around p75 of the
-  real curated catalog — the credit's right edge landed at x=1127 on a 1080px
-  card, hard-clipped; anything past ~45 characters did it, which is over half
-  the catalog. Absolute positioning is the fix rather than a shrink factor: an
-  element out of the flow cannot be pushed by any text length, so the failure is
-  gone by construction, and the address gets the full content width back —
-  which is what keeps **~88%** of real addresses on one line (952px holds ~62
-  characters against a p90 of 64). The credit is **always** on the photo, never
-  conditionally beside the address: satori exposes no text metrics before a
-  render, so "does it fit" cannot be answered honestly, and a credit that moved
-  with the address length would make one layout look like two. **Nothing is lost
+  the "made with Gennety" credit leaves the address's line when the address is
+  long. Both rules exist because the block sits at the end of a fixed 1350px
+  card behind a `flexGrow` spacer, and that spacer is the only slack there is —
+  46px, i.e. one wrapped line and nothing more. The credit used to be a flex
+  sibling of the whole venue COLUMN, and yoga defaults `flex-shrink` to **0**,
+  so a long address did not yield: it grew to the content width and laid the
+  credit out after itself, **off the canvas**. Measured on the reported card — a
+  57-character Kyiv address, around p75 of the real curated catalog — the
+  credit's right edge landed at x=1127 on a 1080px card, hard-clipped; anything
+  past ~45 characters did it, which is over half the catalog. **Nothing is lost
   when the ellipsis fires**: the scheduled DM prints the name and the full
   address verbatim in its caption one line below the photo, and the exact place
-  rides the "Open in Maps" button. The credit sits on a scrim because a duotone
-  photo runs from near-black to cream and neither a light nor a dark credit is
-  legible over both — measured on the real render, the scrim carries it at
-  5.79:1 over the cream end and 17.99:1 over the dark.
+  rides the "Open in Maps" button. On the photo the credit sits on a scrim,
+  because a duotone photo runs from near-black to cream and neither a light nor
+  a dark credit is legible over both — measured on the real render, the scrim
+  carries it at 5.79:1 over the cream end and 17.99:1 over the dark; beside the
+  address it is plain muted text, since that ground is the card's own background
+  and a chip floating on cream reads as pasted on.
+
+- **Which of the two homes is a CONDITION again (2026-08-23), after three days
+  of being unconditional.** That pass moved the credit onto the photo always,
+  on the stated grounds that "satori exposes no text metrics before a render, so
+  'does it fit' cannot be answered honestly" — so a venue whose address used
+  half the width still lost the credit off its line, for a constraint that was
+  not binding. The first half of that reasoning is true and the conclusion was
+  not: `@napi-rs/canvas` is already a dependency of this renderer (it does the
+  duotone, the grain and the face blur) and measures the SAME font file satori
+  is handed. Measured against satori's own laid-out advance width over Latin and
+  Cyrillic at both sizes, it agrees to within **2px and 0.45%**, and always
+  under-reports, because satori rounds up to whole pixels. The minimum gap
+  between address and credit is 40px — thirteen times that worst error — and a
+  test pins the agreement, so a font swap or a satori upgrade that changed
+  shaping lands there rather than on someone's card.
+  **Only the ADDRESS shares its line**; the venue name keeps the full content
+  width in both branches. Measured over the real curated catalog, the credit
+  goes inline for **95.6% of Kyiv venues** (79.6% across all three
+  launched-city files, whose addresses carry an oblast name and run longer), so
+  the photo corner is the long tail rather than the common case. Putting the
+  whole column beside the credit, as the pre-2026-08-20 layout did, would have
+  cut that to 59.8% and started ellipsizing names that are fine today.
+  **The old failure does not come back with it, and that is structural rather
+  than a matter of the measurement being right.** Inline, the address is clipped
+  to a FIXED width, so the credit's box is decided before the address is read
+  and no address length can move it; on the photo it is absolutely positioned,
+  so nothing in the flow can. A wrong measurement can therefore only ellipsize
+  an address a few characters early — it can never lay the credit past the
+  canvas edge. Measured on the real render, dropping that fixed width does not
+  reproduce the 2026-08-20 bug either: yoga shrinks both children instead, the
+  credit squeezes 188px → 157px and wraps onto two lines, and the row grows
+  40px → 58px, pushing the block up into the polaroid. That is the silhouette
+  drift the rule above forbids, so it is guarded the same way.
 
 - **Two renders, one layout.** The **private** card is sent with
   `protect_content: true` (blocks forwarding / saving / download) and carries
