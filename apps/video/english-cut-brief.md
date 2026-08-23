@@ -87,7 +87,7 @@ English cut unchanged.
    iOS expands the island while recording the screen, and the red dot sits at
    its left end (measured x 178–193 on the English sources too — the Ukrainian
    figure was 176–195, i.e. the same). `island_erase()` in the extraction script
-   transfers **verbatim**; see §5.
+   transfers **verbatim**; see §7.
 4. **Speed changes are baked into extraction, never `playbackRate`.**
 5. **The film states a date exactly once.** In Ukrainian this forced the date
    card to be trimmed short. In English it does not — see §4.5.
@@ -566,4 +566,4 @@ And by eye, at full size:
 Then: commit and push (single branch `main`, explicit paths, never `git add -A`
 — parallel sessions share this working tree), and write a `DECISIONS.md` entry
 covering the Date Ticket act being deliberately skipped, the radar rule, and
-whatever you resolved for the missing `tg-open`.
+anything you decided that this brief left open (§4.1c, §9).
