@@ -698,8 +698,26 @@ One consequence for debugging: the driver's `explainRefusal` no longer reports
 the puppet's live matches as a cause, because they are not one. A refusal
 naming a live match now always means the VISITOR.
 
-Plus two `if (DEMO_MODE_ENABLED)` blocks in `index.ts`: the isolation assert +
-banner + driver, and **not** scheduling the drop-matching or no-match crons.
+Plus `if (DEMO_MODE_ENABLED)` blocks in `index.ts`: the isolation assert +
+banner + driver, and **not** scheduling three crons — drop matching, the
+no-match notice, and curated venue re-validation.
+
+**The third one is there for cost, not correctness** (added 2026-08-23). The
+first two protect the product: the real matchmaker would cheerfully pair two
+investors with each other, and a visitor about to be handed a match must never
+read "we couldn't find anyone this week". Re-validation would break nothing —
+it was simply paying a second, identical Google bill every night to keep a
+~1200-row catalog fresh for a deployment that has had **one match in its entire
+life**, already completed, and no date traffic at all.
+
+It is code-owned rather than an env schedule for the same reason the storage
+leak happened: the demo `.env` is generated as production's plus `.env.demo`, so
+**anything that file does not name is inherited silently** — which is exactly
+how this cron came to be running here unnoticed. Accepted tradeoff (founder
+decision): the demo catalog slowly rots and may eventually offer a venue that
+has since closed. In a walkthrough nobody checks, and it is cheaper than the
+bill. If demo fidelity ever matters more, the knob is
+`VENUE_REVALIDATION_BATCH_SIZE` plus removing this branch — not an env schedule.
 
 **And one deliberate non-branch: `PROTECT_PARTNER_MEDIA`.** Partner photos are
 sent `protect_content` wherever they appear with a clear face (PRODUCT_SPEC

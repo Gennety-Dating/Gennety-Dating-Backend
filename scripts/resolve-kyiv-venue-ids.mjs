@@ -279,6 +279,25 @@ async function mapWithConcurrency(items, concurrency, mapper) {
 
 async function main() {
   const config = JSON.parse(readFileSync(inputPath, "utf8"));
+
+  // A run with no flag is a PLAN, not a preview (2026-08-23 — DECISIONS.md).
+  //
+  // `--write` only ever gated the file write, so the no-flag invocation — the
+  // one the usage block documents as the default — made every Text Search
+  // anyway. That was the worst dry-run/cost mismatch in the repo: it reads as
+  // "just look" and bills one Enterprise text search per venue in the list.
+  // Unlike the sync script there is no free validation mode to fall back to,
+  // because resolving a NAME to a placeId is inherently a network question.
+  if (!write) {
+    console.log(
+      `Plan: ${config.venues.length} Google Text Search requests ` +
+        `(1 per venue name), billed per request.\n` +
+        `Nothing was fetched. Re-run with --write to spend them and save ` +
+        `the resolved ids.`,
+    );
+    return;
+  }
+
   loadEnvFile(resolve(root, ".env.local"), true);
   loadEnvFile(resolve(root, ".env"), false);
   const apiKey = process.env.PLACES_API_KEY;

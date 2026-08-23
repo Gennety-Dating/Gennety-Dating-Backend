@@ -1,5 +1,82 @@
 # Gennety Dating Deploy
 
+**PENDING — расход Google Places: cron ревалидации приводится в соответствие со
+спекой, демо перестаёт платить за второй каталог (PRODUCT_SPEC §3.7 / §3.7a,
+ARCHITECTURE → `curated_venues`, DECISIONS.md).** **Нет изменения схемы Prisma,
+нет изменения Mini App** (`apps/webapp` не тронут) — только бот и скрипты, так
+что полный деплой кода несёт всё целиком, **плюс обязательный
+`pnpm demo:deploy`**: половина экономии живёт именно в демо и без его редеплоя
+не наступит.
+
+Одна **опциональная** новая env (`VENUE_REVALIDATION_BATCH_SIZE`); не выставлять
+её при этом деплое — дефолт 30 в коде это и есть фаза 1 (см. ниже).
+
+**Шесть вещей, которые стоит знать до рестарта:**
+
+- **Смысл строки лога меняется, форма — нет.** `[venue-revalidation] scanned=30`
+  теперь «30 МЕСТ (~150 строк)», а не «30 строк». Сравнение логов через границу
+  деплоя — сравнение разных единиц. Ночной счёт `scanned` теперь ровно равен
+  числу оплаченных запросов к Google, что и есть цифра для ops.
+- **Появляется новая строка у демо:** `[cron] Venue re-validation NOT scheduled
+  (demo mode)` — третья рядом с дропом и no-match. **Её присутствие и есть
+  доказательство, что демо-половина уехала**; счётчик рестартов прода при
+  `demo:deploy` меняться не должен.
+- **Каталог для обхода схлопывается 1712 → 275** (фильтр по
+  `SUPPORTED_CITY_KEYS` + дедуп по `placeId`). Предполётно проверено на живом
+  проде: **0** активных строк с `placeId` и `NULL cityKey`, то есть фильтр никого
+  не осиротит. Если это когда-нибудь перестанет быть верным — бэкфиллить
+  `city_key`, а НЕ расширять фильтр: такая строка остаётся видимой
+  пользователю через `universityDomain`.
+- **434 строки Харькова и Одессы замораживаются** на текущем `lastVerifiedAt`.
+  Это намеренно (там невозможен матч). При запуске любого из этих городов его
+  62 места окажутся максимально «просроченными» и съедят ~2 ночи батча вперёд
+  Киева — самоограничивающееся и корректное поведение.
+- **`editorialSummary` снят с маски cron'а** (не с маски поиска). Уже записанные
+  значения остаются: правило «отсутствующее поле — это не пусто, а неизвестно»
+  уже действовало и теперь просто всегда попадает в ветку «не трогать».
+- **Три скрипта перестают тратить сеть на превью.** Прогон без флага теперь
+  печатает план и выходит. Это меняет привычку: `pnpm sync-venues:kyiv` больше
+  ничего не проверяет — для проверки есть бесплатный `--check`.
+
+Preflight по этому изменению: typecheck чист, **полный набор бота 4038 тестов /
+261 файл, 0 failed** (+17 новых). **Семь мутаций подтверждены красными по
+отдельности:** снятый фильтр города, обход по строкам вместо мест, `NULLS LAST`,
+снятый тайбрейк по `placeId`, наивная идиома `Number(env ?? "30")`, счёт по
+строкам, и возврат `photoName: null` в `rowToVenue`.
+
+Проверка после деплоя — счастливый путь молчит, поэтому смотрим на состояние:
+
+```sh
+pnpm demo:deploy
+ssh root@167.172.178.229 'pm2 logs gennety-demo --lines 40 --nostream | grep "Venue re-validation"'
+# Обязано быть: "NOT scheduled (demo mode)". Строка "scheduled" = демо не уехало.
+ssh root@167.172.178.229 'pm2 describe gennety-bot | grep restarts'
+# Счётчик рестартов прода не должен измениться от demo:deploy.
+```
+
+Через сутки после деплоя — в выборку обязан попадать только Киев:
+
+```sql
+SELECT city_key, count(*) FROM curated_venues
+WHERE active AND last_verified_at > now() - interval '1 day' GROUP BY 1;
+-- Ожидается одна строка: ua:kyiv, ~150 (не ~30 — теперь обновляются все копии).
+```
+
+**Фаза 2, примерно через 10 ночей** — как только `photoRefs` по Киеву закроется,
+снизить батч до 10. Это env-правка + `pm2 restart --update-env`, без деплоя:
+
+```sql
+SELECT count(*) FILTER (WHERE cardinality(photo_refs) > 0) filled, count(*) total
+FROM curated_venues WHERE active AND city_key = 'ua:kyiv';
+-- Сейчас 0 / 1278. Когда filled == total → VENUE_REVALIDATION_BATCH_SIZE=10.
+```
+
+**Rollback:** откатить код, перезапустить, передеплоить демо. Откатывать больше
+нечего — ни схемы, ни обязательных env, ни флага. Уже записанные `photoRefs`
+остаются валидными в любую сторону.
+
+---
+
 **PENDING — `InterviewState.reaction`: реакция бота в онбординге доезжает до
 нативного клиента (OpenAPI `InterviewState.reaction`, DECISIONS.md
 2026-08-23).** **Нет изменения схемы Prisma, нет новых env, нет флагов, Mini App
@@ -10825,11 +10902,22 @@ For the reviewed Kyiv expansion, refresh and validate the committed approved
 catalog before importing:
 
 ```sh
-pnpm sync-venues:kyiv
-pnpm sync-venues:kyiv --apply
-pnpm sync-venues:kyiv --check
+pnpm sync-venues:kyiv --check   # free: local validation, no network
+pnpm sync-venues:kyiv --apply   # 219 Place Details, billed per request
 pnpm seed-venues:import --in=scripts/curated-venues.kyiv.approved.json --apply
 ```
+
+**⚠️ This sequence used to open with a bare `pnpm sync-venues:kyiv`, and that
+line cost money.** `--apply` gated only the file write, so the flagless run made
+all 219 Place Details requests and *then* printed "Dry run:" — meaning the
+documented way to edit one venue's tier billed **438** requests, twice what the
+work needs. Fixed 2026-08-23 (DECISIONS.md): a flagless run now prints the
+request count and exits without touching the network, so it is a genuine plan.
+`--check` is the free look; `--apply` is the one that spends. The same trap and
+the same fix apply to `resolve-venues:kyiv` (167 Text Search requests, where
+`--write` gated only the write) and to `backfill-venue-quality.mjs`, whose dry
+run fetched everything and whose default `--limit` was **1000** top-tier
+requests — now 100.
 
 When the operator hands over a raw list of venue NAMES (no place ids), resolve
 and triage it first — `sync-venues:kyiv` needs stable place ids and fails on
@@ -10838,6 +10926,7 @@ anything below the quality gate:
 ```sh
 # 1. Put the names in scripts/curated-venues.kyiv.additions.json
 #    ({"name": "...", "tier": "base|premium|alternative"}).
+pnpm resolve-venues:kyiv                  # free: prints the request count, exits
 pnpm resolve-venues:kyiv --write          # names -> place ids + review flags
 # 2. Read the flags. A `name-mismatch` is Google answering with a DIFFERENT
 #    venue — confirm the address, then set "acceptMatch": true, or fix "query".

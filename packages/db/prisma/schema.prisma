@@ -1987,9 +1987,13 @@ model CuratedVenue {
   /// instead of paying one lookup per venue per process (a cache that went cold
   /// on every deploy).
   ///
-  /// Empty until the cron has reached the row — a full Kyiv cycle is ~9 days at
-  /// 30 rows a night — which is why `withCuratedPhotos` survives as the runtime
-  /// fallback rather than being deleted with the old path.
+  /// Empty until the cron has reached the row — a full Kyiv cycle is ~10 nights
+  /// at 30 distinct PLACES a night — which is why `withCuratedPhotos` survives
+  /// as the runtime fallback rather than being deleted with the old path.
+  /// (Places, not rows, only since 2026-08-23: the cron used to spend one
+  /// request per per-domain copy and skip no market, so the real cycle was 57
+  /// nights and this column reached 0 of 275 Kyiv places while filling 90 rows
+  /// in cities that cannot hold a match.)
   ///
   /// An EMPTY Places answer must never overwrite a stored value: an absent
   /// `photos` field is indistinguishable from a partial 200, and trusting one

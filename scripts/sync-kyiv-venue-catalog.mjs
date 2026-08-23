@@ -260,6 +260,24 @@ async function main() {
     return;
   }
 
+  // A run with no flag is a PLAN, not a preview (2026-08-23 — DECISIONS.md).
+  //
+  // It used to fetch all of `manifest.places` and only then print "Dry run:
+  // …", so the thing that reads as a look-before-you-leap cost a full Places
+  // sweep — and deploy.md documented running it bare and then again with
+  // `--apply`, i.e. paying twice for one catalog edit. Place Details is billed
+  // per request, so at 219 places that is 438 billed requests to change one
+  // venue's tier. `--check` is the free look; `--apply` is the one that spends.
+  if (!apply) {
+    console.log(
+      `Plan: ${manifest.places.length} Google Place Details requests ` +
+        `(1 per place in the manifest), billed per request.\n` +
+        `Nothing was fetched. Re-run with --apply to spend them, ` +
+        `or --check to validate the catalog locally for free.`,
+    );
+    return;
+  }
+
   loadEnvFile(resolve(root, ".env.local"), true);
   loadEnvFile(resolve(root, ".env"), false);
   const apiKey = process.env.PLACES_API_KEY;

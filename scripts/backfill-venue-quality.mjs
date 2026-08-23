@@ -61,7 +61,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
   const apply = args.get("apply") === "true";
-  const limit = Number(args.get("limit") ?? "1000");
+  // 100, not 1000. Every row here is one top-tier Place Details request, and a
+  // four-figure default is a bill nobody chose — raise it explicitly with
+  // --limit=N when a bulk backfill is actually intended.
+  const limit = Number(args.get("limit") ?? "100");
   const apiKey = process.env.PLACES_API_KEY;
   if (!apiKey) {
     console.error("✗ Missing PLACES_API_KEY in env.");
@@ -94,10 +97,24 @@ async function main() {
 
   const byCity = new Map();
   for (const r of stale) byCity.set(r.cityKey ?? "NULL", (byCity.get(r.cityKey ?? "NULL") ?? 0) + 1);
-  console.log(
-    `${stale.length} row(s) missing quality metadata.${apply ? "" : " (dry run — pass --apply to write)"}`,
-  );
+  console.log(`${stale.length} row(s) missing quality metadata.`);
   for (const [city, n] of [...byCity].sort()) console.log(`  ${city}: ${n}`);
+
+  // The dry run does not fetch (2026-08-23 — DECISIONS.md). It used to print
+  // "(dry run — pass --apply to write)" and then make every Place Details
+  // request anyway, gating only the DB write — so looking cost exactly what
+  // doing cost, at the top billing tier, up to `--limit` rows. Paired with the
+  // old default of 1000 that was a four-figure request count for one "let me
+  // see what this would do".
+  if (!apply) {
+    console.log(
+      `\nPlan: ${stale.length} Place Details request(s). Nothing was fetched.\n` +
+        `Re-run with --apply to spend them${
+          stale.length >= limit ? `, and --limit=N to go past ${limit}` : ""
+        }.`,
+    );
+    return;
+  }
   console.log(`\nFetching Place Details (${DELAY_MS}ms apart)…\n`);
 
   let filled = 0;

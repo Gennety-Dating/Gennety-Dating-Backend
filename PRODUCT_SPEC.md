@@ -4987,12 +4987,22 @@ live only in the Telegram caption.
   existing request costs at most what it already cost — which holds whichever
   SKU tier `photos` belongs to, so the saving needs no pricing assumption. The
   board's own lookup survives as the **fallback** for a venue the scan has not
-  reached yet (a full Kyiv cycle is ~9 days at 30 rows a night); deleting it
+  reached yet (a full Kyiv cycle is ~10 nights at 30 **places** a night);
+  deleting it
   would put photo-less cards on the board the first time a venue is added.
   The row deliberately stores more refs than the board shows (10 against
   `VENUE_CHANGE_PHOTOS_PER_VENUE`), and the slice is on READ, so raising that
-  product number later is a one-line change rather than a nine-day wait for the
+  product number later is a one-line change rather than a ten-night wait for the
   catalog to be re-scanned.
+  **The cycle is nights-per-PLACE, and that had to be made true (2026-08-23).**
+  The cron counted rows, so it re-fetched each venue once per `universityDomain`
+  copy and swept unlaunched markets too — 1712 rows, a 57-night cycle, and
+  `photoRefs` reaching **0 of 275 Kyiv places** while filling 90 rows in cities
+  where a match is impossible. So the paragraph above described a saving that
+  had never once been delivered to the only launched market: every board open
+  and every venue assignment in Kyiv still bought the photos this column exists
+  to hold. It scans distinct places in launched markets now, and one request
+  settles all copies.
   Best-effort by rule: an unresolved photo leaves the category glyph the client
   already draws, and a board is never held up or failed for imagery. Only the
   board *read* pays for this; the like/confirm calls rebuild the same catalog

@@ -946,23 +946,35 @@ refs itself, one Place Details call per venue per board open, cached only in
 process memory (`withCuratedPhotos`) — so every deploy threw the whole city
 away and the next board paid for all of it again. `withCuratedPhotos` survives
 as the **fallback**, not the main path: it covers a venue the nightly scan has
-not reached yet (a full Kyiv cycle is ~9 days at 30 rows a night) and the Places
-sweep's own rows in a city with no curated catalog. The date card is unchanged
-and still resolves its single cover from `placeId` at assignment
-(`fetchPlacePhotoName`), which is one request per scheduled date.
+not reached yet (a full Kyiv cycle is ~10 nights at 30 **places** a night) and
+the Places sweep's own rows in a city with no curated catalog. The date card
+reads its cover from these same refs since 2026-08-23 and falls back to
+resolving one from `placeId` at assignment (`fetchPlacePhotoName`) only for a
+venue the scan has not reached — before that it hardcoded null and bought the
+answer again on every single assignment, while this column sat filled.
+
+**The "~10 nights" is only true because the cron counts PLACES.** Until
+2026-08-23 it scanned rows, so each real venue was re-fetched once per
+`universityDomain` copy and the walk also included unlaunched markets: 1712
+rows, a 57-night cycle, and `photoRefs` reaching **0 of 275 Kyiv places** while
+landing on 90 rows in cities nobody can match in. See `venue-revalidation.ts`.
 
 **An empty Places answer never overwrites stored refs.** An absent `photos`
 field is indistinguishable from a partial 200, so the cron treats empty as "no
 news" — the same rule it already applies to `rating`/`priceLevel`. Writing one
-through would blank a venue on the board until its next scan, i.e. ~9 days,
+through would blank a venue on the board until its next scan, i.e. ~10 nights,
 against the 5 minutes the in-process cache held an empty answer for.
 
 **There is no uniqueness constraint on this table, and the seeder writes one row
 per `universityDomain`** — Kyiv holds 538 active rows for 127 real venues, five
 copies of each (90 premium rows = 18 venues), identical in every field a reader
-uses (verified against production: 0 drift across 111 duplicated venues; only
-`lastVerifiedAt` differs, since the cron refreshes copies one at a time).
-**Every reader must therefore dedupe by `placeId`.** `venue-intent-v2.ts` has
+uses (verified against production: 0 drift across 111 duplicated venues).
+**Every reader must therefore dedupe by `placeId`** — including the WRITER:
+`venue-revalidation.ts` did not until 2026-08-23, which is what made copies
+drift on `lastVerifiedAt` at all (it refreshed them one at a time) and cost one
+Places request per copy. It now settles every copy in a single `updateMany`, so
+in steady state the copies agree on that column too.
+`venue-intent-v2.ts` has deduped
 since it shipped; `services/venue-change.ts` did not until 2026-08-03, and the
 result was a board showing the same three places four times each once its scope
 moved from `universityDomain` (which took exactly one copy) to `cityKey` (which
@@ -998,7 +1010,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `0 * * * *` | UTC | Auto-unsuspend elapsed Tier-2 suspensions | `services/match-engine.ts` (`autoUnsuspendElapsed`) |
 | `30 3 * * *` | Europe/Kyiv | GDPR Article 9 selfie scrub (90 d post-`verifiedAt`) | `services/selfie-retention.ts` |
 | `45 3 * * *` | Europe/Kyiv | Data retention: OTP challenges (7 d), dead refresh sessions (30 d past unusable), proxy-chat messages (90 d), chat-timeline events (30 d), **client funnel events (90 d, by `receivedAt` — `occurredAt` is the device clock)**, plus **orphaned `bot_sessions`** — rows whose Telegram chat id matches no user, untouched for 7 d (a raw anti-join: that table has no relation to `users`, so nothing cascades into it; the age floor is what stops it racing a chat mid-`/start`, where the session legitimately exists before the user row). Batched ≤1000 rows/table/tick | `workers/retention.ts` (`retentionTick`) |
-| `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours refresh, ≤30 rows/tick) | `services/venue-revalidation.ts` |
+| `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours/photo refresh). **≤30 distinct PLACES/tick — not rows** (`VENUE_REVALIDATION_BATCH_SIZE`): one Place Details request settles every per-domain copy via `updateMany`, and only launched markets (`SUPPORTED_CITY_KEYS`) are scanned. **Not scheduled under `DEMO_MODE_ENABLED`** — the demo carried a full second catalog and paid an identical nightly bill for a deployment with no date traffic | `services/venue-revalidation.ts` |
 | `0 * * * *` (only when `TICKET_FEATURE_ENABLED`) | UTC | Date Ticket expiry: retry durable Stars refunds, reverse stalled `partial` payments, then open the Calendar for free | `workers/ticket-expiry.ts` → `handlers/matching/ticket-gate.ts` |
 | `0 * * * *` (only when `REMATCH_FEATURE_ENABLED`) | UTC | Rematch refunds: retry `refund_failed` rows and refund purchases abandoned mid-run (`processing` past 5 min). What makes "never keep money without delivering a match" durable | `services/rematch-refund.ts` (`sweepRematchRefunds`) |
 | `0 * * * *` (only when `VENUE_CHANGE_FEATURE_ENABLED`) | UTC | Venue-change refunds: retry `refund_failed` rows and refund purchases abandoned mid-settle (`processing` past 5 min). The twin of the rematch sweep for §3.7b | `services/venue-change-refund.ts` (`sweepVenueChangeRefunds`) |
