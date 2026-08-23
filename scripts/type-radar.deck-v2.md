@@ -238,8 +238,8 @@ casual, а не как офис. Локация та же, что у fs3 — э�
 одежда и украшения. Прямая противоположность ошибке v1, где «edgy» был
 чёрной футболкой, то есть отсутствием, а не образом.
 
-**Промпт.** `a 24-year-old Eastern European woman with a dark brown
-chin-length bob, wearing a black leather biker jacket over a plain top with
+**Промпт.** `a 24-year-old Eastern European woman with a dark chin-length
+bob, wearing a black leather biker jacket over a plain top with
 silver rings and layered necklaces and ankle boots, standing in a wine bar in
 the evening with warm low light behind her,` + общий хвост.
 
@@ -264,7 +264,7 @@ street in the evening with warm shop lights blurred behind her,` + общий х
 (та же, что у fp3). Это самая полезная пара деки: одно место, противоположный
 архетип, противоположное тату.
 
-**Промпт.** `a 24-year-old Eastern European woman with long dark brown hair,
+**Промпт.** `a 24-year-old Eastern European woman with long dark hair,
 wearing a dark oversized overshirt with layered chains and chunky boots,
 standing in a bright modern café with wood and concrete blurred behind her,`
 + общий хвост.
