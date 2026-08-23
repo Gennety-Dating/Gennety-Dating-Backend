@@ -366,10 +366,13 @@ export interface VenueLikeSnapshot {
 /**
  * Fill in a snapshot's cover photo from its `placeId` when it has none.
  *
- * Curated board rows carry no imagery, so without this a settled change wrote
- * `venueChangePhotoName: null` and the new date card lost its venue photo —
- * the same gap the auto-assign path had. One Places request, only at the point
- * a venue actually becomes THE venue. Never throws.
+ * A curated snapshot normally arrives with one already — the catalog reads
+ * `photoRefs` off the row (`venue-change.ts`), which the nightly re-validation
+ * cron fills. So this is the fallback for a venue the scan has not reached yet:
+ * without it a settled change wrote `venueChangePhotoName: null` and the new
+ * date card lost its venue photo, the same gap the auto-assign path had. One
+ * Places request, only at the point a venue actually becomes THE venue, and
+ * only when the row could not answer. Never throws.
  */
 async function withCoverPhoto(v: VenueLikeSnapshot): Promise<VenueLikeSnapshot> {
   if (v.photoRef || !v.placeId) return v;

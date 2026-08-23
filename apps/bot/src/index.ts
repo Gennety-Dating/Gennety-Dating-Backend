@@ -765,22 +765,41 @@ bot.start({
 
     // Curated venue re-validation — deactivate closed/degraded venues and
     // refresh opening hours against Google Places.
-    cron.schedule(
-      VENUE_REVALIDATION_CRON_SCHEDULE,
-      guardedTick("venue-revalidation", () =>
-        venueRevalidationTick().then((r) => {
-          if (r.scanned > 0) {
-            console.log(
-              `[venue-revalidation] scanned=${r.scanned} deactivated=${r.deactivated} refreshed=${r.refreshed} failed=${r.failed}`,
-            );
-          }
-        }),
-      ),
-      { timezone: CRON_TIMEZONE },
-    );
-    console.log(
-      `[cron] Venue re-validation scheduled: "${VENUE_REVALIDATION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
-    );
+    //
+    // Third demo-only cron suppression, alongside drop matching and the
+    // no-match notice above, and the reasoning is cost rather than correctness:
+    // the demo carries its own full catalog (~1200 active rows) and was paying a
+    // second, identical Google bill every night to keep it fresh — for a
+    // deployment that has had one match in its entire life, already completed,
+    // and no date traffic at all. Code-owned rather than an env schedule so it
+    // cannot be silently re-inherited: the demo `.env` is generated as
+    // production's plus `.env.demo`, and anything that file does not name comes
+    // across on its own, which is exactly how this was running unnoticed.
+    // Accepted tradeoff (founder decision 2026-08-23, DECISIONS.md): the demo
+    // catalog slowly rots and may show a venue that has since closed — invisible
+    // in a walkthrough, and cheaper than the bill.
+    if (DEMO_MODE_ENABLED) {
+      console.log("[cron] Venue re-validation NOT scheduled (demo mode)");
+    } else {
+      cron.schedule(
+        VENUE_REVALIDATION_CRON_SCHEDULE,
+        guardedTick("venue-revalidation", () =>
+          venueRevalidationTick().then((r) => {
+            if (r.scanned > 0) {
+              // `scanned` counts distinct PLACES (= Places requests), not rows:
+              // one request settles all ~5 per-domain copies of a venue.
+              console.log(
+                `[venue-revalidation] scanned=${r.scanned} deactivated=${r.deactivated} refreshed=${r.refreshed} failed=${r.failed}`,
+              );
+            }
+          }),
+        ),
+        { timezone: CRON_TIMEZONE },
+      );
+      console.log(
+        `[cron] Venue re-validation scheduled: "${VENUE_REVALIDATION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+      );
+    }
   },
 });
 

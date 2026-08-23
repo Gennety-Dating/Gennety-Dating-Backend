@@ -67,12 +67,21 @@ export interface CuratedVenueRow {
   utcOffsetMinutes: number | null;
   openingHours: RegularOpeningHours | null;
   /**
-   * Stable Google Places id. Curated rows store no imagery of their own, so
-   * this is what `resolveVenue` uses to pull the venue's cover photo at
-   * assignment time (see `fetchPlacePhotoName`). Null for rows seeded without
-   * one — those simply get no photo.
+   * Stable Google Places id. What `resolveVenue` falls back to when the row
+   * carries no {@link photoRefs} yet, to pull a cover photo at assignment time
+   * (see `fetchPlacePhotoName`). Null for rows seeded without one — those
+   * simply get no photo.
    */
   placeId: string | null;
+  /**
+   * Photo resource names the nightly re-validation cron already wrote onto this
+   * row. Reading them here is what makes the cover FREE for a scanned venue:
+   * before 2026-08-23 this file hardcoded `photoName: null` and then paid a
+   * Place Details request per assignment, even though the answer was sitting in
+   * the column. Empty means "the scan has not reached this row yet", which is
+   * the one case that still costs a lookup.
+   */
+  photoRefs?: string[];
 }
 
 export interface ResolveVenueInput {
@@ -230,16 +239,28 @@ export function rankCuratedVenues(
 // DB-backed pick + orchestrator
 // ---------------------------------------------------------------------------
 
-function rowToVenue(row: CuratedVenueRow): Venue {
+/**
+ * Map a curated row to the shared `Venue` shape.
+ *
+ * Exported for a direct unit test, the same reason `rankCuratedVenues` is:
+ * reaching it through `pickCuratedVenue` would mean mocking Prisma in a file
+ * that deliberately touches neither the DB nor Places, and the one line worth
+ * pinning here (the cover coming off the row) is pure mapping.
+ */
+export function rowToVenue(row: CuratedVenueRow): Venue {
   return {
     name: row.name,
     address: row.address,
     googleMapsUri: row.googleMapsUri,
     placeId: row.placeId,
     source: "curated",
-    // Resolved from `placeId` by `resolveVenue` below — curated rows store no
-    // imagery, and Places is the single source for it.
-    photoName: null,
+    // Read straight off the row when the nightly re-validation cron has already
+    // resolved it. `resolveVenue` below only pays a Place Details request when
+    // this is still null, i.e. for a venue the scan has not reached — which is
+    // the whole reason `photoRefs` is written in the first place. It was being
+    // written and never read: this file hardcoded null and then bought the same
+    // answer again on every assignment.
+    photoName: row.photoRefs?.[0] ?? null,
     // Curated rows carry no Places editorial summary / rating; expose the
     // operator category so the blurb still has an honest grounding fact, and
     // let it fall back to the match's requested vibe for the rest.
@@ -277,6 +298,7 @@ export async function pickCuratedVenue(
       utcOffsetMinutes: true,
       openingHours: true,
       placeId: true,
+      photoRefs: true,
     },
   });
   if (rows.length === 0) return null;
@@ -311,9 +333,12 @@ export async function resolveVenue(
 
   const curated = await pickCurated(input);
   if (curated) {
-    // Curated rows store no imagery, so pull the venue's Google cover photo
-    // once, here, at assignment. Without this the date card renders its plain
-    // gradient for every curated pick — which is the common path.
+    // The cover normally arrives free: `rowToVenue` reads `photoRefs[0]` off the
+    // row, which the nightly re-validation cron fills. `??` short-circuits, so
+    // the Places request below runs ONLY for a venue the scan has not reached
+    // yet — a new row, or one whose scan is still pending. Without a cover of
+    // some kind the date card falls back to its plain gradient, which is what
+    // this fallback exists to prevent.
     return {
       ...curated,
       photoName:

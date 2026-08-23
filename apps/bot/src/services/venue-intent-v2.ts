@@ -837,7 +837,10 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       name: row.name, address: row.address, lat: row.lat, lng: row.lng,
       mapsUri: row.googleMapsUri, source: "curated" as const,
       category: row.category as VenueCategory,
-      placeId: row.placeId, photoName: null,
+      // Cover read straight off the row — the nightly re-validation cron writes
+      // it. Null only for a row the scan has not reached, which is the one case
+      // that still costs the Place Details request below (`!chosen.photoName`).
+      placeId: row.placeId, photoName: row.photoRefs?.[0] ?? null,
     }];
   });
   // No `.slice()` here on purpose. It used to cut the eligible set to 20 by
@@ -984,11 +987,11 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
 
   const chosen = best ? deduped.find((row) => row.rank.id === best.candidate.id) ?? null : null;
   const mode = venueIntentMode(matchId) === "shadow" ? "shadow" : "live";
-  // Curated candidates store no imagery of their own, so the winner's cover
-  // photo is pulled from Places by its stable `placeId` — one request, only for
-  // the venue we actually assign. Done here, while the "picking the best spot"
-  // shimmer is still up, so the wait is covered. Skipped in shadow mode (which
-  // assigns nothing) and for Places rows (already photographed by the search).
+  // The winner's cover normally comes free off the row (`photoRefs`, written by
+  // the nightly cron), so this pays a Places request only for a venue the scan
+  // has not reached yet. Done here, while the "picking the best spot" shimmer is
+  // still up, so the wait is covered. Skipped in shadow mode (which assigns
+  // nothing) and for Places rows (already photographed by the search).
   if (chosen && mode === "live" && !chosen.photoName) {
     chosen.photoName = await fetchPlacePhotoName(apiKey, chosen.placeId);
   }

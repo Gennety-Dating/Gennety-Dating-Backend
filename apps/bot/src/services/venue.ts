@@ -658,11 +658,20 @@ const PLACE_DETAILS_FIELD_MASK = [
   "utcOffsetMinutes",
   "priceLevel",
   "primaryType",
-  "editorialSummary",
-  // Carried here rather than fetched separately. Place Details is billed by the
-  // most expensive field requested, not by their sum, so folding `photos` into
-  // a request that already asks for `rating`/`regularOpeningHours` costs at
-  // most what that request already cost — and saves the whole second lookup
+  // NOTE: `editorialSummary` is deliberately NOT here (removed 2026-08-23 —
+  // DECISIONS.md). Place Details bills at the highest tier any requested field
+  // belongs to, and that one field was the ONLY thing in this mask above the
+  // rating/hours tier — so it set the price of every single nightly request on
+  // its own. What it buys is Google's own blurb, which is near-static: the value
+  // written when a venue is seeded stands, and re-asking for it every night at a
+  // higher tier bought nothing. Venues found live through search still carry it
+  // (`FIELD_MASK` is untouched, founder decision), so the date-card blurb is
+  // unaffected. Do not re-add it here without re-checking Google's SKU table.
+  //
+  // Carried here rather than fetched separately. Since billing is by the most
+  // expensive field and not by their sum, folding `photos` into a request that
+  // already asks for `rating`/`regularOpeningHours` costs at most what that
+  // request already cost — and saves the whole second lookup
   // `fetchPlacePhotoNames` used to make per venue per process. That holds
   // whichever SKU tier `photos` belongs to, so it needs no pricing assumption.
   "photos",

@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   rankCuratedVenues,
   resolveVenue,
+  rowToVenue,
   priorityWeight,
   isValidVenueCategory,
   isVenueOpenAt,
@@ -261,6 +262,32 @@ describe("resolveVenue", () => {
     delete process.env.PLACES_API_KEY;
   });
 
+  // The complement of the test above, and the cheaper path: once the nightly
+  // re-validation cron has written `photoRefs` onto the row, the cover is free.
+  // Before 2026-08-23 the cron wrote that column and nothing read it, so this
+  // request was bought again on every single assignment.
+  it("does NOT buy a cover the row already carries", async () => {
+    process.env.PLACES_API_KEY = "k";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const venue = await resolveVenue(input(), {
+      pickCurated: async () => ({
+        name: "Scanned Spot",
+        address: "3 Scanned Rd",
+        googleMapsUri: null,
+        placeId: "c10",
+        photoName: "places/c10/photos/from-the-row",
+      }),
+      pickPlaces: vi.fn(),
+    });
+
+    expect(venue.photoName).toBe("places/c10/photos/from-the-row");
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    delete process.env.PLACES_API_KEY;
+  });
+
   it("keeps the curated pick when the cover lookup fails", async () => {
     process.env.PLACES_API_KEY = "k";
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("places down")));
@@ -302,6 +329,36 @@ describe("resolveVenue", () => {
       keywords: ["jazz"],
       radiusMeters: 2000,
     });
+  });
+});
+
+describe("rowToVenue", () => {
+  const row = (over: Partial<CuratedVenueRow> = {}): CuratedVenueRow => ({
+    name: "Row Cafe",
+    address: "1 Row St",
+    lat: 50.45,
+    lng: 30.52,
+    googleMapsUri: null,
+    category: "cafe",
+    priority: 1,
+    vibeTags: [],
+    utcOffsetMinutes: null,
+    openingHours: null,
+    placeId: "p1",
+    ...over,
+  });
+
+  // This is the line that stops the cover being re-bought on every assignment:
+  // the nightly cron writes `photoRefs`, and until 2026-08-23 nothing read it.
+  it("takes the cover straight off the row's photoRefs", () => {
+    const venue = rowToVenue(row({ photoRefs: ["places/p1/photos/a", "places/p1/photos/b"] }));
+    expect(venue.photoName).toBe("places/p1/photos/a"); // Google's order is cover-first
+  });
+
+  it("leaves the cover null for a row the cron has not scanned yet", () => {
+    // The one case that still costs a Place Details request in `resolveVenue`.
+    expect(rowToVenue(row({ photoRefs: [] })).photoName).toBeNull();
+    expect(rowToVenue(row()).photoName).toBeNull();
   });
 });
 
