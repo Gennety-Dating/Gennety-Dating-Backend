@@ -36,6 +36,19 @@
  *
  * ## Line breaks are measured, not eyeballed
  *
+ * ## Two languages, one typography (2026-08-23)
+ *
+ * Every export below is keyed by language. What is NOT keyed is the design:
+ * one type size, one tracking, one margin, one rise, one anaphora, and the same
+ * five cards in the same order at the same lengths. A localisation that let the
+ * English act find its own rhythm would be a second design, and the film has one.
+ *
+ * The English copy was measured the same way the Ukrainian was — by summing the
+ * font's own advance widths, tracking included — and the numbers are on
+ * `TELEGRAM`, which is the only line the box could not simply take.
+ *
+ * ## Line breaks are measured, not eyeballed
+ *
  * Unbounded 700 is a wide face: «тобі не треба завантажувати» is **18.6 em**, so
  * as one line it caps at 49 px inside a 936 px box — not "big bold text" on a
  * 1080-wide frame by any reading. Every break below was chosen by summing the
@@ -43,6 +56,8 @@
  * at 10.16 em, which is what sets `TYPE_SIZE`. **Re-measure before rewording**:
  * a line that overflows does not wrap gracefully here, it breaks the layout.
  */
+
+import type {Lang} from "./timeline";
 
 /** One revealed group. A part is one or more lines that arrive together. */
 export type Part = {
@@ -130,22 +145,35 @@ const FRAME_H = 1920;
  * The repeated half. Identical on both cards by construction rather than by
  * two authors agreeing — see the anaphora note above.
  */
-const SETUP = ["Щоб бути", "щасливим,"] as const;
+const SETUP_UK = ["Щоб бути", "щасливим,"] as const;
 
-/** The world hands over here, across the same 14 frames the mark used to take. */
-export const TITLE_FROM = 1309;
+/**
+ * The English half, and it carries the same weight for the same reason: it is
+ * byte-identical on both cards, and the two cards' `anchorTop` puts it in
+ * exactly the same place on screen. Measured at 291.6 px and 368.5 px in a
+ * 936 px box — the shortest lines in the act, which is what a setup should be.
+ */
+const SETUP_EN = ["To be", "happy,"] as const;
 
-export const SLOGANS: readonly SloganCard[] = [
+/**
+ * The world hands over here, across the same 14 frames the mark used to take.
+ *
+ * Derived rather than written down: it is `WORLD_END - OUTRO` in both languages,
+ * and the two worlds end 43 frames apart.
+ */
+export const TITLE_FROM: Record<Lang, number> = {uk: 1309, en: 1252};
+
+const SLOGANS_UK: readonly SloganCard[] = [
   {
     note:
       "The claim. Its first part waits 16 frames so it rises into a frame the " +
       "world has already left rather than over the top of the date card.",
-    from: TITLE_FROM,
+    from: TITLE_FROM.uk,
     durationInFrames: 132,
     anchorTop: true,
     fadeIn: 14,
     parts: [
-      {at: 16, lines: SETUP},
+      {at: 16, lines: SETUP_UK},
       {at: 60, lines: ["тобі не треба", "завантажувати", "застосунок", "для знайомств"]},
     ],
   },
@@ -159,7 +187,7 @@ export const SLOGANS: readonly SloganCard[] = [
     durationInFrames: 108,
     anchorTop: true,
     parts: [
-      {at: 0, lines: SETUP},
+      {at: 0, lines: SETUP_UK},
       {at: 44, lines: ["тобі треба", "їх видалити"], accent: true},
     ],
   },
@@ -173,6 +201,79 @@ export const SLOGANS: readonly SloganCard[] = [
     parts: [{at: 0, lines: ["Кожного дня", "у тебе є шанс", "на побачення"]}],
   },
 ];
+
+/**
+ * The English act. Same three cards, same lengths, same reveal frames, same
+ * single burgundy part — offset by the 57 frames the world ends earlier.
+ *
+ *     To be happy, you don't need to download a dating app.
+ *     To be happy, you need to delete them.
+ *
+ * Line breaks, measured in Unbounded 700 at 82 px with 0.03em tracking inside
+ * the 936 px box (the Ukrainian widest line, «завантажувати», is 886.7 px by
+ * the same method, so anything under that is proven):
+ *
+ *     you don't need   790.0    to delete them   786.0
+ *     to download      679.4    Every day        539.2
+ *     a dating app     681.7    is a chance      604.3
+ *     you need         485.4    for a date       536.9
+ *
+ * The claim card composes to FIVE lines where the Ukrainian one takes six —
+ * «застосунок для знайомств» is two lines of Ukrainian and one of English. It
+ * keeps its 132 frames anyway: the extra 6 frames land as hold on the punchline,
+ * which is the one place in the act that can use them, and shortening the card
+ * would have moved the turn away from the beat the founder approved.
+ *
+ * That five-vs-six also moves `SLOGAN_TOP`, which is derived from card 1 — see
+ * that constant. Both English cards still open on the same two words in the same
+ * place, which is the only thing the anchor exists to protect.
+ */
+const SLOGANS_EN: readonly SloganCard[] = [
+  {
+    note:
+      "The claim. Its first part waits 16 frames so it rises into a frame the " +
+      "world has already left rather than over the top of the date card.",
+    from: TITLE_FROM.en,
+    durationInFrames: 132,
+    anchorTop: true,
+    fadeIn: 14,
+    parts: [
+      {at: 16, lines: SETUP_EN},
+      {at: 60, lines: ["you don't need", "to download", "a dating app"]},
+    ],
+  },
+  {
+    note:
+      "The turn, and the only burgundy in the act. The card before it goes to " +
+      "black completely first — the founder asked for the text to disappear and " +
+      "be written again, and that blink is what makes the repeat land as a " +
+      "second sentence rather than as a line being edited in place.",
+    from: 1389,
+    durationInFrames: 108,
+    anchorTop: true,
+    parts: [
+      {at: 0, lines: SETUP_EN},
+      {at: 44, lines: ["you need", "to delete them"], accent: true},
+    ],
+  },
+  {
+    note:
+      "The promise, and the only card with no pause in it — one part, three " +
+      "lines. «Every day is a chance for a date» is tighter than a literal " +
+      "rendering of «Кожного дня у тебе є шанс на побачення», and tighter is " +
+      "what keeps it to three short lines: it is a statement of fact rather " +
+      "than a construction, so building it in halves would put a beat where the " +
+      "sentence has none.",
+    from: 1505,
+    durationInFrames: 90,
+    parts: [{at: 0, lines: ["Every day", "is a chance", "for a date"]}],
+  },
+];
+
+export const SLOGANS: Record<Lang, readonly SloganCard[]> = {
+  uk: SLOGANS_UK,
+  en: SLOGANS_EN,
+};
 
 /**
  * Where the first line sits on an ANCHORED card, in px from the top.
@@ -196,10 +297,18 @@ export const SLOGANS: readonly SloganCard[] = [
  *
  * The promise card is NOT anchored. It shares no line with anything, so there
  * is no repeat to protect, and anchoring it would leave it well above centre.
+ *
+ * **Per language, for the same reason it is derived at all.** Ukrainian card 1
+ * composes to six lines and English card 1 to five, so one shared constant would
+ * put one of the two acts off its own centre by half a line — reintroducing, in
+ * the other direction, exactly the 13px drift this derivation was written to
+ * kill.
  */
-const ANCHOR_LINES = SLOGANS[0].parts.reduce((n, part) => n + part.lines.length, 0);
+const anchorLines = (lang: Lang) =>
+  SLOGANS[lang][0].parts.reduce((n, part) => n + part.lines.length, 0);
 
-export const SLOGAN_TOP = Math.round((FRAME_H - ANCHOR_LINES * TYPE_SIZE * LINE_HEIGHT) / 2);
+export const sloganTop = (lang: Lang): number =>
+  Math.round((FRAME_H - anchorLines(lang) * TYPE_SIZE * LINE_HEIGHT) / 2);
 
 /**
  * The Telegram card. Wordmark, one line, and the product being opened.
@@ -218,27 +327,84 @@ export const SLOGAN_TOP = Math.round((FRAME_H - ANCHOR_LINES * TYPE_SIZE * LINE_
  * this number and, through `MARK`, the length of the film. Working it out by
  * hand is how a card ends up cutting its own footage off two frames early.
  */
-const TG_CLIP_FRAMES = 124; // public/footage/tg-open.mp4 — ffprobe nb_frames
+const TG_CLIP_FRAMES: Record<Lang, number> = {
+  uk: 124, // public/footage/tg-open.mp4     — ffprobe nb_frames
+  en: 100, // public/footage/en/tg-open.mp4  — ffprobe nb_frames
+};
 const TG_TAIL = 14; // beat after the app lands, before the mark takes over
 
-export const TELEGRAM = {
-  from: 1638,
-  durationInFrames: 24 + TG_CLIP_FRAMES + TG_TAIL,
-  line: "Вже в Telegram",
-  /** Clip under public/footage/. IMG_2775, dead air cut, 1.35×. */
-  src: "tg-open",
-  /** Local frame the handset rises at — and the clip starts with it. */
-  phoneAt: 24,
-  /** Screen width in px. Small enough to sit under the wordmark and the line. */
-  screenWidth: 348,
-  note:
-    "The proof of the line above it: Telegram opens, Gennety is the chat at the " +
-    "top, Start, and the app takes over. It shipped at 2.4× and the founder read " +
-    "it as far too fast; the cause was that 3.96s of the 8.93s source is a frozen " +
-    "screen, so speed was dragging the six moments that carry the beat along with " +
-    "it. The holds are cut and the rest runs at 1.35× — same screen time to within " +
-    "half a second, twice the action.",
-} as const;
+export const TELEGRAM: Record<
+  Lang,
+  {
+    from: number;
+    durationInFrames: number;
+    line: string;
+    src: string;
+    phoneAt: number;
+    screenWidth: number;
+    note: string;
+  }
+> = {
+  uk: {
+    from: 1638,
+    durationInFrames: 24 + TG_CLIP_FRAMES.uk + TG_TAIL,
+    line: "Вже в Telegram",
+    /** Clip under public/footage/. IMG_2775, dead air cut, 1.35×. */
+    src: "tg-open",
+    /** Local frame the handset rises at — and the clip starts with it. */
+    phoneAt: 24,
+    /** Screen width in px. Small enough to sit under the wordmark and the line. */
+    screenWidth: 348,
+    note:
+      "The proof of the line above it: Telegram opens, Gennety is the chat at the " +
+      "top, Start, and the app takes over. It shipped at 2.4× and the founder read " +
+      "it as far too fast; the cause was that 3.96s of the 8.93s source is a frozen " +
+      "screen, so speed was dragging the six moments that carry the beat along with " +
+      "it. The holds are cut and the rest runs at 1.35× — same screen time to within " +
+      "half a second, twice the action.",
+  },
+  en: {
+    from: 1581,
+    durationInFrames: 24 + TG_CLIP_FRAMES.en + TG_TAIL,
+    /**
+     * **"Now on Telegram", not the literal "Already on Telegram", and the
+     * reason is a measurement rather than a preference.**
+     *
+     * "Already on Telegram" is 13.64 em — **1118.6 px** at 82 px with this
+     * act's tracking. That is not merely outside the 936 px box the slogan
+     * cards use, it is wider than the 1080 px FRAME, and this card sets
+     * `whiteSpace: nowrap`, so it would be clipped at both ends rather than
+     * wrapping to give the mistake away. Fitting it would need ~68 px type,
+     * i.e. this card alone at its own size — and the note on `TYPE_SIZE` says
+     * why four cards at four sizes reads as four designs.
+     *
+     * "Now on Telegram" measures 937.6 px, which leaves 71.2 px each side: the
+     * same margin as the slogan cards to within a pixel, by arithmetic rather
+     * than by luck. It says the same thing in fifteen characters.
+     *
+     * If the founder wants the literal line back it costs this card its size,
+     * and that is their call rather than this file's — raised, not decided.
+     */
+    line: "Now on Telegram",
+    /** Clip under public/footage/en/. IMG_2802, chat list elided, 1.0×. */
+    src: "en/tg-open",
+    phoneAt: 24,
+    screenWidth: 348,
+    note:
+      "The proof of the line above it: Telegram opens, the Gennety chat, Start, " +
+      "and the app takes over. **Not sped up**, which is the one place this card " +
+      "departs from the Ukrainian one: 4.46s of the 8.23s source is a frozen " +
+      "screen — 54%, against 44% there — so cutting the holds already does the " +
+      "whole job and leaves 3.1s of pure action. The Ukrainian version still had " +
+      "5s to compress after its holds went, and the founder's note on the first " +
+      "cut of it was that it read too fast.\n\n" +
+      "The chat LIST is elided rather than shown, and that is not a style " +
+      "choice: three of its rows carry Russian text and one is the founder's own " +
+      "alerts bot printing a live signup with a real person's name, age, gender " +
+      "and city. See scripts/extract-hero-footage-en.sh for the full note and " +
+      "for what a re-record would have to fix.",
+  },
+};
 
 /**
  * The mark, unchanged, now the last card of the act rather than a lone outro.
@@ -250,9 +416,19 @@ export const TELEGRAM = {
  */
 const MARK_OVERLAP = 14;
 
-export const MARK: {from: number; durationInFrames: number} = {
-  from: TELEGRAM.from + TELEGRAM.durationInFrames - MARK_OVERLAP,
+const mark = (lang: Lang) => ({
+  from: TELEGRAM[lang].from + TELEGRAM[lang].durationInFrames - MARK_OVERLAP,
   durationInFrames: 96,
+  /** Roboto 34 at 0.14em — 452.7 px for the English line, 438.3 for the Ukrainian. */
+  line: lang === "uk" ? "Твій AI-метчмейкер" : "Your AI matchmaker",
+});
+
+export const MARK: Record<Lang, {from: number; durationInFrames: number; line: string}> = {
+  uk: mark("uk"),
+  en: mark("en"),
 };
 
-export const HERO_DURATION_IN_FRAMES = MARK.from + MARK.durationInFrames; // 1882 = 62.7s
+export const HERO_DURATION_IN_FRAMES: Record<Lang, number> = {
+  uk: MARK.uk.from + MARK.uk.durationInFrames, // 1882 = 62.7s
+  en: MARK.en.from + MARK.en.durationInFrames, // 1801 = 60.0s
+};

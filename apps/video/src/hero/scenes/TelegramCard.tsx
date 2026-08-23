@@ -10,6 +10,7 @@ import {
 import {titleTransform} from "../camera";
 import {crossfade, ease} from "../motion";
 import {asset, INK, SOFT} from "../theme";
+import type {Lang} from "../timeline";
 import {RISE, TELEGRAM, TYPE_SIZE, TYPE_TRACKING} from "../titles";
 import {Iphone} from "../ui/Iphone";
 
@@ -32,11 +33,14 @@ import {Iphone} from "../ui/Iphone";
  * and this shot's whole job is to say *this is a real thing you can open right
  * now*.
  *
- * The clip is 2.4× — sped in extraction, not here (`titles.ts` → TELEGRAM).
+ * The clip's speed is baked into EXTRACTION, not applied here (`titles.ts` →
+ * TELEGRAM): 1.35× for the Ukrainian cut, 1.0× for the English one, which needs
+ * none because its source is 54% frozen and cutting the holds does the whole job.
  */
-export const TelegramCard: React.FC = () => {
+export const TelegramCard: React.FC<{language: Lang}> = ({language}) => {
   const frame = useCurrentFrame();
-  const duration = TELEGRAM.durationInFrames;
+  const card = TELEGRAM[language];
+  const duration = card.durationInFrames;
 
   // In: linear, over the promise card still lit underneath — same reasoning as
   // every other handover in the film (`GennetyHero`).
@@ -51,7 +55,7 @@ export const TelegramCard: React.FC = () => {
 
   const word = rise(8);
   const line = rise(16);
-  const phone = rise(TELEGRAM.phoneAt);
+  const phone = rise(card.phoneAt);
 
   return (
     <AbsoluteFill
@@ -86,7 +90,7 @@ export const TelegramCard: React.FC = () => {
           transform: `translateY(${(1 - line) * 18}px)`,
         }}
       >
-        {TELEGRAM.line}
+        {card.line}
       </div>
 
       {/*
@@ -99,16 +103,16 @@ export const TelegramCard: React.FC = () => {
       <div
         style={{
           position: "relative",
-          width: bodyWidth(TELEGRAM.screenWidth),
-          height: bodyHeight(TELEGRAM.screenWidth),
+          width: bodyWidth(card.screenWidth),
+          height: bodyHeight(card.screenWidth),
           opacity: phone,
           transform: `translateY(${(1 - phone) * 30}px)`,
         }}
       >
-        <Iphone screenWidth={TELEGRAM.screenWidth} glow={0.55}>
-          <Sequence from={TELEGRAM.phoneAt} name="tg-open">
+        <Iphone screenWidth={card.screenWidth} glow={0.55}>
+          <Sequence from={card.phoneAt} name="tg-open">
             <OffthreadVideo
-              src={asset(`footage/${TELEGRAM.src}.mp4`)}
+              src={asset(`footage/${card.src}.mp4`)}
               style={{
                 position: "absolute",
                 inset: 0,

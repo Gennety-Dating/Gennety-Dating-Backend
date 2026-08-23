@@ -622,3 +622,198 @@ the brief rules out.
    remove the only compromise in the film's framing.
 7. **`Gennety DEMO`, not production.** Cropped out of frame, but worth knowing
    before this is described as a production capture anywhere public.
+
+---
+
+## I. The English cut (2026-08-23)
+
+`GennetyHeroEnglish` — 1801 frames, 60.0 s, 1080×1920. **The same film**: same
+eighteen beats in the same order, the same two dissolves, the same six-hold
+dolly, the same title act. It is a localisation of the *edit*, not a second
+film, and the test applied throughout was: if a beat exists here that the
+Ukrainian cut does not have, it is wrong.
+
+It has to be re-shot rather than re-lettered because §0's premise holds in both
+directions — every screen in this film is a capture of the running product, and
+a capture cannot be translated.
+
+### I.1 Sources
+
+Seven recordings, all 576×1280 @ 30 fps — the same geometry as the Ukrainian
+sources, so `cut()` applies to all of them and `cut_scaled()` (which existed
+only for the 576×1248 `IMG_2730`) is not needed. They live in
+`~/Desktop/EN mp4`, outside the repo.
+
+| File | Length | What it carries |
+|---|---|---|
+| `IMG_2790` | 139 s | onboarding: Telegram chat → the five basics → profiling Q&A |
+| `IMG_2791` | 26 s | the ideal-Friday answer, typed, sent, and "Thinking…" |
+| `IMG_2794` | 54 s | the match decision → It's a match → Date Ticket → Ticket secured |
+| `IMG_2795` | 67 s | date planning → Pick a date → 17:00 → locked in → the map |
+| `IMG_2796` | 76 s | the venue act end to end → the finished date card |
+| `IMG_2798` | 35 s | the Type Radar ("Choose your type") → All set |
+| `IMG_2802` | 8 s | home screen → Telegram → Gennety → Start → the Mini App |
+
+The Dynamic Island profile was re-measured rather than assumed: the red
+recording dot is at **x 178–193**, the expanded island **x 160–412 at y 44**,
+the status strip RGB ~(3,3,3) on Mini App screens and 63–72 mean luminance on
+the Telegram and home screens, and the erase's sample columns x 146 / x 427 sit
+outside the island in every case. That is the Ukrainian profile exactly, so
+`island_erase()` transfers verbatim. Verified on the output: no recording dot
+survives on any frame of any clip.
+
+### I.2 Where the English cut differs, and why
+
+Four places. Every one of them is the footage forcing the change, not a
+preference, and each is written on the shot in `timeline.ts`.
+
+1. **`basics-preference` is 43 frames against 84.** "Who do you want to meet?"
+   settles at 18.85 s of `IMG_2790` and is replaced at 20.33 s. There is no more
+   of it. It is not stretched and not looped — both would be visible on two
+   grids of photographs — and the 41 frames went to `basics-height` and
+   `basics-age`, which have the source to carry them. The alternative, dropping
+   the shot entirely and letting the gender question carry the preference beat,
+   costs the act one of its few frames that is not type on black.
+
+2. **The Type Radar is three cards in two shots**, against four in one — the
+   founder's cap of 2026-08-23: *«точно не больше четырёх. Используй либо первые
+   две, либо последние две»*. The source holds twelve. Cards 3–10 do not appear,
+   and the rule excludes for free the mirror selfie with the phone across the
+   frame at card 4 — the exact shot §D records the founder vetoing by hand in
+   the Ukrainian cut. Three ship rather than four because fewer is explicitly
+   allowed and the cap exists to make this act shorter.
+
+   Two clips, not one splice: the head and the tail are eleven seconds apart in
+   the source, and joining them inside a swipe animation would ask the viewer to
+   believe a continuity that is not there. Both windows close on the *positive*
+   "What caught your eye?" tags, for the reason §E gives.
+
+3. **The Date Ticket act is deliberately absent.** `IMG_2794` runs on past the
+   decision into It's a match, Claim your Date Ticket, the ticket card and
+   Ticket secured, and `IMG_2795` opens on "You're in / Both tickets are
+   secured". None of it exists in the Ukrainian cut, so none of it is in this
+   one; the cut from "Yes, I'm going" to the calendar elides it exactly the way
+   the Ukrainian cut elides two seconds of dead hold. Recorded in `DECISIONS.md`
+   so a later session does not "discover" the missing beat and add it back. If
+   it is ever wanted it is one shot from `IMG_2794` at ~25–30 s, ~2 s of runtime.
+
+4. **`date-card` is 96 frames against 78 — the one shot that is longer.**
+   §H.0's whole problem is absent here: the calendar locks **Wednesday 26 August
+   17:00** and the card says **Wed 26 August at 17:00**, from the same run. So
+   the film still states a date exactly once, and the card no longer has to be
+   trimmed to keep it that way. The shot opens on the card's own date line and
+   its three actions (Open in Maps / Change venue / Share this card) — the
+   things §H.0 had to spend — and the view then rises to *Error 404: Chat not
+   found. Try real life.* with the venue block under it.
+
+The world therefore ends at 1266 rather than 1323 — 42.2 s against 44.1 s — and
+most of the 1.9 s is the radar, which is what the founder asked for.
+
+### I.3 The Telegram card, and the one thing in it that must not ship
+
+`IMG_2802`'s chat list is **elided**, not shown, and this is not a style
+decision. Checked by rendering the frame at the 348 px the card actually
+delivers rather than guessing at full size: three rows carry Russian text, and
+one of them is the founder's own alerts bot printing a live signup with a real
+person's name, age, gender, sought gender and city. The same rows name internal
+tooling — `Gennety dev`, `Gennety Playbook`, `gennety alerts`,
+`my Hermes Workspace`. No amount of "nobody reads it at that size" makes that
+publishable in a marketing film.
+
+The clip therefore cuts from the home screen straight into the Gennety chat.
+The cost, stated: the Ukrainian card shows *Gennety is the chat at the top*, and
+this one does not. Recovering it needs a fifteen-second re-record with a
+publishable list — a clean account, or the internal chats archived. **Muting
+them is not enough; muted chats still show their last message.**
+
+Two smaller things:
+
+- **The tail is cut.** The recording continues past the app taking over into
+  "Your phone number" and an iOS "Share Phone Number?" system alert. A permission
+  dialog is not a payoff, and it would end a Gennety film on the one frame in it
+  that belongs to Apple. The clip ends on "Synchronizing".
+- **It is not sped up**, where the Ukrainian clip is 1.35×. 4.46 s of the 8.23 s
+  source is a frozen screen — 54 %, against 44 % there — so cutting the holds
+  already does the whole job and leaves 3.1 s of pure action. The Ukrainian
+  source still had ~5 s to compress after its holds went, and the founder's note
+  on the first cut of it was that it read too fast.
+
+### I.4 The title act
+
+    To be happy, you don't need to download a dating app.
+    To be happy, you need to delete them.
+    Every day is a chance for a date.
+    Now on Telegram.  ·  YOUR AI MATCHMAKER
+
+Same three cards at the same lengths, the same single burgundy part, the same
+byte-identical setup on both cards, the same one type size. Line breaks measured
+in Unbounded 700 at 82 px with 0.03em tracking inside the 936 px box — the
+Ukrainian widest line, «завантажувати», is 886.7 px by the same method, so
+anything under it is proven:
+
+| line | px | | line | px |
+|---|---|---|---|---|
+| you don't need | 790.0 | | to delete them | 786.0 |
+| to download | 679.4 | | Every day | 539.2 |
+| a dating app | 681.7 | | is a chance | 604.3 |
+| you need | 485.4 | | for a date | 536.9 |
+
+The claim card composes to **five** lines where the Ukrainian one takes six
+(«застосунок для знайомств» is two lines of Ukrainian and one of English), which
+is why `sloganTop` is derived per language — one shared constant would put one
+of the two acts half a line off its own centre.
+
+### I.5 Verification
+
+- `typecheck`, `lint` — clean.
+- `pnpm probe:camera` — **both cuts pass**. English: 63 % of the world held,
+  launch at 0.78× the move's own average, zero zoom reversals, worst camera step
+  at any cut **0.96 px** of handset (Ukrainian: 1.38 px).
+- **`fadeIn` re-derived, not copied.** Every boundary was measured on the
+  extracted clips — mean luminance of the outgoing shot's last frame against the
+  incoming shot's first — and a fade put only where the step is large. Seven
+  boundaries carry one against the Ukrainian cut's nine; the venue act in
+  particular is four consecutive cuts between screens of near-identical
+  brightness and gets nothing. The table is in `timeline.ts`.
+- Measured on the finished render, the **worst mean-luminance step at any cut is
+  5.47** — below the 8–23 range the Ukrainian fades exist to fix.
+- Every cut inspected as a boundary frame pair, and the whole world swept at
+  render resolution: **no Cyrillic on any screen**, no real person's data, no
+  recording dot, no expanded island, at most three radar cards.
+- The Ukrainian cut re-rendered and checked after the shared-file changes —
+  unchanged.
+
+### I.6 Open items, English
+
+1. **The "Translate to English" bar** sits across the whole bot-chat shot of the
+   Telegram card (`IMG_2802`, 2.2–4.7 s) and is plainly readable at 348 px.
+   Telegram shows it because it detected the chat's earlier history as
+   non-English. In a film selling an English product, a banner offering to
+   translate the product's own chat argues against the film. It is one bar,
+   dismissible from the chat's ⋯ menu, so the fix is a fifteen-second re-record
+   of the same take. **Founder's call, not this file's.** (The Ukrainian cut
+   carries the same bar in `match-decision` and `date-card`, where it is
+   unremarkable — which is exactly why it only becomes a problem here.)
+2. **"Now on Telegram" is not the literal line.** "Already on Telegram" measures
+   **1118.6 px** at 82 px — wider than the 1080 px frame, and `TelegramCard` sets
+   `whiteSpace: nowrap`, so it would be clipped at both ends rather than wrapping
+   to give the mistake away. Fitting it needs ~68 px type, i.e. this card alone
+   at its own size, against §E.1's argument that four cards at four sizes reads
+   as four designs. "Now on Telegram" is 937.6 px — the slogan cards' margin to
+   within a pixel. Reversible if the founder wants the literal line and will
+   spend the size for it.
+3. **"pant house".** The chat-question shot's answer reads *"A private high floor
+   pant house in Tokyo on a rainy night"* — "penthouse", typed as two words, in
+   the one user sentence the film puts on screen and holds for three seconds.
+   It is footage, so fixing it is a re-record of `IMG_2791`. Worth knowing before
+   this is shown to anyone.
+4. **`Gennety DEMO` is on camera**, in the Mini App header and the chat title —
+   as it is in the Ukrainian cut (§H.7), which is why it was not treated as a
+   blocker. Same note applies: know it before describing either cut as a
+   production capture anywhere public.
+5. **Continuity artefacts, checked and accepted.** The clock moves across
+   sources (08:17 → 08:22 → 09:05 → 09:07 → 09:08 → 09:31 → 10:49) and the status
+   bar alternates Wi-Fi and LTE. The Ukrainian cut has the same class of artefact
+   and it survives for the same reason: nobody reads a 20 px clock inside a
+   604 px handset. Checked at full size once.
+6. **No music**, same as §H.1.

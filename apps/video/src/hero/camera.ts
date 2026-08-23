@@ -1,4 +1,5 @@
 import {Easing} from "remotion";
+import type {Lang} from "./timeline";
 
 /**
  * The camera. One of them, for the whole film, and it does exactly one thing:
@@ -54,6 +55,18 @@ import {Easing} from "remotion";
  * step closer, still again. 558 px to 786 px over 47 seconds, one direction,
  * and every framing in the film is one the film has not used before.
  *
+ * ## Two cuts (2026-08-23)
+ *
+ * `BEATS` is keyed by language, because its frame numbers are ABSOLUTE and
+ * therefore move whenever the cut does — and the English cut ends its world at
+ * 1280 rather than 1323. What is keyed is the table, not the system: `locate`,
+ * `EASE`, `TITLE_CREEP` and both rules below are shared, and `camera.probe.ts`
+ * is run for both languages precisely so neither table can drift out of shape.
+ *
+ * The English table is the Ukrainian one re-spaced, not re-designed: six held
+ * distances, five slow steps, the same 0.88 … 1.24 range, monotone, ~60 % held,
+ * and every step placed inside a shot or crossing a cut mid-flight.
+ *
  * `camera.probe.ts` fails if either rule is broken.
  */
 
@@ -94,7 +107,7 @@ export type CameraState = {
  */
 const EASE = Easing.bezier(0.18, 0.12, 0.2, 0.96);
 
-type Beat = {
+export type Beat = {
   /** The camera is DEAD STILL across this inclusive frame range. */
   hold: readonly [number, number];
   scale: number;
@@ -120,7 +133,7 @@ type Beat = {
  * The film therefore builds toward the date card, which is both the last beat
  * and the closest the camera ever gets. That is the whole shape.
  */
-const BEATS = [
+const BEATS_UK = [
   {
     hold: [0, 210],
     scale: 0.88,
@@ -159,24 +172,88 @@ const BEATS = [
   },
 ] as const satisfies readonly Beat[];
 
+/**
+ * The English dolly. Same shape and the same 0.88 … 1.24, re-spaced for a world
+ * that ends 57 frames earlier.
+ *
+ * **Re-spaced against the ENGLISH cut's own boundaries, then checked, rather
+ * than scaled from the Ukrainian table.** A proportional squeeze is the obvious
+ * move and it is wrong here: the two cuts did not shorten evenly — the radar
+ * lost 34 frames and `basics-preference` 41 while the calendar act lost none —
+ * so a uniform factor would drop steps onto cuts that moved by different
+ * amounts.
+ *
+ * The English boundaries are 78, 156, 228, 271, 355, 445, 525, 603, 637, 741,
+ * 780, 843, 919, 997, 1048, 1130, 1170. Every hold edge below sits strictly
+ * inside a shot, so no move starts, ends, or is held from the exact frame a
+ * screen changes — a move that begins when the picture cuts reads as the cut
+ * having caused it. Each step then crosses one or more cuts mid-flight, which
+ * is the point.
+ *
+ * `camera.probe.ts` measures the result rather than trusting this note: 62% of
+ * the world held, launch at 0.76x the move's own average, zero reversals, and
+ * the worst camera step at any cut 0.92 px of handset.
+ */
+const BEATS_EN = [
+  {
+    hold: [0, 202],
+    scale: 0.88,
+    glow: 0.78,
+    note: "Establish and stay there — the name, the age slider, the gender tap.",
+  },
+  {
+    hold: [289, 520],
+    scale: 0.96,
+    glow: 0.82,
+    note: "One step closer for the photo columns, the height drum, the question.",
+  },
+  {
+    hold: [616, 799],
+    scale: 1.05,
+    glow: 0.86,
+    note: "Closer again as the radar closes and the film turns on the decision.",
+  },
+  {
+    hold: [896, 973],
+    scale: 1.12,
+    glow: 0.92,
+    note: "The butterfly, «Wednesday 26 Aug 17:00», and the address search opening.",
+  },
+  {
+    hold: [1098, 1194],
+    scale: 1.19,
+    glow: 0.96,
+    note: "The vibe typed out and read back — the venue act, held.",
+  },
+  {
+    hold: [1266, 1266],
+    scale: 1.24,
+    glow: 1.0,
+    note: "Still moving in as the world hands over. The film does not park.",
+  },
+] as const satisfies readonly Beat[];
+
+const BEATS: Record<Lang, readonly Beat[]> = {uk: BEATS_UK, en: BEATS_EN};
+
 /** Where `frame` sits: inside a hold, or `t` of the way through a step. */
-const locate = (frame: number) => {
-  if (frame <= BEATS[0].hold[1]) return {a: 0, b: 0, t: 0};
-  for (let i = 0; i < BEATS.length - 1; i++) {
-    if (frame <= BEATS[i].hold[1]) return {a: i, b: i, t: 0};
-    const from = BEATS[i].hold[1];
-    const to = BEATS[i + 1].hold[0];
-    if (frame < to) return {a: i, b: i + 1, t: EASE((frame - from) / (to - from))};
+const locate = (frame: number, lang: Lang) => {
+  const beats = BEATS[lang];
+  if (frame <= beats[0].hold[1]) return {beats, a: 0, b: 0, t: 0};
+  for (let i = 0; i < beats.length - 1; i++) {
+    if (frame <= beats[i].hold[1]) return {beats, a: i, b: i, t: 0};
+    const from = beats[i].hold[1];
+    const to = beats[i + 1].hold[0];
+    if (frame < to) return {beats, a: i, b: i + 1, t: EASE((frame - from) / (to - from))};
   }
-  return {a: BEATS.length - 1, b: BEATS.length - 1, t: 0};
+  return {beats, a: beats.length - 1, b: beats.length - 1, t: 0};
 };
 
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** The camera at an absolute composition frame. The film's only source of motion. */
-export const cameraAt = (frame: number): CameraState => {
-  const {a, b, t} = locate(frame);
-  return {scale: mix(BEATS[a].scale, BEATS[b].scale, t), rotate: 0};
+export const cameraAt = (frame: number, lang: Lang): CameraState => {
+  const {beats, a, b, t} = locate(frame, lang);
+  return {scale: mix(beats[a].scale, beats[b].scale, t), rotate: 0};
 };
 
 /**
@@ -186,13 +263,14 @@ export const cameraAt = (frame: number): CameraState => {
  * object at eight of the fourteen cuts. It rides the beats now — as still as
  * the camera is, and moving only when the camera does.
  */
-export const glowAt = (frame: number): number => {
-  const {a, b, t} = locate(frame);
-  return mix(BEATS[a].glow, BEATS[b].glow, t);
+export const glowAt = (frame: number, lang: Lang): number => {
+  const {beats, a, b, t} = locate(frame, lang);
+  return mix(beats[a].glow, beats[b].glow, t);
 };
 
 /** Frame ranges the camera is completely still for. Read by the probe. */
-export const CAMERA_HOLDS = BEATS.map((b) => b.hold);
+export const cameraHolds = (lang: Lang): readonly (readonly [number, number])[] =>
+  BEATS[lang].map((b) => b.hold);
 
 /**
  * The title act's own creep, as a ready-made CSS transform.

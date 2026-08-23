@@ -53,20 +53,31 @@ is recreated — and its last 18 s are the title act, the only drawn part.
 It shares this workspace's tooling and brand tokens and nothing else;
 `GennetyAd` is untouched.
 
+It exists in **two cuts, Ukrainian and English**, and they are the same film —
+same shape, same acts, same camera grammar — rebuilt from different captures,
+because every screen in it is a recording of the running product and a recording
+cannot be re-lettered. One component, one set of rules, two data tables. See
+[Two cuts](#two-cuts) below.
+
 ```sh
 pnpm dev:video                                   # Studio, pick "GennetyHero"
 pnpm render:hero                                 # 1080×1920 → out/gennety-hero.mp4
 pnpm render:hero:poc                             # frames 660-1030, four boundaries
 pnpm render:hero:preview                         # 40% scale, ~60s to render
+pnpm probe:camera                                # the camera continuity probe, BOTH cuts
+
+# the English cut
+pnpm exec remotion render GennetyHeroEnglish out/gennety-hero-en.mp4 --crf=16
 ```
 
 | | |
 |---|---|
-| Composition | `GennetyHero` |
-| Output | `out/gennety-hero.mp4`, 1080×1920, 30 fps, H.264, 1866 frames (62.2 s) |
-| Source | `src/hero/` |
-| Footage | `public/footage/` — 18 clips, 6.1 MB |
-| Sources | `IMG_2588` / `2590` / `2604` / `2730` / `2731` / `2771` / `2772` / `2775`, outside the repo |
+| Composition | `GennetyHero` (uk) · `GennetyHeroEnglish` (en) |
+| Output | `out/gennety-hero.mp4` 1882 frames (62.7 s) · `out/gennety-hero-en.mp4` 1801 frames (60.0 s), both 1080×1920, 30 fps, H.264 |
+| Source | `src/hero/` — one component, both cuts |
+| Footage | `public/footage/` — 18 Ukrainian clips · `public/footage/en/` — 19 English |
+| Sources (uk) | `IMG_2588` / `2590` / `2604` / `2730` / `2731` / `2771` / `2772` / `2775`, outside the repo |
+| Sources (en) | `IMG_2790` / `2791` / `2794` / `2795` / `2796` / `2798` / `2802`, in `~/Desktop/EN mp4` |
 | Plan | [`video-production-plan.md`](video-production-plan.md) — the cut |
 | Camera | [`motion-audit.md`](motion-audit.md) — the motion system |
 
@@ -84,11 +95,49 @@ place the film speaks in its own voice, because the argument it makes there is
 against the product's own category and no screen in the app can make it. Plan
 §E.1 owns it; the data is `src/hero/titles.ts`.
 
+### Two cuts
+
+Every piece of data the film is made of is keyed by language — `SHOTS` in
+`timeline.ts`, `BEATS` in `camera.ts`, `SLOGANS` / `TELEGRAM` / `MARK` in
+`titles.ts` — and everything else is shared: the component tree, the two rules
+below, the easing, the type size, the tracking, the anaphora, the probe.
+
+**Do not fork `src/hero/` per language.** That was considered and rejected: it
+duplicates ~1700 lines of load-bearing reasoning and guarantees the two cuts
+drift the first time either is touched. `GennetyAd` already localises by
+parameter and this workspace's convention says to. A `Shot` carries its own
+`src`, so the English clips just live under `public/footage/en/` and say so.
+
+The English cut is a localisation of the **edit**, not a second film. Where a
+beat differs it is because the footage forced it, and the reason is written on
+the shot. There are four such places and no others:
+
+- `basics-preference` runs 1.4 s instead of 2.8 s — the screen only exists for
+  that long in the source. Its frames went to its neighbours in the same act.
+- The **Type Radar is three cards in two shots**, not four in one, because the
+  founder capped it on 2026-08-23: at most four, drawn only from the first two
+  and the last two. Fewer is explicitly allowed.
+- The **Date Ticket act is deliberately absent** although the English recordings
+  contain it, because the Ukrainian cut has no such beat and this is a
+  localisation. `DECISIONS.md` records it so it is not "discovered" and added.
+- `date-card` runs *longer* — see the date note below.
+
+The Telegram card's clip is not sped up in English (the Ukrainian one is 1.35×),
+and its chat list is elided rather than shown. Both reasons are in
+`scripts/extract-hero-footage-en.sh`, and the second is not stylistic.
+
 > **The film states a date exactly once** — «вівторок, 25 серп. 17:00», in the
 > calendar act. The venue act carries none, and the date card is trimmed to stop
 > 0.1 s before its own date line scrolls in. That is what makes the date
 > re-shootable from one 9 s recording; it is also perishable, so treat a re-shoot
 > of the calendar as maintenance. Production plan §H.0 has the rules.
+>
+> **The English cut states it once for the opposite reason.** Its calendar and
+> its date card are from the *same run* — Wednesday 26 August 17:00 on both — so
+> nothing downstream can contradict the calendar and nothing has to be trimmed
+> to protect it. That is why `en/date-card` is the one shot in the film that is
+> longer than its Ukrainian counterpart: it can afford the card's own date line
+> and the three actions the Ukrainian cut had to drop.
 
 ### The one rule
 
@@ -205,8 +254,14 @@ change lands on the match-decision cut, where the story jumps forward anyway.
 ### Re-cutting the footage
 
 `public/footage/` holds trimmed clips, not sources. Regenerate them with
-`./scripts/extract-hero-footage.sh [source-dir]` — it reproduces all 15
-byte-identically. There is **no crop at all**: the clips are the full 576×1280
+`./scripts/extract-hero-footage.sh [source-dir]` for the Ukrainian cut and
+`./scripts/extract-hero-footage-en.sh [source-dir]` for the English one
+(defaults to `~/Desktop/EN mp4`). Two scripts on purpose: the Ukrainian one is a
+record of a specific set of recordings, thirteen of which no longer exist and
+can never be regenerated, so interleaving a second language would make both
+unreadable and put irreplaceable windows one careless edit away. What they share
+— `island_erase()` and `cut()` — is byte-identical, and was re-verified against
+the English sources rather than assumed. There is **no crop at all**: the clips are the full 576×1280
 phone screen, status bar included, which is what makes the chrome read as the
 device's rather than as ours. The `trim` values in `timeline.ts` are measured
 against these in-points, so changing a window means re-checking them.

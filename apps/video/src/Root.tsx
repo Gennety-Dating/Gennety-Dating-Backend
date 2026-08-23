@@ -28,11 +28,31 @@ export const RemotionRoot: React.FC = () => {
         id="GennetyHero"
         component={GennetyHero}
         schema={gennetyHeroSchema}
-        durationInFrames={HERO_DURATION_IN_FRAMES}
+        durationInFrames={HERO_DURATION_IN_FRAMES.uk}
         fps={FPS}
         width={1080}
         height={1920}
-        defaultProps={{musicVolume: 0, finishing: true}}
+        defaultProps={{language: "uk", musicVolume: 0, finishing: true}}
+      />
+
+      {/*
+        The English cut. The SAME component and the same cut — different
+        captures, because every screen in this film is a recording of the
+        running product and a recording cannot be re-lettered. It runs 1808
+        frames against the Ukrainian 1882: the Type Radar is shorter because the
+        founder capped it at four cards, and the Telegram clip is shorter
+        because its source holds less action. Everything else is frame-for-frame
+        the same shape.
+      */}
+      <Composition<typeof gennetyHeroSchema, GennetyHeroProps>
+        id="GennetyHeroEnglish"
+        component={GennetyHero}
+        schema={gennetyHeroSchema}
+        durationInFrames={HERO_DURATION_IN_FRAMES.en}
+        fps={FPS}
+        width={1080}
+        height={1920}
+        defaultProps={{language: "en", musicVolume: 0, finishing: true}}
       />
 
       <Composition<typeof gennetyAdSchema, GennetyAdProps>

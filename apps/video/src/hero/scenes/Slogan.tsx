@@ -3,12 +3,13 @@ import {AbsoluteFill, interpolate, useCurrentFrame} from "remotion";
 import {titleTransform} from "../camera";
 import {crossfade, ease} from "../motion";
 import {INK, SOFT, WINE_LIGHT} from "../theme";
+import type {Lang} from "../timeline";
 import {
   CARD_OUT,
   LINE_HEIGHT,
   LINE_STAGGER,
   RISE,
-  SLOGAN_TOP,
+  sloganTop,
   TYPE_MARGIN,
   TYPE_SIZE,
   TYPE_TRACKING,
@@ -41,7 +42,7 @@ import {
  * `Вже в Telegram` mixes the two inside one word-space for the same reason.
  * Verified against both files' own cmaps: every character the act uses is served.
  */
-export const Slogan: React.FC<{card: SloganCard}> = ({card}) => {
+export const Slogan: React.FC<{card: SloganCard; language: Lang}> = ({card, language}) => {
   const frame = useCurrentFrame();
   const {durationInFrames: duration} = card;
 
@@ -67,7 +68,7 @@ export const Slogan: React.FC<{card: SloganCard}> = ({card}) => {
         alignItems: "center",
         paddingLeft: TYPE_MARGIN,
         paddingRight: TYPE_MARGIN,
-        paddingTop: card.anchorTop ? SLOGAN_TOP : 0,
+        paddingTop: card.anchorTop ? sloganTop(language) : 0,
         opacity: inn * (1 - out),
         transformOrigin: "50% 50%",
         transform: `${titleTransform(frame, duration)} translateY(${-out * 26}px)`,

@@ -8,10 +8,16 @@
  * pass condition is not "small numbers": it is that a shot boundary is
  * statistically indistinguishable from any other frame in the film.
  *
+ * **It runs for BOTH cuts and fails if either does.** That is the whole reason
+ * `camera.ts` keys its table by language instead of forking: two tables that
+ * are never measured against the same rules are two tables that will disagree,
+ * and the disagreement will be invisible until someone watches 62 seconds of
+ * the wrong one. One rule set, two walks, one exit code.
+ *
  * Run:  pnpm --filter @gennety/video exec tsx src/hero/camera.probe.ts
  */
-import {CAMERA_HOLDS, cameraAt, glowAt} from "./camera";
-import {SCREEN_WIDTH, SHOTS, WORLD_END} from "./timeline";
+import {cameraAt, cameraHolds, glowAt} from "./camera";
+import {type Lang, SCREEN_WIDTH, SHOTS, WORLD_END} from "./timeline";
 import {HERO_DURATION_IN_FRAMES} from "./titles";
 import {CLIP_H, CLIP_W} from "./ui/Iphone";
 
@@ -25,18 +31,22 @@ import {CLIP_H, CLIP_W} from "./ui/Iphone";
  * that it finished. The film's own length is printed for context and nothing
  * else is derived from it.
  */
-const N = WORLD_END;
 const FRAME_W = 1080;
 const FRAME_H = 1920;
 
-const track = <T,>(fn: (f: number) => T) => Array.from({length: N}, (_, f) => fn(f));
-
-const cams = track(cameraAt);
-const scale = cams.map((c) => c.scale);
-
 const diff = (v: number[]) => v.slice(1).map((n, i) => n - v[i]);
 
-const boundaries = [...new Set(SHOTS.map((s) => s.from).filter((f) => f > 0 && f < N))].sort(
+/** Walks one cut and returns the failures it found. */
+const probe = (lang: Lang): string[] => {
+const N = WORLD_END(lang);
+const CAMERA_HOLDS = cameraHolds(lang);
+
+const track = <T,>(fn: (f: number) => T) => Array.from({length: N}, (_, f) => fn(f));
+
+const cams = track((f) => cameraAt(f, lang));
+const scale = cams.map((c) => c.scale);
+
+const boundaries = [...new Set(SHOTS[lang].map((s) => s.from).filter((f) => f > 0 && f < N))].sort(
   (a, b) => a - b,
 );
 
@@ -64,13 +74,13 @@ const report = (label: string, v: number[], unit: string) => {
 };
 
 console.log(
-  `GennetyHero camera — the world is ${N} of the film's ${HERO_DURATION_IN_FRAMES} frames, ` +
-    `${boundaries.length} boundaries`,
+  `\n=== ${lang.toUpperCase()} === the world is ${N} of the film's ` +
+    `${HERO_DURATION_IN_FRAMES[lang]} frames, ${boundaries.length} boundaries`,
 );
 console.log(`boundaries: ${boundaries.join(", ")}`);
 
 report("scale", scale, "x");
-report("glow", track(glowAt), "");
+report("glow", track((f) => glowAt(f, lang)), "");
 
 // Framing bound: the handset must never touch an edge.
 const bodyW = SCREEN_WIDTH + (SCREEN_WIDTH * 0.017 + SCREEN_WIDTH * 0.008) * 2;
@@ -110,9 +120,9 @@ for (let i = 0; i < CAMERA_HOLDS.length - 1; i++) {
   const a = CAMERA_HOLDS[i][1];
   const b = CAMERA_HOLDS[i + 1][0];
   if (b <= a) continue;
-  const span = Math.abs(cameraAt(b).scale - cameraAt(a).scale);
+  const span = Math.abs(cameraAt(b, lang).scale - cameraAt(a, lang).scale);
   if (span < 1e-6) continue;
-  const first = Math.abs(cameraAt(a + 1).scale - cameraAt(a).scale);
+  const first = Math.abs(cameraAt(a + 1, lang).scale - cameraAt(a, lang).scale);
   moves.push(first / (span / (b - a)));
 }
 const worstLaunch = Math.max(...moves);
@@ -149,5 +159,16 @@ console.log(
 );
 if (worstCutStep > 0.004) failures.push(`a cut steps the camera by ${worstCutStep.toFixed(4)}`);
 
-console.log(failures.length === 0 ? "\nPASS" : `\nFAIL\n  - ${failures.join("\n  - ")}`);
-process.exit(failures.length === 0 ? 0 : 1);
+console.log(failures.length === 0 ? `\n${lang}: PASS` : `\n${lang}: FAIL\n  - ${failures.join("\n  - ")}`);
+  return failures;
+};
+
+const langs: Lang[] = ["uk", "en"];
+const failed = langs.filter((lang) => probe(lang).length > 0);
+
+console.log(
+  failed.length === 0
+    ? "\nBOTH CUTS PASS"
+    : `\nFAILED: ${failed.join(", ")}`,
+);
+process.exit(failed.length === 0 ? 0 : 1);

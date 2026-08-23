@@ -9,6 +9,7 @@ import {
 import {titleTransform} from "../camera";
 import {crossfade, enter, fade} from "../motion";
 import {asset, INK, MUTED} from "../theme";
+import type {Lang} from "../timeline";
 import {MARK} from "../titles";
 import {Butterfly} from "../ui/Butterfly";
 
@@ -29,10 +30,10 @@ import {Butterfly} from "../ui/Butterfly";
  * dead centre would put the one hard stop of the whole film on its final
  * seconds. The film ends with something still moving.
  */
-export const Mark: React.FC = () => {
+export const Mark: React.FC<{language: Lang}> = ({language}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
-  const duration = MARK.durationInFrames;
+  const duration = MARK[language].durationInFrames;
 
   // The act's own creep, relative to this card's start — see `camera.ts`. This
   // used to read the WORLD camera relative to `MARK.from`, which was right while
@@ -91,7 +92,7 @@ export const Mark: React.FC = () => {
           transform: `translateY(${(1 - line) * 10}px)`,
         }}
       >
-        Твій AI-метчмейкер
+        {MARK[language].line}
       </div>
     </AbsoluteFill>
   );

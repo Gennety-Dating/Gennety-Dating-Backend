@@ -8,6 +8,7 @@
     "compositions": "remotion compositions",
     "dev": "remotion studio",
     "lint": "eslint src",
+    "probe:camera": "pnpm --filter @gennety/bot exec tsx ../video/src/hero/camera.probe.ts",
     "render": "pnpm run render:uk && pnpm run render:en",
     "render:en": "pnpm run render:vertical:en && pnpm run render:horizontal:en",
     "render:hero": "remotion render GennetyHero out/gennety-hero.mp4 --crf=16",

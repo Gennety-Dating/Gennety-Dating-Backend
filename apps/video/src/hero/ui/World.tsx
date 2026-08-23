@@ -1,6 +1,7 @@
 import React from "react";
 import {AbsoluteFill, useCurrentFrame} from "remotion";
 import {cameraAt} from "../camera";
+import type {Lang} from "../timeline";
 
 /**
  * The world, seen through the camera.
@@ -8,7 +9,9 @@ import {cameraAt} from "../camera";
  * One instance, wrapping the entire film. Its children live in a stable
  * coordinate space whose origin is the centre of the frame; the transform here
  * is the ONLY thing that decides what part of that space the viewer is looking
- * at, and it is read from `cameraAt(frame)` on absolute composition frames.
+ * at, and it is read from `cameraAt(frame, language)` on absolute composition
+ * frames. The language selects which BEATS table the dolly walks — the two cuts'
+ * worlds end 43 frames apart — and nothing else about the world differs.
  *
  * The transform is a **pure scale** — a dolly straight down the lens axis, with
  * no pan and no roll. That is the founder's rule of 2026-08-18 ("the phone is
@@ -21,12 +24,13 @@ import {cameraAt} from "../camera";
  * camera, and fifteen children disagreeing with the camera is precisely what
  * this replaced.
  */
-export const World: React.FC<{children: React.ReactNode; opacity?: number}> = ({
-  children,
-  opacity = 1,
-}) => {
+export const World: React.FC<{
+  children: React.ReactNode;
+  language: Lang;
+  opacity?: number;
+}> = ({children, language, opacity = 1}) => {
   const frame = useCurrentFrame();
-  const camera = cameraAt(frame);
+  const camera = cameraAt(frame, language);
 
   return (
     <AbsoluteFill

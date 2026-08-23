@@ -8,7 +8,7 @@ import {ScreenClip} from "./scenes/ScreenClip";
 import {Slogan} from "./scenes/Slogan";
 import {TelegramCard} from "./scenes/TelegramCard";
 import {asset, INK} from "./theme";
-import {SCREEN_WIDTH, SHOTS} from "./timeline";
+import {SCREEN_WIDTH, type Shot, SHOTS} from "./timeline";
 import {HERO_DURATION_IN_FRAMES, MARK, SLOGANS, TELEGRAM, TITLE_FROM} from "./titles";
 import "./ui/fonts";
 import {Iphone} from "./ui/Iphone";
@@ -16,6 +16,15 @@ import {Grain, Vignette} from "./ui/Texture";
 import {World} from "./ui/World";
 
 export const gennetyHeroSchema = z.object({
+  /**
+   * Which cut. Both are the same film — same shape, same acts, same camera
+   * grammar — built from different captures, because every screen in this film
+   * is a recording of the running product and a recording cannot be re-lettered.
+   *
+   * The data lives in `timeline.ts` (the cut), `camera.ts` (the dolly) and
+   * `titles.ts` (the drawn act); this file only passes the key along.
+   */
+  language: z.enum(["uk", "en"]),
   /**
    * Master gain for a music bed. **Defaults to 0 — the film renders silent.**
    *
@@ -53,9 +62,9 @@ const OUTRO = 14;
  * The footage has the slack, and it is checked after every re-extraction — the
  * tightest case is `cal-dates` at 66 of its 68 frames.
  */
-const tail = (i: number): number => {
-  const shot = SHOTS[i];
-  const next = SHOTS[i + 1];
+const tail = (shots: Shot[], i: number): number => {
+  const shot = shots[i];
+  const next = shots[i + 1];
   if (!next) return 0;
   const gap = next.from - (shot.from + shot.durationInFrames);
   return Math.max(0, (next.fadeIn ?? 0) - Math.max(0, -gap));
@@ -98,8 +107,15 @@ const tail = (i: number): number => {
  * unmounted, and premount the next one so a cut never lands on a cold decoder.
  * What they no longer do is own any geometry.
  */
-export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}) => {
+export const GennetyHero: React.FC<GennetyHeroProps> = ({
+  language,
+  musicVolume,
+  finishing,
+}) => {
   const frame = useCurrentFrame();
+  const shots = SHOTS[language];
+  const titleFrom = TITLE_FROM[language];
+  const duration = HERO_DURATION_IN_FRAMES[language];
 
   // The world opens from black and hands over to the mark. Both are envelopes on
   // the WORLD, never on a shot: the first shot used to carry a 20-frame fade-in
@@ -114,7 +130,7 @@ export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}
     // Linear, for the same reason ScreenClip's crossfades are: this is a
     // handover between two lit pictures, not an arrival out of black. Eased, it
     // moved 30% of the way in a single frame and read as a blink.
-    interpolate(frame, [TITLE_FROM, TITLE_FROM + OUTRO], [1, 0], {
+    interpolate(frame, [titleFrom, titleFrom + OUTRO], [1, 0], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
@@ -126,7 +142,7 @@ export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}
           src={asset("audio/score.m4a")}
           volume={(f) =>
             musicVolume *
-            interpolate(f, [0, 30, TITLE_FROM, HERO_DURATION_IN_FRAMES - 6], [0, 1, 1, 0], {
+            interpolate(f, [0, 30, titleFrom, duration - 6], [0, 1, 1, 0], {
               extrapolateLeft: "clamp",
               extrapolateRight: "clamp",
             })
@@ -134,13 +150,13 @@ export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}
         />
       ) : null}
 
-      <World opacity={worldOpacity}>
-        <Iphone screenWidth={SCREEN_WIDTH} glow={glowAt(frame)}>
-          {SHOTS.map((shot, i) => (
+      <World language={language} opacity={worldOpacity}>
+        <Iphone screenWidth={SCREEN_WIDTH} glow={glowAt(frame, language)}>
+          {shots.map((shot, i) => (
             <Sequence
               key={`${shot.src}-${shot.from}`}
               from={shot.from}
-              durationInFrames={shot.durationInFrames + tail(i)}
+              durationInFrames={shot.durationInFrames + tail(shots, i)}
               premountFor={30}
               name={shot.src}
             >
@@ -162,7 +178,7 @@ export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}
         The founder asked for the text to disappear and be written again, and
         that blink is the difference between two sentences and one being edited.
       */}
-      {SLOGANS.map((card) => (
+      {SLOGANS[language].map((card) => (
         <Sequence
           key={card.from}
           from={card.from}
@@ -170,26 +186,26 @@ export const GennetyHero: React.FC<GennetyHeroProps> = ({musicVolume, finishing}
           premountFor={30}
           name={`slogan-${card.from}`}
         >
-          <Slogan card={card} />
+          <Slogan card={card} language={language} />
         </Sequence>
       ))}
 
       <Sequence
-        from={TELEGRAM.from}
-        durationInFrames={TELEGRAM.durationInFrames}
+        from={TELEGRAM[language].from}
+        durationInFrames={TELEGRAM[language].durationInFrames}
         premountFor={30}
         name="telegram"
       >
-        <TelegramCard />
+        <TelegramCard language={language} />
       </Sequence>
 
       <Sequence
-        from={MARK.from}
-        durationInFrames={MARK.durationInFrames}
+        from={MARK[language].from}
+        durationInFrames={MARK[language].durationInFrames}
         premountFor={30}
         name="mark"
       >
-        <Mark />
+        <Mark language={language} />
       </Sequence>
 
       {finishing ? (
