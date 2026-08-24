@@ -68,11 +68,18 @@
 | Руки | предплечья открыты — тату видно или его достоверно нет |
 | Фон | мягко размыт, **посторонних людей в кадре нет** |
 | Уровень привлекательности | одинаковый: «самый симпатичный человек за обычным столиком», не модель |
+| Стрижка | названа конкретно — «короткая стрижка» без уточнения генератор отдаёт устаревшим вариантом, и на бородатом лице это читается дёшево |
 | Регистр съёмки | «приподнятая реальность»: очень удачный настоящий кадр, не журнальная постановка |
 
 **Правило отбраковки:** кадр, который выделяется красотой **как фотография** —
 светом, композицией, постановкой — бракуется. Иначе дека меряет вкус к
 фотографии, а не к человеку.
+
+**Правило по тату-кадрам.** На кадре с татуировкой предплечье открыто **по
+построению** — короткий рукав, футболка, подвёрнутый оверширт, — а не «рукава
+подвёрнуты» поверх свитера или худи под пальто. Два слоя длинного рукава
+генератор сводит к неловкой позе, и тату, ради которого кадр вообще
+существует, теряется.
 
 **Правило по композиции (найдено на первой партии мужских кадров).** При кропе
 от середины бедра заправленная рубашка с ремнём кладёт **пряжку ровно в центр
@@ -320,8 +327,9 @@ blurred behind him,` + общий хвост.
 архитектуры, пряжка ремня в центре кадра — и генератор устойчиво старил лицо
 до 32–38, потому что лаунж яхт-клуба это комната сорокалетнего.
 
-**Промпт.** `a 24-year-old Eastern European man with light brown hair and a
-short neat beard, wearing an unstructured navy blazer over a plain white shirt
+**Промпт.** `a 24-year-old Eastern European man with light brown hair swept
+back and short at the sides, and a short neat beard, wearing an unstructured
+navy blazer over a plain white shirt
 with an open collar and no tie, dark trousers, standing in the foyer of an old
 theatre before the performance with a marble staircase and warm wall lamps
 blurred behind him,` + общий хвост.
@@ -336,20 +344,29 @@ blurred behind him,` + общий хвост.
 
 **Вайб.** Полированный образ с татуировкой — мужской близнец fp3.
 
-**Промпт.** `a 25-year-old Eastern European man with short dark hair and a
-short neat beard, wearing a fine-knit sweater over a collared shirt with
-tailored trousers, a visible tattoo sleeve on his forearm, standing in a
-bright modern café with wood and concrete blurred behind him,` + общий хвост.
+Предыдущая версия (свитер поверх рубашки + «bright modern café with wood and
+concrete») забракована фаундером: свитер поверх рубашки — это буквально
+офисный business-casual, а «современный интерьер из дерева и бетона»
+рендерится как коворкинг, потому что отличить его от кафе генератору нечем.
+Плюс длинный рукав закрывал предплечье на кадре, вся работа которого — тату.
 
-**Проверить.** Тату отчётливое и на предплечье. Образ строго полированный —
-никакой кожи, никаких цепей.
+**Промпт.** `a 25-year-old Eastern European man with dark hair in a short
+modern textured crop and a short neat beard, wearing a dark green fine-knit
+short-sleeve polo worn untucked with tailored trousers, a visible tattoo
+sleeve on his bare forearm, standing in a small daytime café with a marble
+counter, an espresso machine and cups blurred behind him,` + общий хвост.
+
+**Проверить.** Рукав короткий — тату видно целиком, без подворотов. Поло
+навыпуск, пряжки в кадре нет. За спиной **кофемашина и чашки**, а не
+абстрактный светлый интерьер. Образ полированный — никакой кожи, никаких
+цепей. Стрижка современная текстурная.
 
 ### ms1 — спортивный · тёмные · борода · без тату · корт
 
 **Вайб.** Пришёл играть, а не фотографироваться.
 
-**Промпт.** `a 25-year-old Eastern European man with short dark hair and a
-short beard, wearing a tennis polo and shorts with clean sneakers, holding a
+**Промпт.** `a 25-year-old Eastern European man with dark hair in a short
+textured crop and a short beard, wearing a tennis polo and shorts with clean sneakers, holding a
 racket, standing on a clay tennis court with the net blurred behind him,` +
 общий хвост.
 
@@ -360,8 +377,8 @@ racket, standing on a clay tennis court with the net blurred behind him,` +
 **Вайб.** Зал, но **не зеркальное селфи** — стоит в стороне от снарядов,
 снимает друг. В v1 два кадра ушли в зеркало ванной, это брак.
 
-**Промпт.** `a 25-year-old Eastern European man with short light brown hair,
-clean shaven, wearing a fitted training tee and joggers, a visible tattoo
+**Промпт.** `a 25-year-old Eastern European man with light brown hair in a
+short textured crop, clean shaven, wearing a fitted training tee and joggers, a visible tattoo
 sleeve on his forearm, standing in a modern gym away from the equipment with
 machines blurred behind him,` + общий хвост.
 
@@ -372,8 +389,8 @@ machines blurred behind him,` + общий хвост.
 
 **Вайб.** Бег утром. Локация общая с городским архетипом (mc3).
 
-**Промпт.** `a 25-year-old Eastern European man with short dark hair, clean
-shaven, wearing a technical running jacket and shorts, standing on a river
+**Промпт.** `a 25-year-old Eastern European man with dark hair grown out into
+loose waves, clean shaven, wearing a technical running jacket and shorts, standing on a river
 embankment in the morning with water blurred behind him,` + общий хвост.
 
 **Проверить.** Предплечья чистые. Куртка спортивная техническая, не городская.
@@ -382,8 +399,8 @@ embankment in the morning with water blurred behind him,` + общий хвос�
 
 **Вайб.** Самый обычный и, вероятно, самый населённый класс реального пула.
 
-**Промпт.** `a 25-year-old Eastern European man with short dark hair, clean
-shaven, wearing a bomber jacket over a plain tee with straight jeans and
+**Промпт.** `a 25-year-old Eastern European man with dark hair in a short
+textured crop, clean shaven, wearing a bomber jacket over a plain tee with straight jeans and
 sneakers, standing on an old-town street in the evening with warm shop lights
 blurred behind him,` + общий хвост.
 
@@ -394,21 +411,23 @@ blurred behind him,` + общий хвост.
 **Вайб.** Повседневный образ с татуировкой — расцепляет тату и творческий
 архетип.
 
-**Промпт.** `a 26-year-old Eastern European man with light brown hair and a
-short beard, wearing a hoodie under an unstructured coat with jeans, a visible
-tattoo sleeve on his forearm, standing in a bookshop café with shelves blurred
-behind him,` + общий хвост.
+**Промпт.** `a 26-year-old Eastern European man with light brown hair grown
+out into loose waves and a short beard, wearing an open overshirt with rolled
+sleeves over a plain tee with jeans, a visible tattoo sleeve on his bare
+forearm, standing in a bookshop café with shelves blurred behind him,` +
+общий хвост.
 
-**Проверить.** Тату видно (рукава подвёрнуты). Образ остаётся повседневным,
-без серебра и ботинок.
+**Проверить.** Предплечье открыто, тату видно целиком — худи под пальто
+здесь было ошибкой того же класса, что свитер на mp3. Образ остаётся
+повседневным, без серебра и ботинок.
 
 ### mc3 — городской · тёмные · бритый · без тату · набережная
 
 **Вайб.** Дневной город. Та же локация, что у ms3, — проверяемая пара
 «спортивный против повседневного при одинаковом фоне».
 
-**Промпт.** `a 25-year-old Eastern European man with short dark hair, clean
-shaven, wearing a denim jacket over a tee with chinos and sneakers, standing
+**Промпт.** `a 25-year-old Eastern European man with dark hair swept back and
+short at the sides, clean shaven, wearing a denim jacket over a tee with chinos and sneakers, standing
 on a river embankment with water blurred behind him,` + общий хвост.
 
 **Проверить.** Набережная того же типа, что на ms3. Предплечья чистые.
@@ -418,8 +437,8 @@ on a river embankment with water blurred behind him,` + общий хвост.
 **Вайб.** Полный альтернативный образ. Единственный бритый в архетипе —
 намеренно, чтобы борода не склеилась с «творческим».
 
-**Промпт.** `a 26-year-old Eastern European man with dark hair, clean shaven,
-wearing a black leather jacket over a plain tee with silver rings, a visible
+**Промпт.** `a 26-year-old Eastern European man with dark hair swept back,
+clean shaven, wearing a black leather jacket over a plain tee with silver rings, a visible
 tattoo sleeve on his forearm, standing in a wine bar in the evening with warm
 low light behind him,` + общий хвост.
 
@@ -429,8 +448,8 @@ low light behind him,` + общий хвост.
 
 **Вайб.** Альтернативность **без** татуировки: только одежда и слои.
 
-**Промпт.** `a 26-year-old Eastern European man with light brown hair and a
-beard, wearing an oversized overshirt over a tee with layered chains and
+**Промпт.** `a 26-year-old Eastern European man with light brown hair grown out
+into loose waves and a beard, wearing an oversized overshirt over a tee with layered chains and
 boots, standing on an old-town street in the evening with warm shop lights
 blurred behind him,` + общий хвост.
 
@@ -442,12 +461,13 @@ blurred behind him,` + общий хвост.
 **Вайб.** Альтернативный образ днём, в «полированной» локации (та же, что
 mp3). Мужской близнец пары fp3/fa3.
 
-**Промпт.** `a 25-year-old Eastern European man with dark hair and a beard,
-wearing a dark patterned shirt worn open over a tee with silver rings,
-standing in a bright modern café with wood and concrete blurred behind him,` +
-общий хвост.
+**Промпт.** `a 25-year-old Eastern European man with dark hair in a short
+modern textured crop and a beard, wearing a dark patterned shirt worn open
+over a tee with silver rings, standing in a small daytime café with a marble
+counter, an espresso machine and cups blurred behind him,` + общий хвост.
 
-**Проверить.** Предплечья чистые. Кафе — то же, что на mp3.
+**Проверить.** Предплечья чистые. Кафе — **дословно то же, что на mp3**: это
+изолирующая пара, и фон в ней обязан совпадать.
 
 ---
 
