@@ -7901,7 +7901,7 @@ automatically via `CLAUDE.md`.
 ## 2026-08-24 — устранение паразитной белой рамки и субпиксельного артефакта на чипах карточек заведений
 
 **Kind:** bugfix / polish
-**What:** в `apps/webapp/src/venue-change.css` добавлены сбросы `:focus` / `:focus-visible` / `outline: none`, `-webkit-tap-highlight-color: transparent`, `background-clip: padding-box`, а также `backface-visibility: hidden` и GPU-стабилизация (`transform: translateZ(0)`) для `.vc-card`, `.vc-chip`, `.vc-heart` и `.vc-current-badge`.
-**Why:** при нажатии на карточку заведения (`.vc-card:active`) или кнопку отметки срабатывал `transform: scale(0.985)` и системный фокус на кнопках, что на WebKit/Chromium вызывало субпиксельное сглаживание краёв сильно скруглённых чипов с полупрозрачным фоном (`border-radius: 999px`, `rgba(255, 255, 255, 0.06)`), визуально проявлявшееся как тонкая белая 1px рамка на бейджах рейтинга/тегов, плавно исчезавшая при выходе из `:active`/hover.
-**Recorded in:** `apps/webapp/src/venue-change.css`.
+**What:** в `src/app/places/page.tsx` (сайт) и `apps/webapp/src/venue-change.css` (Mini App) сохранены исходные цвета и `backdrop-blur-md` (`bg-black/50` / `bg-black/60`), а паразитная 1px белая рамка при наведении устранена через комбинацию `border border-transparent bg-clip-padding overflow-hidden isolate transform-gpu` и сбросы `:focus` / `outline: none`.
+**Why:** фильтр `backdrop-filter: blur` при масштабировании картинки под кнопкой (`group-hover:scale-105`) на овале `rounded-full` создавал субпиксельное сглаживание на границе пикселей. Прозрачный 1px border с `bg-clip-padding` и аппаратной изоляцией слоя полностью поглощает артефакт границы, сохраняя оригинальную прозрачность, блюр и цвет без визуальных изменений.
+**Recorded in:** `src/app/places/page.tsx`, `apps/webapp/src/venue-change.css`.
 
