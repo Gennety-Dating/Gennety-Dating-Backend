@@ -124,6 +124,7 @@ import { isAwaitingVoicePrompt } from "../../services/voice-prompt-claim.js";
 import { ONBOARDING_VOICE_PROMPT_SKIP_CALLBACK } from "./voice-prompt.js";
 import { sendOnboardingEntry } from "./mini-app-entry.js";
 import {
+  earnsThinkingPause,
   handleConversational,
   ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
 } from "./conversational.js";
@@ -2538,5 +2539,34 @@ describe("voice-prompt step — the claim is armed with the ask", () => {
     await handleConversational(ctx);
 
     expect(isAwaitingVoicePrompt(ctx.session)).toBe(false);
+  });
+});
+
+/**
+ * The periodic survey pause, and the one answer that must not get it.
+ * (PRODUCT_SPEC §1.3 — the thinking beat; the voice status is §1.3's other
+ * `runStatusSequence` beat, held by `voiceHandler` over the transcription.)
+ */
+describe("earnsThinkingPause", () => {
+  it("fires every third typed answer", () => {
+    expect([1, 2, 3, 4, 5, 6].map((n) => earnsThinkingPause(n, false))).toEqual([
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+    ]);
+  });
+
+  it("never fires on a spoken answer — it already had its own status", () => {
+    // Otherwise: listen (3.5s) + analyse (2s) + think (2.5s) back to back,
+    // which reads as the bot stalling rather than as the bot working.
+    expect([1, 2, 3, 6].map((n) => earnsThinkingPause(n, true))).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
   });
 });

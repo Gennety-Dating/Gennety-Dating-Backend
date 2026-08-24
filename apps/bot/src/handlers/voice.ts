@@ -7,6 +7,8 @@ import { recordChatEventForChat } from "../services/chat-events.js";
 import { readResponseBuffer } from "../utils/bounded-response.js";
 import { claimVoicePrompt, isAwaitingVoicePrompt } from "../services/voice-prompt-claim.js";
 import { shouldClaimVoiceFromCollector } from "../services/voice-prompt-pending.js";
+import { NEVER_CUT_SHORT, runStatusSequence } from "../services/ai-stream.js";
+import { voiceAnswerSteps } from "../services/analysis-status.js";
 
 const MAX_VOICE_DURATION_SEC = 300;
 const MAX_VOICE_BYTES = 20 * 1024 * 1024;
@@ -21,9 +23,73 @@ const VOICE_DOWNLOAD_TIMEOUT_MS = 20_000;
  * post-onboarding menu (`menu/router.ts`) — both of which read
  * `ctx.message?.text` — handle the transcript as if the user had typed it.
  *
- * A `record_voice` chat action is sent up front so the user sees that the bot
- * is "listening" while the OGG is downloaded and the Whisper call runs.
+ * While the OGG is downloaded and the Whisper call runs, the user is told that
+ * something is happening: a `<tg-thinking>` status during onboarding, and the
+ * older `record_voice` chat action everywhere else. See `narrate` below for why
+ * the two surfaces differ.
  */
+type VoiceIngest = { kind: "ok"; transcript: string } | { kind: "failed" };
+
+/**
+ * Download the recording and turn it into text. Never throws: the caller both
+ * awaits this AND hands it to `runStatusSequence` as tracked work, so a
+ * rejection would surface as an unhandled rejection on a cosmetic path.
+ *
+ * `chatActions` is what the narrated path turns OFF. A `record_voice` header
+ * saying the bot is listening, on top of a status message saying the same in
+ * words, is the same claim twice — and the survey pause next door already
+ * establishes the rule that a typing indicator never runs under a shimmer.
+ */
+async function ingestVoiceTranscript(
+  ctx: BotContext,
+  voice: { file_id: string; mime_type?: string | undefined },
+  language: BotContext["session"]["language"],
+  chatActions: boolean,
+): Promise<VoiceIngest> {
+  if (chatActions) {
+    try {
+      await ctx.replyWithChatAction("record_voice");
+    } catch {
+      // Chat action is best-effort — never fail the turn on it.
+    }
+  }
+
+  let buffer: Buffer;
+  try {
+    const file = await ctx.api.getFile(voice.file_id);
+    if (!file.file_path) return { kind: "failed" };
+    const url = `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${file.file_path}`;
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(VOICE_DOWNLOAD_TIMEOUT_MS),
+    });
+    if (!res.ok) return { kind: "failed" };
+    buffer = await readResponseBuffer(res, MAX_VOICE_BYTES);
+  } catch (err) {
+    console.warn("Voice download failed:", err);
+    return { kind: "failed" };
+  }
+
+  if (chatActions) {
+    // Keep the "listening" indicator alive through the Whisper round-trip.
+    try {
+      await ctx.replyWithChatAction("typing");
+    } catch {
+      // Best effort.
+    }
+  }
+
+  try {
+    const transcript = await transcribeVoice(buffer, {
+      mime: voice.mime_type ?? "audio/ogg",
+      language,
+    });
+    return transcript ? { kind: "ok", transcript } : { kind: "failed" };
+  } catch (err) {
+    console.warn("Voice transcription threw:", err);
+    return { kind: "failed" };
+  }
+}
+
 export const voiceHandler = new Composer<BotContext>();
 
 voiceHandler.on("message:voice", async (ctx, next) => {
@@ -79,50 +145,36 @@ voiceHandler.on("message:voice", async (ctx, next) => {
     return;
   }
 
-  try {
-    await ctx.replyWithChatAction("record_voice");
-  } catch {
-    // Chat action is best-effort — never fail the turn on it.
-  }
+  // Narrate the wait while the user is still REGISTERING. Post-onboarding voice
+  // — every voice note the concierge ever receives — keeps today's silent chat
+  // action: there the recording is one turn in an ongoing conversation, while
+  // during onboarding it is an answer to a question the bot just asked, and the
+  // several seconds of download + Whisper that follow read as the bot having
+  // missed it. `onboardingStep` is the same "mid onboarding" test
+  // `shouldClaimVoiceFromCollector` above already runs on, and it is refreshed
+  // from the DB by the FSM router on every update.
+  const chatId = ctx.chat?.id;
+  const narrate = chatId !== undefined && ctx.session.onboardingStep !== "completed";
 
-  let buffer: Buffer;
-  try {
-    const file = await ctx.api.getFile(voice.file_id);
-    if (!file.file_path) {
-      await ctx.reply(t(language, "voiceTranscriptionFailed"));
-      return;
-    }
-    const url = `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${file.file_path}`;
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(VOICE_DOWNLOAD_TIMEOUT_MS),
+  const work = ingestVoiceTranscript(ctx, voice, language, !narrate);
+
+  if (narrate) {
+    // NEVER_CUT_SHORT: these two beats are a script the user is meant to read,
+    // so a fast Whisper call may not collapse them (PRODUCT_SPEC §1.3). The
+    // status is torn down before the reply lands in its place.
+    await runStatusSequence(ctx.api, chatId, voiceAnswerSteps(language), {
+      rich: true,
+      until: work,
+      untilFromStepIndex: NEVER_CUT_SHORT,
     });
-    if (!res.ok) {
-      await ctx.reply(t(language, "voiceTranscriptionFailed"));
-      return;
-    }
-    buffer = await readResponseBuffer(res, MAX_VOICE_BYTES);
-  } catch (err) {
-    console.warn("Voice download failed:", err);
+  }
+
+  const result = await work;
+  if (result.kind === "failed") {
     await ctx.reply(t(language, "voiceTranscriptionFailed"));
     return;
   }
-
-  // Keep the "listening" indicator alive through the Whisper round-trip.
-  try {
-    await ctx.replyWithChatAction("typing");
-  } catch {
-    // Best effort.
-  }
-
-  const transcript = await transcribeVoice(buffer, {
-    mime: voice.mime_type ?? "audio/ogg",
-    language,
-  });
-
-  if (!transcript) {
-    await ctx.reply(t(language, "voiceTranscriptionFailed"));
-    return;
-  }
+  const transcript = result.transcript;
 
   // Chat timeline: the inbound recorder skips voice on purpose and defers to
   // here, so the agent reads what was SAID rather than "(voice note)".

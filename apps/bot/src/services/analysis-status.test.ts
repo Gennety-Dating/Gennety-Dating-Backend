@@ -6,6 +6,10 @@ import {
   rematchSearchSteps,
   venueSearchSteps,
   videoCheckSteps,
+  voiceCheckSteps,
+  voiceAnswerSteps,
+  VOICE_ANSWER_ANALYSE_HOLD_MS,
+  VOICE_ANSWER_LISTEN_HOLD_MS,
 } from "./analysis-status.js";
 import { AI_EMOJI } from "./ai-emoji.js";
 import type { StatusStep } from "./ai-stream.js";
@@ -154,5 +158,53 @@ describe("rematchSearchSteps", () => {
 
   it("keeps the localised copy in step with i18n", () => {
     expect(rematchSearchSteps("ru")[0]!.text).toBe(t("ru", "rematchSearchStep1"));
+  });
+});
+
+describe("voiceAnswerSteps", () => {
+  it("plays the two beats the founder asked for, listen then analyse", () => {
+    expect(voiceAnswerSteps("ru").map((step) => step.text)).toEqual([
+      t("ru", "voiceAnswerStep1"),
+      t("ru", "voiceAnswerStep2"),
+    ]);
+    expect(voiceAnswerSteps("ru").map((step) => step.holdMs)).toEqual([
+      VOICE_ANSWER_LISTEN_HOLD_MS,
+      VOICE_ANSWER_ANALYSE_HOLD_MS,
+    ]);
+  });
+
+  it("stays under its stated ceiling — this is onboarding funnel time", () => {
+    // Real seconds added to every spoken answer during registration. The
+    // ceiling is the point of the constants; without it the number creeps one
+    // retune at a time (same treatment as the gender screen's advance hold).
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const total = voiceAnswerSteps(lang).reduce((sum, step) => sum + step.holdMs, 0);
+      expect(total).toBeLessThanOrEqual(6000);
+      expect(total).toBeGreaterThanOrEqual(4000);
+    }
+  });
+
+  it("is identically paced across languages, with distinct resolved copy", () => {
+    const en = voiceAnswerSteps("en");
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const steps = voiceAnswerSteps(lang);
+      expect(steps.map((s) => s.holdMs)).toEqual(en.map((s) => s.holdMs));
+      expect(steps.map((s) => s.emojiId)).toEqual(en.map((s) => s.emojiId));
+      const texts = steps.map((s) => s.text);
+      expect(new Set(texts).size).toBe(texts.length);
+      // A missing key renders the key name itself.
+      expect(texts).not.toContain("voiceAnswerStep1");
+      // The leading glyph is what `thinkingHtml` promotes to the animated
+      // <tg-emoji>; without it the AIActions id is silently inert.
+      expect(texts.every((text) => /^\p{Extended_Pictographic}/u.test(text))).toBe(true);
+    }
+  });
+
+  it("does not reuse the voice-PROMPT script — different job, same step", () => {
+    // §1.3b's clip is kept as audio and never read into the chat; this one is
+    // about to become the user's answer. Sharing copy would blur the two.
+    expect(voiceAnswerSteps("ru").map((s) => s.text)).not.toEqual(
+      voiceCheckSteps("ru").map((s) => s.text),
+    );
   });
 });

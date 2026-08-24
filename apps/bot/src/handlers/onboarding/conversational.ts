@@ -105,6 +105,21 @@ const CONTEXT_DUMP_DEBOUNCE_MS = 2_000;
  */
 const ONBOARDING_THINKING_EVERY = 3;
 
+/**
+ * Does this survey answer earn the periodic "thinking" beat?
+ *
+ * A SPOKEN answer never does. `voiceHandler` has just held its own two-beat
+ * status over the transcription, so adding this one would put ~8s of narration
+ * between the recording and the next question — three shimmers in a row, which
+ * reads as the bot stalling rather than as it working. The answer is still
+ * counted by the caller, so the cadence keeps measuring answers rather than
+ * typed answers.
+ */
+export function earnsThinkingPause(answered: number, spoken: boolean): boolean {
+  if (spoken) return false;
+  return answered % ONBOARDING_THINKING_EVERY === 0;
+}
+
 
 /**
  * Heuristic split between a real LLM dump and a clarifying question while
@@ -364,15 +379,22 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   // strictly after this status is torn down, and question generation does not
   // start until the pause completes. Only real typed survey answers count —
   // not photo-stage continues, photo uploads, or context-dump pastes.
+  //
+  // A voice answer is counted but never gets this beat: `voiceHandler` has just
+  // held its own two-beat status over the transcription, and stacking a third
+  // shimmer on top would put ~8s of narration between the recording and the
+  // next question. Counting it anyway keeps the cadence measuring answers
+  // rather than typed answers.
   const isSurveyAnswer =
     Boolean(ctx.message?.text) &&
     !continuePhotoStage &&
     !ctx.session.expectingPhoto &&
     !ctx.session.awaitingContextDump;
+  const answerWasSpoken = ctx.message?.voice !== undefined;
   if (isSurveyAnswer) {
     const answered = (ctx.session.onboardingAnswerCount ?? 0) + 1;
     ctx.session.onboardingAnswerCount = answered;
-    if (answered % ONBOARDING_THINKING_EVERY === 0 && ctx.chat?.id !== undefined) {
+    if (earnsThinkingPause(answered, answerWasSpoken) && ctx.chat?.id !== undefined) {
       await runStatusSequence(
         ctx.api,
         ctx.chat.id,

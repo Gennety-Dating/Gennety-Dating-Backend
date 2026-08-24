@@ -1089,8 +1089,44 @@ Hard rules enforced by the collector:
   The pause runs strictly first: the "typing…" indicator and the next-question
   generation only start after the shimmer is torn down, so the thinking beat is
   never preceded by a typing indicator. Photo-stage continues, photo/video
-  uploads, and context-dump pastes do not count toward the cadence. The
-  *content* streams that are NOT thinking-status beats — the match pitch,
+  uploads, and context-dump pastes do not count toward the cadence.
+
+  **A voice answer is covered by its own status, and never gets the cadence
+  beat on top (2026-08-24).** During onboarding a spoken answer used to sit
+  under a bare `record_voice` chat action for the whole Bot API download plus
+  the Whisper round-trip — several seconds in which the bot looked like it had
+  missed the recording, on the one surface where the user has just been asked a
+  question. `voiceHandler` now holds a two-beat status over that work —
+  *listening to your voice note* (3.5 s), then *taking it in* (2 s) — passed
+  `until: <ingest>` with `NEVER_CUT_SHORT`, so the script always plays in full
+  and a slow Whisper call only ever holds the LAST beat longer. Cost is
+  therefore `max(script, work)` rather than their sum, and the status is torn
+  down before the answer — or the transcription-failed refusal — lands in its
+  place. Both hold times are named constants with a ceiling a test enforces:
+  this is real time added to the onboarding funnel for every spoken answer, and
+  a number like that otherwise creeps one retune at a time (the same treatment
+  §1.3's gender-screen advance hold gets).
+
+  Three bounds keep it from becoming a tax on the rest of the product.
+  **Registration only** — `onboardingStep !== "completed"`, the same "mid
+  onboarding" test the voice-prompt claim already runs on: post-onboarding
+  voice, which is every recording the concierge ever receives, keeps its silent
+  chat action, because there a recording is one turn in an ongoing conversation
+  rather than an answer to a question the bot just asked. **No chat action
+  underneath it** — a `record_voice` header saying the bot is listening, under a
+  status saying the same in words, is one claim made twice, and the survey pause
+  next door already establishes that a typing indicator never runs under a
+  shimmer. And **the periodic cadence beat is skipped** for that answer
+  (`earnsThinkingPause`): stacking it would put ~8 s of narration between the
+  recording and the next question. The answer is still COUNTED, so the cadence
+  keeps measuring answers rather than typed answers.
+
+  The §1.3b **voice prompt** is untouched and stays a different job on a
+  neighbouring step: that recording is claimed before this handler's bounds are
+  even read, is kept as audio rather than transcribed into the chat, and carries
+  its own validation status (`voiceCheckSteps`).
+
+  The *content* streams that are NOT thinking-status beats — the match pitch,
   no-match notice, and ice-breaker DMs (`streamDraftsToChat(..., { rich: true })`
   → `streamRichDraftsToChat`) — also stream through the native rich AI-compose
   draft path (their lead "thinking" chunk renders as a `<tg-thinking>` shimmer),
