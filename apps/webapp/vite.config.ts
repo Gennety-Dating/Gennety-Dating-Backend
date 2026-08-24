@@ -47,6 +47,11 @@ export default defineConfig({
     ///     regress to something that puts a third of the travel in one frame.
     ///     The shipped stylesheet is the only honest source for that: a TS
     ///     mirror of the numbers would be the thing that drifts.
+    ///   - `premium.css` — that the plan picker's SELECTED cell is always more
+    ///     present than its neighbours in BOTH themes. Reusing the shared glass
+    ///     tokens inverted that on cream (a white-gradient fill on a white page
+    ///     made the chosen plan read as the background), and the polarity is
+    ///     invisible to every other kind of test.
     ///   - `location.css` — that the departure-point gate's copy and its
     ///     demo-only action stay ONE flex column. Putting the button back
     ///     beside the sentence is a one-line edit that looks harmless and
@@ -59,6 +64,7 @@ export default defineConfig({
         /butterfly-loader\.css/,
         /butterfly-success\.css/,
         /onboarding\.css/,
+        /premium\.css/,
         /location\.css/,
       ],
     },

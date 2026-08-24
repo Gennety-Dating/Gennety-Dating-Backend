@@ -18,11 +18,16 @@ vi.mock("@gennety/db", async (importOriginal) => {
   };
 });
 
+const notifyFounderPurchase = vi.fn();
+vi.mock("./founder-notify.js", () => ({ notifyFounderPurchase }));
+
 const {
   isPremiumHeadActive,
   isPremiumActive,
   getPremiumState,
   activateOrExtendPremium,
+  activatePremiumPackage,
+  grantComplimentaryPremiumMonths,
   revokePremium,
   getPremiumCancelContext,
   recordInChatCancellation,
@@ -34,6 +39,7 @@ const FUTURE = new Date("2026-08-19T12:00:00Z");
 
 beforeEach(() => {
   vi.clearAllMocks();
+  notifyFounderPurchase.mockReset();
   // Array-form $transaction: resolve every op (a rejected create surfaces P2002).
   transaction.mockImplementation(async (ops: unknown[]) => Promise.all(ops));
 });
@@ -233,5 +239,214 @@ describe("attachCancellationReason", () => {
   it("swallows a DB error (the cancellation already happened)", async () => {
     ledgerUpdate.mockRejectedValueOnce(new Error("gone"));
     await expect(attachCancellationReason("led-1", "reason")).resolves.toBeUndefined();
+  });
+});
+
+
+describe("the monotonic guard on a paid grant", () => {
+  it("never moves premiumUntil BACKWARD on a renewal", async () => {
+    // The hazard long packages introduce, and the reason this guard exists at
+    // all. A monthly subscriber who buys 6 months has `premiumUntil` half a
+    // year out; their next ordinary 30-day renewal carries a
+    // `subscription_expiration_date` ~30 days out. Writing that through would
+    // silently delete five months of paid access on a charge the user just
+    // made.
+    const farFuture = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
+    userFindUnique.mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: farFuture });
+    userUpdate.mockReturnValueOnce({ premiumUntil: farFuture });
+    ledgerCreate.mockReturnValueOnce({});
+
+    await activateOrExtendPremium({
+      userId: "u1",
+      provider: "telegram_stars",
+      periodEnd: FUTURE, // ~30 days out — EARLIER than what the user holds
+      externalPaymentId: "renewal_charge",
+      event: "renewed",
+    });
+
+    expect(userUpdate.mock.calls[0][0].data.premiumUntil).toEqual(farFuture);
+  });
+
+  it("still extends when the new period genuinely is later", async () => {
+    userFindUnique.mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: NOW });
+    userUpdate.mockReturnValueOnce({ premiumUntil: FUTURE });
+    ledgerCreate.mockReturnValueOnce({});
+
+    await activateOrExtendPremium({
+      userId: "u1",
+      provider: "telegram_stars",
+      periodEnd: FUTURE,
+      externalPaymentId: "charge_next",
+    });
+
+    expect(userUpdate.mock.calls[0][0].data.premiumUntil).toEqual(FUTURE);
+  });
+
+  it("clears both expiry-reminder markers — a new period earns new warnings", async () => {
+    userFindUnique.mockResolvedValueOnce({ premiumSince: null, premiumUntil: null });
+    userUpdate.mockReturnValueOnce({ premiumUntil: FUTURE });
+    ledgerCreate.mockReturnValueOnce({});
+
+    await activateOrExtendPremium({
+      userId: "u1",
+      provider: "telegram_stars",
+      periodEnd: FUTURE,
+      externalPaymentId: "charge_first",
+    });
+
+    expect(userUpdate.mock.calls[0][0].data).toMatchObject({
+      premiumReminder3dAt: null,
+      premiumReminder1dAt: null,
+    });
+  });
+});
+
+describe("activatePremiumPackage", () => {
+  it("STACKS onto a live period instead of replacing it", async () => {
+    // "новый срок прибавляется к текущей дате окончания" — a user who buys 3
+    // months with a month still running gets four, not three.
+    //
+    // The base is derived from the wall clock inside the service, so the
+    // fixture is anchored to `Date.now()` rather than to a literal: a hardcoded
+    // date silently stops being "in the future" as the calendar moves past it,
+    // and the test then passes for the wrong reason (falling into the
+    // already-lapsed branch it is meant to distinguish from).
+    const liveUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const expected = new Date(liveUntil);
+    expected.setMonth(expected.getMonth() + 3);
+
+    userFindUnique.mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: liveUntil });
+    userUpdate.mockReturnValueOnce({ premiumUntil: expected });
+    ledgerCreate.mockReturnValueOnce({});
+
+    await activatePremiumPackage({
+      userId: "u1",
+      months: 3,
+      externalPaymentId: "pkg_charge_1",
+      amount: 1912,
+      currency: "XTR",
+    });
+
+    // Base is the EXISTING expiry, not now.
+    expect(userUpdate.mock.calls[0][0].data.premiumUntil).toEqual(expected);
+    expect(ledgerCreate.mock.calls[0][0].data).toMatchObject({
+      provider: "telegram_stars",
+      event: "started",
+      amount: 1912,
+      currency: "XTR",
+      periodStart: liveUntil,
+    });
+  });
+
+  it("counts from NOW when the previous period already lapsed", async () => {
+    userFindUnique.mockResolvedValueOnce({
+      premiumSince: NOW,
+      premiumUntil: new Date("2026-01-01T00:00:00Z"),
+    });
+    userUpdate.mockReturnValueOnce({ premiumUntil: null });
+    ledgerCreate.mockReturnValueOnce({});
+
+    await activatePremiumPackage({ userId: "u1", months: 6, externalPaymentId: "pkg_2" });
+
+    const written = userUpdate.mock.calls[0][0].data.premiumUntil as Date;
+    // Six months from today, not six months from a date in the past.
+    expect(written.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("NEVER claims the recurring head", async () => {
+    // Those three columns describe *the subscription*. Writing them here would
+    // either invent a renewal Telegram will never make, or overwrite a live
+    // monthly subscriber's cancellation anchor with a charge id that cannot
+    // cancel anything.
+    userFindUnique.mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: null });
+    userUpdate.mockReturnValueOnce({ premiumUntil: FUTURE });
+    ledgerCreate.mockReturnValueOnce({});
+
+    await activatePremiumPackage({ userId: "u1", months: 3, externalPaymentId: "pkg_3" });
+
+    const data = userUpdate.mock.calls[0][0].data;
+    expect(data).not.toHaveProperty("premiumAutoRenew");
+    expect(data).not.toHaveProperty("premiumProvider");
+    expect(data).not.toHaveProperty("premiumExternalId");
+  });
+
+  it("clears the reminder markers so the package announces its own ending", async () => {
+    userFindUnique.mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: null });
+    userUpdate.mockReturnValueOnce({ premiumUntil: FUTURE });
+    ledgerCreate.mockReturnValueOnce({});
+
+    await activatePremiumPackage({ userId: "u1", months: 6, externalPaymentId: "pkg_4" });
+
+    expect(userUpdate.mock.calls[0][0].data).toMatchObject({
+      premiumReminder3dAt: null,
+      premiumReminder1dAt: null,
+    });
+  });
+
+  it("announces the sale to the founder feed AFTER the ledger insert", async () => {
+    userFindUnique.mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: null });
+    userUpdate.mockReturnValueOnce({ premiumUntil: FUTURE });
+    ledgerCreate.mockReturnValueOnce({});
+
+    await activatePremiumPackage({
+      userId: "u1",
+      months: 6,
+      externalPaymentId: "pkg_5",
+      amount: 3150,
+      currency: "XTR",
+    });
+
+    expect(notifyFounderPurchase).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "premium", amountStars: 3150, userId: "u1" }),
+    );
+  });
+
+  it("is idempotent on a redelivered charge — no second grant, no second announcement", async () => {
+    userFindUnique
+      .mockResolvedValueOnce({ premiumSince: NOW, premiumUntil: FUTURE })
+      .mockResolvedValueOnce({ premiumUntil: FUTURE });
+    transaction.mockRejectedValueOnce(
+      Object.assign(new Error("dup"), { code: "P2002" }),
+    );
+
+    const result = await activatePremiumPackage({
+      userId: "u1",
+      months: 3,
+      externalPaymentId: "pkg_dup",
+    });
+
+    expect(result).toEqual({ applied: false, premiumUntil: FUTURE });
+    expect(notifyFounderPurchase).not.toHaveBeenCalled();
+  });
+
+  it("refuses a zero/negative month count rather than granting nothing forever", async () => {
+    const result = await activatePremiumPackage({
+      userId: "u1",
+      months: 0,
+      externalPaymentId: "pkg_zero",
+    });
+    expect(result.applied).toBe(false);
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("grantComplimentaryPremiumMonths (shares the additive path)", () => {
+  it("stays a comp: no money on the ledger row, no founder announcement", async () => {
+    userFindUnique.mockResolvedValueOnce({ premiumSince: null, premiumUntil: null });
+    userUpdate.mockReturnValueOnce({ premiumUntil: FUTURE });
+    ledgerCreate.mockReturnValueOnce({});
+
+    await grantComplimentaryPremiumMonths({
+      userId: "u1",
+      months: 1,
+      externalPaymentId: "referral:u1",
+    });
+
+    expect(ledgerCreate.mock.calls[0][0].data).toMatchObject({
+      provider: "referral",
+      amount: null,
+      currency: null,
+    });
+    expect(notifyFounderPurchase).not.toHaveBeenCalled();
   });
 });

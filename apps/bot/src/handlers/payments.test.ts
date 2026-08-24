@@ -18,6 +18,7 @@ vi.mock("../services/ticket-wallet.js", () => ({
 }));
 vi.mock("../services/premium.js", () => ({
   activateOrExtendPremium: vi.fn(),
+  activatePremiumPackage: vi.fn(),
   formatPremiumUntil: () => "19 August 2026",
 }));
 // Settled via dynamic import in handleSuccessfulPayment's gate branch.
@@ -25,7 +26,7 @@ vi.mock("./matching/ticket-gate.js", () => ({ applyStarsTicketPayment: vi.fn() }
 
 import { prisma } from "@gennety/db";
 import { grantTickets } from "../services/ticket-wallet.js";
-import { activateOrExtendPremium } from "../services/premium.js";
+import { activateOrExtendPremium, activatePremiumPackage } from "../services/premium.js";
 import { applyStarsTicketPayment } from "./matching/ticket-gate.js";
 import { handlePreCheckout, handleSuccessfulPayment } from "./payments.js";
 
@@ -33,6 +34,7 @@ const findUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>
 const matchFindUnique = prisma.match.findUnique as unknown as ReturnType<typeof vi.fn>;
 const grant = grantTickets as unknown as ReturnType<typeof vi.fn>;
 const activatePremium = activateOrExtendPremium as unknown as ReturnType<typeof vi.fn>;
+const activatePackage = activatePremiumPackage as unknown as ReturnType<typeof vi.fn>;
 const settleStars = applyStarsTicketPayment as unknown as ReturnType<typeof vi.fn>;
 
 const GATE_UUID = "22222222-2222-4222-8222-222222222222";
@@ -345,5 +347,107 @@ describe("premium subscription (sub:premium)", () => {
     (ctx.message!.successful_payment as unknown as Record<string, unknown>).is_first_recurring = true;
     await handleSuccessfulPayment(ctx);
     expect(reply).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("premium packages (sub:premium3 / sub:premium6)", () => {
+  // PREMIUM_STARS is mocked at 500 above, so: 3mo = floor(500×3×0.85) = 1275,
+  // 6mo = floor(500×6×0.70) = 2100. Derived here exactly as the handler derives
+  // it — a hardcoded expectation would still pass if the handler stopped
+  // pricing by plan and started comparing against the monthly price.
+  it("approves a pre-checkout at the plan's derived price", async () => {
+    for (const [payload, stars] of [
+      ["sub:premium3", 1275],
+      ["sub:premium6", 2100],
+    ] as const) {
+      const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+        invoice_payload: payload,
+        currency: "XTR",
+        total_amount: stars,
+      });
+      await handlePreCheckout(ctx);
+      expect(answerPreCheckoutQuery).toHaveBeenCalledWith(true, undefined);
+    }
+  });
+
+  it("declines a package invoice carrying the MONTHLY price", async () => {
+    // The failure a single shared amount check would let through: a stale link,
+    // or a hand-edited one, buying six months for one month's Stars.
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: "sub:premium6",
+      currency: "XTR",
+      total_amount: 500,
+    });
+    await handlePreCheckout(ctx);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
+  });
+
+  it("declines an unknown product tag outright", async () => {
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: "sub:premium12",
+      currency: "XTR",
+      total_amount: 2100,
+    });
+    await handlePreCheckout(ctx);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
+  });
+
+  it("grants the package additively and always DMs", async () => {
+    findUnique.mockResolvedValueOnce({ id: "u1", language: "en" });
+    activatePackage.mockResolvedValueOnce({ applied: true, premiumUntil: new Date() });
+    const { ctx, reply } = successCtx({
+      invoice_payload: "sub:premium6",
+      currency: "XTR",
+      total_amount: 2100,
+      telegram_payment_charge_id: "charge_pkg_6",
+    });
+    await handleSuccessfulPayment(ctx);
+
+    expect(activatePackage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "u1",
+        months: 6,
+        externalPaymentId: "charge_pkg_6",
+        amount: 2100,
+        currency: "XTR",
+      }),
+    );
+    // A package has no silent renewals to suppress: every charge is a first
+    // period, so the user is always told how long they just bought.
+    expect(reply).toHaveBeenCalled();
+    // And it must NEVER take the subscription path, which would read a
+    // `subscription_expiration_date` that a one-time invoice does not carry.
+    expect(activatePremium).not.toHaveBeenCalled();
+  });
+
+  it("does not re-DM on a redelivered package charge", async () => {
+    findUnique.mockResolvedValueOnce({ id: "u1", language: "en" });
+    activatePackage.mockResolvedValueOnce({ applied: false, premiumUntil: new Date() });
+    const { ctx, reply } = successCtx({
+      invoice_payload: "sub:premium3",
+      currency: "XTR",
+      total_amount: 1275,
+      telegram_payment_charge_id: "charge_pkg_dup",
+    });
+    await handleSuccessfulPayment(ctx);
+    expect(reply).not.toHaveBeenCalled();
+  });
+
+  it("keeps `sub:premium` on the RECURRING path", async () => {
+    // The wire tag every existing subscriber's auto-renewal redelivers. If it
+    // ever routed to the package handler, each renewal would grant a fresh
+    // month additively AND stop claiming the recurring head.
+    findUnique.mockResolvedValueOnce({ id: "u1", language: "en" });
+    activatePremium.mockResolvedValueOnce({ applied: true, premiumUntil: new Date() });
+    const { ctx } = successCtx({
+      invoice_payload: "sub:premium",
+      currency: "XTR",
+      total_amount: 500,
+      telegram_payment_charge_id: "charge_monthly",
+    });
+    await handleSuccessfulPayment(ctx);
+    expect(activatePremium).toHaveBeenCalled();
+    expect(activatePackage).not.toHaveBeenCalled();
   });
 });

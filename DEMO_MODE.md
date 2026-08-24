@@ -889,6 +889,35 @@ factor. It changes nothing a visitor sees — `INTENT_FLOOR` is 1.0 in demo as i
 production, so the multiplier is a no-op there too — but it means the demo
 matches the way production will once the floor drops.
 
+## Premium: the monthly plan only, and a real charge behind it
+
+The Premium screen sells three plans in production — 1 / 3 / 6 months
+(PRODUCT_SPEC §3.8) — and **the demo is served the monthly one alone**, refused
+server-side rather than merely hidden from the catalog (`offeredPlans()` in
+`public/routes/premium.ts`), because the catalog is the client's list and not a
+boundary.
+
+The reason is not tidiness. **The demo has no mock rail for Stars, and this
+route has never consulted `TICKET_STARS_ENABLED`** — the flag
+`assertDemoIsolation` refuses to boot with, on the stated grounds that "Telegram
+Stars moves real money out of a visitor's real Telegram balance". So tapping
+Subscribe in the demo already mints a genuine invoice for a genuine charge. That
+predates the packages; what the packages would have changed is the size of it,
+from 750⭐ (~$18) to 3150⭐ (~$75) for one accidental tap on the biggest plan.
+
+Two things follow, and the second is the open one:
+
+- **The demo looks exactly as it did before this feature.** One plan, one price,
+  the same screen — capping costs the walkthrough nothing, because the packages
+  are a pricing choice rather than a product surface an investor needs to see.
+- **The underlying hole is NOT closed**, and closing it is a founder decision,
+  not a cleanup: either a mock rail for Stars (the shape the Date Ticket gate
+  already uses) or refusing to mint at all in demo, which would leave the
+  Subscribe button dead. Recorded in DECISIONS.md 2026-08-24.
+
+The expiry reminder needs no branch here: it only ever addresses a
+non-auto-renewing entitlement, and a demo visitor never buys one.
+
 ## The rule for future work
 
 **Any change to a product flow, a Mini App screen, a gate, or a paid step must

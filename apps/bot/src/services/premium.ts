@@ -43,6 +43,17 @@ export function formatPremiumUntil(date: Date | null | undefined, lang: Language
  * The flag gates NEW purchase surfaces / premium UI at the call sites.
  */
 
+/**
+ * Cleared on every write that advances `premiumUntil`. The expiry reminders are
+ * once-per-PAID-PERIOD, not once-per-user: leaving these set would remind a
+ * renewing user exactly once, ever, and then let every later period lapse in
+ * silence. Kept as one constant so a fourth grant path cannot forget it.
+ */
+const RESET_EXPIRY_REMINDERS = {
+  premiumReminder3dAt: null,
+  premiumReminder1dAt: null,
+} as const;
+
 export type PremiumProvider = "telegram_stars" | "app_store" | "referral";
 
 export type SubscriptionEvent =
@@ -166,21 +177,35 @@ export async function activateOrExtendPremium(
 
   const existing = await prisma.user.findUnique({
     where: { id: userId },
-    select: { premiumSince: true },
+    select: { premiumSince: true, premiumUntil: true },
   });
   if (!existing) return { applied: false, premiumUntil: null };
 
   const now = new Date();
+  // A paid grant may only ever EXTEND. Telegram/Apple hand us an absolute
+  // "paid through" instant, and for a pure subscription each one is later than
+  // the last, so this max() is a no-op there — it exists for the mixed case
+  // that long packages introduce: a monthly subscriber who buys 6 months has a
+  // `premiumUntil` half a year out, and their next ordinary 30-day renewal
+  // carries a `subscription_expiration_date` ~30 days out. Writing that
+  // through would silently delete five months of paid access on a charge the
+  // user just made. `revokePremium` remains the one path that may shorten it.
+  const nextUntil =
+    existing.premiumUntil && existing.premiumUntil.getTime() > periodEnd.getTime()
+      ? existing.premiumUntil
+      : periodEnd;
   try {
     const [updated] = await prisma.$transaction([
       prisma.user.update({
         where: { id: userId },
         data: {
-          premiumUntil: periodEnd,
+          premiumUntil: nextUntil,
           premiumSince: existing.premiumSince ?? now,
           premiumProvider: provider,
           premiumAutoRenew: true,
           premiumExternalId: recurringAnchor ?? externalPaymentId,
+          // A fresh paid period earns a fresh pair of expiry reminders.
+          ...RESET_EXPIRY_REMINDERS,
         },
         select: { premiumUntil: true },
       }),
@@ -234,38 +259,42 @@ function addMonths(date: Date, months: number): Date {
 }
 
 /**
- * Grant `months` of **complimentary** Premium (PRODUCT_SPEC §Referral) — the
- * referral reward path, distinct from the paid `activateOrExtendPremium`:
+ * The shared write behind every **additive** premium grant — the referral/promo
+ * comp and the paid 3/6-month package. Both extend an existing period rather
+ * than replacing it, and both deliberately leave the RECURRING head alone:
  *
- *  - **Additive**: `premiumUntil` is extended from `max(now, premiumUntil)`, so
- *    a comp stacks on top of an existing paid period instead of overwriting it.
+ *  - **Additive**: `premiumUntil` grows from `max(now, premiumUntil)`, so a
+ *    grant stacks on top of a live period instead of overwriting it. This is
+ *    the "новый срок прибавляется к текущей дате окончания" rule.
  *  - **Non-clobbering**: `premiumAutoRenew` / `premiumProvider` /
- *    `premiumExternalId` are DELIBERATELY untouched, so a user's real recurring
- *    anchor (Telegram Stars / App Store) survives — a comp is not a renewing
- *    subscription and must never masquerade as one.
- *  - **Exactly-once**: a duplicate `externalPaymentId` (P2002) is a no-op,
- *    exactly like the paid path.
- *
- * A fresh comp-only user therefore ends up Premium-active with
- * `premiumAutoRenew = false` (schema default), which is correct: nothing renews.
+ *    `premiumExternalId` are UNTOUCHED. Those three columns describe *the
+ *    recurring subscription*, and neither a comp nor a fixed-length package is
+ *    one. Two consequences, both wanted: a monthly subscriber who buys a
+ *    package keeps the anchor that makes cancellation work, and a user with no
+ *    subscription ends up Premium-active with `premiumAutoRenew = false` —
+ *    correct, because nothing renews, and it is exactly what makes the expiry
+ *    reminder fire for them.
+ *  - **Exactly-once**: a duplicate `externalPaymentId` (P2002) is a no-op.
  */
-export async function grantComplimentaryPremiumMonths(input: {
+async function extendPremiumAdditive(input: {
   userId: string;
   months: number;
   externalPaymentId: string;
+  provider: string;
+  event: Extract<SubscriptionEvent, "started" | "renewed">;
+  amount?: number;
+  currency?: string;
   note?: string;
-  /// `subscription_ledger.provider` for the audit row. Complimentary grants are
-  /// not a paid rail; defaults to `referral`, promo passes `promo`.
-  provider?: string;
-}): Promise<ActivatePremiumResult> {
-  const { userId, months, externalPaymentId, note, provider = "referral" } = input;
-  if (months <= 0) return { applied: false, premiumUntil: null };
+}): Promise<ActivatePremiumResult & { periodStart: Date | null }> {
+  const { userId, months, externalPaymentId, provider, event, amount, currency, note } =
+    input;
+  if (months <= 0) return { applied: false, premiumUntil: null, periodStart: null };
 
   const existing = await prisma.user.findUnique({
     where: { id: userId },
     select: { premiumSince: true, premiumUntil: true },
   });
-  if (!existing) return { applied: false, premiumUntil: null };
+  if (!existing) return { applied: false, premiumUntil: null, periodStart: null };
 
   const now = new Date();
   const base =
@@ -282,6 +311,7 @@ export async function grantComplimentaryPremiumMonths(input: {
           premiumUntil: periodEnd,
           premiumSince: existing.premiumSince ?? now,
           // NOTE: autoRenew / provider / externalId intentionally NOT set.
+          ...RESET_EXPIRY_REMINDERS,
         },
         select: { premiumUntil: true },
       }),
@@ -289,25 +319,122 @@ export async function grantComplimentaryPremiumMonths(input: {
         data: {
           userId,
           provider,
-          event: "started",
+          event,
           externalPaymentId,
           periodStart: base,
           periodEnd,
+          amount: amount ?? null,
+          currency: currency ?? null,
           note: note ?? null,
         },
       }),
     ]);
-    return { applied: true, premiumUntil: updated.premiumUntil };
+    return { applied: true, premiumUntil: updated.premiumUntil, periodStart: base };
   } catch (err) {
     if (isUniqueViolation(err)) {
       const head = await prisma.user.findUnique({
         where: { id: userId },
         select: { premiumUntil: true },
       });
-      return { applied: false, premiumUntil: head?.premiumUntil ?? null };
+      return { applied: false, premiumUntil: head?.premiumUntil ?? null, periodStart: null };
     }
     throw err;
   }
+}
+
+/**
+ * Grant `months` of **complimentary** Premium (PRODUCT_SPEC §Referral) — the
+ * referral / promo reward path. Additive and non-clobbering; see
+ * `extendPremiumAdditive` for why. Distinct from the paid paths in that it
+ * moves no money: no amount, no currency, and no founder-feed announcement.
+ */
+export async function grantComplimentaryPremiumMonths(input: {
+  userId: string;
+  months: number;
+  externalPaymentId: string;
+  note?: string;
+  /// `subscription_ledger.provider` for the audit row. Complimentary grants are
+  /// not a paid rail; defaults to `referral`, promo passes `promo`.
+  provider?: string;
+}): Promise<ActivatePremiumResult> {
+  const { userId, months, externalPaymentId, note, provider = "referral" } = input;
+  const { applied, premiumUntil } = await extendPremiumAdditive({
+    userId,
+    months,
+    externalPaymentId,
+    provider,
+    event: "started",
+    ...(note !== undefined ? { note } : {}),
+  });
+  return { applied, premiumUntil };
+}
+
+/**
+ * Settle a **paid, fixed-length Premium package** — the 3- and 6-month
+ * one-time Telegram Stars purchases (PRODUCT_SPEC §3.8).
+ *
+ * A package is deliberately NOT a subscription, and that shows up in three
+ * places rather than one:
+ *
+ *  1. **Telegram never renews it** — the invoice is minted without a
+ *     `subscription_period`, so there is no recurring charge to anchor.
+ *  2. **It stacks** rather than replaces (`extendPremiumAdditive`), which is
+ *     what makes "buy 6 months while a month is still running" add up instead
+ *     of throwing the remainder away.
+ *  3. **Its ending is announced** — the reminder markers are cleared here, so
+ *     the expiry sweep gives this period its own 3-day and 24-hour warning.
+ *     A package with no reminder is access that disappears without notice,
+ *     which is the one failure mode a non-renewing product must not have.
+ *
+ * It IS a paid rail, so unlike the comp above it records the charged amount and
+ * announces to the founder ops feed — after the ledger insert, so a redelivered
+ * `successful_payment` (the duplicate branch) never announces the same charge
+ * twice.
+ */
+export async function activatePremiumPackage(input: {
+  userId: string;
+  months: number;
+  /** Provider charge id → exactly-once. Telegram: `telegram_payment_charge_id`. */
+  externalPaymentId: string;
+  provider?: PremiumProvider;
+  amount?: number;
+  currency?: string;
+  /** Short human label for the ops feed, e.g. "пакет 6 мес.". */
+  detail?: string;
+}): Promise<ActivatePremiumResult> {
+  const {
+    userId,
+    months,
+    externalPaymentId,
+    provider = "telegram_stars",
+    amount,
+    currency,
+    detail,
+  } = input;
+
+  const result = await extendPremiumAdditive({
+    userId,
+    months,
+    externalPaymentId,
+    provider,
+    event: "started",
+    ...(amount !== undefined ? { amount } : {}),
+    ...(currency !== undefined ? { currency } : {}),
+  });
+  if (!result.applied) return { applied: false, premiumUntil: result.premiumUntil };
+
+  void notifyFounderPurchase({
+    userId,
+    kind: "premium",
+    provider: provider === "app_store" ? "app_store" : "telegram_stars",
+    amountStars: (currency ?? "").toUpperCase() === "XTR" ? (amount ?? null) : null,
+    amountCents: (currency ?? "").toUpperCase() === "XTR" ? null : (amount ?? null),
+    currency: currency ?? null,
+    detail: detail ?? `пакет ${months} мес.`,
+    externalPaymentId,
+  });
+
+  return { applied: true, premiumUntil: result.premiumUntil };
 }
 
 /**

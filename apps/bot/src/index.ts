@@ -45,6 +45,7 @@ import { statusTimerTick } from "./workers/status-timer.js";
 import { createStatusTimerRunner } from "./workers/status-timer-runner.js";
 import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
+import { premiumExpiryReminderTick } from "./workers/premium-expiry-reminder.js";
 import { syntheticPartnerTick } from "./workers/synthetic-partner.js";
 import { sweepRematchRefunds } from "./services/rematch-refund.js";
 import { sweepVenueChangeRefunds } from "./services/venue-change-refund.js";
@@ -265,6 +266,11 @@ const VENUE_REVALIDATION_CRON_SCHEDULE =
  */
 const TICKET_EXPIRY_CRON_SCHEDULE =
   process.env.TICKET_EXPIRY_CRON_SCHEDULE ?? "0 * * * *";
+/// Gennety Premium expiry reminders (§3.8). Hourly: the buckets are 24h and 48h
+/// wide, so an hourly sweep cannot miss one, and a finer cadence would only
+/// re-ask the same question of the same rows.
+const PREMIUM_REMINDER_CRON_SCHEDULE =
+  process.env.PREMIUM_REMINDER_CRON_SCHEDULE ?? "0 * * * *";
 
 /**
  * Rematch refund retry (REMATCH_PRODUCT_SPEC.md, D1). Hourly: retries refunds
@@ -628,6 +634,29 @@ bot.start({
         ),
       );
       console.log(`[cron] Ticket expiry scheduled: "${TICKET_EXPIRY_CRON_SCHEDULE}"`);
+    }
+
+    // Premium expiry reminders (§3.8): 3 days and 24 hours before a NON-renewing
+    // paid period ends. Gated on the same flag as the purchase surfaces — this
+    // message exists to sell the next period, so with sales paused there is
+    // nowhere to send anyone. An entitlement already paid for is unaffected
+    // either way; it simply runs out as it does today.
+    if (env.PREMIUM_FEATURE_ENABLED) {
+      cron.schedule(
+        PREMIUM_REMINDER_CRON_SCHEDULE,
+        guardedTick("premium-reminder", () =>
+          premiumExpiryReminderTick(bot.api).then((r) => {
+            if (r.sent3d + r.sent1d + r.failed > 0) {
+              console.log(
+                `[premium-reminder] 3d=${r.sent3d} 1d=${r.sent1d} failed=${r.failed}`,
+              );
+            }
+          }),
+        ),
+      );
+      console.log(
+        `[cron] Premium expiry reminder scheduled: "${PREMIUM_REMINDER_CRON_SCHEDULE}"`,
+      );
     }
 
     // Rematch refunds: retry failed refunds + reverse abandoned purchases.

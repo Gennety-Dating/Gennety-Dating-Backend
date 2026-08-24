@@ -60,8 +60,22 @@ interface Copy {
   b3d: string;
   b3x: string;
   more: string;
+  // Plan picker (§3.8 — 1 / 3 / 6 months).
+  planMonthly: string;
+  plan3: string;
+  plan6: string;
+  planPerMonth: (p: string) => string;
+  planSave: (pct: number) => string;
+  planOneOff: string;
   price: (p: string) => string;
   subscribe: (p: string) => string;
+  /**
+   * The CTA for a PACKAGE. Separate from `subscribe` because that one appends a
+   * "/mo" rate suffix, and a package's price is a total: rendering "$75.56/mo"
+   * on the button that charges $75.56 once misstates the price on the one
+   * control whose whole job is to state it.
+   */
+  buyPackage: (p: string) => string;
   activeBadge: string;
   activePlateUntil: (d: string) => string;
   manage: string;
@@ -84,8 +98,15 @@ const COPY: Record<Lang, Copy> = {
     b2x: "Premium unlocks a separate tier of hand-picked spots — nicer, more memorable places that stay locked for everyone else. They show up on the venue board the moment your subscription is active.",
     b2link: "See the places",
     more: "More perks are on the way.",
-    price: (p) => `${p}/month · cancel anytime`,
+    planMonthly: "1 month",
+  plan3: "3 months",
+  plan6: "6 months",
+  planPerMonth: (p: string) => `${p}/mo`,
+  planSave: (pct: number) => `−${pct}%`,
+  planOneOff: "one payment · no auto-renewal",
+  price: (p) => `${p}/month · cancel anytime`,
     subscribe: (p) => `Subscribe — ${p}/mo`,
+    buyPackage: (p) => `Get Premium — ${p}`,
     activeBadge: "PREMIUM ACTIVE",
     activePlateUntil: (d) => `until ${d}`,
     manage: "Manage or cancel anytime in Telegram → Settings → Subscriptions.",
@@ -106,8 +127,15 @@ const COPY: Record<Lang, Copy> = {
     b2x: "Premium открывает отдельный тир заведений — места получше, отобранные вручную, которые для остальных закрыты. Они появляются в подборе сразу, как только подписка активна.",
     b2link: "Посмотреть места",
     more: "Дальше будет больше.",
-    price: (p) => `${p}/месяц · отмена в любой момент`,
+    planMonthly: "1 месяц",
+  plan3: "3 месяца",
+  plan6: "6 месяцев",
+  planPerMonth: (p: string) => `${p}/мес`,
+  planSave: (pct: number) => `−${pct}%`,
+  planOneOff: "один платёж · без автопродления",
+  price: (p) => `${p}/месяц · отмена в любой момент`,
     subscribe: (p) => `Оформить — ${p}/мес`,
+    buyPackage: (p) => `Оформить — ${p}`,
     activeBadge: "PREMIUM АКТИВЕН",
     activePlateUntil: (d) => `до ${d}`,
     manage: "Управлять и отменить — в Telegram → Настройки → Подписки.",
@@ -128,8 +156,15 @@ const COPY: Record<Lang, Copy> = {
     b2x: "Premium відкриває окремий тір закладів — кращі місця, відібрані вручну, які для інших закриті. Вони з’являються в підборі щойно підписка активна.",
     b2link: "Подивитись місця",
     more: "Далі буде більше.",
-    price: (p) => `${p}/місяць · скасування будь-коли`,
+    planMonthly: "1 місяць",
+  plan3: "3 місяці",
+  plan6: "6 місяців",
+  planPerMonth: (p: string) => `${p}/міс`,
+  planSave: (pct: number) => `−${pct}%`,
+  planOneOff: "один платіж · без автопродовження",
+  price: (p) => `${p}/місяць · скасування будь-коли`,
     subscribe: (p) => `Оформити — ${p}/міс`,
+    buyPackage: (p) => `Оформити — ${p}`,
     activeBadge: "PREMIUM АКТИВНИЙ",
     activePlateUntil: (d) => `до ${d}`,
     manage: "Керувати та скасувати — у Telegram → Налаштування → Підписки.",
@@ -150,8 +185,15 @@ const COPY: Record<Lang, Copy> = {
     b2x: "Premium schaltet eine eigene Kategorie handverlesener Orte frei — schönere, besondere Plätze, die für alle anderen gesperrt bleiben. Sie erscheinen im Ortsboard, sobald dein Abo aktiv ist.",
     b2link: "Orte ansehen",
     more: "Mehr kommt bald.",
-    price: (p) => `${p}/Monat · jederzeit kündbar`,
+    planMonthly: "1 Monat",
+  plan3: "3 Monate",
+  plan6: "6 Monate",
+  planPerMonth: (p: string) => `${p}/Mon.`,
+  planSave: (pct: number) => `−${pct}%`,
+  planOneOff: "einmalige Zahlung · keine Verlängerung",
+  price: (p) => `${p}/Monat · jederzeit kündbar`,
     subscribe: (p) => `Abonnieren — ${p}/Mon.`,
+    buyPackage: (p) => `Premium holen — ${p}`,
     activeBadge: "PREMIUM AKTIV",
     activePlateUntil: (d) => `bis ${d}`,
     manage: "Verwalten oder kündigen in Telegram → Einstellungen → Abos.",
@@ -172,8 +214,15 @@ const COPY: Record<Lang, Copy> = {
     b2x: "Premium odblokowuje osobny poziom ręcznie wybranych miejsc — lepszych i bardziej wyjątkowych, zamkniętych dla pozostałych. Pojawiają się w tablicy, gdy tylko subskrypcja jest aktywna.",
     b2link: "Zobacz miejsca",
     more: "Więcej wkrótce.",
-    price: (p) => `${p}/miesiąc · anulujesz kiedy chcesz`,
+    planMonthly: "1 miesiąc",
+  plan3: "3 miesiące",
+  plan6: "6 miesięcy",
+  planPerMonth: (p: string) => `${p}/mies.`,
+  planSave: (pct: number) => `−${pct}%`,
+  planOneOff: "jedna płatność · bez odnowienia",
+  price: (p) => `${p}/miesiąc · anulujesz kiedy chcesz`,
     subscribe: (p) => `Subskrybuj — ${p}/mies.`,
+    buyPackage: (p) => `Kup Premium — ${p}`,
     activeBadge: "PREMIUM AKTYWNE",
     activePlateUntil: (d) => `do ${d}`,
     manage: "Zarządzaj lub anuluj w Telegram → Ustawienia → Subskrypcje.",
@@ -191,8 +240,26 @@ interface PremiumState {
   autoRenew: boolean;
   priceStars: number;
   priceDisplay: string;
+  /**
+   * The purchase plans, PRICED BY THE SERVER. This page never computes a
+   * discount of its own: a bundle doing `stars × months × 0.85` locally is a
+   * second implementation of the pricing rule, and a cached older bundle would
+   * keep showing yesterday's number after a repricing — on the screen that asks
+   * for money.
+   */
+  plans?: PremiumPlanOffer[];
   /** Drives the "invite a friend instead" referral cross-promo link. */
   referralEnabled?: boolean;
+}
+
+interface PremiumPlanOffer {
+  id: string;
+  months: number;
+  recurring: boolean;
+  stars: number;
+  discountPct: number;
+  priceDisplay: string | null;
+  perMonthDisplay: string | null;
 }
 
 const root = document.getElementById("root")!;
@@ -228,14 +295,14 @@ async function fetchState(): Promise<PremiumState> {
   return (await res.json()) as PremiumState;
 }
 
-async function mintInvoice(): Promise<string> {
+async function mintInvoice(plan: string): Promise<string> {
   const res = await apiFetch(`${apiBase}/v1/premium/stars-invoice`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `tma ${getInitData()}`,
     },
-    body: JSON.stringify({ product: "premium" }),
+    body: JSON.stringify({ plan }),
   });
   if (!res.ok) throw new Error(`invoice ${res.status}`);
   const body = (await res.json()) as { link: string };
@@ -432,26 +499,96 @@ function renderOffer(state: PremiumState): void {
 
   const action = el("div", "pm-action");
 
+  // Plans, if the server sent a catalog. An older server (or a 1-plan future)
+  // falls through to the original single monthly CTA rather than rendering an
+  // empty picker — the button is what this screen is for.
+  const plans = state.plans ?? [];
+  let selected = plans.find((p) => p.id === "monthly") ?? plans[0] ?? null;
+
   const btn = el("button", "pm-cta") as HTMLButtonElement;
-  btn.append(el("span", undefined, s.subscribe(state.priceDisplay)));
-  btn.addEventListener("click", () => void subscribe(btn));
+  const btnLabel = el("span");
+  btn.append(btnLabel);
+  const terms = el("p", "pm-price");
+
+  const paint = (): void => {
+    const price = selected?.priceDisplay ?? state.priceDisplay;
+    // "/mo" belongs only on the recurring plan. A package charges its total
+    // once, so appending a rate to it would put a wrong price on the button.
+    btnLabel.textContent =
+      selected && !selected.recurring ? s.buyPackage(price) : s.subscribe(price);
+    // The monthly plan keeps the terms line exactly as it shipped. A package
+    // replaces it with the ONE thing that differs and is not visible on the row
+    // above: it does not come back next month. Saying that only where it is
+    // true also keeps the line to one row — the Russian "renews monthly ·
+    // cancel anytime" wrapped to two and grew this `flex: none` footer.
+    terms.textContent = selected && !selected.recurring ? s.planOneOff : s.price(price);
+  };
+
+  if (plans.length > 1) {
+    const picker = el("div", "pm-plans");
+    picker.setAttribute("role", "radiogroup");
+    for (const plan of plans) {
+      const row = el("button", "pm-plan") as HTMLButtonElement;
+      row.type = "button";
+      row.setAttribute("role", "radio");
+
+      const name = el(
+        "span",
+        "pm-plan-name",
+        plan.months === 1 ? s.planMonthly : plan.months === 3 ? s.plan3 : s.plan6,
+      );
+      const head = el("span", "pm-plan-head");
+      head.append(name);
+      if (plan.discountPct > 0) {
+        head.append(el("span", "pm-plan-save", s.planSave(plan.discountPct)));
+      }
+
+      const meta = el("span", "pm-plan-meta");
+      meta.append(el("span", "pm-plan-price", plan.priceDisplay ?? `${plan.stars} ⭐`));
+      if (plan.perMonthDisplay && plan.months > 1) {
+        meta.append(el("span", "pm-plan-permonth", s.planPerMonth(plan.perMonthDisplay)));
+      }
+
+      row.append(head, meta);
+      row.addEventListener("click", () => {
+        if (busy) return;
+        selected = plan;
+        for (const other of picker.querySelectorAll(".pm-plan")) {
+          const isMe = other === row;
+          other.classList.toggle("is-selected", isMe);
+          other.setAttribute("aria-checked", isMe ? "true" : "false");
+        }
+        haptic("success");
+        paint();
+      });
+
+      const isSelected = selected?.id === plan.id;
+      row.classList.toggle("is-selected", isSelected);
+      row.setAttribute("aria-checked", isSelected ? "true" : "false");
+      picker.append(row);
+    }
+    action.append(picker);
+  }
+
+  paint();
+  btn.addEventListener("click", () => void subscribe(btn, selected?.id ?? "monthly"));
   action.append(btn);
 
   // Only the price/terms sit under the button now. How to cancel lives in the
   // bot conversation (the agent can explain it and cancel on request), not here.
-  action.append(el("p", "pm-price", s.price(state.priceDisplay)));
+  action.append(terms);
 
   page.append(scroll, action);
   root.replaceChildren(page);
 }
 
-async function subscribe(btn: HTMLButtonElement): Promise<void> {
+async function subscribe(btn: HTMLButtonElement, plan: string): Promise<void> {
   if (busy) return;
   busy = true;
   btn.disabled = true;
   let link: string;
   try {
-    link = await mintInvoice();
+    link = await mintInvoice(plan);
   } catch {
     busy = false;
     btn.disabled = false;
@@ -513,6 +650,35 @@ async function load(): Promise<void> {
       autoRenew: true,
       priceStars: 750,
       priceDisplay: "$17.99",
+      plans: [
+        {
+          id: "monthly",
+          months: 1,
+          recurring: true,
+          stars: 750,
+          discountPct: 0,
+          priceDisplay: "$17.99",
+          perMonthDisplay: "$17.99",
+        },
+        {
+          id: "months3",
+          months: 3,
+          recurring: false,
+          stars: 1912,
+          discountPct: 15,
+          priceDisplay: "$45.86",
+          perMonthDisplay: "$15.29",
+        },
+        {
+          id: "months6",
+          months: 6,
+          recurring: false,
+          stars: 3150,
+          discountPct: 30,
+          priceDisplay: "$75.56",
+          perMonthDisplay: "$12.59",
+        },
+      ],
       referralEnabled: true,
     };
     if (preview === "active") renderActive(mock);

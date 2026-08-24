@@ -52,6 +52,14 @@ export interface PlaybookPricing {
   ticketPrice: string;
   /** Formatted Premium monthly price, e.g. "$17.99". */
   premiumPrice: string;
+  /**
+   * Formatted prices of the fixed-length Premium packages, e.g.
+   * `{ 3: "$45.86", 6: "$75.56" }`. Injected for the same reason the monthly
+   * price is: they are DERIVED from `PREMIUM_STARS`, so a repricing must not
+   * leave the agent quoting a stale discount. Empty when the display price
+   * carries no number to scale.
+   */
+  premiumPackagePrices: Partial<Record<3 | 6, string>>;
   /** Formatted Rematch price, e.g. "$2.99". */
   rematchPrice: string;
 }
@@ -60,6 +68,7 @@ export interface PlaybookPricing {
 const DEFAULT_PRICING: PlaybookPricing = {
   ticketPrice: "$6.99",
   premiumPrice: "$17.99",
+  premiumPackagePrices: { 3: "$45.86", 6: "$75.56" },
   rematchPrice: "$2.99",
 };
 
@@ -275,7 +284,17 @@ export function buildProductPlaybook(
 
   if (features.premium) {
     sections.push(`## Gennety Premium (currently ON)
-- Premium is an optional subscription (${pricing.premiumPrice}/month). Perks: free venue changes and access to a premium tier of nicer venues. Bought from the ✨ Gennety Premium menu row → the Premium Mini App (pays in Telegram Stars). It renews every 30 days; access always runs to the paid-through date.
+- Premium is optional. Perks: every date covered (no Date Ticket needed), free venue changes, and access to a premium tier of nicer venues. Bought from the ✨ Gennety Premium menu row → the Premium Mini App (pays in Telegram Stars).
+- THREE ways to buy it, all the same Premium: ${pricing.premiumPrice}/month, which RENEWS every 30 days until cancelled;${
+      pricing.premiumPackagePrices[3]
+        ? ` 3 months for ${pricing.premiumPackagePrices[3]} (15% off);`
+        : ""
+    }${
+      pricing.premiumPackagePrices[6]
+        ? ` 6 months for ${pricing.premiumPackagePrices[6]} (30% off).`
+        : ""
+    } The 3- and 6-month options are ONE-TIME purchases — they do NOT renew, so there is nothing to cancel on them and no further charge. Access always runs to the paid-through date, and buying again while a period is still running ADDS to it rather than replacing it.
+- Before a non-renewing period ends I message them 3 days out and again 24 hours out, so nobody loses access without warning. Do not promise a reminder to someone on the monthly plan — theirs renews on its own, so nothing is ending.
 - CANCELLING: if the user wants to cancel / stop / turn off Premium (or asks how), call the \`offer_cancel_premium\` tool. It shows them a confirm button (for Telegram Stars subs, you can cancel it right here in chat) or the exact iOS-Settings steps (for App Store subs — those can only be cancelled on their iPhone). NEVER claim you cancelled from text alone; the actual cancel is always a button tap. When it's cancelled, they keep Premium until the paid period ends and are NOT charged again — there is no mid-period refund. After a confirmed cancel, gently ask why (one line) so we can improve, but never push if they'd rather not say.
 - Do NOT call \`offer_cancel_premium\` for general questions about Premium, its price, or its perks — only when they actually want to cancel.`);
   }

@@ -45,6 +45,20 @@
   --pm-bf-a: #ffffff;
   --pm-bf-b: #b6b6c0;
 
+  /* Plan segments (§3.8). Deliberately their OWN pair rather than a reuse of
+     --pm-glass-tile / --pm-glass-fill: those two are calibrated for the status
+     plate and the benefit tiles, and on the LIGHT theme they invert here —
+     `--pm-glass-fill` is a white 0.75→0.40 gradient, so on a white page the
+     SELECTED cell renders whiter than the page while the unselected ones carry
+     an ink tint. The control then reads back to front: the chosen plan looks
+     like the background. The invariant these tokens hold instead is one
+     sentence — the selected cell is always MORE present than its neighbours —
+     which on dark means brighter and on light means more tinted. */
+  --pm-seg: rgba(255, 255, 255, 0.07);
+  --pm-seg-on: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.1) 100%);
+  --pm-seg-on-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+
   --pm-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --tg-content-top: 56px;
   --tg-content-bottom: 0px;
@@ -63,6 +77,13 @@
   --pm-glass-rim: rgba(0, 0, 0, 0.14);
   --pm-glass-hi: rgba(255, 255, 255, 0.95);
   --pm-glass-tile: rgba(0, 0, 0, 0.045);
+
+  /* Same rule, opposite direction: on cream, "more present" is more ink. No
+     white gradient and no white rim — a white edge held inside a pale button on
+     a pale page reads as a frame drawn around it, not as light. */
+  --pm-seg: rgba(0, 0, 0, 0.04);
+  --pm-seg-on: linear-gradient(180deg, rgba(0, 0, 0, 0.13) 0%, rgba(0, 0, 0, 0.09) 100%);
+  --pm-seg-on-edge: inset 0 0 0 1px rgba(0, 0, 0, 0.09);
 
   /* On the cream page the CTA flips to an ink-black glass with white text — the
      "black shades" side of the monochrome identity, high-contrast and glossy. */
@@ -463,6 +484,104 @@ body {
    `.gn-referral` chip (`referral-hint.css`) and it lives at the tail of
    `.pm-scroll`. Anything added to `.pm-action` grows this footer and pushes the
    CTA up the screen, which is exactly what that row used to do. */
+
+/* THE PLAN PICKER — 1 / 3 / 6 months (§3.8).
+ *
+ * This is the one thing that may live in `.pm-action` alongside the CTA, and
+ * the exception is narrow enough to state: the button's label IS a price, so a
+ * picker parked at the tail of the scroll would let someone tap
+ * "Subscribe — $75.56" with the thing that chose that number off-screen. The
+ * referral chip above was moved OUT of this footer precisely because it bought
+ * the purchase nothing; this decides what the purchase is.
+ *
+ * It is laid out as ONE horizontal row of three cells rather than three stacked
+ * rows for the same reason that rule exists: three rows would add ~150px to a
+ * `flex: none` footer and push the CTA up the screen, while one row costs ~62px.
+ *
+ * Borderless like everything else here — the selected cell is distinguished by
+ * a brighter fill and an inset rim of light, never by an outline. */
+.pm-plans {
+  display: grid;
+  /* `minmax(0, 1fr)`, not `1fr`: the bare keyword is `minmax(auto, 1fr)`, so a
+     longer label ("6 месяцев" vs "1 месяц") widens its own cell and the three
+     come out 101 / 113 / 122px — measured. Unequal cells read as three
+     different objects rather than as one control with three positions, and the
+     widths would then also shift per locale. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.pm-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: none;
+  border-radius: 16px;
+  padding: 10px 6px;
+  background: var(--pm-seg);
+  color: var(--pm-ink);
+  font-family: "Inter", system-ui, sans-serif;
+  cursor: pointer;
+  /* Only the fill and the inner light move on selection; a transition on
+     `all` would also animate the layout properties above and make the row
+     visibly reflow every time the user compares two plans. */
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+.pm-plan.is-selected {
+  background: var(--pm-seg-on);
+  box-shadow: var(--pm-seg-on-edge);
+}
+.pm-plan-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.pm-plan-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+/* The discount badge. It is the loudest thing in the cell on purpose — it is
+   the entire argument for the longer commitment — but it is still typography
+   on a tint, not a second colour: this screen's palette is monochrome. */
+.pm-plan-save {
+  flex: none;
+  border-radius: 999px;
+  padding: 1px 5px;
+  background: var(--pm-glow-soft);
+  color: var(--pm-ink);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.pm-plan-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+}
+.pm-plan-price {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* The per-month figure is what makes the discount legible as a RATE rather than
+   as a bigger number — the 6-month cell has the largest price and the smallest
+   monthly cost, and without this line it simply looks like the expensive one. */
+.pm-plan-permonth {
+  color: var(--pm-ink-soft);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 
 /* THE HERO ACTION — a clean liquid-glass pill (same recipe as the onboarding
    AI-memory primary): a bright glossy fill (so the label is always fully

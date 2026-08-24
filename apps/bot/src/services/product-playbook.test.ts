@@ -125,15 +125,61 @@ describe("buildProductPlaybook", () => {
     it("quotes the injected prices, never a hardcoded literal", () => {
       const text = buildProductPlaybook(
         { ...ALL_ON, rematch: true },
-        { ticketPrice: "$4.20", premiumPrice: "$42.00", rematchPrice: "$1.23" },
+        {
+          ticketPrice: "$4.20",
+          premiumPrice: "$42.00",
+          premiumPackagePrices: { 3: "$107.10", 6: "$176.40" },
+          rematchPrice: "$1.23",
+        },
       );
       expect(text).toContain("$4.20");
       expect(text).toContain("$42.00");
       expect(text).toContain("$1.23");
+      // The packages are injected for the same reason as the monthly price:
+      // they are derived from PREMIUM_STARS, so a repricing must not leave the
+      // agent quoting a discount the invoice will not honour.
+      expect(text).toContain("$107.10");
+      expect(text).toContain("$176.40");
       // The old inline literals must be gone, or an env price change silently
       // turns the agent into a source of wrong prices.
       expect(text).not.toContain("$6.99");
       expect(text).not.toContain("$11.99");
+    });
+
+    it("omits a package whose price could not be derived", () => {
+      // `premiumPlanDisplayPrice` returns null when the configured display
+      // string carries no number. The playbook's own rule is that the agent
+      // describes only what is listed here, so an underivable price must leave
+      // the agent silent rather than quoting a default nobody configured.
+      const text = buildProductPlaybook(
+        { ...ALL_ON, rematch: true },
+        {
+          ticketPrice: "$4.20",
+          premiumPrice: "$42.00",
+          premiumPackagePrices: {},
+          rematchPrice: "$1.23",
+        },
+      );
+      expect(text).not.toMatch(/3 months for/);
+      expect(text).not.toMatch(/6 months for/);
+      // The monthly plan is still described — the section does not vanish.
+      expect(text).toContain("$42.00");
+    });
+
+    it("tells the agent a package does NOT renew", () => {
+      // The one thing a buyer must not be wrong about, and the reason the
+      // reminder exists at all.
+      const text = buildProductPlaybook(
+        { ...ALL_ON, rematch: true },
+        {
+          ticketPrice: "$4.20",
+          premiumPrice: "$42.00",
+          premiumPackagePrices: { 3: "$107.10", 6: "$176.40" },
+          rematchPrice: "$1.23",
+        },
+      );
+      expect(text).toMatch(/do NOT renew/i);
+      expect(text).toMatch(/3 days out/i);
     });
   });
 

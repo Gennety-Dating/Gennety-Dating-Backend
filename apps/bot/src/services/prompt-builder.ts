@@ -11,6 +11,8 @@ import { prisma } from "@gennety/db";
 import {
   CADENCE,
   dropOutpacesNotices,
+  premiumPlanDisplayPrice,
+  PREMIUM_PLANS,
   VOICE_SELF_GENDER,
   VOICE_SELF_NAME,
 } from "@gennety/shared";
@@ -96,6 +98,9 @@ function playbookPricing(): PlaybookPricing {
   return {
     ticketPrice: `$${(env.TICKET_PRICE_CENTS / 100).toFixed(2)}`,
     premiumPrice: env.PREMIUM_PRICE_USD_DISPLAY,
+    // Derived from the same monthly price the packages are actually charged at,
+    // so the agent cannot quote a discount the invoice does not honour.
+    premiumPackagePrices: premiumPackagePrices(),
     rematchPrice: env.REMATCH_PRICE_USD_DISPLAY,
   };
 }
@@ -107,6 +112,31 @@ const asHours = (ms: number): number => Math.round(ms / HOUR_MS);
  * Every deadline the playbook states, derived from the live cadence profile
  * rather than written into the prose — see {@link PlaybookCadence}.
  */
+/**
+ * The package prices the agent may quote, derived from the same monthly Star
+ * price the invoices are actually charged at. A plan whose display price cannot
+ * be derived (a `PREMIUM_PRICE_USD_DISPLAY` carrying no number) is OMITTED
+ * rather than defaulted: the playbook's own rule is that the agent describes
+ * only what is listed there, so leaving it out makes the agent stay quiet
+ * instead of quoting a figure nobody configured.
+ */
+function premiumPackagePrices(): Partial<Record<3 | 6, string>> {
+  const out: Partial<Record<3 | 6, string>> = {};
+  const three = premiumPlanDisplayPrice(
+    PREMIUM_PLANS[1],
+    env.PREMIUM_STARS,
+    env.PREMIUM_PRICE_USD_DISPLAY,
+  );
+  const six = premiumPlanDisplayPrice(
+    PREMIUM_PLANS[2],
+    env.PREMIUM_STARS,
+    env.PREMIUM_PRICE_USD_DISPLAY,
+  );
+  if (three) out[3] = three;
+  if (six) out[6] = six;
+  return out;
+}
+
 function playbookCadence(): PlaybookCadence {
   return {
     silentDrops: dropOutpacesNotices(),

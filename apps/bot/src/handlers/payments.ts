@@ -9,13 +9,20 @@ import {
   parseSubInvoicePayload,
   parseRematchInvoicePayload,
   ticketBundleFor,
+  premiumPlanById,
+  premiumPlanStars,
   PREMIUM_SUBSCRIPTION_PERIOD_SECONDS,
+  type PremiumPlan,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { grantTickets, isUniqueViolation } from "../services/ticket-wallet.js";
 import { gateStarsForScope } from "../services/ticket-payment.js";
 import { recordChatEventForChat } from "../services/chat-events.js";
-import { activateOrExtendPremium, formatPremiumUntil } from "../services/premium.js";
+import {
+  activateOrExtendPremium,
+  activatePremiumPackage,
+  formatPremiumUntil,
+} from "../services/premium.js";
 import { notifyFounderPurchase } from "../services/founder-notify.js";
 import { runStatusSequence, NEVER_CUT_SHORT } from "../services/ai-stream.js";
 import { rematchSearchSteps } from "../services/analysis-status.js";
@@ -89,11 +96,21 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
       query.currency === "XTR" &&
       query.total_amount === expectedStars;
   } else if (sub != null) {
-    // Premium subscription — payload `sub:premium`. The amount is the only thing
-    // to re-validate here (there's no per-user state to check; the recurring
-    // charge is anchored by the subscription itself). A stale/tampered amount is
-    // declined before any Stars move.
-    ok = query.currency === "XTR" && query.total_amount === env.PREMIUM_STARS;
+    // Premium — payload `sub:premium` (recurring monthly) or `sub:premium3` /
+    // `sub:premium6` (one-time packages). The amount is the only thing to
+    // re-validate here: there is no per-user state to check, since a package
+    // stacks onto whatever the user already has and the recurring charge is
+    // anchored by the subscription itself.
+    //
+    // The expected amount is DERIVED from the plan rather than compared against
+    // a stored price, so a link minted before a repricing is declined here
+    // instead of settling months at yesterday's rate — the same reason the gate
+    // and venue branches re-derive theirs.
+    const plan = premiumPlanById(sub.plan);
+    ok =
+      plan != null &&
+      query.currency === "XTR" &&
+      query.total_amount === premiumPlanStars(plan, env.PREMIUM_STARS);
   } else if (venue != null) {
     // Venue change — payload `venue:<matchId>:<mode>`. Invoice links are
     // reusable, so beyond the amount we also confirm the swap is still
@@ -189,7 +206,13 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
     // still credits nothing.
     const sub = parseSubInvoicePayload(payment.invoice_payload);
     if (sub != null) {
-      await handlePremiumSuccessfulPayment(ctx, payment);
+      const plan = premiumPlanById(sub.plan);
+      // An unknown plan cannot be priced or granted; leave it unsettled rather
+      // than guessing a length. `parseSubInvoicePayload` already refuses foreign
+      // tags, so this only fires if the catalog and the payload map diverge.
+      if (!plan) return;
+      if (plan.recurring) await handlePremiumSuccessfulPayment(ctx, payment);
+      else await handlePremiumPackagePayment(ctx, plan, payment);
       return;
     }
     const venue = parseVenueInvoicePayload(payment.invoice_payload);
@@ -326,6 +349,70 @@ async function handlePremiumSuccessfulPayment(
     } catch {
       await ctx.reply(text.replace(/[*_`[\]]/g, "")).catch(() => {});
     }
+  }
+}
+
+/**
+ * §3.8 Premium PACKAGE Star payment (payload `sub:premium3` / `sub:premium6`).
+ *
+ * A one-time purchase of a fixed block of months. Three things separate it from
+ * the recurring branch above, and each one is a place the obvious code is wrong:
+ *
+ *  1. **There is no `subscription_expiration_date`.** Telegram only sends that
+ *     for a subscription invoice, so the period end cannot be read off the
+ *     payment — it is computed from the plan's month count, stacked onto
+ *     whatever the user already has (`activatePremiumPackage`).
+ *  2. **It must not claim the recurring head.** Writing `premiumAutoRenew`,
+ *     `premiumProvider` or `premiumExternalId` here would either invent a
+ *     renewal that Telegram will never make, or overwrite a live monthly
+ *     subscriber's cancellation anchor with a charge id that cannot cancel
+ *     anything.
+ *  3. **Every charge is a first period.** There are no silent renewals to
+ *     suppress, so unlike the monthly branch this always DMs — the whole point
+ *     of a fixed block is that the user knows how long they bought.
+ *
+ * Exactly-once is the shared `SubscriptionLedger.externalPaymentId`: a
+ * redelivered `successful_payment` returns `applied: false` and neither grants
+ * months again nor re-DMs.
+ */
+async function handlePremiumPackagePayment(
+  ctx: BotContext,
+  plan: PremiumPlan,
+  payment: { total_amount: number; telegram_payment_charge_id: string },
+): Promise<void> {
+  const telegramId = BigInt(ctx.from!.id);
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, language: true },
+  });
+  if (!user) return;
+
+  console.info(
+    `[stars] premium package user=${user.id} plan=${plan.id} months=${plan.months} ` +
+      `stars=${payment.total_amount} charge=${payment.telegram_payment_charge_id}`,
+  );
+
+  const result = await activatePremiumPackage({
+    userId: user.id,
+    months: plan.months,
+    externalPaymentId: payment.telegram_payment_charge_id,
+    provider: "telegram_stars",
+    amount: payment.total_amount,
+    currency: "XTR",
+    detail: `пакет ${plan.months} мес.`,
+  });
+  // Duplicate redelivery, or an unknown user — nothing to announce.
+  if (!result.applied) return;
+
+  const lang = (user.language ?? "en") as Language;
+  const text = t(lang, "premiumPackageWelcomeDm", {
+    months: plan.months,
+    date: formatPremiumUntil(result.premiumUntil, lang),
+  });
+  try {
+    await ctx.reply(text, { parse_mode: "Markdown" });
+  } catch {
+    await ctx.reply(text.replace(/[*_`[\]]/g, "")).catch(() => {});
   }
 }
 

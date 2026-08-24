@@ -5639,6 +5639,92 @@ user already paid for stays valid regardless of the flag.
   `cancelled` ledger row's `note` for churn analysis. Telegram-only (the menu
   agent is Telegram-only); iOS cancels natively via Apple.
 
+**Three ways to buy it, one entitlement (2026-08-24).** The monthly plan is
+joined by two fixed-length packages — **3 months at 15% off** and **6 months at
+30% off** — sold as ONE-TIME Telegram Stars invoices. Every price is derived
+from `PREMIUM_STARS` (`packages/shared/src/premium-plans.ts`), so a repricing
+stays a single env change and the three plans cannot drift apart; at 750⭐ that
+is 750 / 1912 / 3150⭐. **The derivation rounds DOWN**, because a fractional
+result (750 × 3 × 0.85 = 1912.5) has to land on a whole Star and the two
+directions are not equally safe: rounding up charges more than the advertised
+"−15%", i.e. makes the label on the button a lie, while rounding down means the
+buyer always gets at least the discount promised. The displayed currency price
+is scaled by the STAR ratio rather than by the discount, so the label tracks
+exactly what is charged, rounding included.
+
+**A package is deliberately not a subscription, and that is a platform fact
+before it is a product choice.** Telegram supports a 30-day `subscription_period`
+and nothing else, so "3 months, renewing" is not expressible as a native Stars
+subscription at all. What replaces the renewal is the expiry reminder below —
+which is why the two shipped together: **a fixed-length product whose end is
+never announced is access that silently vanishes.**
+
+Four rules hold the two shapes apart, and each is a place the obvious
+implementation is wrong:
+
+- **A package STACKS, never replaces.** The new period is counted from
+  `max(now, premiumUntil)`, so buying 6 months while a month is still running
+  adds up instead of throwing the remainder away.
+- **A package never claims the recurring head.** `premiumAutoRenew`,
+  `premiumProvider` and `premiumExternalId` describe *the subscription*, so a
+  package leaves all three untouched — the same rule the referral comp already
+  follows. Writing them would either invent a renewal Telegram will never make,
+  or overwrite a live monthly subscriber's cancellation anchor with a charge id
+  that cannot cancel anything. The consequence is wanted in both directions: a
+  package buyer with no subscription ends up Premium-active with
+  `premiumAutoRenew = false`, which is correct (nothing renews) and is exactly
+  what makes the reminder fire for them.
+- **A paid grant may only ever EXTEND `premiumUntil`.** Telegram and Apple hand
+  us an absolute "paid through" instant, and for a pure subscription each one is
+  later than the last — so this guard is a no-op there and exists for the mixed
+  case packages introduce: a monthly subscriber who buys 6 months has
+  `premiumUntil` half a year out, and their next ordinary 30-day renewal carries
+  an expiry ~30 days out. Writing that through would **silently delete five
+  months of paid access on a charge the user had just made.** `revokePremium`
+  (a refund) remains the one path allowed to shorten it.
+- **Every package charge is a first period.** There are no silent renewals to
+  suppress, so unlike the monthly rail it always DMs: the whole point of buying
+  a fixed block is knowing how long you bought.
+
+**The `sub:premium` payload still means MONTHLY, permanently.** Telegram
+redelivers the ORIGINAL payload on every auto-renewal, so that tag is a frozen
+wire format; the packages are `sub:premium3` / `sub:premium6`. Repointing the
+old tag at a package would grant months for a monthly charge on every existing
+subscriber's renewal.
+
+**Access is not silently lost (§3.8 → the expiry reminder).** Two DMs per paid
+period — **3 days out, then 24 hours out** — each carrying a button into the
+Premium Mini App, where all three plans live so the user picks the next stretch
+rather than being sold one specific thing. Five properties are load-bearing:
+
+- **Only a NON-auto-renewing entitlement is reminded.** While Telegram or Apple
+  is still charging, nothing is ending, and "your access runs out on the 3rd"
+  is simply false — said to the one cohort paying every month. Read the other
+  way, the same condition is exactly right for everyone it includes: a package
+  buyer (never renews by construction) and a subscriber who has already
+  cancelled (whose access really does end) both need the warning.
+- **Once per PERIOD, not once per user.** Every path that advances
+  `premiumUntil` clears both markers, so buying again earns a fresh pair.
+  Without that reset a renewing user would be warned once in their life and
+  every later period would lapse in silence.
+- **Inside 24 hours only the accurate message is sent.** The two buckets are
+  mutually exclusive, so a package bought with under three days of runway yields
+  one honest warning rather than two contradictory ones.
+- **Quiet hours can delay a reminder, never cancel one.** The Kyiv quiet window
+  is 10 hours and the narrower bucket is 24 hours wide, so every eligible user
+  has waking hours inside their own window.
+- **Telegram-only, deliberately.** No push leg: the only way to buy Premium
+  today is Telegram Stars, since the App Store subscription group has never been
+  submitted (deploy.md), so a lock-screen banner telling an app-only user their
+  access is ending would point at a purchase path that does not exist — the same
+  reasoning §3.5b uses to withhold the Premium counterfactual from `/v1/*`.
+
+**Demo mode sells the monthly plan only.** The demo has no mock rail for Stars,
+and this route has never consulted `TICKET_STARS_ENABLED`, so a tap there
+already mints a real invoice for a real charge; the packages stay out so one
+accidental tap cannot cost a visitor ~$75 instead of ~$18. Refused server-side
+rather than merely hidden — the catalog is the client's list, not the boundary.
+
 **Benefit #1 — unlimited dates (2026-08-22).** An active subscription covers the
 subscriber's own Date Ticket at the §3.5b gate, every time, with no per-date
 charge and no wallet spend — see that section for the mechanics and for why

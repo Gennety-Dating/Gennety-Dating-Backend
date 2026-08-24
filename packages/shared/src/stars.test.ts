@@ -10,6 +10,7 @@ import {
   SUB_INVOICE_PREFIX,
   buildSubInvoicePayload,
   parseSubInvoicePayload,
+  subProductForPlan,
   REMATCH_INVOICE_PREFIX,
   buildRematchInvoicePayload,
   parseRematchInvoicePayload,
@@ -105,11 +106,28 @@ describe("venue-change invoice payload", () => {
 });
 
 describe("subscription invoice payload", () => {
-  it("round-trips build → parse", () => {
+  it("round-trips build → parse for every product", () => {
     expect(buildSubInvoicePayload()).toBe(`${SUB_INVOICE_PREFIX}premium`);
     expect(parseSubInvoicePayload(buildSubInvoicePayload("premium"))).toEqual({
       product: "premium",
+      plan: "monthly",
     });
+    expect(parseSubInvoicePayload(buildSubInvoicePayload("premium3"))).toEqual({
+      product: "premium3",
+      plan: "months3",
+    });
+    expect(parseSubInvoicePayload(buildSubInvoicePayload("premium6"))).toEqual({
+      product: "premium6",
+      plan: "months6",
+    });
+  });
+
+  it("keeps `sub:premium` meaning MONTHLY — recurring renewals redeliver it", () => {
+    // Telegram re-sends the ORIGINAL payload on every auto-renewal, so this tag
+    // is a frozen wire format. Repointing it at a package would silently grant
+    // months for a monthly charge on every existing subscriber's renewal.
+    expect(parseSubInvoicePayload("sub:premium")?.plan).toBe("monthly");
+    expect(subProductForPlan("monthly")).toBe("premium");
   });
 
   it("returns null for non-sub or unknown-product payloads", () => {

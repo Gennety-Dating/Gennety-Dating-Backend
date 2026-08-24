@@ -286,6 +286,15 @@ model User {
   premiumProvider            String?                  @map("premium_provider")
   premiumAutoRenew           Boolean                  @default(false) @map("premium_auto_renew")
   premiumExternalId          String?                  @map("premium_external_id")
+  /// Expiry-reminder once-markers (PRODUCT_SPEC §3.8 → "Access is not silently
+  /// lost"). The 3-day and 24-hour DMs are sent at most once per PAID PERIOD,
+  /// so every path that advances `premiumUntil` clears both — otherwise a user
+  /// who renews is reminded once and then never again. Only ever set for a
+  /// non-auto-renewing entitlement: nothing is ending while Telegram or Apple
+  /// is still charging, and a "your access is running out" DM to a live
+  /// subscriber would be false.
+  premiumReminder3dAt        DateTime?                @map("premium_reminder_3d_at")
+  premiumReminder1dAt        DateTime?                @map("premium_reminder_1d_at")
   /// Referral program (gated by `REFERRAL_FEATURE_ENABLED`; PRODUCT_SPEC
   /// §Referral). `referralVerifiedCount` is the referrer's materialized tally of
   /// invited friends who cleared verification — the milestone-ladder progress,
@@ -371,6 +380,11 @@ model User {
 
   @@index([status, reEngagementNextAt])
   @@index([status, suspendedUntil])
+  /// The premium expiry-reminder sweep runs hourly and asks one question of the
+  /// whole table: whose paid period lands in the next three days. Without this
+  /// it is a sequential scan every hour, for a column that is null on the
+  /// overwhelming majority of rows.
+  @@index([premiumUntil])
   @@map("users")
 }
 

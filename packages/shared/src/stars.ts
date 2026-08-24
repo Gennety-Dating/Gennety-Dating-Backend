@@ -1,3 +1,5 @@
+import type { PremiumPlanId } from "./premium-plans.js";
+
 /**
  * Telegram Stars (XTR) ticket-store helpers.
  *
@@ -109,36 +111,71 @@ export function parseVenueInvoicePayload(
 }
 
 /**
- * Gennety Premium (§Premium) recurring-subscription Star payment payload. A
- * single flat monthly price (env `PREMIUM_STARS`) sold via a native Telegram
- * Star *subscription* invoice (`subscription_period: 2592000`). The payer is
- * identified from `ctx.from`, so the payload carries no per-user data — just the
- * product tag. Format: `sub:premium`. Recurring renewals redeliver a
- * `successful_payment` with this same payload and `is_recurring: true`.
+ * Gennety Premium (§3.8) Star payment payload.
+ *
+ * One entitlement, three products, distinguished ONLY by this payload:
+ *
+ *   • `sub:premium`  — the recurring monthly subscription
+ *                      (`subscription_period: 2592000`). Auto-renewals
+ *                      redeliver a `successful_payment` with this exact same
+ *                      payload and `is_recurring: true`, which is why the tag
+ *                      must never be repurposed.
+ *   • `sub:premium3` — a ONE-TIME purchase of 3 months (15% off).
+ *   • `sub:premium6` — a ONE-TIME purchase of 6 months (30% off).
+ *
+ * The payer is identified from `ctx.from`, so the payload carries no per-user
+ * data — just the product tag. The Star-amount check in the pre-checkout /
+ * successful-payment handlers remains the trust boundary; this only says WHICH
+ * product a charge is for, and an unknown tag parses to null so a foreign or
+ * tampered invoice can never grant Premium.
  */
 export const SUB_INVOICE_PREFIX = "sub:";
 
-/** The only subscription product today. */
-export type SubInvoiceProduct = "premium";
+/** The subscription/package products in circulation. */
+export type SubInvoiceProduct = "premium" | "premium3" | "premium6";
 
-/** Build the invoice payload for a Premium subscription Star payment. */
+/**
+ * Product tag ↔ plan id. Two vocabularies exist on purpose: the tag is a wire
+ * format frozen by every invoice already minted (`premium` predates packages
+ * and must keep meaning "monthly"), while the plan id is the internal catalog
+ * key. Renaming either alone is what would silently mis-price a redelivered
+ * charge, so the mapping lives here, once.
+ */
+const PRODUCT_TO_PLAN: Record<SubInvoiceProduct, PremiumPlanId> = {
+  premium: "monthly",
+  premium3: "months3",
+  premium6: "months6",
+};
+
+const PLAN_TO_PRODUCT: Record<PremiumPlanId, SubInvoiceProduct> = {
+  monthly: "premium",
+  months3: "premium3",
+  months6: "premium6",
+};
+
+/** The invoice-payload product tag for a plan. */
+export function subProductForPlan(plan: PremiumPlanId): SubInvoiceProduct {
+  return PLAN_TO_PRODUCT[plan];
+}
+
+/** Build the invoice payload for a Premium subscription/package Star payment. */
 export function buildSubInvoicePayload(product: SubInvoiceProduct = "premium"): string {
   return `${SUB_INVOICE_PREFIX}${product}`;
 }
 
 /**
- * Parse a subscription invoice payload back into `{ product }`. Returns null for
- * any non-subscription, malformed, or unknown-product payload — so a foreign or
- * tampered invoice never grants Premium. The Star-amount check remains the trust
- * boundary in the pre-checkout / successful-payment handlers.
+ * Parse a subscription invoice payload back into its product and the plan it
+ * buys. Returns null for any non-subscription, malformed, or unknown-product
+ * payload.
  */
 export function parseSubInvoicePayload(
   payload: string | null | undefined,
-): { product: SubInvoiceProduct } | null {
+): { product: SubInvoiceProduct; plan: PremiumPlanId } | null {
   if (!payload || !payload.startsWith(SUB_INVOICE_PREFIX)) return null;
-  const product = payload.slice(SUB_INVOICE_PREFIX.length);
-  if (product !== "premium") return null;
-  return { product };
+  const product = payload.slice(SUB_INVOICE_PREFIX.length) as SubInvoiceProduct;
+  const plan = PRODUCT_TO_PLAN[product];
+  if (!plan) return null;
+  return { product, plan };
 }
 
 /**

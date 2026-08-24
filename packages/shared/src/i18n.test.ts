@@ -26,6 +26,11 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
   "coordCardAskHead2",
   // Bare domain on the referral card — a URL, not prose.
   "referralCardFooter",
+  // "−{pct}%" on a plan card is a minus sign, a number and a percent sign — a
+  // discount badge with no word in it. The translated part of that row is the
+  // plan NAME (`premiumPlan3Months`) and the per-month price suffix
+  // (`premiumPlanPerMonth`), neither of which is allowlisted.
+  "premiumPlanSaveBadge",
   // "Gennety Premium" is a fixed brand line — identical across all locales.
   "menuPremium",
   "premiumHubTitle",
@@ -66,6 +71,11 @@ const ALLOWED_IDENTICAL_UK_RU = new Set<string>([
   "photoReceived",
   // Deliberate fixed English brand line in all five locales (PRODUCT_SPEC §3.7a).
   "dateCardSlogan",
+  // "−{pct}%" on a plan card is a minus sign, a number and a percent sign — a
+  // discount badge with no word in it. The translated part of that row is the
+  // plan NAME (`premiumPlan3Months`) and the per-month price suffix
+  // (`premiumPlanPerMonth`), neither of which is allowlisted.
+  "premiumPlanSaveBadge",
   // Fixed brand lines — "Gennety Premium" / "Реметч" are product names, and the
   // Cyrillic spelling of Rematch is shared by both languages.
   "menuPremium",
