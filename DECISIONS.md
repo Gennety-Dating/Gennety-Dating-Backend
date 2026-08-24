@@ -54,13 +54,6 @@ Newest entries go **on top**:
 **Why:** подбор идеальной минималистичной иконки взамен старой схемы сложенной карты.
 **Recorded in:** `apps/webapp/src/icons.ts`, `apps/webapp/src/venue-change.ts`, `apps/webapp/src/icons.test.ts`.
 
-## 2026-08-24 — фильтрация городов на странице Places сайта (только Германия, Польша, Украина)
-
-**Kind:** founder decision
-**What:** на лендинге Gennety Dating (`/places`) в барабане выбора городов (CityRoulette) убраны все американские города (New York, Los Angeles), а также города других стран (London, Paris, Tokyo, Rome, Barcelona, Amsterdam, Prague, Vienna). Оставлены только города Германии, Польши и Украины; добавлены Берлин и Мюнхен (`src/lib/cities.ts`).
-**Why:** фокус запуска и масштабирования сервиса — рынки Украины, Польши и Германии. Нерелевантные и американские локации не должны предлагаться на витрине.
-**Recorded in:** `Gennety dating website/src/lib/cities.ts`.
-
 ## 2026-08-24 — у бота одно имя: Gennety. «Aether Concierge» вычищен целиком
 
 **Kind:** founder decision
@@ -7905,10 +7898,4 @@ automatically via `CLAUDE.md`.
 `ARCHITECTURE.md` → `user_blocks`; `openapi/gennety-v1.yaml` (три операции);
 `deploy.md` → PENDING-блок; iOS-репо `IMPLEMENTATION_PLAN.md` → 6.8.
 
-## 2026-08-24 — устранение паразитной белой рамки и субпиксельного артефакта на чипах карточек заведений
-
-**Kind:** bugfix / polish
-**What:** в `src/app/places/page.tsx` (сайт) и `apps/webapp/src/venue-change.css` (Mini App) сохранены исходные цвета и `backdrop-blur-md` (`bg-black/50` / `bg-black/60`), а паразитная 1px белая рамка при наведении устранена через комбинацию `border border-transparent bg-clip-padding overflow-hidden isolate transform-gpu` и сбросы `:focus` / `outline: none`.
-**Why:** фильтр `backdrop-filter: blur` при масштабировании картинки под кнопкой (`group-hover:scale-105`) на овале `rounded-full` создавал субпиксельное сглаживание на границе пикселей. Прозрачный 1px border с `bg-clip-padding` и аппаратной изоляцией слоя полностью поглощает артефакт границы, сохраняя оригинальную прозрачность, блюр и цвет без визуальных изменений.
-**Recorded in:** `src/app/places/page.tsx`, `apps/webapp/src/venue-change.css`.
 
