@@ -24,6 +24,10 @@ export type IconName =
   | "lounge"
   | "pin"
   | "map"
+  | "map-nav"
+  | "map-pin"
+  | "map-fold"
+  | "map-route"
   | "star"
   | "spark"
   | "bolt"
@@ -33,6 +37,22 @@ export type IconName =
   | "lock"
   | "ticket"
   | "close";
+
+/** The 4 candidate map icon variants for live in-app comparison. */
+export const MAP_VARIANTS = ["map-nav", "map-pin", "map-fold", "map-route"] as const;
+export type MapVariantName = (typeof MAP_VARIANTS)[number];
+
+/**
+ * Rotate through candidate map icons by index so each card showcases a variant:
+ * 0 -> map-nav (Navigation Arrow)
+ * 1 -> map-pin (Bold Geo-Pin)
+ * 2 -> map-fold (Clean Folded Map)
+ * 3 -> map-route (Route Waypoint)
+ */
+export function getRotatingMapIcon(index: number): IconName {
+  const safeIdx = Math.abs(Math.floor(index)) % MAP_VARIANTS.length;
+  return MAP_VARIANTS[safeIdx];
+}
 
 /**
  * Path data per icon. `solid: true` icons paint with `fill: currentColor` and
@@ -93,10 +113,40 @@ const ICONS: Record<IconName, { d: string[]; solid?: boolean }> = {
       "M12 13a2.4 2.4 0 1 0 0-4.8 2.4 2.4 0 0 0 0 4.8Z",
     ],
   },
+  // Default map icon — folded paper map.
   map: {
     d: [
       "M9 4.6 3.6 6.8V20l5.4-2.2 6 2.2 5.4-2.2V4.6L15 6.8 9 4.6Z",
       "M9 4.6v13.2M15 6.8V20",
+    ],
+  },
+  // Candidate 1: Modern Navigation Arrow (dynamic 45° navigation pointer).
+  "map-nav": {
+    d: [
+      "M3.8 11.3a1 1 0 0 1 .4-1.2L19.2 3.6a1 1 0 0 1 1.2 1.2L13.9 19.8a1 1 0 0 1-1.2.4l-3-1.5a1 1 0 0 0-.5-.1L3.8 11.3Z",
+      "M10.2 13.8 15 9",
+    ],
+  },
+  // Candidate 2: Bold Modern Geo-Pin (well-proportioned teardrop pin with center dot).
+  "map-pin": {
+    d: [
+      "M12 21.5c-3.5-3.8-7-8.2-7-12a7 7 0 1 1 14 0c0 3.8-3.5 8.2-7 12Z",
+      "M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
+    ],
+  },
+  // Candidate 3: Clean Folded Map (geometric 3-panel map with clean diagonals).
+  "map-fold": {
+    d: [
+      "M9 5 3.5 7.5v12L9 17l6 2.5 5.5-2.5V5L15 7.5 9 5Z",
+      "M9 5v12M15 7.5v12",
+    ],
+  },
+  // Candidate 4: Location Route Waypoint (route connecting start to destination node).
+  "map-route": {
+    d: [
+      "M6 20.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
+      "M18 8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
+      "M6 15.5V11a5 5 0 0 1 5-5h4.5",
     ],
   },
   star: {
