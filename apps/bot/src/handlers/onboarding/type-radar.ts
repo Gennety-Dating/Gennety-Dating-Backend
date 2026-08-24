@@ -11,6 +11,7 @@ import type { BotContext } from "../../session.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import { typeRadarInviteCopy } from "../../services/type-radar-copy.js";
 import { runAgentTurn, type AgentTurnResult } from "../../services/onboarding-agent.js";
+import { voicePromptAskText, voicePromptKeyboard } from "./voice-prompt.js";
 import { photoStagePanelMarkup } from "../../services/photo-stage-panel.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import {
@@ -137,6 +138,25 @@ export async function resumeOnboardingAfterRadar(
     // The flag is set only after the send actually succeeds: marking the panel
     // shown when its message was lost would suppress every later attempt to
     // establish it, leaving the user with no way into the editor at all.
+    // A radar resume lands on ai_memory or photos, never on the voice prompt
+    // (that question sits after photos), so this branch is unreachable today.
+    // It is here anyway because the alternative is an exception in the
+    // one-sender rule, and an exception is how the eight bare senders happened:
+    // the reply is delivered from nine places and only the rule keeps them
+    // agreeing. This function owns no session, so the claim rides the patch.
+    if (result.voicePromptRequested === true) {
+      const language = (await userLanguage(telegramId)) ?? "en";
+      try {
+        await api.sendMessage(chatId, voicePromptAskText(language, result.reply), {
+          reply_markup: voicePromptKeyboard(language),
+        });
+        sessionPatch.expectingVoicePrompt = true;
+      } catch {
+        // Same best-effort contract as the ordinary reply below.
+      }
+      return { sessionPatch };
+    }
+
     let panelMarkup: ReturnType<typeof photoStagePanelMarkup> | undefined;
     if (sessionPatch.expectingPhoto === true) {
       panelMarkup = photoStagePanelMarkup((await userLanguage(telegramId)) ?? "en");

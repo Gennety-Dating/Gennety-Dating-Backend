@@ -1,6 +1,6 @@
 import { Composer, InlineKeyboard, type Api } from "grammy";
 import { prisma } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { t, type Language, type SessionData } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { voiceCheckSteps } from "../../services/analysis-status.js";
@@ -130,7 +130,16 @@ async function resumeAfterVoiceStep(ctx: BotContext, telegramId: bigint): Promis
     ctx.session.expectingPhoto = false;
     releaseVoicePrompt(ctx.session);
   }
-  if (result.reply) await ctx.reply(result.reply);
+  // Normally `complete` by now, so this is insurance rather than a live
+  // branch: if the field write lost its race the collector still says
+  // voice_prompt, and re-asking without the button would strand the user on a
+  // question with no exit.
+  if (
+    ctx.chat?.id === undefined ||
+    !(await sendVoicePromptAskIfRequested(ctx.api, ctx.chat.id, ctx.session, result))
+  ) {
+    if (result.reply) await ctx.reply(result.reply);
+  }
   if (result.onboardingComplete) {
     // Lazily imported: `conversational.ts` imports this module to send the ask,
     // so an eager import here would make the two circular.
@@ -171,6 +180,37 @@ export function voicePromptAskText(language: Language, question: string): string
   return `${question}\n\n${t(language, "voicePromptSkipHint", {
     button: t(language, "voicePromptSkipButton"),
   })}`;
+}
+
+/**
+ * Deliver an agent turn that turned out to BE the voice-prompt ask.
+ *
+ * Returns true when it sent the ask — the caller then skips its own reply.
+ *
+ * This exists because `result.reply` is delivered to Telegram from nine call
+ * sites and exactly one of them used to know about this step, so eight of them
+ * sent the question as a bare message: no skip button, and — the damaging half
+ * — no claim, which lets `voiceHandler` transcribe the recording into the fact
+ * collector (`services/voice-prompt-pending.ts` has the full account). The
+ * fix is not "remember to handle it": it is that every sender routes the reply
+ * through one function, so a tenth sender inherits both halves.
+ *
+ * `voice-prompt-senders.test.ts` fails if a new site delivers `result.reply`
+ * without passing it here first.
+ */
+export async function sendVoicePromptAskIfRequested(
+  api: Api,
+  chatId: number,
+  session: SessionData,
+  result: { reply: string; voicePromptRequested?: boolean },
+): Promise<boolean> {
+  if (result.voicePromptRequested !== true) return false;
+  // Arm before sending: a caller that persists the session right after this
+  // returns then saves the claim. The collector backstop makes the ordering
+  // non-critical, but the cheap path should still be correct on its own.
+  claimVoicePrompt(session);
+  await sendVoicePromptAsk(api, chatId, session.language, result.reply);
+  return true;
 }
 
 /** Send the ask and arm the step. Exported for the conversational handler. */

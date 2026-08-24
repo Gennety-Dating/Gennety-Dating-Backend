@@ -332,7 +332,18 @@ start.command("start", async (ctx) => {
       telegramId,
       { kind: "resume" },
     );
-    await ctx.reply(result.reply, { parse_mode: "Markdown" });
+    // A resume can land on the voice-prompt step, and that question is not an
+    // ordinary reply: it needs the skip button and the claim that keeps
+    // `voiceHandler` from feeding the recording to the fact collector.
+    const { sendVoicePromptAskIfRequested } = await import(
+      "./onboarding/voice-prompt.js"
+    );
+    if (
+      ctx.chat?.id === undefined ||
+      !(await sendVoicePromptAskIfRequested(ctx.api, ctx.chat.id, ctx.session, result))
+    ) {
+      await ctx.reply(result.reply, { parse_mode: "Markdown" });
+    }
     return;
   }
 

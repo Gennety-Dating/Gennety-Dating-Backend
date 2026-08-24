@@ -44,7 +44,7 @@ import { withTyping } from "../../utils/with-typing.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
 import { dispatchToChat } from "../../chat-queue.js";
 import { sendVerificationCTA } from "./verification.js";
-import { armVoicePromptStep, sendVoicePromptAsk } from "./voice-prompt.js";
+import { sendVoicePromptAskIfRequested } from "./voice-prompt.js";
 import {
   getMessageLivePhoto,
   getMessageVideo,
@@ -453,9 +453,10 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   // the radar gate above: the agent names the state, this surface renders the
   // affordance — the skip button, and the claim that keeps `voiceHandler` from
   // transcribing the recording into ordinary text.
-  if (result.voicePromptRequested === true && ctx.chat?.id !== undefined) {
-    armVoicePromptStep(ctx);
-    await sendVoicePromptAsk(ctx.api, ctx.chat.id, ctx.session.language, result.reply);
+  if (
+    ctx.chat?.id !== undefined &&
+    (await sendVoicePromptAskIfRequested(ctx.api, ctx.chat.id, ctx.session, result))
+  ) {
     return;
   }
 
@@ -636,7 +637,12 @@ async function flushContextDump(ctx: BotContext, telegramId: bigint): Promise<vo
     });
   }
 
-  await sendAgentReply(ctx, result.reply);
+  if (
+    ctx.chat?.id === undefined ||
+    !(await sendVoicePromptAskIfRequested(ctx.api, ctx.chat.id, ctx.session, result))
+  ) {
+    await sendAgentReply(ctx, result.reply);
+  }
 
   if (result.onboardingComplete) {
     // When verification is required (Sumsub configured), send the liveness
@@ -704,7 +710,9 @@ async function flushPersistedContextDump(
       });
     }
 
-    await replyText(acc.api, acc.chatId, result.reply, session);
+    if (!(await sendVoicePromptAskIfRequested(acc.api, acc.chatId, session, result))) {
+      await replyText(acc.api, acc.chatId, result.reply, session);
+    }
 
     if (result.onboardingComplete) {
       const language = session.language;
@@ -1362,7 +1370,9 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
           acc.telegramId,
           { kind: "photos_updated" },
         );
-        await replyText(acc.api, acc.chatId, result.reply, session);
+        if (!(await sendVoicePromptAskIfRequested(acc.api, acc.chatId, session, result))) {
+          await replyText(acc.api, acc.chatId, result.reply, session);
+        }
         return;
       }
       if (acc.extraIgnoredCount > 0) {
@@ -1382,12 +1392,18 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
           acc.telegramId,
           { kind: "photos_updated", count: MAX_PHOTOS },
         );
+        const askedVoice = await sendVoicePromptAskIfRequested(
+          acc.api,
+          acc.chatId,
+          session,
+          result,
+        );
         await prisma.botSession.upsert({
           where: { key },
           create: { key, data: session as unknown as object },
           update: { data: session as unknown as object },
         });
-        await replyText(acc.api, acc.chatId, result.reply, session);
+        if (!askedVoice) await replyText(acc.api, acc.chatId, result.reply, session);
         return;
       }
       if (acc.duplicateCount > 0 && !acc.unsolicited) {
@@ -1453,13 +1469,25 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       markOnboardingComplete(session);
     }
 
+    // Armed before the upsert on purpose: this path runs outside a grammY
+    // context and persists the session by hand, so a claim written after the
+    // write is a claim that is thrown away.
+    const askedVoicePrompt = await sendVoicePromptAskIfRequested(
+      acc.api,
+      acc.chatId,
+      session,
+      result,
+    );
+
     await prisma.botSession.upsert({
       where: { key },
       create: { key, data: session as unknown as object },
       update: { data: session as unknown as object },
     });
 
-    await replyText(acc.api, acc.chatId, result.reply, session);
+    if (!askedVoicePrompt) {
+      await replyText(acc.api, acc.chatId, result.reply, session);
+    }
 
     // One-time "4+ photos" ticket bonus (idempotent, flag-gated).
     await maybeGrantPhotoBonus(acc.api, acc.chatId, acc.telegramId, session.language);

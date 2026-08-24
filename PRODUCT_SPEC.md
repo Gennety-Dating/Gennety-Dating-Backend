@@ -1167,6 +1167,31 @@ claim (`services/voice-prompt-claim.ts`) makes that handler return early —
 20 MB, "transcription failed") while this is a profile element with its own
 product bounds and its own wording.
 
+**The claim has two layers, and the second one is what makes it true.** The
+session flag is armed by whoever sent the ask — and the ask has NINE senders,
+because an onboarding agent reply reaches Telegram from `/start`'s resume, the
+photo-batch flush, the photo editor, both context-dump paths, the radar resume,
+the voice step's own resume, and the conversational handler. Eight shipped
+without arming it, **including the photo-batch flush, which is what asks this
+question first in the ordinary flow**: the user got a bare message with no skip
+button, recorded into it, and the transcript was mined into their profile while
+the question re-asked itself forever (`voice_prompt` is synthetic, so text can
+never satisfy it and `currentQuestion` never moves). Observed live — one turn
+wrote `accepted: [ 'gender', 'preference' ]` out of a voice prompt.
+
+So the claim is additionally **derived from the collector's own
+`currentQuestion`** (`services/voice-prompt-pending.ts`). A sender can forget to
+arm a flag; it cannot forget the field that decides which question is pending,
+so the flag becomes an optimization and the derived check the guarantee. Cost is
+one indexed lookup per voice note, and only for a chat mid-onboarding with no
+claim already — the concierge's voice notes pay nothing. `voiceHandler` **repairs
+the session** when that check fires rather than merely deferring, because
+`voicePromptRouter` re-reads the sync predicate to decide whether the recording
+is its own: two readers disagreeing would drop the recording instead of
+ingesting it. Every sender now routes the reply through one helper
+(`sendVoicePromptAskIfRequested`), and a tenth that does not fails
+`voice-prompt-senders.test.ts`.
+
 **Validation is safety-only**, exactly like the profile video: no identity gate,
 no comparison against the verification selfie, and **no voice-printing anywhere
 in this product**. Cheap local bounds run before any provider call, so a

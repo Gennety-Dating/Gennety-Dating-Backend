@@ -5,7 +5,8 @@ import { env } from "../config.js";
 import { transcribeVoice } from "../services/whisper.js";
 import { recordChatEventForChat } from "../services/chat-events.js";
 import { readResponseBuffer } from "../utils/bounded-response.js";
-import { isAwaitingVoicePrompt } from "../services/voice-prompt-claim.js";
+import { claimVoicePrompt, isAwaitingVoicePrompt } from "../services/voice-prompt-claim.js";
+import { shouldClaimVoiceFromCollector } from "../services/voice-prompt-pending.js";
 
 const MAX_VOICE_DURATION_SEC = 300;
 const MAX_VOICE_BYTES = 20 * 1024 * 1024;
@@ -44,6 +45,27 @@ voiceHandler.on("message:voice", async (ctx, next) => {
   // `text` — so the downstream handler still has the file_id. What it must not
   // inherit is a `text` that the fact collector will mine for profile facts.
   if (isAwaitingVoicePrompt(ctx.session)) {
+    await next();
+    return;
+  }
+
+  // The claim is armed by whoever sent the ask, and the ask has nine senders
+  // (`services/voice-prompt-pending.ts` says which, and what a forgetful one
+  // costs). So a missing claim is not proof the step is not waiting: ask the
+  // collector, which is the thing that actually decides which question is
+  // pending, and repair the session when it says yes.
+  //
+  // Repairing rather than merely deferring is the load-bearing half.
+  // `voicePromptRouter` re-reads the SYNC predicate to decide whether the
+  // recording is its own, so deferring without arming would hand it to a
+  // router that drops it — the two readers disagreeing is the exact failure
+  // the claim module's docstring warns about.
+  const telegramId = ctx.from?.id;
+  if (
+    telegramId !== undefined &&
+    (await shouldClaimVoiceFromCollector(ctx.session, BigInt(telegramId)))
+  ) {
+    claimVoicePrompt(ctx.session);
     await next();
     return;
   }
