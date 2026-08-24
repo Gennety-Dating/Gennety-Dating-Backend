@@ -90,7 +90,61 @@
 Instagram (аватарка, «⋯», «✕», случайный ник) вопреки негативам. Такие кадры
 не чинить ретушью — перегенерировать.
 
-## Общий хвост промпта (добавлять к каждому)
+## Регистр съёмки: почему у наборов разные хвосты (переписано 2026-08-24)
+
+Первый хвост говорил `standing, facing camera` — это **и есть каталожная поза**.
+Человек, который просто стоит лицом в камеру внутри локации, ничего в ней не
+делает, и кадр читается съёмкой для посредственного бренда одежды. Отсюда и
+«не соответствует контексту»: локация оказывалась декорацией, а не местом, где
+он находится по делу.
+
+Три причины «ИИшности», все три были в хвосте:
+
+- **поза.** Нет действия — нет контекста. Заменено на «пойман в движении и
+  только что повернулся к камере»: он занят тем, что это место подразумевает,
+  и отвлёкся на снимающего.
+- **`softly blurred background`.** Фон замыливался в кашу, то есть тот самый
+  контекст стирался. Теперь «мягко, но читаемо».
+- **`warm natural light` на каждом кадре.** Одинаковое золотистое свечение
+  везде — главный признак бренд-съёмки. Свет теперь называется по локации
+  честно: жёсткое дневное солнце на корте, холодный верхний в зале, вывески и
+  фонари на вечерней улице.
+
+Плюс из хвоста ушли `elevated` и `photorealistic` (первое тянет в editorial,
+второе даёт пластиковую кожу) и добавлены зерно, обычная текстура кожи и
+лёгкое движение.
+
+**Женский набор остаётся на СТАРОМ хвосте.** Шесть из двенадцати женских кадров
+(fp1…fs3) уже сняты по нему, а внутри набора важна одна фотографическая манера:
+пользователь всегда видит только свой набор целиком, так что разница между
+наборами не видна никому, а разрыв внутри набора виден сразу. Если новая манера
+понравится на мужских — переснимаем женский набор целиком, а не половину.
+
+### Хвост для МУЖСКОГО набора
+
+```
+candid lifestyle photo taken by a friend on a phone, caught mid-action and just
+turned to the camera, real eye contact, an unforced smile that reaches the eyes,
+framed from the waist or mid-thigh up with both forearms in frame, alone in
+frame, the place behind him soft but still readable, real available light, faint
+natural grain, ordinary skin texture, a little motion in the hands or clothes,
+vertical 9:16
+--no posed catalogue stance, lookbook, product photography, model casting,
+studio lighting, fashion editorial, retouched plastic skin, other people, text,
+logos, watermark, instagram ui, story interface, username, phone screen overlay,
+mirror selfie, sunglasses, hat, heavy filter, exaggerated body proportions
+```
+
+**Правило действия (мужской набор).** У каждого кадра названо конкретное
+занятие, которое эта локация подразумевает, и он от него отвлёкся. Не «стоит в
+кафе», а «повернулся от стойки со стаканом». Занятие обязано быть правдоподобным
+для архетипа: полированный в кафе — гость, а не бариста.
+
+**Что действие НЕ имеет права делать.** Оно может нести архетип (это нормально,
+архетип и должен читаться) и не может коррелировать со вторичным признаком —
+цветом волос, бородой, тату. Иначе «выучили занятие и назвали его типажом».
+
+### Хвост для ЖЕНСКОГО набора (без изменений)
 
 ```
 candid smartphone-style portrait, three-quarter view from mid-thigh up,
@@ -131,7 +185,7 @@ studio lighting, fashion editorial, exaggerated body proportions
 **Промпт.** `a 24-year-old Eastern European woman with long blonde hair below
 the shoulders, wearing a cream cashmere sweater and tailored camel trousers,
 delicate thin gold jewellery, muted palette, standing on the terrace of a golf
-club with a manicured green blurred behind her,` + общий хвост.
+club with a manicured green blurred behind her,` + женский хвост.
 
 **Проверить.** Палитра приглушённая, без ярких цветов и принтов. Блонд
 однозначный, не русый. Предплечья чистые. Не читается как «вышла в свет» —
@@ -145,7 +199,7 @@ club with a manicured green blurred behind her,` + общий хвост.
 **Промпт.** `a 24-year-old Eastern European woman with a dark chin-length bob,
 wearing a simple well-cut midi dress in a muted tone with a small structured
 handbag, standing in a quiet classic hotel lobby with warm lamps blurred
-behind her,` + общий хвост.
+behind her,` + женский хвост.
 
 **Проверить.** Каре аккуратное и тёмное. Платье простое, без декора и блеска.
 Лобби читается тёплым и тихим, а не парадным.
@@ -159,7 +213,7 @@ behind her,` + общий хвост.
 **Промпт.** `a 24-year-old Eastern European woman with long natural copper-red
 hair, wearing a crisp white shirt tucked into tailored trousers and a thin
 gold chain, a visible dark tattoo sleeve on her forearm, standing in a bright
-modern café with wood and concrete blurred behind her,` + общий хвост.
+modern café with wood and concrete blurred behind her,` + женский хвост.
 
 **Проверить.** **Тату — самый заметный элемент предплечья**, не тонкая
 линия у плеча. Одежда при этом строго полированная: белая рубашка, брюки,
@@ -173,7 +227,7 @@ modern café with wood and concrete blurred behind her,` + общий хвост
 **Промпт.** `a 24-year-old Eastern European woman with long dark hair in a
 ponytail, wearing a white tennis dress and clean white sneakers, holding a
 racket, standing on a clay tennis court with the net blurred behind her,` +
-общий хвост.
+женский хвост.
 
 **Проверить.** Одежда рабочая, без логотипов и принтов. Хвост, а не укладка.
 Корт читается однозначно.
@@ -187,7 +241,7 @@ racket, standing on a clay tennis court with the net blurred behind her,` +
 bob, wearing fitted athleisure leggings and a cropped training top with a
 light windbreaker tied at the waist, a visible tattoo sleeve on her forearm,
 standing on a river embankment in the morning with water blurred behind her,` +
-общий хвост.
+женский хвост.
 
 **Проверить.** Тату видно отчётливо. Образ остаётся спортивным — ничего
 кожаного, ничего чёрно-дерзкого, иначе кадр съедет в творческий архетип.
@@ -199,7 +253,7 @@ standing on a river embankment in the morning with water blurred behind her,` +
 
 **Промпт.** `a 24-year-old Eastern European woman with a copper-red chin-length
 bob, wearing a simple sports top and shorts with running shoes, standing in a
-European city park at golden hour with trees blurred behind her,` + общий хвост.
+European city park at golden hour with trees blurred behind her,` + женский хвост.
 
 **Проверить.** Предплечья чистые. Одежда спортивная функциональная.
 Золотой час не должен превратить кадр в постановочный.
@@ -212,7 +266,7 @@ European city park at golden hour with trees blurred behind her,` + общий �
 **Промпт.** `a 24-year-old Eastern European woman with long natural blonde hair,
 wearing an oversized denim jacket over a plain tee with straight jeans and
 white sneakers, minimal makeup, standing on an old-town street in the evening
-with warm shop lights blurred behind her,` + общий хвост.
+with warm shop lights blurred behind her,` + женский хвост.
 
 **Проверить.** Ничего спортивного и ничего дерзкого — ровно посередине.
 Вечерний свет тёплый, не синий. **Цвет волос тот же, что у fa2** — это
@@ -225,7 +279,7 @@ with warm shop lights blurred behind her,` + общий хвост.
 
 **Промпт.** `a 24-year-old Eastern European woman with a blonde chin-length
 bob, wearing a knit cardigan over a simple top with wide jeans and a canvas
-bag, standing in a bookshop café with shelves blurred behind her,` + общий хвост.
+bag, standing in a bookshop café with shelves blurred behind her,` + женский хвост.
 
 **Проверить.** Кардиган и джинсы читаются как повседневное, а не как
 «полированное». Полки размыты, текст на корешках нечитаем.
@@ -238,7 +292,7 @@ bag, standing in a bookshop café with shelves blurred behind her,` + общий
 **Промпт.** `a 24-year-old Eastern European woman with long dark hair, wearing
 an oversized blazer over a plain tee with jeans and loafers, a visible tattoo
 sleeve on her forearm, standing in a European city park at golden hour with
-trees blurred behind her,` + общий хвост.
+trees blurred behind her,` + женский хвост.
 
 **Проверить.** Тату отчётливое. Пиджак-оверсайз читается как городской
 casual, а не как офис. Локация та же, что у fs3 — это проверяемо и должно
@@ -253,7 +307,7 @@ casual, а не как офис. Локация та же, что у fs3 — э�
 **Промпт.** `a 24-year-old Eastern European woman with a dark chin-length
 bob, wearing a black leather biker jacket over a plain top with
 silver rings and layered necklaces and ankle boots, standing in a wine bar in
-the evening with warm low light behind her,` + общий хвост.
+the evening with warm low light behind her,` + женский хвост.
 
 **Проверить.** Предплечья **абсолютно чистые** — это принципиально.
 Дерзость даёт косуха, серебро и ботинки. Плоская чёрная футболка = кадр
@@ -266,7 +320,7 @@ the evening with warm low light behind her,` + общий хвост.
 **Промпт.** `a 24-year-old Eastern European woman with a blonde chin-length
 bob, wearing a vintage patterned shirt layered over a tee with silver
 jewellery, a visible tattoo sleeve on her forearm, standing on an old-town
-street in the evening with warm shop lights blurred behind her,` + общий хвост.
+street in the evening with warm shop lights blurred behind her,` + женский хвост.
 
 **Проверить.** Слои читаются, не сливаются в одно пятно. Тату видно.
 
@@ -279,7 +333,7 @@ street in the evening with warm shop lights blurred behind her,` + общий х
 **Промпт.** `a 24-year-old Eastern European woman with long dark hair,
 wearing a dark oversized overshirt with layered chains and chunky boots,
 standing in a bright modern café with wood and concrete blurred behind her,`
-+ общий хвост.
++ женский хвост.
 
 **Проверить.** Предплечья чистые. Кафе — то же самое, что на fp3.
 
@@ -302,6 +356,11 @@ standing in a bright modern café with wood and concrete blurred behind her,`
 | ma2 | творческий | светлые | борода | нет | вечерняя улица |
 | ma3 | творческий | тёмные | борода | нет | светлое кафе |
 
+**mp1 и mp2 сняты по СТАРОМУ хвосту** и остаются как есть — фаундер их принял.
+Цена названа прямо: остальные десять будут в заметно более живой манере, так что
+внутри набора получится два регистра. Если новые кадры читаются лучше, эти два
+переснимаются по мужскому хвосту последними — это два кадра, а не двенадцать.
+
 ### mp1 — полированный · тёмные · бритый · без тату · гольф-клуб
 
 **Вайб.** Old money как регистр: лён, кожа, ткань. Не костюм и не «успешный
@@ -310,7 +369,7 @@ standing in a bright modern café with wood and concrete blurred behind her,`
 **Промпт.** `a 25-year-old Eastern European man with short dark hair, clean
 shaven, wearing a navy polo and tailored trousers with a leather-strap watch
 and loafers, standing on the terrace of a golf club with a manicured green
-blurred behind him,` + общий хвост.
+blurred behind him,` + старый общий хвост (кадр снят, не перегенерировать без нужды).
 
 **Проверить.** Ноль логотипов. Часы на кожаном ремешке, не спортивные.
 Предплечья чистые.
@@ -332,7 +391,7 @@ back and short at the sides, and a short neat beard, wearing an unstructured
 navy blazer over a plain white shirt
 with an open collar and no tie, dark trousers, standing in the foyer of an old
 theatre before the performance with a marble staircase and warm wall lamps
-blurred behind him,` + общий хвост.
+blurred behind him,` + старый общий хвост (кадр снят, не перегенерировать без нужды).
 
 **Проверить.** **Ни галстука, ни платка в кармане** — с ними кадр читается как
 свадьба, а не как вечер. Пиджак мягкий, не костюмный. Тёмный верх на светлой
@@ -342,132 +401,168 @@ blurred behind him,` + общий хвост.
 
 ### mp3 — полированный · тёмные · борода · ТАТУ · светлое кафе
 
-**Вайб.** Полированный образ с татуировкой — мужской близнец fp3.
+**Вайб.** Полированный образ с татуировкой — мужской близнец fp3. Занятие:
+только что забрал кофе и повернулся от стойки.
 
-Предыдущая версия (свитер поверх рубашки + «bright modern café with wood and
-concrete») забракована фаундером: свитер поверх рубашки — это буквально
-офисный business-casual, а «современный интерьер из дерева и бетона»
-рендерится как коворкинг, потому что отличить его от кафе генератору нечем.
-Плюс длинный рукав закрывал предплечье на кадре, вся работа которого — тату.
+Две предыдущие версии забракованы фаундером. Свитер поверх рубашки — это
+буквально офисный business-casual, а «bright modern café with wood and concrete»
+рендерится коворкингом: отличить его от офиса генератору нечем. Второй заход
+чинил одежду и локацию, но оставлял человека **стоять лицом в камеру**, ничего
+не делая, — и кадр всё равно читался постановкой.
 
-**Промпт.** `a 25-year-old Eastern European man with dark hair in a short
-modern textured crop and a short neat beard, wearing a dark green fine-knit
-short-sleeve polo worn untucked with tailored trousers, a visible tattoo
-sleeve on his bare forearm, standing in a small daytime café with a marble
-counter, an espresso machine and cups blurred behind him,` + общий хвост.
+**Промпт.** `a 25-year-old Eastern European man, dark hair in a short textured
+crop, short neat beard, in a dark green fine-knit short-sleeve polo worn
+untucked over tailored trousers, a tattoo sleeve down his bare forearm, just
+turned away from the counter of a small daytime café with a paper cup in one
+hand, an espresso machine and stacked cups behind him, flat daylight from the
+window,` + мужской хвост.
 
-**Проверить.** Рукав короткий — тату видно целиком, без подворотов. Поло
-навыпуск, пряжки в кадре нет. За спиной **кофемашина и чашки**, а не
-абстрактный светлый интерьер. Образ полированный — никакой кожи, никаких
-цепей. Стрижка современная текстурная.
+**Проверить.** Он **держит стакан** — рука поднята, тату видно целиком, без
+подворотов. Поло навыпуск, пряжки в кадре нет. За спиной кофемашина и чашки, а
+не абстрактный светлый интерьер. Образ полированный — никакой кожи, никаких
+цепей.
 
 ### ms1 — спортивный · тёмные · борода · без тату · корт
 
-**Вайб.** Пришёл играть, а не фотографироваться.
+**Вайб.** Пришёл играть, а не фотографироваться. Занятие: уходит с корта между
+геймами, ракетка на плече.
 
-**Промпт.** `a 25-year-old Eastern European man with dark hair in a short
-textured crop and a short beard, wearing a tennis polo and shorts with clean sneakers, holding a
-racket, standing on a clay tennis court with the net blurred behind him,` +
-общий хвост.
+**Промпт.** `a 24-year-old Eastern European man, dark hair in a short textured
+crop damp at the temples, short beard, in a plain grey tennis tee and shorts,
+racket resting on one shoulder, walking off a clay court between sets and just
+turned to the camera, the net and green fence behind him, hard afternoon sun,` +
+мужской хвост.
 
-**Проверить.** Одежда функциональная, без логотипов. Предплечья чистые.
+**Проверить.** Он **идёт**, а не позирует с ракеткой. Волосы у висков влажные —
+это и есть разница между «играл» и «сфотографировался на корте». Одежда
+функциональная, без логотипов. Предплечья чистые.
 
 ### ms2 — спортивный · светлые · бритый · ТАТУ · зал
 
-**Вайб.** Зал, но **не зеркальное селфи** — стоит в стороне от снарядов,
-снимает друг. В v1 два кадра ушли в зеркало ванной, это брак.
+**Вайб.** Зал, но **не зеркальное селфи** — снимает друг. Занятие: сидит на
+скамье между подходами, предплечья на коленях.
 
-**Промпт.** `a 25-year-old Eastern European man with light brown hair in a
-short textured crop, clean shaven, wearing a fitted training tee and joggers, a visible tattoo
-sleeve on his forearm, standing in a modern gym away from the equipment with
-machines blurred behind him,` + общий хвост.
+**Промпт.** `a 26-year-old Eastern European man, light brown hair in a short
+textured crop, clean shaven, in a plain black training tee, a tattoo sleeve down
+his bare forearm, sitting on a gym bench between sets with both forearms on his
+knees and a towel over one shoulder, just looked up at the camera, racks and
+mirrors out of focus behind him, cool overhead light,` + мужской хвост.
 
-**Проверить.** **Не зеркало, не телефон в кадре.** Тату видно. Тело не
-преувеличено — обычный тренирующийся человек.
+**Проверить.** **Не зеркало, не телефон в кадре.** Поза «предплечья на коленях»
+мотивирует тату сама — его видно потому, что человек так сидит, а не потому, что
+его показывают. Тело не преувеличено — обычный тренирующийся.
 
 ### ms3 — спортивный · тёмные · бритый · без тату · набережная
 
-**Вайб.** Бег утром. Локация общая с городским архетипом (mc3).
+**Вайб.** Бег утром. Локация общая с городским архетипом (mc3). Занятие:
+отдышивается у перил после пробежки.
 
-**Промпт.** `a 25-year-old Eastern European man with dark hair grown out into
-loose waves, clean shaven, wearing a technical running jacket and shorts, standing on a river
-embankment in the morning with water blurred behind him,` + общий хвост.
+**Промпт.** `a 25-year-old Eastern European man, dark hair grown out into loose
+waves pushed back off his face, clean shaven, in a plain navy running tee, both
+forearms on the embankment railing, catching his breath after a run and just
+turned to the camera laughing, the river and the far bank behind him, low early
+sun off the water,` + мужской хвост.
 
-**Проверить.** Предплечья чистые. Куртка спортивная техническая, не городская.
+**Проверить.** Предплечья чистые и **на перилах** — поза, а не демонстрация.
+Смех настоящий, не улыбка на камеру. Свет и фон **дословно те же, что на mc3**.
 
 ### mc1 — городской · тёмные · бритый · без тату · вечерняя улица
 
 **Вайб.** Самый обычный и, вероятно, самый населённый класс реального пула.
+Занятие: только что вышел из двери и обернулся.
 
-**Промпт.** `a 25-year-old Eastern European man with dark hair in a short
-textured crop, clean shaven, wearing a bomber jacket over a plain tee with straight jeans and
-sneakers, standing on an old-town street in the evening with warm shop lights
-blurred behind him,` + общий хвост.
+**Промпт.** `a 24-year-old Eastern European man, dark hair in a short textured
+crop, clean shaven, in a dark bomber jacket open over a plain tee with the
+sleeves pushed up his bare forearms, one hand still on the door of the place he
+has just stepped out of, turning back to the camera mid-step, lit shopfronts and
+wet pavement behind him, shop signs and streetlight,` + мужской хвост.
 
-**Проверить.** Ни спорта, ни дерзости. Бомбер простой, однотонный.
+**Проверить.** Рука **на двери** — это единственное, что делает кадр моментом, а
+не позой. Куртка расстёгнута, рукава подвёрнуты: предплечья должны быть видны и
+чистыми, иначе кадр не даёт информации о тату. Ни спорта, ни дерзости.
 
 ### mc2 — городской · светлые · борода · ТАТУ · книжный-кофейня
 
 **Вайб.** Повседневный образ с татуировкой — расцепляет тату и творческий
-архетип.
+архетип. Занятие: стоит у полки с раскрытой книгой, поднял глаза.
 
-**Промпт.** `a 26-year-old Eastern European man with light brown hair grown
-out into loose waves and a short beard, wearing an open overshirt with rolled
-sleeves over a plain tee with jeans, a visible tattoo sleeve on his bare
-forearm, standing in a bookshop café with shelves blurred behind him,` +
-общий хвост.
+**Промпт.** `a 26-year-old Eastern European man, light brown hair grown out into
+loose waves, short beard, in an open overshirt with the sleeves rolled to the
+elbow over a plain tee, a tattoo sleeve down his bare forearm, standing at a
+shelf in a bookshop café with an open book in one hand, just looked up from the
+page, shelves and the coffee counter behind him, warm lamps and daylight from
+the window,` + мужской хвост.
 
-**Проверить.** Предплечье открыто, тату видно целиком — худи под пальто
-здесь было ошибкой того же класса, что свитер на mp3. Образ остаётся
-повседневным, без серебра и ботинок.
+**Проверить.** Книга **раскрыта** и он от неё отвлёкся — закрытая книга в руке
+читается реквизитом. Предплечье открыто, тату видно целиком: худи под пальто
+здесь было ошибкой того же класса, что свитер на mp3. Текст на корешках
+нечитаем.
 
 ### mc3 — городской · тёмные · бритый · без тату · набережная
 
 **Вайб.** Дневной город. Та же локация, что у ms3, — проверяемая пара
-«спортивный против повседневного при одинаковом фоне».
+«спортивный против повседневного при одинаковом фоне». Занятие: идёт с кофе.
 
-**Промпт.** `a 25-year-old Eastern European man with dark hair swept back and
-short at the sides, clean shaven, wearing a denim jacket over a tee with chinos and sneakers, standing
-on a river embankment with water blurred behind him,` + общий хвост.
+**Промпт.** `a 25-year-old Eastern European man, dark hair swept back and short
+at the sides, clean shaven, in a charcoal coat open over a fine knit with the
+sleeves pushed up his bare forearms, walking along the embankment with a
+takeaway coffee and just glanced over at the camera, the river and the far bank
+behind him, low early sun off the water,` + мужской хвост.
 
-**Проверить.** Набережная того же типа, что на ms3. Предплечья чистые.
+**Проверить.** Фон и свет **дословно те же, что на ms3** — иначе пара перестаёт
+изолировать архетип и начинает мерить погоду. Он **идёт**, а не стоит у перил;
+против ms3 разница только в человеке и в том, что он делает. Предплечья чистые.
 
 ### ma1 — творческий · тёмные · бритый · ТАТУ · винный бар
 
 **Вайб.** Полный альтернативный образ. Единственный бритый в архетипе —
-намеренно, чтобы борода не склеилась с «творческим».
+намеренно, чтобы борода не склеилась с «творческим». Занятие: сидит у барной
+стойки, поймали посреди фразы.
 
-**Промпт.** `a 26-year-old Eastern European man with dark hair swept back,
-clean shaven, wearing a black leather jacket over a plain tee with silver rings, a visible
-tattoo sleeve on his forearm, standing in a wine bar in the evening with warm
-low light behind him,` + общий хвост.
+**Промпт.** `a 27-year-old Eastern European man, dark hair swept back off his
+forehead, clean shaven, in a black shirt worn open over a tee with a couple of
+silver rings and the sleeves rolled to the elbow, a tattoo sleeve down his bare
+forearm, one forearm on the bar of a small wine bar next to a half-finished
+glass of red, caught mid-sentence and just turned to the camera laughing,
+bottles and low lamps behind him, low warm lamplight,` + мужской хвост.
 
-**Проверить.** Тату видно. Кольца читаются. Бритый — это существенно.
+**Проверить.** Бокал **початый** — полный до краёв читается реквизитом.
+Предплечье на стойке: тату видно потому, что он так сидит. Кольца читаются.
+Бритый — это существенно.
 
 ### ma2 — творческий · светлые · борода · без тату · вечерняя улица
 
-**Вайб.** Альтернативность **без** татуировки: только одежда и слои.
+**Вайб.** Альтернативность **без** татуировки: только одежда и слои. Занятие:
+выходит из бара, смеётся.
 
-**Промпт.** `a 26-year-old Eastern European man with light brown hair grown out
-into loose waves and a beard, wearing an oversized overshirt over a tee with layered chains and
-boots, standing on an old-town street in the evening with warm shop lights
-blurred behind him,` + общий хвост.
+**Промпт.** `a 26-year-old Eastern European man, light brown hair grown out into
+loose waves, short beard, in a worn leather jacket open over a striped tee with
+the sleeves pushed up his bare forearms and a couple of silver rings, stepping
+out of a bar doorway onto the street mid-laugh and just turned to the camera,
+lit shopfronts and wet pavement behind him, shop signs and streetlight,` +
+мужской хвост.
 
-**Проверить.** Предплечья **абсолютно чистые**. Дерзость даёт оверширт,
-цепи и ботинки, а не чёрная футболка.
+**Проверить.** Предплечья **абсолютно чистые** — и при этом видны, иначе кадр
+молчит о тату. Дерзость даёт потёртая кожа, полоска и серебро, а не чёрная
+футболка. Фон и свет дословно те же, что на mc1.
 
 ### ma3 — творческий · тёмные · борода · без тату · светлое кафе
 
-**Вайб.** Альтернативный образ днём, в «полированной» локации (та же, что
-mp3). Мужской близнец пары fp3/fa3.
+**Вайб.** Альтернативный образ днём, в «полированной» локации (та же, что mp3).
+Мужской близнец пары fp3/fa3. Занятие: сидит за столиком с блокнотом, поднял
+глаза от письма.
 
-**Промпт.** `a 25-year-old Eastern European man with dark hair in a short
-modern textured crop and a beard, wearing a dark patterned shirt worn open
-over a tee with silver rings, standing in a small daytime café with a marble
-counter, an espresso machine and cups blurred behind him,` + общий хвост.
+**Промпт.** `a 25-year-old Eastern European man, dark hair in a short textured
+crop, short beard, in a soft corduroy overshirt open over a tee with the sleeves
+rolled to the elbow, sitting at a small table in a small daytime café with a
+notebook and an espresso in front of him, just looked up from writing, an
+espresso machine and stacked cups behind him, flat daylight from the window,` +
+мужской хвост.
 
 **Проверить.** Предплечья чистые. Кафе — **дословно то же, что на mp3**: это
-изолирующая пара, и фон в ней обязан совпадать.
+изолирующая пара, и фон со светом в ней обязаны совпадать. Он **за столиком**, а
+mp3 — **у стойки**: одно помещение, разные занятия, и архетип читается по
+человеку, а не по комнате.
 
 ---
 
@@ -484,6 +579,8 @@ counter, an espresso machine and cups blurred behind him,` + общий хвос
    (в v1 так вышло с f11).
 4. **Локация не выдаёт архетип.** Три общие локации обязаны быть узнаваемо
    одинаковыми в парах: fp3/fa3, fs3/fc3, fc1/fa2, mp3/ma3, ms3/mc3, mc1/ma2.
+   В мужском наборе фон И свет в паре описаны **дословно одинаково** — сверить
+   построчно; разный свет на одной локации превращает пару в замер погоды.
    В женском наборе по цвету волос совпадает только пара fc1/fa2 (обе блонд) —
    остальные две различаются и мастью, потому что обе рыжие уже сняты в
    полированном и спортивном архетипах.
@@ -493,3 +590,9 @@ counter, an espresso machine and cups blurred behind him,` + общий хвос
 7. **Рыжих ровно две** — fp3 и fs3 (обе уже сняты); блонд и брюнеток по пять.
    Не «выравнивать» обратно в 4/4/4: почему — в разделе «Что мы вообще
    измеряем».
+8. **Каждый мужской кадр отвечает на вопрос «что он делает».** Если ответ
+   «стоит и смотрит в камеру» — брак, даже если кадр красивый: это ровно то, из-за
+   чего первый заход читался съёмкой для бренда одежды.
+9. **Занятие не коррелирует со вторичным признаком.** Пробежаться глазами по
+   четырём тату-кадрам (mp3, ms2, mc2, ma1) и убедиться, что их занятия ничем
+   не похожи друг на друга больше, чем на остальные восемь.
