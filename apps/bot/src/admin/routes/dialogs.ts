@@ -18,7 +18,7 @@ import { isUuid } from "../utils/uuid.js";
 // them (see ARCHITECTURE.md):
 //   • `User.messageHistory` — Telegram onboarding/menu agent turns. Array
 //     order only, no timestamps, no images.
-//   • `Message` rows        — Aether mobile concierge. Real timestamps + an
+//   • `Message` rows        — the mobile app chat. Real timestamps + an
 //     optional image ref.
 //   • `ChatEvent` rows      — the chat timeline: every durable message the bot
 //     SENT and every action the user TOOK (tap, Mini App submit, payment).
@@ -37,7 +37,7 @@ const PREVIEW_MAX_CHARS = 200;
 type UnifiedMessage = {
   id: string;
   /** Which store the row came from. */
-  source: "agent" | "aether" | "timeline";
+  source: "agent" | "mobile" | "timeline";
   /** `in` = the human, `out` = the bot. */
   direction: "in" | "out";
   role: string;
@@ -54,7 +54,7 @@ type UnifiedMessage = {
   /**
    * Attachments the transcript can actually render, streamed through
    * `GET /admin/media?type=telegram`. Telegram-sourced media is a `file_id`,
-   * so it is a different media type from the Aether `image` above (a Supabase
+   * so it is a different media type from the mobile `image` above (a Supabase
    * object path) and carries its own field rather than overloading that one.
    */
   media?: Array<{ type: "telegram"; kind: string; ref?: string }>;
@@ -66,7 +66,7 @@ type RawHistoryEntry = {
   tool_calls?: Array<{ function?: { name?: string; arguments?: string } }>;
 };
 
-type AetherRow = {
+type MobileRow = {
   id: string;
   role: string;
   content: string;
@@ -92,7 +92,7 @@ type GroupedCount = {
   _max: { createdAt: Date | null };
 };
 
-const AETHER_SELECT = {
+const MOBILE_SELECT = {
   id: true,
   role: true,
   content: true,
@@ -228,10 +228,10 @@ function normalizeAgentHistory(history: unknown): UnifiedMessage[] {
   });
 }
 
-function normalizeAether(row: AetherRow): UnifiedMessage {
+function normalizeMobile(row: MobileRow): UnifiedMessage {
   return {
     id: row.id,
-    source: "aether",
+    source: "mobile",
     direction: row.role === "user" ? "in" : "out",
     role: row.role,
     text: row.content,
@@ -305,7 +305,7 @@ async function readTimeline<T>(run: () => Promise<T>, fallback: T): Promise<{ va
       timelineWarnedAt = now;
       const reason = err instanceof Error ? err.message : String(err);
       console.warn(
-        `[admin] dialogs: chat timeline unavailable, serving agent+aether only (${reason})`,
+        `[admin] dialogs: chat timeline unavailable, serving agent+mobile only (${reason})`,
       );
     }
     return { value: fallback, ok: false };
@@ -414,7 +414,7 @@ dialogsRouter.get(["/admin/dialogs", "/admin/conversations"], async (req: Reques
     const ids = users.map((u) => u.id);
 
     const emptyCounts: GroupedCount[] = [];
-    const [aetherCounts, timelineCounts] = await Promise.all([
+    const [mobileCounts, timelineCounts] = await Promise.all([
       ids.length
         ? (prisma.message.groupBy({
             by: ["userId"],
@@ -437,26 +437,26 @@ dialogsRouter.get(["/admin/dialogs", "/admin/conversations"], async (req: Reques
       ),
     ]);
 
-    const aetherByUser = new Map(aetherCounts.map((row) => [row.userId, row]));
+    const mobileByUser = new Map(mobileCounts.map((row) => [row.userId, row]));
     const timelineByUser = new Map(timelineCounts.value.map((row) => [row.userId, row]));
 
     // Newest row per store, for the preview line. Exact rather than
     // approximate: the groupBy above already told us each user's max
     // timestamp, so we ask for precisely those rows.
-    const aetherKeys = aetherCounts
+    const mobileKeys = mobileCounts
       .filter((r): r is GroupedCount & { _max: { createdAt: Date } } => r._max.createdAt !== null)
       .map((r) => ({ userId: r.userId, createdAt: r._max.createdAt }));
     const timelineKeys = timelineCounts.value
       .filter((r): r is GroupedCount & { _max: { createdAt: Date } } => r._max.createdAt !== null)
       .map((r) => ({ userId: r.userId, createdAt: r._max.createdAt }));
 
-    const [aetherNewest, timelineNewest] = await Promise.all([
-      aetherKeys.length
+    const [mobileNewest, timelineNewest] = await Promise.all([
+      mobileKeys.length
         ? prisma.message.findMany({
-            where: { OR: aetherKeys },
-            select: { ...AETHER_SELECT, userId: true },
+            where: { OR: mobileKeys },
+            select: { ...MOBILE_SELECT, userId: true },
           })
-        : Promise.resolve([] as Array<AetherRow & { userId: string }>),
+        : Promise.resolve([] as Array<MobileRow & { userId: string }>),
       timelineKeys.length
         ? readTimeline(
             async () =>
@@ -474,12 +474,12 @@ dialogsRouter.get(["/admin/dialogs", "/admin/conversations"], async (req: Reques
       const current = newestByUser.get(userId);
       if (!current || byNewest(msg, current) < 0) newestByUser.set(userId, msg);
     };
-    for (const row of aetherNewest) remember(row.userId, normalizeAether(row));
+    for (const row of mobileNewest) remember(row.userId, normalizeMobile(row));
     for (const row of timelineNewest) remember(row.userId, normalizeTimeline(row));
 
     // When messages are requested inline we need the actual rows, not just the
     // newest one — fetch the tail of each timestamped store across the page.
-    let inlineAether = new Map<string, Array<AetherRow & { userId: string }>>();
+    let inlineMobile = new Map<string, Array<MobileRow & { userId: string }>>();
     let inlineTimeline = new Map<string, Array<TimelineRow & { userId: string }>>();
     if (includeMessages && ids.length) {
       const [a, t] = await Promise.all([
@@ -487,7 +487,7 @@ dialogsRouter.get(["/admin/dialogs", "/admin/conversations"], async (req: Reques
           where: { userId: { in: ids } },
           orderBy: { createdAt: "desc" },
           take: ids.length * messageLimit,
-          select: { ...AETHER_SELECT, userId: true },
+          select: { ...MOBILE_SELECT, userId: true },
         }),
         readTimeline(
           async () =>
@@ -500,24 +500,24 @@ dialogsRouter.get(["/admin/dialogs", "/admin/conversations"], async (req: Reques
           [] as Array<TimelineRow & { userId: string }>,
         ).then((r) => r.value),
       ]);
-      inlineAether = groupByUser(a);
+      inlineMobile = groupByUser(a);
       inlineTimeline = groupByUser(t);
     }
 
     const data = users.map((user) => {
       const agent = normalizeAgentHistory(user.messageHistory);
-      const aether = aetherByUser.get(user.id);
+      const mobile = mobileByUser.get(user.id);
       const tl = timelineByUser.get(user.id);
 
       const agentCount = agent.length;
-      const aetherCount = aether?._count._all ?? 0;
+      const mobileCount = mobile?._count._all ?? 0;
       const timelineCount = tl?._count._all ?? 0;
 
       const lastTimestamped = newestByUser.get(user.id) ?? null;
       const lastAgent = [...agent].reverse().find((m) => !m.technical) ?? null;
       const last = lastTimestamped ?? lastAgent;
 
-      const timestamps = [aether?._max.createdAt, tl?._max.createdAt, user.lastMessageAt]
+      const timestamps = [mobile?._max.createdAt, tl?._max.createdAt, user.lastMessageAt]
         .filter((d): d is Date => d instanceof Date)
         .map((d) => d.getTime());
       const lastMessageAt = timestamps.length
@@ -527,7 +527,7 @@ dialogsRouter.get(["/admin/dialogs", "/admin/conversations"], async (req: Reques
       let messages: UnifiedMessage[] | undefined;
       if (includeMessages) {
         const timestamped = [
-          ...(inlineAether.get(user.id) ?? []).map(normalizeAether),
+          ...(inlineMobile.get(user.id) ?? []).map(normalizeMobile),
           ...(inlineTimeline.get(user.id) ?? []).map(normalizeTimeline),
         ]
           .sort(byNewest)
@@ -541,9 +541,9 @@ dialogsRouter.get(["/admin/dialogs", "/admin/conversations"], async (req: Reques
         id: user.id,
         participant: serializeParticipant(user),
         counts: {
-          total: agentCount + aetherCount + timelineCount,
+          total: agentCount + mobileCount + timelineCount,
           agent: agentCount,
-          aether: aetherCount,
+          mobile: mobileCount,
           timeline: timelineCount,
         },
         lastMessageAt,
@@ -564,7 +564,7 @@ dialogsRouter.get(["/admin/dialogs", "/admin/conversations"], async (req: Reques
       total,
       limit,
       offset,
-      sources: { agent: true, aether: true, timeline: timelineCounts.ok },
+      sources: { agent: true, mobile: true, timeline: timelineCounts.ok },
     });
   } catch (err) {
     console.error("[admin] dialogs list error:", err);
@@ -610,12 +610,12 @@ dialogsRouter.get(["/admin/dialogs/:id", "/admin/conversations/:id"], async (req
       return;
     }
 
-    const [aetherRows, timeline] = await Promise.all([
+    const [mobileRows, timeline] = await Promise.all([
       prisma.message.findMany({
         where: { userId: id },
         orderBy: { createdAt: "desc" },
         take: limit,
-        select: AETHER_SELECT,
+        select: MOBILE_SELECT,
       }),
       readTimeline(
         async () =>
@@ -631,7 +631,7 @@ dialogsRouter.get(["/admin/dialogs/:id", "/admin/conversations/:id"], async (req
 
     const agent = normalizeAgentHistory(user.messageHistory);
     const timestamped = [
-      ...aetherRows.map(normalizeAether),
+      ...mobileRows.map(normalizeMobile),
       ...timeline.value.map(normalizeTimeline),
     ]
       .sort(byNewest)
@@ -654,12 +654,12 @@ dialogsRouter.get(["/admin/dialogs/:id", "/admin/conversations/:id"], async (req
       id: user.id,
       participant: serializeParticipant(user),
       counts: {
-        total: agent.length + aetherRows.length + timeline.value.length,
+        total: agent.length + mobileRows.length + timeline.value.length,
         agent: agent.length,
-        aether: aetherRows.length,
+        mobile: mobileRows.length,
         timeline: timeline.value.length,
       },
-      sources: { agent: true, aether: true, timeline: timeline.ok },
+      sources: { agent: true, mobile: true, timeline: timeline.ok },
       messages,
       photos,
     });

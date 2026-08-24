@@ -74,7 +74,7 @@ out of Telegram-only workers.
   venues, and the 🎓 profile line.
 - **NO IN-APP CHAT** — Users NEVER message each other through our platform. Do
   not build chat interfaces between users. The only chats are user↔bot,
-  user↔Aether concierge (mobile), and the structured pitch / scheduling /
+  user↔chat agent (mobile), and the structured pitch / scheduling /
   emergency flows. **Narrow exception (feature-flagged):** the Variant C
   pre-date *anonymous proxy chat* (§Phase 4 — Pre-date coordination) relays
   text between an already-matched, already-scheduled pair. It is deliberately
@@ -1557,7 +1557,7 @@ stored in `Profile.photos[]`; the short video part is display-only for
 profile and match cards.
 
 The same pipeline runs again on every photo edit. The bot/mobile photo
-handlers and Aether's `attach_profile_photo` tool fire
+handlers and the chat agent's `attach_profile_photo` tool fire
 `triggerVerificationRerun` after every add/delete/replace,
 which clears the `(personaInquiryId, faceMatchedAt)` idempotency marker (the
 column keeps its historical name and now holds the liveness session id),
@@ -1582,7 +1582,7 @@ came out weak and re-running verification in better light is the fix (rewritten
 exception, so the success copy is
 not repeated at users who have nothing to do with it: a **rerun that merely
 re-confirms an already-`verified` user** sends no DM. Every profile-photo edit
-auto-reruns the pipeline (menu photo manager, mobile `/v1/me/photos`, Aether),
+auto-reruns the pipeline (menu photo manager, mobile `/v1/me/photos`, chat),
 so without this an active user re-read "verification passed, your profile is
 live" every time they opened their photos. The suppression is scoped to
 `verified → verified`; anything the user can act on (`rejected`,
@@ -2250,7 +2250,7 @@ timeline. The same change stops the agent replaying onboarding-era
 turns from `messageHistory` at all: only its own turns from the last 24 h are
 replayed, while the full column is retained for the admin conversation viewer
 and the re-engagement worker. The **timeline** is Telegram-only; the mobile
-Aether concierge keeps its own `Message`-row history unchanged. The menu agent
+The mobile chat agent keeps its own `Message`-row history unchanged. The menu agent
 itself is *not* Telegram-only, despite what this paragraph used to claim: the
 same `runMenuAgentTurn`, with the same tools, also backs the JWT
 `/v1/assistant/{ask,voice}` routes (corrected 2026-07-29 — the mistake had a
@@ -2310,7 +2310,7 @@ worded:
   (Elo distance, cosine similarity) that read as a rating OF THE PARTNER, and
   the blind-decision invariant still forbids revealing their choice.
 - **write** — the profile edits, pause/resume, rejection feedback, plus
-  `update_hobbies` (the Telegram side had no hobby tool while Aether did) and
+  `update_hobbies` (the Telegram side had no hobby tool while the chat agent did) and
   `set_language` / `set_theme` (the same DB write the Settings menu's pickers
   perform, factored into `services/user-preferences.ts` so both paths keep the
   invariant that a switch clears only this user's own cached scheduled-date PNG
@@ -2370,7 +2370,7 @@ corrections, both `VOICE.md`-owned (§1.1, §3.1):
   described the archetype as male since it was written, but only in English, so
   nothing reached the output and the model produced «поняла» about half the
   time. Encoded once as `VOICE_SELF_GENDER` and injected into every prose
-  surface — the concierge, Aether, the onboarding agent, and the pitch /
+  surface — the assistant, the mobile chat agent, the onboarding agent, and the pitch /
   scheduling / venue / wingman prompts. The brand "we" in static copy is
   unaffected: that is the company speaking and is already gender-neutral.
 
@@ -2656,7 +2656,7 @@ Supported first-class flows:
 
 - Onboarding / consent / OTP / liveness via `/v1/onboarding/*`,
   `/v1/auth/*`, `/v1/me/verification/*`.
-- **Aether Concierge** (`/v1/chat/*`) — multimodal AI chat that gathers
+- **Mobile chat agent** (`/v1/chat/*`) — multimodal AI chat that gathers
   profile facts in the background via `update_profile` / `attach_profile_photo`
   tools. Distinct from the legacy onboarding-agent: persists each turn as a
   `Message` row and supports image attachments. Post-onboarding fixed identity
@@ -6614,7 +6614,7 @@ excluding an otherwise-complete user from matching.
 `en` / `ru` / `uk` / `de` / `pl` (the `Language` enum and
 `SUPPORTED_LANGUAGES`; `en` is the fallback). User-facing strings live in
 `packages/shared/src/i18n.ts`, which aggregates `en`/`ru`/`uk` inline plus the
-`de`/`pl` blocks from their own modules. Onboarding/menu/Aether agents
+`de`/`pl` blocks from their own modules. Onboarding/menu/chat agents
 auto-detect the user's language and forbid English enum injection into
 non-English replies.
 # Venue Intent V2 (2026-07-21)

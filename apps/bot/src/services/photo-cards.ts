@@ -114,7 +114,7 @@ export async function retirePhotoCards(
 
 /**
  * Reconcile `session.photoCards` against `session.pendingPhotos`: delete the
- * card message for any ref no longer present (a concurrent mobile/Aether edit,
+ * card message for any ref no longer present (a concurrent mobile/chat edit,
  * or an explicit delete/clear-all that already spliced its own arrays before
  * calling this), and send a fresh card — the photo plus a single delete
  * button — for any ref that doesn't have one yet.

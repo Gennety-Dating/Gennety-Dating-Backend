@@ -1030,7 +1030,7 @@ describe("Menu — Edit Profile", () => {
   it("a stale tap on an already-removed card is a no-op", async () => {
     const photos = Array.from({ length: MAX_PHOTOS }, (_, i) => `p${i}`);
     // No card for msgId 555 — as if it was already deleted (double-tap) or
-    // the ref it pointed at was dropped by a concurrent mobile/Aether edit.
+    // the ref it pointed at was dropped by a concurrent mobile/chat edit.
     const cards = photos.map((ref, i) => ({ msgId: 100 + i, ref }));
     const ctx = createMockCtx({
       session: {

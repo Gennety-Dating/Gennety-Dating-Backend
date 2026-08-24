@@ -261,7 +261,7 @@ export async function createProfilePhotoSignedUrl(
 }
 
 /**
- * Upload a chat attachment (Aether Concierge multimodal input) to Supabase
+ * Upload a chat attachment (mobile chat agent multimodal input) to Supabase
  * Storage. Path format `{userId}/{timestamp}.{ext}` mirrors the photo/selfie
  * helpers so the same ownership-by-prefix check works across all buckets.
  */
@@ -376,7 +376,7 @@ export async function downloadVoicePrompt(path: string): Promise<Buffer | null> 
   }
 }
 
-/** Download a private Aether attachment for server-side validation/copying. */
+/** Download a private chat attachment for server-side validation/copying. */
 export async function downloadChatImage(path: string): Promise<Buffer | null> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
 

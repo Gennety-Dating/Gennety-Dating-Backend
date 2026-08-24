@@ -897,7 +897,7 @@ app.get("/admin/users/:id", async (req: Request, res: Response) => {
 // merging BOTH conversation stores plus a profile-photo gallery.
 //   • User.messageHistory (Telegram onboarding/menu agents) — array order,
 //     no timestamps, no inline images.
-//   • Message rows (Aether mobile concierge) — real createdAt + imageUrl.
+//   • Message rows (the mobile app chat) — real createdAt + imageUrl.
 // Images are returned as refs streamed through GET /admin/media; this endpoint
 // never downloads bytes itself.
 // ---------------------------------------------------------------------------
@@ -909,7 +909,7 @@ type RawHistoryEntry = {
 
 type NormalizedMessage = {
   id: string;
-  source: "telegram" | "aether";
+  source: "telegram" | "mobile";
   role: string;
   text: string | null;
   createdAt: string | null;
@@ -926,7 +926,7 @@ app.get("/admin/users/:id/conversation", async (req: Request, res: Response) => 
       return;
     }
 
-    const [user, aetherRows] = await Promise.all([
+    const [user, mobileRows] = await Promise.all([
       prisma.user.findUnique({
         where: { id },
         select: {
@@ -978,15 +978,15 @@ app.get("/admin/users/:id/conversation", async (req: Request, res: Response) => 
       });
     });
 
-    // Store 2 — Aether. We deliberately do NOT interleave with Store 1 by
+    // Store 2 — the mobile app chat. We deliberately do NOT interleave with Store 1 by
     // fabricating timestamps: a user is realistically one-or-the-other
     // (mobile-only users carry a negative telegramId and no meaningful
-    // messageHistory). Emit the Telegram block (above) then the Aether block
+    // messageHistory). Emit the Telegram block (above) then the mobile block
     // in createdAt order.
-    for (const row of aetherRows) {
+    for (const row of mobileRows) {
       messages.push({
         id: row.id,
-        source: "aether",
+        source: "mobile",
         role: row.role,
         text: row.content,
         createdAt: row.createdAt.toISOString(),

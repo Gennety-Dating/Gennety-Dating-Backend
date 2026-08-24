@@ -29,12 +29,12 @@ import {
 } from "./profile-media-validation/photo-state.js";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 
-export interface AetherToolResult {
+export interface ChatToolResult {
   ok: boolean;
   detail?: string;
 }
 
-interface AetherProfilePatchDeps {
+interface ChatProfilePatchDeps {
   findUser: (userId: string) => Promise<{ onboardingStep: string } | null>;
   updateUser: (userId: string, data: Prisma.UserUncheckedUpdateInput) => Promise<unknown>;
   upsertProfile: (
@@ -44,7 +44,7 @@ interface AetherProfilePatchDeps {
   refreshEmbedding: (userId: string) => Promise<unknown>;
 }
 
-const profilePatchDeps: AetherProfilePatchDeps = {
+const profilePatchDeps: ChatProfilePatchDeps = {
   findUser: (userId) =>
     prisma.user.findUnique({
       where: { id: userId },
@@ -65,11 +65,11 @@ const profilePatchDeps: AetherProfilePatchDeps = {
     refreshUserEmbedding(userId, { timeoutMs: 30_000 }),
 };
 
-export async function applyAetherProfilePatch(
+export async function applyChatProfilePatch(
   userId: string,
   raw: unknown,
-  deps: AetherProfilePatchDeps = profilePatchDeps,
-): Promise<AetherToolResult> {
+  deps: ChatProfilePatchDeps = profilePatchDeps,
+): Promise<ChatToolResult> {
   if (!raw || typeof raw !== "object") return { ok: false, detail: "Bad payload" };
   const args = raw as Record<string, unknown>;
   const user = await deps.findUser(userId);
@@ -141,10 +141,10 @@ export async function applyAetherProfilePatch(
   }
   if (touchedEmbedding) {
     await deps.refreshEmbedding(userId).catch((err) => {
-      // The profile patch is already saved with embeddingDirty=true. Aether
-      // must not report the edit as failed merely because refresh will retry.
+      // The profile patch is already saved with embeddingDirty=true. The chat
+      // agent must not report the edit as failed merely because refresh retries.
       console.warn(
-        `[aether] immediate embedding refresh failed userId=${userId}:`,
+        `[chat] immediate embedding refresh failed userId=${userId}:`,
         err instanceof Error ? err.message : err,
       );
     });
@@ -152,7 +152,7 @@ export async function applyAetherProfilePatch(
   return { ok: true };
 }
 
-interface AetherPhotoDeps {
+interface ChatPhotoDeps {
   findOwnedMessageImage: (
     userId: string,
     imageUrl: string,
@@ -189,7 +189,7 @@ interface AetherPhotoDeps {
   queueVerificationRerun: (userId: string) => void;
 }
 
-const photoDeps: AetherPhotoDeps = {
+const photoDeps: ChatPhotoDeps = {
   findOwnedMessageImage: (userId, imageUrl) =>
     prisma.message.findFirst({
       where: { userId, imageUrl },
@@ -227,17 +227,17 @@ const photoDeps: AetherPhotoDeps = {
       const api = getBotApi();
       if (!api) return;
       void triggerVerificationRerun(userId, api).catch((err) => {
-        console.error("[aether] verification rerun failed:", err);
+        console.error("[chat] verification rerun failed:", err);
       });
     });
   },
 };
 
-export async function attachAetherProfilePhoto(
+export async function attachChatProfilePhoto(
   userId: string,
   raw: unknown,
-  deps: AetherPhotoDeps = photoDeps,
-): Promise<AetherToolResult> {
+  deps: ChatPhotoDeps = photoDeps,
+): Promise<ChatToolResult> {
   if (!raw || typeof raw !== "object") return { ok: false, detail: "Bad payload" };
   const path = (raw as { imageUrl?: unknown }).imageUrl;
   if (typeof path !== "string" || !path.startsWith(`${userId}/`)) {
@@ -274,7 +274,7 @@ export async function attachAetherProfilePhoto(
     if (!validation.ok) {
       return {
         ok: false,
-        detail: aetherPhotoValidationDetail(validation.reason),
+        detail: chatPhotoValidationDetail(validation.reason),
       };
     } else {
       gateScore = validation.value.identitySimilarity ?? 0;
@@ -313,7 +313,7 @@ export async function attachAetherProfilePhoto(
         profileMedia: profilePhotoMedia(uploaded.path),
         perceptualHash: photoHash,
         faceScore: gateScore,
-        source: "aether",
+        source: "mobile_chat",
         candidateBuffer: buffer,
       });
       if (consensus.status === "accepted" || consensus.status === "confirmed") {
@@ -321,7 +321,7 @@ export async function attachAetherProfilePhoto(
       }
       return {
         ok: true,
-        detail: aetherConsensusDetail(consensus),
+        detail: chatConsensusDetail(consensus),
       };
     } catch (err) {
       await deps.deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, uploaded.path).catch(() => false);
@@ -361,7 +361,7 @@ export async function attachAetherProfilePhoto(
   return { ok: true };
 }
 
-function aetherPhotoValidationDetail(reason: MediaValidationReason): string {
+function chatPhotoValidationDetail(reason: MediaValidationReason): string {
   switch (reason) {
     case "invalid_media":
       return "Unsupported image file";
@@ -386,7 +386,7 @@ function aetherPhotoValidationDetail(reason: MediaValidationReason): string {
   }
 }
 
-function aetherConsensusDetail(consensus: PhotoConsensusCommitResult): string {
+function chatConsensusDetail(consensus: PhotoConsensusCommitResult): string {
   if (consensus.status === "pending") {
     return "Photo passed checks, but identity is not fixed yet. Send one more different photo of the same person.";
   }

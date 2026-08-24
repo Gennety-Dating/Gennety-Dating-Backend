@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  applyAetherProfilePatch,
-  attachAetherProfilePhoto,
-} from "./aether-profile-tools.js";
+  applyChatProfilePatch,
+  attachChatProfilePhoto,
+} from "./chat-profile-tools.js";
 import { env } from "../config.js";
 
 const mutableValidationEnv = env as unknown as {
@@ -15,10 +15,10 @@ afterEach(() => {
   mutableValidationEnv.PROFILE_MEDIA_VALIDATION_FAIL_OPEN = false;
 });
 
-describe("Aether profile tools", () => {
+describe("chat agent profile tools", () => {
   it("does not change fixed age after onboarding", async () => {
     const updateUser = vi.fn();
-    const result = await applyAetherProfilePatch(
+    const result = await applyChatProfilePatch(
       "user-1",
       { age: 27, hobbies: ["climbing"] },
       {
@@ -38,7 +38,7 @@ describe("Aether profile tools", () => {
     // female-exclusive express venue swap, so a chat message that flips it
     // would hand the sender another cohort's entitlements.
     const updateUser = vi.fn();
-    const result = await applyAetherProfilePatch(
+    const result = await applyChatProfilePatch(
       "user-1",
       { gender: "female" },
       {
@@ -55,7 +55,7 @@ describe("Aether profile tools", () => {
 
   it("still records gender during onboarding, where it is genuinely being collected", async () => {
     const updateUser = vi.fn().mockResolvedValue(undefined);
-    const result = await applyAetherProfilePatch(
+    const result = await applyChatProfilePatch(
       "user-1",
       { gender: "female" },
       {
@@ -75,7 +75,7 @@ describe("Aether profile tools", () => {
 
   it("keeps partner preference editable after onboarding — it is a choice, not identity", async () => {
     const updateUser = vi.fn().mockResolvedValue(undefined);
-    const result = await applyAetherProfilePatch(
+    const result = await applyChatProfilePatch(
       "user-1",
       { preference: "both" },
       {
@@ -95,7 +95,7 @@ describe("Aether profile tools", () => {
 
   it("refreshes matching data immediately after an embedding-feeding edit", async () => {
     const refreshEmbedding = vi.fn().mockResolvedValue(undefined);
-    const result = await applyAetherProfilePatch(
+    const result = await applyChatProfilePatch(
       "user-1",
       { partnerPreferences: "kind and curious" },
       {
@@ -111,7 +111,7 @@ describe("Aether profile tools", () => {
   });
 
   it("keeps a saved profile edit successful when immediate refresh fails", async () => {
-    const result = await applyAetherProfilePatch(
+    const result = await applyChatProfilePatch(
       "user-1",
       { hobbies: ["climbing"] },
       {
@@ -127,7 +127,7 @@ describe("Aether profile tools", () => {
 
   it("enforces the shared partner-preferences length contract", async () => {
     const upsertProfile = vi.fn();
-    const result = await applyAetherProfilePatch(
+    const result = await applyChatProfilePatch(
       "user-1",
       { partnerPreferences: "x".repeat(501) },
       {
@@ -144,7 +144,7 @@ describe("Aether profile tools", () => {
 
   it("rejects a chat image when the single-face gate fails", async () => {
     mutableValidationEnv.PROFILE_MEDIA_VALIDATION_ENABLED = false;
-    const result = await attachAetherProfilePhoto(
+    const result = await attachChatProfilePhoto(
       "user-1",
       { imageUrl: "user-1/chat.jpg" },
       {
@@ -172,7 +172,7 @@ describe("Aether profile tools", () => {
       retryable: false,
     });
 
-    const result = await attachAetherProfilePhoto(
+    const result = await attachChatProfilePhoto(
       "user-1",
       { imageUrl: "user-1/chat.jpg" },
       {
@@ -222,7 +222,7 @@ describe("Aether profile tools", () => {
     });
     const upsertProfile = vi.fn();
 
-    const result = await attachAetherProfilePhoto(
+    const result = await attachChatProfilePhoto(
       "user-1",
       { imageUrl: "user-1/chat.jpg" },
       {
@@ -260,7 +260,7 @@ describe("Aether profile tools", () => {
         userId: "user-1",
         photoRef: "user-1/profile.jpg",
         perceptualHash: "abc",
-        source: "aether",
+        source: "mobile_chat",
       }),
     );
     expect(upsertProfile).not.toHaveBeenCalled();

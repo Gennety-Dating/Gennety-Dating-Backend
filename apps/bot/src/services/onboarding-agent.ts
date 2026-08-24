@@ -25,6 +25,7 @@ import {
   t,
   PROFILER_ENTRY_DELAY_MS,
   VOICE_SELF_GENDER,
+  VOICE_SELF_NAME,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
@@ -249,7 +250,9 @@ async function generateClarificationReply(
               `Instead of answering, they replied with a question or confusion. ` +
               `Reply in language "${language}" with a warm, concise 1–2 sentence clarification that helps them answer. ` +
               `Do NOT ask a new question and do NOT restate the onboarding question — it is appended separately. Plain text, no markdown.\n\n` +
-              VOICE_SELF_GENDER,
+              VOICE_SELF_GENDER +
+              `\n\n` +
+              VOICE_SELF_NAME,
           },
           { role: "user", content: userText },
         ],
@@ -516,6 +519,8 @@ function buildSystemPrompt(
 Your mission: guide the user through the onboarding process via natural conversation. Extract the required information and use the provided tools to progress through each step.
 
 ${VOICE_SELF_GENDER}
+
+${VOICE_SELF_NAME}
 
 ## Strict Rules
 ${emailRule}

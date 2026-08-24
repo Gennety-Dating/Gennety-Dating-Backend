@@ -6803,7 +6803,7 @@ project's service-role key had not been supplied yet), with `…-demo` bucket
 names. Nothing leaked, and it is worth recording why rather than just that: the
 only storage write on the Telegram demo path — the liveness reference selfie —
 is stubbed by `demo/verification.ts`; Telegram profile photos are `file_id`s
-that never reach Supabase; the mobile/Aether upload routes are JWT-only and
+that never reach Supabase; the mobile/chat upload routes are JWT-only and
 unreachable from a bot chat; and `/restart` calls the real `deleteUserAccount`,
 whose `collectOwnedPaths` keeps only paths prefixed `${userId}/`, so the stub
 selfie path was filtered out and no storage call was made at all. A write that
@@ -7816,7 +7816,7 @@ branch, not this change.
 What ships:
 
 - **`profiles.ethnicity` is gone end to end** — the onboarding question, the
-  legacy agent's tool field + prompts + context-dump gate, the Aether
+  legacy agent's tool field + prompts + context-dump gate, the chat-agent
   `update_profile` field, the fallback embedding text (`profile-analysis.ts`),
   both founder-feed cards, and the admin audience breakdown. PRODUCT_SPEC §1.3
   records why. Existing `onboarding_progress` rows that list `"ethnicity"` are

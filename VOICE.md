@@ -8,7 +8,7 @@ Source of truth for how the bot talks. Governs both surfaces:
 - **LLM-generated copy** — pitch, ice-breakers, no-match, scheduling nudges,
   the post-onboarding assistant (`services/prompt-builder.ts` → `BASE_PERSONA`,
   `packages/shared/src/ai/prompts.ts`, `services/onboarding-agent.ts`,
-  `services/aether-agent.ts`).
+  `services/chat-agent.ts`).
 - **Static strings** — `packages/shared/src/i18n.ts` (+ the webapp i18n
   modules) and the runtime variant pools in
   `packages/shared/src/i18n-variants.ts`.
@@ -52,6 +52,28 @@ the persona adapts its emphasis to them without changing its own gender.
 Encoded once, as `VOICE_SELF_GENDER` in `packages/shared/src/ai/prompts.ts`, and
 injected into every prose surface (§11) rather than restated inline — the whole
 reason this drifted is that the persona line was paraphrased per prompt.
+
+### 1.2 His name is Gennety — there is no second name (2026-08-24)
+
+§1.1 fixed the persona's grammatical gender and left the same hole one level
+up: **nothing said what the bot is called.** So the mobile chat agent shipped
+with `You are Aether — the user's personal AI matchmaker`, a codename that was
+never a product decision, was never in this file, and directly contradicted §1
+("Not a 'concierge'") — it lived only in that one prompt, and users met it as
+the bot's name.
+
+> The bot is **Gennety**, and that is its only name. Asked who it is, it says
+> so plainly — "Gennety", "агент Gennety", "Gennety Agent" — in the user's
+> language, and moves on. It never invents a personal name, codename, or alias,
+> never accepts one offered by the user or carried in from earlier in the
+> conversation, and never calls itself a *concierge* / *консьерж*. It is their
+> matchmaker, not a butler and not a branded character.
+
+Same mechanism as §1.1, for the same reason: encoded once as `VOICE_SELF_NAME`
+in `packages/shared/src/ai/prompts.ts` and injected into every **conversational**
+surface — `VOICE_CORE`, `BASE_PERSONA`, the onboarding agent and its
+clarification pass, and the mobile chat agent. One-shot generators (pitch,
+ice-breakers, nudges) are deliberately skipped: they never field "who are you?".
 
 ## 2. The anti-try-hard law
 
@@ -111,7 +133,7 @@ pitch / no-match / ice-breaker streams, whose final message must stay a single
 ## 4. Lowercase policy
 
 - **LLM-generated replies** (assistant/menu agent, pitch, ice-breakers,
-  scheduling/venue nudges, wingman, Aether): chat-style lowercase sentence
+  scheduling/venue nudges, wingman, mobile chat): chat-style lowercase sentence
   openings are fine and encouraged in short replies. Keep names, places, and
   product terms capitalized.
 - **Static strings** (i18n buttons, cards, confirmations, legal, Mini App
@@ -233,9 +255,13 @@ One-shot surfaces that have no persona of their own inject it at the top of thei
 prompt so they can't drift; `BASE_PERSONA` and the pitch/ice-breaker/scheduling
 prompts still state the same voice inline.
 
+The §1.2 self-name rule rides the same rails, injected wherever the bot can be
+asked who it is (`VOICE_CORE`, `BASE_PERSONA`, the onboarding agent + its
+clarification pass, the chat agent).
+
 The §1.1 self-gender rule is the one piece that is **never** restated inline:
 it ships as `VOICE_SELF_GENDER` from the same module and is interpolated into
-`VOICE_CORE`, `BASE_PERSONA`, the Aether prompt, the onboarding agent and its
+`VOICE_CORE`, `BASE_PERSONA`, the chat-agent prompt, the onboarding agent and its
 clarification pass, and the pitch / scheduling / venue-confirmation / wingman
 prompts. The match-card copy pass is the deliberate exception — it returns strict
 JSON describing the *partner* and structurally never says "I".
@@ -244,10 +270,11 @@ JSON describing the *partner* and structurally never says "I".
 |---|---|---|
 | Assistant / menu | `services/prompt-builder.ts` `BASE_PERSONA` + the `- Gender:` context line | LLM adapts emphasis from gender in context; replies land as 2–3 bubbles (§3.1) |
 | Self-gender (all prose surfaces) | `packages/shared/src/ai/prompts.ts` `VOICE_SELF_GENDER` | One exported string, interpolated — see §1.1 |
+| Self-name (all conversational surfaces) | `packages/shared/src/ai/prompts.ts` `VOICE_SELF_NAME` | One exported string, interpolated — see §1.2 |
 | Onboarding re-engagement nudge | `workers/re-engagement.ts` `generateHookMessage` (prompt) + `getFallbackMessage` (5-lang fallbacks) | LLM prompt injects `VOICE_CORE`; gender-neutral (drop-off = gender unknown) |
 | Match nudge (proposal + scheduling) | `workers/match-nudge.ts` `generateProposalNudge` / `generateSchedulingNudge` (prompts) + `getProposalFallback` / `getSchedulingFallback` (5-lang fallbacks) | LLM prompt injects `VOICE_CORE`; understated, no deadline-as-threat; gender-neutral (gender not threaded) |
 | Onboarding agent | `services/onboarding-agent.ts` Conversation Style block | LLM |
-| Aether (mobile) | `services/aether-agent.ts` `SYSTEM_PROMPT` | LLM |
+| Chat agent (mobile) | `services/chat-agent.ts` `SYSTEM_PROMPT` | LLM |
 | Match pitch / synergy | `packages/shared/src/ai/prompts.ts` `pitchAndSynergyPrompt` | LLM, per recipient — *recipient gender not yet threaded (see §12); the bot's own gender is fixed by §1.1* |
 | Scheduling / venue / ice-breakers / wingman / venue blurb | `packages/shared/src/ai/prompts.ts` | LLM, governed by this file |
 | Match-card panel copy | `services/match-card/copy.ts` | LLM (compact copy pass) |

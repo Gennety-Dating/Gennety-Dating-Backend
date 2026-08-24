@@ -78,7 +78,7 @@ graph TD
       Crons["16× node-cron schedules<br/>+ date lifecycle interval"]
       OnboAgent[Onboarding collector<br/>server state + LLM extractor]
       MenuAgent[Menu LLM agent]
-      Aether[Aether concierge<br/>multimodal chat]
+      MobileChat[Mobile chat agent<br/>multimodal chat]
       Match[Match engine<br/>SQL+Node re-rank]
       DispatchQ[Dispatch queue<br/>rate-limited DM]
       Verify[Verification pipeline<br/>Face Liveness + CompareFaces]
@@ -113,19 +113,19 @@ graph TD
     Crons --> DispatchQ
     Crons --> DateLC
     Crons --> Push
-    PublicAPI --> Aether
+    PublicAPI --> MobileChat
     PublicAPI --> Verify
     AdminAPI --> Verify
 
     %% ── Edges: process → external ──────────────────
     OnboAgent <--> OpenAI
     MenuAgent <--> OpenAI
-    Aether <--> OpenAI
+    MobileChat <--> OpenAI
     Match <--> OpenAI
     Verify -->|CreateSession / GetSessionResults| Liveness
     Verify -->|CompareFaces| Rekog
     Verify -->|selfie/photo storage| Supabase
-    Aether -->|chat images| Supabase
+    MobileChat -->|chat images| Supabase
     DateLC -->|venue lookup| Places
     Bot -->|OTP delivery| Email
     Push --> PushSvc
@@ -488,7 +488,7 @@ operator notes.
 
 ### `messages`
 
-Aether concierge multimodal chat history (one row per turn, with optional
+Mobile chat agent history — multimodal, one row per turn, with optional
 `imageUrl` pointing at an opaque Supabase Storage path — renderers mint
 short-lived signed URLs). Distinct from `users.messageHistory` which the
 legacy onboarding/menu agents still use.
@@ -1073,9 +1073,9 @@ auth) are deliberately outside the spec.
 | POST | `/v1/onboarding/consent` | Record ToS + research-opt-in + `language` (native client sets it from the system locale — no picker). Advances `onboardingStep` to `conversational` once terms + language + a verified contact rail are all present, handing the interview to the server-owned fact collector (the native-client equivalent of Telegram's onboarding Mini App handoff). |
 | POST | `/v1/assistant/ask` | The post-onboarding menu agent — the SAME `runMenuAgentTurn` and the same tool set the Telegram bot uses, not a lighter helper. Gated by `evaluateAgentAccess` (`services/agent-access.ts`), identical to the Telegram door: `403` for a moderated or still-verification-gated account, `409` before onboarding completes. The response carries `reply` plus `action` (a native affordance the agent asked for — a confirm card, or one button into an existing flow) and `receipts` (code-owned confirmations of writes that landed). `action` used to be dropped here while the Telegram router acted on it, so the agent's whole confirm class was silently inert on this surface. Deliberately outside `openapi/gennety-v1.yaml` — no shipped iOS client consumes it. |
 | POST | `/v1/assistant/voice` | Whisper transcript → the same agent turn, same gate, same response shape. This is what makes every agent tool voice-reachable without a separate voice surface. |
-| POST | `/v1/chat/upload` | Upload Aether chat image to private storage |
-| POST | `/v1/chat/message` | Aether concierge turn (text + image) |
-| GET  | `/v1/chat/history` | Aether chat history |
+| POST | `/v1/chat/upload` | Upload a mobile chat image to private storage |
+| POST | `/v1/chat/message` | Mobile chat agent turn (text + image) |
+| GET  | `/v1/chat/history` | Mobile chat history |
 | GET  | `/v1/matches/current` | Current active match (explicit progression priority, with serializer gates). Carries **`timeZone`** — the CALLER's own city zone — because `agreedTime` is an instant and the native date card (§3.8) has to draw it on a wall clock; the device's is wrong for a traveller, who would read and turn up at a time neither side meant. Never the partner's zone. |
 | POST | `/v1/matches/:id/decision` | Accept / decline (mirrors bot decision handler) |
 | POST | `/v1/matches/:id/vibe-location` | Submit concierge vibe + location pin |
@@ -1282,7 +1282,7 @@ Conversation viewer (inline routes in `server.ts`, behind the global
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/admin/users/:id/conversation` | Normalized, chronological transcript for one user, merging BOTH conversation stores — `User.messageHistory` (Telegram onboarding/menu agents, array order, no timestamps/images) then `Message` rows (Aether mobile concierge, real `createdAt` + `imageUrl`). `system`/`tool`/null-content turns are flagged `technical`; `tool_calls` are surfaced; `Profile.photos[]` ride along as a separate `photos[]` gallery (not interleaved). Image fields are refs streamed via `/admin/media`. Stringifies BigInt; 404 unknown user. |
+| GET | `/admin/users/:id/conversation` | Normalized, chronological transcript for one user, merging BOTH conversation stores — `User.messageHistory` (Telegram onboarding/menu agents, array order, no timestamps/images) then `Message` rows (the mobile app chat, real `createdAt` + `imageUrl`). `system`/`tool`/null-content turns are flagged `technical`; `tool_calls` are surfaced; `Profile.photos[]` ride along as a separate `photos[]` gallery (not interleaved). Image fields are refs streamed via `/admin/media`. Stringifies BigInt; 404 unknown user. |
 | GET | `/admin/media` | Authenticated image proxy that streams private/Telegram image bytes (`type ∈ {telegram, photo, chat}` → `downloadTelegramFile` / `downloadProfileImage` / `downloadChatImage` from `services/storage.ts`). The Bearer key is never accepted via query string; the dashboard fetches with the header and converts to a blob URL. Supabase `ref` shape is validated against path traversal; `503` when `botApi` is null and Telegram is needed; `404` (never 500) on a missing/expired image. Exempted from the global 60/min `adminLimiter` and given its own higher-ceiling `mediaLimiter` so a gallery doesn't exhaust the admin budget. |
 
 Dialog reader (`routes/dialogs.ts`, same `requireApiKey` gate) — the
@@ -1300,9 +1300,9 @@ not a bare string (rendering the object as a value is a client-side crash). Filt
 | GET | `/admin/dialogs/:id` | One dialog's transcript; `:id` **is the user id**, since a dialog is user↔bot and has exactly one human participant. `limit` (default 200, max 1000), `order` (`asc`\|`desc`), `includeTechnical` (default false — `system`/`tool`/null-content turns are hidden). Returns `participant`, `counts`, `sources`, `messages`, and the `photos[]` gallery as refs for `/admin/media`. 404 on unknown id. |
 
 Both return one **unified message shape** across the three stores:
-`{id, source: "agent"|"aether"|"timeline", direction: "in"|"out", role, text,
+`{id, source: "agent"|"mobile"|"timeline", direction: "in"|"out", role, text,
 createdAt, technical}` plus per-source extras (`toolCalls` for agent, `image`
-for Aether, `kind`/`surface`/`actions`/`matchId` for the timeline).
+for mobile, `kind`/`surface`/`actions`/`matchId` for the timeline).
 `direction` is what identifies the speaker — `in` = the human, `out` = the bot.
 `agent` rows carry **no timestamp** (`User.messageHistory` has none), so they
 are emitted as a leading block rather than interleaved on a fabricated clock;
@@ -1382,7 +1382,7 @@ so normal fast use never trips them, and add no Prisma schema or dependency.
   user for a fresh liveness check (PRODUCT_SPEC §1.4).
 - `SUPABASE_PHOTO_BUCKET` — mobile-uploaded profile photos. Telegram-uploaded
   profile photos remain Telegram `file_id`s.
-- `SUPABASE_CHAT_BUCKET` — Aether chat images, stored as opaque object paths
+- `SUPABASE_CHAT_BUCKET` — mobile chat images, stored as opaque object paths
   (`{userId}/{ts}.jpg`); rendered via short-lived signed URLs from
   `services/storage.ts`.
 
@@ -1395,8 +1395,8 @@ or `{ type: "video", video, ...metadata }`. Static media admission stores
 Hashes are positional: every `photos[i]` has `uploadedPhotoHashes[i]` (a real
 hash or the empty-string sentinel). Shared alignment helpers normalize legacy
 length mismatches without guessing associations, and every Telegram/mobile/
-Aether append or delete updates photos, media, face score, and hash together.
-Telegram deletion uses the same per-user lock as Telegram/mobile/Aether append,
+chat append or delete updates photos, media, face score, and hash together.
+Telegram deletion uses the same per-user lock as Telegram/mobile/chat append,
 then replaces its session from the locked canonical state; a stale Telegram
 album can therefore never erase a photo concurrently added on another surface.
 **Identity is enforced only by liveness verification, not at upload time
@@ -1439,7 +1439,7 @@ currently bot-side only.
 
 | Service | Role |
 |---|---|
-| OpenAI | Onboarding / menu / Aether agents, embeddings, Whisper voice/video-audio transcription, image/text moderation, vision Elo seed |
+| OpenAI | Onboarding / menu / mobile chat agents, embeddings, Whisper voice/video-audio transcription, image/text moderation, vision Elo seed |
 | AWS Rekognition Face Liveness | Identity liveness: `CreateFaceLivenessSession` + `GetFaceLivenessSessionResults` server-side (`services/face-liveness.ts`); the device streams its selfie video straight to `StartFaceLivenessSession` using STS credentials minted per session by `services/liveness-credentials.ts`. Replaced Persona 2026-07-26. ~$0.015 per check with no monthly floor, so a paused ad campaign costs nothing. A session and its reference image expire 3 minutes after creation — see PRODUCT_SPEC §1.4. **Runs in `FACE_LIVENESS_REGION` = `eu-west-1`, NOT the `AWS_REGION` (eu-central-1) the rest of Rekognition uses** — Frankfurt does not serve Face Liveness, and answers with a message-less `AccessDeniedException` that mimics an IAM denial. `rekognition-client.ts` caches one client per region; the region is returned to the client verbatim because the detector must stream to the region its session was created in. |
 | AWS Rekognition | `CompareFaces`, `DetectFaces`, and `DetectModerationLabels` for profile photo/video admission and the face-match decision; `DetectFaces` boxes also drive the date-card share-copy face blur (§3.7a) |
 | Google Places (New) v1 | **Fallback** concierge venue search (primary is the first-party `curated_venues` base) at the great-circle midpoint via `places.googleapis.com/v1/places:searchNearby` (+ text fallback). Strict quality gate (operational + place-type deny-list + rating ≥ 4.0 + ≥ 30 reviews + student-friendly price tier for food) and weighted scoring on top of the raw API. Also used by `scripts/seed-venues.mjs` (via `searchVenueCandidates`) to source curated-base candidates under the same gate. The `places.photos` field + the Places **media** endpoint supply the date-card venue cover photo (fetched at render time, credited on the card, never persisted), and the same one-request Place Details lookup (`fetchPlacePhotoNames`, which keeps the whole returned gallery rather than only the cover) backs the §3.7b board's curated cards — cached in-process by `placeId`, a day for a real answer and minutes for a failed one, and always best-effort so a Places outage costs pictures and never a board. |

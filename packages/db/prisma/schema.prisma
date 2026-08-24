@@ -1879,7 +1879,7 @@ enum MessageRole {
   system
 }
 
-/// Aether Concierge multimodal chat history. Distinct from `User.messageHistory`
+/// Mobile chat agent multimodal history. Distinct from `User.messageHistory`
 /// (Json[] blob used by the legacy onboarding/menu agents) — this row-per-message
 /// table powers the mobile-side chat UI with image attachments.
 ///

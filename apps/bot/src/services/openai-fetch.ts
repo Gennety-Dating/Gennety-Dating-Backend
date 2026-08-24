@@ -43,7 +43,7 @@ const DEFAULT_OPENAI_TIMEOUT_MS = 30_000;
  *      ("Function tools with reasoning_effort are not supported for
  *      gpt-5.6-terra in /v1/chat/completions. To use function tools, use
  *      /v1/responses or set reasoning_effort to 'none'."). This breaks the
- *      three tool-calling agents (menu, onboarding, Aether) — the failing
+ *      three tool-calling agents (menu, onboarding, mobile chat) — the failing
  *      request bubbles up and the caller silently falls back to the plain
  *      menu / a canned reply.
  *   3. Reasoning tokens are billed against `max_completion_tokens`, so a

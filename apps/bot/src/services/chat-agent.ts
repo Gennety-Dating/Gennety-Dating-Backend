@@ -1,20 +1,27 @@
 import { prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
-import { MAX_AGE, MAX_PHOTOS, MIN_AGE, VOICE_SELF_GENDER } from "@gennety/shared";
+import {
+  MAX_AGE,
+  MAX_PHOTOS,
+  MIN_AGE,
+  VOICE_SELF_GENDER,
+  VOICE_SELF_NAME,
+} from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { createChatImageSignedUrl } from "./storage.js";
 import {
-  applyAetherProfilePatch,
-  attachAetherProfilePhoto,
-  type AetherToolResult,
-} from "./aether-profile-tools.js";
+  applyChatProfilePatch,
+  attachChatProfilePhoto,
+  type ChatToolResult,
+} from "./chat-profile-tools.js";
 
 /**
- * Aether Concierge — multimodal AI chat agent backing `/v1/chat/message`.
+ * Gennety chat agent — the multimodal AI chat backing `/v1/chat/message`,
+ * i.e. the mobile app's Chat tab.
  *
  * Distinct from the legacy `onboarding-agent` and `menu-agent` (which read /
- * write `User.messageHistory: Json[]`): Aether persists each turn as a row
+ * write `User.messageHistory: Json[]`): this agent persists each turn as a row
  * in the `Message` table and supports image attachments end-to-end. It also
  * runs a background tool loop that mutates the user's `Profile` whenever
  * the model surfaces high-confidence facts during the conversation.
@@ -25,9 +32,11 @@ const HISTORY_LIMIT = 30;
 const MAX_TOOL_ITERATIONS = 3;
 const TIMEOUT_MS = 45_000;
 
-const SYSTEM_PROMPT = `You are Aether — the user's personal AI matchmaker at Gennety Dating: young, sharp, with quiet self-respect. A half-friend who is visibly good at his job — never a hype-man, never corporate.
+const SYSTEM_PROMPT = `You are Gennety — the user's personal AI matchmaker at Gennety Dating: young, sharp, with quiet self-respect. A half-friend who is visibly good at his job — never a hype-man, never corporate.
 
 ${VOICE_SELF_GENDER}
+
+${VOICE_SELF_NAME}
 
 Your mission is to gather a rich profile of the user through natural, friendly conversation and to silently update their profile record in the background as you learn things.
 
@@ -129,13 +138,13 @@ interface ChatCompletionResponse {
   }>;
 }
 
-export interface AetherTurnInput {
+export interface ChatTurnInput {
   userId: string;
   text: string;
   imageUrl: string | null;
 }
 
-export interface AetherTurnResult {
+export interface ChatTurnResult {
   id: string;
   role: "assistant";
   content: string;
@@ -143,24 +152,24 @@ export interface AetherTurnResult {
   createdAt: Date;
 }
 
-export interface AetherDeps {
+export interface ChatDeps {
   fetchFn?: typeof fetch;
 }
 
-const userLocks = new Map<string, Promise<AetherTurnResult>>();
+const userLocks = new Map<string, Promise<ChatTurnResult>>();
 
 /**
  * Public entry point. Per-user serial — a second concurrent call from the
  * same user awaits the prior turn so DB inserts don't interleave.
  */
-export async function runAetherTurn(
-  input: AetherTurnInput,
-  deps: AetherDeps = {},
-): Promise<AetherTurnResult> {
+export async function runChatTurn(
+  input: ChatTurnInput,
+  deps: ChatDeps = {},
+): Promise<ChatTurnResult> {
   const existing = userLocks.get(input.userId);
   const next = (existing ?? Promise.resolve()).then(() => runTurnInner(input, deps));
   // Swallow rejection on the lock chain — callers see the original error via `next`.
-  const lockChain = next.catch(() => undefined as unknown as AetherTurnResult);
+  const lockChain = next.catch(() => undefined as unknown as ChatTurnResult);
   userLocks.set(input.userId, lockChain);
   try {
     return await next;
@@ -172,9 +181,9 @@ export async function runAetherTurn(
 }
 
 async function runTurnInner(
-  input: AetherTurnInput,
-  deps: AetherDeps,
-): Promise<AetherTurnResult> {
+  input: ChatTurnInput,
+  deps: ChatDeps,
+): Promise<ChatTurnResult> {
   const { userId, text, imageUrl } = input;
   const fetchFn = deps.fetchFn ?? openaiFetch;
 
@@ -306,12 +315,12 @@ async function callOpenAI(
     });
     if (!res.ok) {
       const body = await res.text();
-      console.warn(`[aether] OpenAI call failed: ${res.status} ${body}`);
+      console.warn(`[chat] OpenAI call failed: ${res.status} ${body}`);
       return null;
     }
     return (await res.json()) as ChatCompletionResponse;
   } catch (err) {
-    console.warn("[aether] OpenAI call error:", err);
+    console.warn("[chat] OpenAI call error:", err);
     return null;
   }
 }
@@ -319,7 +328,7 @@ async function callOpenAI(
 async function executeTool(
   userId: string,
   call: OpenAIToolCall,
-): Promise<AetherToolResult> {
+): Promise<ChatToolResult> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(call.function.arguments || "{}");
@@ -328,10 +337,10 @@ async function executeTool(
   }
 
   if (call.function.name === "update_profile") {
-    return applyAetherProfilePatch(userId, parsed);
+    return applyChatProfilePatch(userId, parsed);
   }
   if (call.function.name === "attach_profile_photo") {
-    return attachAetherProfilePhoto(userId, parsed);
+    return attachChatProfilePhoto(userId, parsed);
   }
   return { ok: false, detail: `Unknown tool ${call.function.name}` };
 }

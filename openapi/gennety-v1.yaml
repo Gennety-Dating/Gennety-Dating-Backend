@@ -1579,7 +1579,7 @@ paths:
                   message: { $ref: "#/components/schemas/ChatMessage" }
                   uiHint:
                     $ref: "#/components/schemas/UiHint"
-                    description: Always null for Aether turns today; contract slot for future hints
+                    description: Always null for chat-agent turns today; contract slot for future hints
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":

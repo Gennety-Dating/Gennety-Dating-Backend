@@ -563,7 +563,7 @@ export async function handleVerifyPhotosRedo(ctx: BotContext): Promise<void> {
  * per-photo button is refused outright.
  *
  * Each removal goes through the same per-user-locked service the manager's
- * delete button uses, so a concurrent mobile/Aether edit can't be clobbered.
+ * delete button uses, so a concurrent mobile/chat edit can't be clobbered.
  * The card MESSAGES themselves are torn down by {@link renderPhotoManager}'s
  * own reconciliation afterwards (`pendingPhotos` is empty, so every tracked
  * card gets pruned) rather than by this loop.
@@ -711,7 +711,7 @@ export async function handleEditPhotosDelete(ctx: BotContext): Promise<void> {
   });
   if (user) {
     const committed = await removeProfilePhotoByRef(user.id, deletedPhotoRef);
-    // The locked service may retain photos added by a concurrent mobile/Aether
+    // The locked service may retain photos added by a concurrent mobile/chat
     // edit. Mirror that canonical state back into this Telegram session so its
     // next button cannot overwrite those additions.
     ctx.session.pendingPhotos = committed.photos;

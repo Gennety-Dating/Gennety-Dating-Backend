@@ -121,7 +121,7 @@ export async function beginLivenessCheck(
   // ONE exception, and it is the whole point of `reference_expired`
   // (PRODUCT_SPEC §1.4 rule 5): the 90-day scrub deleted the reference selfie,
   // AWS cannot re-issue it, and every surface that touches photos — the photo
-  // manager, `POST /v1/me/photos`, Aether — answers "verify again to change
+  // manager, `POST /v1/me/photos`, chat agent — answers "verify again to change
   // your photos". Refusing here made that instruction impossible to follow:
   // the user was told to re-verify by the only product that could refuse it.
   const referenceExpired = !user.verifiedSelfiePath;

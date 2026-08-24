@@ -262,7 +262,7 @@ describe("GET /admin/users/:id/conversation", () => {
     expect(res.body.error).toMatch(/not found/i);
   });
 
-  it("normalizes messageHistory + Aether rows and exposes a photo gallery", async () => {
+  it("normalizes messageHistory + mobile-chat rows and exposes a photo gallery", async () => {
     const findUnique = (prisma.user as unknown as { findUnique: ReturnType<typeof vi.fn> })
       .findUnique;
     const messageFindMany = (
@@ -311,7 +311,7 @@ describe("GET /admin/users/:id/conversation", () => {
     expect(res.body.displayName).toBe("Alice Smith");
 
     const msgs = res.body.messages;
-    expect(msgs).toHaveLength(6); // 4 telegram + 2 aether
+    expect(msgs).toHaveLength(6); // 4 telegram + 2 mobile
 
     expect(msgs[0]).toMatchObject({ id: "mh-0", source: "telegram", role: "system", technical: true });
     expect(msgs[1]).toMatchObject({
@@ -332,13 +332,13 @@ describe("GET /admin/users/:id/conversation", () => {
 
     expect(msgs[4]).toMatchObject({
       id: "msg-1",
-      source: "aether",
+      source: "mobile",
       role: "user",
       technical: false,
       createdAt: "2026-05-01T10:00:00.000Z",
       image: { type: "chat", ref: "user-1/2.jpg" },
     });
-    expect(msgs[5]).toMatchObject({ id: "msg-2", source: "aether", role: "assistant" });
+    expect(msgs[5]).toMatchObject({ id: "msg-2", source: "mobile", role: "assistant" });
     expect(msgs[5].image).toBeUndefined();
 
     expect(res.body.photos).toEqual([

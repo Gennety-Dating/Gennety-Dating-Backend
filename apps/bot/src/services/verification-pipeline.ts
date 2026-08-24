@@ -363,7 +363,7 @@ export interface PipelineRunOptions {
    *
    * Used for one thing — silencing the `verified` outcome DM on a rerun that
    * merely re-confirms an already-verified user. Every profile-photo edit
-   * fires a rerun (menu photo manager, mobile `/v1/me/photos`, Aether), so
+   * fires a rerun (menu photo manager, mobile `/v1/me/photos`, chat agent), so
    * without this an active user gets "Проверка пройдена ✨ Профиль активен"
    * again every time they touch their photos, even though nothing changed.
    * The DM is only suppressed for `verified → verified`; any status the user

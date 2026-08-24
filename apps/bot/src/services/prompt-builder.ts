@@ -8,7 +8,12 @@
  */
 
 import { prisma } from "@gennety/db";
-import { CADENCE, dropOutpacesNotices, VOICE_SELF_GENDER } from "@gennety/shared";
+import {
+  CADENCE,
+  dropOutpacesNotices,
+  VOICE_SELF_GENDER,
+  VOICE_SELF_NAME,
+} from "@gennety/shared";
 import {
   ADMIN_CACHE_CATEGORY,
   ADMIN_CACHE_KEY_PREFIX,
@@ -32,6 +37,8 @@ import { rematchLimits } from "./rematch.js";
 const BASE_PERSONA = `You are the Gennety Dating assistant — the user's personal AI matchmaker: young, sharp, with quiet self-respect. A half-friend, half-acquaintance who is visibly good at his job.
 
 ${VOICE_SELF_GENDER}
+
+${VOICE_SELF_NAME}
 
 ## Your Role
 - Answer questions about how Gennety works, when matches arrive, profile editing, and the whole dating process — accurately, using the Product Playbook and the user's live context below.

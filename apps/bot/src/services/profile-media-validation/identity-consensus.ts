@@ -21,7 +21,7 @@ export type PendingPhotoCandidateSource =
   | "telegram_onboarding"
   | "telegram_edit"
   | "mobile"
-  | "aether";
+  | "mobile_chat";
 
 export interface PendingPhotoCandidate {
   version: typeof PENDING_PHOTO_CANDIDATE_VERSION;
@@ -291,7 +291,7 @@ export async function commitProfilePhotoCandidate(
 
 /**
  * Remove one accepted photo under the same per-user lock as every upload
- * path. A Telegram editor may hold an old album snapshot while mobile/Aether
+ * path. A Telegram editor may hold an old album snapshot while mobile/chat
  * appends a photo; deriving the deletion from the freshly locked DB state
  * ensures that removing A never accidentally overwrites a concurrent D.
  */
@@ -415,12 +415,17 @@ function parsePendingPhotoCandidate(value: unknown): PendingPhotoCandidate | nul
   const uploadedAt = cleanString(value.uploadedAt);
   if (!photoRef || !uploadedAt) return null;
   const profileMedia = parseProfileMedia(value.profileMedia, photoRef);
+  // `"aether"` is the legacy spelling of `"mobile_chat"` (the mobile chat
+  // agent used to be named Aether). Candidates are short-lived but they do sit
+  // in `pendingPhotoCandidates` JSON across a deploy, so the old value is still
+  // read here and mapped forward rather than silently degraded to `"mobile"`.
+  const rawSource = value.source === "aether" ? "mobile_chat" : value.source;
   const source =
-    value.source === "telegram_onboarding" ||
-    value.source === "telegram_edit" ||
-    value.source === "mobile" ||
-    value.source === "aether"
-      ? value.source
+    rawSource === "telegram_onboarding" ||
+    rawSource === "telegram_edit" ||
+    rawSource === "mobile" ||
+    rawSource === "mobile_chat"
+      ? rawSource
       : "mobile";
   return {
     version: PENDING_PHOTO_CANDIDATE_VERSION,

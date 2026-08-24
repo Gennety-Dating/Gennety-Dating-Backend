@@ -184,7 +184,7 @@ export const photoUploadLimiter = make({
   message: { error: "Too many photo uploads, try again later." },
 });
 
-/** Aether Concierge chat turn — 60/hour per user (falls back to IP). */
+/** Mobile chat turn — 60/hour per user (falls back to IP). */
 export const chatMessageLimiter = make({
   windowMs: 3_600_000,
   limit: 60,
@@ -192,7 +192,7 @@ export const chatMessageLimiter = make({
   message: { error: "Too many chat messages, slow down for a bit." },
 });
 
-/** Aether Concierge image upload — 30/hour per user (falls back to IP). */
+/** Mobile chat image upload — 30/hour per user (falls back to IP). */
 export const chatUploadLimiter = make({
   windowMs: 3_600_000,
   limit: 30,

@@ -1,6 +1,6 @@
 /**
  * Focused test for `triggerVerificationRerun` — the photo-edit reconciliation
- * entry point (called from the bot/mobile photo handlers and Aether's
+ * entry point (called from the bot/mobile photo handlers and the chat agent's
  * `attach_profile_photo` tool). Verifies the three observable branches:
  *   - user missing            → `{ kind: "user_missing" }`, no DB write
  *   - never verified          → `{ kind: "no_inquiry" }`, no DB write

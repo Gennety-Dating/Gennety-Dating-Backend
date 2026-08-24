@@ -3,6 +3,7 @@ import {
   MAGIC_CONTEXT_PROMPT,
   VOICE_CORE,
   VOICE_SELF_GENDER,
+  VOICE_SELF_NAME,
   magicContextPrompt,
   parseLLMDumpPrompt,
   pitchAndSynergyPrompt,
@@ -15,6 +16,26 @@ import {
   parsePostDateFeedbackPrompt,
   parseReportTriagePrompt,
 } from "./prompts.js";
+
+describe("VOICE_SELF_NAME", () => {
+  it("names the bot Gennety and nothing else", () => {
+    expect(VOICE_SELF_NAME).toMatch(/your name is Gennety/i);
+    expect(VOICE_SELF_NAME).toMatch(/Gennety Agent/);
+  });
+
+  it("bans invented names and the concierge register", () => {
+    // The rule exists because the mobile chat agent shipped for months
+    // introducing itself under a codename nobody chose. "Be Gennety" alone
+    // left room for the model to add a title on top of it.
+    expect(VOICE_SELF_NAME).toMatch(/NEVER invent a personal name/i);
+    expect(VOICE_SELF_NAME).toMatch(/concierge/i);
+    expect(VOICE_SELF_NAME).toContain("консьерж");
+  });
+
+  it("rides along in VOICE_CORE so one-shot personas inherit it", () => {
+    expect(VOICE_CORE).toContain(VOICE_SELF_NAME);
+  });
+});
 
 describe("VOICE_SELF_GENDER", () => {
   it("states the persona is male", () => {

@@ -272,7 +272,7 @@ export const env = {
   /// selfies are only seen by admins). Expected to be PRIVATE; reads go
   /// through short-lived signed URLs.
   SUPABASE_PHOTO_BUCKET: process.env.SUPABASE_PHOTO_BUCKET ?? "profile-photos",
-  /// Supabase Storage bucket for Aether Concierge multimodal chat attachments
+  /// Supabase Storage bucket for the mobile chat agent's multimodal attachments
   /// (user-uploaded images sent as part of a `/v1/chat/message` turn). Expected
   /// to be PRIVATE; the chat endpoint fetches signed URLs (5 min TTL) just
   /// long enough for the OpenAI vision call to dereference them.

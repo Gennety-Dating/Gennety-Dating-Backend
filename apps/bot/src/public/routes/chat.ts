@@ -4,7 +4,7 @@ import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
 import { chatMessageLimiter, chatUploadLimiter } from "../rate-limit.js";
-import { runAetherTurn } from "../../services/aether-agent.js";
+import { runChatTurn } from "../../services/chat-agent.js";
 import {
   uploadChatImage,
   createChatImageSignedUrl,
@@ -12,7 +12,7 @@ import {
 import { sniffImageMime } from "../../utils/image-sniff.js";
 
 /**
- * Aether Concierge — multimodal AI chat for the mobile app.
+ * Gennety chat agent — multimodal AI chat for the mobile app.
  *
  * Two endpoints:
  *   POST /v1/chat/upload   multipart image → opaque storage path
@@ -108,7 +108,7 @@ chatRouter.post(
       return;
     }
 
-    const turn = await runAetherTurn({
+    const turn = await runChatTurn({
       userId: req.userId!,
       text,
       imageUrl: imageUrl || null,
@@ -123,7 +123,7 @@ chatRouter.post(
         createdAt: turn.createdAt.toISOString(),
       },
       // Hybrid-chat contract slot (same shape as the interview's uiHint).
-      // Aether turns are free-form, so no hint is derived yet — the field
+      // Chat turns are free-form, so no hint is derived yet — the field
       // exists so the generated client handles both surfaces uniformly.
       uiHint: null,
     });

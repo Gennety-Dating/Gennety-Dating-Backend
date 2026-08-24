@@ -6,8 +6,8 @@ const { state } = vi.hoisted(() => ({
   state: {
     users: [] as unknown[],
     userCount: 0,
-    aetherRows: [] as unknown[],
-    aetherGroups: [] as unknown[],
+    mobileRows: [] as unknown[],
+    mobileGroups: [] as unknown[],
     timelineRows: [] as unknown[],
     timelineGroups: [] as unknown[],
     /** Set to make every chatEvent query throw, as a pre-migration DB would. */
@@ -26,8 +26,8 @@ vi.mock("@gennety/db", () => ({
       }),
     },
     message: {
-      findMany: vi.fn(async () => state.aetherRows),
-      groupBy: vi.fn(async () => state.aetherGroups),
+      findMany: vi.fn(async () => state.mobileRows),
+      groupBy: vi.fn(async () => state.mobileGroups),
     },
     chatEvent: {
       findMany: vi.fn(async () => {
@@ -79,8 +79,8 @@ function makeUser(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   state.users = [makeUser()];
   state.userCount = 1;
-  state.aetherRows = [];
-  state.aetherGroups = [];
+  state.mobileRows = [];
+  state.mobileGroups = [];
   state.timelineRows = [];
   state.timelineGroups = [];
   state.timelineBroken = false;
@@ -109,15 +109,15 @@ describe("GET /admin/dialogs", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.total).toBe(1);
-    expect(res.body.sources).toEqual({ agent: true, aether: true, timeline: true });
+    expect(res.body.sources).toEqual({ agent: true, mobile: true, timeline: true });
 
     const dialog = res.body.data[0];
     expect(dialog.id).toBe(USER_ID);
     expect(dialog.participant.telegramId).toBe("123456789");
     expect(dialog.participant.displayName).toBe("Alice Smith");
     expect(dialog.participant.city).toBe("Kyiv");
-    // 3 agent turns + 4 timeline events, no Aether rows.
-    expect(dialog.counts).toEqual({ total: 7, agent: 3, aether: 0, timeline: 4 });
+    // 3 agent turns + 4 timeline events, no mobile-chat rows.
+    expect(dialog.counts).toEqual({ total: 7, agent: 3, mobile: 0, timeline: 4 });
     expect(dialog.lastMessage.text).toBe("Твоя следующая подборка в четверг");
     expect(dialog.lastMessage.direction).toBe("out");
     // No messages array unless explicitly asked for.
@@ -197,7 +197,7 @@ describe("GET /admin/dialogs", () => {
 
 describe("GET /admin/dialogs/:id", () => {
   it("returns a chronological transcript with technical turns hidden", async () => {
-    state.aetherRows = [
+    state.mobileRows = [
       {
         id: "msg-1",
         role: "user",

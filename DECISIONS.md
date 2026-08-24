@@ -47,6 +47,39 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-24 — у бота одно имя: Gennety. «Aether Concierge» вычищен целиком
+
+**Kind:** founder decision
+**What:** мобильный чат-агент представлялся именем **Aether** — оно жило ровно в
+одной строке промпта (`services/aether-agent.ts`, `You are Aether — …`, приехало
+с коммитом `6e33190` от 2026-05-04, ни разу не обсуждалось). Фаундер: такого
+имени он никогда не хотел. Имя и весь его внутренний след убраны: промпт теперь
+`You are Gennety`, файлы переименованы в `chat-agent.ts` / `chat-profile-tools.ts`,
+идентификаторы — в `runChatTurn` / `applyChatProfilePatch` / `attachChatProfilePhoto`,
+источник сообщения в админ-API `"aether"` → `"mobile"`, источник фото-кандидата
+`"aether"` → `"mobile_chat"`, лог-тег `[aether]` → `[chat]`. Доки (ARCHITECTURE,
+PRODUCT_SPEC, VOICE, deploy, IOS_APP_ROADMAP, HERMES_AGENT_PROMPT, openapi,
+schema.prisma) переписаны.
+**Why:** имя противоречило VOICE.md §1 напрямую — там сказано «Not a
+"concierge"», а агент представлялся консьержем. И оно было не решением, а
+случайностью одной строки: остальные поверхности (`VOICE_CORE`, `BASE_PERSONA`,
+онбординг-агент) всегда говорили «Gennety» или вовсе не назывались, так что
+продукт звучал как два разных персонажа.
+**What it changes going forward:** имя персонажа — брендовое решение, а не
+пер-промптовое. Заведено `VOICE_SELF_NAME` в `packages/shared/src/ai/prompts.ts`
+(по образцу `VOICE_SELF_GENDER`): «ты Gennety, другого имени нет, не выдумывай
+кодовое имя, не называй себя консьержем». Оно инжектится во все **разговорные**
+поверхности — `VOICE_CORE`, `BASE_PERSONA`, онбординг-агент и его пасс уточнения,
+чат-агент; одноразовые генераторы (питч, ice-breakers, наджи) намеренно пропущены,
+им вопрос «ты кто?» не задают. Новый персональный имя-alias в промпте = регресс.
+**Deliberately not done:** (1) историю этого журнала и `Gennety-iOS/DECISIONS.md`
+не переписывал — журнал фиксирует то, что было, включая ошибку; (2) в
+`identity-consensus.ts` осталась одна ветка разбора легаси-значения `"aether"` из
+уже лежащего в БД `pendingPhotoCandidates` JSON — её можно снять, когда все
+незакрытые кандидаты протухнут (они живут часы, не недели).
+**Recorded in:** `VOICE.md` §1.2 + таблица §11; `packages/shared/src/ai/prompts.ts`
+`VOICE_SELF_NAME` (+ тесты в `prompts.test.ts`).
+
 ## 2026-08-24 — голосовой ответ в онбординге получает свой статус; каденс-бит ему не достаётся
 
 **Kind:** founder decision + deviation from plan

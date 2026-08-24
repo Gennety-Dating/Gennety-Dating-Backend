@@ -12,7 +12,7 @@
  *   - `visionFast` — simple, higher-volume per-photo checks (face presence,
  *                    duplicate detection).
  *   - `agent`      — conversational agents + user-facing generation (onboarding,
- *                    menu, Aether, pitch, match-card copy, the shared prompt
+ *                    menu, mobile chat, pitch, match-card copy, the shared prompt
  *                    pipeline default) where reasoning/quality matters.
  *   - `fast`       — cheap classification + short templated DMs (decision-intent,
  *                    nudge / announce / re-engagement workers).
