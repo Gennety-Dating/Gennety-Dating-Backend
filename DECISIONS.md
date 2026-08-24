@@ -47,6 +47,13 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-24 — полное снятие иконки с кнопок «Open in Maps» на странице Places сайта
+
+**Kind:** founder decision
+**What:** с кнопок «Open in Maps» / «Открыть на карте» на карточках заведений на сайте (`src/app/places/page.tsx`) полностью снята иконка. Кнопка оставлена в виде чистого центрированного текстового действия.
+**Why:** предельный визуальный минимализм и отсутствие разночтений в пиктограммах.
+**Recorded in:** `Gennety dating website/src/app/places/page.tsx`.
+
 ## 2026-08-24 — выбор финальной иконки «Open in Maps»: залитый минималистичный Geo-Pin с вырезом
 
 **Kind:** founder decision
