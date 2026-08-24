@@ -143,12 +143,15 @@ out of Telegram-only workers.
   city (a **launched market** only — Kyiv today, mirrored to the client as
   `supportedCities` in `/state`; see §1.3), a **light/dark theme picker** (right after the city gate, before the
   visual intro; default `dark`, changeable later in Settings — `POST /theme`
-  records it), the **five profile screens** (name / age / gender / who you're
-  looking for / height — §1.3), and the final AI memory export choice, using
+  records it), the **six profile screens** (name / age / gender / who you're
+  looking for / height / what you're looking for — §1.3), and the final AI
+  memory export choice, using
   Telegram `initData` HMAC auth for all writes (`POST /track` persists the
   re-choosable fork pick).
-- **The Mini App collects the first five profile facts itself (2026-08-05).**
-  Name, age, gender, preference and height each have ONE correct answer out of a
+- **The Mini App collects the first six profile facts itself (2026-08-05; the
+  sixth added 2026-08-24).**
+  Name, age, gender, preference, height and relationship intent each have ONE
+  correct answer out of a
   finite set, and a Telegram chat has no way to ask for that: the bot asked in
   prose and then recovered the value with a regex or an LLM classifier. They now
   sit on their own screens between the welcome-gift screen and the AI-memory
@@ -546,6 +549,41 @@ out of Telegram-only workers.
   stop ON a value and read it. Both pure decisions live in
   `onboarding-wheel.ts` so they are testable away from the DOM. Telegram-only;
   the native iOS client owns its own picker.
+- **The last screen asks the one question about the FUTURE (2026-08-24).**
+  "What are you looking for?" — four rows on a single ordered axis: `spark`
+  (a bright story) → `open` (see where it goes) → `falling` (fall for someone)
+  → `longterm` (something long-term). Deliberately ONE axis rather than a set of
+  labels: the other two dimensions people reach for here are already measured
+  (tempo and process-vs-person are the vibe axes, §3.2), and the ones usually
+  bundled with the question — children, marriage — belong to a different
+  product, since this one's horizon is one date on Thursday. Four points and not
+  three or six: at three the middle swallows everyone who is unsure, and past
+  four people stop distinguishing neighbours, so the answer becomes noise.
+
+  **Four rows in ONE tone, and `spark` leads.** Everywhere else in this set a
+  colour separates options that genuinely differ; here it would rank them, and
+  the axis only measures anything while no answer looks like the respectable
+  one. The wording is a product invariant rather than styling: the moment
+  `spark` reads as "I'm not serious", social desirability drags the population
+  rightward and the axis stops measuring. That is also why the product's own
+  philosophy is the first row rather than a footnote after the respectable
+  answers — the positioning is never argued on this screen, it is simply made
+  an equal answer.
+
+  **A footnote under the options says nobody else sees it** (founder decision):
+  the answer is never shown to the partner anywhere, and the screen has to say
+  so where the choice is made or the honest answer is not safe to give. It is
+  phrased positively — "only you can see this, it helps me match you better" —
+  rather than as a bare "your matches can't see this", because on this screen
+  the first question a reader has is *why are you asking*. The same line rides
+  the chat fallback's question text and the My Profile row (§2.1).
+
+  Written through the same `applyOnboardingFacts` path as the other five, so the
+  canonical column, `onboarding_progress.currentQuestion` and the funnel rows
+  are identical to a chat answer, and `/complete` does not require it — whatever
+  the Mini App did not deliver, the chat asks for. Both surfaces: iOS renders it
+  from the existing `ui_hint` contract (`choice_chips`), so `/v1/*` is
+  unchanged.
 - **The phone gate is also the LOGIN (2026-07-25).** A trusted `message.contact`
   is Telegram vouching that the number belongs to the current Telegram account,
   and Telegram allows one active account per number — so a `User.phone` unique
@@ -638,7 +676,8 @@ fact collector owns profile capture:
 | `photo gate` | Preserve early photos but do not skip unfinished profile questions |
 | `finalize gate` | Activate only after required profile data, AI-memory branch, city, a verified contact rail (email or phone, per track), and minimum photos are complete |
 
-Canonical order: name + age → gender → preference → height → hobbies → partner
+Canonical order: name + age → gender → preference → height → **relationship
+intent** → hobbies → partner
 requirements → **vibe (ideal Friday night →
 process-vs-who follow-up)** → AI memory → photos. (An optional
 nationality/ethnicity step used to sit before the vibe questions; it was
@@ -814,6 +853,13 @@ Hard rules enforced by the collector:
 - Real user text is distinct from `resume`, `context_dump`, and
   `photos_updated`; synthetic events, assistant text, summaries, and tool
   arguments are never mined as profile facts.
+- **Relationship intent never reaches the embedding.** It is scored by its own
+  `V_intent` multiplier (§3.2) from its own column, and folding it into
+  `psychologicalSummary` — the cheap-looking way to make it "count" — would give
+  it weight 0.65 through `V_explicit`, i.e. make the weakest factor in the
+  formula the strongest. It would also be wiped on the next About-me edit, which
+  replaces that field wholesale. Same rule, same reason, as the §1.3b voice
+  transcript.
 - **Nationality/ethnicity is not collected at all (removed 2026-08-01).** The
   question was optional and skippable, but the answer was folded into
   `psychologicalSummary` → the embedding → `V_explicit`, so ethnic origin
@@ -2116,7 +2162,18 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   door behind it.
 - **My Profile** — the single combined view/edit surface: generated bio + photos
   (and profile video when present), followed by **About me**, **Who I want**,
-  **What I do**, and **My photos** actions. **Who I want** shows both the
+  **What I do**, **My photos**, and **What I'm looking for** actions.
+  **The relationship intent (§1.3) sits BELOW the preview block and outside
+  it**, on its own line, always carrying "only you can see this" — set or unset.
+  That placement is the point rather than layout: the block above is framed as
+  *"this is how your match sees you"*, and this is the one profile fact a match
+  never sees, so folding it in would make the preview a lie. The partner is
+  never shown it — not in the pitch, not on the match card, not in
+  `SerializedMatch` (founder decision): a label read before the person turns the
+  decision into a filter, which is the thing this product does not have, and it
+  would make the honest answer the expensive one to give. It is editable
+  because intent changes with time in a way height and gender do not — four
+  buttons, one tap, no text state. **Who I want** shows both the
   current preferred-partner age range and the free-text `partnerPreferences`
   (max 500 characters) and edits them independently. `firstName`, `age`,
   `email`, and `universityDomain` remain fixed post-onboarding. When no video
@@ -2960,8 +3017,8 @@ at all, and the demo database has no rows carrying the marker.
 Hybrid SQL + Node.js re-rank.
 
 ```
-MatchScore = ((w₁·V_explicit) + (w₂·V_research)) · V_league · V_agePref − (w₃·V_penalty)
-                                                + starvationBonus
+MatchScore = ((w₁·V_explicit) + (w₂·V_research)) · V_league · V_agePref · V_type · V_intent
+                                                − (w₃·V_penalty) + starvationBonus
 ```
 
 - `V_explicit` (cosine similarity of the 1536-dim profile embedding), weight
@@ -3024,6 +3081,38 @@ MatchScore = ((w₁·V_explicit) + (w₂·V_research)) · V_league · V_agePref 
   closeness of the two real ages); both can apply at once. Tunable via env
   (`AGE_RANGE_PREF_FLOOR` / `AGE_RANGE_PREF_DECAY_PER_YEAR`); set the floor to
   `1.0` to disable.
+- `V_intent` — **relationship-intent agreement**, the weakest multiplier in the
+  formula and deliberately so (`intentMultiplier`, `packages/shared/src/relationship-intent.ts`).
+  Both sides pick one point on a single ordered axis at the end of onboarding —
+  `spark` → `open` → `falling` → `longterm`, i.e. how far ahead they are looking
+  (§1.3) — and the factor scores their agreement:
+  `1 − distance/3`, blended against `INTENT_FLOOR`. At the launch floor of 0.85
+  that is a **×1.18 range** (identical 1.0, one step 0.95, two 0.90, opposite
+  0.85), against `V_type`'s ×1.43 and `V_league`'s ×20. It reorders neighbours
+  inside a league; it cannot outrank a real difference in league or psychology,
+  and that ceiling is the whole design rather than a tuning accident.
+  - **Exactly 1.0 whenever EITHER side has no intent on file** — legacy rows,
+    the iOS rail before it ships the screen, anyone who registered earlier.
+    Damping an absent answer would penalise users for our own rollout.
+  - **Symmetric by construction** (it reads a distance), which matters because
+    `scorePair` averages the two one-directional multipliers: an asymmetric
+    version would have half its effect averaged away. A directional penalty —
+    the person looking long-term arguably loses more from the mismatch — was
+    considered and rejected for v1 on exactly that ground.
+  - **Never a hard filter.** A launched market can be thin (2 matchable men and
+    1 woman in Kyiv when this shipped), and partitioning that pool by intent
+    yields zero pairs. A soft multiplier is the only shape that cannot subtract
+    a date from anybody.
+  - **Never an embedding input.** Folded into `psychologicalSummary` it would
+    arrive through `V_explicit` at weight 0.65 — the most influential term in
+    the formula, i.e. the opposite of what it is for — and the About-me editor
+    replaces that field wholesale, so it would also be silently wiped on a bio
+    edit. Its own column, its own multiplier. Same reasoning as the §1.3b voice
+    transcript.
+  - `INTENT_FLOOR` defaults to **1.0**, which makes the factor a pure no-op, and
+    that is how it ships: the screen collects answers while ranking is
+    unchanged. There is no separate feature flag — the screen is an ordinary
+    onboarding step, so the floor is the only thing worth gating.
 - `V_penalty` — negative-constraint penalty (subtracted), weight 0.30.
 - `starvationBonus` — α = `CADENCE.starvationAlpha` per missed batch (0.05 under
   `weekly`; `0.05/7` per missed day under `daily`, same ~35-day saturation

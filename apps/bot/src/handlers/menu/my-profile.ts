@@ -4,6 +4,7 @@ import { prisma } from "@gennety/db";
 import { normalizeProfileMedia, profileMediaHasVideo, t, escapeMd } from "@gennety/shared";
 import { sendProfileMediaCard } from "../../services/profile-media-dispatch.js";
 import { env } from "../../config.js";
+import { intentProfileLine } from "../../services/intent-copy.js";
 
 /**
  * Combined view + edit profile screen. Renders the profile the way a match
@@ -87,6 +88,12 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
     }
   }
 
+  // Relationship intent (PRODUCT_SPEC §1.3). Deliberately BELOW the preview
+  // block and outside it: the body above is "how your match sees you", and this
+  // is the one profile fact a match never sees, so it stands apart and says so
+  // on its own line rather than being mistaken for part of the card.
+  body += `\n\n${escapeMd(intentProfileLine(lang, user.profile?.relationshipIntent))}`;
+
   // Outcome-named edit actions live right on the profile (view + edit merged).
   body += `\n\n${t(lang, "myProfileEditLabel")}`;
   const keyboard = new InlineKeyboard()
@@ -95,6 +102,8 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
     .row()
     .text(t(lang, "editMajorBtn"), "menu:edit:major")
     .text(t(lang, "editProfilePhotosBtn"), "menu:edit:photos")
+    .row()
+    .text(t(lang, "editIntentBtn"), "menu:edit:intent")
     .row()
     .text(t(lang, "menuBack"), "menu:back");
 

@@ -19,6 +19,8 @@ import {
   MIN_AGE,
   MIN_HEIGHT_CM,
   MIN_PHOTOS,
+  RELATIONSHIP_INTENTS,
+  isRelationshipIntent,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
@@ -32,6 +34,7 @@ export const ONBOARDING_FIELDS = [
   "gender",
   "preference",
   "height",
+  "relationship_intent",
   "hobbies",
   "partner_preferences",
   "friday_vibe",
@@ -49,6 +52,7 @@ export const ONBOARDING_QUESTIONS = [
   "gender",
   "preference",
   "height",
+  "relationship_intent",
   "hobbies",
   "partner_preferences",
   "friday_vibe",
@@ -404,6 +408,7 @@ export function nextOnboardingQuestion(
   if (!progress.completed.has("gender")) return "gender";
   if (!progress.completed.has("preference")) return "preference";
   if (!progress.completed.has("height")) return "height";
+  if (!progress.completed.has("relationship_intent")) return "relationship_intent";
   if (!progress.completed.has("hobbies")) return "hobbies";
   if (!progress.completed.has("partner_preferences")) {
     return "partner_preferences";
@@ -435,6 +440,13 @@ function inferQuestionFromAssistant(text: string): OnboardingQuestion | null {
     /(hobb|interests|увлека|захоп|інтерес|zainteres|freizeit)/iu.test(lower)
   ) {
     return "hobbies";
+  }
+  if (
+    /(looking for right now|яркая история|ярка історія|всерьёз и надолго|всерйоз і надовго|na dłużej|langfristiges)/iu.test(
+      lower,
+    )
+  ) {
+    return "relationship_intent";
   }
   if (
     /(friday night|пятниц|п'ятниц|freitagabend|piątkowy wieczór|piątkowy wieczor)/iu.test(
@@ -794,6 +806,10 @@ const EXTRACTOR_ALLOWED_VALUES: Partial<
   gender: ["male", "female"],
   preference: ["men", "women", "both"],
   ai_memory: ["accepted", "declined"],
+  // The chat fallback for the Mini App's intent screen. The question text
+  // lists the same four labels the buttons carry, so the extractor has
+  // something to map a colloquial answer onto.
+  relationship_intent: [...RELATIONSHIP_INTENTS],
 };
 
 export async function extractWithOpenAI(
@@ -921,6 +937,9 @@ export function validateFactValue(
       }
       return { value };
     }
+    case "relationship_intent":
+      if (!isRelationshipIntent(raw)) return { reason: "invalid_relationship_intent" };
+      return { value: raw };
     case "hobbies": {
       if (!Array.isArray(raw)) return { reason: "invalid_type" };
       const value = raw
@@ -963,6 +982,7 @@ export function validateFactCandidate(
   if (
     (candidate.field === "gender" ||
       candidate.field === "preference" ||
+      candidate.field === "relationship_intent" ||
       candidate.field === "ai_memory") &&
     normalizedPlaceholder(text)
   ) {
@@ -1015,6 +1035,10 @@ function updatesForCandidates(
       case "height":
         profileCreate.height = candidate.value as number;
         profileUpdate.height = candidate.value as number;
+        break;
+      case "relationship_intent":
+        profileCreate.relationshipIntent = candidate.value as string;
+        profileUpdate.relationshipIntent = candidate.value as string;
         break;
       case "hobbies":
         profileCreate.hobbies = candidate.value as string[];
@@ -1341,6 +1365,7 @@ export const STRUCTURED_ONBOARDING_FIELDS = [
   "gender",
   "preference",
   "height",
+  "relationship_intent",
 ] as const;
 
 export type StructuredOnboardingField = (typeof STRUCTURED_ONBOARDING_FIELDS)[number];
@@ -1542,6 +1567,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     gender: "Are you a man or a woman? Answer directly — I never guess this.",
     preference: "Who would you like to date: men, women, or both?",
     height: "How tall are you? You can answer in centimeters or feet and inches.",
+    relationship_intent:
+      "What are you looking for right now — a bright story, seeing where it goes, falling for someone, or something long-term? Only you ever see this; I use it to match you better.",
     hobbies: "What do you enjoy doing? One hobby is enough, and “no hobbies” is a valid answer.",
     partner_preferences: "What matters most to you in a partner? One short sentence is enough.",
     friday_vibe: "Describe your ideal Friday night — money and logistics no object. Be honest — not what sounds “right”.",
@@ -1558,6 +1585,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     gender: "Укажи свой пол прямо: парень или девушка.",
     preference: "Кого ты хочешь найти: парней, девушек или обоих?",
     height: "Какой у тебя рост? Можно ответить в сантиметрах.",
+    relationship_intent:
+      "Что ты сейчас ищешь: яркую историю, посмотреть куда приведёт, влюбиться или всерьёз и надолго? Это видишь только ты — нужно, чтобы точнее подбирать пару.",
     hobbies: "Чем тебе нравится заниматься? Достаточно одного увлечения, а «нет хобби» тоже считается ответом.",
     partner_preferences: "Что для тебя важнее всего в партнёре? Достаточно одного короткого предложения.",
     friday_vibe: "Опиши идеальный вечер пятницы — без ограничений по деньгам и логистике. Только честно — а не так, как «правильно» звучало бы.",
@@ -1574,6 +1603,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     gender: "Вкажи свою стать прямо: хлопець чи дівчина.",
     preference: "Кого ти хочеш знайти: хлопців, дівчат чи обох?",
     height: "Який у тебе зріст? Можна відповісти в сантиметрах.",
+    relationship_intent:
+      "Що ти зараз шукаєш: яскраву історію, подивитися куди приведе, закохатися чи всерйоз і надовго? Це бачиш тільки ти — потрібно, щоб точніше добирати пару.",
     hobbies: "Чим тобі подобається займатися? Достатньо одного захоплення, а «немає хобі» теж є відповіддю.",
     partner_preferences: "Що для тебе найважливіше в партнері? Достатньо одного короткого речення.",
     friday_vibe: "Опиши ідеальний вечір п’ятниці — без обмежень щодо грошей і логістики. Тільки чесно — а не так, як «правильно» звучало б.",
@@ -1590,6 +1621,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     gender: "Bist du ein Mann oder eine Frau? Antworte direkt — ich rate das nie.",
     preference: "Wen möchtest du daten: Männer, Frauen oder beide?",
     height: "Wie groß bist du? Du kannst in Zentimetern antworten.",
+    relationship_intent:
+      "Wonach suchst du gerade — eine kurze intensive Geschichte, mal sehen wohin es führt, dich verlieben oder etwas Langfristiges? Das siehst nur du; ich nutze es, um besser zu matchen.",
     hobbies: "Was machst du gern? Ein Hobby reicht, und „keine Hobbys“ ist ebenfalls eine gültige Antwort.",
     partner_preferences: "Was ist dir bei einem Partner am wichtigsten? Ein kurzer Satz reicht.",
     friday_vibe: "Beschreib deinen idealen Freitagabend — ohne Geld- oder Logistikgrenzen. Sei ehrlich — nicht das, was „richtig“ klingt.",
@@ -1606,6 +1639,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     gender: "Jaka jest Twoja płeć? Odpowiedz wprost: mężczyzna czy kobieta.",
     preference: "Z kim chcesz się umawiać: z mężczyznami, kobietami czy z obiema grupami?",
     height: "Jaki masz wzrost? Możesz odpowiedzieć w centymetrach.",
+    relationship_intent:
+      "Czego teraz szukasz? Jasna historia, zobaczymy dokąd to zaprowadzi, zakochać się, czy coś na dłużej? To widzisz tylko ty — pomaga mi lepiej dobierać parę.",
     hobbies: "Co lubisz robić? Jedno hobby wystarczy, a „nie mam hobby” też jest poprawną odpowiedzią.",
     partner_preferences: "Co jest dla Ciebie najważniejsze u partnera? Wystarczy jedno krótkie zdanie.",
     friday_vibe: "Opisz swój idealny piątkowy wieczór — bez ograniczeń finansowych i logistycznych. Szczerze — a nie tak, jak „wypada”.",
@@ -1709,6 +1744,8 @@ const NOT_UNDERSTOOD_HINTS: Record<
     gender: "“Man” or “woman” works — your own words are fine too.",
     preference: "“Men”, “women”, or “both” works — your own words are fine too.",
     height: "For example: 180 cm or 5'11\".",
+    relationship_intent:
+      "Any of the four works — or say it your own way, e.g. “nothing serious for now”.",
     hobbies: "Name one or two things you enjoy — “no hobbies” is fine too.",
     partner_preferences: "One short sentence about what matters to you is enough.",
     friday_vibe: "Tell me in a sentence or two how you'd actually spend it.",
@@ -1722,6 +1759,8 @@ const NOT_UNDERSTOOD_HINTS: Record<
     gender: "Подойдёт «парень» или «девушка» — можно своими словами.",
     preference: "Подойдёт «парней», «девушек» или «обоих» — можно своими словами.",
     height: "Например: 180 см.",
+    relationship_intent:
+      "Подойдёт любой из четырёх — или скажи своими словами, например «пока ничего серьёзного».",
     hobbies: "Назови одно-два увлечения — «нет хобби» тоже подойдёт.",
     partner_preferences: "Достаточно одного короткого предложения о том, что для тебя важно.",
     friday_vibe: "Опиши в паре предложений, как бы ты его реально провёл.",
@@ -1735,6 +1774,8 @@ const NOT_UNDERSTOOD_HINTS: Record<
     gender: "Підійде «хлопець» або «дівчина» — можна своїми словами.",
     preference: "Підійде «хлопців», «дівчат» або «обох» — можна своїми словами.",
     height: "Наприклад: 180 см.",
+    relationship_intent:
+      "Підійде будь-який із чотирьох — або скажи своїми словами, наприклад «поки нічого серйозного».",
     hobbies: "Назви одне-два захоплення — «немає хобі» теж підійде.",
     partner_preferences: "Достатньо одного короткого речення про те, що для тебе важливо.",
     friday_vibe: "Опиши в кількох реченнях, як би ти його реально провів.",
@@ -1748,6 +1789,8 @@ const NOT_UNDERSTOOD_HINTS: Record<
     gender: "„Mann“ oder „Frau“ reicht — eigene Worte gehen auch.",
     preference: "„Männer“, „Frauen“ oder „beide“ reicht — eigene Worte gehen auch.",
     height: "Zum Beispiel: 180 cm.",
+    relationship_intent:
+      "Eine der vier Optionen reicht — oder sag es in deinen Worten, z. B. „gerade nichts Ernstes“.",
     hobbies: "Nenn ein oder zwei Dinge, die du gern machst — „keine Hobbys“ geht auch.",
     partner_preferences: "Ein kurzer Satz darüber, was dir wichtig ist, reicht.",
     friday_vibe: "Beschreib in ein, zwei Sätzen, wie du ihn wirklich verbringen würdest.",
@@ -1761,6 +1804,8 @@ const NOT_UNDERSTOOD_HINTS: Record<
     gender: "Wystarczy „mężczyzna” lub „kobieta” — możesz też własnymi słowami.",
     preference: "Wystarczy „mężczyźni”, „kobiety” lub „oboje” — możesz też własnymi słowami.",
     height: "Na przykład: 180 cm.",
+    relationship_intent:
+      "Wystarczy jedna z czterech — albo powiedz po swojemu, np. „na razie nic poważnego”.",
     hobbies: "Wymień jedno lub dwa hobby — „nie mam hobby” też jest OK.",
     partner_preferences: "Wystarczy jedno krótkie zdanie o tym, co jest dla Ciebie ważne.",
     friday_vibe: "Opisz w jednym–dwóch zdaniach, jak naprawdę byś go spędził.",

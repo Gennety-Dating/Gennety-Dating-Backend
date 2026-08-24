@@ -107,6 +107,18 @@ export interface OnboardingStrings {
   basicsPreferenceBoth: string;
   basicsHeightTitle: string;
   basicsHeightUnit: string;
+  // Relationship intent (PRODUCT_SPEC §1.3). The four labels ARE the axis: each
+  // has to read as a taste, never as a confession, or social desirability drags
+  // everyone toward the respectable end and the answer stops measuring anything.
+  basicsIntentTitle: string;
+  basicsIntentSpark: string;
+  basicsIntentOpen: string;
+  basicsIntentFalling: string;
+  basicsIntentLongterm: string;
+  /** Footnote under the options — the one place the owner is told nobody else
+   *  sees this. Positive rather than a bare "not visible": on this screen the
+   *  first question is "why are you asking", not "who will see it". */
+  basicsIntentPrivate: string;
   handoffMissingSession: string;
   handoffFailed: string;
   handoffReadyTitle: string;
@@ -256,6 +268,12 @@ const en: OnboardingStrings = {
   basicsPreferenceBoth: "Both",
   basicsHeightTitle: "How tall are you?",
   basicsHeightUnit: "cm",
+  basicsIntentTitle: "What are you looking for?",
+  basicsIntentSpark: "A bright story",
+  basicsIntentOpen: "See where it goes",
+  basicsIntentFalling: "Fall for someone",
+  basicsIntentLongterm: "Something long-term",
+  basicsIntentPrivate: "Only you can see this — it helps me match you better.",
   handoffMissingSession: "The Mini App session is not synchronized. Open it from the chat again.",
   handoffFailed: "The bot couldn't continue yet. Try again.",
   handoffReadyTitle: "The bot is waiting for you",
@@ -428,6 +446,12 @@ const ru: OnboardingStrings = {
   basicsPreferenceBoth: "И тех, и других",
   basicsHeightTitle: "Какой у тебя рост?",
   basicsHeightUnit: "см",
+  basicsIntentTitle: "Что ты ищешь?",
+  basicsIntentSpark: "Яркая история",
+  basicsIntentOpen: "Посмотрим, куда приведёт",
+  basicsIntentFalling: "Влюбиться",
+  basicsIntentLongterm: "Всерьёз и надолго",
+  basicsIntentPrivate: "Это видно только тебе — нужно, чтобы точнее подбирать пару.",
   handoffMissingSession: "Сессия Mini App не синхронизирована. Открой вход из чата ещё раз.",
   handoffFailed: "Бот пока не смог продолжить. Попробуй ещё раз.",
   handoffReadyTitle: "Бот уже ждёт тебя",
@@ -600,6 +624,12 @@ const uk: OnboardingStrings = {
   basicsPreferenceBoth: "І тих, і тих",
   basicsHeightTitle: "Який у тебе зріст?",
   basicsHeightUnit: "см",
+  basicsIntentTitle: "Що ти шукаєш?",
+  basicsIntentSpark: "Яскрава історія",
+  basicsIntentOpen: "Подивимось, куди приведе",
+  basicsIntentFalling: "Закохатися",
+  basicsIntentLongterm: "Всерйоз і надовго",
+  basicsIntentPrivate: "Це бачиш тільки ти — потрібно, щоб точніше добирати пару.",
   handoffMissingSession: "Сесію Mini App не синхронізовано. Відкрий вхід із чату ще раз.",
   handoffFailed: "Бот поки не зміг продовжити. Спробуй ще раз.",
   handoffReadyTitle: "Бот уже чекає на тебе",
@@ -773,6 +803,12 @@ const de: OnboardingStrings = {
   basicsPreferenceBoth: "Beide",
   basicsHeightTitle: "Wie groß bist du?",
   basicsHeightUnit: "cm",
+  basicsIntentTitle: "Wonach suchst du?",
+  basicsIntentSpark: "Eine kurze, intensive Geschichte",
+  basicsIntentOpen: "Mal sehen, wohin es führt",
+  basicsIntentFalling: "Mich verlieben",
+  basicsIntentLongterm: "Etwas Langfristiges",
+  basicsIntentPrivate: "Das siehst nur du — es hilft mir, besser zu matchen.",
   handoffMissingSession: "Die Mini-App-Sitzung ist nicht synchronisiert. Öffne sie erneut aus dem Chat.",
   handoffFailed: "Der Bot konnte noch nicht fortfahren. Versuch es erneut.",
   handoffReadyTitle: "Der Bot wartet auf dich",
@@ -946,6 +982,12 @@ const pl: OnboardingStrings = {
   basicsPreferenceBoth: "Obie opcje",
   basicsHeightTitle: "Ile masz wzrostu?",
   basicsHeightUnit: "cm",
+  basicsIntentTitle: "Czego szukasz?",
+  basicsIntentSpark: "Jasna historia",
+  basicsIntentOpen: "Zobaczymy, dokąd to zaprowadzi",
+  basicsIntentFalling: "Zakochać się",
+  basicsIntentLongterm: "Coś na dłużej",
+  basicsIntentPrivate: "Widzisz to tylko ty — pomaga mi lepiej dobierać parę.",
   handoffMissingSession: "Sesja Mini App nie jest zsynchronizowana. Otwórz ją ponownie z czatu.",
   handoffFailed: "Bot nie mógł jeszcze kontynuować. Spróbuj ponownie.",
   handoffReadyTitle: "Bot już na Ciebie czeka",

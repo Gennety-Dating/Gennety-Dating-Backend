@@ -875,6 +875,20 @@ Nothing about it needs a demo branch: the demo reaches the pitch through the
 ordinary `dispatchMatches` → `sendMatchProposal`, and `PROTECT_PARTNER_MEDIA`
 already rides the album that now carries the video.
 
+## Relationship intent: the visitor answers it, the puppet is seeded with one
+
+The last of the Mini App's own profile screens (PRODUCT_SPEC §1.3) is an
+ordinary onboarding step, so the demo inherits it from the same bundle — no
+gate, no paid step, no negotiation branch, and nothing in `demo/decide.ts`.
+
+The puppets carry an intent of their own (`DEMO_PARTNER_PERSONAS`), one step
+apart on the axis from each other, and that is not decoration: `intentMultiplier`
+returns exactly 1.0 whenever EITHER side has none, so an unseeded puppet would
+make every demo run silently exercise the absent-value branch rather than the
+factor. It changes nothing a visitor sees — `INTENT_FLOOR` is 1.0 in demo as in
+production, so the multiplier is a no-op there too — but it means the demo
+matches the way production will once the floor drops.
+
 ## The rule for future work
 
 **Any change to a product flow, a Mini App screen, a gate, or a paid step must

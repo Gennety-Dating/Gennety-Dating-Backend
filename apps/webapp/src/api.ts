@@ -337,7 +337,18 @@ export interface TelegramProfileBasics {
   gender: "male" | "female" | null;
   preference: "men" | "women" | "both" | null;
   height: number | null;
+  relationshipIntent: RelationshipIntent | null;
 }
+
+/**
+ * The relationship-intent axis, ordered by horizon (PRODUCT_SPEC §1.3). Mirrors
+ * `@gennety/shared` `relationship-intent.ts`, which this workspace deliberately
+ * does not depend on; the server whitelists every write, so a client that
+ * drifts is rejected rather than silently storing a value matching cannot read.
+ */
+export const RELATIONSHIP_INTENTS = ["spark", "open", "falling", "longterm"] as const;
+
+export type RelationshipIntent = (typeof RELATIONSHIP_INTENTS)[number];
 
 export interface TelegramProfileLimits {
   minAge: number;
@@ -353,6 +364,7 @@ export type TelegramProfilePatch = Partial<{
   gender: "male" | "female";
   preference: "men" | "women" | "both";
   height: number;
+  relationshipIntent: RelationshipIntent;
 }>;
 
 export type RegistrationTrack = "student" | "general";

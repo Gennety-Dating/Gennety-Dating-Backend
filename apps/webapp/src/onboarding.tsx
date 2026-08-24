@@ -187,6 +187,7 @@ const EMPTY_BASICS: TelegramProfileBasics = {
   gender: null,
   preference: null,
   height: null,
+  relationshipIntent: null,
 };
 const FALLBACK_LIMITS: TelegramProfileLimits = {
   minAge: 18,

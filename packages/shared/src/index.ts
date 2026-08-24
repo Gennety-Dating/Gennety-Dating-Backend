@@ -17,6 +17,15 @@ export type {
   ProfilerQuestion,
   ScoredProfilerAnswer,
 } from "./profiler-questions.js";
+export {
+  RELATIONSHIP_INTENTS,
+  INTENT_MAX_DISTANCE,
+  isRelationshipIntent,
+  intentPosition,
+  intentCompatibilityScore,
+  intentMultiplier,
+} from "./relationship-intent.js";
+export type { RelationshipIntent } from "./relationship-intent.js";
 export { cityKeyToTimeZone, isValidTimeZone, DEFAULT_TIME_ZONE } from "./timezone.js";
 export {
   SUPPORTED_MARKETS,

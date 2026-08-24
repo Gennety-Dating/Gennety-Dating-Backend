@@ -2,6 +2,7 @@ import { prisma, type Prisma } from "@gennety/db";
 import {
   CADENCE,
   typePreferenceMultiplier,
+  intentMultiplier,
   setForGender,
   type PreferenceVector,
   type PhotoAttrs,
@@ -301,6 +302,28 @@ export const TYPE_PREF_FLOOR = Math.min(
  */
 export const EFFECTIVE_TYPE_FLOOR = TYPE_RADAR_ENABLED ? TYPE_PREF_FLOOR : 1;
 
+// ---------------------------------------------------------------------------
+// Relationship intent (V_intent multiplier)
+// ---------------------------------------------------------------------------
+
+/**
+ * Floor of the `V_intent` multiplier — how hard a pair at opposite ends of the
+ * intent axis can be damped. `1.0` (the default, and the launch value) makes
+ * the factor a pure no-op, so the screen collects answers while scoring is
+ * unchanged; ops lowers it to ≈0.85 once the distribution is visible.
+ *
+ * Unlike `V_type` this needs no separate feature flag: the intent screen is an
+ * ordinary onboarding step rather than an opt-in calibration, so the only thing
+ * to gate is the scoring — and the floor already does that. One knob, not two.
+ *
+ * Read straight from env (not via `config.ts`) so the scoring functions stay
+ * importable in unit tests. Clamped to [0, 1].
+ */
+export const INTENT_FLOOR = Math.min(
+  1,
+  Math.max(0, Number(process.env.INTENT_FLOOR ?? "1")),
+);
+
 /**
  * `V_agePref`: how well a candidate's *actual* age satisfies the seeker's
  * stated **preferred-partner age band** (`Profile.ageRangeMin/Max`). Returns a
@@ -395,6 +418,10 @@ export interface RichCandidateRow extends CandidateRow {
    *  scored against the seeker's `typePrefTags` by `V_type`. Null when the Elo
    *  vision pass hasn't tagged them / legacy rows → `V_type` stays neutral. */
   appearanceTags?: PhotoAttrs | null;
+  /** This candidate's relationship intent (`Profile.relationshipIntent`).
+   *  Null on legacy rows and any client without the screen → `V_intent` stays
+   *  neutral for the pair. */
+  relationshipIntent?: string | null;
 }
 
 /** Seeker profile data needed for scoring. */
@@ -415,6 +442,9 @@ export interface SeekerProfile {
    *  null when the user hasn't done the radar → `V_type` stays neutral. Scoring
    *  picks the sub-vector matching the candidate's gender. */
   typePrefTags?: TypePrefTags | null;
+  /** This seeker's own relationship intent. Scored as agreement against the
+   *  candidate's, so the same column serves both directions. */
+  relationshipIntent?: string | null;
 }
 
 /**
@@ -445,6 +475,8 @@ export interface ScoredCandidate {
     penalty: number;
     /** Stated age-range preference multiplier (`V_agePref`), 1 = neutral. */
     agePref: number;
+    /** Relationship-intent agreement multiplier (`V_intent`), 1 = neutral. */
+    intent: number;
     /** Type Radar appearance-preference multiplier (`V_type`), 1 = neutral. */
     type: number;
   };
@@ -488,6 +520,7 @@ export function buildCandidateSql(): string {
       p.elo_score             AS "eloScore",
       p.home_city_key         AS "homeCityKey",
       p.appearance_tags       AS "appearanceTags",
+      p.relationship_intent   AS "relationshipIntent",
       (p.embedding <=> $2::vector) AS distance
     FROM users u
     JOIN profiles p ON p.user_id = u.id
@@ -916,6 +949,7 @@ export function scoreCandidate(
   candidate: RichCandidateRow,
   weights = SCORING_WEIGHTS,
   typeFloor: number = EFFECTIVE_TYPE_FLOOR,
+  intentFloor: number = INTENT_FLOOR,
 ): ScoredCandidate {
   const vExplicit = explicitScore(candidate.distance);
   const vResearch = researchScore(
@@ -965,12 +999,28 @@ export function scoreCandidate(
       ? typePreferenceMultiplier(typePref, candidate.appearanceTags, typeFloor)
       : 1;
 
-  const positive =
-    (weights.explicit * vExplicit + weights.research * vResearch) *
-    vLeague *
-    vAgePref *
-    vType;
-  const score = positive - weights.penalty * vPenalty;
+  // V_intent: relationship-intent agreement. The weakest factor in the
+  // formula by design (PRODUCT_SPEC §3.2) — it reorders neighbours inside a
+  // league and can never outrank league or psychology. Exactly 1.0 unless BOTH
+  // sides have an intent on file and the floor is below 1.
+  const vIntent = intentMultiplier(
+    seeker.relationshipIntent,
+    candidate.relationshipIntent,
+    intentFloor,
+  );
+
+  const score = composeScore(
+    {
+      explicit: vExplicit,
+      research: vResearch,
+      league: vLeague,
+      penalty: vPenalty,
+      agePref: vAgePref,
+      type: vType,
+      intent: vIntent,
+    },
+    weights,
+  );
 
   return {
     userId: candidate.userId,
@@ -984,8 +1034,43 @@ export function scoreCandidate(
       penalty: vPenalty,
       agePref: vAgePref,
       type: vType,
+      intent: vIntent,
     },
   };
+}
+
+/** The multiplicative factors plus the subtracted penalty, in one shape. */
+export interface ScoreParts {
+  explicit: number;
+  research: number;
+  league: number;
+  penalty: number;
+  agePref: number;
+  type: number;
+  intent: number;
+  /** Only the pair-level composition carries this; per-candidate scoring does not. */
+  starvationBonus?: number;
+}
+
+/**
+ * The composite, in ONE place.
+ *
+ * `scoreCandidate` ranks with it and `createProposedMatch` recomposes the
+ * persisted `scoreTotal` from the averaged breakdown with it, so the audit row
+ * cannot describe a formula the engine did not rank on. Before this the
+ * expression existed twice and every new multiplier had to be added to both.
+ */
+export function composeScore(
+  parts: ScoreParts,
+  weights: typeof SCORING_WEIGHTS = SCORING_WEIGHTS,
+): number {
+  const positive =
+    (weights.explicit * parts.explicit + weights.research * parts.research) *
+    parts.league *
+    parts.agePref *
+    parts.type *
+    parts.intent;
+  return positive - weights.penalty * parts.penalty + (parts.starvationBonus ?? 0);
 }
 
 /**
@@ -1258,14 +1343,7 @@ export async function createProposedMatch(
       data: { lastMatchedAt: now },
     });
     if (breakdown) {
-      const scoreTotal =
-        (SCORING_WEIGHTS.explicit * breakdown.explicit +
-          SCORING_WEIGHTS.research * breakdown.research) *
-          breakdown.league *
-          breakdown.agePref *
-          breakdown.type -
-        SCORING_WEIGHTS.penalty * breakdown.penalty +
-        breakdown.starvationBonus;
+      const scoreTotal = composeScore(breakdown);
       await tx.matchScoreLog.create({
         data: {
           matchId: match.id,
@@ -1275,6 +1353,7 @@ export async function createProposedMatch(
           scorePenalty: breakdown.penalty,
           scoreAgePref: breakdown.agePref,
           scoreType: breakdown.type,
+          scoreIntent: breakdown.intent,
           scoreTotal,
           embeddingDistance: breakdown.embeddingDistance,
           starvationBonus: breakdown.starvationBonus,
@@ -1346,6 +1425,10 @@ export interface BatchUser {
    *  directions; null when absent → neutral. */
   typePrefTags: TypePrefTags | null;
   appearanceTags: PhotoAttrs | null;
+  /** Relationship intent (`Profile.relationshipIntent`) — one column read in
+   *  both scoring directions, since the factor scores agreement rather than a
+   *  preference over the other person. Null → `V_intent` neutral. */
+  relationshipIntent: string | null;
   /** Immutable snapshot of every eligibility and scoring input used by the
    * batch. Allocation compares it under row locks before writing a match. */
   allocationFingerprint?: string;
@@ -1366,6 +1449,7 @@ export interface ScoredPair {
     penalty: number;
     agePref: number;
     type: number;
+    intent: number;
     embeddingDistance: number;
     starvationBonus: number;
   };
@@ -1414,6 +1498,7 @@ export interface PairScoreResult {
     penalty: number;
     agePref: number;
     type: number;
+    intent: number;
     embeddingDistance: number;
     starvationBonus: number;
   };
@@ -1436,6 +1521,7 @@ export function scorePair(
     ageRangeMin: a.ageRangeMin,
     ageRangeMax: a.ageRangeMax,
     typePrefTags: a.typePrefTags ?? null,
+    relationshipIntent: a.relationshipIntent ?? null,
   };
 
   const candidateB: RichCandidateRow = {
@@ -1454,6 +1540,7 @@ export function scorePair(
     eloScore: b.eloScore,
     homeCityKey: b.homeCityKey,
     appearanceTags: b.appearanceTags ?? null,
+    relationshipIntent: b.relationshipIntent ?? null,
   };
 
   const scored = scoreCandidate(seekerA, candidateB);
@@ -1471,6 +1558,7 @@ export function scorePair(
     ageRangeMin: b.ageRangeMin,
     ageRangeMax: b.ageRangeMax,
     typePrefTags: b.typePrefTags ?? null,
+    relationshipIntent: b.relationshipIntent ?? null,
   };
 
   const candidateA: RichCandidateRow = {
@@ -1489,6 +1577,7 @@ export function scorePair(
     eloScore: a.eloScore,
     homeCityKey: a.homeCityKey,
     appearanceTags: a.appearanceTags ?? null,
+    relationshipIntent: a.relationshipIntent ?? null,
   };
 
   const scoredReverse = scoreCandidate(seekerB, candidateA);
@@ -1506,6 +1595,9 @@ export function scorePair(
       league: (scored.breakdown.league + scoredReverse.breakdown.league) / 2,
       penalty: (scored.breakdown.penalty + scoredReverse.breakdown.penalty) / 2,
       agePref: (scored.breakdown.agePref + scoredReverse.breakdown.agePref) / 2,
+      // Symmetric by construction (it scores a distance), so the average is
+      // the value itself — kept in the same shape as its neighbours.
+      intent: (scored.breakdown.intent + scoredReverse.breakdown.intent) / 2,
       type: (scored.breakdown.type + scoredReverse.breakdown.type) / 2,
       embeddingDistance,
       starvationBonus: bonus,
@@ -1678,6 +1770,7 @@ async function loadEligibleUsersForIds(
           ageRangeMax: true,
           typePrefTags: true,
           appearanceTags: true,
+          relationshipIntent: true,
         },
       },
     },
@@ -1730,6 +1823,7 @@ async function loadEligibleUsersForIds(
           ageRangeMax: true,
           typePrefTags: true,
           appearanceTags: true,
+          relationshipIntent: true,
         },
       },
     },
@@ -1783,6 +1877,7 @@ async function loadEligibleUsersForIds(
           (u.profile?.typePrefTags as unknown as TypePrefTags | null) ?? null,
         appearanceTags:
           (u.profile?.appearanceTags as unknown as PhotoAttrs | null) ?? null,
+        relationshipIntent: u.profile?.relationshipIntent ?? null,
       };
       return { ...snapshot, allocationFingerprint: allocationFingerprint(snapshot) };
     });

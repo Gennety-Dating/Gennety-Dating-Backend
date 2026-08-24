@@ -13,6 +13,7 @@ import {
   STARVATION_ALPHA,
   STARVATION_CAP,
   isUuid,
+  composeScore,
   type BatchUser,
   type ScoredPair,
   type SeekerProfile,
@@ -43,6 +44,7 @@ function makeBatchUser(overrides: Partial<BatchUser> & { id: string }): BatchUse
     ageRangeMax: null,
     typePrefTags: null,
     appearanceTags: null,
+    relationshipIntent: null,
     ...overrides,
   };
 }
@@ -665,5 +667,175 @@ describe("isUuid (defense-in-depth for raw SQL splicing)", () => {
     expect(isUuid("550e8400-e29b-71d4-a716-446655440000")).toBe(false);
     // Wrong variant nibble (must be 8/9/a/b)
     expect(isUuid("550e8400-e29b-41d4-c716-446655440000")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// V_intent in scoreCandidate
+// ---------------------------------------------------------------------------
+
+describe("scoreCandidate — V_intent multiplier", () => {
+  const seeker: SeekerProfile = {
+    age: 26,
+    gender: "male",
+    height: 180,
+    major: null,
+    negativeConstraints: null,
+    energyAxis: null,
+    orientationAxis: null,
+    eloScore: 500,
+    ageRangeMin: null,
+    ageRangeMax: null,
+    relationshipIntent: "spark",
+  };
+  const candidate: RichCandidateRow = {
+    userId: "c",
+    telegramId: 0n,
+    firstName: null,
+    distance: 0.4,
+    age: 24,
+    gender: "female",
+    height: 168,
+    major: null,
+    psychologicalSummary: null,
+    negativeConstraints: null,
+    energyAxis: null,
+    orientationAxis: null,
+    eloScore: 500,
+    homeCityKey: "ua:kyiv",
+  };
+
+  /** `scoreCandidate(seeker, candidate, weights?, typeFloor?, intentFloor?)`. */
+  const score = (
+    seekerIntent: string | null,
+    candidateIntent: string | null,
+    intentFloor: number,
+  ) =>
+    scoreCandidate(
+      { ...seeker, relationshipIntent: seekerIntent },
+      { ...candidate, relationshipIntent: candidateIntent },
+      undefined,
+      1,
+      intentFloor,
+    );
+
+  it("is inert at the shadow floor of 1, whatever the pair", () => {
+    // How it ships: the screen collects answers while ranking is untouched.
+    const opposite = score("spark", "longterm", 1);
+    const same = score("spark", "spark", 1);
+    expect(opposite.breakdown.intent).toBe(1);
+    expect(same.breakdown.intent).toBe(1);
+    expect(opposite.score).toBeCloseTo(same.score, 12);
+  });
+
+  it("damps an opposite pair down to the floor once it is live", () => {
+    expect(score("spark", "longterm", 0.85).breakdown.intent).toBeCloseTo(0.85, 10);
+    expect(score("spark", "falling", 0.85).breakdown.intent).toBeCloseTo(0.9, 10);
+    expect(score("spark", "open", 0.85).breakdown.intent).toBeCloseTo(0.95, 10);
+    expect(score("spark", "spark", 0.85).breakdown.intent).toBeCloseTo(1, 10);
+  });
+
+  it("stays neutral when EITHER side has no intent on file", () => {
+    // Legacy rows and the iOS rail before it ships the screen must not be
+    // damped for an answer nobody asked them for.
+    expect(score(null, "longterm", 0.85).breakdown.intent).toBe(1);
+    expect(score("spark", null, 0.85).breakdown.intent).toBe(1);
+    expect(score(null, null, 0.85).breakdown.intent).toBe(1);
+  });
+
+  it("multiplies the positive bracket rather than being subtracted", () => {
+    // The whole claim about strength: at the launch floor the worst intent
+    // mismatch costs 15% of the positive bracket, so it reorders neighbours
+    // and cannot outrank a real league or psychology difference.
+    const same = score("spark", "spark", 0.85);
+    const opposite = score("spark", "longterm", 0.85);
+    expect(opposite.score / same.score).toBeCloseTo(0.85, 6);
+  });
+
+  it("cannot outrank the league factor it sits beside", () => {
+    // A candidate two leagues away with a perfect intent match must still lose
+    // to a same-league candidate at the opposite end of the intent axis.
+    const sameLeagueWrongIntent = scoreCandidate(
+      { ...seeker, relationshipIntent: "spark" },
+      { ...candidate, relationshipIntent: "longterm", eloScore: 500 },
+      undefined,
+      1,
+      0.85,
+    );
+    const farLeagueRightIntent = scoreCandidate(
+      { ...seeker, relationshipIntent: "spark" },
+      { ...candidate, relationshipIntent: "spark", eloScore: 260 },
+      undefined,
+      1,
+      0.85,
+    );
+    expect(sameLeagueWrongIntent.score).toBeGreaterThan(farLeagueRightIntent.score);
+  });
+});
+
+describe("composeScore", () => {
+  const parts = {
+    explicit: 0.8,
+    research: 0.6,
+    league: 0.9,
+    penalty: 0.1,
+    agePref: 0.95,
+    type: 0.9,
+    intent: 0.85,
+  };
+
+  it("is the exact expression scoreCandidate ranks on", () => {
+    // The reason this function exists: `createProposedMatch` recomposes the
+    // persisted `scoreTotal` from the averaged breakdown, and until it shared
+    // this code the two expressions had to be kept in step by hand — so a new
+    // multiplier could silently make `match_score_logs` describe a formula the
+    // engine never used.
+    const seeker: SeekerProfile = {
+      age: 26,
+      gender: "male",
+      height: 180,
+      major: null,
+      negativeConstraints: null,
+      energyAxis: null,
+      orientationAxis: null,
+      eloScore: 500,
+      ageRangeMin: null,
+      ageRangeMax: null,
+      relationshipIntent: "spark",
+    };
+    const candidate: RichCandidateRow = {
+      userId: "c",
+      telegramId: 0n,
+      firstName: null,
+      distance: 0.4,
+      age: 24,
+      gender: "female",
+      height: 168,
+      major: null,
+      psychologicalSummary: null,
+      negativeConstraints: null,
+      energyAxis: null,
+      orientationAxis: null,
+      eloScore: 500,
+      homeCityKey: "ua:kyiv",
+      relationshipIntent: "longterm",
+    };
+    const scored = scoreCandidate(seeker, candidate, undefined, 1, 0.85);
+    expect(composeScore(scored.breakdown)).toBeCloseTo(scored.score, 12);
+  });
+
+  it("counts every multiplier, so dropping one changes the total", () => {
+    const full = composeScore(parts);
+    for (const factor of ["league", "agePref", "type", "intent"] as const) {
+      expect(composeScore({ ...parts, [factor]: 1 })).toBeGreaterThan(full);
+    }
+    expect(composeScore({ ...parts, penalty: 0 })).toBeGreaterThan(full);
+  });
+
+  it("adds the starvation bonus only when the caller supplies one", () => {
+    expect(composeScore({ ...parts, starvationBonus: 0.25 })).toBeCloseTo(
+      composeScore(parts) + 0.25,
+      12,
+    );
   });
 });

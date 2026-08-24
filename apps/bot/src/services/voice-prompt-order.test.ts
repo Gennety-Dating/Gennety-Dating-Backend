@@ -23,6 +23,7 @@ const ANSWERED = [
   "gender",
   "preference",
   "height",
+  "relationship_intent",
   "hobbies",
   "partner_preferences",
   "friday_vibe",

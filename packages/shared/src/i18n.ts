@@ -322,6 +322,23 @@ const translations = {
     myProfileNoBio: "_No bio yet._",
     myProfilePreviewHeader: "This is how your match sees you 👇",
     myProfileEditLabel: "✏️ What to change:",
+    // --- Relationship intent (PRODUCT_SPEC §1.3) ---
+    // The four labels are the axis itself. Each has to read as a taste, never
+    // as a confession — the moment `spark` reads as "I'm not serious", social
+    // desirability drags everyone rightward and the axis stops measuring.
+    intentSpark: "A bright story",
+    intentOpen: "See where it goes",
+    intentFalling: "Fall for someone",
+    intentLongterm: "Something long-term",
+    // Owner-only by founder decision: the pitch never carries this, so the
+    // line has to say so wherever the owner meets it.
+    intentPrivateNote: "only you can see this",
+    myProfileIntentLine: "🎯 Looking for: {intent} · {privateNote}",
+    myProfileIntentUnset: "🎯 Looking for: not set · {privateNote}",
+    editIntentBtn: "🎯 What I'm looking for",
+    editIntentPrompt:
+      "What are you looking for right now?\n\nOnly you ever see this — I use it to match you better.",
+    editIntentSaved: "✓ Saved: {intent}",
 
     // --- Edit Profile ---
     editProfileBody:
@@ -1579,6 +1596,18 @@ const translations = {
     myProfileNoBio: "_Описания пока нет._",
     myProfilePreviewHeader: "Так тебя видит пара 👇",
     myProfileEditLabel: "✏️ Что поменять:",
+    // --- Relationship intent (PRODUCT_SPEC §1.3) ---
+    intentSpark: "Яркая история",
+    intentOpen: "Посмотрим, куда приведёт",
+    intentFalling: "Влюбиться",
+    intentLongterm: "Всерьёз и надолго",
+    intentPrivateNote: "видно только тебе",
+    myProfileIntentLine: "🎯 Ты ищешь: {intent} · {privateNote}",
+    myProfileIntentUnset: "🎯 Ты ищешь: не выбрано · {privateNote}",
+    editIntentBtn: "🎯 Что я ищу",
+    editIntentPrompt:
+      "Что ты сейчас ищешь?\n\nЭто видишь только ты — нужно, чтобы точнее подбирать пару.",
+    editIntentSaved: "✓ Сохранил: {intent}",
 
     // --- Edit Profile ---
     editProfileBody:
@@ -2737,6 +2766,18 @@ const translations = {
     myProfileNoBio: "_Опису ще немає._",
     myProfilePreviewHeader: "Так тебе бачить пара 👇",
     myProfileEditLabel: "✏️ Що змінити:",
+    // --- Relationship intent (PRODUCT_SPEC §1.3) ---
+    intentSpark: "Яскрава історія",
+    intentOpen: "Подивимось, куди приведе",
+    intentFalling: "Закохатися",
+    intentLongterm: "Всерйоз і надовго",
+    intentPrivateNote: "бачиш тільки ти",
+    myProfileIntentLine: "🎯 Ти шукаєш: {intent} · {privateNote}",
+    myProfileIntentUnset: "🎯 Ти шукаєш: не обрано · {privateNote}",
+    editIntentBtn: "🎯 Що я шукаю",
+    editIntentPrompt:
+      "Що ти зараз шукаєш?\n\nЦе бачиш тільки ти — потрібно, щоб точніше добирати пару.",
+    editIntentSaved: "✓ Зберіг: {intent}",
 
     // --- Edit Profile ---
     editProfileBody:
@@ -3889,6 +3930,18 @@ const deTranslations: TranslationTable = {
   myProfileNoBio: "_Noch keine Bio._",
   myProfilePreviewHeader: "So sieht dich dein Match 👇",
   myProfileEditLabel: "✏️ Was ändern:",
+  // --- Relationship intent (PRODUCT_SPEC §1.3) ---
+  intentSpark: "Eine kurze, intensive Geschichte",
+  intentOpen: "Mal sehen, wohin es führt",
+  intentFalling: "Mich verlieben",
+  intentLongterm: "Etwas Langfristiges",
+  intentPrivateNote: "das siehst nur du",
+  myProfileIntentLine: "🎯 Du suchst: {intent} · {privateNote}",
+  myProfileIntentUnset: "🎯 Du suchst: nicht gewählt · {privateNote}",
+  editIntentBtn: "🎯 Was ich suche",
+  editIntentPrompt:
+    "Wonach suchst du gerade?\n\nDas siehst nur du — ich nutze es, um besser zu matchen.",
+  editIntentSaved: "✓ Gespeichert: {intent}",
   editProfileBody:
     "Das ist fest gespeichert:\n\n" +
     "• *Name:* {firstName} {surname}\n" +
@@ -5013,6 +5066,18 @@ const plTranslations: TranslationTable = {
   myProfileNoBio: "_Brak bio._",
   myProfilePreviewHeader: "Tak widzi Cię Twoja para 👇",
   myProfileEditLabel: "✏️ Co zmienić:",
+  // --- Relationship intent (PRODUCT_SPEC §1.3) ---
+  intentSpark: "Jasna historia",
+  intentOpen: "Zobaczymy, dokąd to zaprowadzi",
+  intentFalling: "Zakochać się",
+  intentLongterm: "Coś na dłużej",
+  intentPrivateNote: "widzisz to tylko ty",
+  myProfileIntentLine: "🎯 Szukasz: {intent} · {privateNote}",
+  myProfileIntentUnset: "🎯 Szukasz: nie wybrano · {privateNote}",
+  editIntentBtn: "🎯 Czego szukam",
+  editIntentPrompt:
+    "Czego teraz szukasz?\n\nWidzisz to tylko ty — pomaga mi lepiej dobierać parę.",
+  editIntentSaved: "✓ Zapisane: {intent}",
   editProfileBody:
     "Te dane są zablokowane:\n\n" +
     "• *Imię i nazwisko:* {firstName} {surname}\n" +

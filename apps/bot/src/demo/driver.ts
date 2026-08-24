@@ -1019,6 +1019,7 @@ async function startDemoMatch(
     penalty: 0,
     agePref: 1,
     type: 1,
+    intent: 1,
     embeddingDistance: 0.24,
     starvationBonus: 0,
   });

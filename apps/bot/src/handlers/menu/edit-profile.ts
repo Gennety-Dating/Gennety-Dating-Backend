@@ -12,11 +12,13 @@ import {
   MAX_MAJOR_LENGTH,
   PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
   DEFAULT_SESSION,
+  isRelationshipIntent,
   normalizeProfileMedia,
   escapeMd,
   type Language,
   type SessionData,
 } from "@gennety/shared";
+import { intentLabel, intentOptions } from "../../services/intent-copy.js";
 import {
   armMediaClaim,
   claimMenuText,
@@ -1493,4 +1495,64 @@ function livePhotoRejectionMessage(
     case "too_large":
       return t(language, "livePhotoTooLarge");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Relationship intent (PRODUCT_SPEC §1.3)
+// ---------------------------------------------------------------------------
+
+/** Callback prefix for one picked option: `menu:edit:intent:<id>`. */
+export const EDIT_INTENT_PREFIX = "menu:edit:intent:";
+
+/**
+ * Open the picker. Four buttons, one tap each — no text claim, because there is
+ * nothing to type: the answer is one of four canonical ids, which is exactly
+ * why this fact was moved out of the chat in the first place.
+ *
+ * Editable at all because intent changes with time in a way height and gender
+ * do not, and a matching input nobody can correct silently rots.
+ */
+export async function handleEditIntentStart(ctx: BotContext): Promise<void> {
+  await ctx.answerCallbackQuery();
+  const lang = ctx.session.language;
+  const keyboard = new InlineKeyboard();
+  for (const option of intentOptions(lang)) {
+    keyboard.text(option.label, `${EDIT_INTENT_PREFIX}${option.value}`).row();
+  }
+  keyboard.text(t(lang, "menuBack"), "menu:profile");
+  await ctx.reply(t(lang, "editIntentPrompt"), { reply_markup: keyboard });
+}
+
+/** Persist one picked option. */
+export async function handleEditIntentSet(ctx: BotContext): Promise<void> {
+  const lang = ctx.session.language;
+  const data = ctx.callbackQuery?.data ?? "";
+  const picked = data.slice(EDIT_INTENT_PREFIX.length);
+  if (!isRelationshipIntent(picked)) {
+    // A stale keyboard from a build that offered a value this one dropped.
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  await ctx.answerCallbackQuery();
+
+  // `upsert`, not `update`: a user editing from the menu has finished
+  // onboarding and therefore has a profile row — but the same guard everywhere
+  // else in this file uses costs nothing and cannot 500 on a legacy account.
+  const userId = (
+    await prisma.user.findUniqueOrThrow({
+      where: { telegramId: BigInt(ctx.from!.id) },
+      select: { id: true },
+    })
+  ).id;
+  await prisma.profile.upsert({
+    where: { userId },
+    create: { userId, relationshipIntent: picked },
+    update: { relationshipIntent: picked },
+  });
+
+  // Deliberately NOT marking the embedding dirty: intent is scored by its own
+  // `V_intent` multiplier and must never reach `V_explicit` (weight 0.65),
+  // which is the whole reason it lives in its own column.
+  await ctx.reply(t(lang, "editIntentSaved", { intent: intentLabel(lang, picked) }));
+  await showMainMenu(ctx);
 }

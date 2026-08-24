@@ -404,6 +404,7 @@ describe("not-understood feedback", () => {
         "gender",
         "preference",
         "height",
+      "relationship_intent",
         "hobbies",
         "partner_preferences",
         "ai_memory",
@@ -455,6 +456,7 @@ describe("onboarding collector routing", () => {
       "gender",
       "preference",
       "height",
+      "relationship_intent",
       "partner_preferences",
       "ai_memory",
       "context_dump",
@@ -476,6 +478,7 @@ describe("onboarding collector routing", () => {
       "gender",
       "preference",
       "height",
+      "relationship_intent",
       "hobbies",
       "partner_preferences",
     ]);
@@ -512,6 +515,7 @@ describe("onboarding collector routing", () => {
       "gender",
       "preference",
       "height",
+      "relationship_intent",
       "hobbies",
       "partner_preferences",
       "friday_vibe",
@@ -690,7 +694,7 @@ describe("applyOnboardingFacts", () => {
     expect(snapshot.rejectedFields).toEqual([]);
   });
 
-  it("writes height onto the profile row and leaves the chat starting at hobbies", async () => {
+  it("writes height onto the profile row and moves on to the intent screen", async () => {
     const state = primeDb(
       collectorUser({
         firstName: "Alice",
@@ -705,8 +709,50 @@ describe("applyOnboardingFacts", () => {
     expect(db.profile.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ update: expect.objectContaining({ height: 170 }) }),
     );
+    expect(state.progressWrite?.currentQuestion).toBe("relationship_intent");
+    expect(snapshot.currentQuestion).toBe("relationship_intent");
+  });
+
+  it("writes the relationship intent onto the profile row", async () => {
+    const state = primeDb(
+      collectorUser({
+        firstName: "Alice",
+        age: 24,
+        gender: "female",
+        preference: "men",
+      }),
+    );
+
+    const snapshot = await applyOnboardingFacts(TELEGRAM_ID, {
+      height: 170,
+      relationship_intent: "spark",
+    });
+
+    expect(db.profile.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ relationshipIntent: "spark" }),
+      }),
+    );
+    // The intent is the LAST Mini App screen, so answering it hands the chat
+    // its first question rather than another screen.
     expect(state.progressWrite?.currentQuestion).toBe("hobbies");
     expect(snapshot.currentQuestion).toBe("hobbies");
+  });
+
+  it("rejects an intent outside the axis and writes nothing", async () => {
+    // All-or-nothing: a value the matching engine could not read must never be
+    // stored, and must not half-save the screen either.
+    primeDb(collectorUser({ firstName: "Alice", age: 24, gender: "female", preference: "men" }));
+
+    const snapshot = await applyOnboardingFacts(TELEGRAM_ID, {
+      height: 170,
+      relationship_intent: "situationship",
+    });
+
+    expect(db.profile.upsert).not.toHaveBeenCalled();
+    expect(snapshot.rejectedFields).toEqual([
+      { field: "relationship_intent", reason: "invalid_relationship_intent" },
+    ]);
   });
 
   it("accepts a whole screen set at once", async () => {
@@ -718,6 +764,7 @@ describe("applyOnboardingFacts", () => {
       gender: "female",
       preference: "men",
       height: 170,
+      relationship_intent: "longterm",
     });
 
     expect(db.user.update).toHaveBeenCalledWith(

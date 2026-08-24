@@ -63,7 +63,7 @@ function user(
         longitude: 30.5234,
       },
     ],
-    // Profile-screen defaults: already answered, so the five Mini App screens
+    // Profile-screen defaults: already answered, so the six Mini App screens
     // are skipped and pre-existing post-visual routing tests are unaffected.
     profileBasics: {
       firstName: "Alice",
@@ -71,6 +71,7 @@ function user(
       gender: "female",
       preference: "men",
       height: 170,
+      relationshipIntent: "open",
     },
     profileLimits: { minAge: 18, maxAge: 55, minHeightCm: 140, maxHeightCm: 220 },
     homeLocation: null,
@@ -85,6 +86,7 @@ const NO_BASICS = {
   gender: null,
   preference: null,
   height: null,
+  relationshipIntent: null,
 } as const;
 
 describe("Telegram onboarding route restoration", () => {
@@ -448,6 +450,7 @@ describe("Telegram onboarding profile screens", () => {
             gender: "female",
             preference: "men",
             height: null,
+            relationshipIntent: null,
           },
         }),
       ),

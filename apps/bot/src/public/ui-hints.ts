@@ -5,6 +5,7 @@ import {
   MAX_HEIGHT_CM,
   MIN_PHOTOS,
   MAX_PHOTOS,
+  RELATIONSHIP_INTENTS,
   VOICE_PROMPT_MIN_DURATION_SECONDS,
   VOICE_PROMPT_MAX_DURATION_SECONDS,
 } from "@gennety/shared";
@@ -56,6 +57,7 @@ const QUESTION_HINTS: Partial<Record<OnboardingQuestion, UiHint>> = {
   gender: { control: "choice_chips", options: ["male", "female"] },
   preference: { control: "choice_chips", options: ["men", "women", "both"] },
   height: { control: "height_wheel", min: MIN_HEIGHT_CM, max: MAX_HEIGHT_CM },
+  relationship_intent: { control: "choice_chips", options: [...RELATIONSHIP_INTENTS] },
   hobbies: { control: "text" },
   partner_preferences: { control: "multiline_text" },
   friday_vibe: { control: "multiline_text" },

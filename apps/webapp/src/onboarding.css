@@ -2776,6 +2776,52 @@ button {
   }
 }
 
+/* ── Relationship intent: four equal rows ────────────────────────────────
+   Four options in ONE tone, which is the point rather than an economy: colour
+   here would rank the answers, and the axis only measures anything while no
+   option looks like the respectable one. Everything about how a row looks —
+   gradient, inner edge light, lift and halo on tap, the way the others recede —
+   comes from `.ob-choice`, which the element also carries.
+
+   Shorter rows than the two-option screens: four of them plus a title and the
+   privacy footnote have to clear a 320x568 viewport, where the default 4.25rem
+   row would overflow. */
+.ob-choice-stack--intent {
+  gap: 0.75rem;
+  width: min(100%, 22rem);
+}
+
+.ob-intent {
+  min-height: 3.5rem;
+  padding: 0.875rem 1.25rem;
+  border-radius: 22px;
+  font-size: 1.0625rem;
+  /* Long labels ("Посмотрим, куда приведёт") wrap rather than being clipped —
+     these are sentences, not one-word options. */
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+/* The footnote that makes the honest answer safe to give: nobody else sees
+   this. Quiet — it is a reassurance, not part of the question — but it sits
+   directly under the options, where the choice is actually made. */
+.ob-basics-note {
+  width: min(100%, 22rem);
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* The footnote rides directly under the stack, so the body keeps the
+   bottom-aligned posture the other tap-to-answer screens use — the options sit
+   in the same place on this screen as on the two before it, near the thumb,
+   rather than floating mid-screen because this one has an extra line. */
+.ob-basics--intent .ob-basics-body {
+  gap: 0.875rem;
+}
+
 /* ── Gender: two square portraits ────────────────────────────────────────
    The two options sit side by side rather than stacked, each a nearly square
    button with a drawn portrait inside it. Everything about how the button

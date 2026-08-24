@@ -931,6 +931,25 @@ model Profile {
   typePrefTags             Json?                        @map("type_pref_tags")
   typeRadarCompletedAt     DateTime?                    @map("type_radar_completed_at")
   typeRadarAgeBand         String?                      @map("type_radar_age_band")
+  /// Relationship intent (PRODUCT_SPEC §1.3 / §3.2) — the one thing onboarding
+  /// asks about the FUTURE, picked on the last of the Mini App's own profile
+  /// screens. One ordered axis (`spark` | `open` | `falling` | `longterm`,
+  /// see `@gennety/shared` `relationship-intent.ts`); whitelist-validated in
+  /// app code, NOT a Prisma enum — mirrors `socialRole` / `CuratedVenue.category`,
+  /// so a fifth point on the axis costs no migration.
+  ///
+  /// Read by the soft `V_intent` match multiplier and by nothing else. Two
+  /// rules ride on that:
+  ///   - it deliberately does NOT feed the embedding. Folded into
+  ///     `psychologicalSummary` it would arrive through `V_explicit` at weight
+  ///     0.65 — the single most influential term in the formula, i.e. the exact
+  ///     opposite of "a nudge inside a league".
+  ///   - it is never shown to the partner. The owner sees it in My Profile with
+  ///     a "only you can see this" line; the pitch never carries it, so nobody
+  ///     decides on a label before reading the person (founder decision).
+  /// Null on every legacy row and on the iOS rail until it ships the screen —
+  /// `intentMultiplier` returns exactly 1.0 for an absent value.
+  relationshipIntent       String?                      @map("relationship_intent")
   /// Structured appearance tags for THIS user as a candidate (hairColor, build,
   /// beard, tattoos, …), scored against a partner's `typePrefTags` by `V_type`.
   /// Piggybacks the Elo cold-start vision pass (no extra OpenAI call). Null until
@@ -1658,6 +1677,12 @@ model MatchScoreLog {
   /// Defaults to 1 so rows logged before the factor existed — and every row
   /// while `TYPE_RADAR_ENABLED`/`TYPE_PREF_FLOOR` keep it inert — read as neutral.
   scoreType         Float    @default(1) @map("score_type")
+  /// Relationship-intent agreement multiplier in [floor..1] (1 = same intent,
+  /// or either side has none on file). The weakest factor in the formula by
+  /// design — see `@gennety/shared` `relationship-intent.ts`. Defaults to 1 so
+  /// rows logged before it existed, and every row while `INTENT_FLOOR` is 1.0,
+  /// read as neutral.
+  scoreIntent       Float    @default(1) @map("score_intent")
   /// Final composite (after weights + starvation bonus).
   scoreTotal        Float    @map("score_total")
   /// Pairwise embedding L2 distance, kept for debugging / re-ranking.

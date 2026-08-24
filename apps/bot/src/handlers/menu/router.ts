@@ -23,6 +23,9 @@ import {
   handleEditPhotosUpload,
   handleEditPhotosAdd,
   handleEditPhotosDelete,
+  handleEditIntentStart,
+  handleEditIntentSet,
+  EDIT_INTENT_PREFIX,
 } from "./edit-profile.js";
 import {
   handleEditVideoStart,
@@ -336,6 +339,9 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     case "menu:edit:photos":
       await handleEditPhotosStart(ctx);
       return;
+    case "menu:edit:intent":
+      await handleEditIntentStart(ctx);
+      return;
 
     // Profile video (main-menu entry + stale Remove fallback)
     case "menu:video":
@@ -399,6 +405,10 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       return;
 
     default:
+      if (data.startsWith(EDIT_INTENT_PREFIX)) {
+        await handleEditIntentSet(ctx);
+        return;
+      }
       if (data.startsWith("menu:lang:")) {
         await handleSettingsLanguageSet(ctx);
         return;

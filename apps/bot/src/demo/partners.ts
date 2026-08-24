@@ -4,6 +4,7 @@ import {
   SUPPORTED_LANGUAGES,
   cityKeyToTimeZone,
   type Language,
+  type RelationshipIntent,
 } from "@gennety/shared";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 import { getBalance, grantTickets } from "../services/ticket-wallet.js";
@@ -111,6 +112,13 @@ export interface DemoPartnerPersona {
    * above the 500 default so `V_league` reads as an ordinary same-tier pairing.
    */
   eloScore: number;
+  /**
+   * Relationship intent (PRODUCT_SPEC §1.3). Seeded so the demo pair reads as a
+   * realistic `V_intent` neighbour rather than a hole in the factor: the
+   * multiplier is exactly 1.0 whenever either side has none, which would make
+   * every demo run silently exercise the absent-value branch instead.
+   */
+  relationshipIntent: RelationshipIntent;
 }
 
 export interface DemoPartnerDefinition extends DemoPartnerPersona {
@@ -153,6 +161,7 @@ export const DEMO_PARTNER_PERSONAS: readonly DemoPartnerPersona[] = [
     orientationAxis: 0.55,
     anchorTags: ["архитектура", "кулинария", "музыка", "город"],
     eloScore: 520,
+    relationshipIntent: "open",
   },
   {
     age: 25,
@@ -180,6 +189,7 @@ export const DEMO_PARTNER_PERSONAS: readonly DemoPartnerPersona[] = [
     orientationAxis: 0.7,
     anchorTags: ["искусство", "керамика", "кино", "медленный отдых"],
     eloScore: 520,
+    relationshipIntent: "falling",
   },
 ];
 
@@ -290,6 +300,7 @@ async function upsertDemoPartner(partner: DemoPartnerDefinition): Promise<void> 
     orientationAxis: partner.orientationAxis,
     anchorTags: partner.anchorTags,
     vibeExtractedAt: now,
+    relationshipIntent: partner.relationshipIntent,
     eloScore: partner.eloScore,
     eloSeededAt: now,
     homeCity: market.city,

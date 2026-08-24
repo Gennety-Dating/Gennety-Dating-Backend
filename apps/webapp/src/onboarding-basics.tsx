@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, ReactElement, ReactNode } from "react";
-import type { TelegramProfileBasics, TelegramProfileLimits, TelegramProfilePatch } from "./api.js";
+import type {
+  RelationshipIntent,
+  TelegramProfileBasics,
+  TelegramProfileLimits,
+  TelegramProfilePatch,
+} from "./api.js";
 import type { BasicsStep } from "./onboarding-basics-route.js";
 import { basicsStepIndex } from "./onboarding-basics-route.js";
 import { burstFromEvent } from "./onboarding-burst.js";
@@ -17,9 +22,9 @@ import { WHEEL_ITEM_H, shouldTickHaptic, wheelValueAt } from "./onboarding-wheel
 
 /**
  * The Mini App's own profile screens: name, age, gender, who you're looking
- * for, height (PRODUCT_SPEC §1.3).
+ * for, height, relationship intent (PRODUCT_SPEC §1.3).
  *
- * These five moved out of the chat because each has ONE correct answer from a
+ * These six moved out of the chat because each has ONE correct answer from a
  * finite set, and Telegram has no way to render the right control for that —
  * the bot had to ask in prose and then recover the value with a regex or an
  * LLM. (The native iOS client already gets purpose-built controls here; see
@@ -153,7 +158,76 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
           onSubmit={(height) => void save({ height })}
         />
       );
+    case "intent":
+      return (
+        <IntentScreen
+          strings={strings}
+          busy={busy}
+          error={errorNode}
+          selected={basics.relationshipIntent}
+          onPick={(intent) =>
+            void save({ relationshipIntent: intent as RelationshipIntent })
+          }
+        />
+      );
   }
+}
+
+/**
+ * "What are you looking for?" — the one question in the set about the FUTURE
+ * (PRODUCT_SPEC §1.3), and the last screen before the chat takes over.
+ *
+ * Four rows in one tone, deliberately. Everywhere else in this set a colour
+ * distinguishes options that genuinely differ (male/female); here it would rank
+ * them, and the entire axis depends on no answer looking like the respectable
+ * one — `spark` leads and is styled exactly like `longterm`.
+ *
+ * The footnote is the whole reason the honest answer is safe to give: the pitch
+ * never carries this, so the screen says so where the choice is made rather
+ * than leaving the user to guess who reads it.
+ */
+function IntentScreen(props: {
+  strings: OnboardingStrings;
+  selected: string | null;
+  busy: boolean;
+  error: ReactNode;
+  onPick: (value: string) => void;
+}): ReactElement {
+  const { strings } = props;
+  const { firing, fire } = useChoiceTap(props.onPick, strings.basicsIntentTitle);
+
+  const options: Array<{ value: RelationshipIntent; label: string }> = [
+    { value: "spark", label: strings.basicsIntentSpark },
+    { value: "open", label: strings.basicsIntentOpen },
+    { value: "falling", label: strings.basicsIntentFalling },
+    { value: "longterm", label: strings.basicsIntentLongterm },
+  ];
+
+  return (
+    <BasicsShell
+      title={strings.basicsIntentTitle}
+      error={props.error}
+      modifier="ob-basics--choice ob-basics--intent"
+    >
+      <div className="ob-choice-stack ob-choice-stack--intent">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={`ob-choice ob-intent ${
+              props.selected === option.value ? "is-selected" : ""
+            } ${firing === option.value ? "is-firing" : ""}`}
+            disabled={props.busy}
+            aria-pressed={props.selected === option.value}
+            onClick={(event) => fire(event, option.value, "neutral")}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <p className="ob-basics-note">{strings.basicsIntentPrivate}</p>
+    </BasicsShell>
+  );
 }
 
 /** The shared frame: question up top, control in the middle, pill at the foot. */

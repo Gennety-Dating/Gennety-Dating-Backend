@@ -13,6 +13,7 @@ function basics(overrides: Partial<TelegramProfileBasics> = {}): TelegramProfile
     gender: null,
     preference: null,
     height: null,
+    relationshipIntent: null,
     ...overrides,
   };
 }
@@ -30,6 +31,17 @@ describe("nextBasicsStep", () => {
         basics({ firstName: "Alice", age: 24, gender: "female", preference: "men" }),
       ),
     ).toBe("height");
+    expect(
+      nextBasicsStep(
+        basics({
+          firstName: "Alice",
+          age: 24,
+          gender: "female",
+          preference: "men",
+          height: 170,
+        }),
+      ),
+    ).toBe("intent");
   });
 
   it("is done once every field is answered", () => {
@@ -41,13 +53,21 @@ describe("nextBasicsStep", () => {
           gender: "female",
           preference: "men",
           height: 170,
+          relationshipIntent: "spark",
         }),
       ),
     ).toBeNull();
   });
 
   it("matches the collector's canonical question order", () => {
-    expect([...BASICS_STEPS]).toEqual(["name", "age", "gender", "preference", "height"]);
+    expect([...BASICS_STEPS]).toEqual([
+      "name",
+      "age",
+      "gender",
+      "preference",
+      "height",
+      "intent",
+    ]);
   });
 
   it("does not treat a legitimate value as missing", () => {
@@ -62,6 +82,7 @@ describe("nextBasicsStep", () => {
           gender: "male",
           preference: "both",
           height: 140,
+          relationshipIntent: "longterm",
         }),
       ),
     ).toBeNull();
@@ -75,6 +96,7 @@ describe("nextBasicsStep", () => {
 
 describe("previousBasicsStep", () => {
   it("pages back through the set and stops at the first screen", () => {
+    expect(previousBasicsStep("intent")).toBe("height");
     expect(previousBasicsStep("height")).toBe("preference");
     expect(previousBasicsStep("age")).toBe("name");
     expect(previousBasicsStep("name")).toBeNull();

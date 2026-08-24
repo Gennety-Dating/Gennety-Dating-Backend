@@ -3,7 +3,7 @@ import type { TelegramProfileBasics } from "./api.js";
 /**
  * The Mini App's own profile screens (PRODUCT_SPEC §1.3).
  *
- * These five facts each have ONE correct answer out of a finite set, which is
+ * These six facts each have ONE correct answer out of a finite set, which is
  * exactly what a native control captures better than a sentence typed into a
  * chat. Everything after `height` — hobbies, partner preferences, the vibe
  * answers — is open prose and stays chat-owned.
@@ -12,7 +12,14 @@ import type { TelegramProfileBasics } from "./api.js";
  * (`nextOnboardingQuestion`), so whatever the Mini App does NOT deliver is
  * picked up by the chat at exactly the point it left off.
  */
-export const BASICS_STEPS = ["name", "age", "gender", "preference", "height"] as const;
+export const BASICS_STEPS = [
+  "name",
+  "age",
+  "gender",
+  "preference",
+  "height",
+  "intent",
+] as const;
 
 export type BasicsStep = (typeof BASICS_STEPS)[number];
 
@@ -39,6 +46,7 @@ export function nextBasicsStep(
   if (!basics.gender) return "gender";
   if (!basics.preference) return "preference";
   if (basics.height === null || basics.height === undefined) return "height";
+  if (!basics.relationshipIntent) return "intent";
   return null;
 }
 

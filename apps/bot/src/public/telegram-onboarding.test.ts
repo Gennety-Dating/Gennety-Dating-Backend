@@ -732,6 +732,36 @@ describe("Telegram onboarding profile screens", () => {
     expect(res.body.user.profileBasics.height).toBeNull();
   });
 
+  it("passes the relationship intent through to the collector", async () => {
+    userFindUnique.mockResolvedValue(profileReadyUser());
+    userFindUniqueOrThrow.mockResolvedValue(profileReadyUser());
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/profile")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ relationshipIntent: "spark" });
+
+    expect(res.status).toBe(200);
+    // Whitelisted downstream by `validateFactValue`, not here — the route only
+    // shape-checks, so one list of legal ids governs every write path.
+    expect(applyOnboardingFacts).toHaveBeenCalledWith(BigInt(TELEGRAM_ID), {
+      relationship_intent: "spark",
+    });
+  });
+
+  it("shape-checks a non-string intent before the collector sees it", async () => {
+    userFindUnique.mockResolvedValue(profileReadyUser());
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/profile")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ relationshipIntent: 3 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid-relationship-intent");
+    expect(applyOnboardingFacts).not.toHaveBeenCalled();
+  });
+
   it("maps a value the collector rejected onto a 400 naming the field", async () => {
     userFindUnique.mockResolvedValue(profileReadyUser());
     applyOnboardingFacts.mockResolvedValue(

@@ -90,6 +90,7 @@ type MiniUser = {
   messageHistory: unknown[];
   profile: {
     height: number | null;
+    relationshipIntent: string | null;
     homeCity: string | null;
     homeCountryCode: string | null;
     homeCityKey: string | null;
@@ -792,6 +793,7 @@ const miniUserSelect = {
   profile: {
     select: {
       height: true,
+      relationshipIntent: true,
       homeCity: true,
       homeCountryCode: true,
       homeCityKey: true,
@@ -937,6 +939,7 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
         gender: user.gender,
         preference: user.preference,
         height: user.profile?.height ?? null,
+        relationshipIntent: user.profile?.relationshipIntent ?? null,
       },
       // Served rather than inlined in the bundle: `apps/webapp` deliberately
       // does not depend on `@gennety/shared`, and a bound that lives in two
@@ -1007,13 +1010,15 @@ interface TelegramOnboardingStateDto {
     promoMonths: number;
     /** Every city registration currently accepts (Kyiv-only at launch). */
     supportedCities: CitySearchHit[];
-    /** The five facts the Mini App's own profile screens collect. */
+    /** The six facts the Mini App's own profile screens collect. */
     profileBasics: {
       firstName: string | null;
       age: number | null;
       gender: Gender | null;
       preference: GenderPreference | null;
       height: number | null;
+      /** `spark` | `open` | `falling` | `longterm`; see `@gennety/shared`. */
+      relationshipIntent: string | null;
     };
     /** Server-owned bounds for the age slider and the height drum. */
     profileLimits: {
@@ -1125,6 +1130,14 @@ function parseProfileBasicsPatch(
       return { error: "invalid-height" };
     }
     facts.height = body.height;
+  }
+  // Whitelisted downstream by `validateFactValue`, so an unknown id is rejected
+  // with `invalid_relationship_intent` rather than written through.
+  if (body.relationshipIntent !== undefined) {
+    if (typeof body.relationshipIntent !== "string") {
+      return { error: "invalid-relationship-intent" };
+    }
+    facts.relationship_intent = body.relationshipIntent;
   }
 
   return { facts };
