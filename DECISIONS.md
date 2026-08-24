@@ -47,6 +47,13 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-24 — выбор финальной иконки «Open in Maps»: залитый минималистичный Geo-Pin с вырезом
+
+**Kind:** founder decision
+**What:** по итогам сравнительного теста основатель утвердил Вариант 2 — плотный каплевидный пин локации. Иконка переведена в залитый solid-стиль (`fill="currentColor"`) с вырезанной точкой в центре (`fillRule="evenodd"`), а отступ от текста в кнопке уменьшен (`gap-1.5`). Решение раскатано на все карточки сайта (`/places`) и в каноническую иконку `map` в Mini App.
+**Why:** максимальная читаемость, плотный современный силуэт и гармония со шрифтом кнопки.
+**Recorded in:** `Gennety dating website/src/app/places/page.tsx`, `apps/webapp/src/icons.ts`, `apps/webapp/src/venue-change.ts`.
+
 ## 2026-08-24 — цель отношений: одна ось, самый слабый множитель, видно только владельцу
 
 **Kind:** founder decision (четыре решения) + deviation from plan

@@ -113,12 +113,12 @@ const ICONS: Record<IconName, { d: string[]; solid?: boolean }> = {
       "M12 13a2.4 2.4 0 1 0 0-4.8 2.4 2.4 0 0 0 0 4.8Z",
     ],
   },
-  // Default map icon — folded paper map.
+  // Default map icon — solid modern Geo-Pin with cutout dot.
   map: {
     d: [
-      "M9 4.6 3.6 6.8V20l5.4-2.2 6 2.2 5.4-2.2V4.6L15 6.8 9 4.6Z",
-      "M9 4.6v13.2M15 6.8V20",
+      "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7Zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z",
     ],
+    solid: true,
   },
   // Candidate 1: Modern Navigation Arrow (dynamic 45° navigation pointer).
   "map-nav": {

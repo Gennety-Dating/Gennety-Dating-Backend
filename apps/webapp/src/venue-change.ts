@@ -1907,11 +1907,9 @@ function renderDetail(v: VenueChangeCatalogItem): void {
     ]));
   }
 
-  const vIdx = catalog.findIndex((item) => keyOf(item) === keyOf(v));
-  const mapIcon = getRotatingMapIcon(vIdx >= 0 ? vIdx : 0);
   const href = mapsHref(v.name, v.address, v.mapsUri);
   const mapsRow = el("a", { class: "vc-info-row", href, target: "_blank", rel: "noopener" }, [
-    icon(mapIcon, "icon vc-info-icon"),
+    icon("map", "icon vc-info-icon"),
     el("span", { class: "vc-info-text", text: s.openMaps }),
     icon("chevron", "icon vc-info-chevron"),
   ]);
@@ -2052,11 +2050,9 @@ function renderVenuePreview(ref: VenueRef, back: () => void): void {
     );
   }
 
-  const vIdx = ref.key ? catalog.findIndex((item) => keyOf(item) === ref.key) : 0;
-  const mapIcon = getRotatingMapIcon(vIdx >= 0 ? vIdx : 0);
   const href = mapsHref(ref.name, ref.address, ref.mapsUri);
   const mapsRow = el("a", { class: "vc-info-row", href, target: "_blank", rel: "noopener" }, [
-    icon(mapIcon, "icon vc-info-icon"),
+    icon("map", "icon vc-info-icon"),
     el("span", { class: "vc-info-text", text: s.openMaps }),
     icon("chevron", "icon vc-info-chevron"),
   ]);
