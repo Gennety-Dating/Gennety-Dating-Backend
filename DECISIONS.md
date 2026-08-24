@@ -50,9 +50,9 @@ Newest entries go **on top**:
 ## 2026-08-24 — ротация 4 вариантов иконки «Open in Maps» по карточкам для живого выбора
 
 **Kind:** founder decision
-**What:** в веб-приложении (`apps/webapp/src/icons.ts`, `venue-change.ts`) добавлены 4 минималистичных варианта векторной иконки карты (`map-nav`, `map-pin`, `map-fold`, `map-route`) с жирными линиями и скруглениями. Иконки выводятся поочередно (`index % 4`) на детальных карточках мест, чтобы основатель мог сравнить их вживую в интерфейсе и выбрать финальный вариант.
-**Why:** подбор идеальной минималистичной иконки взамен старой схемы сложенной карты.
-**Recorded in:** `apps/webapp/src/icons.ts`, `apps/webapp/src/venue-change.ts`, `apps/webapp/src/icons.test.ts`.
+**What:** на сайте (`src/app/places/page.tsx`) и в Mini App (`apps/webapp/src/icons.ts`, `venue-change.ts`) внедрены 4 минималистичных варианта векторной иконки карты (`MapNavIcon`, `MapPinIcon`, `MapFoldIcon`, `MapRouteIcon`) с жирными линиями и скруглениями. Иконки выводятся поочередно (`index % 4`) на кнопках «Open in Maps» на карточках заведений, чтобы основатель мог сравнить их вживую в интерфейсе и выбрать финальный вариант.
+**Why:** подбор идеальной минималистичной иконки взамен старой иконки внешней ссылки / схемы карты.
+**Recorded in:** `Gennety dating website/src/app/places/page.tsx`, `apps/webapp/src/icons.ts`, `apps/webapp/src/venue-change.ts`.
 
 ## 2026-08-24 — у бота одно имя: Gennety. «Aether Concierge» вычищен целиком
 
