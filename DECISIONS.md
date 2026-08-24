@@ -7890,3 +7890,11 @@ automatically via `CLAUDE.md`.
 **Где отражено:** `PRODUCT_SPEC.md` → §Blocking + §Phase 2 (поверхность `/v1`);
 `ARCHITECTURE.md` → `user_blocks`; `openapi/gennety-v1.yaml` (три операции);
 `deploy.md` → PENDING-блок; iOS-репо `IMPLEMENTATION_PLAN.md` → 6.8.
+
+## 2026-08-24 — устранение паразитной белой рамки и субпиксельного артефакта на чипах карточек заведений
+
+**Kind:** bugfix / polish
+**What:** в `apps/webapp/src/venue-change.css` добавлены сбросы `:focus` / `:focus-visible` / `outline: none`, `-webkit-tap-highlight-color: transparent`, `background-clip: padding-box`, а также `backface-visibility: hidden` и GPU-стабилизация (`transform: translateZ(0)`) для `.vc-card`, `.vc-chip`, `.vc-heart` и `.vc-current-badge`.
+**Why:** при нажатии на карточку заведения (`.vc-card:active`) или кнопку отметки срабатывал `transform: scale(0.985)` и системный фокус на кнопках, что на WebKit/Chromium вызывало субпиксельное сглаживание краёв сильно скруглённых чипов с полупрозрачным фоном (`border-radius: 999px`, `rgba(255, 255, 255, 0.06)`), визуально проявлявшееся как тонкая белая 1px рамка на бейджах рейтинга/тегов, плавно исчезавшая при выходе из `:active`/hover.
+**Recorded in:** `apps/webapp/src/venue-change.css`.
+
