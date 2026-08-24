@@ -47,6 +47,13 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-24 — фильтрация городов на странице Places сайта (только Германия, Польша, Украина)
+
+**Kind:** founder decision
+**What:** на лендинге Gennety Dating (`/places`) в барабане выбора городов (CityRoulette) убраны все американские города (New York, Los Angeles), а также города других стран (London, Paris, Tokyo, Rome, Barcelona, Amsterdam, Prague, Vienna). Оставлены только города Германии, Польши и Украины; добавлены Берлин и Мюнхен (`src/lib/cities.ts`).
+**Why:** фокус запуска и масштабирования сервиса — рынки Украины, Польши и Германии. Нерелевантные и американские локации не должны предлагаться на витрине.
+**Recorded in:** `Gennety dating website/src/lib/cities.ts`.
+
 ## 2026-08-24 — у бота одно имя: Gennety. «Aether Concierge» вычищен целиком
 
 **Kind:** founder decision
