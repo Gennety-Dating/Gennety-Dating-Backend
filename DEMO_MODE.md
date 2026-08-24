@@ -915,8 +915,15 @@ Two things follow, and the second is the open one:
   already uses) or refusing to mint at all in demo, which would leave the
   Subscribe button dead. Recorded in DECISIONS.md 2026-08-24.
 
-The expiry reminder needs no branch here: it only ever addresses a
-non-auto-renewing entitlement, and a demo visitor never buys one.
+The expiry reminders need no branch here, but the reason narrowed on
+2026-08-24. They used to address only a non-auto-renewing entitlement,
+which a demo visitor never buys. They now also warn a LIVE recurring
+Stars subscriber that the next charge comes out of their Star balance —
+and a demo tap on Subscribe mints a REAL recurring invoice (the open hole
+recorded above), so a visitor who actually paid would now receive those
+two DMs on their real subscription. That is correct rather than a leak:
+the charge is real, so the warning about it should be too. It is one more
+reason the underlying hole is worth closing.
 
 ## The rule for future work
 

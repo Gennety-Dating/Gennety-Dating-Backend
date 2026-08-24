@@ -3,7 +3,10 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { buildMiniAppUrl } from "../services/mini-app-url.js";
-import { formatPremiumUntil } from "../services/premium.js";
+import {
+  formatPremiumUntil,
+  recurringChargeStarsByAnchor,
+} from "../services/premium.js";
 import { telegramReachable } from "../services/telegram-reach.js";
 import { isQuietHours } from "./quiet-hours.js";
 
@@ -83,8 +86,33 @@ export interface PremiumReminderCandidate {
   theme: "light" | "dark";
   premiumUntil: Date | null;
   premiumAutoRenew: boolean;
+  premiumProvider: string | null;
+  premiumExternalId: string | null;
   premiumReminder3dAt: Date | null;
   premiumReminder1dAt: Date | null;
+}
+
+/**
+ * Which of the two situations this user is in — the thing that decides what the
+ * message may truthfully say.
+ *
+ *  • `lapse`  — nothing renews. A package buyer, or a subscriber who already
+ *               cancelled. Their access has a real last day.
+ *  • `topup`  — a live recurring Stars subscription. Nothing is ending; a
+ *               CHARGE is coming, and Telegram takes it from the Star balance
+ *               with no card to fall back on, so an empty balance ends the
+ *               subscription on the spot.
+ *
+ * App Store recurring subscriptions return `null` and are silent: Apple runs
+ * its own billing retry and grace periods, and there is no Star balance to top
+ * up, so "top up your Stars" would be flatly wrong and "your access is ending"
+ * would be false.
+ */
+export function premiumReminderKind(
+  user: Pick<PremiumReminderCandidate, "premiumAutoRenew" | "premiumProvider">,
+): "lapse" | "topup" | null {
+  if (!user.premiumAutoRenew) return "lapse";
+  return user.premiumProvider === "telegram_stars" ? "topup" : null;
 }
 
 /**
@@ -102,8 +130,10 @@ export function premiumReminderDue(
   now: Date = new Date(),
 ): PremiumReminderStage | null {
   if (!user.premiumUntil) return null;
-  // Nothing is ending while the provider is still charging.
-  if (user.premiumAutoRenew) return null;
+  // An auto-renewing subscriber is NOT silent any more — they are the top-up
+  // cohort (`premiumReminderKind`). What is still silent is a rail we have
+  // nothing true to say about: an App Store subscription.
+  if (premiumReminderKind(user) === null) return null;
   if (!telegramReachable(user)) return null;
 
   const remaining = user.premiumUntil.getTime() - now.getTime();
@@ -138,7 +168,10 @@ export async function premiumExpiryReminderTick(
   const horizon = new Date(now.getTime() + PREMIUM_REMINDER_EARLY_MS);
   const candidates = await prisma.user.findMany({
     where: {
-      premiumAutoRenew: false,
+      // Deliberately NOT filtered by `premiumAutoRenew`: both cohorts live in
+      // this window now, and which one a row belongs to is decided per user by
+      // `premiumReminderKind`. Narrowing here again would silently re-exclude
+      // the top-up cohort the way this worker originally did.
       premiumUntil: { gt: now, lte: horizon },
       // At least one touch still owed — a period with both markers set is done.
       OR: [{ premiumReminder3dAt: null }, { premiumReminder1dAt: null }],
@@ -151,11 +184,21 @@ export async function premiumExpiryReminderTick(
       theme: true,
       premiumUntil: true,
       premiumAutoRenew: true,
+      premiumProvider: true,
+      premiumExternalId: true,
       premiumReminder3dAt: true,
       premiumReminder1dAt: true,
     },
     take: BATCH,
   });
+
+  // One query for the whole batch rather than one per user. Only the top-up
+  // cohort needs a figure, so anchors are collected from those rows alone.
+  const anchors = candidates
+    .filter((u) => premiumReminderKind(u as PremiumReminderCandidate) === "topup")
+    .map((u) => u.premiumExternalId)
+    .filter((a): a is string => Boolean(a));
+  const chargeStars = await recurringChargeStarsByAnchor(anchors);
 
   for (const user of candidates) {
     const stage = premiumReminderDue(user as PremiumReminderCandidate, now);
@@ -173,23 +216,53 @@ export async function premiumExpiryReminderTick(
 
     const lang = (user.language ?? "en") as Language;
     const date = formatPremiumUntil(user.premiumUntil, lang);
-    const text = t(lang, stage === "late" ? "premiumExpiring1d" : "premiumExpiring3d", {
-      date,
-    });
+    const kind = premiumReminderKind(user as PremiumReminderCandidate);
 
-    const keyboard = new InlineKeyboard();
-    // Same rule as the §3.8 hub: the button opens the plans, it does not quote a
-    // price. The price belongs one tap later, next to what it buys — and the
-    // button is omitted rather than rendered dead when WEBAPP_URL is not a real
-    // HTTPS host (dev without a tunnel).
-    const url = buildMiniAppUrl("premium", { lang, theme: user.theme });
-    if (env.PREMIUM_FEATURE_ENABLED && url.startsWith("https://")) {
-      keyboard.webApp(t(lang, "premiumExpiringCta"), url);
+    let text: string;
+    // Only ever assigned once a real button has been added. A pre-created
+    // `InlineKeyboard` cannot express "no buttons": grammY starts it at `[[]]`,
+    // so the obvious `inline_keyboard.length > 0` guard is ALWAYS true and ships
+    // a malformed empty row — which is what the lapse branch below silently did
+    // whenever WEBAPP_URL was not an HTTPS host. Undefined-until-populated makes
+    // the omission structural instead of a condition to get right.
+    let keyboard: InlineKeyboard | undefined;
+
+    if (kind === "topup") {
+      // The amount is the whole point of this message, so it is read from the
+      // user's own last recurring charge — never from `PREMIUM_STARS`, which
+      // prices a NEW invoice and can differ from what an existing subscription
+      // still charges. Unknown → the sentence simply omits the figure; the
+      // warning and the top-up path stand on their own.
+      const stars = user.premiumExternalId
+        ? chargeStars.get(user.premiumExternalId)
+        : undefined;
+      const amount =
+        stars === undefined ? "" : t(lang, "premiumRenewalAmount", { stars: String(stars) });
+      text = t(lang, stage === "late" ? "premiumRenewal1d" : "premiumRenewal3d", {
+        date,
+        amount,
+      });
+      // No button, deliberately. This user already has Premium, so the plans
+      // screen is the wrong destination — and Telegram exposes no deep link a
+      // bot can use to open the Stars top-up screen, so the path is named in
+      // the text rather than rendered as a button that goes somewhere else.
+    } else {
+      text = t(lang, stage === "late" ? "premiumExpiring1d" : "premiumExpiring3d", {
+        date,
+      });
+      // Same rule as the §3.8 hub: the button opens the plans, it does not quote
+      // a price. The price belongs one tap later, next to what it buys — and the
+      // button is omitted rather than rendered dead when WEBAPP_URL is not a real
+      // HTTPS host (dev without a tunnel).
+      const url = buildMiniAppUrl("premium", { lang, theme: user.theme });
+      if (env.PREMIUM_FEATURE_ENABLED && url.startsWith("https://")) {
+        keyboard = new InlineKeyboard().webApp(t(lang, "premiumExpiringCta"), url);
+      }
     }
 
     try {
       await api.sendMessage(Number(user.telegramId), text, {
-        ...(keyboard.inline_keyboard.length > 0 ? { reply_markup: keyboard } : {}),
+        ...(keyboard ? { reply_markup: keyboard } : {}),
       });
       if (stage === "late") result.sent1d += 1;
       else result.sent3d += 1;

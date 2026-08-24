@@ -586,3 +586,52 @@ export async function attachCancellationReason(
     .update({ where: { id: ledgerId }, data: { note: trimmed } })
     .catch(() => {});
 }
+
+// ---------------------------------------------------------------------------
+// Recurring charge amount (the Stars top-up reminder — PRODUCT_SPEC §3.8)
+// ---------------------------------------------------------------------------
+
+/**
+ * What Telegram will actually charge at the next auto-renewal, per user, keyed
+ * by the recurring anchor (`User.premiumExternalId`).
+ *
+ * Two things make this a lookup rather than a constant, and both are traps:
+ *
+ *  1. **`PREMIUM_STARS` is the price of a NEW invoice, not of an existing
+ *     subscription.** A recurring Stars subscription's amount is frozen at the
+ *     invoice that created it — deploy.md records a live 500⭐ subscription
+ *     still renewing at 500⭐ after the env moved to 750⭐. Quoting today's env
+ *     price to such a user would misstate what leaves their balance, on the one
+ *     message whose entire job is to name that number.
+ *
+ *  2. **The anchor, not the newest ledger row, identifies the charge.** A
+ *     3/6-month package also writes a priced `started` row on the same
+ *     `telegram_stars` provider, so "latest XTR row" would quote 3150⭐ to a
+ *     monthly subscriber who once bought a package. `premiumExternalId` is set
+ *     only by the recurring path (`activateOrExtendPremium`) and deliberately
+ *     left alone by `extendPremiumAdditive`, so it points at exactly the last
+ *     recurring charge — and that row carries its amount.
+ *
+ * An anchor with no priced row simply maps to nothing; the caller then omits
+ * the figure. An absent number is a weaker message; a wrong one is a lie about
+ * someone's money.
+ */
+export async function recurringChargeStarsByAnchor(
+  anchors: string[],
+): Promise<Map<string, number>> {
+  const unique = [...new Set(anchors.filter((a): a is string => Boolean(a)))];
+  if (unique.length === 0) return new Map();
+
+  const rows = await prisma.subscriptionLedger.findMany({
+    where: { externalPaymentId: { in: unique }, currency: "XTR", amount: { gt: 0 } },
+    select: { externalPaymentId: true, amount: true },
+  });
+
+  const out = new Map<string, number>();
+  for (const row of rows) {
+    if (row.externalPaymentId && row.amount != null) {
+      out.set(row.externalPaymentId, row.amount);
+    }
+  }
+  return out;
+}

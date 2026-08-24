@@ -5693,16 +5693,49 @@ old tag at a package would grant months for a monthly charge on every existing
 subscriber's renewal.
 
 **Access is not silently lost (§3.8 → the expiry reminder).** Two DMs per paid
-period — **3 days out, then 24 hours out** — each carrying a button into the
+period — **3 days out, then 24 hours out**. What they SAY depends on which of
+two situations the user is in; only the lapse cohort carries a button into the
 Premium Mini App, where all three plans live so the user picks the next stretch
-rather than being sold one specific thing. Five properties are load-bearing:
+rather than being sold one specific thing. These properties are load-bearing:
 
-- **Only a NON-auto-renewing entitlement is reminded.** While Telegram or Apple
-  is still charging, nothing is ending, and "your access runs out on the 3rd"
-  is simply false — said to the one cohort paying every month. Read the other
-  way, the same condition is exactly right for everyone it includes: a package
-  buyer (never renews by construction) and a subscriber who has already
-  cancelled (whose access really does end) both need the warning.
+- **Two cohorts, two different things to say — never the same message.**
+  `premiumReminderKind` decides which, and the split is about what is
+  *truthful*, not about tone:
+  - **`lapse`** — nothing renews: a package buyer, or a subscriber who already
+    cancelled. Their access has a real last day, so the copy names it and the
+    button opens the plans.
+  - **`topup`** — a LIVE recurring Stars subscription. Nothing is ending here;
+    a **charge** is coming, and Telegram takes it from the Star balance with
+    **no card to fall back on**, so an empty balance ends the subscription on
+    the spot. This message names the exact Star amount, says the balance has to
+    be topped up in advance, and states that Premium pauses if it is short.
+  Telling either cohort the other's message is a plain falsehood — "your plan
+  does not renew itself" to someone we charge every month, or "top up your
+  Stars" to someone whose access is simply ending.
+- **An App Store subscriber is silent, and that is the third answer.** Apple
+  runs its own billing retry and grace periods, and there is no Star balance to
+  top up, so both messages would be untrue for that rail. The gate is therefore
+  `premiumProvider`, not `premiumAutoRenew` alone.
+- **The `topup` amount comes from the user's OWN last charge, never from
+  `PREMIUM_STARS`.** A recurring subscription's price is frozen at the invoice
+  that created it — deploy.md records a live 500⭐ subscription still renewing
+  at 500⭐ after the env moved to 750⭐ — so the env price would misstate what
+  leaves that user's balance, on the one message whose whole job is to name
+  that number. It is read via `User.premiumExternalId`, the recurring anchor,
+  rather than "newest XTR ledger row": a 3/6-month package writes a priced
+  `started` row on the same provider, so the naive read would quote 3150⭐ to a
+  monthly subscriber who once bought a package. An amount we cannot determine
+  is **omitted** — the warning and the top-up path stand without it, and an
+  absent number is a weaker message where a wrong one is a lie about money.
+- **The `topup` message carries no button.** That user already has Premium, so
+  the plans screen is the wrong destination, and Telegram exposes no deep link
+  a bot can open on the Stars top-up screen — so the path is named in the text
+  (Settings → My Stars) rather than rendered as a button that goes elsewhere.
+- **It cannot be conditioned on the actual balance.** A bot cannot read a
+  user's Star balance, so every recurring subscriber gets both touches whether
+  or not they need them. That is the accepted cost of the guarantee: two DMs a
+  month to a subscriber, against a subscription that dies silently on a charge
+  nobody warned them about.
 - **Once per PERIOD, not once per user.** Every path that advances
   `premiumUntil` clears both markers, so buying again earns a fresh pair.
   Without that reset a renewing user would be warned once in their life and

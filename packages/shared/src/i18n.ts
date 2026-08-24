@@ -1214,6 +1214,15 @@ const translations = {
     premiumExpiring1d:
       "Last day of your Gennety Premium — it ends {date}.\n\nAfter that, dates go back to costing a ticket and the premium venues lock again. One tap picks the next period: a month, or 3 / 6 months at a lower rate.",
     premiumExpiringCta: "Choose a plan",
+    // Stars top-up warning for a RECURRING subscriber (§3.8). Distinct from
+    // premiumExpiring* above: nothing is ending here — the charge is coming,
+    // and it fails on an empty balance. `{amount}` is premiumRenewalAmount or
+    // an empty string, so the sentence has to read correctly BOTH ways.
+    premiumRenewal3d:
+      "Telegram renews your Gennety Premium in three days, on {date}.{amount}\n\nStars are charged from your Telegram balance — Telegram will not fall back to a card. If there are not enough Stars on the day, the renewal fails and Premium pauses, so it is worth topping up in advance: Settings → My Stars.",
+    premiumRenewal1d:
+      "Telegram renews your Gennety Premium tomorrow, {date}.{amount}\n\nThe charge comes out of your Telegram Star balance and there is no card fallback — if the balance is short tomorrow, the renewal fails and Premium pauses. Topping up takes a moment: Settings → My Stars.",
+    premiumRenewalAmount: " It costs {stars} ⭐.",
     premiumPlanMonthly: "1 month",
     premiumPlan3Months: "3 months",
     premiumPlan6Months: "6 months",
@@ -2407,6 +2416,15 @@ const translations = {
     premiumExpiring1d:
       "Последний день твоего Gennety Premium — он заканчивается {date}.\n\nПосле этого свидания снова будут стоить билет, а премиум-заведения закроются. Одно нажатие — и выбираешь следующий период: месяц или 3 / 6 месяцев по цене ниже.",
     premiumExpiringCta: "Выбрать тариф",
+    // Stars top-up warning for a RECURRING subscriber (§3.8). Distinct from
+    // premiumExpiring* above: nothing is ending here — the charge is coming,
+    // and it fails on an empty balance. `{amount}` is premiumRenewalAmount or
+    // an empty string, so the sentence has to read correctly BOTH ways.
+    premiumRenewal3d:
+      "Через три дня, {date}, Telegram продлит твой Gennety Premium.{amount}\n\nСписание идёт звёздами с баланса Telegram — с карты Telegram не спишет. Если звёзд в этот день не хватит, продление не пройдёт и Premium встанет на паузу, так что баланс лучше пополнить заранее: Настройки → Мои звёзды.",
+    premiumRenewal1d:
+      "Завтра, {date}, Telegram продлит твой Gennety Premium.{amount}\n\nСписание идёт звёздами с баланса Telegram, запасной карты у него нет — если завтра звёзд не хватит, продление не пройдёт и Premium встанет на паузу. Пополнить — минута: Настройки → Мои звёзды.",
+    premiumRenewalAmount: " Спишется {stars} ⭐.",
     premiumPlanMonthly: "1 месяц",
     premiumPlan3Months: "3 месяца",
     premiumPlan6Months: "6 месяцев",
@@ -3587,6 +3605,15 @@ const translations = {
     premiumExpiring1d:
       "Останній день твого Gennety Premium — він завершується {date}.\n\nПісля цього побачення знову коштуватимуть квиток, а преміум-заклади зачиняться. Одне натискання — і обираєш наступний період: місяць або 3 / 6 місяців за нижчою ціною.",
     premiumExpiringCta: "Обрати тариф",
+    // Stars top-up warning for a RECURRING subscriber (§3.8). Distinct from
+    // premiumExpiring* above: nothing is ending here — the charge is coming,
+    // and it fails on an empty balance. `{amount}` is premiumRenewalAmount or
+    // an empty string, so the sentence has to read correctly BOTH ways.
+    premiumRenewal3d:
+      "За три дні, {date}, Telegram продовжить твій Gennety Premium.{amount}\n\nСписання відбувається зірками з балансу Telegram — з картки Telegram не візьме. Якщо того дня зірок забракне, продовження не пройде і Premium стане на паузу, тож баланс варто поповнити заздалегідь: Налаштування → Мої зірки.",
+    premiumRenewal1d:
+      "Завтра, {date}, Telegram продовжить твій Gennety Premium.{amount}\n\nСписання йде зірками з балансу Telegram, запасної картки в нього немає — якщо завтра зірок забракне, продовження не пройде і Premium стане на паузу. Поповнити — хвилина: Налаштування → Мої зірки.",
+    premiumRenewalAmount: " Спишеться {stars} ⭐.",
     premiumPlanMonthly: "1 місяць",
     premiumPlan3Months: "3 місяці",
     premiumPlan6Months: "6 місяців",
@@ -4744,6 +4771,15 @@ const deTranslations: TranslationTable = {
   premiumExpiring1d:
     "Letzter Tag deines Gennety Premium — es endet am {date}.\n\nDanach kostet ein Date wieder ein Ticket und die Premium-Orte sind wieder gesperrt. Ein Tipp genügt für den nächsten Zeitraum: ein Monat oder 3 / 6 Monate zum günstigeren Preis.",
   premiumExpiringCta: "Tarif wählen",
+  // Stars top-up warning for a RECURRING subscriber (§3.8). Distinct from
+  // premiumExpiring* above: nothing is ending here — the charge is coming,
+  // and it fails on an empty balance. `{amount}` is premiumRenewalAmount or
+  // an empty string, so the sentence has to read correctly BOTH ways.
+  premiumRenewal3d:
+    "In drei Tagen, am {date}, verlängert Telegram dein Gennety Premium.{amount}\n\nAbgebucht wird in Stars von deinem Telegram-Guthaben — auf eine Karte weicht Telegram nicht aus. Reichen die Stars an dem Tag nicht, scheitert die Verlängerung und Premium pausiert. Lade lieber vorher auf: Einstellungen → Meine Stars.",
+  premiumRenewal1d:
+    "Morgen, am {date}, verlängert Telegram dein Gennety Premium.{amount}\n\nAbgebucht wird in Stars von deinem Telegram-Guthaben, eine Karte als Rückfall gibt es nicht — reicht das Guthaben morgen nicht, scheitert die Verlängerung und Premium pausiert. Aufladen dauert einen Moment: Einstellungen → Meine Stars.",
+  premiumRenewalAmount: " Es kostet {stars} ⭐.",
   premiumPlanMonthly: "1 Monat",
   premiumPlan3Months: "3 Monate",
   premiumPlan6Months: "6 Monate",
@@ -5898,6 +5934,15 @@ const plTranslations: TranslationTable = {
   premiumExpiring1d:
     "Ostatni dzień twojego Gennety Premium — kończy się {date}.\n\nPotem randka znów kosztuje bilet, a miejsca premium się zamykają. Jedno tapnięcie wybiera kolejny okres: miesiąc albo 3 / 6 miesięcy taniej.",
   premiumExpiringCta: "Wybierz plan",
+  // Stars top-up warning for a RECURRING subscriber (§3.8). Distinct from
+  // premiumExpiring* above: nothing is ending here — the charge is coming,
+  // and it fails on an empty balance. `{amount}` is premiumRenewalAmount or
+  // an empty string, so the sentence has to read correctly BOTH ways.
+  premiumRenewal3d:
+    "Za trzy dni, {date}, Telegram odnowi twoje Gennety Premium.{amount}\n\nOpłata schodzi w gwiazdkach z salda Telegrama — z karty Telegram nie pobierze. Jeśli tego dnia gwiazdek zabraknie, odnowienie się nie uda i Premium się zatrzyma, więc lepiej doładować wcześniej: Ustawienia → Moje gwiazdki.",
+  premiumRenewal1d:
+    "Jutro, {date}, Telegram odnowi twoje Gennety Premium.{amount}\n\nOpłata schodzi w gwiazdkach z salda Telegrama i nie ma zapasowej karty — jeśli jutro zabraknie gwiazdek, odnowienie się nie uda i Premium się zatrzyma. Doładowanie to chwila: Ustawienia → Moje gwiazdki.",
+  premiumRenewalAmount: " Koszt: {stars} ⭐.",
   premiumPlanMonthly: "1 miesiąc",
   premiumPlan3Months: "3 miesiące",
   premiumPlan6Months: "6 miesięcy",
