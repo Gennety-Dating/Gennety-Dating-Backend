@@ -16,6 +16,7 @@ import { chatRouter } from "./routes/chat.js";
 import { matchesRouter } from "./routes/matches.js";
 import { matchMediaRouter } from "./routes/match-media.js";
 import { countdownRouter } from "./routes/countdown.js";
+import { dateStateRouter } from "./routes/date-state.js";
 import { appConfigRouter } from "./routes/app-config.js";
 import { phoneAuthRouter } from "./routes/phone-auth.js";
 import { telegramAuthRouter } from "./routes/telegram-auth.js";
@@ -436,6 +437,10 @@ app.use("/v1/chat", chatRouter);
 app.use("/v1/match-media", matchMediaRouter);
 app.use("/v1/matches", matchesRouter);
 app.use("/v1/countdown", countdownRouter);
+// The Living Canvas. Mounted under its own prefix rather than on /v1/matches
+// because it answers for a user with no match at all — IDLE_EXPLORING is the
+// state most users are in most of the time.
+app.use("/v1/date", dateStateRouter);
 // Founder weekly-matches report page + media proxy. Public by design — the
 // unguessable token in the path is the authorization (no JWT/initData). Ops-only
 // and inert unless FOUNDER_NOTIFY_ENABLED (reports are never created otherwise).

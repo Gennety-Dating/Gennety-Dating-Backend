@@ -2652,6 +2652,61 @@ paths:
                     format: date-time
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/date/state:
+    get:
+      tags: [date]
+      operationId: getDateState
+      summary: Living Canvas state for the caller
+      description: >
+        Everything the map's bottom sheet draws, in one call. Answers for a user
+        with no match at all (IDLE_EXPLORING), which is why it is its own
+        endpoint rather than a field on /v1/matches/current.
+
+
+        The state is DERIVED from MatchStatus plus the clock plus the bump
+        session — it is never a stored column, so a client must not cache it
+        across a boundary it cannot see (poll it, or re-fetch on resume).
+
+
+        Blind-decision safe: the response never carries the partner's own
+        accept/decline, and a caller who has answered a pitch resolves to
+        LOGISTICS_SCHEDULING whatever the partner did.
+      responses:
+        "200":
+          description: Canvas snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [state, serverNow, nextDropAt]
+                properties:
+                  state:
+                    type: string
+                    enum:
+                      - IDLE_EXPLORING
+                      - DROP_PENDING_DECISION
+                      - LOGISTICS_SCHEDULING
+                      - DATE_SCHEDULED
+                      - DATE_RADAR_ACTIVE
+                      - DATE_BUMP_PENDING
+                      - DATE_IN_PROGRESS
+                      - POST_DATE_FEEDBACK
+                  serverNow:
+                    type: string
+                    format: date-time
+                    description: Server clock for client skew correction
+                  nextDropAt: { type: string, format: date-time }
+                  timeZone:
+                    type: [string, "null"]
+                    description: >
+                      The CALLER's own city zone. agreedTime is an instant and
+                      the canvas draws it on a wall clock; the device's is wrong
+                      for a traveller. Same field and same reason as
+                      SerializedMatch.timeZone.
+                  match:
+                    $ref: "#/components/schemas/DateStateMatch"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2712,6 +2767,43 @@ components:
       properties:
         error: { type: string }
       additionalProperties: true
+
+    DateStateVenue:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        address: { type: [string, "null"] }
+        lat: { type: [number, "null"] }
+        lng: { type: [number, "null"] }
+        mapsUri: { type: [string, "null"] }
+
+    DateStateBump:
+      type: object
+      required: [mine, verified]
+      properties:
+        mine:
+          type: boolean
+          description: Whether THIS side has already shaken.
+        verified:
+          type: boolean
+          description: >
+            Whether the pair is confirmed at the table. The partner's individual
+            shake is deliberately not reported — before verification it is the
+            only field here that could be read as "they are there and you are
+            not", which is the class of claim the radar's masking exists to
+            prevent.
+
+    DateStateMatch:
+      type: object
+      required: [id, bump]
+      properties:
+        id: { type: string, format: uuid }
+        agreedTime: { type: [string, "null"], format: date-time }
+        venue:
+          $ref: "#/components/schemas/DateStateVenue"
+        bump:
+          $ref: "#/components/schemas/DateStateBump"
 
     AppConfig:
       type: object

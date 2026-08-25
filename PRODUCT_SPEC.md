@@ -6569,6 +6569,81 @@ applies to both surfaces, but the Telegram bot has no Block button yet. Explicit
 decision, not an accident of where the code was written (DECISIONS.md
 2026-08-23) — Telegram gets it in its own slice.
 
+## Phase 6 — Living Canvas & Viral Mechanics
+
+The clients stop being a chat with screens attached and become a **dark map of
+Kyiv with one sheet on it**. The sheet's contents are decided by the pair's
+current `DateLifecycleState`; the map underneath carries the fog of the Scratch
+Map, the pulsing venue pins, and — in the last forty-five minutes before a date
+— the radar.
+
+Four invariants this phase does not touch: no user-to-user chat, the blind
+decision, mandatory verification, and **a person's exact address is never
+revealed to their match**. The last one is the reason the radar reports a
+masked ETA rather than a position (§6.3).
+
+### 6.1 The state machine is derived, never stored
+
+`DateLifecycleState` is a **pure function** of `MatchStatus` + the clock + the
+Date Bump session (`services/date-state.ts`). There is no lifecycle column.
+
+That is the load-bearing decision of the whole phase, and it is the same one
+this file already records for `ticketStatus`: a sub-state is legitimate when it
+answers a question `Match.status` cannot, and illegitimate when it answers the
+same one. A stored lifecycle column would need updating by every writer of
+`status` and by two crons, and the first writer to forget produces a canvas
+that contradicts the user's own chat — silently, because nothing fails.
+
+Eight states, and the ladder is evaluated from the most specific backwards
+(a verified bump sits inside the bump window, which sits inside the radar
+window, which sits inside `scheduled` — broadest-first answers with the outer
+state every time):
+
+| State | When |
+|---|---|
+| `IDLE_EXPLORING` | No live match. The map, the campus, the countdown. |
+| `DROP_PENDING_DECISION` | `proposed`, and **this side** has not answered. |
+| `LOGISTICS_SCHEDULING` | `negotiating` / `negotiating_venue`, or `proposed` where this side HAS answered. |
+| `DATE_SCHEDULED` | Time and venue locked, more than 45 min away. |
+| `DATE_RADAR_ACTIVE` | Inside `DATE_RADAR_LEAD_MINUTES` (45). |
+| `DATE_BUMP_PENDING` | Inside `DATE_BUMP_OPENS_MINUTES` (15) and until T+2h. |
+| `DATE_IN_PROGRESS` | Bump verified — the icebreaker deck is open. |
+| `POST_DATE_FEEDBACK` | The T+24h prompt has been sent and this side has not answered it. |
+
+**`DATE_SCHEDULED` is an eighth state the original brief did not name, and it
+is where a user spends most of the days between agreeing a date and going on
+it.** Both ways of reusing an existing name are false: `LOGISTICS_SCHEDULING`
+says something is still being agreed when nothing is, and `IDLE_EXPLORING` says
+there is no date when there is one. §2.1's pinned banner already separates its
+"planning" mode from its "date" mode for exactly this reason, so the eighth
+state is the product agreeing with itself rather than an invention.
+
+**The blind-decision invariant is enforced in the derivation, not in the
+client.** `deriveDateState` reads only the caller's own `acceptedBy*`, and a
+side that has committed resolves to `LOGISTICS_SCHEDULING` whatever the partner
+did — the same collapse §2.1 mode 4 makes, and for the same reason: at that
+moment the product does not know the outcome and the user is not entitled to
+it. A test asserts the three peer states are indistinguishable.
+
+**Two windows deliberately close into `IDLE_EXPLORING` rather than into a limbo
+screen.** A date whose evening is over (past T+2h) but whose row still says
+`scheduled` — it lingers until the T+24h tick — goes back to the map, which is
+the call §2.1 mode 5 already makes for the pinned banner. And a `completed`
+match only reads as `POST_DATE_FEEDBACK` once `feedbackPromptedAt` is actually
+set: asking on the canvas before the DM asks would pre-empt the §Phase 4
+attendance question, which has to come first.
+
+`GET /v1/date/state` serves it. It is its own endpoint rather than a field on
+`/v1/matches/current` because it must answer for a user with **no match at
+all** — `IDLE_EXPLORING` is the state most users are in most of the time, and
+that endpoint answers null there. A screen whose default state its own endpoint
+cannot express needs a second call before it may draw anything, which is how
+the post-date feedback form ended up undiscoverable on the app rail (§Phase 4).
+
+The response also carries the CALLER's own `Profile.timeZone`: `agreedTime` is
+an instant and the canvas draws it on a wall clock, and the device's is wrong
+for a traveller. Same field, same reason, as `SerializedMatch.timeZone`.
+
 ## Cross-Cutting Concerns
 
 ### The loading mark: butterflies in the stomach (2026-08-06)

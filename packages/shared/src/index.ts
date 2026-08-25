@@ -37,6 +37,20 @@ export {
   intentMultiplier,
 } from "./relationship-intent.js";
 export type { RelationshipIntent } from "./relationship-intent.js";
+export {
+  DATE_LIFECYCLE_STATES,
+  isDateLifecycleState,
+  DATE_RADAR_LEAD_MINUTES,
+  DATE_BUMP_OPENS_MINUTES,
+  DATE_BUMP_GRACE_HOURS,
+  BUMP_SHAKE_WINDOW_MS,
+  BUMP_VENUE_RADIUS_M,
+  PROXIMITY_ARRIVED_RADIUS_M,
+  BUMP_RELIABILITY_REWARD,
+  SCRATCH_TILE_PRECISION,
+  BUMP_ICEBREAKER_COUNT,
+} from "./date-lifecycle.js";
+export type { DateLifecycleState } from "./date-lifecycle.js";
 export { cityKeyToTimeZone, isValidTimeZone, DEFAULT_TIME_ZONE } from "./timezone.js";
 export {
   SUPPORTED_MARKETS,

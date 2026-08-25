@@ -1,5 +1,68 @@
 # Gennety Dating Deploy
 
+**PENDING — Living Canvas & viral mechanics (PRODUCT_SPEC §6, DECISIONS.md).**
+Needs an **additive `db:push` BEFORE the restart**, and it is half client, so
+the sequence is: Deploy Full Server Code → `db:push` → `pnpm db:drift-check` →
+`pm2 restart` → `./scripts/deploy-webapp.sh` → `pnpm demo:deploy`.
+
+Two new tables (`date_bump_sessions`, `user_scratch_maps`) plus two additive
+columns (`profiles.reliability_score`, `users.scratch_map_opt_in`). The tables
+are read on **every** `GET /v1/date/state`, which the canvas polls, so a DB
+missing them throws `P2022` on the first request after the restart — the PM2
+crash-loop this file warns about. Verify additive first (expect two
+`CREATE TABLE`, two `ADD COLUMN`, **zero `DROP`**):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+**Server first, and the order matters.** `GET /v1/date/state` is new, so an
+older bundle simply never calls it; the reverse order ships a canvas whose only
+data source 404s.
+
+**Things worth knowing before the restart:**
+
+- **Nothing here changes an existing surface.** The state is derived and the
+  endpoint is additive, so the bot's own flows, the pinned banner and
+  `/v1/matches/current` are byte-identical. What is new is one more read path.
+- **`GET /v1/date/state` makes two queries in the worst case** — the live
+  statuses, then (only when there are none) a `completed` row that still owes
+  feedback. The second is skipped whenever a live match exists, which is the
+  common case for anyone the canvas is interesting to.
+- **The Scratch Map ships OFF for every existing user.** `scratch_map_opt_in`
+  defaults false, and it is deliberately its own column rather than a fold into
+  `researchOptIn`: that one governs analytics use of data we already hold,
+  while this authorises COLLECTING a new class of it. Same rule as
+  `biometricConsentAt` — a consent that authorises new collection is never
+  inferred from a broader tick.
+- **`reliability_score` is written but not yet read by matching**, on purpose
+  (DECISIONS.md). It accumulates first so a weight can be chosen against real
+  data; nothing in `V_league` moves in this release.
+- **Nothing exercises the date half in production until a pair schedules.**
+  Production has had **0 dates ever**, so verify on `@gennetytestbot` or in the
+  demo, where every walkthrough reaches a scheduled date.
+
+Post-deploy check — the endpoint answers for a user with no match, which is
+also the proof it is mounted:
+
+```sh
+# 401 (mounted), never 404 (missing).
+curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/date/state
+psql "$DATABASE_URL" -c "select count(*) from date_bump_sessions;"
+psql "$DATABASE_URL" -c "select count(*) from user_scratch_maps;"
+# Both exist and are empty. "relation does not exist" = db:push did not run.
+```
+
+**Rollback:** revert the code and restart. The additive tables/columns can stay
+— nothing reads them once the code is gone.
+
+---
+
 **PENDING — напоминание рекуррентному подписчику о пополнении баланса звёзд
 (PRODUCT_SPEC §3.8, DECISIONS.md).** **Нет изменения схемы Prisma, нет новых env,
 нет флага, нет изменения Mini App** (`apps/webapp` не тронут) — только бот и

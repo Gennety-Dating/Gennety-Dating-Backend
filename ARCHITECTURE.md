@@ -875,6 +875,56 @@ profile dirty and refreshes in one place) and read by `handlers/matching/pitch.t
 `workers/embedding-refresh.ts` and `public/routes/voice-prompt.ts`. Inert unless
 `VOICE_PROMPT_ENABLED`.
 
+### `date_bump_sessions`
+
+One row per match, created by the first shake (PRODUCT_SPEC §6.2). Columns:
+`matchId` (unique, cascade), `userAShakeAt` / `userBShakeAt` (NULL = that side
+has not bumped; the sides follow `Match.userAId`/`userBId`, never arrival
+order, or a retry by one person would look like the pair), `isVerified` +
+`verifiedAt`, `icebreakerDeck` (`Json?`).
+
+**It is the only thing in the product that OBSERVES attendance rather than
+asking about it**, which is why it is permitted to write `Match.dateAttended*`
+while the T+24h evidence classifier is forbidden from doing so. The rule that
+separation protects is "only a human answer becomes data" (`services/
+attendance.ts`), and a Bump is a human answer — two people, deliberately, at
+the venue, at the time — while a classifier reading a proxy chat is a guess.
+
+`isVerified` and `verifiedAt` are separate because the rewards are
+transactional with the flag flip: reliability, the bonus ticket, the attendance
+write and the deck all ride the same compare-and-set, so a repeated shake
+cannot re-run any of them.
+
+The deck is deliberately NOT `Match.iceBreakersA/B`. That pair is sent five
+hours BEFORE the date to someone still deciding what to wear; this one is
+unlocked by the pair actually meeting and is written for a conversation already
+under way. The earlier one is untouched.
+
+### `user_scratch_maps`
+
+One row per user, created lazily on their first recorded tile (PRODUCT_SPEC
+§6.4). Columns: `userId` (unique, cascade), `exploredTiles` (`String[]`),
+`exploredPercent`, `discoveredVenues` (`String[]`).
+
+**Tiles, not coordinates, and that is the privacy design rather than a storage
+choice.** `exploredTiles` holds geohash precision 6 — roughly 1.2 km × 0.6 km —
+so the column can say "they have been around Podil" and can never say which
+building. Every other geo column in this schema is per-purpose and per-match
+(`Match.vibeLat*` is a departure pin for ONE date); this is the first that
+accumulates, which is why the shape of what is stored has to carry the
+guarantee rather than a rule someone has to remember.
+
+Written only when `User.scratchMapOptIn` is true, and only from a foreground
+ping (the user has the map open) or a verified Date Bump. Nothing writes from
+the background — there is no background-location entitlement in the iOS app and
+no such permission requested in the Mini App, so that promise is structural.
+
+`exploredPercent` is materialized rather than derived because the client draws
+it on every frame and the denominator is a per-market constant the database
+does not know. `discoveredVenues` holds `CuratedVenue.id` values free-form (no
+FK), so deleting a venue from the catalog never erases someone's history of
+having been there — the same rule `TicketLedger.matchId` already follows.
+
 ### `no_match_notices`
 
 Audit row for the empathetic "no match this week" DM. `tier` is the
@@ -1113,6 +1163,7 @@ auth) are deliberately outside the spec.
 | POST | `/v1/tickets/store/intent` | Create a (mock) bundle payment intent (`count: 1\|3\|6`). **404 (PAY-1) while `TICKET_STARS_ENABLED` is on.** `initData` HMAC auth. |
 | POST | `/v1/tickets/store/confirm` | Confirm bundle "payment" → credit `ticketBalance` (+`TicketLedger`). **404 (PAY-1) while `TICKET_STARS_ENABLED` is on.** `initData` HMAC auth. |
 | GET  | `/v1/countdown` | Status banner / next-batch countdown |
+| GET  | `/v1/date/state` | **Living Canvas** (JWT, PRODUCT_SPEC §6.1) — the derived `DateLifecycleState` plus the locked date, its venue, this side's bump state, the next drop, and the CALLER's own `timeZone`. Its own prefix rather than a field on `/v1/matches/current` because it must answer for a user with NO match: `IDLE_EXPLORING` is the state most users are in most of the time, and that endpoint answers null there. Two queries by design — the live statuses, then (only if there are none) a `completed` row that still owes feedback, which `ACTIVE_MATCH_STATUSES` excludes. Blind-decision safe: the partner's `acceptedBy*` is never selected into the response, and a caller who has answered resolves identically whatever the partner chose. |
 | POST | `/v1/client/events` | Клиентская воронка нативного приложения (iOS 6.2). **JWT необязателен** — половина событий случается до того, как аккаунт существует, и требовать токен значило бы не собирать именно их; без токена человек опознаётся только анонимным `installId`. Битый или протухший токен оставляет вызов анонимным, а не роняет его (`optionalAuth`). Тело: `installId` + до 200 событий; ответ `{ok, accepted, dropped}`. 400 на битый батч (для превышения потолка — с машинным `code: "too_many_events"`), 404 при выключенном `CLIENT_EVENTS_ENABLED` (гейт стоит ДО авторизации), 429 по лимиту 60 батчей/час на установку. См. `client_events`. |
 | POST | `/v1/tickets/appstore/transaction` | Native-app StoreKit 2 purchase report (JWT — mounted before the initData `/v1/tickets` router): client JWS is decoded ONLY for the transactionId, the authoritative state comes from the App Store Server API; wallet credit exactly-once via `TicketLedger.externalPaymentId = appstore:<txId>`. 404 while `TICKET_FEATURE_ENABLED` off; 503 without `APPSTORE_*` config. |
 | POST | `/v1/webhooks/appstore` | App Store Server Notifications V2. The signedPayload only names a transaction, consequences are applied after an authoritative API re-fetch (a forged webhook can at worst trigger a harmless lookup). REFUND/REVOKE claw back the store credit exactly-once (`appstore:<txId>:refund`, balance may go negative — honest accounting). 500 on lookup outage so Apple retries. |

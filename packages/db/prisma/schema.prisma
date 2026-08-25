@@ -150,6 +150,19 @@ model User {
   /// User opt-in to anonymized research / analytics use of their data.
   /// Defaults to false (opt-in, never opt-out) per GDPR norms.
   researchOptIn              Boolean                  @default(false) @map("research_opt_in")
+  /// Consent for the Dating Scratch Map (PRODUCT_SPEC §Living Canvas). Default
+  /// FALSE and deliberately its own column rather than a fold into
+  /// `researchOptIn`: that one governs analytics use of data the product
+  /// already holds, while this one authorises COLLECTING a new class of it —
+  /// where the user has physically been. Same rule, same reason, as
+  /// `biometricConsentAt` above: a consent that authorises new collection is
+  /// never inferred from a broader tick.
+  ///
+  /// Even with it on, nothing is written from the background: a tile is
+  /// recorded only when the user themselves has the map open (a foreground
+  /// ping) or when a Date Bump is verified at a venue, and what is stored is
+  /// a geohash-6 tile (~1.2 km), never a raw coordinate.
+  scratchMapOptIn            Boolean                  @default(false) @map("scratch_map_opt_in")
   emailOtp                   String?                  @map("email_otp")
   emailOtpExpiresAt          DateTime?                @map("email_otp_expires_at")
   /// True once the user has successfully verified an OTP for `email`.
@@ -353,6 +366,7 @@ model User {
   clientEvents              ClientEvent[]
   profilerAnswers           ProfilerAnswer[]
   voicePrompt               VoicePrompt?
+  scratchMap                UserScratchMap?
   ticketLedger              TicketLedger[]
   subscriptionLedger        SubscriptionLedger[]
   rematchPurchases          RematchPurchase[]
@@ -422,12 +436,12 @@ model PromoCode {
 /// `PromoCode.redeemedCount++` makes the grant exactly-once and cap-safe under
 /// concurrency. Reward deltas live in the ledgers; this is the audit + guard.
 model PromoRedemption {
-  id             String    @id @default(uuid()) @db.Uuid
-  promoCodeId    String    @map("promo_code_id") @db.Uuid
-  userId         String    @unique @map("user_id") @db.Uuid
-  ticketsApplied Int       @map("tickets_applied")
-  monthsApplied  Int       @map("months_applied")
-  redeemedAt     DateTime  @default(now()) @map("redeemed_at")
+  id             String   @id @default(uuid()) @db.Uuid
+  promoCodeId    String   @map("promo_code_id") @db.Uuid
+  userId         String   @unique @map("user_id") @db.Uuid
+  ticketsApplied Int      @map("tickets_applied")
+  monthsApplied  Int      @map("months_applied")
+  redeemedAt     DateTime @default(now()) @map("redeemed_at")
 
   promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -537,8 +551,8 @@ model SubscriptionLedger {
 /// exists ⇔ Stars actually moved. Every row therefore ends in a terminal state
 /// where the user either got a match or got their Stars back.
 model RematchPurchase {
-  id     String @id @default(uuid()) @db.Uuid
-  userId String @map("user_id") @db.Uuid
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
   /// `processing`          — Stars moved; the row is written BEFORE the engine
   ///                         runs so a crash mid-run still leaves a durable
   ///                         record that money was taken. The hourly worker
@@ -549,23 +563,23 @@ model RematchPurchase {
   /// `refunded_ineligible` — eligibility/limits failed at settle; Stars returned.
   /// `refund_failed`       — the refund API call failed; the hourly retry worker
   ///                         owns this row until it flips to a refunded state.
-  status String
+  status            String
   /// Unique Telegram Stars charge id → exactly-once settle + refund key.
-  externalPaymentId String @unique @map("external_payment_id")
+  externalPaymentId String    @unique @map("external_payment_id")
   /// Price frozen at purchase time (prices are env-tunable, so the row must not
   /// re-derive them later).
-  amountStars Int  @map("amount_stars")
-  amountCents Int? @map("amount_cents")
+  amountStars       Int       @map("amount_stars")
+  amountCents       Int?      @map("amount_cents")
   /// The delivered match, when `settled`. Free-form (no FK) so deleting a match
   /// never breaks the payment audit trail.
-  resultMatchId String? @map("result_match_id") @db.Uuid
+  resultMatchId     String?   @map("result_match_id") @db.Uuid
   /// Which gift framing the partner's pitch used (`famine`/`failed`/`neutral`) —
   /// kept for copy A/B. Never contains her identity or any decision state.
-  framing String?
+  framing           String?
   /// Terminal-state stamp + last refund error (retry bookkeeping).
-  resolvedAt  DateTime? @map("resolved_at")
-  refundError String?   @map("refund_error")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  resolvedAt        DateTime? @map("resolved_at")
+  refundError       String?   @map("refund_error")
+  createdAt         DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -589,12 +603,12 @@ model RematchPurchase {
 /// charge (insert succeeds ⇒ must be refunded). Before this table existed both
 /// looked identical and the second charge was silently kept.
 model VenueChangePurchase {
-  id     String @id @default(uuid()) @db.Uuid
-  userId String @map("user_id") @db.Uuid
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
   /// The match whose venue swap this paid for. Free-form (no FK) so deleting a
   /// match never breaks the payment audit trail — same rule as
   /// `RematchPurchase.resultMatchId` / `TicketLedger.matchId`.
-  matchId String @map("match_id") @db.Uuid
+  matchId           String    @map("match_id") @db.Uuid
   /// `processing`     — Stars moved; written before the settle CAS. Rows stuck
   ///                    here past `VENUE_PROCESSING_STALE_MS` are refunded by
   ///                    the hourly sweep.
@@ -604,16 +618,16 @@ model VenueChangePurchase {
   /// `refund_failed`  — the refund API call failed; the sweep owns this row
   ///                    until it flips to a refunded state. NEVER announced to
   ///                    the user as a completed refund.
-  status String
+  status            String
   /// Unique Telegram Stars charge id → exactly-once settle + the key
   /// `refundStarPayment` needs later.
-  externalPaymentId String @unique @map("external_payment_id")
+  externalPaymentId String    @unique @map("external_payment_id")
   /// Price frozen at purchase time (`VENUE_CHANGE_STARS` is env-tunable, so the
   /// row must not re-derive it later).
-  amountStars Int       @map("amount_stars")
-  resolvedAt  DateTime? @map("resolved_at")
-  refundError String?   @map("refund_error")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  amountStars       Int       @map("amount_stars")
+  resolvedAt        DateTime? @map("resolved_at")
+  refundError       String?   @map("refund_error")
+  createdAt         DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -694,39 +708,39 @@ model OnboardingStepEvent {
 /// shimmers and per-minute banner/countdown re-renders are skipped, and rows
 /// are swept after 30 days by `workers/retention.ts`.
 model ChatEvent {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
   /// `out` = the bot sent it; `in` = the user did it.
-  direction String
+  direction         String
   /// Form of the event, so the agent knows a PNG card from a plain message:
   /// `text` | `photo` | `album` | `video` | `video_note` | `voice` | `document`
   /// | `user_text` | `user_voice` | `user_media` | `user_contact`
   /// | `callback_tap` | `mini_app_action` | `payment`.
-  kind      String
+  kind              String
   /// Coarse product area derived from callback prefixes / Mini App page /
   /// route (`venue_change`, `match`, `calendar`, `ticket`, `menu`, …).
   /// Null when nothing identifiable was attached.
-  surface   String?
+  surface           String?
   /// Human-readable one-liner: the message text or caption, the tapped
   /// button's own label, or the Mini App action. Truncated — never the full
   /// body, never media bytes.
-  summary   String
+  summary           String
   /// Buttons that were offered on an outbound message: `[{ label, data?,
   /// webApp? }]`. This is what lets the agent answer "what do I tap".
-  actions   Json?
+  actions           Json?
   /// Displayable media attached to the event: `[{ kind, ref }]`, where `ref`
   /// is a Telegram `file_id` the admin media proxy can re-download. Never the
   /// bytes. Without this a photo, an album or a video note is recorded as the
   /// bare string "(photo card, no caption)" and the admin transcript can only
   /// say that something visual happened, never show it.
-  media     Json?
+  media             Json?
   /// Telegram message id, when the event has one. Used to reconcile a
   /// `deleteMessage` back to the row it created.
-  telegramMessageId Int? @map("telegram_message_id")
+  telegramMessageId Int?     @map("telegram_message_id")
   /// Free-form, no FK (mirrors `rematch_purchases`) so deleting a match never
   /// breaks the timeline.
-  matchId   String?  @map("match_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  matchId           String?  @map("match_id")
+  createdAt         DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -738,69 +752,86 @@ model ChatEvent {
 }
 
 model Profile {
-  id                       String                       @id @default(uuid()) @db.Uuid
-  userId                   String                       @unique @map("user_id") @db.Uuid
-  height                   Int?
-  hobbies                  String[]                     @default([])
-  partnerPreferences       String?                      @map("partner_preferences")
-  psychologicalSummary     String?                      @map("psychological_summary")
-  negativeConstraints      String?                      @map("negative_constraints")
-  ageRangeMin              Int?                         @map("age_range_min")
-  ageRangeMax              Int?                         @map("age_range_max")
-  embedding                Unsupported("vector(1536)")?
+  id                        String                       @id @default(uuid()) @db.Uuid
+  userId                    String                       @unique @map("user_id") @db.Uuid
+  height                    Int?
+  hobbies                   String[]                     @default([])
+  partnerPreferences        String?                      @map("partner_preferences")
+  psychologicalSummary      String?                      @map("psychological_summary")
+  negativeConstraints       String?                      @map("negative_constraints")
+  ageRangeMin               Int?                         @map("age_range_min")
+  ageRangeMax               Int?                         @map("age_range_max")
+  embedding                 Unsupported("vector(1536)")?
   /// M-2: dirty flag set by any code path that mutates a field which feeds
   /// the embedding (psychologicalSummary, partnerPreferences,
   /// negativeConstraints, hobbies). The `embedding-refresh` background
   /// worker picks dirty rows up every few minutes, recomputes via OpenAI,
   /// and clears the flag. Pre-M-2 the embedding silently went stale every
   /// time a user edited their profile, degrading match quality forever.
-  embeddingDirty           Boolean                      @default(false) @map("embedding_dirty")
-  embeddingDirtyAt         DateTime?                    @map("embedding_dirty_at")
+  embeddingDirty            Boolean                      @default(false) @map("embedding_dirty")
+  embeddingDirtyAt          DateTime?                    @map("embedding_dirty_at")
   /// Universal Elo rating in [0..1000]. Seeded by the AI vision pass on the
   /// primary photo when Persona flips the user to `verified`
   /// (see `apps/bot/src/services/elo/seed-from-vision.ts`), then updated on
   /// each Thursday accept/decline event (see `apps/bot/src/utils/elo-calculator.ts`).
   /// Drives the `V_league` multiplier in match scoring — large rating gaps
   /// decay the candidate's score so users mostly see opponents in their league.
-  eloScore                 Int                          @default(500) @map("elo_score")
+  eloScore                  Int                          @default(500) @map("elo_score")
   /// Lifetime count of resolved match events used to drive the dynamic K-factor:
   /// K=20 while < 10 (fast calibration), K=10 thereafter. Half the textbook
   /// chess defaults so the photo-derived cold-start seed dominates and
   /// behavioral updates remain a secondary refinement.
-  eloMatchesPlayed         Int                          @default(0) @map("elo_matches_played")
+  eloMatchesPlayed          Int                          @default(0) @map("elo_matches_played")
+  /// Reliability — how dependably this person turns up, +`BUMP_RELIABILITY_REWARD`
+  /// per Date Bump verified at the venue (PRODUCT_SPEC §Date Bump).
+  ///
+  /// Deliberately NOT folded into `eloScore` above, even though the spec calls
+  /// the reward "рейтинг надёжности (Elo)". That column is *attractiveness*:
+  /// seeded by a vision pass over the photos and moved by accept/decline, and
+  /// it drives `V_league`, which decides who is a viable candidate at all.
+  /// Writing an attendance reward into it would mean a person who shows up
+  /// reliably is scored as better-looking, and would corrupt the one signal
+  /// the league gate reads. Two different facts about a person need two
+  /// columns; "reliability" is the literal meaning of the spec's own phrase.
+  ///
+  /// Not read by the matching engine today — it accumulates first, exactly as
+  /// `socialRole` does, so a weight can be chosen against real data instead of
+  /// guessed. A future factor belongs beside `V_type`/`V_intent` in §3.2, not
+  /// inside `V_league`.
+  reliabilityScore          Int                          @default(0) @map("reliability_score")
   /// Idempotency marker: timestamp the cold-start AI vision pass seeded
   /// `eloScore`. Persona webhook retries skip the OpenAI call when set.
   /// Null on legacy rows and on users who haven't yet completed verification.
-  eloSeededAt              DateTime?                    @map("elo_seeded_at")
+  eloSeededAt               DateTime?                    @map("elo_seeded_at")
   /// Raw vision-pass output stored alongside `eloSeededAt`: the SCUT-FBP5500-
   /// style sub-scores (symmetry, eye distance, face shape, feature regularity),
   /// the overall 0..100 score, the model name, and the mapped Elo. Lets ops
   /// answer "why did this user start at 720?" with a single SELECT instead of
   /// re-running the OpenAI call. Null for users seeded before the feature
   /// shipped or when the seeding flag was disabled.
-  eloSeedDetails           Json?                        @map("elo_seed_details")
-  photos                   String[]                     @default([])
+  eloSeedDetails            Json?                        @map("elo_seed_details")
+  photos                    String[]                     @default([])
   /// Structured profile media displayed in Telegram cards. This is
   /// deliberately additive: `photos[]` remains the ordered static-photo
   /// source for verification and fallback, while each `profile_media[]`
   /// item can carry richer Telegram media metadata, e.g.
   /// `{ type: "live_photo", photo: "<static file_id>", livePhoto: "<video file_id>" }`.
   /// Empty on legacy rows; callers normalize it from `photos[]`.
-  profileMedia             Json[]                       @default([]) @map("profile_media")
+  profileMedia              Json[]                       @default([]) @map("profile_media")
   /// Provider-neutral upload-time identity anchor for onboarding/profile media.
   /// V1 stores non-secret anchor metadata for the first accepted photo while
   /// actual face comparison continues to use transient image bytes.
-  referenceFaceEmbedding   Json?                        @map("reference_face_embedding")
+  referenceFaceEmbedding    Json?                        @map("reference_face_embedding")
   /// Perceptual hashes for accepted static photos, in upload order. Used for
   /// cheap duplicate rejection before moderation/face provider calls.
-  uploadedPhotoHashes      String[]                     @default([]) @map("uploaded_photo_hashes")
+  uploadedPhotoHashes       String[]                     @default([]) @map("uploaded_photo_hashes")
   /// Static photos that passed per-photo safety/face/duplicate validation but
   /// have not yet formed a 2+ photo identity-consensus cluster. These are not
   /// rendered, counted toward MIN_PHOTOS, or used by matching/verification.
-  pendingPhotoCandidates   Json[]                       @default([]) @map("pending_photo_candidates")
+  pendingPhotoCandidates    Json[]                       @default([]) @map("pending_photo_candidates")
   /// Count of static photos accepted by upload-time validation. Videos are
   /// display-only and are not counted toward this value.
-  acceptedPhotoCount       Int                          @default(0) @map("accepted_photo_count")
+  acceptedPhotoCount        Int                          @default(0) @map("accepted_photo_count")
   /// Per-photo face-match similarity (0..1) against User.verifiedSelfiePath,
   /// ordered 1:1 with `photos[]`. Empty for unverified users and for
   /// pre-feature legacy rows. Populated by the verification pipeline on
@@ -808,42 +839,42 @@ model Profile {
   /// Stored alongside `photos` (rather than computed on the fly) so the
   /// admin dashboard can spot the *specific* offending photo when a user
   /// lands in `pending_review`, instead of recomputing N Rekognition calls.
-  photoFaceScores          Float[]                      @default([]) @map("photo_face_scores")
+  photoFaceScores           Float[]                      @default([]) @map("photo_face_scores")
   /// Mobile-side match radius preference. Telegram users inherit the default.
-  matchRadius              MatchRadius                  @default(campus_only) @map("match_radius")
+  matchRadius               MatchRadius                  @default(campus_only) @map("match_radius")
   /// Persistent "home base" coordinates used by the Meet-Halfway matching
   /// algorithm to compute great-circle distance / midpoints between candidates.
   /// Distinct from `Match.vibeLat{A,B}` which are per-match commute pins set
   /// during venue negotiation. Nullable: a user may not have shared location
   /// yet (legacy rows, declined OS prompt). Updated via `POST /v1/me/location`.
-  latitude                 Float?                       @map("latitude")
-  longitude                Float?                       @map("longitude")
+  latitude                  Float?                       @map("latitude")
+  longitude                 Float?                       @map("longitude")
   /// Freshness marker for the home coordinates. The matching engine can
   /// fall back to `matchRadius`-only scoring when this is stale or null.
-  locationUpdatedAt        DateTime?                    @map("location_updated_at")
+  locationUpdatedAt         DateTime?                    @map("location_updated_at")
   /// Canonical dating city selected during onboarding. This is the hard
   /// local matching boundary: users can match across university domains only
   /// when they share the same `homeCityKey`.
-  homeCity                 String?                      @map("home_city")
-  homeCountryCode          String?                      @map("home_country_code")
-  homeCityKey              String?                      @map("home_city_key")
-  homePlaceId              String?                      @map("home_place_id")
+  homeCity                  String?                      @map("home_city")
+  homeCountryCode           String?                      @map("home_country_code")
+  homeCityKey               String?                      @map("home_city_key")
+  homePlaceId               String?                      @map("home_place_id")
   /// Last time this profile was included in a `Match` row. Used by the
   /// match-engine tick to avoid re-pairing the same user within a cooldown.
-  lastMatchedAt            DateTime?                    @map("last_matched_at")
+  lastMatchedAt             DateTime?                    @map("last_matched_at")
   /// Consecutive weekly batches where this profile was eligible but left
   /// unpaired, plus compensating boosts when the user accepted a proposal
   /// but the peer declined. Reset to 0 on a successful pairing. Read by the
   /// scoring function as a capped priority bonus (see `starvationBonus`).
-  missedWeeks              Int                          @default(0) @map("missed_weeks")
+  missedWeeks               Int                          @default(0) @map("missed_weeks")
   /// Canonical standby/starvation counter used by the premium "Standby Mode"
   /// UX. Incremented when a user is eligible for the weekly batch but left
   /// unmatched, or accepts a proposal but the peer declines; reset to 0 on a
   /// successful pairing.
-  standbyCount             Int                          @default(0) @map("standby_count")
+  standbyCount              Int                          @default(0) @map("standby_count")
   /// Timestamp of the most recent batch/unresolved accepted-side outcome that
   /// boosted this profile. Drives the "priority boosted" UX ping.
-  lastMissedAt             DateTime?                    @map("last_missed_at")
+  lastMissedAt              DateTime?                    @map("last_missed_at")
   /// Set when the system (not the user) paused matching for this profile
   /// because no candidate has existed for FAMINE_PAUSE_AFTER_DAYS days
   /// running (D10 — see `services/pool-exhaustion.ts`). Distinguishes a
@@ -852,17 +883,17 @@ model Profile {
   /// stays null) so the two can be told apart: only a system pause is ever
   /// auto-resumed once a candidate reappears; a user's own pause is never
   /// touched by that sweep. Cleared on any resume, manual or automatic.
-  starvationPausedAt       DateTime?                    @map("starvation_paused_at")
+  starvationPausedAt        DateTime?                    @map("starvation_paused_at")
   /// Number of times this profile silently let a match proposal expire
   /// (24h passed without Accept/Decline). Counted post-expiry by
   /// `expireStaleMatches`. Forgive-once gate: first offense = warning only,
   /// from the second onwards Elo is decremented as if the user had declined.
-  silentIgnoreCount        Int                          @default(0) @map("silent_ignore_count")
+  silentIgnoreCount         Int                          @default(0) @map("silent_ignore_count")
   /// IANA timezone (e.g. "Europe/Kyiv") resolved from the user's dating city.
   /// Drives the Profiler's morning/evening batch windows in the user's local
   /// wall-clock time. Null → the scheduler falls back to Europe/Kyiv. Derived
   /// at city-selection time via `cityKeyToTimeZone` in @gennety/shared.
-  timeZone                 String?                      @map("time_zone")
+  timeZone                  String?                      @map("time_zone")
   /// Profiler (PRODUCT_SPEC §Phase 1b) scheduler state. The Profiler harvests
   /// gender-specific Q&A in timed batches after onboarding to fuel icebreakers
   /// and date-planning hints — it is NOT used by the matching algorithm.
@@ -888,19 +919,19 @@ model Profile {
   ///     question. Lets an explicit reply-to be recognised as an answer even
   ///     after the implicit window closed, and lets the Skip keyboard be
   ///     stripped once the question stops being live.
-  profilerStartedAt         DateTime?                   @map("profiler_started_at")
-  profilerNextAt            DateTime?                   @map("profiler_next_at")
-  profilerActiveQuestionId  String?                     @map("profiler_active_question_id")
-  profilerBatchRemaining    Int                         @default(0) @map("profiler_batch_remaining")
-  profilerAnswerWindowUntil DateTime?                   @map("profiler_answer_window_until")
-  profilerQuestionMessageId Int?                        @map("profiler_question_message_id")
+  profilerStartedAt         DateTime?                    @map("profiler_started_at")
+  profilerNextAt            DateTime?                    @map("profiler_next_at")
+  profilerActiveQuestionId  String?                      @map("profiler_active_question_id")
+  profilerBatchRemaining    Int                          @default(0) @map("profiler_batch_remaining")
+  profilerAnswerWindowUntil DateTime?                    @map("profiler_answer_window_until")
+  profilerQuestionMessageId Int?                         @map("profiler_question_message_id")
   /// One-time onboarding ticket-bonus idempotency markers (gated by
   /// `TICKET_FEATURE_ENABLED`). Set the first time the profile reaches 6+
   /// face-validated photos (`photoBonusTicketAt`) or gains a profile video
   /// (`videoBonusTicketAt`). The grant is never re-issued, even if the user
   /// later edits photos/video. See `services/ticket-wallet.ts`.
-  photoBonusTicketAt       DateTime?                    @map("photo_bonus_ticket_at")
-  videoBonusTicketAt       DateTime?                    @map("video_bonus_ticket_at")
+  photoBonusTicketAt        DateTime?                    @map("photo_bonus_ticket_at")
+  videoBonusTicketAt        DateTime?                    @map("video_bonus_ticket_at")
   /// Vibe signal (PRODUCT_SPEC §1.3 / §3.2). Collected as two short free-text
   /// onboarding answers right before the Magic Prompt step, asked of EVERY user
   /// regardless of AI-memory export choice. The raw text feeds icebreakers and
@@ -908,27 +939,27 @@ model Profile {
   /// real psychological signal even when the Magic Prompt is declined.
   ///   - `fridayVibeText`: "describe your ideal Friday night, honestly".
   ///   - `vibeFocusText`: "what matters more — the process, or who's with you?".
-  fridayVibeText           String?                      @map("friday_vibe_text")
-  vibeFocusText            String?                      @map("vibe_focus_text")
+  fridayVibeText            String?                      @map("friday_vibe_text")
+  vibeFocusText             String?                      @map("vibe_focus_text")
   /// Structured axes extracted from the two vibe answers at finalize, scored by
   /// V_research (quadrant proximity). `[-1,+1]` continuous.
   ///   - `energyAxis`: internal (-1) ↔ external (+1) energy — the "tempo" axis.
   ///   - `orientationAxis`: experience (-1) ↔ connection (+1).
-  energyAxis               Float?                       @map("energy_axis")
-  orientationAxis          Float?                       @map("orientation_axis")
+  energyAxis                Float?                       @map("energy_axis")
+  orientationAxis           Float?                       @map("orientation_axis")
   /// Social role inferred from the vibe answers: initiator | participant |
   /// observer (whitelist-validated in app code, NOT a Prisma enum — mirrors
   /// `CuratedVenue.category`). STORED but not yet scored: role-complementarity
   /// matching (Phase 2) is deferred until there is accept/decline data to
   /// validate it against. See PRODUCT_SPEC §3.2.
-  socialRole               String?                      @map("social_role")
+  socialRole                String?                      @map("social_role")
   /// Concrete "anchor" interests pulled from the vibe answers (food, music,
   /// nature, ideas, humor, …). Icebreaker fuel + future shared-anchor scoring;
   /// the embedding stays authoritative for anchor similarity in v1.
-  anchorTags               String[]                     @default([]) @map("anchor_tags")
+  anchorTags                String[]                     @default([]) @map("anchor_tags")
   /// Idempotency/audit marker: when the vibe-axis extraction last ran. Guards
   /// the accepted-path summary append so finalize retries don't double-append.
-  vibeExtractedAt          DateTime?                    @map("vibe_extracted_at")
+  vibeExtractedAt           DateTime?                    @map("vibe_extracted_at")
   /// Type Radar (PRODUCT_SPEC §Type Radar / TYPE_RADAR_PRODUCT_SPEC.md). A fast
   /// visual appearance-preference calibration shown in onboarding right BEFORE
   /// the Magic Prompt: the user reacts "My Type" / "Not My Type" to ~12
@@ -941,10 +972,10 @@ model Profile {
   ///   - `typePrefTags`: compiled preference vector from `buildPreferenceVector`
   ///     (per attribute-value weight); the only thing matching reads.
   ///   - `typeRadarAgeBand`: `'a'|'b'|'c'` band the user actually rated.
-  typeRadarAnswers         Json[]                       @default([]) @map("type_radar_answers")
-  typePrefTags             Json?                        @map("type_pref_tags")
-  typeRadarCompletedAt     DateTime?                    @map("type_radar_completed_at")
-  typeRadarAgeBand         String?                      @map("type_radar_age_band")
+  typeRadarAnswers          Json[]                       @default([]) @map("type_radar_answers")
+  typePrefTags              Json?                        @map("type_pref_tags")
+  typeRadarCompletedAt      DateTime?                    @map("type_radar_completed_at")
+  typeRadarAgeBand          String?                      @map("type_radar_age_band")
   /// Relationship intent (PRODUCT_SPEC §1.3 / §3.2) — the one thing onboarding
   /// asks about the FUTURE, picked on the last of the Mini App's own profile
   /// screens. One ordered axis (`spark` | `open` | `falling` | `longterm`,
@@ -963,14 +994,14 @@ model Profile {
   ///     decides on a label before reading the person (founder decision).
   /// Null on every legacy row and on the iOS rail until it ships the screen —
   /// `intentMultiplier` returns exactly 1.0 for an absent value.
-  relationshipIntent       String?                      @map("relationship_intent")
+  relationshipIntent        String?                      @map("relationship_intent")
   /// Structured appearance tags for THIS user as a candidate (hairColor, build,
   /// beard, tattoos, …), scored against a partner's `typePrefTags` by `V_type`.
   /// Piggybacks the Elo cold-start vision pass (no extra OpenAI call). Null until
   /// that pass runs / for legacy rows; `V_type` is neutral (0.5→floor) when absent.
-  appearanceTags           Json?                        @map("appearance_tags")
-  createdAt                DateTime                     @default(now()) @map("created_at")
-  updatedAt                DateTime                     @updatedAt @map("updated_at")
+  appearanceTags            Json?                        @map("appearance_tags")
+  createdAt                 DateTime                     @default(now()) @map("created_at")
+  updatedAt                 DateTime                     @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1036,7 +1067,7 @@ model VoicePrompt {
   /// directly. Null on a Telegram-originated prompt. MUST be covered by
   /// `collectOwnedPaths` in services/account-deletion.ts — a miss there leaves
   /// audio in the bucket after an erasure request, silently.
-  storagePath String? @map("storage_path")
+  storagePath    String? @map("storage_path")
 
   durationSec Int     @map("duration_sec")
   mimeType    String? @map("mime_type")
@@ -1071,6 +1102,52 @@ model VoicePrompt {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("voice_prompts")
+}
+
+/// The Dating Scratch Map: which parts of the city this person has actually
+/// been in (PRODUCT_SPEC §Scratch Map). One row per user, created lazily on
+/// their first recorded tile.
+///
+/// **Tiles, not coordinates, and that is the privacy design rather than a
+/// storage choice.** `exploredTiles` holds geohash precision 6 — roughly
+/// 1.2 km × 0.6 km — so the column can say "they have been around Podil" and
+/// can never say which building. The product's existing geo columns are all
+/// per-purpose and per-match (`Match.vibeLat*` is a departure pin for ONE
+/// date); this is the first thing that accumulates, so it is the one place
+/// where the shape of what is stored has to carry the guarantee.
+///
+/// Written only with `User.scratchMapOptIn` true, and only from a foreground
+/// ping (the user has the map open) or a verified Date Bump. Nothing here is
+/// written from the background: there is no background-location entitlement in
+/// the iOS app and no such permission requested in the Mini App, which is what
+/// makes that promise structural rather than a rule someone has to remember.
+model UserScratchMap {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  /// Geohash-6 tiles the user has uncovered. A set, kept sorted and unique by
+  /// the service — Postgres arrays do not enforce either, and a duplicate
+  /// would silently inflate `exploredPercent`.
+  exploredTiles String[] @default([]) @map("explored_tiles")
+
+  /// Materialized `exploredTiles.length / <tiles in the market>`, in [0..1].
+  /// Stored rather than derived because the client draws it on every frame of
+  /// the canvas and the denominator is a per-market constant the database does
+  /// not know.
+  exploredPercent Float @default(0) @map("explored_percent")
+
+  /// Venues this user has been verified at by a Date Bump — `CuratedVenue.id`
+  /// values, free-form (no FK) so deleting a venue from the catalog never
+  /// erases someone's history of having been there. The same rule
+  /// `TicketLedger.matchId` already follows.
+  discoveredVenues String[] @default([]) @map("discovered_venues")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_scratch_maps")
 }
 
 enum MatchStatus {
@@ -1319,8 +1396,8 @@ model Match {
   /// message that must be edited on each rotation and DELETED when the wait
   /// ends, so its id has to survive a process restart — an in-memory map would
   /// strand a permanent "waiting for them…" line in the chat after any deploy.
-  peerWaitMessageIdA Int? @map("peer_wait_message_id_a")
-  peerWaitMessageIdB Int? @map("peer_wait_message_id_b")
+  peerWaitMessageIdA Int?      @map("peer_wait_message_id_a")
+  peerWaitMessageIdB Int?      @map("peer_wait_message_id_b")
   /// When the fallback line's text was last rewritten. The shimmer re-issues on
   /// every ~20s tick, but an edit is a real API call on a real message, so the
   /// fallback text is rewritten at most once a minute.
@@ -1345,18 +1422,18 @@ model Match {
   /// scheduling-phase nudges shared the same two slots. Kept nullable so old
   /// rows still parse — new code reads/writes the four phase-specific columns
   /// below. Safe to drop after a few release cycles.
-  nudge1SentAt         DateTime? @map("nudge1_sent_at")
-  nudge2SentAt         DateTime? @map("nudge2_sent_at")
+  nudge1SentAt                DateTime? @map("nudge1_sent_at")
+  nudge2SentAt                DateTime? @map("nudge2_sent_at")
   /// Proposal-phase nudges (status = "proposed", awaiting accept/decline).
   /// First reminder ≥3h after dispatchedAt, second ≥10h after.
-  proposalNudge1SentAt DateTime? @map("proposal_nudge1_sent_at")
-  proposalNudge2SentAt DateTime? @map("proposal_nudge2_sent_at")
+  proposalNudge1SentAt        DateTime? @map("proposal_nudge1_sent_at")
+  proposalNudge2SentAt        DateTime? @map("proposal_nudge2_sent_at")
   /// Scheduling-phase nudges (status = "negotiating", both accepted but no
   /// agreed slot yet). First reminder ≥6h since last update, second ≥12h.
   /// Split from the proposal nudges in C-6 so a row that already received a
   /// proposal nudge doesn't dead-letter the scheduling phase's nudge cadence.
-  schedNudge1SentAt    DateTime? @map("sched_nudge1_sent_at")
-  schedNudge2SentAt    DateTime? @map("sched_nudge2_sent_at")
+  schedNudge1SentAt           DateTime? @map("sched_nudge1_sent_at")
+  schedNudge2SentAt           DateTime? @map("sched_nudge2_sent_at")
   /// Deadline-anchored proposal reminder: one nudge fired ~2h BEFORE the 24h
   /// TTL expires (not anchored to dispatch like the two above), sent only to
   /// sides that still haven't decided. Idempotency marker for that single DM.
@@ -1364,8 +1441,8 @@ model Match {
   /// Venue-phase nudges (status = "negotiating_venue", a side hasn't submitted
   /// its departure point + vibe yet). Same 6h/12h cadence as the scheduling
   /// pair above, anchored on `venuePromptAskedAt`.
-  venueNudge1SentAt    DateTime? @map("venue_nudge1_sent_at")
-  venueNudge2SentAt    DateTime? @map("venue_nudge2_sent_at")
+  venueNudge1SentAt           DateTime? @map("venue_nudge1_sent_at")
+  venueNudge2SentAt           DateTime? @map("venue_nudge2_sent_at")
 
   /// When the Calendar was actually opened for this pair (`startScheduling`).
   /// The scheduling-phase cadence anchors here, NOT on `dispatchedAt`: a pair
@@ -1374,7 +1451,7 @@ model Match {
   /// Calendar itself. It is also the stall anchor for the same phase. Null on
   /// rows created before this column existed — those fall back to
   /// `dispatchedAt`, preserving the old behaviour rather than never nudging.
-  schedulingOpenedAt   DateTime? @map("scheduling_opened_at")
+  schedulingOpenedAt DateTime? @map("scheduling_opened_at")
 
   /// Stall check-in (PRODUCT_SPEC §3.5c) — the "still in?" question sent to a
   /// side that has owed an action for ~24h at the scheduling or venue phase.
@@ -1384,10 +1461,10 @@ model Match {
   /// side's timeout deadline out and re-arms the check-in exactly once (the
   /// re-arm is gated on this column having been null, so the chain is bounded
   /// at two questions and can't be held open forever by tapping green).
-  stallCheckInSentAtA  DateTime? @map("stall_check_in_sent_at_a")
-  stallCheckInSentAtB  DateTime? @map("stall_check_in_sent_at_b")
-  stallConfirmedAtA    DateTime? @map("stall_confirmed_at_a")
-  stallConfirmedAtB    DateTime? @map("stall_confirmed_at_b")
+  stallCheckInSentAtA DateTime? @map("stall_check_in_sent_at_a")
+  stallCheckInSentAtB DateTime? @map("stall_check_in_sent_at_b")
+  stallConfirmedAtA   DateTime? @map("stall_confirmed_at_a")
+  stallConfirmedAtB   DateTime? @map("stall_confirmed_at_b")
 
   /// Phase 4 mobile: personalised ice-breakers persisted per side so the
   /// Expo app can display the same topics that Telegram users receive via DM.
@@ -1593,6 +1670,7 @@ model Match {
   scoreLog           MatchScoreLog?
   proxyMessages      ProxyMessage[]
   venueSelectionLogs VenueSelectionLog[]
+  bumpSession        DateBumpSession?
 
   @@index([status, createdAt])
   @@index([userAId, userBId])
@@ -1710,6 +1788,57 @@ model MatchScoreLog {
   @@index([createdAt])
   @@index([scoreTotal])
   @@map("match_score_logs")
+}
+
+/// One Date Bump per match — the pair confirming, with a physical act, that they
+/// are sitting at the same table (PRODUCT_SPEC §Date Bump). Both people shake
+/// their phones; the pair is verified when the two shakes land within
+/// `BUMP_WINDOW_MS` of each other AND both coordinates are inside
+/// `BUMP_RADIUS_M` of the venue.
+///
+/// **This is the only thing in the product that observes attendance rather than
+/// asking about it**, which is why it is allowed to write `Match.dateAttended*`
+/// while the T+24h evidence classifier is forbidden from doing so
+/// (`services/attendance.ts`). The rule that separation protects is "only a
+/// human answer becomes data" — and a Bump IS a human answer: two people,
+/// deliberately, at the venue, at the time. A classifier guessing from a proxy
+/// chat is not.
+///
+/// A row exists from the first shake, so `userAShakeAt`/`userBShakeAt` also
+/// carry the half-open state: one side waiting for the other. `isVerified` is
+/// the claim, and `verifiedAt` is when it was granted — kept separate because
+/// the rewards (reliability, the bonus ticket, the deck) are transactional with
+/// the flag flip and must never re-run on a repeated shake.
+model DateBumpSession {
+  id      String @id @default(uuid()) @db.Uuid
+  matchId String @unique @map("match_id") @db.Uuid
+
+  /// When each side shook. NULL = that side has not bumped yet. Which side is
+  /// A and which is B follows `Match.userAId`/`userBId`, never arrival order —
+  /// otherwise a retry by the same person would look like the pair.
+  userAShakeAt DateTime? @map("user_a_shake_at")
+  userBShakeAt DateTime? @map("user_b_shake_at")
+
+  isVerified Boolean   @default(false) @map("is_verified")
+  verifiedAt DateTime? @map("verified_at")
+
+  /// The at-the-table AI icebreaker deck, generated once at verification:
+  /// `{ topicsForA: string[], topicsForB: string[] }`, each in that side's own
+  /// language (same per-side rule as `Match.pitchForA`/`pitchForB`).
+  ///
+  /// Deliberately NOT the same thing as `Match.iceBreakersA/B`, which the
+  /// lifecycle sends five hours BEFORE the date to a person who is still
+  /// deciding what to wear. This deck is unlocked by the pair actually meeting
+  /// and is written for a conversation already in progress; the earlier one is
+  /// untouched.
+  icebreakerDeck Json? @map("icebreaker_deck")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@map("date_bump_sessions")
 }
 
 model MatchEvent {
@@ -2118,13 +2247,13 @@ model ClientEvent {
 /// `token` is a cryptographically-random unguessable string = the page's only
 /// authorization (no login), so it must never be logged.
 model FounderReport {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
   /// Crypto-random URL token = the report page's sole authorization.
-  token     String   @unique
+  token     String    @unique
   /// UTC day of the batch this report covers (dedup + display).
-  weekOf    DateTime @map("week_of")
+  weekOf    DateTime  @map("week_of")
   /// Assembled `WeeklyMatchesReport` snapshot (pairs + user cards + photo refs).
-  dataJson  Json     @map("data_json")
+  dataJson  Json      @map("data_json")
   /// When the token stops working. The page shows real users' names, photos,
   /// cities and attractiveness scores behind a token-in-the-URL sole-auth
   /// boundary, so that token also lands in reverse-proxy access logs and
