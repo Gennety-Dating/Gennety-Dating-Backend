@@ -2774,6 +2774,89 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/dates/{id}/proximity:
+    post:
+      tags: [date]
+      operationId: postDateProximity
+      summary: Ping this side's position in the last 45 minutes before the date
+      description: >
+        Ping-and-read. You tell the server where you are; it tells you about
+        your PARTNER — one word, and one wall-clock time if they are moving.
+
+
+        **The response shape is the privacy boundary.** No coordinate, no
+        distance, no address, no "500 m away": those are the same disclosure at
+        different resolutions, and a person's exact position is never revealed
+        to their match (PRODUCT_SPEC §6.3). The coordinates you send are used to
+        compute an ETA and dropped — they are never stored and never logged.
+
+
+        The window is T-45m to `agreedTime` itself and not a minute past it:
+        once the date has begun, "your match is on the way" has stopped being
+        information.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lat, lng]
+              properties:
+                lat: { type: number }
+                lng: { type: number }
+                mode:
+                  type: string
+                  enum: [walking, transit]
+                  description: >
+                    How you are travelling. Omitted, or a value this server does
+                    not know, falls back to a guess from the distance rather
+                    than an error.
+      responses:
+        "200":
+          description: Position recorded; the partner's masked status returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, arrived, peer, bothArrived]
+                properties:
+                  ok: { type: boolean, const: true }
+                  arrived:
+                    type: boolean
+                    description: Whether YOU are inside 50m of the venue.
+                  peer:
+                    type: string
+                    enum: [unknown, en_route, arrived]
+                    description: >
+                      Your partner's state. `unknown` means their phone has not
+                      pinged recently — the honest answer rather than a stale ETA.
+                  peerEtaLocal:
+                    type: string
+                    description: >
+                      Their arrival as `HH:mm` in the pair's own city. Present
+                      only while they are en route.
+                  bothArrived:
+                    type: boolean
+                    description: Both of you are at the venue — the one celebratory beat.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: >
+            The caller is not on this match. 404 rather than 403 so the endpoint
+            cannot be used to probe which match ids exist.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >
+            `wrong-state` (not a scheduled date, or no venue), `too-early` (the
+            radar has not opened), or `too-late` (the date has started).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
 components:
   securitySchemes:
     bearerAuth:

@@ -55,6 +55,19 @@ data source 404s.
   the first real bump also changes what that DM asks (chemistry directly,
   skipping "did you meet?"). Expected, and stated because it is the one place
   this feature reaches an existing flow.
+- **`POST /v1/dates/:matchId/proximity` (Date Radar, §6.3) holds its state in
+  PROCESS MEMORY and writes nothing** — no table, no column, deliberately (a
+  minute-by-minute record of where two people were is the one artefact it must
+  not create). Two operational consequences: a `pm2 restart` mid-window clears
+  it and the next ping restores it within seconds, and it is single-process
+  state like `usage-limiter` / `promo-attribution`, so it would need rethinking
+  the day the bot stops running as one PM2 process.
+- **The Radar adds request volume during a live date's last 45 minutes** — the
+  canvas pings on a client-chosen cadence, two phones. Each ping is two indexed
+  reads (`match`, `profile`) and no write. Nothing exercises it today (0 dates
+  ever, and the canvas is Phase 2), but it is the first endpoint in the product
+  designed to be called repeatedly by an open screen, so watch it once the
+  canvas ships.
 
 Post-deploy check — the endpoints answer for a user with no match, which is
 also the proof they are mounted:

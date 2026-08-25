@@ -18,6 +18,7 @@ import { matchMediaRouter } from "./routes/match-media.js";
 import { countdownRouter } from "./routes/countdown.js";
 import { dateStateRouter } from "./routes/date-state.js";
 import { dateBumpRouter } from "./routes/date-bump.js";
+import { dateRadarRouter } from "./routes/date-radar.js";
 import { appConfigRouter } from "./routes/app-config.js";
 import { phoneAuthRouter } from "./routes/phone-auth.js";
 import { telegramAuthRouter } from "./routes/telegram-auth.js";
@@ -446,6 +447,9 @@ app.use("/v1/date", dateStateRouter);
 // the JWT matches router, so the canvas mechanics stay together and the
 // existing match surface keeps its shape.
 app.use("/v1/dates", dateBumpRouter);
+// Same prefix, separate router: the Bump and the Radar share a resource and
+// nothing else — one is a two-sided commit, the other a masked read.
+app.use("/v1/dates", dateRadarRouter);
 // Founder weekly-matches report page + media proxy. Public by design — the
 // unguessable token in the path is the authorization (no JWT/initData). Ops-only
 // and inert unless FOUNDER_NOTIFY_ENABLED (reports are never created otherwise).

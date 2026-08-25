@@ -925,6 +925,20 @@ two DMs on their real subscription. That is correct rather than a leak:
 the charge is real, so the warning about it should be too. It is one more
 reason the underlying hole is worth closing.
 
+## The Date Radar is unreachable for the same reason
+
+Everything the section below says about the Bump applies unchanged to the Radar
+(§6.3), and for the first of its two reasons: its window is T−45m to
+`agreedTime`, and the demo's `agreedTime` is at least tomorrow evening in real
+time. A visitor's ping would arrive on the real clock and be refused
+`too-early`, correctly, by a day.
+
+It needs no puppet branch either — and here the reason is one step stronger.
+The Radar is not a negotiation: it is two phones reporting independently, so
+the puppet has nothing to answer even in principle. A phone that never pings
+reads as `unknown`, which is exactly what the product shows a visitor whose
+partner has not set off yet.
+
 ## The Date Bump is unreachable here, and it needs no puppet branch
 
 The Bump (PRODUCT_SPEC §6.2) is a two-sided step, so the rule below would

@@ -6701,6 +6701,49 @@ better-looking and corrupt the one signal the league reads.
 deliberately does not read it yet: it accumulates first, like `socialRole`, so
 its weight can be chosen against data rather than guessed.
 
+### 6.3 Date Radar — a masked ETA, never a position
+
+For the `DATE_RADAR_LEAD_MINUTES` (45) before `agreedTime`, each side's phone
+pings its own position (`POST /v1/dates/:matchId/proximity`) and is told, about
+the other, **one word and at most one wall-clock time**: *on the way, arriving
+18:55*, or *here*. Both inside `PROXIMITY_ARRIVED_RADIUS_M` (50 m) produces the
+one celebratory beat — "you're both here" — and a haptic pulse.
+
+**The response shape is the privacy guarantee, and it is a closed set.** No
+coordinate, no distance, no address, no "500 m away" — those are one
+disclosure at four resolutions, and the invariant this phase runs under is that
+a person's exact position is never revealed to their match. The masking lives
+in one function (`viewOfPeer`), so there is a single place that decides what
+crosses between two people, and it cannot leak a coordinate because it is never
+handed one.
+
+**Nothing is stored.** There is no schema for any of this. Every other
+geographic column in the product is per-purpose and per-match, and the one
+thing this feature must never become is a record of where two people were,
+minute by minute, on the evening they met. The window is forty-five minutes, so
+an in-memory map is the honest lifetime rather than a shortcut: a restart loses
+it and the next ping restores it within seconds. The pinged coordinates are
+used to compute an ETA and dropped — never written, never logged.
+
+**A phone that goes quiet becomes `unknown`, not a stale ETA.** Past a few
+minutes without a ping the last one stops speaking for its sender, because
+"eight minutes away" reads as present tense while being a quarter of an hour
+old — a worse failure than saying nothing.
+
+**The ETA is arithmetic, not a provider** — a straight line times a city detour
+factor over a city speed (walking 1.35 / 4.8 km/h, transit 1.6 / 18 km/h, the
+transit detour deliberately the larger because it folds in the wait and the
+walk at each end). That is ±5–7 minutes, which is the accuracy a single
+rendered line can carry, and it costs no key, no quota and no outage. It rounds
+**up**: told 18:55 and arriving 18:56 is a lie, told 18:56 and arriving 18:55 is
+not. `RouteEstimator` is the one substitution point if a real routing provider
+is ever wanted; nothing else knows how the number was produced.
+
+**The window closes at `agreedTime` itself**, which is where it differs from the
+Bump's two-hour grace. A Bump is still meaningful an hour into a date that
+started late; "your match is on the way" stops being information the moment the
+date has begun, because from then on the two of them can see each other.
+
 ## Cross-Cutting Concerns
 
 ### The loading mark: butterflies in the stomach (2026-08-06)

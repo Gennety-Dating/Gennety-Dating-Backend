@@ -925,6 +925,22 @@ does not know. `discoveredVenues` holds `CuratedVenue.id` values free-form (no
 FK), so deleting a venue from the catalog never erases someone's history of
 having been there — the same rule `TicketLedger.matchId` already follows.
 
+### Date Radar presence (in memory, no table)
+
+The last forty-five minutes before a date are held in a process-local `Map`
+(`services/date-radar.ts`), not in Postgres, and that is the design rather than
+a shortcut. Every other geographic column in this schema is per-purpose and
+per-match; a table of where two people were, minute by minute, on the evening
+they met is the one artefact this feature must not create. The window bounds
+the data's usefulness at forty-five minutes, so an in-memory lifetime is the
+honest one — a restart loses it and the next ping restores it within seconds.
+
+Same single-process caveat as `services/usage-limiter.ts` and
+`services/promo-attribution.ts`: correct while the bot runs as one PM2 process,
+and something to revisit the day that stops being true. An entry also expires a
+few minutes after its last ping, so a phone that has gone quiet reads as
+`unknown` rather than as a stale ETA.
+
 ### `no_match_notices`
 
 Audit row for the empathetic "no match this week" DM. `tier` is the
@@ -1165,6 +1181,7 @@ auth) are deliberately outside the spec.
 | GET  | `/v1/countdown` | Status banner / next-batch countdown |
 | GET  | `/v1/date/state` | **Living Canvas** (JWT, PRODUCT_SPEC §6.1) — the derived `DateLifecycleState` plus the locked date, its venue, this side's bump state, the next drop, and the CALLER's own `timeZone`. Its own prefix rather than a field on `/v1/matches/current` because it must answer for a user with NO match: `IDLE_EXPLORING` is the state most users are in most of the time, and that endpoint answers null there. Two queries by design — the live statuses, then (only if there are none) a `completed` row that still owes feedback, which `ACTIVE_MATCH_STATUSES` excludes. Blind-decision safe: the partner's `acceptedBy*` is never selected into the response, and a caller who has answered resolves identically whatever the partner chose. |
 | POST | `/v1/dates/{id}/bump` | **Date Bump** (JWT, PRODUCT_SPEC §6.2) — one side's shake. The client detects it (CoreMotion / `DeviceMotionEvent`) and posts when and where; **the server decides whether it counts**, because a client-side verdict is a client-side ticket grant. `at` is the DEVICE clock and is trusted only inside `CLOCK_SKEW_TOLERANCE_MS` (60 s) of ours — the two phones' clocks are what the alignment check compares, so it has to be used, but a phone an hour fast must not bump its way outside its own date. `not-participant` answers **404**, not 403, so the endpoint cannot be used to probe which match ids exist; every other refusal is 409. The deck and the announcement hang off the ONE call that verified the pair (`justVerified`), never off `verified`, or the partner's own shake a beat later would generate a second deck and send everything twice. |
+| POST | `/v1/dates/{id}/proximity` | **Date Radar** (JWT, PRODUCT_SPEC §6.3) — ping-and-read: the caller's position goes in, the PARTNER's masked status comes back. The response is a closed shape (`peer` ∈ `unknown`/`en_route`/`arrived`, an optional `HH:mm`, `bothArrived`) and carries no coordinate, distance or address — those are one disclosure at four resolutions, and the masking lives in `viewOfPeer` so exactly one function decides what crosses between two people. **Stores nothing** (see `services/date-radar.ts`): the pinged coordinates compute an ETA and are dropped. Window is T-45m to `agreedTime` itself — unlike the Bump's T+2h grace, because once the date has begun the two of them can see each other. |
 | POST | `/v1/client/events` | Клиентская воронка нативного приложения (iOS 6.2). **JWT необязателен** — половина событий случается до того, как аккаунт существует, и требовать токен значило бы не собирать именно их; без токена человек опознаётся только анонимным `installId`. Битый или протухший токен оставляет вызов анонимным, а не роняет его (`optionalAuth`). Тело: `installId` + до 200 событий; ответ `{ok, accepted, dropped}`. 400 на битый батч (для превышения потолка — с машинным `code: "too_many_events"`), 404 при выключенном `CLIENT_EVENTS_ENABLED` (гейт стоит ДО авторизации), 429 по лимиту 60 батчей/час на установку. См. `client_events`. |
 | POST | `/v1/tickets/appstore/transaction` | Native-app StoreKit 2 purchase report (JWT — mounted before the initData `/v1/tickets` router): client JWS is decoded ONLY for the transactionId, the authoritative state comes from the App Store Server API; wallet credit exactly-once via `TicketLedger.externalPaymentId = appstore:<txId>`. 404 while `TICKET_FEATURE_ENABLED` off; 503 without `APPSTORE_*` config. |
 | POST | `/v1/webhooks/appstore` | App Store Server Notifications V2. The signedPayload only names a transaction, consequences are applied after an authoritative API re-fetch (a forged webhook can at worst trigger a harmless lookup). REFUND/REVOKE claw back the store credit exactly-once (`appstore:<txId>:refund`, balance may go negative — honest accounting). 500 on lookup outage so Apple retries. |
