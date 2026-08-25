@@ -23,6 +23,7 @@ vi.mock("./canvas-auth.js", () => ({
 }));
 
 const { dateStateRouter } = await import("./routes/date-state.js");
+const { deadlineFor } = await import("../services/proposal-deadline.js");
 
 function buildApp() {
   const app = express();
@@ -42,6 +43,7 @@ function liveMatch(overrides: Record<string, unknown> = {}) {
     acceptedByA: true,
     acceptedByB: true,
     agreedTime: AGREED,
+    dispatchedAt: new Date(Date.now() - 60 * 60 * 1000),
     feedbackPromptedAt: null,
     feedbackByA: null,
     feedbackByB: null,
@@ -81,6 +83,33 @@ describe("GET /v1/date/state", () => {
     expect(res.body.match.id).toBe("match-1");
     expect(res.body.match.venue.name).toBe("Kavarnya");
     expect(res.body.match.agreedTime).toBe(AGREED.toISOString());
+  });
+
+  // The one state whose clock is running is also the one where `agreedTime` is
+  // null by definition, so without this field the canvas can name no deadline
+  // at all there.
+  it("carries the reply deadline on a proposed match", async () => {
+    const dispatchedAt = new Date(Date.now() - 60 * 60 * 1000);
+    matchFindMany.mockResolvedValue([
+      liveMatch({ status: "proposed", acceptedByA: null, acceptedByB: null, agreedTime: null, dispatchedAt }),
+    ]);
+
+    const res = await request(buildApp()).get("/v1/date/state");
+
+    expect(res.body.state).toBe("DROP_PENDING_DECISION");
+    expect(res.body.match.agreedTime).toBeNull();
+    // The same function `SerializedMatch.proposalDeadlineAt` uses — two
+    // calculations of one deadline would diverge the moment the cadence moves.
+    expect(res.body.match.deadlineAt).toBe(deadlineFor(dispatchedAt).toISOString());
+  });
+
+  it("carries no deadline once the pitch has been answered", async () => {
+    matchFindMany.mockResolvedValue([liveMatch()]);
+
+    const res = await request(buildApp()).get("/v1/date/state");
+
+    expect(res.body.state).toBe("DATE_SCHEDULED");
+    expect(res.body.match.deadlineAt).toBeNull();
   });
 
   // The blind-decision invariant, asserted on the wire rather than only in the

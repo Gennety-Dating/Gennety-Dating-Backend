@@ -58,6 +58,8 @@ export interface CanvasInput {
   serverNow: Date;
   nextDropAt?: Date | null;
   agreedTime?: Date | null;
+  /** The 24h reply deadline. Set on `proposed` and nowhere else. */
+  deadlineAt?: Date | null;
   venueName?: string | null;
   /** This side's own shake. The peer's is deliberately not knowable here. */
   bumpMine?: boolean;
@@ -142,13 +144,15 @@ export function sheetFor(input: CanvasInput): SheetView {
 
   switch (input.state) {
     case "DROP_PENDING_DECISION": {
-      const left = until(input.agreedTime);
+      // `deadlineAt`, never `agreedTime`: a time is agreed only after both
+      // sides say yes, so on a `proposed` match that field is null by
+      // definition — this is the one state with a clock and it is the only
+      // clock it has. An older server that does not send it drops the clause
+      // rather than rendering a placeholder, and in neither case is the
+      // sentence ever replaced by anything about the partner (file header).
+      const left = until(input.deadlineAt);
       return {
         title: s.decisionTitle,
-        // `agreedTime` is null on a `proposed` match, so the deadline is not
-        // knowable here and the sentence drops its clause rather than
-        // rendering a placeholder. It is never replaced by anything about the
-        // partner — see this file's header.
         body: left ? s.decisionBody.replace("{time}", left) : s.planningBody,
         action: "chat",
         actionLabel: s.openChat,

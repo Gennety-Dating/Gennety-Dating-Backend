@@ -6692,6 +6692,14 @@ per side, in each side's own language, generated from both profiles and stored
 on `DateBumpSession.icebreakerDeck`. A model failure falls back to a static
 five-line deck rather than costing the pair the moment.
 
+**`DROP_PENDING_DECISION` counts the REPLY deadline, not the date.** A time is
+agreed only after both sides say yes, so `agreedTime` is null on every
+`proposed` match — the one state whose clock is genuinely running is the one
+state that field cannot describe. `/v1/date/state` therefore carries
+`deadlineAt` alongside it, derived by the same function that feeds
+`SerializedMatch.proposalDeadlineAt`, so the canvas and the pitch's own
+countdown button can never name different hours for one pitch.
+
 **Both sides read the deck from `/v1/date/state`, not from the bump response.**
 Only one of the two shakes completes the pair, so only one call can answer with
 a deck; the side that shook first would otherwise have the topics as

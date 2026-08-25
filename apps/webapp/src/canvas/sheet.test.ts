@@ -154,7 +154,10 @@ describe("sheetFor", () => {
           input({
             state: "DROP_PENDING_DECISION",
             lang,
-            agreedTime: new Date(NOW.getTime() + 5 * HOUR),
+            deadlineAt: new Date(NOW.getTime() + 5 * HOUR),
+            // A `proposed` match HAS no agreed time — the countdown here is the
+            // reply deadline, and handing it one must not change that.
+            agreedTime: new Date(NOW.getTime() + 3 * 24 * HOUR),
             // Even handed a radar reading and a verified bump, the decision
             // sheet must use neither — both would describe the partner.
             radar: { peer: "arrived", bothArrived: true },
@@ -173,9 +176,26 @@ describe("sheetFor", () => {
       }
     });
 
+    it("counts the reply deadline, never the agreed time", () => {
+      // The trap this pins: `agreedTime` is null on every real `proposed`
+      // match, so a sheet reading it would drop its clause on the ONE state
+      // whose clock is running — and would count the wrong clock the moment a
+      // stale value survived a transition.
+      const view = sheetFor(
+        input({
+          state: "DROP_PENDING_DECISION",
+          deadlineAt: new Date(NOW.getTime() + 2 * HOUR),
+          agreedTime: new Date(NOW.getTime() + 3 * 24 * HOUR),
+        }),
+      );
+      const s = stringsFor("en");
+      expect(view.body).toBe(s.decisionBody.replace("{time}", formatCountdown(2 * HOUR, s)));
+    });
+
     it("drops the deadline clause rather than rendering a placeholder", () => {
-      // `agreedTime` is null on a `proposed` match, so no deadline is knowable.
-      const view = sheetFor(input({ state: "DROP_PENDING_DECISION", agreedTime: null }));
+      // An older server sends no `deadlineAt` at all; saying nothing about the
+      // clock beats printing a token.
+      const view = sheetFor(input({ state: "DROP_PENDING_DECISION", deadlineAt: null }));
       expect(view.body).not.toContain("{time}");
       expect(view.action).toBe("chat");
     });

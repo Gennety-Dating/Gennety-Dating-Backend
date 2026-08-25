@@ -25,6 +25,8 @@ export interface DateStateVenue {
 export interface DateStateMatch {
   id: string;
   agreedTime: string | null;
+  /** 24h reply deadline; set on `proposed` and nowhere else. */
+  deadlineAt: string | null;
   venue: DateStateVenue | null;
   /** This caller's own at-the-table topics; empty until the bump verifies. */
   deck: string[];

@@ -174,6 +174,9 @@ function render(): void {
     serverNow: new Date(latest.serverNow),
     nextDropAt: latest.nextDropAt ? new Date(latest.nextDropAt) : null,
     agreedTime: match?.agreedTime ? new Date(match.agreedTime) : null,
+    // Its own clock: a `proposed` match has no agreed time yet, and this is
+    // the one state whose deadline is running.
+    deadlineAt: match?.deadlineAt ? new Date(match.deadlineAt) : null,
     venueName: match?.venue?.name ?? null,
     bumpMine: match?.bump?.mine ?? false,
     bumpVerified: match?.bump?.verified ?? false,

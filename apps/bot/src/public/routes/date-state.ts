@@ -8,6 +8,7 @@ import {
   pickCurrentMatch,
 } from "../../services/active-match-priority.js";
 import { deriveDateState, sideOf } from "../../services/date-state.js";
+import { deadlineFor } from "../../services/proposal-deadline.js";
 import type { BumpDeck } from "../../services/date-bump.js";
 
 /**
@@ -36,6 +37,7 @@ const MATCH_SELECT = {
   acceptedByA: true,
   acceptedByB: true,
   agreedTime: true,
+  dispatchedAt: true,
   feedbackPromptedAt: true,
   feedbackByA: true,
   feedbackByB: true,
@@ -148,6 +150,19 @@ dateStateRouter.get("/state", async (req: Request, res: Response): Promise<void>
       ? {
           id: usable.id,
           agreedTime: usable.agreedTime?.toISOString() ?? null,
+          // The reply deadline. Without it the canvas cannot name a deadline in
+          // DROP_PENDING_DECISION at all: `agreedTime` is null on a `proposed`
+          // match by definition — a time is agreed AFTER both say yes — and
+          // that is precisely the state whose clock is running.
+          //
+          // Derived by the same `deadlineFor` that feeds
+          // `SerializedMatch.proposalDeadlineAt`: a second calculation of one
+          // deadline would diverge from the first the moment the cadence
+          // changes, and two surfaces would name different hours for one pitch.
+          deadlineAt:
+            usable.status === "proposed" && usable.dispatchedAt
+              ? deadlineFor(usable.dispatchedAt).toISOString()
+              : null,
           venue: usable.venueName
             ? {
                 name: usable.venueName,

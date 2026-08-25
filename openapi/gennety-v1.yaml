@@ -2974,6 +2974,18 @@ components:
       properties:
         id: { type: string, format: uuid }
         agreedTime: { type: [string, "null"], format: date-time }
+        deadlineAt:
+          type: [string, "null"]
+          format: date-time
+          description: >
+            The 24h reply deadline, on a `proposed` match and nowhere else.
+
+
+            `agreedTime` is null while a pitch is undecided — a time is agreed
+            only after both sides say yes — so this is the ONLY clock the
+            canvas can count down in the one state whose clock is running.
+            Derived by the same function as
+            `SerializedMatch.proposalDeadlineAt`.
         venue:
           $ref: "#/components/schemas/DateStateVenue"
         deck:
