@@ -21,6 +21,7 @@ import { apiFetch } from "./api.js";
  */
 
 import { wireContentInsets } from "./telegram-insets.js";
+import { rheostatStyle, shouldTickScale } from "./haptics.js";
 
 const app = window.Telegram?.WebApp;
 app?.ready();
@@ -568,6 +569,26 @@ async function main(): Promise<void> {
 
   // ── Slider interaction (custom — native range input doesn't theme well)
 
+  /**
+   * Градуированный щелчок шкалы химии — паритет с iOS
+   * (`GennetyHaptics.rheostatStep`): глухо внизу, остро вверху.
+   *
+   * Особой точки на десятке нет намеренно: эта форма — единственное, из чего
+   * продукт узнаёт, сработало ли свидание, и хаптика, награждающая максимум,
+   * смещала бы датасет пальцем. Градация сообщает величину, а не одобрение.
+   *
+   * Промежуток обязателен: drag по шкале даёт поток шагов, и без него это
+   * дребезг, а не отсчёт. Подавленный щелчок НЕ записывается сыгранным —
+   * следующий кадр сыграет то, что под пальцем к тому моменту.
+   */
+  let chemistryTickedAt = 0;
+  function tickChemistry(level: number): void {
+    const now = Date.now();
+    if (!shouldTickScale(chemistryTickedAt, now)) return;
+    chemistryTickedAt = now;
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(rheostatStyle(level, 10));
+  }
+
   function setChemistryFromX(clientX: number): void {
     const rect = $track.getBoundingClientRect();
     const ratio = (clientX - rect.left) / rect.width;
@@ -578,7 +599,7 @@ async function main(): Promise<void> {
       renderSlider();
       persist();
       syncSubmit();
-      window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+      tickChemistry(next);
     }
   }
 
@@ -624,7 +645,7 @@ async function main(): Promise<void> {
       renderSlider();
       persist();
       syncSubmit();
-      window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+      tickChemistry(next);
     }
   });
 

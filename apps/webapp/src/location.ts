@@ -17,6 +17,7 @@ import {
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { wireContentInsets } from "./telegram-insets.js";
 import { isInsideMarket, type MarketBounds } from "./market-gate.js";
+import { boundaryEvent } from "./haptics.js";
 
 /**
  * Location Mini App entry point (Phase 3.7 — concierge venue, map picker).
@@ -160,6 +161,12 @@ let draft: VenueIntentDraft | null = null;
  * the screen never blocks Confirm over data it is still waiting for.
  */
 let market: MarketBounds | null = null;
+/**
+ * Сторона границы рынка на прошлом расчёте гейта. `null` — экран только что
+ * открылся: первый расчёт обязан молчать, иначе черновик с точкой вне рынка
+ * встречал бы человека упором в границу, которую он не пересекал.
+ */
+let wasInsideMarket: boolean | null = null;
 let demoMode = false;
 /** True once the user has deliberately chosen a point (search / geolocation). */
 let originPicked = false;
@@ -365,6 +372,18 @@ function setSelected(lat: number, lng: number, address: string | null): void {
  */
 function applyMarketGate(): boolean {
   const inside = isInsideMarket(market, selectedLat, selectedLng);
+
+  // Тактильная сторона гейта — паритет с iOS (`boundaryBump`/`pinSettle`).
+  // Играет ПЕРЕСЕЧЕНИЕ, а не состояние: эта функция вызывается на каждом пане
+  // карты, и отклик от состояния означал бы вибрацию всё время, пока пин
+  // снаружи. Первый расчёт молчит — сторона границы ещё неизвестна.
+  const crossing = boundaryEvent(wasInsideMarket, inside);
+  wasInsideMarket = inside;
+  if (crossing === "exit") {
+    app?.HapticFeedback?.impactOccurred?.("rigid");
+  } else if (crossing === "enter") {
+    app?.HapticFeedback?.impactOccurred?.("soft");
+  }
 
   if (confirmEl && !confirming) confirmEl.disabled = !inside;
   if (marketBlockEl) marketBlockEl.hidden = inside;
