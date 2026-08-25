@@ -132,7 +132,8 @@ vertical 9:16
 --no posed catalogue stance, lookbook, product photography, model casting,
 studio lighting, fashion editorial, retouched plastic skin, other people, text,
 logos, watermark, instagram ui, story interface, username, phone screen overlay,
-mirror selfie, sunglasses, hat, heavy filter, exaggerated body proportions
+mirror selfie, sunglasses, hat, heavy filter, exaggerated body proportions,
+androgynous, feminine features, soft jawline
 ```
 
 **Правило действия (мужской набор).** У каждого кадра названо конкретное
@@ -455,16 +456,41 @@ mirrors out of focus behind him, cool overhead light,` + мужской хвос
 ### ms3 — спортивный · тёмные · бритый · без тату · набережная
 
 **Вайб.** Бег утром. Локация общая с городским архетипом (mc3). Занятие:
-отдышивается у перил после пробежки.
+только закончил пробежку, вынимает наушник.
 
-**Промпт.** `a 25-year-old Eastern European man, dark hair grown out into loose
-waves pushed back off his face, clean shaven, in a plain navy running tee, both
-forearms on the embankment railing, catching his breath after a run and just
-turned to the camera laughing, the river and the far bank behind him, low early
-sun off the water,` + мужской хвост.
+**Переписан 2026-08-25.** Первая версия читалась женственно, и причина была не в
+одной детали, а в том, что ВСЕ мягкие оси сошлись на одном кадре: `loose waves`
+(модель тянет это в женскую укладку) + бритое лицо + мягкая поза с двумя
+предплечьями на перилах + смех + низкое тёплое солнце. Ячейки трогать нельзя
+(тёмные / бритый / без тату / набережная), поэтому переписаны стрижка, поза и
+выражение; свет остаётся прежним, потому что он общий с mc3.
 
-**Проверить.** Предплечья чистые и **на перилах** — поза, а не демонстрация.
-Смех настоящий, не улыбка на камеру. Свет и фон **дословно те же, что на mc3**.
+**Промпт.** `a 25-year-old Eastern European man, dark hair cut short at the sides
+and pushed back off his forehead, damp with sweat, clean shaven with a squared
+jaw, in a plain navy running tee damp at the chest and across the shoulders,
+wired earphones hanging around his neck, standing upright with one hand on the
+embankment railing and the other just pulling an earphone out of his ear, still
+breathing hard from the run and just turned to the camera, the river and the far
+bank behind him, low early sun off the water,` + мужской хвост.
+
+**Запасной образ**, если первый всё ещё мягкий: `a 25-year-old Eastern European
+man, dark hair cut short at the sides and pushed back off his forehead, damp with
+sweat, clean shaven, in a plain navy running tee stuck to his chest, standing at
+the embankment railing with both hands on his hips and his elbows out, chest
+still heaving after a hard run, head just turned to the camera, the river and the
+far bank behind him, low early sun off the water,` + мужской хвост.
+
+**Проверить.** Стоит прямо, не облокотившись — вес на ногах, а не на перилах.
+Волосы влажные и функциональные, не уложенные. Предплечья чистые и оба в кадре
+(одно на перилах, второе поднято к уху). Свет и фон **дословно те же, что на
+mc3**.
+
+**Следствие для разброса стрижек.** `loose waves` остаётся только у mc2 и ma2,
+то есть у двух архетипов из четырёх. Стрижка не входит в измеряемое
+пространство признаков (там цвет волос, борода, тату), так что на подсчёт
+предпочтений это не влияет — но если захочется вернуть разброс, дешевле всего
+перевести mp3 с `short textured crop` на `loose waves`: он бородатый, так что
+женственно не прочитается.
 
 ### mc1 — городской · тёмные · бритый · без тату · вечерняя улица
 
