@@ -4,8 +4,8 @@
  * — it stays a script include (AGENTS.md: no new deps without approval; approved
  * as a CDN include, same as the map lib it replaced).
  *
- * Only the surface used by `src/location.ts` is typed. Leaflet uses [lat, lng]
- * order (the opposite of GeoJSON [lng, lat]).
+ * Only the surface used by `src/location.ts` and `src/canvas.ts` is typed.
+ * Leaflet uses [lat, lng] order (the opposite of GeoJSON [lng, lat]).
  */
 
 declare namespace L {
@@ -54,8 +54,31 @@ declare namespace L {
     addTo(map: Map): this;
   }
 
+  interface DivIconOptions {
+    className?: string;
+    html?: string;
+    iconSize?: [number, number];
+    iconAnchor?: [number, number];
+  }
+
+  interface DivIcon {
+    readonly __divIcon: unique symbol;
+  }
+
+  interface MarkerOptions {
+    icon?: DivIcon;
+  }
+
+  class Marker {
+    addTo(map: Map): this;
+    setLatLng(latlng: LatLngTuple | LatLng): this;
+    remove(): this;
+  }
+
   function map(el: string | HTMLElement, options?: MapOptions): Map;
   function tileLayer(url: string, options?: TileLayerOptions): TileLayer;
+  function marker(latlng: LatLngTuple | LatLng, options?: MarkerOptions): Marker;
+  function divIcon(options?: DivIconOptions): DivIcon;
 }
 
 interface Window {

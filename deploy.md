@@ -25,6 +25,18 @@ pnpm db:drift-check   # must exit 0 before pm2 restart
 older bundle simply never calls it; the reverse order ships a canvas whose only
 data source 404s.
 
+**The Mini App half is a NEW entry (`canvas.html`), so `deploy-webapp.sh` is
+not optional for this block** — skipping it leaves the three endpoints live
+with nothing calling them. `pnpm demo:deploy` builds its own bundle from the
+same source and is needed for the demo to have the page at all.
+
+**Nothing in the bot links to the canvas yet, deliberately** (DECISIONS.md):
+there is no menu row, so it is reachable only by direct URL
+(`https://dating-calendar.gennety.com/canvas.html?lang=ru&theme=dark`), which
+is what a dev or demo check uses. The entry point is a Phase 5 decision, once
+the Scratch Map gives the map something to show. **So "the canvas is not in the
+menu" is the expected post-deploy state, not a missing step.**
+
 **Things worth knowing before the restart:**
 
 - **Nothing here changes an existing surface.** The state is derived and the
@@ -45,8 +57,15 @@ data source 404s.
   data; nothing in `V_league` moves in this release.
 - **`POST /v1/dates/:matchId/bump` ships live and is unreachable today.** It
   needs a pair inside `agreedTime − 15m … +2h` AND a client that can detect a
-  shake; the Living Canvas is Phase 2, so nothing calls it yet. Production has
-  had **0 dates ever** either way.
+  shake. Production has had **0 dates ever**, so nothing exercises it either
+  way.
+- **The three canvas routes accept a JWT OR Telegram `initData`**
+  (`public/canvas-auth.ts`). Worth knowing at restart because it widens who can
+  reach them: a valid Mini App signature now resolves to a user by
+  `telegramId`, which is one indexed lookup per initData call and none on the
+  JWT path. An unknown Telegram id is refused **401**, not 404 — the routes
+  behind it deliberately refuse to distinguish "no such user" from "not your
+  match".
 - **The demo cannot exercise the Bump, and that is structural** (DEMO_MODE.md):
   its `agreedTime` is days out in real time and the visitor's shake would come
   through the public route on the real clock. Verify on `@gennetytestbot` with

@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
 
-import { requireAuth } from "../auth-middleware.js";
+import { requireCanvasAuth } from "../canvas-auth.js";
 import { sideOf } from "../../services/date-state.js";
 import {
   checkRadarWindow,
@@ -35,7 +35,8 @@ import {
  */
 export const dateRadarRouter: Router = Router();
 
-dateRadarRouter.use(requireAuth);
+// Either rail: the canvas is one screen on two clients (see canvas-auth.ts).
+dateRadarRouter.use(requireCanvasAuth);
 
 const REFUSAL_STATUS: Record<string, number> = {
   // Authenticated but on neither side — 404 rather than 403, so the endpoint

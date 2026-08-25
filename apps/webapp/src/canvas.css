@@ -1,0 +1,219 @@
+/**
+ * The Living Canvas (PRODUCT_SPEC §6.1): a full-bleed dark map with one sheet
+ * on it. Colours come from the shared theme tokens, so the canvas follows the
+ * user's own light/dark choice like every other Mini App.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#map {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+/* The map is a backdrop, not the subject: a scrim keeps the sheet legible over
+   whatever the tiles happen to show, without dimming the city to mud. */
+#scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 34%) 0%,
+    rgb(0 0 0 / 4%) 28%,
+    rgb(0 0 0 / 4%) 46%,
+    var(--bg) 100%
+  );
+}
+:root[data-theme="light"] #scrim {
+  background: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 12%) 0%,
+    rgb(0 0 0 / 0%) 28%,
+    rgb(0 0 0 / 0%) 40%,
+    var(--bg) 100%
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   The venue pin — the one thing on the map that pulses.
+   --------------------------------------------------------------------------- */
+
+.venue-pin {
+  position: relative;
+}
+
+.venue-dot,
+.venue-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.venue-dot {
+  background: var(--accent);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 45%);
+}
+
+.venue-pulse {
+  background: var(--accent);
+  opacity: 0.55;
+  animation: venue-pulse 2.4s ease-out infinite;
+}
+
+@keyframes venue-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The sheet.
+   --------------------------------------------------------------------------- */
+
+#sheet {
+  position: fixed;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20px 20px calc(22px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -12px 40px rgb(0 0 0 / 34%);
+  max-height: 62vh;
+  overflow-y: auto;
+  /* The sheet's height follows its content, so a state that gains a line must
+     not make the whole thing jump — the transition is on the box, not on a
+     hardcoded height. */
+  transition: box-shadow 240ms ease;
+}
+
+#sheet[data-tone="urgent"] {
+  box-shadow:
+    0 -12px 40px rgb(0 0 0 / 34%),
+    inset 0 2px 0 var(--accent);
+}
+
+#sheet[data-tone="warm"] {
+  box-shadow:
+    0 -12px 40px rgb(0 0 0 / 34%),
+    inset 0 2px 0 var(--accent-bright, var(--accent));
+}
+
+#sheet-title {
+  margin: 0 0 8px;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.22;
+}
+
+#sheet-body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+#sheet-note {
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+#sheet[data-tone="warm"] #sheet-note {
+  color: var(--accent-bright, var(--accent));
+  font-weight: 600;
+}
+
+#sheet-list {
+  margin: 14px 0 0;
+  padding: 0 0 0 18px;
+  display: grid;
+  gap: 9px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+#sheet-action {
+  margin-top: 18px;
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  /* The house inner-edge sheen: light held just inside the button's own
+     border rather than a travelling highlight (PRODUCT_SPEC §3.5b). */
+  box-shadow:
+    inset 0 1px 0 -0.5px rgb(255 255 255 / 34%),
+    inset 0 -1px 0 -0.5px rgb(255 255 255 / 14%),
+    0 6px 18px rgb(0 0 0 / 26%);
+}
+
+#sheet-action[hidden] {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Boot cover. Opaque and theme-correct, so the first frame is never a flash of
+   the wrong background — the same reason every other Mini App here has one.
+   --------------------------------------------------------------------------- */
+
+#boot {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  transition: opacity 380ms ease;
+}
+
+#boot.gone {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .venue-pulse {
+    animation: none;
+    opacity: 0.32;
+  }
+  #boot {
+    transition: none;
+  }
+}

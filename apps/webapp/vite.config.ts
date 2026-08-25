@@ -26,6 +26,7 @@ export default defineConfig({
         premium: resolve(__dirname, "premium.html"),
         radar: resolve(__dirname, "radar.html"),
         referral: resolve(__dirname, "referral.html"),
+        canvas: resolve(__dirname, "canvas.html"),
       },
     },
   },

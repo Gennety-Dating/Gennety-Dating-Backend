@@ -6744,6 +6744,60 @@ Bump's two-hour grace. A Bump is still meaningful an hour into a date that
 started late; "your match is on the way" stops being information the moment the
 date has begun, because from then on the two of them can see each other.
 
+### 6.4 The canvas itself — one screen, two clients
+
+The Mini App entry is `canvas.html`: a full-bleed dark map (Leaflet over the
+existing `GET /v1/maptiles` proxy, so the phone only ever talks to our origin)
+with a single sheet on it, whose contents are `sheetFor(state)` and nothing
+else. Every rule about what a state may say lives in that one pure function,
+so the DOM decides nothing — which is what makes the invariant below testable
+without a browser.
+
+**`DROP_PENDING_DECISION` carries no field about the partner at all.** Not an
+empty one — absent, so a later edit cannot fill it in by accident. The server
+already enforces the blind decision (`deriveDateState` reads only the caller's
+own column, and `/v1/date/state` never selects the peer's), and this is the
+client half of the same rule: it is the one screen a user stares at *while*
+deciding, so a hint invented here would reopen the invariant on the surface
+where it costs most. The test pins the whole view object rather than scanning
+for forbidden words — a vocabulary list both false-positives on copy that
+legitimately says "tell me yes or no" (addressed to the user) and misses
+whatever phrasing a future edit invents.
+
+**Most states hand the user back to the chat, and that is the honest action.**
+The flows behind them — accepting a pitch, picking a slot, answering the
+feedback form — live in the bot, and the canvas is a map and a status surface
+in v1, not a second place to accept a date. The two things it genuinely owns
+are the Bump's shake and the Radar's ping.
+
+**The poll cadence is per state, not flat.** Five seconds inside the radar and
+the bump window, where the answer changes without the user and a stale reading
+is the failure the feature exists to prevent; a minute everywhere else, where
+nothing moves without a cron or a tap. A screen people leave open pays for its
+own cadence, and paying radio for `IDLE_EXPLORING` buys nothing.
+
+**A shake is a motion that repeats, not a sample over a threshold** — a phone
+put down hard clears any threshold worth having. Three qualifying readings
+inside 900 ms, then a cooldown, because one continuous shake produces samples
+for as long as the hand moves and each would otherwise post its own bump. The
+magnitude is read from `accelerationIncludingGravity` rather than
+`acceleration`: the latter is null on a large share of Android browsers, so a
+detector built on it works on iOS and silently never fires elsewhere. iOS also
+requires a user gesture before motion is delivered at all, so a permission
+throw reads as *denied* (ask again from a real tap) rather than *unsupported*
+(this phone cannot) — telling a user their phone cannot do something it can is
+the worse of the two errors.
+
+**Both surfaces read one endpoint.** `/v1/date/state`, `/v1/dates/:id/bump` and
+`/v1/dates/:id/proximity` accept a JWT *or* Telegram `initData`
+(`public/canvas-auth.ts`). The product's usual shape is a shared service behind
+two routes, and that is right where the surfaces genuinely differ — the Mini
+App feedback route sends a thank-you DM and the app rail cannot. The canvas is
+the opposite case: one screen, two clients, a byte-identical answer. Two routes
+would then be two copies of one handler with a rule that they must never
+diverge, so the split moves to where the difference actually is — how the
+caller proves who they are — and nothing else is duplicated.
+
 ## Cross-Cutting Concerns
 
 ### The loading mark: butterflies in the stomach (2026-08-06)

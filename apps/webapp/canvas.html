@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Gennety</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect" />
+    <!-- Critical first-paint CSS — the boot cover ONLY.
+
+         Like the Location Mini App, this page ships real markup while its
+         stylesheet is imported from the deferred module, so between the first
+         frame and the bundle landing this block is the only CSS the page has.
+         Without it the user would stare at an unstyled heading and a naked
+         button for the length of that gap, on a background belonging to no
+         theme. The cover is opaque and theme-correct; canvas.ts fades it as
+         soon as the first map tile paints. -->
+    <style>
+      :root {
+        --boot-bg: #030303;
+        --boot-ring: rgb(182 48 79 / 34%);
+      }
+      :root[data-theme="light"] {
+        --boot-bg: #f5f5f5;
+        --boot-ring: rgb(139 37 59 / 22%);
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--boot-bg);
+        overflow: hidden;
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: grid;
+        place-items: center;
+        background: var(--boot-bg);
+      }
+      #boot-mark {
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        border: 2px solid var(--boot-ring);
+        border-top-color: #b6304f;
+        animation: boot-spin 900ms linear infinite;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-mark {
+          animation: none;
+        }
+      }
+    </style>
+    <script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q==="light"||q==="dark"){try{localStorage.setItem("gennety-theme",q);}catch(e){}}var t=(q==="light"||q==="dark")?q:localStorage.getItem("gennety-theme");document.documentElement.dataset.theme=(t==="light"||t==="dark")?t:"dark";}catch(e){document.documentElement.dataset.theme="dark";}})();</script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin="anonymous"
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin="anonymous"
+    ></script>
+  </head>
+  <body>
+    <div id="boot" aria-hidden="true"><div id="boot-mark"></div></div>
+
+    <div id="map"></div>
+    <div id="scrim"></div>
+
+    <!-- The sheet. `aria-live` because its whole job is to change under the
+         user without being touched — a partner arriving, a shake landing —
+         and those are exactly the moments a screen reader must not stay
+         silent. `polite` rather than `assertive`: none of it interrupts. -->
+    <section id="sheet" data-tone="quiet" aria-live="polite">
+      <h1 id="sheet-title"></h1>
+      <p id="sheet-body"></p>
+      <p id="sheet-note" hidden></p>
+      <ul id="sheet-list" hidden></ul>
+      <button id="sheet-action" type="button" hidden></button>
+    </section>
+
+    <script type="module" src="/src/canvas.ts"></script>
+  </body>
+</html>

@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
 
-import { requireAuth } from "../auth-middleware.js";
+import { requireCanvasAuth } from "../canvas-auth.js";
 import { getNextBatchDate } from "../../services/next-batch.js";
 import {
   ACTIVE_MATCH_STATUSES,
@@ -47,7 +47,8 @@ const MATCH_SELECT = {
 
 export const dateStateRouter: Router = Router();
 
-dateStateRouter.use(requireAuth);
+// Either rail: the canvas is one screen on two clients (see canvas-auth.ts).
+dateStateRouter.use(requireCanvasAuth);
 
 dateStateRouter.get("/state", async (req: Request, res: Response): Promise<void> => {
   const userId = req.userId!;

@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 
-import { requireAuth } from "../auth-middleware.js";
+import { requireCanvasAuth } from "../canvas-auth.js";
 import {
   announceBumpVerified,
   generateAndStoreBumpDeck,
@@ -23,7 +23,8 @@ import {
  */
 export const dateBumpRouter: Router = Router();
 
-dateBumpRouter.use(requireAuth);
+// Either rail: the canvas is one screen on two clients (see canvas-auth.ts).
+dateBumpRouter.use(requireCanvasAuth);
 
 /** How far the device clock may run ahead of ours before we stop trusting it. */
 const CLOCK_SKEW_TOLERANCE_MS = 60_000;

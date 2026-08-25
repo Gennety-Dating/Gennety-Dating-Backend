@@ -15,8 +15,8 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
-vi.mock("./auth-middleware.js", () => ({
-  requireAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
+vi.mock("./canvas-auth.js", () => ({
+  requireCanvasAuth: (req: { userId?: string }, _res: unknown, next: () => void) => {
     req.userId = "me";
     next();
   },
