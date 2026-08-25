@@ -8,6 +8,7 @@ import {
   pickCurrentMatch,
 } from "../../services/active-match-priority.js";
 import { deriveDateState, sideOf } from "../../services/date-state.js";
+import type { BumpDeck } from "../../services/date-bump.js";
 
 /**
  * `GET /v1/date/state` — everything the Living Canvas draws, in one call
@@ -102,9 +103,30 @@ dateStateRouter.get("/state", async (req: Request, res: Response): Promise<void>
   const bump = usable
     ? await prisma.dateBumpSession.findUnique({
         where: { matchId: usable.id },
-        select: { isVerified: true, userAShakeAt: true, userBShakeAt: true },
+        select: {
+          isVerified: true,
+          userAShakeAt: true,
+          userBShakeAt: true,
+          icebreakerDeck: true,
+        },
       })
     : null;
+
+  // The deck belongs on THIS endpoint, not only on the bump response, because
+  // `POST /bump` answers the one call that completed the pair — the other side
+  // shook first and gets a 200 with no deck at all. Its notification carries
+  // the topics as text, but `date-bump.ts` states the division plainly ("the
+  // notification says the thing happened; the app draws the deck"), and until
+  // now the app had nothing to draw them from.
+  //
+  // Only the caller's own topics: the deck is per-side and in each side's own
+  // language, so shipping both halves would hand every client a screenful of
+  // its partner's private prompts for no reason a client could use.
+  const deck = bump?.isVerified
+    ? ((bump.icebreakerDeck as BumpDeck | null)?.[
+        side === "A" ? "topicsForA" : "topicsForB"
+      ] ?? [])
+    : [];
 
   const state = deriveDateState({
     match: usable,
@@ -135,6 +157,10 @@ dateStateRouter.get("/state", async (req: Request, res: Response): Promise<void>
                 mapsUri: usable.venueGoogleMapsUri,
               }
             : null,
+          // Outside `bump` on purpose: that object is asserted by exact shape
+          // so a field claiming "they are here and you are not" cannot be added
+          // to it inattentively, and a growing object makes that guard weaker.
+          deck,
           bump: {
             // Whether THIS side has shaken, and whether the pair is verified.
             // The peer's individual shake is deliberately not reported: before

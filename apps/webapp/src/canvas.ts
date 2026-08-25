@@ -177,6 +177,10 @@ function render(): void {
     venueName: match?.venue?.name ?? null,
     bumpMine: match?.bump?.mine ?? false,
     bumpVerified: match?.bump?.verified ?? false,
+    // Read from the state, never from the bump response: that one carries BOTH
+    // sides' halves and the client is not told which side it is, so it could
+    // only guess. `/v1/date/state` resolves the side on the server.
+    deck: match?.deck ?? [],
     radar,
   });
 

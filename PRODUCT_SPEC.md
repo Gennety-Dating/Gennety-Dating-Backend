@@ -6692,6 +6692,14 @@ per side, in each side's own language, generated from both profiles and stored
 on `DateBumpSession.icebreakerDeck`. A model failure falls back to a static
 five-line deck rather than costing the pair the moment.
 
+**Both sides read the deck from `/v1/date/state`, not from the bump response.**
+Only one of the two shakes completes the pair, so only one call can answer with
+a deck; the side that shook first would otherwise have the topics as
+notification text and nothing else — while the notification is deliberately the
+half that says the thing HAPPENED, and the app is the half that draws it. The
+state endpoint resolves the caller's own side, so no client is ever handed its
+partner's half.
+
 **Reliability is its own column, not Elo.** `Profile.eloScore` is
 attractiveness — seeded by the vision pass over photos, moved by accept/decline,
 and read by `V_league`, which decides who is a viable candidate at all. Writing

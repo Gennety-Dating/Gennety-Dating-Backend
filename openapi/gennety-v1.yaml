@@ -2682,15 +2682,22 @@ paths:
                 properties:
                   state:
                     type: string
-                    enum:
-                      - IDLE_EXPLORING
-                      - DROP_PENDING_DECISION
-                      - LOGISTICS_SCHEDULING
-                      - DATE_SCHEDULED
-                      - DATE_RADAR_ACTIVE
-                      - DATE_BUMP_PENDING
-                      - DATE_IN_PROGRESS
-                      - POST_DATE_FEEDBACK
+                    description: >
+                      One of `IDLE_EXPLORING`, `DROP_PENDING_DECISION`,
+                      `LOGISTICS_SCHEDULING`, `DATE_SCHEDULED`,
+                      `DATE_RADAR_ACTIVE`, `DATE_BUMP_PENDING`,
+                      `DATE_IN_PROGRESS`, `POST_DATE_FEEDBACK`.
+
+
+                      **Deliberately a documented string, not an `enum`.** The
+                      set is derived by a pure function, so a ninth state costs
+                      no migration and can ship any deploy — while the native
+                      client is an App Store build that cannot be rolled back,
+                      and swift-openapi-generator turns an `enum` into a closed
+                      Swift type whose decode THROWS on an unknown value. That
+                      would take the canvas down for everyone who had not
+                      updated. As a string, an unknown value reads as
+                      `IDLE_EXPLORING` — the map the user sees most of the time.
                   serverNow:
                     type: string
                     format: date-time
@@ -2828,10 +2835,13 @@ paths:
                     description: Whether YOU are inside 50m of the venue.
                   peer:
                     type: string
-                    enum: [unknown, en_route, arrived]
                     description: >
-                      Your partner's state. `unknown` means their phone has not
-                      pinged recently — the honest answer rather than a stale ETA.
+                      Your partner's state: `unknown`, `en_route` or `arrived`.
+                      `unknown` means their phone has not pinged recently — the
+                      honest answer rather than a stale ETA, and also the value
+                      a client reads an unrecognised one as (a documented string
+                      rather than an `enum`, for the reason spelled out on
+                      `/v1/date/state` → `state`).
                   peerEtaLocal:
                     type: string
                     description: >
@@ -2960,12 +2970,24 @@ components:
 
     DateStateMatch:
       type: object
-      required: [id, bump]
+      required: [id, bump, deck]
       properties:
         id: { type: string, format: uuid }
         agreedTime: { type: [string, "null"], format: date-time }
         venue:
           $ref: "#/components/schemas/DateStateVenue"
+        deck:
+          type: array
+          description: >
+            The at-the-table topics for THIS caller, in their own language.
+            Empty until the pair's Date Bump verifies.
+
+
+            It lives here and not only on the bump response because that
+            response answers the one call that COMPLETED the pair — the side
+            that shook first gets a 200 with no deck, and would otherwise have
+            the topics only as notification text.
+          items: { type: string }
         bump:
           $ref: "#/components/schemas/DateStateBump"
 

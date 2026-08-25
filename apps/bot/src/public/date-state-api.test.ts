@@ -111,6 +111,72 @@ describe("GET /v1/date/state", () => {
     expect(res.body.match.bump).toEqual({ mine: false, verified: false });
   });
 
+  // The side that shook FIRST gets a 200 with no deck from /bump, so without
+  // this field it would have the topics only as notification text.
+  it("carries this side's own deck once the pair is verified", async () => {
+    matchFindMany.mockResolvedValue([liveMatch()]);
+    bumpFindUnique.mockResolvedValue({
+      isVerified: true,
+      userAShakeAt: new Date(),
+      userBShakeAt: new Date(),
+      icebreakerDeck: { topicsForA: ["Mine one", "Mine two"], topicsForB: ["Theirs"] },
+    });
+
+    const res = await request(buildApp()).get("/v1/date/state");
+
+    expect(res.body.match.deck).toEqual(["Mine one", "Mine two"]);
+    // Per-side and in each side's own language: the partner's half is not the
+    // caller's to read, and no client has a use for it.
+    expect(JSON.stringify(res.body)).not.toContain("Theirs");
+  });
+
+  it("gives side B its own half", async () => {
+    matchFindMany.mockResolvedValue([liveMatch({ userAId: "them", userBId: "me" })]);
+    bumpFindUnique.mockResolvedValue({
+      isVerified: true,
+      userAShakeAt: new Date(),
+      userBShakeAt: new Date(),
+      icebreakerDeck: { topicsForA: ["Theirs"], topicsForB: ["Mine"] },
+    });
+
+    const res = await request(buildApp()).get("/v1/date/state");
+
+    expect(res.body.match.deck).toEqual(["Mine"]);
+  });
+
+  // Before verification there is nothing to say, and an unverified deck would
+  // be a claim that the pair is at the table.
+  it("withholds the deck until the bump verifies", async () => {
+    matchFindMany.mockResolvedValue([liveMatch()]);
+    bumpFindUnique.mockResolvedValue({
+      isVerified: false,
+      userAShakeAt: new Date(),
+      userBShakeAt: null,
+      icebreakerDeck: { topicsForA: ["Mine"], topicsForB: ["Theirs"] },
+    });
+
+    const res = await request(buildApp()).get("/v1/date/state");
+
+    expect(res.body.match.deck).toEqual([]);
+  });
+
+  // Generation is best-effort and its own fallback can still fail; a verified
+  // pair with no stored deck must answer with an empty list, not a crash.
+  it("answers an empty deck when generation left nothing behind", async () => {
+    matchFindMany.mockResolvedValue([liveMatch()]);
+    bumpFindUnique.mockResolvedValue({
+      isVerified: true,
+      userAShakeAt: new Date(),
+      userBShakeAt: new Date(),
+      icebreakerDeck: null,
+    });
+
+    const res = await request(buildApp()).get("/v1/date/state");
+
+    expect(res.status).toBe(200);
+    expect(res.body.match.deck).toEqual([]);
+  });
+
   // A completed match is outside ACTIVE_MATCH_STATUSES, so without the second
   // query the canvas could never discover that feedback is owed — the exact
   // hole §Phase 4 had to close on the app rail.

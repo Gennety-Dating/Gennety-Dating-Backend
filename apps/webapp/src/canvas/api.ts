@@ -26,6 +26,8 @@ export interface DateStateMatch {
   id: string;
   agreedTime: string | null;
   venue: DateStateVenue | null;
+  /** This caller's own at-the-table topics; empty until the bump verifies. */
+  deck: string[];
   bump: { mine: boolean; verified: boolean } | null;
 }
 
@@ -40,6 +42,13 @@ export interface DateStateResponse {
 export interface BumpResponse {
   ok: true;
   verified: boolean;
+  /**
+   * Both halves, and the caller is never told which side it is — so this is
+   * NOT what a client renders. The topics to draw come from `/v1/date/state`
+   * (`match.deck`), already resolved to the caller's own side; that is also the
+   * only place the side that shook FIRST can get them, since this response
+   * belongs to the call that completed the pair.
+   */
   deck: { topicsForA: string[]; topicsForB: string[] } | null;
 }
 
