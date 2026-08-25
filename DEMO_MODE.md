@@ -925,6 +925,38 @@ two DMs on their real subscription. That is correct rather than a leak:
 the charge is real, so the warning about it should be too. It is one more
 reason the underlying hole is worth closing.
 
+## The Date Bump is unreachable here, and it needs no puppet branch
+
+The Bump (PRODUCT_SPEC §6.2) is a two-sided step, so the rule below would
+normally demand a branch in `decide.ts`. It does not, and the reason is worth
+stating rather than discovering: **the demo can never enter
+`DATE_BUMP_PENDING` at all**, so there is no dead end for a puppet to rescue.
+
+Two independent reasons, and either alone is enough:
+
+- **The demo's date is days away, in real time.** The puppet counters with a
+  slot from the ordinary 6-day grid, so `agreedTime` is at least tomorrow
+  evening — and the bump window opens 15 minutes before it. The replay does not
+  help: it shifts a clock into `runDateLifecycleTick` / `runCoordinationTick`,
+  while a visitor's shake would arrive through `POST /v1/dates/:matchId/bump`
+  on the REAL clock and be refused `too-early`, correctly, by days.
+- **There is nothing to shake.** The shake is detected by the Living Canvas
+  (§6.1), which is a client surface; until it ships there is no screen in the
+  demo that could produce one.
+
+So a puppet branch would be code that can never run, which is worse than a
+stated limit — the same call this file already makes for the female-only
+pre-date safety brief. What it costs is real and named: **an investor walking
+the demo never sees the Bump, the reliability reward, the bonus ticket or the
+at-the-table icebreaker deck.**
+
+Closing it later is not a `decide.ts` branch either. The puppet's half could
+use the injected-clock idiom the proxy chat already uses
+(`relayProxyMessage` at `agreedTime − 15m`), but the visitor's half comes
+through the public route, which must not grow a demo branch — so making the
+Bump demoable means giving the demo a date that is genuinely minutes away,
+which is a change to how the demo schedules, not to how it puppets.
+
 ## The rule for future work
 
 **Any change to a product flow, a Mini App screen, a gate, or a paid step must

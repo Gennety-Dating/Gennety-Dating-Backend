@@ -39,6 +39,10 @@ export type TicketReason =
   // once to a promo-attributed new user at the onboarding wow screen; idempotent
   // via a unique `externalPaymentId` (`promo:<codeId>:<userId>`).
   | "promo"
+  // Date Bump reward (PRODUCT_SPEC §6.2). One free ticket to each side when a
+  // bump verifies at the venue; idempotent via a synthetic unique
+  // `externalPaymentId` (`bump:<matchId>:<userId>`).
+  | "bump_bonus"
   | "store_purchase"
   | "spend_match"
   | "refund";

@@ -49,6 +49,8 @@ export {
   BUMP_RELIABILITY_REWARD,
   SCRATCH_TILE_PRECISION,
   BUMP_ICEBREAKER_COUNT,
+  bumpWindowFor,
+  checkBumpWindow,
 } from "./date-lifecycle.js";
 export type { DateLifecycleState } from "./date-lifecycle.js";
 export { cityKeyToTimeZone, isValidTimeZone, DEFAULT_TIME_ZONE } from "./timezone.js";
@@ -183,6 +185,7 @@ export {
   proposeSchedulingPrompt,
   venueSelectionPrompt,
   generateIceBreakersPrompt,
+  generateBumpDeckPrompt,
   generateWingmanHintPrompt,
   generateVenueBlurbPrompt,
   parseRejectionFeedbackPrompt,
@@ -195,6 +198,7 @@ export type {
   ProposeSchedulingInput,
   VenueSelectionInput,
   IceBreakersInput,
+  BumpDeckInput,
   WingmanHintInput,
   VenueBlurbInput,
   RejectionFeedbackInput,

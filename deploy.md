@@ -43,16 +43,27 @@ data source 404s.
 - **`reliability_score` is written but not yet read by matching**, on purpose
   (DECISIONS.md). It accumulates first so a weight can be chosen against real
   data; nothing in `V_league` moves in this release.
-- **Nothing exercises the date half in production until a pair schedules.**
-  Production has had **0 dates ever**, so verify on `@gennetytestbot` or in the
-  demo, where every walkthrough reaches a scheduled date.
+- **`POST /v1/dates/:matchId/bump` ships live and is unreachable today.** It
+  needs a pair inside `agreedTime − 15m … +2h` AND a client that can detect a
+  shake; the Living Canvas is Phase 2, so nothing calls it yet. Production has
+  had **0 dates ever** either way.
+- **The demo cannot exercise the Bump, and that is structural** (DEMO_MODE.md):
+  its `agreedTime` is days out in real time and the visitor's shake would come
+  through the public route on the real clock. Verify on `@gennetytestbot` with
+  a date staged inside the window — the demo will not show it at all.
+- **A verified Bump writes `dateAttended*`, which the T+24h flow reads.** So
+  the first real bump also changes what that DM asks (chemistry directly,
+  skipping "did you meet?"). Expected, and stated because it is the one place
+  this feature reaches an existing flow.
 
-Post-deploy check — the endpoint answers for a user with no match, which is
-also the proof it is mounted:
+Post-deploy check — the endpoints answer for a user with no match, which is
+also the proof they are mounted:
 
 ```sh
 # 401 (mounted), never 404 (missing).
 curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/date/state
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  https://dating-api.gennety.com/v1/dates/00000000-0000-4000-8000-000000000000/bump
 psql "$DATABASE_URL" -c "select count(*) from date_bump_sessions;"
 psql "$DATABASE_URL" -c "select count(*) from user_scratch_maps;"
 # Both exist and are empty. "relation does not exist" = db:push did not run.

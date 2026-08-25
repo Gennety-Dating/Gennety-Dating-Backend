@@ -404,6 +404,67 @@ Tone: how friends actually text. Informal, native register in Russian/Ukrainian/
 }
 
 // ---------------------------------------------------------------------------
+// #4a — generateBumpDeckPrompt (Phase 6, at the table, after a verified Bump)
+// ---------------------------------------------------------------------------
+
+export interface BumpDeckInput {
+  userFirstName: string;
+  matchFirstName: string;
+  userSummary: string | null;
+  matchSummary: string | null;
+  language: string;
+  /** Weighted Profiler answers from the PARTNER, same source as #4. */
+  matchProfilerBlock?: string | null;
+  /** How many topics to produce. */
+  count: number;
+}
+
+/**
+ * The at-the-table deck, unlocked by a verified Date Bump (PRODUCT_SPEC §6.2).
+ *
+ * **Deliberately a different prompt from `generateIceBreakersPrompt`, not a
+ * count parameter on it.** That one writes an opening TEXT for someone who has
+ * not met the person yet and is five hours from doing so — it optimises for
+ * "easy to send". This one is read by two people already sitting down, so an
+ * opener is the one thing it must not produce: they have already said hello.
+ * What it owes them is somewhere to go when the first ten minutes run out.
+ */
+export function generateBumpDeckPrompt(input: BumpDeckInput): string {
+  const profilerSection = input.matchProfilerBlock
+    ? `\n## What ${input.matchFirstName} is into (PRIMARY source — build topics around THEIR world; higher weight = more important)\n${input.matchProfilerBlock}\n`
+    : "";
+  return `**${input.userFirstName}** and **${input.matchFirstName}** are sitting at the same table right now, on a first date. They have already met and said hello. Give ${input.userFirstName} ${input.count} things to talk about when the conversation needs somewhere to go.
+
+## About ${input.matchFirstName} (the person across the table — anchor the topics here)
+${input.matchSummary ?? "(no profile summary available)"}
+## About ${input.userFirstName} (only for light common ground — never force it)
+${input.userSummary ?? "(no profile summary available)"}
+${profilerSection}
+## Your Task
+Generate exactly ${input.count} topics in **${input.language}**. Each must:
+1. Be SHORT — one sentence, ~12 words max. Something you can glance at and say out loud.
+2. Be built around ONE concrete thing from ${input.matchFirstName}'s world. One topic per line.
+3. Be sayable ALOUD to someone sitting opposite you — not a text you would send.
+4. Open a story rather than close it: something they can answer for a minute, not with one word.
+
+Tone: how two people actually talk over a table. Informal, native register in Russian/Ukrainian/German/Polish. Plain and specific beats clever; at most one casual word per line, usually zero.
+
+## Format
+${input.count} numbered lines. No preamble, no closing.
+
+## NEVER do these
+- Greetings or openers of any kind ("hi", "nice to finally meet you") — they are already talking.
+- Anything that reads as a text message rather than a spoken line.
+- Slang dictionaries ("краш/слэй/база", "rizz/slay/no cap", or equivalents).
+- Abstract or philosophical framings. Keep it down to earth.
+- Two-clause, multi-part questions. One ask.
+- "You must be [trait]..." — presumptuous.
+- physical appearance comments.
+- Sexual or overly intimate topics.
+- Anything that reveals you were given a profile to read from.`;
+}
+
+// ---------------------------------------------------------------------------
 // #4b — generateWingmanHintPrompt (Phase 4, 90 minutes before date)
 // ---------------------------------------------------------------------------
 

@@ -720,6 +720,12 @@ const translations = {
     // only entry point left is a card that has scrolled away.
     ticketPeerTookTheirs:
       "{name} just grabbed their date ticket 🎟️ Yours is the last one — then we open planning.",
+    // Date Bump verified (§6.2). Sent to BOTH sides, and only on the verified
+    // event — a single shake notifies nobody, because a nudge to the second
+    // person is the first person's phone telling on them.
+    bumpVerifiedDm:
+      "You're both here ✨ I've counted the date — and the next ticket is on me.",
+    bumpDeckIntro: "If the conversation needs somewhere to go:",
     ticketBothSecuredDm: "Both tickets secured 🎟️ Your date is on — let's pick a time.",
     ticketPartnerPaidDm: "{name} already covered your date ticket ❤️ You're all set — nothing to pay.",
     // Goodwill "he covered her ticket" read-receipt (§3.5b): confirm his gesture
@@ -1986,6 +1992,9 @@ const translations = {
     ticketGateWaiting: "Билет готов ✨ Ждём вторую сторону.",
     ticketPeerTookTheirs:
       "{name} только что взял(а) свой билет на свидание 🎟️ Твой — последний, и мы открываем планирование.",
+    bumpVerifiedDm:
+      "Вы оба на месте ✨ Свидание засчитано, а билет на следующее — от меня.",
+    bumpDeckIntro: "Если разговору понадобится, куда пойти:",
     ticketBothSecuredDm: "Оба билета у вас 🎟️ Свидание в силе — давай выберем время.",
     ticketPartnerPaidDm: "{name} уже оплатил твой билет на свидание ❤️ Тебе ничего не нужно делать.",
     ticketCoveredHerConfirm:
@@ -3167,6 +3176,9 @@ const translations = {
     ticketGateWaiting: "Квиток готовий ✨ Чекаємо на іншу сторону.",
     ticketPeerTookTheirs:
       "{name} щойно взяв(ла) свій квиток на побачення 🎟️ Твій — останній, і ми відкриваємо планування.",
+    bumpVerifiedDm:
+      "Ви обидва на місці ✨ Побачення зараховано, а квиток на наступне — від мене.",
+    bumpDeckIntro: "Якщо розмові знадобиться, куди піти:",
     ticketBothSecuredDm: "Обидва квитки у вас 🎟️ Побачення в силі — оберімо час.",
     ticketPartnerPaidDm: "{name} вже сплатив твій квиток на побачення ❤️ Тобі нічого не потрібно робити.",
     ticketCoveredHerConfirm:
@@ -4342,6 +4354,9 @@ const deTranslations: TranslationTable = {
   ticketGateWaiting: "Ticket bereit ✨ Warten auf die andere Person.",
   ticketPeerTookTheirs:
     "{name} hat gerade das eigene Date-Ticket geholt 🎟️ Deins ist das letzte — dann öffnen wir die Planung.",
+  bumpVerifiedDm:
+    "Ihr seid beide da ✨ Das Date ist gezählt — das nächste Ticket geht auf mich.",
+  bumpDeckIntro: "Falls das Gespräch einen Anstoß braucht:",
   matchScheduleNoOverlap: "Noch keine Überschneidung - nächste Runde.",
   matchScheduled: "Fixiert — bis dann 🤝\n\n{venue}",
   matchScheduledNoReservation:
@@ -5501,6 +5516,9 @@ const plTranslations: TranslationTable = {
   ticketGateWaiting: "Bilet gotowy ✨ Czekamy na drugą osobę.",
   ticketPeerTookTheirs:
     "{name} właśnie odebrał(a) swój bilet na randkę 🎟️ Twój jest ostatni — potem otwieramy planowanie.",
+  bumpVerifiedDm:
+    "Jesteście oboje na miejscu ✨ Randka zaliczona — bilet na następną ode mnie.",
+  bumpDeckIntro: "Jeśli rozmowa będzie potrzebowała kierunku:",
   matchScheduleNoOverlap: "Jeszcze brak wspólnego terminu - kolejna runda.",
   matchScheduled: "Ustalone — do zobaczenia 🤝\n\n{venue}",
   matchScheduledNoReservation:

@@ -6644,6 +6644,63 @@ The response also carries the CALLER's own `Profile.timeZone`: `agreedTime` is
 an instant and the canvas draws it on a wall clock, and the device's is wrong
 for a traveller. Same field, same reason, as `SerializedMatch.timeZone`.
 
+### 6.2 Date Bump — the pair confirms the meeting with a physical act
+
+Both people shake their phones at the table. The pair **verifies** when the two
+shakes land within `BUMP_SHAKE_WINDOW_MS` (10 s) of each other AND both
+coordinates are inside `BUMP_VENUE_RADIUS_M` (100 m) of the venue, inside the
+window that opens at `DATE_BUMP_OPENS_MINUTES` (15) before `agreedTime` and
+closes `DATE_BUMP_GRACE_HOURS` (2) after it. `POST /v1/dates/:matchId/bump`.
+
+**Verification is the only event that does anything**, and everything it does
+rides one compare-and-set: `isVerified`, `Profile.reliabilityScore += 50` for
+both, `Match.dateAttendedA/B = true`, one bonus Date Ticket each, and the
+icebreaker deck. A second shake from either side after that is a no-op — the
+CAS claims zero rows and credits nothing, which is what makes the reward
+exactly-once when both shakes land in the same millisecond.
+
+**Why this is allowed to write attendance.** §Phase 4 states the rule it looks
+like it breaks: *the evidence classifier NEVER writes `dateAttended*`, only a
+live human answer does.* A Bump satisfies that rule rather than weakening it.
+The classifier reads a proxy chat and guesses; a Bump is two people,
+deliberately, at the venue, at the time — a stronger human answer than the one
+the T+24h form collects, and earlier. What the rule forbids is a machine
+inventing the fact, and nothing here invents anything. The T+24h flow therefore
+skips its attendance question for a bumped pair and asks about chemistry
+directly.
+
+**A single shake announces nothing.** The peer is not nudged, and the client is
+not told the peer has shaken — `/v1/date/state` reports only the caller's own
+`bump.mine`. Nudging the second person is the first person's phone telling on
+them, at a table where they are sitting together; and a client that could see
+the peer's shake could show it, which is the same leak one step later.
+
+**The three refusals are the whole anti-abuse story, deliberately.** There is
+no device attestation and no anti-spoofing: a determined user can lie about
+their coordinates, and the product's answer is that they would be lying their
+way into a free ticket, on a date they are already paying for, at a venue we
+chose, inside a fifteen-minute window. The cost of being wrong is one ticket;
+the cost of a heavier gate is a real couple at a real table who cannot make it
+work.
+
+**The AI Icebreaker Deck is a SECOND deck and does not replace the §Phase 4
+one.** That one is sent five hours before the date to someone still deciding
+what to wear, and its job is to open a conversation that has not started. This
+one is unlocked by the pair actually meeting and is read by two people already
+sitting down, so openers are forbidden — it is five things worth talking about,
+per side, in each side's own language, generated from both profiles and stored
+on `DateBumpSession.icebreakerDeck`. A model failure falls back to a static
+five-line deck rather than costing the pair the moment.
+
+**Reliability is its own column, not Elo.** `Profile.eloScore` is
+attractiveness — seeded by the vision pass over photos, moved by accept/decline,
+and read by `V_league`, which decides who is a viable candidate at all. Writing
+a turned-up-to-the-date reward into it would assert that reliable people are
+better-looking and corrupt the one signal the league reads.
+`Profile.reliabilityScore` carries the literal meaning instead, and matching
+deliberately does not read it yet: it accumulates first, like `socialRole`, so
+its weight can be chosen against data rather than guessed.
+
 ## Cross-Cutting Concerns
 
 ### The loading mark: butterflies in the stomach (2026-08-06)

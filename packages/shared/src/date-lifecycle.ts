@@ -109,3 +109,34 @@ export const SCRATCH_TILE_PRECISION = 6;
 
 /** Topics per side in a generated icebreaker deck. */
 export const BUMP_ICEBREAKER_COUNT = 5;
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+
+/**
+ * The window a Date Bump is accepted in.
+ *
+ * Lives here rather than in `services/date-bump.ts` for one reason: the demo
+ * driver's decision table has to know whether the window is open before it asks
+ * the puppet to shake, and that table is pure by design — it must not import a
+ * module that pulls in Prisma. Two copies of this arithmetic would drift, and
+ * the drift would show up as a demo that gives up three times and announces
+ * itself stuck.
+ */
+export function bumpWindowFor(agreedTime: Date): { opens: Date; closes: Date } {
+  const ms = agreedTime.getTime();
+  return {
+    opens: new Date(ms - DATE_BUMP_OPENS_MINUTES * MINUTE_MS),
+    closes: new Date(ms + DATE_BUMP_GRACE_HOURS * HOUR_MS),
+  };
+}
+
+export function checkBumpWindow(
+  agreedTime: Date,
+  at: Date,
+): "ok" | "too-early" | "too-late" {
+  const { opens, closes } = bumpWindowFor(agreedTime);
+  if (at.getTime() < opens.getTime()) return "too-early";
+  if (at.getTime() >= closes.getTime()) return "too-late";
+  return "ok";
+}

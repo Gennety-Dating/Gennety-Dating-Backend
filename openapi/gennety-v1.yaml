@@ -2707,6 +2707,73 @@ paths:
                     $ref: "#/components/schemas/DateStateMatch"
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/dates/{id}/bump:
+    post:
+      tags: [date]
+      operationId: postDateBump
+      summary: Record this side's Date Bump shake
+      description: >
+        One side's shake. The pair verifies when both shakes land within 10s of
+        each other and both coordinates are inside 100m of the venue — the
+        server re-checks all three, because a client-side verdict is a
+        client-side ticket grant.
+
+
+        `at` is the DEVICE's clock and is the only honest answer to "when was it
+        shaken", so it is used — but it is clamped to the server's own clock
+        beyond a minute of skew, so a wrong device date cannot bump outside its
+        own date.
+
+
+        `verified` is the state of the PAIR, not of this call: the partner's own
+        shake also answers true. `deck` is returned only to the call that
+        actually completed the pair.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lat, lng]
+              properties:
+                lat: { type: number }
+                lng: { type: number }
+                at:
+                  type: string
+                  format: date-time
+                  description: When the device registered the shake. Omitted = now.
+      responses:
+        "200":
+          description: Shake recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, verified]
+                properties:
+                  ok: { type: boolean, const: true }
+                  verified: { type: boolean }
+                  deck:
+                    $ref: "#/components/schemas/BumpDeck"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: >
+            The caller is not on this match. 404 rather than 403 so the endpoint
+            cannot be used to probe which match ids exist.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >
+            `wrong-state` (not a scheduled date, or no venue), `too-early`,
+            `too-late`, or `too-far`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2793,6 +2860,20 @@ components:
             only field here that could be read as "they are there and you are
             not", which is the class of claim the radar's masking exists to
             prevent.
+
+    BumpDeck:
+      type: object
+      required: [topicsForA, topicsForB]
+      description: >
+        The at-the-table deck, per side, each in that side's own language — the
+        same per-side rule the pitch follows. A client renders only its own.
+      properties:
+        topicsForA:
+          type: array
+          items: { type: string }
+        topicsForB:
+          type: array
+          items: { type: string }
 
     DateStateMatch:
       type: object
