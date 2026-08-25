@@ -1136,10 +1136,19 @@ model UserScratchMap {
   /// not know.
   exploredPercent Float @default(0) @map("explored_percent")
 
-  /// Venues this user has been verified at by a Date Bump — `CuratedVenue.id`
-  /// values, free-form (no FK) so deleting a venue from the catalog never
-  /// erases someone's history of having been there. The same rule
-  /// `TicketLedger.matchId` already follows.
+  /// Venues this user has been verified at by a Date Bump, as Google **Place
+  /// ids** (`Match.venuePlaceId`) — free-form, no FK, so deleting a venue from
+  /// the catalog never erases someone's history of having been there. The same
+  /// rule `TicketLedger.matchId` already follows.
+  ///
+  /// **NOT `CuratedVenue.id`, and that is a correction rather than a
+  /// preference.** The catalog has no uniqueness constraint and the seeder
+  /// writes one row per `universityDomain` — Kyiv holds ~538 rows for ~127 real
+  /// venues — so every other reader in the product already dedupes by
+  /// `placeId`. Storing one of five arbitrary uuids would give two people who
+  /// sat in the same café different "discovered venues", which is the one thing
+  /// this column exists to get right. A Places-fallback venue has a place id
+  /// too, while it has no curated row at all.
   discoveredVenues String[] @default([]) @map("discovered_venues")
 
   createdAt DateTime @default(now()) @map("created_at")

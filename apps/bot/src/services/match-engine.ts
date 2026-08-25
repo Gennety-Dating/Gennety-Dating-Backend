@@ -460,8 +460,15 @@ export interface SeekerProfile {
  * is excluded from the scoring A/B for free — and it writes no
  * `MatchScoreLog` at all (see `runDropBatch`), because a pairing against a
  * partner who declines by construction says nothing about scoring quality.
+ *
+ * `campus` is the Bonus Campus Drop (§Campus Radar): an out-of-cycle run scoped
+ * to one university whose verified cohort just grew. It carries its own value
+ * for two reasons — the weekly analytics exclude it like every other
+ * non-`weekly` source, and it is the ONLY record of when a campus last had a
+ * drop, which is what its cooldown is derived from. A counter would be a second
+ * source of truth about the same fact; this cannot drift from it.
  */
-export type MatchSource = "weekly" | "rematch" | "synthetic";
+export type MatchSource = "weekly" | "rematch" | "synthetic" | "campus";
 
 export interface ScoredCandidate {
   userId: string;
@@ -2166,8 +2173,27 @@ export async function runDropBatch(): Promise<DropBatchResult> {
   };
 }
 
-export async function previewDropBatch(): Promise<DropBatchPlan> {
-  const users = await loadEligibleUsers();
+/**
+ * Plan a drop.
+ *
+ * `restrictToUserIds` narrows the eligible pool to a named set and is used by
+ * exactly one caller: the Bonus Campus Drop (§Campus Radar), which runs the
+ * SAME scorer, the same lifetime pair ban and the same greedy allocator over
+ * one university's cohort. It is a restriction, never an exemption — a user in
+ * the set who fails ordinary eligibility is still excluded, because the ids
+ * are handed to `loadEligibleUsersForIds` as its `requestedIds` filter rather
+ * than replacing the predicate.
+ *
+ * Omitted (the Thursday batch) the behaviour is byte-for-byte what it was
+ * before the parameter existed — `loadEligibleUsers()` is called with no
+ * arguments, which is what `match-engine-eligibility.test.ts` pins.
+ */
+export async function previewDropBatch(
+  restrictToUserIds?: readonly string[],
+): Promise<DropBatchPlan> {
+  const users = restrictToUserIds
+    ? await loadEligibleUsersForIds(prisma, restrictToUserIds)
+    : await loadEligibleUsers();
   if (users.length === 0) {
     return { eligible: 0, pairs: 0, finalPairs: [], missedUserIds: [] };
   }

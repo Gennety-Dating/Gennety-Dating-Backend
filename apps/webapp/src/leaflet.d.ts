@@ -38,10 +38,27 @@ declare namespace L {
     setPrefix(prefix: string | false): this;
   }
 
+  interface Point {
+    x: number;
+    y: number;
+  }
+
   class Map {
     attributionControl: AttributionControl;
-    on(type: "moveend" | "movestart" | "load", listener: () => void): this;
+    // `move`/`zoom` fire continuously through a gesture, unlike their `*end`
+    // twins. The Scratch Map's fog is drawn in container pixels, so it has to
+    // follow the city rather than catch up with it when the finger lifts.
+    on(
+      type: "moveend" | "movestart" | "load" | "move" | "zoom",
+      listener: () => void,
+    ): this;
     getCenter(): LatLng;
+    /** Container size in pixels. Optional — a stubbed map degrades to the
+        element's own size rather than throwing inside the fog renderer. */
+    getSize?(): Point;
+    /** Projects a coordinate to a pixel inside the map container. Optional for
+        the same reason as `getSize`. */
+    latLngToContainerPoint?(latlng: LatLngTuple | LatLng): Point;
     setView(center: LatLngTuple | LatLng, zoom?: number, options?: SetViewOptions): this;
     invalidateSize(animate?: boolean): this;
     remove(): this;

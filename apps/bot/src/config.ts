@@ -659,6 +659,33 @@ export const env = {
   SYNTHETIC_PARTNER_CRON_SCHEDULE:
     process.env.SYNTHETIC_PARTNER_CRON_SCHEDULE ?? "* * * * *",
 
+  // ── Bonus Campus Drop (§Campus Radar) ────────────────────────────────
+  /// An out-of-cycle drop for one university whose verified cohort just grew.
+  /// Ships OFF: it is a second entry point into the allocator, and the reason
+  /// Rematch carries a pre-batch blackout is that a single-cohort run can take
+  /// a candidate the globally-optimal Thursday batch needed.
+  CAMPUS_DROP_ENABLED: process.env.CAMPUS_DROP_ENABLED === "true",
+  /// How many students a campus must newly verify inside the window to earn a
+  /// drop. Low enough to fire on a real campus push, high enough that two
+  /// friends signing up together do not trigger one.
+  CAMPUS_DROP_GROWTH_THRESHOLD: Number(
+    process.env.CAMPUS_DROP_GROWTH_THRESHOLD ?? "6",
+  ),
+  /// The window that growth is measured over.
+  CAMPUS_DROP_WINDOW_HOURS: Number(process.env.CAMPUS_DROP_WINDOW_HOURS ?? "48"),
+  /// How long a campus waits between bonus drops. Derived state: the anchor is
+  /// the newest `campus` match for that domain, so there is no counter to drift.
+  CAMPUS_DROP_COOLDOWN_HOURS: Number(
+    process.env.CAMPUS_DROP_COOLDOWN_HOURS ?? "168",
+  ),
+  /// Hours before the ordinary drop in which a campus drop stands down — the
+  /// same protection `REMATCH_PRE_BATCH_BLACKOUT_HOURS` gives the batch, and
+  /// for the same reason.
+  CAMPUS_DROP_PRE_BATCH_BLACKOUT_HOURS: Number(
+    process.env.CAMPUS_DROP_PRE_BATCH_BLACKOUT_HOURS ?? "6",
+  ),
+  CAMPUS_DROP_CRON_SCHEDULE: process.env.CAMPUS_DROP_CRON_SCHEDULE ?? "30 * * * *",
+
   // ── Date card (shareable PNG for a fully scheduled date) ─────
   /// Master flag for the date-card feature. When false (default), the
   /// scheduled-date confirmation is the existing plain-text DM. When true, both

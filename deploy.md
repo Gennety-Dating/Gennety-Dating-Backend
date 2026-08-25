@@ -1,5 +1,72 @@
 # Gennety Dating Deploy
 
+**PENDING — Scratch Map + Campus Radar (PRODUCT_SPEC §6.5/§6.6, DECISIONS.md
+2026-08-26).** Rides the SAME `db:push` as the Living Canvas block below — its
+two tables and two columns were already in that block's plan, so there is
+**no additional schema step**. Half client, so the sequence is unchanged:
+Deploy Full Server Code → `db:push` → `pnpm db:drift-check` → `pm2 restart` →
+`./scripts/deploy-webapp.sh` → `pnpm demo:deploy`.
+
+**One new env, and it uses the safe default:** `CAMPUS_DROP_ENABLED` (default
+`false`). Do **not** set it in this deploy — see below. The other four
+(`CAMPUS_DROP_GROWTH_THRESHOLD` 6, `_WINDOW_HOURS` 48, `_COOLDOWN_HOURS` 168,
+`_PRE_BATCH_BLACKOUT_HOURS` 6, `_CRON_SCHEDULE` `30 * * * *`) are optional and
+only mean anything once the flag is on.
+
+**Six things worth knowing before the restart:**
+
+- **The Scratch Map ships LIVE but collects nothing by default.**
+  `scratch_map_opt_in` is false on every existing row, so the three routes
+  answer and write nothing until a person turns it on. That is the intended
+  first state, not a half-deploy.
+- **`POST /v1/scratch/ping` is the first endpoint in the product designed to be
+  called repeatedly by an open screen while NOTHING is happening.** It is
+  cheap by construction — a ping that uncovers no new tile performs no write at
+  all, which is the common case — but it is a new shape of load. Watch it once
+  the canvas has users.
+- **The Campus Drop is a SECOND entry point into the allocator**, which is why
+  it ships off. `runDropBatch` is untouched, and `previewDropBatch` gained an
+  optional restriction whose absence reproduces the old call exactly —
+  `match-engine-eligibility.test.ts` (the guard that pins the query shape
+  byte-for-byte) passes unchanged, which is the evidence rather than the claim.
+- **`Match.source` gains the value `campus`.** Plain string column, no
+  migration. Weekly-optimizer analytics filter to `source = 'weekly'`, so a
+  campus pair is excluded from the scoring A/B for free.
+- **A verified Date Bump now also writes a scratch row** for each side that
+  opted in. Fire-and-forget with its own try/catch, so it cannot cost the pair
+  their verification, their reliability or their bonus ticket.
+- **Flipping `CAMPUS_DROP_ENABLED` today would do nothing**, and knowing why
+  matters more than the flag: production has **zero** accounts carrying a
+  `universityDomain` (every one is on the general/phone track), so every
+  campus's cohort is empty. It becomes meaningful at a real campus launch, and
+  the first flip should be paired with watching `[campus-radar]` for a tick.
+
+Preflight for this change: typecheck clean across 5 projects, `openapi:lint`
+valid (9 warnings — the baseline), **5032 tests** (bot 4264 / shared 318 /
+webapp 450), 0 failed. New guards: 9 on the geohash (pinned to a published
+reference vector, not to itself), 15 on the scratch service, 11 on its routes,
+14 on the campus radar, 10 on the fog.
+
+Post-deploy check — the routes answer 401 unauthenticated, which is also the
+proof they are mounted, and nothing should be collected yet:
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' https://dating-api.gennety.com/v1/scratch
+# 401 = mounted. 404 = the router did not come up.
+psql "$DATABASE_URL" -c "select count(*) from user_scratch_maps;"
+# 0, and it stays 0 until somebody turns the toggle on.
+psql "$DATABASE_URL" -c "select count(*) from users where scratch_map_opt_in;"
+pm2 logs gennety-bot --lines 40 --nostream | grep 'Campus drop'
+# Nothing: the flag is off, so the cron is not registered at all.
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — the schema is
+the canvas block's, the flag is already off, and rows already written are the
+users' own map (leaving them costs nothing and deleting them is not this
+deploy's business).
+
+---
+
 **PENDING — Living Canvas & viral mechanics (PRODUCT_SPEC §6, DECISIONS.md).**
 Needs an **additive `db:push` BEFORE the restart**, and it is half client, so
 the sequence is: Deploy Full Server Code → `db:push` → `pnpm db:drift-check` →

@@ -18,6 +18,8 @@ export interface CanvasStrings {
   idleTitle: string;
   idleBody: string;
   idleNoDrop: string;
+  /** The Scratch Map's one line. `{percent}` is already formatted. */
+  scratchExplored: string;
   /** A pitch is on the table and THIS side has not answered. */
   decisionTitle: string;
   decisionBody: string;
@@ -58,6 +60,7 @@ const en: CanvasStrings = {
   idleTitle: "I'm looking",
   idleBody: "Next drop in {time}. Until then the map is yours.",
   idleNoDrop: "I check every evening. You'll hear from me the moment I find someone.",
+  scratchExplored: "You've walked {percent} of Kyiv.",
   decisionTitle: "Someone's waiting on your answer",
   decisionBody: "Open the chat and tell me yes or no — {time} left.",
   planningTitle: "Sorting out the details",
@@ -89,6 +92,7 @@ const ru: CanvasStrings = {
   idleTitle: "Я ищу",
   idleBody: "Следующий дроп через {time}. А пока карта твоя.",
   idleNoDrop: "Смотрю каждый вечер. Напишу, как только найду.",
+  scratchExplored: "Ты обошёл {percent} Киева.",
   decisionTitle: "От тебя ждут ответа",
   decisionBody: "Открой чат и скажи да или нет — осталось {time}.",
   planningTitle: "Договариваемся о деталях",
@@ -120,6 +124,7 @@ const uk: CanvasStrings = {
   idleTitle: "Я шукаю",
   idleBody: "Наступний дроп через {time}. А поки карта твоя.",
   idleNoDrop: "Дивлюся щовечора. Напишу, щойно знайду.",
+  scratchExplored: "Ти обійшов {percent} Києва.",
   decisionTitle: "Від тебе чекають відповіді",
   decisionBody: "Відкрий чат і скажи так чи ні — лишилось {time}.",
   planningTitle: "Узгоджуємо деталі",
@@ -152,6 +157,7 @@ const de: CanvasStrings = {
   idleTitle: "Ich suche",
   idleBody: "Nächster Drop in {time}. Bis dahin gehört dir die Karte.",
   idleNoDrop: "Ich schaue jeden Abend. Du hörst von mir, sobald ich jemanden finde.",
+  scratchExplored: "Du hast {percent} von Kyjiw erlaufen.",
   decisionTitle: "Jemand wartet auf deine Antwort",
   decisionBody: "Öffne den Chat und sag ja oder nein — noch {time}.",
   planningTitle: "Wir klären die Details",
@@ -184,6 +190,7 @@ const pl: CanvasStrings = {
   idleTitle: "Szukam",
   idleBody: "Następny drop za {time}. Na razie mapa jest twoja.",
   idleNoDrop: "Sprawdzam co wieczór. Odezwę się, gdy tylko kogoś znajdę.",
+  scratchExplored: "Przeszedłeś {percent} Kijowa.",
   decisionTitle: "Ktoś czeka na twoją odpowiedź",
   decisionBody: "Otwórz czat i powiedz tak albo nie — zostało {time}.",
   planningTitle: "Ustalamy szczegóły",

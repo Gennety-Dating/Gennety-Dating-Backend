@@ -6814,6 +6814,88 @@ would then be two copies of one handler with a rule that they must never
 diverge, so the split moves to where the difference actually is — how the
 caller proves who they are — and nothing else is duplicated.
 
+### 6.5 Scratch Map — the city you have actually been in
+
+A dark veil over Kyiv with a hole punched through it wherever this person has
+been. It is the answer to what the canvas is FOR on the six evenings a week
+when nobody has a date: a map with nothing on it is a screen you open once.
+
+**Tiles, never coordinates, and that is the design rather than the storage.**
+A tile is geohash precision 6 — roughly 1.2 km × 0.61 km — so the column can
+say "they have been around Podil" and cannot say which building. Every other
+geographic value in the product is per-purpose and per-match and disappears
+with the row that held it; this is the first thing that ACCUMULATES, which is
+why the guarantee has to be the shape of what is written rather than a rule
+somebody remembers at the call site. `packages/shared/src/geohash.ts`
+deliberately offers no decode to a point.
+
+**Off by default, behind its own consent.** `User.scratchMapOptIn` is not a
+fold into `researchOptIn`: that one governs analytics use of data we already
+hold, this one authorises COLLECTING a new class of it, and a consent that
+authorises new collection is never inferred from a broader tick — the rule
+`biometricConsentAt` already follows. **Switching it off stops collection and
+keeps the map**: the tiles are the person's own, and a toggle that silently
+deleted months of them would be a worse surprise than one that stops
+collecting. Erasure is account deletion.
+
+**Nothing is recorded while you are not looking.** The only two writers are a
+ping sent while the canvas is open and a verified Date Bump. There is no
+background-location entitlement in the iOS app and no such permission requested
+in the Mini App, so that promise is structural rather than a policy.
+
+**The Bump writes here for the same reason it may write attendance.** It is not
+a guess about where someone was — two people deliberately shook their phones,
+at the venue, at the time — so it records the venue and its tile for both
+sides. It rides the bump's success path fire-and-forget: a souvenir must never
+cost someone the date their reliability and bonus ticket depend on.
+
+**The percentage is a share of the CITY.** The denominator is a constant of the
+market (2915 tiles for Kyiv), not of anyone's data — derived from visited tiles
+it would move everyone's number whenever a stranger walked somewhere new, and a
+person who explored nothing would watch their own fall. A first tile is 0.034%
+and is shown as 0.1% rather than 0.0%: telling someone who just walked their
+first square that they have walked nothing reads as a broken feature.
+
+**The fog is translucent.** The city under it stays legible — streets, the
+river, where you are. An opaque veil would turn the map into a scratch card
+that happens to be a city, and the canvas exists to show the city. And it is
+drawn only once tiles have arrived: a fully-fogged map with no data hides
+everything, says nothing, and looks exactly like a bug.
+
+### 6.6 Campus Radar — a bonus drop for a campus that just filled up
+
+A university that verifies a dozen students in two days has a pool the product
+cannot use until Thursday. The radar watches for that and runs one extra drop,
+scoped to that campus.
+
+**It reuses the real allocator.** Same eligibility predicate, same lifetime
+pair ban, same scorer, same greedy allocation — the only difference is the id
+set it plans over. A second pairing implementation would be a second definition
+of what a good match is, and the two would diverge silently.
+
+**Three bounds, each answering a different way it could hurt.** A growth
+threshold, so it fires on a campus push rather than on two friends signing up
+together. A cooldown, so one campus cannot be dropped repeatedly — read off the
+newest `campus` match for that domain rather than a counter, because the row IS
+the record of the last drop. And a **pre-batch blackout**, because a
+single-cohort run can take a candidate the globally-optimal Thursday batch
+needed: exactly the protection Rematch carries, for exactly the same reason.
+
+**Growth needs no baseline.** "Verified inside the window" is the growth, and
+it is a timestamp range on rows we already keep. A stored baseline would be a
+second fact about the same cohort, wrong from the first missed tick, with
+nothing to notice.
+
+**Starvation counters are left alone.** `standbyCount` measures how many
+ordinary drops a person was passed over by. A bonus run that incremented it
+would punish everyone it failed to pair for having a lively campus; one that
+reset it would hand a whole university a priority advantage in the next batch.
+
+Ships off (`CAMPUS_DROP_ENABLED`). It is a second entry point into the
+allocator, and production today has no university-domain accounts at all — the
+general/phone track carries every one of them — so it would trigger never and
+pair nobody until a real campus launch.
+
 ## Cross-Cutting Concerns
 
 ### The loading mark: butterflies in the stomach (2026-08-06)

@@ -47,6 +47,7 @@ import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { premiumExpiryReminderTick } from "./workers/premium-expiry-reminder.js";
 import { syntheticPartnerTick } from "./workers/synthetic-partner.js";
+import { campusDropTick } from "./workers/campus-drop.js";
 import { sweepRematchRefunds } from "./services/rematch-refund.js";
 import { sweepVenueChangeRefunds } from "./services/venue-change-refund.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
@@ -701,6 +702,25 @@ bot.start({
       console.log(
         `[cron] Synthetic test partner scheduled: "${env.SYNTHETIC_PARTNER_CRON_SCHEDULE}"`,
       );
+    }
+
+    // Bonus Campus Drop (PRODUCT_SPEC §Campus Radar): an out-of-cycle drop for
+    // a university whose verified cohort just grew. Registered only when
+    // CAMPUS_DROP_ENABLED — it is a SECOND entry point into the allocator, and
+    // the reason Rematch carries a pre-batch blackout is that a single-cohort
+    // run can take a candidate the globally-optimal Thursday batch needed.
+    //
+    // Not scheduled in demo mode, for the same reason drop matching is not:
+    // the demo must never pair two visitors with each other, and a campus drop
+    // is matching.
+    if (env.CAMPUS_DROP_ENABLED && !DEMO_MODE_ENABLED) {
+      cron.schedule(
+        env.CAMPUS_DROP_CRON_SCHEDULE,
+        guardedTick("campus-drop", () => campusDropTick()),
+      );
+      console.log(`[cron] Campus drop scheduled: "${env.CAMPUS_DROP_CRON_SCHEDULE}"`);
+    } else if (env.CAMPUS_DROP_ENABLED) {
+      console.log("[cron] Campus drop NOT scheduled (demo mode owns matching)");
     }
 
     // M-6: hourly auto-unsuspend. Lifts Tier 2 suspensions whose

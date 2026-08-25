@@ -59,6 +59,19 @@ export interface ProximityResponse extends RadarReading {
   arrived: boolean;
 }
 
+export interface ScratchState {
+  optIn: boolean;
+  /** Geohash-6 tiles. Never coordinates — see `services/scratch-map.ts`. */
+  exploredTiles: string[];
+  exploredPercent: number;
+  discoveredVenues: string[];
+}
+
+export interface ScratchPingResponse extends ScratchState {
+  ok: true;
+  uncovered: boolean;
+}
+
 /** Refused for a reason the screen can act on, rather than a network fault. */
 export class CanvasApiError extends Error {
   constructor(
@@ -120,4 +133,36 @@ export async function postProximity(
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as ProximityResponse;
+}
+
+export async function fetchScratchMap(initData: string): Promise<ScratchState> {
+  const res = await apiFetch(`${apiBase}/v1/scratch`, { headers: auth(initData) });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as ScratchState;
+}
+
+export async function postScratchPing(
+  initData: string,
+  at: { lat: number; lng: number },
+): Promise<ScratchPingResponse> {
+  const res = await apiFetch(`${apiBase}/v1/scratch/ping`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...auth(initData) },
+    body: JSON.stringify(at),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as ScratchPingResponse;
+}
+
+export async function putScratchOptIn(
+  initData: string,
+  enabled: boolean,
+): Promise<ScratchState> {
+  const res = await apiFetch(`${apiBase}/v1/scratch/opt-in`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...auth(initData) },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as ScratchState;
 }

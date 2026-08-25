@@ -941,6 +941,61 @@ and something to revisit the day that stops being true. An entry also expires a
 few minutes after its last ping, so a phone that has gone quiet reads as
 `unknown` rather than as a stale ETA.
 
+### The Scratch Map and the Campus Radar
+
+`services/scratch-map.ts` owns the tiles; `services/campus-radar.ts` owns the
+Bonus Campus Drop. They share a section because they are the two halves of
+§Scratch Map / §Campus Radar and nothing else — one is per-person and
+per-neighbourhood, the other per-university.
+
+**The scratch map's privacy guarantee is `packages/shared/src/geohash.ts`, not
+a rule at the call sites.** A tile is precision 6 (~1.2 km × 0.61 km), so
+nothing narrower than a neighbourhood is REPRESENTABLE. The module deliberately
+exposes no decode-to-a-point: handing callers a centre invites treating a tile
+as a location, which is the exact conversion it exists to prevent. `tileBounds`
+returns the box, which is what a map layer and a tile count both actually need.
+
+**The denominator is a constant of the city.** `tilesInMarket` walks the
+market's circle once per process and counts the tiles whose centre falls inside
+it — 2915 for Kyiv, which is π·21² km² to within a percent. Deriving it from
+tiles anyone has visited would make everyone's percentage move whenever a
+stranger walked somewhere new, and a person who explored nothing would watch
+their own number fall.
+
+**Two writers, and the second is the interesting one.** A foreground ping is
+the ordinary path. A verified Date Bump also writes — the venue and its tile,
+for both sides — and it is allowed to for the same reason the Bump may write
+`dateAttended*` while the T+24h evidence classifier may not: it is not a guess
+about where someone was. It rides the bump's success path fire-and-forget, and
+swallows its own errors, because a souvenir must never cost someone the date
+their reliability and bonus ticket depend on.
+
+**`discoveredVenues` holds Google Place ids, not `CuratedVenue.id`.** The
+catalog has no uniqueness constraint and the seeder writes one row per
+`universityDomain` — Kyiv holds ~538 rows for ~127 real venues — so a row id
+would give two people who sat in the same café different histories. Every other
+reader in the product already dedupes by `placeId`.
+
+**The Campus Radar needs no baseline table.** "Verified inside the window" IS
+the growth, and it is a `verifiedAt` range on rows we already keep; a stored
+baseline would be a second fact about the same cohort, wrong from the first
+missed tick with nothing to notice. Its cooldown is read the same way — off the
+newest `Match` with `source = "campus"` for that domain, which is the record of
+the last drop rather than a counter that can drift from it.
+
+**The Bonus Campus Drop reuses the real allocator.** `previewDropBatch(ids)`
+takes a restriction, never an exemption: the ids are handed to
+`loadEligibleUsersForIds` as its filter, so a user in the cohort who fails
+ordinary eligibility is still excluded. A second pairing implementation would
+be a second definition of what a good match is, and the two would diverge
+silently. It carries a pre-batch blackout for exactly the reason Rematch does —
+a single-cohort run can take a candidate the globally-optimal Thursday batch
+needed — and it deliberately leaves starvation counters alone: incrementing
+them would punish a lively campus, resetting them would hand one a priority
+advantage in the next batch.
+
+Inert without `CAMPUS_DROP_ENABLED`; the worker is not scheduled at all.
+
 ### `no_match_notices`
 
 Audit row for the empathetic "no match this week" DM. `tier` is the
@@ -1092,6 +1147,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `0 * * * *` (only when `REMATCH_FEATURE_ENABLED`) | UTC | Rematch refunds: retry `refund_failed` rows and refund purchases abandoned mid-run (`processing` past 5 min). What makes "never keep money without delivering a match" durable | `services/rematch-refund.ts` (`sweepRematchRefunds`) |
 | `0 * * * *` (only when `VENUE_CHANGE_FEATURE_ENABLED`) | UTC | Venue-change refunds: retry `refund_failed` rows and refund purchases abandoned mid-settle (`processing` past 5 min). The twin of the rematch sweep for §3.7b | `services/venue-change-refund.ts` (`sweepVenueChangeRefunds`) |
 | `* * * * *` (only when `SYNTHETIC_FILL_ENABLED`) | UTC | Synthetic test partner (PRODUCT_SPEC §3.1c): declines a `proposed` match once the HUMAN side has answered and `SYNTHETIC_DECLINE_DELAY_MS` has elapsed since dispatch. Answering second is what makes the blind-decision invariant trivially safe. Goes through the ordinary `applyMatchDecision`, so the Elo guard, the reveals and the suppressed Rematch upsell behave exactly as on a real decline. A silent human is left to the ordinary expiry cron | `workers/synthetic-partner.ts` (`syntheticPartnerTick`) |
+| `30 * * * *` (only when `CAMPUS_DROP_ENABLED`, never in demo) | UTC | **Bonus Campus Drop** (PRODUCT_SPEC §Campus Radar): counts students verified per university inside the window and runs one extra, campus-scoped drop when a cohort grew past the threshold. Hourly rather than by the minute because what it watches moves in days. Three bounds — growth threshold, cooldown (read off the newest `campus` match, not a counter), and a pre-batch blackout, because a single-cohort run can take a candidate the globally-optimal batch needed. Not scheduled in demo mode for the same reason drop matching is not: the demo must never pair two visitors with each other | `workers/campus-drop.ts` → `services/campus-radar.ts` |
 | `0 10 * * 5` (only when `VENUE_CONCENTRATION_ALERT_ENABLED`) | Europe/Kyiv | Weekly venue-concentration alarm — DMs the founder ops feed when one venue took more than `VENUE_CONCENTRATION_ALERT_THRESHOLD_PCT` of a city's dates. Friday morning, so the window always contains a full Thursday drop. Deliberately **not** deduplicated by a marker table: a problem still there next week SHOULD be reported again, and the weekly cadence is the whole rate limit | `workers/venue-concentration-alert.ts` (`venueConcentrationAlertTick`) |
 | `setInterval(20 s)` | — | **Peer-wait shimmer** — re-issues the ephemeral `<tg-thinking>` draft for every side currently waiting on its partner (pitch decision / calendar / venue / the §3.7b venue-change board), so the shimmer survives the whole wait. "Waiting" means the user has nothing left to do: a state where the next move is theirs — including a calendar where both picked and nothing overlaps — gets the §3.5 reminder instead and no status at all (`isSideWaitingOnPeer`, PRODUCT_SPEC §3.6b); owns the per-side wait anchor that drives the five-tier wording ladder, plus the plain-message fallback and its teardown. `PEER_WAIT_TICK_MS=0` disables. Interval rather than cron: the draft's ~30 s TTL is shorter than cron's one-minute floor | `workers/peer-wait-shimmer.ts` (`peerWaitShimmerTick`) + `workers/peer-wait-venue-change.ts` |
 | `setInterval(2 min)` | — | Date lifecycle: **venue-change lapse sweep** (an unpaid `agreed` swap lapses — original venue stands, match untouched; an abandoned express mint quietly reverts — feature-flagged), ice-breakers (T-5 h), emergency window, T-1.5 h pre-date safety, T+24 h feedback, wingman; **pre-date coordination** (T-60 m offer, T-30 m proxy open, T+2 h proxy close — feature-flagged) | `services/date-lifecycle.ts` + `services/pre-date-safety.ts` + `services/coordination.ts` + `handlers/matching/venue-change.ts` |
@@ -1182,6 +1238,9 @@ auth) are deliberately outside the spec.
 | GET  | `/v1/date/state` | **Living Canvas** (JWT, PRODUCT_SPEC §6.1) — the derived `DateLifecycleState` plus the locked date, its venue, this side's bump state, the next drop, and the CALLER's own `timeZone`. Its own prefix rather than a field on `/v1/matches/current` because it must answer for a user with NO match: `IDLE_EXPLORING` is the state most users are in most of the time, and that endpoint answers null there. Two queries by design — the live statuses, then (only if there are none) a `completed` row that still owes feedback, which `ACTIVE_MATCH_STATUSES` excludes. Blind-decision safe: the partner's `acceptedBy*` is never selected into the response, and a caller who has answered resolves identically whatever the partner chose. |
 | POST | `/v1/dates/{id}/bump` | **Date Bump** (JWT, PRODUCT_SPEC §6.2) — one side's shake. The client detects it (CoreMotion / `DeviceMotionEvent`) and posts when and where; **the server decides whether it counts**, because a client-side verdict is a client-side ticket grant. `at` is the DEVICE clock and is trusted only inside `CLOCK_SKEW_TOLERANCE_MS` (60 s) of ours — the two phones' clocks are what the alignment check compares, so it has to be used, but a phone an hour fast must not bump its way outside its own date. `not-participant` answers **404**, not 403, so the endpoint cannot be used to probe which match ids exist; every other refusal is 409. The deck and the announcement hang off the ONE call that verified the pair (`justVerified`), never off `verified`, or the partner's own shake a beat later would generate a second deck and send everything twice. |
 | POST | `/v1/dates/{id}/proximity` | **Date Radar** (JWT, PRODUCT_SPEC §6.3) — ping-and-read: the caller's position goes in, the PARTNER's masked status comes back. The response is a closed shape (`peer` ∈ `unknown`/`en_route`/`arrived`, an optional `HH:mm`, `bothArrived`) and carries no coordinate, distance or address — those are one disclosure at four resolutions, and the masking lives in `viewOfPeer` so exactly one function decides what crosses between two people. **Stores nothing** (see `services/date-radar.ts`): the pinged coordinates compute an ETA and are dropped. Window is T-45m to `agreedTime` itself — unlike the Bump's T+2h grace, because once the date has begun the two of them can see each other. |
+| GET | `/v1/scratch` | **Dating Scratch Map** (JWT or `tma`, PRODUCT_SPEC §Scratch Map) — the caller's tiles, their share of the city, the venues a verified Bump recorded, and the opt-in, in one call so a client needs no second request to draw the screen. |
+| POST | `/v1/scratch/ping` | One foreground position, folded into a geohash-6 tile. **The coordinates are dropped** — never stored, never logged, the same rule the Radar follows. A ping that uncovers nothing performs no write at all, which is the common case: someone sitting still would otherwise write a row every few seconds for a set that never changes. `409 opted-out` / `409 outside-market`. |
+| PUT | `/v1/scratch/opt-in` | The consent the feature runs under. Off by default, and its own column rather than a fold into `researchOptIn` — that governs analytics use of data we already hold, this authorises COLLECTING a new class of it. **Switching it off stops collection and keeps the map**: the tiles are the person's own, and erasure is what account deletion is for. |
 
 **The three canvas routes above (`/v1/date/state`, `/v1/dates/{id}/bump`,
 `/v1/dates/{id}/proximity`) accept EITHER a JWT bearer or Telegram

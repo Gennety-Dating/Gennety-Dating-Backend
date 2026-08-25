@@ -19,6 +19,7 @@ import { countdownRouter } from "./routes/countdown.js";
 import { dateStateRouter } from "./routes/date-state.js";
 import { dateBumpRouter } from "./routes/date-bump.js";
 import { dateRadarRouter } from "./routes/date-radar.js";
+import { scratchMapRouter } from "./routes/scratch-map.js";
 import { appConfigRouter } from "./routes/app-config.js";
 import { phoneAuthRouter } from "./routes/phone-auth.js";
 import { telegramAuthRouter } from "./routes/telegram-auth.js";
@@ -450,6 +451,10 @@ app.use("/v1/dates", dateBumpRouter);
 // Same prefix, separate router: the Bump and the Radar share a resource and
 // nothing else — one is a two-sided commit, the other a masked read.
 app.use("/v1/dates", dateRadarRouter);
+// The Scratch Map. Its own prefix and not `/v1/me/*`: it is the only surface a
+// client polls while nothing is happening, and it is gated by a consent of its
+// own rather than by being logged in.
+app.use("/v1/scratch", scratchMapRouter);
 // Founder weekly-matches report page + media proxy. Public by design — the
 // unguessable token in the path is the authorization (no JWT/initData). Ops-only
 // and inert unless FOUNDER_NOTIFY_ENABLED (reports are never created otherwise).

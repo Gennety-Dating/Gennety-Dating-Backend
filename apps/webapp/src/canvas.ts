@@ -8,10 +8,10 @@
  * browser. What is left here is the DOM, Leaflet, and the two permission
  * dances the platform forces on us.
  *
- * Deliberately NOT here: the Scratch Map's fog. That layer has no data until
- * §6.4 ships, and a fully-fogged map is strictly worse than no fog at all —
- * it would hide the city the canvas exists to show. It lands with its own
- * endpoint rather than as an empty layer waiting for one.
+ * The Scratch Map's fog is here now that it has an endpoint to fill it
+ * (§Scratch Map). It is drawn only once tiles have actually arrived: a
+ * fully-fogged map with no data hides the city the canvas exists to show and
+ * looks exactly like a bug.
  */
 
 import "./theme.css";
@@ -22,10 +22,14 @@ import { backoffFor, pollIntervalFor } from "./canvas/poll.js";
 import { createShakeDetector, requestMotionPermission } from "./canvas/shake.js";
 import {
   fetchDateState,
+  fetchScratchMap,
   postBump,
   postProximity,
+  postScratchPing,
   type DateStateResponse,
+  type ScratchState,
 } from "./canvas/api.js";
+import { fogPath, formatExplored } from "./canvas/fog.js";
 
 const KYIV: [number, number] = [50.4501, 30.5234];
 const MAP_ZOOM = 13;
@@ -75,6 +79,8 @@ let latest: DateStateResponse | null = null;
 let radar: RadarReading | null = null;
 let motionBound = false;
 let motionDenied = false;
+let scratch: ScratchState | null = null;
+let fogLayer: SVGSVGElement | null = null;
 const detector = createShakeDetector();
 
 function dismissBoot(): void {
@@ -137,7 +143,13 @@ function initMap(): void {
   const kick = (): void => {
     sizeMap();
     map?.invalidateSize();
+    renderFog();
   };
+  // The veil is drawn in container pixels, so every pan and zoom moves it.
+  // `move`/`zoom` rather than their `*end` twins: waiting for the gesture to
+  // finish would leave the holes visibly lagging the city under them.
+  map.on?.("move", renderFog);
+  map.on?.("zoom", renderFog);
   window.addEventListener("resize", kick);
   app?.onEvent?.("viewportChanged", kick);
   [120, 350, 800].forEach((ms) => window.setTimeout(kick, ms));
@@ -157,6 +169,82 @@ function showVenue(lat: number, lng: number): void {
     map.setView([lat, lng], VENUE_ZOOM);
   } else {
     venueMarker.setLatLng([lat, lng]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fog of war
+// ---------------------------------------------------------------------------
+
+/**
+ * Redraw the veil.
+ *
+ * An SVG overlay rather than a Leaflet layer: the whole thing is ONE path with
+ * one hole per tile, and even-odd fill cuts them out in a single composite.
+ * A layer of N rectangles would seam visibly where two uncovered tiles touch,
+ * which is the common case — people walk through adjacent tiles.
+ */
+function renderFog(): void {
+  if (!map || !window.L || !el.map) return;
+  const tiles = scratch?.exploredTiles ?? [];
+
+  const project = map.latLngToContainerPoint;
+  // Without a projection there is no fog to draw, and a veil positioned by
+  // guesswork would sit over the wrong streets — worse than none.
+  if (!project) return;
+
+  const size = map.getSize?.() ?? { x: el.map.clientWidth, y: el.map.clientHeight };
+  const path = fogPath(tiles, {
+    width: size.x,
+    height: size.y,
+    project: (lat, lng) => project.call(map!, [lat, lng]),
+  });
+
+  if (!path) {
+    fogLayer?.remove();
+    fogLayer = null;
+    return;
+  }
+
+  if (!fogLayer) {
+    fogLayer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    fogLayer.setAttribute("class", "fog");
+    fogLayer.setAttribute("aria-hidden", "true");
+    el.map.appendChild(fogLayer);
+  }
+  fogLayer.setAttribute("width", String(size.x));
+  fogLayer.setAttribute("height", String(size.y));
+  fogLayer.innerHTML =
+    `<path d="${path}" fill-rule="evenodd" class="fog-veil" />`;
+}
+
+async function loadScratchMap(): Promise<void> {
+  try {
+    scratch = await fetchScratchMap(initData);
+    renderFog();
+  } catch {
+    // No fog beats wrong fog: without the tiles the map is simply the map.
+  }
+}
+
+async function pingScratch(): Promise<void> {
+  if (!scratch?.optIn) return;
+  const here = await currentPosition();
+  if (!here) return;
+  try {
+    const res = await postScratchPing(initData, here);
+    scratch = res;
+    // Only a ping that actually uncovered ground is worth redrawing for, and
+    // only that one is worth a haptic: the map does not celebrate standing
+    // still.
+    if (res.uncovered) {
+      haptic("light");
+      renderFog();
+      render();
+    }
+  } catch {
+    // Opted out mid-session, or outside the market. Neither is an error the
+    // screen should shout about.
   }
 }
 
@@ -184,6 +272,11 @@ function render(): void {
     // sides' halves and the client is not told which side it is, so it could
     // only guess. `/v1/date/state` resolves the side on the server.
     deck: match?.deck ?? [],
+    // Only once something has actually been uncovered: "0%" on a fresh
+    // account is a feature announcing that it has nothing to show.
+    ...(scratch?.optIn && scratch.exploredPercent > 0
+      ? { exploredLabel: formatExplored(scratch.exploredPercent) }
+      : {}),
     radar,
   });
 
@@ -333,6 +426,10 @@ async function tick(): Promise<void> {
     render();
     dismissBoot();
 
+    // The scratch map fills while the canvas is being used AS a map — the
+    // states where the screen is about a date have something better to do with
+    // the user's attention and their battery.
+    if (latest.state === "IDLE_EXPLORING") void pingScratch();
     if (latest.state === "DATE_RADAR_ACTIVE") void pingRadar();
     if (latest.state === "DATE_BUMP_PENDING" && !latest.match?.bump?.mine) void armShake();
     if (latest.state !== "DATE_BUMP_PENDING" && motionBound) {
@@ -351,4 +448,5 @@ async function tick(): Promise<void> {
 
 window.setTimeout(dismissBoot, BOOT_REVEAL_MAX_MS);
 initMap();
+void loadScratchMap();
 void tick();

@@ -268,3 +268,21 @@ describe("the copy's own rules", () => {
     }
   });
 });
+
+describe("the Scratch Map's line", () => {
+  // It appears on exactly one state: the one where the canvas IS a map. On the
+  // others it would be a souvenir competing with a date for the same slot.
+  it("is shown only while exploring", () => {
+    const withLabel = sheetFor(input({ state: "IDLE_EXPLORING", exploredLabel: "12.5%" }));
+    expect(withLabel.note).toContain("12.5%");
+
+    for (const state of ["DATE_SCHEDULED", "DATE_RADAR_ACTIVE", "DATE_IN_PROGRESS"] as const) {
+      const other = sheetFor(input({ state, exploredLabel: "12.5%" }));
+      expect(other.note ?? "").not.toContain("12.5%");
+    }
+  });
+
+  it("is absent when there is nothing to say", () => {
+    expect(sheetFor(input({ state: "IDLE_EXPLORING" })).note).toBeUndefined();
+  });
+});

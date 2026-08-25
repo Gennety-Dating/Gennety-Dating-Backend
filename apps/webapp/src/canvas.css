@@ -52,6 +52,33 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   The Scratch Map's fog (§Scratch Map).
+   --------------------------------------------------------------------------- */
+
+/* Sits between the map and the scrim, and never takes a tap: the city under it
+   stays pannable, because the fog is emphasis rather than a cover. */
+.fog {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Translucent on purpose. An opaque veil would turn the map into a scratch
+   card that happens to be a city, and the canvas exists to show the city:
+   under the fog the streets, the river and the shape of Kyiv all stay
+   readable, they simply stop being the thing you are looking at. */
+.fog-veil {
+  fill: rgb(3 3 3 / 62%);
+}
+:root[data-theme="light"] .fog-veil {
+  /* The light theme's map is still the dark one (the canvas's map is a scene,
+     not a surface), so the veil stays dark here too — a pale wash over dark
+     tiles reads as haze rather than as unexplored ground. */
+  fill: rgb(3 3 3 / 52%);
+}
+
+/* ---------------------------------------------------------------------------
    The venue pin — the one thing on the map that pulses.
    --------------------------------------------------------------------------- */
 

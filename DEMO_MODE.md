@@ -971,6 +971,30 @@ through the public route, which must not grow a demo branch — so making the
 Bump demoable means giving the demo a date that is genuinely minutes away,
 which is a change to how the demo schedules, not to how it puppets.
 
+## The Scratch Map fills, the Campus Radar cannot fire
+
+Two halves of §Scratch Map / §Campus Radar, and they land on opposite sides of
+the demo's line.
+
+**The Scratch Map works here, and needs no puppet branch** — it is one-sided by
+construction, so there is nothing for the puppet to answer. A visitor who turns
+the toggle on and opens the canvas uncovers tiles exactly as a real user would.
+Worth knowing rather than assuming: the demo's own database is separate, so
+those tiles are the visitor's own and nothing reaches production.
+
+**The Campus Radar can never fire here, structurally.** Its cron is not
+scheduled under `DEMO_MODE_ENABLED` at all — for the same reason drop matching
+is not, and it is the same reason exactly: a campus drop IS matching, and the
+demo must never pair two visitors with each other. Even scheduled it would find
+nothing: a demo visitor registers on the general track and has no
+`universityDomain`, so every campus's cohort is empty.
+
+So of §Campus Radar the demo shows nothing at all, and that is a stated limit
+rather than a gap to close. Verifying it needs `@gennetytestbot` with several
+seeded university accounts — which is also what verifying it will need in
+production, since production today has **zero** accounts carrying a university
+domain.
+
 ## The rule for future work
 
 **Any change to a product flow, a Mini App screen, a gate, or a paid step must

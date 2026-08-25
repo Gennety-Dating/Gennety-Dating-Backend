@@ -66,6 +66,9 @@ export interface CanvasInput {
   bumpVerified?: boolean;
   deck?: string[];
   radar?: RadarReading | null;
+  /** Share of the city uncovered, already formatted (`fog.ts`). Absent while
+   *  the Scratch Map is off or has nothing to say. */
+  exploredLabel?: string | null;
 }
 
 /**
@@ -231,6 +234,12 @@ export function sheetFor(input: CanvasInput): SheetView {
         // (§2.1 mode 5). The canvas follows the banner rather than inventing
         // a countdown of its own.
         body: left ? s.idleBody.replace("{time}", left) : s.idleNoDrop,
+        // The Scratch Map's one line, and it appears ONLY here. This is the
+        // state where the canvas is a map rather than a status screen; on the
+        // others the line would be a souvenir competing with a date.
+        ...(input.exploredLabel
+          ? { note: s.scratchExplored.replace("{percent}", input.exploredLabel) }
+          : {}),
         action: null,
         tone: "quiet",
       };
