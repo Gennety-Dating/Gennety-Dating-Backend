@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   armGlove,
+  gripPoint,
+  handSquash,
   BEATS,
   CARDS,
   cardX,
@@ -182,22 +184,23 @@ describe("card targeting", () => {
   });
 });
 
-describe("the glove is oriented by the arm", () => {
-  // This is the defect the whole rig was rebuilt around: a constant angle made
-  // the hand read as a sticker dragged across the screen. The cuff must point
-  // back along the arm, so the angle has to MOVE with the hand.
-  it("points the cuff back down a straight arm", () => {
-    // Hand directly below the shoulder, no bend: the cuff faces straight up
+describe("the hand's axis comes from the arm", () => {
+  // The angle used to rotate a five-fingered glove, and a constant one made
+  // the hand read as a sticker dragged across the screen. The hand is a circle
+  // now, so the angle only aims its squash — but it still has to MOVE with the
+  // hand, or a hand reaching sideways would flatten vertically.
+  it("points back down a straight arm", () => {
+    // Hand directly below the shoulder, no bend: local +Y faces straight up
     // the way it came, i.e. 180° in this rig's convention.
     const straightDown = armGlove([50, 30], [50, 80], 0);
     expect(Math.abs(straightDown.ang)).toBeCloseTo(180, 0);
 
-    // Hand directly right of the shoulder: the cuff faces back left, 90°.
+    // Hand directly right of the shoulder: it faces back left, 90°.
     const straightRight = armGlove([30, 50], [90, 50], 0);
     expect(straightRight.ang).toBeCloseTo(90, 0);
   });
 
-  it("turns the cuff as the hand moves", () => {
+  it("turns the axis as the hand moves", () => {
     const a = armGlove([34, 68], [12, 76], 13).ang;
     const b = armGlove([34, 68], [40, 30], 13).ang;
     expect(Math.abs(a - b)).toBeGreaterThan(40);
@@ -299,5 +302,74 @@ describe("stylesheet", () => {
   // is also why the grab hand needs its own fade rather than a clip.
   it("lets the stage paint outside its box", () => {
     expect(rule(".mw-svg {")).toMatch(/overflow:\s*visible/);
+  });
+});
+
+
+describe("the hand is a circle", () => {
+  // Replaced a five-digit glove on 2026-08-23 (founder decision, DECISIONS.md).
+  // What a circle cannot do is show a fist closing, so two things carry the
+  // grip instead — a small squash, and WHERE on the card it lands — and both
+  // are easy to undo without noticing.
+  it("stays a perfect circle at rest", () => {
+    const [across, along] = handSquash(0);
+    expect(across).toBeCloseTo(along, 6);
+  });
+
+  it("flattens along the arm when it grips, and only a little", () => {
+    const [across, along] = handSquash(1);
+    expect(along, "a gripping hand must be shorter along the arm").toBeLessThan(across);
+    // Past ~20% a circle stops reading as a hand and starts reading as a ball.
+    expect(across / along).toBeLessThan(1.4);
+    expect(across / along, "squash this small is invisible").toBeGreaterThan(1.15);
+  });
+
+  it("takes the card by its NEAR corner, not its centre", () => {
+    const card = CARDS[3]!;
+    const t = 800;
+    const centre = cardX(card, t);
+    const left = gripPoint(card, t, 0);
+    const right = gripPoint(card, t, 1);
+    // The hand renders wider than a card, so a centred hand just covers it.
+    expect(left[0], "left hand must reach the left side").toBeLessThan(centre);
+    expect(right[0], "right hand must reach the right side").toBeGreaterThan(centre);
+    expect(left[1], "and hold it above the middle").toBeLessThan(card.y);
+    // Symmetric, or one hand would hold cards differently from the other.
+    expect(centre - left[0]).toBeCloseTo(right[0] - centre, 6);
+  });
+
+  it("rides the card it is holding rather than its own memory of it", () => {
+    // The ride position has to track the moving card, or the hand parks in
+    // space while the card slides out from under it.
+    // A hand is deliberately empty ~30% of the time (it hovers, searching),
+    // so scan for a moment it is actually carrying something.
+    let moved = 0;
+    let carried = 0;
+    for (let t = 0; t < CYC * 40; t += 3) {
+      const a = handWork(t, 0, 0);
+      const b = handWork(t + 3, 0, 0);
+      if (a.card < 0 || a.card !== b.card) continue;
+      carried++;
+      if (Math.abs(a.pos[0] - b.pos[0]) > 1e-6) moved++;
+    }
+    expect(carried, "the hand never carries a card at all").toBeGreaterThan(50);
+    // Nearly every held frame should move with the card; a hand pinned to the
+    // position it booked at contact reads as the card sliding out of it.
+    expect(moved / carried).toBeGreaterThan(0.9);
+  });
+});
+
+describe("the mascot's own stylesheet", () => {
+  it("has no rule left for the deleted fingers", () => {
+    expect(CSS.includes(".mw-digit"), "dead rule for a shape nothing draws").toBe(false);
+    expect(CSS.indexOf(".mw-hand"), "the circle has no fill").toBeGreaterThan(-1);
+  });
+
+  it("draws the arm in something other than the dark page colour", () => {
+    // With a big glove the limb could hide; a circle leaves the arm carrying
+    // the whole shape of the reach, and #3b0b1e sits ~2% off the dark ground.
+    const rule = CSS.slice(CSS.indexOf(".mw-arm {"), CSS.indexOf(".mw-arm {") + 90);
+    expect(rule).toContain("fill:");
+    expect(rule.toLowerCase(), "arm is invisible on the dark theme").not.toContain("#3b0b1e");
   });
 });

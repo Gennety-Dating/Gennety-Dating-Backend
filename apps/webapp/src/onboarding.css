@@ -3485,19 +3485,18 @@ button {
   stroke-linecap: round;
 }
 
-.mw-glove {
+/* One circle, no fingers and no cuff (2026-08-23) — see mascot-welcome.ts. */
+.mw-hand {
   fill: #fbf3f5;
 }
 
-.mw-digit {
-  stroke: #fbf3f5;
-  stroke-linecap: round;
-  fill: none;
-}
-
-/* A filled band, not a stroke — a stroked line cannot taper toward the wrist. */
+/* A filled band, not a stroke — a stroked line cannot taper toward the wrist.
+   Mid-burgundy rather than the darkest stop: with a round hand there is no
+   large glove to carry the limb's shape, so the arm has to read on its own,
+   and #3b0b1e sits ~2% off the dark page. Body burgundy, white hand — the
+   same split the logo already makes between wing and light. */
 .mw-arm {
-  fill: #3b0b1e;
+  fill: #8b253b;
   stroke: none;
 }
 
@@ -3511,8 +3510,10 @@ button {
 }
 
 /* The eyes sit INSIDE the body, ringed by burgundy, so they need nothing. The
-   gloves float outside it and touch the page directly — on cream they vanish,
-   so they take the depth the design system allows: a shadow, never an outline. */
+   hands float outside it and touch the page directly — on cream they vanish,
+   so they take the depth the design system allows: a shadow, never an outline.
+   It matters more now than it did with fingers: a plain circle has no internal
+   detail to separate it from the ground, so the shadow IS its edge. */
 :root[data-theme="light"] .mw-gloves,
 :root[data-theme="light"] .mw-grab {
   filter: drop-shadow(0 1.4px 2.2px rgba(59, 11, 30, 0.38));

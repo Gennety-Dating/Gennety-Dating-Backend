@@ -1,5 +1,5 @@
 /**
- * The welcome mascot — the Gennety butterfly, with eyes and gloved hands,
+ * The welcome mascot — the Gennety butterfly, with eyes and round hands,
  * shuffling through profiles while the Mini App boots.
  *
  * ## What the picture says
@@ -18,10 +18,13 @@
  * deliberately, because three of its properties cannot be authored as
  * keyframes at all:
  *
- * - **The glove is oriented by the arm, not by a track.** The arm is a
- *   quadratic; the cuff takes the curve's tangent at the wrist, so the palm
- *   turns *with* the arm at every frame. A constant angle is what made an
- *   earlier version read as a sticker dragged around the screen.
+ * - **The hands are drawn on a curve.** The arm is a quadratic band that
+ *   thins as it stretches, and the hand takes the curve's tangent at the
+ *   wrist. The tangent used to rotate a five-fingered glove; getting that
+ *   angle even slightly wrong made the hand read as a sticker dragged around
+ *   the screen, so on 2026-08-23 the hand became a plain circle (founder
+ *   decision, DECISIONS.md) and the tangent now only aims its squash. That is
+ *   an error the shape can no longer make.
  * - **The hands grab real cards.** A hand flies to where a specific card *will*
  *   be at the moment of contact and then rides it. The cards stream on their
  *   own clock, so the target is solved per frame, not baked.
@@ -234,6 +237,20 @@ export interface HandTarget {
  * mutual recursion), and a cycle with no card in reach is a deliberate MISS —
  * the hand hovers open at home, which reads as searching rather than as noise.
  */
+/**
+ * Where a hand meets a card.
+ *
+ * Deliberately the card's near TOP CORNER, not its centre. The hand renders
+ * ~24 stage units across against a card ~18 wide, so a hand centred on a card
+ * simply covers it and reads as a ball resting on top; taking the corner
+ * leaves most of the card visible and reads as holding it. The five-fingered
+ * glove this replaced could sit centred because its fingers closed *around*
+ * the card — a circle has to solve the same problem with placement.
+ */
+export function gripPoint(card: Card, t: number, hand: 0 | 1): [number, number] {
+  return [cardX(card, t) + (hand === 0 ? -6.5 : 6.5), card.y - 10];
+}
+
 export function targetFor(hand: 0 | 1, tc: number, depth = 0): HandTarget {
   const band = HAND_BAND[hand]!;
   const home = HAND_HOME[hand]!;
@@ -247,8 +264,7 @@ export function targetFor(hand: 0 | 1, tc: number, depth = 0): HandTarget {
   for (let i = 0; i < CARDS.length; i++) {
     if (i === excl) continue;
     const card = CARDS[i]!;
-    const x = cardX(card, tc);
-    const y = card.y - 6;
+    const [x, y] = gripPoint(card, tc, hand);
     if (y < 30 || x < band[0] || x > band[1]) continue;
     if (isBehindBody(x, y)) continue;
     const s = Math.abs(x - home[0]) + Math.abs(y - home[1]) * 0.7;
@@ -261,7 +277,7 @@ export function targetFor(hand: 0 | 1, tc: number, depth = 0): HandTarget {
     return { card: -1, pos: hoverAt(hand, tc), miss: true };
   }
   const card = CARDS[best]!;
-  return { card: best, pos: [cardX(card, tc), card.y - 6], miss: false };
+  return { card: best, pos: gripPoint(card, tc, hand), miss: false };
 }
 
 function hoverAt(hand: 0 | 1, t: number): [number, number] {
@@ -288,9 +304,7 @@ export function handWork(t: number, hand: 0 | 1, off: number): HandState {
   const tc = t0 + CYC * RIDE_FROM;
   const now = targetFor(hand, tc);
   const prev = targetFor(hand, t0 - CYC + CYC * RIDE_FROM);
-  const release = prev.miss
-    ? prev.pos
-    : ([cardX(CARDS[prev.card]!, t0), CARDS[prev.card]!.y - 6] as [number, number]);
+  const release = prev.miss ? prev.pos : gripPoint(CARDS[prev.card]!, t0, hand);
 
   if (f < RIDE_FROM) {
     const p = EO(f / RIDE_FROM);
@@ -307,9 +321,10 @@ export function handWork(t: number, hand: 0 | 1, off: number): HandState {
   }
   if (now.miss) return { pos: hoverAt(hand, t), grip: 0, card: -1, rideP: 0 };
   const card = CARDS[now.card]!;
-  let x = cardX(card, t);
-  if (Math.abs(x - now.pos[0]) > 60) x = now.pos[0];
-  return { pos: [x, card.y - 6], grip: 1, card: now.card, rideP: (f - RIDE_FROM) / (1 - RIDE_FROM) };
+  const ride = gripPoint(card, t, hand);
+  // A card that has wrapped around the strip must not drag the hand with it.
+  const x = Math.abs(ride[0] - now.pos[0]) > 60 ? now.pos[0] : ride[0];
+  return { pos: [x, ride[1]], grip: 1, card: now.card, rideP: (f - RIDE_FROM) / (1 - RIDE_FROM) };
 }
 
 /** Body sway during the loop. Periodic by construction — no loop seam. */
@@ -319,52 +334,32 @@ export function loopSway(t: number): number {
 
 /* ------------------------------------------------------------------ glove */
 
-const F_ROOT: readonly [number, number][] = [
-  [-2.5, -1.6],
-  [0.2, -2.5],
-  [2.9, -1.6],
-];
-const TH_ROOT: readonly [number, number] = [-3.0, 1.8];
-
-/** Per digit: `[rootAngle, tipAngle, rootLen, tipLen]`. */
-type Pose = number[][];
-
-export const POSE: Record<"open" | "grip" | "flat", Pose> = {
-  open: [
-    [-104, -100, 5.4, 5.0],
-    [-92, -89, 5.8, 5.4],
-    [-80, -76, 5.3, 4.8],
-    [-160, -140, 5.2, 4.4],
-  ],
-  grip: [
-    [-88, -24, 4.8, 4.4],
-    [-80, -14, 5.0, 4.6],
-    [-70, -6, 4.6, 4.2],
-    [-176, -118, 5.0, 4.2],
-  ],
-  flat: [
-    [-99, -96, 5.6, 5.2],
-    [-91, -90, 5.9, 5.5],
-    [-83, -80, 5.5, 5.1],
-    [-166, -158, 5.2, 4.6],
-  ],
-};
-
-const mixPose = (a: Pose, b: Pose, p: number): Pose =>
-  a.map((d, i) => d.map((v, j) => v + (b[i]![j]! - v) * p));
+/**
+ * Hand radius, in stage units. Sized against the arm it sits on rather than
+ * picked by eye: the band is ~2 units of half-width at the wrist, so a radius
+ * near four times that reads as a hand on an arm instead of the arm merely
+ * getting thicker.
+ */
+export const HAND_R = 11;
 
 export interface ArmResult {
   /** Filled band — a stroked line cannot taper. */
   d: string;
-  /** Cuff angle taken from the curve's tangent at the wrist. */
+  /**
+   * The curve's tangent at the wrist, as a rotation: local +Y points back
+   * along the arm. A circular hand has no orientation of its own, so this is
+   * what tells the squash which way "along the arm" is.
+   */
   ang: number;
 }
 
 /**
- * The arm, and the glove angle that keeps the cuff pointing back along it.
+ * The arm, and the axis its hand squashes along.
  *
- * This is what makes the palm turn with the arm rather than being a sticker.
- * The band also thins as it stretches — cheap mass conservation, but felt.
+ * The band thins as it stretches — cheap mass conservation, but felt. The
+ * tangent used to rotate a five-fingered glove, which is where the whole
+ * "hand as a sticker" defect lived; with a round hand it survives only to
+ * aim the deformation, and can never look wrong.
  */
 export function armGlove(
   o: readonly [number, number],
@@ -378,9 +373,9 @@ export function armGlove(
     (o[0] + h[0]) / 2 - (dy / L) * bend,
     (o[1] + h[1]) / 2 + (dx / L) * bend,
   ];
-  const k = clamp(Math.sqrt(34 / L), 0.72, 1.05);
-  const w0 = 7.4 * k;
-  const w1 = 3.9 * k;
+  const k = clamp(Math.sqrt(34 / L), 0.82, 1.05);
+  const w0 = 8.4 * k;
+  const w1 = 7.0 * k;
   const N = 22;
   const A: [number, number][] = [];
   const B: [number, number][] = [];
@@ -504,21 +499,6 @@ const gBraceY = track([
   [B.rock + 370, -4.5],
   [B.rock + 580, 0, EO],
 ]);
-/** Wrist cock on top of the arm tangent: at rest the fingers point up. */
-const gWristL = track([
-  [0, 0],
-  [B.peer + 90, 40, EO],
-]);
-const gWristR = track([
-  [0, 0],
-  [B.peer + 90, -40, EO],
-]);
-/** On the reach the hand stops being arm-driven and aligns to the curtain. */
-const gAbsR = track([
-  [0, 0],
-  [B.reach, 0],
-  [B.grip, 1, EO],
-]);
 const gBendL = track([
   [0, 13],
   [B.peer + 90, -15, EO],
@@ -530,8 +510,14 @@ const gBendR = track([
   [B.grip, 5, EO],
 ]);
 
-const REST_L: readonly [number, number] = [10, 76];
-const REST_R: readonly [number, number] = [90, 76];
+/**
+ * Where the hands rest once he has turned around. Pushed out and down from
+ * (10, 76) when the hand became a circle: a 24-unit disc parked there sat in
+ * the middle of the lower wing and read as a hole in it, where the old glove's
+ * fingers had broken the overlap up.
+ */
+const REST_L: readonly [number, number] = [5, 81];
+const REST_R: readonly [number, number] = [95, 81];
 
 /* ----------------------------------------------------------------- markup */
 
@@ -615,70 +601,62 @@ export interface MascotHandle {
   destroy(): void;
 }
 
-interface GloveParts {
+interface HandParts {
   g: SVGGElement;
-  segs: SVGLineElement[];
 }
 
-function buildGlove(parent: Element): GloveParts {
+/**
+ * The hand: one circle, and nothing else.
+ *
+ * It replaced a five-digit glove (cuff ellipse, four two-segment fingers, a
+ * palm painted last to bury their roots) on 2026-08-23. That rig had to solve
+ * a problem a circle does not have — which way the palm faces — and every
+ * frame where it got that even slightly wrong read as a sticker dragged
+ * across the screen rather than a hand. A circle is orientation-free by
+ * construction, so the class of defect is gone rather than tuned away.
+ */
+function buildHand(parent: Element): HandParts {
   const g = document.createElementNS(NS, "g");
-  const cuff = document.createElementNS(NS, "ellipse");
-  cuff.setAttribute("cy", "7.4");
-  cuff.setAttribute("rx", "4.3");
-  cuff.setAttribute("ry", "2.5");
-  cuff.setAttribute("class", "mw-glove");
-  g.appendChild(cuff);
-  const segs: SVGLineElement[] = [];
-  for (let d = 0; d < 4; d++) {
-    for (let k = 0; k < 2; k++) {
-      const l = document.createElementNS(NS, "line");
-      l.setAttribute("class", "mw-digit");
-      l.setAttribute("stroke-width", String(d === 3 ? (k ? 4.6 : 5.0) : k ? 4.05 : 4.4));
-      g.appendChild(l);
-      segs.push(l);
-    }
-  }
-  // Palm LAST: it buries the digit roots, which is what keeps the valleys
-  // between the fingers round instead of notched.
   const palm = document.createElementNS(NS, "ellipse");
-  palm.setAttribute("rx", "6.4");
-  palm.setAttribute("ry", "6.0");
-  palm.setAttribute("class", "mw-glove");
+  palm.setAttribute("rx", String(HAND_R));
+  palm.setAttribute("ry", String(HAND_R));
+  palm.setAttribute("class", "mw-hand");
   g.appendChild(palm);
   parent.appendChild(g);
-  return { g, segs };
+  return { g };
 }
 
-function setGlove(
-  parts: GloveParts,
-  pose: Pose,
-  x: number,
-  y: number,
-  ang: number,
-  s: number,
-  flip: number,
-): void {
-  for (let d = 0; d < 4; d++) {
-    const root = d === 3 ? TH_ROOT : F_ROOT[d]!;
-    const [a1, a2, l1, l2] = pose[d] as [number, number, number, number];
-    const kx = root[0] + Math.cos(rad(a1)) * l1;
-    const ky = root[1] + Math.sin(rad(a1)) * l1;
-    const tx = kx + Math.cos(rad(a2)) * l2;
-    const ty = ky + Math.sin(rad(a2)) * l2;
-    const s1 = parts.segs[d * 2]!;
-    const s2 = parts.segs[d * 2 + 1]!;
-    s1.setAttribute("x1", String(root[0]));
-    s1.setAttribute("y1", String(root[1]));
-    s1.setAttribute("x2", kx.toFixed(2));
-    s1.setAttribute("y2", ky.toFixed(2));
-    s2.setAttribute("x1", kx.toFixed(2));
-    s2.setAttribute("y1", ky.toFixed(2));
-    s2.setAttribute("x2", tx.toFixed(2));
-    s2.setAttribute("y2", ty.toFixed(2));
-  }
+/** Drawn size of the hand. Kept apart from `HAND_R` so squash is readable. */
+const HAND_S = 1.12;
+
+/**
+ * Scale for a hand gripping at `grip` (0..1), as `[across, along]` the arm.
+ *
+ * Pure, and exported, because it is the only thing left that says "this is
+ * holding something" — there are no fingers to close any more — so the one
+ * number that matters (how far a circle may deform before it reads as a
+ * bouncing ball) is worth pinning rather than re-tuning by eye.
+ */
+export function handSquash(grip: number): [number, number] {
+  return [HAND_S * (1 + grip * 0.12), HAND_S * (1 - grip * 0.15)];
+}
+
+/**
+ * Place the hand, and squash it along the arm by `grip`.
+ *
+ * Squash is the only thing left that says "this is holding something", now
+ * that there are no fingers to close. It is deliberately small — 11% — because
+ * a circle deforming much more stops reading as a hand and starts reading as
+ * a bouncing ball. 15% is where it is legible at the size the hand actually
+ * renders (~24 stage units across) without crossing that line. The axis comes from the arm's own tangent, so a hand
+ * reaching sideways flattens sideways with no extra bookkeeping.
+ */
+function setHand(parts: HandParts, x: number, y: number, ang: number, grip: number): void {
+  const [across, along] = handSquash(grip);
   parts.g.setAttribute(
     "transform",
-    `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${ang.toFixed(2)}) scale(${(s * flip).toFixed(3)} ${s.toFixed(3)})`,
+    `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${ang.toFixed(2)}) ` +
+      `scale(${across.toFixed(3)} ${along.toFixed(3)})`,
   );
 }
 
@@ -703,9 +681,9 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
   const edge = q<SVGRectElement>(".mw-edge");
   const cardNodes = Array.from(cardsG.children) as SVGGElement[];
 
-  const gL = buildGlove(glovesG);
-  const gR = buildGlove(glovesG);
-  const gGrab = buildGlove(grabG);
+  const gL = buildHand(glovesG);
+  const gR = buildHand(glovesG);
+  const gGrab = buildHand(grabG);
 
   let raf = 0;
   let loopStart = 0;
@@ -789,8 +767,8 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
     const Bm = armGlove([66 + tx, 68], hR, -13);
     armL.setAttribute("d", A.d);
     armR.setAttribute("d", Bm.d);
-    setGlove(gL, mixPose(POSE.open, POSE.grip, a.grip), hL[0], hL[1], A.ang, 1.12, 1);
-    setGlove(gR, mixPose(POSE.open, POSE.grip, b.grip), hR[0], hR[1], Bm.ang, 1.12, -1);
+    setHand(gL, hL[0], hL[1], A.ang, a.grip);
+    setHand(gR, hR[0], hR[1], Bm.ang, b.grip);
     gR.g.setAttribute("opacity", "1");
     gGrab.g.setAttribute("opacity", "0");
 
@@ -872,23 +850,18 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
     armL.setAttribute("d", A.d);
     armR.setAttribute("d", Bm.d);
 
-    const angL = A.ang + gWristL(t);
-    const angR = mix(Bm.ang + gWristR(t), 90, gAbsR(t));
-
-    const poseL = mixPose(POSE.open, POSE.grip, fA.grip * (1 - settle));
-    let poseR = mixPose(POSE.open, POSE.grip, fB.grip * (1 - settle));
-    if (t >= B.reach) {
-      poseR = mixPose(POSE.open, POSE.flat, EO(clamp((t - B.reach) / (B.grip - B.reach), 0, 1)));
-    }
-    if (t >= B.grip) {
-      poseR = mixPose(POSE.flat, POSE.grip, EO(clamp((t - B.grip) / 140, 0, 1)) * 0.55);
-    }
+    // Grip: still holding a card at rest, open on the reach, then closing on
+    // the curtain edge — the one beat where the squash has to be legible.
+    const gripL = fA.grip * (1 - settle);
+    let gripR = fB.grip * (1 - settle);
+    if (t >= B.reach) gripR = 0;
+    if (t >= B.grip) gripR = EO(clamp((t - B.grip) / 140, 0, 1)) * 0.9;
 
     const swap = t >= B.grip;
-    setGlove(gL, poseL, hL[0], hL[1], angL, 1.12, 1);
-    setGlove(gR, poseR, hR[0], hR[1], angR, 1.12, -1);
+    setHand(gL, hL[0], hL[1], A.ang, gripL);
+    setHand(gR, hR[0], hR[1], Bm.ang, gripR);
     gR.g.setAttribute("opacity", swap ? "0" : "1");
-    setGlove(gGrab, poseR, hR[0], hR[1], angR, 1.12, -1);
+    setHand(gGrab, hR[0], hR[1], Bm.ang, gripR);
     // The grabbing hand rides OUTSIDE the curtain clip — that is what lets it
     // hold the edge rather than be cut by it — so nothing else stops it being
     // drawn once the edge has left the stage (the SVG keeps `overflow:

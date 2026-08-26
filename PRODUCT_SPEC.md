@@ -256,7 +256,8 @@ out of Telegram-only workers.
   The change is additive by construction.
   **The Mini App boots behind a mascot, not a spinner (2026-08-23).** The
   loading screen for the very first `/state` call is the Gennety butterfly with
-  eyes and gloved hands, shuffling through profile cards with its back turned —
+  eyes and round white hands, shuffling through profile cards with its back
+  turned —
   the loading indicator IS a picture of what the server is doing. When state
   arrives it notices it is being watched, turns, peers, rocks back, winks, and
   then **pulls the screen aside like a curtain**, revealing the first real
@@ -287,15 +288,39 @@ out of Telegram-only workers.
   **It is the product's first per-frame animation, and that is deliberate**
   (`apps/webapp/src/mascot-welcome.ts`). The loading and success marks are pure
   CSS keyframes and that remains the house rule; three properties here cannot be
-  keyframes at all. The glove's angle is taken from the ARM's tangent at the
-  wrist, so the palm turns with the arm instead of being a sticker dragged
-  around. The hands grab REAL cards — each flies to where a specific card will
-  be at the moment of contact and then rides it — so the target is solved per
-  frame against a stream that has its own clock. And the hands are anchored in
-  the body's coordinate space and sample it ~60 ms late, which is what gives the
-  rock-back its whip. Everything that can be a curve still is: the module
-  evaluates real `cubic-bezier()`, so its easings are the ones a stylesheet
-  would have.
+  keyframes at all. The arm is a quadratic band that thins as it stretches, and
+  the hand takes its tangent at the wrist. The hands grab REAL cards — each
+  flies to where a specific card will be at the moment of contact and then rides
+  it — so the target is solved per frame against a stream that has its own
+  clock. And the hands are anchored in the body's coordinate space and sample it
+  ~60 ms late, which is what gives the rock-back its whip. Everything that can
+  be a curve still is: the module evaluates real `cubic-bezier()`, so its
+  easings are the ones a stylesheet would have.
+
+  **The hand is a circle, and that is what removed a whole class of defect
+  (founder decision 2026-08-23).** It was a five-digit glove — cuff, four
+  two-segment fingers, a palm painted last to bury their roots — and it had to
+  answer a question a circle does not have: which way the palm faces. Every
+  frame where that came out even slightly wrong read as a sticker dragged
+  across the screen, which is exactly how it was reported. The tangent survives
+  and now only aims the hand's squash, so being wrong about it is no longer
+  expressible. Three things carry the weight the fingers used to:
+
+  - **The arm reads on its own.** With no large glove to carry the limb's
+    shape, the band is mid-burgundy rather than the darkest stop, which sat ~2%
+    off the dark page and left the hands looking like floating dots; it is also
+    near-uniform in width now, because the strong taper existed to meet a wide
+    palm.
+  - **A grip is a squash, capped at 15%.** It is the only thing left that says
+    "this is holding something", and past ~20% a circle stops reading as a hand
+    and starts reading as a bouncing ball.
+  - **The hand takes a card by its near TOP CORNER, never its centre.** It
+    renders ~24 stage units across against a card ~18 wide, so a centred hand
+    simply covers the card; the corner leaves most of it visible. The old glove
+    could sit centred because its fingers closed *around* the card — a circle
+    has to solve the same problem with placement. For the same reason the
+    resting hands were pushed out and down: a disc parked where the glove used
+    to sit read as a hole in the lower wing.
 
   **The body carries the CORRECTED logo and the shipped logo is untouched.**
   The mascot converges the two lower wings on a single point; every product
