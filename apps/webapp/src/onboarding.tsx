@@ -252,7 +252,11 @@ function App(): ReactElement {
    * greeting is decided later, once /state and the marker have both answered.
    */
   const [welcome, setWelcome] = useState<"loop" | "off">(() =>
-    prefersReducedMotion() ? "off" : "loop",
+    // The dev preview forces it on: its whole purpose is looking at the
+    // mascot, and a reviewer whose OS has Reduce Motion set would otherwise
+    // open the preview, see the ordinary loading screen, and conclude the
+    // feature is broken. The real gate below is untouched.
+    PREVIEW_WELCOME ? "loop" : prefersReducedMotion() ? "off" : "loop",
   );
   const mascotRef = useRef<MascotHandle | null>(null);
   // Stable per language: the typewriter scenes key their run on the `lines`
