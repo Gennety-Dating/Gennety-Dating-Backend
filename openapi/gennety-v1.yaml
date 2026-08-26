@@ -3382,6 +3382,43 @@ components:
         serverNow:
           type: string
           format: date-time
+        primeTime:
+          $ref: "#/components/schemas/PrimeTimeState"
+
+    PrimeTimeState:
+      type: object
+      description: |
+        The paid evening band (PRIME_TIME_PRODUCT_SPEC §7/§12). Additive and
+        optional: a client that ignores it behaves exactly as before, because
+        the server refuses a locked slot regardless of what the client drew.
+
+        Deliberately a resolved ANSWER rather than the inputs behind it. The
+        server has already weighed a subscription on either side, a paid pass,
+        and a pair the rail cannot reach; a client re-deriving any of that would
+        be a second implementation of the gate that can disagree with the first.
+      required: [locked, slots, stars]
+      properties:
+        locked:
+          type: boolean
+          description: |
+            The whole gate. False for a premium pair, a pair that already paid,
+            and a pair with no purchase path — draw the grid as you always have.
+        slots:
+          type: array
+          items: { type: string, format: date-time }
+          description: |
+            Which of `proposedTimes` are behind the band. Empty whenever
+            `locked` is false, so one field can never contradict the other.
+        stars:
+          type: integer
+          description: |
+            The Telegram Stars price of opening the band for this date. Quoted
+            in Stars and never in currency: it is env-tunable, so a figure baked
+            into a client goes stale silently on the one screen that asks for
+            money. iOS has no purchase path for it yet — the band is opened
+            there by a subscription, or by the Telegram side of the pair
+            (the unlock is per MATCH, so either side opening it opens it for
+            both). A StoreKit consumable is the follow-up.
 
     ProxyChatMessage:
       type: object

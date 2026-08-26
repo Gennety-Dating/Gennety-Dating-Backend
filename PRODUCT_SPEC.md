@@ -4294,6 +4294,50 @@ better UX than three separate retries.
   slot was 17:30 until 2026-07-07, then a 6-slot 17:00–19:30 evening band
   until 2026-07-18, when the start was pulled forward to 13:00 (14 slots
   per date) so afternoon dates are offered, not just evening ones.
+- **The last three times of each day are a paid band (2026-08-26, feature-flagged
+  `PRIME_TIME_ENABLED`).** 18:30 / 19:00 / 19:30 Kyiv are the slots people
+  actually want, so they open with Gennety Premium — or, for a pair with no
+  subscription, with one `PRIME_TIME_STARS` (50⭐) purchase that opens them **for
+  that date**. Full design: [PRIME_TIME_PRODUCT_SPEC.md](PRIME_TIME_PRODUCT_SPEC.md).
+
+  **The band is the grid's own SUFFIX, never a second list.** `primeTimeSlots`
+  slices `CALENDAR_TIME_SLOTS` from the end, so moving the grid moves the band
+  with it and the two can never describe different hours. The count is
+  `PRIME_TIME_SLOT_COUNT`, and no user-facing copy names it — a number baked
+  into five translations goes stale silently the first time it moves.
+
+  **The unlock is per MATCH, and that is forced rather than chosen.** A date
+  locks when the two availability sets intersect at exactly one slot (below), so
+  a pass that opened the band for ONE person would buy nothing: their partner
+  still could not mark the same slot, and no intersection could ever form there.
+  `Match.primeTimeUnlockedAt` is therefore the unit, and either side opening it
+  opens it for both.
+
+  **A subscription is read live, and stamped the first time it is used.** The
+  band is open while `isPremiumHeadActive` holds on either side; the moment a
+  premium user actually marks a prime slot, `primeTimeUnlockedAt` is written, so
+  a subscription lapsing between the pick and the date cannot re-lock a slot the
+  pair already agreed on. That is the ONE reason the column is written without
+  money moving (`shouldPersistUnlock`) — a reason that can stop being true is
+  the only kind worth persisting.
+
+  **A pair already holding a prime slot is grandfathered**, checked against
+  `availableTimesA/B` rather than by a migration: turning the flag on must never
+  invalidate a mark somebody made while it was off.
+
+  **A pair the rail cannot reach is fail-open.** With both participants on the
+  native app there is no way to buy the pass at all today (Stars is a Telegram
+  rail), so the band is simply open for them rather than being a wall — the
+  same reasoning §3.5c applies to a stall it cannot ask about. A mixed pair is
+  NOT in that state: the Telegram side can open the band, and the unlock is
+  per-match, so it opens for both.
+
+  **Enforcement is one choke point.** Both surfaces already share
+  `processCalendarSlotsUpdate`, so the refusal lives there and the
+  `overlapCandidates` confirm path inherits it — a client that draws no lock
+  still cannot write one. The Mini App paints the band from `primeTime.locked`
+  and re-derives nothing.
+
 - **Multi-pick with live peer visibility.** Each user marks any subset
   of slots as "I'm free" — stored in `Match.availableTimesA` /
   `availableTimesB`. The Mini App polls `GET /v1/calendar/state` every
@@ -5770,7 +5814,23 @@ break-even is ~2.6 dates a month at `TICKET_PRICE_CENTS`; there is deliberately
 none of the benefit — and the trigger for revisiting it is a metric (a
 subscriber exceeding ~4 dates in a month), never a mechanism.
 
-**Benefit #2 — venue-change (v1).** Inside the §3.7b board:
+**Benefit #2 — every evening time (2026-08-26).** A subscription on EITHER side
+opens the paid evening band in the calendar (§3.6) for that pair, on every date
+they plan, with no purchase and no per-date fee. It is read live rather than
+stamped at the gate, and the first prime pick under an active subscription
+writes `Match.primeTimeUnlockedAt` — so a lapse cannot re-lock a slot the pair
+already agreed on, and nothing is ever revoked from a date in flight.
+
+It leads the benefit list on the Premium Mini App **second**, right after
+unlimited dates, and that is a routing decision rather than a ranking one: the
+one path this feature creates onto that screen is the calendar's locked slot,
+and a reader who arrived that way is looking for exactly this line. The card
+carries the same padlock the calendar plates a locked row with — recognition
+beats semantics on a screen someone reached thirty seconds after meeting that
+glyph. No surface that describes the subscription names the slot count: the
+number is `PRIME_TIME_SLOT_COUNT` and copy cannot follow it.
+
+**Benefit #3 — venue-change (v1).** Inside the §3.7b board:
 
 - **Premium venues.** Curated venues carry a `tier` (`base` | `premium`).
   Premium venues are hand-picked nicer spots that **may exceed the ≤ MODERATE
