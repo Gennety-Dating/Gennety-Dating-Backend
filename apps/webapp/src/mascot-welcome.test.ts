@@ -375,17 +375,71 @@ describe("markup", () => {
     expect(y + h).toBeGreaterThan(128);
   });
 
+  // He is turned away from us, so a card held up to read is between him and
+  // whatever he is facing — his back occludes it. Painted in front he slid
+  // across his own silhouette in 20% of held frames, covering up to 40% of the
+  // card with himself, which is what "карточки просвечиваются через него" was
+  // (founder, 2026-08-26). Two orderings carry the fix and neither is
+  // arbitrary: the body must be over the card, and the arms must stay UNDER it
+  // — the bottom-outer grip was chosen so the arm runs along the card's lower
+  // edge and reads end to end, and putting the card behind the arms would trade
+  // one occlusion complaint for another.
+  it("keeps a held card behind his back and above his arms", () => {
+    const html = mascotWelcomeMarkup("x");
+    expect(html.indexOf('class="mw-held"'), "his back must occlude the card").toBeLessThan(
+      html.indexOf('class="mw-body"'),
+    );
+    expect(html.indexOf('class="mw-held"'), "the arm must not be drawn over the card").toBeGreaterThan(
+      html.indexOf('class="mw-arms"'),
+    );
+    // And the stream sits behind the body too, so the grab and the release do
+    // not jump a card from one side of him to the other.
+    expect(html.indexOf('class="mw-cards"')).toBeLessThan(html.indexOf('class="mw-body"'));
+  });
+
+  // The other half of putting the card behind him: he may occlude it on the way
+  // out and on the way back, but never while he is READING it. The examine spot
+  // sits clear of the silhouette today (0% covered on average, 8% worst), and
+  // this is what says so if it is ever moved inward — a card he is holding up
+  // to look at that is 40% behind his own back is the complaint, one phase
+  // later.
+  it("never hides the card he is actually reading", () => {
+    const inBody = (x: number, y: number): boolean =>
+      ((x - 50) / 35) ** 2 + ((y - 50) / 27) ** 2 < 1;
+    let worst = 0;
+    for (let t = 0; t <= LOOP_FLOOR_MS; t += 8) {
+      for (const [hand, off] of [
+        [0, 0],
+        [1, HAND_PHASE_R],
+      ] as const) {
+        const st = handWork(t, hand as 0 | 1, off);
+        if (!st.hold || st.card < 0 || st.lift < 0.9) continue;
+        const card = CARDS[st.card]!;
+        const s = card.s + (HELD_SCALE - card.s) * st.lift;
+        const hw = 10 * s;
+        const hh = 13.5 * s;
+        let covered = 0;
+        let n = 0;
+        for (let dx = -hw; dx <= hw; dx += hw / 6) {
+          for (let dy = -hh; dy <= hh; dy += hh / 6) {
+            n++;
+            if (inBody(st.hold[0] + dx, st.hold[1] + dy)) covered++;
+          }
+        }
+        worst = Math.max(worst, covered / n);
+      }
+    }
+    expect(worst, `${(worst * 100).toFixed(0)}% of the examined card is behind him`).toBeLessThan(0.15);
+  });
+
   it("carries one card group per card, plus one spare per hand", () => {
     const html = mascotWelcomeMarkup("x");
     const stream = html.slice(html.indexOf('class="mw-cards"'), html.indexOf('class="mw-arms"'));
     expect([...stream.matchAll(/class="mw-card-g"/g)]).toHaveLength(CARDS.length);
-    // The two held nodes are painted ABOVE the body, so they cannot be the same
-    // nodes as the stream's — a card he holds up has to be in front of him.
-    const held = html.slice(html.indexOf('class="mw-held"'), html.indexOf('class="mw-gloves"'));
+    // Two spare nodes, so a held card is never the same node as its twin in the
+    // stream: one is parked at the examine spot while the other keeps flowing.
+    const held = html.slice(html.indexOf('class="mw-held"'), html.indexOf('class="mw-body"'));
     expect([...held.matchAll(/class="mw-card-g"/g)]).toHaveLength(2);
-    expect(html.indexOf('class="mw-held"'), "a held card must be over the body").toBeGreaterThan(
-      html.indexOf('class="mw-body"'),
-    );
   });
 });
 

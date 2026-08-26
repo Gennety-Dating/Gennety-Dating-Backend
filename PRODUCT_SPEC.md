@@ -334,6 +334,28 @@ out of Telegram-only workers.
   kink where it begins, and the eye reads that line as the edge of the thing
   being faded — the very seam this removes.
 
+  **He is turned away, so his back occludes the card (2026-08-26).** The card he
+  holds up was painted in FRONT of him, on the stated reasoning that "a card he
+  is holding up to look at has to be in front of him". That is true of someone
+  facing us and false of him: he has his back turned, so a card held up to read
+  is between him and whatever he is facing, which is away from the camera.
+  Drawn in front it slid across his own silhouette in **20% of held frames**,
+  covering up to **40% of the card with himself** — reported as the cards
+  "showing through him", and the measurement is what turned a vague oddness into
+  one wrong line of paint order.
+
+  Two orderings carry it and neither is arbitrary. **The body is over the
+  card**; and **the arms stay under it**, untouched, because the bottom-outer
+  grip exists so the arm runs along the card's lower edge and reads end to end
+  — pushing the card behind the arms would trade one occlusion complaint for
+  another. The other half is that it never hides what he is actually *reading*:
+  at full examine the card sits clear of the silhouette (0% covered on average,
+  8% at worst), so the body only ever occludes it on the way out and on the way
+  back, which is the read — he draws one from the pile behind him, holds it out
+  where it can be seen, and puts it back. Moving it also removed a jump nobody
+  had reported: the stream is behind him too, so grabbing and releasing no
+  longer flips a card from one side of him to the other.
+
   **A grab is a whole gesture, not a tap (2026-08-26).** The first version ran
   one every 190 ms and never took a card out of the stream: a hand flew to a
   card and rode it along. On screen that reads as clicking at the cards rather

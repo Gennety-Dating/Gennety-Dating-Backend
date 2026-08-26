@@ -933,10 +933,20 @@ function cardMarkup(): string {
 
 export function mascotWelcomeMarkup(ariaLabel: string): string {
   const cards = CARDS.map(cardMarkup).join("");
-  // One spare card per hand, painted ABOVE the body. A card he is holding up to
-  // look at has to be in front of him, and the stream is behind him — so the
-  // held one is a different node rather than the same node re-parented every
-  // frame. Its stream twin is hidden while it is out.
+  // One spare card per hand, painted BEHIND the body — he is turned away from
+  // us, so a card he holds up to read is between him and whatever he is facing,
+  // which is away from the camera. His back occludes it. Drawn in front, it
+  // slid across his silhouette in 20% of held frames and covered up to 40% of
+  // itself with him (measured), which is what "странно, карточки просвечиваются
+  // через него" turned out to be (founder, 2026-08-26).
+  //
+  // It is still a separate node rather than the stream's own re-parented every
+  // frame — but note what moving it bought for free: the stream sits behind the
+  // body too, so the handoff at the grab and the release no longer jumps a card
+  // from one side of him to the other. Its stream twin is hidden while it is
+  // out. It stays ABOVE `.mw-arms`, which is untouched: the bottom-outer grip
+  // was chosen so the arm runs along the card's lower edge and reads end to
+  // end, and that is a relationship this change has no business disturbing.
   const held = `${cardMarkup()}${cardMarkup()}`;
 
   return (
@@ -957,13 +967,13 @@ export function mascotWelcomeMarkup(ariaLabel: string): string {
     `<rect class="mw-bg" x="-260" y="-238" width="620" height="576"/>` +
     `<g class="mw-cards">${cards}</g>` +
     `<g class="mw-arms"><path class="mw-arm mw-arm-l"/><path class="mw-arm mw-arm-r"/></g>` +
+    `<g class="mw-held">${held}</g>` +
     `<g class="mw-body"><g class="mw-turner">` +
     `<path class="mw-wings" fill="url(#${GRADIENT_ID})" d="${MASCOT_BODY}"/>` +
     `<path class="mw-shade" d="${MASCOT_BODY}"/>` +
     `<g class="mw-face">` +
     `<ellipse class="mw-eye mw-eye-l"/><path class="mw-lid"/><ellipse class="mw-eye mw-eye-r"/>` +
     `</g></g></g>` +
-    `<g class="mw-held">${held}</g>` +
     `<g class="mw-gloves"></g>` +
     `</g>` +
     `<rect class="mw-edge" y="-238" height="576" width="14" fill="url(#gnt-mw-edge)" opacity="0"/>` +
