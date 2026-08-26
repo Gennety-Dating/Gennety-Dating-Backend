@@ -1,20 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
   armGlove,
+  examineAt,
+  HELD_SCALE,
+  gScaleX,
   gripPoint,
-  handSquash,
+  handScale,
   BEATS,
   CARDS,
   cardX,
   CYC,
   FADE_MS,
   GREET_MS,
+  HAND_PHASE_R,
   handWork,
   isBehindBody,
   LOOP_FLOOR_MS,
   loopSway,
   MASCOT_BODY,
   mascotWelcomeMarkup,
+  PHASE,
   targetFor,
   track,
 } from "./mascot-welcome.js";
@@ -51,10 +56,28 @@ describe("timing", () => {
   // Real added time on the onboarding funnel's very first screen. Pinned so it
   // cannot drift one retune at a time — the same treatment SUCCESS_TOTAL_MS
   // gets in butterfly-success.
+  // Both ceilings were raised on 2026-08-23 (3800 / 1500) when the gesture
+  // became a real pick-up rather than a tap: a grab takes 1400ms now, so a
+  // 1400ms floor showed less than one of them, and the turn was stretched from
+  // 162ms to 470. That is ~1.5s more on the funnel's first screen, once per
+  // user — a deliberate cost, which is exactly why it is pinned rather than
+  // left to drift one retune at a time.
   it("keeps the greeting inside its funnel budget", () => {
-    expect(GREET_MS).toBeLessThanOrEqual(3800);
-    expect(LOOP_FLOOR_MS).toBeLessThanOrEqual(1500);
+    expect(GREET_MS).toBeLessThanOrEqual(4800);
+    expect(LOOP_FLOOR_MS).toBeLessThanOrEqual(2200);
     expect(FADE_MS).toBeLessThanOrEqual(300);
+  });
+
+  // The floor exists so the turn interrupts something. Below one gesture there
+  // is nothing to interrupt — the mascot would be caught mid-reach.
+  it("holds the loop for at least a whole gesture", () => {
+    expect(LOOP_FLOOR_MS).toBeGreaterThanOrEqual(CYC);
+  });
+
+  it("gives the turn enough frames to read as a rotation", () => {
+    // It was 80ms, which at 60Hz is five frames from full-face to edge-on —
+    // the eye reads that as a cut, and it was reported as exactly that.
+    expect(BEATS.turn).toBeGreaterThanOrEqual(220);
   });
 
   it("orders the beats and leaves room for the curtain", () => {
@@ -147,22 +170,36 @@ describe("card targeting", () => {
     }
   });
 
-  it("never books a card above the top wing", () => {
+  // He MAY reach above his own head — that is an ordinary thing to do, and it
+  // is what makes seven of the nine cards reachable instead of five. What he
+  // may not do is reach off the top of the stage after a card that is only
+  // half on it. (The silhouette is the neighbouring test's job; this one is
+  // purely about the frame.)
+  it("never books a card off the top of the stage", () => {
     for (let t = 0; t < 4000; t += 17) {
       for (const hand of [0, 1] as const) {
         const target = targetFor(hand, t);
-        if (!target.miss) expect(target.pos[1]).toBeGreaterThanOrEqual(30);
+        if (!target.miss) expect(target.pos[1]).toBeGreaterThanOrEqual(0);
       }
     }
   });
 
+  // At BOOKING granularity. The instant-level version — no two hands holding
+  // one card at any moment — lives with the gesture tests below, and is the
+  // one that actually matters now that a hand keeps its card for most of a
+  // cycle. Both are kept: this one fails loudly if the exclusion set is
+  // dropped, without depending on the phase layout.
   it("never books the same card in both hands", () => {
     let contested = 0;
-    for (let t = 0; t < 4000; t += CYC) {
-      const l = targetFor(0, t);
-      const r = targetFor(1, t);
-      if (!l.miss && !r.miss && l.card === r.card) contested++;
+    let booked = 0;
+    for (let k = 0; k < 24; k++) {
+      const l = targetFor(0, (k + PHASE.reach) * CYC);
+      const r = targetFor(1, (k + PHASE.reach) * CYC);
+      if (l.miss || r.miss) continue;
+      booked++;
+      if (l.card === r.card) contested++;
     }
+    expect(booked, "neither hand ever books — the test proves nothing").toBeGreaterThan(8);
     expect(contested).toBe(0);
   });
 
@@ -256,9 +293,17 @@ describe("markup", () => {
     expect(y + h).toBeGreaterThan(128);
   });
 
-  it("carries one card group per card", () => {
+  it("carries one card group per card, plus one spare per hand", () => {
     const html = mascotWelcomeMarkup("x");
-    expect([...html.matchAll(/class="mw-card-g"/g)]).toHaveLength(CARDS.length);
+    const stream = html.slice(html.indexOf('class="mw-cards"'), html.indexOf('class="mw-arms"'));
+    expect([...stream.matchAll(/class="mw-card-g"/g)]).toHaveLength(CARDS.length);
+    // The two held nodes are painted ABOVE the body, so they cannot be the same
+    // nodes as the stream's — a card he holds up has to be in front of him.
+    const held = html.slice(html.indexOf('class="mw-held"'), html.indexOf('class="mw-gloves"'));
+    expect([...held.matchAll(/class="mw-card-g"/g)]).toHaveLength(2);
+    expect(html.indexOf('class="mw-held"'), "a held card must be over the body").toBeGreaterThan(
+      html.indexOf('class="mw-body"'),
+    );
   });
 });
 
@@ -312,16 +357,27 @@ describe("the hand is a circle", () => {
   // grip instead — a small squash, and WHERE on the card it lands — and both
   // are easy to undo without noticing.
   it("stays a perfect circle at rest", () => {
-    const [across, along] = handSquash(0);
+    const [across, along] = handScale(0);
     expect(across).toBeCloseTo(along, 6);
   });
 
-  it("flattens along the arm when it grips, and only a little", () => {
-    const [across, along] = handSquash(1);
-    expect(along, "a gripping hand must be shorter along the arm").toBeLessThan(across);
+  // The one the founder reported on 2026-08-23: a hand that went oval every
+  // time it touched a card read as a blob squashing against the screen. Grip
+  // changes SIZE, and nothing else.
+  it("stays a circle while it grips a card, and only gets smaller", () => {
+    const [across, along] = handScale(1);
+    expect(across, "gripping a card must not deform the hand").toBeCloseTo(along, 6);
+    expect(across, "a closing hand is smaller, not the same").toBeLessThan(handScale(0)[0]);
+  });
+
+  // The curtain is the ONE beat that is about taking hold of an edge, so the
+  // deformation is spent there and reads precisely because it happens once.
+  it("goes oval only for the curtain", () => {
+    const [across, along] = handScale(0, 1);
+    expect(along, "the pinched hand must be shorter along the arm").toBeLessThan(across);
     // Past ~20% a circle stops reading as a hand and starts reading as a ball.
     expect(across / along).toBeLessThan(1.4);
-    expect(across / along, "squash this small is invisible").toBeGreaterThan(1.15);
+    expect(across / along, "a deformation this small is invisible").toBeGreaterThan(1.15);
   });
 
   it("takes the card by its NEAR corner, not its centre", () => {
@@ -338,26 +394,255 @@ describe("the hand is a circle", () => {
     expect(centre - left[0]).toBeCloseTo(right[0] - centre, 6);
   });
 
-  it("rides the card it is holding rather than its own memory of it", () => {
-    // The ride position has to track the moving card, or the hand parks in
-    // space while the card slides out from under it.
-    // A hand is deliberately empty ~30% of the time (it hovers, searching),
-    // so scan for a moment it is actually carrying something.
-    let moved = 0;
-    let carried = 0;
-    for (let t = 0; t < CYC * 40; t += 3) {
-      const a = handWork(t, 0, 0);
-      const b = handWork(t + 3, 0, 0);
-      if (a.card < 0 || a.card !== b.card) continue;
-      carried++;
-      if (Math.abs(a.pos[0] - b.pos[0]) > 1e-6) moved++;
+  it("never lets go of the card it is carrying", () => {
+    // Whatever phase it is in, the hand and the card it holds are one object.
+    // The offset MOVES as the card grows (see `handOffset`), so what is pinned
+    // here is that it is a pure function of how far out of the stream the card
+    // is: the same lift on the way up and on the way down puts the hand in the
+    // same place. Anything else is the card sliding around inside the grip.
+    const byLift = new Map<string, [number, number]>();
+    let held = 0;
+    for (let t = 0; t < CYC * 12; t += 7) {
+      for (const hand of [0, 1] as const) {
+        const s = handWork(t, hand, hand === 0 ? 0 : HAND_PHASE_R);
+        if (!s.hold) continue;
+        held++;
+        const off: [number, number] = [s.hold[0] - s.pos[0], s.hold[1] - s.pos[1]];
+        expect(dist(s.hold, s.pos), "hand floated off its card").toBeLessThan(34);
+        const key = `${hand}:${s.lift.toFixed(3)}`;
+        const seen = byLift.get(key);
+        if (seen) {
+          expect(off[0]).toBeCloseTo(seen[0], 5);
+          expect(off[1]).toBeCloseTo(seen[1], 5);
+        } else byLift.set(key, off);
+      }
     }
-    expect(carried, "the hand never carries a card at all").toBeGreaterThan(50);
-    // Nearly every held frame should move with the card; a hand pinned to the
-    // position it booked at contact reads as the card sliding out of it.
-    expect(moved / carried).toBeGreaterThan(0.9);
+    expect(held, "no card is ever held — the test proves nothing").toBeGreaterThan(100);
+  });
+
+  it("does not cover the card it is holding up", () => {
+    // The defect this pins was found on a render, not in a test: the grip
+    // offset was a constant tuned against a stream card, so once the card grew
+    // to `HELD_SCALE` the same offset parked a white disc over its photo and
+    // half its text — on the ONE card he is supposed to be reading. Fully
+    // lifted, the hand belongs clear of the card's face — which edge it grips
+    // is a separate call (`handOffset` picks the bottom so the arm stays
+    // visible), so this asserts the clearance and not the sign.
+    const halfHeight = 13.5 * HELD_SCALE;
+    let checked = 0;
+    for (let t = 0; t < CYC * 12; t += 5) {
+      for (const hand of [0, 1] as const) {
+        const s = handWork(t, hand, hand === 0 ? 0 : HAND_PHASE_R);
+        if (!s.hold || s.lift < 0.9) continue;
+        checked++;
+        expect(Math.abs(s.hold[1] - s.pos[1])).toBeGreaterThan(halfHeight);
+      }
+    }
+    expect(checked, "nothing was ever fully lifted").toBeGreaterThan(100);
   });
 });
+
+describe("the turn", () => {
+  it("never covers a fifth of the swing in one frame", () => {
+    // The founder's first complaint, as a number (2026-08-23): "he spins round
+    // very fast". Measured per 60Hz frame rather than end to end, the first
+    // slowed version STILL moved 30% of the whole swing in a single frame at
+    // the crossing — `EI` ends fast, `EO` starts at 3.09x its own average, and
+    // the two halves met at full speed. Length was the smaller half of the fix;
+    // this pins the shape.
+    const swing = 1.06 - 0.05;
+    let worst = 0;
+    for (let t = 0; t <= BEATS.peer; t += 1000 / 60) {
+      worst = Math.max(worst, Math.abs(gScaleX(t + 1000 / 60) - gScaleX(t)));
+    }
+    expect(worst / swing).toBeLessThan(0.2);
+  });
+
+  it("still crosses — the squash is not quietly tuned away", () => {
+    // The cheap way to pass the test above is to stop turning. He has to go
+    // nearly edge-on, and come back with a little overshoot.
+    expect(gScaleX(BEATS.turn)).toBeLessThan(0.1);
+    expect(gScaleX(BEATS.turn + 220)).toBeGreaterThan(1.02);
+    expect(gScaleX(BEATS.peer)).toBeCloseTo(1, 2);
+  });
+});
+
+describe("a grab is a whole gesture, not a tap", () => {
+  // The complaint this answers (founder, 2026-08-23): "he does not take a card
+  // and look at it, he just clicks at them". Everything below is a property of
+  // picking something up that a fly-by touch does not have.
+
+  it("runs its phases in order", () => {
+    const order = [PHASE.reach, PHASE.close, PHASE.lift, PHASE.hold, PHASE.back, PHASE.open];
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i]!, `phase ${i} must follow phase ${i - 1}`).toBeGreaterThan(order[i - 1]!);
+    }
+    expect(order[order.length - 1]!).toBeLessThan(1);
+  });
+
+  it("takes a card OUT of the stream and puts it back", () => {
+    // Find a cycle where the left hand actually books something.
+    const k = firstHit(0);
+    const at = (f: number): ReturnType<typeof handWork> => handWork((k + f) * CYC, 0, 0);
+
+    expect(at(0.05).hold, "still flying — nothing in hand").toBeNull();
+    expect(at(PHASE.close - 0.01).hold, "on the card but not lifted yet").toBeNull();
+    expect(at((PHASE.lift + PHASE.hold) / 2).hold, "must be out of the stream").not.toBeNull();
+    expect(at(PHASE.open + 0.02).hold, "let go — back in the stream").toBeNull();
+  });
+
+  it("holds it still while the rest keep flowing", () => {
+    const k = firstHit(0);
+    const mid = handWork((k + (PHASE.lift + PHASE.hold) / 2) * CYC, 0, 0);
+    const later = handWork((k + PHASE.hold - 0.005) * CYC, 0, 0);
+    expect(mid.card).toBe(later.card);
+    const card = CARDS[mid.card]!;
+    // The card he is holding barely moves...
+    expect(Math.abs(later.hold![0] - mid.hold![0])).toBeLessThan(1);
+    // ...while its own stream position has moved on without it. That gap IS
+    // the read: he pulled this one out and the others carried on.
+    const drift = Math.abs(
+      cardX(card, (k + PHASE.hold - 0.005) * CYC) -
+        cardX(card, (k + (PHASE.lift + PHASE.hold) / 2) * CYC),
+    );
+    expect(drift, "the stream barely moves during the hold").toBeGreaterThan(3);
+  });
+
+  it("puts it back where the stream has got to, not where it was taken from", () => {
+    const k = firstHit(0);
+    const card = CARDS[handWork((k + PHASE.close) * CYC, 0, 0).card]!;
+    const tookAt = cardX(card, (k + PHASE.close) * CYC);
+    const back = handWork((k + PHASE.open - 0.005) * CYC, 0, 0);
+    expect(back.pos[0]).toBeCloseTo(gripPoint(card, (k + PHASE.open - 0.005) * CYC, 0)[0], 6);
+    expect(Math.abs(gripPoint(card, (k + PHASE.open - 0.005) * CYC, 0)[0] - tookAt)).toBeGreaterThan(
+      8,
+    );
+  });
+
+  it("uses both hands at once for a real stretch of every cycle", () => {
+    // "sometimes with two hands, one card in each" — a phase offset that never
+    // overlaps, or overlaps for two frames, does not deliver that.
+    let both = 0;
+    let steps = 0;
+    for (let t = 0; t < CYC * 24; t += 6) {
+      steps++;
+      const a = handWork(t, 0, 0);
+      const b = handWork(t, 1, HAND_PHASE_R);
+      if (a.hold && b.hold) both++;
+    }
+    const share = both / steps;
+    expect(share, "the two hands never hold a card at the same time").toBeGreaterThan(0.1);
+    expect(share, "they are ALWAYS both holding — no solo beats left").toBeLessThan(0.32);
+  });
+
+  it("keeps at least one hand busy most of the time", () => {
+    // The other half of the complaint: a hand that finds nothing in reach just
+    // hovers, and at 1400ms per cycle a barren one is a second and a half of
+    // nothing. Four of the nine cards used to be permanently unreachable.
+    let busy = 0;
+    let steps = 0;
+    for (let t = 0; t < CYC * 40; t += 6) {
+      steps++;
+      if (handWork(t, 0, 0).hold || handWork(t, 1, HAND_PHASE_R).hold) busy++;
+    }
+    expect(busy / steps).toBeGreaterThan(0.6);
+  });
+
+  it("never covers a quarter of a flight in one frame", () => {
+    // "The whole thing moves too fast" is, at the frame level, this: a
+    // cubic-bezier leaves at `y1 / x1` times its own average speed, and the
+    // ease this used to fly on starts at 3.09×. The hand crossed 23% of a
+    // 96-unit reach in the first 60Hz frame and then crawled — a snap followed
+    // by a glide. Rest-to-rest halves the worst frame. Same measurement, same
+    // reasoning and the same fix as `--kb-ease` in the stylesheet.
+    const k = firstHit(0);
+    const t0 = k * CYC;
+    const span = PHASE.reach * CYC;
+    const at = (ms: number): [number, number] => handWork(t0 + ms, 0, 0).pos;
+    const total = dist(at(0), at(span));
+    let worst = 0;
+    for (let ms = 0; ms + 16.7 <= span; ms += 16.7) {
+      worst = Math.max(worst, dist(at(ms), at(ms + 16.7)) / total);
+    }
+    expect(total, "the flight is too short to measure anything").toBeGreaterThan(30);
+    expect(worst, `worst frame covers ${(worst * 100).toFixed(1)}% of the flight`).toBeLessThan(
+      0.15,
+    );
+  });
+
+  it("only takes a card it can still put back on screen", () => {
+    // The stream keeps flowing while he examines, so the card goes back to
+    // wherever it has got to — which measured x = 165 on a stage that ends at
+    // 150 before `targetFor` started checking the return. On screen that is an
+    // arm shooting off the right edge to replace a card nobody can see, and
+    // nothing else in the suite can see it: every other property still holds.
+    for (let t = 0; t < CYC * 120; t += 9) {
+      for (const [hand, off] of [
+        [0, 0],
+        [1, HAND_PHASE_R],
+      ] as const) {
+        const s = handWork(t, hand, off);
+        expect(s.pos[0], `hand ${hand} off the stage at ${t}ms`).toBeGreaterThan(-45);
+        expect(s.pos[0], `hand ${hand} off the stage at ${t}ms`).toBeLessThan(148);
+        expect(s.pos[1]).toBeGreaterThan(-24);
+        expect(s.pos[1]).toBeLessThan(124);
+        if (s.hold) {
+          expect(s.hold[0], `card off the stage at ${t}ms`).toBeGreaterThan(-42);
+          expect(s.hold[0], `card off the stage at ${t}ms`).toBeLessThan(142);
+        }
+      }
+    }
+  });
+
+  it("can reach most of the deck", () => {
+    // The floor that decides this is a single number in `targetFor`, and
+    // raising it silently starves the gesture rather than breaking anything.
+    const reachable = new Set<number>();
+    for (let k = 0; k < 200; k++) {
+      for (const hand of [0, 1] as const) {
+        const target = targetFor(hand, (k + PHASE.reach) * CYC);
+        if (!target.miss) reachable.add(target.card);
+      }
+    }
+    expect(reachable.size).toBeGreaterThanOrEqual(7);
+  });
+
+  it("never holds the same card in both hands at the same instant", () => {
+    // The booking exclusion has to cover the whole hold, not the instant a
+    // hand books — a gesture keeps its card for most of a cycle now.
+    for (let t = 0; t < CYC * 24; t += 5) {
+      const a = handWork(t, 0, 0);
+      const b = handWork(t, 1, HAND_PHASE_R);
+      if (a.card < 0 || b.card < 0) continue;
+      expect(a.card, `both hands on card ${a.card} at ${t}ms`).not.toBe(b.card);
+    }
+  });
+
+  it("examines cards at different heights", () => {
+    // Four identical gestures in a row read as a machine. The examine height
+    // is derived from the card's own, so it varies with what he picked up.
+    const ys = new Set(CARDS.map((c) => Math.round(examineAt(c, 0)[1])));
+    expect(ys.size).toBeGreaterThan(4);
+    for (const c of CARDS) {
+      const [x, y] = examineAt(c, 0);
+      expect(x, "off the left edge of the stage").toBeGreaterThan(-30);
+      expect(y, "above the stage").toBeGreaterThan(10);
+      expect(y, "below the stage").toBeLessThan(120);
+    }
+  });
+});
+
+function dist(a: readonly [number, number], b: readonly [number, number]): number {
+  return Math.hypot(b[0] - a[0], b[1] - a[1]);
+}
+
+/** The first cycle in which `hand` actually books a card rather than missing. */
+function firstHit(hand: 0 | 1): number {
+  for (let k = 0; k < 40; k++) {
+    if (!targetFor(hand, (k + PHASE.reach) * CYC).miss) return k;
+  }
+  throw new Error("the hand never books a card at all");
+}
 
 describe("the mascot's own stylesheet", () => {
   it("has no rule left for the deleted fingers", () => {

@@ -268,7 +268,7 @@ out of Telegram-only workers.
 
   **The full greeting plays ONCE per user** (founder decision), marked in
   DeviceStorage (`gennety.onboarding.welcomed`). Every later launch still gets
-  the shuffling loop as its loading state and then simply fades — a 3.7 s
+  the shuffling loop as its loading state and then simply fades — a 4.7 s
   performance on every resume would be charm the first time and a toll the
   fourth. Three conditions gate it (`shouldPlayWelcome`), and the third is the
   one a marker alone cannot express: the boot phase must be the **very start**
@@ -290,12 +290,47 @@ out of Telegram-only workers.
   CSS keyframes and that remains the house rule; three properties here cannot be
   keyframes at all. The arm is a quadratic band that thins as it stretches, and
   the hand takes its tangent at the wrist. The hands grab REAL cards — each
-  flies to where a specific card will be at the moment of contact and then rides
-  it — so the target is solved per frame against a stream that has its own
-  clock. And the hands are anchored in the body's coordinate space and sample it
-  ~60 ms late, which is what gives the rock-back its whip. Everything that can
-  be a curve still is: the module evaluates real `cubic-bezier()`, so its
-  easings are the ones a stylesheet would have.
+  flies to where a specific card will be at the moment of contact, pulls it out
+  of the stream and puts it back where the stream has got to by then — so the
+  target is solved per frame against a stream that has its own clock. And the
+  hands are anchored in the body's coordinate space and sample it ~60 ms late,
+  which is what gives the rock-back its whip. Everything that can be a curve
+  still is: the module evaluates real `cubic-bezier()`, so its easings are the
+  ones a stylesheet would have.
+
+  **A grab is a whole gesture, not a tap (2026-08-26).** The first version ran
+  one every 190 ms and never took a card out of the stream: a hand flew to a
+  card and rode it along. On screen that reads as clicking at the cards rather
+  than looking at them, which is exactly how it came back (founder). A cycle is
+  1.4 s now — reach, close, lift OUT, hold still while the rest keep flowing,
+  put back, release — with the card following the HAND for the middle three
+  rather than the other way round, and the two hands running at a deliberately
+  un-round phase offset so part of the time he holds one card in each and the
+  rhythm never reads as a metronome.
+
+  Three properties of the pose are load-bearing, and each was found on a render
+  rather than reasoned about. **The card is put back where the STREAM has got
+  to**, never where it was taken from — the gap is the read. **It converges on a
+  fixed size** rather than a multiple of its own: the deck's own scales run
+  0.74–1.05, so a multiple made some examined cards smaller than their
+  neighbours. And **the hand grips the outer BOTTOM corner** once the card is
+  out, which is not framing: the shoulder sits inside the body and the hand
+  beyond the card, so a top grip runs the whole arm behind a card drawn on top
+  of it and the hand goes back to reading as a floating disc — the very
+  complaint the burgundy arm was introduced to answer. From below, the arm runs
+  along the card's bottom edge and is visible end to end. The arm's bow flips
+  with the lift for the same reason.
+
+  **What reads as "too fast" is usually one frame of jump, not the length of the
+  move.** The turn was reported as a snap twice. Stretching it (80 → 300 ms in)
+  was not enough on its own: measured per 60 Hz frame it still moved **30% of
+  the whole swing in a single frame** at the crossing, because the squeeze ended
+  fast and the recovery began at 3.09× its own average, so the two halves met at
+  full speed. Both are on the rest-to-rest curve now — the same shape and the
+  same measurement as the keyboard easing (§1.1 → `--kb-ease`) — which halves
+  that to 17% at the original durations and reaches 13% at 360/220 ms. A test
+  walks the real curve and fails past 20%, and a second one asserts he still
+  goes edge-on, because the cheap way to pass the first is to stop turning.
 
   **The hand is a circle, and that is what removed a whole class of defect
   (founder decision 2026-08-23).** It was a five-digit glove — cuff, four

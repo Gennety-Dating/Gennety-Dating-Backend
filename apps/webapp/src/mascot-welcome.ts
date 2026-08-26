@@ -26,8 +26,10 @@
  *   decision, DECISIONS.md) and the tangent now only aims its squash. That is
  *   an error the shape can no longer make.
  * - **The hands grab real cards.** A hand flies to where a specific card *will*
- *   be at the moment of contact and then rides it. The cards stream on their
- *   own clock, so the target is solved per frame, not baked.
+ *   be at the moment of contact, closes on it, pulls it OUT of the stream, holds
+ *   it still while the rest keep flowing, and puts it back where the stream has
+ *   got to by then. The cards move on their own clock, so every one of those
+ *   positions is solved per frame rather than baked.
  * - **Hands lag the body.** Each hand is anchored in the body's own coordinate
  *   space and samples that transform ~60ms late, which is what gives the
  *   rock-back its whip.
@@ -35,6 +37,17 @@
  * Everything that CAN be a curve still is: `track()` evaluates real CSS
  * `cubic-bezier()` by Newton iteration, so the easings here are the same
  * easings a stylesheet would have.
+ *
+ * ## One grab is a whole gesture, not a tap
+ *
+ * The first version ran a grab every 190ms and never took a card out of the
+ * stream: the hand flew to a card and rode it along. On screen that reads as
+ * tapping at the cards rather than looking at them, which is exactly how it was
+ * reported (founder, 2026-08-23). A cycle is now `CYC`, spent on
+ * reach → close → lift out → examine → put back → release (`PHASE`), with the
+ * card following the HAND for the middle three rather than the other way round.
+ * The two hands run at a deliberately un-round phase offset, so part of the time
+ * both are holding one card each and the rhythm never reads as a metronome.
  *
  * ## Body shape
  *
@@ -70,7 +83,7 @@ export const MASCOT_BODY =
  * is pinned by a test rather than left to drift one retune at a time — the same
  * treatment `SUCCESS_TOTAL_MS` gets.
  */
-export const GREET_MS = 3700;
+export const GREET_MS = 4710;
 
 /**
  * Minimum loop before the greeting may start.
@@ -78,22 +91,45 @@ export const GREET_MS = 3700;
  * A turn-around only reads as "he noticed you" if there was something to
  * interrupt. `/state` often answers in a few hundred milliseconds, so without a
  * floor the mascot would spin round before the audience has seen him working.
+ *
+ * Sized in GESTURES rather than picked as a round number: at `CYC` = 1400 this
+ * is one full pick-up-examine-return plus the other hand starting its own, which
+ * is the least that reads as "he is working through profiles". It went up with
+ * the gesture — it was 1400 when a grab took 190ms and there was nothing to see.
  */
-export const LOOP_FLOOR_MS = 1400;
+export const LOOP_FLOOR_MS = 2000;
 
 /** Fade used when the greeting is skipped or not played at all. */
 export const FADE_MS = 240;
 
-/** Beat boundaries inside the greeting, in ms from its start. */
+/**
+ * Beat boundaries inside the greeting, in ms from its start.
+ *
+ * Roughly 2× their first values. The turn was the loud one: `gScaleX` used to
+ * squeeze the body flat in 80ms and pop it back in 82, which is a cut rather
+ * than a turn — it read as him snapping round, and that is how it came back
+ * (founder, 2026-08-23). It is 360ms in and 220 out now, about what a real head
+ * turn costs, and every other beat was stretched with it so the performance has
+ * one tempo rather than a slow middle between two snaps.
+ *
+ * Duration was only half of it, and the smaller half. Measured per 60Hz frame,
+ * the first stretch (300/170) still moved **30% of the whole swing in a single
+ * frame**, right at the crossing — because `EI` ends fast and `EO` begins at
+ * 3.09× its own average, so the two halves met at full speed. On the SAME
+ * durations, swapping both for the rest-to-rest curve halves that to 17%; at
+ * 360/220 it is 13%. Same measurement, same conclusion, and the same curve as
+ * the keyboard easing (DECISIONS.md 2026-08-18): what reads as "too fast" is
+ * usually one frame of jump, not the length of the move.
+ */
 export const BEATS = {
-  turn: 80,
-  peer: 260,
-  hold: 700,
-  rock: 1050,
-  wink: 1750,
-  reach: 2300,
-  grip: 2600,
-  pull: 2760,
+  turn: 360,
+  peer: 730,
+  hold: 1290,
+  rock: 1730,
+  wink: 2490,
+  reach: 3090,
+  grip: 3410,
+  pull: 3590,
 } as const;
 
 const NS = "http://www.w3.org/2000/svg";
@@ -125,7 +161,21 @@ export function bezier(x1: number, y1: number, x2: number, y2: number): Ease {
 }
 
 const EO = bezier(0.22, 0.68, 0.3, 1);
-const EI = bezier(0.62, 0, 0.9, 0.42);
+/**
+ * Rest to rest — the same shape `--kb-ease` uses in the stylesheet, chosen for
+ * the same reason and by the same measurement.
+ *
+ * A cubic-bezier leaves at `y1 / x1` times its own average speed, so `EO`
+ * starts at **3.09×**. On a 96-unit flight across a 200-unit stage that is 23%
+ * of the distance in the first frame followed by a crawl — a snap and then a
+ * glide, which is what "the whole thing moves too fast" describes once you look
+ * at it frame by frame rather than end to end. This one starts at rest,
+ * accelerates, and comes back to rest, so the hand's fastest moment is 2× its
+ * average instead of 3.09× and it happens in the middle where the eye expects
+ * it. Used for every travel in the loop; the greeting's own beats keep `EO`,
+ * where a little attack is the point.
+ */
+const MOVE_E = bezier(0.42, 0, 0.58, 1);
 const SNAP = bezier(0.3, 1.3, 0.45, 1);
 const PULL_E = bezier(0.55, 0.03, 0.5, 1);
 const EDGE_E = bezier(0.5, 0.05, 0.3, 1);
@@ -189,9 +239,54 @@ export function cardX(card: Card, t: number): number {
   return -78 + frac((t / 1000) * card.sp + card.ph) * 268;
 }
 
-/** One grab cycle. */
-export const CYC = 190;
-const RIDE_FROM = 0.42;
+/**
+ * One whole gesture: reach, close, lift out, examine, put back, release.
+ *
+ * It was 190ms, which is not a length a gesture can be — at that rate the hand
+ * could only ever flick at a passing card, and that is what it looked like.
+ */
+export const CYC = 1400;
+
+/**
+ * Phase boundaries inside a gesture, as fractions of `CYC`.
+ *
+ * The three middle phases are the ones that make it a pick-up rather than a
+ * touch: the card leaves the stream, stops dead while everything else keeps
+ * flowing, and is put back where the stream has got to by then.
+ */
+export const PHASE = {
+  /** Flying to the card. Contact is booked for this instant. */
+  reach: 0.2,
+  /** On the card, closing. It is still in the stream. */
+  close: 0.28,
+  /** Drawing it out of the stream. */
+  lift: 0.44,
+  /** Held still, being looked at. */
+  hold: 0.64,
+  /** Returned to wherever the stream has got to. */
+  back: 0.82,
+  /** Opening; the card streams on. */
+  open: 0.9,
+} as const;
+
+/**
+ * How far the right hand's gesture leads the left's, in cycles.
+ *
+ * Picked by sweeping it rather than by eye, because the two things it trades
+ * off pull in opposite directions and neither is guessable. A hand holds a card
+ * for `close..back` — 54% of a cycle — so the two hands always overlap somewhat;
+ * antiphase is simply the setting where they overlap LEAST. Measured over 80
+ * cycles: at 0.48 both hands hold at once 4% of the time, at 0.04 it is 39% and
+ * the mascot looks like he only ever works in pairs.
+ *
+ * 0.72 sits where both readings are true at once — both hands hold a card each
+ * ~17% of the time, and at least one hand is holding ~71%, the highest the
+ * sweep reaches. It also produces the beat as described: the left lifts one
+ * out, the right lifts another, the left puts hers back while the right is
+ * still looking at his. The two reaches stay a third of a cycle apart, so it
+ * reads as a stagger rather than as two hands moving in unison.
+ */
+export const HAND_PHASE_R = 0.72;
 
 /**
  * A hand's reachable band and its home position. A card passing BEHIND the
@@ -231,6 +326,79 @@ export interface HandTarget {
 }
 
 /**
+ * Where a hand sits relative to the card centre it is holding.
+ *
+ * Kept as one pair of numbers because two places need it in opposite
+ * directions — `gripPoint` puts the hand on a card, and `handFor` puts the hand
+ * on a card the hand is carrying. Two copies would drift and the card would
+ * float a few units out of the grip.
+ */
+const HAND_DX = 6.5;
+const HAND_DY = -10;
+
+/**
+ * How big a card gets while it is being looked at.
+ *
+ * A fixed size rather than a multiple of the card's own: holding something up
+ * to read it does not depend on how far away it was, and the deck's own scales
+ * run 0.74..1.05, so a multiple made some examined cards smaller than their
+ * neighbours in the stream. Against that spread, 1.5 is unmistakably the one he
+ * is reading.
+ */
+export const HELD_SCALE = 1.5;
+
+/**
+ * The hand's offset from the card centre, as the card leaves the stream.
+ *
+ * It has to move, and that is not decoration. On the stream the hand takes the
+ * near top corner of a card drawn at ~1.0; held, the card is at `HELD_SCALE`
+ * and the same offset lands the hand in the MIDDLE of it — measured on the
+ * render, a white disc sitting over the photo and half the text of the one card
+ * he is supposed to be reading.
+ *
+ * Held, it grips the OUTER BOTTOM corner, and the vertical sign is the load-
+ * bearing half. Gripping the top puts the card between the viewer and the arm:
+ * the shoulder sits inside the body at x 66, the hand beyond the card at 109,
+ * so the whole 43 units of arm run behind a card drawn on top of it and the
+ * hand goes back to reading as a floating disc — which is the complaint the
+ * burgundy arm was introduced to answer (DECISIONS.md 2026-08-23). From below,
+ * the arm runs along the card's bottom edge and is visible end to end, and the
+ * card rests above the hand the way something held up to be read does.
+ */
+function handOffset(hand: 0 | 1, lift: number): [number, number] {
+  const s = hand === 0 ? -1 : 1;
+  const heldDx = 10 * HELD_SCALE * 0.6;
+  const heldDy = 13.5 * HELD_SCALE + 8;
+  return [s * mix(HAND_DX, heldDx, lift), mix(HAND_DY, heldDy, lift)];
+}
+
+/** The hand position for a card centred at `c`, `lift` out of the stream. */
+function handFor(c: readonly [number, number], hand: 0 | 1, lift = 0): [number, number] {
+  const [dx, dy] = handOffset(hand, lift);
+  return [c[0] + dx, c[1] + dy];
+}
+
+/**
+ * Where a card is taken to be looked at.
+ *
+ * CLEAR of the body — the wings end at x 15..85 and a card held at `HELD_SCALE`
+ * is 30 wide, so 0 and 100 put it just past them. That is not framing: with the
+ * card over a wing the arm has nothing to cross, so it renders as a stub behind
+ * the body and the hand reads as a disc stuck to the card (measured on the
+ * render — hand at x 93 against a shoulder at 66). Out here the arm is 40-60
+ * units of visible reach, which is the whole difference between holding
+ * something up and touching it.
+ *
+ * The height is derived from the card's own so four gestures in a row do not
+ * all happen at the same spot. It is a WORLD point: he sways, his arm
+ * stretches, the card stays put, which is what holding something steady looks
+ * like.
+ */
+export function examineAt(card: Card, hand: 0 | 1): [number, number] {
+  return [hand === 0 ? 0 : 100, mix(card.y, 40, 0.75)];
+}
+
+/**
  * Which card this hand books for the contact at `tc`.
  *
  * The right hand never books the card the left one is on (`depth` breaks the
@@ -248,25 +416,63 @@ export interface HandTarget {
  * the card — a circle has to solve the same problem with placement.
  */
 export function gripPoint(card: Card, t: number, hand: 0 | 1): [number, number] {
-  return [cardX(card, t) + (hand === 0 ? -6.5 : 6.5), card.y - 10];
+  return handFor([cardX(card, t), card.y], hand);
 }
 
 export function targetFor(hand: 0 | 1, tc: number, depth = 0): HandTarget {
   const band = HAND_BAND[hand]!;
   const home = HAND_HOME[hand]!;
-  let excl = -1;
+  const excl = new Set<number>();
   if (hand === 1 && depth === 0) {
-    const lk = Math.floor(tc / CYC);
-    excl = targetFor(0, lk * CYC + CYC * RIDE_FROM, 1).card;
+    // Exclude the left hand's card for any of ITS cycles whose hold OVERLAPS
+    // this one's — not the cycle it happens to be in. A gesture keeps its card
+    // for `back - close` of a cycle, so two holds overlap only when their
+    // starts are closer than that, which is at most two left cycles and usually
+    // one. The first version bucketed by `floor(tc / CYC)` and excluded two
+    // unconditionally: one of them never overlapped, so it cost the right hand
+    // a candidate for nothing, and that hand is the one that can least afford
+    // it — the stream flows away from its band, so its choices are thinnest.
+    const w = PHASE.back - PHASE.close;
+    const u0 = tc / CYC - PHASE.reach;
+    for (let j = Math.ceil(u0 - w); j <= Math.floor(u0 + w); j++) {
+      excl.add(targetFor(0, (j + PHASE.reach) * CYC, 1).card);
+    }
   }
   let best = -1;
   let bs = Infinity;
   for (let i = 0; i < CARDS.length; i++) {
-    if (i === excl) continue;
+    if (excl.has(i)) continue;
     const card = CARDS[i]!;
     const [x, y] = gripPoint(card, tc, hand);
-    if (y < 30 || x < band[0] || x > band[1]) continue;
+    // The floor is the STAGE, not the body — `isBehindBody` already owns the
+    // silhouette. It was y >= 30, which is where the top wing sits, and that
+    // put FOUR of the nine cards permanently out of reach: measured, a hand
+    // found nothing to grab in a quarter of its cycles. At 190ms a barren
+    // cycle was invisible; at 1400 it is a second and a half of a hand hovering
+    // over nothing, which is the "he does not really do anything" this whole
+    // rework is about. Reaching above his own head for a card is a normal thing
+    // to do; reaching off the top of the screen is not.
+    if (y < 4 || x < band[0] || x > band[1]) continue;
     if (isBehindBody(x, y)) continue;
+    // He only takes a card he can still PUT BACK. A gesture holds its card for
+    // most of a cycle while the stream keeps moving underneath, so a card taken
+    // at the far edge has to be returned to wherever it has got to by then —
+    // measured at up to x = 165 on a stage that ends at 150, i.e. an arm
+    // shooting off the side of the screen to replace a card nobody can see.
+    //
+    // The two rules that matter at the return are the same two that matter at
+    // the pickup — off his own silhouette, and on the stage — rather than the
+    // reach band, which is about the arm's PATH and is far too tight here: at
+    // the return the arm is coming back from beside the body, not across it,
+    // and using the band starved the right hand into a barren cycle half the
+    // time (39% against 26%; the stream flows rightward, so cards drift OUT of
+    // that band during the gesture and into the left one).
+    //
+    // `xr < x` is the wrap: a card that has looped round to the far left reads
+    // as being behind where it was taken from. That is the constraint the old
+    // ride-along code spelled out separately, now covered for free.
+    const [xr, yr] = gripPoint(card, tc + CYC * (PHASE.back - PHASE.reach), hand);
+    if (xr < x || xr < -42 || xr > 140 || isBehindBody(xr, yr)) continue;
     const s = Math.abs(x - home[0]) + Math.abs(y - home[1]) * 0.7;
     if (s < bs) {
       bs = s;
@@ -287,44 +493,126 @@ function hoverAt(hand: 0 | 1, t: number): [number, number] {
 
 export interface HandState {
   pos: [number, number];
+  /** 0..1, how closed the hand is. Only ever changes its SIZE, never its shape. */
   grip: number;
+  /** The card this hand is on, or -1. */
   card: number;
-  rideP: number;
+  /**
+   * Where the card's centre must be drawn, or null to leave it in the stream.
+   *
+   * This is the whole difference between a pick-up and a touch: for the middle
+   * three phases the CARD follows the HAND, so it stops while the others keep
+   * flowing past it.
+   */
+  hold: [number, number] | null;
+  /** 0..1, how far out of the stream the card is. Drives its size and opacity. */
+  lift: number;
 }
 
 /**
- * The loop's hand solver. Fly to the booked card, close on approach, ride it.
- * Purely a function of `t`, so the loop is seamless at any length.
+ * How far the hand has drifted home by the end of a gesture.
+ *
+ * The reach of the NEXT cycle starts from exactly this, which is what makes the
+ * cycle boundary invisible: at `f = 1` the retreat has travelled `RETREAT` of
+ * the way to the hover point, and at `f = 0` the next `release` is that same
+ * mix evaluated at the same instant.
+ */
+const RETREAT = 0.55;
+
+/**
+ * The loop's hand solver, and the one place the gesture is described.
+ *
+ * Purely a function of `t` — the loop runs for however long `/state` takes, so
+ * nothing here may depend on when it started.
  */
 export function handWork(t: number, hand: 0 | 1, off: number): HandState {
   const u = t / CYC + off;
   const k = Math.floor(u);
   const f = u - k;
   const t0 = (k - off) * CYC;
-  const tc = t0 + CYC * RIDE_FROM;
-  const now = targetFor(hand, tc);
-  const prev = targetFor(hand, t0 - CYC + CYC * RIDE_FROM);
-  const release = prev.miss ? prev.pos : gripPoint(CARDS[prev.card]!, t0, hand);
+  const now = targetFor(hand, t0 + CYC * PHASE.reach);
+  const prev = targetFor(hand, t0 - CYC + CYC * PHASE.reach);
+  // Where the previous gesture actually left the hand, evaluated at THIS
+  // instant rather than remembered — a remembered position would be stale by a
+  // whole cycle and the hand would jump at every boundary.
+  const hover = hoverAt(hand, t0);
+  const release: [number, number] = prev.miss
+    ? hover
+    : (() => {
+        const g = gripPoint(CARDS[prev.card]!, t0, hand);
+        return [mix(g[0], hover[0], RETREAT), mix(g[1], hover[1], RETREAT)];
+      })();
 
-  if (f < RIDE_FROM) {
-    const p = EO(f / RIDE_FROM);
-    const grip = now.miss ? 0 : f < 0.12 ? 1 - EO(f / 0.12) : EO(clamp((f - 0.3) / 0.12, 0, 1));
+  // Nothing in reach this cycle: drift home and hover, which reads as searching.
+  if (now.miss) {
+    const p = MOVE_E(clamp(f / PHASE.reach, 0, 1));
+    const h = hoverAt(hand, t);
+    return {
+      pos: [mix(release[0], h[0], p), mix(release[1], h[1], p)],
+      grip: 0,
+      card: -1,
+      hold: null,
+      lift: 0,
+    };
+  }
+
+  const card = CARDS[now.card]!;
+  const ex = examineAt(card, hand);
+
+  // Reach — flying to where the card WILL be at contact.
+  if (f < PHASE.reach) {
+    const p = MOVE_E(f / PHASE.reach);
     return {
       pos: [
         mix(release[0], now.pos[0], p),
-        mix(release[1], now.pos[1], p) - 9 * Math.sin(Math.PI * p),
+        mix(release[1], now.pos[1], p) - 11 * Math.sin(Math.PI * p),
       ],
-      grip,
+      grip: 0,
       card: -1,
-      rideP: 0,
+      hold: null,
+      lift: 0,
     };
   }
-  if (now.miss) return { pos: hoverAt(hand, t), grip: 0, card: -1, rideP: 0 };
-  const card = CARDS[now.card]!;
-  const ride = gripPoint(card, t, hand);
-  // A card that has wrapped around the strip must not drag the hand with it.
-  const x = Math.abs(ride[0] - now.pos[0]) > 60 ? now.pos[0] : ride[0];
-  return { pos: [x, ride[1]], grip: 1, card: now.card, rideP: (f - RIDE_FROM) / (1 - RIDE_FROM) };
+  // Close — on the card, still streaming with it.
+  if (f < PHASE.close) {
+    const p = (f - PHASE.reach) / (PHASE.close - PHASE.reach);
+    return { pos: gripPoint(card, t, hand), grip: EO(p), card: now.card, hold: null, lift: 0 };
+  }
+  // Lift — out of the stream. From here the card follows the hand.
+  if (f < PHASE.lift) {
+    const p = MOVE_E((f - PHASE.close) / (PHASE.lift - PHASE.close));
+    const c: [number, number] = [mix(cardX(card, t), ex[0], p), mix(card.y, ex[1], p)];
+    return { pos: handFor(c, hand, p), grip: 1, card: now.card, hold: c, lift: p };
+  }
+  // Examine — held still while everything else keeps flowing past.
+  if (f < PHASE.hold) {
+    const p = (f - PHASE.lift) / (PHASE.hold - PHASE.lift);
+    const c: [number, number] = [ex[0], ex[1] + Math.sin(p * Math.PI * 2) * 1.6];
+    return { pos: handFor(c, hand, 1), grip: 1, card: now.card, hold: c, lift: 1 };
+  }
+  // Back — returned to wherever the stream has got to by now, not to where it
+  // was taken from. That gap IS the read: the others moved on without it.
+  if (f < PHASE.back) {
+    const p = MOVE_E((f - PHASE.hold) / (PHASE.back - PHASE.hold));
+    const c: [number, number] = [mix(ex[0], cardX(card, t), p), mix(ex[1], card.y, p)];
+    return { pos: handFor(c, hand, 1 - p), grip: 1, card: now.card, hold: c, lift: 1 - p };
+  }
+  // Open — letting go, the card streaming on under the hand.
+  if (f < PHASE.open) {
+    const p = (f - PHASE.back) / (PHASE.open - PHASE.back);
+    return { pos: gripPoint(card, t, hand), grip: 1 - EO(p), card: now.card, hold: null, lift: 0 };
+  }
+  // Retreat — drifting back, ready to reach again.
+  const p = MOVE_E((f - PHASE.open) / (1 - PHASE.open)) * RETREAT;
+  const g = gripPoint(card, t, hand);
+  const h = hoverAt(hand, t);
+  return {
+    pos: [mix(g[0], h[0], p), mix(g[1], h[1], p)],
+    grip: 0,
+    card: -1,
+    hold: null,
+    lift: 0,
+  };
 }
 
 /** Body sway during the loop. Periodic by construction — no loop seam. */
@@ -406,7 +694,7 @@ const B = BEATS;
 
 const gTx = track([
   [0, 4],
-  [B.turn + 100, 0, EO],
+  [B.turn + 140, 0, EO],
   [B.reach, 0],
   [B.grip, 3, EO],
   [B.pull, 3],
@@ -414,28 +702,43 @@ const gTx = track([
 ]);
 const gScale = track([
   [0, 0.92],
-  [B.turn + 100, 1.02, EO],
+  [B.turn + 140, 1.02, EO],
   [B.peer, 1, EO],
   [B.hold, 1.14, EO],
   [B.rock, 1.14],
-  [B.rock + 230, 0.93, EO],
-  [B.rock + 390, 1.035, EO],
-  [B.rock + 530, 1, EO],
+  [B.rock + 320, 0.93, EO],
+  [B.rock + 540, 1.035, EO],
+  [B.rock + 740, 1, EO],
 ]);
-const gScaleX = track([
+/**
+ * The turn itself: squeezed edge-on, then widened back out.
+ *
+ * 300ms in and 170 out. It was 80 and 82, which is not enough frames for the
+ * eye to read a rotation at all — it landed as a cut, and came back as "he
+ * turns round far too fast". The ease-in is kept: a turn should still start
+ * slow and whip through the flat, it just needs the anticipation to exist.
+ */
+/**
+ * The turn, as a horizontal squash of the whole body.
+ *
+ * Exported only so a test can walk the real curve. The complaint it answers is
+ * about a single frame, so a test that rebuilt the track from constants could
+ * pass while this one snapped.
+ */
+export const gScaleX = track([
   [0, 1],
-  [B.turn, 0.05, EI],
-  [B.turn + 82, 1.06, EO],
+  [B.turn, 0.05, MOVE_E],
+  [B.turn + 220, 1.06, MOVE_E],
   [B.peer, 1, EO],
 ]);
 const gRot = track([
   [0, 0],
   [B.rock, 0],
-  [B.rock + 230, 4.5, EO],
-  [B.rock + 500, 0, EO],
+  [B.rock + 320, 4.5, EO],
+  [B.rock + 700, 0, EO],
   [B.wink, 0],
-  [B.wink + 150, -8, EO],
-  [B.wink + 430, -8],
+  [B.wink + 200, -8, EO],
+  [B.wink + 560, -8],
   [B.reach, 0, EO],
   [B.grip, 2.2, EO],
   [B.pull, 2.2],
@@ -455,20 +758,25 @@ const gRy = track([
   [B.turn, 12],
   [B.hold, 4, EO],
   [B.rock, 4],
-  [B.rock + 280, 14.6, SNAP],
-  [B.rock + 500, 13.4, EO],
+  [B.rock + 380, 14.6, SNAP],
+  [B.rock + 700, 13.4, EO],
 ]);
 const gRx = track([
   [B.turn, 7],
   [B.hold, 6.4, EO],
   [B.rock, 6.4],
-  [B.rock + 280, 7.6, EO],
+  [B.rock + 380, 7.6, EO],
 ]);
+/**
+ * The wink, stretched least of all the beats. A blink is genuinely quick, and
+ * a slow one reads as sleepy rather than as a wink — so this got ~30% where
+ * everything around it got ~70%.
+ */
 const gWink = track([
   [B.wink, 0],
-  [B.wink + 130, 1, EO],
-  [B.wink + 410, 1],
-  [B.wink + 530, 0, EO],
+  [B.wink + 170, 1, EO],
+  [B.wink + 470, 1],
+  [B.wink + 610, 0, EO],
 ]);
 const gEyeX = track([
   [0, 0],
@@ -477,7 +785,7 @@ const gEyeX = track([
 ]);
 const gCards = track([
   [0, 1],
-  [B.turn + 20, 0, EO],
+  [B.turn + 60, 0, EO],
 ]);
 /**
  * The curtain edge starts 90ms AFTER the body starts pulling — the yank first,
@@ -495,17 +803,17 @@ const gBraceY = track([
   [B.peer, 0],
   [B.hold, 2.2, EO],
   [B.rock, 2.2],
-  [B.rock + 220, -4.5, EO],
-  [B.rock + 370, -4.5],
-  [B.rock + 580, 0, EO],
+  [B.rock + 300, -4.5, EO],
+  [B.rock + 520, -4.5],
+  [B.rock + 800, 0, EO],
 ]);
 const gBendL = track([
   [0, 13],
-  [B.peer + 90, -15, EO],
+  [B.peer + 140, -15, EO],
 ]);
 const gBendR = track([
   [0, -13],
-  [B.peer + 90, 15, EO],
+  [B.peer + 140, 15, EO],
   [B.reach, 15],
   [B.grip, 5, EO],
 ]);
@@ -539,19 +847,26 @@ const GRADIENT_ID = "gnt-mw-wing";
  * fitted with `meet`, so on a tall phone there is letterbox above and below
  * that still has to read as the page rather than as a hole.
  */
+function cardMarkup(): string {
+  const w = 20;
+  const h = 27;
+  return (
+    `<g class="mw-card-g">` +
+    `<rect class="mw-card" x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="3.2"/>` +
+    `<circle class="mw-card-line" cy="${-h * 0.17}" r="${w * 0.19}"/>` +
+    `<rect class="mw-card-line" x="${-w * 0.28}" y="${h * 0.11}" width="${w * 0.56}" height="1.8" rx=".9"/>` +
+    `<rect class="mw-card-line" x="${-w * 0.19}" y="${h * 0.25}" width="${w * 0.38}" height="1.8" rx=".9"/>` +
+    `</g>`
+  );
+}
+
 export function mascotWelcomeMarkup(ariaLabel: string): string {
-  const cards = CARDS.map(() => {
-    const w = 20;
-    const h = 27;
-    return (
-      `<g class="mw-card-g">` +
-      `<rect class="mw-card" x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="3.2"/>` +
-      `<circle class="mw-card-line" cy="${-h * 0.17}" r="${w * 0.19}"/>` +
-      `<rect class="mw-card-line" x="${-w * 0.28}" y="${h * 0.11}" width="${w * 0.56}" height="1.8" rx=".9"/>` +
-      `<rect class="mw-card-line" x="${-w * 0.19}" y="${h * 0.25}" width="${w * 0.38}" height="1.8" rx=".9"/>` +
-      `</g>`
-    );
-  }).join("");
+  const cards = CARDS.map(cardMarkup).join("");
+  // One spare card per hand, painted ABOVE the body. A card he is holding up to
+  // look at has to be in front of him, and the stream is behind him — so the
+  // held one is a different node rather than the same node re-parented every
+  // frame. Its stream twin is hidden while it is out.
+  const held = `${cardMarkup()}${cardMarkup()}`;
 
   return (
     `<div class="mw" role="status" aria-label="${escapeHtml(ariaLabel)}">` +
@@ -577,6 +892,7 @@ export function mascotWelcomeMarkup(ariaLabel: string): string {
     `<g class="mw-face">` +
     `<ellipse class="mw-eye mw-eye-l"/><path class="mw-lid"/><ellipse class="mw-eye mw-eye-r"/>` +
     `</g></g></g>` +
+    `<g class="mw-held">${held}</g>` +
     `<g class="mw-gloves"></g>` +
     `</g>` +
     `<rect class="mw-edge" y="-238" height="576" width="14" fill="url(#gnt-mw-edge)" opacity="0"/>` +
@@ -630,29 +946,42 @@ function buildHand(parent: Element): HandParts {
 const HAND_S = 1.12;
 
 /**
- * Scale for a hand gripping at `grip` (0..1), as `[across, along]` the arm.
+ * Hand scale, as `[across, along]` the arm.
  *
- * Pure, and exported, because it is the only thing left that says "this is
- * holding something" — there are no fingers to close any more — so the one
- * number that matters (how far a circle may deform before it reads as a
- * bouncing ball) is worth pinning rather than re-tuning by eye.
+ * Two signals, deliberately NOT the same one — they used to be, and it was
+ * wrong (founder, 2026-08-23):
+ *
+ * - **`grip`** — holding a card. It only ever changes SIZE: the hand closes a
+ *   little and stays a circle. A hand that went oval every time it touched a
+ *   card read as a blob squashing against the screen rather than as fingers
+ *   closing, which is the one thing a circle genuinely cannot mime.
+ * - **`pinch`** — the curtain, and nothing else in the whole piece. That is the
+ *   single beat where taking hold of an edge is the point, so the deformation
+ *   is spent there and is legible precisely because it happens once.
+ *
+ * The oval stays under 1.4:1 either way: past ~20% a circle stops reading as a
+ * hand and starts reading as a bouncing ball.
  */
-export function handSquash(grip: number): [number, number] {
-  return [HAND_S * (1 + grip * 0.12), HAND_S * (1 - grip * 0.15)];
+export function handScale(grip: number, pinch = 0): [number, number] {
+  const s = HAND_S * (1 - grip * 0.11);
+  return [s * (1 + pinch * 0.14), s * (1 - pinch * 0.17)];
 }
 
 /**
- * Place the hand, and squash it along the arm by `grip`.
+ * Place the hand, size it by `grip`, and deform it by `pinch`.
  *
- * Squash is the only thing left that says "this is holding something", now
- * that there are no fingers to close. It is deliberately small — 11% — because
- * a circle deforming much more stops reading as a hand and starts reading as
- * a bouncing ball. 15% is where it is legible at the size the hand actually
- * renders (~24 stage units across) without crossing that line. The axis comes from the arm's own tangent, so a hand
- * reaching sideways flattens sideways with no extra bookkeeping.
+ * The deformation axis comes from the arm's own tangent, so the hand that grabs
+ * the curtain flattens along the reach with no extra bookkeeping.
  */
-function setHand(parts: HandParts, x: number, y: number, ang: number, grip: number): void {
-  const [across, along] = handSquash(grip);
+function setHand(
+  parts: HandParts,
+  x: number,
+  y: number,
+  ang: number,
+  grip: number,
+  pinch = 0,
+): void {
+  const [across, along] = handScale(grip, pinch);
   parts.g.setAttribute(
     "transform",
     `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${ang.toFixed(2)}) ` +
@@ -675,11 +1004,13 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
   const armL = q<SVGPathElement>(".mw-arm-l");
   const armR = q<SVGPathElement>(".mw-arm-r");
   const cardsG = q<SVGGElement>(".mw-cards");
+  const heldG = q<SVGGElement>(".mw-held");
   const glovesG = q<SVGGElement>(".mw-gloves");
   const grabG = q<SVGGElement>(".mw-grab");
   const wipe = q<SVGRectElement>(".mw-wipe");
   const edge = q<SVGRectElement>(".mw-edge");
   const cardNodes = Array.from(cardsG.children) as SVGGElement[];
+  const heldNodes = Array.from(heldG.children) as SVGGElement[];
 
   const gL = buildHand(glovesG);
   const gR = buildHand(glovesG);
@@ -688,12 +1019,21 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
   let raf = 0;
   let loopStart = 0;
   let greetStart = -1;
+  /**
+   * The loop time the greeting takes over from.
+   *
+   * The greeting blends its hands out of whatever pose the loop was in, and a
+   * gesture now takes 1400ms — so blending from a fixed `handWork(0, …)`, which
+   * is what this used to do, would snap the hands across half a stage at the
+   * moment of the turn. It was invisible at 190ms per grab and would not be now.
+   */
+  let handoffT = 0;
   let skipAt = -1;
   let resolveGreet: (() => void) | null = null;
   let destroyed = false;
 
   const breath = (t: number): number =>
-    t > B.rock + 530 ? 1 + 0.007 * Math.sin(((t - B.rock - 530) * Math.PI * 2) / 2600) : 1;
+    t > B.rock + 740 ? 1 + 0.007 * Math.sin(((t - B.rock - 740) * Math.PI * 2) / 2600) : 1;
 
   /**
    * Map a body-local point through the SAME transform chain the body group
@@ -725,25 +1065,54 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
     return [now[0] + dx, now[1] + dy];
   }
 
-  function drawCards(t: number, opacity: number, rideL: number, rideR: number, rpL: number, rpR: number): void {
+  /**
+   * Draw the stream, and the one or two cards currently out of it.
+   *
+   * A held card is drawn by its own node in `.mw-held` (above the body) and its
+   * stream twin is hidden, so the same card is never painted twice.
+   */
+  function drawCards(t: number, opacity: number, hands: readonly [HandState, HandState]): void {
     cardsG.setAttribute("opacity", String(opacity));
+    heldG.setAttribute("opacity", String(opacity));
+
     for (let i = 0; i < CARDS.length; i++) {
       const c = CARDS[i]!;
       const node = cardNodes[i]!;
-      let s = c.s;
-      let r = c.r;
-      let o = c.o;
-      const rp = i === rideL ? rpL : i === rideR ? rpR : -1;
-      if (rp >= 0) {
-        s *= 1.09;
-        r += 3.5 * Math.sin(rp * Math.PI);
-        o = Math.min(0.85, o + 0.25);
+      const out = hands.some((h) => h.hold !== null && h.card === i);
+      if (out) {
+        node.setAttribute("opacity", "0");
+        continue;
       }
+      // Touched but not yet lifted: it brightens under the hand, which is what
+      // says the hand landed on THIS one out of nine.
+      const touched = hands.some((h) => h.card === i);
       node.setAttribute(
         "transform",
-        `translate(${cardX(c, t).toFixed(2)} ${c.y}) rotate(${r.toFixed(1)}) scale(${s.toFixed(3)})`,
+        `translate(${cardX(c, t).toFixed(2)} ${c.y}) rotate(${c.r.toFixed(1)}) scale(${c.s.toFixed(3)})`,
       );
-      node.setAttribute("opacity", String(o));
+      node.setAttribute("opacity", String(touched ? Math.min(0.82, c.o + 0.2) : c.o));
+    }
+
+    for (let h = 0; h < 2; h++) {
+      const hand = hands[h]!;
+      const node = heldNodes[h]!;
+      if (hand.hold === null || hand.card < 0) {
+        node.setAttribute("opacity", "0");
+        continue;
+      }
+      const c = CARDS[hand.card]!;
+      const lift = hand.lift;
+      // Bigger, straighter and far more opaque than the stream it left: the one
+      // he is reading is the only vivid thing on screen. It converges on a FIXED
+      // size rather than a multiple of its own — see `HELD_SCALE`.
+      const s = mix(c.s, HELD_SCALE, lift);
+      const r = mix(c.r, h === 0 ? -7 : 7, lift);
+      node.setAttribute(
+        "transform",
+        `translate(${hand.hold[0].toFixed(2)} ${hand.hold[1].toFixed(2)}) ` +
+          `rotate(${r.toFixed(1)}) scale(${s.toFixed(3)})`,
+      );
+      node.setAttribute("opacity", mix(c.o, 0.95, lift).toFixed(3));
     }
   }
 
@@ -759,12 +1128,24 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
     face.setAttribute("opacity", "0");
 
     const a = handWork(t, 0, 0);
-    const b = handWork(t, 1, 0.5);
-    const hL: [number, number] = [a.pos[0] + tx, a.pos[1]];
-    const hR: [number, number] = [b.pos[0] + tx, b.pos[1]];
+    const b = handWork(t, 1, HAND_PHASE_R);
+    // The SHOULDERS sway with him; the hands do not. A hand resting on a card
+    // has to be exactly where that card is, and the cards are not attached to
+    // him — adding the sway to both put the hand up to 7 units off its own
+    // grip. The arm simply stretches a little as he leans, which is what an arm
+    // holding something steady actually does.
+    const hL = a.pos;
+    const hR = b.pos;
 
-    const A = armGlove([34 + tx, 68], hL, 13);
-    const Bm = armGlove([66 + tx, 68], hR, -13);
+    // The bow flips while a card is held, and that is the last thing standing
+    // between the burgundy arm and a floating white dot. At rest the arm bows
+    // UP, which is right for a reach; holding, the hand grips the card's bottom
+    // corner and the up-bow puts the arm's whole belly behind a card drawn on
+    // top of it — the shoulder end is already inside the body, so nothing at
+    // all is left on screen (measured: 0 of 43 units visible). Bowed down it
+    // runs along the card's lower edge, out in the open.
+    const A = armGlove([34 + tx, 68], hL, mix(13, -13, a.lift));
+    const Bm = armGlove([66 + tx, 68], hR, mix(-13, 13, b.lift));
     armL.setAttribute("d", A.d);
     armR.setAttribute("d", Bm.d);
     setHand(gL, hL[0], hL[1], A.ang, a.grip);
@@ -772,7 +1153,7 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
     gR.g.setAttribute("opacity", "1");
     gGrab.g.setAttribute("opacity", "0");
 
-    drawCards(t, 1, a.card, b.card, a.rideP, b.rideP);
+    drawCards(t, 1, [a, b]);
     wipe.setAttribute("x", "-260");
     wipe.setAttribute("width", "420");
     edge.setAttribute("opacity", "0");
@@ -814,13 +1195,13 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
     lid.setAttribute("opacity", String(arcOn));
 
     // Hands settle from the loop's last pose into the rest stance.
-    const settle = EO(clamp(t / 300, 0, 1));
-    const fA = handWork(0, 0, 0);
-    const fB = handWork(0, 1, 0.5);
+    const settle = EO(clamp(t / 520, 0, 1));
+    const fA = handWork(handoffT, 0, 0);
+    const fB = handWork(handoffT, 1, HAND_PHASE_R);
     const rl = anchor(t, REST_L[0], REST_L[1]);
     const rr = anchor(t, REST_R[0], REST_R[1]);
     const by = gBraceY(t);
-    const on = clamp((t - (B.rock + 570)) / 500, 0, 1);
+    const on = clamp((t - (B.rock + 780)) / 600, 0, 1);
     let hL: [number, number] = [
       mix(fA.pos[0], rl[0] + Math.sin(t / 560) * 0.6 * on, settle),
       mix(fA.pos[1], rl[1] + by + Math.cos(t / 760) * 0.7 * on, settle),
@@ -850,18 +1231,23 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
     armL.setAttribute("d", A.d);
     armR.setAttribute("d", Bm.d);
 
-    // Grip: still holding a card at rest, open on the reach, then closing on
-    // the curtain edge — the one beat where the squash has to be legible.
+    // Grip is still just size — he lets go of whatever the loop left him
+    // holding. `pinch` is the ONLY oval in the piece, and it belongs to the one
+    // beat that is about taking hold of an edge.
     const gripL = fA.grip * (1 - settle);
     let gripR = fB.grip * (1 - settle);
+    let pinchR = 0;
     if (t >= B.reach) gripR = 0;
-    if (t >= B.grip) gripR = EO(clamp((t - B.grip) / 140, 0, 1)) * 0.9;
+    if (t >= B.grip) {
+      gripR = 0;
+      pinchR = EO(clamp((t - B.grip) / 180, 0, 1));
+    }
 
     const swap = t >= B.grip;
     setHand(gL, hL[0], hL[1], A.ang, gripL);
-    setHand(gR, hR[0], hR[1], Bm.ang, gripR);
+    setHand(gR, hR[0], hR[1], Bm.ang, gripR, pinchR);
     gR.g.setAttribute("opacity", swap ? "0" : "1");
-    setHand(gGrab, hR[0], hR[1], Bm.ang, gripR);
+    setHand(gGrab, hR[0], hR[1], Bm.ang, gripR, pinchR);
     // The grabbing hand rides OUTSIDE the curtain clip — that is what lets it
     // hold the edge rather than be cut by it — so nothing else stops it being
     // drawn once the edge has left the stage (the SVG keeps `overflow:
@@ -873,7 +1259,13 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
       swap ? clamp((ed + 50) / 20, 0, 1).toFixed(3) : "0",
     );
 
-    drawCards(t, gCards(t), -1, -1, 0, 0);
+    // The stream carries on from where the loop left it (`handoffT + t`, not
+    // `t` — the greeting's clock starts at zero and the cards' does not), while
+    // whatever he was holding stays frozen at the pose he abandoned and fades
+    // with the rest. Both matter now that the fade takes 360ms and a held card
+    // is the brightest thing on screen: released, it would snap back across the
+    // stage in full view.
+    drawCards(handoffT + t, gCards(t), [fA, fB]);
 
     // The stage keeps everything LEFT of the curtain edge; what is right of it
     // is simply not painted, so the real screen shows through. The rect's left
@@ -929,6 +1321,7 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
     playGreeting() {
       if (destroyed) return Promise.resolve();
       greetStart = performance.now();
+      handoffT = loopStart ? greetStart - loopStart : 0;
       skipAt = -1;
       if (!raf) raf = requestAnimationFrame(frame);
       return new Promise<void>((resolve) => {
