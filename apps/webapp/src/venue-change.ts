@@ -45,7 +45,7 @@ import {
   type VenueBoardState,
   type VenueChangeCatalogItem,
 } from "./api.js";
-import { icon, categoryIcon, getRotatingMapIcon, type IconName } from "./icons.js";
+import { icon, categoryIcon, type IconName } from "./icons.js";
 import { wireContentInsets } from "./telegram-insets.js";
 import { returnParams } from "./return-to.js";
 import { referralChip } from "./referral-hint.js";
