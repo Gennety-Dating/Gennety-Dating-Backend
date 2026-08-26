@@ -9,6 +9,7 @@ import {
   BEATS,
   CARDS,
   cardX,
+  cardFade,
   CYC,
   FADE_MS,
   GREET_MS,
@@ -62,10 +63,38 @@ describe("timing", () => {
   // 162ms to 470. That is ~1.5s more on the funnel's first screen, once per
   // user — a deliberate cost, which is exactly why it is pinned rather than
   // left to drift one retune at a time.
+  //
+  // The floor was raised again on 2026-08-26, 2000 -> 4000, because three
+  // examinations do not read as "working THROUGH profiles" (founder). Same
+  // treatment: a stated decision with a ceiling, not drift. It is a floor
+  // against the `/state` fetch rather than an addition, so the worst case is
+  // the whole two seconds and the typical case is close to it.
   it("keeps the greeting inside its funnel budget", () => {
     expect(GREET_MS).toBeLessThanOrEqual(4800);
-    expect(LOOP_FLOOR_MS).toBeLessThanOrEqual(2200);
+    expect(LOOP_FLOOR_MS).toBeLessThanOrEqual(4200);
     expect(FADE_MS).toBeLessThanOrEqual(300);
+  });
+
+  // The number the founder actually asked for, measured rather than asserted:
+  // "хотя бы где-то четыре штуки пересмотрел". At 2000ms it was three, which
+  // is what prompted it; the arithmetic said two, so this counts the real
+  // thing. Sampling both hands over the floor and counting the cycles that
+  // reach a genuine examination is the only way the requirement survives a
+  // retune of CYC, of the phase offset, or of the floor itself.
+  it("shows at least four profiles examined before the turn", () => {
+    const seen = new Set<string>();
+    for (let t = 0; t <= LOOP_FLOOR_MS; t += 8) {
+      for (const [hand, off] of [
+        [0, 0],
+        [1, HAND_PHASE_R],
+      ] as const) {
+        const state = handWork(t, hand as 0 | 1, off);
+        if (state.lift >= 0.9 && state.card >= 0) {
+          seen.add(`${hand}:${Math.floor(t / CYC + (hand === 1 ? HAND_PHASE_R : 0))}`);
+        }
+      }
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(4);
   });
 
   // The floor exists so the turn interrupts something. Below one gesture there
@@ -128,6 +157,59 @@ describe("the loop is seamless", () => {
     const card = CARDS[0]!;
     const period = 1000 / card.sp;
     expect(cardX(card, 500 + period)).toBeCloseTo(cardX(card, 500), 6);
+  });
+
+  it("dissolves a card in and out instead of popping it", () => {
+    // The seam this closes: a flat opacity meant a card MATERIALISED at its
+    // spawn point and was cut in half by the curtain clip on the way out.
+    // Invisible on a phone (the viewBox fills the width, so both events are
+    // off-screen) and plainly visible in a browser, where `meet` leaves
+    // letterbox either side and `.mw-svg` is `overflow: visible`.
+    expect(cardFade(-78)).toBe(0);
+    expect(cardFade(-64)).toBeGreaterThan(0.2);
+    expect(cardFade(-64)).toBeLessThan(0.8);
+    expect(cardFade(160)).toBe(0);
+  });
+
+  // The load-bearing half: the ramps ARE the off-viewBox margins. If either
+  // one reached inside the band, a phone — where the band is the whole screen
+  // — would start dissolving cards in mid-air, which is worse than the browser
+  // seam being fixed.
+  it("never fades a card while it is still on a phone's screen", () => {
+    for (let x = -50; x <= 150; x += 0.5) {
+      expect(cardFade(x), `faded to ${cardFade(x).toFixed(3)} at x=${x}`).toBe(1);
+    }
+  });
+
+  // The clip and the ramp's end are one number in the module. If they ever
+  // stop being one number, this is what says so: a card still visible where
+  // nothing is painted is a card cut in half.
+  it("has nothing left to cut by the time the curtain clips it", () => {
+    let worst = 0;
+    for (const card of CARDS) {
+      for (let t = 0; t < 30000; t += 4) {
+        const x = cardX(card, t);
+        if (x > 159.5) worst = Math.max(worst, cardFade(x));
+      }
+    }
+    expect(worst).toBeLessThan(0.02);
+  });
+
+  // Eased, not linear — the rule the gender screen's photo fade already
+  // states: a two-stop linear ramp has a visible kink where it begins, and the
+  // eye reads that line as the edge of the thing being faded.
+  it("eases both ramps rather than ramping them linearly", () => {
+    for (const [a, b] of [
+      [-78, -50],
+      [150, 160],
+    ] as const) {
+      const mid = cardFade((a + b) / 2);
+      const quarter = cardFade(a + (b - a) * 0.25);
+      const linear = 0.25;
+      expect(mid).toBeCloseTo(0.5, 2);
+      // A cubic smoothstep sits well under its own straight line at a quarter.
+      expect(Math.abs(quarter - (a < 0 ? linear : 1 - linear))).toBeGreaterThan(0.08);
+    }
   });
 
   it("moves hands continuously across a cycle boundary", () => {

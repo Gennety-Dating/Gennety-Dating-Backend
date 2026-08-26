@@ -298,6 +298,42 @@ out of Telegram-only workers.
   still is: the module evaluates real `cubic-bezier()`, so its easings are the
   ones a stylesheet would have.
 
+  **The stream is a stack, and it dissolves at both ends (2026-08-26).** Three
+  separate reports about the same screen, and the third is the one worth
+  keeping. The loading loop was **too short** — it held for one `CYC` plus a
+  little, which showed three examinations, and "he is working THROUGH profiles"
+  is a plural claim; it is four seconds now, measured at six examinations across
+  five distinct cards rather than asserted. The stream was **too thin** — nine
+  cards over the travel left about six on stage at once, so it read as a
+  trickle; sixteen puts about thirteen there, carrying the same depth
+  correlation (smaller is fainter) so it stays a stream with depth rather than a
+  flat scatter.
+
+  And a card **appeared from nowhere and was cut in half on the way out**, which
+  is the interesting one because it is invisible on the product's own surface.
+  The SVG is fitted with `meet`, so at a phone's aspect it exactly fills the
+  width: the whole of a card's life outside the viewBox happens off-screen, and
+  a card entering and leaving at the screen edge is as natural as walking out of
+  frame. In a browser the same fitting leaves letterbox either side, `.mw-svg`
+  is `overflow: visible`, and the spawn point lands inside the window — so the
+  seam is a *browser* artifact, which is exactly how it was reported ("я не
+  знаю, как действительно это происходит на телефоне, но в веб-версии в браузере
+  мне это не нравится").
+
+  So **the two fade ramps ARE the off-viewBox margins**, and that is the whole
+  design rather than a tuning: on a phone they sit entirely off-screen and
+  nothing about the stream changes, while in a browser they are precisely the
+  stretch that was showing the seam. They are deliberately different widths —
+  the left runs from the spawn point to the stage edge, the right from the stage
+  edge to the curtain clip — because the margins are, and matching them would
+  mean either spawning further out or dissolving a card while it is still
+  mid-screen on a phone. The right ramp reaches zero exactly at the clip, so
+  there is nothing left to guillotine; the two numbers are one constant, not two
+  that can drift. Both are **eased rather than linear**, the rule the gender
+  screen's photo fade already states: a two-stop linear alpha ramp has a visible
+  kink where it begins, and the eye reads that line as the edge of the thing
+  being faded — the very seam this removes.
+
   **A grab is a whole gesture, not a tap (2026-08-26).** The first version ran
   one every 190 ms and never took a card out of the stream: a hand flew to a
   card and rode it along. On screen that reads as clicking at the cards rather

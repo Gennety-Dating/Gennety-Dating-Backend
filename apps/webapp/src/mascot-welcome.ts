@@ -92,12 +92,19 @@ export const GREET_MS = 4710;
  * interrupt. `/state` often answers in a few hundred milliseconds, so without a
  * floor the mascot would spin round before the audience has seen him working.
  *
- * Sized in GESTURES rather than picked as a round number: at `CYC` = 1400 this
- * is one full pick-up-examine-return plus the other hand starting its own, which
- * is the least that reads as "he is working through profiles". It went up with
- * the gesture — it was 1400 when a grab took 190ms and there was nothing to see.
+ * Sized in GESTURES rather than picked as a round number, and it has gone up
+ * twice for the same reason: what the audience is meant to read is "he is
+ * working THROUGH profiles", plural, and one pick-up does not say that. At
+ * `CYC` = 1400 this is roughly five examinations across the two hands — the
+ * founder asked for at least four (2026-08-26), and `examinations()` measures
+ * the real number rather than trusting this arithmetic.
+ *
+ * It is a FLOOR, not an addition: `finishWelcome` spends only the shortfall
+ * against the `/state` fetch the loop is covering anyway. So the worst case is
+ * the whole two seconds and the typical case is close to it, since the fetch
+ * usually answers in a few hundred milliseconds.
  */
-export const LOOP_FLOOR_MS = 2000;
+export const LOOP_FLOOR_MS = 4000;
 
 /** Fade used when the greeting is skipped or not played at all. */
 export const FADE_MS = 240;
@@ -219,24 +226,88 @@ interface Card {
 /**
  * Authored, not random. A scatter re-rolled per render can never be reviewed
  * twice and would shuffle under the user's finger.
+ *
+ * Sixteen rather than nine (2026-08-26, founder): nine spread over the 268-unit
+ * travel left ~30 units between cards, so at any moment the stage held about
+ * six and read as a trickle rather than as a stack he is working through. The
+ * extra seven are interleaved into the phase gaps and carry the same depth
+ * correlation as the rest — a card that is smaller is also fainter, which is
+ * the only thing making this a stream with depth rather than a flat scatter.
  */
 export const CARDS: readonly Card[] = [
   { ph: 0.0, y: 10, r: -8, sp: 0.135, o: 0.62, s: 1.05 },
-  { ph: 0.17, y: 92, r: 7, sp: 0.15, o: 0.5, s: 0.92 },
-  { ph: 0.31, y: 26, r: 5, sp: 0.12, o: 0.44, s: 0.82 },
-  { ph: 0.44, y: 74, r: -6, sp: 0.14, o: 0.58, s: 1.0 },
-  { ph: 0.55, y: 4, r: 9, sp: 0.125, o: 0.38, s: 0.78 },
-  { ph: 0.66, y: 104, r: -4, sp: 0.132, o: 0.54, s: 0.96 },
-  { ph: 0.75, y: 44, r: 6, sp: 0.118, o: 0.34, s: 0.74 },
-  { ph: 0.86, y: 62, r: -9, sp: 0.146, o: 0.46, s: 0.88 },
-  { ph: 0.94, y: 20, r: 3, sp: 0.128, o: 0.4, s: 0.8 },
+  { ph: 0.07, y: 58, r: 4, sp: 0.122, o: 0.36, s: 0.76 },
+  { ph: 0.14, y: 96, r: 7, sp: 0.15, o: 0.5, s: 0.92 },
+  { ph: 0.21, y: 30, r: -5, sp: 0.128, o: 0.42, s: 0.82 },
+  { ph: 0.29, y: 68, r: 8, sp: 0.14, o: 0.56, s: 0.98 },
+  { ph: 0.36, y: 12, r: 4, sp: 0.119, o: 0.33, s: 0.73 },
+  { ph: 0.43, y: 74, r: -6, sp: 0.14, o: 0.58, s: 1.0 },
+  { ph: 0.5, y: 40, r: 9, sp: 0.131, o: 0.45, s: 0.86 },
+  { ph: 0.56, y: 4, r: 9, sp: 0.125, o: 0.38, s: 0.78 },
+  { ph: 0.63, y: 86, r: -3, sp: 0.144, o: 0.52, s: 0.94 },
+  { ph: 0.69, y: 104, r: -4, sp: 0.132, o: 0.54, s: 0.96 },
+  { ph: 0.76, y: 44, r: 6, sp: 0.118, o: 0.34, s: 0.74 },
+  { ph: 0.82, y: 22, r: -7, sp: 0.137, o: 0.48, s: 0.9 },
+  { ph: 0.87, y: 62, r: -9, sp: 0.146, o: 0.46, s: 0.88 },
+  { ph: 0.92, y: 100, r: 5, sp: 0.123, o: 0.31, s: 0.72 },
+  { ph: 0.96, y: 20, r: 3, sp: 0.128, o: 0.4, s: 0.8 },
 ];
 
 const frac = (v: number): number => ((v % 1) + 1) % 1;
 
+/** Where a card is born, and where it dies. */
+const SPAWN_X = -78;
+const DESPAWN_X = 190;
+
+/** The band a phone actually shows: the viewBox, and nothing either side. */
+const BAND_L = VIEWBOX.x;
+const BAND_R = VIEWBOX.x + VIEWBOX.width;
+
+/**
+ * Right edge of the curtain clip while the loop runs (`renderLoop` writes it).
+ * Nothing past it is painted at all, so a card reaching it is guillotined.
+ */
+const LOOP_EDGE = 160;
+
+const smoothstep = (p: number): number => p * p * (3 - 2 * p);
+
 /** Where a card sits at time `t`. Continuous and periodic — the loop is seamless. */
 export function cardX(card: Card, t: number): number {
-  return -78 + frac((t / 1000) * card.sp + card.ph) * 268;
+  return SPAWN_X + frac((t / 1000) * card.sp + card.ph) * (DESPAWN_X - SPAWN_X);
+}
+
+/**
+ * How visible a card is at `x`, 0..1 — it dissolves in and out instead of
+ * appearing from nowhere and being cut in half on the way out.
+ *
+ * The stream ran at a flat opacity for its whole travel, so a card simply
+ * MATERIALISED at `SPAWN_X` and was guillotined by the curtain clip at
+ * `LOOP_EDGE`. Both events are invisible on a phone — the SVG is fitted with
+ * `meet`, so at a phone's aspect it exactly fills the width and the whole of a
+ * card's life outside the viewBox happens off-screen. In a browser the same
+ * fitting leaves letterbox on either side, `.mw-svg` is `overflow: visible`,
+ * and the spawn point lands inside the window. Reported that way, too: "в
+ * веб-версии в браузере мне не нравится, как выглядит" (founder, 2026-08-26).
+ *
+ * So the two ramps ARE the off-viewBox margins, and that is the whole design:
+ * on a phone they sit entirely off-screen and nothing about the stream changes,
+ * while in a browser they are exactly the stretch that was showing the seam.
+ * They are deliberately different widths — 28 units on the left, 10 on the
+ * right — because the margins are: the left one runs from the spawn point to
+ * the stage edge, the right one from the stage edge to the curtain. Matching
+ * them would mean either spawning further out or fading a card while it is
+ * still mid-screen on a phone.
+ *
+ * Eased rather than linear, for the reason the gender screen's photo fade
+ * already states (DECISIONS 2026-08-22): a two-stop linear alpha ramp has a
+ * visible kink where it begins, and the eye reads that line as the edge of the
+ * thing being faded — which is the seam this exists to remove.
+ */
+export function cardFade(x: number): number {
+  if (x <= SPAWN_X || x >= LOOP_EDGE) return 0;
+  if (x < BAND_L) return smoothstep((x - SPAWN_X) / (BAND_L - SPAWN_X));
+  if (x > BAND_R) return smoothstep((LOOP_EDGE - x) / (LOOP_EDGE - BAND_R));
+  return 1;
 }
 
 /**
@@ -1084,13 +1155,15 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
         continue;
       }
       // Touched but not yet lifted: it brightens under the hand, which is what
-      // says the hand landed on THIS one out of nine.
+      // says the hand landed on THIS one out of the stream.
       const touched = hands.some((h) => h.card === i);
+      const x = cardX(c, t);
       node.setAttribute(
         "transform",
-        `translate(${cardX(c, t).toFixed(2)} ${c.y}) rotate(${c.r.toFixed(1)}) scale(${c.s.toFixed(3)})`,
+        `translate(${x.toFixed(2)} ${c.y}) rotate(${c.r.toFixed(1)}) scale(${c.s.toFixed(3)})`,
       );
-      node.setAttribute("opacity", String(touched ? Math.min(0.82, c.o + 0.2) : c.o));
+      const lit = touched ? Math.min(0.82, c.o + 0.2) : c.o;
+      node.setAttribute("opacity", (lit * cardFade(x)).toFixed(3));
     }
 
     for (let h = 0; h < 2; h++) {
@@ -1112,7 +1185,12 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
         `translate(${hand.hold[0].toFixed(2)} ${hand.hold[1].toFixed(2)}) ` +
           `rotate(${r.toFixed(1)}) scale(${s.toFixed(3)})`,
       );
-      node.setAttribute("opacity", mix(c.o, 0.95, lift).toFixed(3));
+      // The fade applies to the held one too. It is 1 across the whole examine
+      // spot, so this only bites while the card is being PUT BACK: the stream
+      // has moved on under him, and a card returned near the right margin has
+      // to leave the same way its neighbours do rather than blinking out when
+      // the twin takes over.
+      node.setAttribute("opacity", (mix(c.o, 0.95, lift) * cardFade(hand.hold[0])).toFixed(3));
     }
   }
 
@@ -1154,8 +1232,11 @@ export function mountMascotWelcome(host: HTMLElement, ariaLabel: string): Mascot
     gGrab.g.setAttribute("opacity", "0");
 
     drawCards(t, 1, [a, b]);
+    // Derived, not written twice: `cardFade` ramps a card to nothing exactly
+    // here, so a clip edge moved without moving that constant would start
+    // guillotining cards again — the seam this pair exists to close.
     wipe.setAttribute("x", "-260");
-    wipe.setAttribute("width", "420");
+    wipe.setAttribute("width", String(LOOP_EDGE + 260));
     edge.setAttribute("opacity", "0");
   }
 
