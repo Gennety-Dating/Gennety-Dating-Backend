@@ -52,6 +52,16 @@ interface Copy {
   b1t: string; // benefit 1 title
   b1d: string; // benefit 1 detail (short, always visible)
   b1x: string; // benefit 1 explanation (revealed on tap)
+  /**
+   * The paid evening band. Placed SECOND on purpose: the one path this feature
+   * creates into this screen is the calendar's locked slot, and that reader is
+   * looking for exactly this line — burying it under two venue perks makes them
+   * scroll past the thing they came for. It names no slot count: the number is
+   * env-side (`PRIME_TIME_SLOT_COUNT`) and the calendar's own sheet avoids it too.
+   */
+  b4t: string;
+  b4d: string;
+  b4x: string;
   b2t: string;
   b2d: string;
   b2x: string;
@@ -90,6 +100,9 @@ const COPY: Record<Lang, Copy> = {
     b1t: "Unlimited dates",
     b1d: "Every date is covered — no ticket, no per-date fee.",
     b1x: "A date normally costs one Date Ticket each. With Premium your own place at the table is always covered, however often you go — and buying a ticket for your date, if you want to, still costs one ticket.",
+    b4t: "Every evening time",
+    b4d: "The late slots in the calendar stay open for you.",
+    b4x: "The last hours of each day are the ones people actually want, so they are a Premium band — anyone else opens them for a one-off fee, per date. With Premium they are simply open, on every date you plan, for both of you.",
     b3t: "Free venue changes",
     b3d: "Swap your date spot as often as you like — no fee.",
     b3x: "Changing the venue normally costs a small fee each time. With Premium every swap on the venue board is free, right up until the date — rethink the spot as many times as you both want.",
@@ -119,6 +132,9 @@ const COPY: Record<Lang, Copy> = {
     b1t: "Безлимитные свидания",
     b1d: "Каждое свидание покрыто — без билета и без оплаты за раз.",
     b1x: "Обычно свидание стоит по одному билету с человека. С Premium твоё место всегда покрыто, сколько бы свиданий ни было — а оплатить билет за спутницу, если захочешь, по-прежнему стоит один билет.",
+    b4t: "Любое вечернее время",
+    b4d: "Поздние слоты в календаре открыты для тебя.",
+    b4x: "Последние часы каждого дня — те, которые на самом деле нужны, поэтому это Premium-полоса: остальные открывают её разово и за отдельную плату, на одно свидание. С Premium она просто открыта, на каждом свидании, сразу для вас двоих.",
     b3t: "Бесплатная смена места",
     b3d: "Меняй место свидания сколько угодно — без оплаты.",
     b3x: "Обычно каждая смена места стоит небольшую сумму. С Premium любая замена в подборе мест — бесплатна, вплоть до самого свидания. Пересматривайте место столько раз, сколько захотите вдвоём.",
@@ -148,6 +164,9 @@ const COPY: Record<Lang, Copy> = {
     b1t: "Безлімітні побачення",
     b1d: "Кожне побачення покрите — без квитка й без оплати за раз.",
     b1x: "Зазвичай побачення коштує по одному квитку з людини. З Premium твоє місце завжди покрите, скільки б побачень не було — а сплатити квиток за супутницю, якщо захочеш, і далі коштує один квиток.",
+    b4t: "Будь-який вечірній час",
+    b4d: "Пізні слоти в календарі відкриті для тебе.",
+    b4x: "Останні години кожного дня — ті, які насправді потрібні, тому це Premium-смуга: решта відкриває її разово й за окрему плату, на одне побачення. З Premium вона просто відкрита, на кожному побаченні, одразу для вас двох.",
     b3t: "Безкоштовна зміна місця",
     b3d: "Змінюй місце побачення скільки завгодно — без оплати.",
     b3x: "Зазвичай кожна зміна місця коштує невелику суму. З Premium будь-яка заміна в підборі місць — безкоштовна, аж до самого побачення. Переглядайте місце стільки разів, скільки захочете вдвох.",
@@ -177,6 +196,9 @@ const COPY: Record<Lang, Copy> = {
     b1t: "Unbegrenzte Dates",
     b1d: "Jedes Date ist abgedeckt — kein Ticket, keine Gebühr pro Date.",
     b1x: "Ein Date kostet normalerweise pro Person ein Date-Ticket. Mit Premium ist dein eigener Platz immer abgedeckt, egal wie oft — und das Ticket deiner Begleitung zu übernehmen kostet weiterhin ein Ticket.",
+    b4t: "Jede Abendzeit",
+    b4d: "Die späten Slots im Kalender bleiben für dich offen.",
+    b4x: "Die letzten Stunden jedes Tages sind die, die man wirklich will — deshalb sind sie ein Premium-Band: alle anderen öffnen es einmalig gegen Gebühr, pro Date. Mit Premium ist es einfach offen, bei jedem Date, für euch beide.",
     b3t: "Kostenlose Ortswechsel",
     b3d: "Wechsle den Date-Ort so oft du willst — ohne Gebühr.",
     b3x: "Normalerweise kostet jeder Ortswechsel eine kleine Gebühr. Mit Premium ist jeder Wechsel im Ortsboard kostenlos — bis zum Date. Überdenkt den Ort so oft ihr beide wollt.",
@@ -206,6 +228,9 @@ const COPY: Record<Lang, Copy> = {
     b1t: "Nielimitowane randki",
     b1d: "Każda randka jest pokryta — bez biletu i bez opłaty za randkę.",
     b1x: "Randka zwykle kosztuje po jednym bilecie od osoby. Z Premium twoje miejsce jest zawsze pokryte, niezależnie od liczby randek — a pokrycie biletu partnerki, jeśli zechcesz, nadal kosztuje jeden bilet.",
+    b4t: "Każda wieczorna godzina",
+    b4d: "Późne sloty w kalendarzu są dla ciebie otwarte.",
+    b4x: "Ostatnie godziny każdego dnia to te, których naprawdę się chce — dlatego są pasmem Premium: reszta otwiera je jednorazowo za opłatą, na jedną randkę. Z Premium są po prostu otwarte, na każdej randce, od razu dla was obojga.",
     b3t: "Darmowa zmiana miejsca",
     b3d: "Zmieniaj miejsce randki ile chcesz — bez opłat.",
     b3x: "Zwykle każda zmiana miejsca kosztuje niewielką opłatę. Z Premium każda zmiana w tablicy miejsc jest darmowa — aż do samej randki. Zmieniajcie miejsce tyle razy, ile chcecie.",
@@ -467,6 +492,10 @@ function renderOffer(state: PremiumState): void {
     [IconName, "twinkle" | "flutter", string, string, string, { label: string; href: string }?]
   > = [
     ["heart", "twinkle", s.b1t, s.b1d, s.b1x],
+    // The padlock is deliberately the SAME glyph the calendar plates a locked
+    // row with: a user arriving from that tap recognises it before reading a
+    // word. Same precedent as the venue board's own `vc-premium-hint`.
+    ["lock", "twinkle", s.b4t, s.b4d, s.b4x],
     ["star", "twinkle", s.b2t, s.b2d, s.b2x, { label: s.b2link, href: PLACES_URL }],
     ["map", "flutter", s.b3t, s.b3d, s.b3x],
   ];

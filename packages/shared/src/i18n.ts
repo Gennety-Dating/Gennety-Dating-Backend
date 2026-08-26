@@ -1220,14 +1220,14 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Unlimited dates* — your ticket is covered every time, however often you go\n• *Premium venues* — a hand-picked tier of nicer places, unlocked in the venue board\n• *Free venue changes* — swap your date spot as often as you like, no fee\n\nMore to come.",
+      "*Gennety Premium*\n\n• *Unlimited dates* — your ticket is covered every time, however often you go\n• *Every evening time* — the late slots in the calendar stay open for you\n• *Premium venues* — a hand-picked tier of nicer places, unlocked in the venue board\n• *Free venue changes* — swap your date spot as often as you like, no fee\n\nMore to come.",
     premiumHubActiveNote: "You're Premium ✨ Active until {date}.",
     premiumOpenCta: "Learn more",
     premiumCancelHint:
       "You can cancel anytime — just tell me here, and I'll do it once you confirm.",
     premiumManageNote: "Manage or cancel anytime in Telegram → Settings → Subscriptions.",
     premiumWelcomeDm:
-      "Welcome to Gennety Premium ✨\n\nYour dates are covered from now on — no ticket needed. Venue changes are on us, and the premium venue tier is unlocked. Active until {date}.",
+      "Welcome to Gennety Premium ✨\n\nYour dates are covered from now on — no ticket needed. Every evening time in the calendar is open to you, venue changes are on us, and the premium venue tier is unlocked. Active until {date}.",
     premiumExpiring3d:
       "Your Gennety Premium runs out on {date} — three days from now.\n\nNothing renews automatically on this plan, so covered dates, free venue changes and the premium venue tier stop on that day. Pick your next stretch below — a month, or 3 / 6 months at a lower rate.",
     premiumExpiring1d:
@@ -2435,14 +2435,14 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Безлимитные свидания* — твой билет покрыт каждый раз, сколько бы свиданий ни было\n• *Премиум-заведения* — отобранный тир мест получше, открывается в подборе\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты\n\nДальше — больше.",
+      "*Gennety Premium*\n\n• *Безлимитные свидания* — твой билет покрыт каждый раз, сколько бы свиданий ни было\n• *Любое вечернее время* — поздние слоты в календаре открыты для тебя\n• *Премиум-заведения* — отобранный тир мест получше, открывается в подборе\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты\n\nДальше — больше.",
     premiumHubActiveNote: "У тебя Premium ✨ Активен до {date}.",
     premiumOpenCta: "Подробнее",
     premiumCancelHint:
       "Отменить можно в любой момент — просто напиши мне, и я отменю подписку после твоего подтверждения.",
     premiumManageNote: "Управлять и отменить — в Telegram → Настройки → Подписки.",
     premiumWelcomeDm:
-      "Добро пожаловать в Gennety Premium ✨\n\nТвои свидания теперь покрыты — билет не нужен. Смена места бесплатна, премиум-заведения открыты. Активно до {date}.",
+      "Добро пожаловать в Gennety Premium ✨\n\nТвои свидания теперь покрыты — билет не нужен. Любое вечернее время в календаре тебе открыто, смена места бесплатна, премиум-заведения открыты. Активно до {date}.",
     premiumExpiring3d:
       "Твой Gennety Premium заканчивается {date} — через три дня.\n\nЭтот тариф не продлевается сам, так что покрытые свидания, бесплатная смена места и премиум-заведения в этот день отключатся. Выбери следующий период: месяц или 3 / 6 месяцев по цене ниже.",
     premiumExpiring1d:
@@ -3637,14 +3637,14 @@ const translations = {
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "*Gennety Premium*\n\n• *Безлімітні побачення* — твій квиток покритий щоразу, скільки б побачень не було\n• *Преміум-заклади* — відібраний тір кращих місць, відкривається в підборі\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати\n\nДалі — більше.",
+      "*Gennety Premium*\n\n• *Безлімітні побачення* — твій квиток покритий щоразу, скільки б побачень не було\n• *Будь-який вечірній час* — пізні слоти в календарі відкриті для тебе\n• *Преміум-заклади* — відібраний тір кращих місць, відкривається в підборі\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати\n\nДалі — більше.",
     premiumHubActiveNote: "У тебе Premium ✨ Активний до {date}.",
     premiumOpenCta: "Детальніше",
     premiumCancelHint:
       "Скасувати можна будь-коли — просто напиши мені, і я скасую підписку після твого підтвердження.",
     premiumManageNote: "Керувати та скасувати — у Telegram → Налаштування → Підписки.",
     premiumWelcomeDm:
-      "Ласкаво просимо до Gennety Premium ✨\n\nТвої побачення тепер покриті — квиток не потрібен. Зміна місця безкоштовна, преміум-заклади відкриті. Активно до {date}.",
+      "Ласкаво просимо до Gennety Premium ✨\n\nТвої побачення тепер покриті — квиток не потрібен. Будь-який вечірній час у календарі тобі відкритий, зміна місця безкоштовна, преміум-заклади відкриті. Активно до {date}.",
     premiumExpiring3d:
       "Твій Gennety Premium завершується {date} — за три дні.\n\nЦей тариф не продовжується сам, тож покриті побачення, безкоштовна зміна місця та преміум-заклади цього дня вимкнуться. Обери наступний період: місяць або 3 / 6 місяців за нижчою ціною.",
     premiumExpiring1d:
@@ -4816,14 +4816,14 @@ const deTranslations: TranslationTable = {
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "*Gennety Premium*\n\n• *Unbegrenzte Dates* — dein Ticket ist jedes Mal abgedeckt, egal wie oft\n• *Premium-Orte* — eine handverlesene Auswahl schönerer Orte, im Ortsboard freigeschaltet\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr\n\nDa kommt noch mehr.",
+    "*Gennety Premium*\n\n• *Unbegrenzte Dates* — dein Ticket ist jedes Mal abgedeckt, egal wie oft\n• *Jede Abendzeit* — die späten Slots im Kalender bleiben für dich offen\n• *Premium-Orte* — eine handverlesene Auswahl schönerer Orte, im Ortsboard freigeschaltet\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr\n\nDa kommt noch mehr.",
   premiumHubActiveNote: "Du bist Premium ✨ Aktiv bis {date}.",
   premiumOpenCta: "Mehr erfahren",
   premiumCancelHint:
     "Du kannst jederzeit kündigen — schreib es mir einfach hier, ich erledige es nach deiner Bestätigung.",
   premiumManageNote: "Verwalten oder kündigen jederzeit in Telegram → Einstellungen → Abos.",
   premiumWelcomeDm:
-    "Willkommen bei Gennety Premium ✨\n\nDeine Dates sind ab jetzt abgedeckt — kein Ticket nötig. Ortswechsel gehen auf uns, und die Premium-Orte sind frei. Aktiv bis {date}.",
+    "Willkommen bei Gennety Premium ✨\n\nDeine Dates sind ab jetzt abgedeckt — kein Ticket nötig. Jede Abendzeit im Kalender steht dir offen, Ortswechsel gehen auf uns, und die Premium-Orte sind frei. Aktiv bis {date}.",
   premiumExpiring3d:
     "Dein Gennety Premium endet am {date} — in drei Tagen.\n\nDieser Tarif verlängert sich nicht von selbst: abgedeckte Dates, kostenlose Ortswechsel und die Premium-Orte hören an dem Tag auf. Wähle den nächsten Zeitraum: ein Monat oder 3 / 6 Monate zum günstigeren Preis.",
   premiumExpiring1d:
@@ -5992,14 +5992,14 @@ const plTranslations: TranslationTable = {
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "*Gennety Premium*\n\n• *Nielimitowane randki* — twój bilet jest pokryty za każdym razem, ile byś ich nie miał\n• *Miejsca premium* — wyselekcjonowany zestaw lepszych miejsc, odblokowany w tablicy miejsc\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat\n\nDalej — więcej.",
+    "*Gennety Premium*\n\n• *Nielimitowane randki* — twój bilet jest pokryty za każdym razem, ile byś ich nie miał\n• *Każda wieczorna godzina* — późne sloty w kalendarzu są dla ciebie otwarte\n• *Miejsca premium* — wyselekcjonowany zestaw lepszych miejsc, odblokowany w tablicy miejsc\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat\n\nDalej — więcej.",
   premiumHubActiveNote: "Masz Premium ✨ Aktywne do {date}.",
   premiumOpenCta: "Dowiedz się więcej",
   premiumCancelHint:
     "Możesz anulować w każdej chwili — po prostu napisz do mnie, a anuluję po Twoim potwierdzeniu.",
   premiumManageNote: "Zarządzaj lub anuluj w Telegram → Ustawienia → Subskrypcje.",
   premiumWelcomeDm:
-    "Witaj w Gennety Premium ✨\n\nTwoje randki są od teraz pokryte — bilet niepotrzebny. Zmiany miejsca na nasz koszt, miejsca premium odblokowane. Aktywne do {date}.",
+    "Witaj w Gennety Premium ✨\n\nTwoje randki są od teraz pokryte — bilet niepotrzebny. Każda wieczorna godzina w kalendarzu jest dla ciebie otwarta, zmiany miejsca na nasz koszt, miejsca premium odblokowane. Aktywne do {date}.",
   premiumExpiring3d:
     "Twoje Gennety Premium kończy się {date} — za trzy dni.\n\nTen plan nie odnawia się sam, więc pokryte randki, darmowe zmiany miejsca i miejsca premium przestaną działać tego dnia. Wybierz kolejny okres: miesiąc albo 3 / 6 miesięcy taniej.",
   premiumExpiring1d:
