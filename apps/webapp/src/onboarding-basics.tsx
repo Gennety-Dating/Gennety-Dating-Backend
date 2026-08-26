@@ -12,8 +12,8 @@ import { burstFromEvent } from "./onboarding-burst.js";
 import type { BurstTone } from "./onboarding-burst.js";
 import { errorCopy } from "./onboarding-errors.js";
 import { GENDER_AVATARS } from "./gender-avatars.js";
+import { INTENT_CYCLE_MS } from "./intent-cycle.js";
 import { INTENT_PHOTOS } from "./intent-photos.js";
-import { tileClass } from "./intent-wash.js";
 import { GENDER_ADVANCE_HOLD_MS } from "./onboarding-timing.js";
 import type { OnboardingStrings } from "./onboarding-i18n.js";
 import { placeScatter } from "./preference-layout.js";
@@ -211,31 +211,18 @@ function IntentScreen(props: {
 }): ReactElement {
   const { strings } = props;
   const [picked, setPicked] = useState<string[]>(() => [...props.selected]);
-  /* Which tiles are mid-wash, and in which direction.
-     It has to be React state rather than a class added in the click handler:
-     the tap also calls setPicked, React re-renders, and its own `className`
-     overwrites anything written imperatively — so the spread class was being
-     wiped in the same tick it was added, and only the settled fill ever
-     showed. The anchor point survives that (nothing passes a `style` prop), so
-     that half stays imperative. */
-  const [wave, setWave] = useState<Record<string, "on" | "off">>({});
 
-  const options: Array<{ value: RelationshipIntent; label: string; photo: string }> = [
-    { value: "spark", label: strings.basicsIntentSpark, photo: INTENT_PHOTOS.spark },
-    { value: "open", label: strings.basicsIntentOpen, photo: INTENT_PHOTOS.open },
-    { value: "falling", label: strings.basicsIntentFalling, photo: INTENT_PHOTOS.falling },
-    { value: "longterm", label: strings.basicsIntentLongterm, photo: INTENT_PHOTOS.longterm },
+  const options: Array<{ value: RelationshipIntent; label: string }> = [
+    { value: "spark", label: strings.basicsIntentSpark },
+    { value: "open", label: strings.basicsIntentOpen },
+    { value: "falling", label: strings.basicsIntentFalling },
+    { value: "longterm", label: strings.basicsIntentLongterm },
   ];
 
-  const toggle = (event: MouseEvent, value: string): void => {
-    const isOn = picked.includes(value);
-    // The wash spreads from the point the finger landed, so the origin has to
-    // come off this event — there is no other moment that knows it.
-    anchorWash(event);
+  const toggle = (value: string): void => {
     app?.HapticFeedback?.selectionChanged();
-    setWave((current) => ({ ...current, [value]: isOn ? "off" : "on" }));
     setPicked((current) =>
-      isOn ? current.filter((item) => item !== value) : [...current, value],
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value],
     );
   };
 
@@ -254,20 +241,14 @@ function IntentScreen(props: {
     >
       <div className="ob-intent-grid">
         {options.map((option) => (
-          <button
+          <IntentTile
             key={option.value}
-            type="button"
-            className={tileClass(picked.includes(option.value), wave[option.value])}
+            label={option.label}
+            photos={INTENT_PHOTOS[option.value] ?? []}
+            selected={picked.includes(option.value)}
             disabled={props.busy}
-            aria-pressed={picked.includes(option.value)}
-            onClick={(event) => toggle(event, option.value)}
-          >
-            <img className="ob-intent-photo" src={option.photo} alt="" aria-hidden="true" />
-            {/* The wash layer. Empty in the markup: every blob is a pseudo-element,
-                so a tile costs one extra node rather than four. */}
-            <span className="ob-intent-wash" aria-hidden="true" />
-            <span className="ob-intent-label">{option.label}</span>
-          </button>
+            onToggle={() => toggle(option.value)}
+          />
         ))}
       </div>
       <p className="ob-basics-note">{strings.basicsIntentPrivate}</p>
@@ -276,28 +257,106 @@ function IntentScreen(props: {
 }
 
 /**
- * Anchor the selection wash at the point the finger landed.
+ * One option: a photograph, its label, and — once chosen — a burgundy frame
+ * with the house inner-edge light, a check, and the option's other photographs
+ * playing behind it every two seconds (founder decision 2026-08-26).
  *
- * Two CSS custom properties and nothing else: the blobs are pseudo-elements
- * that scale on the compositor, so nothing here touches layout or paint per
- * frame. Deliberately imperative — React owns `className` but not inline style
- * here, since no `style` prop is passed, so this write survives the re-render
- * the same tap triggers. The class that runs the animation cannot be written
- * this way and lives in state.
+ * The cycle is the reason a tile owns state at all. It is per tile rather than
+ * one timer for the screen because a tile's phase starts at ITS tap: two
+ * options chosen a second apart should each hold their frame for two seconds,
+ * not change together on somebody else's clock.
+ *
+ * **An unselected tile renders exactly one `<img>`**, and that is load-bearing
+ * rather than tidy: the other three frames are ~80-120 kB that nobody who did
+ * not choose this option should ever download. Mounting them IS the preload,
+ * and the first advance is two seconds later, which is a long head start for
+ * one WebP.
  */
-function anchorWash(event: MouseEvent): void {
-  const tile = event.currentTarget as HTMLElement | null;
-  if (!tile) return;
-  const box = tile.getBoundingClientRect();
-  if (box.width === 0 || box.height === 0) return;
+function IntentTile(props: {
+  label: string;
+  photos: readonly string[];
+  selected: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}): ReactElement {
+  const { photos, selected } = props;
+  /* Which frame is on top and which one is directly under it. Two levels is
+     exactly what a dip-free crossfade needs and no more: the incoming frame
+     fades 0 -> 1 OVER the outgoing one, which stays fully opaque until it is
+     covered, so the burgundy ring never shows through the middle of a swap.
+     Everything else sits at opacity 0, which is also what lets a frame fade in
+     again on the second lap — keeping every shown frame opaque would make lap
+     two a hard cut. (It reads as a cut with only two frames, where the incoming
+     one IS the outgoing one's neighbour; every cycle here has four.) */
+  const [phase, setPhase] = useState<{ live: number; prev: number }>({ live: 0, prev: -1 });
+  /* Which frames have actually decoded. They are fetched by this very
+     selection, so on a slow link the first advance can arrive before the bytes
+     do — and advancing to an undecoded frame fades the tile to nothing. */
+  const loaded = useRef(new Set<string>());
 
-  // A keyboard-driven click reports the element's centre as (0, 0)-ish rather
-  // than a real point; fall back to the middle so the wash still plays.
-  const hasPoint = event.clientX !== 0 || event.clientY !== 0;
-  const x = hasPoint ? event.clientX - box.left : box.width / 2;
-  const y = hasPoint ? event.clientY - box.top : box.height / 2;
-  tile.style.setProperty("--sx", `${(x / box.width) * 100}%`);
-  tile.style.setProperty("--sy", `${(y / box.height) * 100}%`);
+  useEffect(() => {
+    if (!selected) {
+      setPhase({ live: 0, prev: -1 });
+      return;
+    }
+    // No reduced variant of a cycling photograph, only its absence — the same
+    // rule the tap burst and the welcome mascot follow.
+    if (prefersReducedMotion() || photos.length < 2) return;
+    const timer = window.setInterval(() => {
+      setPhase((current) => {
+        const next = (current.live + 1) % photos.length;
+        return loaded.current.has(photos[next] ?? "")
+          ? { live: next, prev: current.live }
+          : current;
+      });
+    }, INTENT_CYCLE_MS);
+    return () => window.clearInterval(timer);
+  }, [selected, photos]);
+
+  const frames = selected ? photos : photos.slice(0, 1);
+
+  return (
+    <button
+      type="button"
+      className={`ob-intent${selected ? " is-on" : ""}`}
+      disabled={props.disabled}
+      aria-pressed={selected}
+      onClick={props.onToggle}
+    >
+      {frames.map((src, index) => (
+        <img
+          key={src}
+          className="ob-intent-photo"
+          style={{
+            opacity: index === phase.live || index === phase.prev ? 1 : 0,
+            zIndex: index === phase.live ? 3 : index === phase.prev ? 2 : 1,
+          }}
+          src={src}
+          alt=""
+          aria-hidden="true"
+          // Both, because either alone has a hole: a cached frame can be
+          // complete before React attaches the listener (so `onLoad` never
+          // fires), and a cold one is not complete when the ref runs.
+          ref={(element) => {
+            if (element?.complete) loaded.current.add(src);
+          }}
+          onLoad={() => loaded.current.add(src)}
+        />
+      ))}
+      <span className="ob-intent-check" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path
+            d="M6 12.4 10.3 16.6 18 7.8"
+            stroke="currentColor"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+      <span className="ob-intent-label">{props.label}</span>
+    </button>
+  );
 }
 
 /** The shared frame: question up top, control in the middle, pill at the foot. */

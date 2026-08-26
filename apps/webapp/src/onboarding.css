@@ -2799,192 +2799,151 @@ button {
   width: min(100%, 22rem);
 }
 
+/* The tile's own background IS the burgundy frame: the photograph insets by
+   `--intent-ring` when the option is chosen, and what shows in the gap is this.
+   No extra element, and the frame can never be a hair out of register with the
+   photograph because it is the same box. */
 .ob-intent {
+  --intent-ring: 0px;
   position: relative;
-  /* Not `overflow: hidden` on a whim: the wash blobs are far larger than the
-     tile and scale past its edges, and the photo has square corners of its
-     own. This is what makes both of them the tile's shape. */
+  /* Not `overflow: hidden` on a whim: the photographs stack and cross-fade at
+     the tile's own corner radius, and the check sits half over the top-left
+     corner. This is what makes all of them the tile's shape. */
   overflow: hidden;
   isolation: isolate;
   aspect-ratio: 3 / 4;
+  /* A COLUMN, so the label stretches across the tile on its own. As a row item
+     it was content-width, and a short label ("Влюбиться") sat against the left
+     edge while a wrapping one only looked centred because it had run out of
+     room. */
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  justify-content: flex-end;
   padding: 0;
   border: 0;
   border-radius: 20px;
   background: var(--accent);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 180ms ease, box-shadow 220ms ease;
+  transition: transform 180ms ease, box-shadow 320ms ease;
 }
 
 .ob-intent:active {
   transform: scale(0.985);
 }
 
+/* Light from the borders inward, in the house recipe: four directional insets
+   with a NEGATIVE spread, which pulls each shadow's body out past its own edge
+   and leaves only the falloff pointing in. Same construction as the Continue
+   pill and the back arrow — white light, because the ground it lands on is the
+   accent rather than the page.
+
+   The blur is short (12px against the back arrow's 20) for one reason: the ring
+   is 7px wide and the photograph covers everything beyond it, so a longer
+   falloff would spend most of itself under the picture and read as a flat rim.
+   The outer glow is the pill's, at the accent. */
+.ob-intent.is-on {
+  --intent-ring: 7px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 7px 12px -8px rgba(255, 255, 255, 0.42),
+    inset 0 -7px 12px -8px rgba(255, 255, 255, 0.34),
+    inset 7px 0 12px -8px rgba(255, 255, 255, 0.38),
+    inset -7px 0 12px -8px rgba(255, 255, 255, 0.38),
+    0 0 22px rgba(139, 37, 59, 0.42);
+}
+
+/* The photographs: one at rest, all four once chosen, stacked and cross-faded.
+   `inset` rather than `transform: scale()` — a scaled 3:4 box leaves a wider
+   gap left and right than top and bottom, and this gap is a frame, so it has to
+   be even. It animates the layout of one absolutely-positioned element, which
+   reflows nothing else on the screen. */
 .ob-intent-photo {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  /* Sized rather than `inset`: for an absolutely-positioned REPLACED element,
+     `width: auto` resolves to the intrinsic width (540px here) and the `right`
+     offset is dropped as over-constrained, so `inset` alone leaves the picture
+     hanging 381px off the tile. */
+  top: var(--intent-ring);
+  left: var(--intent-ring);
+  width: calc(100% - 2 * var(--intent-ring));
+  height: calc(100% - 2 * var(--intent-ring));
+  border-radius: calc(20px - var(--intent-ring));
   object-fit: cover;
-  /* The photographs are prepared at the tile's own ratio, so `cover` crops
-     nothing today; it is here so an odd-sized replacement crops rather than
-     stretching a face. */
-  z-index: 0;
-  /* Unselected tiles are a shade quieter, so the selected one reads as lit
-     rather than as the only one with a picture. Both ends animate, so
-     deselecting is a fade rather than a snap. */
+  /* Unselected tiles are a shade quieter, so the chosen one reads as lit rather
+     than as the only one with a picture. Both ends animate, so deselecting is a
+     fade rather than a snap. */
   filter: brightness(0.82) saturate(0.9);
-  transition: filter 320ms ease;
+  transition:
+    top 380ms cubic-bezier(0.32, 0.72, 0.24, 1),
+    left 380ms cubic-bezier(0.32, 0.72, 0.24, 1),
+    width 380ms cubic-bezier(0.32, 0.72, 0.24, 1),
+    height 380ms cubic-bezier(0.32, 0.72, 0.24, 1),
+    border-radius 380ms cubic-bezier(0.32, 0.72, 0.24, 1),
+    filter 320ms ease,
+    opacity 700ms ease;
 }
 
 .ob-intent.is-on .ob-intent-photo {
-  /* Lifted a little past neutral: it is about to be read through the wash, and
-     the point of the wash is that the photograph is still there under it. The
-     long ease is what makes the brightening travel WITH the spread instead of
-     switching on under it. */
-  filter: brightness(1.06) saturate(1.02);
-  transition: filter 900ms ease;
+  filter: brightness(1.04) saturate(1.02);
 }
 
-/* The wash: the white that spreads from the point the finger landed.
-
-   Three blobs rather than one, and that is what makes it read as water rather
-   than as a circle: they sit at slightly different offsets from the tap point
-   and grow at slightly different rates, so their union has an irregular edge
-   the whole way out. Each is a radial-gradient with a soft falloff instead of a
-   hard-edged disc, so nothing needs `filter: blur()` — the entire effect is
-   `transform`, which the compositor animates without repainting.
-
-   The blobs are pseudo-elements on the wash layer, so a tile costs one extra
-   node rather than four. `--sx` / `--sy` are written by `spreadFromEvent`. */
-.ob-intent-wash {
+/* The check: a small white disc over the top-left corner of the photograph,
+   burgundy tick inside. It arrives after the shrink rather than with it — the
+   frame has to exist before something can sit on it — and leaves at once,
+   because an un-choosing that lingers reads as a mis-tap being expensive. */
+.ob-intent-check {
   position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
+  top: calc(var(--intent-ring) + 0.4375rem);
+  left: calc(var(--intent-ring) + 0.4375rem);
+  /* Above the photographs, which stack to 3 while they cross-fade. */
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 9999px;
+  background: #fff;
+  color: var(--accent);
+  box-shadow: 0 2px 8px rgba(3, 3, 3, 0.28);
   opacity: 0;
-}
-
-.ob-intent-wash::before,
-.ob-intent-wash::after,
-.ob-intent-label::before {
-  content: "";
-  position: absolute;
-  left: var(--sx, 50%);
-  top: var(--sy, 50%);
-  /* Sized so the gradient's OPAQUE CORE — not its soft edge — still covers the
-     far corner from a corner tap. In a 3:4 tile the diagonal is ~1.66x the
-     width, the core ends at 70% of the blob's radius, and the blob grows from
-     its centre: 1.66 / 0.7 x 2 ~= 4.8. Anything smaller leaves the opposite
-     corner bare at rest, which is what a flat fill used to paper over. */
-  width: 480%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  translate: -50% -50%;
-  scale: 0;
+  scale: 0.55;
   pointer-events: none;
+  transition:
+    opacity 160ms ease,
+    scale 260ms cubic-bezier(0.34, 1.4, 0.64, 1),
+    top 380ms cubic-bezier(0.32, 0.72, 0.24, 1),
+    left 380ms cubic-bezier(0.32, 0.72, 0.24, 1);
 }
 
-.ob-intent-wash::before {
-  background: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.31) 0 70%,
-    rgba(255, 255, 255, 0) 86%
-  );
+.ob-intent-check svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
 }
 
-.ob-intent-wash::after {
-  /* Offset from the tap point, so the union stops being a circle. */
-  margin: -6% 9% 0 0;
-  background: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.3) 0 68%,
-    rgba(255, 255, 255, 0) 85%
-  );
-}
-
-/* The third blob rides the LABEL's pseudo-element rather than a third node.
-   It sits under the text (z-index below the label's own content) and reads as
-   part of the same wash. */
-.ob-intent-label::before {
-  margin: 8% 0 0 -8%;
-  background: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.29) 0 66%,
-    rgba(255, 255, 255, 0) 84%
-  );
-  z-index: -1;
-}
-
-/* Spreading. The three blobs run the same distance over slightly different
-   times, which is what keeps the leading edge uneven all the way out — they
-   arrive together, they just do not travel together. */
-.ob-intent.is-spreading .ob-intent-wash {
+.ob-intent.is-on .ob-intent-check {
   opacity: 1;
-}
-
-.ob-intent.is-spreading .ob-intent-wash::before {
-  animation: intent-spread 980ms cubic-bezier(0.42, 0.06, 0.3, 1) forwards;
-}
-
-.ob-intent.is-spreading .ob-intent-wash::after {
-  animation: intent-spread 1140ms cubic-bezier(0.5, 0.04, 0.34, 1) 70ms forwards;
-}
-
-.ob-intent.is-spreading .ob-intent-label::before {
-  animation: intent-spread 1060ms cubic-bezier(0.46, 0.05, 0.32, 1) 130ms forwards;
-}
-
-/* Settled. The three blobs at rest ARE the resting wash — deliberately not a
-   flat fill laid over them. A flat fill has to be painted at some moment, and
-   painting it at tap time (which is when `is-on` lands) covered the tile before
-   the first blob had moved, so the spread was never visible at all. Their
-   alphas are chosen so the union composites to ~0.66: 1 - 0.69 x 0.70 x 0.71.
-
-   They are parked at full scale rather than removed, which would flash — and
-   `is-receding` has to park them too, because the animation that held them
-   there belongs to `is-spreading` and goes with it. */
-.ob-intent.is-on .ob-intent-wash {
-  opacity: 1;
-  transition: opacity 220ms ease;
-}
-
-.ob-intent.is-on .ob-intent-wash::before,
-.ob-intent.is-on .ob-intent-wash::after,
-.ob-intent.is-on .ob-intent-label::before,
-.ob-intent.is-receding .ob-intent-wash::before,
-.ob-intent.is-receding .ob-intent-wash::after,
-.ob-intent.is-receding .ob-intent-label::before {
   scale: 1;
+  transition:
+    opacity 200ms ease 260ms,
+    scale 320ms cubic-bezier(0.34, 1.4, 0.64, 1) 260ms,
+    top 380ms cubic-bezier(0.32, 0.72, 0.24, 1),
+    left 380ms cubic-bezier(0.32, 0.72, 0.24, 1);
 }
 
-/* Receding. Deliberately NOT the spread played backwards: a wash that drains
-   back into the finger reads as an undo of an animation rather than as
-   deselecting, and it makes a mis-tap feel expensive. It simply fades. */
-.ob-intent.is-receding .ob-intent-wash {
-  opacity: 0;
-  transition: opacity 260ms ease;
-}
-
-@keyframes intent-spread {
-  from {
-    scale: 0;
-  }
-  to {
-    scale: 1;
-  }
-}
-
-/* The label sits above the wash and flips from white-on-photo to ink-on-white.
-   Its own scrim is what keeps it legible on an unselected tile, where the
-   ground is a photograph rather than a colour. */
+/* The label keeps its dark scrim and white ink in both states: the ground under
+   it is a photograph either way now, and burgundy ink on a photograph is the
+   one thing this label may never be. It insets with the picture so its scrim
+   stops at the frame instead of running over the bottom of it. */
 .ob-intent-label {
   position: relative;
-  z-index: 2;
-  width: 100%;
+  /* Above the photographs, which stack to 3 while they cross-fade — at z-index
+     2 the label was covered the moment a tile advanced past its first frame. */
+  z-index: 5;
+  width: auto;
+  margin: 0 var(--intent-ring) var(--intent-ring);
   padding: 2.25rem 0.75rem 0.75rem;
+  border-radius: 0 0 calc(20px - var(--intent-ring)) calc(20px - var(--intent-ring));
   background: linear-gradient(
     to top,
     rgba(3, 3, 3, 0.82) 0%,
@@ -2997,40 +2956,20 @@ button {
   line-height: 1.2;
   text-align: center;
   text-wrap: balance;
-  transition: color 300ms ease, background 300ms ease;
+  transition:
+    margin 380ms cubic-bezier(0.32, 0.72, 0.24, 1),
+    border-radius 380ms cubic-bezier(0.32, 0.72, 0.24, 1);
 }
 
-.ob-intent.is-on .ob-intent-label {
-  /* Held back until the wash is actually under the text. Ink-on-photograph is
-     unreadable, and that is what an undelayed flip shows for most of a second. */
-  transition: color 320ms ease 600ms, background 320ms ease 600ms;
-  background: linear-gradient(
-    to top,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  color: var(--accent);
-}
-
-.ob-intent.is-receding .ob-intent-label {
-  transition: color 220ms ease, background 220ms ease;
-}
-
-/* No wash at all under reduced motion: the selection still reads, it just
-   arrives rather than travels. Same rule the tap burst follows — there is no
-   reduced variant of a spreading animation, only its absence. */
+/* Under reduced motion the chosen state simply IS — no shrink, no travelling
+   check, and `IntentTile` starts no timer, so the photograph does not cycle
+   either. There is no reduced variant of a cycling picture, only its absence. */
 @media (prefers-reduced-motion: reduce) {
-  .ob-intent-wash::before,
-  .ob-intent-wash::after,
-  .ob-intent-label::before {
-    display: none;
-  }
-
-  .ob-intent.is-spreading .ob-intent-wash,
-  .ob-intent.is-on .ob-intent-wash {
-    opacity: 1;
-    background: rgba(255, 255, 255, 0.66);
-    transition: opacity 160ms linear;
+  .ob-intent,
+  .ob-intent-photo,
+  .ob-intent-check,
+  .ob-intent-label {
+    transition: none;
   }
 }
 

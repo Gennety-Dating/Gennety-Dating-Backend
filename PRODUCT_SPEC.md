@@ -658,29 +658,45 @@ out of Telegram-only workers.
   tile, because on an unselected tile the ground is a photograph rather than a
   colour.
 
-  **Tapping washes the tile white FROM the point the finger landed** (founder
-  request). Three radial blobs at slightly different offsets and speeds spread
-  out of that point, so the leading edge stays uneven the whole way and reads as
-  water rather than as a circle. Four properties are load-bearing:
+  **Tapping shrinks the photograph inside a burgundy frame, and the option's
+  other photographs then play behind it** (founder decision 2026-08-26). The
+  picture insets by 7px, what shows in the gap is the tile's own accent ground
+  lit by the house inner-edge sheen, a small white check lands on the top-left
+  corner, and from then on the tile advances through that option's remaining
+  frames every two seconds. Six properties are load-bearing:
 
-  - **The wash is the union of the three blobs, never a flat fill laid over
-    them.** A fill has to be painted at some moment, and painting it when the
-    tile becomes selected covers the tile before the first blob has moved — the
-    spread was invisible for two builds because of exactly that.
-  - **The class that runs it is React state, never `classList.add`.** The same
-    tap re-renders the component, and React's own `className` overwrites
-    anything written by hand, so an imperative class is wiped in the tick it is
-    added. Only the anchor point stays imperative, because nothing passes a
-    `style` prop and that write survives.
-  - **The label flips to ink only once the wash is under it.** Burgundy on a
-    photograph is the one state this label may never be in, which is what an
-    undelayed flip shows for most of a second.
-  - **Deselecting fades rather than draining back into the finger** — an undo of
-    an animation makes a mis-tap feel expensive.
+  - **The frame is the tile's own background, not an extra element**, so it can
+    never be a hair out of register with the picture it surrounds.
+  - **The photograph is SIZED, never `inset`.** For an absolutely-positioned
+    replaced element `width: auto` resolves to the intrinsic width and the
+    `right` offset is dropped as over-constrained, which hangs a 540px picture
+    381px off a 166px tile. Measured, not reasoned about.
+  - **The crossfade keeps exactly two layers opaque** — the incoming frame and
+    the one it is covering — so the burgundy ring never shows through the middle
+    of a swap, and a frame can still fade in on its second lap. Keeping every
+    shown frame opaque makes lap two a hard cut instead.
+  - **The label and the check outrank every photograph.** The pictures stack
+    while they cross-fade, and at a lower z-index the label vanished the moment
+    a tile advanced past its first frame — visible only after two seconds, which
+    is why nothing but running the page caught it.
+  - **The label keeps its dark scrim and white ink in both states.** The ground
+    under it is a photograph either way now, and burgundy ink on a photograph is
+    the one thing this label may never be.
+  - **An unselected tile mounts ONE `<img>`.** The other three frames are
+    ~80–120 kB apiece; rendering them up front would put ~600 kB of pictures on
+    every registration for options nobody chose. Mounting them on selection IS
+    the preload, and the first advance is two seconds after their fetch starts.
 
-  Under `prefers-reduced-motion` the tile simply arrives white: there is no
-  reduced variant of a spreading animation, only its absence — the same rule the
-  tap burst follows. Telegram-only; the native client owns its own controls.
+  **The cycle order is the founder's, rotated to begin on the frame already on
+  screen.** It is a loop, so rotating changes the phase and not the order — and
+  what it buys is that the first advance lands two seconds after the tap rather
+  than in the same instant, where a photograph swapping under the shrink reads
+  as a glitch rather than as the cycle starting.
+
+  Under `prefers-reduced-motion` the chosen state simply is — no shrink, no
+  travelling check, and no cycle at all: there is no reduced variant of a moving
+  picture, only its absence, the same rule the tap burst follows. Telegram-only;
+  the native client owns its own controls.
 
   **A footnote under the options says nobody else sees it** (founder decision):
   the answer is never shown to the partner anywhere, and the screen has to say
