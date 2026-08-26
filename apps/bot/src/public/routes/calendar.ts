@@ -81,7 +81,12 @@ export function createCalendarRouter(api: Api<RawApi>): Router {
           ? 404
           : result.reason === "not-participant"
             ? 403
-            : 400;
+            : // A locked evening slot is not a malformed request — the client
+              // asked for something real that costs money, which is what 402
+              // means. Mirrors the venue board's `premium-locked`.
+              result.reason === "prime-time-locked"
+              ? 402
+              : 400;
       res.status(status).json({ error: result.reason });
       return;
     }
@@ -141,6 +146,7 @@ export function createCalendarRouter(api: Api<RawApi>): Router {
       peerSlots: result.peerSlots,
       agreedTime: result.agreedTime,
       isFirstMover: result.isFirstMover,
+      primeTime: result.primeTime,
     });
   });
 

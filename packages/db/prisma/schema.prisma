@@ -371,6 +371,7 @@ model User {
   subscriptionLedger        SubscriptionLedger[]
   rematchPurchases          RematchPurchase[]
   venueChangePurchases      VenueChangePurchase[]
+  primeTimePurchases        PrimeTimePurchase[]
   liveActivityTokens        LiveActivityToken[]
   mediaValidationRejections MediaValidationRejection[]
   chatEvents                ChatEvent[]
@@ -635,6 +636,49 @@ model VenueChangePurchase {
   /// Backs the hourly `processing` / `refund_failed` sweep.
   @@index([status, createdAt])
   @@map("venue_change_purchases")
+}
+
+/// One paid Prime Time pass (PRIME_TIME_PRODUCT_SPEC.md §8).
+///
+/// Deliberately its own table rather than a `ticket_ledger` row: a pass is a
+/// one-off purchase, not a wallet movement, so it follows `RematchPurchase` /
+/// `VenueChangePurchase` — the rule ARCHITECTURE.md already states for the
+/// venue board. The §9.1 dead-match refund is what makes it mandatory rather
+/// than merely consistent: returning Stars is a provider call that fails, and
+/// a failed refund with no durable row is money nobody can reconcile.
+model PrimeTimePurchase {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  /// The match whose calendar band this opened. Free-form (no FK) so deleting
+  /// a match never breaks the payment audit trail — same rule as
+  /// `VenueChangePurchase.matchId`.
+  matchId           String    @map("match_id") @db.Uuid
+  /// `processing`          — Stars moved; written before the unlock CAS. Rows
+  ///                         stuck here past the stale window are refunded by
+  ///                         the hourly sweep.
+  /// `settled`            — the band was claimed for the pair.
+  /// `refunded_race`      — both sides paid at once; the loser's Stars went back.
+  /// `refunded_stale`     — abandoned mid-settle; returned by the sweep.
+  /// `refunded_match_died`— the date never happened (§9.1).
+  /// `refund_failed`      — the refund call failed; the sweep owns this row
+  ///                         until it flips. NEVER announced as completed.
+  status            String
+  /// Unique Telegram Stars charge id → exactly-once settle + the key
+  /// `refundStarPayment` needs later.
+  externalPaymentId String    @unique @map("external_payment_id")
+  /// Price frozen at purchase (`PRIME_TIME_STARS` is env-tunable, so the row
+  /// must never re-derive it).
+  amountStars       Int       @map("amount_stars")
+  resolvedAt        DateTime? @map("resolved_at")
+  refundError       String?   @map("refund_error")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  /// Backs the hourly `processing` / `refund_failed` sweep.
+  @@index([status, createdAt])
+  @@map("prime_time_purchases")
 }
 
 model OnboardingProgress {
@@ -1241,6 +1285,24 @@ model Match {
   /// at deploy time and will be dropped in a follow-up cleanup migration.
   pickedTimeA         DateTime?  @map("picked_time_a")
   pickedTimeB         DateTime?  @map("picked_time_b")
+
+  /// Prime Time (PRIME_TIME_PRODUCT_SPEC.md): the last few slots of each day
+  /// are locked behind Gennety Premium or a one-off Stars pass. Non-null once
+  /// the band is open for THIS match, and it is deliberately a property of the
+  /// match rather than of a user: `processCalendarSlotsUpdate` only locks a
+  /// date when both sides' sets intersect, so a per-user unlock would buy
+  /// nothing — the payer could mark 19:30 and the partner could not, so the
+  /// intersection could never contain it.
+  ///
+  /// Written by the Stars settle CAS AND by the first prime-slot mark made
+  /// while either participant's subscription is live: that turns a live
+  /// entitlement into a permanent property, so a subscription lapsing
+  /// mid-negotiation cannot re-lock slots the pair has already chosen (the
+  /// same rule §3.5b applies to a settled ticket slot).
+  primeTimeUnlockedAt DateTime?  @map("prime_time_unlocked_at")
+  /// Who paid for the pass. Null when a subscription opened the band — which
+  /// is also what makes the §9.1 dead-match refund a no-op for those pairs.
+  primeTimePaidById   String?    @map("prime_time_paid_by_id") @db.Uuid
 
   agreedTime   DateTime? @map("agreed_time")
   venueName    String?   @map("venue_name")

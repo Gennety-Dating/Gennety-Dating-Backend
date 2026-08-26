@@ -80,6 +80,10 @@ export function createNativeCalendarRouter(api: Api<RawApi>): Router {
       answerFailure(res, result.reason);
       return;
     }
+    // A submission does not echo the band: `processCalendarSlotsUpdate` has no
+    // reason to recompute it, and the client already holds it from the GET it
+    // polls. Re-reading state here purely to restate an unchanged field would
+    // buy a query per tap.
     res.json({
       proposedTimes: await proposedTimesFor(matchId),
       mySlots: result.mySlots,
@@ -138,6 +142,13 @@ function nativeState(
     agreedTime: result.agreedTime,
     // A read never resolves an overlap — only a submission does.
     overlapCandidates: [],
+    /**
+     * Prime Time (§12). The native calendar IS gated — a founder decision — so
+     * it has to be told what is locked, or it draws free the cells the server
+     * will refuse with 402. Additive: a shipped build that does not know the
+     * field keeps its current behaviour and merely discovers the refusal.
+     */
+    primeTime: result.primeTime,
     timeZone,
     serverNow: new Date().toISOString(),
   };
@@ -155,9 +166,12 @@ function answerFailure(res: Response, reason: string): void {
       ? 403
       : reason === "wrong-state"
         ? 409
-        : reason === "invalid-iso" || reason === "invalid-slot"
-          ? 400
-          : 404;
+        : // 402: the slot exists and the caller may have it — for a price.
+          reason === "prime-time-locked"
+          ? 402
+          : reason === "invalid-iso" || reason === "invalid-slot"
+            ? 400
+            : 404;
   res.status(status).json({ error: reason });
 }
 

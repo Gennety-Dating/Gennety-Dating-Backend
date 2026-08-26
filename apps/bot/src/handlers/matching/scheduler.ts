@@ -13,6 +13,14 @@ import {
 } from "./post-accept-message.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
+import { env } from "../../config.js";
+import {
+  isPrimeTimeSlot,
+  lockedSlotsOf,
+  primeTimeFeatureLive,
+  primeTimeUnlockReason,
+  shouldPersistUnlock,
+} from "../../services/prime-time.js";
 
 /**
  * Calendar-only scheduler.
@@ -356,6 +364,8 @@ export type CalendarPickResult =
         | "match-not-found"
         | "wrong-state"
         | "invalid-slot"
+        /** A locked evening slot from a pair that has not opened the band. */
+        | "prime-time-locked"
         | "user-not-found"
         | "not-participant";
     }
@@ -422,8 +432,28 @@ export async function processCalendarSlotsUpdate(
       availableTimesB: true,
       calendarMessageIdA: true,
       calendarMessageIdB: true,
-      userA: { select: { telegramId: true, language: true, theme: true } },
-      userB: { select: { telegramId: true, language: true, theme: true } },
+      primeTimeUnlockedAt: true,
+      // Prime Time reads the premium head + reachability of BOTH sides: the
+      // band is a property of the match, so either subscription opens it and a
+      // pair with no purchase path is never locked (PRIME_TIME_PRODUCT_SPEC §2/§12).
+      userA: {
+        select: {
+          telegramId: true,
+          language: true,
+          theme: true,
+          platform: true,
+          premiumUntil: true,
+        },
+      },
+      userB: {
+        select: {
+          telegramId: true,
+          language: true,
+          theme: true,
+          platform: true,
+          premiumUntil: true,
+        },
+      },
     },
   });
   if (!match) return { ok: false, reason: "match-not-found" };
@@ -432,6 +462,19 @@ export async function processCalendarSlotsUpdate(
   const allowed = new Set(match.proposedTimes.map((d) => d.getTime()));
   for (const p of picks) {
     if (!allowed.has(p.getTime())) return { ok: false, reason: "invalid-slot" };
+  }
+
+  /**
+   * Prime Time (PRIME_TIME_PRODUCT_SPEC.md). One choke point for BOTH surfaces:
+   * the Mini App and the native calendar funnel through this function, so the
+   * band cannot be marked from a client that simply forgot to draw the lock —
+   * and the `overlapCandidates` confirm path re-POSTs through here too, so it
+   * inherits the rule rather than needing its own copy.
+   */
+  const wantsPrime = picks.some((d) => isPrimeTimeSlot(d));
+  const primeReason = primeTimeUnlockReason(match);
+  if (wantsPrime && primeReason === null) {
+    return { ok: false, reason: "prime-time-locked" };
   }
 
   const user = await prisma.user.findUnique({
@@ -452,11 +495,31 @@ export async function processCalendarSlotsUpdate(
 
   const actorPrev = isA ? match.availableTimesA : match.availableTimesB;
   const wasMineEmpty = actorPrev.length === 0;
+
+  /**
+   * Turn a LIVE entitlement into a permanent property of the match (§13.2).
+   *
+   * `primeTimeUnlockReason` re-reads the subscription on every call, so a
+   * subscription lapsing mid-negotiation would otherwise put the lock back on
+   * slots the pair had already chosen — and the pair would have no idea why.
+   * Stamping on the first prime mark is the same rule §3.5b applies to a
+   * settled ticket slot: paid-for access does not get re-verified later.
+   *
+   * Only `premium` is persisted; a grandfathered or feature-off pair is in a
+   * CONDITION, not a purchase, and writing that would permanently open a band
+   * for a pair that merely happened to be in that state on one afternoon.
+   */
+  const stampUnlock =
+    wantsPrime && match.primeTimeUnlockedAt === null && shouldPersistUnlock(primeReason);
+
   await prisma.match.update({
     where: { id: match.id },
-    data: isA
-      ? { availableTimesA: dedupedSorted }
-      : { availableTimesB: dedupedSorted },
+    data: {
+      ...(isA
+        ? { availableTimesA: dedupedSorted }
+        : { availableTimesB: dedupedSorted }),
+      ...(stampUnlock ? { primeTimeUnlockedAt: new Date() } : {}),
+    },
   });
 
   // Re-read the peer side after our write. The initial row may be stale if
@@ -621,6 +684,21 @@ export type CalendarStateResult =
       peerSlots: string[];
       agreedTime: string | null;
       isFirstMover: boolean;
+      /**
+       * Prime Time (PRIME_TIME_PRODUCT_SPEC.md §6). `slots` is the whole band
+       * and is populated whether or not it is locked, so a pair that HAS opened
+       * it still sees what their subscription or pass bought — the venue board
+       * makes the same call with its premium plate. `locked` is what draws the
+       * padlock and routes a tap to the unlock sheet instead of toggling.
+       *
+       * Empty + unlocked when the feature is off, so a client that knows the
+       * field simply draws nothing.
+       */
+      primeTime: {
+        locked: boolean;
+        slots: string[];
+        stars: number;
+      };
     };
 
 export async function getCalendarState(
@@ -637,6 +715,9 @@ export async function getCalendarState(
       availableTimesA: true,
       availableTimesB: true,
       agreedTime: true,
+      primeTimeUnlockedAt: true,
+      userA: { select: { telegramId: true, platform: true, premiumUntil: true } },
+      userB: { select: { telegramId: true, platform: true, premiumUntil: true } },
     },
   });
   if (!match) return { ok: false, reason: "match-not-found" };
@@ -666,6 +747,7 @@ export async function getCalendarState(
   const mine = isA ? match.availableTimesA : match.availableTimesB;
   const peer = isA ? match.availableTimesB : match.availableTimesA;
 
+  const live = primeTimeFeatureLive();
   return {
     ok: true,
     proposedTimes: match.proposedTimes.map((d) => d.toISOString()),
@@ -673,6 +755,11 @@ export async function getCalendarState(
     peerSlots: peer.map((d) => d.toISOString()),
     agreedTime: match.agreedTime?.toISOString() ?? null,
     isFirstMover: peer.length === 0,
+    primeTime: {
+      locked: live && primeTimeUnlockReason(match) === null,
+      slots: live ? lockedSlotsOf(match.proposedTimes) : [],
+      stars: env.PRIME_TIME_STARS,
+    },
   };
 }
 

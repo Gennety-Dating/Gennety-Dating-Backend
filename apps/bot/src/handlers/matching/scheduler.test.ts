@@ -31,6 +31,12 @@ vi.mock("../../config.js", () => ({
     CUSTOM_EMOJI_LIKE_ID: "",
     CUSTOM_EMOJI_DISLIKE_ID: "",
     WEBAPP_URL: "https://test.invalid/calendar",
+    // Prime Time ships dark, so every pre-existing test in this file exercises
+    // the feature-off path unchanged. The block at the bottom flips them.
+    PRIME_TIME_ENABLED: false,
+    PREMIUM_FEATURE_ENABLED: false,
+    PRIME_TIME_SLOT_COUNT: 3,
+    PRIME_TIME_STARS: 50,
   },
 }));
 
@@ -61,6 +67,8 @@ import {
 } from "./scheduler.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
+import { env } from "../../config.js";
+import { wallToUtc } from "../../services/profiler-schedule.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as { findUnique: MockFn; update: MockFn };
@@ -839,5 +847,183 @@ describe("scheduler: handleCalendarWebAppData (legacy WS path)", () => {
     });
     await handleCalendarWebAppData(ctx);
     expect(mMatch.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+
+/**
+ * Prime Time enforcement (PRIME_TIME_PRODUCT_SPEC.md §6).
+ *
+ * This is the choke point both surfaces share, so these are the tests that
+ * stand between a locked band and a client that simply forgot to draw it.
+ */
+describe("scheduler: Prime Time band", () => {
+  const primeEnv = env as unknown as {
+    PRIME_TIME_ENABLED: boolean;
+    PREMIUM_FEATURE_ENABLED: boolean;
+  };
+
+  /** Kyiv wall clock, resolved exactly as the grid generator does. */
+  const kyiv = (day: number, hour: number, minute: number) =>
+    wallToUtc(2026, 7, day, hour, minute, "Europe/Kyiv");
+
+  const PRIME = kyiv(1, 19, 30);
+  const ORDINARY = kyiv(1, 15, 0);
+  const future = new Date(Date.now() + 30 * 86_400_000);
+
+  beforeEach(() => {
+    mMatch.findUnique.mockReset();
+    mMatch.update.mockReset();
+    mUser.findUnique.mockReset();
+    mStartVenue.mockReset();
+    mStartVenue.mockResolvedValue(undefined);
+    mPeerWaitShimmer.mockReset();
+    primeEnv.PRIME_TIME_ENABLED = true;
+    primeEnv.PREMIUM_FEATURE_ENABLED = true;
+  });
+
+  afterAll(() => {
+    primeEnv.PRIME_TIME_ENABLED = false;
+    primeEnv.PREMIUM_FEATURE_ENABLED = false;
+  });
+
+  function mockMatch(over: {
+    userA?: Record<string, unknown>;
+    userB?: Record<string, unknown>;
+    primeTimeUnlockedAt?: Date | null;
+    availableTimesA?: Date[];
+    availableTimesB?: Date[];
+  } = {}) {
+    mMatch.findUnique.mockResolvedValue({
+      id: "match-1",
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating",
+      proposedTimes: [ORDINARY, PRIME],
+      availableTimesA: over.availableTimesA ?? [],
+      availableTimesB: over.availableTimesB ?? [],
+      calendarMessageIdA: null,
+      calendarMessageIdB: null,
+      primeTimeUnlockedAt: over.primeTimeUnlockedAt ?? null,
+      userA: { telegramId: 1001n, language: "en", platform: "telegram", premiumUntil: null, ...over.userA },
+      userB: { telegramId: 1002n, language: "en", platform: "telegram", premiumUntil: null, ...over.userB },
+    });
+    mUser.findUnique.mockResolvedValue({ id: "uid-A", language: "en" });
+  }
+
+  it("refuses a locked slot and writes NOTHING", async () => {
+    mockMatch();
+    const res = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      PRIME.toISOString(),
+    ]);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.reason).toBe("prime-time-locked");
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  it("still accepts the rest of the day", async () => {
+    mockMatch();
+    const res = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      ORDINARY.toISOString(),
+    ]);
+    expect(res.ok).toBe(true);
+    expect(mMatch.update).toHaveBeenCalled();
+  });
+
+  it("refuses a MIXED submission — one locked slot poisons the whole save", async () => {
+    // The alternative (silently dropping the locked one) would save a set the
+    // user did not choose and show it back to them as their own answer.
+    mockMatch();
+    const res = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      ORDINARY.toISOString(),
+      PRIME.toISOString(),
+    ]);
+    expect(res.ok).toBe(false);
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  it("opens the band for the PAIR when the PARTNER subscribes, not just the subscriber", async () => {
+    // The whole point of §2: A is marking, B is the one paying.
+    mockMatch({ userB: { premiumUntil: future } });
+    const res = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      PRIME.toISOString(),
+    ]);
+    expect(res.ok).toBe(true);
+  });
+
+  it("stamps the unlock on the first premium mark, so a lapse cannot re-lock it", async () => {
+    mockMatch({ userA: { premiumUntil: future } });
+    await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [PRIME.toISOString()]);
+    const data = mMatch.update.mock.calls[0]![0].data;
+    expect(data.primeTimeUnlockedAt).toBeInstanceOf(Date);
+  });
+
+  it("does NOT stamp on an ordinary mark, or when already unlocked", async () => {
+    mockMatch({ userA: { premiumUntil: future } });
+    await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [ORDINARY.toISOString()]);
+    expect(mMatch.update.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
+
+    mMatch.update.mockReset();
+    mockMatch({ userA: { premiumUntil: future }, primeTimeUnlockedAt: new Date() });
+    await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [PRIME.toISOString()]);
+    expect(mMatch.update.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
+  });
+
+  it("does NOT stamp when the pair is merely grandfathered — a condition is not a purchase", async () => {
+    mockMatch({ availableTimesB: [PRIME] });
+    const res = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      PRIME.toISOString(),
+    ]);
+    expect(res.ok).toBe(true);
+    expect(mMatch.update.mock.calls[0]![0].data.primeTimeUnlockedAt).toBeUndefined();
+  });
+
+  it("honours a paid pass with no subscription anywhere", async () => {
+    mockMatch({ primeTimeUnlockedAt: new Date() });
+    const res = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      PRIME.toISOString(),
+    ]);
+    expect(res.ok).toBe(true);
+  });
+
+  it("does not lock a pair with no purchase path at all", async () => {
+    mockMatch({
+      userA: { telegramId: -1n, platform: "mobile" },
+      userB: { telegramId: -2n, platform: "mobile" },
+    });
+    const res = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      PRIME.toISOString(),
+    ]);
+    expect(res.ok).toBe(true);
+  });
+
+  it("is inert with the flag off", async () => {
+    primeEnv.PRIME_TIME_ENABLED = false;
+    mockMatch();
+    const res = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      PRIME.toISOString(),
+    ]);
+    expect(res.ok).toBe(true);
+  });
+
+  it("reports the band on the state read, locked and unlocked alike", async () => {
+    mockMatch();
+    mUser.findUnique.mockResolvedValue({ id: "uid-A" });
+    const locked = await getCalendarState(1001n, "match-1");
+    expect(locked.ok).toBe(true);
+    if (locked.ok) {
+      expect(locked.primeTime.locked).toBe(true);
+      expect(locked.primeTime.slots).toEqual([PRIME.toISOString()]);
+      expect(locked.primeTime.stars).toBe(50);
+    }
+
+    // Unlocked still lists the band: a subscriber should see what they bought.
+    mockMatch({ primeTimeUnlockedAt: new Date() });
+    mUser.findUnique.mockResolvedValue({ id: "uid-A" });
+    const open = await getCalendarState(1001n, "match-1");
+    if (open.ok) {
+      expect(open.primeTime.locked).toBe(false);
+      expect(open.primeTime.slots).toEqual([PRIME.toISOString()]);
+    }
   });
 });

@@ -498,6 +498,28 @@ export const env = {
   /// for every path (agreed board pick, express). Env-tunable at launch.
   VENUE_CHANGE_STARS: Number(process.env.VENUE_CHANGE_STARS ?? "150"),
 
+  // ── Prime Time (paid evening band in the calendar) ───────────
+  /// Master flag for PRIME_TIME_PRODUCT_SPEC.md. When false (default) nothing
+  /// in the calendar is locked and the unlock endpoints 404 — the feature ships
+  /// dark. Additionally inert without PREMIUM_FEATURE_ENABLED: the pass is only
+  /// half the offer, and locking a band whose subscription alternative cannot be
+  /// bought is a paywall with one path missing.
+  PRIME_TIME_ENABLED: process.env.PRIME_TIME_ENABLED === "true",
+  /// How many of the day's LAST time slots are locked. 3 → 18:30 / 19:00 /
+  /// 19:30 out of the 14-slot day, i.e. 18 of the grid's 84 cells. Read as a
+  /// suffix of CALENDAR_TIME_SLOTS, never as a second list of hours.
+  PRIME_TIME_SLOT_COUNT: Math.max(
+    0,
+    Math.min(14, Number(process.env.PRIME_TIME_SLOT_COUNT ?? "3")),
+  ),
+  /// Telegram Stars (XTR) price of one pass. 50⭐ is exactly one minimum Stars
+  /// top-up. There is deliberately NO USD display env: at both documented rates
+  /// ($0.02/⭐ ticket, $0.024/⭐ premium) 50⭐ costs the user $1.00–$1.20, so any
+  /// "$0.99" label would under-promise the charge — the one wrong price
+  /// deploy.md forbids. The Mini App shows Stars, and Telegram names the real
+  /// sum in its own payment sheet.
+  PRIME_TIME_STARS: Number(process.env.PRIME_TIME_STARS ?? "50"),
+
   // ── Venue observability + context (VENUE_ENGINE_IMPROVEMENT_PLAN 5.3 / 6) ──
   /// Weekly "one venue is taking the city" alert into the founder ops DM.
   /// Off by default; also inert unless FOUNDER_NOTIFY_ENABLED, which is the
