@@ -61,6 +61,16 @@ describe("returnParams", () => {
   });
 });
 
+describe("the calendar is a returnable page", () => {
+  it("round-trips, so the evening-band hand-off to Premium can come back", () => {
+    // Without this the calendar's locked-slot → Premium link is a one-way door:
+    // the user reads the price, decides against it, and has to close the Mini
+    // App and reopen the calendar from chat.
+    const search = returnParams("calendar", { match: "m-1", lang: "ru" });
+    expect(returnHref(`?${search}`)).toBe("index.html?match=m-1&lang=ru");
+  });
+});
+
 describe("returnHref", () => {
   it("rebuilds the board URL, with the match the board needs to reopen", () => {
     // venue-change.html reads `?match=`; a page reached from a chat web_app

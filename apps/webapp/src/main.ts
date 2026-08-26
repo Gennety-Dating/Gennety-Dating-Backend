@@ -11,11 +11,14 @@ import {
   postCalendarPicks,
   CalendarApiError,
   type CalendarState,
+  primeTimeStarsInvoice,
 } from "./api.js";
 import { butterflySuccessMarkup, onSuccessSettle } from "./butterfly-success.js";
 import { hasNewSlot, pruneSlotsToProposedTimes } from "./calendar-selection.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { classifyDaySlots, classifySlot, type DayClass, type SlotClass } from "./state-render.js";
+import { icon } from "./icons.js";
+import { returnParams } from "./return-to.js";
 
 /**
  * Calendar Mini App entry point.
@@ -108,6 +111,14 @@ const sheetTitleEl = document.getElementById("sheet-title");
 const sheetBodyEl = document.getElementById("sheet-body");
 const sheetCtaEl = document.getElementById("sheet-cta") as HTMLButtonElement | null;
 const sheetCtaLabelEl = sheetCtaEl?.querySelector<HTMLSpanElement>(".label") ?? null;
+const primeSheetEl = document.getElementById("prime-sheet");
+const primeBackdropEl = document.getElementById("prime-backdrop");
+const primeTitleEl = document.getElementById("prime-title");
+const primeBodyEl = document.getElementById("prime-body");
+const primePayEl = document.getElementById("prime-pay") as HTMLButtonElement | null;
+const primePayLabelEl = primePayEl?.querySelector<HTMLSpanElement>(".label") ?? null;
+const primePremiumEl = document.getElementById("prime-premium") as HTMLButtonElement | null;
+const primeDismissEl = document.getElementById("prime-dismiss") as HTMLButtonElement | null;
 
 type ViewState = "dates" | "agreed" | "multi-overlap" | "waiting";
 
@@ -128,6 +139,16 @@ let overlapCandidates: string[] = [];
 let multiOverlapChoice: string | null = null;
 let sheetDayKey: string | null = null;
 let isFirstMover = true;
+/**
+ * The paid evening band (PRIME_TIME_PRODUCT_SPEC §7). The server has already
+ * resolved every reason the band might be open — a subscription on either side,
+ * a paid pass, a pair it cannot reach — so `primeLocked` is the whole gate and
+ * this file re-derives none of it.
+ */
+let primeLocked = false;
+let primeSlots = new Set<string>();
+let primeStars = 0;
+let primeBusy = false;
 let saving = false;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let sheetHideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -254,6 +275,9 @@ function applyState(state: CalendarState, firstLoad: boolean): void {
   confirmedMine = new Set(state.mySlots);
   agreedTime = state.agreedTime;
   isFirstMover = state.isFirstMover;
+  primeLocked = state.primeTime?.locked === true;
+  primeSlots = new Set(primeLocked ? (state.primeTime?.slots ?? []) : []);
+  primeStars = state.primeTime?.stars ?? 0;
   selected = pruneSlotsToProposedTimes(selected, proposedTimes);
 
   // First load with no draft: mirror server picks so re-tapping un-selects.
@@ -382,8 +406,127 @@ function setSheetCtaLoading(label: string): void {
   sheetCtaLabelEl.textContent = label;
 }
 
+primePayEl?.addEventListener("click", () => void onPrimePay());
+primePremiumEl?.addEventListener("click", () => openPremiumFromPrime());
+primeDismissEl?.addEventListener("click", () => closePrimeSheet());
+primeBackdropEl?.addEventListener("click", () => closePrimeSheet());
+
 function onBackButton(): void {
+  // Topmost layer first — the unlock sheet sits ABOVE the time picker, so a
+  // back that closed the picker underneath it would leave an orphan on screen.
+  if (primeSheetEl && !primeSheetEl.hasAttribute("hidden")) {
+    closePrimeSheet();
+    return;
+  }
   if (sheetDayKey !== null) closeSheet(true);
+}
+
+// ── Prime Time unlock sheet ────────────────────────────────────────────
+
+function openPrimeSheet(): void {
+  if (!primeSheetEl || !primeBackdropEl) return;
+  app?.HapticFeedback?.impactOccurred?.("light");
+  if (primeTitleEl) primeTitleEl.textContent = tr(lang, "primeSheetTitle");
+  if (primeBodyEl) primeBodyEl.textContent = tr(lang, "primeSheetBody");
+  if (primePayLabelEl) {
+    primePayLabelEl.textContent = tr(lang, "primeSheetCtaPay").replace(
+      "{stars}",
+      String(primeStars),
+    );
+  }
+  if (primePremiumEl) primePremiumEl.textContent = tr(lang, "primeSheetCtaPremium");
+  if (primeDismissEl) primeDismissEl.textContent = tr(lang, "primeSheetDismiss");
+  setPrimeBusy(false);
+  primeSheetEl.removeAttribute("hidden");
+  primeBackdropEl.removeAttribute("hidden");
+  void primeSheetEl.offsetHeight;
+  requestAnimationFrame(() => {
+    primeSheetEl.classList.add("is-open");
+    primeBackdropEl.classList.add("is-open");
+  });
+}
+
+function closePrimeSheet(): void {
+  if (!primeSheetEl || !primeBackdropEl) return;
+  primeSheetEl.classList.remove("is-open");
+  primeBackdropEl.classList.remove("is-open");
+  setTimeout(() => {
+    primeSheetEl.setAttribute("hidden", "");
+    primeBackdropEl.setAttribute("hidden", "");
+  }, 320);
+}
+
+function setPrimeBusy(busy: boolean): void {
+  primeBusy = busy;
+  if (primePayEl) {
+    primePayEl.disabled = busy;
+    primePayEl.classList.toggle("is-loading", busy);
+  }
+}
+
+async function onPrimePay(): Promise<void> {
+  if (primeBusy || !app) return;
+  setPrimeBusy(true);
+  try {
+    const { link } = await primeTimeStarsInvoice(app!.initData, matchId);
+    const open = app.openInvoice;
+    if (!open) {
+      // A client too old for openInvoice can still follow the link.
+      setPrimeBusy(false);
+      window.open(link, "_blank");
+      return;
+    }
+    open.call(app, link, (status) => {
+      if (status === "paid") {
+        app?.HapticFeedback?.notificationOccurred?.("success");
+        // The band is opened by the SERVER on `successful_payment`, so the only
+        // honest confirmation is the state that comes back — never the callback.
+        void refreshAfterUnlock();
+        return;
+      }
+      setPrimeBusy(false);
+      if (status === "failed") {
+        app?.HapticFeedback?.notificationOccurred?.("error");
+        app?.showAlert?.(tr(lang, "primeUnlockFailed"));
+      }
+    });
+  } catch {
+    setPrimeBusy(false);
+    app?.HapticFeedback?.notificationOccurred?.("error");
+    app?.showAlert?.(tr(lang, "primeUnlockFailed"));
+  }
+}
+
+/**
+ * Poll until the band is actually open. `successful_payment` reaches the bot on
+ * its own connection, so the Mini App can come back from the invoice before the
+ * settle has landed — a single refetch would redraw the grid still locked.
+ */
+async function refreshAfterUnlock(attempt = 0): Promise<void> {
+  try {
+    const state = await fetchCalendarState(app!.initData, matchId);
+    applyState(state, false);
+    if (!primeLocked) {
+      setPrimeBusy(false);
+      closePrimeSheet();
+      render();
+      return;
+    }
+  } catch {
+    // fall through to the retry
+  }
+  if (attempt >= 6) {
+    setPrimeBusy(false);
+    closePrimeSheet();
+    render();
+    return;
+  }
+  setTimeout(() => void refreshAfterUnlock(attempt + 1), 700);
+}
+
+function openPremiumFromPrime(): void {
+  app?.HapticFeedback?.impactOccurred?.("light");
+  location.href = `premium.html?${returnParams("calendar", { match: matchId, lang })}`;
 }
 
 // ── Bottom sheet ───────────────────────────────────────────────
@@ -400,7 +543,18 @@ function buildSheetContent(group: DayGroup): void {
     const btn = renderSlotShell(iso, "time");
     const cls = classifySlot(iso, selected, peerSlots);
     paintSlotState(btn, cls, null, formatTime(new Date(iso), lang), isNewPeerSlot(iso));
-    btn.addEventListener("click", () => onTapTime(iso));
+    // A locked row keeps its time and its shape and loses only its saturation:
+    // it is an offer, not a hole. The tap explains rather than refusing.
+    if (primeLocked && primeSlots.has(iso)) {
+      btn.classList.add("is-locked");
+      const plate = document.createElement("span");
+      plate.className = "prime-plate";
+      plate.append(icon("lock", "icon"), document.createTextNode(tr(lang, "primeLockedTag")));
+      btn.appendChild(plate);
+      btn.addEventListener("click", () => openPrimeSheet());
+    } else {
+      btn.addEventListener("click", () => onTapTime(iso));
+    }
     sheetBodyEl.appendChild(btn);
   }
   sheetBodyEl.scrollTop = keepScrollTop;

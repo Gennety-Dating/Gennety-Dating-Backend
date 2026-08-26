@@ -23,6 +23,14 @@ export interface CalendarState {
   peerSlots: string[];
   agreedTime: string | null;
   isFirstMover: boolean;
+  /**
+   * The paid evening band (PRIME_TIME_PRODUCT_SPEC §7). `locked` is the whole
+   * gate: it is already false for a premium pair, a paid pair, and a pair the
+   * feature cannot reach — the client never re-derives any of that, it just
+   * paints. `slots` is empty whenever `locked` is false, so a stale bundle that
+   * ignores the block behaves exactly as it does today.
+   */
+  primeTime?: { locked: boolean; slots: string[]; stars: number };
 }
 
 export interface PickResponse {
@@ -121,6 +129,28 @@ export async function postCalendarPicks(
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as PickResponse;
+}
+
+/**
+ * Mint the Stars invoice for the evening band.
+ *
+ * The server re-derives the lock rather than trusting the caller, so a client
+ * asking for an invoice it does not need is answered 409, not charged.
+ */
+export async function primeTimeStarsInvoice(
+  initData: string,
+  matchId: string,
+): Promise<{ link: string; stars: number }> {
+  const res = await apiFetch(`${apiBase}/v1/calendar/prime-time/stars-invoice`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: JSON.stringify({ matchId }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as { link: string; stars: number };
 }
 
 // ---------------------------------------------------------------------------

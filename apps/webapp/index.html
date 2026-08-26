@@ -918,6 +918,85 @@
         .sheet-backdrop { transition: none !important; }
       }
 
+      /* ── Prime Time: the paid evening band ───────────────────────
+       * A locked slot is still a real, readable time — it is an offer, not a
+       * hole. It keeps the row's shape and loses only its saturation, so the
+       * grid reads as one list with three rows behind glass rather than as a
+       * grid with three errors in it.
+       */
+      .slot.is-locked {
+        opacity: 0.62;
+        cursor: pointer;
+      }
+      .slot.is-locked .slot-time-label {
+        color: var(--text-70, var(--text));
+      }
+      /* Rides the row's right edge, so the time stays where the eye already
+       * looks for it on every other row. */
+      .prime-plate {
+        position: absolute;
+        top: 50%;
+        right: 14px;
+        transform: translateY(-50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 9px 3px 7px;
+        border-radius: 999px;
+        background: var(--accent-soft, rgba(139, 37, 59, 0.18));
+        color: var(--accent-bright, var(--accent));
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        line-height: 1;
+        pointer-events: none;
+      }
+      .prime-plate .icon {
+        width: 11px;
+        height: 11px;
+      }
+
+      .prime-backdrop { z-index: 60; }
+      .prime-sheet { z-index: 70; }
+
+      .prime-body {
+        margin: 10px 0 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--text-70, var(--text));
+        text-align: center;
+      }
+
+      /* The quiet second way in. Deliberately a glass rung rather than a second
+       * filled button: exactly one loud button per screen, and the Stars price
+       * is the one the user came here to answer. */
+      .prime-rung {
+        display: block;
+        width: 100%;
+        margin-top: 10px;
+        padding: 13px 16px;
+        border: 0;
+        border-radius: 14px;
+        background: var(--fill, rgba(255, 255, 255, 0.06));
+        color: var(--text);
+        font: inherit;
+        font-size: 15px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .prime-dismiss {
+        display: block;
+        width: 100%;
+        margin-top: 12px;
+        padding: 4px;
+        border: 0;
+        background: none;
+        color: var(--text-40, var(--text));
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
       /* ── Multi-overlap (final time-picker choice, screen_7) ────── */
 
       .overlap-hero {
@@ -1092,6 +1171,29 @@
           <span class="label"></span>
           <span class="spinner" aria-hidden="true"></span>
         </button>
+      </footer>
+    </div>
+    <div class="sheet-backdrop prime-backdrop" id="prime-backdrop" hidden></div>
+    <div
+      class="sheet prime-sheet"
+      id="prime-sheet"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="prime-title"
+    >
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <header class="sheet-header">
+        <h2 class="sheet-title" id="prime-title"></h2>
+        <p class="prime-body" id="prime-body"></p>
+      </header>
+      <footer class="sheet-footer">
+        <button type="button" id="prime-pay" class="btn-primary">
+          <span class="label"></span>
+          <span class="spinner" aria-hidden="true"></span>
+        </button>
+        <button type="button" id="prime-premium" class="prime-rung"></button>
+        <button type="button" id="prime-dismiss" class="prime-dismiss"></button>
       </footer>
     </div>
     <div class="cta-bar" id="cta-bar" hidden>

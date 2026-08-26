@@ -49,6 +49,18 @@ interface Strings {
   legendAlternative: string;
   legendOverlap: string;
   badgeNew: string;
+  /**
+   * The paid evening band (PRIME_TIME_PRODUCT_SPEC §7). The tag is one word on
+   * purpose — it rides a 44px slot row that already carries a time.
+   */
+  primeLockedTag: string;
+  primeSheetTitle: string;
+  primeSheetBody: string;
+  /** `{stars}` — the real Stars charge. There is no USD figure anywhere here. */
+  primeSheetCtaPay: string;
+  primeSheetCtaPremium: string;
+  primeSheetDismiss: string;
+  primeUnlockFailed: string;
   noContext: string;
   // Location Mini App (Phase 3.7 — concierge map picker)
   locTitle: string;
@@ -132,6 +144,14 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Other time",
     legendOverlap: "Both",
     badgeNew: "NEW",
+    primeLockedTag: "Premium",
+    primeSheetTitle: "Evening times",
+    primeSheetBody:
+      "The last hours of each day are open with Premium. You can open them for this date instead — once, for both of you.",
+    primeSheetCtaPay: "Open the evening — {stars} ⭐",
+    primeSheetCtaPremium: "Gennety Premium",
+    primeSheetDismiss: "Pick another time",
+    primeUnlockFailed: "That didn't go through. Try again.",
     noContext: "No match context — reopen this from the bot.",
     locTitle: "Where will you be coming from?",
     locSearchPlaceholder: "Metro, address, place…",
@@ -218,6 +238,14 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Другое время",
     legendOverlap: "Совпало",
     badgeNew: "NEW",
+    primeLockedTag: "Premium",
+    primeSheetTitle: "Вечернее время",
+    primeSheetBody:
+      "Последние часы каждого дня открыты по Premium. Можешь открыть их для этого свидания — один раз, сразу для вас двоих.",
+    primeSheetCtaPay: "Открыть вечер — {stars} ⭐",
+    primeSheetCtaPremium: "Gennety Premium",
+    primeSheetDismiss: "Выбрать другое время",
+    primeUnlockFailed: "Не прошло. Попробуй ещё раз.",
     noContext: "Нет контекста матча — открой заново из бота.",
     locTitle: "Откуда поедешь на свидание?",
     locSearchPlaceholder: "Метро, адрес, заведение…",
@@ -304,6 +332,14 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Інший час",
     legendOverlap: "Збіг",
     badgeNew: "NEW",
+    primeLockedTag: "Premium",
+    primeSheetTitle: "Вечірній час",
+    primeSheetBody:
+      "Останні години кожного дня відкриті з Premium. Можеш відкрити їх для цього побачення — один раз, одразу для вас двох.",
+    primeSheetCtaPay: "Відкрити вечір — {stars} ⭐",
+    primeSheetCtaPremium: "Gennety Premium",
+    primeSheetDismiss: "Обрати інший час",
+    primeUnlockFailed: "Не вийшло. Спробуй ще раз.",
     noContext: "Немає контексту метчу — відкрий знову з бота.",
     locTitle: "Звідки поїдеш на побачення?",
     locSearchPlaceholder: "Метро, адреса, заклад…",
@@ -390,6 +426,14 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Andere Zeit",
     legendOverlap: "Beide",
     badgeNew: "NEW",
+    primeLockedTag: "Premium",
+    primeSheetTitle: "Abendzeiten",
+    primeSheetBody:
+      "Die letzten Stunden jedes Tages sind mit Premium offen. Du kannst sie stattdessen für dieses Date öffnen — einmalig, für euch beide.",
+    primeSheetCtaPay: "Abend öffnen — {stars} ⭐",
+    primeSheetCtaPremium: "Gennety Premium",
+    primeSheetDismiss: "Andere Zeit wählen",
+    primeUnlockFailed: "Hat nicht geklappt. Versuch es noch mal.",
     noContext: "Kein Match-Kontext - öffne das bitte erneut aus dem Bot.",
     locTitle: "Von wo kommst du zum Date?",
     locSearchPlaceholder: "Metro, Adresse, Ort...",
@@ -477,6 +521,14 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Inny termin",
     legendOverlap: "Oboje",
     badgeNew: "NEW",
+    primeLockedTag: "Premium",
+    primeSheetTitle: "Wieczorne godziny",
+    primeSheetBody:
+      "Ostatnie godziny każdego dnia są dostępne z Premium. Możesz je otworzyć dla tej randki — raz, od razu dla was obojga.",
+    primeSheetCtaPay: "Otwórz wieczór — {stars} ⭐",
+    primeSheetCtaPremium: "Gennety Premium",
+    primeSheetDismiss: "Wybierz inną godzinę",
+    primeUnlockFailed: "Nie udało się. Spróbuj jeszcze raz.",
     noContext: "Brak kontekstu dopasowania - otwórz to ponownie z bota.",
     locTitle: "Skąd będziesz jechać na randkę?",
     locSearchPlaceholder: "Metro, adres, miejsce...",

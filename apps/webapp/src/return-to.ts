@@ -43,6 +43,7 @@ const RETURN_PAGES = {
   "ticket-store": "tickets.html",
   "ticket-gate": "ticket.html",
   "premium": "premium.html",
+  "calendar": "index.html",
 } as const;
 
 export type ReturnPage = keyof typeof RETURN_PAGES;

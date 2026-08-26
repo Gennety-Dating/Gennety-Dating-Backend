@@ -35,6 +35,24 @@ describe("Mini App i18n", () => {
     }
   });
 
+  it("has Prime Time copy, with the Stars placeholder intact, in every language", () => {
+    for (const lang of languages) {
+      // The charge is interpolated at the call site, so a locale that lost the
+      // placeholder renders "Open the evening — ⭐" and asks for an unnamed
+      // amount of money. That is the one failure this block cannot tolerate.
+      expect(tr(lang, "primeSheetCtaPay")).toContain("{stars}");
+      // ...and it must be the ONLY number in the sentence. A USD figure baked
+      // into a translation is a second price the server can never move, and
+      // §5 is explicit that this rail quotes Stars and nothing else.
+      expect(tr(lang, "primeSheetCtaPay").replace("{stars}", "")).not.toMatch(/\d/);
+      expect(tr(lang, "primeSheetBody").length).toBeGreaterThan(0);
+      expect(tr(lang, "primeSheetTitle").length).toBeGreaterThan(0);
+      expect(tr(lang, "primeUnlockFailed").length).toBeGreaterThan(0);
+      // One word: the plate rides a 44px row that already carries a time.
+      expect(tr(lang, "primeLockedTag").trim().split(/\s+/)).toHaveLength(1);
+    }
+  });
+
   it("has departure-point gate copy, with the city placeholder intact, in every language", () => {
     // The city name is interpolated at the call site (`tr` has no params), so a
     // locale that lost the placeholder would render a sentence naming no city
