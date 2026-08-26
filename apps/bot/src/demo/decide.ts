@@ -121,6 +121,19 @@ export interface DemoMatchSnapshot {
   partnerLikeKeys: string[];
   /** True when the payer matrix puts the bill on the puppet, not the visitor. */
   venueChangePayerIsPartner: boolean;
+  /**
+   * The evening slots this pair may NOT mark (PRIME_TIME §11), already resolved
+   * by the driver through production's own predicate — so it is empty when the
+   * feature is off, when either side is premium, and once the band is paid for.
+   * One field rather than a flag plus a list: two of them could disagree.
+   *
+   * The puppet obeys it exactly as a non-premium person would: it counters with
+   * the latest OPEN slot rather than reaching into a band it has not paid for.
+   * That is not politeness — `processCalendarSlotsUpdate` would REFUSE the
+   * write and stall the demo. It is also what leaves the locked rows on screen
+   * for the visitor to walk into, which is the whole point of showing them.
+   */
+  primeLockedSlots: string[];
 }
 
 export interface DemoSnapshot {
@@ -459,7 +472,11 @@ function decideMatchAction(
       if (match.visitorSlots.length === 0) return idle; // their move
 
       if (match.partnerSlots.length === 0) {
-        const slots = pickCounterSlots(match.proposedTimes, match.visitorSlots);
+        const slots = pickCounterSlots(
+          match.proposedTimes,
+          match.visitorSlots,
+          match.primeLockedSlots,
+        );
         // Nothing left to counter with (the visitor marked everything): take
         // one of theirs instead of stalling.
         return slots.length > 0
@@ -592,13 +609,20 @@ function decideVenueChangeAction(match: DemoMatchSnapshot): DemoAction | null {
 export function pickCounterSlots(
   proposedTimes: readonly string[],
   visitorSlots: readonly string[],
+  primeLockedSlots: readonly string[] = [],
 ): string[] {
   const taken = new Set(visitorSlots);
+  const locked = new Set(primeLockedSlots);
   const visitorDays = new Set(visitorSlots.map(dayKey));
 
   const byDay = new Map<string, string[]>();
   for (const slot of proposedTimes) {
     if (taken.has(slot)) continue;
+    // A locked evening slot is unavailable to the puppet in the same way a
+    // slot the visitor already took is: it cannot mark one, so proposing one
+    // would be refused and stall the demo. Skipping them also leaves the band
+    // intact for the visitor to walk into, which is the point of showing it.
+    if (locked.has(slot)) continue;
     const day = dayKey(slot);
     const bucket = byDay.get(day);
     if (bucket) bucket.push(slot);

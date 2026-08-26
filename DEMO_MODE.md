@@ -26,6 +26,7 @@ Everything on screen is production code. What the demo changes is only:
 | Departure point | must be inside Kyiv | **same gate**, plus a one-tap "drop the pin in Kyiv" |
 | Date Ticket | Telegram Stars | the existing **mock** rail (real screens, real prices, no charge) |
 | Venue change | 150⭐ | settled free |
+| Evening calendar band | 50⭐ (or Premium) | the lock is shown; the tap settles free |
 | Partner photos | forward/save-protected (clients blank them out of screenshots and screen recordings) | unprotected, so a walkthrough can be filmed |
 | Waiting | hours to days | ~12 seconds per step |
 | Pre-date content | fires at T-5h / T-1.5h / T+24h | replayed immediately |
@@ -634,7 +635,7 @@ and both are mounted only when `DEMO_MODE_ENABLED`.
 
 ## The guarded branches in production code
 
-Nine, each a single `if`, each commented at the site:
+Ten, each a single `if`, each commented at the site:
 
 | File | What it does |
 |---|---|
@@ -647,6 +648,7 @@ Nine, each a single `if`, each commented at the site:
 | `handlers/menu/edit-profile.ts` | the same, in the photo manager |
 | `services/venue-intent-v2.ts` | adds `demoMode: true` to the venue-intent state |
 | `services/match-engine.ts` | exempts the puppet from the single-live-match invariant (below) |
+| `public/routes/calendar.ts` | the Prime Time unlock settles free instead of minting a Stars invoice |
 
 **Why the last two exist — `PROFILE_MEDIA_VALIDATION_ENABLED=false` does not
 mean "nothing is checked".** It selects the *pre-rollout* validator instead of
@@ -744,6 +746,38 @@ modes, because the blur is what makes it safe to leave the platform.
 visitor is an active, verified Kyiv account, so the real engine would cheerfully
 pair two investors with each other. "The demo must never pair two visitors" is
 an invariant, not a setting.
+
+### The evening band is shown locked and opens for free
+
+The paid Prime Time band (PRIME_TIME_PRODUCT_SPEC §11) is a gate AND a paid
+step, so it owes this file an answer on both counts. It is **shown**: the last
+three times of every day carry their Premium plate and padlock, tapping one
+opens the real sheet with the real hero button, and only the settle is free —
+the same shape `changeIsFree` already gives the venue board, and for the same
+reason (Stars moves real money out of a visitor's real balance and has no mock
+rail the way the Date Ticket gate does).
+
+**So a demo shows the lock and never the Stars payment sheet.** Closing that gap
+means a mock rail for Stars, which is the same open decision the venue-change
+deviation below records.
+
+**The puppet obeys the lock rather than being exempted from it**, and that is
+not politeness: it counters through the production `processCalendarSlotsUpdate`,
+which REFUSES a locked slot, so a puppet reaching into the band would be turned
+down three times and give up (`failure-tracker.ts`). `pickCounterSlots` is
+handed the locked ISOs and skips them exactly as it skips a slot the visitor
+already took.
+
+Two consequences worth stating. The band survives for the visitor to walk into —
+if the puppet took 19:00 first there would be nothing locked left to demo. And
+the 2026-08-17 decision holds unchanged: the grid's last three slots are
+18:30/19:00/19:30, so 18:00 and 17:00 are still open and the puppet still
+counters in the evening rather than falling back to the 13:00 that decision
+exists to prevent.
+
+The driver asks production's own predicate (`primeTimeUnlockReason`) rather
+than keeping a demo copy of the question, so "the feature is off", "either side
+is premium" and "already paid" are all answered once, in one place.
 
 ### Known deviation: the venue-change price screen
 

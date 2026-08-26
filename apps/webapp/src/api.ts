@@ -140,7 +140,7 @@ export async function postCalendarPicks(
 export async function primeTimeStarsInvoice(
   initData: string,
   matchId: string,
-): Promise<{ link: string; stars: number }> {
+): Promise<{ link?: string; stars?: number; settled?: boolean }> {
   const res = await apiFetch(`${apiBase}/v1/calendar/prime-time/stars-invoice`, {
     method: "POST",
     headers: {
@@ -150,7 +150,9 @@ export async function primeTimeStarsInvoice(
     body: JSON.stringify({ matchId }),
   });
   if (!res.ok) throw await toError(res);
-  return (await res.json()) as { link: string; stars: number };
+  // `settled` is the demo's free unlock (DEMO_MODE.md): the band is already
+  // open by the time this resolves, so there is no invoice to show.
+  return (await res.json()) as { link?: string; stars?: number; settled?: boolean };
 }
 
 // ---------------------------------------------------------------------------

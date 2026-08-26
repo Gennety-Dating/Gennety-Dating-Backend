@@ -468,7 +468,13 @@ async function onPrimePay(): Promise<void> {
   if (primeBusy || !app) return;
   setPrimeBusy(true);
   try {
-    const { link } = await primeTimeStarsInvoice(app!.initData, matchId);
+    const { link, settled } = await primeTimeStarsInvoice(app!.initData, matchId);
+    // Demo mode settles for free and sends no link — the band is already open.
+    if (settled || !link) {
+      app?.HapticFeedback?.notificationOccurred?.("success");
+      void refreshAfterUnlock();
+      return;
+    }
     const open = app.openInvoice;
     if (!open) {
       // A client too old for openInvoice can still follow the link.

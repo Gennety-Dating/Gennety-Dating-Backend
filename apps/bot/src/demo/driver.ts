@@ -7,6 +7,7 @@ import { t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { MATCH_COOLDOWN_MS, createProposedMatch } from "../services/match-engine.js";
 import { ACTIVE_MATCH_STATUSES } from "../services/active-match-priority.js";
+import { lockedSlotsOf, primeTimeUnlockReason } from "../services/prime-time.js";
 import { dispatchMatches } from "../services/dispatch-queue.js";
 import { applyMatchDecision } from "../public/matches-service.js";
 import { processCalendarSlotsUpdate } from "../handlers/matching/scheduler.js";
@@ -382,6 +383,7 @@ async function loadDemoMatch(
       ticketPaidA: true,
       ticketPaidB: true,
       proposedTimes: true,
+      primeTimeUnlockedAt: true,
       availableTimesA: true,
       availableTimesB: true,
       agreedTime: true,
@@ -395,8 +397,24 @@ async function loadDemoMatch(
       venueChangeProposerId: true,
       venueLikesA: true,
       venueLikesB: true,
-      userA: { select: { id: true, telegramId: true, gender: true } },
-      userB: { select: { id: true, telegramId: true, gender: true } },
+      userA: {
+        select: {
+          id: true,
+          telegramId: true,
+          gender: true,
+          platform: true,
+          premiumUntil: true,
+        },
+      },
+      userB: {
+        select: {
+          id: true,
+          telegramId: true,
+          gender: true,
+          platform: true,
+          premiumUntil: true,
+        },
+      },
     },
   });
   if (!row) return NO_MATCH;
@@ -462,6 +480,11 @@ async function loadDemoMatch(
           userB: { id: row.userB.id, gender: row.userB.gender },
           venueChangeProposerId: row.venueChangeProposerId,
         }),
+      // Production's own predicate rather than a demo copy of it: it already
+      // answers "off", "premium on either side" and "already paid", and a second
+      // reading of the same question is a second thing to keep in step.
+      primeLockedSlots:
+        primeTimeUnlockReason(row) === null ? lockedSlotsOf(row.proposedTimes) : [],
     },
   };
 }

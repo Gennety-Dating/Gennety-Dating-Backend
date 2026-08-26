@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
 import { env } from "../../config.js";
+import { DEMO_MODE_ENABLED } from "../../demo/config.js";
 import { validateInitData } from "../init-data.js";
 import {
   processCalendarSlotsUpdate,
@@ -209,6 +210,26 @@ export function createCalendarRouter(api: Api<RawApi>): Router {
       })
       .catch(() => null);
     const lang = (user?.language ?? "en") as Language;
+
+    // Demo mode (DEMO_MODE.md): Stars moves real money out of a visitor's real
+    // balance and has no mock rail the way the Date Ticket gate does. So the
+    // demo keeps the whole mechanic on screen — the plated rows, the sheet, the
+    // hero button — and settles the tap for free, exactly as the venue-change
+    // board already does with `changeIsFree`. Documented consequence: a demo
+    // shows the lock and never the Stars payment sheet.
+    if (DEMO_MODE_ENABLED) {
+      const opened = await prisma.match.updateMany({
+        where: { id: matchId, status: "negotiating", primeTimeUnlockedAt: null },
+        data: { primeTimeUnlockedAt: new Date() },
+      });
+      recordMiniAppAction(
+        BigInt(validation.user.id),
+        "in the Calendar Mini App, opened the late evening times (demo — settled free)",
+        { surface: "calendar", matchId },
+      );
+      res.status(200).json({ ok: true, settled: true, claimed: opened.count > 0 });
+      return;
+    }
 
     try {
       const link = await createPrimeInvoiceLink(api, lang, matchId);

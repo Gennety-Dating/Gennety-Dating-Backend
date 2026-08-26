@@ -43,6 +43,7 @@ function match(overrides: Partial<DemoMatchSnapshot> = {}): DemoMatchSnapshot {
     ticketOpen: false,
     visitorTicketPaid: false,
     partnerTicketPaid: false,
+    primeLockedSlots: [],
     proposedTimes: [],
     visitorSlots: [],
     partnerSlots: [],
@@ -367,6 +368,25 @@ describe("pickCounterSlots — the counter lands in the evening", () => {
     expect(new Set(picked.map((slot) => slot.slice(0, 10))).size).toBe(picked.length);
     // Three evenings at the identical hour would read as a template, not a week.
     expect(new Set(picked.map(utcHour)).size).toBeGreaterThan(1);
+  });
+
+  it("never counters into a locked evening band — that write would be REFUSED", () => {
+    // The band is the last three slots of each day (18:30/19:00/19:30 Kyiv).
+    // A puppet proposing one is not merely impolite: `processCalendarSlotsUpdate`
+    // refuses it, the driver retries, and the demo gives up at three strikes.
+    const locked = grid.filter((slot) => utcHour(slot) >= 15.5);
+    const picked = pickCounterSlots(grid, day("2026-09-01"), locked);
+
+    expect(picked.length).toBe(3);
+    for (const slot of picked) expect(locked).not.toContain(slot);
+    // And still an evening: 18:00 Kyiv survives the band, so the 2026-08-17
+    // decision (never 13:00) holds rather than being traded away for this one.
+    for (const slot of picked) expect(utcHour(slot)).toBeGreaterThanOrEqual(eveningFromUtc);
+  });
+
+  it("counters into the band once it is open — an empty list locks nothing", () => {
+    const picked = pickCounterSlots(grid, day("2026-09-01"), []);
+    expect(picked).toEqual(pickCounterSlots(grid, day("2026-09-01")));
   });
 
   it("is deterministic — the same grid gives the same counter twice", () => {
