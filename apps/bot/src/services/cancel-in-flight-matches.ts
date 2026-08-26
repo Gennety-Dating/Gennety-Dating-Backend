@@ -3,6 +3,7 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { applyEmergencyCancellationPeerBoost } from "../utils/elo-calculator.js";
 import { sendPushToUser } from "./push.js";
+import { refundPrimeTimeForDeadMatch } from "./prime-time-purchase.js";
 import {
   applyTicketRefunds,
   planMatchTicketRefunds,
@@ -201,6 +202,13 @@ export async function deliverCancelledPartnerEffects(
       console.warn("[cancel-in-flight] ticket refund failed:", err);
       return [];
     });
+    // The pass follows the ticket (§9.1): the date did not happen, so the Stars
+    // spent on the evening band go back to whoever spent them. A band opened by
+    // a subscription has no purchase row and is therefore a no-op.
+    await refundPrimeTimeForDeadMatch(item.matchId).catch((err: unknown) => {
+      console.warn("[prime-time] dead-match refund failed:", err);
+    });
+
     const partnerRefund = refunds.find((r) => r.userId === item.partnerUserId);
     const partnerRefundKey = ticketRefundNoticeKey(partnerRefund?.refunded ?? 0);
     const partnerNotice = partnerRefundKey

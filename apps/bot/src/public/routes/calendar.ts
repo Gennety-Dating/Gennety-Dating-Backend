@@ -7,6 +7,10 @@ import {
   getCalendarState,
 } from "../../handlers/matching/scheduler.js";
 import { recordMiniAppAction } from "../../services/chat-events.js";
+import { prisma } from "@gennety/db";
+import type { Language } from "@gennety/shared";
+import { primeTimeFeatureLive } from "../../services/prime-time.js";
+import { createPrimeInvoiceLink } from "../../services/prime-time-purchase.js";
 
 /**
  * RFC 4122 UUID shape. We pre-validate `matchId` here because Prisma rejects a
@@ -148,6 +152,76 @@ export function createCalendarRouter(api: Api<RawApi>): Router {
       isFirstMover: result.isFirstMover,
       primeTime: result.primeTime,
     });
+  });
+
+  /**
+   * Mint the Prime Time pass invoice (PRIME_TIME_PRODUCT_SPEC.md §9).
+   *
+   * Telegram-only by construction — Stars is a Telegram rail, and this router
+   * is `initData`-authed. iOS gets its own path in M7; until then a native user
+   * in a mixed pair is opened by their partner, which is what makes §2's
+   * pair-scoped unlock more than a technicality.
+   */
+  router.post("/prime-time/stars-invoice", async (req: Request, res: Response): Promise<void> => {
+    const validation = authenticate(req);
+    if (!validation.ok) {
+      res.status(401).json(validation.body);
+      return;
+    }
+    // 404 rather than 403: with the feature off this endpoint does not exist,
+    // which is also what tells a cached older bundle to stop offering it.
+    if (!primeTimeFeatureLive()) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+
+    const body = req.body as { matchId?: unknown } | undefined;
+    const matchId = typeof body?.matchId === "string" ? body.matchId : null;
+    if (!matchId || !UUID_REGEX.test(matchId)) {
+      res.status(404).json({ error: "match-not-found" });
+      return;
+    }
+
+    // Re-derive from state rather than trusting the client: the band may have
+    // been opened by the partner's subscription or their payment since this
+    // screen was drawn, and charging for something already free is the one
+    // outcome this route must not produce.
+    const state = await getCalendarState(BigInt(validation.user.id), matchId);
+    if (!state.ok) {
+      const status =
+        state.reason === "match-not-found" || state.reason === "user-not-found"
+          ? 404
+          : state.reason === "not-participant"
+            ? 403
+            : 409;
+      res.status(status).json({ error: state.reason });
+      return;
+    }
+    if (!state.primeTime.locked) {
+      res.status(409).json({ error: "already-unlocked" });
+      return;
+    }
+
+    const user = await prisma.user
+      .findUnique({
+        where: { telegramId: BigInt(validation.user.id) },
+        select: { language: true },
+      })
+      .catch(() => null);
+    const lang = (user?.language ?? "en") as Language;
+
+    try {
+      const link = await createPrimeInvoiceLink(api, lang, matchId);
+      recordMiniAppAction(
+        BigInt(validation.user.id),
+        "in the Calendar Mini App, opened the Stars payment sheet for the late evening times (not paid yet)",
+        { surface: "calendar", matchId },
+      );
+      res.status(200).json({ ok: true, link, stars: env.PRIME_TIME_STARS });
+    } catch (err) {
+      console.error("[prime-time] createInvoiceLink failed:", err);
+      res.status(502).json({ error: "invoice-failed" });
+    }
   });
 
   return router;

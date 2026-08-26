@@ -831,6 +831,19 @@ const translations = {
     venueDeclinedKeepDm: "You're keeping {venue}, as originally planned.",
     venueChangeRefunded:
       "The venue change didn't go through, so your Stars are back. Your date is on as planned, at the original place.",
+    // Prime Time (PRIME_TIME_PRODUCT_SPEC.md). The invoice copy says what the
+    // Stars buy for the PAIR, not for the buyer — the band opens for both, and
+    // a description that said "for you" would misdescribe the purchase.
+    primeInvoiceTitle: "Late evening times",
+    primeInvoiceDesc:
+      "Opens 18:30, 19:00 and 19:30 on every day of your calendar — for both of you, for this date.",
+    primeInvoiceLabel: "Late evening times",
+    primeTimeOpenedDm:
+      "{name} opened the late evening times — 18:30 and later are now available in your calendar.",
+    primeTimeRefunded:
+      "The late evening times didn't open, so your Stars are back. The rest of the calendar is unchanged.",
+    primeTimeRefundedDateOff:
+      "The date is off, so the Stars you spent on the late evening times are back with you.",
     venuePayPromptDm: "You two picked a new place for your date.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 See it and decide",
     // Caption under the wish-card PNG, which already shows the venue name and
@@ -2089,6 +2102,16 @@ const translations = {
     venueDeclinedKeepDm: "Остаётесь в {venue}, как и планировали.",
     venueChangeRefunded:
       "Смена места не прошла, звёзды вернулись к тебе. Свидание в силе — в том месте, о котором договаривались изначально.",
+    primeInvoiceTitle: "Поздние вечерние времена",
+    primeInvoiceDesc:
+      "Откроет 18:30, 19:00 и 19:30 во все дни вашего календаря — для вас обоих, на это свидание.",
+    primeInvoiceLabel: "Поздние вечерние времена",
+    primeTimeOpenedDm:
+      "{name} открыл(а) поздние вечерние времена — 18:30 и позже теперь доступны в вашем календаре.",
+    primeTimeRefunded:
+      "Поздние вечерние времена не открылись, звёзды вернулись к тебе. Остальной календарь без изменений.",
+    primeTimeRefundedDateOff:
+      "Свидание не состоится, поэтому звёзды за поздние вечерние времена вернулись к тебе.",
     venuePayPromptDm: "Вы вместе выбрали новое место для свидания.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 Посмотреть и решить",
     venueWishText:
@@ -3281,6 +3304,16 @@ const translations = {
     venueDeclinedKeepDm: "Залишаєтесь у {venue}, як і планували.",
     venueChangeRefunded:
       "Зміна місця не пройшла, тож зірки повернулися до тебе. Побачення в силі — у тому місці, про яке домовлялися спочатку.",
+    primeInvoiceTitle: "Пізні вечірні часи",
+    primeInvoiceDesc:
+      "Відкриє 18:30, 19:00 і 19:30 в усі дні вашого календаря — для вас обох, на це побачення.",
+    primeInvoiceLabel: "Пізні вечірні часи",
+    primeTimeOpenedDm:
+      "{name} відкрив(ла) пізні вечірні часи — 18:30 і пізніше тепер доступні у вашому календарі.",
+    primeTimeRefunded:
+      "Пізні вечірні часи не відкрилися, тож зірки повернулися до тебе. Решта календаря без змін.",
+    primeTimeRefundedDateOff:
+      "Побачення не відбудеться, тож зірки за пізні вечірні часи повернулися до тебе.",
     venuePayPromptDm: "Ви разом обрали нове місце для побачення.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 Подивитися й вирішити",
     venueWishText:
@@ -4447,6 +4480,16 @@ const deTranslations: TranslationTable = {
   venueDeclinedKeepDm: "Ihr bleibt bei {venue}, wie geplant.",
   venueChangeRefunded:
     "Der Ortswechsel hat nicht geklappt, deine Sterne sind zurück. Das Date bleibt wie geplant — am bisherigen Ort.",
+  primeInvoiceTitle: "Späte Abendzeiten",
+  primeInvoiceDesc:
+    "Öffnet 18:30, 19:00 und 19:30 an allen Tagen eures Kalenders — für euch beide, für dieses Date.",
+  primeInvoiceLabel: "Späte Abendzeiten",
+  primeTimeOpenedDm:
+    "{name} hat die späten Abendzeiten geöffnet — 18:30 und später stehen jetzt in eurem Kalender.",
+  primeTimeRefunded:
+    "Die späten Abendzeiten wurden nicht geöffnet, deine Sterne sind zurück. Der restliche Kalender bleibt unverändert.",
+  primeTimeRefundedDateOff:
+    "Das Date findet nicht statt, deine Sterne für die späten Abendzeiten sind zurück.",
   venuePayPromptDm: "Ihr habt zusammen einen neuen Ort für euer Date gewählt.\n\n📍 {venue}",
   venuePayOpenBtn: "📍 Ansehen und entscheiden",
   venueWishText:
@@ -5609,6 +5652,16 @@ const plTranslations: TranslationTable = {
   venueDeclinedKeepDm: "Zostajecie w {venue}, zgodnie z planem.",
   venueChangeRefunded:
     "Zmiana miejsca nie doszła do skutku, gwiazdki wróciły do Ciebie. Randka jest aktualna — w dotychczasowym miejscu.",
+  primeInvoiceTitle: "Późne wieczorne godziny",
+  primeInvoiceDesc:
+    "Otworzy 18:30, 19:00 i 19:30 we wszystkie dni waszego kalendarza — dla was obojga, na tę randkę.",
+  primeInvoiceLabel: "Późne wieczorne godziny",
+  primeTimeOpenedDm:
+    "{name} otworzył(a) późne wieczorne godziny — 18:30 i później są już dostępne w waszym kalendarzu.",
+  primeTimeRefunded:
+    "Późne wieczorne godziny nie zostały otwarte, gwiazdki wróciły do Ciebie. Reszta kalendarza bez zmian.",
+  primeTimeRefundedDateOff:
+    "Randka się nie odbędzie, więc gwiazdki za późne wieczorne godziny wróciły do Ciebie.",
   venuePayPromptDm: "Razem wybraliście nowe miejsce na randkę.\n\n📍 {venue}",
   venuePayOpenBtn: "📍 Zobacz i zdecyduj",
   venueWishText:

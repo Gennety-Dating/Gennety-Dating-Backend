@@ -109,6 +109,9 @@ vi.mock("@gennety/db", () => ({
     venueChangePurchase: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    primeTimePurchase: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 

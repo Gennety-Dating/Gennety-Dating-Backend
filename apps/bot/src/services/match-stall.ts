@@ -6,6 +6,7 @@ import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { boostAcceptedSidePriority } from "./match-decision-shared.js";
 import { refundMatchTickets, ticketRefundNoticeKey } from "./ticket-refund.js";
 import { sendPushToUser } from "./push.js";
+import { refundPrimeTimeForDeadMatch } from "./prime-time-purchase.js";
 
 /**
  * Stall handling for the two open-ended planning phases (PRODUCT_SPEC §3.5c).
@@ -443,6 +444,13 @@ export async function cancelStalledMatch(
     console.warn(`[match-stall] ticket refund failed for ${matchId}:`, err);
     return [];
   });
+
+  // The pass follows the ticket (§9.1): the date did not happen, so the Stars
+  // spent on the evening band go back to whoever spent them. A band opened by a
+  // subscription has no purchase row and is therefore a no-op.
+  await refundPrimeTimeForDeadMatch(matchId).catch((err: unknown) => {
+    console.warn("[prime-time] dead-match refund failed:", err);
+  });
   const refundLineFor = (userId: string, lang: Language): string => {
     const key = ticketRefundNoticeKey(refunds.find((r) => r.userId === userId)?.refunded ?? 0);
     return key ? `\n\n${t(lang, key)}` : "";
@@ -544,6 +552,13 @@ export async function cancelPlanningByUser(
   const refunds = await refundMatchTickets(matchId).catch((err: unknown) => {
     console.warn(`[match-stall] ticket refund failed for ${matchId}:`, err);
     return [];
+  });
+
+  // The pass follows the ticket (§9.1): the date did not happen, so the Stars
+  // spent on the evening band go back to whoever spent them. A band opened by a
+  // subscription has no purchase row and is therefore a no-op.
+  await refundPrimeTimeForDeadMatch(matchId).catch((err: unknown) => {
+    console.warn("[prime-time] dead-match refund failed:", err);
   });
   const refundLineFor = (userId: string, lang: Language): string => {
     const key = ticketRefundNoticeKey(refunds.find((r) => r.userId === userId)?.refunded ?? 0);

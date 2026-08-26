@@ -35,7 +35,9 @@ export type PurchaseKind =
   /** §3.11 paid Rematch run. */
   | "rematch"
   /** §3.7b paid venue change. */
-  | "venue_change";
+  | "venue_change"
+  /** Prime Time — one-off pass opening the calendar's evening band for a pair. */
+  | "prime_time";
 
 /**
  * Where the row came from. Kept alongside `kind` because a reader chasing a
@@ -45,7 +47,8 @@ export type PurchaseSource =
   | "ticket_ledger"
   | "subscription_ledger"
   | "rematch_purchase"
-  | "venue_change_purchase";
+  | "venue_change_purchase"
+  | "prime_time_purchase";
 
 /**
  * Normalized lifecycle. Each source spells its own states differently
@@ -127,6 +130,8 @@ export function purchaseKindLabel(kind: PurchaseKind): string {
       return "Rematch";
     case "venue_change":
       return "Venue change";
+    case "prime_time":
+      return "Prime Time";
   }
 }
 
@@ -380,6 +385,37 @@ export function normalizeVenueChangeRow(row: RawVenueChangePurchaseRow): Purchas
   };
 }
 
+export interface RawPrimeTimePurchaseRow {
+  id: string;
+  userId: string;
+  matchId: string;
+  status: string;
+  amountStars: number;
+  externalPaymentId: string;
+  createdAt: Date;
+}
+
+export function normalizePrimeTimeRow(row: RawPrimeTimePurchaseRow): PurchaseRow {
+  return {
+    id: `prime_time_purchase:${row.id}`,
+    source: "prime_time_purchase",
+    kind: "prime_time",
+    userId: row.userId,
+    provider: "telegram_stars",
+    status: normalizePurchaseTableStatus(row.status),
+    rawStatus: row.status,
+    amountStars: row.amountStars,
+    amountCents: null,
+    currency: "XTR",
+    usdCents: starsToUsdCents(row.amountStars),
+    amountIsEstimate: true,
+    detail: "evening calendar band",
+    matchId: row.matchId,
+    externalPaymentId: row.externalPaymentId,
+    createdAt: row.createdAt,
+  };
+}
+
 /**
  * Totals over an already-normalized set. Refunded rows are counted separately
  * and excluded from the revenue figures — a refunded purchase is money the
@@ -482,8 +518,9 @@ async function loadPurchases(
   const wantsPremium = !filter.kind || filter.kind === "premium";
   const wantsRematch = !filter.kind || filter.kind === "rematch";
   const wantsVenue = !filter.kind || filter.kind === "venue_change";
+  const wantsPrime = !filter.kind || filter.kind === "prime_time";
 
-  const [ticketRows, subscriptionRows, rematchRows, venueRows] = await Promise.all([
+  const [ticketRows, subscriptionRows, rematchRows, venueRows, primeRows] = await Promise.all([
     wantsTickets
       ? prisma.ticketLedger.findMany({
           where: {
@@ -573,6 +610,25 @@ async function loadPurchases(
           },
         })
       : Promise.resolve([]),
+    wantsPrime
+      ? prisma.primeTimePurchase.findMany({
+          where: {
+            ...owner,
+            ...(createdAt ? { createdAt } : {}),
+          },
+          orderBy: { createdAt: "desc" },
+          take,
+          select: {
+            id: true,
+            userId: true,
+            matchId: true,
+            status: true,
+            amountStars: true,
+            externalPaymentId: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   // An App Store ticket credit that Apple later revoked is clawed back with a
@@ -595,10 +651,11 @@ async function loadPurchases(
     ...subscriptionRows.filter(isPaidSubscriptionRow).map((row) => normalizeSubscriptionRow(row)),
     ...rematchRows.map(normalizeRematchRow),
     ...venueRows.map(normalizeVenueChangeRow),
+    ...primeRows.map(normalizePrimeTimeRow),
   ];
 
   const filtered = filter.status ? rows.filter((row) => row.status === filter.status) : rows;
-  const truncated = [ticketRows, subscriptionRows, rematchRows, venueRows].some(
+  const truncated = [ticketRows, subscriptionRows, rematchRows, venueRows, primeRows].some(
     (source) => source.length >= take,
   );
   return { rows: sortPurchases(filtered), truncated };
@@ -741,6 +798,7 @@ export const PURCHASE_KINDS: readonly PurchaseKind[] = [
   "premium",
   "rematch",
   "venue_change",
+  "prime_time",
 ];
 
 function emptyKindBreakdown(): PayerKindBreakdown {

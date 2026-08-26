@@ -50,6 +50,8 @@ import { syntheticPartnerTick } from "./workers/synthetic-partner.js";
 import { campusDropTick } from "./workers/campus-drop.js";
 import { sweepRematchRefunds } from "./services/rematch-refund.js";
 import { sweepVenueChangeRefunds } from "./services/venue-change-refund.js";
+import { sweepPrimeTimeRefunds } from "./services/prime-time-purchase.js";
+import { primeTimeFeatureLive } from "./services/prime-time.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { retentionTick } from "./workers/retention.js";
 import { venueConcentrationAlertTick } from "./workers/venue-concentration-alert.js";
@@ -290,6 +292,15 @@ const REMATCH_REFUND_CRON_SCHEDULE =
  */
 const VENUE_CHANGE_REFUND_CRON_SCHEDULE =
   process.env.VENUE_CHANGE_REFUND_CRON_SCHEDULE ?? "0 * * * *";
+
+/**
+ * Prime Time refund retry (PRIME_TIME_PRODUCT_SPEC.md §9). Hourly, same shape
+ * as the two sweeps above. Registered only when the feature is live — which
+ * means the flag AND `PREMIUM_FEATURE_ENABLED`, since a band nobody can be
+ * charged for has no refunds to retry.
+ */
+const PRIME_TIME_REFUND_CRON_SCHEDULE =
+  process.env.PRIME_TIME_REFUND_CRON_SCHEDULE ?? "0 * * * *";
 
 /**
  * Profiler scheduler (Phase 1b). Every 15 min: lazy-seed never-armed users and
@@ -684,6 +695,22 @@ bot.start({
       );
       console.log(
         `[cron] Venue-change refund retry scheduled: "${VENUE_CHANGE_REFUND_CRON_SCHEDULE}"`,
+      );
+    }
+
+    // Prime Time refunds: retry failed refunds + reverse passes abandoned
+    // mid-settle. Registered through `primeTimeFeatureLive()` rather than the
+    // raw flag so the two conditions that make the feature real stay in one
+    // place — a cron whose purchases cannot exist is a scheduled no-op.
+    if (primeTimeFeatureLive()) {
+      cron.schedule(
+        PRIME_TIME_REFUND_CRON_SCHEDULE,
+        guardedTick("prime-time-refund", () =>
+          sweepPrimeTimeRefunds(bot.api).then(() => undefined),
+        ),
+      );
+      console.log(
+        `[cron] Prime Time refund retry scheduled: "${PRIME_TIME_REFUND_CRON_SCHEDULE}"`,
       );
     }
 

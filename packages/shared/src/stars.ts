@@ -111,6 +111,37 @@ export function parseVenueInvoicePayload(
 }
 
 /**
+ * Prime Time (PRIME_TIME_PRODUCT_SPEC.md) Star payment payload.
+ *
+ * One product, one match: the pass opens the calendar's evening band for the
+ * PAIR, so the payload needs nothing but the match id. Format:
+ * `prime:<matchId>`.
+ *
+ * There is deliberately no scope segment the way the date gate has one. The
+ * band cannot be bought "for me only" — a slot locks when both sides' sets
+ * intersect, so a one-sided unlock would buy nothing.
+ */
+export const PRIME_INVOICE_PREFIX = "prime:";
+
+export function buildPrimeInvoicePayload(matchId: string): string {
+  return `${PRIME_INVOICE_PREFIX}${matchId}`;
+}
+
+/**
+ * Parse a Prime Time payload back into the match id. Null for anything foreign,
+ * malformed, or carrying a non-UUID — participant checks stay the trust
+ * boundary in the settle handler, exactly as they do for the venue rail.
+ */
+export function parsePrimeInvoicePayload(
+  payload: string | null | undefined,
+): { matchId: string } | null {
+  if (!payload || !payload.startsWith(PRIME_INVOICE_PREFIX)) return null;
+  const matchId = payload.slice(PRIME_INVOICE_PREFIX.length);
+  if (!GATE_PAYLOAD_UUID.test(matchId)) return null;
+  return { matchId };
+}
+
+/**
  * Gennety Premium (§3.8) Star payment payload.
  *
  * One entitlement, three products, distinguished ONLY by this payload:

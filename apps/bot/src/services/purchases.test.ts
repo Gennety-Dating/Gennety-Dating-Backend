@@ -10,6 +10,7 @@ const findMany = vi.hoisted(() => ({
   subscriptionLedger: vi.fn().mockResolvedValue([]),
   rematchPurchase: vi.fn().mockResolvedValue([]),
   venueChangePurchase: vi.fn().mockResolvedValue([]),
+  primeTimePurchase: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@gennety/db", () => ({
@@ -18,6 +19,7 @@ vi.mock("@gennety/db", () => ({
     subscriptionLedger: { findMany: findMany.subscriptionLedger },
     rematchPurchase: { findMany: findMany.rematchPurchase },
     venueChangePurchase: { findMany: findMany.venueChangePurchase },
+    primeTimePurchase: { findMany: findMany.primeTimePurchase },
   },
 }));
 
@@ -380,6 +382,27 @@ describe("loadPayerIndex", () => {
     // Rows arrive newest-first, so first/last must not be read off in order.
     expect(entry.firstPaidAt).toEqual(new Date("2026-08-01T10:00:00.000Z"));
     expect(entry.lastPaidAt).toEqual(new Date("2026-08-05T10:00:00.000Z"));
+  });
+
+  it("counts a Prime Time pass — a fifth source that is easy to forget to read", async () => {
+    findMany.primeTimePurchase.mockResolvedValue([
+      {
+        id: "pt1",
+        userId: "u1",
+        status: "settled",
+        amountStars: 50,
+        externalPaymentId: "charge_pt",
+        resolvedAt: AT,
+        createdAt: AT,
+        matchId: "m1",
+      },
+    ]);
+
+    const { byUser } = await loadPayerIndex();
+    const entry = byUser.get("u1")!;
+
+    expect(entry.purchases).toBe(1);
+    expect(entry.byKind.prime_time).toEqual({ purchases: 1, stars: 50, usdCents: 100 });
   });
 
   it("does not count free grants as purchases", async () => {

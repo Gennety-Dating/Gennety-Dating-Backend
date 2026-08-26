@@ -117,6 +117,7 @@ vi.mock("@gennety/db", () => ({
     subscriptionLedger: { findMany: vi.fn().mockResolvedValue([]) },
     rematchPurchase: { findMany: vi.fn().mockResolvedValue([]) },
     venueChangePurchase: { findMany: vi.fn().mockResolvedValue([]) },
+    primeTimePurchase: { findMany: vi.fn().mockResolvedValue([]) },
     profilerAnswer: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));

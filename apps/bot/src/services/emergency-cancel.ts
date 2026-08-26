@@ -4,6 +4,7 @@ import { applyEmergencyCancellationPeerBoost } from "../utils/elo-calculator.js"
 import { sendPushToUser } from "./push.js";
 import { refundMatchTickets, type TicketRefundOutcome } from "./ticket-refund.js";
 import { getMainBotApi } from "./main-bot-api.js";
+import { refundPrimeTimeForDeadMatch } from "./prime-time-purchase.js";
 import { refreshStatusBanners } from "./status-banner-refresh.js";
 
 /**
@@ -92,6 +93,14 @@ export async function cancelScheduledDate(input: {
   const refunds = await refundMatchTickets(match.id).catch((err: unknown) => {
     console.warn("[emergency] ticket refund failed:", err instanceof Error ? err.message : err);
     return [] as TicketRefundOutcome[];
+  });
+
+
+  // The pass follows the ticket (§9.1): the date did not happen, so the Stars
+  // spent on the evening band go back to whoever spent them. A band opened by a
+  // subscription has no purchase row and is therefore a no-op.
+  await refundPrimeTimeForDeadMatch(match.id).catch((err: unknown) => {
+    console.warn("[prime-time] dead-match refund failed:", err);
   });
 
   await notifyPeerByPush(peerUserId, match.id);

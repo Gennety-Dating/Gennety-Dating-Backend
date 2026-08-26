@@ -6,6 +6,8 @@ import {
   buildGateInvoicePayload,
   parseGateInvoicePayload,
   buildVenueInvoicePayload,
+  buildPrimeInvoicePayload,
+  parsePrimeInvoicePayload,
   parseVenueInvoicePayload,
   SUB_INVOICE_PREFIX,
   buildSubInvoicePayload,
@@ -171,5 +173,38 @@ describe("rematch invoice payload", () => {
     expect(parseGateInvoicePayload(buildRematchInvoicePayload())).toBeNull();
     expect(parseRematchInvoicePayload(buildStoreInvoicePayload(3))).toBeNull();
     expect(parseRematchInvoicePayload(buildSubInvoicePayload())).toBeNull();
+  });
+});
+
+describe("prime time invoice payload", () => {
+  const MATCH = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+
+  it("round-trips a match id", () => {
+    expect(parsePrimeInvoicePayload(buildPrimeInvoicePayload(MATCH))).toEqual({
+      matchId: MATCH,
+    });
+  });
+
+  it("refuses a foreign, malformed or non-UUID payload", () => {
+    // A tampered payload must never open a band: the settle handler's
+    // participant check is the trust boundary, but this is the first gate.
+    for (const bad of [
+      null,
+      undefined,
+      "",
+      "venue:" + MATCH,
+      "gate:" + MATCH + ":self",
+      "prime:",
+      "prime:not-a-uuid",
+      "prime:" + MATCH + ":extra",
+    ]) {
+      expect(parsePrimeInvoicePayload(bad as string | null)).toBeNull();
+    }
+  });
+
+  it("carries no scope — the band cannot be bought for one side", () => {
+    // Documented in the module: a one-sided unlock would buy nothing, because a
+    // date only locks when both sides' sets intersect.
+    expect(buildPrimeInvoicePayload(MATCH)).toBe(`prime:${MATCH}`);
   });
 });

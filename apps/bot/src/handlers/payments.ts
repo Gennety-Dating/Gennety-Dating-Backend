@@ -8,6 +8,7 @@ import {
   parseVenueInvoicePayload,
   parseSubInvoicePayload,
   parseRematchInvoicePayload,
+  parsePrimeInvoicePayload,
   ticketBundleFor,
   premiumPlanById,
   premiumPlanStars,
@@ -24,6 +25,10 @@ import {
   formatPremiumUntil,
 } from "../services/premium.js";
 import { notifyFounderPurchase } from "../services/founder-notify.js";
+import {
+  primeTimeFeatureLive,
+  primeTimeUnlockReason,
+} from "../services/prime-time.js";
 import { runStatusSequence, NEVER_CUT_SHORT } from "../services/ai-stream.js";
 import { rematchSearchSteps } from "../services/analysis-status.js";
 
@@ -63,6 +68,10 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
   const rematch =
     count == null && venue == null && sub == null
       ? parseRematchInvoicePayload(query.invoice_payload)
+      : null;
+  const prime =
+    count == null && venue == null && sub == null && rematch == null
+      ? parsePrimeInvoicePayload(query.invoice_payload)
       : null;
   if (rematch != null) {
     // Rematch — payload `rematch:v1`. Like the venue branch, invoice links are
@@ -111,6 +120,34 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
       plan != null &&
       query.currency === "XTR" &&
       query.total_amount === premiumPlanStars(plan, env.PREMIUM_STARS);
+  } else if (prime != null) {
+    // Prime Time — payload `prime:<matchId>`. Invoice links are reusable, so
+    // beyond the amount we confirm the band is still LOCKED: a stale link (the
+    // partner subscribed, the other side already paid, the match moved past
+    // scheduling) is declined here, before any Stars move. Without it the
+    // settle CAS claims nothing and the money round-trips through a refund the
+    // user never needed to see.
+    if (
+      primeTimeFeatureLive() &&
+      query.currency === "XTR" &&
+      query.total_amount === env.PRIME_TIME_STARS
+    ) {
+      const match = await prisma.match
+        .findUnique({
+          where: { id: prime.matchId },
+          select: {
+            status: true,
+            primeTimeUnlockedAt: true,
+            availableTimesA: true,
+            availableTimesB: true,
+            userA: { select: { telegramId: true, platform: true, premiumUntil: true } },
+            userB: { select: { telegramId: true, platform: true, premiumUntil: true } },
+          },
+        })
+        .catch(() => null);
+      ok =
+        match?.status === "negotiating" && primeTimeUnlockReason(match) === null;
+    }
   } else if (venue != null) {
     // Venue change — payload `venue:<matchId>:<mode>`. Invoice links are
     // reusable, so beyond the amount we also confirm the swap is still
@@ -223,6 +260,11 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
     const rematch = parseRematchInvoicePayload(payment.invoice_payload);
     if (rematch != null) {
       await handleRematchSuccessfulPayment(ctx, payment);
+      return;
+    }
+    const prime = parsePrimeInvoicePayload(payment.invoice_payload);
+    if (prime != null) {
+      await handlePrimeTimeSuccessfulPayment(ctx, prime.matchId, payment);
       return;
     }
     await handleGateSuccessfulPayment(ctx, payment);
@@ -447,6 +489,42 @@ async function handleVenueSuccessfulPayment(
   if (!result.ok) {
     console.error(
       `[stars] venue-change settle failed user=${telegramId} match=${matchId} ` +
+        `reason=${result.reason}`,
+    );
+  }
+}
+
+/**
+ * Prime Time Star payment (payload `prime:<matchId>`).
+ *
+ * Telegram has confirmed the Stars moved, so from here exactly one of two
+ * things must become true and stay true: the pair's evening band opens, or the
+ * Stars come back. `settlePrimeTimePayment` owns that ordering (durable row →
+ * CAS → outcome); this is only the transport.
+ */
+async function handlePrimeTimeSuccessfulPayment(
+  ctx: BotContext,
+  matchId: string,
+  payment: { total_amount: number; telegram_payment_charge_id: string },
+): Promise<void> {
+  const telegramId = BigInt(ctx.from!.id);
+  console.info(
+    `[stars] prime-time payment user=${telegramId} match=${matchId} ` +
+      `stars=${payment.total_amount} charge=${payment.telegram_payment_charge_id}`,
+  );
+
+  // Dynamic import keeps the calendar's module graph out of this handler's
+  // static graph (mirrors the venue + gate branches).
+  const { settlePrimeTimePayment } = await import("../services/prime-time-purchase.js");
+  const result = await settlePrimeTimePayment(
+    ctx.api,
+    telegramId,
+    matchId,
+    payment.telegram_payment_charge_id,
+  );
+  if (!result.ok) {
+    console.error(
+      `[stars] prime-time settle failed user=${telegramId} match=${matchId} ` +
         `reason=${result.reason}`,
     );
   }
