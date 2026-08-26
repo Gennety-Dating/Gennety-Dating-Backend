@@ -20,7 +20,7 @@ import {
   MIN_HEIGHT_CM,
   MIN_PHOTOS,
   RELATIONSHIP_INTENTS,
-  isRelationshipIntent,
+  normalizeIntents,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
@@ -937,9 +937,17 @@ export function validateFactValue(
       }
       return { value };
     }
-    case "relationship_intent":
-      if (!isRelationshipIntent(raw)) return { reason: "invalid_relationship_intent" };
-      return { value: raw };
+    case "relationship_intent": {
+      // Multi-select: the Mini App posts an array, while the chat and the
+      // native client each answer with exactly ONE option — a set of size one
+      // is a valid answer, which is why neither needs a control of its own.
+      // `normalizeIntents` accepts both shapes, drops anything off the axis and
+      // canonicalises the order, so the stored value never depends on how the
+      // answer arrived or on which option was tapped first.
+      const value = normalizeIntents(raw);
+      if (value.length === 0) return { reason: "invalid_relationship_intent" };
+      return { value };
+    }
     case "hobbies": {
       if (!Array.isArray(raw)) return { reason: "invalid_type" };
       const value = raw
@@ -1037,8 +1045,8 @@ function updatesForCandidates(
         profileUpdate.height = candidate.value as number;
         break;
       case "relationship_intent":
-        profileCreate.relationshipIntent = candidate.value as string;
-        profileUpdate.relationshipIntent = candidate.value as string;
+        profileCreate.relationshipIntents = candidate.value as string[];
+        profileUpdate.relationshipIntents = candidate.value as string[];
         break;
       case "hobbies":
         profileCreate.hobbies = candidate.value as string[];

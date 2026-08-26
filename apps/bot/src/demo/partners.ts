@@ -118,7 +118,7 @@ export interface DemoPartnerPersona {
    * multiplier is exactly 1.0 whenever either side has none, which would make
    * every demo run silently exercise the absent-value branch instead.
    */
-  relationshipIntent: RelationshipIntent;
+  relationshipIntents: RelationshipIntent[];
 }
 
 export interface DemoPartnerDefinition extends DemoPartnerPersona {
@@ -161,7 +161,7 @@ export const DEMO_PARTNER_PERSONAS: readonly DemoPartnerPersona[] = [
     orientationAxis: 0.55,
     anchorTags: ["архитектура", "кулинария", "музыка", "город"],
     eloScore: 520,
-    relationshipIntent: "open",
+    relationshipIntents: ["open", "falling"],
   },
   {
     age: 25,
@@ -189,7 +189,7 @@ export const DEMO_PARTNER_PERSONAS: readonly DemoPartnerPersona[] = [
     orientationAxis: 0.7,
     anchorTags: ["искусство", "керамика", "кино", "медленный отдых"],
     eloScore: 520,
-    relationshipIntent: "falling",
+    relationshipIntents: ["falling", "longterm"],
   },
 ];
 
@@ -300,7 +300,7 @@ async function upsertDemoPartner(partner: DemoPartnerDefinition): Promise<void> 
     orientationAxis: partner.orientationAxis,
     anchorTags: partner.anchorTags,
     vibeExtractedAt: now,
-    relationshipIntent: partner.relationshipIntent,
+    relationshipIntents: partner.relationshipIntents,
     eloScore: partner.eloScore,
     eloSeededAt: now,
     homeCity: market.city,

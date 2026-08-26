@@ -585,15 +585,67 @@ out of Telegram-only workers.
   three or six: at three the middle swallows everyone who is unsure, and past
   four people stop distinguishing neighbours, so the answer becomes noise.
 
-  **Four rows in ONE tone, and `spark` leads.** Everywhere else in this set a
+  **SEVERAL may be picked (founder decision 2026-08-26), and that is a better
+  question rather than a looser one.** Plenty of people want a bright story AND
+  would go somewhere serious if it turned out that way; forcing one point makes
+  them guess which half to declare. The scoring survives it because the answer
+  becomes a SET and the distance between two people is the **smallest** gap
+  between their sets, so the factor fires only where both sides are specific
+  and opposed — exactly where it should. Three consequences follow, and the
+  second is the reason no cap was needed:
+
+  - A broad answer scores 1.0 against nearly everyone, i.e. it reads as *do not
+    filter me on this*, which is what someone unsure is actually saying.
+  - Selecting all four is arithmetically identical to not answering, so
+    "everything" costs the user nothing and buys them nothing; a limit would
+    only stop people from saying something true.
+  - The cost is stated rather than discovered later: if most people pick three
+    or four the axis goes quiet. That makes **how many** were picked as worth
+    watching as which ones, and it is the trigger for revisiting the floor.
+
+  **Four options in ONE tone, and `spark` leads.** Everywhere else in this set a
   colour separates options that genuinely differ; here it would rank them, and
   the axis only measures anything while no answer looks like the respectable
   one. The wording is a product invariant rather than styling: the moment
   `spark` reads as "I'm not serious", social desirability drags the population
   rightward and the axis stops measuring. That is also why the product's own
-  philosophy is the first row rather than a footnote after the respectable
+  philosophy is the first tile rather than a footnote after the respectable
   answers — the positioning is never argued on this screen, it is simply made
   an equal answer.
+
+  **A 2×2 grid of photographs, not four rows of text (2026-08-26).** This is the
+  one question in the set that is about a FUTURE rather than a fact, and four
+  words cannot show one — so each option carries a photograph of what it looks
+  like. The grid is forced rather than chosen: the frames are 9:16, and a
+  full-width row is roughly 2.7:1 at 390px, which leaves a horizontal ribbon
+  with the heads cropped off. A 3:4 tile loses WIDTH instead, which these
+  photographs have to spare. The label sits on its own scrim at the foot of the
+  tile, because on an unselected tile the ground is a photograph rather than a
+  colour.
+
+  **Tapping washes the tile white FROM the point the finger landed** (founder
+  request). Three radial blobs at slightly different offsets and speeds spread
+  out of that point, so the leading edge stays uneven the whole way and reads as
+  water rather than as a circle. Four properties are load-bearing:
+
+  - **The wash is the union of the three blobs, never a flat fill laid over
+    them.** A fill has to be painted at some moment, and painting it when the
+    tile becomes selected covers the tile before the first blob has moved — the
+    spread was invisible for two builds because of exactly that.
+  - **The class that runs it is React state, never `classList.add`.** The same
+    tap re-renders the component, and React's own `className` overwrites
+    anything written by hand, so an imperative class is wiped in the tick it is
+    added. Only the anchor point stays imperative, because nothing passes a
+    `style` prop and that write survives.
+  - **The label flips to ink only once the wash is under it.** Burgundy on a
+    photograph is the one state this label may never be in, which is what an
+    undelayed flip shows for most of a second.
+  - **Deselecting fades rather than draining back into the finger** — an undo of
+    an animation makes a mis-tap feel expensive.
+
+  Under `prefers-reduced-motion` the tile simply arrives white: there is no
+  reduced variant of a spreading animation, only its absence — the same rule the
+  tap burst follows. Telegram-only; the native client owns its own controls.
 
   **A footnote under the options says nobody else sees it** (founder decision):
   the answer is never shown to the partner anywhere, and the screen has to say
@@ -606,9 +658,11 @@ out of Telegram-only workers.
   Written through the same `applyOnboardingFacts` path as the other five, so the
   canonical column, `onboarding_progress.currentQuestion` and the funnel rows
   are identical to a chat answer, and `/complete` does not require it — whatever
-  the Mini App did not deliver, the chat asks for. Both surfaces: iOS renders it
-  from the existing `ui_hint` contract (`choice_chips`), so `/v1/*` is
-  unchanged.
+  the Mini App did not deliver, the chat asks for. The chat and the native rail
+  answer with exactly one value and are unchanged by the move to a set: the
+  collector accepts a bare string and canonicalises it into a one-member list,
+  so `/v1/*` needs no change either. iOS renders it from the existing `ui_hint`
+  contract (`choice_chips`).
 - **The phone gate is also the LOGIN (2026-07-25).** A trusted `message.contact`
   is Telegram vouching that the number belongs to the current Telegram account,
   and Telegram allows one active account per number — so a `User.phone` unique
@@ -3108,18 +3162,28 @@ MatchScore = ((w₁·V_explicit) + (w₂·V_research)) · V_league · V_agePref 
   `1.0` to disable.
 - `V_intent` — **relationship-intent agreement**, the weakest multiplier in the
   formula and deliberately so (`intentMultiplier`, `packages/shared/src/relationship-intent.ts`).
-  Both sides pick one point on a single ordered axis at the end of onboarding —
-  `spark` → `open` → `falling` → `longterm`, i.e. how far ahead they are looking
-  (§1.3) — and the factor scores their agreement:
+  Both sides pick one or more points on a single ordered axis at the end of
+  onboarding — `spark` → `open` → `falling` → `longterm`, i.e. how far ahead
+  they are looking (§1.3) — and the factor scores their agreement:
   `1 − distance/3`, blended against `INTENT_FLOOR`. At the launch floor of 0.85
   that is a **×1.18 range** (identical 1.0, one step 0.95, two 0.90, opposite
   0.85), against `V_type`'s ×1.43 and `V_league`'s ×20. It reorders neighbours
   inside a league; it cannot outrank a real difference in league or psychology,
   and that ceiling is the whole design rather than a tuning accident.
+  - **The distance between two SETS is the SMALLEST gap between them**, so any
+    overlap scores 1.0. That is what makes multi-select safe (§1.3): the factor
+    damps only where both sides are specific AND opposed, and a broad answer
+    means "do not filter me on this" rather than "I am far from everyone".
+    A user who picks all four is arithmetically indistinguishable from one who
+    never answered — which is why the screen needs no cap, and also why **how
+    many** options people pick is worth watching: a population that mostly picks
+    three or four silences the axis without anything looking wrong.
   - **Exactly 1.0 whenever EITHER side has no intent on file** — legacy rows,
     the iOS rail before it ships the screen, anyone who registered earlier.
     Damping an absent answer would penalise users for our own rollout.
-  - **Symmetric by construction** (it reads a distance), which matters because
+  - **Symmetric by construction** (it reads the minimum distance between two
+    sets, which does not depend on which side is read first), which matters
+    because
     `scorePair` averages the two one-directional multipliers: an asymmetric
     version would have half its effect averaged away. A directional penalty —
     the person looking long-term arguably loses more from the mismatch — was

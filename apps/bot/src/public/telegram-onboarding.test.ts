@@ -732,30 +732,44 @@ describe("Telegram onboarding profile screens", () => {
     expect(res.body.user.profileBasics.height).toBeNull();
   });
 
-  it("passes the relationship intent through to the collector", async () => {
+  it("passes the relationship intents through to the collector", async () => {
     userFindUnique.mockResolvedValue(profileReadyUser());
     userFindUniqueOrThrow.mockResolvedValue(profileReadyUser());
 
     const res = await request(buildApp())
       .post("/v1/telegram-onboarding/profile")
       .set("Authorization", `tma ${signInitData()}`)
-      .send({ relationshipIntent: "spark" });
+      .send({ relationshipIntents: ["spark", "falling"] });
 
     expect(res.status).toBe(200);
-    // Whitelisted downstream by `validateFactValue`, not here — the route only
-    // shape-checks, so one list of legal ids governs every write path.
+    // Whitelisted and canonicalised downstream by `validateFactValue`, not here
+    // — the route only shape-checks, so one list of legal ids and one ordering
+    // govern every write path.
     expect(applyOnboardingFacts).toHaveBeenCalledWith(BigInt(TELEGRAM_ID), {
-      relationship_intent: "spark",
+      relationship_intent: ["spark", "falling"],
     });
   });
 
-  it("shape-checks a non-string intent before the collector sees it", async () => {
+  it("shape-checks a non-array intent before the collector sees it", async () => {
     userFindUnique.mockResolvedValue(profileReadyUser());
 
     const res = await request(buildApp())
       .post("/v1/telegram-onboarding/profile")
       .set("Authorization", `tma ${signInitData()}`)
-      .send({ relationshipIntent: 3 });
+      .send({ relationshipIntents: "spark" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid-relationship-intent");
+    expect(applyOnboardingFacts).not.toHaveBeenCalled();
+  });
+
+  it("shape-checks a non-string member before the collector sees it", async () => {
+    userFindUnique.mockResolvedValue(profileReadyUser());
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/profile")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ relationshipIntents: ["spark", 3] });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid-relationship-intent");

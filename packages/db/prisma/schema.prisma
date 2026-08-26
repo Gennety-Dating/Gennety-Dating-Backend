@@ -1027,6 +1027,13 @@ model Profile {
   /// app code, NOT a Prisma enum — mirrors `socialRole` / `CuratedVenue.category`,
   /// so a fifth point on the axis costs no migration.
   ///
+  /// A SET rather than a point (founder decision 2026-08-26): people hold more
+  /// than one of these at once, and the distance between two users is the
+  /// smallest gap between their sets. Always written through
+  /// `normalizeIntents`, so the array is deduplicated and sorted BY AXIS
+  /// POSITION — two people who tapped the same options in a different order
+  /// hold byte-identical rows.
+  ///
   /// Read by the soft `V_intent` match multiplier and by nothing else. Two
   /// rules ride on that:
   ///   - it deliberately does NOT feed the embedding. Folded into
@@ -1036,9 +1043,11 @@ model Profile {
   ///   - it is never shown to the partner. The owner sees it in My Profile with
   ///     a "only you can see this" line; the pitch never carries it, so nobody
   ///     decides on a label before reading the person (founder decision).
-  /// Null on every legacy row and on the iOS rail until it ships the screen —
-  /// `intentMultiplier` returns exactly 1.0 for an absent value.
-  relationshipIntent        String?                      @map("relationship_intent")
+  /// Empty on every legacy row and on the iOS rail until it ships the screen —
+  /// `intentMultiplier` returns exactly 1.0 for an empty set on either side.
+  /// A full set (all four) is identical to an empty one for scoring, which is
+  /// what makes the answer self-neutralising and needs no cap.
+  relationshipIntents       String[]                     @default([]) @map("relationship_intents")
   /// Structured appearance tags for THIS user as a candidate (hairColor, build,
   /// beard, tattoos, …), scored against a partner's `typePrefTags` by `V_type`.
   /// Piggybacks the Elo cold-start vision pass (no extra OpenAI call). Null until

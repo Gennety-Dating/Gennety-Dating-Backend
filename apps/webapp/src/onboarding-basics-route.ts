@@ -46,7 +46,7 @@ export function nextBasicsStep(
   if (!basics.gender) return "gender";
   if (!basics.preference) return "preference";
   if (basics.height === null || basics.height === undefined) return "height";
-  if (!basics.relationshipIntent) return "intent";
+  if (basics.relationshipIntents.length === 0) return "intent";
   return null;
 }
 

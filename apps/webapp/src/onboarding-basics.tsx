@@ -12,6 +12,8 @@ import { burstFromEvent } from "./onboarding-burst.js";
 import type { BurstTone } from "./onboarding-burst.js";
 import { errorCopy } from "./onboarding-errors.js";
 import { GENDER_AVATARS } from "./gender-avatars.js";
+import { INTENT_PHOTOS } from "./intent-photos.js";
+import { tileClass } from "./intent-wash.js";
 import { GENDER_ADVANCE_HOLD_MS } from "./onboarding-timing.js";
 import type { OnboardingStrings } from "./onboarding-i18n.js";
 import { placeScatter } from "./preference-layout.js";
@@ -164,9 +166,9 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
           strings={strings}
           busy={busy}
           error={errorNode}
-          selected={basics.relationshipIntent}
-          onPick={(intent) =>
-            void save({ relationshipIntent: intent as RelationshipIntent })
+          selected={basics.relationshipIntents}
+          onSubmit={(intents) =>
+            void save({ relationshipIntents: intents as RelationshipIntent[] })
           }
         />
       );
@@ -177,10 +179,24 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
  * "What are you looking for?" — the one question in the set about the FUTURE
  * (PRODUCT_SPEC §1.3), and the last screen before the chat takes over.
  *
- * Four rows in one tone, deliberately. Everywhere else in this set a colour
+ * Four tiles in ONE tone, deliberately. Everywhere else in this set a colour
  * distinguishes options that genuinely differ (male/female); here it would rank
  * them, and the entire axis depends on no answer looking like the respectable
- * one — `spark` leads and is styled exactly like `longterm`.
+ * one — `spark` leads and is weighted exactly like `longterm`. That rule is why
+ * the four photographs have to be one set: same treatment, same class of
+ * beauty. A prettier frame on one option IS a ranking.
+ *
+ * Multi-select, unlike the two tap-to-answer screens before it (founder
+ * decision 2026-08-26): people hold several of these at once, and the scorer
+ * reads the nearest of a person's answers rather than an average, so breadth
+ * costs nothing and honesty costs nothing. That is also what turns this into a
+ * pick-then-Continue screen — a tap no longer commits, so it needs the pill the
+ * name and height screens already use.
+ *
+ * A 2x2 grid rather than four rows, and the reason is the source material: the
+ * photographs are 9:16, so a full-width row (roughly 2.7:1) would leave a
+ * horizontal ribbon with the heads cropped off. A 3:4 tile loses width instead,
+ * which these frames have to spare.
  *
  * The footnote is the whole reason the honest answer is safe to give: the pitch
  * never carries this, so the screen says so where the choice is made rather
@@ -188,46 +204,100 @@ export function BasicsGate(props: BasicsGateProps): ReactElement {
  */
 function IntentScreen(props: {
   strings: OnboardingStrings;
-  selected: string | null;
+  selected: readonly string[];
   busy: boolean;
   error: ReactNode;
-  onPick: (value: string) => void;
+  onSubmit: (values: string[]) => void;
 }): ReactElement {
   const { strings } = props;
-  const { firing, fire } = useChoiceTap(props.onPick, strings.basicsIntentTitle);
+  const [picked, setPicked] = useState<string[]>(() => [...props.selected]);
+  /* Which tiles are mid-wash, and in which direction.
+     It has to be React state rather than a class added in the click handler:
+     the tap also calls setPicked, React re-renders, and its own `className`
+     overwrites anything written imperatively — so the spread class was being
+     wiped in the same tick it was added, and only the settled fill ever
+     showed. The anchor point survives that (nothing passes a `style` prop), so
+     that half stays imperative. */
+  const [wave, setWave] = useState<Record<string, "on" | "off">>({});
 
-  const options: Array<{ value: RelationshipIntent; label: string }> = [
-    { value: "spark", label: strings.basicsIntentSpark },
-    { value: "open", label: strings.basicsIntentOpen },
-    { value: "falling", label: strings.basicsIntentFalling },
-    { value: "longterm", label: strings.basicsIntentLongterm },
+  const options: Array<{ value: RelationshipIntent; label: string; photo: string }> = [
+    { value: "spark", label: strings.basicsIntentSpark, photo: INTENT_PHOTOS.spark },
+    { value: "open", label: strings.basicsIntentOpen, photo: INTENT_PHOTOS.open },
+    { value: "falling", label: strings.basicsIntentFalling, photo: INTENT_PHOTOS.falling },
+    { value: "longterm", label: strings.basicsIntentLongterm, photo: INTENT_PHOTOS.longterm },
   ];
+
+  const toggle = (event: MouseEvent, value: string): void => {
+    const isOn = picked.includes(value);
+    // The wash spreads from the point the finger landed, so the origin has to
+    // come off this event — there is no other moment that knows it.
+    anchorWash(event);
+    app?.HapticFeedback?.selectionChanged();
+    setWave((current) => ({ ...current, [value]: isOn ? "off" : "on" }));
+    setPicked((current) =>
+      isOn ? current.filter((item) => item !== value) : [...current, value],
+    );
+  };
 
   return (
     <BasicsShell
       title={strings.basicsIntentTitle}
       error={props.error}
-      modifier="ob-basics--choice ob-basics--intent"
+      modifier="ob-basics--intent"
+      action={
+        <ContinuePill
+          label={props.busy ? strings.saving : strings.continue}
+          disabled={props.busy || picked.length === 0}
+          onClick={() => props.onSubmit(picked)}
+        />
+      }
     >
-      <div className="ob-choice-stack ob-choice-stack--intent">
+      <div className="ob-intent-grid">
         {options.map((option) => (
           <button
             key={option.value}
             type="button"
-            className={`ob-choice ob-intent ${
-              props.selected === option.value ? "is-selected" : ""
-            } ${firing === option.value ? "is-firing" : ""}`}
+            className={tileClass(picked.includes(option.value), wave[option.value])}
             disabled={props.busy}
-            aria-pressed={props.selected === option.value}
-            onClick={(event) => fire(event, option.value, "neutral")}
+            aria-pressed={picked.includes(option.value)}
+            onClick={(event) => toggle(event, option.value)}
           >
-            {option.label}
+            <img className="ob-intent-photo" src={option.photo} alt="" aria-hidden="true" />
+            {/* The wash layer. Empty in the markup: every blob is a pseudo-element,
+                so a tile costs one extra node rather than four. */}
+            <span className="ob-intent-wash" aria-hidden="true" />
+            <span className="ob-intent-label">{option.label}</span>
           </button>
         ))}
       </div>
       <p className="ob-basics-note">{strings.basicsIntentPrivate}</p>
     </BasicsShell>
   );
+}
+
+/**
+ * Anchor the selection wash at the point the finger landed.
+ *
+ * Two CSS custom properties and nothing else: the blobs are pseudo-elements
+ * that scale on the compositor, so nothing here touches layout or paint per
+ * frame. Deliberately imperative — React owns `className` but not inline style
+ * here, since no `style` prop is passed, so this write survives the re-render
+ * the same tap triggers. The class that runs the animation cannot be written
+ * this way and lives in state.
+ */
+function anchorWash(event: MouseEvent): void {
+  const tile = event.currentTarget as HTMLElement | null;
+  if (!tile) return;
+  const box = tile.getBoundingClientRect();
+  if (box.width === 0 || box.height === 0) return;
+
+  // A keyboard-driven click reports the element's centre as (0, 0)-ish rather
+  // than a real point; fall back to the middle so the wash still plays.
+  const hasPoint = event.clientX !== 0 || event.clientY !== 0;
+  const x = hasPoint ? event.clientX - box.left : box.width / 2;
+  const y = hasPoint ? event.clientY - box.top : box.height / 2;
+  tile.style.setProperty("--sx", `${(x / box.width) * 100}%`);
+  tile.style.setProperty("--sy", `${(y / box.height) * 100}%`);
 }
 
 /** The shared frame: question up top, control in the middle, pill at the foot. */

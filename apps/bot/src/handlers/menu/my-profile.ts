@@ -92,7 +92,7 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
   // block and outside it: the body above is "how your match sees you", and this
   // is the one profile fact a match never sees, so it stands apart and says so
   // on its own line rather than being mistaken for part of the card.
-  body += `\n\n${escapeMd(intentProfileLine(lang, user.profile?.relationshipIntent))}`;
+  body += `\n\n${escapeMd(intentProfileLine(lang, user.profile?.relationshipIntents))}`;
 
   // Outcome-named edit actions live right on the profile (view + edit merged).
   body += `\n\n${t(lang, "myProfileEditLabel")}`;

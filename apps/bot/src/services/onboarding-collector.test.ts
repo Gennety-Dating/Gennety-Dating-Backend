@@ -725,12 +725,16 @@ describe("applyOnboardingFacts", () => {
 
     const snapshot = await applyOnboardingFacts(TELEGRAM_ID, {
       height: 170,
-      relationship_intent: "spark",
+      relationship_intent: ["longterm", "spark"],
     });
 
+    // Stored as a canonical SET: deduplicated and sorted by axis position, so
+    // the row never depends on which option was tapped first.
     expect(db.profile.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: expect.objectContaining({ relationshipIntent: "spark" }),
+        update: expect.objectContaining({
+          relationshipIntents: ["spark", "longterm"],
+        }),
       }),
     );
     // The intent is the LAST Mini App screen, so answering it hands the chat

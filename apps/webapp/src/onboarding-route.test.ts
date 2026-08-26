@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { TelegramOnboardingState } from "./api.js";
+import type {
+  TelegramProfileBasics, TelegramOnboardingState } from "./api.js";
 import {
   bootPhaseFromRemote,
   DATEFLOW_LAST_INDEX,
@@ -71,7 +72,7 @@ function user(
       gender: "female",
       preference: "men",
       height: 170,
-      relationshipIntent: "open",
+      relationshipIntents: ["open"],
     },
     profileLimits: { minAge: 18, maxAge: 55, minHeightCm: 140, maxHeightCm: 220 },
     homeLocation: null,
@@ -80,14 +81,14 @@ function user(
   };
 }
 
-const NO_BASICS = {
+const NO_BASICS: TelegramProfileBasics = {
   firstName: null,
   age: null,
   gender: null,
   preference: null,
   height: null,
-  relationshipIntent: null,
-} as const;
+  relationshipIntents: [],
+};
 
 describe("Telegram onboarding route restoration", () => {
   it("shows language before consent for a new user", () => {
@@ -450,7 +451,7 @@ describe("Telegram onboarding profile screens", () => {
             gender: "female",
             preference: "men",
             height: null,
-            relationshipIntent: null,
+            relationshipIntents: [],
           },
         }),
       ),

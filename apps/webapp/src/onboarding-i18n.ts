@@ -273,7 +273,8 @@ const en: OnboardingStrings = {
   basicsIntentOpen: "See where it goes",
   basicsIntentFalling: "Fall for someone",
   basicsIntentLongterm: "Something long-term",
-  basicsIntentPrivate: "Only you can see this — it helps me match you better.",
+  basicsIntentPrivate:
+    "Pick as many as fit. Only you can see this — it helps me match you better.",
   handoffMissingSession: "The Mini App session is not synchronized. Open it from the chat again.",
   handoffFailed: "The bot couldn't continue yet. Try again.",
   handoffReadyTitle: "The bot is waiting for you",
@@ -451,7 +452,8 @@ const ru: OnboardingStrings = {
   basicsIntentOpen: "Посмотрим, куда приведёт",
   basicsIntentFalling: "Влюбиться",
   basicsIntentLongterm: "Всерьёз и надолго",
-  basicsIntentPrivate: "Это видно только тебе — нужно, чтобы точнее подбирать пару.",
+  basicsIntentPrivate:
+    "Отметь всё, что подходит. Это видно только тебе — нужно, чтобы точнее подбирать пару.",
   handoffMissingSession: "Сессия Mini App не синхронизирована. Открой вход из чата ещё раз.",
   handoffFailed: "Бот пока не смог продолжить. Попробуй ещё раз.",
   handoffReadyTitle: "Бот уже ждёт тебя",
@@ -629,7 +631,8 @@ const uk: OnboardingStrings = {
   basicsIntentOpen: "Подивимось, куди приведе",
   basicsIntentFalling: "Закохатися",
   basicsIntentLongterm: "Всерйоз і надовго",
-  basicsIntentPrivate: "Це бачиш тільки ти — потрібно, щоб точніше добирати пару.",
+  basicsIntentPrivate:
+    "Познач усе, що підходить. Це бачиш тільки ти — потрібно, щоб точніше добирати пару.",
   handoffMissingSession: "Сесію Mini App не синхронізовано. Відкрий вхід із чату ще раз.",
   handoffFailed: "Бот поки не зміг продовжити. Спробуй ще раз.",
   handoffReadyTitle: "Бот уже чекає на тебе",
@@ -808,7 +811,8 @@ const de: OnboardingStrings = {
   basicsIntentOpen: "Mal sehen, wohin es führt",
   basicsIntentFalling: "Mich verlieben",
   basicsIntentLongterm: "Etwas Langfristiges",
-  basicsIntentPrivate: "Das siehst nur du — es hilft mir, besser zu matchen.",
+  basicsIntentPrivate:
+    "Wähl alles, was passt. Das siehst nur du — es hilft mir, besser zu matchen.",
   handoffMissingSession: "Die Mini-App-Sitzung ist nicht synchronisiert. Öffne sie erneut aus dem Chat.",
   handoffFailed: "Der Bot konnte noch nicht fortfahren. Versuch es erneut.",
   handoffReadyTitle: "Der Bot wartet auf dich",
@@ -987,7 +991,8 @@ const pl: OnboardingStrings = {
   basicsIntentOpen: "Zobaczymy, dokąd to zaprowadzi",
   basicsIntentFalling: "Zakochać się",
   basicsIntentLongterm: "Coś na dłużej",
-  basicsIntentPrivate: "Widzisz to tylko ty — pomaga mi lepiej dobierać parę.",
+  basicsIntentPrivate:
+    "Zaznacz wszystko, co pasuje. Widzisz to tylko ty — pomaga mi lepiej dobierać parę.",
   handoffMissingSession: "Sesja Mini App nie jest zsynchronizowana. Otwórz ją ponownie z czatu.",
   handoffFailed: "Bot nie mógł jeszcze kontynuować. Spróbuj ponownie.",
   handoffReadyTitle: "Bot już na Ciebie czeka",

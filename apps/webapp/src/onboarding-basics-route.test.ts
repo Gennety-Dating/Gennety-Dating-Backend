@@ -13,7 +13,7 @@ function basics(overrides: Partial<TelegramProfileBasics> = {}): TelegramProfile
     gender: null,
     preference: null,
     height: null,
-    relationshipIntent: null,
+    relationshipIntents: [],
     ...overrides,
   };
 }
@@ -53,7 +53,7 @@ describe("nextBasicsStep", () => {
           gender: "female",
           preference: "men",
           height: 170,
-          relationshipIntent: "spark",
+          relationshipIntents: ["spark"],
         }),
       ),
     ).toBeNull();
@@ -82,7 +82,7 @@ describe("nextBasicsStep", () => {
           gender: "male",
           preference: "both",
           height: 140,
-          relationshipIntent: "longterm",
+          relationshipIntents: ["longterm"],
         }),
       ),
     ).toBeNull();

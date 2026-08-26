@@ -187,7 +187,7 @@ const EMPTY_BASICS: TelegramProfileBasics = {
   gender: null,
   preference: null,
   height: null,
-  relationshipIntent: null,
+  relationshipIntents: [],
 };
 const FALLBACK_LIMITS: TelegramProfileLimits = {
   minAge: 18,
@@ -270,6 +270,15 @@ function App(): ReactElement {
 
   useEffect(() => {
     configureTelegramChrome();
+    // Every preview EXCEPT the mascot's own has to take the mascot down.
+    // It is the loading overlay for the first `/state` call, and a preview
+    // never makes that call — so with motion allowed it shuffles its cards
+    // forever on top of the screen the reviewer opened the preview to see.
+    // (Invisible until now only because headless Chrome and a Mac with Reduce
+    // Motion both report `reduce`, which never mounts it at all.)
+    if (!PREVIEW_WELCOME && (PREVIEW_REFERRAL_GIFT || PREVIEW_BASICS || PREVIEW_INTRO)) {
+      setWelcome("off");
+    }
     // Standalone visual preview — no Telegram, no remote state (see the flag's doc).
     if (PREVIEW_REFERRAL_GIFT) {
       setRemoteUser({ referrerFirstName: "Anna", referralGiftMonths: 1 } as unknown as RemoteUser);

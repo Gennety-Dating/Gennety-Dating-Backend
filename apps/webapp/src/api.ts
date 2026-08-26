@@ -369,7 +369,7 @@ export interface TelegramProfileBasics {
   gender: "male" | "female" | null;
   preference: "men" | "women" | "both" | null;
   height: number | null;
-  relationshipIntent: RelationshipIntent | null;
+  relationshipIntents: RelationshipIntent[];
 }
 
 /**
@@ -396,7 +396,7 @@ export type TelegramProfilePatch = Partial<{
   gender: "male" | "female";
   preference: "men" | "women" | "both";
   height: number;
-  relationshipIntent: RelationshipIntent;
+  relationshipIntents: RelationshipIntent[];
 }>;
 
 export type RegistrationTrack = "student" | "general";

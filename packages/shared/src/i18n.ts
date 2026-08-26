@@ -337,8 +337,8 @@ const translations = {
     myProfileIntentUnset: "🎯 Looking for: not set · {privateNote}",
     editIntentBtn: "🎯 What I'm looking for",
     editIntentPrompt:
-      "What are you looking for right now?\n\nOnly you ever see this — I use it to match you better.",
-    editIntentSaved: "✓ Saved: {intent}",
+      "What are you looking for right now? Pick as many as fit — most people hold more than one.\n\nOnly you ever see this — I use it to match you better.",
+    editIntentCleared: "Nothing selected",
 
     // --- Edit Profile ---
     editProfileBody:
@@ -1646,8 +1646,8 @@ const translations = {
     myProfileIntentUnset: "🎯 Ты ищешь: не выбрано · {privateNote}",
     editIntentBtn: "🎯 Что я ищу",
     editIntentPrompt:
-      "Что ты сейчас ищешь?\n\nЭто видишь только ты — нужно, чтобы точнее подбирать пару.",
-    editIntentSaved: "✓ Сохранил: {intent}",
+      "Что ты сейчас ищешь? Отметь всё, что подходит — обычно это не одно.\n\nЭто видишь только ты — нужно, чтобы точнее подбирать пару.",
+    editIntentCleared: "Ничего не выбрано",
 
     // --- Edit Profile ---
     editProfileBody:
@@ -2850,8 +2850,8 @@ const translations = {
     myProfileIntentUnset: "🎯 Ти шукаєш: не обрано · {privateNote}",
     editIntentBtn: "🎯 Що я шукаю",
     editIntentPrompt:
-      "Що ти зараз шукаєш?\n\nЦе бачиш тільки ти — потрібно, щоб точніше добирати пару.",
-    editIntentSaved: "✓ Зберіг: {intent}",
+      "Що ти зараз шукаєш? Познач усе, що підходить — зазвичай це не одне.\n\nЦе бачиш тільки ти — потрібно, щоб точніше добирати пару.",
+    editIntentCleared: "Нічого не обрано",
 
     // --- Edit Profile ---
     editProfileBody:
@@ -4048,8 +4048,8 @@ const deTranslations: TranslationTable = {
   myProfileIntentUnset: "🎯 Du suchst: nicht gewählt · {privateNote}",
   editIntentBtn: "🎯 Was ich suche",
   editIntentPrompt:
-    "Wonach suchst du gerade?\n\nDas siehst nur du — ich nutze es, um besser zu matchen.",
-  editIntentSaved: "✓ Gespeichert: {intent}",
+    "Wonach suchst du gerade? Wähl alles, was passt — meistens ist es nicht nur eins.\n\nDas siehst nur du — ich nutze es, um besser zu matchen.",
+  editIntentCleared: "Nichts gewählt",
   editProfileBody:
     "Das ist fest gespeichert:\n\n" +
     "• *Name:* {firstName} {surname}\n" +
@@ -5218,8 +5218,8 @@ const plTranslations: TranslationTable = {
   myProfileIntentUnset: "🎯 Szukasz: nie wybrano · {privateNote}",
   editIntentBtn: "🎯 Czego szukam",
   editIntentPrompt:
-    "Czego teraz szukasz?\n\nWidzisz to tylko ty — pomaga mi lepiej dobierać parę.",
-  editIntentSaved: "✓ Zapisane: {intent}",
+    "Czego teraz szukasz? Zaznacz wszystko, co pasuje — zwykle to nie jedno.\n\nWidzisz to tylko ty — pomaga mi lepiej dobierać parę.",
+  editIntentCleared: "Nic nie wybrano",
   editProfileBody:
     "Te dane są zablokowane:\n\n" +
     "• *Imię i nazwisko:* {firstName} {surname}\n" +

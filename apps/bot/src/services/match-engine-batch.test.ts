@@ -44,7 +44,7 @@ function makeBatchUser(overrides: Partial<BatchUser> & { id: string }): BatchUse
     ageRangeMax: null,
     typePrefTags: null,
     appearanceTags: null,
-    relationshipIntent: null,
+    relationshipIntents: [],
     ...overrides,
   };
 }
@@ -686,7 +686,7 @@ describe("scoreCandidate — V_intent multiplier", () => {
     eloScore: 500,
     ageRangeMin: null,
     ageRangeMax: null,
-    relationshipIntent: "spark",
+    relationshipIntents: ["spark"],
   };
   const candidate: RichCandidateRow = {
     userId: "c",
@@ -707,13 +707,13 @@ describe("scoreCandidate — V_intent multiplier", () => {
 
   /** `scoreCandidate(seeker, candidate, weights?, typeFloor?, intentFloor?)`. */
   const score = (
-    seekerIntent: string | null,
-    candidateIntent: string | null,
+    seekerIntent: string[] | null,
+    candidateIntent: string[] | null,
     intentFloor: number,
   ) =>
     scoreCandidate(
-      { ...seeker, relationshipIntent: seekerIntent },
-      { ...candidate, relationshipIntent: candidateIntent },
+      { ...seeker, relationshipIntents: seekerIntent },
+      { ...candidate, relationshipIntents: candidateIntent },
       undefined,
       1,
       intentFloor,
@@ -721,34 +721,64 @@ describe("scoreCandidate — V_intent multiplier", () => {
 
   it("is inert at the shadow floor of 1, whatever the pair", () => {
     // How it ships: the screen collects answers while ranking is untouched.
-    const opposite = score("spark", "longterm", 1);
-    const same = score("spark", "spark", 1);
+    const opposite = score(["spark"], ["longterm"], 1);
+    const same = score(["spark"], ["spark"], 1);
     expect(opposite.breakdown.intent).toBe(1);
     expect(same.breakdown.intent).toBe(1);
     expect(opposite.score).toBeCloseTo(same.score, 12);
   });
 
   it("damps an opposite pair down to the floor once it is live", () => {
-    expect(score("spark", "longterm", 0.85).breakdown.intent).toBeCloseTo(0.85, 10);
-    expect(score("spark", "falling", 0.85).breakdown.intent).toBeCloseTo(0.9, 10);
-    expect(score("spark", "open", 0.85).breakdown.intent).toBeCloseTo(0.95, 10);
-    expect(score("spark", "spark", 0.85).breakdown.intent).toBeCloseTo(1, 10);
+    expect(score(["spark"], ["longterm"], 0.85).breakdown.intent).toBeCloseTo(0.85, 10);
+    expect(score(["spark"], ["falling"], 0.85).breakdown.intent).toBeCloseTo(0.9, 10);
+    expect(score(["spark"], ["open"], 0.85).breakdown.intent).toBeCloseTo(0.95, 10);
+    expect(score(["spark"], ["spark"], 0.85).breakdown.intent).toBeCloseTo(1, 10);
   });
 
   it("stays neutral when EITHER side has no intent on file", () => {
     // Legacy rows and the iOS rail before it ships the screen must not be
     // damped for an answer nobody asked them for.
-    expect(score(null, "longterm", 0.85).breakdown.intent).toBe(1);
-    expect(score("spark", null, 0.85).breakdown.intent).toBe(1);
+    expect(score(null, ["longterm"], 0.85).breakdown.intent).toBe(1);
+    expect(score(["spark"], null, 0.85).breakdown.intent).toBe(1);
+    expect(score([], ["longterm"], 0.85).breakdown.intent).toBe(1);
     expect(score(null, null, 0.85).breakdown.intent).toBe(1);
+  });
+
+  it("reads the SMALLEST gap between two multi-select answers", () => {
+    // The whole point of multi-select: someone open to a bright story, to
+    // seeing where it goes, and to something lasting is one honest person —
+    // scored on whichever of their answers is NEAREST the other side, not on
+    // the average of the three, which would punish breadth.
+    expect(score(["spark", "open", "longterm"], ["falling"], 0.85).breakdown.intent)
+      .toBeCloseTo(0.95, 10); // `open` and `longterm` are both one step away
+    expect(score(["spark", "open"], ["open", "falling"], 0.85).breakdown.intent)
+      .toBeCloseTo(1, 10); // they overlap on `open`
+    // A broad answer therefore lands within one step of neutral for ANY
+    // partner, while the full damping survives where both sides are specific.
+    for (const other of ["spark", "open", "falling", "longterm"]) {
+      expect(
+        score(["spark", "open", "falling"], [other], 0.85).breakdown.intent,
+      ).toBeGreaterThanOrEqual(0.95 - 1e-10);
+    }
+    expect(score(["spark"], ["longterm"], 0.85).breakdown.intent).toBeCloseTo(0.85, 10);
+  });
+
+  it("makes the widest answer identical to no answer at all", () => {
+    // Self-neutralising, which is why the screen needs no "choose at most N".
+    const all = ["spark", "open", "falling", "longterm"];
+    for (const other of all) {
+      expect(score(all, [other], 0.85).breakdown.intent).toBe(
+        score(null, [other], 0.85).breakdown.intent,
+      );
+    }
   });
 
   it("multiplies the positive bracket rather than being subtracted", () => {
     // The whole claim about strength: at the launch floor the worst intent
     // mismatch costs 15% of the positive bracket, so it reorders neighbours
     // and cannot outrank a real league or psychology difference.
-    const same = score("spark", "spark", 0.85);
-    const opposite = score("spark", "longterm", 0.85);
+    const same = score(["spark"], ["spark"], 0.85);
+    const opposite = score(["spark"], ["longterm"], 0.85);
     expect(opposite.score / same.score).toBeCloseTo(0.85, 6);
   });
 
@@ -756,15 +786,15 @@ describe("scoreCandidate — V_intent multiplier", () => {
     // A candidate two leagues away with a perfect intent match must still lose
     // to a same-league candidate at the opposite end of the intent axis.
     const sameLeagueWrongIntent = scoreCandidate(
-      { ...seeker, relationshipIntent: "spark" },
-      { ...candidate, relationshipIntent: "longterm", eloScore: 500 },
+      { ...seeker, relationshipIntents: ["spark"] },
+      { ...candidate, relationshipIntents: ["longterm"], eloScore: 500 },
       undefined,
       1,
       0.85,
     );
     const farLeagueRightIntent = scoreCandidate(
-      { ...seeker, relationshipIntent: "spark" },
-      { ...candidate, relationshipIntent: "spark", eloScore: 260 },
+      { ...seeker, relationshipIntents: ["spark"] },
+      { ...candidate, relationshipIntents: ["spark"], eloScore: 260 },
       undefined,
       1,
       0.85,
@@ -801,7 +831,7 @@ describe("composeScore", () => {
       eloScore: 500,
       ageRangeMin: null,
       ageRangeMax: null,
-      relationshipIntent: "spark",
+      relationshipIntents: ["spark"],
     };
     const candidate: RichCandidateRow = {
       userId: "c",
@@ -818,7 +848,7 @@ describe("composeScore", () => {
       orientationAxis: null,
       eloScore: 500,
       homeCityKey: "ua:kyiv",
-      relationshipIntent: "longterm",
+      relationshipIntents: ["longterm"],
     };
     const scored = scoreCandidate(seeker, candidate, undefined, 1, 0.85);
     expect(composeScore(scored.breakdown)).toBeCloseTo(scored.score, 12);

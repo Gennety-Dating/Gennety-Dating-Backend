@@ -1,4 +1,4 @@
-import { RELATIONSHIP_INTENTS, isRelationshipIntent, t } from "@gennety/shared";
+import { RELATIONSHIP_INTENTS, normalizeIntents, t } from "@gennety/shared";
 import type { Language, RelationshipIntent } from "@gennety/shared";
 
 /**
@@ -28,6 +28,16 @@ export function intentOptions(
 }
 
 /**
+ * The picked options as one human line, in axis order — "Яркая история,
+ * Влюбиться". Empty for an unanswered profile.
+ */
+export function intentSummary(lang: Language, stored: unknown): string {
+  return normalizeIntents(stored)
+    .map((intent) => intentLabel(lang, intent))
+    .join(", ");
+}
+
+/**
  * The My Profile line. It ALWAYS carries "only you can see this", set or unset:
  * the screen it sits on is framed as "this is how your match sees you", so a
  * line the match will never see has to say so where it is read, not once in a
@@ -35,11 +45,9 @@ export function intentOptions(
  */
 export function intentProfileLine(lang: Language, stored: unknown): string {
   const privateNote = t(lang, "intentPrivateNote");
-  if (!isRelationshipIntent(stored)) {
+  const summary = intentSummary(lang, stored);
+  if (!summary) {
     return t(lang, "myProfileIntentUnset", { privateNote });
   }
-  return t(lang, "myProfileIntentLine", {
-    intent: intentLabel(lang, stored),
-    privateNote,
-  });
+  return t(lang, "myProfileIntentLine", { intent: summary, privateNote });
 }

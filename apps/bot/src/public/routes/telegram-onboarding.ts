@@ -90,7 +90,7 @@ type MiniUser = {
   messageHistory: unknown[];
   profile: {
     height: number | null;
-    relationshipIntent: string | null;
+    relationshipIntents: string[];
     homeCity: string | null;
     homeCountryCode: string | null;
     homeCityKey: string | null;
@@ -793,7 +793,7 @@ const miniUserSelect = {
   profile: {
     select: {
       height: true,
-      relationshipIntent: true,
+      relationshipIntents: true,
       homeCity: true,
       homeCountryCode: true,
       homeCityKey: true,
@@ -939,7 +939,7 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
         gender: user.gender,
         preference: user.preference,
         height: user.profile?.height ?? null,
-        relationshipIntent: user.profile?.relationshipIntent ?? null,
+        relationshipIntents: user.profile?.relationshipIntents ?? [],
       },
       // Served rather than inlined in the bundle: `apps/webapp` deliberately
       // does not depend on `@gennety/shared`, and a bound that lives in two
@@ -1018,7 +1018,7 @@ interface TelegramOnboardingStateDto {
       preference: GenderPreference | null;
       height: number | null;
       /** `spark` | `open` | `falling` | `longterm`; see `@gennety/shared`. */
-      relationshipIntent: string | null;
+      relationshipIntents: string[];
     };
     /** Server-owned bounds for the age slider and the height drum. */
     profileLimits: {
@@ -1131,13 +1131,18 @@ function parseProfileBasicsPatch(
     }
     facts.height = body.height;
   }
-  // Whitelisted downstream by `validateFactValue`, so an unknown id is rejected
-  // with `invalid_relationship_intent` rather than written through.
-  if (body.relationshipIntent !== undefined) {
-    if (typeof body.relationshipIntent !== "string") {
+  // Multi-select, so the Mini App posts an ARRAY. Whitelisted downstream by
+  // `validateFactValue`, which normalises it and rejects an empty result with
+  // `invalid_relationship_intent` rather than writing an unanswered set
+  // through — a screen that saves nothing must not read as answered.
+  if (body.relationshipIntents !== undefined) {
+    if (
+      !Array.isArray(body.relationshipIntents) ||
+      body.relationshipIntents.some((item) => typeof item !== "string")
+    ) {
       return { error: "invalid-relationship-intent" };
     }
-    facts.relationship_intent = body.relationshipIntent;
+    facts.relationship_intent = body.relationshipIntents;
   }
 
   return { facts };

@@ -33,6 +33,7 @@ export {
   INTENT_MAX_DISTANCE,
   isRelationshipIntent,
   intentPosition,
+  normalizeIntents,
   intentCompatibilityScore,
   intentMultiplier,
 } from "./relationship-intent.js";

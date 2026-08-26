@@ -418,10 +418,10 @@ export interface RichCandidateRow extends CandidateRow {
    *  scored against the seeker's `typePrefTags` by `V_type`. Null when the Elo
    *  vision pass hasn't tagged them / legacy rows → `V_type` stays neutral. */
   appearanceTags?: PhotoAttrs | null;
-  /** This candidate's relationship intent (`Profile.relationshipIntent`).
-   *  Null on legacy rows and any client without the screen → `V_intent` stays
-   *  neutral for the pair. */
-  relationshipIntent?: string | null;
+  /** This candidate's relationship intents (`Profile.relationshipIntents`) —
+   *  a SET, since the answer is multi-select. Empty on legacy rows and any
+   *  client without the screen → `V_intent` stays neutral for the pair. */
+  relationshipIntents?: string[] | null;
 }
 
 /** Seeker profile data needed for scoring. */
@@ -442,9 +442,9 @@ export interface SeekerProfile {
    *  null when the user hasn't done the radar → `V_type` stays neutral. Scoring
    *  picks the sub-vector matching the candidate's gender. */
   typePrefTags?: TypePrefTags | null;
-  /** This seeker's own relationship intent. Scored as agreement against the
+  /** This seeker's own relationship intents. Scored as agreement against the
    *  candidate's, so the same column serves both directions. */
-  relationshipIntent?: string | null;
+  relationshipIntents?: string[] | null;
 }
 
 /**
@@ -527,7 +527,7 @@ export function buildCandidateSql(): string {
       p.elo_score             AS "eloScore",
       p.home_city_key         AS "homeCityKey",
       p.appearance_tags       AS "appearanceTags",
-      p.relationship_intent   AS "relationshipIntent",
+      p.relationship_intents  AS "relationshipIntents",
       (p.embedding <=> $2::vector) AS distance
     FROM users u
     JOIN profiles p ON p.user_id = u.id
@@ -1011,8 +1011,8 @@ export function scoreCandidate(
   // league and can never outrank league or psychology. Exactly 1.0 unless BOTH
   // sides have an intent on file and the floor is below 1.
   const vIntent = intentMultiplier(
-    seeker.relationshipIntent,
-    candidate.relationshipIntent,
+    seeker.relationshipIntents,
+    candidate.relationshipIntents,
     intentFloor,
   );
 
@@ -1432,10 +1432,10 @@ export interface BatchUser {
    *  directions; null when absent → neutral. */
   typePrefTags: TypePrefTags | null;
   appearanceTags: PhotoAttrs | null;
-  /** Relationship intent (`Profile.relationshipIntent`) — one column read in
+  /** Relationship intents (`Profile.relationshipIntents`) — one column read in
    *  both scoring directions, since the factor scores agreement rather than a
-   *  preference over the other person. Null → `V_intent` neutral. */
-  relationshipIntent: string | null;
+   *  preference over the other person. Empty → `V_intent` neutral. */
+  relationshipIntents: string[];
   /** Immutable snapshot of every eligibility and scoring input used by the
    * batch. Allocation compares it under row locks before writing a match. */
   allocationFingerprint?: string;
@@ -1528,7 +1528,7 @@ export function scorePair(
     ageRangeMin: a.ageRangeMin,
     ageRangeMax: a.ageRangeMax,
     typePrefTags: a.typePrefTags ?? null,
-    relationshipIntent: a.relationshipIntent ?? null,
+    relationshipIntents: a.relationshipIntents ?? [],
   };
 
   const candidateB: RichCandidateRow = {
@@ -1547,7 +1547,7 @@ export function scorePair(
     eloScore: b.eloScore,
     homeCityKey: b.homeCityKey,
     appearanceTags: b.appearanceTags ?? null,
-    relationshipIntent: b.relationshipIntent ?? null,
+    relationshipIntents: b.relationshipIntents ?? [],
   };
 
   const scored = scoreCandidate(seekerA, candidateB);
@@ -1565,7 +1565,7 @@ export function scorePair(
     ageRangeMin: b.ageRangeMin,
     ageRangeMax: b.ageRangeMax,
     typePrefTags: b.typePrefTags ?? null,
-    relationshipIntent: b.relationshipIntent ?? null,
+    relationshipIntents: b.relationshipIntents ?? [],
   };
 
   const candidateA: RichCandidateRow = {
@@ -1584,7 +1584,7 @@ export function scorePair(
     eloScore: a.eloScore,
     homeCityKey: a.homeCityKey,
     appearanceTags: a.appearanceTags ?? null,
-    relationshipIntent: a.relationshipIntent ?? null,
+    relationshipIntents: a.relationshipIntents ?? [],
   };
 
   const scoredReverse = scoreCandidate(seekerB, candidateA);
@@ -1777,7 +1777,7 @@ async function loadEligibleUsersForIds(
           ageRangeMax: true,
           typePrefTags: true,
           appearanceTags: true,
-          relationshipIntent: true,
+          relationshipIntents: true,
         },
       },
     },
@@ -1830,7 +1830,7 @@ async function loadEligibleUsersForIds(
           ageRangeMax: true,
           typePrefTags: true,
           appearanceTags: true,
-          relationshipIntent: true,
+          relationshipIntents: true,
         },
       },
     },
@@ -1884,7 +1884,7 @@ async function loadEligibleUsersForIds(
           (u.profile?.typePrefTags as unknown as TypePrefTags | null) ?? null,
         appearanceTags:
           (u.profile?.appearanceTags as unknown as PhotoAttrs | null) ?? null,
-        relationshipIntent: u.profile?.relationshipIntent ?? null,
+        relationshipIntents: u.profile?.relationshipIntents ?? [],
       };
       return { ...snapshot, allocationFingerprint: allocationFingerprint(snapshot) };
     });

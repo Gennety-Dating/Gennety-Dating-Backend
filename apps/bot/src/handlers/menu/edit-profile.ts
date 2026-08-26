@@ -13,12 +13,13 @@ import {
   PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
   DEFAULT_SESSION,
   isRelationshipIntent,
+  normalizeIntents,
   normalizeProfileMedia,
   escapeMd,
   type Language,
   type SessionData,
 } from "@gennety/shared";
-import { intentLabel, intentOptions } from "../../services/intent-copy.js";
+import { intentOptions, intentSummary } from "../../services/intent-copy.js";
 import {
   armMediaClaim,
   claimMenuText,
@@ -1501,13 +1502,29 @@ function livePhotoRejectionMessage(
 // Relationship intent (PRODUCT_SPEC §1.3)
 // ---------------------------------------------------------------------------
 
-/** Callback prefix for one picked option: `menu:edit:intent:<id>`. */
+/** Callback prefix for toggling one option: `menu:edit:intent:<id>`. */
 export const EDIT_INTENT_PREFIX = "menu:edit:intent:";
 
 /**
- * Open the picker. Four buttons, one tap each — no text claim, because there is
- * nothing to type: the answer is one of four canonical ids, which is exactly
- * why this fact was moved out of the chat in the first place.
+ * Render the picker for a given selection. Multi-select, so each row is a
+ * TOGGLE and the ticks are the whole state readout — there is no separate
+ * "selected" message to keep in step with the keyboard.
+ */
+function intentKeyboard(lang: Language, selected: readonly string[]): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  const chosen = new Set(selected);
+  for (const option of intentOptions(lang)) {
+    const mark = chosen.has(option.value) ? "✓ " : "";
+    keyboard.text(`${mark}${option.label}`, `${EDIT_INTENT_PREFIX}${option.value}`).row();
+  }
+  keyboard.text(t(lang, "menuBack"), "menu:profile");
+  return keyboard;
+}
+
+/**
+ * Open the picker. Four toggles, no text claim, because there is nothing to
+ * type: the answer is a subset of four canonical ids, which is exactly why this
+ * fact was moved out of the chat in the first place.
  *
  * Editable at all because intent changes with time in a way height and gender
  * do not, and a matching input nobody can correct silently rots.
@@ -1515,15 +1532,24 @@ export const EDIT_INTENT_PREFIX = "menu:edit:intent:";
 export async function handleEditIntentStart(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   const lang = ctx.session.language;
-  const keyboard = new InlineKeyboard();
-  for (const option of intentOptions(lang)) {
-    keyboard.text(option.label, `${EDIT_INTENT_PREFIX}${option.value}`).row();
-  }
-  keyboard.text(t(lang, "menuBack"), "menu:profile");
-  await ctx.reply(t(lang, "editIntentPrompt"), { reply_markup: keyboard });
+  const profile = await prisma.profile.findFirst({
+    where: { user: { telegramId: BigInt(ctx.from!.id) } },
+    select: { relationshipIntents: true },
+  });
+  await ctx.reply(t(lang, "editIntentPrompt"), {
+    reply_markup: intentKeyboard(lang, profile?.relationshipIntents ?? []),
+  });
 }
 
-/** Persist one picked option. */
+/**
+ * Toggle one option.
+ *
+ * The stored column is the ONLY state: each tap reads it, flips one value and
+ * writes it back, then repaints the keyboard. Keeping the pending selection in
+ * the session instead would need a "Done" button and a claim on the chat, and
+ * would leave a half-made choice to expire — for a screen whose every state is
+ * already durable and one tap from being fixed.
+ */
 export async function handleEditIntentSet(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
   const data = ctx.callbackQuery?.data ?? "";
@@ -1533,26 +1559,31 @@ export async function handleEditIntentSet(ctx: BotContext): Promise<void> {
     await ctx.answerCallbackQuery();
     return;
   }
-  await ctx.answerCallbackQuery();
 
   // `upsert`, not `update`: a user editing from the menu has finished
   // onboarding and therefore has a profile row — but the same guard everywhere
   // else in this file uses costs nothing and cannot 500 on a legacy account.
-  const userId = (
-    await prisma.user.findUniqueOrThrow({
-      where: { telegramId: BigInt(ctx.from!.id) },
-      select: { id: true },
-    })
-  ).id;
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: { id: true, profile: { select: { relationshipIntents: true } } },
+  });
+  const current = new Set(normalizeIntents(user.profile?.relationshipIntents));
+  if (current.has(picked)) current.delete(picked);
+  else current.add(picked);
+  // Normalised on the way in, so the row stays canonical (axis order, no
+  // duplicates) whichever order the user tapped.
+  const next = normalizeIntents([...current]);
   await prisma.profile.upsert({
-    where: { userId },
-    create: { userId, relationshipIntent: picked },
-    update: { relationshipIntent: picked },
+    where: { userId: user.id },
+    create: { userId: user.id, relationshipIntents: next },
+    update: { relationshipIntents: next },
   });
 
   // Deliberately NOT marking the embedding dirty: intent is scored by its own
   // `V_intent` multiplier and must never reach `V_explicit` (weight 0.65),
   // which is the whole reason it lives in its own column.
-  await ctx.reply(t(lang, "editIntentSaved", { intent: intentLabel(lang, picked) }));
-  await showMainMenu(ctx);
+  await ctx.answerCallbackQuery({
+    text: next.length ? intentSummary(lang, next) : t(lang, "editIntentCleared"),
+  });
+  await ctx.editMessageReplyMarkup({ reply_markup: intentKeyboard(lang, next) });
 }
