@@ -72,18 +72,33 @@ dateRadarRouter.post(
     // does not know yet gets a slightly rougher ETA instead of an error.
     const mode = isTravelMode(body.mode) ? body.mode : undefined;
 
-    const match = await prisma.match.findUnique({
-      where: { id: matchId },
-      select: {
-        id: true,
-        status: true,
-        userAId: true,
-        userBId: true,
-        agreedTime: true,
-        venueLat: true,
-        venueLng: true,
-      },
-    });
+    // Both reads are keyed on values already in hand, and this route is the
+    // hottest in the product — one ping every ~5s per side for the 45 minutes
+    // before a date. Serial round trips doubled that latency for nothing. A
+    // refusal now pays for a profile read it does not use, which is the right
+    // way round: refusals are rare (the client only pings inside the window)
+    // and the happy path is every single ping. Same idiom as `/v1/date/state`.
+    const [match, profile] = await Promise.all([
+      prisma.match.findUnique({
+        where: { id: matchId },
+        select: {
+          id: true,
+          status: true,
+          userAId: true,
+          userBId: true,
+          agreedTime: true,
+          venueLat: true,
+          venueLng: true,
+        },
+      }),
+      // The caller's OWN city zone. Matching is same-city (§3.2 filter 5), so
+      // the two agree by construction — reading the caller's own is what keeps
+      // a partner's profile out of a request already about their location.
+      prisma.profile.findUnique({
+        where: { userId: req.userId! },
+        select: { timeZone: true },
+      }),
+    ]);
 
     const side = match ? sideOf(match, req.userId!) : null;
     if (!match || !side) {
@@ -121,14 +136,6 @@ dateRadarRouter.post(
       },
       now,
     );
-
-    // The caller's OWN city zone. Matching is same-city (§3.2 filter 5), so
-    // the two agree by construction — reading the caller's own is what keeps a
-    // partner's profile out of a request that is already about their location.
-    const profile = await prisma.profile.findUnique({
-      where: { userId: req.userId! },
-      select: { timeZone: true },
-    });
 
     res.json({
       ok: true,

@@ -79,6 +79,11 @@ export async function refundPrimeTimePurchase(
         data: {
           status: PRIME_PURCHASE_REFUND_FAILED,
           refundError: message.slice(0, 500),
+          // Stamped on a FAILED attempt too, not only on a terminal one:
+          // nothing reads this column for meaning, and it is what lets the
+          // sweep's retry tier order by "least recently attempted" instead of
+          // re-trying one permanently stuck row every hour forever.
+          resolvedAt: new Date(),
         },
       })
       .catch(() => {});
@@ -301,10 +306,35 @@ export async function refundPrimeTimeForDeadMatch(
   return refunded;
 }
 
+/**
+ * The sweep's per-tick budget, split into two tiers on purpose.
+ *
+ * A single `OR` query ordered by `createdAt` head-of-line blocks: a row that
+ * fails permanently (a deleted Telegram account, a charge Telegram will not
+ * reverse) keeps its original `createdAt` forever, so it is always inside the
+ * first page. Fifty such rows and the sweep re-fetches the same fifty every
+ * hour and never reaches row fifty-one — a genuinely refundable purchase
+ * behind them is never refunded, and the log says `stillFailing` rather than
+ * anything that names the queue.
+ *
+ * So the two statuses stop competing for one budget. Only `refund_failed` can
+ * grow without bound, and it now cannot crowd out a fresh stale row. The total
+ * is unchanged, so this costs no extra load.
+ */
+const SWEEP_STALE_BUDGET = 40;
+const SWEEP_RETRY_BUDGET = 10;
+
 export interface PrimeTimeRefundSweepResult {
   scanned: number;
   refunded: number;
   stillFailing: number;
+  /**
+   * Rows the rail cannot reach at all (a synthetic negative `telegramId`).
+   * Counted rather than dropped: without it a tick that touched nothing logs
+   * `refunded=0 stillFailing=0`, which reads as "nothing was wrong" when what
+   * happened is "nothing was attempted".
+   */
+  skipped: number;
 }
 
 /**
@@ -316,31 +346,49 @@ export async function sweepPrimeTimeRefunds(
   now: Date = new Date(),
 ): Promise<PrimeTimeRefundSweepResult> {
   const staleBefore = new Date(now.getTime() - PRIME_PROCESSING_STALE_MS);
-  const rows = await prisma.primeTimePurchase.findMany({
-    where: {
-      OR: [
-        { status: PRIME_PURCHASE_REFUND_FAILED },
-        { status: PRIME_PURCHASE_PROCESSING, createdAt: { lt: staleBefore } },
-      ],
-    },
-    select: {
+  // Fresh money first: a `processing` row is a charge that has been taken and
+  // never resolved, so it is the one the user is actually owed right now.
+  const [stale, retries] = await Promise.all([
+    prisma.primeTimePurchase.findMany({
+      where: { status: PRIME_PURCHASE_PROCESSING, createdAt: { lt: staleBefore } },
+      select: {
       ...PRIME_PURCHASE_SELECT,
       user: { select: { telegramId: true, language: true } },
-    },
-    orderBy: { createdAt: "asc" },
-    take: 50,
-  });
+      },
+      orderBy: { createdAt: "asc" },
+      take: SWEEP_STALE_BUDGET,
+    }),
+    prisma.primeTimePurchase.findMany({
+      where: { status: PRIME_PURCHASE_REFUND_FAILED },
+      select: {
+      ...PRIME_PURCHASE_SELECT,
+      user: { select: { telegramId: true, language: true } },
+      },
+      // `resolvedAt` is stamped on every attempt, successful or not, so a row
+      // that keeps failing sinks behind rows tried longer ago and the retry
+      // tier rotates instead of re-trying one stuck head forever. Nulls first:
+      // a row that failed before this became true has never been tried under
+      // the rotation, so it goes to the front once.
+      orderBy: { resolvedAt: { sort: "asc", nulls: "first" } },
+      take: SWEEP_RETRY_BUDGET,
+    }),
+  ]);
+  const rows = [...stale, ...retries];
 
   const result: PrimeTimeRefundSweepResult = {
     scanned: rows.length,
     refunded: 0,
     stillFailing: 0,
+    skipped: 0,
   };
 
   for (const row of rows) {
     // A mobile-only user carries a synthetic negative id and cannot hold a
     // Stars charge, so there is nothing to reverse through this rail.
-    if (!isTelegramTarget(row.user.telegramId)) continue;
+    if (!isTelegramTarget(row.user.telegramId)) {
+      result.skipped++;
+      continue;
+    }
     const target =
       row.status === PRIME_PURCHASE_PROCESSING
         ? PRIME_PURCHASE_REFUNDED_STALE
@@ -371,7 +419,7 @@ export async function sweepPrimeTimeRefunds(
   if (result.scanned > 0) {
     console.log(
       `[prime-time-refund] scanned=${result.scanned} refunded=${result.refunded} ` +
-        `stillFailing=${result.stillFailing}`,
+        `stillFailing=${result.stillFailing} skipped=${result.skipped}`,
     );
   }
   return result;

@@ -525,6 +525,14 @@ async function refreshAfterUnlock(attempt = 0): Promise<void> {
     setPrimeBusy(false);
     closePrimeSheet();
     render();
+    // Say what happened. Giving up silently closes the sheet on a band that is
+    // still visibly locked, seconds after Telegram confirmed the charge — and
+    // the only move that reads as available from there is paying again.
+    //
+    // Deliberately NOT `primeUnlockFailed`: the payment did not fail. The
+    // settle simply has not landed yet, and the ordinary 4s poll opens the band
+    // on its own, so the honest line is "it is paid, it is coming".
+    app?.showAlert?.(tr(lang, "primeUnlockPending"));
     return;
   }
   setTimeout(() => void refreshAfterUnlock(attempt + 1), 700);

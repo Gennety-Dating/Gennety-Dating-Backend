@@ -240,6 +240,17 @@ export async function campusRadarTick(now = new Date()): Promise<CampusRadarTick
   const matchIds: string[] = [];
 
   for (const campus of growth) {
+    // The free gate first, and it has to be here rather than only inside
+    // `decideCampusDrop`. That function checks it on its own first line — but
+    // `lastDropAt` is an ARGUMENT, so it is evaluated before the function is
+    // entered at all, and `lastCampusDropAt` is a join into `users` on an
+    // unindexed `universityDomain` plus an unindexed `source`. Every campus,
+    // every hour, to feed a check that (as the log branch below says) is almost
+    // never reached. The pure function keeps its own copy of the test so it
+    // stays correct standalone; nothing observable changes, because the
+    // `below-threshold` branch was already deliberately silent.
+    if (campus.newlyVerified < env.CAMPUS_DROP_GROWTH_THRESHOLD) continue;
+
     const decision = decideCampusDrop({
       growth: campus,
       lastDropAt: await lastCampusDropAt(campus.domain),

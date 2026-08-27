@@ -79,6 +79,14 @@ let latest: DateStateResponse | null = null;
 let radar: RadarReading | null = null;
 let motionBound = false;
 let motionDenied = false;
+/**
+ * A bump needs TWO permissions, and only one of them used to be explained.
+ * `currentPosition()` returning null just dropped the shake, so a user with
+ * location denied shook the phone at the table and nothing happened at all —
+ * no message, no haptic, no state change — under a sheet still telling them to
+ * shake. Same treatment as `motionDenied`, one line up.
+ */
+let geoDenied = false;
 let scratch: ScratchState | null = null;
 let fogLayer: SVGSVGElement | null = null;
 const detector = createShakeDetector();
@@ -90,11 +98,11 @@ function dismissBoot(): void {
   window.setTimeout(() => el.boot?.remove(), 400);
 }
 
-function haptic(style: "light" | "rigid" | "success"): void {
+function haptic(style: "light" | "rigid" | "success" | "error"): void {
   const h = app?.HapticFeedback;
   if (!h) return;
   try {
-    if (style === "success") h.notificationOccurred?.("success");
+    if (style === "success" || style === "error") h.notificationOccurred?.(style);
     else h.impactOccurred?.(style);
   } catch {
     // Older clients expose a partial HapticFeedback object. A missing buzz is
@@ -281,7 +289,14 @@ function render(): void {
   });
 
   el.title.textContent = view.title;
-  el.body.textContent = motionDenied && view.action === "shake" ? s.bumpDenied : view.body;
+  el.body.textContent =
+    view.action === "shake"
+      ? motionDenied
+        ? s.bumpDenied
+        : geoDenied
+          ? s.bumpNoLocation
+          : view.body
+      : view.body;
   el.sheet?.setAttribute("data-tone", view.tone);
 
   if (el.note) {
@@ -352,7 +367,14 @@ async function sendBump(): Promise<void> {
   const matchId = latest?.match?.id;
   if (!matchId) return;
   const here = await currentPosition();
-  if (!here) return;
+  if (!here) {
+    // Say so rather than swallowing the shake — see `geoDenied`.
+    geoDenied = true;
+    haptic("error");
+    render();
+    return;
+  }
+  geoDenied = false;
   haptic("rigid");
   try {
     const res = await postBump(initData, matchId, { ...here, when: new Date() });

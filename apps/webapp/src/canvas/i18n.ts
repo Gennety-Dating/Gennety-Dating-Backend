@@ -40,6 +40,8 @@ export interface CanvasStrings {
   bumpAction: string;
   bumpWaiting: string;
   bumpDenied: string;
+  /** The bump's OTHER permission. Same shape as `bumpDenied`, different cause. */
+  bumpNoLocation: string;
   /** Verified — the deck is open. */
   inProgressTitle: string;
   inProgressBody: string;
@@ -76,6 +78,8 @@ const en: CanvasStrings = {
   bumpAction: "Shake to confirm",
   bumpWaiting: "Got yours. Waiting for the other phone.",
   bumpDenied: "I need motion access for this — allow it in your browser settings.",
+  bumpNoLocation:
+    "I got the shake, but I can't see where you are — allow location and shake again.",
   inProgressTitle: "You made it ✨",
   inProgressBody: "The date's on me — your next ticket is free. Something to talk about:",
   feedbackTitle: "How did it go?",
@@ -108,6 +112,8 @@ const ru: CanvasStrings = {
   bumpAction: "Тряхнуть",
   bumpWaiting: "Твоё поймал. Жду второй телефон.",
   bumpDenied: "Нужен доступ к движению — разреши его в настройках браузера.",
+  bumpNoLocation:
+    "Тряску поймал, но не вижу, где вы — разреши геолокацию и тряхни ещё раз.",
   inProgressTitle: "Вы дошли ✨",
   inProgressBody: "Свидание засчитано, билет на следующее — от меня. О чём поговорить:",
   feedbackTitle: "Как всё прошло?",
@@ -140,6 +146,8 @@ const uk: CanvasStrings = {
   bumpAction: "Струснути",
   bumpWaiting: "Твоє впіймав. Чекаю на другий телефон.",
   bumpDenied: "Потрібен доступ до руху — дозволь його в налаштуваннях браузера.",
+  bumpNoLocation:
+    "Струс упіймав, але не бачу, де ви — дозволь геолокацію і струсни ще раз.",
   inProgressTitle: "Ви дійшли ✨",
   inProgressBody: "Побачення зараховано, квиток на наступне — від мене. Про що поговорити:",
   feedbackTitle: "Як усе минуло?",
@@ -173,6 +181,8 @@ const de: CanvasStrings = {
   bumpAction: "Schütteln",
   bumpWaiting: "Deins habe ich. Warte auf das andere Handy.",
   bumpDenied: "Dafür brauche ich Bewegungszugriff — erlaube ihn in den Browsereinstellungen.",
+  bumpNoLocation:
+    "Das Schütteln kam an, aber ich sehe nicht, wo ihr seid — erlaube den Standort und schüttel noch mal.",
   inProgressTitle: "Ihr habt es geschafft ✨",
   inProgressBody: "Das Date geht auf mich — dein nächstes Ticket ist frei. Worüber ihr reden könnt:",
   feedbackTitle: "Wie war es?",
@@ -206,6 +216,8 @@ const pl: CanvasStrings = {
   bumpAction: "Potrząśnij",
   bumpWaiting: "Twoje mam. Czekam na drugi telefon.",
   bumpDenied: "Potrzebuję dostępu do ruchu — zezwól na niego w ustawieniach przeglądarki.",
+  bumpNoLocation:
+    "Potrząśnięcie odebrane, ale nie widzę, gdzie jesteście — zezwól na lokalizację i potrząśnij jeszcze raz.",
   inProgressTitle: "Udało się ✨",
   inProgressBody: "Randka zaliczona, bilet na następną ode mnie. O czym pogadać:",
   feedbackTitle: "Jak poszło?",

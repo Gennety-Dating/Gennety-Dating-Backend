@@ -81,6 +81,19 @@ beforeEach(() => {
   });
 });
 
+
+/**
+ * The sweep issues ONE query per status tier (see SWEEP_STALE_BUDGET), so the
+ * mock has to answer by `where.status` rather than hand the same fixture to
+ * both — otherwise every fixture row is counted twice.
+ */
+function serveByStatus(rows: Array<{ status: string }>): (args: unknown) => Promise<unknown[]> {
+  return async (args: unknown) => {
+    const want = (args as { where?: { status?: string } } | undefined)?.where?.status;
+    return rows.filter((r) => r.status === want);
+  };
+}
+
 describe("settlePrimeTimePayment", () => {
   it("writes the durable row BEFORE claiming, then settles and tells the partner", async () => {
     const api = fakeApi();
@@ -164,7 +177,7 @@ function purchaseRow(over: Record<string, unknown> = {}) {
 describe("refundPrimeTimeForDeadMatch", () => {
   it("returns the Stars and says so, once per settled purchase", async () => {
     const api = fakeApi();
-    db.primeTimePurchase.findMany.mockResolvedValue([purchaseRow()]);
+    db.primeTimePurchase.findMany.mockImplementation(serveByStatus([purchaseRow()]));
 
     const refunded = await refundPrimeTimeForDeadMatch("m1", api);
 
@@ -180,7 +193,7 @@ describe("refundPrimeTimeForDeadMatch", () => {
 
   it("is a no-op for a band opened by a subscription — there is no row to return", async () => {
     const api = fakeApi();
-    db.primeTimePurchase.findMany.mockResolvedValue([]);
+    db.primeTimePurchase.findMany.mockImplementation(serveByStatus([]));
 
     expect(await refundPrimeTimeForDeadMatch("m1", api)).toBe(0);
     expect(api.refundStarPayment).not.toHaveBeenCalled();
@@ -189,7 +202,7 @@ describe("refundPrimeTimeForDeadMatch", () => {
   it("does NOT tell the user the money is back when Telegram refused", async () => {
     const api = fakeApi();
     api.refundStarPayment.mockRejectedValue(new Error("BALANCE_TOO_LOW"));
-    db.primeTimePurchase.findMany.mockResolvedValue([purchaseRow()]);
+    db.primeTimePurchase.findMany.mockImplementation(serveByStatus([purchaseRow()]));
 
     expect(await refundPrimeTimeForDeadMatch("m1", api)).toBe(0);
     expect(api.sendMessage).not.toHaveBeenCalled();
@@ -210,10 +223,10 @@ describe("refundPrimeTimeForDeadMatch", () => {
 describe("sweepPrimeTimeRefunds", () => {
   it("retries refund_failed and returns an abandoned processing row as stale", async () => {
     const api = fakeApi();
-    db.primeTimePurchase.findMany.mockResolvedValue([
+    db.primeTimePurchase.findMany.mockImplementation(serveByStatus([
       purchaseRow({ status: "refund_failed" }),
       purchaseRow({ id: "p2", status: "processing", externalPaymentId: "charge-2" }),
-    ]);
+    ]));
 
     const res = await sweepPrimeTimeRefunds(api);
 
@@ -221,13 +234,15 @@ describe("sweepPrimeTimeRefunds", () => {
     const statuses = db.primeTimePurchase.update.mock.calls.map(
       (c) => (c[0] as { data: { status: string } }).data.status,
     );
-    expect(statuses).toEqual(["refunded_race", "refunded_stale"]);
+    // Stale first: a `processing` row is a charge taken and never resolved, so
+    // it outranks a retry of one that has already failed at least once.
+    expect(statuses).toEqual(["refunded_stale", "refunded_race"]);
   });
 
   it("counts a still-failing refund instead of announcing it", async () => {
     const api = fakeApi();
     api.refundStarPayment.mockRejectedValue(new Error("nope"));
-    db.primeTimePurchase.findMany.mockResolvedValue([purchaseRow({ status: "refund_failed" })]);
+    db.primeTimePurchase.findMany.mockImplementation(serveByStatus([purchaseRow({ status: "refund_failed" })]));
 
     const res = await sweepPrimeTimeRefunds(api);
 
@@ -237,13 +252,20 @@ describe("sweepPrimeTimeRefunds", () => {
 
   it("skips a mobile-only payer — a synthetic negative id holds no Stars charge", async () => {
     const api = fakeApi();
-    db.primeTimePurchase.findMany.mockResolvedValue([
-      purchaseRow({ user: { telegramId: -778000001n, language: "en" } }),
-    ]);
+    db.primeTimePurchase.findMany.mockImplementation(serveByStatus([
+      purchaseRow({
+        // A status the SWEEP actually queries — the fixture's default
+        // (`settled`) belongs to the dead-match rail, not to this one.
+        status: "refund_failed",
+        user: { telegramId: -778000001n, language: "en" },
+      }),
+    ]));
 
     const res = await sweepPrimeTimeRefunds(api);
 
-    expect(res).toMatchObject({ scanned: 1, refunded: 0, stillFailing: 0 });
+    // Counted as skipped rather than dropped: `refunded=0 stillFailing=0` alone
+    // reads as "nothing was wrong" when nothing was attempted.
+    expect(res).toMatchObject({ scanned: 1, refunded: 0, stillFailing: 0, skipped: 1 });
     expect(api.refundStarPayment).not.toHaveBeenCalled();
   });
 });

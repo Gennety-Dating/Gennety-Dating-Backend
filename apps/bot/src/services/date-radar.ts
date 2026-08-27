@@ -188,12 +188,38 @@ function readFresh(matchId: string, side: "A" | "B", now: Date): Presence | null
   return entry;
 }
 
+/**
+ * Last time the whole map was walked for expired entries.
+ *
+ * `readFresh` evicts, but only a key somebody reads — and at the end of a date
+ * BOTH phones stop pinging at once, so the pair's last two entries are never
+ * read again and stay for the life of the process. Two entries per date is
+ * small and it is also unbounded, which is the one thing the module's own
+ * "a restart loses it and the next ping restores it" promise rules out.
+ *
+ * Amortised on the write path rather than on a timer: a bare `setInterval`
+ * would hold the process open and need tearing down in tests, for a sweep that
+ * is only ever useful while someone is pinging anyway. One O(n) pass per TTL,
+ * and none at all when the radar is idle.
+ */
+let lastSweepAt = 0;
+
+function sweepExpired(now: Date): void {
+  const t = now.getTime();
+  if (t - lastSweepAt < PRESENCE_TTL_MS) return;
+  lastSweepAt = t;
+  for (const [k, entry] of presence) {
+    if (t - entry.seenAt.getTime() > PRESENCE_TTL_MS) presence.delete(k);
+  }
+}
+
 export function recordPresence(
   matchId: string,
   side: "A" | "B",
   value: { etaAt?: Date; arrived: boolean },
   now: Date,
 ): void {
+  sweepExpired(now);
   // An arrival supersedes whatever ETA came with it rather than sitting beside
   // it — a person who is here has no arrival time, and carrying a stale one
   // would let a later read describe them as still moving.
@@ -235,4 +261,10 @@ export function viewOfPeer(
 /** Test seam — the map is process-wide and would otherwise leak between cases. */
 export function resetRadarPresenceForTests(): void {
   presence.clear();
+  lastSweepAt = 0;
+}
+
+/** Test seam — the sweep is invisible from outside, so assert on the size. */
+export function radarPresenceSizeForTests(): number {
+  return presence.size;
 }

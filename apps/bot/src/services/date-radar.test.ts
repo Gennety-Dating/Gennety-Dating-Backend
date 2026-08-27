@@ -9,6 +9,7 @@ import {
   formatEtaLocal,
   hasArrived,
   isTravelMode,
+  radarPresenceSizeForTests,
   recordPresence,
   resetRadarPresenceForTests,
   viewOfPeer,
@@ -187,5 +188,36 @@ describe("what one side is told about the other", () => {
     ]) {
       expect(wire.toLowerCase()).not.toContain(forbidden);
     }
+  });
+});
+
+describe("presence eviction", () => {
+  // Regression: `readFresh` only evicts a key somebody READS, and at the end of
+  // a date both phones stop pinging at once — so the pair's last two entries
+  // were never read again and stayed for the life of the process. Every date
+  // leaked two entries, permanently.
+  it("forgets a pair that both stopped pinging, without anyone reading them", () => {
+    resetRadarPresenceForTests();
+    const t0 = new Date("2026-09-03T18:00:00.000Z");
+
+    recordPresence("dead-match", "A", { arrived: false }, t0);
+    recordPresence("dead-match", "B", { arrived: false }, t0);
+    expect(radarPresenceSizeForTests()).toBe(2);
+
+    // Nobody ever reads that pair again. Some other pair pings much later.
+    const later = new Date(t0.getTime() + 60 * 60 * 1000);
+    recordPresence("live-match", "A", { arrived: false }, later);
+
+    expect(radarPresenceSizeForTests()).toBe(1);
+  });
+
+  it("sweeps at most once per TTL, so an ordinary ping stays O(1)", () => {
+    resetRadarPresenceForTests();
+    const t0 = new Date("2026-09-03T18:00:00.000Z");
+    recordPresence("m", "A", { arrived: false }, t0);
+    // Well inside the TTL: the stale entry from a moment ago must survive,
+    // which is only true if the sweep did not run again.
+    recordPresence("m2", "A", { arrived: false }, new Date(t0.getTime() + 5_000));
+    expect(radarPresenceSizeForTests()).toBe(2);
   });
 });

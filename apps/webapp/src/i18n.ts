@@ -61,6 +61,8 @@ interface Strings {
   primeSheetCtaPremium: string;
   primeSheetDismiss: string;
   primeUnlockFailed: string;
+  /** Charge confirmed, settle not visible yet — never phrased as a failure. */
+  primeUnlockPending: string;
   noContext: string;
   // Location Mini App (Phase 3.7 — concierge map picker)
   locTitle: string;
@@ -152,6 +154,8 @@ const dict: Record<Lang, Strings> = {
     primeSheetCtaPremium: "Gennety Premium",
     primeSheetDismiss: "Pick another time",
     primeUnlockFailed: "That didn't go through. Try again.",
+    primeUnlockPending:
+      "Payment received. The evening times open in a moment — no need to pay again.",
     noContext: "No match context — reopen this from the bot.",
     locTitle: "Where will you be coming from?",
     locSearchPlaceholder: "Metro, address, place…",
@@ -246,6 +250,8 @@ const dict: Record<Lang, Strings> = {
     primeSheetCtaPremium: "Gennety Premium",
     primeSheetDismiss: "Выбрать другое время",
     primeUnlockFailed: "Не прошло. Попробуй ещё раз.",
+    primeUnlockPending:
+      "Оплата прошла. Вечерние слоты откроются через несколько секунд — платить ещё раз не нужно.",
     noContext: "Нет контекста матча — открой заново из бота.",
     locTitle: "Откуда поедешь на свидание?",
     locSearchPlaceholder: "Метро, адрес, заведение…",
@@ -340,6 +346,8 @@ const dict: Record<Lang, Strings> = {
     primeSheetCtaPremium: "Gennety Premium",
     primeSheetDismiss: "Обрати інший час",
     primeUnlockFailed: "Не вийшло. Спробуй ще раз.",
+    primeUnlockPending:
+      "Оплата пройшла. Вечірні слоти відкриються за кілька секунд — платити ще раз не треба.",
     noContext: "Немає контексту метчу — відкрий знову з бота.",
     locTitle: "Звідки поїдеш на побачення?",
     locSearchPlaceholder: "Метро, адреса, заклад…",
@@ -434,6 +442,8 @@ const dict: Record<Lang, Strings> = {
     primeSheetCtaPremium: "Gennety Premium",
     primeSheetDismiss: "Andere Zeit wählen",
     primeUnlockFailed: "Hat nicht geklappt. Versuch es noch mal.",
+    primeUnlockPending:
+      "Zahlung eingegangen. Die Abendzeiten öffnen gleich — du musst nicht noch mal zahlen.",
     noContext: "Kein Match-Kontext - öffne das bitte erneut aus dem Bot.",
     locTitle: "Von wo kommst du zum Date?",
     locSearchPlaceholder: "Metro, Adresse, Ort...",
@@ -529,6 +539,8 @@ const dict: Record<Lang, Strings> = {
     primeSheetCtaPremium: "Gennety Premium",
     primeSheetDismiss: "Wybierz inną godzinę",
     primeUnlockFailed: "Nie udało się. Spróbuj jeszcze raz.",
+    primeUnlockPending:
+      "Płatność przeszła. Wieczorne godziny otworzą się za chwilę — nie trzeba płacić ponownie.",
     noContext: "Brak kontekstu dopasowania - otwórz to ponownie z bota.",
     locTitle: "Skąd będziesz jechać na randkę?",
     locSearchPlaceholder: "Metro, adres, miejsce...",

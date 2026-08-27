@@ -188,8 +188,16 @@ function refuse(reason: BumpRefusal): BumpOutcome {
  *
  * The CAS (`updateMany` on `isVerified: false`) is what makes the rewards
  * exactly-once under two shakes landing in the same millisecond: the loser
- * updates zero rows and returns false, so it credits nothing. Same shape the
- * ticket gate and the venue-change settle already use.
+ * updates zero rows and credits nothing. Same shape the ticket gate and the
+ * venue-change settle already use.
+ *
+ * **It has to be an INTERACTIVE transaction, and that is the whole point.**
+ * The array form (`$transaction([a, b, c])`) runs every operation it is handed
+ * — there is no short-circuit — so a CAS written that way is inspected only
+ * after the writes it guards have already committed. `reliabilityScore` is an
+ * `increment`, i.e. the one write here that is NOT idempotent, so a loser
+ * reaching it pays the reward a second time: +100 instead of +50, on a pair who
+ * simply shook twice together after a first attempt that did not align.
  *
  * `dateAttended*` is written for BOTH sides here, not one — attendance is a
  * property of the PAIR (`services/attendance.ts`), and a Bump observes the pair.
@@ -198,22 +206,27 @@ async function verifyBump(
   match: { id: string; userAId: string; userBId: string },
   at: Date,
 ): Promise<boolean> {
-  const [claim] = await prisma.$transaction([
-    prisma.dateBumpSession.updateMany({
+  const claimed = await prisma.$transaction(async (tx) => {
+    const claim = await tx.dateBumpSession.updateMany({
       where: { matchId: match.id, isVerified: false },
       data: { isVerified: true, verifiedAt: at },
-    }),
-    prisma.match.update({
+    });
+    // The loser leaves before writing anything: it lost the pair, so it owes
+    // neither the attendance flag nor the reliability reward.
+    if (claim.count === 0) return false;
+
+    await tx.match.update({
       where: { id: match.id },
       data: { dateAttendedA: true, dateAttendedB: true },
-    }),
-    prisma.profile.updateMany({
+    });
+    await tx.profile.updateMany({
       where: { userId: { in: [match.userAId, match.userBId] } },
       data: { reliabilityScore: { increment: BUMP_RELIABILITY_REWARD } },
-    }),
-  ]);
+    });
+    return true;
+  });
 
-  if (claim.count === 0) return false;
+  if (!claimed) return false;
 
   // Tickets ride their own exactly-once rail rather than the transaction above:
   // `grantTickets` writes a ledger row plus the materialized balance and is the

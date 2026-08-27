@@ -150,7 +150,18 @@ describe("recordBump", () => {
     bumpUpdateMany.mockReset();
     profileUpdateMany.mockReset();
     grantTickets.mockReset().mockResolvedValue(1);
-    transaction.mockReset().mockResolvedValue([{ count: 1 }, {}, {}]);
+    // `verifyBump` uses the INTERACTIVE form so its CAS can short-circuit, so
+    // the mock has to actually run the callback rather than resolve a tuple.
+    // `bumpUpdateMany`'s return value is what decides win/lose.
+    bumpUpdateMany.mockResolvedValue({ count: 1 });
+    transaction.mockReset().mockImplementation(async (fn: unknown) => {
+      if (typeof fn !== "function") return fn;
+      return (fn as (tx: unknown) => unknown)({
+        dateBumpSession: { updateMany: bumpUpdateMany },
+        match: { update: matchUpdate },
+        profile: { updateMany: profileUpdateMany },
+      });
+    });
   });
 
   function bump(userId: string, when = T, coords = NEARBY) {
@@ -248,12 +259,52 @@ describe("recordBump", () => {
       userAShakeAt: null,
       userBShakeAt: T,
     });
-    transaction.mockResolvedValue([{ count: 0 }, {}, {}]);
+    bumpUpdateMany.mockResolvedValue({ count: 0 });
 
     const out = await bump("a", new Date(T.getTime() + 2_000));
 
     expect(out).toEqual({ ok: true, verified: true, justVerified: false });
     expect(grantTickets).not.toHaveBeenCalled();
+  });
+
+  // Regression: the CAS used to sit in an array `$transaction([...])`, which
+  // runs every operation it is handed — so the loser's `claim.count === 0` was
+  // read only AFTER these two writes had committed. `reliabilityScore` is an
+  // `increment`, so a pair who shook twice together banked +100 each instead of
+  // +50. Reachable without any race: both sides carry a shake timestamp from a
+  // first, misaligned attempt, then shake again at the same moment.
+  it("credits no reliability and writes no attendance when it loses the race", async () => {
+    bumpUpsert.mockResolvedValue({
+      isVerified: false,
+      userAShakeAt: null,
+      userBShakeAt: T,
+    });
+    bumpUpdateMany.mockResolvedValue({ count: 0 });
+
+    const out = await bump("a", new Date(T.getTime() + 2_000));
+
+    expect(out.justVerified).toBe(false);
+    expect(profileUpdateMany).not.toHaveBeenCalled();
+    expect(matchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("credits reliability exactly once when it wins the race", async () => {
+    bumpUpsert.mockResolvedValue({
+      isVerified: false,
+      userAShakeAt: null,
+      userBShakeAt: T,
+    });
+    bumpUpdateMany.mockResolvedValue({ count: 1 });
+
+    const out = await bump("a", new Date(T.getTime() + 2_000));
+
+    expect(out.justVerified).toBe(true);
+    expect(profileUpdateMany).toHaveBeenCalledTimes(1);
+    expect(profileUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { reliabilityScore: { increment: BUMP_RELIABILITY_REWARD } },
+      }),
+    );
   });
 
   it("says an already-verified pair is verified without re-crediting", async () => {

@@ -66,7 +66,15 @@ export async function refundRematchPurchase(
     await prisma.rematchPurchase
       .update({
         where: { id: purchase.id },
-        data: { status: REMATCH_REFUND_FAILED, refundError: message.slice(0, 500) },
+        data: {
+          status: REMATCH_REFUND_FAILED,
+          refundError: message.slice(0, 500),
+          // Stamped on a FAILED attempt too, not only on a terminal one:
+          // nothing reads this column for meaning, and it is what lets the
+          // sweep's retry tier order by "least recently attempted" instead of
+          // re-trying one permanently stuck row every hour forever.
+          resolvedAt: new Date(),
+        },
       })
       .catch(() => {});
     return false;
@@ -94,10 +102,35 @@ export async function refundRematchPurchase(
   return true;
 }
 
+/**
+ * The sweep's per-tick budget, split into two tiers on purpose.
+ *
+ * A single `OR` query ordered by `createdAt` head-of-line blocks: a row that
+ * fails permanently (a deleted Telegram account, a charge Telegram will not
+ * reverse) keeps its original `createdAt` forever, so it is always inside the
+ * first page. Fifty such rows and the sweep re-fetches the same fifty every
+ * hour and never reaches row fifty-one — a genuinely refundable purchase
+ * behind them is never refunded, and the log says `stillFailing` rather than
+ * anything that names the queue.
+ *
+ * So the two statuses stop competing for one budget. Only `refund_failed` can
+ * grow without bound, and it now cannot crowd out a fresh stale row. The total
+ * is unchanged, so this costs no extra load.
+ */
+const SWEEP_STALE_BUDGET = 40;
+const SWEEP_RETRY_BUDGET = 10;
+
 export interface RematchRefundSweepResult {
   scanned: number;
   refunded: number;
   stillFailing: number;
+  /**
+   * Rows the rail cannot reach at all (a synthetic negative `telegramId`).
+   * Counted rather than dropped: without it a tick that touched nothing logs
+   * `refunded=0 stillFailing=0`, which reads as "nothing was wrong" when what
+   * happened is "nothing was attempted".
+   */
+  skipped: number;
 }
 
 /**
@@ -113,34 +146,55 @@ export async function sweepRematchRefunds(
   now: Date = new Date(),
 ): Promise<RematchRefundSweepResult> {
   const staleBefore = new Date(now.getTime() - REMATCH_PROCESSING_STALE_MS);
-  const rows = await prisma.rematchPurchase.findMany({
-    where: {
-      OR: [
-        { status: REMATCH_REFUND_FAILED },
-        { status: REMATCH_PROCESSING, createdAt: { lt: staleBefore } },
-      ],
-    },
-    select: {
+  // Fresh money first: a `processing` row is a charge that has been taken and
+  // never resolved, so it is the one the user is actually owed right now.
+  const [stale, retries] = await Promise.all([
+    prisma.rematchPurchase.findMany({
+      where: { status: REMATCH_PROCESSING, createdAt: { lt: staleBefore } },
+      select: {
       id: true,
       status: true,
       externalPaymentId: true,
       userId: true,
       user: { select: { telegramId: true, language: true } },
-    },
-    orderBy: { createdAt: "asc" },
-    take: 50,
-  });
+      },
+      orderBy: { createdAt: "asc" },
+      take: SWEEP_STALE_BUDGET,
+    }),
+    prisma.rematchPurchase.findMany({
+      where: { status: REMATCH_REFUND_FAILED },
+      select: {
+      id: true,
+      status: true,
+      externalPaymentId: true,
+      userId: true,
+      user: { select: { telegramId: true, language: true } },
+      },
+      // `resolvedAt` is stamped on every attempt, successful or not, so a row
+      // that keeps failing sinks behind rows tried longer ago and the retry
+      // tier rotates instead of re-trying one stuck head forever. Nulls first:
+      // a row that failed before this became true has never been tried under
+      // the rotation, so it goes to the front once.
+      orderBy: { resolvedAt: { sort: "asc", nulls: "first" } },
+      take: SWEEP_RETRY_BUDGET,
+    }),
+  ]);
+  const rows = [...stale, ...retries];
 
   const result: RematchRefundSweepResult = {
     scanned: rows.length,
     refunded: 0,
     stillFailing: 0,
+    skipped: 0,
   };
 
   for (const row of rows) {
     // A mobile-only user carries a synthetic negative telegramId and cannot hold
     // a Stars charge, so there is nothing to refund through this rail.
-    if (row.user.telegramId <= 0n) continue;
+    if (row.user.telegramId <= 0n) {
+      result.skipped++;
+      continue;
+    }
     // An abandoned `processing` row never learned why it failed, so it settles
     // as `refunded_ineligible` — the neutral "we couldn't complete it" bucket.
     const target =
@@ -159,7 +213,7 @@ export async function sweepRematchRefunds(
 
   if (result.scanned > 0) {
     console.log(
-      `[rematch-refund] scanned=${result.scanned} refunded=${result.refunded} stillFailing=${result.stillFailing}`,
+      `[rematch-refund] scanned=${result.scanned} refunded=${result.refunded} stillFailing=${result.stillFailing} skipped=${result.skipped}`,
     );
   }
   return result;
