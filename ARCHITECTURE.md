@@ -659,6 +659,69 @@ export reaches this table; if it is ever revived it must be masked here first.
 является стёртыми данными; события, снятые до авторизации, `user_id` не имеют
 вовсе и уходят по ретеншену (90 дней, `workers/retention.ts`).
 
+### `user_activity_days`
+
+One row per `(UTC day, user, platform)` on which the person DID something — the
+DAU/MAU substrate. Columns: `activityDate` (`@db.Date`), `userId`, `platform`
+(`telegram` | `ios`), `firstSeenAt` / `lastSeenAt` (real UTC instants),
+`events`. Composite PK `(activityDate, userId, platform)`; `onDelete: Cascade`
+from `users`.
+
+**It is an aggregate, not a second event log, and that is the decision.**
+`chat_events` already records every inbound action — a typed message, a voice
+note, a tapped button, a Mini App submission, a settled payment — so a parallel
+`user_activity_events` table would be a second source of truth about the same
+fact plus a second write on every update. What `chat_events` cannot be is the
+substrate, for one reason: `workers/retention.ts` deletes it after **30 days**
+(measured — production's oldest surviving row sits exactly at that boundary),
+so a metric computed from it has no history and no trend. This table is what
+survives.
+
+**Rolled up per DAY because that is the smallest shape both metrics can be
+answered from.** DAU is a `COUNT` over one day; MAU is a `COUNT(DISTINCT
+user_id)` over a window. Unique users are not additive, so daily counters alone
+could never produce a monthly number — a person active on twelve days is one
+monthly active user, and summing DAU overcounts by exactly how loyal the base
+is. At ~50–100× fewer rows than the events it summarises it stays cheap: 10k DAU
+is 10k rows a day.
+
+**`activityDate` is a UTC calendar day, and the boundary is why.** Not the
+reflex "store everything in UTC": UTC midnight falls at 02:00–03:00 Kyiv, deep
+inside the product's own quiet hours (23:00–09:00), while Kyiv midnight lands
+while people are still awake. The UTC day therefore cuts fewer sessions in half
+than the local one. Revisit it the day a market exists whose night is not
+Kyiv's. `firstSeenAt` / `lastSeenAt` are ordinary UTC instants — `activityDate`
+is a bucket key, those are timestamps.
+
+**`platform` is a plain string, deliberately not the `Platform` enum.** That one
+describes an ACCOUNT and has a `both` value; this describes one day on one
+surface, where `both` is meaningless — a user active on two surfaces is two
+rows, which is what makes a per-platform DAU breakdown possible at all. MAU
+still counts them once, because every window number goes through
+`uniqueUsers()`.
+
+**Written from ONE choke point** (`services/activity.ts` → `markUserActive`,
+called by `recordChatEvent` whenever `direction === "in"`). Every inbound path
+in the product already funnels through that function, so a seventh inbound path
+is counted the day it is written with nobody having to remember. `direction:
+"out"` is deliberately not activity: the bot sends the pinned banner, the drop
+pitch and the nudges on its own schedule, so counting those would measure our
+delivery rather than the user's engagement.
+
+The write is fire-and-forget and swallows its errors — it sits on the path of
+every update and must never cost a user their action — so
+`workers/activity-rollup.ts` re-derives the same rows from `chat_events` nightly.
+That reconcile is what turns a best-effort write into a reliable metric, and it
+is the reason the live path is allowed to be best-effort. It cannot be the only
+mechanism: the timeline is retained 30 days, so a reconcile repairs the recent
+past and is never a source of history.
+
+Test and synthetic accounts are excluded on **read**, not on write
+(`admin/utils/activity-source.ts`, sharing `ADMIN_TEST_TELEGRAM_IDS` with
+`user-health-source.ts` so two dashboards cannot disagree about who counts).
+Filtering at write time would bake one definition of "test account" into data
+collected months earlier.
+
 ### `media_validation_rejections`
 
 Append-only audit of upload-time profile-media rejections. Stores only
@@ -1181,6 +1244,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `0 * * * *` | UTC | Auto-unsuspend elapsed Tier-2 suspensions | `services/match-engine.ts` (`autoUnsuspendElapsed`) |
 | `30 3 * * *` | Europe/Kyiv | GDPR Article 9 selfie scrub (90 d post-`verifiedAt`) | `services/selfie-retention.ts` |
 | `45 3 * * *` | Europe/Kyiv | Data retention: OTP challenges (7 d), dead refresh sessions (30 d past unusable), proxy-chat messages (90 d), chat-timeline events (30 d), **client funnel events (90 d, by `receivedAt` — `occurredAt` is the device clock)**, plus **orphaned `bot_sessions`** — rows whose Telegram chat id matches no user, untouched for 7 d (a raw anti-join: that table has no relation to `users`, so nothing cascades into it; the age floor is what stops it racing a chat mid-`/start`, where the session legitimately exists before the user row). Batched ≤1000 rows/table/tick | `workers/retention.ts` (`retentionTick`) |
+| `20 0 * * *` | **UTC** | **DAU/MAU reconcile** — re-derive `user_activity_days` from the inbound chat timeline, repairing whatever the fire-and-forget live mark dropped. UTC-timed rather than Kyiv-timed, unlike every other cron here: the rows it repairs are bucketed by UTC day, so the sweep runs just after the boundary it is closing — the others are Kyiv-timed because they are about when a PERSON is awake, this one is about when a DAY ends. Two-day lookback so the minutes before midnight are covered; idempotent (same keyed upsert), and logs only when it actually repaired something, so a silent night is the healthy case | `workers/activity-rollup.ts` (`activityRollupTick`) |
 | `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours/photo refresh). **≤30 distinct PLACES/tick — not rows** (`VENUE_REVALIDATION_BATCH_SIZE`): one Place Details request settles every per-domain copy via `updateMany`, and only launched markets (`SUPPORTED_CITY_KEYS`) are scanned. **Not scheduled under `DEMO_MODE_ENABLED`** — the demo carried a full second catalog and paid an identical nightly bill for a deployment with no date traffic | `services/venue-revalidation.ts` |
 | `0 * * * *` (only when `TICKET_FEATURE_ENABLED`) | UTC | Date Ticket expiry: retry durable Stars refunds, reverse stalled `partial` payments, then open the Calendar for free | `workers/ticket-expiry.ts` → `handlers/matching/ticket-gate.ts` |
 | `0 * * * *` (only when `PREMIUM_FEATURE_ENABLED`) | UTC | Gennety Premium expiry reminders: 3 days and 24 hours before a NON-renewing paid period ends (PRODUCT_SPEC §3.8). Gated on the same flag as the purchase surfaces — the DM exists to sell the next period, so with sales paused there is nowhere to send anyone; an entitlement already paid for is unaffected and simply runs out. Claims its once-marker with a CAS BEFORE sending, because the asymmetry favours it: claiming after a send means a DB blip re-DMs on every hourly tick forever, while claiming first costs at most one of two independent touches | `workers/premium-expiry-reminder.ts` |
@@ -1368,6 +1432,10 @@ external callers kept reaching for:
 | GET | `/admin/stats` | Headline counters in ONE call: users by status, onboarding by step, verification by status, matches by status (+ `live` = the single-live-match states), reports by tier. Every bucket is zero-filled, so a missing group reads as `0` rather than `undefined`. Also carries **`conversion`** (net confirmed-match → paid-date, `admin/utils/match-conversion.ts`) and **`genderRatio`**. Both exclude synthetic matches and test pairs, and both report `null` — never `0` — on an empty denominator. |
 | GET | `/admin/dashboard` | The `/admin/stats` superset plus derived rates (`signupsLast7Days`, `activeRate`, `verifiedRate`, `matchAcceptanceRate`, `weeklyPaidDates`, `matchToTicketConversionPct`, `matchNoShowRatePct`, `matchGhostRatePct`, `registeredToMatchRate7dPct`) and the 10 most recent matches. Shares `collectStats()` with `/admin/stats` — including the match snapshot, so the weekly numbers are computed on the same rows the conversion was, rather than loaded a second time and allowed to disagree. `cacPerPaying`/`ltvCac`/`roas` are hard `null` until ad spend exists (`AD_SPEND_TRACKING_DESIGN.md`); they are deliberately not `0`, because "no data" and "acquired for free" are different claims. |
 | GET | `/admin/purchases` | The revenue ledger — every real money movement, newest first, with the payer inlined (`?kind=`, `?status=`, `?userId=`, `?since=`, `?until=`, paginated). Carries `totals` + `byKind` over the WHOLE filtered set, not just the page. Deliberately **uncached**, unlike the analytics tabs: a founder checking whether a payment landed must not be served a ten-minute-old answer. |
+| GET | `/admin/analytics/dau` | DAU for one UTC day (`?date=YYYY-MM-DD`), plus the WAU/MAU windows ending on it so the number has a scale, `stickinessPct`, and a per-platform breakdown. Defaults to **yesterday**, not today: today is still filling, so a dashboard defaulting to it shows a figure that climbs all day and is lowest right after UTC midnight — which reads as a crash every morning. Cached 10 min, honours `?fresh=1`. |
+| GET | `/admin/analytics/mau` | MAU over a **rolling 30 days** by default (`?days=`, `?end=`), or a calendar month with `?month=YYYY-MM`. Rolling is the default because the product's rhythm is weekly — the drop, the famine notice, the check-in ladder — so 30 days is four cycles whatever month it is, while a calendar month holds four or five Thursdays and would make February structurally quieter than March by the calendar rather than by the product. Carries `avgDau` (averaged, never summed) and `byPlatform`. |
+| GET | `/admin/analytics/active` | The trend view: a **zero-filled** daily DAU series over `?from=`/`?to=` plus the headline block. Zero-filled rather than sparse — a chart that omits an empty day draws a straight line through the gap, which reads as "flat" instead of "nobody came". Loads back to the MAU window even when the series starts later, so the series and the summary come from one read. |
+| GET | `/admin/analytics/active.csv` | The same series as CSV. Deliberately **uncached**, like `/admin/purchases`: an export is asked for when someone wants the real numbers now. |
 | GET | `/admin/analytics/monetization` | **The conversion, not the ledger** — what share of acquired users pay. Three denominators side by side (all real registrations / activated / reached a paywall), revenue with ARPU+ARPPU, per-product payers, signup-week cohorts, four segment cuts (channel, gender, city, registration track), repeat-purchase and time-to-first-payment. Cached 15 min with `?fresh=1`, like the other analytics tabs — the opposite call from `/admin/purchases` above, and for the opposite reason: a conversion rate does not move meaningfully between two page loads. |
 | GET | `/admin/users/:id/health` | One account's health class plus the RULE that produced it (`reason`, `rules_fired`, `signals`). Counters and metadata only — never conversation content. |
 | GET | `/admin/matches` | The match **row** list — the pairs themselves, newest first, both participants inlined, `?status=` filtered and paginated. Distinct from `/admin/analytics/matches`, which is the aggregate funnel and cannot answer "which pairs exist right now". `telegramId` is serialized to a string (BigInt is not JSON-safe). Each row also carries the DERIVED lifecycle fields — `confirmed`, `ticketPurchased`/`At`, `refunded`/`refundedSlots`/`refundReason`, `noShow`, `attendance`, `ghostDuringScheduling`, `dateCompletedAt` — computed from columns the product already writes rather than stored (DECISIONS.md 2026-08-15), so they are populated across the whole match history instead of starting at deploy. Two readings that are easy to get wrong: `noShow: null` means "nobody answered", never "there was no no-show"; and `dateCompletedAt` is when the match CLOSED (the T+24h prompt), not evidence the date happened — that is `attendance`. Refund counts come from one `ticket_ledger` groupBy per page, not N+1. |

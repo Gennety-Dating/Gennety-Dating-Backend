@@ -10,6 +10,10 @@ vi.mock("@gennety/db", () => ({
     user: {
       findUnique: vi.fn(),
     },
+    // The DAU/MAU mark rides on `recordChatEvent`; without this the write would
+    // only ever be swallowed by its own catch and the tests below would pass
+    // for the wrong reason.
+    $executeRaw: vi.fn(),
   },
   Prisma: { DbNull: Symbol("DbNull") },
 }));
@@ -27,16 +31,21 @@ import {
   resolveChatTarget,
   truncateSummary,
 } from "./chat-events.js";
+import { clearActivityCache } from "./activity.js";
 
 const create = prisma.chatEvent.create as ReturnType<typeof vi.fn>;
 const findMany = prisma.chatEvent.findMany as ReturnType<typeof vi.fn>;
 const deleteMany = prisma.chatEvent.deleteMany as ReturnType<typeof vi.fn>;
 const findUser = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+const executeRaw = (prisma as unknown as { $executeRaw: ReturnType<typeof vi.fn> })
+  .$executeRaw;
 
 beforeEach(() => {
   vi.clearAllMocks();
   clearChatTargetCache();
   create.mockResolvedValue({});
+  executeRaw.mockResolvedValue(1);
+  clearActivityCache();
   findMany.mockResolvedValue([]);
   deleteMany.mockResolvedValue({ count: 0 });
 });
@@ -250,5 +259,46 @@ describe("forgetChatEventForMessage", () => {
     expect(deleteMany).toHaveBeenCalledWith({
       where: { userId: "u1", telegramMessageId: 77, direction: "out" },
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DAU/MAU marking rides on this function (see the comment at its call site).
+// ---------------------------------------------------------------------------
+describe("activity marking", () => {
+  it("marks an inbound event as activity", async () => {
+    await recordChatEvent({
+      userId: "u1",
+      direction: "in",
+      kind: "user_text",
+      summary: "hello",
+    });
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT mark an outbound message as activity", async () => {
+    // The bot sends the pinned banner, the drop pitch and the nudges on its own
+    // schedule. Counting those would measure our delivery, not their
+    // engagement — and would make DAU roughly equal to the notified base.
+    await recordChatEvent({
+      userId: "u1",
+      direction: "out",
+      kind: "text",
+      summary: "your match is here",
+    });
+    expect(executeRaw).not.toHaveBeenCalled();
+  });
+
+  it("still marks the day when the timeline row itself fails to write", async () => {
+    // The two are independent facts: losing the transcript line is no reason
+    // to lose the fact that the person was active.
+    create.mockRejectedValueOnce(new Error("db down"));
+    await recordChatEvent({
+      userId: "u1",
+      direction: "in",
+      kind: "user_text",
+      summary: "hello",
+    });
+    expect(executeRaw).toHaveBeenCalledTimes(1);
   });
 });

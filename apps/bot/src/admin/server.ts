@@ -27,6 +27,7 @@ import { dialogsRouter } from "./routes/dialogs.js";
 import { opsRouter } from "./routes/ops.js";
 import { purchasesRouter } from "./routes/purchases.js";
 import { userHealthRouter } from "./routes/user-health.js";
+import { activityRouter } from "./routes/activity.js";
 import { classifyAllUsers } from "./utils/user-health-source.js";
 import { USER_HEALTH_CLASSES, type UserHealthClass } from "./utils/user-health.js";
 import { purchaseSummariesForUsers, purchasesForUser } from "../services/purchases.js";
@@ -187,6 +188,7 @@ app.use(purchasesRouter);
 // Диагностика одного аккаунта: класс здоровья + какое правило сработало.
 // Путь длиннее, чем `/admin/users/:id`, поэтому затенить его не может.
 app.use(userHealthRouter);
+app.use(activityRouter);
 
 type AdminProfileSnapshot = {
   height: number | null;

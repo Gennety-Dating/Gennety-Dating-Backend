@@ -1,5 +1,101 @@
 # Gennety Dating Deploy
 
+**PENDING — DAU/MAU (ARCHITECTURE.md → `user_activity_days`, DECISIONS.md
+2026-08-27).** **Нет новых обязательных env, нет флагов, нет изменения Mini App**
+(`apps/webapp` не тронут) — но нужен **аддитивный `db:push` ДО рестарта**, так
+что порядок: Deploy Full Server Code → `db:push` → `pnpm db:drift-check` →
+`pm2 restart` → **backfill** (см. ниже).
+
+Новая таблица `user_activity_days` **пишется на каждом входящем апдейте** (хук
+в `recordChatEvent`) и читается ночным кроном, поэтому база без неё роняет
+запись в `catch` при каждом сообщении и ломает крон — сначала схема, потом
+рестарт. План проверен `migrate diff` — **ноль DROP**:
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # 0 до pm2 restart
+```
+
+**⚠️ Этот `db:push` вынесет и чужие незадеплоенные фичи.** На момент написания
+план несёт также `prime_time_purchases`, `matches.prime_time_*`,
+`profiles.relationship_intents` / `reliability_score`, `users.premium_reminder_*`
+/ `scratch_map_opt_in` и `user_scratch_maps` — всё из PENDING-блоков ниже. Всё
+аддитивно (проверено: 0 DROP на весь план), но знать об этом надо до запуска.
+
+**Backfill — не опциональный шаг, и его окно ограничено физически.** Метрика
+стартует пустой, а `chat_events` живёт 30 дней, так что либо историю
+восстанавливают сейчас, либо она не существует. Без него первое чтение MAU —
+30-дневное окно с одним днём данных, то есть число, выглядящее как коллапс:
+
+```sh
+pnpm activity:backfill          # dry run: сколько строк и за какие дни
+pnpm activity:backfill:apply    # записать
+```
+
+Идемпотентно (тот же ключ `(день, человек, платформа)`), так что повтор ничего
+не задваивает.
+
+**Шесть вещей, которые стоит знать до рестарта:**
+
+- **Появляется запись в БД на каждого активного пользователя раз в день**, не на
+  каждое сообщение: дедуп живёт в памяти процесса (`services/activity.ts`), а
+  первичный ключ — гарантия. После рестарта первое сообщение каждого человека
+  снова пишет — это ожидаемо и стоит один upsert.
+- **Исходящие сообщения не считаются активностью**, и это тест, а не
+  договорённость. Если DAU вдруг окажется равен уведомляемой базе — сломали
+  именно это.
+- **Появляется новый крон `activity-rollup`, в UTC, а не в Kyiv** (`20 0 * * *`).
+  Единственный UTC-крон в системе, намеренно: он закрывает UTC-день. Логирует
+  ТОЛЬКО когда что-то починил, поэтому тихая ночь — здоровое состояние, а строка
+  `repaired=` означает, что живая запись теряет данные.
+- **Тестовые аккаунты исключаются на чтении по `ADMIN_TEST_TELEGRAM_IDS`** — той
+  же переменной, что уже читает `user-health`. В проде она выставлена, так что
+  фаундерский аккаунт из DAU выпадет; синтетические профили (`syntheticAt`)
+  тоже. Расхождение с ручным `count(*)` объясняется полем `excludedTestUsers` в
+  каждом ответе.
+- **`ACTIVITY_ROLLUP_CRON_SCHEDULE`** — единственная новая (опциональная) env.
+  Не выставлять: дефолт и есть нужное значение.
+- **Дашборд не сломается** — форма существующих ответов не тронута, эндпоинты
+  новые. Чтобы отрисовать метрику, дашборд нужно передеплоить отдельно
+  (отдельный репозиторий); API работает и без этого.
+
+Preflight: typecheck чист по 5 проектам, lint чист, **бот 4368 тестов**
+(+46 новых), 0 failed. Шесть несущих гвардов подтверждены **красными** по
+отдельности: счёт исходящих как активности, снятый дедуп-кэш, off-by-one в
+окне (7 дней → 8), снятое исключение тестовых, DAU по умолчанию на сегодня, и
+reconcile, читающий исходящие.
+
+Проверено на живом Postgres (dev), а не только на моках: три записи (14:00,
+затем 09:00, затем 21:00) дают ОДНУ строку с `first_seen_at = 09:00` и
+`last_seen_at = 21:00` — то есть `LEAST`/`GREATEST` в `ON CONFLICT` работают и
+reconcile не откатывает живую отметку; человек, активный три дня, даёт MAU = 1.
+
+Проверка после деплоя:
+
+```sh
+psql "$DATABASE_URL" -c "select count(*), min(activity_date), max(activity_date) from user_activity_days;"
+# После backfill — непустая таблица с окном примерно в 30 дней.
+KEY=$(ssh root@167.172.178.229 "sed -n 's/^ADMIN_API_KEY=//p' /opt/gennety/.env | tail -1 | tr -d '\"'")
+curl -s -H "Authorization: Bearer $KEY" 'https://api-admin.gennety.com/admin/analytics/dau' | head -c 400
+curl -s -H "Authorization: Bearer $KEY" 'https://api-admin.gennety.com/admin/analytics/mau' | head -c 400
+pm2 logs gennety-bot --lines 40 --nostream | grep 'Activity rollup scheduled'
+```
+
+Через сутки строка `[activity-rollup] repaired=N` обязана отсутствовать: она
+означает, что живая отметка теряет записи, и смотреть тогда надо на
+`[activity] mark failed` выше по логу.
+
+**Rollback:** откатить код и перезапустить. Таблицу можно оставить — старый код
+её не читает; крон исчезает вместе с кодом. Чтобы остановить только reconcile,
+не откатывая код, поставить `ACTIVITY_ROLLUP_CRON_SCHEDULE` в далёкое будущее
+(например `0 0 31 2 *`).
+
+---
+
 **PENDING — тумблер Scratch Map, лимит канвы, покрытие возвратов реметча, плюс
 правка приватности (DECISIONS.md 2026-08-27, позже).** **Нет изменения схемы
 Prisma, нет новых env, нет флагов** — но правки есть и в `apps/webapp`, и в

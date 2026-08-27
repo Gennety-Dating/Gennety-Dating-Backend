@@ -1,4 +1,5 @@
 import { prisma, Prisma } from "@gennety/db";
+import { markUserActive } from "./activity.js";
 
 /**
  * Chat timeline (see `ChatEvent` in the Prisma schema).
@@ -140,6 +141,25 @@ export async function recordChatEvent(input: RecordChatEventInput): Promise<void
     });
   } catch (err) {
     console.warn("[chat-events] record failed:", err);
+  }
+
+  // DAU/MAU is marked HERE rather than at the individual handlers, and that is
+  // the whole point: every inbound path in the product already funnels through
+  // this function — the interaction middleware (text, media, contact, button
+  // taps), `handlers/voice.ts` after Whisper, `recordMiniAppAction` for the
+  // Mini App surfaces that never touch the chat, and `handlers/payments.ts` on
+  // a settled charge. Marking at one choke point means a seventh inbound path
+  // is counted the day it is written, with nobody having to remember.
+  //
+  // `direction: "out"` is deliberately not activity: the bot sends the pinned
+  // banner, the drop pitch and the nudges on its own schedule, so counting
+  // those would measure our delivery rather than their engagement.
+  //
+  // Fire-and-forget on purpose — see `services/activity.ts`. It also runs even
+  // when the write above failed: the two are independent facts, and losing the
+  // timeline row is no reason to lose the day.
+  if (input.direction === "in") {
+    void markUserActive(input.userId, "telegram");
   }
 }
 

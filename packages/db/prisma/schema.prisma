@@ -375,6 +375,7 @@ model User {
   liveActivityTokens        LiveActivityToken[]
   mediaValidationRejections MediaValidationRejection[]
   chatEvents                ChatEvent[]
+  activityDays              UserActivityDay[]
 
   matchesAsA          Match[]      @relation("MatchUserA")
   matchesAsB          Match[]      @relation("MatchUserB")
@@ -793,6 +794,62 @@ model ChatEvent {
   /// Backs the `deleteMessage` reconciliation lookup.
   @@index([telegramMessageId])
   @@map("chat_events")
+}
+
+/// One row per (UTC day, user, platform) on which the person DID something.
+///
+/// This is the DAU/MAU substrate, and it is deliberately an aggregate rather
+/// than a second event log: `chat_events` already records every inbound action
+/// (a typed message, a voice note, a tapped button, a Mini App submission, a
+/// settled payment), so a parallel `user_activity_events` table would be a
+/// second source of truth about the same fact and a second write on every
+/// update. What `chat_events` cannot be is the substrate, for one reason:
+/// `workers/retention.ts` deletes it after 30 days (measured on production —
+/// the oldest surviving row is exactly at that boundary), so a metric computed
+/// from it has no history and no trend. This table is what survives.
+///
+/// It is rolled up per DAY rather than counted per EVENT because that is the
+/// smallest shape both metrics can be answered from: DAU is a `COUNT` over one
+/// day, and MAU is a `COUNT(DISTINCT user_id)` over a window — unique users are
+/// not additive, so daily counters alone could never produce a monthly number.
+/// At ~50–100× fewer rows than the events it summarises, it stays cheap: 10k
+/// DAU is 10k rows a day, which Postgres does not notice.
+///
+/// `activityDate` is a **UTC** calendar day, not a Kyiv one. That is not the
+/// usual "store everything in UTC" reflex — it is where the boundary falls:
+/// UTC midnight is 02:00–03:00 in Kyiv, i.e. deep inside the product's own
+/// quiet hours (23:00–09:00), while Kyiv midnight lands while people are still
+/// awake. The UTC day therefore cuts fewer sessions in half than the local one.
+/// Revisit it the day a market exists whose night is not Kyiv's.
+model UserActivityDay {
+  /// UTC calendar day this activity belongs to (see the note above).
+  activityDate DateTime @map("activity_date") @db.Date
+  userId       String   @map("user_id") @db.Uuid
+  /// Which surface the person was active on: `telegram` | `ios`.
+  /// A plain string rather than the `Platform` enum on purpose — that enum
+  /// describes an ACCOUNT (`both` is a real value there), while this describes
+  /// one day's activity on one surface, where `both` is meaningless: a user
+  /// active on two surfaces is two rows, which is what makes a per-platform
+  /// DAU breakdown possible at all.
+  platform     String
+  /// First and last activity seen that day, in UTC. Kept as real instants —
+  /// `activityDate` is a bucket key, these are the timestamps.
+  firstSeenAt  DateTime @map("first_seen_at")
+  lastSeenAt   DateTime @map("last_seen_at")
+  /// How many actions were recorded that day. Not used by DAU/MAU — it is what
+  /// separates "opened it once" from "used it all evening" when someone asks.
+  events       Int      @default(1)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The composite key IS the idempotency guarantee: a repeated mark for the
+  /// same person on the same day and surface can only ever update a row.
+  @@id([activityDate, userId, platform])
+  /// Backs DAU (one day) and MAU (a window scan).
+  @@index([activityDate])
+  /// Backs "when was this person last active" on the single-user admin card.
+  @@index([userId, activityDate])
+  @@map("user_activity_days")
 }
 
 model Profile {

@@ -54,6 +54,7 @@ import { sweepPrimeTimeRefunds } from "./services/prime-time-purchase.js";
 import { primeTimeFeatureLive } from "./services/prime-time.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { retentionTick } from "./workers/retention.js";
+import { activityRollupTick } from "./workers/activity-rollup.js";
 import { venueConcentrationAlertTick } from "./workers/venue-concentration-alert.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
 import { retryDueVenueSelections } from "./services/venue-intent-v2.js";
@@ -248,6 +249,18 @@ const SELFIE_RETENTION_CRON_SCHEDULE =
  */
 const RETENTION_CRON_SCHEDULE =
   process.env.RETENTION_CRON_SCHEDULE ?? "45 3 * * *";
+
+/**
+ * DAU/MAU reconcile: re-derive `user_activity_days` from the inbound chat
+ * timeline, repairing whatever the fire-and-forget live mark dropped.
+ *
+ * 00:20 **UTC**, not Kyiv, and that is the point rather than an oversight: the
+ * rows it repairs are bucketed by UTC day, so the sweep has to run just after
+ * the boundary it is closing. Every other cron here is Kyiv-timed because it
+ * is about when a PERSON is awake; this one is about when a DAY ends.
+ */
+const ACTIVITY_ROLLUP_CRON_SCHEDULE =
+  process.env.ACTIVITY_ROLLUP_CRON_SCHEDULE ?? "20 0 * * *";
 /// Weekly, Friday 10:00 Kyiv — the morning after Thursday's batch, so the
 /// window it reports on always contains a full drop cycle.
 const VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE =
@@ -814,6 +827,25 @@ bot.start({
     );
     console.log(
       `[cron] Data retention scheduled: "${RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+    );
+
+    // DAU/MAU self-heal. Logs only when it actually repaired something, so a
+    // silent night is the healthy case and a `repaired=` line is the signal
+    // that the live mark is dropping writes.
+    cron.schedule(
+      ACTIVITY_ROLLUP_CRON_SCHEDULE,
+      guardedTick("activity-rollup", async () => {
+        const r = await activityRollupTick();
+        if (r.repaired > 0 || r.failed > 0) {
+          console.log(
+            `[activity-rollup] scanned=${r.scanned} repaired=${r.repaired} failed=${r.failed}`,
+          );
+        }
+      }),
+      { timezone: "UTC" },
+    );
+    console.log(
+      `[cron] Activity rollup scheduled: "${ACTIVITY_ROLLUP_CRON_SCHEDULE}" (UTC)`,
     );
 
     // Weekly venue-concentration alarm. Registered only when the alert is on:
