@@ -142,6 +142,34 @@ export const mapTileLimiter = make({
   message: { error: "Too many map tile requests, try again later." },
 });
 
+/**
+ * The Living Canvas — 90/min per authenticated user.
+ *
+ * This is the only surface in the product designed to be LEFT OPEN and to poll
+ * while nothing is happening. In the radar window it costs 24 req/min per user
+ * (a state poll and a proximity ping every 5s), which the global floor —
+ * keyed by IP at 100/min — does not distinguish from abuse.
+ *
+ * So the canvas gets a key that identifies the person rather than the address,
+ * mounted INSIDE each canvas router so `requireCanvasAuth` has already run and
+ * `req.userId` exists. 90 is ~3.75x the designed cadence: no honest client
+ * reaches it, and one broken or hostile client can no longer spend an entire
+ * shared address's budget.
+ *
+ * What this does NOT fix, and is worth knowing: the global IP floor still
+ * applies on top, so four users behind one carrier-grade NAT with the canvas
+ * open in the radar window still contend for 100/min between them —
+ * `publicReadLimiter` below already names the same shared-address problem.
+ * Solving that properly means not counting authenticated requests against an
+ * IP bucket at all, which is a change to every route rather than to this one.
+ */
+export const canvasLimiter = make({
+  windowMs: 60_000,
+  limit: 90,
+  keyGenerator: (req): string => `canvas:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many requests, slow down for a bit." },
+});
+
 /** Selfie submission — 5/day per user (falls back to IP). */
 export const selfieLimiter = make({
   windowMs: 86_400_000,

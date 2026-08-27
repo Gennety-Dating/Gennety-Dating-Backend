@@ -65,6 +65,7 @@ export default defineConfig({
         /butterfly-loader\.css/,
         /butterfly-success\.css/,
         /onboarding\.css/,
+        /canvas\.css/,
         /premium\.css/,
         /location\.css/,
       ],

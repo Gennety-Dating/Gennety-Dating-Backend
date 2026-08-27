@@ -216,6 +216,71 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   The Scratch Map's consent.
+
+   Deliberately quieter than `#sheet-action`: that button is whatever the date
+   lifecycle is asking for right now, and this is an optional setting about the
+   map. One loud control per screen (PRODUCT_SPEC §3.5b), and it is not this
+   one — so the toggle is a bordered glass row rather than a filled accent
+   button, and it drops to a plain text link once it is already on.
+   --------------------------------------------------------------------------- */
+#scratch {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgb(128 128 128 / 16%);
+}
+
+#scratch[hidden] {
+  display: none;
+}
+
+#scratch-copy {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+#scratch-copy[hidden] {
+  display: none;
+}
+
+#scratch-toggle {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgb(128 128 128 / 24%);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 6%);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+:root[data-theme="light"] #scratch-toggle {
+  background: rgb(0 0 0 / 4%);
+}
+
+/* Already on: there is nothing left to persuade anyone of, so the way out is
+   a quiet link rather than a second button competing with the sheet's own. */
+#scratch-toggle[data-on="1"] {
+  min-height: 0;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  text-align: left;
+}
+
+#scratch-toggle:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------------------
    Boot cover. Opaque and theme-correct, so the first frame is never a flash of
    the wrong background — the same reason every other Mini App here has one.
    --------------------------------------------------------------------------- */

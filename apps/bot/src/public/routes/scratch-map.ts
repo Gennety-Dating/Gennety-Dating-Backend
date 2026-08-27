@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
 
 import { requireCanvasAuth } from "../canvas-auth.js";
+import { canvasLimiter } from "../rate-limit.js";
 import {
   readScratchMap,
   recordScratchPing,
@@ -33,6 +34,10 @@ export const scratchMapRouter: Router = Router();
 
 // Either rail: the canvas is one screen on two clients (see canvas-auth.ts).
 scratchMapRouter.use(requireCanvasAuth);
+// After auth, so the key is the PERSON rather than a shared address —
+// see `canvasLimiter`. The canvas polls while nothing is happening, which
+// the global IP floor cannot tell apart from abuse.
+scratchMapRouter.use(canvasLimiter);
 
 const REFUSAL_STATUS: Record<ScratchRefusal, number> = {
   // Not an error the user can fix by retrying — it is a setting, and the

@@ -712,22 +712,34 @@ describe("a grab is a whole gesture, not a tap", () => {
     // 150 before `targetFor` started checking the return. On screen that is an
     // arm shooting off the right edge to replace a card nobody can see, and
     // nothing else in the suite can see it: every other property still holds.
+    // 120 cycles rather than a dozen because the hands and the stream run on
+    // DIFFERENT clocks: a long walk is what explores their drifting phase
+    // relationship, and shortening it would quietly stop testing the thing
+    // that broke. What it must not do is spend an `expect()` per sample —
+    // 18,667 steps x 2 hands x 6 assertions is ~224k matcher allocations for
+    // one property, which is what made this file the suite's slowest by an
+    // order of magnitude and its only test to time out under parallel load.
+    // Collect and assert once: identical coverage, and the failure names the
+    // first offending frame instead of the last.
+    const offStage: string[] = [];
     for (let t = 0; t < CYC * 120; t += 9) {
       for (const [hand, off] of [
         [0, 0],
         [1, HAND_PHASE_R],
       ] as const) {
         const s = handWork(t, hand, off);
-        expect(s.pos[0], `hand ${hand} off the stage at ${t}ms`).toBeGreaterThan(-45);
-        expect(s.pos[0], `hand ${hand} off the stage at ${t}ms`).toBeLessThan(148);
-        expect(s.pos[1]).toBeGreaterThan(-24);
-        expect(s.pos[1]).toBeLessThan(124);
-        if (s.hold) {
-          expect(s.hold[0], `card off the stage at ${t}ms`).toBeGreaterThan(-42);
-          expect(s.hold[0], `card off the stage at ${t}ms`).toBeLessThan(142);
+        if (s.pos[0] <= -45 || s.pos[0] >= 148) {
+          offStage.push(`hand ${hand} x=${s.pos[0].toFixed(1)} at ${t}ms`);
+        }
+        if (s.pos[1] <= -24 || s.pos[1] >= 124) {
+          offStage.push(`hand ${hand} y=${s.pos[1].toFixed(1)} at ${t}ms`);
+        }
+        if (s.hold && (s.hold[0] <= -42 || s.hold[0] >= 142)) {
+          offStage.push(`card x=${s.hold[0].toFixed(1)} at ${t}ms`);
         }
       }
     }
+    expect(offStage.slice(0, 5)).toEqual([]);
   });
 
   it("can reach most of the deck", () => {

@@ -1,8 +1,10 @@
 # Gennety — Privacy Policy
 
-**Last Updated: 1 August 2026**
+**Last Updated: 27 August 2026**
 
-**Version: 4.0** — this version was rewritten after a full audit of the
+**Version: 4.1** — adds one disclosure: the optional map-colouring feature
+("explored areas"), which is off unless you switch it on. Everything else is
+unchanged from version 4.0, which was rewritten after a full audit of the
 running code. The substantive changes: we no longer collect nationality or
 ethnic origin at all; identity verification moved from Persona to Amazon
 Rekognition Face Liveness; the optional "personal AI export" feature has been
@@ -116,6 +118,7 @@ the Service, and data we derive or generate to power matchmaking.
 | **Follow-up questionnaire answers** | Short optional questions we send after onboarding ("Profiler") to fuel icebreakers and date hints — you can skip any of them. |
 | **Visual type preference (optional feature)** | Where we offer the visual "type" calibration step, the picks you make from a set of sample portraits, and the compiled preference this produces. |
 | **Location** | The dating city you select and its coordinates; coordinates resolved from your browser/device geolocation or a place you pick on a map; the departure point you mark for a date, with its human-readable label if you selected it via search. |
+| **Explored areas (optional, off by default)** | Only if you switch on map colouring: the **approximate areas** you have been in, stored as grid squares roughly 1.2 km across — never your exact position, and never a coordinate. Recorded only while the map screen is open, and only inside a city we operate in. |
 | **Date preferences ("venue intent")** | What kind of date you want — experience, atmosphere, format — plus any requirements you explicitly confirm, including **dietary requirements** (e.g. vegan, vegetarian, halal, kosher, gluten-free), an **alcohol-free** requirement, and a **step-free access** requirement. See Section 6 — some of these can reveal special-category data. |
 | **Communications & feedback** | Messages, images, and voice notes you send to our bot or AI concierge; post-date feedback (a chemistry rating, whether you want a second date, free text or a voice note); free-text reasons when you decline a match, cancel a date, or report a user; and messages you send through the optional pre-date anonymous relay chat. |
 | **Payments** | Your purchase records for Date Tickets, ticket bundles, paid venue changes, and the Gennety Premium subscription. **We never receive or store your full card number** — see Section 14. |
@@ -378,7 +381,9 @@ the EU), how long it is kept, and what happens if you say no.
 
 ## 11. Location Data
 
-We use location data for two narrow purposes:
+We use location data for three narrow purposes. The first two are part of the
+service; the third is an optional feature that does nothing unless you turn it
+on:
 
 - **Your dating city.** The city you select — and its coordinates — determines
   your match pool. You can search for a city or let us resolve it from your
@@ -389,9 +394,22 @@ We use location data for two narrow purposes:
   meeting area and to find a venue that is convenient for both of you. Your
   match is **never shown your departure point** — only the agreed venue.
 
+- **Colouring in the map you have explored (optional).** If — and only if — you
+  switch this on, we note the **approximate area** you are in while the map
+  screen is open, so the map can show the parts of the city you have actually
+  been to. We store it as a grid square roughly 1.2 km across, which is about a
+  neighbourhood: it can record that you have been around a district, and it
+  cannot record which street or which building. **Your exact position is never
+  stored for this**, and the areas are yours alone — they are never shown to a
+  match or to anyone else. You can switch it off at any time; switching it off
+  stops the recording and keeps the map you have already uncovered. To erase the
+  areas themselves, delete your account (Section 15).
+
 We do **not** continuously track your location, and we do not run background
-location collection. Map tiles shown in our Mini Apps are proxied through our
-own servers, so the map provider does not receive your IP address.
+location collection — including for the optional feature above, which records
+only while you have the map screen open in front of you, and which is off until
+you switch it on. Map tiles shown in our Mini Apps are proxied through our own
+servers, so the map provider does not receive your IP address.
 
 ---
 
@@ -584,6 +602,7 @@ We keep personal data only as long as necessary for the purposes above.
 | Relay-chat message logs | **90 days**, and in any case deleted with the match |
 | Chat timeline | **30 days**, then automatically deleted |
 | Promo attribution fingerprint | Up to **1 hour**, held in memory only |
+| Explored areas (map colouring) | While your account exists; erased on account deletion. Switching the feature off stops new recording and keeps what you have uncovered |
 | Match records, score breakdowns, venue selection logs | While your account exists; erased on account deletion |
 | Onboarding funnel telemetry | While your account exists; erased on account deletion (it contains no answer text) |
 | Payment and subscription ledger entries | As required by accounting and tax law, typically several years, even after account deletion — kept minimal and separated from your profile |

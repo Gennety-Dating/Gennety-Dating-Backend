@@ -4,7 +4,7 @@ Source-of-truth **drafts** for Gennety's user-facing legal documents.
 
 | File | Publish to | Live version to publish |
 |---|---|---|
-| [privacy-policy.md](privacy-policy.md) | `https://gennety.com/privacy` | v4.0 — "Last Updated: 1 August 2026" |
+| [privacy-policy.md](privacy-policy.md) | `https://gennety.com/privacy` | v4.1 — "Last Updated: 27 August 2026" |
 | [terms-of-service.md](terms-of-service.md) | `https://gennety.com/terms` | v3.0 — "Last Updated: 1 August 2026" |
 | [cookie-policy.md](cookie-policy.md) | `https://gennety.com/cookies` | v1.0 — "Last Updated: 23 July 2026" |
 
@@ -23,7 +23,7 @@ processor**, exactly like the published documents above.
 **The Terms and the Privacy Policy share one version stamp**, because the
 consent screen accepts them with a single checkbox. That stamp lives in code as
 `LEGAL_DOCS_VERSION` (`packages/shared/src/constants.ts`, currently
-`"2026-08-01"`) and is written to `User.policyVersion` at the moment of the
+`"2026-08-27"`) and is written to `User.policyVersion` at the moment of the
 click, so we can demonstrate WHICH text any given user agreed to (GDPR Art.
 7(1)). **Bump the constant in the same commit as any material edit to either
 document.**
@@ -43,6 +43,26 @@ legal review.** Have a qualified lawyer review them before publishing —
 especially the biometric-data (GDPR Art. 9), dietary/accessibility special-
 category (Art. 9), automated-decision (Art. 22), payment/refund/subscription,
 and Apple App Store sections.
+
+## What changed in v4.1 (2026-08-27)
+
+One disclosure, driven by shipping the feature it describes. The **Scratch Map**
+("colour in the parts of the city you have been to") had been built end to end —
+server, endpoint, fog layer, percentage, consent column — and was **unreachable**,
+because nothing in the client ever called the opt-in. Making it reachable makes it
+collectable, so the documents move in the same commit as the switch:
+
+- **Privacy §11 said "two narrow purposes" and now says three.** The two existing
+  statements stay true and are now stated more strongly: this collection is
+  foreground-only and off until switched on, so "no background collection" is a
+  property of the build rather than a promise.
+- **Privacy §4** gains an "explored areas" row, **§16** a retention row.
+- **ROPA gains activity 2.5b**, on Art. 6(1)(a) consent — deliberately not folded
+  into the research opt-in, because that governs analytics use of data we already
+  hold while this authorises collecting a new class of it.
+- **No DPIA risk was added.** The assessment's location risk is about precision
+  and linkage; this feature stores geohash-6 tiles (~1.2 km) and no coordinate,
+  so it lands inside the existing minimisation finding rather than beside it.
 
 ## What changed in this rewrite (2026-08-01)
 

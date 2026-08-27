@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
 
 import { requireCanvasAuth } from "../canvas-auth.js";
+import { canvasLimiter } from "../rate-limit.js";
 import { getNextBatchDate } from "../../services/next-batch.js";
 import {
   ACTIVE_MATCH_STATUSES,
@@ -52,6 +53,10 @@ export const dateStateRouter: Router = Router();
 
 // Either rail: the canvas is one screen on two clients (see canvas-auth.ts).
 dateStateRouter.use(requireCanvasAuth);
+// After auth, so the key is the PERSON rather than a shared address —
+// see `canvasLimiter`. The canvas polls while nothing is happening, which
+// the global IP floor cannot tell apart from abuse.
+dateStateRouter.use(canvasLimiter);
 
 dateStateRouter.get("/state", async (req: Request, res: Response): Promise<void> => {
   const userId = req.userId!;

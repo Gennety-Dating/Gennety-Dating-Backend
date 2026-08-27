@@ -91,6 +91,17 @@ enforced at onboarding) — so it is stated once here rather than repeated.
 | **Retention** | While the account exists; erased on deletion |
 | **Note** | A departure point is **never** shown to the match — only the agreed venue |
 
+### 2.5b Explored areas ("map colouring") — optional, off by default
+
+| | |
+|---|---|
+| **Purpose** | Let a user colour in the parts of their city they have actually been to |
+| **Legal basis** | Art. 6(1)(a) **consent** — a dedicated in-product switch, off by default, withdrawable at any time. Deliberately NOT covered by the research opt-in or by the sign-up terms: this authorises collecting a new class of data, so it is asked for separately |
+| **Data categories** | Geohash precision-6 tiles (~1.2 km x 0.61 km) and a count of them. **No coordinate is stored** — the position is reduced to a tile and discarded |
+| **Recipients** | None. Not shared with the match, not shared with a processor |
+| **Retention** | While the account exists; erased on deletion. Withdrawing consent stops collection and retains the tiles already uncovered (they are the user's own map) |
+| **Note** | Written only from a foreground ping while the map screen is open, and from a verified Date Bump. There is no background-location entitlement and no such permission is requested, so "we do not run background collection" is structural rather than a policy promise |
+
 ### 2.6 Communications with the AI, and the chat timeline
 
 | | |

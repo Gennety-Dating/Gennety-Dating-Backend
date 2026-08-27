@@ -91,6 +91,16 @@
       <p id="sheet-note" hidden></p>
       <ul id="sheet-list" hidden></ul>
       <button id="sheet-action" type="button" hidden></button>
+
+      <!-- The Scratch Map's consent. Its own block rather than a `sheetFor`
+           branch: that function describes the DATE lifecycle, and this is
+           about the map. Shown only in IDLE_EXPLORING — the one state where
+           the feature actually records anything — so the control sits where
+           the thing it authorises happens. -->
+      <div id="scratch" hidden>
+        <p id="scratch-copy"></p>
+        <button id="scratch-toggle" type="button"></button>
+      </div>
     </section>
 
     <script type="module" src="/src/canvas.ts"></script>

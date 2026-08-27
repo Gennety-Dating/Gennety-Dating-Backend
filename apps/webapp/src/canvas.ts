@@ -26,6 +26,7 @@ import {
   postBump,
   postProximity,
   postScratchPing,
+  putScratchOptIn,
   type DateStateResponse,
   type ScratchState,
 } from "./canvas/api.js";
@@ -68,6 +69,9 @@ const el = {
   list: document.getElementById("sheet-list"),
   action: document.getElementById("sheet-action") as HTMLButtonElement | null,
   sheet: document.getElementById("sheet"),
+  scratch: document.getElementById("scratch"),
+  scratchCopy: document.getElementById("scratch-copy"),
+  scratchToggle: document.getElementById("scratch-toggle") as HTMLButtonElement | null,
 };
 
 let map: L.Map | null = null;
@@ -88,6 +92,8 @@ let motionDenied = false;
  */
 let geoDenied = false;
 let scratch: ScratchState | null = null;
+let scratchBusy = false;
+let scratchError: string | null = null;
 let fogLayer: SVGSVGElement | null = null;
 const detector = createShakeDetector();
 
@@ -317,6 +323,65 @@ function render(): void {
   el.action.hidden = view.action === null;
   el.action.textContent = view.actionLabel ?? "";
   el.action.dataset.action = view.action ?? "";
+
+  renderScratchToggle();
+}
+
+/**
+ * The Scratch Map's on/off control.
+ *
+ * It exists because for a while everything behind it did and this did not:
+ * the endpoint, the client call, the fog layer, the percentage and the copy
+ * were all built while `putScratchOptIn` had no caller anywhere, so the
+ * feature could not be switched on by any user on any surface.
+ *
+ * Only in IDLE_EXPLORING, which is exactly where `pingScratch` runs — a
+ * consent control belongs in the state where the collection it authorises
+ * actually happens, not on a screen that is about a date. The "N% of Kyiv"
+ * readout is the sheet's own note and is not repeated here.
+ */
+function renderScratchToggle(): void {
+  const { scratch: box, scratchCopy: copy, scratchToggle: toggle } = el;
+  if (!box || !copy || !toggle) return;
+
+  // `null` means the state has not loaded yet — offering a consent before
+  // knowing whether it was already given would flash the wrong control.
+  const show = latest?.state === "IDLE_EXPLORING" && scratch !== null;
+  box.hidden = !show;
+  if (!show || !scratch) return;
+
+  const on = scratch.optIn;
+  // The copy is the ask, so it belongs to the off state. Once it is on, the
+  // sheet's own note already says what it bought.
+  copy.textContent = scratchError ?? (on ? "" : s.scratchOffer);
+  copy.hidden = !copy.textContent;
+  toggle.textContent = on ? s.scratchDisable : s.scratchEnable;
+  toggle.dataset.on = on ? "1" : "0";
+  toggle.disabled = scratchBusy;
+}
+
+async function toggleScratch(): Promise<void> {
+  if (!scratch || scratchBusy) return;
+  scratchBusy = true;
+  scratchError = null;
+  renderScratchToggle();
+  const next = !scratch.optIn;
+  try {
+    scratch = await putScratchOptIn(initData, next);
+    haptic(next ? "success" : "light");
+    // Turning it ON should show something immediately rather than waiting out
+    // the idle poll, which is a minute away.
+    if (next) await pingScratch();
+    render();
+  } catch {
+    // The write IS the consent, so a failure must not leave a control that
+    // reads as switched.
+    scratchError = s.scratchFailed;
+    haptic("error");
+  } finally {
+    scratchBusy = false;
+    renderScratchToggle();
+  }
 }
 
 el.action?.addEventListener("click", () => {
@@ -330,6 +395,8 @@ el.action?.addEventListener("click", () => {
   }
   if (action === "shake") void armShake();
 });
+
+el.scratchToggle?.addEventListener("click", () => void toggleScratch());
 
 // ---------------------------------------------------------------------------
 // Bump

@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 
 import { requireCanvasAuth } from "../canvas-auth.js";
+import { canvasLimiter } from "../rate-limit.js";
 import {
   announceBumpVerified,
   generateAndStoreBumpDeck,
@@ -25,6 +26,10 @@ export const dateBumpRouter: Router = Router();
 
 // Either rail: the canvas is one screen on two clients (see canvas-auth.ts).
 dateBumpRouter.use(requireCanvasAuth);
+// After auth, so the key is the PERSON rather than a shared address —
+// see `canvasLimiter`. The canvas polls while nothing is happening, which
+// the global IP floor cannot tell apart from abuse.
+dateBumpRouter.use(canvasLimiter);
 
 /** How far the device clock may run ahead of ours before we stop trusting it. */
 const CLOCK_SKEW_TOLERANCE_MS = 60_000;

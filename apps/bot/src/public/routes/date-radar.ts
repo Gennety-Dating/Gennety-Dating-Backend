@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
 
 import { requireCanvasAuth } from "../canvas-auth.js";
+import { canvasLimiter } from "../rate-limit.js";
 import { sideOf } from "../../services/date-state.js";
 import {
   checkRadarWindow,
@@ -37,6 +38,10 @@ export const dateRadarRouter: Router = Router();
 
 // Either rail: the canvas is one screen on two clients (see canvas-auth.ts).
 dateRadarRouter.use(requireCanvasAuth);
+// After auth, so the key is the PERSON rather than a shared address —
+// see `canvasLimiter`. The canvas polls while nothing is happening, which
+// the global IP floor cannot tell apart from abuse.
+dateRadarRouter.use(canvasLimiter);
 
 const REFUSAL_STATUS: Record<string, number> = {
   // Authenticated but on neither side — 404 rather than 403, so the endpoint
