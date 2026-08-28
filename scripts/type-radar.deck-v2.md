@@ -127,19 +127,56 @@ Instagram (аватарка, «⋯», «✕», случайный ник) воп
 
 ```
 a photo they would post on their own feed — posing for the camera on purpose,
-relaxed and self-aware, body angled with the weight on one leg, face fully
-toward the lens and looking straight into it, an easy unforced smile that
-reaches the eyes, framed from mid-thigh up with both forearms bare and in frame,
-alone in frame, a beautiful place behind them kept soft and out of focus, real
-available light, faint natural grain, ordinary skin texture, vertical 9:16
---no profile, no looking away, no face turned from the camera, full body, feet
-in frame, posed catalogue stance, lookbook, product photography, model casting,
+relaxed and self-aware, a warm genuinely good-looking face with real bone
+structure, body angled with the weight on one leg, turned to the camera and
+looking into the lens with a relaxed half-smile, shot from a few steps back so
+their whole upper body and hips sit in the frame with room around them, both
+forearms bare and in frame, alone in frame, a beautiful place behind them kept
+soft and out of focus, real available light, faint natural grain, ordinary skin
+texture, vertical 9:16
+--no profile, no looking away, no face turned from the camera, close-up,
+headshot, portrait crop, tight crop, forced grin, wide toothy smile, full body,
+feet in frame, posed catalogue stance, lookbook, product photography, model casting,
 studio lighting, fashion editorial, retouched plastic skin, androgynous,
 feminine features, soft jawline, other people, passers-by in the background,
 readable text, signage lettering, logos, watermark, instagram ui, story
 interface, username, phone screen overlay, mirror selfie, sunglasses, hat,
 heavy filter, exaggerated body proportions
 ```
+
+**Слово `tattoo` НИКОГДА не пишется в позитиве — ни с «no», ни с чем угодно.**
+Это моя ошибка первого захода, и она стоила двух браков: в промптах карточек
+«без тату» стояло `with no tattoos`, а в негативах слова `tattoo` не было
+вообще — то есть модель видела токен «tattoos» **только** как то, что надо
+нарисовать. Диффузия не отрицает: «no X» в позитиве работает как «X». Прямое
+доказательство — ms1, чей промпт просил `bare forearms with no tattoos` и
+вернулся с татуировкой на плече.
+
+Поэтому: **у карточки «без тату» слово из позитива убирается совсем**
+(предплечья описываются нейтрально — «sleeves rolled up his bare forearms»), а
+в конец негатива добавляется
+
+```
+tattoo, tattoos, tattoo sleeve, inked arms, ink on skin
+```
+
+**У тату-карточки этой строки в негативе быть не должно** — там тату описывается
+в позитиве подробно и отдельным предложением, как на ms2.
+
+**Кадр задаётся расстоянием, а не долей тела.** `from mid-thigh up` ничего не
+ограничивает у **сидящего** героя: середина бедра у него на уровне столешницы,
+и кадр честно схлопывается в поясной. Так вышли ma3, fa1 и ma1 — все трое
+сидят. Работает `shot from a few steps back … with room around them`, потому что
+это инструкция камере, а не анатомии.
+
+**Улыбка — половинчатая, а не «до глаз».** `a smile that reaches the eyes`
+тянет в широкую улыбку с зубами, и на статике она читается натянутой. Просить
+надо `relaxed half-smile`, а `forced grin, wide toothy smile` держать в негативе.
+
+**Привлекательность впервые доехала до генератора.** Константа «самый
+симпатичный человек за обычным столиком» была записана в разделе констант и **ни
+разу не попадала ни в один промпт** — модель её не видела. Теперь она в хвосте
+одной фразой.
 
 **Почему `caught mid-action` выброшено.** Хвост 2026-08-24 просил одновременно
 «поймали за делом» и «смотрит в объектив», и генератор разрешал конфликт в
@@ -633,19 +670,33 @@ lit shopfronts and wet pavement behind him, shop signs and streetlight,` +
 
 ### ma3 — творческий · тёмные · борода · без тату · светлое кафе
 
-**Пересъём 2026-08-26.** На первом кадре нижняя половина лица закрыта чашкой, а
-взгляд уведён в сторону — карточка, которая должна показать лицо, показывала
-чашку. Кафе приведено к общему с mp3 предложению.
+**Пересъём 2026-08-28, второй заход.** Первый заход (лицо за чашкой) и второй
+(татуировки на половине генераций, поясной кадр, натянутая улыбка) провалились по
+трём разным причинам, и все три — мои:
 
-**Промпт.** `a 25-year-old Eastern European man, dark hair grown out into loose
-waves, short beard, in a soft corduroy overshirt open over a white tee with the
-sleeves rolled to the elbow, bare forearms with no tattoos, sitting at a small
-table with both forearms on it and an espresso beside him, leaning slightly toward
-the camera, face fully to the lens with a warm smile, in a bright modern speciality café with a marble counter, hanging plants and big daylight windows behind him, soft daylight from the window,` + хвост v3.
+1. **`no tattoos` в позитиве рисовало тату.** Слово убрано из позитива совсем,
+   тату уехало в негатив. См. правило в хвосте v3.
+2. **Сидящая поза не поддаётся `from mid-thigh up`.** Герой поставлен к стойке —
+   как на mp3, который из всей пересъёмки вышел лучшим и снят в этом же кафе.
+   Это заодно усиливает изолирующую пару: одинаковая композиция при разных
+   архетипах — ровно то, ради чего пара существует.
+3. **Лицо было никакое, потому что генератор о привлекательности не просили.**
+   Теперь просят — фразой в хвосте.
 
-**Проверить.** Чашка **на столе, а не у лица**. Предплечья открыты и чистые —
-иначе ячейка «без тату» не наблюдаема. Фон и свет **дословно те же, что на
-mp3**.
+**Промпт.** `a 25-year-old Eastern European man with a warm genuinely handsome
+face, dark hair grown out into loose waves, a short beard, in a soft corduroy
+overshirt open over a white tee with the sleeves rolled up his bare forearms,
+standing and leaning back against the marble counter with a flat white in one
+hand and the other hand in his pocket, weight on one leg, turned to the camera
+with a relaxed half-smile, in a bright modern speciality café with a marble
+counter, hanging plants and big daylight windows behind him, soft daylight from
+the window,` + хвост v3 **+ в негатив** `tattoo, tattoos, tattoo sleeve, inked
+arms, ink on skin`.
+
+**Проверить.** Предплечья открыты и **чистые** — это одна из немногих оставшихся
+наблюдаемых карточек «без тату» в мужском наборе, после mc1 запаса нет. Кадр от
+пояса и шире, не поясной портрет. Улыбка спокойная, не оскал. Фон и свет **те
+же, что на mp3**.
 
 ## Приёмка: что проверяем на всём наборе, а не покадрово
 
