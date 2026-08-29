@@ -90,8 +90,16 @@ real face passing liveness per invitee.
 
 ## Surfaces
 
-- **Telegram.** Menu row "🎁 Invite a friend" (`menu:referral`, feature-gated)
-  → the referral Mini App (`referral.html`): the milestone ladder with $ values,
+- **Telegram.** Menu row "🎁 Invite a friend" opens the referral Mini App
+  directly (feature-gated) — no title/tagline message first (2026-08-29):
+  `referral.html` already renders the ladder itself, so a message repeating
+  that one tap earlier bought nothing (the same reasoning §3.8 applies to
+  Premium's own menu row). The callback path (`menu:referral` →
+  `handleReferralHub`) still exists as the fallback when `WEBAPP_URL` isn't a
+  real HTTPS host (dev without a tunnel), since Telegram rejects a non-HTTPS
+  `web_app` button outright.
+  Once open: the referral Mini App (`referral.html`) shows the milestone
+  ladder with $ values,
   and a one-tap **share** (`POST /v1/referral/share-message` mints a
   `savePreparedInlineMessage` → `WebApp.shareMessage`) that forwards a branded
   invite card (`services/referral-card`, satori→resvg→JPEG; degrades to a rich

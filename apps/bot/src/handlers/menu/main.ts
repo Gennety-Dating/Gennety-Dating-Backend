@@ -1,11 +1,12 @@
 import { InlineKeyboard, type Api } from "grammy";
 import type { MessageEntity } from "grammy/types";
 import type { BotContext } from "../../session.js";
-import { prisma, type MatchStatus } from "@gennety/db";
+import { prisma, type MatchStatus, type Theme } from "@gennety/db";
 import { computeStatusSnapshot, t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { menuToggleStateFor, type MenuToggleState } from "../../services/user-status.js";
 import { findActiveMatchForTelegramId } from "../../services/active-match.js";
+import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import { citySwitchLabel, isMarketPending } from "./city-switch.js";
 
 /** Minimal descriptor for the conditional "My date" menu row. */
@@ -46,14 +47,16 @@ export function buildMainMenuKeyboard(
   ctx: BotContext,
   status: MenuToggleState,
   videoReward = false,
+  theme: Theme = "dark",
 ): InlineKeyboard {
-  return buildMainMenuKeyboardFor(ctx.session.language, status, videoReward);
+  return buildMainMenuKeyboardFor(ctx.session.language, status, videoReward, theme);
 }
 
 function buildMainMenuKeyboardFor(
   lang: Language,
   status: MenuToggleState,
   videoReward: boolean,
+  theme: Theme,
   activeDate: ActiveDateDescriptor | null = null,
   now: Date = new Date(),
   marketPending = false,
@@ -98,20 +101,46 @@ function buildMainMenuKeyboardFor(
   const videoLabel = t(lang, "menuVideo") + (videoReward ? " 🎁" : "");
   kb.text(videoLabel, "menu:video").row();
 
-  // Ticket wallet entry — only when the Date Ticket feature is live.
+  // Ticket wallet entry — only when the Date Ticket feature is live. Kept as
+  // a message (not a direct web_app row) on purpose: the balance shown there
+  // is the whole reason someone taps it, and founder preference is to keep
+  // that number visible before the Mini App opens.
   if (env.TICKET_FEATURE_ENABLED) {
     kb.text(t(lang, "menuMyTickets"), "menu:tickets").row();
   }
 
-  // Gennety Premium entry — only when the Premium feature is live. The hub
-  // itself shows whether the subscription is active.
+  // Gennety Premium entry — only when the Premium feature is live. Opens the
+  // Mini App directly: `premium.html` already renders the "active until" /
+  // benefits state itself from its own GET /v1/premium/state call, so the
+  // hub message this used to send only repeated what the Mini App shows one
+  // tap later. Falls back to the callback-driven hub (still handled in
+  // router.ts) when WEBAPP_URL isn't a real HTTPS host — Telegram rejects a
+  // non-HTTPS web_app button outright — and that same callback is also how
+  // the concierge agent's `open_screen("premium")` tool hands the screen over
+  // via text/voice (a bot reply can only contain a button, never open a
+  // WebView on its own).
   if (env.PREMIUM_FEATURE_ENABLED) {
-    kb.text(t(lang, "menuPremium"), "menu:premium").row();
+    const premiumUrl = buildMiniAppUrl("premium", { lang, theme });
+    if (premiumUrl.startsWith("https://")) {
+      kb.webApp(t(lang, "menuPremium"), premiumUrl).row();
+    } else {
+      kb.text(t(lang, "menuPremium"), "menu:premium").row();
+    }
   }
 
-  // Referral entry ("Give a date, get a date") — only when the feature is live.
+  // Referral entry ("Give a date, get a date") — only when the feature is
+  // live. Same reasoning as Premium: `referral.html` renders the ladder +
+  // share button itself, so the row opens it directly instead of through a
+  // title/tagline message. Same HTTPS fallback and the same open_screen
+  // caveat apply (referral isn't in SCREEN_ENTRIES today, but the callback
+  // stays live as the dev fallback and for any future caller).
   if (env.REFERRAL_FEATURE_ENABLED) {
-    kb.text(t(lang, "menuInviteFriend"), "menu:referral").row();
+    const referralUrl = buildMiniAppUrl("referral", { lang, theme });
+    if (referralUrl.startsWith("https://")) {
+      kb.webApp(t(lang, "menuInviteFriend"), referralUrl).row();
+    } else {
+      kb.text(t(lang, "menuInviteFriend"), "menu:referral").row();
+    }
   }
 
   return kb.text(t(lang, "menuHelp"), "menu:help");
@@ -126,6 +155,7 @@ export async function showMainMenu(ctx: BotContext): Promise<void> {
     where: { telegramId },
     select: {
       status: true,
+      theme: true,
       profile: { select: { videoBonusTicketAt: true, homeCityKey: true } },
     },
   });
@@ -138,6 +168,7 @@ export async function showMainMenu(ctx: BotContext): Promise<void> {
     lang,
     status,
     videoReward,
+    user?.theme ?? "dark",
     activeDate,
     marketPending,
   );
@@ -158,6 +189,7 @@ export async function sendMainMenu(
     where: { telegramId },
     select: {
       status: true,
+      theme: true,
       profile: { select: { videoBonusTicketAt: true, homeCityKey: true } },
     },
   });
@@ -170,6 +202,7 @@ export async function sendMainMenu(
     lang,
     status,
     videoReward,
+    user?.theme ?? "dark",
     activeDate,
     marketPending,
   );
@@ -196,6 +229,7 @@ function buildMainMenuPayload(
   lang: Language,
   status: MenuToggleState,
   videoReward: boolean,
+  theme: Theme,
   activeDate: ActiveDateDescriptor | null = null,
   marketPending = false,
 ): { text: string; options: Record<string, unknown> } {
@@ -204,6 +238,7 @@ function buildMainMenuPayload(
     lang,
     status,
     videoReward,
+    theme,
     activeDate,
     new Date(),
     marketPending,

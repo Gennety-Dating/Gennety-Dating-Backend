@@ -5886,22 +5886,30 @@ user already paid for stays valid regardless of the flag.
   authoritative transaction is re-fetched from Apple). The subscription's
   `originalTransactionId` is stored on `User.premiumExternalId` so a renewal
   webhook (which carries no user id) finds the owner.
-- **Purchase surface.** Telegram: a ✨ **Gennety Premium** main-menu row → the
-  Premium hub (benefits, or "active until …") → the Premium Mini App
-  (`apps/webapp/premium.html`, `WebApp.openInvoice`). iOS: a native paywall
+- **Purchase surface.** Telegram: a ✨ **Gennety Premium** main-menu row opens
+  the Premium Mini App directly (`apps/webapp/premium.html`, `WebApp.openInvoice`)
+  — no intermediate hub message (2026-08-29). `premium.html` already renders its
+  own "active until …" / benefits state from `GET /v1/premium/state`, so a text
+  message repeating that one tap earlier bought nothing. The old hub screen
+  (`handlePremiumHub`, `menu:premium`) still exists and is reached two other
+  ways: as the fallback when `WEBAPP_URL` isn't a real HTTPS host (dev without a
+  tunnel — Telegram rejects a non-HTTPS `web_app` button outright), and as what
+  the concierge agent's `open_screen("premium")` tool hands over via text/voice
+  — a bot reply can only ever contain a *button*, never open a WebView on its
+  own, so that tool still needs a callback to attach. iOS: a native paywall
   (designed in parallel; `features.premium` in `GET /v1/app/config`).
-  **The hub names no price and its button does not ask for the sale**
-  (2026-08-01). It used to open with the monthly price and a `Subscribe — $X/mo`
-  button — a request for money made in the first message after the menu tap,
-  before the product had shown what Premium does. The button is now a plain
-  "Learn more" and the price appears one tap later, inside the Mini App, next to
-  the benefits it buys. The hub's closing line is the reassurance, not a
-  procedure: cancelling is one message to the concierge, which is the real
-  mechanic (below) — the Telegram → Settings → Subscriptions walkthrough is
-  gone from here and survives only where it is load-bearing, as the honest
-  fallback when the Stars API cancel fails. An **App Store** subscriber viewing
-  the hub gets Apple's own steps instead, since the concierge cannot cancel
-  their subscription and must not imply otherwise.
+  **The hub (where it is still reached) names no price and its button does not
+  ask for the sale** (2026-08-01). It used to open with the monthly price and a
+  `Subscribe — $X/mo` button — a request for money made in the first message
+  after the menu tap, before the product had shown what Premium does. The
+  button is now a plain "Learn more" and the price appears one tap later,
+  inside the Mini App, next to the benefits it buys. The hub's closing line is
+  the reassurance, not a procedure: cancelling is one message to the concierge,
+  which is the real mechanic (below) — the Telegram → Settings → Subscriptions
+  walkthrough is gone from here and survives only where it is load-bearing, as
+  the honest fallback when the Stars API cancel fails. An **App Store**
+  subscriber viewing the hub gets Apple's own steps instead, since the
+  concierge cannot cancel their subscription and must not imply otherwise.
 - **In-chat cancellation (Telegram, agent-driven), two-stage confirm
   (2026-08-01).** When a user tells the menu agent they want to cancel / stop /
   turn off Premium — or asks how — the agent calls the `offer_cancel_premium`

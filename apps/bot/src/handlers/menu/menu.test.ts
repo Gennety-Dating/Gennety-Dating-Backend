@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SessionData, PhotoManagerCard } from "@gennety/shared";
 import { DEFAULT_SESSION, MIN_PHOTOS, MAX_PHOTOS, t } from "@gennety/shared";
 
@@ -121,6 +121,7 @@ const verificationCtaMocks = vi.hoisted(() => ({
 vi.mock("../onboarding/verification.js", () => verificationCtaMocks);
 
 import { prisma } from "@gennety/db";
+import { env } from "../../config.js";
 import { findActiveMatchForTelegramId } from "../../services/active-match.js";
 import { showMainMenu, buildMainMenuKeyboard } from "./main.js";
 import { handleMyProfile } from "./my-profile.js";
@@ -358,6 +359,70 @@ describe("Menu — main keyboard", () => {
     const firstBtn = kb.inline_keyboard[0][0];
     expect(firstBtn.callback_data).toBe("menu:city");
     expect(firstBtn.style).toBe("primary");
+  });
+});
+
+describe("Menu — Premium / Referral rows open the Mini App directly", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "active" });
+  });
+
+  afterEach(() => {
+    env.PREMIUM_FEATURE_ENABLED = false;
+    env.REFERRAL_FEATURE_ENABLED = false;
+    env.TICKET_FEATURE_ENABLED = false;
+  });
+
+  it("renders the Premium row as a web_app button, not a callback", async () => {
+    env.PREMIUM_FEATURE_ENABLED = true;
+    const ctx = createMockCtx({});
+    await showMainMenu(ctx);
+    const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    const flat = kb.inline_keyboard.flat();
+    const premiumBtn = flat.find((b: { text: string }) => b.text === t("en", "menuPremium"));
+    expect(premiumBtn).toBeDefined();
+    expect(premiumBtn.callback_data).toBeUndefined();
+    expect(premiumBtn.web_app?.url).toContain("/premium.html");
+    expect(premiumBtn.web_app?.url).toContain("lang=en");
+  });
+
+  it("renders the Referral row as a web_app button, not a callback", async () => {
+    env.REFERRAL_FEATURE_ENABLED = true;
+    const ctx = createMockCtx({});
+    await showMainMenu(ctx);
+    const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    const flat = kb.inline_keyboard.flat();
+    const referralBtn = flat.find((b: { text: string }) => b.text === t("en", "menuInviteFriend"));
+    expect(referralBtn).toBeDefined();
+    expect(referralBtn.callback_data).toBeUndefined();
+    expect(referralBtn.web_app?.url).toContain("/referral.html");
+  });
+
+  it("falls back to the callback-driven hub when WEBAPP_URL isn't real HTTPS", async () => {
+    env.PREMIUM_FEATURE_ENABLED = true;
+    const original = env.WEBAPP_URL;
+    env.WEBAPP_URL = "http://localhost:5173";
+    try {
+      const ctx = createMockCtx({});
+      await showMainMenu(ctx);
+      const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+      expect(JSON.stringify(kb.inline_keyboard)).toContain('"menu:premium"');
+    } finally {
+      env.WEBAPP_URL = original;
+    }
+  });
+
+  it("still renders My Tickets as the balance message, not a direct web_app row", async () => {
+    env.TICKET_FEATURE_ENABLED = true;
+    const ctx = createMockCtx({});
+    await showMainMenu(ctx);
+    const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    const flat = kb.inline_keyboard.flat();
+    const ticketsBtn = flat.find((b: { text: string }) => b.text === t("en", "menuMyTickets"));
+    expect(ticketsBtn).toBeDefined();
+    expect(ticketsBtn.callback_data).toBe("menu:tickets");
+    expect(ticketsBtn.web_app).toBeUndefined();
   });
 });
 
