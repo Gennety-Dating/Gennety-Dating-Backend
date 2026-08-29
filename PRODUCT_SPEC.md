@@ -1368,47 +1368,43 @@ Hard rules enforced by the collector:
   status beat: (1) the Profiler in-batch flow (§Phase 1b), so the post-onboarding
   Q&A reads as an AI composing each question for the user; and (2) the **periodic
   profile-survey "thinking" pause** — during the conversational profile survey,
-  every third typed answer the bot holds one short "thinking" shimmer beat
-  (~2.5 s, the `think` AIActions glyph) *before* the next question is composed.
+  every third answer — spoken or typed alike — the bot holds one short
+  "thinking" shimmer beat (~2.5 s, the `think` AIActions glyph) *before* the
+  next question is composed.
   The pause runs strictly first: the "typing…" indicator and the next-question
   generation only start after the shimmer is torn down, so the thinking beat is
   never preceded by a typing indicator. Photo-stage continues, photo/video
   uploads, and context-dump pastes do not count toward the cadence.
 
-  **A voice answer is covered by its own status, and never gets the cadence
-  beat on top (2026-08-24).** During onboarding a spoken answer used to sit
-  under a bare `record_voice` chat action for the whole Bot API download plus
-  the Whisper round-trip — several seconds in which the bot looked like it had
-  missed the recording, on the one surface where the user has just been asked a
-  question. `voiceHandler` now holds a two-beat status over that work —
-  *listening to your voice note* (3.5 s), then *taking it in* (2 s) — passed
-  `until: <ingest>` with `NEVER_CUT_SHORT`, so the script always plays in full
-  and a slow Whisper call only ever holds the LAST beat longer. Cost is
-  therefore `max(script, work)` rather than their sum, and the status is torn
-  down before the answer — or the transcription-failed refusal — lands in its
-  place. Both hold times are named constants with a ceiling a test enforces:
-  this is real time added to the onboarding funnel for every spoken answer, and
-  a number like that otherwise creeps one retune at a time (the same treatment
-  §1.3's gender-screen advance hold gets).
+  **A recording used as an ANSWER is never narrated, on any step (founder
+  decision 2026-08-29, reversing 2026-08-24).** It gets the plain
+  `record_voice` / `typing` chat action while the Bot API download and the
+  Whisper round-trip run, exactly as a post-onboarding recording does, and it
+  is counted by the periodic cadence beat above exactly like a typed answer.
 
-  Three bounds keep it from becoming a tax on the rest of the product.
-  **Registration only** — `onboardingStep !== "completed"`, the same "mid
-  onboarding" test the voice-prompt claim already runs on: post-onboarding
-  voice, which is every recording the concierge ever receives, keeps its silent
-  chat action, because there a recording is one turn in an ongoing conversation
-  rather than an answer to a question the bot just asked. **No chat action
-  underneath it** — a `record_voice` header saying the bot is listening, under a
-  status saying the same in words, is one claim made twice, and the survey pause
-  next door already establishes that a typing indicator never runs under a
-  shimmer. And **the periodic cadence beat is skipped** for that answer
-  (`earnsThinkingPause`): stacking it would put ~8 s of narration between the
-  recording and the next question. The answer is still COUNTED, so the cadence
-  keeps measuring answers rather than typed answers.
+  This is a correction rather than a refinement. The 2026-08-24 pass added a
+  two-beat `<tg-thinking>` status over every spoken onboarding answer, on the
+  reading that "этап онбординга" meant the whole of registration; the founder
+  meant the one step where a recording is the deliverable. What it produced is
+  the thing this section otherwise forbids — **a status on a step the user has
+  already finished.** A shimmer here narrates transcription, which is
+  plumbing: the user has answered, and what they are waiting for is the next
+  question, not a report that we heard them. It also read as the product
+  treating "spoke instead of typed" as an event worth announcing, which is the
+  opposite of the intent — voice is a way of typing here, not a feature.
 
-  The §1.3b **voice prompt** is untouched and stays a different job on a
-  neighbouring step: that recording is claimed before this handler's bounds are
-  even read, is kept as audio rather than transcribed into the chat, and carries
-  its own validation status (`voiceCheckSteps`).
+  So the shimmer belongs to the §1.3b **voice prompt** and nowhere else. Two
+  things make that step different rather than merely earlier: the recording IS
+  the profile element (it is kept as audio, never transcribed into the chat),
+  and `voiceCheckSteps` covers a real validation pipeline — download, Whisper,
+  moderation — that the user cannot see and that can genuinely refuse the clip.
+  Narrating work with a verdict is a status; narrating work with no verdict is
+  a delay with a picture on it.
+
+  One consequence rides along: `earnsThinkingPause` loses its spoken-answer
+  exception. That guard existed only because two shimmers would otherwise have
+  stacked ~8 s of narration between a recording and the next question, and with
+  the first one gone the reason went with it.
 
   The *content* streams that are NOT thinking-status beats — the match pitch,
   no-match notice, and ice-breaker DMs (`streamDraftsToChat(..., { rich: true })`

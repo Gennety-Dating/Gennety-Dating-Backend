@@ -137,46 +137,6 @@ export function photoReviewSteps(lang: Language, frames: number): StatusStep[] {
  * Two beats rather than the video check's three because a 15-second Opus clip
  * is a fraction of the work a profile video is.
  */
-/**
- * Hold times for {@link voiceAnswerSteps}. Named, and pinned by a test to a
- * stated ceiling, for the same reason `GENDER_ADVANCE_HOLD_MS` is: this is real
- * time added to the onboarding funnel for every voice answer, and a number like
- * that otherwise creeps one retune at a time.
- */
-export const VOICE_ANSWER_LISTEN_HOLD_MS = 3500;
-export const VOICE_ANSWER_ANALYSE_HOLD_MS = 2000;
-
-/**
- * Held while an onboarding voice answer is turned into text — the Bot API
- * download plus the Whisper round-trip, which until now ran under a bare
- * `record_voice` chat action while the user waited in silence.
- *
- * Two beats: what the bot is doing to the recording, then what it is doing with
- * what it heard. Passed with `until: <ingest>` and {@link NEVER_CUT_SHORT}, so
- * the script is a script rather than a progress bar: a fast Whisper call cannot
- * collapse it to half of one beat, and a slow one only ever holds the last beat
- * longer. Cost is therefore `max(script, work)`, not their sum.
- *
- * Deliberately distinct from {@link voiceCheckSteps}, which narrates a different
- * job on a neighbouring step: that one validates the §1.3b voice PROMPT (a
- * profile element, kept as audio and never transcribed into the chat), this one
- * covers a recording that is about to be read as an answer.
- */
-export function voiceAnswerSteps(lang: Language): StatusStep[] {
-  return [
-    {
-      text: t(lang, "voiceAnswerStep1"),
-      holdMs: VOICE_ANSWER_LISTEN_HOLD_MS,
-      emojiId: AI_EMOJI.listen,
-    },
-    {
-      text: t(lang, "voiceAnswerStep2"),
-      holdMs: VOICE_ANSWER_ANALYSE_HOLD_MS,
-      emojiId: AI_EMOJI.think,
-    },
-  ];
-}
-
 export function voiceCheckSteps(lang: Language): StatusStep[] {
   return [
     { text: t(lang, "voiceCheckStep1"), holdMs: 1800, emojiId: AI_EMOJI.listen },

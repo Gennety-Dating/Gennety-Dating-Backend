@@ -2541,30 +2541,22 @@ describe("voice-prompt step — the claim is armed with the ask", () => {
 });
 
 /**
- * The periodic survey pause, and the one answer that must not get it.
- * (PRODUCT_SPEC §1.3 — the thinking beat; the voice status is §1.3's other
- * `runStatusSequence` beat, held by `voiceHandler` over the transcription.)
+ * The periodic survey pause (PRODUCT_SPEC §1.3 — the thinking beat). It is the
+ * only shimmer on this path: `voiceHandler` narrates nothing, so a spoken
+ * answer is counted and paced exactly like a typed one.
  */
 describe("earnsThinkingPause", () => {
-  it("fires every third typed answer", () => {
-    expect([1, 2, 3, 4, 5, 6].map((n) => earnsThinkingPause(n, false))).toEqual([
+  it("fires every third answer", () => {
+    // Spoken and typed alike: a recording reaches this point as its transcript
+    // and carries no status of its own (PRODUCT_SPEC §1.3), so there is nothing
+    // for this beat to stack on top of.
+    expect([1, 2, 3, 4, 5, 6].map((n) => earnsThinkingPause(n))).toEqual([
       false,
       false,
       true,
       false,
       false,
       true,
-    ]);
-  });
-
-  it("never fires on a spoken answer — it already had its own status", () => {
-    // Otherwise: listen (3.5s) + analyse (2s) + think (2.5s) back to back,
-    // which reads as the bot stalling rather than as the bot working.
-    expect([1, 2, 3, 6].map((n) => earnsThinkingPause(n, true))).toEqual([
-      false,
-      false,
-      false,
-      false,
     ]);
   });
 });

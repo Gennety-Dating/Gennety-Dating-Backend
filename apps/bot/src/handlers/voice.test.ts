@@ -100,66 +100,36 @@ beforeEach(() => {
   );
 });
 
-describe("voiceHandler — onboarding narration", () => {
-  it("holds a two-beat status over the transcription and hands the text on", async () => {
-    const h = harness("conversational");
+/**
+ * A recording used as an ANSWER is never narrated — on any step, onboarding
+ * included (founder decision, PRODUCT_SPEC §1.3). The `<tg-thinking>` shimmer
+ * belongs to the §1.3b voice PROMPT step, where the recording is the
+ * deliverable rather than a way of typing, and `voiceCheckSteps` covers a real
+ * validation pipeline there.
+ *
+ * These are regression guards rather than descriptions: a two-beat status over
+ * every spoken onboarding answer shipped once and had to be taken back out.
+ */
+describe("voiceHandler — a spoken answer is never narrated", () => {
+  for (const step of ["consent", "language", "conversational", "completed"] as const) {
+    it(`keeps the plain chat-action path on '${step}'`, async () => {
+      const h = harness(step);
 
-    expect(await h.run()).toBe(true);
-
-    expect(status).toHaveBeenCalledTimes(1);
-    const [, chatId, steps, options] = status.mock.calls[0]!;
-    expect(chatId).toBe(555);
-    expect(steps.map((s: { text: string }) => s.text)).toEqual([
-      t("ru", "voiceAnswerStep1"),
-      t("ru", "voiceAnswerStep2"),
-    ]);
-    // The script is a script, not a progress bar: a fast Whisper call may not
-    // collapse it, and the tracked work may only ever hold the LAST beat longer.
-    expect(options.untilFromStepIndex).toBe(Number.POSITIVE_INFINITY);
-    expect(options.until).toBeInstanceOf(Promise);
-    expect(options.rich).toBe(true);
-
-    expect(h.ctx.message?.text).toBe("мне нравится бегать по утрам");
-  });
-
-  it("sends no chat action while the status is on screen", async () => {
-    const h = harness("conversational");
-    await h.run();
-
-    expect(h.calls.map((c) => c.method)).not.toContain("sendChatAction");
-  });
-
-  it("tears the status down before telling the user it failed", async () => {
-    whisper.mockResolvedValue(null);
-    const order: string[] = [];
-    status.mockImplementation(async () => {
-      order.push("status");
+      expect(await h.run()).toBe(true);
+      expect(status).not.toHaveBeenCalled();
+      expect(
+        h.calls.filter((c) => c.method === "sendChatAction").map((c) => c.payload.action),
+      ).toEqual(["record_voice", "typing"]);
+      expect(h.ctx.message?.text).toBe("мне нравится бегать по утрам");
     });
+  }
 
-    const h = harness("conversational", order);
+  it("still answers a failed transcription with the localized refusal", async () => {
+    whisper.mockResolvedValue(null);
+    const h = harness("conversational");
+
     expect(await h.run()).toBe(false);
-
-    // The status must have finished before the refusal is sent — a verdict
-    // landing under a shimmer still claiming to be listening is the bot
-    // contradicting itself, which §1.4 already had to fix once.
-    expect(order.filter((entry) => entry === "status" || entry === "sendMessage")).toEqual([
-      "status",
-      "sendMessage",
-    ]);
-    expect(h.calls.at(-1)?.payload.text).toBe(t("ru", "voiceTranscriptionFailed"));
-  });
-});
-
-describe("voiceHandler — post-onboarding is unchanged", () => {
-  it("keeps the silent chat-action path for a completed user", async () => {
-    const h = harness("completed");
-
-    expect(await h.run()).toBe(true);
     expect(status).not.toHaveBeenCalled();
-    expect(h.calls.filter((c) => c.method === "sendChatAction").map((c) => c.payload.action)).toEqual([
-      "record_voice",
-      "typing",
-    ]);
-    expect(h.ctx.message?.text).toBe("мне нравится бегать по утрам");
+    expect(h.calls.at(-1)?.payload.text).toBe(t("ru", "voiceTranscriptionFailed"));
   });
 });

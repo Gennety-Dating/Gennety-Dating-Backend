@@ -7,8 +7,6 @@ import { recordChatEventForChat } from "../services/chat-events.js";
 import { readResponseBuffer } from "../utils/bounded-response.js";
 import { claimVoicePrompt, isAwaitingVoicePrompt } from "../services/voice-prompt-claim.js";
 import { shouldClaimVoiceFromCollector } from "../services/voice-prompt-pending.js";
-import { NEVER_CUT_SHORT, runStatusSequence } from "../services/ai-stream.js";
-import { voiceAnswerSteps } from "../services/analysis-status.js";
 
 const MAX_VOICE_DURATION_SEC = 300;
 const MAX_VOICE_BYTES = 20 * 1024 * 1024;
@@ -23,35 +21,30 @@ const VOICE_DOWNLOAD_TIMEOUT_MS = 20_000;
  * post-onboarding menu (`menu/router.ts`) — both of which read
  * `ctx.message?.text` — handle the transcript as if the user had typed it.
  *
- * While the OGG is downloaded and the Whisper call runs, the user is told that
- * something is happening: a `<tg-thinking>` status during onboarding, and the
- * older `record_voice` chat action everywhere else. See `narrate` below for why
- * the two surfaces differ.
+ * While the OGG is downloaded and the Whisper call runs, the user gets the
+ * plain `record_voice` / `typing` chat action — on EVERY surface, onboarding
+ * included. A recording used as an answer is one turn in a conversation, and
+ * narrating it with a `<tg-thinking>` shimmer would put a status on a step the
+ * user has already finished: the shimmer belongs to the §1.3b voice PROMPT
+ * step, where the recording IS the deliverable and `voiceCheckSteps` covers a
+ * real validation pipeline (founder decision — PRODUCT_SPEC §1.3).
  */
 type VoiceIngest = { kind: "ok"; transcript: string } | { kind: "failed" };
 
 /**
- * Download the recording and turn it into text. Never throws: the caller both
- * awaits this AND hands it to `runStatusSequence` as tracked work, so a
- * rejection would surface as an unhandled rejection on a cosmetic path.
- *
- * `chatActions` is what the narrated path turns OFF. A `record_voice` header
- * saying the bot is listening, on top of a status message saying the same in
- * words, is the same claim twice — and the survey pause next door already
- * establishes the rule that a typing indicator never runs under a shimmer.
+ * Download the recording and turn it into text. Never throws: every failure is
+ * reported as `{ kind: "failed" }` so the caller answers with the localized
+ * "couldn't make that out" line rather than dropping the turn.
  */
 async function ingestVoiceTranscript(
   ctx: BotContext,
   voice: { file_id: string; mime_type?: string | undefined },
   language: BotContext["session"]["language"],
-  chatActions: boolean,
 ): Promise<VoiceIngest> {
-  if (chatActions) {
-    try {
-      await ctx.replyWithChatAction("record_voice");
-    } catch {
-      // Chat action is best-effort — never fail the turn on it.
-    }
+  try {
+    await ctx.replyWithChatAction("record_voice");
+  } catch {
+    // Chat action is best-effort — never fail the turn on it.
   }
 
   let buffer: Buffer;
@@ -69,13 +62,11 @@ async function ingestVoiceTranscript(
     return { kind: "failed" };
   }
 
-  if (chatActions) {
-    // Keep the "listening" indicator alive through the Whisper round-trip.
-    try {
-      await ctx.replyWithChatAction("typing");
-    } catch {
-      // Best effort.
-    }
+  // Keep the "listening" indicator alive through the Whisper round-trip.
+  try {
+    await ctx.replyWithChatAction("typing");
+  } catch {
+    // Best effort.
   }
 
   try {
@@ -145,31 +136,7 @@ voiceHandler.on("message:voice", async (ctx, next) => {
     return;
   }
 
-  // Narrate the wait while the user is still REGISTERING. Post-onboarding voice
-  // — every voice note the concierge ever receives — keeps today's silent chat
-  // action: there the recording is one turn in an ongoing conversation, while
-  // during onboarding it is an answer to a question the bot just asked, and the
-  // several seconds of download + Whisper that follow read as the bot having
-  // missed it. `onboardingStep` is the same "mid onboarding" test
-  // `shouldClaimVoiceFromCollector` above already runs on, and it is refreshed
-  // from the DB by the FSM router on every update.
-  const chatId = ctx.chat?.id;
-  const narrate = chatId !== undefined && ctx.session.onboardingStep !== "completed";
-
-  const work = ingestVoiceTranscript(ctx, voice, language, !narrate);
-
-  if (narrate) {
-    // NEVER_CUT_SHORT: these two beats are a script the user is meant to read,
-    // so a fast Whisper call may not collapse them (PRODUCT_SPEC §1.3). The
-    // status is torn down before the reply lands in its place.
-    await runStatusSequence(ctx.api, chatId, voiceAnswerSteps(language), {
-      rich: true,
-      until: work,
-      untilFromStepIndex: NEVER_CUT_SHORT,
-    });
-  }
-
-  const result = await work;
+  const result = await ingestVoiceTranscript(ctx, voice, language);
   if (result.kind === "failed") {
     await ctx.reply(t(language, "voiceTranscriptionFailed"));
     return;

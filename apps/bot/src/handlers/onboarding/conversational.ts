@@ -108,15 +108,14 @@ const ONBOARDING_THINKING_EVERY = 3;
 /**
  * Does this survey answer earn the periodic "thinking" beat?
  *
- * A SPOKEN answer never does. `voiceHandler` has just held its own two-beat
- * status over the transcription, so adding this one would put ~8s of narration
- * between the recording and the next question — three shimmers in a row, which
- * reads as the bot stalling rather than as it working. The answer is still
- * counted by the caller, so the cadence keeps measuring answers rather than
- * typed answers.
+ * A spoken answer counts exactly like a typed one. It briefly did not: while
+ * `voiceHandler` narrated every onboarding recording with its own two-beat
+ * shimmer, stacking this one put ~8s of narration between the recording and the
+ * next question. That shimmer is gone (the status belongs to the §1.3b voice
+ * PROMPT step, not to a recording used as an answer), so the reason for the
+ * exception went with it and the cadence is back to counting answers.
  */
-export function earnsThinkingPause(answered: number, spoken: boolean): boolean {
-  if (spoken) return false;
+export function earnsThinkingPause(answered: number): boolean {
   return answered % ONBOARDING_THINKING_EVERY === 0;
 }
 
@@ -377,24 +376,19 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   // shimmer BEFORE the next question is composed. This must run before any
   // typing indicator: the typing action only starts inside withTyping below,
   // strictly after this status is torn down, and question generation does not
-  // start until the pause completes. Only real typed survey answers count —
-  // not photo-stage continues, photo uploads, or context-dump pastes.
-  //
-  // A voice answer is counted but never gets this beat: `voiceHandler` has just
-  // held its own two-beat status over the transcription, and stacking a third
-  // shimmer on top would put ~8s of narration between the recording and the
-  // next question. Counting it anyway keeps the cadence measuring answers
-  // rather than typed answers.
+  // start until the pause completes. Only real survey answers count — not
+  // photo-stage continues, photo uploads, or context-dump pastes. A spoken
+  // answer arrives here as its transcript (`voiceHandler` writes it into
+  // `ctx.message.text`) and is treated exactly like a typed one.
   const isSurveyAnswer =
     Boolean(ctx.message?.text) &&
     !continuePhotoStage &&
     !ctx.session.expectingPhoto &&
     !ctx.session.awaitingContextDump;
-  const answerWasSpoken = ctx.message?.voice !== undefined;
   if (isSurveyAnswer) {
     const answered = (ctx.session.onboardingAnswerCount ?? 0) + 1;
     ctx.session.onboardingAnswerCount = answered;
-    if (earnsThinkingPause(answered, answerWasSpoken) && ctx.chat?.id !== undefined) {
+    if (earnsThinkingPause(answered) && ctx.chat?.id !== undefined) {
       await runStatusSequence(
         ctx.api,
         ctx.chat.id,
