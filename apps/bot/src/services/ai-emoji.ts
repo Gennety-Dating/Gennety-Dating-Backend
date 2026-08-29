@@ -16,6 +16,8 @@
 export const AI_EMOJI = {
   /** Reading context / scanning. */
   scan: "5537511986251694100",
+  /** Listening to a voice recording (the "🎧 …" beats). */
+  listen: "5535010562938765332",
   /** Sparkle / stars — the recurring "spark" + done beat. */
   spark: "5573473356579078196",
   /** Selfie ↔ photo face-match. */

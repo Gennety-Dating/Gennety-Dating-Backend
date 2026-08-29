@@ -167,7 +167,7 @@ export function voiceAnswerSteps(lang: Language): StatusStep[] {
     {
       text: t(lang, "voiceAnswerStep1"),
       holdMs: VOICE_ANSWER_LISTEN_HOLD_MS,
-      emojiId: AI_EMOJI.scan,
+      emojiId: AI_EMOJI.listen,
     },
     {
       text: t(lang, "voiceAnswerStep2"),
@@ -179,7 +179,7 @@ export function voiceAnswerSteps(lang: Language): StatusStep[] {
 
 export function voiceCheckSteps(lang: Language): StatusStep[] {
   return [
-    { text: t(lang, "voiceCheckStep1"), holdMs: 1800, emojiId: AI_EMOJI.scan },
+    { text: t(lang, "voiceCheckStep1"), holdMs: 1800, emojiId: AI_EMOJI.listen },
     { text: t(lang, "voiceCheckStep2"), holdMs: 2400, emojiId: AI_EMOJI.spark },
   ];
 }
