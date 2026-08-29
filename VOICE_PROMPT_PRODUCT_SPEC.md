@@ -336,14 +336,52 @@ end of the collector's own order
 so in practice it reads `vibe_focus → photos → voice_prompt → complete`. Two
 things fall out for free: the photo stage's **Continue** button already resolves
 through `nextOnboardingQuestion`, so "done with photos" leads into the ask
-without a new mechanism; and the persistent "🗂 My photos" reply keyboard is
-already removed by the first message the bot sends after the stage ends, which
-is now this one.
+without a new mechanism; and the ask is the message that takes the chat's bottom
+panel off the photo stage.
 
-**One message, one quiet button, no accept button.** Recording IS the
-acceptance — an explicit "yes" button would cost a tap and still leave the
-recording to ask for. The skip button is the default gray style the repo uses
-for every secondary action.
+**The panel is handed over, not removed (corrected 2026-08-29).** This section
+used to claim the "🗂 My photos" keyboard was "already removed by the first
+message the bot sends after the stage ends". There is no such message: the ask,
+the verification card, the main menu and the pinned banner all set an inline
+keyboard, and Telegram allows one `reply_markup` per message — so the removal
+had no carrier and the photo panel survived the whole way, still inviting photos
+under a question that wants a recording. A reply keyboard is REPLACED by a new
+one, so the ask carries the voice step's own panel (its skip button, and a
+placeholder describing THIS step) in the same message. One owner decides which
+panel is up — `services/reply-panel.ts` — because two independent flags would
+each eventually emit a removal that kills the other step's keyboard.
+
+**The step no longer ends at the recording** (founder decision 2026-08-29,
+DECISIONS.md), which reverses "recording IS the acceptance":
+
+```
+ask (+ bottom panel)
+  └─ voice ──► validate ──► rejected → same step, record again
+                        └─► accepted → confirmation card [✅ Done]
+                                         ├─ another voice → replaces it
+                                         ├─ panel button → drops it (row deleted)
+                                         └─ ✅ Done      → keeps it
+  └─ panel button (before any recording) → skipped
+```
+
+Both exits close with one plain-text line, and that line is the only carrier the
+panel teardown has — hence `exitVoiceStep` owning the send rather than trusting
+each caller to spread it, which is the mistake this feature has already made
+once at scale (§the nine senders, below).
+
+**The skip button is the panel, not a chip.** That is louder than the "one quiet
+button" this section asked for, and it is the price of the loop above: after a
+recording the button means *drop this*, so it has to outlive the user's own
+voice message, the validation shimmer, a rejection and the confirmation card.
+It also removes the orphaned-inline-button cleanup the old skip handler carried.
+
+**The cost, named rather than discovered.** One extra tap on the last step of
+onboarding, whose drop-off is measured; and `markOnboardingField` now writes at
+Done/drop rather than at the recording, so this step's `dwellMs` includes the
+review loop and "recorded, then walked away" moves from `answered` to
+`stuckHere`. Do not compare the funnel across the cutover naively. The new
+terminal state (recorded, tapped nothing) is covered by the insurance that
+already existed: `/start` re-asks through the same sender, panel and all.
 
 **What the message has to do.** The default failure is predictable: people read
 their bio aloud ("hi, I'm Maksim, 24, I like sport and travel"), which is worth

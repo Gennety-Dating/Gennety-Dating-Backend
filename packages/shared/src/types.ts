@@ -55,6 +55,15 @@ export interface PendingPremiumCancel {
   messageId: number;
 }
 
+/**
+ * Which onboarding step currently owns the chat's bottom reply keyboard.
+ *
+ * The steps hand it over rather than each removing their own: Telegram REPLACES
+ * a reply keyboard when a new one is sent, so photos → voice is one message and
+ * no `remove_keyboard` in between. See `services/reply-panel.ts`.
+ */
+export type ReplyPanel = "photos" | "voice" | null;
+
 /** One photo's own card message in the photo manager — see `SessionData.photoCards`. */
 export interface PhotoManagerCard {
   msgId: number;
@@ -176,13 +185,36 @@ export interface SessionData {
    */
   onboardingPhotoEdit: boolean;
   /**
-   * True while the onboarding upload stage's persistent bottom panel (a reply
-   * keyboard carrying the editor entry) is on screen. It is what lets the
-   * teardown ride the next outgoing message once the stage ends — a reply
-   * keyboard survives until explicitly removed, and it hides the user's normal
-   * keyboard, so an orphaned one would block the next onboarding question.
+   * Which persistent bottom panel (reply keyboard) onboarding currently has on
+   * screen, or `null` for none — see `services/reply-panel.ts`.
+   *
+   * A reply keyboard is CHAT-level: it survives until explicitly removed, and
+   * it hides the user's normal keyboard, so an orphaned one would block the
+   * next onboarding question. One field rather than one flag per step, because
+   * the steps hand the panel over to each other: two independent flags would
+   * eventually emit a `remove_keyboard` that kills the other step's panel.
+   */
+  replyPanel: ReplyPanel;
+  /**
+   * @deprecated Superseded by {@link SessionData.replyPanel}. Kept because
+   * `SessionData` is persisted JSON in `bot_sessions` and survives a deploy:
+   * `replyPanelSync` reads a legacy `true` here as `replyPanel = "photos"`, so
+   * a user standing in the photo stage at restart is not left with an orphaned
+   * panel. Never written any more.
    */
   photoStagePanelShown: boolean;
+  /**
+   * Telegram message id of the live voice-prompt confirmation card — the
+   * "recorded, tap Done" message and its single inline button
+   * (VOICE_PROMPT_PRODUCT_SPEC.md §4.1).
+   *
+   * Tracked for the same reason `photoManagerMsgId` is: a re-record strips the
+   * previous card's keyboard before sending the new one, so a resolved card
+   * never sits in the chat still looking answerable. Also the discriminator
+   * between "skip" and "drop": non-null means a recording was already saved
+   * this step, so the panel tap owes a `deleteVoicePrompt`.
+   */
+  voicePromptCardMsgId: number | null;
   /**
    * One entry per photo currently shown as its own card message in the photo
    * manager (photo + a single delete button), in no particular order.
@@ -275,7 +307,9 @@ export const DEFAULT_SESSION: SessionData = {
   photoManagerMsgId: null,
   verifyPhotoRedo: false,
   onboardingPhotoEdit: false,
+  replyPanel: null,
   photoStagePanelShown: false,
+  voicePromptCardMsgId: null,
   photoCards: [],
   pendingAccountAction: null,
   pendingPremiumCancel: null,

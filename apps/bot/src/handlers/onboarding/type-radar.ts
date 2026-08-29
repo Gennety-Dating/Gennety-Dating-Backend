@@ -11,8 +11,8 @@ import type { BotContext } from "../../session.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import { typeRadarInviteCopy } from "../../services/type-radar-copy.js";
 import { runAgentTurn, type AgentTurnResult } from "../../services/onboarding-agent.js";
-import { voicePromptAskText, voicePromptKeyboard } from "./voice-prompt.js";
-import { photoStagePanelMarkup } from "../../services/photo-stage-panel.js";
+import { voicePromptAskPayload } from "./voice-prompt.js";
+import { replyPanelMarkupFor } from "../../services/reply-panel.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import {
   radarThinkingSteps,
@@ -146,24 +146,27 @@ export async function resumeOnboardingAfterRadar(
     // agreeing. This function owns no session, so the claim rides the patch.
     if (result.voicePromptRequested === true) {
       const language = (await userLanguage(telegramId)) ?? "en";
+      const ask = voicePromptAskPayload(language, result.reply);
       try {
-        await api.sendMessage(chatId, voicePromptAskText(language, result.reply), {
-          reply_markup: voicePromptKeyboard(language),
-        });
+        await api.sendMessage(chatId, ask.text, ask.options);
         sessionPatch.expectingVoicePrompt = true;
+        // The ask carries the voice panel, which REPLACES whatever the photo
+        // stage had up — so the session has to agree, or the next sync reads a
+        // stale "photos" and emits a removal that kills it.
+        sessionPatch.replyPanel = "voice";
       } catch {
         // Same best-effort contract as the ordinary reply below.
       }
       return { sessionPatch };
     }
 
-    let panelMarkup: ReturnType<typeof photoStagePanelMarkup> | undefined;
+    let panelMarkup: ReturnType<typeof replyPanelMarkupFor> | undefined;
     if (sessionPatch.expectingPhoto === true) {
-      panelMarkup = photoStagePanelMarkup((await userLanguage(telegramId)) ?? "en");
+      panelMarkup = replyPanelMarkupFor("photos", (await userLanguage(telegramId)) ?? "en");
     }
     try {
       await api.sendMessage(chatId, result.reply, panelMarkup ?? {});
-      if (panelMarkup) sessionPatch.photoStagePanelShown = true;
+      if (panelMarkup) sessionPatch.replyPanel = "photos";
     } catch {
       // Best-effort, unchanged: a failed resume message must not fail the radar
       // save the Mini App depends on.

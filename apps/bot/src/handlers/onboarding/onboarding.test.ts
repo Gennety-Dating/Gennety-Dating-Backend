@@ -119,16 +119,14 @@ vi.mock("../../config.js", () => ({
 }));
 
 import { prisma } from "@gennety/db";
-import type { InlineKeyboard } from "grammy";
 import { isAwaitingVoicePrompt } from "../../services/voice-prompt-claim.js";
-import { ONBOARDING_VOICE_PROMPT_SKIP_CALLBACK } from "./voice-prompt.js";
 import { sendOnboardingEntry } from "./mini-app-entry.js";
 import {
   earnsThinkingPause,
   handleConversational,
   ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
 } from "./conversational.js";
-import { photoStagePanelSync } from "../../services/photo-stage-panel.js";
+import { replyPanelMarkupFor } from "../../services/reply-panel.js";
 import {
   VERIFY_SKIP_CALLBACK,
   VERIFY_SKIP_CONFIRM_CALLBACK,
@@ -2345,12 +2343,7 @@ describe("Onboarding photo stage — editor entry", () => {
   const agentMock = runAgentTurn as ReturnType<typeof vi.fn>;
 
   function panelLabel(language: SessionData["language"] = "en"): string {
-    const probe: SessionData = {
-      ...DEFAULT_SESSION,
-      language,
-      expectingPhoto: true,
-    };
-    const markup = photoStagePanelSync(probe).reply_markup as {
+    const markup = replyPanelMarkupFor("photos", language).reply_markup as {
       keyboard: { text: string }[][];
     };
     return markup.keyboard[0]![0]!.text;
@@ -2511,21 +2504,26 @@ describe("voice-prompt step — the claim is armed with the ask", () => {
     expect(isAwaitingVoicePrompt(ctx.session)).toBe(true);
   });
 
-  it("sends the ask with the skip button on it", async () => {
+  it("sends the ask carrying the bottom panel that replaces the photo stage's", async () => {
     const ctx = askTurn();
+    ctx.session.expectingPhoto = true;
+    ctx.session.replyPanel = "photos";
 
     await handleConversational(ctx);
 
     expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
     const [chatId, text, options] = (ctx.api.sendMessage as ReturnType<typeof vi.fn>)
-      .mock.calls[0] as [number, string, { reply_markup?: InlineKeyboard }];
+      .mock.calls[0] as [number, string, { reply_markup?: Record<string, unknown> }];
     expect(chatId).toBe(12345);
     expect(text).toContain("Last thing");
     // A question with no way out is the failure the ask copy already carries a
     // line about: the sentence names the button, so the button has to exist.
-    expect(
-      JSON.stringify(options?.reply_markup?.inline_keyboard ?? []),
-    ).toContain(ONBOARDING_VOICE_PROMPT_SKIP_CALLBACK);
+    // It is the chat's bottom panel now, and this message is the ONLY carrier
+    // the handover has — one `reply_markup` per message, and every send after
+    // this one on the way to the verification card sets an inline keyboard.
+    expect(options?.reply_markup).toMatchObject({ is_persistent: true });
+    expect(options?.reply_markup).not.toHaveProperty("remove_keyboard");
+    expect(ctx.session.replyPanel).toBe("voice");
   });
 
   it("does not claim voice on an ordinary turn", async () => {

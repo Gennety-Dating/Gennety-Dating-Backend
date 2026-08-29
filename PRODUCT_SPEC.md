@@ -1157,8 +1157,18 @@ Hard rules enforced by the collector:
   (plus any per-frame rejection reply) lands below it — and because Telegram
   allows one `reply_markup` per message, the panel attaches to the stage's
   first plain-text message and persists chat-wide, while Continue keeps its own
-  inline keyboard. It is removed on the first message the bot sends after the
-  stage ends, whichever path ended it. Before this the first upload was
+  inline keyboard. **It is HANDED OVER rather than removed (2026-08-29):** the
+  voice step that follows owns the same one panel slot, so its ask carries the
+  voice keyboard, which Telegram substitutes for this one — and only a path
+  that ends the onboarding panels entirely emits `remove_keyboard`. That is a
+  correction, not a refinement: this line used to claim the panel was "removed
+  on the first message the bot sends after the stage ends", and no such message
+  exists. Every send downstream — the voice ask, the verification card, the
+  main menu, the pinned banner — sets an INLINE keyboard, and a message carries
+  one `reply_markup`, so the removal had no carrier and the panel survived into
+  the verification gate. One owner decides which panel is up
+  (`services/reply-panel.ts`); two independent flags would each eventually emit
+  a removal that kills the other step's panel. Before this the first upload was
   write-only: a user who disliked a photo could only pile more on top until
   `MAX_PHOTOS`, then walk into verification with photos they never wanted —
   the one place where the photo set is actually FORMED was the one place with
@@ -1388,13 +1398,55 @@ surface except verification and photo re-upload, so a question asked later never
 reaches the user. The order becomes `… photos → voice_prompt → complete`. Two
 things fall out for free: the photo stage's **Continue** already resolves
 through `nextOnboardingQuestion`, so "done with photos" leads into the ask with
-no new mechanism, and the persistent "🗂 My photos" reply keyboard is already
-removed by the first message the bot sends after the stage ends — which is now
-this one.
+no new mechanism, and the ask is the message that takes the chat's bottom panel
+off the photo stage.
 
-**One message, one quiet skip button, and no accept button** — recording IS the
-acceptance; an explicit "yes" would cost a tap and still leave the recording to
-ask for. The copy's central instruction is a **prohibition** ("don't read your
+**The panel is HANDED OVER, not removed, and that is forced rather than chosen
+(2026-08-29).** This paragraph used to say the "🗂 My photos" keyboard was
+"already removed by the first message the bot sends after the stage ends", which
+was false in the strongest way: there is no such message. The ask, the
+verification card, the main menu and the pinned banner all set an inline
+keyboard, and Telegram allows one `reply_markup` per message — so the removal
+had no carrier at all and the photo panel survived the whole way, still inviting
+photos while the bot asked for a recording, still labelling the input field
+"send more photos". A reply keyboard is REPLACED by a new one, so the ask
+carries the voice step's own panel instead, in the same message, with no extra
+bubble and with a placeholder that describes this step. The removal then rides
+the step's own exit line, which is the one message on this path that is plain
+text by construction.
+
+**The skip moves onto that panel, and that is a cost paid for the review loop
+below.** A reply-keyboard button is louder than a chip under the message, which
+is the opposite of what this section wanted. It is worth it because after a
+recording that button means *drop this*, and it has to outlive the user's own
+voice message, the validation shimmer, a possible rejection and the confirmation
+card — the same argument §1.3 makes for the photo panel. It also ends the
+orphaned-inline-button problem the old skip handler had to clean up by hand.
+
+**The recording is no longer the acceptance** (founder decision 2026-08-29,
+DECISIONS.md). The step stays open after an accepted clip: sending another
+replaces it, the panel button drops it — deleting the saved row, because the
+button means "no voice note", not "no MORE voice notes" — and one inline
+**✅ Done** on the confirmation keeps it and moves on. This reverses the rule
+that stood here before ("recording IS the acceptance; an explicit yes would cost
+a tap"), and the cost is real and stated rather than discovered: **one extra tap
+on the last step of onboarding**, whose drop-off is measured
+(`GET /admin/analytics/onboarding-funnel`), plus the re-record spiral
+VOICE_PROMPT_PRODUCT_SPEC §4.1 names as a funnel leak. Two things bound it. The
+confirmation **adds no bubble** — the inline button rides the message this path
+already sent. And the label is **Done**, not "Keep it": the first reads as
+forward motion, the second as approving an artefact, which is what invites
+another take.
+
+**One consequence for the funnel:** `markOnboardingField` now writes at Done or
+at the drop rather than at the recording, so this step's `dwellMs` includes the
+review loop and "recorded, then walked away" moves from `answered` to
+`stuckHere`. A naive before/after comparison across the cutover is invalid.
+There is a new terminal state — recorded and tapped nothing — and the insurance
+is the one that already existed: `/start` re-asks through the same sender, so
+the panel and the button come back.
+
+The copy's central instruction is a **prohibition** ("don't read your
 profile aloud"), because that is the default failure and the bio is already on
 the partner's screen; the hook is the stake, stated plainly — *the person I find
 for you hears this before they decide*.

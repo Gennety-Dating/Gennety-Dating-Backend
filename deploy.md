@@ -1843,7 +1843,7 @@ curl -s https://dating-calendar.gennety.com/onboarding.html \
 ---
 
 **PENDING — Voice Prompts (PRODUCT_SPEC §1.3b, VOICE_PROMPT_PRODUCT_SPEC.md,
-DECISIONS.md ×2).** Ships **DARK** — `VOICE_PROMPT_ENABLED` is unset in
+DECISIONS.md ×3).** Ships **DARK** — `VOICE_PROMPT_ENABLED` is unset in
 `/opt/gennety/.env` and stays unset in this deploy. **No Mini App change**
 (`apps/webapp` untouched) — but it needs an **additive `db:push` BEFORE the
 restart**, a **new Supabase bucket**, and one **`.env.demo`** line, so the
@@ -1872,9 +1872,36 @@ Telegram-recorded prompt is a `file_id` and Telegram is its store — but
 now issues a delete against it on every erasure. A missing bucket makes that
 call fail, and a failed storage phase **blocks the deletion** by design.
 
+**⚠️ Since 2026-08-29 this block also carries a change to the LIVE photo stage,
+which is NOT dark** (PRODUCT_SPEC §1.3, DECISIONS.md). The chat's bottom reply
+keyboard has one owner now (`services/reply-panel.ts`, renamed from
+`photo-stage-panel.ts`), because the old teardown had no carrier and the
+"🗂 Мои фото" panel survived into the verification card and the main menu. With
+`VOICE_PROMPT_ENABLED` unset the photo panel behaves byte-for-byte as it does
+today — that is what `reply-panel.test.ts`'s legacy-upgrade and feature-off
+cases pin — but two things are worth knowing at the restart:
+
+- **Every session mid-photo-stage at restart is upgraded, not orphaned.**
+  `SessionData` is JSON in `bot_sessions` and survives the deploy; a row written
+  before this reads `replyPanel: null` plus the deprecated
+  `photoStagePanelShown: true`, and the first sync reads that pair as "photos"
+  and clears the old flag. Skipping that upgrade would leave those users a
+  panel nothing can ever remove — the exact failure being fixed.
+- **`session.photoStagePanelShown` stops being written.** It stays in the type
+  for the upgrade above and nothing else; a new step that wants the bottom
+  keyboard adds a value to `ReplyPanel`, never a second flag.
+
+Also new here, and only reachable once the flag is on: the step no longer ends
+at the recording (founder decision — re-record, drop, or **✅ Done**), so
+`markOnboardingField` moves to the exit and this step's `dwellMs` starts
+including the review loop. Record the cutover date before comparing
+`GET /admin/analytics/onboarding-funnel` across it.
+
 **Seven things worth knowing before the restart:**
 
 - **With the flag off, nothing changes at all, and that is checkable.** The
+  bottom panel is gated on `isAwaitingVoicePrompt`, which reads the flag first,
+  so a stale `expectingVoicePrompt` on an old session cannot raise it. The
   collector marks `voice_prompt` complete+skipped — the same masking
   `ai_memory` already uses — so the canonical order stays `photos → complete`.
   The pitch sender returns before touching Telegram, `/v1/me/voice-prompt`
@@ -1917,9 +1944,25 @@ psql "$DATABASE_URL" -c "select count(*) from voice_prompts;"
 # Table exists and is empty. "relation does not exist" = db:push did not run.
 ```
 
-**Rollback:** unset the flag and restart — the feature goes inert with no code
-change. To roll the code back, revert and restart; the additive table can stay
-(nothing reads it once the code is gone). The bucket can stay either way.
+**Post-deploy check for the panel half, which is NOT gated and cannot be seen
+from a log:** walk the photo stage on `@gennetytestbot` (or the demo). The
+"🗂 Мои фото" panel and its placeholder must appear exactly as they do today —
+that is the regression control — and tapping **Continue** must take the chat's
+bottom keyboard away in the same message, leaving a default input placeholder,
+not "Пришли ещё фото". With `VOICE_PROMPT_ENABLED=true` on that bot the panel
+must SWITCH to "Без голосового" rather than disappear and come back.
+
+**Rollback:** unset the flag and restart — the voice half goes inert with no
+code change, but note the panel half does NOT: it is live on the photo stage
+either way, so rolling that back means reverting the code. What a revert costs
+across the session boundary, traced rather than assumed: a session raised by the
+new code carries `replyPanel: "photos"` and `photoStagePanelShown: false`, which
+the old code reads as "no panel up" — so it re-sends the keyboard once, and
+Telegram replaces it with an identical one. One redundant send, not a stuck
+panel. (A session parked in the VOICE step would keep its keyboard, but that
+state is unreachable while the flag is unset, and the old code never removed it
+there either.) The additive table can stay (nothing reads it
+once the code is gone). The bucket can stay either way.
 
 ---
 

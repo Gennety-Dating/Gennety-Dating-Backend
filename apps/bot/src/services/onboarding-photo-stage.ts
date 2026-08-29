@@ -10,7 +10,7 @@ import {
   type SessionData,
 } from "@gennety/shared";
 import { recordOnboardingAssistantReply } from "./onboarding-agent.js";
-import { photoStagePanelSync } from "./photo-stage-panel.js";
+import { replyPanelSync } from "./reply-panel.js";
 
 export const ONBOARDING_PHOTOS_CONTINUE_CALLBACK = "onboarding:photos:continue";
 
@@ -96,14 +96,15 @@ export function sessionHasProfileVideo(session: SessionData): boolean {
  * how many are still missing), the inline Continue once the minimum is met,
  * and the persistent bottom panel that opens the photo editor.
  *
- * This is the ONE place the panel is attached, which is what makes its
+ * This is the ONE place the PHOTO panel is attached, which is what makes its
  * lifecycle tractable — every branch of the burst flush, the text handler, and
- * the video handler funnel through here. Teardown rides the next outgoing
- * message instead (see `services/photo-stage-panel.ts`).
+ * the video handler funnel through here. Its removal is not this module's job:
+ * it rides a later outgoing message, and where the voice-prompt step follows it
+ * is a handover rather than a removal (see `services/reply-panel.ts`).
  *
- * `session` is mutated (the panel arms its teardown flag), so the caller owns
- * persisting it: the live `ctx.session` is written back by grammY, while the
- * debounced burst flush upserts its own `bot_sessions` row.
+ * `session` is mutated (the panel records itself in `session.replyPanel`), so
+ * the caller owns persisting it: the live `ctx.session` is written back by
+ * grammY, while the debounced burst flush upserts its own `bot_sessions` row.
  */
 export async function sendPhotoStagePrompt(
   api: Api,
@@ -125,7 +126,7 @@ export async function sendPhotoStagePrompt(
 
   if (photoCount < MIN_PHOTOS) {
     // Plain text, so it is free to carry the bottom panel.
-    await api.sendMessage(chatId, text, photoStagePanelSync(session));
+    await api.sendMessage(chatId, text, replyPanelSync(session));
     return;
   }
 

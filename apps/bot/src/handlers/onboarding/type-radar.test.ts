@@ -88,9 +88,9 @@ describe("resumeOnboardingAfterRadar — photo-stage bottom panel", () => {
         }),
       }),
     );
-    // The flag has to travel with the patch, otherwise the next message would
-    // send a second, duplicate keyboard.
-    expect(sessionPatch.photoStagePanelShown).toBe(true);
+    // Which panel is up has to travel with the patch, otherwise the next sync
+    // reads a stale value and either duplicates the keyboard or removes it.
+    expect(sessionPatch.replyPanel).toBe("photos");
   });
 
   it("renders the panel in the user's own language", async () => {

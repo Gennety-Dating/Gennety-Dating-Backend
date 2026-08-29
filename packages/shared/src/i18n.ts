@@ -53,7 +53,25 @@ const translations = {
      * `voicePromptSkipButton` so the copy cannot name a label the keyboard
      * stopped using; a test enforces that.
      */
-    voicePromptSkipHint: "To skip: the “{button}” button below.",
+    voicePromptSkipHint: "To skip: “{button}”, at the bottom of the chat.",
+    /** Placeholder of the voice step's bottom panel — see `services/reply-panel.ts`. */
+    voicePromptPanelPlaceholder: "Hold the mic — about 15 seconds",
+    /**
+     * Sent for every accepted recording. The step deliberately stays open, so
+     * this states BOTH ways out of it: another recording replaces this one, and
+     * the panel button drops it. `{button}` is interpolated from
+     * `voicePromptSkipButton` for the same reason `voicePromptSkipHint` does it.
+     */
+    voicePromptRecorded:
+      "Got it — give it a listen. Send another one to replace it, or “{button}” to drop it.",
+    /**
+     * The confirmation card's only button. Deliberately "Done" rather than
+     * "Keep it": the first reads as forward motion, the second as approving an
+     * artefact — which is what starts the re-record spiral §4.1 names.
+     */
+    voicePromptReviewDone: "✅ Done",
+    /** Closing line of the skip/drop exit; carries the panel teardown. */
+    voicePromptSkipped: "No voice note then — that's fine.",
     voicePromptSaved: "Saved ✨ They'll hear it right before they decide.",
     voicePromptTooShort: "That was barely a second — the mic button needs holding. Try again, aim for about 15 seconds.",
     voicePromptTooLong: "A bit long — keep it under a minute, otherwise it doesn't get listened to. Record another one?",
@@ -1374,7 +1392,12 @@ const translations = {
       "Почти всё! Пришли {min}–{max} разных фото. На каждом должен быть хорошо виден ты, откровенный контент запрещён. В видео могут быть друзья или пейзажи, но ты должен хорошо появляться в нескольких моментах.",
     photoReceived: "Фото {n}/{max}",
     voicePromptSkipButton: "Без голосового",
-    voicePromptSkipHint: "Пропустить — кнопка «{button}» ниже.",
+    voicePromptSkipHint: "Пропустить — кнопка «{button}» внизу чата.",
+    voicePromptPanelPlaceholder: "Зажми микрофон — секунд 15",
+    voicePromptRecorded:
+      "Записал — послушай. Пришли другое, если хочешь переписать, или «{button}», чтобы убрать.",
+    voicePromptReviewDone: "✅ Готово",
+    voicePromptSkipped: "Хорошо, обойдёмся без голосового.",
     voicePromptSaved: "Сохранил ✨ Он услышит его прямо перед тем, как решить.",
     voicePromptTooShort: "Это меньше секунды — кнопку микрофона надо держать. Попробуй ещё раз, целься секунд на 15.",
     voicePromptTooLong: "Длинновато — уложись в минуту, иначе такое просто не дослушивают. Запишешь ещё раз?",
@@ -2578,7 +2601,12 @@ const translations = {
       "Майже все! Надішли {min}–{max} різних фото. На кожному маєш бути добре видимий ти, відвертий контент заборонений. У відео можуть бути друзі або краєвиди, але ти маєш добре з'являтися в кількох моментах.",
     photoReceived: "Фото {n}/{max}",
     voicePromptSkipButton: "Без голосового",
-    voicePromptSkipHint: "Пропустити — кнопка «{button}» нижче.",
+    voicePromptSkipHint: "Пропустити — кнопка «{button}» внизу чату.",
+    voicePromptPanelPlaceholder: "Затисни мікрофон — секунд 15",
+    voicePromptRecorded:
+      "Записав — послухай. Надішли інше, якщо хочеш перезаписати, або «{button}», щоб прибрати.",
+    voicePromptReviewDone: "✅ Готово",
+    voicePromptSkipped: "Гаразд, обійдемося без голосового.",
     voicePromptSaved: "Зберіг ✨ Він почує його прямо перед тим, як вирішити.",
     voicePromptTooShort: "Це менше секунди — кнопку мікрофона треба тримати. Спробуй ще раз, цілься секунд на 15.",
     voicePromptTooLong: "Задовго — вклади́ся в хвилину, інакше таке просто не дослуховують. Запишеш ще раз?",
@@ -3789,7 +3817,12 @@ const deTranslations: TranslationTable = {
     "Fast fertig! Sende {min}-{max} verschiedene Fotos. Auf jedem musst du klar zu sehen sein; explizite Inhalte sind nicht erlaubt. Ein Profilvideo darf Freunde oder Landschaften zeigen, aber du musst in mehreren Momenten klar erscheinen.",
   photoReceived: "Foto {n}/{max}",
   voicePromptSkipButton: "Ohne Sprachnachricht",
-  voicePromptSkipHint: "Überspringen: der Button „{button}“ unten.",
+  voicePromptSkipHint: "Überspringen: „{button}“, unten im Chat.",
+  voicePromptPanelPlaceholder: "Mikrofon gedrückt halten — etwa 15 Sekunden",
+  voicePromptRecorded:
+    "Aufgenommen — hör sie dir an. Schick eine neue, um sie zu ersetzen, oder „{button}“, um sie zu verwerfen.",
+  voicePromptReviewDone: "✅ Fertig",
+  voicePromptSkipped: "Dann ohne Sprachnachricht — auch gut.",
   voicePromptSaved: "Gespeichert ✨ Die Person hört sie direkt vor ihrer Entscheidung.",
   voicePromptTooShort: "Das war kaum eine Sekunde — die Mikrofontaste muss gehalten werden. Versuch's nochmal, ziel auf etwa 15 Sekunden.",
   voicePromptTooLong: "Etwas lang — bleib unter einer Minute, sonst hört das niemand zu Ende. Nochmal aufnehmen?",
@@ -4960,7 +4993,12 @@ const plTranslations: TranslationTable = {
     "Prawie gotowe! Wyślij {min}-{max} różnych zdjęć. Na każdym musisz być wyraźnie widoczny; treści erotyczne są niedozwolone. Wideo profilowe może pokazywać znajomych lub krajobrazy, ale musisz pojawić się wyraźnie w kilku momentach.",
   photoReceived: "Zdjęcie {n}/{max}",
   voicePromptSkipButton: "Bez wiadomości głosowej",
-  voicePromptSkipHint: "Pominąć — przycisk „{button}” poniżej.",
+  voicePromptSkipHint: "Pominąć — przycisk „{button}” na dole czatu.",
+  voicePromptPanelPlaceholder: "Przytrzymaj mikrofon — jakieś 15 sekund",
+  voicePromptRecorded:
+    "Nagrane — posłuchaj. Wyślij inne, żeby zastąpić, albo „{button}”, żeby usunąć.",
+  voicePromptReviewDone: "✅ Gotowe",
+  voicePromptSkipped: "To bez wiadomości głosowej — w porządku.",
   voicePromptSaved: "Zapisałem ✨ Usłyszy ją tuż przed decyzją.",
   voicePromptTooShort: "To ledwie sekunda — przycisk mikrofonu trzeba przytrzymać. Spróbuj jeszcze raz, celuj w jakieś 15 sekund.",
   voicePromptTooLong: "Trochę za długo — zmieść się w minucie, inaczej nikt tego nie dosłucha. Nagrasz jeszcze raz?",

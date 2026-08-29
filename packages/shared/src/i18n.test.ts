@@ -87,6 +87,9 @@ const ALLOWED_IDENTICAL_UK_RU = new Set<string>([
   // Single words that are spelled identically in Ukrainian and Russian.
   // Translating them would mean inventing a synonym nobody uses.
   "voicePromptSkipButton",
+  // "Готово" is the same word in both — the label on the voice step's
+  // confirmation button, where a forced synonym would be worse than the match.
+  "voicePromptReviewDone",
   "menuBack",
   "reportBackBtn",
   "stallBtnCancelBack",

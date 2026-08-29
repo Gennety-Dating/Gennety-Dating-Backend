@@ -37,8 +37,9 @@ const NOT_THE_ONBOARDING_AGENT = new Set(["menu/router.ts"]);
 const AWARE_OF_THE_STEP = [
   "sendVoicePromptAskIfRequested",
   // The radar resume owns no session object, so it arms through the patch it
-  // returns and builds the ask itself out of these two.
-  "voicePromptAskText",
+  // returns and sends the ask through the shared payload builder — the text AND
+  // the bottom panel, so its send cannot drift from the ordinary one.
+  "voicePromptAskPayload",
 ];
 
 function walk(dir: string, prefix = ""): string[] {

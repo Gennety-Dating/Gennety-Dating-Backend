@@ -86,8 +86,8 @@ import {
 } from "./photo-editor.js";
 import {
   isPhotoStagePanelTap,
-  photoStagePanelSync,
-} from "../../services/photo-stage-panel.js";
+  replyPanelSync,
+} from "../../services/reply-panel.js";
 import {
   MESSAGE_REACTION,
   onboardingReactionFor,
@@ -783,7 +783,7 @@ async function sendAgentReply(ctx: BotContext, reply: string): Promise<void> {
   if (ctx.chat) {
     await closeStalePhotoEditor(ctx.api, ctx.chat.id, ctx.session);
   }
-  const panel = photoStagePanelSync(ctx.session);
+  const panel = replyPanelSync(ctx.session);
   try {
     await ctx.reply(reply, { parse_mode: "Markdown", ...panel });
   } catch {
@@ -1349,7 +1349,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
      * Report where the stage stands, then persist.
      *
      * The persist is what makes the bottom panel's show-once bookkeeping
-     * survive: `photoStagePanelSync` flips `photoStagePanelShown` DURING the
+     * survive: `replyPanelSync` flips `session.replyPanel` DURING the
      * send, while every branch here upserts BEFORE sending. Without writing
      * afterwards the flag drifts from what Telegram actually shows — and the
      * damaging direction ("shown in Telegram, false in the DB") leaves the
@@ -1567,7 +1567,7 @@ async function replyText(
   session?: SessionData,
 ): Promise<void> {
   if (session) await closeStalePhotoEditor(api, chatId, session);
-  const panel = session ? photoStagePanelSync(session) : {};
+  const panel = session ? replyPanelSync(session) : {};
   try {
     await api.sendMessage(chatId, text, { parse_mode: "Markdown", ...panel });
   } catch {
