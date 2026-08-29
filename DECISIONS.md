@@ -47,6 +47,43 @@ Newest entries go **on top**:
 
 ---
 
+## 2026-08-29 — Launch Events subsystem: spec written, and the brief's premises corrected
+
+**Kind:** deviation from plan + not done
+**What:** the founder commissioned an end-to-end design for a "Launch Engine,
+Waitlist Admission & Offline Events" subsystem (waitlist tiering off the
+attractivity score, founder moderation hub, event ticketing + signed QR,
+venue gatekeeper portal, in-event Zero-Chat pairing rounds, post-event mutual
+loop). Delivered as **[LAUNCH_EVENTS_PRODUCT_SPEC.md](LAUNCH_EVENTS_PRODUCT_SPEC.md)**
+— specification only, zero code, zero schema, everything designed to ship dark
+behind its own flags in four phases.
+**Why the deviations, each one a correction of the brief rather than taste:**
+- **The brief described a stack this product does not run** (Next.js, Supabase
+  RLS/Auth/Realtime, Server Actions, Zod). The spec is designed against the
+  real one — Node/grammY/Express/Prisma, initData/JWT/bearer auth, polling
+  Mini Apps — and delivers the requested RLS guarantees as an explicit
+  server-side access-control map instead (spec §0/§3). Supabase Realtime was
+  explicitly NOT adopted: first WS dependency, Supabase credentials would have
+  to reach clients, and a 30–45-min round cadence doesn't need it.
+- **`calculateAttractivityScore` does not exist.** The real primitive is the
+  vision attractiveness pass already run once per user at verification
+  (`services/elo-seed.ts`, 0..100 → `Profile.eloScore`, audit in
+  `eloSeedDetails`). Admission READS the stored score; no second vision call.
+- **Waitlist admission is scoped to events, never to registration** — the
+  contact-rail + mandatory-liveness gates are invariants and stay the only
+  account-level admission. A `waitlisted` applicant remains a fully matchable
+  user.
+**What it changes going forward:** nothing in code yet. The spec's §14 lists
+eight founder decisions that BLOCK Phase 1 — the first being whether
+score-gated admission exists at all (the spec supports a fully-manual
+`autoApproveScore: null` mode, and the ethnicity/Art.-9 precedent is the bar
+any automatic gate must clear). Do not start implementation from the brief;
+start from the spec.
+**Recorded in:** LAUNCH_EVENTS_PRODUCT_SPEC.md (the whole document; §0 carries
+the brief-vs-codebase corrections, §14 the open decisions).
+
+---
+
 ## 2026-08-29 — Premium и «Пригласи друга» открывают Mini App напрямую; билеты — нет
 
 **Kind:** founder decision + change of mind (scope walk-back)
@@ -1341,7 +1378,7 @@ Places-фолбэка place id есть, а курируемой строки н
 960 — граница, а не провал: чуть мягче, но не размыто. Пересъём ради 17%
 разрешения не окупается.
 
-**Recorded in:** `~/Desktop/gennety-radar-v2/` — 24 кадра под именами карточек,
+**Recorded in:** `~/Desktop/_TO_GDRIVE/gennety-media/gennety-radar-v2/` — 24 кадра под именами карточек,
 первые дубли в `superseded/`, происхождение и правки в `_source-map.json`.
 
 ---
@@ -2674,7 +2711,7 @@ truthiness, в тесте — `"reaction" in body === false`.
 ## 2026-08-23 — английский `GennetyHero`: локализация монтажа, а не новый фильм
 
 **Kind:** founder decision
-**What:** фаундер записал шесть английских экранных записей (`~/Desktop/EN mp4`)
+**What:** фаундер записал шесть английских экранных записей (`~/Desktop/_TO_GDRIVE/gennety-media/EN mp4`)
 и попросил собрать английскую версию продуктового фильма — ту же 62.8-секундную
 сборку, тот же ритм, ту же камеру, тот же титровальный акт, но на новых
 записях. Бриф-передача написана целиком: `apps/video/english-cut-brief.md`.
