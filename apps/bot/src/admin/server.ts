@@ -26,6 +26,7 @@ import { monetizationRouter } from "./routes/monetization.js";
 import { dialogsRouter } from "./routes/dialogs.js";
 import { opsRouter } from "./routes/ops.js";
 import { purchasesRouter } from "./routes/purchases.js";
+import { adSpendRouter } from "./routes/ad-spend.js";
 import { userHealthRouter } from "./routes/user-health.js";
 import { activityRouter } from "./routes/activity.js";
 import { classifyAllUsers } from "./utils/user-health-source.js";
@@ -122,7 +123,10 @@ if (adminCorsOrigin === false) {
 app.use(
   cors({
     origin: adminCorsOrigin,
-    methods: ["GET", "POST", "PATCH", "OPTIONS"],
+    // DELETE added for /admin/ad-spend/:id — the dashboard calls it from the
+    // browser, and without it here a DELETE preflight fails silently before
+    // ever reaching the route's own auth/logic.
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     // The analytics endpoints are served from a cache with TTLs up to 30
     // minutes, so a dashboard that only shows numbers cannot tell the operator
     // whether they are looking at now or at half an hour ago. These headers
@@ -185,6 +189,9 @@ app.use(dialogsRouter);
 app.use(opsRouter);
 // Revenue surface: every real money movement, newest first, payer inlined.
 app.use(purchasesRouter);
+// Acquisition spend the founder enters by hand — what /admin/dashboard's
+// CAC/LTV:CAC/ROAS fields are computed from (AD_SPEND_TRACKING_DESIGN.md).
+app.use(adSpendRouter);
 // Диагностика одного аккаунта: класс здоровья + какое правило сработало.
 // Путь длиннее, чем `/admin/users/:id`, поэтому затенить его не может.
 app.use(userHealthRouter);

@@ -156,6 +156,8 @@ const NEW_ENDPOINTS = [
   "/admin/stats",
   "/admin/dashboard",
   "/admin/matches",
+  "/admin/ad-spend",
+  "/admin/ad-spend/channels",
 ];
 
 describe("ops endpoints — auth", () => {
