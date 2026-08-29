@@ -796,6 +796,32 @@ waitlist (promotion without a notification is invisible); and there is no
 scheduled sweep at all — the only automatic trigger is the verification
 pipeline, with `POST /admin/events/:id/retier` as the repair path for
 applications stranded in `screening` while the flag was off.
+
+### What actually shipped in Phase 2 (2026-08-29)
+
+`event_ticket_tiers` + `event_tickets` + `event_staff_tokens`,
+`services/event-qr.ts` (90-second HMAC codes with a rotatable nonce),
+`services/event-ticket.ts` (claim / scan / perk, every mutation a CAS), five
+`/v1/events/*` routes on the dual-rail `requireCanvasAuth`, five `/gk/*`
+routes on the new per-event bcrypt staff-token rail, and two Mini App pages
+(`event.html`, `gatekeeper.html`). Still dark. See ARCHITECTURE.md → the three
+tables, and the deploy.md block.
+
+**§6.2–6.4 stand as unbuilt design.** The founder's free-ticket decision
+removed the whole money half, so what shipped is materially smaller than this
+document describes: there is no `claimExpiresAt`, no reaper, no Stars payload,
+no wallet acceptance and no refund rail, and the three new tables carry **no
+price column at all**. That absence is deliberate — a price in the schema
+before a decision to charge reads as a promise — so re-adding one is a
+founder decision, not a completion.
+
+Four things Phase 2 deliberately does NOT do: OpenAPI is not updated (these
+screens are Telegram-only, and that file is the generator contract for the
+Swift client); nobody is notified when a ticket is claimed or a tier fills;
+the gatekeeper's offline branch can read the manifest and **cannot admit
+anyone**, because nothing offline writes a check-in; and the demo shows none
+of it, since the demo database has no events (closing that needs a seeded
+event, not a branch in `decide.ts`).
 2. **Lifetime pair ban vs event rounds** (§9.2.3): never re-pair banned
    pairs (default), or allow at a party since "we already matched once" is
    different in a room than in a feed.
