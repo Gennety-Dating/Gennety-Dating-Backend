@@ -23,6 +23,12 @@ import {
 import { loadConversionMatches } from "../utils/match-conversion-source.js";
 import { computeGenderRatio, type GenderRatio } from "../utils/gender-ratio.js";
 import { isNoShow, resolvePairAttendance } from "../../services/attendance.js";
+import { normalizeChannel } from "../utils/growth.js";
+import {
+  computeAcquisitionCost,
+  type AcquisitionCostUserInput,
+} from "../utils/ad-spend.js";
+import { loadPayerIndex } from "../../services/purchases.js";
 
 /**
  * Operational + top-level resource endpoints for the admin surface.
@@ -281,7 +287,14 @@ opsRouter.get("/admin/stats", async (_req: Request, res: Response) => {
  */
 opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
   try {
-    const [{ stats, conversionMatches, classified }, recentMatches, recentUsers] = await Promise.all([
+    const [
+      { stats, conversionMatches, classified },
+      recentMatches,
+      recentUsers,
+      adSpendRows,
+      acquisitionUserRows,
+      payerIndex,
+    ] = await Promise.all([
       collectStats(),
       prisma.match.findMany({
         take: 10,
@@ -299,6 +312,17 @@ opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
       prisma.user.count({
         where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
       }),
+      prisma.adSpend.findMany({
+        select: { channel: true, category: true, periodStart: true, periodEnd: true, amountUsdCents: true },
+      }),
+      // Второй скан `users` за запрос: у `classifyAllUsers` фиксированная форма
+      // выхода без `referralSource` (см. `admin/utils/user-health.ts`), а копия
+      // её правил стоила бы дороже одного лишнего `findMany` — тот же размен,
+      // что уже сделан в `monetization-source.ts`.
+      prisma.user.findMany({
+        select: { id: true, referralSource: true, createdAt: true, status: true, verificationStatus: true },
+      }),
+      loadPayerIndex(),
     ]);
 
     const { matches, userHealth, funnel } = stats;
@@ -326,6 +350,28 @@ opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
       (matches.byStatus.scheduled ?? 0) +
       (matches.byStatus.completed ?? 0);
 
+    // Тестовые/синтетические — та же классификация, что уже исключает их из
+    // воронки: `syntheticAt` сворачивается в вердикт "test" внутри
+    // `classifyAllUsers`, отдельной проверки не нужно.
+    const testUserIds = new Set(
+      classified.filter((u) => u.verdict.classification === "test").map((u) => u.id),
+    );
+    const acquisitionUsers: AcquisitionCostUserInput[] = acquisitionUserRows
+      .filter((u) => !testUserIds.has(u.id))
+      .map((u) => ({
+        id: u.id,
+        channel: normalizeChannel(u.referralSource),
+        createdAt: u.createdAt,
+        status: u.status,
+        verificationStatus: u.verificationStatus,
+      }));
+    const acquisitionCost = computeAcquisitionCost({
+      spend: adSpendRows,
+      users: acquisitionUsers,
+      payers: payerIndex.byUser,
+      now: nowTs,
+    });
+
     res.json({
       ...stats,
       derived: {
@@ -350,13 +396,15 @@ opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
         registeredToMatchRate7dPct: pct(matchedLast7Days, recentRealUsers),
         registeredReal7d: recentRealUsers,
         matchedLast7Days,
-        // ── Требуют данных о расходах (AD_SPEND_TRACKING_DESIGN.md) ───────
-        // null, а не 0: «нет данных» и «привлекли бесплатно» — разные
-        // утверждения, и второе было бы ложью.
-        cacPerPayingUsdCents: null,
-        cacPerActiveUsdCents: null,
-        ltvCac: null,
-        roas: null,
+        // AD_SPEND_TRACKING_DESIGN.md. `computeAcquisitionCost` уже возвращает
+        // null (не 0 и не Infinity) на пустом знаменателе — «нет данных» и
+        // «привлекли бесплатно» остаются разными утверждениями.
+        cacPerPayingUsdCents: acquisitionCost.cacPerPayingUsdCents,
+        cacPerActiveUsdCents: acquisitionCost.cacPerActiveUsdCents,
+        ltvCac: acquisitionCost.ltvCac,
+        roas: acquisitionCost.roas,
+        totalMarketingSpendUsdCents: acquisitionCost.totalMarketingSpendUsdCents,
+        adSpendByChannel: acquisitionCost.byChannel,
         // ИСПРАВЛЕНО: раньше делилось на users.total, т.е. вместе с тестовыми
         // аккаунтами (5/19 вместо 5/16). Знаменатель — реальные пользователи,
         // числитель — активные И верифицированные, т.е. те, кто действительно

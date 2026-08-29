@@ -59,16 +59,44 @@ const { MOCK_MATCH } = vi.hoisted(() => ({
 // Set per-test; read by the where-aware `match.count` mock below.
 let strandedProposedCount = 0;
 
+// Set per-test; read by the select-aware `user.findMany` / `adSpend.findMany`
+// mocks below and by the `loadPayerIndex` mock further down.
+interface RawAcquisitionUserRow {
+  id: string;
+  referralSource: string | null;
+  createdAt: Date;
+  status: string;
+  verificationStatus: string;
+}
+interface RawAdSpendRow {
+  channel: string;
+  category: string;
+  periodStart: Date;
+  periodEnd: Date;
+  amountUsdCents: number;
+}
+let acquisitionUserRows: RawAcquisitionUserRow[] = [];
+let adSpendRows: RawAdSpendRow[] = [];
+let payerIndexOverride: Map<string, { firstPaidAt: Date | null; usdCents: number }> | null = null;
+
 vi.mock("@gennety/db", () => ({
   prisma: {
     $queryRaw: vi.fn().mockResolvedValue([{ "?column?": 1 }]),
     user: {
       count: vi.fn().mockResolvedValue(9),
       groupBy: vi.fn().mockResolvedValue([]),
-      findMany: vi.fn().mockResolvedValue([]),
+      // Select-aware for the same reason `match.findMany` below is:
+      // `/admin/dashboard` scans `users` TWICE — once inside `classifyAllUsers`
+      // (health select) and once for the acquisition-cost `referralSource`
+      // scan — and a flat mock cannot tell the two apart. Per-test overrides
+      // (`mockImplementationOnce`) still layer on top of this default.
+      findMany: vi.fn().mockImplementation((args?: { select?: { referralSource?: unknown } }) =>
+        Promise.resolve(args?.select?.referralSource ? acquisitionUserRows : []),
+      ),
       findUnique: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({}),
     },
+    adSpend: { findMany: vi.fn().mockImplementation(() => Promise.resolve(adSpendRows)) },
     // Возвраты по матчам — вход нетто-конверсии (`match-conversion.ts`).
     ticketLedger: { groupBy: vi.fn().mockResolvedValue([]) },
     match: {
@@ -109,6 +137,12 @@ vi.mock("../../services/storage.js", () => ({
   downloadProfileImage: vi.fn(),
   downloadChatImage: vi.fn(),
   downloadTelegramFile: vi.fn(),
+}));
+
+vi.mock("../../services/purchases.js", () => ({
+  loadPayerIndex: vi.fn().mockImplementation(() =>
+    Promise.resolve({ byUser: payerIndexOverride ?? new Map(), truncated: false }),
+  ),
 }));
 
 import { prisma } from "@gennety/db";
@@ -201,6 +235,62 @@ describe("GET /admin/dashboard", () => {
     expect(res.body.recentMatches).toHaveLength(1);
     // Dates must be ISO strings, never Date objects leaking through JSON.
     expect(typeof res.body.recentMatches[0].createdAt).toBe("string");
+  });
+
+  describe("acquisition cost (AD_SPEND_TRACKING_DESIGN.md)", () => {
+    it("is null, not 0 or Infinity, with no spend recorded", async () => {
+      const res = await get("/admin/dashboard");
+      expect(res.body.derived.cacPerPayingUsdCents).toBeNull();
+      expect(res.body.derived.cacPerActiveUsdCents).toBeNull();
+      expect(res.body.derived.ltvCac).toBeNull();
+      expect(res.body.derived.roas).toBeNull();
+      expect(res.body.derived.totalMarketingSpendUsdCents).toBe(0);
+      expect(res.body.derived.adSpendByChannel).toEqual([]);
+    });
+
+    it("computes real CAC/LTV:CAC/ROAS once spend, a signup, and a payer all line up", async () => {
+      // Anchored to the real clock (the route reads `new Date()`, not an
+      // injected one) but well inside `performance_ads`'s 3-day window either
+      // way — only the attribution range matters here, never `matured`.
+      const day = 86_400_000;
+      const periodStart = new Date(Date.now() - 20 * day);
+      const periodEnd = new Date(Date.now() - 14 * day);
+      adSpendRows = [
+        {
+          channel: "tg:insta_promo",
+          category: "performance_ads",
+          periodStart,
+          periodEnd,
+          amountUsdCents: 5_000,
+        },
+      ];
+      acquisitionUserRows = [
+        {
+          id: "u1",
+          referralSource: "tg:insta_promo",
+          createdAt: new Date(Date.now() - 18 * day),
+          status: "active",
+          verificationStatus: "verified",
+        },
+      ];
+      payerIndexOverride = new Map([
+        ["u1", { firstPaidAt: new Date(Date.now() - 13 * day), usdCents: 700 }],
+      ]);
+      try {
+        const res = await get("/admin/dashboard");
+        expect(res.body.derived.totalMarketingSpendUsdCents).toBe(5_000);
+        expect(res.body.derived.cacPerPayingUsdCents).toBe(5_000);
+        expect(res.body.derived.cacPerActiveUsdCents).toBe(5_000);
+        expect(res.body.derived.ltvCac).toBeCloseTo(0.14, 2);
+        expect(res.body.derived.roas).toBeCloseTo(0.14, 2);
+        expect(res.body.derived.adSpendByChannel).toHaveLength(1);
+        expect(res.body.derived.adSpendByChannel[0].channel).toBe("tg:insta_promo");
+      } finally {
+        adSpendRows = [];
+        acquisitionUserRows = [];
+        payerIndexOverride = null;
+      }
+    });
   });
 });
 
