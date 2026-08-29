@@ -1989,6 +1989,22 @@ paths:
               schema: { $ref: "#/components/schemas/CalendarState" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "402":
+          description: |
+            `prime-time-locked` — at least one submitted slot is in the Prime
+            Time band and this pair has not opened it (`PrimeTimeState`).
+
+            **A permitted verdict, not a failure**: the slot exists and the pair
+            may have it, for a price. Nothing was saved — the whole submission
+            is refused, not the offending entries — so re-submitting without the
+            locked slots is the way forward.
+
+            Documented after the fact: the server has answered this since
+            2026-08-26, and a client reading the bare 402 by number would be
+            reading a status the contract never promised.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "403":
           description: Not a participant of this match
           content:
@@ -3407,8 +3423,22 @@ components:
           type: array
           items: { type: string, format: date-time }
           description: |
-            Which of `proposedTimes` are behind the band. Empty whenever
-            `locked` is false, so one field can never contradict the other.
+            Which of `proposedTimes` are behind the band — the whole band, sent
+            whether or not it is locked. Empty only when the feature itself is
+            off.
+
+            **`locked` is the gate; this is just the band.** A pair that HAS
+            opened it still receives its slots, so `slots` non-empty with
+            `locked: false` is the ordinary shape for a premium pair, not a
+            contradiction. Draw the padlock from `locked` and read this list
+            only while it is true — the Mini App discards the list outright when
+            unlocked, and a client that instead inferred "these are locked" from
+            a non-empty list would lock the band for exactly the people who paid
+            to open it.
+
+            (Until 2026-08-29 this said "empty whenever `locked` is false",
+            which the server has never done — `getCalendarState` fills the band
+            from the feature flag alone.)
         stars:
           type: integer
           description: |
