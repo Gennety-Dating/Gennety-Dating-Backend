@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { getOrCompute } from "../utils/cache.js";
 import {
+  DAY_MS,
   MAU_WINDOW_DAYS,
   WAU_WINDOW_DAYS,
   dailySeries,
@@ -13,7 +14,24 @@ import {
   windowEndingOn,
   byPlatform,
 } from "../utils/activity.js";
-import { loadActivityRows, countExcludedActive } from "../utils/activity-source.js";
+import {
+  loadActivityRows,
+  countExcludedActive,
+  loadCohortUsers,
+  countExcludedCohortUsers,
+  activityCoverageFrom,
+} from "../utils/activity-source.js";
+import { normalizeChannel } from "../utils/growth.js";
+import {
+  DEFAULT_MILESTONES,
+  computeChannelRetention,
+  computeCohortRetention,
+  isCohortBucket,
+  isValidMilestone,
+  lastCompleteDay,
+  type CohortBucket,
+  type RetentionMilestone,
+} from "../utils/cohort-retention.js";
 
 /**
  * DAU / WAU / MAU.
@@ -292,3 +310,152 @@ activityRouter.get(
 );
 
 export { WAU_WINDOW_DAYS, MAU_WINDOW_DAYS };
+
+// ---------------------------------------------------------------------------
+// GET /admin/analytics/cohort-retention
+//   ?bucket=day|week|month &from=YYYY-MM-DD &to=YYYY-MM-DD
+//   &milestones=1,7,14,30  (or explicit windows: 1:1,7:7,14:7,30:7)
+//
+// The cohort matrix: registration bucket × "still active on day N", plus the
+// same measurement per acquisition channel so it can sit beside CAC. The
+// definitions and every reason behind them live in `utils/cohort-retention.ts`.
+// ---------------------------------------------------------------------------
+
+/** Registration span the matrix covers when nobody says otherwise. */
+const COHORT_DEFAULT_SPAN_DAYS = 180;
+
+/**
+ * Widen a bare day offset into a window.
+ *
+ * A caller who writes `?milestones=1,7,14,30` is asking the question in the
+ * founder's own terms and should get this file's answer to it rather than a
+ * literal one-day reading, which at day 30 measures the weekly drop schedule
+ * instead of the user. Day 1 stays exact — see `RetentionMilestone`.
+ */
+function widenMilestone(day: number): RetentionMilestone {
+  return { day, windowDays: day <= 1 ? 1 : Math.min(7, day) };
+}
+
+function parseMilestones(raw: string): RetentionMilestone[] | null {
+  const out: RetentionMilestone[] = [];
+  for (const part of raw.split(",").map((s) => s.trim()).filter(Boolean)) {
+    const [dayRaw, widthRaw] = part.split(":");
+    const day = Number(dayRaw);
+    if (!Number.isInteger(day)) return null;
+    const m =
+      widthRaw === undefined
+        ? widenMilestone(day)
+        : { day, windowDays: Number(widthRaw) };
+    if (!isValidMilestone(m)) return null;
+    out.push(m);
+  }
+  return out.length > 0 && out.length <= 8 ? out : null;
+}
+
+activityRouter.get(
+  "/admin/analytics/cohort-retention",
+  async (req: Request, res: Response) => {
+    const bucketRaw = String(req.query["bucket"] ?? "week");
+    if (!isCohortBucket(bucketRaw)) {
+      return badRequest(res, "bucket must be day, week or month");
+    }
+    const bucket: CohortBucket = bucketRaw;
+
+    const now = new Date();
+    // `to` defaults to TODAY rather than yesterday, unlike the DAU endpoints:
+    // this parameter bounds which registrations are in scope, and a cohort
+    // that signed up this morning genuinely belongs in the table — it will
+    // simply report `immature` cells until its windows close.
+    const today = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+    const toRaw = req.query["to"];
+    const fromRaw = req.query["from"];
+    const to = toRaw === undefined ? today : parseDayKey(String(toRaw));
+    if (!to) return badRequest(res, "to must be YYYY-MM-DD");
+    const from =
+      fromRaw === undefined
+        ? windowEndingOn(to, COHORT_DEFAULT_SPAN_DAYS).from
+        : parseDayKey(String(fromRaw));
+    if (!from) return badRequest(res, "from must be YYYY-MM-DD");
+    if (from > to) return badRequest(res, "from must not be after to");
+
+    const spanDays = Math.round((to.getTime() - from.getTime()) / DAY_MS) + 1;
+    if (spanDays > MAX_RANGE_DAYS) {
+      return badRequest(res, `range must be at most ${MAX_RANGE_DAYS} days`);
+    }
+
+    const milestonesRaw = req.query["milestones"];
+    const milestones =
+      milestonesRaw === undefined
+        ? [...DEFAULT_MILESTONES]
+        : parseMilestones(String(milestonesRaw));
+    if (!milestones) {
+      return badRequest(
+        res,
+        "milestones must be up to 8 entries like 1,7,14,30 or 30:7, each with 1 <= windowDays <= day",
+      );
+    }
+
+    const includeTest = wantsTestAccounts(req);
+
+    try {
+      const key = `cohort_retention:v1:${bucket}:${toDayKey(from)}:${toDayKey(to)}:${
+        milestones.map((m) => `${m.day}-${m.windowDays}`).join("_")
+      }:${includeTest ? "all" : "real"}`;
+
+      const data = await getOrCompute(
+        key,
+        CACHE_TTL_SECONDS,
+        async () => {
+          // The activity read has to start at the earliest signup in scope (a
+          // cohort's own day 1 can be the day after `from`) and run to today.
+          // Windows reaching past today belong to immature cells, which are
+          // never scored, so there is nothing beyond today to load.
+          const [users, activity, coverageFrom, excludedTestUsers] =
+            await Promise.all([
+              loadCohortUsers(from, to, { includeTest }),
+              loadActivityRows(from, today, { includeTest }),
+              activityCoverageFrom(),
+              includeTest ? Promise.resolve(0) : countExcludedCohortUsers(from, to),
+            ]);
+
+          const opts = { bucket, milestones, now, coverageFrom };
+
+          return {
+            generatedAt: new Date().toISOString(),
+            timezone: "UTC",
+            bucket,
+            from: toDayKey(from),
+            to: toDayKey(to),
+            includeTest,
+            milestones,
+            /**
+             * What the instrument can see, reported next to what it saw.
+             * Without this pair a reader cannot tell a churned cohort from an
+             * unobserved one, and every cohort older than the activity table
+             * would read as a total loss.
+             */
+            coverage: {
+              activityFrom: coverageFrom,
+              lastCompleteDay: toDayKey(lastCompleteDay(now)),
+            },
+            overall: computeCohortRetention(users, activity, opts),
+            byChannel: computeChannelRetention(
+              users,
+              activity,
+              normalizeChannel,
+              opts,
+            ),
+            excludedTestUsers,
+          };
+        },
+        { req, res },
+      );
+      res.json(data);
+    } catch (err) {
+      console.error("[admin] cohort-retention error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);

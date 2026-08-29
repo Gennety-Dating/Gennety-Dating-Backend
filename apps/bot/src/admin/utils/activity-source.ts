@@ -94,3 +94,77 @@ export async function countExcludedActive(from: Date, to: Date): Promise<number>
   );
   return excluded.size;
 }
+
+// ---------------------------------------------------------------------------
+// Cohort retention loading
+// ---------------------------------------------------------------------------
+
+/**
+ * The registration side of a cohort matrix.
+ *
+ * It lives here, beside `loadActivityRows`, on purpose: the numerator and the
+ * denominator of a retention percentage have to describe the SAME population,
+ * and the only way to guarantee that is for one module to own "who counts".
+ * A denominator built from `classifyAllUsers` against a numerator built from
+ * this file's filter would drift the day the two definitions of a test account
+ * diverge, and the symptom would be a retention rate above 100%.
+ */
+export async function loadCohortUsers(
+  from: Date,
+  to: Date,
+  options: LoadActivityOptions = {},
+): Promise<Array<{ id: string; createdAt: Date; referralSource: string | null }>> {
+  return prisma.user.findMany({
+    where: {
+      createdAt: { gte: from, lte: to },
+      ...(options.includeTest
+        ? {}
+        : {
+            syntheticAt: null,
+            ...(TEST_TELEGRAM_IDS.length > 0
+              ? { telegramId: { notIn: TEST_TELEGRAM_IDS } }
+              : {}),
+          }),
+    },
+    select: { id: true, createdAt: true, referralSource: true },
+  });
+}
+
+/** How many registrations in the window were left out, so the gap is stated. */
+export async function countExcludedCohortUsers(from: Date, to: Date): Promise<number> {
+  const [all, real] = await Promise.all([
+    prisma.user.count({ where: { createdAt: { gte: from, lte: to } } }),
+    prisma.user.count({
+      where: {
+        createdAt: { gte: from, lte: to },
+        syntheticAt: null,
+        ...(TEST_TELEGRAM_IDS.length > 0
+          ? { telegramId: { notIn: TEST_TELEGRAM_IDS } }
+          : {}),
+      },
+    }),
+  ]);
+  return all - real;
+}
+
+/**
+ * The earliest UTC day `user_activity_days` holds anything for — i.e. the
+ * first day the instrument was switched on.
+ *
+ * This is what separates "nobody came back" from "we were not watching", and
+ * it is load-bearing rather than decorative here: the table began collecting
+ * in August 2026, so every cohort older than that would otherwise be reported
+ * as 100% churned. `null` means the table is empty and nothing is measurable
+ * yet — which is the state production is in until the backfill runs.
+ *
+ * Deliberately NOT filtered by test accounts: it answers "what does the table
+ * cover", not "who is in it", and a synthetic row is still evidence that the
+ * writer was alive that day.
+ */
+export async function activityCoverageFrom(): Promise<string | null> {
+  const row = await prisma.userActivityDay.findFirst({
+    orderBy: { activityDate: "asc" },
+    select: { activityDate: true },
+  });
+  return row ? toDayKey(row.activityDate) : null;
+}

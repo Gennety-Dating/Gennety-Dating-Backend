@@ -722,6 +722,22 @@ Test and synthetic accounts are excluded on **read**, not on write
 Filtering at write time would bake one definition of "test account" into data
 collected months earlier.
 
+**It has a second reader with a different shape of question (2026-08-29):**
+`GET /admin/analytics/cohort-retention` groups users by the day they registered
+and asks whether each was active in a window ending N days later. DAU/MAU ask
+"how many distinct people on this day"; cohort retention asks "of the people who
+arrived on day X, how many came back". Both read the same rows, so **the two
+must agree about who counts** — `loadCohortUsers` deliberately reuses
+`loadActivityRows`'s exclusion verbatim (`syntheticAt: null` plus the same
+`ADMIN_TEST_TELEGRAM_IDS`), because a numerator and denominator drawn from two
+definitions of the population can produce a retention rate above 100%.
+
+One consequence that is easy to misread: because this table is the substrate,
+**a cohort older than the table reads as `no-data`, never as 0%**. The
+`activityCoverageFrom` field on the response is what says which is which, and it
+deliberately does NOT apply the test filter — it answers "what does the table
+cover", not "who is in it".
+
 ### `media_validation_rejections`
 
 Append-only audit of upload-time profile-media rejections. Stores only
@@ -1754,6 +1770,7 @@ external callers kept reaching for:
 | GET | `/admin/analytics/mau` | MAU over a **rolling 30 days** by default (`?days=`, `?end=`), or a calendar month with `?month=YYYY-MM`. Rolling is the default because the product's rhythm is weekly — the drop, the famine notice, the check-in ladder — so 30 days is four cycles whatever month it is, while a calendar month holds four or five Thursdays and would make February structurally quieter than March by the calendar rather than by the product. Carries `avgDau` (averaged, never summed) and `byPlatform`. |
 | GET | `/admin/analytics/active` | The trend view: a **zero-filled** daily DAU series over `?from=`/`?to=` plus the headline block. Zero-filled rather than sparse — a chart that omits an empty day draws a straight line through the gap, which reads as "flat" instead of "nobody came". Loads back to the MAU window even when the series starts later, so the series and the summary come from one read. |
 | GET | `/admin/analytics/active.csv` | The same series as CSV. Deliberately **uncached**, like `/admin/purchases`: an export is asked for when someone wants the real numbers now. |
+| GET | `/admin/analytics/cohort-retention` | **True cohort retention — the return curve, not the survival curve.** Groups users by the day/week/month they REGISTERED (`?bucket=`) and asks, for each milestone, whether they were active inside a window ending on that offset: D1 exact, D7/D14/D30 over a 7-day bracket. The bracket is the load-bearing part — the product's rhythm is weekly (one drop, one famine notice), so an exact-day reading at D30 would measure the drop schedule rather than the user. Day 0 is never counted: it is the signup session, and counting it makes every cohort 100%. Reads `user_activity_days`, so it is a real activity signal rather than `lastMessageAt`. Cached 10 min, honours `?fresh=1`. **Deliberately NOT the same metric as the `retention` router listed above** — that one asks "is the user's LAST activity at least N weeks out", which counts a user at every earlier offset and therefore reads systematically HIGHER. Never compare the two numbers. |
 | GET | `/admin/analytics/monetization` | **The conversion, not the ledger** — what share of acquired users pay. Three denominators side by side (all real registrations / activated / reached a paywall), revenue with ARPU+ARPPU, per-product payers, signup-week cohorts, four segment cuts (channel, gender, city, registration track), repeat-purchase and time-to-first-payment. Cached 15 min with `?fresh=1`, like the other analytics tabs — the opposite call from `/admin/purchases` above, and for the opposite reason: a conversion rate does not move meaningfully between two page loads. |
 | GET | `/admin/users/:id/health` | One account's health class plus the RULE that produced it (`reason`, `rules_fired`, `signals`). Counters and metadata only — never conversation content. |
 | GET | `/admin/matches` | The match **row** list — the pairs themselves, newest first, both participants inlined, `?status=` filtered and paginated. Distinct from `/admin/analytics/matches`, which is the aggregate funnel and cannot answer "which pairs exist right now". `telegramId` is serialized to a string (BigInt is not JSON-safe). Each row also carries the DERIVED lifecycle fields — `confirmed`, `ticketPurchased`/`At`, `refunded`/`refundedSlots`/`refundReason`, `noShow`, `attendance`, `ghostDuringScheduling`, `dateCompletedAt` — computed from columns the product already writes rather than stored (DECISIONS.md 2026-08-15), so they are populated across the whole match history instead of starting at deploy. Two readings that are easy to get wrong: `noShow: null` means "nobody answered", never "there was no no-show"; and `dateCompletedAt` is when the match CLOSED (the T+24h prompt), not evidence the date happened — that is `attendance`. Refund counts come from one `ticket_ledger` groupBy per page, not N+1. |
