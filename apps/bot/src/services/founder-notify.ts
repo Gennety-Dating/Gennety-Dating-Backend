@@ -118,6 +118,36 @@ export async function notifyFounderStatusTimerHealth(
   }
 }
 
+/**
+ * Someone marked an event `unsafe` (LAUNCH_EVENTS §10).
+ *
+ * Fired at write time rather than left to the admin hub, because this is the
+ * one post-event answer where waiting for someone to open a dashboard is the
+ * wrong outcome. The ids are the whole payload: the reporter's own words are
+ * carried only when they wrote some, and even then this DM is the founder's
+ * private ops channel, which is where the profile-and-photos disclosure on
+ * account closure already lives.
+ */
+export async function notifyFounderEventSafetyFlag(input: {
+  eventId: string;
+  userId: string;
+  text: string | null;
+}): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+  try {
+    const lines = [
+      `🚨 Event safety flag: UNSAFE`,
+      `event=${input.eventId}`,
+      `user=${input.userId}`,
+    ];
+    if (input.text) lines.push("", input.text);
+    await api.sendMessage(founderChatId(), lines.join("\n"));
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} event safety notify failed`, { eventId: input.eventId, err });
+  }
+}
+
 /** Privacy-safe terminal alert for Venue Intent V2 provider failures. */
 export async function notifyFounderVenueSelectionFailure(
   matchId: string,

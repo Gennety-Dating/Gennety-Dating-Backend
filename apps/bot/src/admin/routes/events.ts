@@ -914,3 +914,130 @@ eventsRouter.post("/admin/events/:id/retier", async (req: Request, res: Response
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+/**
+ * Safety analytics + the post-event funnel for one event (LAUNCH_EVENTS §10/§11).
+ *
+ * Three questions in one call, because they are read together and answering
+ * them separately would let the ratings and the safety flags come from
+ * different moments:
+ *
+ *  - **Safety.** Every `unsafe` row in full, with the reporter's own words.
+ *    These are the un-dismissable entries §10 asks for: they are exempt from
+ *    the retention sweep, so unlike everything else on this screen they do not
+ *    age out from under a founder who has not looked yet.
+ *  - **How the evening went** — the rating distribution and its mean, over
+ *    answers that carry one.
+ *  - **What it converted into** — met-confirmed pairs, mutual thumbs, and the
+ *    matches those actually became. The last is the number the whole events
+ *    programme exists to move, and it is deliberately counted from `matchId`
+ *    rather than from mutuals: a mutual that never became a date is a promise,
+ *    not a result.
+ */
+eventsRouter.get("/admin/events/:id/feedback", async (req: Request, res: Response) => {
+  if (!requireFeature(res)) return;
+  try {
+    const { id } = req.params as { id: string };
+    if (!isUuid(id)) {
+      res.status(400).json({ error: "id must be a UUID" });
+      return;
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id },
+      select: { id: true, title: true, endsAt: true },
+    });
+    if (!event) {
+      res.status(404).json({ error: "Event not found" });
+      return;
+    }
+
+    const [feedback, attended, pairings] = await Promise.all([
+      prisma.eventFeedback.findMany({
+        where: { eventId: id },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          userId: true,
+          rating: true,
+          safety: true,
+          text: true,
+          createdAt: true,
+          user: { select: { firstName: true, telegramUsername: true } },
+        },
+      }),
+      prisma.eventTicket.count({ where: { eventId: id, checkedInAt: { not: null } } }),
+      prisma.eventRoundPairing.findMany({
+        where: { eventId: id },
+        select: {
+          metConfirmedA: true,
+          metConfirmedB: true,
+          thumbsA: true,
+          thumbsB: true,
+          matchId: true,
+        },
+      }),
+    ]);
+
+    const ratings = feedback.map((f) => f.rating).filter((r): r is number => r !== null);
+    const distribution: Record<string, number> = {};
+    for (const r of ratings) distribution[String(r)] = (distribution[String(r)] ?? 0) + 1;
+
+    const safetyCounts: Record<string, number> = {};
+    for (const f of feedback) {
+      if (f.safety) safetyCounts[f.safety] = (safetyCounts[f.safety] ?? 0) + 1;
+    }
+
+    let met = 0;
+    let mutual = 0;
+    let matched = 0;
+    for (const p of pairings) {
+      if (p.metConfirmedA && p.metConfirmedB) met += 1;
+      if (p.thumbsA === true && p.thumbsB === true) {
+        mutual += 1;
+        if (p.matchId) matched += 1;
+      }
+    }
+
+    res.json({
+      event: { id: event.id, title: event.title, endsAt: event.endsAt },
+      attended,
+      responses: feedback.length,
+      // `null`, never 0, on an empty denominator — "nobody answered" and
+      // "everyone rated it zero" are different facts, and a screen that prints
+      // 0% for the first is worse than one that prints nothing.
+      responseRatePct: attended > 0 ? Math.round((feedback.length / attended) * 1000) / 10 : null,
+      rating: {
+        count: ratings.length,
+        mean:
+          ratings.length > 0
+            ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
+            : null,
+        distribution,
+      },
+      safety: {
+        counts: safetyCounts,
+        // Full rows, not a count: a safety flag is read, not tallied.
+        unsafe: feedback
+          .filter((f) => f.safety === "unsafe")
+          .map((f) => ({
+            id: f.id,
+            userId: f.userId,
+            firstName: f.user.firstName,
+            telegramUsername: f.user.telegramUsername,
+            text: f.text,
+            createdAt: f.createdAt,
+          })),
+      },
+      funnel: {
+        pairings: pairings.length,
+        metConfirmed: met,
+        mutualThumbs: mutual,
+        matchesCreated: matched,
+      },
+    });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} feedback error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});

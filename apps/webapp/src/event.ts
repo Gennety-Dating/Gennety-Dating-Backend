@@ -63,6 +63,23 @@ interface LiveState {
   pairing: LivePairing | null;
 }
 
+interface RecapPairing {
+  pairingId: string;
+  partnerFirstName: string | null;
+  /** This side's own answer. Null until given; once given it is final. */
+  myThumb: boolean | null;
+  mutual: boolean;
+}
+
+interface RecapState {
+  open: boolean;
+  opensAt: string | null;
+  eventTitle: string;
+  pairings: RecapPairing[];
+  feedbackSubmitted: boolean;
+  discount: { pct: number; expiresAt: string } | null;
+}
+
 let events: EventRow[] = [];
 let openTicketFor: string | null = null;
 let qrTimer: ReturnType<typeof setTimeout> | null = null;
@@ -71,6 +88,10 @@ let openLiveFor: string | null = null;
 let liveTimer: ReturnType<typeof setTimeout> | null = null;
 /** Last mutual we celebrated, so a poll cannot re-fire the haptic every 5s. */
 let celebrated: string | null = null;
+/** Which event's recap is open — the recap does not poll, so this is only the
+ *  back button's memory and the target for a re-paint after a thumb. */
+let openRecapFor: string | null = null;
+let recapState: RecapState | null = null;
 
 const root = document.getElementById("app") as HTMLElement;
 
@@ -135,6 +156,26 @@ const COPY = {
     livePause: "Взять паузу",
     liveResume: "Я вернулся",
     livePaused: "Ты на паузе. Следующий раунд пропустим.",
+    recap: "Итоги вечера",
+    recapTitle: "Как прошёл вечер",
+    recapNotYet: "Откроем чуть позже — пока все ещё расходятся.",
+    recapNobody: "Ты никого не отметил в этот вечер. Расскажи, как было.",
+    recapAsk: "С кем хочется увидеться ещё?",
+    recapYes: "Да",
+    recapNo: "Нет",
+    recapAnswered: "Ответ записан",
+    recapMutual: "Взаимно ✨ Скоро всё устроим",
+    recapNoRecap: "Не нашли твоих итогов по этому вечеру.",
+    fbTitle: "Как тебе вечер?",
+    fbRating: "Оценка",
+    fbSafety: "Было комфортно?",
+    fbFine: "Всё хорошо",
+    fbUncomfortable: "Некомфортно",
+    fbUnsafe: "Небезопасно",
+    fbText: "Что запомнилось? (по желанию)",
+    fbSend: "Отправить",
+    fbThanks: "Спасибо — это правда помогает.",
+    fbDiscount: "Скидка {pct}% на следующий билет на свидание",
   },
   en: {
     title: "Parties",
@@ -165,6 +206,26 @@ const COPY = {
     livePause: "Take a break",
     liveResume: "I'm back",
     livePaused: "You're sitting out. We'll skip the next round.",
+    recap: "Last night",
+    recapTitle: "How the evening went",
+    recapNotYet: "Opening a little later — everyone's still heading home.",
+    recapNobody: "You didn't mark anyone that evening. Tell us how it was.",
+    recapAsk: "Who would you like to see again?",
+    recapYes: "Yes",
+    recapNo: "No",
+    recapAnswered: "Answer recorded",
+    recapMutual: "It's mutual \u2728 We'll set it up shortly",
+    recapNoRecap: "We have no recap for you for that evening.",
+    fbTitle: "How was it?",
+    fbRating: "Rating",
+    fbSafety: "Did you feel comfortable?",
+    fbFine: "All good",
+    fbUncomfortable: "Uncomfortable",
+    fbUnsafe: "Unsafe",
+    fbText: "Anything that stayed with you? (optional)",
+    fbSend: "Send",
+    fbThanks: "Thank you — this genuinely helps.",
+    fbDiscount: "{pct}% off your next date ticket",
   },
 } as const;
 
@@ -196,6 +257,13 @@ function renderList(): void {
         action =
           `<button class="ev-cta" data-live="${esc(event.id)}">${esc(t.party)}</button>` +
           `<button class="ev-secondary" data-ticket="${esc(event.id)}">${esc(t.showTicket)}</button>`;
+      } else if (event.hasTicket && Date.parse(event.endsAt) < Date.now()) {
+        // The evening is over, so the ticket is a souvenir and the recap is the
+        // thing. Offered on `hasTicket` rather than on check-in, which this
+        // payload does not carry — someone who never came gets a plain "no
+        // recap" rather than a button that is not there, and the difference is
+        // one tap against another round trip on every card in the list.
+        action = `<button class="ev-cta" data-recap="${esc(event.id)}">${esc(t.recap)}</button>`;
       } else if (event.hasTicket) {
         action = `<button class="ev-cta" data-ticket="${esc(event.id)}">${esc(t.showTicket)}</button>`;
       } else if (event.admission === "admitted") {
@@ -348,6 +416,103 @@ function paintLive(eventId: string, state: LiveState): void {
   </section>`);
 }
 
+/**
+ * The morning after (§11).
+ *
+ * Deliberately NOT polled. The live screen refreshes every few seconds because
+ * a round can open under the user; nothing here changes without them, except a
+ * partner's thumb — and learning of a mutual on the next open rather than
+ * mid-scroll costs nothing, while a poll on a screen with a text field in it
+ * would fight the keyboard.
+ */
+async function renderRecap(eventId: string): Promise<void> {
+  openRecapFor = eventId;
+  openLiveFor = null;
+  if (liveTimer) clearTimeout(liveTimer);
+
+  const res = await apiFetch(`${apiBase}/v1/events/${eventId}/recap`, {
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok) {
+    root.innerHTML = h(`
+      <section class="ev-live">
+        <button class="ev-back" data-back="1">← ${esc(t.back)}</button>
+        <div class="ev-empty">${esc(t.recapNoRecap)}</div>
+      </section>`);
+    return;
+  }
+  recapState = (await res.json()) as RecapState;
+  if (openRecapFor !== eventId) return;
+  paintRecap(eventId, recapState);
+}
+
+function paintRecap(eventId: string, state: RecapState): void {
+  const header =
+    `<button class="ev-back" data-back="1">← ${esc(t.back)}</button>` +
+    `<h2 class="ev-title">${esc(state.eventTitle || t.recapTitle)}</h2>`;
+
+  if (!state.open) {
+    root.innerHTML = h(`
+      <section class="ev-live">
+        ${header}
+        <div class="ev-note">${esc(t.recapNotYet)}</div>
+      </section>`);
+    return;
+  }
+
+  const people = state.pairings.length
+    ? `<div class="ev-recap-ask">${esc(t.recapAsk)}</div>` +
+      state.pairings
+        .map((p) => {
+          const name = esc(p.partnerFirstName ?? "—");
+          // Answered is a dead end by design: the first answer is final, so
+          // the buttons go away rather than staying tappable and doing nothing.
+          if (p.myThumb !== null) {
+            const note = p.mutual ? t.recapMutual : t.recapAnswered;
+            return `<div class="ev-recap-row is-done"><span>${name}</span>` +
+              `<span class="ev-recap-note${p.mutual ? " is-mutual" : ""}">${esc(note)}</span></div>`;
+          }
+          return `<div class="ev-recap-row"><span>${name}</span>
+            <span class="ev-recap-actions">
+              <button class="ev-thumb is-no" data-thumb="${esc(p.pairingId)}" data-value="0" data-recap-event="${esc(eventId)}">${esc(t.recapNo)}</button>
+              <button class="ev-thumb is-yes" data-thumb="${esc(p.pairingId)}" data-value="1" data-recap-event="${esc(eventId)}">${esc(t.recapYes)}</button>
+            </span></div>`;
+        })
+        .join("")
+    : `<div class="ev-note">${esc(t.recapNobody)}</div>`;
+
+  const discount = state.discount
+    ? `<div class="ev-recap-discount">${esc(
+        t.fbDiscount.replace("{pct}", String(state.discount.pct)),
+      )}</div>`
+    : "";
+
+  const feedback = state.feedbackSubmitted
+    ? `<div class="ev-recap-thanks">${esc(t.fbThanks)}</div>${discount}`
+    : `<form class="ev-fb" data-fb="${esc(eventId)}">
+        <h3 class="ev-fb-title">${esc(t.fbTitle)}</h3>
+        <div class="ev-fb-label">${esc(t.fbRating)}</div>
+        <div class="ev-fb-scale">
+          ${Array.from({ length: 10 }, (_, i) => i + 1)
+            .map(
+              (n) =>
+                `<button type="button" class="ev-fb-num" data-rating="${n}">${n}</button>`,
+            )
+            .join("")}
+        </div>
+        <div class="ev-fb-label">${esc(t.fbSafety)}</div>
+        <div class="ev-fb-safety">
+          <button type="button" class="ev-fb-chip" data-safety="everything_fine">${esc(t.fbFine)}</button>
+          <button type="button" class="ev-fb-chip" data-safety="uncomfortable">${esc(t.fbUncomfortable)}</button>
+          <button type="button" class="ev-fb-chip is-unsafe" data-safety="unsafe">${esc(t.fbUnsafe)}</button>
+        </div>
+        <textarea class="ev-fb-text" rows="3" placeholder="${esc(t.fbText)}"></textarea>
+        <button type="submit" class="ev-cta">${esc(t.fbSend)}</button>
+      </form>`;
+
+  root.innerHTML = h(`<section class="ev-live">${header}${people}${feedback}</section>`);
+}
+
 async function post(path: string, body?: unknown): Promise<Response> {
   return apiFetch(`${apiBase}${path}`, {
     method: "POST",
@@ -358,7 +523,8 @@ async function post(path: string, body?: unknown): Promise<Response> {
 
 root.addEventListener("click", (ev) => {
   const target = (ev.target as HTMLElement).closest(
-    "[data-apply],[data-claim],[data-ticket],[data-back],[data-rotate],[data-live],[data-met],[data-pause],[data-resume]",
+    "[data-apply],[data-claim],[data-ticket],[data-back],[data-rotate],[data-live],[data-met]," +
+      "[data-pause],[data-resume],[data-recap],[data-thumb],[data-rating],[data-safety]",
   );
   if (!(target instanceof HTMLElement)) return;
 
@@ -372,6 +538,7 @@ root.addEventListener("click", (ev) => {
       if (target.dataset.back) {
         openTicketFor = null;
         openLiveFor = null;
+        openRecapFor = null;
         if (qrTimer) clearTimeout(qrTimer);
         if (liveTimer) clearTimeout(liveTimer);
         renderList();
@@ -379,6 +546,35 @@ root.addEventListener("click", (ev) => {
       }
       if (target.dataset.live) {
         await renderLive(target.dataset.live);
+        return;
+      }
+      if (target.dataset.recap) {
+        await renderRecap(target.dataset.recap);
+        return;
+      }
+      if (target.dataset.thumb) {
+        const eventId = target.dataset.recapEvent ?? "";
+        target.setAttribute("disabled", "true");
+        await post(`/v1/events/${eventId}/pairings/${target.dataset.thumb}/thumbs`, {
+          value: target.dataset.value === "1",
+        });
+        // Re-read rather than painting the tap: whether this turned out to be
+        // mutual is the server's answer, and deciding it here is exactly how a
+        // blind decision stops being blind.
+        await renderRecap(eventId);
+        return;
+      }
+      if (target.dataset.rating || target.dataset.safety) {
+        // Selection only — the form is submitted by its own button. Marking
+        // the choice in the DOM rather than in a variable keeps the state
+        // where the user can see it, which is also where the submit reads it.
+        const group = target.dataset.rating ? "[data-rating]" : "[data-safety]";
+        target
+          .closest("form")
+          ?.querySelectorAll(group)
+          .forEach((el) => el.classList.remove("is-picked"));
+        target.classList.add("is-picked");
+        tg?.HapticFeedback?.selectionChanged?.();
         return;
       }
       if (target.dataset.met) {
@@ -427,6 +623,34 @@ root.addEventListener("click", (ev) => {
   })();
 });
 
+root.addEventListener("submit", (ev) => {
+  const form = (ev.target as HTMLElement).closest("form[data-fb]");
+  if (!(form instanceof HTMLFormElement)) return;
+  ev.preventDefault();
+  const eventId = form.dataset.fb ?? "";
+  const rating = form.querySelector("[data-rating].is-picked") as HTMLElement | null;
+  const safety = form.querySelector("[data-safety].is-picked") as HTMLElement | null;
+  const text = (form.querySelector(".ev-fb-text") as HTMLTextAreaElement | null)?.value ?? "";
+
+  void (async () => {
+    try {
+      form.querySelector("[type=submit]")?.setAttribute("disabled", "true");
+      await post(`/v1/events/${eventId}/feedback`, {
+        rating: rating ? Number(rating.dataset.rating) : null,
+        safety: safety?.dataset.safety ?? null,
+        text: text.trim() || null,
+      });
+      // Re-read so the discount line comes from the server. It may be one the
+      // user already held rather than one this answer earned, and the screen
+      // must say what is true rather than what the tap hoped for.
+      await renderRecap(eventId);
+      tg?.HapticFeedback?.notificationOccurred?.("success");
+    } catch {
+      root.innerHTML = h(`<div class="ev-empty">${esc(t.error)}</div>`);
+    }
+  })();
+});
+
 async function boot(): Promise<void> {
   applyTheme(getTheme());
   tg?.ready?.();
@@ -434,6 +658,14 @@ async function boot(): Promise<void> {
   document.title = t.title;
   try {
     await load();
+    // The T+18h message links straight here, so a recap opened from it must
+    // not make the reader find their own event in a list first.
+    const params = new URLSearchParams(location.search);
+    const deepEventId = params.get("eventId");
+    if (params.get("view") === "recap" && deepEventId) {
+      await renderRecap(deepEventId);
+      return;
+    }
     renderList();
   } catch {
     root.innerHTML = h(`<div class="ev-empty">${esc(t.error)}</div>`);

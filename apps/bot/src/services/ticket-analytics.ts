@@ -28,6 +28,13 @@ export type TicketAnalyticsEvent =
   // match (the store path has none), so `matchId` is optional and `userId`
   // identifies the subject instead.
   | "famine_discount_granted"
+  // The post-event feedback incentive (LAUNCH_EVENTS §11). Its own event rather
+  // than a reused `famine_discount_granted`: the two mechanisms share one slot,
+  // so a single event name would make "how many discounts did the events
+  // programme actually buy" unanswerable from the log. Redemption stays
+  // `famine_discount_redeemed` — by then the slot is one discount and the
+  // spend path neither knows nor cares which mechanism filled it.
+  | "event_feedback_discount_granted"
   | "famine_discount_redeemed";
 
 export function emitTicketEvent(

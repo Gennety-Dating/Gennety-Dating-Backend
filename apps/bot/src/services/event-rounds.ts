@@ -30,8 +30,7 @@
  *      contract, and the §3.1c rule that scripted outcomes must not become
  *      data applies with more force to outcomes nobody agreed to at all.
  */
-import type { Prisma } from "@prisma/client";
-import { prisma } from "@gennety/db";
+import { prisma, type Prisma } from "@gennety/db";
 import {
   formatProfilerAnswersBlock,
   generateEventMissionsPrompt,
@@ -366,8 +365,9 @@ export async function loadAttendees(userIds: readonly string[]): Promise<BatchUs
       homeCityKey: row.profile?.homeCityKey ?? null,
       ageRangeMin: row.profile?.ageRangeMin ?? null,
       ageRangeMax: row.profile?.ageRangeMax ?? null,
-      typePrefTags: row.profile?.typePrefTags ?? null,
-      appearanceTags: row.profile?.appearanceTags ?? null,
+      typePrefTags: (row.profile?.typePrefTags as unknown as BatchUser["typePrefTags"]) ?? null,
+      appearanceTags:
+        (row.profile?.appearanceTags as unknown as BatchUser["appearanceTags"]) ?? null,
       relationshipIntents: row.profile?.relationshipIntents ?? [],
     });
   }

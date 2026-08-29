@@ -11,6 +11,12 @@ import {
 } from "../../services/event-ticket.js";
 import { ADMITTED_TIERS, tierOneApplication } from "../../services/event-admission.js";
 import { confirmMet, getEventLiveState, setPartyPause } from "../../services/event-live.js";
+import {
+  getEventRecap,
+  recordThumb,
+  sendMutualReveal,
+  submitEventFeedback,
+} from "../../services/event-recap.js";
 
 /**
  * `/v1/events/*` — the attendee's own surface for launch events
@@ -315,6 +321,102 @@ eventsPublicRouter.post("/:id/pairings/:pairingId/met", async (req: Request, res
     res.json({ ok: true, mutual: result.mutual });
   } catch (err) {
     console.error(`${LOG_PREFIX} met error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── The morning after (§11) ──────────────────────────────────────────────
+
+/**
+ * The recap screen: who you actually found, and your own verdict on each.
+ *
+ * Never the partner's verdict unless it is mutual, and a `false` is
+ * indistinguishable from silence — the §3.4 blind rule, carried past the party.
+ */
+eventsPublicRouter.get("/:id/recap", async (req: Request, res: Response) => {
+  if (featureOff(res)) return;
+  try {
+    const userId = req.userId as string;
+    const { id } = req.params as { id: string };
+    const result = await getEventRecap(userId, id);
+    if (!result.ok) {
+      // Both refusals answer the same 404: "no such event" and "you were not
+      // there" must not be distinguishable, or the route becomes a way to test
+      // whether an event id exists.
+      res.status(404).json({ error: "no_recap" });
+      return;
+    }
+    res.json(result.state);
+  } catch (err) {
+    console.error(`${LOG_PREFIX} recap error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/** The double-blind thumb. First answer is final; a repeat tap is a no-op. */
+eventsPublicRouter.post("/:id/pairings/:pairingId/thumbs", async (req: Request, res: Response) => {
+  if (featureOff(res)) return;
+  try {
+    const userId = req.userId as string;
+    const { id, pairingId } = req.params as { id: string; pairingId: string };
+    const value = (req.body as { value?: unknown } | undefined)?.value;
+    if (typeof value !== "boolean") {
+      res.status(400).json({ error: "value must be a boolean" });
+      return;
+    }
+
+    const result = await recordThumb(userId, pairingId, value);
+    if (!result.ok) {
+      if (result.reason === "not_open") {
+        // The one refusal worth naming: the client can say when, and telling
+        // someone "not yet" is not the same as telling them "no".
+        res.status(409).json({ error: "not_open" });
+        return;
+      }
+      res.status(404).json({ error: "no_pairing" });
+      return;
+    }
+
+    // Fire-and-forget: the verdict is already durable, and a reveal that fails
+    // to send must never turn a recorded thumb into an error the user retries.
+    if (result.revealTo) {
+      void sendMutualReveal(result.revealTo, userId, id).catch((err) =>
+        console.error(`${LOG_PREFIX} mutual reveal failed:`, err),
+      );
+    }
+    res.json({ ok: true, mutual: result.mutual });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} thumbs error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * How the evening went. Incentivised, never a gate: the recap and the thumbs
+ * work whether or not this is ever answered (§10).
+ */
+eventsPublicRouter.post("/:id/feedback", async (req: Request, res: Response) => {
+  if (featureOff(res)) return;
+  try {
+    const userId = req.userId as string;
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { rating?: unknown; safety?: unknown; text?: unknown };
+    const result = await submitEventFeedback(userId, id, {
+      rating: typeof body.rating === "number" ? body.rating : null,
+      safety: typeof body.safety === "string" ? body.safety : null,
+      text: typeof body.text === "string" ? body.text : null,
+    });
+    if (!result.ok) {
+      if (result.reason === "bad_rating" || result.reason === "empty") {
+        res.status(400).json({ error: result.reason });
+        return;
+      }
+      res.status(404).json({ error: "no_recap" });
+      return;
+    }
+    res.json({ ok: true, discount: result.discount, granted: result.granted });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} feedback error:`, err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

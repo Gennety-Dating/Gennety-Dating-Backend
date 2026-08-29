@@ -705,6 +705,18 @@ export const env = {
   /// ticket routes refuse to mint or verify a code without it rather than
   /// signing with a blank string, which would make every forgery valid.
   EVENT_QR_SECRET: process.env.EVENT_QR_SECRET ?? "",
+  /// The post-event feedback incentive (LAUNCH_EVENTS §11) — the same
+  /// single-ticket discount mechanism the famine perk uses, deliberately not a
+  /// second one. Smaller than famine's 77% because it buys a minute of the
+  /// user's time rather than apologising for a week without a match, and
+  /// because the two share ONE slot: the grant only ever fills an empty one
+  /// (`services/ticket-discount.ts`), so a modest number can never displace a
+  /// large one. Inert unless BOTH `EVENTS_FEATURE_ENABLED` and
+  /// `TICKET_FEATURE_ENABLED`.
+  EVENT_FEEDBACK_DISCOUNT_PCT: Number(process.env.EVENT_FEEDBACK_DISCOUNT_PCT ?? "40"),
+  EVENT_FEEDBACK_DISCOUNT_TTL_DAYS: Number(
+    process.env.EVENT_FEEDBACK_DISCOUNT_TTL_DAYS ?? "30",
+  ),
 
   // ── Bonus Campus Drop (§Campus Radar) ────────────────────────────────
   /// An out-of-cycle drop for one university whose verified cohort just grew.

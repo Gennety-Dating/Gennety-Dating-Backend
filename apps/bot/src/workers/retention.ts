@@ -105,6 +105,20 @@ export const CLIENT_EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
  */
 export const ORPHAN_SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * Post-event feedback (`event_feedback`, LAUNCH_EVENTS §11).
+ *
+ * It holds a person's free-text account of an evening, which is the same class
+ * of content as a relayed proxy message and gets the same 90 days.
+ *
+ * **`unsafe` is exempt, and that is the load-bearing half.** The row IS the
+ * moderation queue entry for a safety flag (§10), so sweeping it on a timer
+ * would silently close an open case — and this product already keeps `reports`
+ * indefinitely for exactly that reason. An unreviewed safety report piling up
+ * forever is the correct failure direction; a quietly-expiring one is not.
+ */
+export const EVENT_FEEDBACK_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
 /** Rows removed per table per tick. */
 const BATCH_LIMIT = 1_000;
 
@@ -115,6 +129,7 @@ export interface RetentionSweepResult {
   proxyMessages: number;
   chatEvents: number;
   clientEvents: number;
+  eventFeedback: number;
   orphanBotSessions: number;
 }
 
@@ -142,6 +157,7 @@ export async function retentionTick(
   const proxyCutoff = new Date(now.getTime() - PROXY_MESSAGE_RETENTION_MS);
   const chatEventCutoff = new Date(now.getTime() - CHAT_EVENT_RETENTION_MS);
   const clientEventCutoff = new Date(now.getTime() - CLIENT_EVENT_RETENTION_MS);
+  const eventFeedbackCutoff = new Date(now.getTime() - EVENT_FEEDBACK_RETENTION_MS);
 
   const emailOtps = await deleteOldest(
     (take) =>
@@ -218,6 +234,25 @@ export async function retentionTick(
     (ids) => prisma.clientEvent.deleteMany({ where: { id: { in: ids } } }),
   );
 
+  const eventFeedback = await deleteOldest(
+    (take) =>
+      prisma.eventFeedback.findMany({
+        // `safety: "unsafe"` never ages out — see EVENT_FEEDBACK_RETENTION_MS.
+        // Written as "not unsafe OR null" rather than `not: "unsafe"` because
+        // in SQL a NULL comparison is neither, and most rows carry no safety
+        // answer at all: `NOT (safety = 'unsafe')` would silently retain every
+        // one of them forever.
+        where: {
+          createdAt: { lt: eventFeedbackCutoff },
+          OR: [{ safety: null }, { safety: { not: "unsafe" } }],
+        },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+        take,
+      }),
+    (ids) => prisma.eventFeedback.deleteMany({ where: { id: { in: ids } } }),
+  );
+
   // Raw, because there is no relation to traverse: the join is
   // `users.telegram_id::text = bot_sessions.key`, which is exactly the coupling
   // the schema does not express. Anti-join rather than "load all keys and diff
@@ -243,12 +278,14 @@ export async function retentionTick(
     proxyMessages +
     chatEvents +
     clientEvents +
+    eventFeedback +
     orphanBotSessions;
   if (total > 0) {
     console.log(
       `[retention] emailOtps=${emailOtps} phoneOtps=${phoneOtps} ` +
         `sessions=${sessions} proxyMessages=${proxyMessages} chatEvents=${chatEvents} ` +
-        `clientEvents=${clientEvents} orphanBotSessions=${orphanBotSessions}`,
+        `clientEvents=${clientEvents} eventFeedback=${eventFeedback} ` +
+        `orphanBotSessions=${orphanBotSessions}`,
     );
   }
   return {
@@ -258,6 +295,7 @@ export async function retentionTick(
     proxyMessages,
     chatEvents,
     clientEvents,
+    eventFeedback,
     orphanBotSessions,
   };
 }

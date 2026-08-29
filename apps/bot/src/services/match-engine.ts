@@ -468,7 +468,7 @@ export interface SeekerProfile {
  * drop, which is what its cooldown is derived from. A counter would be a second
  * source of truth about the same fact; this cannot drift from it.
  */
-export type MatchSource = "weekly" | "rematch" | "synthetic" | "campus";
+export type MatchSource = "weekly" | "rematch" | "synthetic" | "campus" | "event";
 
 export interface ScoredCandidate {
   userId: string;
@@ -1255,7 +1255,29 @@ export async function createProposedMatch(
    * a window where a rematch pair is indistinguishable from a weekly one, which
    * is exactly what the analytics filter must never see.
    */
-  allocation?: { source: MatchSource; rematchPaidById?: string },
+  allocation?: {
+    source: MatchSource;
+    rematchPaidById?: string;
+    /**
+     * Both sides have ALREADY consented (LAUNCH_EVENTS §11: a mutual `true`
+     * from the post-event thumbs). The row is therefore born at `negotiating`
+     * with both accept columns set — the pitch/decision phase is not skipped
+     * so much as already over, and a `proposed` row here would ask two people
+     * a question they have each answered.
+     *
+     * Stamped INSIDE the creating transaction for the same reason `source` is,
+     * and for one stronger one: a `negotiating` row is invisible to the expiry
+     * sweep (which filters on `dispatchedAt`), so a follow-up UPDATE that
+     * failed would leave a live match nothing can ever resolve — the §3.3
+     * hole, one stage on. `ticketGateExpiresAt` rides the same write for the
+     * §3.5b half of it: a `negotiating` row with neither a gate deadline nor
+     * `proposedTimes` is invisible to the ticket sweep AND exempt from the
+     * §3.5c stall chain at once, and strands both participants for good.
+     */
+    preAccepted?: boolean;
+    /** The gate deadline to arm alongside `preAccepted`. See above. */
+    ticketGateExpiresAt?: Date;
+  },
 ): Promise<{ id: string } | null> {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
@@ -1339,7 +1361,14 @@ export async function createProposedMatch(
       data: {
         userAId,
         userBId,
-        status: "proposed",
+        status: allocation?.preAccepted ? "negotiating" : "proposed",
+        ...(allocation?.preAccepted
+          ? {
+              acceptedByA: true,
+              acceptedByB: true,
+              ticketExpiresAt: allocation.ticketGateExpiresAt ?? null,
+            }
+          : {}),
         source: allocation?.source ?? "weekly",
         rematchPaidById: allocation?.rematchPaidById ?? null,
       },

@@ -244,3 +244,174 @@ body {
   font-weight: 600;
   text-align: center;
 }
+
+/* ── The morning after (§11) ─────────────────────────────────────────────
+ *
+ * Deliberately quieter than the live screen. That one is read at arm's length
+ * in a dark room and shouts a two-digit code; this one is read in bed, and the
+ * only thing on it that earns an accent is a mutual.
+ */
+
+.ev-recap-ask {
+  font-size: 15px;
+  color: var(--text-dim);
+  margin: 4px 0 2px;
+}
+
+.ev-recap-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--fill);
+  font-size: 16px;
+  color: var(--text);
+}
+
+/* An answered row keeps its height so the list does not jump under the finger
+ * as the reader works down it. */
+.ev-recap-row.is-done {
+  color: var(--text-dim);
+}
+
+.ev-recap-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.ev-thumb {
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--fill-strong, rgba(127, 127, 127, 0.16));
+}
+
+/* The yes carries the accent and the no carries nothing — a rejection styled
+ * as loudly as an acceptance turns the row into a verdict on a person rather
+ * than an answer to a question. */
+.ev-thumb.is-yes {
+  background: var(--accent);
+  color: #fff;
+}
+
+.ev-recap-note {
+  font-size: 14px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.ev-recap-note.is-mutual {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ev-fb {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--fill);
+}
+
+.ev-fb-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ev-fb-label {
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+/* Ten targets on one row: they wrap rather than scroll, because a horizontal
+ * scroller here hides the ends of the scale, which is where the answer usually
+ * is. */
+.ev-fb-scale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ev-fb-num {
+  flex: 1 1 auto;
+  min-width: 34px;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: var(--fill);
+}
+
+.ev-fb-safety {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ev-fb-chip {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--fill);
+}
+
+/* The unsafe chip is NOT red until it is chosen. A permanently alarming
+ * button reads as the wrong answer to give, and this is the one answer the
+ * product most needs someone to feel able to give. */
+.ev-fb-chip.is-unsafe.is-picked {
+  background: #b3261e;
+  color: #fff;
+}
+
+.ev-fb-num.is-picked,
+.ev-fb-chip.is-picked {
+  background: var(--accent);
+  color: #fff;
+}
+
+.ev-fb-text {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 12px;
+  padding: 12px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--fill);
+  resize: none;
+}
+
+.ev-recap-thanks {
+  margin-top: 22px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--fill);
+  font-size: 15px;
+  color: var(--text);
+  text-align: center;
+}
+
+.ev-recap-discount {
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+}

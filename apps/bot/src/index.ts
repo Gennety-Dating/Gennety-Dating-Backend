@@ -30,6 +30,7 @@ import { expireStaleMatches } from "./services/match-expiry.js";
 import { sendExpiryNotifications } from "./services/expiry-notify.js";
 import { runDateLifecycleTick } from "./services/date-lifecycle.js";
 import { runEventRoundTick } from "./services/event-rounds.js";
+import { runEventRecapTick } from "./services/event-recap-tick.js";
 import { runPreDateSafetyTick } from "./services/pre-date-safety.js";
 import { runCoordinationTick } from "./services/coordination.js";
 import { startAdminServer } from "./admin/server.js";
@@ -277,6 +278,22 @@ const SELFIE_RETENTION_CRON_SCHEDULE =
  */
 const RETENTION_CRON_SCHEDULE =
   process.env.RETENTION_CRON_SCHEDULE ?? "45 3 * * *";
+
+/**
+ * The post-event loop (LAUNCH_EVENTS §11): the T+18h recap fan-out and the
+ * sweep that turns a mutual thumbs-up into a real match.
+ *
+ * Every five minutes rather than hourly, and the reason is the second stage:
+ * the reveal ("you both felt it") is sent by the thumb itself and is instant,
+ * but the ticket card that follows comes from this tick, and an hour of
+ * silence between the two reads as the product forgetting. The recap half does
+ * not need the precision — T+18h to the minute is nobody's requirement.
+ *
+ * Registered only when the events feature is on, so with it off the worker
+ * does not exist rather than merely finding nothing.
+ */
+const EVENT_RECAP_CRON_SCHEDULE =
+  process.env.EVENT_RECAP_CRON_SCHEDULE ?? "*/5 * * * *";
 
 /**
  * DAU/MAU reconcile: re-derive `user_activity_days` from the inbound chat
@@ -880,6 +897,30 @@ bot.start({
     console.log(
       `[cron] Data retention scheduled: "${RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
     );
+
+    // Post-event recap + mutual sweep. Logs only when something happened, so a
+    // quiet tick is the healthy case; `deferred` staying high across many
+    // ticks means mutuals are piling up behind live matches (or behind the
+    // lifetime pair ban, which the sweep cannot tell apart — see the service).
+    if (env.EVENTS_FEATURE_ENABLED) {
+      cron.schedule(
+        EVENT_RECAP_CRON_SCHEDULE,
+        guardedTick("event-recap", async () => {
+          const r = await runEventRecapTick();
+          if (r.recapsSent > 0 || r.recapsFailed > 0 || r.matchesCreated > 0) {
+            console.log(
+              `[event-recap] events=${r.eventsScanned} recaps=${r.recapsSent} ` +
+                `failed=${r.recapsFailed} matches=${r.matchesCreated} ` +
+                `deferred=${r.matchesDeferred}`,
+            );
+          }
+        }),
+        { timezone: CRON_TIMEZONE },
+      );
+      console.log(
+        `[cron] Event recap scheduled: "${EVENT_RECAP_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+      );
+    }
 
     // DAU/MAU self-heal. Logs only when it actually repaired something, so a
     // silent night is the healthy case and a `repaired=` line is the signal

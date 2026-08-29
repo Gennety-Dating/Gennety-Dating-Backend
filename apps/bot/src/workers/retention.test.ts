@@ -6,6 +6,7 @@ const userSession = { findMany: vi.fn(), deleteMany: vi.fn() };
 const proxyMessage = { findMany: vi.fn(), deleteMany: vi.fn() };
 const chatEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
 const clientEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
+const eventFeedback = { findMany: vi.fn(), deleteMany: vi.fn() };
 const $executeRaw = vi.fn();
 
 vi.mock("@gennety/db", () => ({
@@ -16,6 +17,7 @@ vi.mock("@gennety/db", () => ({
     proxyMessage,
     chatEvent,
     clientEvent,
+    eventFeedback,
     $executeRaw,
   },
 }));
@@ -27,13 +29,14 @@ const {
   PROXY_MESSAGE_RETENTION_MS,
   CHAT_EVENT_RETENTION_MS,
   CLIENT_EVENT_RETENTION_MS,
+  EVENT_FEEDBACK_RETENTION_MS,
   ORPHAN_SESSION_RETENTION_MS,
 } = await import("./retention.js");
 
 const NOW = new Date("2026-08-01T03:45:00.000Z");
 
 beforeEach(() => {
-  for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent]) {
+  for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent, eventFeedback]) {
     model.findMany.mockReset().mockResolvedValue([]);
     model.deleteMany.mockReset().mockResolvedValue({ count: 0 });
   }
@@ -51,9 +54,10 @@ describe("retentionTick", () => {
       proxyMessages: 0,
       chatEvents: 0,
       clientEvents: 0,
+      eventFeedback: 0,
       orphanBotSessions: 0,
     });
-    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent]) {
+    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent, eventFeedback]) {
       expect(model.deleteMany).not.toHaveBeenCalled();
     }
   });
@@ -151,9 +155,24 @@ describe("retentionTick", () => {
     expect(String(log.mock.calls[0][0])).toContain("clientEvents=1");
   });
 
+  it("keeps an `unsafe` event-feedback row forever, and says so in SQL", async () => {
+    // The exemption is written as an explicit OR rather than
+    // `NOT (safety = 'unsafe')`, because in SQL a NULL comparison is neither
+    // true nor false — the negation would silently retain every row that
+    // carried no safety answer at all, which is most of them.
+    await retentionTick(NOW);
+    const where = eventFeedback.findMany.mock.calls[0][0].where;
+    expect(where.createdAt).toEqual({
+      lt: new Date(NOW.getTime() - EVENT_FEEDBACK_RETENTION_MS),
+    });
+    expect(where.OR).toEqual([{ safety: null }, { safety: { not: "unsafe" } }]);
+    // Same window as the proxy-chat log and the reference selfie.
+    expect(EVENT_FEEDBACK_RETENTION_MS).toBe(90 * 24 * 60 * 60 * 1000);
+  });
+
   it("batches each table so one tick cannot run away", async () => {
     await retentionTick(NOW);
-    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent]) {
+    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent, eventFeedback]) {
       expect(model.findMany.mock.calls[0][0].take).toBe(1_000);
     }
   });
@@ -173,6 +192,7 @@ describe("retentionTick", () => {
       proxyMessages: 2,
       chatEvents: 0,
       clientEvents: 0,
+      eventFeedback: 0,
       orphanBotSessions: 0,
     });
   });

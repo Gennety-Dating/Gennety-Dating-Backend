@@ -13,7 +13,10 @@ export type MiniAppPage =
   | "venue-change"
   | "premium"
   | "radar"
-  | "referral";
+  | "referral"
+  /// Launch events (LAUNCH_EVENTS): the ticket, the live party screen and the
+  /// T+18h recap are all one page, switched by `?view=`.
+  | "event";
 
 const PAGE_FILES: Record<Exclude<MiniAppPage, "calendar">, string> = {
   feedback: "feedback.html",
@@ -26,6 +29,7 @@ const PAGE_FILES: Record<Exclude<MiniAppPage, "calendar">, string> = {
   premium: "premium.html",
   radar: "radar.html",
   referral: "referral.html",
+  event: "event.html",
 };
 
 export interface BuildMiniAppUrlOptions {

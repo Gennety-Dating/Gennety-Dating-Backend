@@ -751,12 +751,39 @@ native live view its own slice. Demo: still nothing, same reason as Phase 2 —
 the lifecycle-replay idiom would work, but it needs a staged `live` event in
 the demo database first.
 
-**Phase 4 — post-event loop + safety analytics.**
-Flags: `EVENT_RECAP_ENABLED`. Thumbs, recap, mutual→Match creation
-(`source: "event"` + the two nullable `matches` columns if any prove needed),
-feedback + incentive, safety analytics on the hub, `EventFeedback` retention
-sweep entry (`retentionTick` gains a table = **three** edits: sweep, sum, log
-line — the 2026-08-21 lesson).
+**Phase 4 — post-event loop + safety analytics.** ✅ SHIPPED 2026-08-29, dark.
+Double-blind thumbs, the T+18h recap, mutual→Match creation with
+`source: "event"`, the feedback form + its discount, the hub's safety cut, and
+the `EventFeedback` retention sweep (three edits, as predicted — plus a fourth,
+the `total` sum, which is what makes the log line print at all).
+
+**No `EVENT_RECAP_ENABLED`, and the reason is Phase 3's, not laziness.** The
+recap is not a feature beside events, it is the tail of one: its routes live
+under `/v1/events/*` and 404 with the master flag off, and the worker is
+registered only inside `if (env.EVENTS_FEATURE_ENABLED)`. `EVENT_RECAP_CRON_SCHEDULE`
+already expresses "events on, recap off" by being pushed out of reach, so a
+boolean beside it is the second switch for one decision that eventually
+disagrees with itself.
+
+Three departures from the design above, all recorded in DECISIONS:
+
+- **A mutual the allocator refuses is swept, not parked.** §11 said the row
+  would be created `proposed` and held — but a `proposed` row IS a live match,
+  so parking one violates the single-live-match invariant. `matchId` stays null
+  and the next tick retries, bounded by a 14-day window measured from the
+  event's own `endsAt`. No "gave up" column: the allocator answers a bare null
+  for "mid-date" and for "banned forever" alike, so a column would record a
+  distinction the sweep cannot make.
+- **`unsafe` feedback is exempt from retention**, the same way `reports` are
+  already kept forever — and the predicate is an explicit `OR` rather than a
+  negation, because `NOT (safety = 'unsafe')` silently retains every NULL row.
+- **The discount rides the existing famine slot** rather than a second
+  mechanism, with an asymmetric collision rule (famine replaces, feedback only
+  fills an empty slot) chosen so no arithmetic is needed: "never take anything
+  away" needs no comparison.
+
+iOS: nothing again — same reason as Phases 2 and 3, no native event screen, so
+OpenAPI stays untouched. Demo: still nothing, still one seeded event away.
 
 ---
 

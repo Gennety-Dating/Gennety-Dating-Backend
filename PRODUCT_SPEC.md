@@ -4123,6 +4123,26 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   amount-bound, so a stale discount auto-fails verify) and consumes via a CAS so
   a double-confirm redeems exactly once. Re-granted/refreshed each later famine
   week until used. Inert unless `TICKET_FEATURE_ENABLED`; Telegram-only in v1.
+- **The discount slot is ONE slot, shared with the post-event perk, and the
+  collision rule is asymmetric on purpose.** A user who fills in the §11 form
+  after a launch event is granted an `EVENT_FEEDBACK_DISCOUNT_PCT` (40%)
+  discount on a single ticket for `EVENT_FEEDBACK_DISCOUNT_TTL_DAYS` (30) days
+  — through the same mechanism, the same columns and the same
+  consume-on-first-purchase CAS as the famine perk above, deliberately not a
+  second one. Famine **replaces** whatever is in the slot; event feedback only
+  ever fills an **empty** one, because it is the smaller perk and overwriting a
+  live 77% famine discount with it would take something away from a user as a
+  reward for helping us. There is deliberately no "keep the better one"
+  arithmetic — comparing a percent against a deadline is a judgement two call
+  sites would eventually make differently, and "never take anything away" needs
+  no comparison at all. `User.ticketDiscountSource` records which mechanism
+  filled the slot; it is **analytics and audit only** — pricing reads
+  `ticketDiscountPct` and never the source. A zero configured percent grants
+  nothing rather than occupying the slot with something that discounts nothing.
+  Redemption is still reported as `famine_discount_redeemed`: the two are the
+  same object at the point of sale, and splitting the redemption event would
+  make the surfaces disagree about how many discounts exist. Inert unless BOTH
+  `TICKET_FEATURE_ENABLED` and `EVENTS_FEATURE_ENABLED`.
 - **Hard gate.** The Calendar is not sent until *both* tickets are paid
   (`ticketStatus = completed`), at which point `startScheduling` runs and sends
   the Calendar as a **separate** message that follows each side's persistent
