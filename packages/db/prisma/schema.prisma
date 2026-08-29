@@ -376,6 +376,7 @@ model User {
   mediaValidationRejections MediaValidationRejection[]
   chatEvents                ChatEvent[]
   activityDays              UserActivityDay[]
+  waitlistApplications      WaitlistApplication[]
 
   matchesAsA          Match[]      @relation("MatchUserA")
   matchesAsB          Match[]      @relation("MatchUserB")
@@ -2433,4 +2434,141 @@ model AdSpend {
   @@unique([channel, category, periodStart, periodEnd])
   @@index([periodStart])
   @@map("ad_spend")
+}
+
+/// One offline launch event / batch drop / mixer in a launched market
+/// (LAUNCH_EVENTS_PRODUCT_SPEC.md). Phase 1 of that spec: the event exists so
+/// applications can be tiered and moderated; ticketing, the door scanner and
+/// the in-event rounds arrive in later phases and add their own tables.
+///
+/// `cityKey` must be a launched market (`SUPPORTED_MARKETS`) — enforced in the
+/// service, the same split `validateHomeLocationPayload` already uses: the DB
+/// stores a string, one code path is the gate. An event in a city the product
+/// has not launched is an event nobody can be matched out of afterwards.
+///
+/// The venue is a frozen snapshot (name/address/coordinates) rather than a
+/// required FK to `curated_venues`: the nightly re-validation cron deactivates
+/// venues that close, and an event that already happened must not lose its
+/// address because the venue shut down two months later. `curatedVenueId` is
+/// kept when the venue IS in the catalog, for the venue-concentration view.
+model Event {
+  id             String  @id @default(uuid()) @db.Uuid
+  cityKey        String  @map("city_key")
+  /// launch | batch | mixer — descriptive only, never branched on. Plain
+  /// `String` rather than a Prisma enum so a new kind costs no migration (the
+  /// same reasoning `Match.source` and `AdSpend.category` already carry).
+  kind           String  @default("launch")
+  /// draft | upcoming | live | concluded | cancelled. Transitions are a CAS on
+  /// the current value in the admin route — never a blind write, so two
+  /// dashboard tabs cannot advance the lifecycle twice.
+  status         String  @default("draft")
+  title          String
+  curatedVenueId String? @map("curated_venue_id") @db.Uuid
+  venueName      String  @map("venue_name")
+  venueAddress   String  @map("venue_address")
+  venueLat       Float   @map("venue_lat")
+  venueLng       Float   @map("venue_lng")
+
+  startsAt DateTime @map("starts_at")
+  endsAt   DateTime @map("ends_at")
+  /// The market's own zone, frozen on the row. `startsAt` is an instant and
+  /// every surface has to draw it on a wall clock; the reader's device is the
+  /// wrong one for a traveller — the same reason `SerializedMatch.timeZone`
+  /// and `CalendarState.timeZone` exist.
+  timeZone String   @map("time_zone")
+
+  /// Hard cap on admitted people. The gate is checked at tiering time against
+  /// a live count, so it bounds the ADMITTED set rather than applications.
+  capacity Int
+
+  /// How an application becomes admitted:
+  ///   `open`   — every verified applicant is auto-approved (capacity and the
+  ///              ratio balancer still apply). "The ticket is the condition."
+  ///   `manual` — every verified applicant lands in `pending_review` and a
+  ///              human decides. The attractiveness score is a SORT KEY in the
+  ///              hub, never a gate.
+  ///   `scored` — the `autoApproveScore` / `reviewFloorScore` thresholds below
+  ///              tier automatically.
+  /// Defaults to `manual`: nothing may auto-admit a stranger to a physical
+  /// room without someone choosing that behaviour for that event.
+  admissionPolicy String @default("manual") @map("admission_policy")
+
+  /// When true, verifying inside this event's market creates an application
+  /// automatically. Off by default — an application is otherwise an explicit
+  /// act, and a silent one would put people in a queue they never joined.
+  autoApplyOnVerification Boolean @default(false) @map("auto_apply_on_verification")
+
+  /// Target male share of the ADMITTED set, in [0,1]. Null = uncontrolled.
+  /// 0.5 = balanced.
+  targetMaleShare Float? @map("target_male_share")
+  /// How far the admitted share may drift from `targetMaleShare` before the
+  /// balancer stops auto-approving the overrepresented gender (0.08 → the
+  /// automatic lane stalls past roughly 58/42). Never rejects: an application
+  /// the balancer stops is handed to the founder, not waitlisted.
+  ratioTolerance  Float  @default(0.08) @map("ratio_tolerance")
+
+  /// `scored` policy only, attractiveness 0..100 read from
+  /// `Profile.eloSeedDetails.score`. Null under the other two policies.
+  autoApproveScore Int? @map("auto_approve_score")
+  reviewFloorScore Int? @map("review_floor_score")
+
+  admissionOpensAt  DateTime? @map("admission_opens_at")
+  admissionClosesAt DateTime? @map("admission_closes_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  applications WaitlistApplication[]
+
+  @@index([cityKey, status, startsAt])
+  @@map("events")
+}
+
+/// One person's application to one event. The unique key makes a re-application
+/// the same row rather than a duplicate, so a retry is idempotent by
+/// construction (the rule `WaitlistApplication` shares with `AdSpend`).
+///
+/// NOTE this is an EVENT admission gate and never an account-level one. The
+/// product's admission gates are the contact rail and mandatory liveness
+/// (PRODUCT_SPEC §1.1/§1.4); a `waitlisted` applicant is a full, matchable
+/// user who simply is not on the door list for one party.
+model WaitlistApplication {
+  id      String @id @default(uuid()) @db.Uuid
+  eventId String @map("event_id") @db.Uuid
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId  String @map("user_id") @db.Uuid
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// screening | auto_approved | pending_review | waitlisted | approved | revoked
+  ///
+  /// `screening` is the pre-tier state of an applicant who is not verified yet
+  /// — tiering re-runs for free at the verification pipeline's activation.
+  /// `approved` is the manual twin of `auto_approved`; both admit.
+  tier String @default("screening")
+
+  /// Attractiveness 0..100, FROZEN at the moment of tiering (copied from
+  /// `Profile.eloSeedDetails.score`). Frozen because a later photo edit
+  /// re-runs the verification pipeline and can re-seed the score — and a
+  /// decision already taken must not silently change its own basis. Same
+  /// freezing rule as `match_score_logs`.
+  ///
+  /// Read by the founder hub as a SORT KEY. Never shown to the applicant, and
+  /// under the `open`/`manual` policies it decides nothing at all.
+  scoreAtTiering  Int?    @map("score_at_tiering")
+  /// Gender frozen at tiering — the balancer's own input. Frozen for the same
+  /// reason: a profile edit must not retroactively re-shuffle a cohort that
+  /// has already been balanced around it.
+  genderAtTiering String? @map("gender_at_tiering")
+
+  tieredAt  DateTime? @map("tiered_at")
+  /// `"auto"` or the admin actor's label. The row plus the admin log line IS
+  /// the audit trail; there is no separate decision table.
+  decidedBy String?   @map("decided_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([eventId, userId])
+  @@index([eventId, tier])
+  @@map("waitlist_applications")
 }

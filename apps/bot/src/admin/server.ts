@@ -27,6 +27,7 @@ import { dialogsRouter } from "./routes/dialogs.js";
 import { opsRouter } from "./routes/ops.js";
 import { purchasesRouter } from "./routes/purchases.js";
 import { adSpendRouter } from "./routes/ad-spend.js";
+import { eventsRouter } from "./routes/events.js";
 import { userHealthRouter } from "./routes/user-health.js";
 import { activityRouter } from "./routes/activity.js";
 import { classifyAllUsers } from "./utils/user-health-source.js";
@@ -192,6 +193,11 @@ app.use(purchasesRouter);
 // Acquisition spend the founder enters by hand — what /admin/dashboard's
 // CAC/LTV:CAC/ROAS fields are computed from (AD_SPEND_TRACKING_DESIGN.md).
 app.use(adSpendRouter);
+// Launch events: the moderation hub for offline city-launch admission
+// (LAUNCH_EVENTS_PRODUCT_SPEC.md). Every route inside answers 404 while
+// EVENTS_FEATURE_ENABLED is off, so mounting it changes no API surface until
+// the flag is flipped.
+app.use(eventsRouter);
 // Диагностика одного аккаунта: класс здоровья + какое правило сработало.
 // Путь длиннее, чем `/admin/users/:id`, поэтому затенить его не может.
 app.use(userHealthRouter);

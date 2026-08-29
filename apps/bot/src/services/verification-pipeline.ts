@@ -17,6 +17,7 @@ import { downloadProfileImage, uploadSelfie } from "./storage.js";
 import type { OutcomeGate } from "./outcome-gate.js";
 import { notifyFounderNewUser } from "./founder-notify.js";
 import { settleReferralOnVerified } from "./referral-notify.js";
+import { settleEventApplicationsOnVerified } from "./event-admission.js";
 import {
   terminalVerificationMessage,
   terminalVerificationPush,
@@ -263,6 +264,18 @@ export interface PipelineDeps {
    * still rewards their referrer. No-ops when the feature flag is off.
    */
   settleReferralReward?: (userId: string) => Promise<void>;
+  /**
+   * Launch-event admission (LAUNCH_EVENTS_PRODUCT_SPEC.md §4): tier any event
+   * application this freshly-verified user holds, and auto-apply them to an
+   * event that asked for it. Optional + best-effort, exactly like
+   * `settleReferralReward` above — a failure never blocks verification.
+   *
+   * This is the ONLY place admission tiering happens automatically, and that
+   * is deliberate: the admission condition is a verified profile, so a hook at
+   * onboarding completion would put unverifiable accounts into a founder's
+   * moderation queue. No-ops when the feature flag is off.
+   */
+  settleEventAdmission?: (userId: string) => Promise<void>;
   /**
    * DB shim so tests can hand in an in-memory store. Production uses the
    * real Prisma client. Only the slices we actually call.
@@ -905,6 +918,18 @@ export async function runFaceMatchVerification(
         console.warn(`${LOG_PREFIX} referral settle threw (swallowed)`, { userId, err });
       }
     }
+    // Launch-event admission: the applicant is verified as of this branch, so
+    // any application they hold can finally be tiered. Runs AFTER the Elo seed
+    // above on purpose — the seed is what writes the score the `scored` policy
+    // reads, and a tiering that ran first would see null and route a perfectly
+    // scoreable applicant to a human for no reason.
+    if (deps.settleEventAdmission) {
+      try {
+        await deps.settleEventAdmission(userId);
+      } catch (err) {
+        console.warn(`${LOG_PREFIX} event admission threw (swallowed)`, { userId, err });
+      }
+    }
     // Founder ops feed: first activation via a `verified` outcome. The vision
     // Elo seed above has run, so the DM'd profile carries the attractiveness
     // score. Idempotent + status-gated inside the notifier; fire-and-forget.
@@ -1317,6 +1342,13 @@ export async function runFaceMatchVerificationDefault(
         ? {
             settleReferralReward: (uid: string) => settleReferralOnVerified(uid, api),
           }
+        : {}),
+      // Flag-gated the same way, and for the same reason: without a dep here
+      // the verified branch never reaches the admission code at all, so the
+      // subsystem is inert by construction rather than by a return statement
+      // somebody has to remember. The helper re-checks the flag anyway.
+      ...(env.EVENTS_FEATURE_ENABLED
+        ? { settleEventAdmission: (uid: string) => settleEventApplicationsOnVerified(uid) }
         : {}),
       db: {
         findUser: async (id) => {

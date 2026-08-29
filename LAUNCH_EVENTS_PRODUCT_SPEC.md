@@ -745,16 +745,57 @@ line — the 2026-08-21 lesson).
 
 ---
 
-## 14. Open founder decisions (blockers, in priority order)
+## 14. Founder decisions — resolved 2026-08-29
 
-1. **Does score-gated admission exist at all?** This is the product's first
-   surface where attractiveness *visibly* gates access (tier names leak
-   intent even without numbers). Legally reviewable (automated decision,
-   Art. 22 adjacency — the ethnicity removal precedent shows the bar);
-   reputationally loud. Alternative: admission by capacity + ratio + manual
-   review only, score shown to the founder as a sort key but never an
-   automatic gate. **The spec supports both** — `autoApproveScore: null` is
-   the fully-manual mode.
+**1. Score-gated admission: NO. ✅ RESOLVED — implemented in Phase 1.**
+The attractiveness score is a **sort key in the founder hub and gates
+nothing**. Admission runs on `admissionPolicy`, per event:
+
+| policy | behaviour | status |
+|---|---|---|
+| `manual` | every verified applicant → `pending_review`; a human decides | **the default**, and the founder's stated choice |
+| `open` | every verified applicant is admitted, subject only to capacity + the balancer — "the ticket costs nothing, it is just the condition" | one field at event creation |
+| `scored` | thresholds tier automatically | built, unused; needs its own founder decision before an event ever selects it |
+
+Both of the founder's statements are expressible without a code change:
+"start in manual mode" is the default, and "available to everyone who applies
+with an approved profile" is `open`. **The choice is made per event in the
+hub, not per deploy** — the ambiguity became a visible setting rather than a
+guess, which is the point.
+
+The Art. 22 exposure the earlier draft flagged is therefore not taken on: no
+automatic decision is made about a person on the basis of a score in either
+policy the product will actually run.
+
+**7. Pricing: the ticket is FREE. ✅ RESOLVED.** Not a paid product — it is the
+entry condition. This deleted the whole Stars/wallet integration, the refund
+sweep and the claim TTL from Phase 2, which is now materially smaller than
+this document originally described (§6.2–6.4 stand as the design to reach for
+IF a paid tier is ever wanted; nothing in them is built). Premium does not
+cover an event ticket because there is nothing to cover.
+
+**2–6, 8: defaults accepted.** Lifetime pair ban respected in rounds; recap
+shows met-confirmed pairings only; mutual thumbs skip to `negotiating`; QR
+offline story is the manifest fallback; venue staffing falls back to the
+founder scanning at the door. The two new dependencies (QR render, scan
+fallback) are approved but not yet installed — they belong to Phase 2 and
+should be added in that commit, not ahead of it.
+
+### What actually shipped in Phase 1 (2026-08-29)
+
+`events` + `waitlist_applications`, `services/event-admission.ts` (pure
+tiering + the balancer + the verification-activation hook), the
+`/admin/events/*` hub, `EVENTS_FEATURE_ENABLED` — dark. No user surface, no
+tickets, no `/v1/*`, no Mini App. See ARCHITECTURE.md → `events` /
+`waitlist_applications` and the deploy.md block.
+
+Three things Phase 1 deliberately does NOT do, so their absence is not read as
+an oversight later: nobody is **notified** of a tier (that needs a user
+surface, Phase 2); a revoke frees capacity but **promotes nobody** off the
+waitlist (promotion without a notification is invisible); and there is no
+scheduled sweep at all — the only automatic trigger is the verification
+pipeline, with `POST /admin/events/:id/retier` as the repair path for
+applications stranded in `screening` while the flag was off.
 2. **Lifetime pair ban vs event rounds** (§9.2.3): never re-pair banned
    pairs (default), or allow at a party since "we already matched once" is
    different in a room than in a feed.

@@ -687,6 +687,17 @@ export const env = {
   SYNTHETIC_PARTNER_CRON_SCHEDULE:
     process.env.SYNTHETIC_PARTNER_CRON_SCHEDULE ?? "* * * * *",
 
+  // ── Launch events (LAUNCH_EVENTS_PRODUCT_SPEC.md) ────────────────────
+  /// Master flag for the offline launch-event subsystem: waitlist admission,
+  /// the founder moderation hub, and (later phases) ticketing, the door
+  /// scanner and in-event rounds.
+  ///
+  /// Ships OFF, and OFF is genuinely inert rather than merely quiet: the
+  /// verification pipeline's admission hook returns immediately, so a
+  /// registration cannot land in a queue nobody is watching, and no admin
+  /// route is reachable. The tables exist and stay empty.
+  EVENTS_FEATURE_ENABLED: process.env.EVENTS_FEATURE_ENABLED === "true",
+
   // ── Bonus Campus Drop (§Campus Radar) ────────────────────────────────
   /// An out-of-cycle drop for one university whose verified cohort just grew.
   /// Ships OFF: it is a second entry point into the allocator, and the reason

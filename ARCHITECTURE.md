@@ -988,6 +988,92 @@ weekly Monday-morning founder reminder (`notifyFounderAdSpendReminder`,
 `services/founder-notify.ts`) rides `FOUNDER_NOTIFY_ENABLED` alone rather than
 a flag of its own — a nudge into a disabled feed has nothing to deliver.
 
+### `events` / `waitlist_applications`
+
+Phase 1 of the offline launch-event subsystem
+([LAUNCH_EVENTS_PRODUCT_SPEC.md](LAUNCH_EVENTS_PRODUCT_SPEC.md)): a founder
+creates an event in a launched market, people apply, and the applications are
+tiered and moderated. Ticketing, the door scanner and the in-event pairing
+rounds are later phases and bring their own tables — nothing here reads a
+ticket, because no ticket exists yet.
+
+`events` carries the venue as a **frozen snapshot** (`venueName`,
+`venueAddress`, `venueLat/Lng`) with `curatedVenueId` only as a link: the
+nightly venue re-validation cron deactivates rows when a place closes, and an
+event that already happened must not lose its own address two months later.
+`timeZone` is on the row for the same reason `SerializedMatch.timeZone` and
+`CalendarState.timeZone` exist — `startsAt` is an instant and every surface
+draws it on a wall clock, which for a traveller is not the device's.
+
+`waitlist_applications` is `@@unique([eventId, userId])`, so a re-application
+is the same row and a retry is idempotent by construction. **This is an EVENT
+admission gate and never an account-level one**: the product's own admission
+gates are the contact rail and mandatory liveness (PRODUCT_SPEC §1.1/§1.4),
+and a `waitlisted` applicant is a full, matchable user who simply is not on
+one door list.
+
+**Admission policy is per event** (`admissionPolicy`), and the default is the
+conservative one:
+
+| policy | behaviour |
+|---|---|
+| `manual` (default) | every verified applicant → `pending_review`; the attractiveness score is a hub SORT KEY and gates nothing |
+| `open` | every verified applicant is auto-approved, subject only to capacity and the balancer — "the ticket is the condition" |
+| `scored` | the `autoApproveScore` / `reviewFloorScore` thresholds tier automatically |
+
+Three properties of `services/event-admission.ts` are load-bearing and silent
+when broken, so each is pinned by a test:
+
+- **The score is READ, never computed.** It is the 0..100 figure the vision
+  pass already produced once at verification (`eloSeedDetails.score`,
+  `services/elo-seed.ts`). This module never calls OpenAI: a second pass would
+  cost money per applicant and could disagree with the score `V_league` is
+  already using for the same person. `readAttractivenessScore` falls back to
+  inverting a **seeded** `eloScore`, and returns null for an unseeded profile
+  rather than inverting the schema default of 500 into a fabricated median.
+- **Verification is the floor under every policy.** `screening` is the only
+  tier an unverified applicant can hold, and the admin decide route refuses to
+  hand-approve out of it — an admin button is not an exception to a product
+  invariant. Tiering re-runs for free when the verification pipeline activates
+  them.
+- **The gender balancer downgrades, never rejects**, and it can correct
+  itself. Past `ratioTolerance` an auto-approval of the overrepresented gender
+  becomes `pending_review` (a human decision, not a waitlist); an admission
+  that moves the share TOWARD target is always allowed even from outside the
+  band, because the naive "must land inside tolerance" test blocks the very
+  admissions that would fix a skewed cohort. Below `RATIO_GATE_MIN_COHORT`
+  (10) it does not gate at all — the first applicant is 100%/0% of the
+  admitted set by construction, so a floorless balancer deadlocks the event it
+  exists to balance.
+
+`scoreAtTiering` / `genderAtTiering` are **frozen at the moment of tiering**,
+the same rule `match_score_logs` follows: a photo edit re-runs the
+verification pipeline and can re-seed the score, and a decision already taken
+must not silently change its own basis.
+
+The only automatic trigger is the verification pipeline's `verified` branch
+(`settleEventAdmission`, beside `settleReferralReward` and on the same
+contract — optional dep, best-effort, never blocks activation), ordered
+**after** the Elo seed so the score exists by the time a `scored` policy reads
+it. `POST /admin/events/:id/retier` is the repair path for applications left
+in `screening` because the flag was off when their owner verified.
+
+Admin surface: `/admin/events` (CRUD + a lifecycle CAS that refuses an illegal
+transition by name), `/admin/events/:id/pipeline` (funnel, admitted ratio,
+capacity fill, and a score **decile histogram** rather than a per-user list —
+names beside attractiveness scores is a spreadsheet waiting to be exported),
+`/admin/events/:id/applications` (the moderation grid), `.../decide`,
+`.../bulk-approve` (capacity-bounded, per-row CAS so a founder in another tab
+loses one row rather than the batch). Pipeline denominators exclude test and
+synthetic accounts via the same `classifyAllUsers` verdict monetization uses,
+and report `excludedTestUsers`; an empty denominator is `null`, never `0`.
+
+Gated by `EVENTS_FEATURE_ENABLED`, and off is genuinely inert rather than
+merely quiet: without the flag the pipeline hook is not even wired as a dep,
+so no registration can land in a queue nobody is watching, and every admin
+route answers **404** — the subsystem is not part of the API surface at all.
+`/v1/*` and OpenAPI are untouched in this phase; there is no user surface yet.
+
 ### `profiler_answers`
 
 One row per (user, Profiler question) — `questionId`, `priority`
