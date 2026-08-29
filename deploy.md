@@ -1,6 +1,6 @@
 # Gennety Dating Deploy
 
-**PENDING — пять метрик поверх ad-spend + Hermes читает их напрямую
+**Deployed 2026-08-29 (was PENDING) — пять метрик поверх ad-spend + Hermes читает их напрямую
 (AD_SPEND_TRACKING_DESIGN.md, HERMES_AGENT_PROMPT.md, DECISIONS.md).** **Нет
 изменения схемы Prisma, нет новых env, нет флагов, нет изменения Mini App** —
 только бот, так что полный деплой кода несёт это целиком. Ничего давить в
@@ -88,6 +88,18 @@ curl -sD- -H "Authorization: Bearer $KEY" \
 # x-data-cache: miss — байпас кэша сработал.
 ```
 
+**Проверено после деплоя (замерено, а не выведено):** прод поднят с
+изолированного `git worktree`, все три шага (rsync → build → `db:push`)
+прошли чисто. Схема — **ноль DROP**, `db:drift-check` вернул `OK` до рестарта.
+Рестарт 0 → 1 (без петли), `Bot @gennetybot started`, все 20 кронов
+зарегистрированы. `/v1/ping` жив, `/admin/analytics/acquisition-cost` без
+ключа → 401, с ключом → 200 с `byChannel`/`byEntry` в ответе (оба пустые —
+`ad_spend` пока не содержит строк, это правильный «нет данных», а не баг),
+`x-data-cache: miss` на обоих вызовах, включая `?fresh=1`. `/admin/ad-spend/
+channels` читает реальные `referralSource` прода
+(`organic`/`promo:DATE_WITH`/`unattributed`). Демо (`gennety-demo`) не
+затронут — рестарт коснулся только `gennety-bot`.
+
 Сквозная — этот эндпоинт создан ради Hermes, а не для человека: настоящая
 проверка — его собственный следующий еженедельный прогон, где он реально
 дёргает `/admin/analytics/acquisition-cost` и цитирует `byChannel`/`byEntry` в
@@ -100,7 +112,7 @@ curl -sD- -H "Authorization: Bearer $KEY" \
 
 ---
 
-**PENDING — трекинг расходов на привлечение: канал × категория, ручной ввод +
+**Deployed 2026-08-29 (was PENDING) — трекинг расходов на привлечение: канал × категория, ручной ввод +
 живой CAC/LTV:CAC/ROAS (AD_SPEND_TRACKING_DESIGN.md, ARCHITECTURE.md →
 `ad_spend` + Admin API, DECISIONS.md 2026-08-29).** **Нет нового флага** — но
 нужен **аддитивный `db:push` ДО рестарта**, две новые опциональные env, и
@@ -200,6 +212,43 @@ pm2 logs gennety-bot --lines 40 --nostream | grep 'Ad-spend reminder scheduled'
 `FOUNDER_NOTIFY_ENABLED=false` останавливает весь фаундер-фид (шире, чем нужно)
 либо `AD_SPEND_REMINDER_CRON_SCHEDULE` в далёкое будущее (`0 0 31 2 *`) —
 последнее точечно отключает только эту фичу.
+
+**⚠️ Деплой унёс с собой куда больше, чем эту фичу — и это стоит записать
+честно.** До этого рестарта прод не запускал `ad-spend.ts` вообще (файла не
+было на диске), и то же самое оказалось верно для целого хвоста уже
+закоммиченных, но никогда не выкаченных фич — Prime Time
+(`matches.prime_time_*`, `prime_time_purchases`), Living Canvas / Scratch Map
+(`profiles.relationship_intents`/`reliability_score`, `user_scratch_maps`,
+`date_bump_sessions`, `match_score_logs.score_intent`), Voice Prompts
+(`voice_prompts`), блокировка пользователя (`user_blocks`), напоминания об
+истечении Premium (`users.premium_reminder_*`) и новая таблица активности
+(`user_activity_days`, `users_premium_until_idx`). `prisma migrate diff` по
+живому `DATABASE_URL` прода дал план из ОДНИХ `ADD COLUMN`/`CREATE TABLE`/
+`CREATE INDEX`/внешних ключей — **ноль `DROP`** — что и было условием,
+позволившим протолкнуть всё одним `db:push`, а не пытаться выковыривать
+`ad_spend` вручную из общего диффа. Флаги всех перечисленных фич остаются в
+том состоянии, в котором были в `.env` до этого деплоя — сама СХЕМА теперь
+синхронна с `main`, но включение каждой фичи — отдельное решение, не принятое
+этим деплоем.
+
+**Проверено после деплоя (замерено):** worktree на `git worktree add`,
+изолированный от параллельной сессии. rsync dry-run прочитан построчно — все
+удаления безвредны (переименования `photo-stage-panel→reply-panel`,
+`aether-*→chat-*`, гитигнорнутые артефакты `apps/video/build`, устаревший
+набор портретов Type Radar v1). `pnpm install`/`db:generate`/`pnpm build`
+прошли (webapp Vite-сборка чистая; `apps/bot`'s `tsc --noEmit` красный
+ТОЛЬКО на девяти предсуществующих `TS2540` в `menu.test.ts` — не в объёме
+этого деплоя, бот исполняется через `tsx`, а не из `tsc`-вывода, так что это
+не блокирует рестарт). `.env` забэкаплен
+(`.env.bak.20260829-113303`), `db:push` — «in sync», `db:drift-check` → `OK`
+до рестарта. `pm2 restart` — рестарт-каунт 0 → 1 без петли, лог после
+`Bot @gennetybot started` содержит **20 кронов**, включая впервые появившиеся
+`Ad-spend reminder`, `Premium expiry reminder`, `Rematch refund retry`,
+`Venue-change refund retry`, `Activity rollup` — все эти строки были
+единственным доказательством того, что соответствующий бэклог реально ожил.
+Ошибок с нового PID нет (в error-логе — только события ДО рестарта: 403
+`bot was blocked by the user`, протухший `placeId` у деактивированной
+площадки). `gennety-demo` не тронут.
 
 ---
 
