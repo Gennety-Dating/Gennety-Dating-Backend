@@ -1,5 +1,108 @@
 # Gennety Dating Deploy
 
+**PENDING — трекинг расходов на привлечение: канал × категория, ручной ввод +
+живой CAC/LTV:CAC/ROAS (AD_SPEND_TRACKING_DESIGN.md, ARCHITECTURE.md →
+`ad_spend` + Admin API, DECISIONS.md 2026-08-29).** **Нет нового флага** — но
+нужен **аддитивный `db:push` ДО рестарта**, две новые опциональные env, и
+**редеплой дашборда** (отдельный репозиторий, `~/Desktop/gennety-admin-
+dashboard`, auto-deploy на Vercel по пушу — уже запушено коммитом `d9488cc`, так
+что к моменту серверного деплоя дашборд может уже быть живым; проверить, а не
+предполагать).
+
+Одна новая таблица, `ad_spend`, читается на КАЖДОМ открытии `/admin/dashboard`
+(её `computeAcquisitionCost()` больше не может молча вернуть нули — она реально
+дёргает `prisma.adSpend.findMany`), так что база без неё бросит `P2022` на
+первом же открытии дашборда — тот самый крэш только одного эндпоинта, а не
+всего процесса (роут ловит исключение и отвечает 500, не роняя бот), но это всё
+равно живая поломка живого экрана. Проверить, что план аддитивный (ожидается
+один `CREATE TABLE ad_spend`, два индекса, **ноль DROP**):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # 0 до pm2 restart
+```
+
+**Шесть вещей, которые стоит знать до рестарта:**
+
+- **⚠️ Еженедельное напоминание фаундеру уезжает ЖИВЫМ, а не дремлющим.**
+  `FOUNDER_NOTIFY_ENABLED=true` в проде с 2026-07-16, а у этого крона нет своего
+  флага — он читает ровно тот же (`index.ts`: «a reminder to log spend into a
+  feed that is itself off has nothing to deliver»). Значит первый же
+  `AD_SPEND_REMINDER_CRON_SCHEDULE` тик (дефолт `0 9 * * 1`, понедельник 09:00
+  Kyiv) реально пошлёт сообщение в личку фаундеру — не дожидаться отдельного
+  флипа. Сообщение называет только что закрывшуюся неделю (`Date.now() − 7d`) и
+  ссылку на `ADMIN_DASHBOARD_URL` — если её не выставить, там просто вежливая
+  строка «укажи адрес дашборда», ничего не сломается.
+- **`ADMIN_DASHBOARD_URL` — новая переменная, отдельная от
+  `ADMIN_DASHBOARD_ORIGIN`.** Первая — обычный URL для ссылки в сообщении
+  (`https://admin.gennety.com`, без слэша на конце — код сам его срезает), вторая
+  — CORS-список источников. Не путать и не пытаться заменить одну другой.
+- **CORS `methods` в `admin/server.ts` получил `DELETE`, и это первый раз, когда
+  этот метод реально понадобился с браузера.** Без него `DELETE
+  /admin/ad-spend/:id` из дашборда падал бы на preflight ещё до того, как
+  запрос дошёл до роута — молча, кнопка «Delete» в таблице просто не сработала
+  бы. Проверять на живом дашборде, а не только curl'ом (preflight — это
+  браузерное поведение, не серверное).
+- **Схемы нет ни в `/v1/*`, ни в OpenAPI — это чисто админская фича.** Ни одного
+  клиентского (Telegram/iOS) контракта не тронуто.
+- **`/admin/dashboard` перестаёт отдавать `null` в четырёх полях, и это будет
+  выглядеть как регресс, если не знать причину.** До этого деплоя
+  `cacPerPayingUsdCents`/`cacPerActiveUsdCents`/`ltvCac`/`roas` были жёстко
+  зашитыми `null` — теперь они реально считаются из `ad_spend` +
+  `loadPayerIndex()`. **Пустая таблица `ad_spend` по-прежнему даёт `null`, а не
+  `0`** (`divCents()`: «no data ≠ acquired for free») — сразу после деплоя, пока
+  никто не залогировал ни одной траты, это ожидаемое состояние, а не баг.
+- **`GET /admin/ad-spend` без пагинации — намеренно.** Объём маленький (вносится
+  примерно раз в неделю вручную), так что список не растёт быстро; если это
+  когда-нибудь перестанет быть верно, паджинация — отдельная задача, не часть
+  этого деплоя.
+
+Preflight по этому изменению: typecheck чист по всем 5 воркспейсам (`db`,
+`shared`, `video`, `webapp`, `bot`), **`pnpm build` чист по всем пяти**, полный
+монорепный `pnpm test` зелёный — **бот 4430 тестов / 284 файла, shared 333 / 18,
+webapp 502 / 46**, суммарно **5265 тестов, 0 failed**. Три файла, специфичных
+для фичи (`ad-spend.test.ts` 17 + маршрут `ad-spend.test.ts` 16 + `ops.test.ts`
+26 = 59 тестов), плюс один живой гвард, найденный именно полным прогоном, а не
+точечным: `user-health.test.ts` бил в тот же `/admin/dashboard`, что и `ops.ts`,
+но его собственный мок Prisma не знал про `adSpend.findMany` — падал `500`
+вместо `200`. Починено добавлением мока (`485c76a`), не изменением
+продакшен-кода.
+
+Проверка после деплоя — счастливый путь молчит, поэтому по состоянию и одному
+живому раунд-трипу:
+
+```sh
+KEY=$(ssh root@167.172.178.229 "sed -n 's/^ADMIN_API_KEY=//p' /opt/gennety/.env | tail -1 | tr -d '\"'")
+curl -s -H "Authorization: Bearer $KEY" https://api-admin.gennety.com/admin/ad-spend | head -c 200
+# {"data":[]} сразу после деплоя — таблица пуста, это ожидаемо.
+curl -s -H "Authorization: Bearer $KEY" https://api-admin.gennety.com/admin/ad-spend/channels | head -c 300
+# список normalizeChannel-значений реальных пользователей + "unattributed".
+curl -s -H "Authorization: Bearer $KEY" https://api-admin.gennety.com/admin/dashboard \
+  | python3 -c "import json,sys; d=json.load(sys.stdin)['derived']; print({k:d[k] for k in ('cacPerPayingUsdCents','ltvCac','roas','totalMarketingSpendUsdCents')})"
+# все null, пока ad_spend пуста — это и есть проверка «null, не 0».
+pm2 logs gennety-bot --lines 40 --nostream | grep 'Ad-spend reminder scheduled'
+# строка при старте = крон зарегистрирован (FOUNDER_NOTIFY_ENABLED уже true).
+```
+
+Сквозная — на живом дашборде: открыть вкладку **Ad Spend**, ввести одну строку
+(канал + категория + диапазон + сумма), убедиться что она появилась в таблице и
+что `/admin/ad-spend` её отдаёт; повторно отправить те же канал+категория+
+диапазон и убедиться, что строка ОБНОВИЛАСЬ, а не задвоилась (`@@unique`); для
+`content_production`/`agency` убедиться, что канал молча принудительно
+`unattributed`, а не то, что ввёл пользователь.
+
+**Rollback:** откатить код, перезапустить. Таблицу можно оставить — старый код
+её не читает. Чтобы остановить только напоминание, не откатывая код,
+`FOUNDER_NOTIFY_ENABLED=false` останавливает весь фаундер-фид (шире, чем нужно)
+либо `AD_SPEND_REMINDER_CRON_SCHEDULE` в далёкое будущее (`0 0 31 2 *`) —
+последнее точечно отключает только эту фичу.
+
+---
+
 **PENDING — Type Radar v2: дека архетипов вместо пяти признаков (PRODUCT_SPEC
 §Type Radar, TYPE_RADAR_PRODUCT_SPEC.md → Dataset, DECISIONS.md).** **Нет
 изменения схемы Prisma, нет новых env, нет флипа флагов** — но это половина
