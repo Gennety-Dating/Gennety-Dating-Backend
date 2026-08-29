@@ -1,5 +1,105 @@
 # Gennety Dating Deploy
 
+**PENDING — пять метрик поверх ad-spend + Hermes читает их напрямую
+(AD_SPEND_TRACKING_DESIGN.md, HERMES_AGENT_PROMPT.md, DECISIONS.md).** **Нет
+изменения схемы Prisma, нет новых env, нет флагов, нет изменения Mini App** —
+только бот, так что полный деплой кода несёт это целиком. Ничего давить в
+`db:push` не нужно: все пять метрик выводятся из уже лежащих в Postgres таблиц
+(`User`, `Match`, кошельки) через уже существующие загрузчики — это проще
+предыдущего ad-spend-релиза, которому была нужна миграция.
+
+Пять метрик, все — расширение `computeAcquisitionCost()`
+(`admin/utils/ad-spend.ts`), а не параллельный модуль: окупаемость на канал
+(`ltvCac`/`roas`), связка канал×воронка (`completedOnboarding`/`matched`),
+связка канал×пол (`genderKnown`), CAC во времени (`byEntry` — построчно на
+каждую запись `ad_spend`, отсортировано по `periodStart`) и микс выручки по
+каналу (`revenueByKind`, zero-filled по `PURCHASE_KINDS`). Новый эндпоинт —
+`GET /admin/analytics/acquisition-cost`, кэш 15 мин через тот же `getOrCompute`,
+что уже несёт `/admin/analytics/monetization`.
+
+**Шесть вещей, которые стоит знать до рестарта:**
+
+- **`matched` — по той же выборке, что уже использует `growth.ts`, дословно.**
+  `prisma.match.findMany({select:{userAId:true,userBId:true}})`, без фильтра по
+  тестовым на уровне строк — фильтрация тестовых идёт по пользователю через
+  `classifyAllUsers()`, как и везде. Скопировано намеренно один-в-один, чтобы
+  «matched» не имело двух конкурирующих определений в проекте.
+- **`payers` в `computeAcquisitionCost()` расширен по ТИПУ, а не по загрузке.**
+  `/admin/dashboard` уже передавал полный `Map<string, PayerIndexEntry>` (с
+  `.byKind`), просто функция принимала урезанный `Pick<..., "firstPaidAt" |
+  "usdCents">`. Значит `revenueByKind` не стоит нового похода в базу — только
+  расширение сигнатуры типа.
+- **`ltvCac`/`roas` — те же формулы, что уже стояли в блендованных полях,
+  просто на уровне канала**, плюс `daysSinceFirstAttributableSpend` как явный
+  сигнал зрелости: слишком молодой канал не должен читаться как «не окупается».
+  Никакой проекции даты окупаемости — данные это агрегированные lifetime-суммы
+  по плательщику, а не таймсерия покупок, и подгонка кривой была бы ложной
+  точностью, которую данные не выдерживают.
+- **`/admin/dashboard.derived.adSpendByChannel` теперь несёт те же расширенные
+  поля тоже** — он вызывает ту же функцию, просто без `matched` (см.
+  комментарий на месте: `matched` требует отдельного полного скана `Match`,
+  который живой некэшируемый дашборд платить не обязан, а новый закэшированный
+  эндпоинт и так уже платит за один лишний скан на пересчёт).
+- **Дашборд-репозиторий (`~/Desktop/gennety-admin-dashboard`) НЕ трогается.**
+  `AdSpendPage.tsx` сегодня не читает `derived.adSpendByChannel` вовсе — это
+  осознанно оставлено вне объёма: задача про то, что читает Hermes, а не про
+  новые графики для человека.
+- **`HERMES_AGENT_PROMPT.md` переписан заново**, но это чисто документный
+  артефакт — Hermes читает его при своём следующем запуске, никакого действия
+  на сервере это не требует. Карта эндпоинтов, секция Core Metrics и таблица
+  null≠0% приведены в соответствие с тем, что реально отдаёт API.
+
+Preflight по этому изменению: typecheck чист по всем 5 воркспейсам (кроме
+**предсуществующего**, никак не связанного бага — см. ниже), lint чист.
+**Полный набор 348 файлов / 5290 тестов, 0 failed** (бот 284/4455, shared
+18/333, webapp 46/502) — совпадает с последним известным зелёным прогоном
+байт-в-байт, то есть правка ничего не задела помимо своих файлов. Три файла,
+специфичных для задачи: `ad-spend.test.ts` (утилиты) — 31 тест, `ad-spend.test.ts`
+(маршрут) — 23 теста, `ops.test.ts` — 26 тестов, суммарно 80/80 при точечном
+прогоне.
+
+**⚠️ `pnpm build` красный из-за `apps/bot/src/handlers/menu/menu.test.ts` — это
+чужой, предсуществующий баг, а не регресс этой правки.** Девять `TS2540`
+(«Cannot assign to … because it is a read-only property», строки
+372/373/374/378/391/403/405/412/417) принадлежат коммиту параллельной сессии
+`e021efc` и не задеты ни одним файлом этой задачи — проверено `git status`
+перед стартом (мои файлы: `HERMES_AGENT_PROMPT.md`,
+`apps/bot/src/admin/{routes,utils}/ad-spend.{ts,test.ts}`,
+`apps/bot/src/admin/routes/ops.{ts,test.ts}` — ни одного пересечения). Тот же
+класс проблемы уже фиксировался в блоке про account-health 2026-08-07. Не
+трогать эти строки в рамках этого деплоя — не входит в объём.
+
+Проверка после деплоя:
+
+```sh
+KEY=$(ssh root@167.172.178.229 "sed -n 's/^ADMIN_API_KEY=//p' /opt/gennety/.env | tail -1 | tr -d '\"'")
+curl -s -o /dev/null -w '%{http_code}\n' https://api-admin.gennety.com/admin/analytics/acquisition-cost
+# 401 без ключа = смонтирован.
+curl -sD- -H "Authorization: Bearer $KEY" \
+  'https://api-admin.gennety.com/admin/analytics/acquisition-cost' | head -c 600
+# 200; заголовки x-data-generated-at / x-data-cache: miss на первом вызове.
+curl -s -H "Authorization: Bearer $KEY" \
+  'https://api-admin.gennety.com/admin/analytics/acquisition-cost' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print('byChannel' in d, 'byEntry' in d, len(d.get('byChannel',[])))"
+# byChannel и byEntry присутствуют; byChannel пуст, если ad_spend пуста —
+# это тот же ответ, что и в блоке выше про пустую таблицу (null, не 0).
+curl -sD- -H "Authorization: Bearer $KEY" \
+  'https://api-admin.gennety.com/admin/analytics/acquisition-cost?fresh=1' | grep -i x-data-cache
+# x-data-cache: miss — байпас кэша сработал.
+```
+
+Сквозная — этот эндпоинт создан ради Hermes, а не для человека: настоящая
+проверка — его собственный следующий еженедельный прогон, где он реально
+дёргает `/admin/analytics/acquisition-cost` и цитирует `byChannel`/`byEntry` в
+дайджесте, а не только `/admin/ad-spend`.
+
+**Rollback:** откатить код и перезапустить. Откатывать больше нечего — ни
+схемы, ни env, ни флага. `HERMES_AGENT_PROMPT.md` — файл, а не рантайм-код;
+откат кода не требует отдельного отката промпта, но стоит откатить и его, чтобы
+описание API снова совпадало с тем, что реально отдаёт сервер.
+
+---
+
 **PENDING — трекинг расходов на привлечение: канал × категория, ручной ввод +
 живой CAC/LTV:CAC/ROAS (AD_SPEND_TRACKING_DESIGN.md, ARCHITECTURE.md →
 `ad_spend` + Admin API, DECISIONS.md 2026-08-29).** **Нет нового флага** — но
@@ -5262,7 +5362,7 @@ Post-deploy sequence and checks:
 # 1. Dry run FIRST — prints the target DB host and what it would write.
 pnpm synthetic:seed
 # 2. Seed for real, with photos laid out as <dir>/<slot>/*.jpg
-pnpm synthetic:seed -- --apply --photos=~/Desktop/synthetic-photos
+pnpm synthetic:seed -- --apply --photos=~/Desktop/_TO_GDRIVE/gennety-media/synthetic-photos
 # 3. Confirm every profile got an embedding — without one it is silently
 #    unmatchable, which looks exactly like "the fill does not work".
 psql "$DATABASE_URL" -c "select u.first_name, u.gender, array_length(p.photos,1) photos, p.embedding_dirty from users u join profiles p on p.user_id=u.id where u.synthetic_at is not null order by u.telegram_id desc;"
@@ -7651,7 +7751,7 @@ this change where a user gets stuck at the handoff.
     held one group image per side in a `cutout/` folder — ~330 KB; that folder
     is gone, see the last bullet.)
     **Never copy originals in by hand.** They are 2–6 MB PNGs, ~40 MB across the
-    set. `~/Desktop/gennety-preference-photos/prepare.mjs` is what resizes,
+    set. `~/Desktop/_TO_GDRIVE/gennety-media/gennety-preference-photos/prepare.mjs` is what resizes,
     re-encodes and trims them into the repo; the naive `sync.sh` that preceded
     it was deleted precisely because running it shipped the originals. **Run it
     with no flags.** It still writes a `cutout/` folder the app no longer reads,
