@@ -8,19 +8,136 @@
     />
     <title>Gennety Onboarding</title>
     <script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q==="light"||q==="dark"){try{localStorage.setItem("gennety-theme",q);}catch(e){}}var t=(q==="light"||q==="dark")?q:localStorage.getItem("gennety-theme");document.documentElement.dataset.theme=(t==="light"||t==="dark")?t:"dark";}catch(e){document.documentElement.dataset.theme="dark";}})();</script>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!--
+      The boot orb: the same mark the syncing screen draws, painted by the shell
+      so the first frame does not have to wait for ~124 KB of JS to download,
+      parse and run. Measured on production over a 4G profile before this
+      existed: first paint at 968 ms was the background colour alone and the
+      first content arrived at 1256 ms, which is the blank stretch that reads as
+      "the Mini App froze" after tapping Open Gennety.
+
+      Everything it needs is inline, deliberately: `onboarding.css` is a module
+      import, so in dev it arrives WITH the bundle — a `<link>`-dependent orb
+      would wait for exactly the thing it exists to beat. (In the production
+      build Vite injects that stylesheet at the end of this head, and it stays
+      render-blocking on purpose; see onboarding-boot.test.ts.)
+
+      The values are a copy of `.loading-orb` / `.syncing-orb` in
+      `src/onboarding.css`, and a copy that drifts becomes a visible swap on the
+      handover — `src/onboarding-boot.test.ts` fails if it does.
+    -->
+    <style>
+      :root, :root[data-theme="dark"] { --bg: #030303; }
+      :root[data-theme="light"] { --bg: #f5f5f5; }
+      html, body { margin: 0; }
+      #boot-orb {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /* `.orb-wrap`'s own padding, so the centred block lands on the same
+           pixel row here as it does in React — an asymmetric safe-area inset
+           would otherwise shift one and not the other. */
+        padding: calc(2rem + env(safe-area-inset-top, 0)) 2rem calc(2rem + env(safe-area-inset-bottom, 0));
+        background: var(--bg, #030303);
+      }
+      #boot-orb .orb {
+        width: 148px;
+        height: 148px;
+        margin: 0 auto 2rem;
+        border-radius: 9999px;
+        background:
+          radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.22) 20%, transparent 42%),
+          radial-gradient(circle at 62% 70%, rgba(139, 37, 59, 0.7), transparent 46%),
+          #111;
+        box-shadow: 0 0 48px rgba(255, 255, 255, 0.18), 0 0 90px rgba(139, 37, 59, 0.26);
+        /* `orbBreath` alone, never `orbSix`: this stands in for the SYNCING
+           screen, which renders `.loading-orb.syncing-orb`, and `.syncing-orb`
+           overrides the six-second intro animation away. */
+        animation: orbBreath 1800ms ease-in-out infinite;
+      }
+      /* `.orb-wrap` centres the whole block — orb, heading and lead — while the
+         shell knows no language yet and so shows no text. 72px is that missing
+         text (36px heading line + 12px margin + 24px lead line), reserved so
+         the orb sits at the same height in both and does not jump on handover. */
+      #boot-orb .orb-text-space { height: 72px; }
+      @keyframes orbBreath {
+        0%, 100% {
+          box-shadow: 0 0 48px rgba(255, 255, 255, 0.18), 0 0 90px rgba(139, 37, 59, 0.26);
+        }
+        50% {
+          box-shadow: 0 0 70px rgba(255, 255, 255, 0.24), 0 0 120px rgba(139, 37, 59, 0.36);
+        }
+      }
+    </style>
+    <!--
+      `defer` so the parser reaches <body> — and the orb in it — instead of
+      stopping here for a third-party round trip (measured 279 -> 675 ms). It
+      keeps its execution order: deferred classic scripts and modules both run
+      in document order, and this is written above the module, so
+      window.Telegram still exists when the app starts.
+    -->
+    <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://fonts.googleapis.com" rel="preconnect" />
     <link crossorigin href="https://fonts.gstatic.com" rel="preconnect" />
+    <!--
+      Both font stylesheets are loaded without blocking the first frame: they
+      are two round trips to another origin, and they used to stand between the
+      tap and any pixel at all. The trade was already accepted — `display=swap`
+      means text has always rendered in a fallback face until they land — and at
+      boot the orb carries no text that could flash.
+    -->
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <!--
+      `icon_names` is the whole font: without it this asks for the full variable
+      Material Symbols face — 1,127,204 bytes, 3.8 s of the boot on a 4G
+      profile, and the only shell in the Mini App that requests it — to draw
+      three glyphs. Subsetted it is 2,260 bytes. The axes stay because dropping
+      them would be a different font rather than a subset of this one.
+
+      ADDING AN ICON TO THE ONBOARDING MEANS ADDING IT HERE. Left out, it
+      renders as its own name in a fallback face; `onboarding-boot.test.ts`
+      holds this list equal to the glyphs `onboarding.tsx` actually uses,
+      because nothing else would catch it.
+    -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&icon_names=arrow_back,chevron_right,my_location&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+      />
+      <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&icon_names=arrow_back,chevron_right,my_location&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
   </head>
   <body>
+    <!--
+      A SIBLING of #root rather than a child: removal is then an explicit line
+      in onboarding.tsx instead of resting on how createRoot() treats a
+      container it did not find empty. It is dropped in App's mount effect,
+      which React runs after it has painted its own first screen, so the
+      handover has no gap.
+    -->
+    <div id="boot-orb">
+      <div>
+        <div class="orb"></div>
+        <div class="orb-text-space"></div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/onboarding.tsx"></script>
   </body>

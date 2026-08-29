@@ -254,6 +254,46 @@ out of Telegram-only workers.
   didn't deliver, the chat asks for — which is what keeps a cached older bundle,
   the iOS rail and a legacy mid-flight account from dead-ending at the handoff.
   The change is additive by construction.
+  **Before either of them, the SHELL paints the syncing orb (2026-08-29).**
+  The mascot is a module of a ~124 KB bundle, so it structurally cannot be the
+  first frame — and the document's body was `<div id="root"></div>` and nothing
+  else, so nothing else could be either. Measured on production over a 4G
+  profile: first paint at **968 ms** was the background colour alone, and the
+  first content arrived at **1256 ms**. That blank stretch after tapping *Open
+  Gennety* is what the founder reported as the Mini App having frozen, and it is
+  the one part of this screen nobody had ever looked at, because every
+  measurement of the mascot starts from the moment it mounts.
+
+  What the shell draws is **the app's own syncing orb, not a new shimmer**
+  (founder decision): the same mark, the same breath, so React arriving replaces
+  it with a copy of itself and the handover is invisible. Its styles are inline
+  rather than in `onboarding.css`, which is a module import and would therefore
+  arrive with the very bundle the orb exists to beat — the same reason
+  `verification.html` inlines its own mark. It carries **no text**: the language
+  is not known until `/state` answers, and the wrong language is worse than
+  none. So it reserves 72 px where the heading and lead will be (36 + 12 + 24),
+  because `.orb-wrap` centres the whole block rather than the orb, and without
+  that reservation the orb would sit ~52 px lower before React than after it.
+  A copy that drifts from `.loading-orb` turns the handover into a visible swap,
+  which is what `onboarding-boot.test.ts` exists to prevent.
+
+  **And the boot stops carrying a megabyte of icons.** This shell requested the
+  full variable Material Symbols face — **1,127,204 bytes**, 3.8 s of the boot on
+  that same profile — to draw **three** glyphs, and it is the only one of the
+  Mini App's shells that asked for it at all. `font-variation-settings` appears
+  nowhere and the CSS pins `font-weight: normal`, so the axes were never read.
+  Subsetted to the three names it uses it is **2,260 bytes**. The cost is stated
+  rather than discovered later: **an icon added to this screen must be added to
+  `icon_names`**, or it renders as its own name in a fallback face — a silent
+  failure, and the reason that list is held equal to the glyphs the code
+  actually uses by a test. Two smaller things ride along: the Telegram SDK is
+  `defer`red so the parser can reach the body at all, and the two font
+  stylesheets stop blocking the first frame (they already carried
+  `display=swap`, so text has always rendered in a fallback face until they
+  land; at boot the orb has no text to flash). The three local stylesheets Vite
+  injects stay blocking on purpose — same-origin, and asyncing them would buy
+  ~150 ms at the price of a FOUC on the registration funnel.
+
   **The Mini App boots behind a mascot, not a spinner (2026-08-23).** The
   loading screen for the very first `/state` call is the Gennety butterfly with
   eyes and round white hands, shuffling through profile cards with its back

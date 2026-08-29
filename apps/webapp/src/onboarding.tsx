@@ -264,6 +264,17 @@ function App(): ReactElement {
   // must not hand them a fresh object and restart the typing.
   const strings = useMemo(() => onboardingStrings(lang), [lang]);
 
+  // The shell paints a copy of the syncing orb before this bundle exists
+  // (see onboarding.html), so the first frame is not a blank screen. Drop it
+  // now that React has one of its own: effects run after paint, so whatever is
+  // underneath — the syncing screen, or the mascot on a first launch — is
+  // already on screen and the removal shows no gap. Explicit rather than
+  // relying on createRoot() clearing a container, because the overlay is a
+  // sibling of #root, not a child of it.
+  useEffect(() => {
+    document.getElementById("boot-orb")?.remove();
+  }, []);
+
   useEffect(() => {
     document.documentElement?.setAttribute("lang", lang);
   }, [lang]);
