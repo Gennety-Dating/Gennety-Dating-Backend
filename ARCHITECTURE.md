@@ -923,6 +923,71 @@ Inert unless `PRIME_TIME_ENABLED`, with one deliberate exception: the dead-match
 refund is NOT gated on the flag. Money outlives flags, and a pass already paid
 for must come back even if the feature was switched off in between.
 
+### `ad_spend`
+
+The founder's own record of acquisition spend (PRODUCT_SPEC has no section for
+this — see `AD_SPEND_TRACKING_DESIGN.md`), entered by hand through the admin
+dashboard's `/ad-spend` page and read by `/admin/dashboard`'s
+`cacPerPayingUsdCents`/`cacPerActiveUsdCents`/`ltvCac`/`roas`/
+`adSpendByChannel`. The other purchase tables above record money coming IN;
+this is the one table recording money going OUT, and it is the only source
+those four fields have — before it existed they were hard-coded `null`.
+
+Columns: `channel` (must already be the OUTPUT of `normalizeChannel`
+(`growth.ts`) — `organic` | `referral` | `mobile` | `web:*` | `tg:<slug>` — or
+the literal sentinel `"unattributed"`), `category` (one of
+`AD_SPEND_CATEGORIES`, plain string not a Prisma enum — same reasoning as
+`Match.source`: a new category costs no migration), `periodStart`/`periodEnd`
+(a free date range, not an ISO-week bucket — see below), `amount` + `currency`
+(what was actually paid, in whatever currency), `amountUsdCents` (frozen at
+entry, never recomputed by a later FX move — the same rule `TicketLedger.
+amountStars` already follows), `note`. `@@unique([channel, category,
+periodStart, periodEnd])` — re-entering the same combination updates the row
+instead of duplicating the spend.
+
+**Category owns the attribution window, not channel** — the two-axis model
+this table is built around. `AD_SPEND_ATTRIBUTION_WINDOW_DAYS[category]`
+(`admin/utils/ad-spend.ts`) is how many days PAST `periodEnd` a conversion is
+still counted before an entry is treated as matured: `performance_ads` 3,
+`influencer` 14, `offline_event` 28, `other` 7, and `content_production` /
+`agency` **null** — those categories buy nothing trackable at all (a retainer,
+a production shoot) and are excluded from every per-channel/CAC computation,
+counting only toward the founder's own P&L total
+(`totalMarketingSpendUsdCents`). A `null`-window category MUST be logged
+against `"unattributed"` — enforced both server-side
+(`categoryRequiresUnattributed()`, the route refuses a mismatch) and by the
+dashboard form, because the form is not the only client of this API.
+
+**Why a range instead of the ISO-week bucket the original design used**:
+performance ads convert in hours, an offline event's word of mouth trickles in
+for weeks, and one calendar-week bucket cannot express both. `computeAcquisitionCost`
+(`admin/utils/ad-spend.ts`, pure — no Prisma inside, fed by already-fetched
+arrays from the route) is what turns rows into CAC/CPL/ROAS/LTV:CAC; `divCents()`
+returns `null` — never `0` or `Infinity` — on a non-positive numerator or
+denominator, so "no data" and "acquired for free" stay distinguishable
+everywhere this feeds a dashboard card.
+
+**`ltvCac`/`roas` deliberately diverge from `monetization.ts`'s own
+revenue-in-window rule.** That rule protects a WEEKLY revenue bucket from
+repeat-purchase contamination; here the cohort is defined by an ACQUISITION
+event (a payer attributed to a spend entry), not a purchase-timing bucket, so
+the value is the payer's full lifetime `usdCents` from `loadPayerIndex()`, not
+only what they paid inside the attribution window. Once a user is attributed
+to a spend entry, everything they have brought in since is exactly the answer
+to "was this spend worth it".
+
+Fed to the route by a **second** `users.findMany` selecting `referralSource`
+rather than by widening the shared health-classification select — the same
+choke-point tradeoff `monetization-source.ts` already makes, because a copy of
+`classifyAllUsers`'s rules would cost more than one extra query. Test/synthetic
+accounts are excluded via that same classification verdict, no separate check.
+
+`/v1/*` and OpenAPI are untouched — this is admin-only, with no client
+surface. No feature flag: the table and routes are always live, and the
+weekly Monday-morning founder reminder (`notifyFounderAdSpendReminder`,
+`services/founder-notify.ts`) rides `FOUNDER_NOTIFY_ENABLED` alone rather than
+a flag of its own — a nudge into a disabled feed has nothing to deliver.
+
 ### `profiler_answers`
 
 One row per (user, Profiler question) — `questionId`, `priority`
@@ -1430,8 +1495,12 @@ external callers kept reaching for:
 |---|---|---|
 | GET | `/admin/health` | Liveness + readiness. Answers **503**, not 200, when the database is unreachable — a health check that reports healthy while Postgres is down silences the one alarm that matters. Carries `uptimeSeconds`, `nodeVersion`, and DB latency. |
 | GET | `/admin/stats` | Headline counters in ONE call: users by status, onboarding by step, verification by status, matches by status (+ `live` = the single-live-match states), reports by tier. Every bucket is zero-filled, so a missing group reads as `0` rather than `undefined`. Also carries **`conversion`** (net confirmed-match → paid-date, `admin/utils/match-conversion.ts`) and **`genderRatio`**. Both exclude synthetic matches and test pairs, and both report `null` — never `0` — on an empty denominator. |
-| GET | `/admin/dashboard` | The `/admin/stats` superset plus derived rates (`signupsLast7Days`, `activeRate`, `verifiedRate`, `matchAcceptanceRate`, `weeklyPaidDates`, `matchToTicketConversionPct`, `matchNoShowRatePct`, `matchGhostRatePct`, `registeredToMatchRate7dPct`) and the 10 most recent matches. Shares `collectStats()` with `/admin/stats` — including the match snapshot, so the weekly numbers are computed on the same rows the conversion was, rather than loaded a second time and allowed to disagree. `cacPerPaying`/`ltvCac`/`roas` are hard `null` until ad spend exists (`AD_SPEND_TRACKING_DESIGN.md`); they are deliberately not `0`, because "no data" and "acquired for free" are different claims. |
+| GET | `/admin/dashboard` | The `/admin/stats` superset plus derived rates (`signupsLast7Days`, `activeRate`, `verifiedRate`, `matchAcceptanceRate`, `weeklyPaidDates`, `matchToTicketConversionPct`, `matchNoShowRatePct`, `matchGhostRatePct`, `registeredToMatchRate7dPct`) and the 10 most recent matches. Shares `collectStats()` with `/admin/stats` — including the match snapshot, so the weekly numbers are computed on the same rows the conversion was, rather than loaded a second time and allowed to disagree. `cacPerPayingUsdCents`/`cacPerActiveUsdCents`/`ltvCac`/`roas`/`totalMarketingSpendUsdCents`/`adSpendByChannel` are `computeAcquisitionCost()` fed by the `ad_spend` table (`AD_SPEND_TRACKING_DESIGN.md`) — `null`, never `0`, on an empty denominator, because "no data" and "acquired for free" are different claims. |
 | GET | `/admin/purchases` | The revenue ledger — every real money movement, newest first, with the payer inlined (`?kind=`, `?status=`, `?userId=`, `?since=`, `?until=`, paginated). Carries `totals` + `byKind` over the WHOLE filtered set, not just the page. Deliberately **uncached**, unlike the analytics tabs: a founder checking whether a payment landed must not be served a ten-minute-old answer. |
+| GET | `/admin/ad-spend` | The founder's own log of acquisition spend — every row, unpaginated (small volume, entered by hand roughly weekly), `?channel=`/`?category=`/`?from=`/`?to=` filtered, newest `periodStart` first. This is what `/admin/dashboard`'s CAC/LTV:CAC/ROAS block is computed FROM. |
+| GET | `/admin/ad-spend/channels` | The channel picker's source list — the union of every `normalizeChannel(referralSource)` a real (non-test) user has ever carried and every channel already logged in `ad_spend`, plus the `"unattributed"` sentinel. So a typo in the dashboard form can never create a channel-ghost nothing joins against. |
+| POST | `/admin/ad-spend` | Upsert on `[channel, category, periodStart, periodEnd]` — re-entering the same combination updates the row instead of duplicating the spend. Validates category, `categoryRequiresUnattributed`, currency (rejects lower-case — the dashboard form is where "always type upper-case" belongs, not this route), and that `periodEnd >= periodStart`. |
+| DELETE | `/admin/ad-spend/:id` | `isUuid` guard, then delete; a `P2025` (row already gone) is treated as success — the caller's intent is already satisfied. |
 | GET | `/admin/analytics/dau` | DAU for one UTC day (`?date=YYYY-MM-DD`), plus the WAU/MAU windows ending on it so the number has a scale, `stickinessPct`, and a per-platform breakdown. Defaults to **yesterday**, not today: today is still filling, so a dashboard defaulting to it shows a figure that climbs all day and is lowest right after UTC midnight — which reads as a crash every morning. Cached 10 min, honours `?fresh=1`. |
 | GET | `/admin/analytics/mau` | MAU over a **rolling 30 days** by default (`?days=`, `?end=`), or a calendar month with `?month=YYYY-MM`. Rolling is the default because the product's rhythm is weekly — the drop, the famine notice, the check-in ladder — so 30 days is four cycles whatever month it is, while a calendar month holds four or five Thursdays and would make February structurally quieter than March by the calendar rather than by the product. Carries `avgDau` (averaged, never summed) and `byPlatform`. |
 | GET | `/admin/analytics/active` | The trend view: a **zero-filled** daily DAU series over `?from=`/`?to=` plus the headline block. Zero-filled rather than sparse — a chart that omits an empty day draws a straight line through the gap, which reads as "flat" instead of "nobody came". Loads back to the MAU window even when the series starts later, so the series and the summary come from one read. |
