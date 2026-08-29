@@ -72,6 +72,14 @@ MUST_DIFFER = [
     "SUPABASE_SERVICE_ROLE_KEY",
     "JWT_SECRET",             # a demo-minted /v1/* token would verify on prod
 ]
+# Same rule, but only once production actually sets the key. These belong to
+# features that ship dark, so demanding a demo value before production has one
+# would refuse every deploy over a secret nothing is using yet — and the check
+# arms itself the moment production sets it, which is the point where inheriting
+# it starts to matter.
+MUST_DIFFER_IF_SET = [
+    "EVENT_QR_SECRET",        # signs event door codes (LAUNCH_EVENTS §8)
+]
 # Present in demo at all = a route into production's ops surface.
 MUST_BE_ABSENT = ["ADMIN_API_KEY", "FOUNDER_BOT_TOKEN", "FOUNDER_TELEGRAM_ID"]
 
@@ -79,6 +87,15 @@ problems = []
 for key in MUST_DIFFER:
     p, d = prod.get(key), demo.get(key)
     if p and d and p == d:
+        digest = hashlib.sha256(p.encode()).hexdigest()[:12]
+        problems.append("%s is IDENTICAL in both (sha256 %s…)" % (key, digest))
+    elif not d:
+        problems.append("%s is missing from the demo .env — it inherits production's" % key)
+for key in MUST_DIFFER_IF_SET:
+    p, d = prod.get(key), demo.get(key)
+    if not p:
+        continue
+    if d and p == d:
         digest = hashlib.sha256(p.encode()).hexdigest()[:12]
         problems.append("%s is IDENTICAL in both (sha256 %s…)" % (key, digest))
     elif not d:

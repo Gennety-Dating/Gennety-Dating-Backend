@@ -1,9 +1,12 @@
 import { Router, type Request, type Response } from "express";
+import { randomBytes } from "node:crypto";
+import bcrypt from "bcryptjs";
 import { prisma } from "@gennety/db";
 import { isSupportedCityKey, cityKeyToTimeZone, isValidTimeZone } from "@gennety/shared";
 import { env } from "../../config.js";
 import { isUuid } from "../utils/uuid.js";
 import { classifyAllUsers } from "../utils/user-health-source.js";
+import { revokeEventTicket } from "../../services/event-ticket.js";
 import {
   ADMITTED_TIERS,
   isAdmissionPolicy,
@@ -517,6 +520,7 @@ eventsRouter.post(
             id: true,
             eventId: true,
             tier: true,
+            userId: true,
             scoreAtTiering: true,
             genderAtTiering: true,
             user: {
@@ -529,7 +533,7 @@ eventsRouter.post(
           },
         });
         if (!app || app.eventId !== id) return { error: "not_found" as const };
-        if (app.tier === target) return { ok: true as const, tier: target };
+        if (app.tier === target) return { ok: true as const, tier: target, userId: app.userId };
         // A screening (unverified) applicant cannot be approved by hand
         // either. Mandatory liveness is a product invariant, and an admin
         // button is not an exception to it.
@@ -565,7 +569,7 @@ eventsRouter.post(
           },
         });
         if (claimed.count === 0) return { error: "conflict" as const };
-        return { ok: true as const, tier: target, from: app.tier };
+        return { ok: true as const, tier: target, from: app.tier, userId: app.userId };
       });
 
       if ("error" in result) {
@@ -574,8 +578,30 @@ eventsRouter.post(
         res.status(status).json({ error: result.error });
         return;
       }
+
+      // Withdrawing admission has to take the ticket with it, or the person is
+      // off the guest list and still holding a working door code — and the
+      // seat they were occupying never returns to the tier.
+      //
+      // Deliberately AFTER the decision transaction commits rather than inside
+      // it: `revokeEventTicket` opens its own transaction, and the decision
+      // must not be held open across it. A failure here is logged and leaves
+      // the admission revoked, which is the safe half to have landed.
+      let ticketReleased = false;
+      if (result.tier === "revoked" && result.userId) {
+        try {
+          const ticket = await prisma.eventTicket.findUnique({
+            where: { eventId_userId: { eventId: id, userId: result.userId } },
+            select: { id: true },
+          });
+          if (ticket) ticketReleased = await revokeEventTicket(ticket.id);
+        } catch (err) {
+          console.error(`${LOG_PREFIX} ticket release failed after revoke`, { appId, err });
+        }
+      }
+
       console.log(`${LOG_PREFIX} decided`, { eventId: id, appId, tier: result.tier, actor });
-      res.json({ ok: true, tier: result.tier });
+      res.json({ ok: true, tier: result.tier, ticketReleased });
     } catch (err) {
       console.error(`${LOG_PREFIX} decide error:`, err);
       res.status(500).json({ error: "Internal server error" });
@@ -642,6 +668,216 @@ eventsRouter.post("/admin/events/:id/bulk-approve", async (req: Request, res: Re
     res.json({ approved, skippedAtCapacity: Math.max(0, eligible.length - take.length) });
   } catch (err) {
     console.error(`${LOG_PREFIX} bulk-approve error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/** Ticket tiers for one event: what allocations exist and how full each is. */
+eventsRouter.get("/admin/events/:id/tiers", async (req: Request, res: Response) => {
+  if (!requireFeature(res)) return;
+  try {
+    const { id } = req.params as { id: string };
+    if (!isUuid(id)) {
+      res.status(400).json({ error: "id must be a UUID" });
+      return;
+    }
+    const [event, tiers] = await Promise.all([
+      prisma.event.findUnique({ where: { id }, select: { capacity: true } }),
+      prisma.eventTicketTier.findMany({ where: { eventId: id }, orderBy: { createdAt: "asc" } }),
+    ]);
+    if (!event) {
+      res.status(404).json({ error: "Event not found" });
+      return;
+    }
+    const allocated = tiers.reduce((sum, tier) => sum + tier.capacity, 0);
+    res.json({
+      data: tiers,
+      allocated,
+      eventCapacity: event.capacity,
+      // Surfaced rather than enforced: tier capacity bounds TICKETS and
+      // `Event.capacity` bounds ADMISSION, which are different questions, so
+      // they legitimately differ. Two numbers that must agree would drift —
+      // this shows the founder when they have, and lets them mean it.
+      overAllocated: allocated > event.capacity,
+    });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} tiers error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+eventsRouter.post("/admin/events/:id/tiers", async (req: Request, res: Response) => {
+  if (!requireFeature(res)) return;
+  try {
+    const { id } = req.params as { id: string };
+    if (!isUuid(id)) {
+      res.status(400).json({ error: "id must be a UUID" });
+      return;
+    }
+    const body = req.body as Record<string, unknown>;
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const capacity = Number(body.capacity);
+    const kind = typeof body.kind === "string" ? body.kind.trim() : "free_rsvp";
+    if (!title) {
+      res.status(400).json({ error: "title is required" });
+      return;
+    }
+    if (!Number.isInteger(capacity) || capacity <= 0) {
+      res.status(400).json({ error: "capacity must be a positive integer" });
+      return;
+    }
+    if (!["free_rsvp", "vip_guestlist"].includes(kind)) {
+      res.status(400).json({ error: "kind must be free_rsvp | vip_guestlist" });
+      return;
+    }
+
+    const row = await prisma.eventTicketTier.create({
+      data: {
+        eventId: id,
+        kind,
+        title,
+        capacity,
+        // The guestlist is the one door that bypasses the moderation queue —
+        // it is the founder's comp list, and it is never self-serve (the
+        // attendee API filters it out of what it offers).
+        requiresAdmission: kind !== "vip_guestlist",
+      },
+    });
+    res.json({ data: row });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} tier create error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * Mint a door-staff token. The raw value is returned ONCE and never stored —
+ * only its bcrypt hash is, the same treatment `email_otps` gives a code. A
+ * founder who loses it mints another and revokes the old one.
+ */
+eventsRouter.post("/admin/events/:id/staff-tokens", async (req: Request, res: Response) => {
+  if (!requireFeature(res)) return;
+  try {
+    const { id } = req.params as { id: string };
+    if (!isUuid(id)) {
+      res.status(400).json({ error: "id must be a UUID" });
+      return;
+    }
+    const body = req.body as Record<string, unknown>;
+    const label = typeof body.label === "string" && body.label.trim() ? body.label.trim() : "Door";
+
+    const event = await prisma.event.findUnique({ where: { id }, select: { id: true } });
+    if (!event) {
+      res.status(404).json({ error: "Event not found" });
+      return;
+    }
+
+    const raw = randomBytes(24).toString("base64url");
+    const row = await prisma.eventStaffToken.create({
+      data: { eventId: id, label, tokenHash: await bcrypt.hash(raw, 10) },
+      select: { id: true, label: true, createdAt: true },
+    });
+    console.log(`${LOG_PREFIX} staff token minted`, { eventId: id, tokenId: row.id, label });
+    res.json({ data: { ...row, createdAt: row.createdAt.toISOString() }, token: raw });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} staff token error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+eventsRouter.get("/admin/events/:id/staff-tokens", async (req: Request, res: Response) => {
+  if (!requireFeature(res)) return;
+  try {
+    const { id } = req.params as { id: string };
+    if (!isUuid(id)) {
+      res.status(400).json({ error: "id must be a UUID" });
+      return;
+    }
+    const rows = await prisma.eventStaffToken.findMany({
+      where: { eventId: id },
+      // `tokenHash` is deliberately absent from the select: a listing endpoint
+      // has no reason to hand back the material an offline crack would need.
+      select: { id: true, label: true, revokedAt: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ data: rows });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} staff token list error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+eventsRouter.delete(
+  "/admin/events/:id/staff-tokens/:tokenId",
+  async (req: Request, res: Response) => {
+    if (!requireFeature(res)) return;
+    try {
+      const { id, tokenId } = req.params as { id: string; tokenId: string };
+      if (!isUuid(id) || !isUuid(tokenId)) {
+        res.status(400).json({ error: "id and tokenId must be UUIDs" });
+        return;
+      }
+      // Revoked, never deleted: the row is what `checkedInByTokenId` points at,
+      // and an admission whose audit trail vanished is worse than a stale row.
+      await prisma.eventStaffToken.updateMany({
+        where: { id: tokenId, eventId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error(`${LOG_PREFIX} staff token revoke error:`, err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
+
+/** What the founder watches during the party. */
+eventsRouter.get("/admin/events/:id/live", async (req: Request, res: Response) => {
+  if (!requireFeature(res)) return;
+  try {
+    const { id } = req.params as { id: string };
+    if (!isUuid(id)) {
+      res.status(400).json({ error: "id must be a UUID" });
+      return;
+    }
+    const [tiers, tickets] = await Promise.all([
+      prisma.eventTicketTier.findMany({
+        where: { eventId: id },
+        select: { id: true, title: true, capacity: true, claimed: true },
+      }),
+      prisma.eventTicket.findMany({
+        where: { eventId: id },
+        select: { status: true, checkedInAt: true, perkRedeemedAt: true },
+      }),
+    ]);
+
+    const buckets = new Map<string, number>();
+    for (const ticket of tickets) {
+      if (!ticket.checkedInAt) continue;
+      const at = new Date(ticket.checkedInAt);
+      at.setMinutes(Math.floor(at.getMinutes() / 15) * 15, 0, 0);
+      const key = at.toISOString();
+      buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+
+    const insideNow = tickets.filter((t) => t.checkedInAt).length;
+    const claimed = tickets.filter((t) => t.status !== "revoked").length;
+    res.json({
+      tickets: {
+        claimed,
+        insideNow,
+        perksRedeemed: tickets.filter((t) => t.perkRedeemedAt).length,
+        // null rather than 0 on an empty denominator — "nobody claimed yet" is
+        // not "0% turned up".
+        turnoutPct: claimed > 0 ? Math.round((insideNow / claimed) * 1000) / 10 : null,
+      },
+      tiers,
+      arrivals: [...buckets.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([at, count]) => ({ at, count })),
+    });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} live error:`, err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

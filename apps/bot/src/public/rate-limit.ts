@@ -170,6 +170,24 @@ export const canvasLimiter = make({
   message: { error: "Too many requests, slow down for a bit." },
 });
 
+/**
+ * The venue door portal (`/gk/*`).
+ *
+ * Keyed by IP, and that is the honest key here rather than a compromise: staff
+ * carry no `req.userId`, and one venue's door phones legitimately share one
+ * connection. The limit is generous because a queue at a launch party is a
+ * burst by nature — someone scanning forty codes in two minutes is the feature
+ * working, not an attack — while still bounding a stolen token being used to
+ * grind ticket ids. Auth failures are the thing actually worth throttling, and
+ * bcrypt does that on its own: each wrong token costs a hash comparison.
+ */
+export const gatekeeperLimiter = make({
+  windowMs: 60_000,
+  limit: 240,
+  keyGenerator: (req): string => `gk:${ipKey(req)}`,
+  message: { error: "Too many scans, slow down for a moment." },
+});
+
 /** Selfie submission — 5/day per user (falls back to IP). */
 export const selfieLimiter = make({
   windowMs: 86_400_000,

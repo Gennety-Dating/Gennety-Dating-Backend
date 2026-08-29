@@ -697,6 +697,14 @@ export const env = {
   /// registration cannot land in a queue nobody is watching, and no admin
   /// route is reachable. The tables exist and stay empty.
   EVENTS_FEATURE_ENABLED: process.env.EVENTS_FEATURE_ENABLED === "true",
+  /// HMAC key for door-entry QR codes. **Its own secret, never `JWT_SECRET`** —
+  /// the demo once inherited production's JWT key and made every `/v1/*` token
+  /// cross-valid (DEMO_MODE.md → the isolation gate), and the lesson recorded
+  /// there is that every new secret gets its own key AND a line in
+  /// `deploy-demo.sh`'s MUST_DIFFER list. Empty while the feature is off; the
+  /// ticket routes refuse to mint or verify a code without it rather than
+  /// signing with a blank string, which would make every forgery valid.
+  EVENT_QR_SECRET: process.env.EVENT_QR_SECRET ?? "",
 
   // ── Bonus Campus Drop (§Campus Radar) ────────────────────────────────
   /// An out-of-cycle drop for one university whose verified cohort just grew.

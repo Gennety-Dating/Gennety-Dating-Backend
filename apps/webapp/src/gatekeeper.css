@@ -1,0 +1,247 @@
+/**
+ * The venue door portal (LAUNCH_EVENTS_PRODUCT_SPEC.md §8).
+ *
+ * Dark unconditionally — this page is read in a dim room by someone who is not
+ * a Gennety user and has no theme of their own, so it does not consume the
+ * `data-theme` switch every other Mini App follows. Everything else is the
+ * house palette.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #030303;
+  color: #e9e6e5;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── The key screen ─────────────────────────────────────────────────────── */
+
+.gk-gate {
+  padding: 64px 24px calc(24px + env(safe-area-inset-bottom));
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.gk-gate-title {
+  margin: 0 0 20px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.gk-input {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e9e6e5;
+  font-family: inherit;
+  font-size: 17px;
+}
+
+.gk-gate-error {
+  margin-top: 12px;
+  color: #b6304f;
+  font-size: 14px;
+}
+
+.gk-primary {
+  width: 100%;
+  margin-top: 16px;
+  padding: 16px;
+  border: 0;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #0a0a0a;
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gk-gate-hint {
+  margin-top: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6a656b;
+}
+
+/* ── The door ───────────────────────────────────────────────────────────── */
+
+.gk-door {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+}
+
+.gk-stats {
+  font-size: 14px;
+  font-weight: 600;
+  color: #8e8895;
+  margin-bottom: 14px;
+  min-height: 20px;
+}
+
+.gk-viewport {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 1;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #0e0e0e;
+}
+
+.gk-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A frame rather than an instruction: staff aim at it without reading. */
+.gk-reticle {
+  position: absolute;
+  inset: 18%;
+  border: 3px solid rgba(255, 255, 255, 0.75);
+  border-radius: 16px;
+  pointer-events: none;
+}
+
+.gk-prompt {
+  margin-top: 16px;
+  font-size: 15px;
+  text-align: center;
+  color: #8e8895;
+}
+
+.gk-manual {
+  margin-top: auto;
+  padding: 12px;
+  border: 0;
+  background: none;
+  color: #6a656b;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ── The verdict ────────────────────────────────────────────────────────── */
+
+/* It covers the camera on purpose. Staff read one thing, say it out loud, and
+   the next guest steps up — a verdict competing with a live viewfinder is a
+   verdict someone misses. */
+.gk-verdict {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px;
+  text-align: center;
+  z-index: 10;
+}
+
+.gk-verdict.is-ok {
+  background: #0b3d1f;
+}
+
+.gk-verdict.is-no {
+  background: #4a0f1c;
+}
+
+.gk-outcome {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #ffffff;
+}
+
+.gk-who {
+  font-size: 19px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.gk-perk {
+  margin-top: 10px;
+  padding: 14px 28px;
+  border: 0;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #0a0a0a;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gk-perk[disabled] {
+  opacity: 0.55;
+}
+
+.gk-perk-done {
+  margin-top: 10px;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* ── The offline guest list ─────────────────────────────────────────────── */
+
+/* Read rather than glanced at, so unlike every other verdict it scrolls and
+   waits for an explicit Close. */
+.gk-search {
+  width: 100%;
+  max-width: 420px;
+}
+
+.gk-list {
+  width: 100%;
+  max-width: 420px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.gk-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 17px;
+  color: #ffffff;
+}
+
+.gk-list-row + .gk-list-row {
+  margin-top: 4px;
+}
+
+/* Someone already inside is dimmed rather than hidden: staff still need to see
+   that the name is on the list, and that it has been used. */
+.gk-list-row.is-in {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.gk-list-tag {
+  flex: none;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.gk-list-empty {
+  padding: 20px 14px;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.6);
+}

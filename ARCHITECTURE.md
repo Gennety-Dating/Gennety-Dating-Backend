@@ -1072,7 +1072,78 @@ Gated by `EVENTS_FEATURE_ENABLED`, and off is genuinely inert rather than
 merely quiet: without the flag the pipeline hook is not even wired as a dep,
 so no registration can land in a queue nobody is watching, and every admin
 route answers **404** — the subsystem is not part of the API surface at all.
-`/v1/*` and OpenAPI are untouched in this phase; there is no user surface yet.
+
+### `event_ticket_tiers` / `event_tickets` / `event_staff_tokens`
+
+Phase 2 of the same subsystem: the free ticket, the door code, and the people
+who read it. **There are no money columns anywhere in these three tables, and
+their absence is the design** (founder decision 2026-08-29) — the ticket is the
+entry *condition*, not a product, so there is no price, no charge id, no refund
+state and no claim TTL to expire an unpaid hold. `handlers/payments.ts` is not
+touched by this phase.
+
+**`event_ticket_tiers` is where capacity actually lives**, and `claimed` is the
+only counter in the product incremented by a **conditional atomic update**
+(`SET claimed = claimed + 1 WHERE claimed < capacity`) rather than by a
+count-then-insert. Two people racing for the last seat both read "49 of 50"
+under any read-first scheme; here one statement updates a row and the other
+updates zero. It runs in the INTERACTIVE `$transaction` form — the array form
+cannot short-circuit, so a CAS written that way is an after-the-fact report
+rather than a guard, which cost this codebase a double reward once
+(DECISIONS.md 2026-08-27). `kind` is `free_rsvp | vip_guestlist` and
+`requiresAdmission` is derived from it at creation; **readers must filter on
+`kind`**, because the two are equivalent only by that derivation and the schema
+lets them diverge — at which point `requiresAdmission` silently hides an
+ordinary open tier from the one screen that can claim it.
+
+**`event_tickets` is `@@unique([eventId, userId])`**, so a second tap returns
+the ticket already held instead of consuming another seat — the idempotency is
+the index's, not the handler's. `qrNonce` is the rotatable half of the door
+code: rotating it kills every code already in the wild for that ticket, which
+is what "my code leaked" actually does. `checkedInAt` carries the **single-use
+guarantee, and it is the database's rather than the signature's** — two doors
+scanning one screenshot in the same second produce one admission and one
+`already_used`, via the same CAS shape. `checkedInByTokenId` records which door
+opened, so a disputed entry has an owner rather than only a timestamp.
+`perkRedeemedAt` is the same CAS again, for the same reason: a bar with two
+staff phones pours one cocktail. Revoking a ticket releases its seat with
+`GREATEST(claimed - 1, 0)` — a counter allowed to go negative silently inflates
+capacity for everyone after it.
+
+**`event_staff_tokens` is the fourth auth rail in the product**, and it exists
+because venue staff are not users: no account, no Telegram, no profile, no place
+in the matching pool, so neither rail of `requireCanvasAuth` can describe them.
+A token is bcrypt-hashed (so it cannot be looked up by equality — every live
+token *for the named event* is compared, bounded by how many doors one party
+has), scoped to one event, and revocable, so a phone left behind a bar cannot
+admit anyone to the next party. The raw value is shown once at mint and never
+again.
+
+The door code itself is stateless and lives in no table: an HMAC-SHA256 payload
+(`services/event-qr.ts`) carrying version, ticket, event, nonce and a 90-second
+expiry. Short on purpose — the TTL is what makes a forwarded screenshot useless,
+and a client that fetched one code and displayed it forever would hand that
+property back. The signature is verified BEFORE expiry (so a forged expired code
+reads as forged), and the two strings are length-checked before
+`timingSafeEqual`, which throws on a length mismatch and would otherwise answer
+500 at a door.
+
+Surfaces: `/v1/events/*` (attendee — `requireCanvasAuth`, so one screen serves
+the Mini App and the native client identically) and `/gk/:eventId/*` (the door —
+staff token, deliberately outside `/v1` because it is not the product's client
+API and must not inherit its shape by accident). The attendee surface reports a
+tier as `none | pending | admitted | reserve` and **never a score, a threshold
+or the cohort ratio**; it reports `spotsLeft` rather than the raw
+claimed/capacity pair. Every door refusal is an HTTP **200** with a named
+outcome, because staff have to say a different sentence to the person in front
+of them and a 4xx with one message makes the portal useless exactly when it
+matters.
+
+Both routers answer **404** with the flag off, so Phase 2 is as inert as Phase
+1. `/v1/*` is nonetheless a real client contract now, and `openapi/gennety-v1.yaml`
+deliberately does **not** describe it: the native client has no event screen
+yet, and a spec entry for a surface no client generates from is a contract that
+drifts unobserved. It is added with the iOS work, not before.
 
 ### `profiler_answers`
 
@@ -1492,6 +1563,11 @@ auth) are deliberately outside the spec.
 | POST | `/v1/tickets/store/confirm` | Confirm bundle "payment" → credit `ticketBalance` (+`TicketLedger`). **404 (PAY-1) while `TICKET_STARS_ENABLED` is on.** `initData` HMAC auth. |
 | POST | `/v1/calendar/prime-time/stars-invoice` | Mint the Telegram Stars invoice that opens the paid evening band for one date (payload `prime:<matchId>`); settled by the bot's `successful_payment` handler. Re-derives the lock from `getCalendarState` rather than trusting the caller — charging for something already free is the one outcome this route must not produce — so an open band answers **409 `already-unlocked`**, not a charge. 404 while `PRIME_TIME_ENABLED` is off, which is also what tells a cached older bundle to stop offering it. In demo mode it settles the band FREE and answers `{settled: true}` with no link (DEMO_MODE.md). Telegram `initData` HMAC auth. |
 | GET  | `/v1/countdown` | Status banner / next-batch countdown |
+| GET  | `/v1/events` | Open launch events in the caller's own market, with their own state on each (LAUNCH_EVENTS §6). **Dual-rail auth** (`requireCanvasAuth` — initData OR JWT), the same one-screen-two-clients case the canvas routes use. Reports `admission` as `none\|pending\|admitted\|reserve` and `spotsLeft` as a remaining count — never a score, a threshold, the cohort ratio, or the raw claimed/capacity pair. The vip guestlist is filtered out of what is offered self-serve (it would be a "skip the queue" button). Carries the event's `timeZone`, because `startsAt` is an instant and the reader's device is the wrong clock for a traveller. A caller with no dating city gets `[]`: matching is same-city, so an event elsewhere is one where nobody could be matched with them. 404 while `EVENTS_FEATURE_ENABLED` is off. |
+| POST | `/v1/events/:id/apply` | Apply. Idempotent on the unique `(eventId, userId)`, so a second tap is the same row and never resets a tier. Tiers immediately when the applicant is already verified — otherwise someone who applies AFTER verifying sits in `screening` until a human presses a button, because the only other automatic trigger is the verification pipeline they have already been through. |
+| POST | `/v1/events/:id/ticket` | Claim the free ticket. Refusals are distinct statuses (`404` unknown event/tier, `403 not_admitted`, `409 tier_full\|event_closed`) because "the room is full" and "you are not on the list" need different sentences on screen. |
+| GET  | `/v1/events/:id/ticket/qr` | Mint a 90-second door code. **503 rather than a signature** when `EVENT_QR_SECRET` is missing or weak: signing with a blank string validates every forgery while looking exactly like a working door. Answers 404 identically for "not yours" and "does not exist", so the route cannot be used to probe ticket ids. |
+| POST | `/v1/events/:id/ticket/rotate` | "My code leaked" — rotates the nonce, killing every code already in the wild for this ticket. |
 | GET  | `/v1/date/state` | **Living Canvas** (JWT, PRODUCT_SPEC §6.1) — the derived `DateLifecycleState` plus the locked date, its venue, this side's bump state, the next drop, and the CALLER's own `timeZone`. Its own prefix rather than a field on `/v1/matches/current` because it must answer for a user with NO match: `IDLE_EXPLORING` is the state most users are in most of the time, and that endpoint answers null there. Two queries by design — the live statuses, then (only if there are none) a `completed` row that still owes feedback, which `ACTIVE_MATCH_STATUSES` excludes. Blind-decision safe: the partner's `acceptedBy*` is never selected into the response, and a caller who has answered resolves identically whatever the partner chose. |
 | POST | `/v1/dates/{id}/bump` | **Date Bump** (JWT, PRODUCT_SPEC §6.2) — one side's shake. The client detects it (CoreMotion / `DeviceMotionEvent`) and posts when and where; **the server decides whether it counts**, because a client-side verdict is a client-side ticket grant. `at` is the DEVICE clock and is trusted only inside `CLOCK_SKEW_TOLERANCE_MS` (60 s) of ours — the two phones' clocks are what the alignment check compares, so it has to be used, but a phone an hour fast must not bump its way outside its own date. `not-participant` answers **404**, not 403, so the endpoint cannot be used to probe which match ids exist; every other refusal is 409. The deck and the announcement hang off the ONE call that verified the pair (`justVerified`), never off `verified`, or the partner's own shake a beat later would generate a second deck and send everything twice. |
 | POST | `/v1/dates/{id}/proximity` | **Date Radar** (JWT, PRODUCT_SPEC §6.3) — ping-and-read: the caller's position goes in, the PARTNER's masked status comes back. The response is a closed shape (`peer` ∈ `unknown`/`en_route`/`arrived`, an optional `HH:mm`, `bothArrived`) and carries no coordinate, distance or address — those are one disclosure at four resolutions, and the masking lives in `viewOfPeer` so exactly one function decides what crosses between two people. **Stores nothing** (see `services/date-radar.ts`): the pinged coordinates compute an ETA and are dropped. Window is T-45m to `agreedTime` itself — unlike the Bump's T+2h grace, because once the date has begun the two of them can see each other. |

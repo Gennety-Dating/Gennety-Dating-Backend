@@ -1,0 +1,154 @@
+/**
+ * The attendee's launch-event screen (LAUNCH_EVENTS_PRODUCT_SPEC.md §6).
+ *
+ * Deliberately plain: this page is a list of facts (what, where, when, are you
+ * in) plus one code the door reads. The design-system rule the ticket screens
+ * already run on applies here too — depth comes from elevation, colour is spent
+ * only on the one action, and there is exactly one loud button per card.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── The list ───────────────────────────────────────────────────────────── */
+
+.ev-card {
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 18px;
+  margin-bottom: 14px;
+  box-shadow: 0 10px 24px var(--shadow);
+}
+
+.ev-title {
+  margin: 0 0 10px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ev-when {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent-bright);
+  margin-bottom: 8px;
+}
+
+.ev-venue {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+/* The address sits under the venue name rather than beside it: at a phone's
+   width the two on one line ellipsise the part that actually gets you there. */
+.ev-venue span {
+  display: block;
+  color: var(--text-faint);
+}
+
+.ev-spots {
+  font-size: 13px;
+  color: var(--text-faint);
+  margin-bottom: 10px;
+}
+
+/* ── Actions ────────────────────────────────────────────────────────────── */
+
+.ev-cta {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ev-cta[disabled] {
+  opacity: 0.55;
+}
+
+/* A state, not an action — so it must not look like a button someone failed to
+   tap. Same reasoning as the ticket gate's waiting screen. */
+.ev-note {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--fill);
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* ── The ticket ─────────────────────────────────────────────────────────── */
+
+.ev-ticket {
+  text-align: center;
+  padding-top: 8px;
+}
+
+.ev-back {
+  display: inline-block;
+  margin-bottom: 18px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* The QR is read by a phone camera in a dim room, so it keeps a white quiet
+   zone in BOTH themes — a dark-themed code is a code that does not scan. */
+#ev-qr {
+  width: 260px;
+  height: 260px;
+  max-width: 100%;
+  padding: 14px;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.ev-hint {
+  margin: 16px auto 0;
+  max-width: 280px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.ev-rotate {
+  margin-top: 24px;
+  padding: 10px 16px;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ev-empty {
+  padding: 48px 24px;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}

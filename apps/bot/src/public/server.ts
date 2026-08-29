@@ -17,6 +17,8 @@ import { matchesRouter } from "./routes/matches.js";
 import { matchMediaRouter } from "./routes/match-media.js";
 import { countdownRouter } from "./routes/countdown.js";
 import { dateStateRouter } from "./routes/date-state.js";
+import { eventsPublicRouter } from "./routes/events.js";
+import { gatekeeperRouter } from "./routes/gatekeeper.js";
 import { dateBumpRouter } from "./routes/date-bump.js";
 import { dateRadarRouter } from "./routes/date-radar.js";
 import { scratchMapRouter } from "./routes/scratch-map.js";
@@ -459,6 +461,13 @@ app.use("/v1/scratch", scratchMapRouter);
 // unguessable token in the path is the authorization (no JWT/initData). Ops-only
 // and inert unless FOUNDER_NOTIFY_ENABLED (reports are never created otherwise).
 app.use("/v1/founder", founderReportRouter);
+// Launch events, attendee side (LAUNCH_EVENTS_PRODUCT_SPEC.md). Dual-rail auth
+// like the canvas — one screen, two clients, the same answer.
+app.use("/v1/events", eventsPublicRouter);
+// The venue door portal. Deliberately OUTSIDE /v1: venue staff are not users,
+// they authenticate with a per-event token rather than either client rail, and
+// this is not part of the product's client API.
+app.use("/gk", gatekeeperRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: "Not found" });
