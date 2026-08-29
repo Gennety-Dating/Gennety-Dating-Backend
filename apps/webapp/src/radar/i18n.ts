@@ -1,6 +1,11 @@
 // Type Radar Mini App copy. The active language comes from `?lang=` on the URL
 // the bot builds (same convention as the other Mini Apps); chip labels are keyed
 // by the shared reason-chip id (the API sends ids only — see routes/radar.ts).
+//
+// The `figure` label was deleted with the `build` attribute (2026-08-28): the
+// deck no longer varies body type, so a chip naming it told the user it did.
+// `style` is unchanged in wording and now credits the archetype — it already
+// read as "the whole look", which is what an archetype is.
 import type { Lang } from "../i18n.js";
 
 export interface RadarStrings {
@@ -23,7 +28,6 @@ export interface RadarStrings {
 
 const CHIPS_EN = {
   face: "The face",
-  figure: "The figure",
   hair: "The hair",
   style: "The style",
   tattoo: "Tattoos",
@@ -68,7 +72,6 @@ const STRINGS: Record<Lang, RadarStrings> = {
     progress: (d, t) => `${d} / ${t}`,
     chips: {
       face: "Лицо",
-      figure: "Фигура",
       hair: "Волосы",
       style: "Стиль",
       tattoo: "Тату",
@@ -95,7 +98,6 @@ const STRINGS: Record<Lang, RadarStrings> = {
     progress: (d, t) => `${d} / ${t}`,
     chips: {
       face: "Обличчя",
-      figure: "Фігура",
       hair: "Волосся",
       style: "Стиль",
       tattoo: "Тату",
@@ -122,7 +124,6 @@ const STRINGS: Record<Lang, RadarStrings> = {
     progress: (d, t) => `${d} / ${t}`,
     chips: {
       face: "Gesicht",
-      figure: "Figur",
       hair: "Haare",
       style: "Stil",
       tattoo: "Tattoos",
@@ -149,7 +150,6 @@ const STRINGS: Record<Lang, RadarStrings> = {
     progress: (d, t) => `${d} / ${t}`,
     chips: {
       face: "Twarz",
-      figure: "Figura",
       hair: "Włosy",
       style: "Styl",
       tattoo: "Tatuaże",

@@ -1,4 +1,5 @@
 {
+  "retired": "ИСТОРИЯ — деке v1 (пять независимых признаков, ids f01..m12). Заменена 2026-08-28 декой архетипов: scripts/type-radar.deck-v2.md. Ничто это не читает; оставлено как запись того, как выглядел v1, и как компилировались полосы B/C. Новую полосу компилировать из deck-v2, не отсюда.",
   "version": 1,
   "note": "Compiled generation worklist: all 72 Type Radar prompts (24 profiles x 3 age bands). Band A is the canonical source in type-radar.dataset.draft.json; bands B/C are age-descriptor swaps of band A (identical attributes/scene/style). MJ v6 as-is; Flux/Higgsfield = drop --ar/--style/--no. 2026-08-20: f04/f07/f10/m12 regenerated (founder review) - f10 and m12 moved park -> cafe, so the scene nuisance factor is 5/4/3 rather than 4/4/4 in both sets; scene is not scored and is not sent to the client. Do NOT revert these four to the pre-2026-08-20 texts: they produced a gallery interior (f04), a dusk rooftop with an invisible tattoo (f07), a bookstore in a plain tee (f10) and an unattractive strongman (m12).",
   "bands": {

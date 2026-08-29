@@ -49,7 +49,7 @@
 A fast visual calibration of appearance-type preferences inside the Telegram
 onboarding Mini App. The user sees 10–12 contrasting AI-generated portraits and
 answers binary "My type" / "Not my type". The server decomposes each photo into
-pre-authored attribute tags (build, hair color/length, style, tattoos, beard)
+pre-authored attribute tags (archetype, hair color/length, tattoos, beard)
 and learns a preference vector. Ambiguity is resolved by a one-tap
 **reason-chip attribution layer** ("what caught you here?" — the Ditto
 pattern); pre-authored contrast pairs remain a fallback only. The result feeds a new soft multiplier
@@ -176,7 +176,8 @@ the venue-change board).
   everywhere ⇒ the factor goes silent instead of noisy.
 - **Attribution layer (reason chips, Ditto pattern):** after a verdict the
   Mini App may ask one one-tap "why?" — chips mapped to the attribute space
-  (face / figure / hair / style / tattoo / beard / whole vibe / bad photo; see
+  (face / hair / style / tattoo / beard / whole vibe / bad photo — `style` credits
+  the archetype, and `figure` was deleted with `build`; see
   `reasonChips` in the dataset draft). A named attribute gets a boosted
   per-card weight and the other attributes are discounted for that card;
   `face`/`bad photo` **exclude the card** from attribute learning entirely —
@@ -234,24 +235,68 @@ re-scanned legacy profiles) are neutral on the candidate side.
 
 ## Dataset
 
-- Canonical draft (attribute matrix, per-photo Russian review briefs,
-  generation prompts, contrast pairs):
-  [`scripts/type-radar.dataset.draft.json`](scripts/type-radar.dataset.draft.json).
-- Attribute space (5 dims per gender, deliberately small — 12 binary answers
-  cannot support more):
-  - **Female set:** hairColor {blonde, brunette, red}, hairLength {long,
-    short}, build {slim, athletic, curvy}, style {elegant, sporty, edgy},
-    tattoos {yes, no}.
-  - **Male set:** hairColor {dark, light}, beard {clean, beard}, build {lean,
-    athletic, big}, style {classic, sporty, edgy}, tattoos {yes, no}.
-- 12 photos per set arranged as a balanced fractional-factorial plan (each
-  value appears 4–6×, attribute pairs decorrelated by construction) + 5
-  pre-authored contrast pairs per set for clarifications.
+- Canonical brief (attribute matrix, per-card generation prompts, acceptance
+  checklist): [`scripts/type-radar.deck-v2.md`](scripts/type-radar.deck-v2.md).
+  The v1 artefacts (`type-radar.dataset.draft.json`,
+  `type-radar.prompts.compiled.json`, `type-radar.band-a.final.md`) describe the
+  RETIRED five-feature deck; each now carries a `retired` marker at the top.
+  Nothing reads them, and a future age band compiles from the v2 brief, not from
+  them.
+- **Attribute space (v2, 2026-08-28 — one primary axis plus three secondaries).**
+  A verdict now credits ONE cell rather than five:
+  - **Both sets:** archetype {polished, sporty, urban, creative} — the primary
+    axis, defined observably in `ARCHETYPE_DESCRIPTIONS` so the deck brief and
+    the candidate-side tagger cannot drift apart; tattoos {yes, no}.
+  - **Female:** hairColor {blonde, brunette, red}, hairLength {long, short}.
+  - **Male:** hairColor {dark, light}, beard {clean, beard}.
+  - `build` was REMOVED. The v1 space scored five independent features, so a
+    like driven by one was recorded against all five, and the only channel that
+    disentangled them — the reason chip — is asked on a minority of cards and is
+    rationalization-biased. `build` in particular did not exist on screen: an
+    audit of the v1 band-A renders (2026-08-20) found four female cards declared
+    `curvy` and four `athletic` while all twelve read as slim, so eight of twelve
+    taught a distinction nobody could see. It is also the attribute a VLM reads
+    least reliably off a candidate's own photos, and ranking people by body type
+    through an automated decision is the most exposed thing left after
+    `ethnicity` was removed under Art. 9. Do not reintroduce it.
+- **The archetype outweighs any single secondary** (`ATTR_WEIGHTS`, weight 2 vs
+  1). This is not decoration: with 12 cards over 4 archetypes each value is shown
+  exactly 3 times, so `confidence` caps at 0.75 while a hair value shown 6 times
+  reaches 1.0 — the shrinkage would otherwise invert the intended ranking. The
+  damping is correct on its own terms (3 observations IS thinner than 6), so the
+  fix is the weight, not a looser floor.
+- 12 photos per set, 3 per archetype, decorrelated by construction and enforced
+  by `type-radar.test.ts`: no archetype carries a constant value on any secondary
+  axis, exactly one card per archetype is tattooed, every value spans at least
+  two locations, and at least one location is shared between archetypes.
+- **Location is part of the construct since v2, not a nuisance factor.** v1 held
+  it to three fixed scenes to keep the backdrop from becoming a hidden attribute;
+  an archetype is partly *made of* where a person is photographed, so the deck
+  now uses eleven locations and protects the same property differently — several
+  locations per archetype, and three shared BETWEEN archetypes so the backdrop
+  alone cannot identify one. `location` is still never scored and never sent to a
+  client.
+- **A measured bound on what the deck can separate (2026-08-28).** Face height as
+  a fraction of the rendered card, measured with Vision across all 24 band-A
+  frames, ranges 0.103 (`fs1`, full-body tennis) to 0.271 (`fa2`, tight
+  portrait) — and the creative archetype is framed largest in BOTH sets, ~1.35x
+  the smallest archetype mean. Closer framing reads as more intimate, so that is
+  a confound on the primary axis. It is knowingly shipped rather than fixed:
+  normalization is impossible from these sources (a tight portrait cannot be
+  zoomed out, and zooming the full-body frames to the median would drop them
+  below ~640px wide), and partial normalization does not close the gap because it
+  lifts `fa3`, itself a creative card, in lockstep. Two things bound the damage —
+  the within-archetype spread is ~2.2x, i.e. larger than the between-archetype
+  signal, so it is not a cue a viewer could learn; and `V_type` is the weakest
+  multiplier in the formula. The nine frames re-shot on the 2026-08-26 posing
+  tail span 1.55x against 2.63x for the fifteen older ones, so the remaining
+  spread lives entirely in frames predating that tail: re-shooting the four
+  extremes (`fs1`, `fc3`, `mp1`, `fa2`) would bring the whole deck to ~1.55x.
 - **Age bands (founder decision 2026-07-20 — NOT one age for everyone):** the
   shown set is age-matched to the **viewer's own age band**, not a fixed
   24/26. A single young set is wrong twice — (1) UX: showing a 22-year-old to
   a 46-year-old promises a pool that won't deliver; (2) methodology: attributes
-  read differently with age (build, graying vs "light hair", beard), so taste
+  read differently with age (graying vs "light hair", beard), so taste
   learned on young faces transfers poorly to an older candidate pool. The
   **attribute matrix / scene plan / balance is identical across bands** — a
   band changes ONLY the age descriptor in the prompt (a mechanical swap, like
@@ -263,23 +308,25 @@ re-scanned legacy profiles) are neutral on the candidate side.
   e.g. men younger) is deliberately NOT baked into the radar default: that
   belongs to `V_agePref`/`ageRangeMin-Max`, keeping an age-gap assumption out
   of the product's defaults (same discipline as not scoring ethnicity).
-- **Validity constraints (every photo):** the photos read as **amateur
-  friend-shot smartphone snapshots** (founder decision 2026-07-19) — slightly
-  imperfect framing, no professional lighting, no studio gloss — ecological
-  validity: the user will judge real candid pitch photos, so taste must be
-  calibrated in the same visual domain, and the scene primes the actual
-  question ("do you want this person across the table?"). Front-camera
-  selfies were considered and rejected: arm's-length framing crops at the
-  chest and kills the build attribute. The scene is a **balanced nuisance
-  factor** (founder decision 2026-07-19, replacing the earlier single-scene
-  rule): exactly THREE fixed warm scenes — evening café / old-town street by
-  a terrace / park at golden hour — 4 photos per scene per set, the
-  assignment balanced so every attribute value appears in at least two
-  scenes; scene effects therefore average out and cannot glue to any
-  attribute. The per-photo `scene` field in the dataset is part of the
-  design — never reassign it casually. Subject always standing/leaning
-  (never seated, build must stay readable), softly blurred background with
-  no other people. **Ethnicity is a held constant matched to the launch
+- **Validity constraints (every photo).** The register is **"heightened
+  reality"** (founder decision 2026-08-22, superseding the 2026-07-19
+  amateur-snapshot rule): a very good REAL photograph — an attractive place, warm
+  light, clothes that fit — but never a magazine set-up. The earlier rule argued
+  ecological validity (a user judges candid pitch photos, so calibrate in the
+  same visual domain) and was dropped knowingly: the domain is broken anyway
+  because the frames are generated, the deck's measurement value was near zero in
+  practice, and the step's conversion is real. A frame that stands out by beauty
+  **as a photograph** — light, composition, staging — is still rejected, or the
+  deck measures taste in photography rather than in people.
+  Since 2026-08-26 the subject **deliberately poses for their own feed**, which
+  also fixed a failure the earlier tail caused: `caught mid-action` and
+  `real eye contact` fought each other and the generator kept the action, so 7 of
+  12 male frames came back in profile or with the face occluded.
+  Subject standing or seated, softly blurred background, **no other people** —
+  though the last of those is aspirational rather than achieved: roughly ten of
+  the 24 shipped frames carry a soft out-of-focus person in the background, kept
+  because cropping them out would tighten the framing the re-shoots existed to
+  widen. **Ethnicity is a held constant matched to the launch
   market** (Ukraine → Eastern European appearance on every frame): left
   unspecified, generators randomize it into the strongest uncontrolled
   visual confound of all; it is deliberately NOT a scored attribute (the

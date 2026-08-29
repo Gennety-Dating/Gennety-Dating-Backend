@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  ARCHETYPES,
+  attributeWeight,
   FEMALE_PHOTOS,
   MALE_PHOTOS,
   FEMALE_ATTRIBUTES,
@@ -13,6 +15,7 @@ import {
   typeOverlapCount,
   typePreferenceMultiplier,
   CONF_FULL,
+  type PreferenceVector,
   type RadarAnswer,
   type RadarSet,
 } from "./type-radar.js";
@@ -40,29 +43,92 @@ describe("radar dataset integrity", () => {
     check(MALE_PHOTOS, MALE_ATTRIBUTES);
   });
 
-  it("balances every attribute value across at least two scenes (nuisance control)", () => {
+  it("names every card after the archetype it teaches", () => {
+    // The id is the only thing a reviewer sees when filing 24 renders, so a
+    // mis-filed asset has to be visible without opening it.
+    const letter: Record<string, string> = { p: "polished", s: "sporty", c: "urban", a: "creative" };
     for (const photos of [FEMALE_PHOTOS, MALE_PHOTOS]) {
-      const keys = Object.keys(photos[0].attrs);
-      for (const key of keys) {
-        const scenesByValue: Record<string, Set<string>> = {};
-        for (const p of photos) {
-          (scenesByValue[p.attrs[key]] ??= new Set()).add(p.scene);
-        }
-        for (const [, scenes] of Object.entries(scenesByValue)) {
-          expect(scenes.size).toBeGreaterThanOrEqual(2);
+      for (const p of photos) {
+        expect(p.id).toMatch(/^[fm][psca]\d$/);
+        expect(p.attrs.archetype).toBe(letter[p.id[1]]);
+      }
+    }
+  });
+
+  it("decorrelates every secondary axis from the archetype", () => {
+    // The property the whole v2 deck exists for: if an archetype always carried
+    // the same beard/hair/tattoo value, a verdict on it could not be told apart
+    // from a verdict on that secondary — which is how "we learned a preference
+    // for beards and called it a type" happens.
+    for (const photos of [FEMALE_PHOTOS, MALE_PHOTOS]) {
+      const secondary = Object.keys(photos[0].attrs).filter((k) => k !== "archetype");
+      for (const archetype of ARCHETYPES) {
+        const cards = photos.filter((p) => p.attrs.archetype === archetype);
+        expect(cards).toHaveLength(3);
+        for (const key of secondary) {
+          const values = new Set(cards.map((p) => p.attrs[key]));
+          expect(values.size).toBeGreaterThanOrEqual(2);
         }
       }
     }
   });
 
-  it("shows each attribute value at least 4 times (confidence floor)", () => {
+  it("gives every archetype exactly one tattooed card", () => {
+    for (const photos of [FEMALE_PHOTOS, MALE_PHOTOS]) {
+      for (const archetype of ARCHETYPES) {
+        const inked = photos.filter(
+          (p) => p.attrs.archetype === archetype && p.attrs.tattoos === "yes",
+        );
+        expect(inked).toHaveLength(1);
+      }
+    }
+  });
+
+  it("balances every attribute value across at least two locations", () => {
+    // Location is part of the archetype construct since v2, not a nuisance
+    // factor held to three values — but a value shot in only ONE place is
+    // indistinguishable from a preference for that place, so this still holds.
+    for (const photos of [FEMALE_PHOTOS, MALE_PHOTOS]) {
+      const keys = Object.keys(photos[0].attrs);
+      for (const key of keys) {
+        const byValue: Record<string, Set<string>> = {};
+        for (const p of photos) (byValue[p.attrs[key]] ??= new Set()).add(p.location);
+        for (const [, locations] of Object.entries(byValue)) {
+          expect(locations.size).toBeGreaterThanOrEqual(2);
+        }
+      }
+    }
+  });
+
+  it("shares at least one location between archetypes", () => {
+    // The insurance against identifying an archetype from the backdrop alone.
+    for (const photos of [FEMALE_PHOTOS, MALE_PHOTOS]) {
+      const archetypesByLocation: Record<string, Set<string>> = {};
+      for (const p of photos) {
+        (archetypesByLocation[p.location] ??= new Set()).add(p.attrs.archetype);
+      }
+      const shared = Object.values(archetypesByLocation).filter((s) => s.size >= 2);
+      expect(shared.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("shows each attribute value enough times to reach confidence", () => {
+    // Two deliberate exceptions, both recorded decisions rather than drift, so
+    // a value that thins out by accident still fails here:
+    //   - `archetype` is 3 by construction (12 cards / 4 values) — the cap the
+    //     ATTR_WEIGHTS comment is about;
+    //   - female `red` is 2 (founder, 2026-08-23): redheads are a few percent of
+    //     the real pool, so a third of the deck spent on them bought precision
+    //     nobody could use.
+    const belowFloor: Record<string, number> = { archetype: 3, red: 2 };
     for (const photos of [FEMALE_PHOTOS, MALE_PHOTOS]) {
       const keys = Object.keys(photos[0].attrs);
       for (const key of keys) {
         const counts: Record<string, number> = {};
         for (const p of photos) counts[p.attrs[key]] = (counts[p.attrs[key]] ?? 0) + 1;
-        for (const [, c] of Object.entries(counts)) {
-          expect(c).toBeGreaterThanOrEqual(CONF_FULL);
+        for (const [value, c] of Object.entries(counts)) {
+          const floor = belowFloor[key] ?? belowFloor[value] ?? CONF_FULL;
+          expect(c).toBeGreaterThanOrEqual(floor);
         }
       }
     }
@@ -112,13 +178,13 @@ describe("buildPreferenceVector", () => {
   });
 
   it("ignores answers for the other set", () => {
-    const pref = buildPreferenceVector("female", [like("m01"), dislike("m02")]);
+    const pref = buildPreferenceVector("female", [like("mp1"), dislike("mp2")]);
     expect(hasTypeSignal(pref)).toBe(false);
   });
 
   it("shrinks weight toward zero when signal is thin", () => {
     // Only one photo answered: confidence for its values is 1/4.
-    const pref = buildPreferenceVector("female", [like("f01")]);
+    const pref = buildPreferenceVector("female", [like("fp1")]);
     expect(pref.hairColor.blonde.confidence).toBe(1 / CONF_FULL);
     expect(Math.abs(pref.hairColor.blonde.weight)).toBeLessThan(
       Math.abs(pref.hairColor.blonde.score),
@@ -126,23 +192,24 @@ describe("buildPreferenceVector", () => {
   });
 
   it("excludes a card from attribute learning when the face/bad-photo chip is tapped", () => {
-    const withChip = buildPreferenceVector("female", [dislike("f01", "face")]);
-    // f01 is the only observation; excluded ⇒ no directional signal, score 0.
+    const withChip = buildPreferenceVector("female", [dislike("fp1", "face")]);
+    // fp1 is the only observation; excluded ⇒ no directional signal, score 0.
     expect(withChip.hairColor.blonde.score).toBe(0);
     expect(withChip.hairColor.blonde.confidence).toBe(1 / CONF_FULL); // still shown
   });
 
   it("boosts the named attribute and discounts the rest on an attribute chip", () => {
-    // Two conflicting cards on 'style', but one credits 'style' explicitly.
-    const base = buildPreferenceVector("female", [like("f01"), dislike("f04")]);
-    const credited = buildPreferenceVector("female", [like("f01", "style"), dislike("f04")]);
-    // f01 style=elegant liked; crediting style should raise elegant's weight.
-    expect(credited.style.elegant.score).toBeGreaterThan(base.style.elegant.score);
+    // fp1 and fp2 are both `polished`, so a like on one against a dislike on the
+    // other cancels out — unless the like explicitly credits the archetype.
+    const base = buildPreferenceVector("female", [like("fp1"), dislike("fp2")]);
+    const credited = buildPreferenceVector("female", [like("fp1", "style"), dislike("fp2")]);
+    expect(base.archetype.polished.score).toBe(0);
+    expect(credited.archetype.polished.score).toBeGreaterThan(0);
   });
 
   it("treats wholeVibe and loggedOnly chips as a uniform update", () => {
-    const plain = buildPreferenceVector("female", [like("f01")]);
-    const vibe = buildPreferenceVector("female", [like("f01", "wholeVibe")]);
+    const plain = buildPreferenceVector("female", [like("fp1")]);
+    const vibe = buildPreferenceVector("female", [like("fp1", "wholeVibe")]);
     expect(vibe.hairColor.blonde.score).toBe(plain.hairColor.blonde.score);
     expect(vibe.hairColor.blonde.weight).toBe(plain.hairColor.blonde.weight);
   });
@@ -173,6 +240,25 @@ describe("candidateTypeScore", () => {
     expect(onType).toBeGreaterThan(0.5);
     expect(offType).toBeLessThan(0.5);
     expect(onType).toBeGreaterThan(offType);
+  });
+
+  it("lets the archetype outweigh a single secondary tag", () => {
+    // The founder-facing claim of v2 in one assertion: a candidate whose
+    // ARCHETYPE the viewer likes but whose hair they dislike must still score
+    // above one where those roles are reversed.
+    const pref: PreferenceVector = {
+      archetype: { polished: { score: 1, confidence: 1, weight: 1 } },
+      hairColor: { blonde: { score: -1, confidence: 1, weight: -1 } },
+    };
+    const rightType = candidateTypeScore(pref, { archetype: "polished", hairColor: "blonde" });
+    const flipped: PreferenceVector = {
+      archetype: { polished: { score: -1, confidence: 1, weight: -1 } },
+      hairColor: { blonde: { score: 1, confidence: 1, weight: 1 } },
+    };
+    const rightHair = candidateTypeScore(flipped, { archetype: "polished", hairColor: "blonde" });
+    expect(rightType).toBeGreaterThan(0.5);
+    expect(rightHair).toBeLessThan(0.5);
+    expect(attributeWeight("archetype")).toBeGreaterThan(attributeWeight("hairColor"));
   });
 
   it("stays within [0,1]", () => {

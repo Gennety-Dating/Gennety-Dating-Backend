@@ -2,8 +2,10 @@ import { env } from "../../config.js";
 import { MODELS } from "../../models.js";
 import { openaiFetch } from "../openai-fetch.js";
 import {
+  ARCHETYPE_DESCRIPTIONS,
   FEMALE_ATTRIBUTES,
   MALE_ATTRIBUTES,
+  type Archetype,
   type RadarSet,
   type PhotoAttrs,
 } from "@gennety/shared";
@@ -13,8 +15,8 @@ import type { AttractivenessImageInput } from "./score-attractiveness.js";
  * Type Radar candidate tagging (PRODUCT_SPEC §Type Radar, step 6). A deliberately
  * ISOLATED vision pass — separate from the Elo attractiveness call — that
  * classifies a user's own appearance into the radar's categorical attributes
- * (hairColor / build / style / tattoos, plus hairLength for women / beard for
- * men) so the match engine can score it against a partner's `typePrefTags`
+ * (archetype / hairColor / tattoos, plus hairLength for women / beard for men)
+ * so the match engine can score it against a partner's `typePrefTags`
  * (`V_type`). Kept off the production attractiveness path on purpose: a tagging
  * regression must never perturb the live Elo seed. Uses the cheap `visionFast`
  * tier and only runs when `TYPE_RADAR_ENABLED` is on (zero cost while dark).
@@ -40,16 +42,29 @@ function attributesForSet(set: RadarSet): Record<string, readonly string[]> {
 
 function buildInstruction(set: RadarSet): string {
   const attrs = attributesForSet(set);
-  const lines = Object.entries(attrs).map(
-    ([key, values]) => `- "${key}": one of [${values.map((v) => `"${v}"`).join(", ")}]`,
-  );
+  const lines = Object.entries(attrs).map(([key, values]) => {
+    // `archetype` is the one attribute whose values are not self-explanatory —
+    // "polished" means nothing to a classifier on its own, and a label read one
+    // way here and another way in the deck brief would silently make the two
+    // sides stop describing the same thing. Definitions come from the shared
+    // module so there is exactly one of them.
+    if (key === "archetype") {
+      const defs = values
+        .map((v) => `    "${v}" — ${ARCHETYPE_DESCRIPTIONS[v as Archetype]}`)
+        .join("\n");
+      return `- "${key}": one of [${values.map((v) => `"${v}"`).join(", ")}]\n${defs}`;
+    }
+    return `- "${key}": one of [${values.map((v) => `"${v}"`).join(", ")}]`;
+  });
   return [
     "You are shown several photos of the SAME person. Classify their appearance",
     "into the attributes below. Pick exactly ONE allowed value per attribute — the",
-    "best fit across all the photos. For \"tattoos\", answer \"yes\" only if a tattoo",
-    "is clearly visible on their body in any photo, otherwise \"no\". Judge hair",
-    "color/length and build from the clearest photo. Do not invent attributes that",
-    "are not listed.",
+    "best fit across all the photos. For \"archetype\", judge the OVERALL look —",
+    "clothing, grooming and the kind of places they are photographed in — not any",
+    "single garment; pick the closest of the four even when it is not a perfect",
+    "fit. For \"tattoos\", answer \"yes\" only if a tattoo is clearly visible on",
+    "their body in any photo, otherwise \"no\". Judge hair colour and length from",
+    "the clearest photo. Do not invent attributes that are not listed.",
     "",
     "Attributes:",
     ...lines,

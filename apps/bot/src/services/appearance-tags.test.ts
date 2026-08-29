@@ -7,7 +7,7 @@ function deps(overrides: Partial<TagAppearanceDeps> = {}): TagAppearanceDeps {
     downloadProfileImage: vi.fn().mockResolvedValue(Buffer.from("img")),
     tagAppearance: vi
       .fn()
-      .mockResolvedValue({ ok: true, tags: { hairColor: "dark", build: "athletic" }, model: "m" }),
+      .mockResolvedValue({ ok: true, tags: { archetype: "urban", hairColor: "dark" }, model: "m" }),
     persist: vi.fn().mockResolvedValue(true),
     ...overrides,
   };
@@ -16,16 +16,37 @@ function deps(overrides: Partial<TagAppearanceDeps> = {}): TagAppearanceDeps {
 describe("validateTags", () => {
   it("keeps only in-schema keys with allowed values (female)", () => {
     const out = validateTags(
-      { hairColor: "blonde", build: "curvy", tattoos: "no", bogusKey: "x", beard: "beard" },
+      {
+        archetype: "creative",
+        hairColor: "blonde",
+        hairLength: "short",
+        tattoos: "no",
+        bogusKey: "x",
+        beard: "beard",
+        build: "curvy",
+      },
       "female",
     );
-    // beard is a male-only key; bogusKey is off-schema — both dropped.
-    expect(out).toEqual({ hairColor: "blonde", build: "curvy", tattoos: "no" });
+    // beard is male-only; bogusKey is off-schema; build was removed from the
+    // space entirely (2026-08-28) — all three dropped.
+    expect(out).toEqual({
+      archetype: "creative",
+      hairColor: "blonde",
+      hairLength: "short",
+      tattoos: "no",
+    });
   });
 
   it("drops values outside the allowed vocabulary", () => {
-    const out = validateTags({ hairColor: "purple", build: "athletic" }, "male");
-    expect(out).toEqual({ build: "athletic" }); // "purple" not allowed for male hairColor
+    const out = validateTags({ hairColor: "purple", archetype: "sporty" }, "male");
+    expect(out).toEqual({ archetype: "sporty" }); // "purple" not allowed for male hairColor
+  });
+
+  it("rejects an archetype outside the four allowed values", () => {
+    // The primary axis: a hallucinated label here would be scored against a
+    // preference vector that has never seen it, so it must not survive.
+    expect(validateTags({ archetype: "bohemian" }, "male")).toEqual({});
+    expect(validateTags({ archetype: "polished" }, "male")).toEqual({ archetype: "polished" });
   });
 
   it("returns {} for missing/non-object input", () => {
@@ -56,8 +77,8 @@ describe("tagAndPersistAppearance", () => {
     expect(out).toBe("persisted");
     expect(d.tagAppearance).toHaveBeenCalledWith(expect.any(Array), "female");
     expect(d.persist).toHaveBeenCalledWith("u1", ["p1", "p2"], {
+      archetype: "urban",
       hairColor: "dark",
-      build: "athletic",
     });
   });
 

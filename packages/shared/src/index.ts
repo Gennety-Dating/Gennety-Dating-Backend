@@ -98,10 +98,16 @@ export {
   CHIP_ATTR_BOOST,
   CHIP_ATTR_DISCOUNT,
   CONF_FULL,
+  ARCHETYPES,
+  ARCHETYPE_DESCRIPTIONS,
+  ATTR_WEIGHTS,
+  ATTR_WEIGHT_DEFAULT,
+  attributeWeight,
 } from "./type-radar.js";
 export type {
   RadarSet,
-  RadarScene,
+  RadarLocation,
+  Archetype,
   RadarPhoto,
   PhotoAttrs,
   AttributeKey,

@@ -140,8 +140,15 @@ describe("GET /v1/radar/deck", () => {
     const cards = res.body.cards as DeckCard[];
     const byId = (id: string): DeckCard => cards.find((c) => c.photoId === id)!;
     const ids = (c: DeckCard, v: "like" | "dislike"): string[] => c.chips[v].map((x) => x.id);
-    const cleanNoTattoo = byId("m01"); // beard: clean, tattoos: no
-    const beardedTattoo = byId("m03"); // beard: beard, tattoos: yes
+    // Found by predicate rather than by id: the matrix is a product decision
+    // that moves, and a hardcoded id turns a deck edit into a mystery failure
+    // in a test that is not about the deck.
+    const cleanNoTattoo = byId(
+      MALE_PHOTOS.find((p) => p.attrs.beard === "clean" && p.attrs.tattoos === "no")!.id,
+    );
+    const beardedTattoo = byId(
+      MALE_PHOTOS.find((p) => p.attrs.beard === "beard" && p.attrs.tattoos === "yes")!.id,
+    );
     // Clean-shaven with no tattoos → neither chip is offered, on like or dislike.
     expect(ids(cleanNoTattoo, "like")).not.toContain("beard");
     expect(ids(cleanNoTattoo, "like")).not.toContain("tattoo");

@@ -1,3 +1,5 @@
+> **ИСТОРИЯ.** ИСТОРИЯ — деке v1 (пять независимых признаков, ids f01..m12). Заменена 2026-08-28 декой архетипов: scripts/type-radar.deck-v2.md. Ничто это не читает; оставлено как запись того, как выглядел v1, и как компилировались полосы B/C. Новую полосу компилировать из deck-v2, не отсюда.
+
 # Type Radar — Band A FINAL manifest (24/24 accepted)
 
 Age band A = 22–28 (women rendered 24, men 26). Source of truth for attributes:

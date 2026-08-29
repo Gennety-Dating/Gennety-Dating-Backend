@@ -21,25 +21,95 @@ import type { Gender, GenderPreference } from "./types.js";
  */
 
 // ── Attribute space ────────────────────────────────────────────────────────
-// Deliberately 5 dims per gender: 12 binary answers cannot support more without
-// each attribute value falling below the ~4 observations needed to separate
-// signal from the per-face noise (see spec "attribute selection" rationale).
+// ONE primary axis — `archetype` (4 values, 3 cards each) — plus three
+// secondary tags. Rewritten 2026-08-28 (DECISIONS.md): the v1 space scored five
+// independent visual features, which meant every card credited five cells at
+// once, so a like driven by one of them was recorded against all five. The
+// archetype is a whole read of a person (clothes + place + posture), so one
+// verdict now credits one cell, and the secondaries are decorrelated from it by
+// construction — no archetype holds a constant value on any of them.
+//
+// `build` is DROPPED and must not come back on the strength of "it feels like a
+// dimension". A full audit of the v1 band-A renders (2026-08-20) found the
+// female `build` cells did not exist on screen at all: four cards declared
+// `curvy` and four `athletic`, and all twelve women read as slim — so eight of
+// twelve cards taught a distinction the viewer could not see, while the "figure"
+// reason chip credited exactly that cell. It is also the attribute a VLM reads
+// least reliably off a candidate's own photos, and ranking people by body type
+// through an automated decision is the most exposed thing left after
+// `ethnicity` was removed under Art. 9.
+//
+// Haircut is deliberately NOT measured: hair LENGTH (women) / BEARD (men) is,
+// and that is the same slot the v1 space already had.
+
+export const ARCHETYPES = ["polished", "sporty", "urban", "creative"] as const;
+export type Archetype = (typeof ARCHETYPES)[number];
+
+/**
+ * What each archetype looks like, in terms an observer can check. This is the
+ * SINGLE source shared by the deck brief (`scripts/type-radar.deck-v2.md`) and
+ * the candidate-side vision tagger (`services/vision/tag-appearance.ts`) — a
+ * label with no definition would be classified one way in the deck and another
+ * way on a real profile, and the two sides would silently stop describing the
+ * same thing.
+ *
+ * Deliberately GENDER-NEUTRAL: one description serves both sets, so naming a
+ * gendered garment ("a slip dress") would put it in front of a classifier
+ * reading a man's photos. Say the register, not the item.
+ */
+export const ARCHETYPE_DESCRIPTIONS: Record<Archetype, string> = {
+  polished:
+    "put-together and expensive-looking: tailored or dressy clothes, a blazer " +
+    "or a coat over something smart, neat grooming, upmarket settings " +
+    "(a hotel lobby, a golf club, a theatre foyer)",
+  sporty:
+    "athletic and outdoorsy: technical or gym wear, a tennis or running look, " +
+    "trainers, active settings (a court, a gym, a waterfront)",
+  urban:
+    "everyday modern city casual: jeans, a plain tee or a knit, sneakers, " +
+    "ordinary city settings (an evening street, a bookshop cafe, a park)",
+  creative:
+    "expressive and a little unconventional: layered or vintage pieces, " +
+    "texture and pattern, arts-adjacent settings (a wine bar, a record cafe)",
+};
 
 export const FEMALE_ATTRIBUTES = {
+  archetype: ARCHETYPES,
   hairColor: ["blonde", "brunette", "red"],
   hairLength: ["long", "short"],
-  build: ["slim", "athletic", "curvy"],
-  style: ["elegant", "sporty", "edgy"],
   tattoos: ["yes", "no"],
 } as const;
 
 export const MALE_ATTRIBUTES = {
+  archetype: ARCHETYPES,
   hairColor: ["dark", "light"],
   beard: ["clean", "beard"],
-  build: ["lean", "athletic", "big"],
-  style: ["classic", "sporty", "edgy"],
   tattoos: ["yes", "no"],
 } as const;
+
+/**
+ * How much each attribute counts when scoring a candidate. The archetype is the
+ * primary axis and outweighs any single secondary tag.
+ *
+ * This exists because confidence shrinkage would otherwise INVERT the intended
+ * ranking, which is easy to miss: with 12 cards over 4 archetypes each value is
+ * shown exactly 3 times, so `confidence = 3/CONF_FULL = 0.75` and an archetype's
+ * weight is capped below a hair-length value shown 6 times (confidence 1.0).
+ * That damping is correct on its own terms — 3 observations really is thinner
+ * evidence than 6 — so the fix is not to loosen it but to say outright that one
+ * archetype observation is worth more than one hair observation. At weight 2
+ * against three secondaries at 1, the archetype carries 2 x 0.75 = 1.5 of a
+ * possible 5, i.e. ~30% of the score and the single largest term.
+ */
+export const ATTR_WEIGHTS: Record<string, number> = {
+  archetype: 2,
+};
+/** Weight for an attribute with no explicit entry above. */
+export const ATTR_WEIGHT_DEFAULT = 1;
+
+export function attributeWeight(key: string): number {
+  return ATTR_WEIGHTS[key] ?? ATTR_WEIGHT_DEFAULT;
+}
 
 export type FemaleAttributeKey = keyof typeof FEMALE_ATTRIBUTES;
 export type MaleAttributeKey = keyof typeof MALE_ATTRIBUTES;
@@ -51,13 +121,33 @@ export type RadarSet = "female" | "male";
 /** A photo's attribute assignment: attribute key → chosen value. */
 export type PhotoAttrs = Record<string, string>;
 
-export type RadarScene = "cafe" | "street" | "park";
+/**
+ * Where a card was shot. Since v2 this is PART of the archetype construct rather
+ * than a nuisance factor to be held to three values: a polished person is partly
+ * polished by being in a hotel lobby. It is still never scored and never sent to
+ * a client — what keeps it from becoming a hidden attribute is the deck
+ * discipline instead (each archetype spans several locations, and three
+ * locations are shared BETWEEN archetypes so the backdrop alone cannot identify
+ * one). `type-radar.test.ts` holds both properties.
+ */
+export type RadarLocation =
+  | "golf_club"
+  | "hotel_lobby"
+  | "theatre_foyer"
+  | "cafe"
+  | "bookshop_cafe"
+  | "wine_bar"
+  | "tennis_court"
+  | "gym"
+  | "quay"
+  | "park"
+  | "night_street";
 
 export interface RadarPhoto {
-  /** Stable id (e.g. "f01"/"m07"); must match the generated asset filename. */
+  /** Stable id (e.g. "fp1"/"ma3"); must match the generated asset filename. */
   id: string;
   set: RadarSet;
-  scene: RadarScene;
+  location: RadarLocation;
   /** Band-invariant attribute assignment (age only re-skins the render). */
   attrs: PhotoAttrs;
 }
@@ -109,7 +199,14 @@ export function radarBandLive(band: AgeBand): boolean {
 // attribute's weight for the card and discounts the rest; `excludeCard` chips
 // (face / bad photo) drop the card from attribute learning entirely — the
 // explicit noise channel; `uniform` learns as if no chip was tapped.
-// `loggedOnly` chips are recorded for v2 research and never scored.
+// `loggedOnly` chips are recorded for research and never scored.
+//
+// The `figure` chip was REMOVED with `build` (2026-08-28) rather than repointed
+// at something else. Its whole job was to credit a cell, and a chip that names a
+// dimension the deck does not vary tells the user it does — which is the exact
+// defect the audit found. `face` and `badPhoto` remain the noise channels.
+// `style` now credits the archetype: the chip already read as "the whole look",
+// which is what the archetype is, so no label changed.
 
 export type ChipEffect = "attribute" | "excludeCard" | "uniform" | "loggedOnly";
 
@@ -123,9 +220,8 @@ export interface ReasonChip {
 
 const LIKE_CHIPS: ReasonChip[] = [
   { id: "face", effect: "excludeCard" },
-  { id: "figure", effect: "attribute", attrs: ["build"] },
   { id: "hair", effect: "attribute", attrs: ["hairColor", "hairLength"] },
-  { id: "style", effect: "attribute", attrs: ["style"] },
+  { id: "style", effect: "attribute", attrs: ["archetype"] },
   { id: "tattoo", effect: "attribute", attrs: ["tattoos"] },
   { id: "beard", effect: "attribute", attrs: ["beard"], maleSetOnly: true },
   { id: "wholeVibe", effect: "uniform" },
@@ -133,9 +229,8 @@ const LIKE_CHIPS: ReasonChip[] = [
 
 const DISLIKE_CHIPS: ReasonChip[] = [
   { id: "face", effect: "excludeCard" },
-  { id: "figure", effect: "attribute", attrs: ["build"] },
   { id: "hair", effect: "attribute", attrs: ["hairColor", "hairLength"] },
-  { id: "style", effect: "attribute", attrs: ["style"] },
+  { id: "style", effect: "attribute", attrs: ["archetype"] },
   { id: "tattoo", effect: "attribute", attrs: ["tattoos"] },
   { id: "beard", effect: "attribute", attrs: ["beard"], maleSetOnly: true },
   { id: "tooFlashy", effect: "loggedOnly" },
@@ -177,55 +272,57 @@ export function reasonChipsForPhoto(photo: RadarPhoto, verdict: Verdict): Reason
   return reasonChipsFor(photo.set, verdict).filter((c) => chipAppliesToPhoto(c, photo));
 }
 
-// ── Photo sets (band-invariant attribute assignments) ───────────────────────
-// Balanced fractional-factorial plan: each attribute value appears 4–6×, with
-// attribute pairs decorrelated by construction. Scene is a balanced nuisance
-// factor, not a preference dimension — `scene` is never scored and is never
-// serialized to a client; it exists so the backdrop cannot become a hidden
-// attribute. It was 4/4/4 per set until 2026-08-20, when a founder review moved
-// f10 and m12 from `park` to `cafe` (the regenerated photos are shot indoors),
-// leaving 5 cafe / 4 street / 3 park in both sets. Accepted rather than
-// rebalanced: closing it would mean regenerating a third, already-approved
-// photo, and `type-radar.test.ts` still holds the property that actually
-// matters — every attribute value spans at least two scenes.
+// ── Photo sets (band-invariant attribute assignments) ──────────────────────
+// Ids are mnemonic: set letter + archetype letter (p/s/c/a) + index, so a card's
+// primary cell is readable from its filename and a mis-filed asset is visible
+// without opening it.
 //
-// One caveat that outranks all of the above: `scene` is DECLARED here and has
-// never been verified against the rendered images. A full audit of band A on
-// 2026-08-20 found roughly 5 of 24 backdrops actually matching their declared
-// scene (f03 says `park` and is a wine bar; m04 says `street` and is a
-// bookshop). Nothing reads the field at runtime, so this costs no behaviour —
-// but the decorrelation above is an intent, not an enforced property, and the
-// test asserts it over the declarations rather than over the photographs. Do
-// not cite `scene` as evidence that a backdrop cannot confound an attribute.
+// The plan is decorrelated by construction and `type-radar.test.ts` enforces it:
+// each archetype is shown 3x, no archetype carries a constant value on any
+// secondary axis, and exactly one card per archetype has a tattoo. Counts are
+// deliberately uneven where a decision says so — female hair is 5 blonde /
+// 5 brunette / 2 red rather than 4/4/4 (founder, 2026-08-23): a third of the
+// deck spent on a colour that is a few percent of the real pool bought
+// measurement precision nobody could use. The arithmetic makes it nearly free —
+// `confidence` caps at CONF_FULL = 4, so 5 scores exactly like 4 — and the cost
+// is confined to `red`, which drops to 0.5.
+//
+// The ids CHANGED at v2 (f01..m12 -> fp1..ma3) and old recorded answers are
+// therefore unresolvable. That is deliberate rather than tolerated: a vector
+// built on the v1 attribute space must not survive into this one. Nothing needs
+// migrating, because both sides degrade to neutral on their own — a stale
+// preference vector holds keys (`build`, `style`) no candidate is tagged with
+// any more, and stale candidate tags hold values no viewer has learned on, so
+// `typeOverlapCount` is 0 and `typePreferenceMultiplier` returns exactly 1.0.
 
 export const FEMALE_PHOTOS: RadarPhoto[] = [
-  { id: "f01", set: "female", scene: "cafe", attrs: { hairColor: "blonde", hairLength: "long", build: "slim", style: "elegant", tattoos: "no" } },
-  { id: "f02", set: "female", scene: "cafe", attrs: { hairColor: "brunette", hairLength: "long", build: "athletic", style: "sporty", tattoos: "no" } },
-  { id: "f03", set: "female", scene: "park", attrs: { hairColor: "red", hairLength: "short", build: "slim", style: "edgy", tattoos: "yes" } },
-  { id: "f04", set: "female", scene: "street", attrs: { hairColor: "brunette", hairLength: "short", build: "curvy", style: "elegant", tattoos: "no" } },
-  { id: "f05", set: "female", scene: "cafe", attrs: { hairColor: "blonde", hairLength: "short", build: "athletic", style: "edgy", tattoos: "yes" } },
-  { id: "f06", set: "female", scene: "cafe", attrs: { hairColor: "red", hairLength: "long", build: "curvy", style: "sporty", tattoos: "no" } },
-  { id: "f07", set: "female", scene: "street", attrs: { hairColor: "brunette", hairLength: "long", build: "slim", style: "sporty", tattoos: "yes" } },
-  { id: "f08", set: "female", scene: "street", attrs: { hairColor: "blonde", hairLength: "long", build: "curvy", style: "edgy", tattoos: "no" } },
-  { id: "f09", set: "female", scene: "street", attrs: { hairColor: "red", hairLength: "short", build: "athletic", style: "elegant", tattoos: "no" } },
-  { id: "f10", set: "female", scene: "cafe", attrs: { hairColor: "brunette", hairLength: "short", build: "slim", style: "edgy", tattoos: "no" } },
-  { id: "f11", set: "female", scene: "park", attrs: { hairColor: "blonde", hairLength: "short", build: "curvy", style: "sporty", tattoos: "yes" } },
-  { id: "f12", set: "female", scene: "park", attrs: { hairColor: "red", hairLength: "long", build: "athletic", style: "elegant", tattoos: "yes" } },
+  { id: "fp1", set: "female", location: "golf_club", attrs: { archetype: "polished", hairColor: "blonde", hairLength: "long", tattoos: "no" } },
+  { id: "fp2", set: "female", location: "hotel_lobby", attrs: { archetype: "polished", hairColor: "brunette", hairLength: "short", tattoos: "no" } },
+  { id: "fp3", set: "female", location: "cafe", attrs: { archetype: "polished", hairColor: "red", hairLength: "long", tattoos: "yes" } },
+  { id: "fs1", set: "female", location: "tennis_court", attrs: { archetype: "sporty", hairColor: "brunette", hairLength: "long", tattoos: "no" } },
+  { id: "fs2", set: "female", location: "quay", attrs: { archetype: "sporty", hairColor: "blonde", hairLength: "short", tattoos: "yes" } },
+  { id: "fs3", set: "female", location: "park", attrs: { archetype: "sporty", hairColor: "red", hairLength: "short", tattoos: "no" } },
+  { id: "fc1", set: "female", location: "night_street", attrs: { archetype: "urban", hairColor: "blonde", hairLength: "long", tattoos: "no" } },
+  { id: "fc2", set: "female", location: "bookshop_cafe", attrs: { archetype: "urban", hairColor: "blonde", hairLength: "short", tattoos: "no" } },
+  { id: "fc3", set: "female", location: "park", attrs: { archetype: "urban", hairColor: "brunette", hairLength: "long", tattoos: "yes" } },
+  { id: "fa1", set: "female", location: "wine_bar", attrs: { archetype: "creative", hairColor: "brunette", hairLength: "short", tattoos: "no" } },
+  { id: "fa2", set: "female", location: "night_street", attrs: { archetype: "creative", hairColor: "blonde", hairLength: "short", tattoos: "yes" } },
+  { id: "fa3", set: "female", location: "cafe", attrs: { archetype: "creative", hairColor: "brunette", hairLength: "long", tattoos: "no" } },
 ];
 
 export const MALE_PHOTOS: RadarPhoto[] = [
-  { id: "m01", set: "male", scene: "cafe", attrs: { hairColor: "dark", beard: "clean", build: "lean", style: "classic", tattoos: "no" } },
-  { id: "m02", set: "male", scene: "cafe", attrs: { hairColor: "light", beard: "beard", build: "athletic", style: "sporty", tattoos: "no" } },
-  { id: "m03", set: "male", scene: "cafe", attrs: { hairColor: "dark", beard: "beard", build: "athletic", style: "edgy", tattoos: "yes" } },
-  { id: "m04", set: "male", scene: "street", attrs: { hairColor: "light", beard: "clean", build: "athletic", style: "classic", tattoos: "no" } },
-  { id: "m05", set: "male", scene: "street", attrs: { hairColor: "dark", beard: "beard", build: "big", style: "sporty", tattoos: "no" } },
-  { id: "m06", set: "male", scene: "park", attrs: { hairColor: "light", beard: "clean", build: "lean", style: "edgy", tattoos: "yes" } },
-  { id: "m07", set: "male", scene: "street", attrs: { hairColor: "dark", beard: "clean", build: "athletic", style: "sporty", tattoos: "yes" } },
-  { id: "m08", set: "male", scene: "street", attrs: { hairColor: "light", beard: "beard", build: "lean", style: "classic", tattoos: "yes" } },
-  { id: "m09", set: "male", scene: "park", attrs: { hairColor: "dark", beard: "beard", build: "lean", style: "sporty", tattoos: "no" } },
-  { id: "m10", set: "male", scene: "cafe", attrs: { hairColor: "light", beard: "clean", build: "big", style: "edgy", tattoos: "no" } },
-  { id: "m11", set: "male", scene: "park", attrs: { hairColor: "dark", beard: "clean", build: "big", style: "classic", tattoos: "yes" } },
-  { id: "m12", set: "male", scene: "cafe", attrs: { hairColor: "light", beard: "beard", build: "big", style: "edgy", tattoos: "no" } },
+  { id: "mp1", set: "male", location: "golf_club", attrs: { archetype: "polished", hairColor: "dark", beard: "clean", tattoos: "no" } },
+  { id: "mp2", set: "male", location: "theatre_foyer", attrs: { archetype: "polished", hairColor: "light", beard: "beard", tattoos: "no" } },
+  { id: "mp3", set: "male", location: "cafe", attrs: { archetype: "polished", hairColor: "dark", beard: "beard", tattoos: "yes" } },
+  { id: "ms1", set: "male", location: "tennis_court", attrs: { archetype: "sporty", hairColor: "dark", beard: "beard", tattoos: "no" } },
+  { id: "ms2", set: "male", location: "gym", attrs: { archetype: "sporty", hairColor: "light", beard: "clean", tattoos: "yes" } },
+  { id: "ms3", set: "male", location: "quay", attrs: { archetype: "sporty", hairColor: "dark", beard: "clean", tattoos: "no" } },
+  { id: "mc1", set: "male", location: "night_street", attrs: { archetype: "urban", hairColor: "dark", beard: "clean", tattoos: "no" } },
+  { id: "mc2", set: "male", location: "bookshop_cafe", attrs: { archetype: "urban", hairColor: "light", beard: "beard", tattoos: "yes" } },
+  { id: "mc3", set: "male", location: "quay", attrs: { archetype: "urban", hairColor: "dark", beard: "clean", tattoos: "no" } },
+  { id: "ma1", set: "male", location: "wine_bar", attrs: { archetype: "creative", hairColor: "dark", beard: "clean", tattoos: "yes" } },
+  { id: "ma2", set: "male", location: "night_street", attrs: { archetype: "creative", hairColor: "light", beard: "beard", tattoos: "no" } },
+  { id: "ma3", set: "male", location: "cafe", attrs: { archetype: "creative", hairColor: "dark", beard: "beard", tattoos: "no" } },
 ];
 
 export function photosForSet(set: RadarSet): RadarPhoto[] {
@@ -371,18 +468,23 @@ function clamp01(x: number): number {
  * Only attributes present on BOTH sides contribute; a candidate tag the viewer
  * has no signal on is skipped (not penalized). No overlap → neutral 0.5, so a
  * viewer who skipped the radar or a tagless candidate never distorts scoring.
+ *
+ * The mean is WEIGHTED by `attributeWeight` (see ATTR_WEIGHTS), so the archetype
+ * outweighs any single secondary tag. Weighting the mean rather than the learned
+ * weights keeps the result in [−1, 1] by construction whatever the weights are.
  */
 export function candidateTypeScore(pref: PreferenceVector, candidateTags: PhotoAttrs): number {
   let sum = 0;
-  let n = 0;
+  let wsum = 0;
   for (const [key, value] of Object.entries(candidateTags)) {
     const w = pref[key]?.[value]?.weight;
     if (w === undefined) continue;
-    sum += w;
-    n += 1;
+    const kw = attributeWeight(key);
+    sum += w * kw;
+    wsum += kw;
   }
-  if (n === 0) return 0.5;
-  const raw = sum / n; // ∈ [−1, 1]
+  if (wsum === 0) return 0.5;
+  const raw = sum / wsum; // ∈ [−1, 1]
   return clamp01(0.5 + 0.5 * raw);
 }
 
