@@ -47,16 +47,55 @@ const { MOCK_ROW, findMany, upsert, del, userFindMany, spendChannelsDistinct } =
     findMany: vi.fn().mockResolvedValue([mockRow]),
     upsert: vi.fn().mockResolvedValue(mockRow),
     del: vi.fn().mockResolvedValue(mockRow),
+    // Enriched with the fields GET /admin/analytics/acquisition-cost reads
+    // (createdAt/status/verificationStatus/gender/onboardingStep) — additive,
+    // the CRUD tests above only ever read id/referralSource off these rows.
+    // u1's createdAt sits inside MOCK_ROW's [2026-08-01, 2026-08-07] window
+    // and shares its channel, so it is the one row that actually reaches a
+    // byChannel entry below; u2 is a different channel (organic, no spend
+    // logged against it) and u3 is filtered out as a test account regardless
+    // of matching both.
     userFindMany: vi.fn().mockResolvedValue([
-      { id: "u1", referralSource: "tg:insta_promo" },
-      { id: "u2", referralSource: null }, // → organic
-      { id: "u3", referralSource: "tg:insta_promo" }, // test account, excluded
+      {
+        id: "u1",
+        referralSource: "tg:insta_promo",
+        createdAt: new Date("2026-08-03T00:00:00Z"),
+        status: "active",
+        verificationStatus: "verified",
+        gender: "male",
+        onboardingStep: "completed",
+      },
+      {
+        id: "u2",
+        referralSource: null, // → organic
+        createdAt: new Date("2026-08-03T00:00:00Z"),
+        status: "active",
+        verificationStatus: "verified",
+        gender: null,
+        onboardingStep: "completed",
+      },
+      {
+        id: "u3",
+        referralSource: "tg:insta_promo", // test account, excluded
+        createdAt: new Date("2026-08-03T00:00:00Z"),
+        status: "active",
+        verificationStatus: "verified",
+        gender: "female",
+        onboardingStep: "completed",
+      },
     ]),
     spendChannelsDistinct: vi
       .fn()
       .mockResolvedValue([{ channel: "tg:insta_promo" }, { channel: "referral" }]),
   };
 });
+
+// The exact query growth.ts's own "matched" set uses — see the plan's
+// Grounding note on why the acquisition-cost route reuses it verbatim rather
+// than defining "matched" a second way.
+const matchFindMany = vi.hoisted(() =>
+  vi.fn().mockResolvedValue([] as { userAId: string; userBId: string }[]),
+);
 
 vi.mock("@gennety/db", () => ({
   prisma: {
@@ -68,6 +107,7 @@ vi.mock("@gennety/db", () => ({
       delete: (...args: unknown[]) => del(...args),
     },
     user: { findMany: (...args: unknown[]) => userFindMany(...args) },
+    match: { findMany: (...args: unknown[]) => matchFindMany(...args) },
   },
 }));
 
@@ -78,6 +118,37 @@ vi.mock("../utils/user-health-source.js", () => ({
     truncated: false,
   }),
 }));
+
+// Bypass the SystemKnowledge-backed cache entirely — same pattern
+// `monetization.test.ts` uses. What is asserted below is that the route
+// wires THROUGH getOrCompute with the right key/ttl/ctx (which is what
+// produces the X-Data-Generated-At / X-Data-Cache headers in production);
+// the header-writing itself is covered without Express in `cache.test.ts`.
+const getOrCompute = vi.hoisted(() =>
+  vi.fn(
+    async (
+      _key: string,
+      _ttl: number,
+      compute: () => Promise<unknown>,
+      _ctx?: { req: { query: Record<string, string> }; res: unknown },
+    ) => compute(),
+  ),
+);
+vi.mock("../utils/cache.js", () => ({ getOrCompute }));
+
+// Real PURCHASE_KINDS + the real value-only exports of this module are kept
+// (revenueByKindFor in utils/ad-spend.ts iterates PURCHASE_KINDS at runtime,
+// and that module resolves to this SAME mocked specifier) — only
+// loadPayerIndex is swapped for a controllable stub.
+const loadPayerIndex = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ byUser: new Map(), truncated: false }),
+);
+vi.mock("../../services/purchases.js", async () => {
+  const actual = await vi.importActual<typeof import("../../services/purchases.js")>(
+    "../../services/purchases.js",
+  );
+  return { ...actual, loadPayerIndex };
+});
 
 const { adSpendRouter } = await import("./ad-spend.js");
 const express = (await import("express")).default;
@@ -219,5 +290,125 @@ describe("DELETE /admin/ad-spend/:id", () => {
     const res = await request(app).delete(`/admin/ad-spend/${MOCK_ROW.id}`);
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+  });
+});
+
+/**
+ * `GET /admin/analytics/acquisition-cost` — the deep-dive Hermes and the
+ * founder read for payback / funnel×channel / gender×channel / revenue mix /
+ * the CAC-over-time trend. Route-level only: that it wires the right rows
+ * into `computeAcquisitionCost` and goes through the shared analytics cache.
+ * The arithmetic itself (ltvCac, revenueByKind, byEntry windowing, …) is
+ * covered without a database or Express in `utils/ad-spend.test.ts`.
+ */
+describe("GET /admin/analytics/acquisition-cost", () => {
+  it("enriches byChannel with the funnel/gender/matched fields, excluding test accounts", async () => {
+    matchFindMany.mockResolvedValueOnce([{ userAId: "u1", userBId: "some-other-user" }]);
+
+    const res = await request(app).get("/admin/analytics/acquisition-cost");
+    expect(res.status).toBe(200);
+
+    const row = res.body.byChannel.find((c: { channel: string }) => c.channel === "tg:insta_promo");
+    expect(row).toBeDefined();
+    // u1 only: u3 shares the channel and the same createdAt window but is a
+    // test account (see the classifyAllUsers mock above); u2 is "organic".
+    expect(row.signups).toBe(1);
+    expect(row.completedOnboarding).toBe(1);
+    expect(row.matched).toBe(1);
+    expect(row.genderKnown).toEqual({ male: 1, female: 0 });
+    expect(row.revenueByKind).toHaveProperty("tickets");
+    expect(row.revenueByKind).toHaveProperty("premium");
+  });
+
+  it("reads real payer revenue into revenueByKind and the payback fields", async () => {
+    loadPayerIndex.mockResolvedValueOnce({
+      byUser: new Map([
+        [
+          "u1",
+          {
+            userId: "u1",
+            purchases: 1,
+            refundedCount: 0,
+            stars: 350,
+            usdCents: 699,
+            // Inside MOCK_ROW's 3-day performance_ads attribution window
+            // (periodEnd 2026-08-07 + 3d = 2026-08-10).
+            firstPaidAt: new Date("2026-08-04T00:00:00Z"),
+            lastPaidAt: new Date("2026-08-04T00:00:00Z"),
+            byKind: {
+              tickets: { purchases: 1, stars: 350, usdCents: 699 },
+              date_ticket: { purchases: 0, stars: 0, usdCents: 0 },
+              premium: { purchases: 0, stars: 0, usdCents: 0 },
+              rematch: { purchases: 0, stars: 0, usdCents: 0 },
+              venue_change: { purchases: 0, stars: 0, usdCents: 0 },
+              prime_time: { purchases: 0, stars: 0, usdCents: 0 },
+            },
+            refundedOnly: false,
+          },
+        ],
+      ]),
+      truncated: false,
+    });
+
+    const res = await request(app).get("/admin/analytics/acquisition-cost");
+    expect(res.status).toBe(200);
+
+    const row = res.body.byChannel.find((c: { channel: string }) => c.channel === "tg:insta_promo");
+    expect(row.newPayers).toBe(1);
+    expect(row.revenueByKind.tickets).toBe(699);
+    // spend 20_000, 1 payer → cacPerPayingUsdCents 20_000; ltv 699 → ltvCac ~0.03.
+    expect(row.cacPerPayingUsdCents).toBe(20_000);
+    expect(row.ltvCac).toBeGreaterThan(0);
+    expect(row.ltvCac).toBeLessThan(1);
+    expect(row.roas).toBeGreaterThan(0);
+  });
+
+  it("carries the per-entry trend alongside the channel roll-up", async () => {
+    const res = await request(app).get("/admin/analytics/acquisition-cost");
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.byEntry)).toBe(true);
+    expect(res.body.byEntry.length).toBeGreaterThan(0);
+    expect(res.body.byEntry[0]).toMatchObject({
+      channel: "tg:insta_promo",
+      category: "performance_ads",
+    });
+  });
+
+  it("returns null CAC/LTV:CAC/ROAS and an empty byChannel — never 0 — with no AdSpend rows", async () => {
+    findMany.mockResolvedValueOnce([]);
+    const res = await request(app).get("/admin/analytics/acquisition-cost");
+    expect(res.status).toBe(200);
+    expect(res.body.cacPerPayingUsdCents).toBeNull();
+    expect(res.body.ltvCac).toBeNull();
+    expect(res.body.roas).toBeNull();
+    expect(res.body.byChannel).toEqual([]);
+    expect(res.body.byEntry).toEqual([]);
+  });
+
+  it("goes through the shared analytics cache with a 15-minute TTL", async () => {
+    getOrCompute.mockClear();
+    await request(app).get("/admin/analytics/acquisition-cost");
+    expect(getOrCompute).toHaveBeenCalledWith(
+      "acquisition-cost:v1",
+      900,
+      expect.any(Function),
+      expect.objectContaining({ req: expect.anything(), res: expect.anything() }),
+    );
+  });
+
+  it("hands the request to the cache so ?fresh=1 can bypass it", async () => {
+    getOrCompute.mockClear();
+    await request(app).get("/admin/analytics/acquisition-cost?fresh=1");
+    const ctx = getOrCompute.mock.calls[0]?.[3] as
+      | { req: { query: Record<string, string> } }
+      | undefined;
+    expect(ctx?.req.query.fresh).toBe("1");
+  });
+
+  it("answers 500 rather than leaking an error body", async () => {
+    findMany.mockRejectedValueOnce(new Error("db down"));
+    const res = await request(app).get("/admin/analytics/acquisition-cost");
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: "Internal server error" });
   });
 });

@@ -3,14 +3,18 @@ import { prisma } from "@gennety/db";
 import { isUuid } from "../utils/uuid.js";
 import { classifyAllUsers } from "../utils/user-health-source.js";
 import { normalizeChannel } from "../utils/growth.js";
+import { loadPayerIndex } from "../../services/purchases.js";
+import { getOrCompute } from "../utils/cache.js";
 import {
   AD_SPEND_CATEGORIES,
   UNATTRIBUTED_CHANNEL,
   categoryRequiresUnattributed,
+  computeAcquisitionCost,
   isAdSpendCategory,
   isSelfNormalizedChannel,
   isValidCurrency,
   isValidPeriod,
+  type AcquisitionCostUserInput,
 } from "../utils/ad-spend.js";
 
 /**
@@ -207,3 +211,95 @@ adSpendRouter.delete("/admin/ad-spend/:id", async (req: Request, res: Response) 
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+/**
+ * `GET /admin/analytics/acquisition-cost` — the deep-dive Hermes and the
+ * founder read for payback, funnel×channel, gender×channel, revenue mix and
+ * the CAC-over-time trend. `/admin/dashboard.derived.adSpendByChannel` is the
+ * SAME `byChannel` array (it reuses this module's `computeAcquisitionCost`),
+ * so the two never disagree about a channel's numbers — this route differs
+ * only in ALSO carrying `byEntry` (one row per `AdSpend` entry, the trend) and
+ * in being cached, because unlike the live dashboard nobody needs
+ * per-payment freshness here.
+ *
+ * `matched` is real on this route and NOT on `/admin/dashboard` — see the
+ * comment on that endpoint's `user.findMany` select for why: a full `Match`
+ * scan is a cost `/admin/dashboard` (live, uncached, checked by hand) does
+ * not owe, while this cached 15-minute route already pays for one extra scan
+ * per recompute regardless.
+ */
+adSpendRouter.get(
+  "/admin/analytics/acquisition-cost",
+  async (req: Request, res: Response) => {
+    try {
+      const data = await getOrCompute(
+        "acquisition-cost:v1",
+        900,
+        async () => {
+          const [health, adSpendRows, userRows, matchPairs, payerIndex] = await Promise.all([
+            classifyAllUsers(),
+            prisma.adSpend.findMany({
+              select: {
+                channel: true,
+                category: true,
+                periodStart: true,
+                periodEnd: true,
+                amountUsdCents: true,
+              },
+            }),
+            prisma.user.findMany({
+              select: {
+                id: true,
+                referralSource: true,
+                createdAt: true,
+                status: true,
+                verificationStatus: true,
+                gender: true,
+                onboardingStep: true,
+              },
+            }),
+            // The exact query `growth.ts`'s `computeAcquisition` uses for its
+            // own `matched` set — kept verbatim so the two never define
+            // "matched" two different ways (see the plan's Grounding note).
+            prisma.match.findMany({ select: { userAId: true, userBId: true } }),
+            loadPayerIndex(),
+          ]);
+
+          const testIds = new Set(
+            health.users.filter((u) => u.verdict.classification === "test").map((u) => u.id),
+          );
+          const matchedIds = new Set<string>();
+          for (const m of matchPairs) {
+            matchedIds.add(m.userAId);
+            matchedIds.add(m.userBId);
+          }
+
+          const users: AcquisitionCostUserInput[] = userRows
+            .filter((u) => !testIds.has(u.id))
+            .map((u) => ({
+              id: u.id,
+              channel: normalizeChannel(u.referralSource),
+              createdAt: u.createdAt,
+              status: u.status,
+              verificationStatus: u.verificationStatus,
+              onboardingStep: u.onboardingStep,
+              gender: u.gender,
+              matched: matchedIds.has(u.id),
+            }));
+
+          return computeAcquisitionCost({
+            spend: adSpendRows,
+            users,
+            payers: payerIndex.byUser,
+            now: new Date(),
+          });
+        },
+        { req, res },
+      );
+      res.json(data);
+    } catch (err) {
+      console.error("[admin] acquisition-cost error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);

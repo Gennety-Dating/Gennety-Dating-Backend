@@ -20,7 +20,7 @@
  *    carries a free `[periodStart, periodEnd]` range instead.
  */
 
-import type { PayerIndexEntry } from "../../services/purchases.js";
+import { PURCHASE_KINDS, type PayerIndexEntry, type PurchaseKind } from "../../services/purchases.js";
 
 // ---------------------------------------------------------------------------
 // Categories
@@ -123,13 +123,26 @@ export interface AcquisitionCostUserInput {
   createdAt: Date;
   status: string;
   verificationStatus: string;
+  /** OnboardingStep value; `completed` = cleared the conversational funnel. */
+  onboardingStep: string;
+  gender: string | null;
+  /**
+   * Whether this user ever appeared in a `Match` row (as A or B). Deriving it
+   * costs a full `Match` scan, so it is OPTIONAL: a caller unwilling to pay
+   * for that scan (`/admin/dashboard`, checked live and uncached) simply
+   * omits it, and this module counts it as "not measured here" rather than
+   * "zero matched" — the same null-not-zero rule `divCents` already applies,
+   * one level up. Only callers that supply it (the cached
+   * `/admin/analytics/acquisition-cost` route) get a real `byChannel.matched`.
+   */
+  matched?: boolean;
 }
 
 export interface AcquisitionCostInput {
   spend: readonly AdSpendEntryInput[];
   users: readonly AcquisitionCostUserInput[];
   /** All-time payer index (`services/purchases.ts` → `loadPayerIndex()`). */
-  payers: ReadonlyMap<string, Pick<PayerIndexEntry, "firstPaidAt" | "usdCents">>;
+  payers: ReadonlyMap<string, PayerIndexEntry>;
   now: Date;
 }
 
@@ -141,11 +154,55 @@ export interface ChannelAcquisitionCostRow {
   channel: string;
   spendUsdCents: number;
   signups: number;
+  /** Signups (in this channel's own attribution window) who finished onboarding. */
+  completedOnboarding: number;
   newPayers: number;
   newActive: number;
+  /** Signups who ever appeared in a `Match` row. `0` when `matched` was not
+   * supplied on any input user for this run — see `AcquisitionCostUserInput`. */
+  matched: number;
+  /** `unknown` is implicit: `signups − genderKnown.male − genderKnown.female`. */
+  genderKnown: { male: number; female: number };
   cplUsdCents: number | null;
   cacPerPayingUsdCents: number | null;
+  /**
+   * Same formula as the blended `ltvCac`/`roas` below, scoped to this
+   * channel's own attributed payers — the per-channel payback read.
+   */
+  ltvCac: number | null;
+  roas: number | null;
+  /**
+   * Days since this channel's EARLIEST attributable spend entry started.
+   * A confidence gate for `ltvCac`/`roas` above, not a correctness check —
+   * `ltvCac: 0.4` after 3 days and `ltvCac: 0.4` after 90 days are different
+   * claims, and this is what tells them apart. `null` when the channel has
+   * no attributable entry at all.
+   */
+  daysSinceFirstAttributableSpend: number | null;
+  /** This channel's attributed payers' lifetime revenue, split by product —
+   * zero-filled per `PURCHASE_KINDS`, so "never bought this" reads as `0`. */
+  revenueByKind: Record<PurchaseKind, number>;
   /** True once every attributable entry's window has fully elapsed. */
+  matured: boolean;
+}
+
+/**
+ * One row per `AdSpend` entry — the CAC-over-time trend a single blended
+ * snapshot can't show. Only entries with a real channel + attribution window
+ * appear here (the same entries that get a `byChannel` row); a
+ * `content_production`/`agency` entry logged against `UNATTRIBUTED_CHANNEL`
+ * carries no signal to trend and is excluded, exactly like `byChannel`.
+ */
+export interface AcquisitionCostEntryRow {
+  channel: string;
+  category: string;
+  periodStart: string;
+  periodEnd: string;
+  spendUsdCents: number;
+  signups: number;
+  newPayers: number;
+  cplUsdCents: number | null;
+  cacPerPayingUsdCents: number | null;
   matured: boolean;
 }
 
@@ -172,6 +229,8 @@ export interface AcquisitionCostSummary {
   roas: number | null;
   matured: boolean;
   byChannel: ChannelAcquisitionCostRow[];
+  /** One row per `AdSpend` entry, sorted by `periodStart` — the CAC-over-time trend. */
+  byEntry: AcquisitionCostEntryRow[];
 }
 
 // ---------------------------------------------------------------------------
@@ -208,6 +267,58 @@ function divCents(numerator: number, denominator: number): number | null {
   return Math.round(numerator / denominator);
 }
 
+/**
+ * One payer set's lifetime revenue, split by product — zero-filled per
+ * `PURCHASE_KINDS`, so "this cohort never bought Premium" reads as `0`, not
+ * an absent key a consumer has to guess about.
+ */
+function revenueByKindFor(
+  ids: ReadonlySet<string>,
+  payers: AcquisitionCostInput["payers"],
+): Record<PurchaseKind, number> {
+  const totals = Object.fromEntries(PURCHASE_KINDS.map((kind) => [kind, 0])) as Record<
+    PurchaseKind,
+    number
+  >;
+  for (const id of ids) {
+    const entry = payers.get(id);
+    if (!entry) continue;
+    for (const kind of PURCHASE_KINDS) totals[kind] += entry.byKind[kind].usdCents;
+  }
+  return totals;
+}
+
+/**
+ * Channel-scoped payback — the SAME two formulas the blended
+ * `ltvCac`/`roas` below use, just over one channel's own attributed payers
+ * and spend rather than every channel's pooled together. `avgUsdCents`
+ * returns the cohort's SUMMED lifetime `usdCents` (see its own comment); the
+ * per-payer LTV used for `ltvCac` is derived from that sum here exactly as
+ * the blended computation already does it.
+ */
+function channelPayback(
+  payerIds: ReadonlySet<string>,
+  cacPerPayingUsdCents: number | null,
+  spendUsdCents: number,
+  payers: AcquisitionCostInput["payers"],
+): { ltvCac: number | null; roas: number | null } {
+  const cohortRevenueUsdCents = avgUsdCents(payerIds, payers);
+  const ltvCents =
+    payerIds.size > 0 && cohortRevenueUsdCents !== null
+      ? Math.round(cohortRevenueUsdCents / payerIds.size)
+      : null;
+  return {
+    ltvCac:
+      ltvCents !== null && cacPerPayingUsdCents !== null && cacPerPayingUsdCents > 0
+        ? +(ltvCents / cacPerPayingUsdCents).toFixed(2)
+        : null,
+    roas:
+      cohortRevenueUsdCents !== null && spendUsdCents > 0
+        ? +(cohortRevenueUsdCents / spendUsdCents).toFixed(2)
+        : null,
+  };
+}
+
 export function computeAcquisitionCost(input: AcquisitionCostInput): AcquisitionCostSummary {
   const { spend, users, payers, now } = input;
 
@@ -220,10 +331,17 @@ export function computeAcquisitionCost(input: AcquisitionCostInput): Acquisition
       signupIds: Set<string>;
       payerIds: Set<string>;
       activeIds: Set<string>;
+      completedOnboardingIds: Set<string>;
+      matchedIds: Set<string>;
+      maleIds: Set<string>;
+      femaleIds: Set<string>;
       /** false the moment ANY attributable entry has not matured yet. */
       matured: boolean;
       /** true once this channel has at least one attributable (windowed) entry. */
       hasAttributableEntry: boolean;
+      /** Earliest `periodStart` among this channel's attributable entries —
+       * what `daysSinceFirstAttributableSpend` is measured from. */
+      earliestAttributablePeriodStart: Date | null;
     }
   >();
 
@@ -235,13 +353,24 @@ export function computeAcquisitionCost(input: AcquisitionCostInput): Acquisition
         signupIds: new Set(),
         payerIds: new Set(),
         activeIds: new Set(),
+        completedOnboardingIds: new Set(),
+        matchedIds: new Set(),
+        maleIds: new Set(),
+        femaleIds: new Set(),
         matured: true,
         hasAttributableEntry: false,
+        earliestAttributablePeriodStart: null,
       };
       byChannel.set(channel, row);
     }
     return row;
   };
+
+  // One row per spend entry, in ADDITION to the channel roll-up below — the
+  // CAC-over-time trend a single blended (or even a per-channel) snapshot
+  // cannot show, since two entries on the same channel can have very
+  // different CAC and only the trend says which direction it's moving.
+  const byEntryRows: AcquisitionCostEntryRow[] = [];
 
   for (const entry of spend) {
     // Unattributed spend contributes to the P&L total only — nothing can ever
@@ -254,7 +383,20 @@ export function computeAcquisitionCost(input: AcquisitionCostInput): Acquisition
     const windowEnd = windowEndOf(entry);
     if (windowEnd === null) continue; // no signal — spend counted, cohort not.
     row.hasAttributableEntry = true;
-    if (now.getTime() < windowEnd.getTime()) row.matured = false;
+    const entryMatured = now.getTime() >= windowEnd.getTime();
+    if (!entryMatured) row.matured = false;
+    if (
+      row.earliestAttributablePeriodStart === null ||
+      entry.periodStart.getTime() < row.earliestAttributablePeriodStart.getTime()
+    ) {
+      row.earliestAttributablePeriodStart = entry.periodStart;
+    }
+
+    // Scoped to THIS entry alone — separate from the channel-wide sets below,
+    // which is what makes byEntryRows a real per-entry trend rather than a
+    // running channel total repeated on every row.
+    const entrySignupIds = new Set<string>();
+    const entryPayerIds = new Set<string>();
 
     for (const user of users) {
       if (user.channel !== entry.channel) continue;
@@ -262,27 +404,63 @@ export function computeAcquisitionCost(input: AcquisitionCostInput): Acquisition
       if (user.createdAt.getTime() > entry.periodEnd.getTime()) continue;
 
       row.signupIds.add(user.id);
+      entrySignupIds.add(user.id);
       if (user.status === "active" && user.verificationStatus === "verified") {
         row.activeIds.add(user.id);
       }
+      if (user.onboardingStep === "completed") row.completedOnboardingIds.add(user.id);
+      if (user.matched === true) row.matchedIds.add(user.id);
+      if (user.gender === "male") row.maleIds.add(user.id);
+      else if (user.gender === "female") row.femaleIds.add(user.id);
+
       const payer = payers.get(user.id);
       if (payer?.firstPaidAt && payer.firstPaidAt.getTime() <= windowEnd.getTime()) {
         row.payerIds.add(user.id);
+        entryPayerIds.add(user.id);
       }
     }
+
+    byEntryRows.push({
+      channel: entry.channel,
+      category: entry.category,
+      periodStart: entry.periodStart.toISOString(),
+      periodEnd: entry.periodEnd.toISOString(),
+      spendUsdCents: entry.amountUsdCents,
+      signups: entrySignupIds.size,
+      newPayers: entryPayerIds.size,
+      cplUsdCents: divCents(entry.amountUsdCents, entrySignupIds.size),
+      cacPerPayingUsdCents: divCents(entry.amountUsdCents, entryPayerIds.size),
+      matured: entryMatured,
+    });
   }
 
+  byEntryRows.sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+
   const byChannelRows: ChannelAcquisitionCostRow[] = Array.from(byChannel.entries())
-    .map(([channel, r]) => ({
-      channel,
-      spendUsdCents: r.spendUsdCents,
-      signups: r.signupIds.size,
-      newPayers: r.payerIds.size,
-      newActive: r.activeIds.size,
-      cplUsdCents: divCents(r.spendUsdCents, r.signupIds.size),
-      cacPerPayingUsdCents: divCents(r.spendUsdCents, r.payerIds.size),
-      matured: r.matured,
-    }))
+    .map(([channel, r]) => {
+      const cacPerPayingUsdCents = divCents(r.spendUsdCents, r.payerIds.size);
+      const { ltvCac, roas } = channelPayback(r.payerIds, cacPerPayingUsdCents, r.spendUsdCents, payers);
+      return {
+        channel,
+        spendUsdCents: r.spendUsdCents,
+        signups: r.signupIds.size,
+        completedOnboarding: r.completedOnboardingIds.size,
+        newPayers: r.payerIds.size,
+        newActive: r.activeIds.size,
+        matched: r.matchedIds.size,
+        genderKnown: { male: r.maleIds.size, female: r.femaleIds.size },
+        cplUsdCents: divCents(r.spendUsdCents, r.signupIds.size),
+        cacPerPayingUsdCents,
+        ltvCac,
+        roas,
+        daysSinceFirstAttributableSpend:
+          r.earliestAttributablePeriodStart !== null
+            ? Math.floor((now.getTime() - r.earliestAttributablePeriodStart.getTime()) / DAY_MS)
+            : null,
+        revenueByKind: revenueByKindFor(r.payerIds, payers),
+        matured: r.matured,
+      };
+    })
     .sort((a, b) => b.spendUsdCents - a.spendUsdCents);
 
   // Blended totals over channels that actually had an attributable entry —
@@ -325,5 +503,6 @@ export function computeAcquisitionCost(input: AcquisitionCostInput): Acquisition
         : null,
     matured: allMatured,
     byChannel: byChannelRows,
+    byEntry: byEntryRows,
   };
 }

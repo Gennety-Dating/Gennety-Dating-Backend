@@ -318,9 +318,24 @@ opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
       // Второй скан `users` за запрос: у `classifyAllUsers` фиксированная форма
       // выхода без `referralSource` (см. `admin/utils/user-health.ts`), а копия
       // её правил стоила бы дороже одного лишнего `findMany` — тот же размен,
-      // что уже сделан в `monetization-source.ts`.
+      // что уже сделан в `monetization-source.ts`. `gender`/`onboardingStep`
+      // добавлены сюда же — те же две колонки, что `HEALTH_USER_SELECT` и так
+      // читает в `classified`, но джойн с ним ради двух скаляров дороже, чем
+      // просто расширить этот select. `matched` (полный скан `Match`) сюда
+      // намеренно НЕ добавлен: этот эндпоинт живой, проверяется вручную и без
+      // кеша — платить за третий скан таблицы ради поля, у которого уже есть
+      // кешируемый маршрут (`GET /admin/analytics/acquisition-cost`), было бы
+      // регрессией именно там, где эту регрессию труднее всего заметить.
       prisma.user.findMany({
-        select: { id: true, referralSource: true, createdAt: true, status: true, verificationStatus: true },
+        select: {
+          id: true,
+          referralSource: true,
+          createdAt: true,
+          status: true,
+          verificationStatus: true,
+          gender: true,
+          onboardingStep: true,
+        },
       }),
       loadPayerIndex(),
     ]);
@@ -364,6 +379,8 @@ opsRouter.get("/admin/dashboard", async (_req: Request, res: Response) => {
         createdAt: u.createdAt,
         status: u.status,
         verificationStatus: u.verificationStatus,
+        onboardingStep: u.onboardingStep,
+        gender: u.gender,
       }));
     const acquisitionCost = computeAcquisitionCost({
       spend: adSpendRows,

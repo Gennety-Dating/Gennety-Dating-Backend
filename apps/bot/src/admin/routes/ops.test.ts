@@ -77,7 +77,31 @@ interface RawAdSpendRow {
 }
 let acquisitionUserRows: RawAcquisitionUserRow[] = [];
 let adSpendRows: RawAdSpendRow[] = [];
-let payerIndexOverride: Map<string, { firstPaidAt: Date | null; usdCents: number }> | null = null;
+let payerIndexOverride: Map<string, PayerIndexEntry> | null = null;
+
+// Same shape `ad-spend.test.ts` uses — `revenueByKindFor`/`channelPayback`
+// (real, unmocked) unconditionally read `entry.byKind[kind]` for every
+// PURCHASE_KINDS member, so a payer fixture missing it throws at runtime
+// even though nothing in this file's assertions ever reads `byKind` back.
+function emptyByKind(): PayerKindBreakdown {
+  return Object.fromEntries(
+    PURCHASE_KINDS.map((kind) => [kind, { purchases: 0, stars: 0, usdCents: 0 }]),
+  ) as PayerKindBreakdown;
+}
+function payerFixture(over: Partial<PayerIndexEntry> = {}): PayerIndexEntry {
+  return {
+    userId: "unused",
+    purchases: 1,
+    refundedCount: 0,
+    stars: 0,
+    usdCents: 700,
+    firstPaidAt: null,
+    lastPaidAt: null,
+    byKind: emptyByKind(),
+    refundedOnly: false,
+    ...over,
+  };
+}
 
 vi.mock("@gennety/db", () => ({
   prisma: {
@@ -139,13 +163,24 @@ vi.mock("../../services/storage.js", () => ({
   downloadTelegramFile: vi.fn(),
 }));
 
-vi.mock("../../services/purchases.js", () => ({
-  loadPayerIndex: vi.fn().mockImplementation(() =>
-    Promise.resolve({ byUser: payerIndexOverride ?? new Map(), truncated: false }),
-  ),
-}));
+vi.mock("../../services/purchases.js", async () => {
+  // `PURCHASE_KINDS` must stay REAL — `computeAcquisitionCost`'s
+  // `revenueByKindFor` (unmocked, imported transitively via `ad-spend.js`)
+  // iterates it to read `entry.byKind[kind]` off every payer, so a fixture
+  // built against a stale/local copy of the six kinds would drift silently.
+  const actual = await vi.importActual<typeof import("../../services/purchases.js")>(
+    "../../services/purchases.js",
+  );
+  return {
+    ...actual,
+    loadPayerIndex: vi.fn().mockImplementation(() =>
+      Promise.resolve({ byUser: payerIndexOverride ?? new Map(), truncated: false }),
+    ),
+  };
+});
 
 import { prisma } from "@gennety/db";
+import { PURCHASE_KINDS, type PayerIndexEntry, type PayerKindBreakdown } from "../../services/purchases.js";
 import { app } from "../server.js";
 
 const KEY = "test-secret-key";
@@ -276,7 +311,15 @@ describe("GET /admin/dashboard", () => {
         },
       ];
       payerIndexOverride = new Map([
-        ["u1", { firstPaidAt: new Date(Date.now() - 13 * day), usdCents: 700 }],
+        [
+          "u1",
+          payerFixture({
+            userId: "u1",
+            firstPaidAt: new Date(Date.now() - 13 * day),
+            lastPaidAt: new Date(Date.now() - 13 * day),
+            usdCents: 700,
+          }),
+        ],
       ]);
       try {
         const res = await get("/admin/dashboard");
