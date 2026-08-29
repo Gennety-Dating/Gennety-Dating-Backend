@@ -378,6 +378,8 @@ model User {
   activityDays              UserActivityDay[]
   waitlistApplications      WaitlistApplication[]
   eventTickets              EventTicket[]
+  eventPairingsAsA          EventRoundPairing[] @relation("EventPairingA")
+  eventPairingsAsB          EventRoundPairing[] @relation("EventPairingB")
 
   matchesAsA          Match[]      @relation("MatchUserA")
   matchesAsB          Match[]      @relation("MatchUserB")
@@ -2523,6 +2525,7 @@ model Event {
   tiers        EventTicketTier[]
   tickets      EventTicket[]
   staffTokens  EventStaffToken[]
+  rounds       EventRound[]
 
   @@index([cityKey, status, startsAt])
   @@map("events")
@@ -2649,6 +2652,15 @@ model EventTicket {
   /// One complimentary perk (a drink), CAS'd exactly like check-in itself.
   perkRedeemedAt     DateTime? @map("perk_redeemed_at")
 
+  /// "I'm taking a break" — the attendee sits out the next pairing round
+  /// (LAUNCH_EVENTS §9.2 step 1). DURABLE rather than the in-memory presence
+  /// chip beside it, and the distinction is real: presence is ephemeral by
+  /// nature and self-heals the right way when it is lost, while an opt-out
+  /// does not — a deploy or a restart mid-party would silently re-enter
+  /// someone who had just asked to be left alone, which is the exact class of
+  /// bug DECISIONS keeps recording about in-memory maps. Cleared by resuming.
+  pausedAt DateTime? @map("paused_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -2675,4 +2687,93 @@ model EventStaffToken {
 
   @@index([eventId])
   @@map("event_staff_tokens")
+}
+
+/// One pairing round of Party Mode (LAUNCH_EVENTS_PRODUCT_SPEC §9.2).
+///
+/// `@@unique([eventId, index])` is the round's own double-open guard, and it
+/// is load-bearing rather than tidy: the worker creates the round row AND all
+/// of its pairings inside one interactive transaction, so a second tick that
+/// races to open round N loses on this constraint and writes no pairings at
+/// all. That is what makes "a user is in at most one pairing per round" true
+/// without a constraint Prisma cannot express (a uniqueness that spans two
+/// columns in either order — the same shape `matches` solves with its
+/// boot-created canonical-pair functional index).
+model EventRound {
+  id      String @id @default(uuid()) @db.Uuid
+  eventId String @map("event_id") @db.Uuid
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 1-based round number within the event.
+  index Int
+
+  opensAt  DateTime @map("opens_at")
+  closesAt DateTime @map("closes_at")
+
+  /// planned | open | closed. Plain `String` for the same reason `Event.kind`
+  /// and `Match.source` are: a new value costs no migration.
+  status String @default("planned")
+
+  pairings EventRoundPairing[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([eventId, index])
+  @@map("event_rounds")
+}
+
+/// Two people, one spot, one round. The entire interaction surface the product
+/// allows at a party: a partner card, a mission line, and one "we crossed
+/// paths" tap. There is deliberately no message column — Party Mode is inside
+/// the NO IN-APP CHAT invariant, not a carve-out from it.
+model EventRoundPairing {
+  id      String     @id @default(uuid()) @db.Uuid
+  roundId String     @map("round_id") @db.Uuid
+  round   EventRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  /// Denormalized so the T+18h recap is one query per user rather than a join
+  /// through every round of the event.
+  eventId String     @map("event_id") @db.Uuid
+
+  userAId String @map("user_a_id") @db.Uuid
+  userA   User   @relation("EventPairingA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId String @map("user_b_id") @db.Uuid
+  userB   User   @relation("EventPairingB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  /// The resolved label ("Bar counter · 2"), not a pointer into the event's
+  /// spot list: a later edit to that list must not rewrite where two people
+  /// were told to stand an hour ago.
+  spotLabel String @map("spot_label")
+  /// Two digits, spoken out loud to find each other in a crowded room. Unique
+  /// within the round only — it is a human handshake, not an identifier.
+  code      Int
+
+  /// One mission line per side, generated at pairing time from Profiler
+  /// answers with a `psychologicalSummary` fallback (the §Phase 4 icebreaker
+  /// contract). Nullable because a round must never fail for want of copy: a
+  /// model outage falls back to a static line, and a null renders the card
+  /// without one rather than blocking the round.
+  missionA String? @map("mission_a")
+  missionB String? @map("mission_b")
+
+  /// The mutual "we crossed paths" tap — per side, and BLIND until both, the
+  /// same rule §3.4 enforces for the pitch decision.
+  metConfirmedA DateTime? @map("met_confirmed_a")
+  metConfirmedB DateTime? @map("met_confirmed_b")
+
+  /// Post-event double-blind thumbs (§11), opened at T+2h and never during the
+  /// party — so nobody is visibly swiping on people standing in the room.
+  /// A single thumb reveals nothing and a `false` is never announced.
+  thumbsA Boolean? @map("thumbs_a")
+  thumbsB Boolean? @map("thumbs_b")
+
+  /// Set when a mutual `true` created a core Match row. Its own CAS target
+  /// (`matchId: null`) so two simultaneous thumbs create exactly one match.
+  matchId String? @map("match_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([eventId, userAId])
+  @@index([eventId, userBId])
+  @@index([roundId])
+  @@map("event_round_pairings")
 }

@@ -29,6 +29,7 @@ import { autoResumeStarvedUsers } from "./services/pool-exhaustion.js";
 import { expireStaleMatches } from "./services/match-expiry.js";
 import { sendExpiryNotifications } from "./services/expiry-notify.js";
 import { runDateLifecycleTick } from "./services/date-lifecycle.js";
+import { runEventRoundTick } from "./services/event-rounds.js";
 import { runPreDateSafetyTick } from "./services/pre-date-safety.js";
 import { runCoordinationTick } from "./services/coordination.js";
 import { startAdminServer } from "./admin/server.js";
@@ -124,6 +125,32 @@ function resolveDateLifecycleTickMs(raw: string | undefined): number {
   return parsed;
 }
 const DATE_LIFECYCLE_TICK_MS = resolveDateLifecycleTickMs(process.env.DATE_LIFECYCLE_TICK_MS);
+
+/**
+ * Party Mode's round tick (LAUNCH_EVENTS §9.2). One minute is deliberately
+ * finer than the round it drives: `planCurrentRound` is a pure function of the
+ * clock, so the tick only decides how LATE a round can open — a five-minute
+ * interval would mean people standing around for up to five minutes past the
+ * moment the product told them a round had begun.
+ *
+ * Registered only when the events feature is on, and the guard below means an
+ * unparseable override disables the party rather than crashing it.
+ */
+const DEFAULT_EVENT_ROUND_TICK_MS = 60 * 1000;
+const EVENT_ROUND_TICK_MS = (() => {
+  const raw = process.env.EVENT_ROUND_TICK_MS;
+  if (raw === undefined || raw.trim() === "") return DEFAULT_EVENT_ROUND_TICK_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    console.warn(
+      `[config] EVENT_ROUND_TICK_MS="${raw}" is not a non-negative number — ` +
+        `falling back to ${DEFAULT_EVENT_ROUND_TICK_MS}ms. Use a millisecond ` +
+        `integer (or 0 to disable Party Mode rounds).`,
+    );
+    return DEFAULT_EVENT_ROUND_TICK_MS;
+  }
+  return parsed;
+})();
 
 /**
  * Peer-wait shimmer interval (PRODUCT_SPEC §3.6b). A `<tg-thinking>` draft dies
@@ -578,6 +605,26 @@ bot.start({
     // Date lifecycle (icebreakers, emergencies, feedback) — kept on setInterval.
     if (DATE_LIFECYCLE_TICK_MS > 0) {
       setInterval(guardedTick("date-lifecycle", dateLifecycleTick), DATE_LIFECYCLE_TICK_MS);
+    }
+
+    // Party Mode rounds. Gated on the feature flag rather than only on the
+    // interval, so with events off the worker does not exist at all — the same
+    // "off is inert, not merely quiet" property the rest of the feature has.
+    if (env.EVENTS_FEATURE_ENABLED && EVENT_ROUND_TICK_MS > 0) {
+      setInterval(
+        guardedTick("event-rounds", async () => {
+          const result = await runEventRoundTick();
+          if (result.roundsOpened > 0 || result.roundsClosed > 0) {
+            console.log(
+              `[event-rounds] scanned=${result.eventsScanned} opened=${result.roundsOpened} ` +
+                `closed=${result.roundsClosed} pairings=${result.pairingsCreated} ` +
+                `unpaired=${result.unpaired}`,
+            );
+          }
+        }),
+        EVENT_ROUND_TICK_MS,
+      );
+      console.log(`[worker] Party Mode rounds every ${EVENT_ROUND_TICK_MS}ms`);
     }
 
     // "Waiting on your partner" shimmer — re-issues the ephemeral rich draft so

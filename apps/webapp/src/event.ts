@@ -45,9 +45,32 @@ interface EventRow {
   tiers: EventTier[];
 }
 
+interface LivePairing {
+  pairingId: string;
+  roundIndex: number;
+  closesAt: string;
+  partnerFirstName: string | null;
+  spotLabel: string;
+  code: number;
+  mission: string | null;
+  iConfirmed: boolean;
+  mutual: boolean;
+}
+
+interface LiveState {
+  checkedIn: boolean;
+  paused: boolean;
+  pairing: LivePairing | null;
+}
+
 let events: EventRow[] = [];
 let openTicketFor: string | null = null;
 let qrTimer: ReturnType<typeof setTimeout> | null = null;
+/** Which event's live screen is open, if any — the poll's own cancel token. */
+let openLiveFor: string | null = null;
+let liveTimer: ReturnType<typeof setTimeout> | null = null;
+/** Last mutual we celebrated, so a poll cannot re-fire the haptic every 5s. */
+let celebrated: string | null = null;
 
 const root = document.getElementById("app") as HTMLElement;
 
@@ -99,6 +122,19 @@ const COPY = {
     back: "Назад",
     rotate: "Код скомпрометирован — обновить",
     error: "Что-то пошло не так. Попробуй ещё раз.",
+    party: "Идёт вечеринка",
+    liveTitle: "Твой раунд",
+    liveDoor: "Сначала покажи код на входе — тогда начнём знакомить.",
+    liveWaiting: "Свободный раунд — бар вон там 🍸 Следующий скоро.",
+    liveMeet: "Найди",
+    liveAt: "у места",
+    liveCode: "код",
+    liveMet: "Мы нашли друг друга",
+    liveMetDone: "Отмечено. Ждём вторую сторону.",
+    liveMutual: "Вы нашли друг друга ✨",
+    livePause: "Взять паузу",
+    liveResume: "Я вернулся",
+    livePaused: "Ты на паузе. Следующий раунд пропустим.",
   },
   en: {
     title: "Parties",
@@ -116,6 +152,19 @@ const COPY = {
     back: "Back",
     rotate: "Code leaked — refresh it",
     error: "Something went wrong. Try again.",
+    party: "Party in progress",
+    liveTitle: "Your round",
+    liveDoor: "Show your code at the door first — then we'll start introducing you.",
+    liveWaiting: "Free round — bar's that way 🍸 Next one shortly.",
+    liveMeet: "Find",
+    liveAt: "at",
+    liveCode: "code",
+    liveMet: "We crossed paths",
+    liveMetDone: "Noted. Waiting on the other side.",
+    liveMutual: "You found each other ✨",
+    livePause: "Take a break",
+    liveResume: "I'm back",
+    livePaused: "You're sitting out. We'll skip the next round.",
   },
 } as const;
 
@@ -141,7 +190,13 @@ function renderList(): void {
       const when = formatWhen(event.startsAt, event.timeZone, lang);
       const tier = event.tiers[0];
       let action = "";
-      if (event.hasTicket) {
+      if (event.hasTicket && event.status === "live") {
+        // While the party is on, the round is what the screen is for; the QR
+        // is one tap away and only matters at the door.
+        action =
+          `<button class="ev-cta" data-live="${esc(event.id)}">${esc(t.party)}</button>` +
+          `<button class="ev-secondary" data-ticket="${esc(event.id)}">${esc(t.showTicket)}</button>`;
+      } else if (event.hasTicket) {
         action = `<button class="ev-cta" data-ticket="${esc(event.id)}">${esc(t.showTicket)}</button>`;
       } else if (event.admission === "admitted") {
         action = tier
@@ -208,6 +263,91 @@ async function refreshQr(eventId: string): Promise<void> {
   qrTimer = setTimeout(() => void refreshQr(eventId), Math.max(5_000, msLeft));
 }
 
+/** Poll cadence while a round is on screen — §9.2.5's "5 s in-round poll". */
+const LIVE_POLL_MS = 5_000;
+
+/**
+ * The party screen.
+ *
+ * Deliberately has no message field, no list of who else is here, and no
+ * verdict: Party Mode lives inside NO IN-APP CHAT rather than carving an
+ * exception out of it, and the thumbs open two hours after the event with the
+ * recap so nobody is visibly rating people standing in the room.
+ */
+async function renderLive(eventId: string): Promise<void> {
+  openLiveFor = eventId;
+  openTicketFor = null;
+  if (qrTimer) clearTimeout(qrTimer);
+  await pollLive(eventId);
+}
+
+async function pollLive(eventId: string): Promise<void> {
+  if (liveTimer) clearTimeout(liveTimer);
+  // The user may have gone back while the request was in flight; painting then
+  // would replace whatever screen they are actually looking at.
+  if (openLiveFor !== eventId) return;
+
+  const res = await apiFetch(`${apiBase}/v1/events/${eventId}/live`, {
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok || openLiveFor !== eventId) return;
+  const state = (await res.json()) as LiveState;
+  if (openLiveFor !== eventId) return;
+
+  paintLive(eventId, state);
+  liveTimer = setTimeout(() => void pollLive(eventId), LIVE_POLL_MS);
+}
+
+function paintLive(eventId: string, state: LiveState): void {
+  const event = events.find((e) => e.id === eventId);
+  const head =
+    `<button class="ev-back" data-back="1">← ${esc(t.back)}</button>` +
+    `<h2 class="ev-title">${esc(event?.title ?? t.liveTitle)}</h2>`;
+
+  // Check-in is the gate (§9.1) — until the door has scanned them, the honest
+  // answer is what to do about it, not an empty round.
+  if (!state.checkedIn) {
+    root.innerHTML = h(`<section class="ev-live">${head}
+      <p class="ev-hint">${esc(t.liveDoor)}</p>
+      <button class="ev-cta" data-ticket="${esc(eventId)}">${esc(t.showTicket)}</button>
+    </section>`);
+    return;
+  }
+
+  const chip = state.paused
+    ? `<button class="ev-secondary" data-resume="${esc(eventId)}">${esc(t.liveResume)}</button>`
+    : `<button class="ev-secondary" data-pause="${esc(eventId)}">${esc(t.livePause)}</button>`;
+
+  if (!state.pairing) {
+    root.innerHTML = h(`<section class="ev-live">${head}
+      <p class="ev-hint">${esc(state.paused ? t.livePaused : t.liveWaiting)}</p>
+      ${chip}
+    </section>`);
+    return;
+  }
+
+  const p = state.pairing;
+  if (p.mutual && celebrated !== p.pairingId) {
+    celebrated = p.pairingId;
+    tg?.HapticFeedback?.notificationOccurred?.("success");
+  }
+
+  const met = p.mutual
+    ? `<div class="ev-mutual">${esc(t.liveMutual)}</div>`
+    : p.iConfirmed
+      ? `<div class="ev-note">${esc(t.liveMetDone)}</div>`
+      : `<button class="ev-cta" data-met="${esc(p.pairingId)}" data-live-event="${esc(eventId)}">${esc(t.liveMet)}</button>`;
+
+  root.innerHTML = h(`<section class="ev-live">${head}
+    <div class="ev-round">${esc(t.liveMeet)} <strong>${esc(p.partnerFirstName ?? "")}</strong></div>
+    <div class="ev-spot">${esc(t.liveAt)} <strong>${esc(p.spotLabel)}</strong></div>
+    <div class="ev-code"><span>${esc(t.liveCode)}</span><b>${p.code}</b></div>
+    ${p.mission ? `<p class="ev-mission">${esc(p.mission)}</p>` : ""}
+    ${met}
+    ${chip}
+  </section>`);
+}
+
 async function post(path: string, body?: unknown): Promise<Response> {
   return apiFetch(`${apiBase}${path}`, {
     method: "POST",
@@ -217,7 +357,9 @@ async function post(path: string, body?: unknown): Promise<Response> {
 }
 
 root.addEventListener("click", (ev) => {
-  const target = (ev.target as HTMLElement).closest("[data-apply],[data-claim],[data-ticket],[data-back],[data-rotate]");
+  const target = (ev.target as HTMLElement).closest(
+    "[data-apply],[data-claim],[data-ticket],[data-back],[data-rotate],[data-live],[data-met],[data-pause],[data-resume]",
+  );
   if (!(target instanceof HTMLElement)) return;
 
   const apply = target.dataset.apply;
@@ -229,8 +371,30 @@ root.addEventListener("click", (ev) => {
     try {
       if (target.dataset.back) {
         openTicketFor = null;
+        openLiveFor = null;
         if (qrTimer) clearTimeout(qrTimer);
+        if (liveTimer) clearTimeout(liveTimer);
         renderList();
+        return;
+      }
+      if (target.dataset.live) {
+        await renderLive(target.dataset.live);
+        return;
+      }
+      if (target.dataset.met) {
+        target.setAttribute("disabled", "true");
+        await post(`/v1/events/${target.dataset.liveEvent}/pairings/${target.dataset.met}/met`);
+        // Repaint from the server rather than from the tap: whether this is a
+        // mutual is the server's answer, and guessing it here is exactly how a
+        // blind decision stops being blind.
+        await pollLive(target.dataset.liveEvent ?? "");
+        return;
+      }
+      if (target.dataset.pause || target.dataset.resume) {
+        const id = target.dataset.pause ?? target.dataset.resume ?? "";
+        target.setAttribute("disabled", "true");
+        await post(`/v1/events/${id}/pause`, { paused: Boolean(target.dataset.pause) });
+        await pollLive(id);
         return;
       }
       if (apply) {

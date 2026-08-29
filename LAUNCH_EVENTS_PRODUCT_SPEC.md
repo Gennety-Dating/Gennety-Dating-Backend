@@ -720,21 +720,36 @@ verification-activation hook + admin endpoints + dashboard tab. No user
 surface yet beyond the application row auto-created at onboarding (silent).
 iOS: nothing (no surface). Demo: inert (no events in the demo DB).
 
-**Phase 2 — ticketing + gatekeeper.**
-Flags: `EVENT_TICKETS_ENABLED`, `EVENT_QR_SECRET`. `events` list/detail in a
-Mini App page + `/v1/events/*`; Stars payload `event:*`; `gatekeeper.html` +
-`/gk/*`; refund sweep cron. iOS: read-only event screen + wallet-paid ticket
-(`openapi/gennety-v1.yaml` additive, generator-run gate — the
-`oneOf: [$ref, "null"]` trap is now a standing check). Demo: events shown,
-payment settles free like `changeIsFree`; scanning demoed with a staged
-token.
+**Phase 2 — ticketing + gatekeeper.** ✅ SHIPPED 2026-08-29, dark.
+As designed apart from the money: the founder's free-ticket decision deleted
+the Stars payload, the wallet rail and the refund sweep cron before any of it
+was written, so there is **no `EVENT_TICKETS_ENABLED`** either — a second flag
+would gate a paid step that does not exist. `EVENT_QR_SECRET` is real and
+fail-closed. iOS got nothing: no native event screen exists, so OpenAPI is
+deliberately untouched (a spec entry no client generates from drifts
+unobserved). Demo shows none of it — the demo database has no events, and
+closing that is a seeded event rather than a branch in `decide.ts`.
 
-**Phase 3 — Party Mode.**
-Flags: `EVENT_ROUNDS_ENABLED`. Round worker (injected clock), `event.html`
-live view, pairing allocator restriction, mission generation, presence chips,
-`event.round` push. iOS: same endpoints; native live view its own slice.
-Demo: replayable with the lifecycle-replay idiom (a staged `live` event with
-the visitor + puppets from the reserved id band).
+**Phase 3 — Party Mode.** ✅ SHIPPED 2026-08-29, dark.
+`event_rounds` + `event_round_pairings`, the round worker on an injected
+clock, the pairing selection restricted to the room, mission generation with a
+static fallback, the `event.html` live view, `event.round` push, and three
+`/v1/events/*` routes.
+
+**No `EVENT_ROUNDS_ENABLED`, deliberately.** `EVENT_ROUND_TICK_MS=0` already
+expresses "events on, rounds off" exactly, and a boolean beside an interval
+that can also disable is two switches for one decision — the shape that
+eventually disagrees with itself. The worker is registered only when
+`EVENTS_FEATURE_ENABLED` is on, so with events off it does not exist rather
+than ticking over an empty query.
+
+Two other departures, both recorded in DECISIONS: the candidate LOADER is not
+reused (matching-pool eligibility is wrong in a room), and the "taking a
+break" chip is a durable column rather than an in-memory presence flag,
+because losing an opt-out fails in the unsafe direction. iOS: same endpoints,
+native live view its own slice. Demo: still nothing, same reason as Phase 2 —
+the lifecycle-replay idiom would work, but it needs a staged `live` event in
+the demo database first.
 
 **Phase 4 — post-event loop + safety analytics.**
 Flags: `EVENT_RECAP_ENABLED`. Thumbs, recap, mutual→Match creation

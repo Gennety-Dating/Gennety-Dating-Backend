@@ -66,6 +66,10 @@ const ALLOWED_IDENTICAL_UK_RU = new Set<string>([
   // allowlisted — "Синергия" and "Синергія" genuinely differ).
   "matchSynergyHeader",
   "coordProxyRelayNamedPrefix",
+  // Two interpolations, a separator and one word — and that word is "код" in
+  // both languages. Inventing a difference to satisfy this guard would be
+  // worse than recording that there is none.
+  "eventRoundPushBody",
   "referralCardFooter",
   "coordCardAskHead2",
   "photoReceived",

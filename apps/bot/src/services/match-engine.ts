@@ -1469,9 +1469,23 @@ export interface ScoredPair {
  * Check mutual gender compatibility between two users.
  * a's preference must include b's gender AND b's preference must include a's gender.
  */
-export function areMutuallyCompatible(a: BatchUser, b: BatchUser): boolean {
+/**
+ * Do these two want each other's gender? The half of compatibility that is
+ * about the PEOPLE rather than about where they live.
+ *
+ * Split out of `areMutuallyCompatible` for Party Mode (LAUNCH_EVENTS §9.2),
+ * which needs this rule and must NOT have the same-city rule: at an offline
+ * event, standing in the venue is stronger proof of locality than a profile
+ * column, so a person who changed their dating city after being admitted must
+ * not become unpairable at a party they are physically at. Sharing the
+ * predicate rather than forking it is the point — a second definition of "do
+ * these two want each other" is exactly what §6.6 warns about.
+ */
+export function preferencesAgree(
+  a: Pick<BatchUser, "gender" | "preference">,
+  b: Pick<BatchUser, "gender" | "preference">,
+): boolean {
   if (!a.gender || !b.gender || !a.preference || !b.preference) return false;
-  if (!a.homeCityKey || !b.homeCityKey || a.homeCityKey !== b.homeCityKey) return false;
 
   const aWantsB =
     a.preference === "both" ||
@@ -1484,6 +1498,11 @@ export function areMutuallyCompatible(a: BatchUser, b: BatchUser): boolean {
     (b.preference === "women" && a.gender === "female");
 
   return aWantsB && bWantsA;
+}
+
+export function areMutuallyCompatible(a: BatchUser, b: BatchUser): boolean {
+  if (!a.homeCityKey || !b.homeCityKey || a.homeCityKey !== b.homeCityKey) return false;
+  return preferencesAgree(a, b);
 }
 
 /**
@@ -2000,7 +2019,18 @@ async function loadHistoricalMatchPairs(
  * call site is how the synthetic-fill pass came to be one edit behind the main
  * pass more than once.
  */
-async function loadExcludedPairs(userIds: string[]): Promise<Set<string>> {
+/**
+ * Every pair these users may never be shown to each other again: the lifetime
+ * pair ban (any `matches` row, whatever its terminal status) UNION both
+ * directions of `user_blocks`. Keys are `"a:b"` AND `"b:a"`, so a caller never
+ * has to canonicalise.
+ *
+ * Exported for Party Mode (LAUNCH_EVENTS §9.2), which respects the same ban —
+ * founder decision §14.2, defaulted to "never re-pair people the core product
+ * already banned". Calling this rather than re-deriving it is what keeps the
+ * party and the Thursday drop agreeing on who is off-limits.
+ */
+export async function loadExcludedPairs(userIds: string[]): Promise<Set<string>> {
   const [historical, blocked] = await Promise.all([
     loadHistoricalMatchPairs(userIds),
     loadBlockedPairKeys(userIds),

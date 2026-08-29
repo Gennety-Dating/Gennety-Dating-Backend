@@ -1145,6 +1145,89 @@ deliberately does **not** describe it: the native client has no event screen
 yet, and a spec entry for a surface no client generates from is a contract that
 drifts unobserved. It is added with the iOS work, not before.
 
+### `event_rounds` / `event_round_pairings`
+
+Party Mode — the in-event pairing engine (LAUNCH_EVENTS_PRODUCT_SPEC §9). Every
+~35 minutes at a `live` event, everyone present who is not sitting out is paired
+with someone they have not met yet tonight, given a named spot and two digits to
+say out loud, and left alone.
+
+**There is no message column anywhere in either table, and that is the design
+rather than an omission.** Party Mode lives INSIDE the NO IN-APP CHAT invariant
+instead of carving an exception out of it the way the pre-date proxy chat does:
+the conversation it arranges happens in a room, so the product's whole
+contribution is deciding who stands where. The interaction surface is exactly
+three things — read your pairing, say you found each other, take a break.
+
+**The allocator is the product's own.** `selectRoundPairings`
+(`services/event-rounds.ts`) enumerates edges and hands them to the same
+`scorePair` + `greedyPair` the Thursday drop runs, which is the §Campus Radar
+rule applied again: a second pairing implementation is a second definition of a
+good match, and the two diverge silently. Three things differ, each deliberate:
+
+- **The candidate set is the room**, loaded by `loadAttendees` rather than by
+  `loadEligibleUsers`. The matching pool's eligibility — the 24-hour candidate
+  cooldown, the single-live-match rule, the contact rail — is all wrong here:
+  someone with a date already scheduled for Friday is exactly the person who
+  should still be meeting people at a mixer on Wednesday, and refusing to pair
+  them would be the product enforcing a rule about matching against something
+  that is not matching. What IS shared is the field list — the mapping is typed
+  as `BatchUser`, so a field added there is a compile error in the loader rather
+  than an undefined the scorer silently reads as a zero.
+- **Same-city is dropped.** `areMutuallyCompatible` was split so Party Mode can
+  call `preferencesAgree` — the half that is about the people — without the half
+  that is about where they live. Standing in the venue is stronger proof of
+  locality than a profile column, and someone who changed their dating city
+  after being admitted must not become unpairable at a party they are at.
+- **`V_league` is lifted, not removed** (`EVENT_LEAGUE_FLOOR`, 0.4). The weekly
+  engine floors at 0.05, i.e. "effectively never matched" — right when the
+  product is choosing ONE person for someone, wrong in a room where the
+  alternative to a slightly mismatched pairing is standing alone for twenty
+  minutes.
+
+The lifetime pair ban is respected in full (founder decision §14.2):
+`loadExcludedPairs` is exported and called here, so the party and the Thursday
+drop agree on who is off-limits rather than each deriving it.
+
+**`@@unique([eventId, index])` is the round's double-open guard, and it is
+load-bearing rather than tidy.** The round row and ALL of its pairings are
+created in one interactive transaction, so a second worker tick racing to open
+round N loses on that constraint and writes no pairings at all. That is what
+makes "a user is in at most one pairing per round" true without a constraint
+Prisma cannot express — a uniqueness spanning two columns in either order, the
+same shape `matches` solves with its boot-created canonical-pair index.
+`planCurrentRound` is a pure function of the event's start time and the clock,
+so two ticks a minute apart inside one window agree on the index; the tick only
+decides how LATE a round opens.
+
+**Nothing here is ever penalised.** An unconfirmed pairing simply lapses — no
+Elo, no `silentIgnoreCount`, no `standbyCount`. An event is a party, not a
+contract, and the §3.1c rule that scripted outcomes must not become data applies
+with more force to outcomes nobody agreed to. The sit-out priority bump takes
+`composeScore`'s `starvationBonus` slot but lives **in memory, per event**, so it
+can never leak into the weekly famine measure; losing it fails in the safe
+direction (someone is paired on merit), which is the test the same file's
+durable `EventTicket.pausedAt` deliberately fails — an opt-out lost to a deploy
+would re-enter somebody who had just asked to be left alone.
+
+`metConfirmedA/B` is **blind until both**, the §3.4 rule again: a single
+confirmation is indistinguishable from none on the other side's screen, so the
+first tapper cannot learn the answer before giving their own. `thumbsA/B` and
+`matchId` are written by Phase 4 and are unused today.
+
+**The live view carries no partner photo, on purpose.** The photo rail
+(`public/partner-photos.ts`) is match-scoped end to end, so a face here would
+mean widening a live security path for a dark feature — and at a party the thing
+that finds someone is the spot plus two digits said out loud. A face turns that
+into scanning the room comparing people, which is the behaviour §9.3 exists to
+keep out of the venue.
+
+Surfaces: `GET /v1/events/:id/live`, `POST /v1/events/:id/pairings/:pid/met`,
+`POST /v1/events/:id/pause`. Delivery is a `event.round` push, deliberately NOT
+in `TIME_SENSITIVE_PUSH_TYPES` — the recipient is at a party holding their
+phone, and punching through Focus is for something that matters when nobody is
+looking at the screen.
+
 ### `profiler_answers`
 
 One row per (user, Profiler question) — `questionId`, `priority`
@@ -1476,6 +1559,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `* * * * *` (only when `SYNTHETIC_FILL_ENABLED`) | UTC | Synthetic test partner (PRODUCT_SPEC §3.1c): declines a `proposed` match once the HUMAN side has answered and `SYNTHETIC_DECLINE_DELAY_MS` has elapsed since dispatch. Answering second is what makes the blind-decision invariant trivially safe. Goes through the ordinary `applyMatchDecision`, so the Elo guard, the reveals and the suppressed Rematch upsell behave exactly as on a real decline. A silent human is left to the ordinary expiry cron | `workers/synthetic-partner.ts` (`syntheticPartnerTick`) |
 | `30 * * * *` (only when `CAMPUS_DROP_ENABLED`, never in demo) | UTC | **Bonus Campus Drop** (PRODUCT_SPEC §Campus Radar): counts students verified per university inside the window and runs one extra, campus-scoped drop when a cohort grew past the threshold. Hourly rather than by the minute because what it watches moves in days. Three bounds — growth threshold, cooldown (read off the newest `campus` match, not a counter), and a pre-batch blackout, because a single-cohort run can take a candidate the globally-optimal batch needed. Not scheduled in demo mode for the same reason drop matching is not: the demo must never pair two visitors with each other | `workers/campus-drop.ts` → `services/campus-radar.ts` |
 | `0 10 * * 5` (only when `VENUE_CONCENTRATION_ALERT_ENABLED`) | Europe/Kyiv | Weekly venue-concentration alarm — DMs the founder ops feed when one venue took more than `VENUE_CONCENTRATION_ALERT_THRESHOLD_PCT` of a city's dates. Friday morning, so the window always contains a full Thursday drop. Deliberately **not** deduplicated by a marker table: a problem still there next week SHOULD be reported again, and the weekly cadence is the whole rate limit | `workers/venue-concentration-alert.ts` (`venueConcentrationAlertTick`) |
+| `setInterval(60 s)` | — | **Party Mode rounds** — opens whichever pairing round is due at a `live` event and closes whichever has lapsed (LAUNCH_EVENTS §9.2). Registered ONLY when `EVENTS_FEATURE_ENABLED` is on, so with events off the worker does not exist rather than ticking over an empty query. A minute is deliberately finer than the 35-minute round it drives: `planCurrentRound` is a pure function of the clock, so the tick decides only how LATE a round can open — a coarse tick leaves people standing around after the product has told them a round began. Closing runs BEFORE opening in the same tick, or a client polling mid-tick briefly sees two open rounds. `EVENT_ROUND_TICK_MS=0` disables the rounds without disabling tickets or the door. Logs only when something happened | `services/event-rounds.ts` (`runEventRoundTick`) |
 | `setInterval(20 s)` | — | **Peer-wait shimmer** — re-issues the ephemeral `<tg-thinking>` draft for every side currently waiting on its partner (pitch decision / calendar / venue / the §3.7b venue-change board), so the shimmer survives the whole wait. "Waiting" means the user has nothing left to do: a state where the next move is theirs — including a calendar where both picked and nothing overlaps — gets the §3.5 reminder instead and no status at all (`isSideWaitingOnPeer`, PRODUCT_SPEC §3.6b); owns the per-side wait anchor that drives the five-tier wording ladder, plus the plain-message fallback and its teardown. `PEER_WAIT_TICK_MS=0` disables. Interval rather than cron: the draft's ~30 s TTL is shorter than cron's one-minute floor | `workers/peer-wait-shimmer.ts` (`peerWaitShimmerTick`) + `workers/peer-wait-venue-change.ts` |
 | `setInterval(2 min)` | — | Date lifecycle: **venue-change lapse sweep** (an unpaid `agreed` swap lapses — original venue stands, match untouched; an abandoned express mint quietly reverts — feature-flagged), ice-breakers (T-5 h), emergency window, T-1.5 h pre-date safety, T+24 h feedback, wingman; **pre-date coordination** (T-60 m offer, T-30 m proxy open, T+2 h proxy close — feature-flagged) | `services/date-lifecycle.ts` + `services/pre-date-safety.ts` + `services/coordination.ts` + `handlers/matching/venue-change.ts` |
 
@@ -1568,6 +1652,9 @@ auth) are deliberately outside the spec.
 | POST | `/v1/events/:id/ticket` | Claim the free ticket. Refusals are distinct statuses (`404` unknown event/tier, `403 not_admitted`, `409 tier_full\|event_closed`) because "the room is full" and "you are not on the list" need different sentences on screen. |
 | GET  | `/v1/events/:id/ticket/qr` | Mint a 90-second door code. **503 rather than a signature** when `EVENT_QR_SECRET` is missing or weak: signing with a blank string validates every forgery while looking exactly like a working door. Answers 404 identically for "not yours" and "does not exist", so the route cannot be used to probe ticket ids. |
 | POST | `/v1/events/:id/ticket/rotate` | "My code leaked" — rotates the nonce, killing every code already in the wild for this ticket. |
+| GET  | `/v1/events/:id/live` | Party Mode (LAUNCH_EVENTS §9): am I checked in, am I sitting out, and who am I meeting. Polled every 5 s while a round is open, so it is two indexed reads and no join beyond the pairing's own participants. **Gated on `checkedInAt`** — a staff-scanned QR at the door is stronger evidence of presence than any client-reported coordinate and costs no permission prompt. Carries this side's mission line and never the partner's, and reports `mutual` only once BOTH have confirmed: a single confirmation is indistinguishable from none, or the first tapper learns the answer before giving their own. No partner photo, deliberately — see the schema section. |
+| POST | `/v1/events/:id/pairings/:pairingId/met` | "We crossed paths." A CAS on this side's own column, so a double tap is one timestamp and two simultaneous taps both resolve to mutual. Deliberately NOT gated on the round still being open: the round closing is how the product stops asking, not a deadline the attendee has to beat. "Not yours" and "does not exist" answer identically, so the route cannot be walked to discover which pairing ids are real. |
+| POST | `/v1/events/:id/pause` | The status chip — sit the next round out, or come back. Durable (`EventTicket.pausedAt`) rather than an in-memory presence flag, because losing an opt-out fails in the unsafe direction: a deploy mid-party would re-enter someone who had just asked to be left alone. A bodyless tap means "I need a break", the only reason to press it. |
 | GET  | `/v1/date/state` | **Living Canvas** (JWT, PRODUCT_SPEC §6.1) — the derived `DateLifecycleState` plus the locked date, its venue, this side's bump state, the next drop, and the CALLER's own `timeZone`. Its own prefix rather than a field on `/v1/matches/current` because it must answer for a user with NO match: `IDLE_EXPLORING` is the state most users are in most of the time, and that endpoint answers null there. Two queries by design — the live statuses, then (only if there are none) a `completed` row that still owes feedback, which `ACTIVE_MATCH_STATUSES` excludes. Blind-decision safe: the partner's `acceptedBy*` is never selected into the response, and a caller who has answered resolves identically whatever the partner chose. |
 | POST | `/v1/dates/{id}/bump` | **Date Bump** (JWT, PRODUCT_SPEC §6.2) — one side's shake. The client detects it (CoreMotion / `DeviceMotionEvent`) and posts when and where; **the server decides whether it counts**, because a client-side verdict is a client-side ticket grant. `at` is the DEVICE clock and is trusted only inside `CLOCK_SKEW_TOLERANCE_MS` (60 s) of ours — the two phones' clocks are what the alignment check compares, so it has to be used, but a phone an hour fast must not bump its way outside its own date. `not-participant` answers **404**, not 403, so the endpoint cannot be used to probe which match ids exist; every other refusal is 409. The deck and the announcement hang off the ONE call that verified the pair (`justVerified`), never off `verified`, or the partner's own shake a beat later would generate a second deck and send everything twice. |
 | POST | `/v1/dates/{id}/proximity` | **Date Radar** (JWT, PRODUCT_SPEC §6.3) — ping-and-read: the caller's position goes in, the PARTNER's masked status comes back. The response is a closed shape (`peer` ∈ `unknown`/`en_route`/`arrived`, an optional `HH:mm`, `bothArrived`) and carries no coordinate, distance or address — those are one disclosure at four resolutions, and the masking lives in `viewOfPeer` so exactly one function decides what crosses between two people. **Stores nothing** (see `services/date-radar.ts`): the pinged coordinates compute an ETA and are dropped. Window is T-45m to `agreedTime` itself — unlike the Bump's T+2h grace, because once the date has begun the two of them can see each other. |

@@ -1028,6 +1028,12 @@ const translations = {
     // phone, argues against itself.
     safetyBriefPushTitle: "Before you head out",
     safetyBriefPushBody: "Your safety checklist for tonight is in the app.",
+    // Party Mode (LAUNCH_EVENTS §9.2). Deliberately NOT time-sensitive: the
+    // recipient is at a party holding their phone, and punching through Focus
+    // is for something that matters when nobody is looking at the screen.
+    eventRoundPushTitle: "Your next round",
+    eventRoundPushBody: "{name} · {spot} · code {code}",
+    eventRoundPushSomeone: "Someone",
     // The four §4.3 notifications that reached only Telegram until now. Each
     // push is a one-line "this happened, open the app": the DM stays the real
     // message, because a famine tier, a calendar and a model-written nudge do
@@ -2274,6 +2280,9 @@ const translations = {
       "Желаем отличного вечера и приятных впечатлений! ✨",
     safetyBriefPushTitle: "Перед выходом",
     safetyBriefPushBody: "Памятка безопасности на сегодня уже в приложении.",
+    eventRoundPushTitle: "Твой следующий раунд",
+    eventRoundPushBody: "{name} · {spot} · код {code}",
+    eventRoundPushSomeone: "Кое-кто",
     noMatchPushTitle: "В этот раз без мэтча",
     noMatchPushBody: "Пока никого подходящего не нашлось. Поиск продолжается.",
     matchNudgePushTitle: "Мэтч всё ещё ждёт",
@@ -3481,6 +3490,9 @@ const translations = {
       "Бажаємо чудового вечора і приємних вражень ✨",
     safetyBriefPushTitle: "Перед виходом",
     safetyBriefPushBody: "Пам'ятка безпеки на сьогодні вже в застосунку.",
+    eventRoundPushTitle: "Твій наступний раунд",
+    eventRoundPushBody: "{name} · {spot} · код {code}",
+    eventRoundPushSomeone: "Дехто",
     noMatchPushTitle: "Цього разу без метчу",
     noMatchPushBody: "Поки нікого відповідного не знайшлося. Пошук триває.",
     matchNudgePushTitle: "Метч усе ще чекає",
@@ -4648,6 +4660,9 @@ const deTranslations: TranslationTable = {
     "Hab einen schönen Abend ✨",
   safetyBriefPushTitle: "Bevor du losgehst",
   safetyBriefPushBody: "Deine Sicherheits-Checkliste für heute Abend liegt in der App.",
+  eventRoundPushTitle: "Deine nächste Runde",
+  eventRoundPushBody: "{name} · {spot} · Code {code}",
+  eventRoundPushSomeone: "Jemand",
   noMatchPushTitle: "Diesmal kein Match",
   noMatchPushBody: "Noch niemand Passendes gefunden. Die Suche läuft weiter.",
   matchNudgePushTitle: "Dein Match wartet noch",
@@ -5825,6 +5840,9 @@ const plTranslations: TranslationTable = {
     "Dobrego wieczoru ✨",
   safetyBriefPushTitle: "Zanim wyjdziesz",
   safetyBriefPushBody: "Twoja lista bezpieczeństwa na dziś jest już w aplikacji.",
+  eventRoundPushTitle: "Twoja następna runda",
+  eventRoundPushBody: "{name} · {spot} · kod {code}",
+  eventRoundPushSomeone: "Ktoś",
   noMatchPushTitle: "Tym razem bez matcha",
   noMatchPushBody: "Na razie nie znalazł się nikt odpowiedni. Poszukiwania trwają.",
   matchNudgePushTitle: "Twój match wciąż czeka",

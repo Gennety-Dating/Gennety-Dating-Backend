@@ -10,6 +10,7 @@ import {
   rotateTicketNonce,
 } from "../../services/event-ticket.js";
 import { ADMITTED_TIERS, tierOneApplication } from "../../services/event-admission.js";
+import { confirmMet, getEventLiveState, setPartyPause } from "../../services/event-live.js";
 
 /**
  * `/v1/events/*` — the attendee's own surface for launch events
@@ -273,6 +274,66 @@ eventsPublicRouter.post("/:id/ticket/rotate", async (req: Request, res: Response
     res.json({ ok: true });
   } catch (err) {
     console.error(`${LOG_PREFIX} rotate error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Party Mode (§9) ──────────────────────────────────────────────────────
+
+/**
+ * The live screen: am I checked in, am I sitting out, and who am I meeting.
+ *
+ * Polled every few seconds while a round is open, so it is deliberately two
+ * indexed reads and no join beyond the pairing's own participants.
+ */
+eventsPublicRouter.get("/:id/live", async (req: Request, res: Response) => {
+  if (featureOff(res)) return;
+  try {
+    const userId = req.userId as string;
+    const { id } = req.params as { id: string };
+    res.json(await getEventLiveState(userId, id));
+  } catch (err) {
+    console.error(`${LOG_PREFIX} live error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/** "We crossed paths." Blind until both — see `confirmMet`. */
+eventsPublicRouter.post("/:id/pairings/:pairingId/met", async (req: Request, res: Response) => {
+  if (featureOff(res)) return;
+  try {
+    const userId = req.userId as string;
+    const { pairingId } = req.params as { pairingId: string };
+    const result = await confirmMet(userId, pairingId);
+    if (!result.ok) {
+      // Both refusals answer 404 rather than distinguishing "no such pairing"
+      // from "not yours", so the route cannot be walked to discover whether a
+      // pairing id exists.
+      res.status(404).json({ error: "no_pairing" });
+      return;
+    }
+    res.json({ ok: true, mutual: result.mutual });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} met error:`, err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/** The status chip: sit the next round out, or come back. */
+eventsPublicRouter.post("/:id/pause", async (req: Request, res: Response) => {
+  if (featureOff(res)) return;
+  try {
+    const userId = req.userId as string;
+    const { id } = req.params as { id: string };
+    const paused = (req.body as { paused?: unknown } | undefined)?.paused !== false;
+    const ok = await setPartyPause(userId, id, paused);
+    if (!ok) {
+      res.status(404).json({ error: "no_ticket" });
+      return;
+    }
+    res.json({ ok: true, paused });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} pause error:`, err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

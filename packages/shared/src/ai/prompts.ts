@@ -465,6 +465,77 @@ ${input.count} numbered lines. No preamble, no closing.
 }
 
 // ---------------------------------------------------------------------------
+// #4c — generateEventMissionsPrompt (Party Mode, at a live event)
+// ---------------------------------------------------------------------------
+
+export interface EventMissionsInput {
+  aFirstName: string;
+  bFirstName: string;
+  aSummary: string | null;
+  bSummary: string | null;
+  /** Weighted Profiler answers — the PRIMARY source, per side. */
+  aProfilerBlock?: string | null;
+  bProfilerBlock?: string | null;
+  language: string;
+  /** How long they have together, so the mission is sized to the round. */
+  minutes: number;
+}
+
+/**
+ * Two mission lines for one Party Mode pairing — one call, one per side.
+ *
+ * A mission is NOT an opener, and that is the whole reason this exists beside
+ * `generateIceBreakersPrompt`. An opener is written for someone alone with
+ * their phone five hours before a date, deciding what to send. A mission is
+ * read by two people who are already standing together with twenty minutes to
+ * fill: it has to give them something to DO, and it has to be true of the
+ * person in front of them rather than of the room.
+ *
+ * Both sides come back in one call because they are two halves of one
+ * conversation — generated apart, they routinely propose the same topic from
+ * both ends, and the pair spends its round discovering they were each told to
+ * ask about the other's dog.
+ */
+export function generateEventMissionsPrompt(input: EventMissionsInput): string {
+  const aProfiler = input.aProfilerBlock
+    ? `\n### What ${input.aFirstName} is into (PRIMARY — higher weight = more important)\n${input.aProfilerBlock}\n`
+    : "";
+  const bProfiler = input.bProfilerBlock
+    ? `\n### What ${input.bFirstName} is into (PRIMARY — higher weight = more important)\n${input.bProfilerBlock}\n`
+    : "";
+
+  return `**${input.aFirstName}** and **${input.bFirstName}** have just been introduced at a party and have ${input.minutes} minutes together. Give each of them ONE small mission — something to actually do or find out in the next few minutes.
+
+## ${input.aFirstName}
+${input.aSummary ?? "(no profile summary available)"}${aProfiler}
+## ${input.bFirstName}
+${input.bSummary ?? "(no profile summary available)"}${bProfiler}
+## Your Task
+Write exactly 2 lines in **${input.language}**, in this order:
+1. ${input.aFirstName}'s mission — about ${input.bFirstName}.
+2. ${input.bFirstName}'s mission — about ${input.aFirstName}.
+
+Each must:
+1. Be ONE short sentence, ~14 words max. It is read standing up, in a noisy room.
+2. Name ONE concrete thing from the OTHER person's world — a taste, a hobby, a small story.
+3. Be a thing to DO or FIND OUT, not a question to recite. "Find out which of you…", "Get them to explain…", "Ask what they'd…".
+4. Work spoken out loud between two people who have just met.
+
+Tone: a friend nudging you across a room. Informal, native register in Russian/Ukrainian/German/Polish. Never formal, never clever for its own sake.
+
+## Format
+2 numbered lines. No preamble, no closing, no names as labels.
+
+## NEVER do these
+- Slang dictionaries ("краш/слэй/база", "rizz/slay/no cap"). At most one casual word.
+- Anything about how either of them looks.
+- Sexual or intimate topics — they met ninety seconds ago, in public.
+- Missions that need a phone, an app, or leaving the room.
+- Two-part missions. One thing.
+- Anything that reveals you were given a profile to read from.`;
+}
+
+// ---------------------------------------------------------------------------
 // #4b — generateWingmanHintPrompt (Phase 4, 90 minutes before date)
 // ---------------------------------------------------------------------------
 
