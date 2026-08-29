@@ -2405,3 +2405,32 @@ model FounderReport {
   @@index([createdAt])
   @@map("founder_reports")
 }
+
+/// One founder-entered acquisition-spend line (AD_SPEND_TRACKING_DESIGN.md).
+/// `channel` is a `normalizeChannel()`-compatible key (`organic` | `referral` |
+/// `mobile` | `web:*` | `tg:<slug>`) or the literal `"unattributed"` for spend
+/// with no trackable channel at all (agency retainers, footage production).
+/// `category` decides how many days past `periodEnd` a conversion is still
+/// counted — plain `String`, not a Prisma enum, so a new category costs no
+/// migration (same reasoning as `Match.source`). `amountUsdCents` is frozen at
+/// entry time and never recomputed by a later FX move, the same rule
+/// `ticket_ledger.amountStars` already follows. The unique key lets the
+/// founder re-submit the same line to correct it rather than duplicate it.
+model AdSpend {
+  id             String   @id @default(uuid()) @db.Uuid
+  channel        String
+  category       String
+  periodStart    DateTime @map("period_start")
+  periodEnd      DateTime @map("period_end")
+  amount         Int
+  /// ISO-4217, e.g. UAH / USD / EUR.
+  currency       String
+  amountUsdCents Int      @map("amount_usd_cents")
+  note           String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([channel, category, periodStart, periodEnd])
+  @@index([periodStart])
+  @@map("ad_spend")
+}
