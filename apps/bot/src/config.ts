@@ -251,6 +251,12 @@ export const env = {
   /// weekly-matches report link sent to the founder (`GET /v1/founder/report/
   /// :token`). Defaults to the production public API host.
   PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL ?? "https://dating-api.gennety.com",
+  /// Absolute base URL of the admin dashboard itself (NOT the API —
+  /// `ADMIN_DASHBOARD_ORIGIN` above is a comma-separated CORS allowlist and
+  /// unsuitable for building a link). Used only by the weekly ad-spend
+  /// reminder to link straight to `/ad-spend`. Empty (default) → the
+  /// reminder still sends, just without a clickable link.
+  ADMIN_DASHBOARD_URL: process.env.ADMIN_DASHBOARD_URL ?? "",
 
   /// Expo Push Service access token (https://expo.dev/accounts/…/settings/access-tokens).
   /// Optional — unset disables push dispatch.

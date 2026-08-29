@@ -25,6 +25,10 @@ import type { Venue } from "./venue.js";
  *   5. `notifyFounderPurchase` / `notifyFounderPurchaseRefunded` — every real
  *      money movement (ticket store, date gate, Premium, Rematch, venue
  *      change; Telegram Stars and App Store alike), with who paid and how much.
+ *   6. `notifyFounderAdSpendReminder` — weekly nudge to log acquisition spend
+ *      for the week that just closed (AD_SPEND_TRACKING_DESIGN.md). Rides
+ *      `FOUNDER_NOTIFY_ENABLED` alone — no feature flag of its own, because
+ *      the reminder is worthless without the feed it already gates on.
  *
  * Everything here is BEST-EFFORT and fire-and-forget: a failure must never
  * touch the user-facing flow. Callers should not await the result on any hot
@@ -680,6 +684,46 @@ export async function notifyFounderWeeklyMatches(matchIds: string[]): Promise<vo
     });
   } catch (err) {
     console.warn(`${FOUNDER_LOG} notifyFounderWeeklyMatches failed`, { err });
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Feature 6 — weekly ad-spend reminder
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * A Monday-morning nudge naming the week that just closed and pointing at the
+ * dashboard's ad-spend form (AD_SPEND_TRACKING_DESIGN.md). Nothing is read or
+ * written here — unlike `notifyFounderWeeklyMatches`, there is no snapshot to
+ * persist, so a failure costs nothing beyond the message not arriving.
+ *
+ * `weekOf` is the Monday the closed week STARTED on; the message names the
+ * full Mon–Sun range so the founder never has to do the arithmetic.
+ */
+export async function notifyFounderAdSpendReminder(weekOf: Date): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+
+  try {
+    const start = startOfUtcDay(weekOf);
+    const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const fmt = (d: Date) =>
+      d.toLocaleDateString("ru-RU", { timeZone: "Europe/Kyiv", day: "numeric", month: "long" });
+
+    const dashboardLine = env.ADMIN_DASHBOARD_URL
+      ? `\n${env.ADMIN_DASHBOARD_URL.replace(/\/+$/, "")}/ad-spend`
+      : "\n(укажи адрес дашборда в ADMIN_DASHBOARD_URL, чтобы здесь была ссылка)";
+
+    const message =
+      `💸 Не забудь внести расходы на привлечение за неделю ` +
+      `${fmt(start)} – ${fmt(end)}` +
+      dashboardLine;
+
+    await api.sendMessage(founderChatId(), message, {
+      link_preview_options: { is_disabled: true },
+    });
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} notifyFounderAdSpendReminder failed`, { err });
   }
 }
 

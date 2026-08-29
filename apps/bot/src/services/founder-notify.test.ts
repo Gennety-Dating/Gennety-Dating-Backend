@@ -25,6 +25,7 @@ const { env } = vi.hoisted(() => ({
     FOUNDER_BOT_TOKEN: "founder-token",
     FOUNDER_TELEGRAM_ID: "999",
     PUBLIC_BASE_URL: "https://dating-api.gennety.com",
+    ADMIN_DASHBOARD_URL: "",
   },
 }));
 vi.mock("../config.js", () => ({ env }));
@@ -59,6 +60,7 @@ import {
   notifyFounderNewUser,
   notifyFounderWeeklyMatches,
   notifyFounderAccountClosed,
+  notifyFounderAdSpendReminder,
   isFounderFeedSuppressedRuntime,
   __resetFounderApiForTests,
   type FounderAccountUser,
@@ -95,6 +97,7 @@ function accountUser(over: Partial<FounderAccountUser> = {}): FounderAccountUser
 beforeEach(() => {
   vi.clearAllMocks();
   env.FOUNDER_NOTIFY_ENABLED = false;
+  env.ADMIN_DASHBOARD_URL = "";
   __resetFounderApiForTests();
 });
 
@@ -264,5 +267,44 @@ describe("notifyFounderWeeklyMatches", () => {
     await notifyFounderWeeklyMatches([]);
     expect(buildWeeklyMatchesReport).not.toHaveBeenCalled();
     expect(sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("notifyFounderAdSpendReminder", () => {
+  it("is a no-op when the feature is disabled", async () => {
+    env.FOUNDER_NOTIFY_ENABLED = false;
+    await notifyFounderAdSpendReminder(new Date("2026-08-17T00:00:00Z"));
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("names the closed Mon–Sun week and links to the dashboard when configured", async () => {
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    env.ADMIN_DASHBOARD_URL = "https://admin.gennety.com/";
+    await notifyFounderAdSpendReminder(new Date("2026-08-17T00:00:00Z")); // a Monday
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const [chatId, text] = sendMessage.mock.calls[0]!;
+    expect(chatId).toBe(999);
+    expect(text).toContain("17 августа");
+    expect(text).toContain("23 августа");
+    // Trailing slash on the configured URL must not become a doubled one.
+    expect(text).toContain("https://admin.gennety.com/ad-spend");
+    expect(text).not.toContain("//ad-spend");
+  });
+
+  it("degrades to a linkless reminder rather than sending nothing", async () => {
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    env.ADMIN_DASHBOARD_URL = "";
+    await notifyFounderAdSpendReminder(new Date("2026-08-17T00:00:00Z"));
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const [, text] = sendMessage.mock.calls[0]!;
+    expect(text).not.toContain("/ad-spend");
+  });
+
+  it("never throws when Telegram rejects the send", async () => {
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    sendMessage.mockRejectedValueOnce(new Error("blocked"));
+    await expect(
+      notifyFounderAdSpendReminder(new Date("2026-08-17T00:00:00Z")),
+    ).resolves.toBeUndefined();
   });
 });

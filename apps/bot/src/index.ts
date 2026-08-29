@@ -20,6 +20,7 @@ import { setMainBotApi } from "./services/main-bot-api.js";
 import {
   notifyFounderStatusTimerHealth,
   notifyFounderWeeklyMatches,
+  notifyFounderAdSpendReminder,
 } from "./services/founder-notify.js";
 import { autoUnsuspendElapsed, runDropBatch } from "./services/match-engine.js";
 import { dispatchMatches } from "./services/dispatch-queue.js";
@@ -265,6 +266,10 @@ const ACTIVITY_ROLLUP_CRON_SCHEDULE =
 /// window it reports on always contains a full drop cycle.
 const VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE =
   process.env.VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE ?? "0 10 * * 5";
+/// Weekly, Monday 09:00 Kyiv — the previous Mon–Sun week has fully closed by
+/// then, so the reminder never asks the founder to log a partial week.
+const AD_SPEND_REMINDER_CRON_SCHEDULE =
+  process.env.AD_SPEND_REMINDER_CRON_SCHEDULE ?? "0 9 * * 1";
 
 /**
  * Curated-venue re-validation: re-check the oldest-verified active venues
@@ -868,6 +873,23 @@ bot.start({
       );
       console.log(
         `[cron] Venue concentration alert scheduled: "${VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+      );
+    }
+
+    // Weekly ad-spend reminder (AD_SPEND_TRACKING_DESIGN.md). No feature flag
+    // of its own — it rides FOUNDER_NOTIFY_ENABLED alone, same as the other
+    // founder-feed crons: a reminder to log spend into a feed that is itself
+    // off has nothing to deliver.
+    if (env.FOUNDER_NOTIFY_ENABLED) {
+      cron.schedule(
+        AD_SPEND_REMINDER_CRON_SCHEDULE,
+        guardedTick("ad-spend-reminder", () =>
+          notifyFounderAdSpendReminder(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
+        ),
+        { timezone: CRON_TIMEZONE },
+      );
+      console.log(
+        `[cron] Ad-spend reminder scheduled: "${AD_SPEND_REMINDER_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
       );
     }
 
