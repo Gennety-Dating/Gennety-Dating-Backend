@@ -119,6 +119,9 @@ vi.mock("@gennety/db", () => ({
     venueChangePurchase: { findMany: vi.fn().mockResolvedValue([]) },
     primeTimePurchase: { findMany: vi.fn().mockResolvedValue([]) },
     profilerAnswer: { findMany: vi.fn().mockResolvedValue([]) },
+    // Read by ops.ts's computeAcquisitionCost() call for /admin/dashboard's
+    // derived CAC/LTV:CAC/ROAS block — empty spend history is the norm here.
+    adSpend: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 
