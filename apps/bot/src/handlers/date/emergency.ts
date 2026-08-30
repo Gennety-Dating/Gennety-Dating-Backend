@@ -5,6 +5,7 @@ import type { MessageEntity } from "grammy/types";
 import type { BotContext } from "../../session.js";
 import { withRedactedSummary } from "../../services/outbound-recorder.js";
 import { cancelScheduledDate } from "../../services/emergency-cancel.js";
+import { telegramReachable } from "../../services/telegram-reach.js";
 import { ticketRefundNoticeKey } from "../../services/ticket-refund.js";
 import {
   claimMatchFlow,
@@ -182,8 +183,10 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
     select: {
       id: true,
       userAId: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
+      // `platform` is here for `telegramReachable` below — the id alone stopped
+      // being a reachability test when Telegram login shipped.
+      userA: { select: { telegramId: true, platform: true, language: true } },
+      userB: { select: { telegramId: true, platform: true, language: true } },
     },
   });
   if (!match) return;
@@ -214,7 +217,15 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
   // peers see the cancellation via the `/v1/matches/current` poll, plus a
   // push notification dispatched separately.
   const other = isA ? match.userB : match.userA;
-  if (other.telegramId > 0n) {
+  // `telegramReachable`, not `telegramId > 0n`: "Continue with Telegram" stores
+  // a REAL positive id on an app-only account the bot cannot open a chat with
+  // (§1.1), so the id alone addressed a quote to someone who would never see
+  // it — a 400 swallowed by the `.catch` below, logged as a forwarding failure
+  // that was never a failure. Nothing is lost either way, because the peer's
+  // real notice is the push `emergency-cancel.ts` sends on their own rail; what
+  // this removes is a wasted call and a misleading error line on a health
+  // signal deploy.md reads as "zero errors from the new PID".
+  if (telegramReachable(other)) {
     const otherLang = (other.language ?? "en") as Language;
     const notice = buildEmergencyCancellationNotice(otherLang, forwardedReason);
     // Appended AFTER the quote, so the blockquote entity's offset/length still

@@ -365,6 +365,51 @@ describe("emergency cancellation", () => {
     expect((body as string).slice(entity.offset, entity.offset + entity.length)).toBe(reason);
   });
 
+  // `telegramReachable`, not `telegramId > 0n`. "Continue with Telegram" stores
+  // a REAL positive id on an app-only account the bot cannot open a chat with
+  // (§1.1), so the id alone quoted someone's free text into a chat that does
+  // not exist. Nothing is lost by skipping it — the peer's actual notice is the
+  // push `cancelScheduledDate` sends on their own rail — but the send was a
+  // guaranteed 400 logged as a forwarding failure that was never a failure.
+  it("handleEmergencyReason does not quote into a chat a positive id cannot open", async () => {
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    mMatch.findUnique.mockResolvedValue(
+      matchRow({ userB: { telegramId: 1002n, platform: "mobile", language: "en" } }),
+    );
+
+    const ctx = createCtx({
+      session: { matchFlow: "awaiting_emergency_reason", activeMatchId: "match-1" },
+      messageText: "не смогу, прости",
+      fromId: 1001,
+    });
+
+    await handleEmergencyReason(ctx);
+
+    // The cancellation itself is untouched — only the Telegram leg is skipped.
+    expect(mMatch.updateMany).toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalled();
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  // A row written before `platform` existed carries null, and must keep its DM
+  // — the fallback that stops this fix costing an existing Telegram user.
+  it("handleEmergencyReason still quotes when platform is absent", async () => {
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    mMatch.findUnique.mockResolvedValue(
+      matchRow({ userB: { telegramId: 1002n, platform: null, language: "en" } }),
+    );
+
+    const ctx = createCtx({
+      session: { matchFlow: "awaiting_emergency_reason", activeMatchId: "match-1" },
+      messageText: "не смогу, прости",
+      fromId: 1001,
+    });
+
+    await handleEmergencyReason(ctx);
+    expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(ctx.api.sendMessage.mock.calls[0]![0]).toBe(1002);
+  });
+
   it("handleEmergencyReason refunds both tickets and tells each side", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
     mMatch.findUnique.mockResolvedValue(matchRow());
