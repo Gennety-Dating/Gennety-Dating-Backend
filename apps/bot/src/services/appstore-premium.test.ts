@@ -90,9 +90,15 @@ describe("handleAppStorePremiumNotification", () => {
     );
   });
 
+  // Apple sends EXPIRED once the paid-through instant has passed, so the
+  // fixture carries a lapsed `expiresDate` — the authoritative fact the verdict
+  // is now read from. The assertions are unchanged.
   it("revokes on EXPIRED", async () => {
     userFindFirst.mockResolvedValueOnce({ id: "u1" });
-    const res = await handleAppStorePremiumNotification(tx(), "EXPIRED");
+    const res = await handleAppStorePremiumNotification(
+      tx({ expiresDate: Date.now() - 1000 }),
+      "EXPIRED",
+    );
     expect(res.status).toBe("revoked");
     expect(revokePremium).toHaveBeenCalledWith("u1", "appstore:tx-1:expired", "expired");
   });
@@ -101,5 +107,31 @@ describe("handleAppStorePremiumNotification", () => {
     userFindFirst.mockResolvedValueOnce(null);
     const res = await handleAppStorePremiumNotification(tx(), "DID_RENEW");
     expect(res).toEqual({ status: "invalid", reason: "unknown_owner" });
+  });
+
+  /**
+   * The webhook is unauthenticated and its `signedPayload` signature is not
+   * verified, so `notificationType` is attacker-controlled: anyone who can name
+   * a transaction id can post `EXPIRED` for it. The entitlement verdict must
+   * therefore come from the transaction Apple returned, never from the type
+   * string that asked for the lookup — otherwise a forged notification ends a
+   * subscription that Apple says is live and paid through.
+   */
+  it("ignores a forged end-notification for a transaction Apple reports as live", async () => {
+    userFindFirst.mockResolvedValueOnce({ id: "u1" });
+    const res = await handleAppStorePremiumNotification(tx(), "EXPIRED");
+    expect(revokePremium).not.toHaveBeenCalled();
+    expect(res.status).toBe("activated");
+  });
+
+  it("still revokes when Apple itself reports the purchase revoked", async () => {
+    userFindFirst.mockResolvedValueOnce({ id: "u1" });
+    const revokedAt = Date.now() - 1000;
+    const res = await handleAppStorePremiumNotification(
+      tx({ revocationDate: revokedAt }),
+      "REFUND",
+    );
+    expect(res.status).toBe("revoked");
+    expect(revokePremium).toHaveBeenCalledWith("u1", "appstore:tx-1:refund", "refunded");
   });
 });
