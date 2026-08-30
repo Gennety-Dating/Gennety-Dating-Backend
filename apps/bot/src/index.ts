@@ -911,7 +911,7 @@ bot.start({
             console.log(
               `[event-recap] events=${r.eventsScanned} recaps=${r.recapsSent} ` +
                 `failed=${r.recapsFailed} matches=${r.matchesCreated} ` +
-                `deferred=${r.matchesDeferred}`,
+                `deferred=${r.matchesDeferred} blocked=${r.matchesBlocked}`,
             );
           }
         }),

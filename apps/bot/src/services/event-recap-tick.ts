@@ -75,6 +75,9 @@ export interface EventRecapTickResult {
   matchesCreated: number;
   /** Mutuals the allocator refused this time round — retried next tick. */
   matchesDeferred: number;
+  /** Mutuals a block rules out. Counted apart from `deferred`: this one never
+   *  becomes a match, so reporting it as "not yet" would misdescribe it. */
+  matchesBlocked: number;
 }
 
 export async function runEventRecapTick(
@@ -87,6 +90,7 @@ export async function runEventRecapTick(
     recapsFailed: 0,
     matchesCreated: 0,
     matchesDeferred: 0,
+    matchesBlocked: 0,
   };
 
   // One window covers both stages: from "old enough that the thumbs are open"
@@ -115,6 +119,7 @@ export async function runEventRecapTick(
     const mutual = await sweepMutuals(event.id, deps);
     result.matchesCreated += mutual.created;
     result.matchesDeferred += mutual.deferred;
+    result.matchesBlocked += mutual.blocked;
   }
 
   return result;
@@ -250,18 +255,48 @@ async function sendRecapMessage(userId: string, n: EventRecapNotification): Prom
 async function sweepMutuals(
   eventId: string,
   deps: EventRecapDeps,
-): Promise<{ created: number; deferred: number }> {
+): Promise<{ created: number; deferred: number; blocked: number }> {
   const pending = await prisma.eventRoundPairing.findMany({
     where: { eventId, thumbsA: true, thumbsB: true, matchId: null },
     select: { id: true, userAId: true, userBId: true },
   });
-  if (pending.length === 0) return { created: 0, deferred: 0 };
+  if (pending.length === 0) return { created: 0, deferred: 0, blocked: 0 };
+
+  // Blocks are absolute (§2), and this is the THIRD path that can put two
+  // people together — after the round allocator and the recap screen, both of
+  // which already honour them (`loadExcludedPairs` unions the ban with the
+  // blocks; `sendRecaps` and `getEventRecap` filter on the same set). It is
+  // the only one of the three that produces a date, and it was the only one
+  // enforcing nothing.
+  //
+  // Not left to the lifetime pair ban inside `createProposedMatch`, even
+  // though that ban does catch it today: a block can only be filed against a
+  // MATCH, so a blocked pair necessarily has a `matches` row and the ban
+  // refuses them. PRODUCT_SPEC §Blocking keeps the block's own enforcement
+  // redundant for exactly this reason — the ban is a product decision under
+  // periodic review, and a block is a promise to a user that has to survive
+  // its revision. Resting the promise on an unrelated invariant is what makes
+  // it quietly untrue the day that invariant changes.
+  //
+  // It also stops a pair that can NEVER become a match being handed to the
+  // allocator — two row locks and a transaction — every five minutes for the
+  // whole fourteen-day window.
+  const blocked = await loadBlockedPairKeys(
+    Array.from(new Set(pending.flatMap((p) => [p.userAId, p.userBId]))),
+  );
 
   const handoff = deps.onMatchCreated ?? defaultMatchHandoff;
   let created = 0;
   let deferred = 0;
+  let blockedCount = 0;
 
   for (const pairing of pending) {
+    // `loadBlockedPairKeys` carries both directions, so one lookup covers
+    // "either of them blocked the other".
+    if (blocked.has(`${pairing.userAId}:${pairing.userBId}`)) {
+      blockedCount += 1;
+      continue;
+    }
     // No `breakdown`, so no `match_score_logs` row — nothing was scored. Two
     // people said yes, which is a stronger signal than the formula produces
     // and not a value on its scale; writing one would put a made-up number
@@ -298,14 +333,26 @@ async function sweepMutuals(
     try {
       await handoff(match.id);
     } catch (err) {
-      // The row exists at `negotiating` with its gate deadline armed, so the
-      // hourly ticket sweep and the §3.5c chain both own it either way — a
-      // failed handoff costs the pair their card, not their match.
+      // A failed handoff normally costs the pair their card, not their match:
+      // with tickets ON the gate deadline was armed inside the create, so the
+      // hourly ticket sweep owns the row; with tickets off `startScheduling`
+      // writes `proposedTimes` as its FIRST statement, before it can reach
+      // Telegram, so a send that throws still leaves the §3.5c chain owning it.
+      //
+      // The one gap left is narrow and worth naming rather than papering over:
+      // tickets off AND that write itself failing (a DB blip) leaves a
+      // `negotiating` row with neither anchor, which the ticket sweep filters
+      // out (`ticketExpiresAt: { not: null }`) and the stall chain exempts
+      // (`stallPhaseOf` returns null on empty `proposedTimes`) — the §3.5b
+      // hole. Deliberately not closed by widening that exemption: DECISIONS
+      // 2026-08-20 weighed and rejected it, because a predicate error there
+      // cancels live paid dates hourly across every match, against a hole that
+      // needs a throw in a one-statement window.
       console.error(`${LOG_PREFIX} handoff failed for match ${match.id}:`, err);
     }
   }
 
-  return { created, deferred };
+  return { created, deferred, blocked: blockedCount };
 }
 
 /**

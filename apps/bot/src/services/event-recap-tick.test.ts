@@ -236,6 +236,30 @@ describe("the mutual sweep", () => {
     expect(onMatchCreated).not.toHaveBeenCalled();
   });
 
+  // Blocks are absolute (§2), and this is the third path that can pair two
+  // people — the only one that produces a DATE. It must refuse on its own
+  // rather than lean on the lifetime pair ban inside `createProposedMatch`:
+  // that ban catches a blocked pair today only because a block can only be
+  // filed against an existing match, and PRODUCT_SPEC §Blocking keeps the
+  // block's own enforcement redundant precisely because the ban is under
+  // periodic review.
+  it("never hands a blocked pair to the allocator, in either direction", async () => {
+    loadBlockedPairKeys.mockResolvedValue(new Set([`${B}:${A}`, `${A}:${B}`]));
+    const onMatchCreated = vi.fn();
+    const result = await runEventRecapTick(SAME_NIGHT, { notify: vi.fn(), onMatchCreated });
+    expect(createProposedMatch).not.toHaveBeenCalled();
+    expect(pairingUpdateMany).not.toHaveBeenCalled();
+    expect(onMatchCreated).not.toHaveBeenCalled();
+    // Counted apart from `deferred`: a block never resolves into a match, so
+    // reporting it as "retrying next tick" would misdescribe it — and would
+    // hide a pair being re-offered every five minutes for fourteen days.
+    expect(result).toMatchObject({
+      matchesCreated: 0,
+      matchesDeferred: 0,
+      matchesBlocked: 1,
+    });
+  });
+
   // A card that fails to send costs the pair their card, never their match:
   // the row is live with its deadline armed, so both sweeps own it either way.
   it("keeps the match when the handoff throws", async () => {
