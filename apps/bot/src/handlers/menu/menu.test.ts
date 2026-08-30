@@ -52,6 +52,12 @@ vi.mock("../../config.js", () => ({
     CUSTOM_EMOJI_MENU_ID: "",
     CUSTOM_EMOJI_DATE_ID: "",
     WEBAPP_URL: "https://test.invalid/calendar",
+    // Stated rather than inherited: the menu reads these three, and leaving
+    // them off the mock made every "row is hidden" assertion pass on
+    // `undefined` being falsy instead of on the flag actually being off.
+    PREMIUM_FEATURE_ENABLED: false,
+    REFERRAL_FEATURE_ENABLED: false,
+    TICKET_FEATURE_ENABLED: false,
   },
 }));
 
@@ -122,6 +128,17 @@ vi.mock("../onboarding/verification.js", () => verificationCtaMocks);
 
 import { prisma } from "@gennety/db";
 import { env } from "../../config.js";
+
+/**
+ * The real `config.ts` ends in `as const`, so TypeScript types every property
+ * of `env` as readonly — while at RUNTIME this is the plain object mocked
+ * above, which these tests deliberately mutate to walk the flag branches.
+ *
+ * The cast lives here, once, rather than at each assignment: nine inline casts
+ * would be nine places for the next person to add a tenth without noticing the
+ * object is only mutable because it is a mock.
+ */
+const mutableEnv = env as unknown as Record<string, string | number | boolean>;
 import { findActiveMatchForTelegramId } from "../../services/active-match.js";
 import { showMainMenu, buildMainMenuKeyboard } from "./main.js";
 import { handleMyProfile } from "./my-profile.js";
@@ -369,13 +386,13 @@ describe("Menu — Premium / Referral rows open the Mini App directly", () => {
   });
 
   afterEach(() => {
-    env.PREMIUM_FEATURE_ENABLED = false;
-    env.REFERRAL_FEATURE_ENABLED = false;
-    env.TICKET_FEATURE_ENABLED = false;
+    mutableEnv.PREMIUM_FEATURE_ENABLED = false;
+    mutableEnv.REFERRAL_FEATURE_ENABLED = false;
+    mutableEnv.TICKET_FEATURE_ENABLED = false;
   });
 
   it("renders the Premium row as a web_app button, not a callback", async () => {
-    env.PREMIUM_FEATURE_ENABLED = true;
+    mutableEnv.PREMIUM_FEATURE_ENABLED = true;
     const ctx = createMockCtx({});
     await showMainMenu(ctx);
     const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
@@ -388,7 +405,7 @@ describe("Menu — Premium / Referral rows open the Mini App directly", () => {
   });
 
   it("renders the Referral row as a web_app button, not a callback", async () => {
-    env.REFERRAL_FEATURE_ENABLED = true;
+    mutableEnv.REFERRAL_FEATURE_ENABLED = true;
     const ctx = createMockCtx({});
     await showMainMenu(ctx);
     const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
@@ -400,21 +417,21 @@ describe("Menu — Premium / Referral rows open the Mini App directly", () => {
   });
 
   it("falls back to the callback-driven hub when WEBAPP_URL isn't real HTTPS", async () => {
-    env.PREMIUM_FEATURE_ENABLED = true;
+    mutableEnv.PREMIUM_FEATURE_ENABLED = true;
     const original = env.WEBAPP_URL;
-    env.WEBAPP_URL = "http://localhost:5173";
+    mutableEnv.WEBAPP_URL = "http://localhost:5173";
     try {
       const ctx = createMockCtx({});
       await showMainMenu(ctx);
       const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
       expect(JSON.stringify(kb.inline_keyboard)).toContain('"menu:premium"');
     } finally {
-      env.WEBAPP_URL = original;
+      mutableEnv.WEBAPP_URL = original;
     }
   });
 
   it("still renders My Tickets as the balance message, not a direct web_app row", async () => {
-    env.TICKET_FEATURE_ENABLED = true;
+    mutableEnv.TICKET_FEATURE_ENABLED = true;
     const ctx = createMockCtx({});
     await showMainMenu(ctx);
     const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
