@@ -137,6 +137,56 @@ chips failed to resolve → done → `aiMemoryExport` phase as today. Unresolved
 ambiguity after the caps is recorded as "no expressed preference" (neutral
 weight) — never re-asked.
 
+**A card can be taken back (2026-08-30).** Until this the deck was one-way: a
+verdict was appended and the deck advanced in the same step, with no inverse —
+so a rushed tap, a misread photo, or the double-tap below wrote a permanent
+answer into the preference vector, on a step reachable only during onboarding
+and with no re-take surface anywhere. Nothing here forbade it; it was simply
+never built.
+
+An undo control sits over the card's top-LEFT corner, and each of the three
+things about it is a constraint rather than a preference:
+
+- **It is a 40px disc carrying the reason-chip's own treatment** — solid light
+  fill, dark ink, the same double shadow. That is this screen's already-stated
+  answer to "a control over an arbitrary portrait", so the back arrow adds no
+  second idiom. The onboarding intro's graphite disc is deliberately not reused:
+  at 3.5rem it would outweigh the two verdict buttons the screen is about, and
+  it draws its glyph from an icon font `radar.html` does not load.
+- **The header and the verdict row were both measured and rejected.** At 320px
+  the RU title spans essentially the whole content box, so a control beside it
+  either overlaps the words or forces them to wrap; and a third button in the
+  verdict row shrinks two `flex: 1` buttons that German already fills, while
+  putting an undo target inside the thumb's rating arc.
+- **It is a sibling of the card, not a child**, so the chips phase's
+  `radar-card-dim` brightness filter cannot dim the one control that gets a
+  user out of that phase.
+
+Two meanings, in this order: with the "why?" panel open, back cancels the
+pending verdict and re-offers the same card (the likely intent there is the
+other verdict, not leaving the card); from the rating phase it drops the
+previous answer and re-asks the previous card, cleanly, so re-answering
+REPLACES rather than appending a second entry for that photo. It walks back to
+card 1 and then stops, and it is not rendered at all where it could not act.
+
+**The last card cannot be undone**, and that is an accepted limit rather than an
+oversight: recording the final verdict submits the deck in the same step. Adding
+a confirmation to buy that back would put a step in front of every user to serve
+the last card of twelve, on a funnel whose drop-off is measured.
+
+**A double-tap can no longer answer a card the user never saw.** The next card
+mounts under the same two buttons at the same coordinates, and the reason-chip
+panel opens over that same foot of the card — so the second half of an
+accidental double-tap landed a real verdict. Two committing taps closer together
+than `TAP_LOCKOUT_MS` (350 ms) now count as one. That is above a double-tap
+(iOS treats up to ~300 ms as one gesture) and far below any deliberate
+look-at-a-face-and-decide, so the false-positive cost is one repeated tap.
+**The back control is deliberately exempt** — the instant a user wants undo is
+the instant after the tap that armed the lockout.
+
+Client-side throughout: the deck answers all twelve cards locally and posts the
+array once, so an undo touches no server state and needs no `/v1/*` change.
+
 ## Data model (additive, non-destructive)
 
 | Column | Purpose |
@@ -151,14 +201,24 @@ weight) — never re-asked.
 No enums; attribute whitelists live in `packages/shared` (app-code validated,
 like `socialRole` / venue categories).
 
-## API surface (Telegram `tma <initData>` auth, on the telegram-onboarding router)
+## API surface (Telegram `tma <initData>` auth, own `/v1/radar` router)
+
+**Corrected 2026-08-30 — this table described four per-answer endpoints that
+were never built.** The header block above has named the two real routes for
+a while, so the stale part was the SHAPE, and the shape is the load-bearing
+half: the server does not decide `continue` / `askReason` / `clarify` after
+every tap — the Mini App owns the whole deck and posts the finished array
+once. That is what makes "take a card back" a purely local edit with no
+request to undo, and it is why anyone moving the write earlier turns undo
+into a server concern.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/v1/telegram-onboarding/radar` | Dataset refs for this user's set — gender-of-interest × age band, both read from the `User` row (no intent/age input) — + progress (resume-safe). 404 while `TYPE_RADAR_ENABLED` off (pattern: `POST /track`) |
-| POST | `/v1/telegram-onboarding/radar/answer` | `{photoId, verdict}` → server persists, returns `continue` \| `askReason {chips}` \| `clarify {pairId}` \| `done` |
-| POST | `/v1/telegram-onboarding/radar/reason` | `{photoId, chipId}` (or explicit skip) → per-card attribution reweight, returns next step |
-| POST | `/v1/telegram-onboarding/radar/clarify` | Fallback contrast pair: `{pairId, chosenPhotoId}` (or explicit skip) → next step or `done` |
+| GET | `/v1/radar/deck` | The cards for this user's set — gender-of-interest × age band, both read from the `User` row — with each card's reason chips. 404 while `TYPE_RADAR_ENABLED` off |
+| POST | `/v1/radar/submit` | `{answers: [{photoId, verdict, chipId}]}` for the WHOLE deck → compiles `typePrefTags`, stamps `typeRadarCompletedAt`, resumes the chat. Rejects an empty array and caps the count at two full sets plus slack |
+
+The contrast-pair fallback (`clarify`) is likewise unbuilt, exactly as
+"the pairs may not ship in v1 at all" anticipated.
 
 `/state` mirrors `typeRadarEnabled` + `typeRadarDone` (pattern:
 `phoneAuthEnabled`). The phase machine gates on both, so the flag off ⇒ the

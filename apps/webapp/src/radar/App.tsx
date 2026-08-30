@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchRadarDeck,
   submitRadar,
@@ -15,6 +15,7 @@ import {
   SUCCESS_TOTAL_MS,
 } from "../butterfly-success.js";
 import { radarStrings } from "./i18n.js";
+import { canStepBack, shouldAcceptTap, stepBack } from "./deck-nav.js";
 
 const app = window.Telegram?.WebApp;
 const params = new URLSearchParams(location.search);
@@ -87,6 +88,11 @@ export function App() {
   const [answers, setAnswers] = useState<RadarAnswerInput[]>([]);
   const [phase, setPhase] = useState<Phase>("rating");
   const [pending, setPending] = useState<{ photoId: string; verdict: RadarVerdict } | null>(null);
+  /** Which way the deck last moved — the card entrance mirrors it, so an undo
+   *  reads as a step back rather than as another new card arriving. */
+  const [dir, setDir] = useState<"forward" | "back">("forward");
+  /** When the last COMMITTING tap landed (verdict or reason chip). */
+  const lastCommitAt = useRef(0);
   // Indices whose card image is fully decoded and instant to paint.
   const [ready, setReady] = useState<Set<number>>(new Set());
 
@@ -161,12 +167,22 @@ export function App() {
     if (index + 1 >= total) {
       finish(nextAnswers);
     } else {
+      setDir("forward");
       setIndex(index + 1);
     }
   };
 
+  /** Was this tap a real decision, or the tail of the previous one landing on a
+   *  card that has just mounted under the same button? See TAP_LOCKOUT_MS. */
+  const committing = () => {
+    const now = Date.now();
+    if (!shouldAcceptTap(lastCommitAt.current, now)) return false;
+    lastCommitAt.current = now;
+    return true;
+  };
+
   const onVerdict = (verdict: RadarVerdict) => {
-    if (!card) return;
+    if (!card || !committing()) return;
     app?.HapticFeedback?.selectionChanged?.();
     const chips = card.chips?.[verdict] ?? [];
     if (promptIdx.has(index) && chips.length > 0) {
@@ -178,8 +194,23 @@ export function App() {
   };
 
   const onChip = (chipId: string | null) => {
-    if (!pending) return;
+    if (!pending || !committing()) return;
     record({ photoId: pending.photoId, verdict: pending.verdict, chipId });
+  };
+
+  /** Undo. Deliberately NOT rate-limited by `committing()` — the instant a
+   *  user wants this is the instant after the tap that armed that lockout. */
+  const goBack = () => {
+    const next = stepBack({ index, answers, phase });
+    if (next.index === index && next.phase === phase) return;
+    app?.HapticFeedback?.selectionChanged?.();
+    setPending(null);
+    setPhase(next.phase);
+    setAnswers(next.answers);
+    if (next.index !== index) {
+      setDir("back");
+      setIndex(next.index);
+    }
   };
 
   if (status === "loading") {
@@ -237,6 +268,7 @@ export function App() {
 
   const cardClass = [
     "radar-card",
+    dir === "back" ? "radar-card-back" : "",
     phase === "chips" ? "radar-card-dim" : "",
     ready.has(index) ? "" : "radar-card-loading",
   ]
@@ -265,6 +297,29 @@ export function App() {
           />
         )}
         <div className="radar-card-scrim" aria-hidden="true" />
+
+        {/* Undo, over the photo's top-left corner. It is a sibling of the card
+            rather than a child so the chips phase's `radar-card-dim` filter
+            cannot dim the one control that gets a user out of that phase — and
+            it costs the composition nothing, since the header has no room for
+            it (at 320px the RU title already spans the content box) and the
+            verdict row must stay exactly two buttons. Rendered only when it can
+            act: on card 1 there is nothing to undo, and a dead control is worse
+            than none. */}
+        {canStepBack({ phase, answers }) && (
+          <button className="radar-back" onClick={goBack} aria-label={s.back} title={s.back}>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M19 12H5m7-7-7 7 7 7"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
 
         {phase === "chips" && pending && (
           <div className="radar-chip-panel">

@@ -22,6 +22,8 @@ export interface RadarStrings {
   doneBody: string;
   loadError: string;
   retry: string;
+  /** Accessible name for the icon-only undo control over the card. */
+  back: string;
   progress: (done: number, total: number) => string;
   chips: Record<string, string>;
 }
@@ -52,6 +54,7 @@ const STRINGS: Record<Lang, RadarStrings> = {
     doneBody: "We've saved your preferences and we'll use them to find your matches.",
     loadError: "Couldn't load the cards.",
     retry: "Try again",
+    back: "Back",
     progress: (d, t) => `${d} / ${t}`,
     chips: CHIPS_EN,
   },
@@ -69,6 +72,7 @@ const STRINGS: Record<Lang, RadarStrings> = {
     doneBody: "Мы сохранили твои предпочтения и учтём их, когда будем подбирать тебе пару.",
     loadError: "Не удалось загрузить карточки.",
     retry: "Ещё раз",
+    back: "Назад",
     progress: (d, t) => `${d} / ${t}`,
     chips: {
       face: "Лицо",
@@ -95,6 +99,7 @@ const STRINGS: Record<Lang, RadarStrings> = {
     doneBody: "Ми зберегли твої вподобання й врахуємо їх, коли шукатимемо тобі пару.",
     loadError: "Не вдалося завантажити картки.",
     retry: "Ще раз",
+    back: "Назад",
     progress: (d, t) => `${d} / ${t}`,
     chips: {
       face: "Обличчя",
@@ -121,6 +126,7 @@ const STRINGS: Record<Lang, RadarStrings> = {
     doneBody: "Wir haben deine Vorlieben gespeichert und beziehen sie in deine Matches ein.",
     loadError: "Karten konnten nicht geladen werden.",
     retry: "Erneut",
+    back: "Zurück",
     progress: (d, t) => `${d} / ${t}`,
     chips: {
       face: "Gesicht",
@@ -147,6 +153,7 @@ const STRINGS: Record<Lang, RadarStrings> = {
     doneBody: "Zapisaliśmy Twoje preferencje i uwzględnimy je przy dobieraniu par.",
     loadError: "Nie udało się wczytać kart.",
     retry: "Ponów",
+    back: "Wstecz",
     progress: (d, t) => `${d} / ${t}`,
     chips: {
       face: "Twarz",
