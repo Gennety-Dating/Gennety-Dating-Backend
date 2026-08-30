@@ -204,21 +204,50 @@ export const accountDeleteLimiter = make({
 });
 
 /**
- * Client analytics batches — 60/hour per install (falls back to IP).
+ * Client analytics batches — 60/hour per (install + IP).
  *
  * Keyed by `installId` from the BODY rather than by user: the funnel starts
  * before an account exists, so `req.userId` is null for exactly the events this
  * endpoint exists to collect. A batch carries up to 200 events, so 60/hour is
  * far above the client's own cadence (one batch per 30s at worst) and still
  * bounds a broken or hostile client.
+ *
+ * The IP is part of the key for the reason spelled out on `otpVerifyLimiter`:
+ * an identifier a stranger can name must not let them burn somebody else's
+ * budget. It does NOT bound rotation — that is what the per-address ceiling
+ * below is for.
  */
 export const clientEventsLimiter = make({
   windowMs: 3_600_000,
   limit: 60,
   keyGenerator: (req): string => {
     const installId = (req.body as { installId?: unknown } | undefined)?.installId;
-    return `client-ev:${typeof installId === "string" && installId ? installId.slice(0, 64) : ipKey(req)}`;
+    const install =
+      typeof installId === "string" && installId ? installId.slice(0, 64) : "anon";
+    return `client-ev:${install}:${ipKey(req)}`;
   },
+  message: { error: "Too many event batches, try again later." },
+});
+
+/**
+ * The same endpoint, bounded per ADDRESS — 20/min.
+ *
+ * `installId` travels in the body, so it is chosen by the caller: while it was
+ * the only key, a fresh value on every request meant a fresh budget, and the
+ * per-install limit above could not be reached by anyone who did not want to
+ * reach it. Unauthenticated rows in the events table were bounded only by the
+ * global floor.
+ *
+ * 20/min is derived from the client rather than picked: `AnalyticsCore` flushes
+ * at most once per 30s (`flushDelay`), so one device cannot exceed 2/min, and a
+ * shared address would need ten devices flushing flat out — well above a
+ * short-session product's real traffic, and still three times stricter than the
+ * global floor. Rotation now costs an attacker addresses instead of nothing.
+ */
+export const clientEventsIpLimiter = make({
+  windowMs: 60_000,
+  limit: 20,
+  keyGenerator: (req): string => `client-ev-ip:${ipKey(req)}`,
   message: { error: "Too many event batches, try again later." },
 });
 

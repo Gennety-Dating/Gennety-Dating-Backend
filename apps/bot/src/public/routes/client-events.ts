@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { env } from "../../config.js";
 import { optionalAuth } from "../auth-middleware.js";
-import { clientEventsLimiter } from "../rate-limit.js";
+import { clientEventsIpLimiter, clientEventsLimiter } from "../rate-limit.js";
 import { ingestClientEvents, CLIENT_EVENTS_MAX_BATCH } from "../../services/client-events.js";
 
 /**
@@ -32,6 +32,9 @@ clientEventsRouter.use(optionalAuth);
 
 clientEventsRouter.post(
   "/events",
+  // Адресный потолок стоит ПЕРВЫМ: ключ следующего лимитера читается из тела,
+  // то есть выбирается вызывающим, и ротация значения обходила бы его.
+  clientEventsIpLimiter,
   clientEventsLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const result = await ingestClientEvents(req.body ?? {}, req.userId ?? null);

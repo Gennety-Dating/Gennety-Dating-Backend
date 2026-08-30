@@ -114,4 +114,24 @@ describe("POST /v1/client/events", () => {
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("too_many_events");
   });
+
+  /**
+   * `installId` приходит в ТЕЛЕ и потому подконтролен вызывающему: пока он был
+   * единственным ключом лимитера, новое значение в каждом запросе означало
+   * новый бюджет, то есть анонимная запись в БД не ограничивалась ничем, кроме
+   * глобального пола. Ротация должна упираться в потолок на адрес.
+   */
+  it("ротация installId не даёт нового бюджета — потолок на адрес держит", async () => {
+    const app = buildApp();
+    const statuses: number[] = [];
+
+    for (let i = 0; i < 40; i += 1) {
+      const res = await request(app)
+        .post("/v1/client/events")
+        .send({ installId: `rotated-${i}`, events: [] });
+      statuses.push(res.status);
+    }
+
+    expect(statuses).toContain(429);
+  });
 });
