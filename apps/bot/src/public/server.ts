@@ -147,7 +147,13 @@ app.get("/v1/maptiles/:z/:x/:y", mapTileLimiter, async (req, res) => {
   // labels into the raster in the LOCAL language (Ukrainian for Kyiv), and there
   // is no English raster variant, so we drop labels rather than show the wrong
   // language. (English street labels would need a keyed provider / vector tiles.)
-  const upstream = `https://${sub}.basemaps.cartocdn.com/dark_nolabels/${z}/${x}/${y}.png`;
+  // The key rides server-side (see `CARTO_API_KEY` in config.ts). Unkeyed,
+  // CARTO answers 200 with a watermarked PNG rather than an error, so the
+  // `upstreamRes.ok` check below cannot catch a missing key — the boot
+  // warning in `startPublicServer` is what makes that state visible.
+  const upstream =
+    `https://${sub}.basemaps.cartocdn.com/dark_nolabels/${z}/${x}/${y}.png` +
+    (env.CARTO_API_KEY ? `?key=${encodeURIComponent(env.CARTO_API_KEY)}` : "");
   try {
     const upstreamRes = await fetch(upstream, { signal: AbortSignal.timeout(8000) });
     if (!upstreamRes.ok) {
@@ -504,6 +510,12 @@ export function startPublicServer(api?: Api<RawApi>): void {
     return;
   }
   if (api) injectedBotApi = api;
+  if (!env.CARTO_API_KEY) {
+    console.warn(
+      "[public] CARTO_API_KEY not set — map tiles will render with CARTO's " +
+        '"API KEY REQUIRED" watermark. Free key: carto.com/basemaps/apikey',
+    );
+  }
   app.listen(env.PUBLIC_PORT, () => {
     console.log(`[public] /v1/* API listening on :${env.PUBLIC_PORT}`);
   });

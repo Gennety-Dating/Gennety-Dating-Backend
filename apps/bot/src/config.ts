@@ -258,6 +258,21 @@ export const env = {
   /// reminder still sends, just without a clickable link.
   ADMIN_DASHBOARD_URL: process.env.ADMIN_DASHBOARD_URL ?? "",
 
+  /// CARTO basemaps API key for the `/v1/maptiles` raster proxy (the dark
+  /// basemap under the departure-point picker and the Living Canvas).
+  ///
+  /// CARTO began requiring a key in 2026, and the failure mode is the reason
+  /// this is worth a comment: an unkeyed request still answers **HTTP 200
+  /// with a valid PNG of the right size** — it just has "API KEY REQUIRED /
+  /// carto.com/basemaps/apikey" burned into the raster. So the proxy's
+  /// `upstreamRes.ok` check passes, nothing throws, nothing logs, and the only
+  /// symptom is a watermark across the map. Empty here = that state; the key
+  /// is free (5M tiles/month, no CARTO account) from carto.com/basemaps/apikey.
+  ///
+  /// It stays server-side: the Mini App only ever talks to our own proxy, so
+  /// the key is never in a bundle and never reaches a phone.
+  CARTO_API_KEY: process.env.CARTO_API_KEY ?? "",
+
   /// Expo Push Service access token (https://expo.dev/accounts/…/settings/access-tokens).
   /// Optional — unset disables push dispatch.
   /// Direct APNs (token-based .p8) — the push rail for the native iOS app
