@@ -340,6 +340,12 @@ async function main() {
     // Type Radar V_type factor — 1 = neutral/no-op, matching the shadow-mode
     // TYPE_PREF_FLOOR default (services/match-engine.ts multiplies by this).
     type: 1,
+    // Relationship-intent V_intent factor — 1 = neutral, matching the shipped
+    // INTENT_FLOOR default. Every factor `composeScore` multiplies by MUST be
+    // present: this file is .mjs, so a missing one is not a type error — it
+    // silently makes scoreTotal NaN, and Prisma then rejects the score-log
+    // write with a misleading "Argument `match` is missing".
+    intent: 1,
     penalty: 0,
     embeddingDistance: 0.24,
     starvationBonus: 0,
