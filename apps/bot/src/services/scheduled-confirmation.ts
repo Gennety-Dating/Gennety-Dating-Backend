@@ -34,7 +34,12 @@ import { type Venue } from "./venue.js";
 import { type VenueCategory } from "./vibe-parser.js";
 import { generateVenueBlurb } from "./venue-blurb.js";
 import { buildDateTimeEntity } from "./datetime-entity.js";
-import { renderDateCard, buildShareButton, type CardTheme } from "./date-card/index.js";
+import {
+  renderDateCard,
+  prepareVenuePhoto,
+  buildShareButton,
+  type CardTheme,
+} from "./date-card/index.js";
 import { notifyFounderDateScheduled } from "./founder-notify.js";
 import {
   shouldOfferVenueChange,
@@ -75,6 +80,12 @@ interface ScheduledConfirmationInput {
   partnerPhotoRef: string | null;
   venue: Venue;
   agreedTime: Date;
+  /**
+   * The venue photo, already fetched and duotoned by the caller. Both sides see
+   * the SAME venue, so it is resolved once per match before either render —
+   * see `prepareVenuePhoto` for why doing it per side lost the photo entirely.
+   */
+  venuePhoto: Buffer | null;
 }
 
 /**
@@ -118,7 +129,7 @@ async function sendScheduledConfirmation(
         language: input.language,
         theme: input.theme,
       },
-      { blur: false },
+      { blur: false, venuePhoto: input.venuePhoto },
       api,
     );
 
@@ -294,6 +305,21 @@ export async function deliverScheduledConfirmation(
   // banner follows an ATTEMPTED confirmation, not a successful one) and per
   // side rather than per pair, so one unreachable chat can neither delay nor
   // skip the other person's banner.
+
+  // The venue photo is fetched + duotoned ONCE, here, before either render —
+  // and the ordering is the whole point, not a saving. Both cards show the same
+  // venue, so this used to happen twice inside the `Promise.all` below; and
+  // because a card's rasterize is synchronous native work that blocks the event
+  // loop for tens of seconds, the second side's fetch could not progress while
+  // its wall-clock `AbortSignal.timeout` ran out. Both cards then fell back to
+  // the branded gradient, indistinguishable from a venue with no picture.
+  // Resolving on a free loop is what fixes it (see `prepareVenuePhoto`).
+  //
+  // Best-effort by rule: `prepareVenuePhoto` returns null rather than throwing,
+  // and a null simply means the gradient — a missing photo must never cost the
+  // pair their card.
+  const venuePhoto = await prepareVenuePhoto(venue.photoName ?? null);
+
   const [resultA, resultB] = await Promise.all([
     sendScheduledConfirmation(api, {
       telegramId: match.userA.telegramId,
@@ -306,6 +332,7 @@ export async function deliverScheduledConfirmation(
       partnerFirstName: match.userB.firstName ?? "",
       partnerPhotoRef: match.userB.profile?.photos?.[0] ?? null,
       venue,
+      venuePhoto,
       agreedTime: match.agreedTime,
     }).finally(() => refreshStatusBanners(api, [match.userA.id]).catch(() => {})),
     sendScheduledConfirmation(api, {
@@ -319,6 +346,7 @@ export async function deliverScheduledConfirmation(
       partnerFirstName: match.userA.firstName ?? "",
       partnerPhotoRef: match.userA.profile?.photos?.[0] ?? null,
       venue,
+      venuePhoto,
       agreedTime: match.agreedTime,
     }).finally(() => refreshStatusBanners(api, [match.userB.id]).catch(() => {})),
   ]);

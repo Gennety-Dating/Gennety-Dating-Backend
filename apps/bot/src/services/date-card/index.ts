@@ -48,6 +48,17 @@ export interface DateCardInput {
 export interface RenderDateCardOptions {
   /** When true, the partner's face is blurred for an off-platform share copy. */
   blur: boolean;
+  /**
+   * A venue photo already prepared by `prepareVenuePhoto`. Both sides of a
+   * match show the SAME venue, so the caller that renders two cards resolves
+   * it once and hands the result to both — see that function for why sharing
+   * it is a correctness fix and not just a saving.
+   *
+   * `undefined` means "resolve it yourself" (the share copy, the My Date hub
+   * and the venue wish card each render one card and keep that path).
+   * A Buffer or an explicit `null` means "already decided, do not re-fetch".
+   */
+  venuePhoto?: Buffer | null;
 }
 
 type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
@@ -88,6 +99,45 @@ async function loadLogo(): Promise<ButterflyMark | null> {
   return cachedLogo;
 }
 
+/**
+ * Fetch the venue's Places photo and duotone it into the brand palette, ready
+ * to drop into the card. Returns `null` when there is no usable photo — the
+ * template then falls back to its branded gradient.
+ *
+ * **Call this ONCE per match, before rendering, when two cards are coming.**
+ * Both sides show the same venue, so doing it per side fetched the same image
+ * twice (two billed Places media requests per date) and duotoned it twice —
+ * but the real cost was correctness, and it is worth stating because the
+ * failure is invisible from the code:
+ *
+ * `Resvg.render()`, `satori`, `duotonePng` and `toPngBuffer` are synchronous
+ * native work on the main thread. `deliverScheduledConfirmation` renders both
+ * cards under one `Promise.all`, so while side A rasterizes, the event loop is
+ * blocked — and side B's in-flight fetch cannot progress, while its
+ * `AbortSignal.timeout` keeps counting in WALL-CLOCK time. Measured on a real
+ * match: the fetch takes ~2.5s on a free loop and returns `null` when the loop
+ * is blocked for 9s; one card alone rasterizes in ~45s, so the 8s budget never
+ * stood a chance. Both delivered cards lost their venue photo and fell back to
+ * the gradient, which reads exactly like a venue that has no picture.
+ *
+ * Resolving here, before any rasterize starts, is what puts the fetch back on a
+ * free loop. Raising the timeout would not: the loop is blocked for far longer
+ * than any sane budget, and a bigger number would only make the eventual
+ * failure slower.
+ */
+export async function prepareVenuePhoto(
+  venuePhotoName: string | null,
+): Promise<Buffer | null> {
+  const raw = await resolveVenuePhoto(venuePhotoName);
+  if (!raw) return null;
+  // Duotone into the brand palette so a stock Places photo reads as part of the
+  // card; a plain PNG, then the gradient, are the fallbacks.
+  return (
+    (await duotonePng(raw.buffer, "#1C0710", "#F7E7EB", 1000, 690, 0.7)) ??
+    (await toPngBuffer(raw.buffer))
+  );
+}
+
 export async function renderDateCard(
   input: DateCardInput,
   opts: RenderDateCardOptions,
@@ -109,16 +159,12 @@ export async function renderDateCard(
     }
   }
 
-  // 2. Venue photo (best-effort; template falls back to a gradient). Duotone it
-  //    into the brand palette so a stock Places/curated photo reads as part of
-  //    the card. Falls back to a plain PNG, then to the gradient, on failure.
-  const venueRaw = await resolveVenuePhoto(input.venuePhotoName);
-  let venuePhoto: Buffer | null = null;
-  if (venueRaw) {
-    venuePhoto =
-      (await duotonePng(venueRaw.buffer, "#1C0710", "#F7E7EB", 1000, 690, 0.7)) ??
-      (await toPngBuffer(venueRaw.buffer));
-  }
+  // 2. Venue photo — either handed in ready (both sides of one match share it)
+  //    or resolved here for a single-card caller.
+  const venuePhoto =
+    opts.venuePhoto !== undefined
+      ? opts.venuePhoto
+      : await prepareVenuePhoto(input.venuePhotoName);
 
   // Brand logo (best-effort; absent → no logo, never blocks the render).
   const logo = await loadLogo();

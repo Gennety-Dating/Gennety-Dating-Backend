@@ -48,14 +48,33 @@ export async function resolveVenuePhoto(
   return buffer ? { buffer, attribution: true } : null;
 }
 
+/**
+ * The URL carries `key=<PLACES_API_KEY>`, so it can never be logged as-is.
+ * Everything diagnostic about it is in the path (which photo, which place).
+ */
+function redactKey(url: string): string {
+  return url.replace(/([?&]key=)[^&]*/i, "$1***");
+}
+
 async function fetchImage(url: string, fetchFn: typeof fetch): Promise<Buffer | null> {
   try {
     const res = await fetchFn(url, {
       signal: AbortSignal.timeout(VENUE_PHOTO_TIMEOUT_MS),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[date-card] venue photo HTTP ${res.status} for ${redactKey(url)}`);
+      return null;
+    }
     return await readResponseBuffer(res, VENUE_PHOTO_MAX_BYTES);
-  } catch {
+  } catch (err) {
+    // Never silent. A venue photo that fails leaves the card on its gradient,
+    // which looks like a venue that simply has no picture — so without this
+    // line the ONLY way to tell the two apart is to diff a delivered card
+    // against a fresh render, which is what it took to find the event-loop
+    // starvation this module now guards against (see `resolveVenuePhoto`).
+    // Same rule PRODUCT_SPEC §3.7b already states for the venue-change proxy:
+    // best-effort means logged, never silent.
+    console.warn(`[date-card] venue photo fetch failed for ${redactKey(url)}:`, err);
     return null;
   }
 }

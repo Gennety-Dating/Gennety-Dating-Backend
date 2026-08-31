@@ -5469,6 +5469,27 @@ live only in the Telegram caption.
   path always fell through to a photo-less card. Operator-supplied photos are
   not part of the product today; if reintroduced they must be an explicit
   override with a seeding path, never a silently-null field.
+  **The photo is fetched ONCE per date, before either card renders
+  (2026-08-31).** Both sides show the same venue, and both cards are rendered
+  under one `Promise.all` — so resolving inside the render meant the second
+  side's fetch was in flight while the first side rasterized. A rasterize is
+  synchronous native work (satori → resvg, plus the canvas duotone and grain)
+  that blocks the event loop for tens of seconds, while the fetch's
+  `AbortSignal.timeout` counts in **wall-clock** time, so it aborted every
+  time. Measured on a real match: the fetch takes ~2.5 s on a free loop and
+  returns null when the loop is held for 9 s, against a single card that
+  rasterizes in ~45 s — the 8 s budget never stood a chance. **Both** delivered
+  cards therefore fell back to the branded gradient, which reads exactly like a
+  venue with no picture, so the fault was invisible from the product side and
+  had to be found by diffing a delivered card against a fresh render. Resolving
+  ahead of the renders is what puts the fetch back on a free loop; raising the
+  timeout is not a fix, because the loop is blocked far longer than any sane
+  budget. It also halves the billed Places media requests and the duotone cost
+  per date, but that is the side benefit, not the reason.
+  **A failed fetch is now logged rather than swallowed**, by the same rule
+  §3.7b already states for the board's photo proxy: best-effort means retried
+  and logged, never silent. The log line redacts `key=` — the media URL carries
+  `PLACES_API_KEY`.
   **The §3.7b board reads its photos off the venue row, and pays nothing for
   them (2026-08-20).** A curated venue's board card and detail gallery were
   blank for the same structural reason as the date card once was — curated rows
