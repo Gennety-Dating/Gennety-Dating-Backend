@@ -84,6 +84,12 @@ body {
 
 .venue-pin {
   position: relative;
+  /* The pin carries its own size. MapLibre gives a marker element none (this
+     used to come from Leaflet's `iconSize`), and the dot and the pulse are
+     both absolutely positioned against it — so without this they collapse to
+     0x0 and the pin vanishes with nothing failing anywhere. */
+  width: 22px;
+  height: 22px;
 }
 
 .venue-dot,

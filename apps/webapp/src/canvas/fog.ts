@@ -15,7 +15,7 @@
  * nothing, and it looks identical to a bug. This module renders `null` for an
  * empty state and the caller simply does not add the layer.
  *
- * Pure geometry, no Leaflet: it turns a tile list plus a viewport into an SVG
+ * Pure geometry, no map library: it turns a tile list plus a viewport into an SVG
  * path string, which is the one thing here worth testing without a browser.
  *
  * **The geohash decode is inlined rather than imported**, because this

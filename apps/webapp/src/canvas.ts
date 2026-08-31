@@ -5,7 +5,7 @@
  * This file is the wiring and nothing else: the decisions live in
  * `canvas/sheet.ts` (what a state says), `canvas/poll.ts` (how often to ask)
  * and `canvas/shake.ts` (what a shake is), all pure and all tested without a
- * browser. What is left here is the DOM, Leaflet, and the two permission
+ * browser. What is left here is the DOM, MapLibre, and the two permission
  * dances the platform forces on us.
  *
  * The Scratch Map's fog is here now that it has an endpoint to fill it
@@ -14,8 +14,13 @@
  * looks exactly like a bug.
  */
 
+// maplibre-gl v6 is ESM-only and has NO default export — named only. `Map`
+// would shadow the global, so the package's own `MapLibreMap` alias is used.
+import { AttributionControl, MapLibreMap, Marker } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import "./theme.css";
 import "./canvas.css";
+import { mapStyle } from "./map-style.js";
 import { isLang, stringsFor, type Lang } from "./canvas/i18n.js";
 import { isCanvasState, sheetFor, type CanvasState, type RadarReading } from "./canvas/sheet.js";
 import { backoffFor, pollIntervalFor } from "./canvas/poll.js";
@@ -31,13 +36,11 @@ import {
   type ScratchState,
 } from "./canvas/api.js";
 import { fogPath, formatExplored } from "./canvas/fog.js";
+import { apiBase } from "./api.js";
 
 const KYIV: [number, number] = [50.4501, 30.5234];
 const MAP_ZOOM = 13;
 const VENUE_ZOOM = 16;
-const MAP_TILES_URL = `${(import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "")}/v1/maptiles/{z}/{x}/{y}`;
-const MAP_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 /**
  * Floor under the boot cover. It normally lifts on the first painted tile;
  * this is what stops a tile-proxy outage trapping the user behind a loader
@@ -74,8 +77,8 @@ const el = {
   scratchToggle: document.getElementById("scratch-toggle") as HTMLButtonElement | null,
 };
 
-let map: L.Map | null = null;
-let venueMarker: L.Marker | null = null;
+let map: MapLibreMap | null = null;
+let venueMarker: Marker | null = null;
 let bootDismissed = false;
 let pollTimer: number | null = null;
 let failures = 0;
@@ -121,10 +124,7 @@ function haptic(style: "light" | "rigid" | "success" | "error"): void {
 // ---------------------------------------------------------------------------
 
 function initMap(): void {
-  if (!window.L || !el.map) {
-    // No Leaflet (the CDN is unreachable) is not a dead screen: the sheet is
-    // the product here and the map is its backdrop, so we drop the cover and
-    // let the sheet render over the page's own background.
+  if (!el.map) {
     dismissBoot();
     return;
   }
@@ -136,27 +136,45 @@ function initMap(): void {
   };
   sizeMap();
 
-  map = window.L.map("map", {
-    center: KYIV,
-    zoom: MAP_ZOOM,
-    zoomControl: false,
-    attributionControl: true,
-  });
-  map.attributionControl?.setPrefix?.(false);
+  // No WebGL (an ancient client, or a browser with it switched off) is not a
+  // dead screen: the sheet is the product here and the map is its backdrop, so
+  // the constructor's throw drops the cover and lets the sheet render over the
+  // page's own background.
+  try {
+    map = new MapLibreMap({
+      container: el.map,
+      style: mapStyle(apiBase),
+      // MapLibre takes [lng, lat]. `KYIV` is stored the other way round, as
+      // every other coordinate in this product is.
+      center: [KYIV[1], KYIV[0]],
+      zoom: MAP_ZOOM,
+      maxZoom: 20,
+      // The fog is drawn in container pixels against a north-up projection, so
+      // a rotated or pitched map would slide the holes off the streets they
+      // belong to. Both gestures are disabled rather than compensated for.
+      dragRotate: false,
+      pitchWithRotate: false,
+      attributionControl: false,
+    });
+  } catch {
+    map = null;
+    dismissBoot();
+    return;
+  }
+  map.touchZoomRotate?.disableRotation?.();
+  map.addControl(new AttributionControl({ compact: false }), "bottom-right");
 
-  const tiles = window.L.tileLayer(MAP_TILES_URL, {
-    attribution: MAP_ATTRIBUTION,
-    maxZoom: 20,
-  });
-  // One real tile, not the layer's `load`: Telegram settles this WebView's
-  // viewport a few hundred ms after init, so the container can measure 0×0 and
-  // build a zero-tile grid — `load` would then resolve against nothing.
-  tiles.once?.("tileload", dismissBoot);
-  tiles.addTo(map);
+// `idle` — the map has painted everything it was asked to paint — rather
+  // than `load`, which resolves as soon as the style parses and one frame
+  // goes out. Neither is proof on its own: in this WebView the container can
+  // still measure 0x0 at init, and a map asked for no tiles reaches both
+  // events instantly. That is what the size-kick below and the
+  // BOOT_REVEAL_MAX_MS floor are for; `idle` is simply the closer of the two.
+  map.once("idle", dismissBoot);
 
   const kick = (): void => {
     sizeMap();
-    map?.invalidateSize();
+    map?.resize();
     renderFog();
   };
   // The veil is drawn in container pixels, so every pan and zoom moves it.
@@ -170,19 +188,21 @@ function initMap(): void {
 }
 
 function showVenue(lat: number, lng: number): void {
-  if (!map || !window.L) return;
+  if (!map) return;
   if (!venueMarker) {
-    venueMarker = window.L.marker([lat, lng], {
-      icon: window.L.divIcon({
-        className: "venue-pin",
-        html: '<span class="venue-pulse"></span><span class="venue-dot"></span>',
-        iconSize: [22, 22],
-        iconAnchor: [11, 11],
-      }),
-    }).addTo(map);
-    map.setView([lat, lng], VENUE_ZOOM);
+    // The element carries its own 22×22 in `canvas.css`. MapLibre gives a
+    // marker element no size of its own (Leaflet's `iconSize` did), and the
+    // pulse and the dot are absolutely positioned against it — so without that
+    // rule they collapse to nothing and the pin silently disappears.
+    const pin = document.createElement("div");
+    pin.className = "venue-pin";
+    pin.innerHTML = '<span class="venue-pulse"></span><span class="venue-dot"></span>';
+    venueMarker = new Marker({ element: pin, anchor: "center" })
+      .setLngLat([lng, lat])
+      .addTo(map);
+    map.jumpTo({ center: [lng, lat], zoom: VENUE_ZOOM });
   } else {
-    venueMarker.setLatLng([lat, lng]);
+    venueMarker.setLngLat([lng, lat]);
   }
 }
 
@@ -193,25 +213,24 @@ function showVenue(lat: number, lng: number): void {
 /**
  * Redraw the veil.
  *
- * An SVG overlay rather than a Leaflet layer: the whole thing is ONE path with
+ * An SVG overlay rather than a map layer: the whole thing is ONE path with
  * one hole per tile, and even-odd fill cuts them out in a single composite.
  * A layer of N rectangles would seam visibly where two uncovered tiles touch,
  * which is the common case — people walk through adjacent tiles.
  */
 function renderFog(): void {
-  if (!map || !window.L || !el.map) return;
+  if (!map || !el.map) return;
   const tiles = scratch?.exploredTiles ?? [];
 
-  const project = map.latLngToContainerPoint;
-  // Without a projection there is no fog to draw, and a veil positioned by
-  // guesswork would sit over the wrong streets — worse than none.
-  if (!project) return;
-
-  const size = map.getSize?.() ?? { x: el.map.clientWidth, y: el.map.clientHeight };
+  // Container pixels, which is what `map.project` returns and what the veil is
+  // positioned in. Deliberately not the WebGL canvas's own width/height —
+  // those are device pixels and would be 2–3x too large on a phone.
+  const width = el.map.clientWidth;
+  const height = el.map.clientHeight;
   const path = fogPath(tiles, {
-    width: size.x,
-    height: size.y,
-    project: (lat, lng) => project.call(map!, [lat, lng]),
+    width,
+    height,
+    project: (lat, lng) => map!.project([lng, lat]),
   });
 
   if (!path) {
@@ -226,8 +245,8 @@ function renderFog(): void {
     fogLayer.setAttribute("aria-hidden", "true");
     el.map.appendChild(fogLayer);
   }
-  fogLayer.setAttribute("width", String(size.x));
-  fogLayer.setAttribute("height", String(size.y));
+  fogLayer.setAttribute("width", String(width));
+  fogLayer.setAttribute("height", String(height));
   fogLayer.innerHTML =
     `<path d="${path}" fill-rule="evenodd" class="fog-veil" />`;
 }

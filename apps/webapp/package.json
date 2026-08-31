@@ -24,6 +24,7 @@
     "@aws-amplify/ui-react-liveness": "^3.6.7",
     "aws-amplify": "^6.19.0",
     "jsqr": "^1.4.0",
+    "maplibre-gl": "^6.6.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"

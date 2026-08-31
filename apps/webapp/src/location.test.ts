@@ -1,5 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// maplibre-gl is mocked at module level: it is an ESM package with named
+// exports and a WebGL runtime, and neither survives this suite's fake DOM.
+const mapConstructorMock = vi.hoisted(() => vi.fn());
+vi.mock("maplibre-gl", () => ({
+  MapLibreMap: mapConstructorMock,
+  AttributionControl: vi.fn(),
+  Marker: vi.fn(),
+}));
+vi.mock("maplibre-gl/dist/maplibre-gl.css", () => ({}));
+vi.mock("./map-style.js", () => ({ mapStyle: vi.fn(() => ({ version: 8 })) }));
+
 const { selectLocationMock, fetchVenueIntentStateMock, interpretVenueIntentTmaMock, confirmVenueIntentTmaMock } = vi.hoisted(() => ({
   selectLocationMock: vi.fn(),
   fetchVenueIntentStateMock: vi.fn(),
@@ -236,32 +247,29 @@ async function loadLocationApp(options: {
       notificationOccurred: vi.fn(),
     },
   };
+  // MapLibre arrives as an ES import rather than a `window.L` global, so it is
+  // mocked at module level (top of file). `once("idle")` is what lifts the
+  // loading cover — the map's own first-render event, not a tile event.
+  const mapListeners = new Map<string, () => void>();
   const fakeMap = {
-    attributionControl: { setPrefix: vi.fn() },
     on: vi.fn(),
+    once: vi.fn((type: string, listener: () => void) => {
+      mapListeners.set(type, listener);
+      return fakeMap;
+    }),
     getCenter: vi.fn(() => ({ lng: 30.5234, lat: 50.4501 })),
-    setView: vi.fn(),
-    invalidateSize: vi.fn(),
+    jumpTo: vi.fn(),
+    resize: vi.fn(),
+    addControl: vi.fn(),
+    touchZoomRotate: { disableRotation: vi.fn() },
     remove: vi.fn(),
   };
-  // Leaflet's `L.map(el, opts)` returns the map instance; `L.tileLayer(url, opts)`
-  // returns a layer with `.addTo(map)` plus the Evented `.once(type, fn)` the app
-  // subscribes to so the loading cover lifts on the first painted tile.
-  const tileListeners = new Map<string, () => void>();
-  const fakeTileLayer: {
-    once: (type: string, listener: () => void) => typeof fakeTileLayer;
-    addTo: (map: unknown) => typeof fakeMap;
-  } = {
-    once: vi.fn((type: string, listener: () => void) => {
-      tileListeners.set(type, listener);
-      return fakeTileLayer;
-    }),
-    addTo: vi.fn(() => fakeMap),
-  };
-  const L = {
-    map: vi.fn(() => fakeMap),
-    tileLayer: vi.fn(() => fakeTileLayer),
-  };
+  // A `function` expression, never an arrow: the app calls `new MapLibreMap(…)`
+  // and an arrow is not constructible, so an arrow impl throws — straight into
+  // initMap's WebGL-fallback catch, where the map silently never exists.
+  mapConstructorMock.mockImplementation(function () {
+    return fakeMap;
+  });
 
   vi.stubGlobal("document", document);
   vi.stubGlobal("Node", FakeElement);
@@ -271,7 +279,6 @@ async function loadLocationApp(options: {
   });
   vi.stubGlobal("window", {
     Telegram: { WebApp: app },
-    L,
     isSecureContext: options.isSecureContext ?? true,
   });
   vi.stubGlobal("navigator", {
@@ -287,7 +294,7 @@ async function loadLocationApp(options: {
     mainButton,
     shareButton: document.getElementById("share-current")!,
     boot: document.getElementById("boot")!,
-    paintFirstTile: () => tileListeners.get("tileload")?.(),
+    paintFirstTile: () => mapListeners.get("idle")?.(),
   };
 }
 
@@ -329,10 +336,11 @@ describe("Location Mini App geolocation quick-action", () => {
     callbacks.success?.(makePosition(50.46, 30.51));
     await flushPromises();
 
-    // Center-pin picker: recenter under the fixed pin via Leaflet setView.
-    // Leaflet uses [lat, lng] order.
-    expect(fakeMap.setView).toHaveBeenCalledWith([50.46, 30.51], 16, {
-      animate: false,
+    // Center-pin picker: recenter under the fixed pin. MapLibre takes
+    // [lng, lat] — the reverse of the Leaflet map this replaced.
+    expect(fakeMap.jumpTo).toHaveBeenCalledWith({
+      center: [30.51, 50.46],
+      zoom: 16,
     });
     expect(selectLocationMock).toHaveBeenCalledWith(
       "init-data",

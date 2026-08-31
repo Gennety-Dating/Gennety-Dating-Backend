@@ -70,11 +70,11 @@ body {
     radial-gradient(120% 42% at 50% 0%, rgba(245, 245, 245, 0.62), transparent 46%),
     radial-gradient(120% 34% at 50% 100%, rgba(245, 245, 245, 0.86), transparent 52%);
 }
-/* Recolor the CARTO dark raster tiles into a light basemap for the light theme
-   (the tiles are server-proxied dark_all, so we can't switch providers here).
-   Only the tile pane is filtered — the pin, markers and controls are separate
-   panes, so they stay correct. */
-:root[data-theme="light"] .leaflet-tile-pane {
+/* Recolor the dark basemap into a light one for the light theme. The style is
+   vendored and server-proxied, so we cannot swap providers here.
+   Only the map's own canvas is filtered — the pin, the controls and the
+   attribution are ordinary DOM siblings of it, so they stay correct. */
+:root[data-theme="light"] .maplibregl-canvas {
   filter: invert(1) hue-rotate(180deg) brightness(0.98);
 }
 
@@ -448,24 +448,28 @@ button.cta .cta-text.swap {
   background: var(--bg);
 }
 
-/* --- Leaflet: dark container (Leaflet defaults to light grey while tiles
-   paint) + soften the required attribution to the dark theme. The "Leaflet"
-   prefix is stripped in JS, so only the OSM/CARTO credit remains — no
-   library watermark. --- */
-.leaflet-container {
+/* --- MapLibre: dark container while the first tiles paint, and the required
+   attribution softened to the theme. MapLibre carries no library watermark of
+   its own, so only the OSM/CARTO credit remains. --- */
+.maplibregl-map {
   background: var(--bg) !important;
   outline: none;
   font-family: inherit;
 }
-.leaflet-control-attribution {
+.maplibregl-ctrl-attrib {
   background: var(--surface-glass) !important;
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
-.leaflet-control-attribution,
-.leaflet-control-attribution a {
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib a {
   color: var(--text-faint) !important;
   font-size: 10px;
+}
+/* MapLibre draws a light "i" button next to the credit when it thinks the bar
+   is compact. We always render it expanded, so the button is a dead control. */
+.maplibregl-ctrl-attrib-button {
+  display: none;
 }
 
 /* --- Venue Intent V2 · step 2 (vibe + review) ------------------------------

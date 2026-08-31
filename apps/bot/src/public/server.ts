@@ -1,7 +1,10 @@
+import { gzip } from "node:zlib";
+import { promisify } from "node:util";
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { allowCrossOriginImage } from "./cross-origin-image.js";
+import { stripUndrawnLayers } from "./vector-tile-filter.js";
 import type { Api, RawApi } from "grammy";
 import { env } from "../config.js";
 import {
@@ -123,68 +126,138 @@ let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
 let premiumRouter: ReturnType<typeof createPremiumRouter> | null = null;
 let referralRouter: ReturnType<typeof createReferralRouter> | null = null;
-// Public map-tile proxy for the location Mini App. Some client networks can't
-// reach the tile CDN directly (regional CDN blocks), so the bot fetches tiles
-// server-side and streams them — the phone only ever talks to our own origin,
-// which it already reaches to load the Mini App. Tiles are public + immutable →
-// no auth, aggressive cache. It has a dedicated higher-volume limiter because
-// one map view fetches ~15 tiles at once, but it is never an unbounded proxy.
+// Public map-tile proxy for the two map Mini App screens (the departure-point
+// picker and the Living Canvas). Some client networks can't reach the tile CDN
+// directly (regional CDN blocks), so the bot fetches tiles server-side and
+// streams them — the phone only ever talks to our own origin, which it already
+// reaches to load the Mini App. Tiles are public + immutable → no auth,
+// aggressive cache. There is a dedicated higher-volume limiter because one map
+// view fetches ~10 tiles at once, but it is never an unbounded proxy.
+//
+// Two routes, because the basemap moved from raster PNG to vector:
+//   /v1/vectortiles — the live one (`.mvt`, MapLibre), needs no CARTO key.
+//   /v1/maptiles    — the legacy raster one, kept only for Mini App bundles
+//                     cached on a phone from before the migration.
 const TILE_SUBDOMAINS = ["a", "b", "c", "d"] as const;
 const MAX_TILE_BYTES = 1024 * 1024;
-app.get("/v1/maptiles/:z/:x/:y", mapTileLimiter, async (req, res) => {
+
+/** Validated `{z}/{x}/{y}`, or null. The bounds check is what stops the proxy
+    being pointed at an arbitrary upstream path. */
+function tileCoords(req: Request): { z: number; x: number; y: number } | null {
   const z = Number(req.params.z);
   const x = Number(req.params.x);
   const y = Number(req.params.y);
   const valid =
     Number.isInteger(z) && Number.isInteger(x) && Number.isInteger(y) &&
     z >= 0 && z <= 22 && x >= 0 && y >= 0 && x < 2 ** z && y < 2 ** z;
-  if (!valid) {
+  return valid ? { z, x, y } : null;
+}
+
+/**
+ * Read an upstream tile with a hard size ceiling.
+ *
+ * The ceiling is enforced while STREAMING rather than from `content-length`,
+ * and on the vector route that is not belt-and-braces: CARTO serves `.mvt`
+ * gzipped, Node's `fetch` transparently decompresses it, and the
+ * `content-length` header still describes the COMPRESSED bytes — so the header
+ * under-reports the body by ~1.7x and cannot be the guard. Measured worst case
+ * over central Kyiv at z14 is 448 KB decompressed, i.e. 2.3x headroom.
+ */
+async function readTile(upstream: string): Promise<Buffer | null> {
+  const upstreamRes = await fetch(upstream, { signal: AbortSignal.timeout(8000) });
+  if (!upstreamRes.ok || !upstreamRes.body) return null;
+  const reader = upstreamRes.body.getReader();
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > MAX_TILE_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks, totalBytes);
+}
+
+const gzipAsync = promisify(gzip);
+
+app.get("/v1/vectortiles/:z/:x/:y", mapTileLimiter, async (req, res) => {
+  const coords = tileCoords(req);
+  if (!coords) {
     res.status(400).end();
     return;
   }
+  const { z, x, y } = coords;
   const sub = TILE_SUBDOMAINS[(x + y) % TILE_SUBDOMAINS.length];
-  // `dark_nolabels` = the dark basemap without any place labels. CARTO bakes
-  // labels into the raster in the LOCAL language (Ukrainian for Kyiv), and there
-  // is no English raster variant, so we drop labels rather than show the wrong
-  // language. (English street labels would need a keyed provider / vector tiles.)
+  // `carto.streets/v1` is the source behind CARTO's own GL styles, and it needs
+  // NO api key — which is the whole reason the map moved here from the raster
+  // basemap. The style that reads it is vendored client-side in
+  // `apps/webapp/src/map-style.ts`; it declares no glyphs and no sprite, so
+  // this is the ONLY upstream URL the map touches and the proxy stays a
+  // single-origin one.
+  const upstream =
+    `https://tiles-${sub}.basemaps.cartocdn.com/vectortiles/carto.streets/v1/${z}/${x}/${y}.mvt`;
+  try {
+    const raw = await readTile(upstream);
+    if (!raw) {
+      res.status(502).end();
+      return;
+    }
+    // Two steps, innermost first.
+    //
+    // Drop the label/POI layers this style never draws. 78% of a central-Kyiv
+    // z14 tile is layers we do not render, which is the difference between a
+    // ~1 MB screen and a ~342 KB one — see `vector-tile-filter.ts` for the
+    // measurements and for why it cannot corrupt a tile.
+    //
+    // Then re-compress what `fetch` decompressed on the way in. Not optional:
+    // the phones this proxy exists for are on the worst networks, and
+    // forwarding the plain protobuf would send them ~1.7x the bytes CARTO
+    // would have. Measured, our output lands within ~0.5% of CARTO's own gzip,
+    // at 0.7–17.5 ms per tile — and `zlib.gzip` is async, so that cost sits on
+    // the libuv threadpool rather than blocking the bot's event loop.
+    const body = await gzipAsync(stripUndrawnLayers(raw));
+    res.setHeader("Content-Type", "application/x-protobuf");
+    res.setHeader("Content-Encoding", "gzip");
+    res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+    allowCrossOriginImage(res);
+    res.status(200).end(body);
+  } catch {
+    res.status(502).end();
+  }
+});
+
+app.get("/v1/maptiles/:z/:x/:y", mapTileLimiter, async (req, res) => {
+  const coords = tileCoords(req);
+  if (!coords) {
+    res.status(400).end();
+    return;
+  }
+  const { z, x, y } = coords;
+  const sub = TILE_SUBDOMAINS[(x + y) % TILE_SUBDOMAINS.length];
+  // LEGACY. Kept alive only so a Mini App bundle cached before the vector
+  // migration keeps drawing a map; nothing we ship still requests it.
+  //
+  // `dark_nolabels` = the dark basemap without place labels. CARTO bakes labels
+  // into the raster in the LOCAL language and offers no English variant, so we
+  // dropped labels rather than show the wrong one.
+  //
   // The key rides server-side (see `CARTO_API_KEY` in config.ts). Unkeyed,
-  // CARTO answers 200 with a watermarked PNG rather than an error, so the
-  // `upstreamRes.ok` check below cannot catch a missing key — the boot
-  // warning in `startPublicServer` is what makes that state visible.
+  // CARTO answers 200 with a WATERMARKED PNG rather than an error, so no status
+  // check here can catch a missing key — the boot warning in
+  // `startPublicServer` is what makes that state visible.
   const upstream =
     `https://${sub}.basemaps.cartocdn.com/dark_nolabels/${z}/${x}/${y}.png` +
     (env.CARTO_API_KEY ? `?key=${encodeURIComponent(env.CARTO_API_KEY)}` : "");
   try {
-    const upstreamRes = await fetch(upstream, { signal: AbortSignal.timeout(8000) });
-    if (!upstreamRes.ok) {
+    const buf = await readTile(upstream);
+    if (!buf) {
       res.status(502).end();
       return;
     }
-    const declaredBytes = Number(upstreamRes.headers.get("content-length"));
-    if (Number.isFinite(declaredBytes) && declaredBytes > MAX_TILE_BYTES) {
-      await upstreamRes.body?.cancel();
-      res.status(502).end();
-      return;
-    }
-    if (!upstreamRes.body) {
-      res.status(502).end();
-      return;
-    }
-    const reader = upstreamRes.body.getReader();
-    const chunks: Buffer[] = [];
-    let totalBytes = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      totalBytes += value.byteLength;
-      if (totalBytes > MAX_TILE_BYTES) {
-        await reader.cancel();
-        res.status(502).end();
-        return;
-      }
-      chunks.push(Buffer.from(value));
-    }
-    const buf = Buffer.concat(chunks, totalBytes);
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "public, max-age=604800, immutable");
     allowCrossOriginImage(res);

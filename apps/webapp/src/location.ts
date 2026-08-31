@@ -18,6 +18,11 @@ import { pickLang, tr, type Lang } from "./i18n.js";
 import { wireContentInsets } from "./telegram-insets.js";
 import { isInsideMarket, type MarketBounds } from "./market-gate.js";
 import { boundaryEvent } from "./haptics.js";
+// maplibre-gl v6 is ESM-only and has NO default export — named only. `Map`
+// would shadow the global, so the package's own `MapLibreMap` alias is used.
+import { AttributionControl, MapLibreMap } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { mapStyle } from "./map-style.js";
 
 /**
  * Location Mini App entry point (Phase 3.7 — concierge venue, map picker).
@@ -30,10 +35,11 @@ import { boundaryEvent } from "./haptics.js";
  * UX:
  *   1. Opened via the bot's `web_app` inline button. URL carries
  *      `?match=<id>&lang=<en|ru|uk|de|pl>` (start_param fallback for inline mode).
- *   2. A dark map (Leaflet + CARTO dark tiles) opens centred on Kyiv (default
- *      city — no prior coords at first open). A **fixed centre pin** marks the
- *      selected point; the map moves under it (easier one-handed than dragging a
- *      marker), so whatever sits under the pin is the departure point.
+ *   2. A dark map (MapLibre GL over our own vector-tile proxy) opens centred
+ *      on Kyiv (default city — no prior coords at first open). A **fixed centre
+ *      pin** marks the selected point; the map moves under it (easier one-handed
+ *      than dragging a marker), so whatever sits under the pin is the departure
+ *      point.
  *   3. The user can:
  *      - Tap the 📍 FAB → browser geolocation prompt → immediate save.
  *      - Type a query → debounced `GET /v1/location/search` → floating glass
@@ -52,15 +58,13 @@ import { boundaryEvent } from "./haptics.js";
 const DEFAULT_CENTER: [number, number] = [50.4501, 30.5234]; // Kyiv center [lat, lng]
 const DEFAULT_ZOOM = 14;
 const PICK_ZOOM = 16;
-// CARTO "dark_all" raster basemap — keyless, minimal, on a fast global CDN.
-// Raster tiles are plain images (no WebGL, no vector glyphs/sprites), so the
-// picker loads light and renders reliably inside the Telegram WebView.
-// Tiles come through the bot's own /v1/maptiles proxy (see public/server.ts):
-// the phone only talks to our origin, so it works even where the CARTO CDN is
-// unreachable directly. The proxy fetches CARTO dark_all server-side.
-const MAP_TILES_URL = `${apiBase}/v1/maptiles/{z}/{x}/{y}`;
-const MAP_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+// CARTO "dark-matter-nolabels" VECTOR basemap. The style itself is vendored
+// (`map-style.ts`) rather than fetched from a hosted style URL, and it carries
+// no glyphs and no sprite — so the whole map resolves to exactly ONE runtime
+// URL, the bot's own /v1/vectortiles proxy (see public/server.ts). The phone
+// therefore still talks only to our origin, which is the property the proxy
+// exists for: it works where the CARTO CDN is unreachable directly.
+
 const SEARCH_DEBOUNCE_MS = 350;
 const MIN_QUERY_LEN = 2;
 const GEOLOCATION_OPTIONS: PositionOptions = {
@@ -147,7 +151,7 @@ function dismissBoot(): void {
 }
 setTimeout(dismissBoot, BOOT_REVEAL_MAX_MS);
 
-let map: L.Map | null = null;
+let map: MapLibreMap | null = null;
 let selectedLat: number = DEFAULT_CENTER[0];
 let selectedLng: number = DEFAULT_CENTER[1];
 let selectedAddress: string | null = null;
@@ -263,21 +267,16 @@ function showNoContext(): void {
 }
 
 function initMap(): void {
-  // Leaflet is loaded from a `<script>` tag in location.html — global `L`. If
-  // for any reason it didn't load (offline tunnel during dev), surface a
-  // graceful message rather than crashing.
-  if (!window.L) {
-    if (selectedEl) selectedEl.textContent = tr(lang, "locErrMapUnavailable");
-    dismissBoot();
-    return;
-  }
-
   // Isolate init so a map failure only costs the preview — search, "use my
-  // location", and Confirm must still work (they operate on lat/lng).
+  // location", and Confirm must still work (they operate on lat/lng). This
+  // catch is also the WebGL fallback: MapLibre throws from its constructor on
+  // a device that cannot give it a GL context, and the user still gets a
+  // working picker rather than a dead screen.
   try {
     // This WebView leaves the `inset:0` map container at 0 height (verified on
-    // device: #map=375x0), so Leaflet would build a 0-tile grid and show
-    // nothing. Force an explicit pixel size from the real window dimensions
+    // device: #map=375x0), so the renderer would size its canvas to nothing
+    // and paint nothing. Force an explicit pixel size from the real window
+    // dimensions
     // before init, and keep it in sync as the fullscreen viewport settles.
     const mapEl = document.getElementById("map");
     const sizeMapContainer = (): void => {
@@ -287,27 +286,35 @@ function initMap(): void {
     };
     sizeMapContainer();
 
-    // Leaflet coordinates are [lat, lng] — the same order as DEFAULT_CENTER.
-    map = window.L.map("map", {
-      center: DEFAULT_CENTER,
+    // MapLibre takes [lng, lat] where DEFAULT_CENTER is [lat, lng] — the one
+    // ordering difference from the Leaflet map this replaced, and the only
+    // thing worth double-checking when touching this file.
+    map = new MapLibreMap({
+      container: "map",
+      style: mapStyle(apiBase),
+      center: [DEFAULT_CENTER[1], DEFAULT_CENTER[0]],
       zoom: DEFAULT_ZOOM,
-      zoomControl: false,
-      attributionControl: true,
-    });
-    // Drop Leaflet's "Leaflet" prefix from the attribution so no library
-    // watermark shows — only the required OSM/CARTO credit remains.
-    map.attributionControl?.setPrefix?.(false);
-    const tiles = window.L.tileLayer(MAP_TILES_URL, {
-      attribution: MAP_ATTRIBUTION,
       maxZoom: 20,
+      // The picker is a fixed centre pin over a north-up map. MapLibre enables
+      // two-finger rotate/pitch by default, which would tilt the ground under a
+      // pin that cannot tilt with it — so the extra freedom is switched off
+      // rather than left as an affordance that leads somewhere confusing.
+      dragRotate: false,
+      pitchWithRotate: false,
+      attributionControl: false,
     });
-    // First painted tile = the map is genuinely showing something, so that is
-    // when the loading cover lifts. Deliberately `tileload` (one real tile) and
-    // not the layer's `load` (all visible tiles): in this WebView the container
-    // can still measure 0×0 at init, which builds a zero-tile grid — `load`
-    // would then resolve against nothing and reveal a blank map.
-    tiles.once?.("tileload", dismissBoot);
-    tiles.addTo(map);
+    map.touchZoomRotate?.disableRotation?.();
+    // OSM + CARTO credit is a licence condition, so it is added explicitly and
+    // never in `compact` mode — a credit hidden behind an ⓘ the user has to
+    // find is not a credit. The string rides the style's own source.
+    map.addControl(new AttributionControl({ compact: false }), "bottom-right");
+    // `idle` — the map has painted everything it was asked to paint — rather
+    // than `load`, which resolves as soon as the style parses and one frame
+    // goes out. Neither is proof on its own: in this WebView the container can
+    // still measure 0x0 at init, and a map asked for no tiles reaches both
+    // events instantly. That is what the size-kick below and the
+    // BOOT_REVEAL_MAX_MS floor are for; `idle` is simply the closer of the two.
+    map.once("idle", dismissBoot);
 
     // The point under the fixed centre pin is the selection. Any manual pan
     // makes it a "custom point"; programmatic recentres (search / geolocation)
@@ -320,13 +327,14 @@ function initMap(): void {
 
     setSelected(DEFAULT_CENTER[0], DEFAULT_CENTER[1], null);
     // Telegram opens this in immersive fullscreen, so the viewport (and the map
-    // container) settles a few hundred ms AFTER init. Leaflet builds its tile
-    // grid from the container size, so measuring only once at init would request
-    // ZERO tiles and stay blank forever. Recompute on every viewport change plus
-    // a few staggered ticks so tiles load as soon as the size is real.
+    // container) settles a few hundred ms AFTER init. The renderer sizes its
+    // canvas from the container, so measuring only once at init would leave a
+    // 0-height canvas and stay blank forever. Recompute on every viewport
+    // change plus a few staggered ticks so it paints as soon as the size is
+    // real.
     const kickResize = (): void => {
       sizeMapContainer();
-      map?.invalidateSize();
+      map?.resize();
     };
     if (typeof window.addEventListener === "function") {
       window.addEventListener("resize", kickResize);
@@ -346,10 +354,10 @@ function initMap(): void {
 
 /** Recentre the map under the pin and label the point in one step. */
 function recenter(lat: number, lng: number, address: string | null): void {
-  // setView (no animation) is instant and fires `moveend` synchronously
+  // jumpTo (no animation) is instant and fires `moveend` synchronously
   // (setting a null "custom point"); we then override with the real label
-  // below. Leaflet is [lat, lng].
-  map?.setView([lat, lng], PICK_ZOOM, { animate: false });
+  // below. MapLibre is [lng, lat].
+  map?.jumpTo({ center: [lng, lat], zoom: PICK_ZOOM });
   setSelected(lat, lng, address);
 }
 
