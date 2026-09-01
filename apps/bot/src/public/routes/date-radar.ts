@@ -12,6 +12,7 @@ import {
   recordPresence,
   viewOfPeer,
 } from "../../services/date-radar.js";
+import { notifyPartnerArrived } from "../../services/date-day-activity.js";
 
 /**
  * `POST /v1/dates/:matchId/proximity` — one side's position ping
@@ -132,7 +133,7 @@ dateRadarRouter.post(
     const arrived = hasArrived(here, venue);
     const eta = arrived ? null : estimateEta(here, venue, mode);
 
-    recordPresence(
+    const { newArrival } = recordPresence(
       match.id,
       side,
       {
@@ -141,6 +142,21 @@ dateRadarRouter.post(
       },
       now,
     );
+
+    // The one moment this hot route does anything beyond ping-and-read: the
+    // ping that turns a side present tells the OTHER one's lock screen, once.
+    // What travels is the fact and nothing else — the same masking as the
+    // response below, which is why the card can say "they're at the venue" and
+    // can never say how far away anyone is. On every other ping this is skipped
+    // entirely, so the five-second cadence pays nothing for it.
+    if (newArrival) {
+      await notifyPartnerArrived(match.id, side).catch((err: unknown) => {
+        console.warn(
+          `[date-radar] arrival push failed for ${match.id}:`,
+          err instanceof Error ? err.message : err,
+        );
+      });
+    }
 
     res.json({
       ok: true,

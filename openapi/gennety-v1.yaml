@@ -2500,6 +2500,83 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /v1/matches/{id}/vibe-telemetry:
+    post:
+      tags: [matches]
+      operationId: submitDateVibe
+      summary: One-tap read on how the evening went, from the Live Activity
+      description: |
+        Written by the native Live Activity's App Intent at T+2h (iOS §4.2,
+        stage `vibe_check`), from the lock screen or the expanded Dynamic
+        Island, without the app coming to the foreground.
+
+        **Deliberately not `POST /v1/me/feedback/post-date`.** That one is the
+        T+24h form: it refuses with 409 until the date is closed out, and it
+        demands a 1-10 chemistry score and a second-date answer. Pointing a
+        one-tap button at it would have meant either loosening its gate or
+        inventing a number on the user's behalf, and that blob is the only
+        thing the product learns whether a date worked from. This endpoint
+        writes to the audit log (`match_events`) instead, with the exact rating
+        in `metadata`, and changes nothing the form later says.
+
+        **Answering twice succeeds.** The second call is almost always a retry
+        of a request whose response was lost; only the first one writes.
+
+        Recording an answer also takes that side's card down, with a short
+        dismissal delay so the acknowledgement is visible before it goes.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                rating:
+                  type: string
+                  enum: [chemistry_great, nice_chat, no_vibe]
+                  description: |
+                    Three values rather than a scale. A scale already exists in
+                    the T+24h form; repeating it on a surface where the user has
+                    one second and one thumb would collect a random number, not
+                    an answer.
+      responses:
+        "200":
+          description: Recorded (or already recorded)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean, const: true }
+        "400":
+          description: |
+            `bad-rating` — a value this server does not know. Refused rather
+            than coerced: a rating guessed on the client's behalf is
+            indistinguishable in the dataset from one the person gave.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: >
+            No such match, or the caller is not on it. 404 rather than 403 so
+            the endpoint cannot be used to probe which match ids exist.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >
+            `wrong-state` — the date has not happened yet. A card that somehow
+            asked early must not be able to write an answer about an evening
+            that has not occurred.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/matches/{id}/cancel:
     post:
       tags: [matches]

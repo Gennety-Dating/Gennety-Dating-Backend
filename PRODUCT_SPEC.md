@@ -6526,7 +6526,9 @@ columns on `matches`.
 | T − 5 h | Open the **emergency window** — DM both sides with the cancel button (callback `emerg:start:{matchId}`) | shared with above |
 | T − 5 h | **Start the native «date day» Live Activity** on both sides (`services/date-day-activity.ts`, iOS §4.2) — APNs *push-to-start*, so the card appears on a locked phone whose owner has not opened the app, which is the entire reason the gate is at T-5h. No-op for anyone with no registered start token, i.e. every Telegram-only account. | shared with above |
 | T − 1.5 h | **Advance the Live Activity to the `wingman` stage.** | shared with `wingmanSentAt` |
-| T + 2 h | **End the Live Activity.** A time window (T+2h … T+2h30) rather than an idempotency column: ending an activity that is already gone is a no-op, so a repeated sweep costs one wasted push. | — (idempotent by nature) |
+| T − 30 min | **Advance the Live Activity to the `spotter` stage** — the shared sign, the partner's arrival flag, and (expanded Dynamic Island only) their first name. | time window (`dateDayBeatFor`) |
+| T + 2 h | **Advance the Live Activity to `vibe_check`** — three buttons asking how the evening went, answered from the lock screen without opening the app. | time window (`dateDayBeatFor`) |
+| T + 3 h | **End the Live Activity.** An hour after the question, not at the same moment as it: ending at T+2h would take the question away in the tick that posed it. A time window (T+3h … T+3h30) rather than an idempotency column: ending an activity that is already gone is a no-op, so a repeated sweep costs one wasted push. | — (idempotent by nature) |
 | T − 1.5 h | **Pre-date safety brief** to the female user, on whichever rails reach her — Telegram DM and/or APNs push (`safety.brief`, **time-sensitive**, §Phase 4 → Pre-date safety brief). Gender selects the recipient; `platform` selects the rail. | `safetyNoteSentAt` |
 | T − 1.5 h | **Wingman hint reveal push** — the asymmetric tip is unmasked at this gate (the mobile serializer enforces it independently) | `wingmanSentAt` |
 | T − 1 h | **Pre-date coordination offer** (feature-flagged) — DM the initiator the contact-exchange / anonymous-chat menu (see below) | `coordOfferSentAt` |
@@ -6534,6 +6536,38 @@ columns on `matches`.
 | Date moment | (no automated action — users meet in person) | — |
 | T + 2 h | **Anonymous proxy chat auto-closes** (feature-flagged) | `proxyClosedAt` |
 | T + 24 h | **"Did you actually meet?"** on Telegram, then the **feedback prompt** — each side on its own rail (DM and/or push — see below); LLM parses positives/negatives and updates `negativeConstraints` accordingly | `feedbackPromptedAt` |
+
+### The spotter sign and the one-tap vibe read (2026-09-01)
+
+Two beats added to the date-day card, both native-only (the Telegram rail has no
+surface for either).
+
+**The spotter sign** answers "which of them is he" without showing a face. It is
+a pure function of the match id (`spotterSignFor`), so both pushes carry the same
+SF Symbol and colour without a column, a migration, or a write that could succeed
+on one side and fail on the other — and a re-delivered push cannot contradict the
+first one. What travels with it is the partner's arrival as a **fact**: the
+proximity route (`POST /v1/dates/:id/proximity`) fires `notifyPartnerArrived`
+**only on the transition** to present, never on the five-second ping, and the
+payload carries no distance and no coordinate — the same masking the radar
+response already applies. The partner's first name rides along on this stage
+alone, and the client renders it in exactly one place: the expanded Dynamic
+Island, which the phone's owner opens deliberately.
+
+**`tableHint` is declared by the client and never sent by us.** There is nowhere
+in the product a person writes "by the window"; inventing one would be the
+dead-button anti-pattern in text. The slot waits for the surface that fills it,
+exactly as `chat_open` waited for the chat.
+
+**The vibe read** (`POST /v1/matches/:id/vibe-telemetry`) is one tap with three
+values, and it is **not** the T+24h feedback form. The form refuses anything
+before the date is closed out and demands two considered answers, so pointing a
+lock-screen button at it would have meant either loosening its gate or inventing
+a chemistry number on the user's behalf — and that blob is the only thing the
+product learns whether a date worked from. The tap writes to the audit log
+(`match_events`) with the rating in `metadata`, changes nothing the form later
+says, and takes that side's card down. Answering twice succeeds: the second call
+is almost always a retry of a request whose response was lost.
 
 ### Pre-date safety brief (both rails since 2026-08-12)
 

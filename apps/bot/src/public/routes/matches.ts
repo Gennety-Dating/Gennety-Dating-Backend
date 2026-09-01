@@ -33,6 +33,7 @@ import {
   isVenueOriginRefusal,
   venueOriginRefusal,
 } from "../../services/venue-origin.js";
+import { recordDateVibe } from "../../services/date-vibe.js";
 
 export const matchesRouter: Router = Router();
 
@@ -208,6 +209,33 @@ matchesRouter.post("/:id/vibe-location", async (req: Request, res: Response): Pr
     return;
   }
   res.json(result);
+});
+
+/**
+ * `POST /v1/matches/:id/vibe-telemetry` — the one-tap read on how the evening
+ * went, sent by the Live Activity's App Intent at T+2h (iOS §4.2).
+ *
+ * Separate from `POST /v1/me/feedback/post-date` on purpose. That one is the
+ * T+24h form, refuses anything before the date is closed out, and demands two
+ * considered answers; this one is a single tap on a lock screen and writes to
+ * the audit log rather than to the feedback blob. Pointing the intent at the
+ * form would have meant either loosening the form's gate or inventing a
+ * chemistry number on the user's behalf.
+ *
+ * Answering twice is a success, not a conflict: the second tap is almost
+ * always a retry of a request whose response never arrived.
+ */
+matchesRouter.post("/:id/vibe-telemetry", async (req: Request, res: Response): Promise<void> => {
+  const id = paramId(req);
+  const { rating } = (req.body ?? {}) as { rating?: unknown };
+
+  const result = await recordDateVibe({ matchId: id, userId: req.userId!, rating });
+  if (!result.ok) {
+    const status = result.error === "not-found" ? 404 : result.error === "wrong-state" ? 409 : 400;
+    res.status(status).json({ error: result.error });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 matchesRouter.post("/:id/safety-ack", async (req: Request, res: Response): Promise<void> => {

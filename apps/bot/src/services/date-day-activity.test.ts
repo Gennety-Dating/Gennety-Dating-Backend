@@ -9,8 +9,17 @@ const sendLiveActivityStartToUser = vi.fn();
 const sendLiveActivityUpdateToUser = vi.fn();
 vi.mock("./push.js", () => ({ sendLiveActivityStartToUser, sendLiveActivityUpdateToUser }));
 
-const { DATE_DAY_ATTRIBUTES_TYPE, advanceDateDayActivities, endDateDayActivities, startDateDayActivities } =
-  await import("./date-day-activity.js");
+const {
+  DATE_DAY_ATTRIBUTES_TYPE,
+  advanceDateDayActivities,
+  advanceToSpotterStage,
+  advanceToVibeCheck,
+  endDateDayActivities,
+  endDateDayActivityAfterVibe,
+  notifyPartnerArrived,
+  spotterSignFor,
+  startDateDayActivities,
+} = await import("./date-day-activity.js");
 
 const NOW = new Date("2026-08-10T12:00:00.000Z");
 const DATE_AT = new Date("2026-08-10T17:00:00.000Z");
@@ -22,8 +31,8 @@ function matchRow(overrides: Record<string, unknown> = {}) {
     venueName: "Aroma Kava",
     venueAddress: "Khreshchatyk 14",
     venueGoogleMapsUri: "https://maps.google.com/?cid=1",
-    userA: { id: "ua", language: "ru" },
-    userB: { id: "ub", language: "en" },
+    userA: { id: "ua", language: "ru", firstName: "Аня" },
+    userB: { id: "ub", language: "en", firstName: "Bohdan" },
     ...overrides,
   };
 }
@@ -122,5 +131,136 @@ describe("endDateDayActivities", () => {
 
     expect(sendLiveActivityUpdateToUser).toHaveBeenCalledTimes(2);
     expect(sendLiveActivityUpdateToUser.mock.calls[0]![2]).toEqual({ event: "end" });
+  });
+});
+
+
+describe("spotterSignFor", () => {
+  it("is deterministic — the same match always gets the same sign", () => {
+    // The whole mechanism is that two phones show the same thing without
+    // talking to each other, so instability here would not look like a bug: it
+    // would look like two people failing to find each other.
+    expect(spotterSignFor("m1")).toEqual(spotterSignFor("m1"));
+    expect(spotterSignFor("11111111-2222-3333-4444-555555555555")).toEqual(
+      spotterSignFor("11111111-2222-3333-4444-555555555555"),
+    );
+  });
+
+  it("spreads across the curated set rather than collapsing onto one sign", () => {
+    const signs = new Set(
+      Array.from({ length: 200 }, (_, i) => JSON.stringify(spotterSignFor(`match-${i}`))),
+    );
+    // 8 glyphs x 4 colours = 32 combinations. A hash that ignored most of the
+    // id (or a modulo applied to the same byte twice) would still be
+    // deterministic and would still pass the test above.
+    expect(signs.size).toBeGreaterThan(20);
+  });
+
+  it("only ever returns a sign the client can draw", () => {
+    for (let i = 0; i < 50; i++) {
+      const sign = spotterSignFor(`m-${i}`);
+      expect(sign.glyph).toMatch(/^[a-z0-9.]+$/);
+      expect(sign.glyphHex).toMatch(/^#[0-9A-F]{6}$/);
+    }
+  });
+});
+
+describe("advanceToSpotterStage", () => {
+  it("gives both sides the SAME sign and each the OTHER's first name", async () => {
+    matchFindUnique.mockResolvedValue(matchRow());
+
+    await advanceToSpotterStage("m1");
+
+    expect(sendLiveActivityUpdateToUser).toHaveBeenCalledTimes(2);
+    const [, , toA] = sendLiveActivityUpdateToUser.mock.calls[0]!;
+    const [, , toB] = sendLiveActivityUpdateToUser.mock.calls[1]!;
+
+    expect(toA.contentState.stage).toBe("spotter");
+    expect(toA.contentState.glyph).toBe(toB.contentState.glyph);
+    expect(toA.contentState.glyphHex).toBe(toB.contentState.glyphHex);
+    expect(toA.contentState).toEqual({ ...spotterSignFor("m1"), stage: "spotter", partnerFirstName: "Bohdan" });
+    expect(toB.contentState.partnerFirstName).toBe("Аня");
+  });
+
+  it("sends nobody their own name", async () => {
+    // Getting `self` and `peer` the wrong way round would leak a person their
+    // own name AND break the mechanism for both, silently.
+    matchFindUnique.mockResolvedValue(matchRow());
+    await advanceToSpotterStage("m1");
+    const [userIdA, , toA] = sendLiveActivityUpdateToUser.mock.calls[0]!;
+    expect(userIdA).toBe("ua");
+    expect(toA.contentState.partnerFirstName).not.toBe("Аня");
+  });
+
+  it("omits the name entirely when the partner has none", async () => {
+    matchFindUnique.mockResolvedValue(
+      matchRow({ userB: { id: "ub", language: "en", firstName: null } }),
+    );
+    await advanceToSpotterStage("m1");
+    const [, , toA] = sendLiveActivityUpdateToUser.mock.calls[0]!;
+    // Absent, not null: an absent key costs nothing against the 4096-byte cap.
+    expect("partnerFirstName" in toA.contentState).toBe(false);
+  });
+});
+
+describe("notifyPartnerArrived", () => {
+  it("tells the OTHER side only, and tells it a fact rather than a position", async () => {
+    matchFindUnique.mockResolvedValue(matchRow());
+
+    await notifyPartnerArrived("m1", "A");
+
+    expect(sendLiveActivityUpdateToUser).toHaveBeenCalledTimes(1);
+    const [userId, , payload] = sendLiveActivityUpdateToUser.mock.calls[0]!;
+    expect(userId).toBe("ub");
+    expect(payload.contentState.partnerArrived).toBe(true);
+    // The privacy boundary of the radar, restated on the card: no distance, no
+    // coordinate, no ETA. Pinned as an exact key set so a field added later has
+    // to be argued for here first.
+    expect(Object.keys(payload.contentState).sort()).toEqual([
+      "glyph",
+      "glyphHex",
+      "partnerArrived",
+      "partnerFirstName",
+      "stage",
+    ]);
+  });
+
+  it("carries the same sign the stage push carried", async () => {
+    matchFindUnique.mockResolvedValue(matchRow());
+    await notifyPartnerArrived("m1", "B");
+    const [userId, , payload] = sendLiveActivityUpdateToUser.mock.calls[0]!;
+    expect(userId).toBe("ua");
+    expect(payload.contentState.glyph).toBe(spotterSignFor("m1").glyph);
+  });
+});
+
+describe("advanceToVibeCheck", () => {
+  it("moves both sides and carries nothing about the partner", async () => {
+    matchFindUnique.mockResolvedValue(matchRow());
+
+    await advanceToVibeCheck("m1");
+
+    expect(sendLiveActivityUpdateToUser).toHaveBeenCalledTimes(2);
+    const [, , payload] = sendLiveActivityUpdateToUser.mock.calls[0]!;
+    expect(payload.contentState).toEqual({ stage: "vibe_check" });
+  });
+});
+
+describe("endDateDayActivityAfterVibe", () => {
+  it("ends one side with the answer visible for a moment first", async () => {
+    const now = new Date("2026-08-10T20:00:00.000Z");
+
+    await endDateDayActivityAfterVibe("ua", "chemistry_great", now);
+
+    expect(sendLiveActivityUpdateToUser).toHaveBeenCalledTimes(1);
+    const [userId, type, payload] = sendLiveActivityUpdateToUser.mock.calls[0]!;
+    expect(userId).toBe("ua");
+    expect(type).toBe("date_day");
+    expect(payload.event).toBe("end");
+    // The server's last word matches the optimistic one the intent already
+    // wrote; without it the card would blink back to three buttons for the two
+    // seconds before it disappears.
+    expect(payload.contentState).toEqual({ stage: "vibe_check", vibe: "chemistry_great" });
+    expect(payload.dismissalDate).toBeGreaterThan(Math.floor(now.getTime() / 1000));
   });
 });

@@ -52,8 +52,14 @@ export {
   BUMP_ICEBREAKER_COUNT,
   bumpWindowFor,
   checkBumpWindow,
+  DATE_DAY_SPOTTER_LEAD_MINUTES,
+  DATE_DAY_VIBE_AFTER_HOURS,
+  DATE_DAY_END_HOURS,
+  DATE_DAY_BEAT_WINDOW_MINUTES,
+  DATE_DAY_END_GRACE_MINUTES,
+  dateDayBeatFor,
 } from "./date-lifecycle.js";
-export type { DateLifecycleState } from "./date-lifecycle.js";
+export type { DateLifecycleState, DateDayBeat } from "./date-lifecycle.js";
 export { cityKeyToTimeZone, isValidTimeZone, DEFAULT_TIME_ZONE } from "./timezone.js";
 export {
   SUPPORTED_MARKETS,

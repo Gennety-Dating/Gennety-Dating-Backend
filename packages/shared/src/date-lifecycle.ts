@@ -73,10 +73,11 @@ export const DATE_BUMP_OPENS_MINUTES = 15;
  * How long after `agreedTime` a Bump is still accepted, and how long the canvas
  * keeps showing the date at all.
  *
- * Matches `PROXY_CLOSE_AFTER_HOURS` and the date-day Live Activity's own end
- * sweep, which is not a coincidence worth collapsing into a shared constant:
- * each bounds a different thing (a chat, a lock-screen card, this), and they
- * are free to move apart.
+ * Matches `PROXY_CLOSE_AFTER_HOURS`, which is not a coincidence worth
+ * collapsing into a shared constant: each bounds a different thing (a chat,
+ * this), and they are free to move apart. **They already did** — the date-day
+ * Live Activity used to end on this same number and now ends an hour later
+ * (`DATE_DAY_END_HOURS`), because it acquired a question to ask at T+2h.
  */
 export const DATE_BUMP_GRACE_HOURS = 2;
 
@@ -139,4 +140,80 @@ export function checkBumpWindow(
   if (at.getTime() < opens.getTime()) return "too-early";
   if (at.getTime() >= closes.getTime()) return "too-late";
   return "ok";
+}
+
+// ---------------------------------------------------------------------------
+// The date-day Live Activity's later beats (iOS §4.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * When the card turns from the route to the spotter sign.
+ *
+ * The same moment the pre-date proxy chat opens, and for the same reason: at
+ * half an hour out the question stops being "how do I get there" and becomes
+ * "how do we find each other".
+ */
+export const DATE_DAY_SPOTTER_LEAD_MINUTES = 30;
+
+/** When the card asks how the evening went. */
+export const DATE_DAY_VIBE_AFTER_HOURS = 2;
+
+/**
+ * When the card comes down.
+ *
+ * An hour after the question, not at the same moment as it: ending at T+2h
+ * would take the question away in the tick that posed it.
+ */
+export const DATE_DAY_END_HOURS = 3;
+
+/**
+ * How wide each beat's firing window is.
+ *
+ * The tick that fires these runs every couple of minutes and they are bounded
+ * by time windows rather than by idempotency columns, so this is the trade:
+ * a stage push carries no alert and replaces a content state with an identical
+ * one, meaning a duplicate costs two APNs calls and changes nothing on screen,
+ * whereas a MISSED beat leaves the card describing the wrong half of the
+ * evening until the next one. Six minutes is three ticks — enough that a slow
+ * tick or a restart does not drop a beat, small enough that duplicates stay in
+ * single digits.
+ */
+export const DATE_DAY_BEAT_WINDOW_MINUTES = 6;
+
+/**
+ * How far back the END beat looks, so a restarted process still catches it.
+ *
+ * Wider than the other two on purpose: a missed spotter or vibe beat costs a
+ * stale-looking card for a few minutes, but a missed end leaves a dead card on
+ * someone's lock screen until the system's own 12-hour display cap expires it.
+ */
+export const DATE_DAY_END_GRACE_MINUTES = 30;
+
+/** Which date-day beat, if any, falls in this tick for a match. */
+export type DateDayBeat = "spotter" | "vibe_check" | "end";
+
+/**
+ * Which beat a match crosses at `now`, or `null`.
+ *
+ * Pure and env-free so it can be tested without a database — the arithmetic is
+ * the whole of the behaviour, and the tick around it is plumbing.
+ *
+ * Every branch asks "did `now` just CROSS this boundary", never "is `now` past
+ * it": the latter would re-fire every tick for the rest of the day. And the
+ * ladder runs from the latest beat backwards, so a tick that wakes up late on a
+ * match already past its end does not walk it back through the earlier two.
+ */
+export function dateDayBeatFor(
+  agreedTime: Date,
+  now: Date,
+  windowMinutes: number = DATE_DAY_BEAT_WINDOW_MINUTES,
+): DateDayBeat | null {
+  const since = (offsetMs: number): number => now.getTime() - (agreedTime.getTime() + offsetMs);
+  const within = (elapsed: number, spanMinutes: number): boolean =>
+    elapsed >= 0 && elapsed < spanMinutes * MINUTE_MS;
+
+  if (within(since(DATE_DAY_END_HOURS * HOUR_MS), DATE_DAY_END_GRACE_MINUTES)) return "end";
+  if (within(since(DATE_DAY_VIBE_AFTER_HOURS * HOUR_MS), windowMinutes)) return "vibe_check";
+  if (within(since(-DATE_DAY_SPOTTER_LEAD_MINUTES * MINUTE_MS), windowMinutes)) return "spotter";
+  return null;
 }

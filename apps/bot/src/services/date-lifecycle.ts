@@ -7,6 +7,10 @@ import {
   DATE_ALERT_HOURS,
   FEEDBACK_DELAY_HOURS,
   PRE_DATE_WINGMAN_HOURS,
+  DATE_DAY_END_GRACE_MINUTES,
+  DATE_DAY_END_HOURS,
+  DATE_DAY_SPOTTER_LEAD_MINUTES,
+  dateDayBeatFor,
   generateIceBreakersPrompt,
   formatProfilerAnswersBlock,
   scoreProfilerAnswers,
@@ -20,6 +24,8 @@ import { sendPushToUser } from "./push.js";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
 import {
   advanceDateDayActivities,
+  advanceToSpotterStage,
+  advanceToVibeCheck,
   endDateDayActivities,
   startDateDayActivities,
 } from "./date-day-activity.js";
@@ -43,19 +49,10 @@ import {
  *      how the date went.
  *
  * Each action is idempotent: tracked by DB flags so it's safe to
- * retry on failure or if the tick interval overlaps.
+ * retry on failure or if the tick interval overlaps. The exception is the
+ * date-day Live Activity's later beats (§2c), which are bounded by time
+ * windows instead — see the comment there for why a repeat is free.
  */
-
-/**
- * How long after `agreedTime` the native date-day Live Activity comes down.
- * Deliberately its own constant rather than `PROXY_CLOSE_AFTER_HOURS`, which
- * happens to hold the same number today: that one bounds the pre-date chat and
- * is behind a feature flag, and retuning it must not silently change how long
- * a card sits on someone's lock screen.
- */
-const DATE_DAY_ACTIVITY_END_HOURS = 2;
-/** How far back the end sweep looks, so a restarted process still catches it. */
-const DATE_DAY_ACTIVITY_END_GRACE_MIN = 30;
 
 /** Static ice-breaker topics — swap with an LLM call later. */
 const ICEBREAKER_TOPICS_EN = [
@@ -166,6 +163,8 @@ export interface DateLifecycleResult {
   emergencies: number;
   feedbacks: number;
   wingmen: number;
+  /** Spotter / vibe-check / end pushes dispatched this tick. */
+  dateDayBeats: number;
 }
 
 /**
@@ -182,6 +181,7 @@ export async function runDateLifecycleTick(
     emergencies: 0,
     feedbacks: 0,
     wingmen: 0,
+    dateDayBeats: 0,
   };
 
   // 0. Venue change expiry — auto-cancel any stalled `proposed` swap whose
@@ -477,32 +477,53 @@ export async function runDateLifecycleTick(
     result.wingmen++;
   }
 
-  // 2c. Take the date-day card down at T+2h — the same moment the pre-date
-  // proxy chat closes, and the last point at which anything on it is
-  // actionable. Deliberately a TIME WINDOW rather than an idempotency column:
-  // ending an activity that has already ended is a no-op, so a second sweep
-  // costs one wasted APNs call and nothing else. The window is generous
-  // against a restarted process; past its right edge the system's own 12-hour
+  // 2c. The three later beats of the date-day card: spotter at T-30m, vibe
+  // check at T+2h, end at T+3h.
+  //
+  // **One query and a pure function, not three queries.** The three windows
+  // are all "agreedTime relative to now", so splitting them into three
+  // `findMany`s would have produced three rows of near-identical `where`
+  // clauses that only a careful reader could tell apart — and that a test stub
+  // matching on query shape could not tell apart at all. `dateDayBeatFor` is
+  // testable without a database, which is where the arithmetic belongs.
+  //
+  // Deliberately TIME WINDOWS rather than idempotency columns: these pushes
+  // carry no alert and replace a content state with an identical one, so a
+  // duplicate is invisible and an extra column would be a migration for
+  // nothing. Ending an activity that has already ended is a no-op for the same
+  // reason. Past the right edge of the end window, the system's own 12-hour
   // display cap is the backstop.
-  const dateDayEndFrom = new Date(
-    now.getTime() - (DATE_DAY_ACTIVITY_END_HOURS * 60 + DATE_DAY_ACTIVITY_END_GRACE_MIN) * 60_000,
+  const dateDayFrom = new Date(
+    now.getTime() - (DATE_DAY_END_HOURS * 60 + DATE_DAY_END_GRACE_MINUTES) * 60_000,
   );
-  const dateDayEndTo = new Date(now.getTime() - DATE_DAY_ACTIVITY_END_HOURS * 60 * 60 * 1000);
-  const finishedDates = await prisma.match.findMany({
+  const dateDayTo = new Date(now.getTime() + DATE_DAY_SPOTTER_LEAD_MINUTES * 60_000);
+  const dateDayCards = await prisma.match.findMany({
     where: {
       status: "scheduled",
-      agreedTime: { gt: dateDayEndFrom, lte: dateDayEndTo },
+      agreedTime: { gt: dateDayFrom, lte: dateDayTo },
       icebreakersSentAt: { not: null },
     },
-    select: { id: true },
+    select: { id: true, agreedTime: true },
   });
-  for (const match of finishedDates) {
-    await endDateDayActivities(match.id).catch((err: unknown) => {
+  for (const match of dateDayCards) {
+    if (!match.agreedTime) continue;
+    const beat = dateDayBeatFor(match.agreedTime, now);
+    if (!beat) continue;
+
+    const dispatch =
+      beat === "spotter"
+        ? advanceToSpotterStage(match.id)
+        : beat === "vibe_check"
+          ? advanceToVibeCheck(match.id)
+          : endDateDayActivities(match.id);
+
+    await dispatch.catch((err: unknown) => {
       console.warn(
-        `[date-lifecycle] date-day activity end failed for ${match.id}:`,
+        `[date-lifecycle] date-day ${beat} failed for ${match.id}:`,
         err instanceof Error ? err.message : err,
       );
     });
+    result.dateDayBeats++;
   }
 
   // 3. Feedback prompt — 24h after agreed_time

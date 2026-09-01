@@ -213,12 +213,23 @@ function sweepExpired(now: Date): void {
   }
 }
 
+/**
+ * Record one side's ping.
+ *
+ * Returns whether this ping is the moment that side BECAME present — the
+ * caller pushes the partner's Live Activity on that transition, and pings
+ * arrive every five seconds, so "is arrived" would be the wrong question to
+ * ask. A phone that goes quiet past the TTL and comes back arrived counts as a
+ * new arrival again; that is the honest reading, since in between we were
+ * telling the partner we did not know.
+ */
 export function recordPresence(
   matchId: string,
   side: "A" | "B",
   value: { etaAt?: Date; arrived: boolean },
   now: Date,
-): void {
+): { newArrival: boolean } {
+  const previous = readFresh(matchId, side, now);
   sweepExpired(now);
   // An arrival supersedes whatever ETA came with it rather than sitting beside
   // it — a person who is here has no arrival time, and carrying a stale one
@@ -229,6 +240,7 @@ export function recordPresence(
     arrived: value.arrived,
     seenAt: now,
   });
+  return { newArrival: value.arrived && !previous?.arrived };
 }
 
 /**
