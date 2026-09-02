@@ -1,3 +1,4 @@
+import { SUPPORTED_LANGUAGES, type Language } from "@gennety/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const matchFindUnique = vi.fn();
@@ -8,6 +9,12 @@ vi.mock("@gennety/db", () => ({
 const sendLiveActivityStartToUser = vi.fn();
 const sendLiveActivityUpdateToUser = vi.fn();
 vi.mock("./push.js", () => ({ sendLiveActivityStartToUser, sendLiveActivityUpdateToUser }));
+
+// `apns.ts` reads credentials at call time, never at import time, so an empty
+// env is enough to borrow its envelope builders below — and borrowing them is
+// the point: a hand-rolled copy of the envelope would measure the copy.
+vi.mock("../config.js", () => ({ env: {} }));
+const { buildLiveActivityPayload, buildLiveActivityStartPayload } = await import("./apns.js");
 
 const {
   DATE_DAY_ATTRIBUTES_TYPE,
@@ -262,5 +269,73 @@ describe("endDateDayActivityAfterVibe", () => {
     // seconds before it disappears.
     expect(payload.contentState).toEqual({ stage: "vibe_check", vibe: "chemistry_great" });
     expect(payload.dismissalDate).toBeGreaterThan(Math.floor(now.getTime() / 1000));
+  });
+});
+
+/**
+ * Apple's ceiling for a Live Activity payload is 4096 bytes, and crossing it is
+ * NOT an error: APNs takes the request, returns 200, and the device never sees
+ * the update. Nothing to notice in a log, nothing to catch in review — which is
+ * why the budget is asserted here, against what the real builders emit.
+ *
+ * **The working ceiling is half of Apple's, and the slack is not politeness.**
+ * The fattest payload is the start push, and almost all of its size comes from
+ * fields nobody on this side writes: a venue name and address copied out of
+ * Google Places, a Maps URI carrying a place_id, and an alert that a translator
+ * can lengthen without ever opening this file.
+ */
+describe("APNs payload budget", () => {
+  /** Half of Apple's 4096. */
+  const BUDGET = 2048;
+
+  /**
+   * The worst case that can actually reach production: the longest shape Places
+   * returns for a Kyiv venue, a postal address down to the entrance, a Maps URI
+   * with both a place_id and a cid, and double first names. Cyrillic, not
+   * English, because it costs two bytes per character on the wire.
+   */
+  function fatMatch(language: Language) {
+    return matchRow({
+      venueName: "Кав'ярня-книгарня «Літературне кафе на Хрещатику»",
+      venueAddress: "вулиця Володимирська, 20/1а, під'їзд 2, поверх 3, Київ, 01001, Україна",
+      venueGoogleMapsUri:
+        "https://www.google.com/maps/place/?q=place_id:ChIJrTLr-GyuEmsRBfy61i59si0&cid=10281119596374313554",
+      userA: { id: "ua", language, firstName: "Олександра-Вікторія" },
+      userB: { id: "ub", language, firstName: "Володимир-Богдан" },
+    });
+  }
+
+  function wireBytes(payload: Record<string, unknown>): number {
+    return Buffer.byteLength(JSON.stringify(payload), "utf8");
+  }
+
+  it("keeps the start push under budget in every language", async () => {
+    for (const language of SUPPORTED_LANGUAGES) {
+      matchFindUnique.mockResolvedValue(fatMatch(language));
+      sendLiveActivityStartToUser.mockClear();
+
+      await startDateDayActivities("m1", NOW);
+
+      const input = sendLiveActivityStartToUser.mock.calls[0]![2];
+      const bytes = wireBytes(buildLiveActivityStartPayload(input, NOW.getTime()));
+      expect(bytes, `start push in ${language}`).toBeLessThan(BUDGET);
+    }
+  });
+
+  it.each([
+    ["wingman", () => advanceDateDayActivities("m1", "wingman")],
+    ["spotter", () => advanceToSpotterStage("m1")],
+    ["arrival", () => notifyPartnerArrived("m1", "B")],
+    ["vibe check", () => advanceToVibeCheck("m1")],
+  ] as const)("keeps the %s update under budget", async (stage, send) => {
+    matchFindUnique.mockResolvedValue(fatMatch("uk"));
+
+    await send();
+
+    expect(sendLiveActivityUpdateToUser).toHaveBeenCalled();
+    for (const [, , input] of sendLiveActivityUpdateToUser.mock.calls) {
+      const bytes = wireBytes(buildLiveActivityPayload(input, NOW.getTime()));
+      expect(bytes, `${stage} update`).toBeLessThan(BUDGET);
+    }
   });
 });
