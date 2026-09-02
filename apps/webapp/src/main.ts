@@ -15,6 +15,7 @@ import {
 } from "./api.js";
 import { butterflySuccessMarkup, onSuccessSettle } from "./butterfly-success.js";
 import { hasNewSlot, pruneSlotsToProposedTimes } from "./calendar-selection.js";
+import { planDayRows } from "./prime-band.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { classifyDaySlots, classifySlot, type DayClass, type SlotClass } from "./state-render.js";
 import { icon } from "./icons.js";
@@ -276,7 +277,12 @@ function applyState(state: CalendarState, firstLoad: boolean): void {
   agreedTime = state.agreedTime;
   isFirstMover = state.isFirstMover;
   primeLocked = state.primeTime?.locked === true;
-  primeSlots = new Set(primeLocked ? (state.primeTime?.slots ?? []) : []);
+  // Kept whatever `locked` says. The evening section does not disappear once
+  // the band opens — it goes neutral (§3 of the redesign): a list that silently
+  // loses its grouping the moment you pay reads as if the purchase moved the
+  // times somewhere, and the pair still benefits from seeing where the evening
+  // starts. The server sends the band for both states already.
+  primeSlots = new Set(state.primeTime?.slots ?? []);
   primeStars = state.primeTime?.stars ?? 0;
   selected = pruneSlotsToProposedTimes(selected, proposedTimes);
 
@@ -552,27 +558,142 @@ function buildSheetContent(group: DayGroup): void {
   // back up the list mid-pick — it wipes and re-appends every row, which
   // resets scrollTop to 0. Where a *fresh* open lands is openSheet's call.
   const keepScrollTop = sheetBodyEl.scrollTop;
-  sheetBodyEl.innerHTML = "";
-  for (const iso of group.isos) {
-    const btn = renderSlotShell(iso, "time");
-    const cls = classifySlot(iso, selected, peerSlots);
-    paintSlotState(btn, cls, null, formatTime(new Date(iso), lang), isNewPeerSlot(iso));
-    // A locked row keeps its time and its shape and loses only its saturation:
-    // it is an offer, not a hole. The tap explains rather than refusing.
-    if (primeLocked && primeSlots.has(iso)) {
+  const body = sheetBodyEl;
+  body.innerHTML = "";
+
+  // The evening band is ONE section, not N flagged rows: a header, the rows,
+  // and — while it is locked — a single caption carrying the price. Three rows
+  // each wearing their own padlock and their own "Premium" plate read as three
+  // errors in the list; one softly tinted section with one offer under it reads
+  // as what it is. `band` is the open wrapper while we are inside that run;
+  // every other row goes straight into the body, untouched by any of this.
+  let band: HTMLElement | null = null;
+
+  for (const row of planDayRows(group.isos, primeSlots)) {
+    const btn = renderSlotShell(row.iso, "time");
+    const cls = classifySlot(row.iso, selected, peerSlots);
+    paintSlotState(btn, cls, null, formatTime(new Date(row.iso), lang), isNewPeerSlot(row.iso));
+
+    if (row.bandStart) band = openPrimeBand(body);
+
+    if (row.prime && primeLocked) {
+      // A locked row keeps its time, its fill and its height — it is an offer,
+      // not a hole, and dimming it into a grey stub is the one thing that would
+      // make a commercial row read as an invalid one. Its only state marker is
+      // a compact padlock; NO click handler goes on it, because the whole band
+      // carries one (see openPrimeBand) and a second would double-fire through
+      // it on every tap.
       btn.classList.add("is-locked");
-      const plate = document.createElement("span");
-      plate.className = "prime-plate";
-      plate.append(icon("lock", "icon"), document.createTextNode(tr(lang, "primeLockedTag")));
-      btn.appendChild(plate);
-      btn.addEventListener("click", () => openPrimeSheet());
+      btn.setAttribute("aria-haspopup", "dialog");
+      // Only on an otherwise-empty row. A slot carrying a pick indicator is
+      // showing pair state, and that always outranks band decor. The server
+      // grandfathers any band a pair has already marked (prime-time.ts §13.1),
+      // so this is a guard rather than a case that ships today.
+      if (cls === "empty") btn.appendChild(icon("lock", "icon prime-lock"));
     } else {
-      btn.addEventListener("click", () => onTapTime(iso));
+      btn.addEventListener("click", () => onTapTime(row.iso));
     }
-    sheetBodyEl.appendChild(btn);
+
+    (band ?? body).appendChild(btn);
+
+    if (row.bandEnd) {
+      if (primeLocked && band) band.appendChild(primeBandCaption());
+      band = null;
+    }
   }
-  sheetBodyEl.scrollTop = keepScrollTop;
+
+  body.scrollTop = keepScrollTop;
   setSheetCtaState(canSubmitSelection());
+}
+
+/**
+ * Open the evening section and return the wrapper the band's rows go into.
+ *
+ * The wrapper is what carries the soft brand wash, so the tint is one surface
+ * behind the whole run rather than a gradient repeated per row. It is also the
+ * single click target for the locked state: the rows, the caption, the header
+ * and the gaps between them all lead to the same sheet, and every interactive
+ * child inside it is a real `<button>`, so keyboard activation bubbles here too.
+ */
+function openPrimeBand(host: HTMLElement): HTMLElement {
+  const el = document.createElement("div");
+  el.className = primeLocked ? "prime-band" : "prime-band is-open";
+  el.setAttribute("role", "group");
+
+  const header = document.createElement("div");
+  header.className = "prime-band-header";
+  const title = document.createElement("span");
+  title.className = "prime-band-title";
+  title.textContent = tr(lang, primeLocked ? "primeBandLocked" : "primeBandOpen");
+  // The header is the group's name — without this a screen reader reads the
+  // evening rows as three more unlabelled times in the same flat list.
+  el.setAttribute("aria-label", title.textContent);
+  const rule = document.createElement("span");
+  rule.className = "prime-band-rule";
+  // The crest leads the header only while the band is locked: once the pair
+  // owns the evening there is no tier left to name, and a mark that keeps
+  // selling after the sale is the thing the open state exists to stop.
+  if (primeLocked) header.appendChild(primeCrest());
+  header.append(title, rule);
+  if (!primeLocked) {
+    // One quiet "it's yours" at section level. Repeating it per row would be
+    // the same noise the locked state just stopped making.
+    const tag = document.createElement("span");
+    tag.className = "prime-band-tag";
+    tag.append(icon("check", "icon"), document.createTextNode(tr(lang, "primeBandOpenTag")));
+    header.appendChild(tag);
+  }
+  el.appendChild(header);
+
+  if (primeLocked) el.addEventListener("click", () => openPrimeSheet());
+  host.appendChild(el);
+  return el;
+}
+
+/**
+ * The brand butterfly, in the metallic vertical gradient the Premium Mini App
+ * gives its own crest (theme-aware through the .pt-bf-a / .pt-bf-b stops).
+ * Static trusted markup — no user data reaches this string.
+ *
+ * The gradient id is per-instance: a day's sheet holds one band today, but SVG
+ * ids are document-global, and duplicates make every later crest resolve its
+ * fill to the FIRST definition — fine until the stops ever differ, then broken
+ * silently. Same precaution the venue board takes for the same reason.
+ */
+let crestSeq = 0;
+function primeCrest(): HTMLElement {
+  const id = `pt-bf-grad-${++crestSeq}`;
+  const host = document.createElement("span");
+  host.className = "prime-band-crest";
+  host.setAttribute("aria-hidden", "true");
+  host.innerHTML = `
+    <svg viewBox="-12 -10 124 120" focusable="false">
+      <defs>
+        <linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+          <stop class="pt-bf-a" offset="0" />
+          <stop class="pt-bf-b" offset="1" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M 50 35 C 20 0, -10 30, 15 55 C -5 75, 25 100, 48 65 L 52 65 C 75 100, 105 75, 85 55 C 110 30, 80 0, 50 35 Z"
+        fill="url(#${id})"
+      />
+    </svg>`;
+  return host;
+}
+
+/**
+ * The band's one paywall affordance: a single quiet action row under the last
+ * locked slot. Deliberately not a filled button — the loud one lives in the
+ * sheet this opens, and there is exactly one of those per screen.
+ */
+function primeBandCaption(): HTMLElement {
+  const cta = document.createElement("button");
+  cta.type = "button";
+  cta.className = "prime-band-cta";
+  cta.setAttribute("aria-haspopup", "dialog");
+  cta.textContent = tr(lang, "primeBandCta").replace("{stars}", String(primeStars));
+  return cta;
 }
 
 /**
@@ -1261,7 +1382,11 @@ async function poll(): Promise<void> {
 function stateFingerprint(): string {
   const peer = Array.from(peerSlots).sort().join(",");
   const mine = Array.from(confirmedMine).sort().join(",");
-  return `${agreedTime ?? ""}|${peer}|${mine}|${isFirstMover}`;
+  // `primeLocked` belongs here now that it changes the sheet's SHAPE, not just
+  // a per-row tint: the peer starting a subscription mid-negotiation has to
+  // swap the evening header and drop the caption, and without this the poll
+  // that learned about it would skip the redraw.
+  return `${agreedTime ?? ""}|${peer}|${mine}|${isFirstMover}|${primeLocked}`;
 }
 
 function onVisibility(): void {

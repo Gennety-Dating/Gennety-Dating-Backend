@@ -50,10 +50,24 @@ interface Strings {
   legendOverlap: string;
   badgeNew: string;
   /**
-   * The paid evening band (PRIME_TIME_PRODUCT_SPEC §7). The tag is one word on
-   * purpose — it rides a 44px slot row that already carries a time.
+   * The paid evening band (PRIME_TIME_PRODUCT_SPEC §7).
+   *
+   * The band is drawn as ONE section in the time sheet, not as N flagged rows,
+   * so the copy is section-level: a header, and — while it is locked — a single
+   * caption carrying the price. Neither may name how many rows are gated:
+   * that count is `PRIME_TIME_SLOT_COUNT`, an env value the server can move
+   * without anyone re-translating five locales.
+   *
+   * Both headers are rendered uppercase by CSS, so they are written in normal
+   * sentence case here.
    */
-  primeLockedTag: string;
+  primeBandLocked: string;
+  /** Same section once the band is open — neutral, no offer left to make. */
+  primeBandOpen: string;
+  /** The quiet "it's yours" mark beside the open header. */
+  primeBandOpenTag: string;
+  /** `{stars}` — the real Stars charge. The band's only paywall affordance. */
+  primeBandCta: string;
   primeSheetTitle: string;
   primeSheetBody: string;
   /** `{stars}` — the real Stars charge. There is no USD figure anywhere here. */
@@ -146,12 +160,15 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Other time",
     legendOverlap: "Both",
     badgeNew: "NEW",
-    primeLockedTag: "Premium",
+    primeBandLocked: "Evening · with Premium",
+    primeBandOpen: "Evening",
+    primeBandOpenTag: "Available",
+    primeBandCta: "Open the evening for you two · {stars} ⭐",
     primeSheetTitle: "Evening times",
     primeSheetBody:
       "The last hours of each day are open with Premium. You can open them for this date instead — once, for both of you.",
     primeSheetCtaPay: "Open the evening — {stars} ⭐",
-    primeSheetCtaPremium: "Gennety Premium",
+    primeSheetCtaPremium: "See Gennety Premium",
     primeSheetDismiss: "Pick another time",
     primeUnlockFailed: "That didn't go through. Try again.",
     primeUnlockPending:
@@ -242,12 +259,15 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Другое время",
     legendOverlap: "Совпало",
     badgeNew: "NEW",
-    primeLockedTag: "Premium",
+    primeBandLocked: "Вечер · с Premium",
+    primeBandOpen: "Вечер",
+    primeBandOpenTag: "Доступно",
+    primeBandCta: "Открыть вечер для вас двоих · {stars} ⭐",
     primeSheetTitle: "Вечернее время",
     primeSheetBody:
       "Последние часы каждого дня открыты по Premium. Можешь открыть их для этого свидания — один раз, сразу для вас двоих.",
     primeSheetCtaPay: "Открыть вечер — {stars} ⭐",
-    primeSheetCtaPremium: "Gennety Premium",
+    primeSheetCtaPremium: "Посмотреть Gennety Premium",
     primeSheetDismiss: "Выбрать другое время",
     primeUnlockFailed: "Не прошло. Попробуй ещё раз.",
     primeUnlockPending:
@@ -338,12 +358,15 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Інший час",
     legendOverlap: "Збіг",
     badgeNew: "NEW",
-    primeLockedTag: "Premium",
+    primeBandLocked: "Вечір · з Premium",
+    primeBandOpen: "Вечір",
+    primeBandOpenTag: "Доступно",
+    primeBandCta: "Відкрити вечір для вас двох · {stars} ⭐",
     primeSheetTitle: "Вечірній час",
     primeSheetBody:
       "Останні години кожного дня відкриті з Premium. Можеш відкрити їх для цього побачення — один раз, одразу для вас двох.",
     primeSheetCtaPay: "Відкрити вечір — {stars} ⭐",
-    primeSheetCtaPremium: "Gennety Premium",
+    primeSheetCtaPremium: "Переглянути Gennety Premium",
     primeSheetDismiss: "Обрати інший час",
     primeUnlockFailed: "Не вийшло. Спробуй ще раз.",
     primeUnlockPending:
@@ -434,12 +457,15 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Andere Zeit",
     legendOverlap: "Beide",
     badgeNew: "NEW",
-    primeLockedTag: "Premium",
+    primeBandLocked: "Abend · mit Premium",
+    primeBandOpen: "Abend",
+    primeBandOpenTag: "Verfügbar",
+    primeBandCta: "Den Abend für euch beide öffnen · {stars} ⭐",
     primeSheetTitle: "Abendzeiten",
     primeSheetBody:
       "Die letzten Stunden jedes Tages sind mit Premium offen. Du kannst sie stattdessen für dieses Date öffnen — einmalig, für euch beide.",
     primeSheetCtaPay: "Abend öffnen — {stars} ⭐",
-    primeSheetCtaPremium: "Gennety Premium",
+    primeSheetCtaPremium: "Gennety Premium ansehen",
     primeSheetDismiss: "Andere Zeit wählen",
     primeUnlockFailed: "Hat nicht geklappt. Versuch es noch mal.",
     primeUnlockPending:
@@ -531,12 +557,15 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Inny termin",
     legendOverlap: "Oboje",
     badgeNew: "NEW",
-    primeLockedTag: "Premium",
+    primeBandLocked: "Wieczór · z Premium",
+    primeBandOpen: "Wieczór",
+    primeBandOpenTag: "Dostępne",
+    primeBandCta: "Otwórz wieczór dla was dwojga · {stars} ⭐",
     primeSheetTitle: "Wieczorne godziny",
     primeSheetBody:
       "Ostatnie godziny każdego dnia są dostępne z Premium. Możesz je otworzyć dla tej randki — raz, od razu dla was obojga.",
     primeSheetCtaPay: "Otwórz wieczór — {stars} ⭐",
-    primeSheetCtaPremium: "Gennety Premium",
+    primeSheetCtaPremium: "Zobacz Gennety Premium",
     primeSheetDismiss: "Wybierz inną godzinę",
     primeUnlockFailed: "Nie udało się. Spróbuj jeszcze raz.",
     primeUnlockPending:

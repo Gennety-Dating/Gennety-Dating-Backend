@@ -48,8 +48,18 @@ describe("Mini App i18n", () => {
       expect(tr(lang, "primeSheetBody").length).toBeGreaterThan(0);
       expect(tr(lang, "primeSheetTitle").length).toBeGreaterThan(0);
       expect(tr(lang, "primeUnlockFailed").length).toBeGreaterThan(0);
-      // One word: the plate rides a 44px row that already carries a time.
-      expect(tr(lang, "primeLockedTag").trim().split(/\s+/)).toHaveLength(1);
+      // The band's own caption quotes the same charge and carries the same
+      // rule — it is the affordance most users actually tap, since it sits in
+      // the list rather than behind it.
+      expect(tr(lang, "primeBandCta")).toContain("{stars}");
+      expect(tr(lang, "primeBandCta").replace("{stars}", "")).not.toMatch(/\d/);
+      // Neither header may name how many rows are gated: that count is
+      // `PRIME_TIME_SLOT_COUNT`, an env value the server moves without anyone
+      // re-translating five locales.
+      for (const key of ["primeBandLocked", "primeBandOpen", "primeBandOpenTag"] as const) {
+        expect(tr(lang, key).length).toBeGreaterThan(0);
+        expect(tr(lang, key)).not.toMatch(/\d/);
+      }
     }
   });
 

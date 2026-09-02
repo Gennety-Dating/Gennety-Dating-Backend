@@ -66,6 +66,29 @@
         --self-glow: rgba(255, 255, 255, 0.7);
         --self-fill-strong: rgba(255, 255, 255, 0.25);
         --self-fill-soft: rgba(255, 255, 255, 0.08);
+        /* Prime Time's evening band — the premium layer, in SILVER.
+         * Borrowed value-for-value from the venue board's own premium slab
+         * (`venue-change.css` --vcp-*) rather than re-picked here: those two
+         * screens plus the Premium Mini App are where a user meets this tier,
+         * and a tier that changes colour between them reads as three products.
+         * Silver and not burgundy for the same reason the board gives: in this
+         * sheet burgundy already means "your partner marked this", and a
+         * burgundy band would collide with the peer wash on the row inside it.
+         *
+         * The tray steps AWAY from the sheet (--surface #161616) and the rows
+         * inside it step away from the tray in the opposite direction, so the
+         * evening rows are the brightest chips on the screen — never the
+         * dimmest, which is how a paid offer starts reading as a broken one. */
+        --pt-slab: linear-gradient(180deg, #202024 0%, #191919 100%);
+        --pt-rim: rgba(255, 255, 255, 0.09);
+        --pt-card: linear-gradient(180deg, #2e2e33 0%, #27272b 100%);
+        --pt-shimmer-base: #8b8b93;
+        --pt-shimmer-hi: #ffffff;
+        --pt-bf-a: #ffffff;
+        --pt-bf-b: #b6b6c0;
+        /* The padlock: a neutral ink at the weight of the type beside it, not
+         * a brand colour and not a whisper — it is the row's only state mark. */
+        --pt-lock: rgba(255, 255, 255, 0.72);
         --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Display",
           "Inter", system-ui, sans-serif;
         --safe-top: env(safe-area-inset-top, 0px);
@@ -122,6 +145,20 @@
          * keeping the dark label text readable. */
         --self-fill-strong: rgba(0, 0, 0, 0.24);
         --self-fill-soft: rgba(0, 0, 0, 0.12);
+        /* Light theme mirrors the dark one by INVERTING which layer is which:
+         * the sheet here is pure white, so a lifted tray would be invisible on
+         * it — the tray steps down instead, and the rows step down once more.
+         * Same rule as dark ("tray away from the sheet, rows away from the
+         * tray"), same result: the evening rows are the most contrasted chips
+         * in the list, in whichever direction the theme leaves room. */
+        --pt-slab: linear-gradient(180deg, #f1f1f4 0%, #ebebee 100%);
+        --pt-rim: rgba(0, 0, 0, 0.07);
+        --pt-card: linear-gradient(180deg, #e3e3e7 0%, #dcdce1 100%);
+        --pt-shimmer-base: #2c2c31;
+        --pt-shimmer-hi: #a9a9b2;
+        --pt-bf-a: #2a2a2e;
+        --pt-bf-b: #050505;
+        --pt-lock: rgba(29, 29, 29, 0.55);
       }
 
       * { box-sizing: border-box; }
@@ -916,45 +953,205 @@
       @media (prefers-reduced-motion: reduce) {
         .sheet { transition: none !important; }
         .sheet-backdrop { transition: none !important; }
+        /* Freeze the silver to a legible solid rather than leaving the label
+         * parked mid-fade — the same thing venue-change.css and premium.css do
+         * to their wordmarks. */
+        .prime-band-title {
+          animation: none;
+          background: none;
+          color: var(--text);
+          -webkit-text-fill-color: var(--text);
+        }
       }
 
       /* ── Prime Time: the paid evening band ───────────────────────
-       * A locked slot is still a real, readable time — it is an offer, not a
-       * hole. It keeps the row's shape and loses only its saturation, so the
-       * grid reads as one list with three rows behind glass rather than as a
-       * grid with three errors in it.
+       * ONE section, not N flagged rows. The band gets a header, a soft brand
+       * wash behind the whole run, and — while it is locked — a single caption
+       * under the last row carrying the price. Every locked row keeps its fill,
+       * its type and its height: a commercial offer must not read like three
+       * invalid options, and dimming is exactly what makes it read that way.
+       *
+       * The section is a SLAB in silver, not a burgundy wash: the same premium
+       * layer the venue board lifts its premium venues onto (`.vc-premium-group`
+       * / --vcp-*), down to the crest and the travelling shimmer on the label.
+       * Two reasons it is not burgundy. One, burgundy in this sheet already
+       * means "your partner marked this" — a burgundy band tints the very rows
+       * that have to show that state. Two, the tier a user meets on the venue
+       * board and the tier they meet here are the same purchase, and it has to
+       * look like it.
+       *
+       * The tray steps away from the sheet, and the rows inside step away from
+       * the tray in the opposite direction (--pt-slab / --pt-card, defined per
+       * theme): in dark the tray sinks and the rows lift, in light the tray
+       * pales and the rows sink. Either way the evening rows end up the most
+       * contrasted chips in the list — never the dimmest.
        */
-      .slot.is-locked {
-        opacity: 0.62;
-        cursor: pointer;
+      .prime-band {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        /* Negative inline margin cancelled by equal padding: the wash extends
+         * 8px past the rows while the rows themselves stay on the exact x-axis
+         * they had before, so the band changes no row's rhythm. 8 < the sheet
+         * body's 20px inline padding, so nothing overflows sideways. */
+        margin: 2px -8px 0;
+        padding: 8px;
+        border-radius: 22px;
+        background: var(--pt-slab);
+        /* An inset rim rather than a real outline — a 1px border would grow
+         * the band's box and push its rows off the exact x-axis the
+         * margin/padding pair above just spent its whole comment keeping. */
+        box-shadow: inset 0 0 0 1px var(--pt-rim);
       }
-      .slot.is-locked .slot-time-label {
-        color: var(--text-70, var(--text));
+      /* Scoped, not global: `.slot` paints `var(--slot-bg)` and every selected
+       * state paints its own translucent gradient instead, so re-pointing the
+       * variable here re-tones ONLY the empty evening rows and leaves "you",
+       * "your partner" and "both" reading exactly as they do everywhere else. */
+      .prime-band:not(.is-open) { --slot-bg: var(--pt-card); }
+      /* Open band: the grouping is still useful, the tier decoration is not —
+       * nothing is being sold any more, and a paid-for section that keeps
+       * shimmering is the upsell continuing after the sale. Rows fall back to
+       * the ordinary `--slot-bg` on their own, since the rule above no longer
+       * matches. */
+      .prime-band.is-open {
+        background: none;
+        box-shadow: none;
       }
-      /* Rides the row's right edge, so the time stays where the eye already
-       * looks for it on every other row. */
-      .prime-plate {
-        position: absolute;
-        top: 50%;
-        right: 14px;
-        transform: translateY(-50%);
+
+      .prime-band-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        /* 8px band padding + 12px = the 20px inline padding of a slot row, so
+         * the label starts on the same vertical as every time below it. */
+        padding: 2px 12px 0;
+      }
+      /* The crest: the brand butterfly in the same vertical metal the Premium
+       * Mini App gives its own, so the mark on the paywall and the mark on the
+       * band are one object. It is a filled shape, so the shimmer cannot travel
+       * through it the way it travels through letterforms — the soft halo is
+       * what keeps it in the same material as the word beside it. */
+      .prime-band-crest {
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        width: 16px;
+        height: 16px;
+      }
+      .prime-band-crest svg {
+        width: 100%;
+        height: 100%;
+        filter: drop-shadow(0 1px 3px var(--pt-rim));
+      }
+      .pt-bf-a { stop-color: var(--pt-bf-a); }
+      .pt-bf-b { stop-color: var(--pt-bf-b); }
+      /* The travelling silver band runs through the LETTERS themselves (clipped
+       * to the text), not as a sweep across a pill — same treatment, timing and
+       * values as `.vc-premium-word` and the Premium Mini App's wordmark. 3× the
+       * text width keeps the bright band fully off the glyphs at both ends of
+       * the loop, which is what makes the wrap invisible. */
+      .prime-band-title {
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        line-height: 1.4;
+        background: linear-gradient(
+          100deg,
+          var(--pt-shimmer-base) 0%,
+          var(--pt-shimmer-base) 40%,
+          var(--pt-shimmer-hi) 50%,
+          var(--pt-shimmer-base) 60%,
+          var(--pt-shimmer-base) 100%
+        );
+        background-size: 300% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        -webkit-text-fill-color: transparent;
+        animation: pt-shimmer 4.6s linear infinite;
+      }
+      /* Constant-speed travel, no easing and no hold — identical to vcp-shimmer
+       * and pm-shimmer, so two of these on one screen never beat against each
+       * other. */
+      @keyframes pt-shimmer {
+        from { background-position: 100% 0; }
+        to { background-position: 0% 0; }
+      }
+      /* Open band: back to plain ink. `--text-60`, not `--text-40` — this is a
+       * real section label, and 40% of the ink on a white sheet is ~2.9:1,
+       * under the floor for text. */
+      .prime-band.is-open .prime-band-title {
+        font-weight: 700;
+        background: none;
+        color: var(--text-60);
+        -webkit-text-fill-color: var(--text-60);
+        animation: none;
+      }
+      /* Fills whatever the (localized, possibly two-line) label leaves. Shrinks
+       * to nothing before the label ever truncates. */
+      .prime-band-rule {
+        flex: 1 1 auto;
+        min-width: 8px;
+        height: 1px;
+        background: var(--border-2);
+      }
+      .prime-band-tag {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        padding: 3px 9px 3px 7px;
-        border-radius: 999px;
-        background: var(--accent-soft, rgba(139, 37, 59, 0.18));
-        color: var(--accent-bright, var(--accent));
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        line-height: 1;
-        pointer-events: none;
+        gap: 4px;
+        flex: 0 0 auto;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-60);
       }
-      .prime-plate .icon {
+      .prime-band-tag .icon {
         width: 11px;
         height: 11px;
       }
+
+      /* A locked row is a normal row on the tray's ground: same type, same
+       * height, its fill re-pointed by the band's `--slot-bg` above.
+       * `cursor: pointer` only — no opacity, no muted text. */
+      .slot.is-locked { cursor: pointer; }
+      /* The single state marker, in the tray's own neutral ink rather than in
+       * burgundy: burgundy on a slot row means "your partner", and a padlock is
+       * not a person. Sized like a body glyph rather than a badge so it sits
+       * where the pair dots sit on every other row. */
+      .prime-lock {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+        color: var(--pt-lock);
+        z-index: 1;
+      }
+
+      /* The band's one paywall affordance. Quiet by construction: no fill, no
+       * border, brand text on the tray's own ground — the loud button lives in
+       * the sheet this opens. Burgundy is deliberately kept HERE and nowhere
+       * else in the band: it is the one line that asks for money, and it is the
+       * board's rule too (a silver slab, a burgundy call to action).
+       * Padding keeps it a ≥40px hit target. */
+      .prime-band-cta {
+        appearance: none;
+        display: block;
+        width: 100%;
+        margin: -2px 0 0;
+        padding: 11px 12px;
+        border: 0;
+        border-radius: 14px;
+        background: none;
+        color: var(--brand-light);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.35;
+        text-align: center;
+        cursor: pointer;
+      }
+      .prime-band-cta:active { opacity: 0.65; }
 
       .prime-backdrop { z-index: 60; }
       .prime-sheet { z-index: 70; }
