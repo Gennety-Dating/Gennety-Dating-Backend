@@ -116,6 +116,20 @@ describe("time sheet — the evening band's wiring", () => {
     expect(MAIN).toContain('if (primeLocked) el.addEventListener("click", () => openPrimeSheet())');
   });
 
+  it("prices the band with the authored star rather than the platform emoji", () => {
+    expect(MAIN).toContain('icon("star", "icon prime-star")');
+    expect(MAIN).toContain('cta.append(...priceLabel("primeBandCta"))');
+    // The unlock sheet's own button quotes the same charge the same way.
+    expect(MAIN).toContain('priceLabel("primeSheetCtaPay")');
+  });
+
+  it("keeps the header one lockup — the crest, then the word", () => {
+    // The filler rule that used to run to the right edge is gone: it read as a
+    // divider between the mark and its own label.
+    expect(MAIN).not.toContain("prime-band-rule");
+    expect(HTML).not.toContain("prime-band-rule");
+  });
+
   it("lets a real slot state outrank the band's decor", () => {
     expect(build).toContain('if (cls === "empty") btn.appendChild');
   });

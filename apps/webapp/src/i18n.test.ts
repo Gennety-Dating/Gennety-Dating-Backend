@@ -53,6 +53,13 @@ describe("Mini App i18n", () => {
       // the list rather than behind it.
       expect(tr(lang, "primeBandCta")).toContain("{stars}");
       expect(tr(lang, "primeBandCta").replace("{stars}", "")).not.toMatch(/\d/);
+      // The star is an authored glyph appended at the call site, never the
+      // platform character: that one renders as Apple's art on iOS, Google's on
+      // Android and a font glyph on the web — three different products quoting
+      // one price. A locale that pastes it back in undoes the icon set.
+      for (const key of ["primeSheetCtaPay", "primeBandCta"] as const) {
+        expect(tr(lang, key)).not.toContain("\u2b50");
+      }
       // Neither header may name how many rows are gated: that count is
       // `PRIME_TIME_SLOT_COUNT`, an env value the server moves without anyone
       // re-translating five locales.

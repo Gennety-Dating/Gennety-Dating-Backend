@@ -1021,7 +1021,9 @@
       .prime-band-header {
         display: flex;
         align-items: center;
-        gap: 10px;
+        /* Tight: the crest and the word are ONE lockup — the mark reads as the
+         * first glyph of the label, not as a separate badge parked beside it. */
+        gap: 5px;
         /* 8px band padding + 12px = the 20px inline padding of a slot row, so
          * the label starts on the same vertical as every time below it. */
         padding: 2px 12px 0;
@@ -1035,8 +1037,8 @@
         flex: 0 0 auto;
         display: grid;
         place-items: center;
-        width: 16px;
-        height: 16px;
+        width: 21px;
+        height: 21px;
       }
       .prime-band-crest svg {
         width: 100%;
@@ -1051,10 +1053,10 @@
        * text width keeps the bright band fully off the glyphs at both ends of
        * the loop, which is what makes the wrap invisible. */
       .prime-band-title {
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.13em;
         line-height: 1.4;
         background: linear-gradient(
           100deg,
@@ -1088,19 +1090,14 @@
         -webkit-text-fill-color: var(--text-60);
         animation: none;
       }
-      /* Fills whatever the (localized, possibly two-line) label leaves. Shrinks
-       * to nothing before the label ever truncates. */
-      .prime-band-rule {
-        flex: 1 1 auto;
-        min-width: 8px;
-        height: 1px;
-        background: var(--border-2);
-      }
       .prime-band-tag {
         display: inline-flex;
         align-items: center;
         gap: 4px;
         flex: 0 0 auto;
+        /* Pushed to the far edge by the gap the header no longer fills with a
+         * rule: the label owns the left, the state mark owns the right. */
+        margin-left: auto;
         font-size: 10px;
         font-weight: 700;
         text-transform: uppercase;
@@ -1152,6 +1149,25 @@
         cursor: pointer;
       }
       .prime-band-cta:active { opacity: 0.65; }
+      /* The Stars price, as a chip at the end of the sentence rather than a
+       * second clause behind a separator. Used by the band's caption and by the
+       * unlock sheet's own button, so it inherits whatever colour it lands on:
+       * brand text on the tray, `--cta-fg` on the filled button. */
+      .prime-price {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        margin-left: 7px;
+        font-weight: 700;
+        /* inline-flex sits on its own baseline; this puts the chip back on the
+         * sentence's. */
+        vertical-align: -2px;
+      }
+      .prime-star {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 auto;
+      }
 
       .prime-backdrop { z-index: 60; }
       .prime-sheet { z-index: 70; }

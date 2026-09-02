@@ -434,12 +434,7 @@ function openPrimeSheet(): void {
   app?.HapticFeedback?.impactOccurred?.("light");
   if (primeTitleEl) primeTitleEl.textContent = tr(lang, "primeSheetTitle");
   if (primeBodyEl) primeBodyEl.textContent = tr(lang, "primeSheetBody");
-  if (primePayLabelEl) {
-    primePayLabelEl.textContent = tr(lang, "primeSheetCtaPay").replace(
-      "{stars}",
-      String(primeStars),
-    );
-  }
+  if (primePayLabelEl) primePayLabelEl.replaceChildren(...priceLabel("primeSheetCtaPay"));
   if (primePremiumEl) primePremiumEl.textContent = tr(lang, "primeSheetCtaPremium");
   if (primeDismissEl) primeDismissEl.textContent = tr(lang, "primeSheetDismiss");
   setPrimeBusy(false);
@@ -628,13 +623,11 @@ function openPrimeBand(host: HTMLElement): HTMLElement {
   // The header is the group's name — without this a screen reader reads the
   // evening rows as three more unlabelled times in the same flat list.
   el.setAttribute("aria-label", title.textContent);
-  const rule = document.createElement("span");
-  rule.className = "prime-band-rule";
   // The crest leads the header only while the band is locked: once the pair
   // owns the evening there is no tier left to name, and a mark that keeps
   // selling after the sale is the thing the open state exists to stop.
   if (primeLocked) header.appendChild(primeCrest());
-  header.append(title, rule);
+  header.appendChild(title);
   if (!primeLocked) {
     // One quiet "it's yours" at section level. Repeating it per row would be
     // the same noise the locked state just stopped making.
@@ -692,8 +685,36 @@ function primeBandCaption(): HTMLElement {
   cta.type = "button";
   cta.className = "prime-band-cta";
   cta.setAttribute("aria-haspopup", "dialog");
-  cta.textContent = tr(lang, "primeBandCta").replace("{stars}", String(primeStars));
+  cta.append(...priceLabel("primeBandCta"));
   return cta;
+}
+
+/**
+ * A Stars price rendered with OUR star, never the platform ⭐ — that character
+ * renders as Apple's art on iOS, Google's on Android and a font glyph on the
+ * web, which is the whole reason this app authors its icon set. Same rule the
+ * venue board's `iconBtn(..., withStar)` already follows.
+ *
+ * The `{stars}` placeholder is therefore replaced by a NODE, not by text, so
+ * the copy stays one translated sentence with the price as a chip at its end.
+ * A locale that somehow lost the placeholder still renders its whole sentence
+ * — with the price appended rather than dropped, because a button that asks
+ * for an unnamed amount of money is the one outcome worth guarding against.
+ */
+function priceLabel(key: "primeBandCta" | "primeSheetCtaPay"): Node[] {
+  const [rawBefore, rawAfter = ""] = tr(lang, key).split("{stars}");
+  // The chip carries its own leading gap, so the space a locale leaves around
+  // the placeholder would double it — visibly, right after an em dash.
+  const before = rawBefore.replace(/\s+$/, "");
+  const after = rawAfter.replace(/^\s+/, "");
+  const price = document.createElement("span");
+  price.className = "prime-price";
+  price.append(icon("star", "icon prime-star"), document.createTextNode(String(primeStars)));
+  const nodes: Node[] = [];
+  if (before) nodes.push(document.createTextNode(before));
+  nodes.push(price);
+  if (after) nodes.push(document.createTextNode(after));
+  return nodes;
 }
 
 /**

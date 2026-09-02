@@ -66,11 +66,20 @@ interface Strings {
   primeBandOpen: string;
   /** The quiet "it's yours" mark beside the open header. */
   primeBandOpenTag: string;
-  /** `{stars}` — the real Stars charge. The band's only paywall affordance. */
+  /**
+   * `{stars}` — the real Stars charge. The band's only paywall affordance.
+   *
+   * The placeholder is replaced by a NODE, not by text: our own star glyph plus
+   * the number (`priceLabel` in main.ts). No locale carries the platform ⭐ —
+   * it renders as Apple's art on iOS and Google's on Android, which is the one
+   * thing an authored icon set exists to prevent — and none carries a separator
+   * before it either: the price is a chip at the end of the line, not a second
+   * clause.
+   */
   primeBandCta: string;
   primeSheetTitle: string;
   primeSheetBody: string;
-  /** `{stars}` — the real Stars charge. There is no USD figure anywhere here. */
+  /** `{stars}` — as above: an authored glyph + the number, no USD figure. */
   primeSheetCtaPay: string;
   primeSheetCtaPremium: string;
   primeSheetDismiss: string;
@@ -163,11 +172,11 @@ const dict: Record<Lang, Strings> = {
     primeBandLocked: "Evening · with Premium",
     primeBandOpen: "Evening",
     primeBandOpenTag: "Available",
-    primeBandCta: "Open the evening for you two · {stars} ⭐",
+    primeBandCta: "Open the evening for you two {stars}",
     primeSheetTitle: "Evening times",
     primeSheetBody:
       "The last hours of each day are open with Premium. You can open them for this date instead — once, for both of you.",
-    primeSheetCtaPay: "Open the evening — {stars} ⭐",
+    primeSheetCtaPay: "Open the evening — {stars}",
     primeSheetCtaPremium: "See Gennety Premium",
     primeSheetDismiss: "Pick another time",
     primeUnlockFailed: "That didn't go through. Try again.",
@@ -262,11 +271,11 @@ const dict: Record<Lang, Strings> = {
     primeBandLocked: "Вечер · с Premium",
     primeBandOpen: "Вечер",
     primeBandOpenTag: "Доступно",
-    primeBandCta: "Открыть вечер для вас двоих · {stars} ⭐",
+    primeBandCta: "Открыть вечер для вас двоих {stars}",
     primeSheetTitle: "Вечернее время",
     primeSheetBody:
       "Последние часы каждого дня открыты по Premium. Можешь открыть их для этого свидания — один раз, сразу для вас двоих.",
-    primeSheetCtaPay: "Открыть вечер — {stars} ⭐",
+    primeSheetCtaPay: "Открыть вечер — {stars}",
     primeSheetCtaPremium: "Посмотреть Gennety Premium",
     primeSheetDismiss: "Выбрать другое время",
     primeUnlockFailed: "Не прошло. Попробуй ещё раз.",
@@ -361,11 +370,11 @@ const dict: Record<Lang, Strings> = {
     primeBandLocked: "Вечір · з Premium",
     primeBandOpen: "Вечір",
     primeBandOpenTag: "Доступно",
-    primeBandCta: "Відкрити вечір для вас двох · {stars} ⭐",
+    primeBandCta: "Відкрити вечір для вас двох {stars}",
     primeSheetTitle: "Вечірній час",
     primeSheetBody:
       "Останні години кожного дня відкриті з Premium. Можеш відкрити їх для цього побачення — один раз, одразу для вас двох.",
-    primeSheetCtaPay: "Відкрити вечір — {stars} ⭐",
+    primeSheetCtaPay: "Відкрити вечір — {stars}",
     primeSheetCtaPremium: "Переглянути Gennety Premium",
     primeSheetDismiss: "Обрати інший час",
     primeUnlockFailed: "Не вийшло. Спробуй ще раз.",
@@ -460,11 +469,11 @@ const dict: Record<Lang, Strings> = {
     primeBandLocked: "Abend · mit Premium",
     primeBandOpen: "Abend",
     primeBandOpenTag: "Verfügbar",
-    primeBandCta: "Den Abend für euch beide öffnen · {stars} ⭐",
+    primeBandCta: "Den Abend für euch beide öffnen {stars}",
     primeSheetTitle: "Abendzeiten",
     primeSheetBody:
       "Die letzten Stunden jedes Tages sind mit Premium offen. Du kannst sie stattdessen für dieses Date öffnen — einmalig, für euch beide.",
-    primeSheetCtaPay: "Abend öffnen — {stars} ⭐",
+    primeSheetCtaPay: "Abend öffnen — {stars}",
     primeSheetCtaPremium: "Gennety Premium ansehen",
     primeSheetDismiss: "Andere Zeit wählen",
     primeUnlockFailed: "Hat nicht geklappt. Versuch es noch mal.",
@@ -560,11 +569,11 @@ const dict: Record<Lang, Strings> = {
     primeBandLocked: "Wieczór · z Premium",
     primeBandOpen: "Wieczór",
     primeBandOpenTag: "Dostępne",
-    primeBandCta: "Otwórz wieczór dla was dwojga · {stars} ⭐",
+    primeBandCta: "Otwórz wieczór dla was dwojga {stars}",
     primeSheetTitle: "Wieczorne godziny",
     primeSheetBody:
       "Ostatnie godziny każdego dnia są dostępne z Premium. Możesz je otworzyć dla tej randki — raz, od razu dla was obojga.",
-    primeSheetCtaPay: "Otwórz wieczór — {stars} ⭐",
+    primeSheetCtaPay: "Otwórz wieczór — {stars}",
     primeSheetCtaPremium: "Zobacz Gennety Premium",
     primeSheetDismiss: "Wybierz inną godzinę",
     primeUnlockFailed: "Nie udało się. Spróbuj jeszcze raz.",
