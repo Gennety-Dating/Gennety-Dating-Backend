@@ -129,4 +129,55 @@ describe("getVerifiedTransaction", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })));
     await expect(getVerifiedTransaction("tx-x")).resolves.toEqual({ status: "unavailable" });
   });
+
+  it("falls back to the other store when the configured one 404s", async () => {
+    // A sandbox (TestFlight) purchase reported to a server pinned to
+    // production: the production store has never heard of it.
+    envMock.APPSTORE_ENVIRONMENT = "production";
+    const signed = fakeJws({ transactionId: "tx-sandbox", bundleId: "com.gennety.ios" });
+    const fetchMock = vi.fn(async (url: string) =>
+      url.startsWith("https://api.storekit-sandbox.")
+        ? Response.json({ signedTransactionInfo: signed })
+        : new Response("{}", { status: 404 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getVerifiedTransaction("tx-sandbox");
+    expect(result.status).toBe("ok");
+    // Production asked first (env order), sandbox second.
+    expect(fetchMock.mock.calls[0]![0]).toContain("https://api.storekit.itunes.apple.com");
+    expect(fetchMock.mock.calls[1]![0]).toContain("https://api.storekit-sandbox.");
+  });
+
+  it("asks only the configured store when it answers", async () => {
+    const signed = fakeJws({ transactionId: "tx-1", bundleId: "com.gennety.ios" });
+    const fetchMock = vi.fn(async () => Response.json({ signedTransactionInfo: signed }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getVerifiedTransaction("tx-1")).resolves.toMatchObject({ status: "ok" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("never turns a transport failure into not_found", async () => {
+    // 404 from one store, Apple down on the other. Answering `not_found` here
+    // would 422 the client, which never retries past it — a real purchase lost
+    // to a blip. `unavailable` keeps the transaction unfinished instead.
+    const fetchMock = vi.fn(async (url: string) =>
+      url.startsWith("https://api.storekit-sandbox.")
+        ? new Response("{}", { status: 404 })
+        : new Response("{}", { status: 503 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getVerifiedTransaction("tx-x")).resolves.toEqual({ status: "unavailable" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports not_found only when both stores deny the id", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getVerifiedTransaction("tx-forged")).resolves.toEqual({ status: "not_found" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

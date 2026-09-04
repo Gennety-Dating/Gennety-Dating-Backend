@@ -46,6 +46,7 @@ import { createNativeTicketGateRouter } from "./routes/ticket-gate.js";
 import { createNativeCalendarRouter } from "./routes/calendar-native.js";
 import { createProxyChatRouter } from "./routes/proxy-chat.js";
 import { createUserBlocksRouter } from "./routes/user-blocks.js";
+import { ticketsHistoryRouter } from "./routes/tickets-history.js";
 import { createVoicePromptRouter } from "./routes/voice-prompt.js";
 import { createNativeFeedbackRouter } from "./routes/feedback-native.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
@@ -511,6 +512,8 @@ app.use("/v1/me/verification", verificationRouter);
 app.use("/v1/me/live-activity-token", liveActivityRouter);
 // Blocked-users list (6.8). Same more-specific-prefix rule as the mounts above.
 app.use("/v1/me/blocks", createUserBlocksRouter());
+// Wallet movements for the native Tickets tab (TH1). Same rule again.
+app.use("/v1/me/tickets/history", ticketsHistoryRouter);
 // Pause/resume + freeze (native app). Same mount as meRouter, tried first;
 // unmatched /v1/me/* paths fall through to the main router below.
 app.use("/v1/me", accountStatusRouter);
