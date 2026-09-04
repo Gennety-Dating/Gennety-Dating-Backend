@@ -34,7 +34,21 @@ enum Language {
 
 /// User-selected app color theme, applied across the Mini Apps and the
 /// server-rendered match / date cards. `dark` is the brand default.
+///
+/// This is the EFFECTIVE theme — what a server-rendered surface paints. It is
+/// deliberately two-valued: a PNG card has no "follow the device" to follow.
 enum Theme {
+  light
+  dark
+}
+
+/// How the effective theme is CHOSEN. Separate from `Theme` because the native
+/// iOS client offers the platform-standard third state, "follow the phone",
+/// while the surfaces that render server-side need a concrete colour. `system`
+/// therefore never reaches a renderer: the client resolves it and reports the
+/// result in `User.theme`.
+enum ThemeMode {
+  system
   light
   dark
 }
@@ -120,6 +134,10 @@ model User {
   /// screen or Settings). Distinguishes an explicit choice from the `dark`
   /// default, so the onboarding theme picker is shown exactly once.
   themeChosenAt              DateTime?                @map("theme_chosen_at")
+  /// How `theme` was chosen (iOS Settings; the bot writes only light/dark).
+  /// `system` means the iPhone decides and the client keeps `theme` in step
+  /// with it, so Telegram cards match what the app is showing right now.
+  themeMode                  ThemeMode                @default(dark) @map("theme_mode")
   status                     UserStatus               @default(onboarding)
   onboardingStep             OnboardingStep           @default(consent) @map("onboarding_step")
   /// Whether the user wants to enrich onboarding with memory exported from

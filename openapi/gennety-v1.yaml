@@ -696,6 +696,43 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/me/theme:
+    patch:
+      tags: [me]
+      operationId: patchTheme
+      summary: Set the colour theme (Settings picker)
+      description: |
+        Takes both halves of the answer: `mode` is what the person picked and
+        `theme` is the colour it resolves to right now. They are equal for an
+        explicit pick and differ only under `system`, where the phone decides
+        and the client re-sends `theme` whenever the appearance flips.
+
+        Both are stored because they answer different questions: `mode` decides
+        which radio the app checks, `theme` decides what the Telegram PNG cards
+        are painted in. Sending `mode` alone would leave an app that follows a
+        light phone receiving dark cards — the split this route closes.
+
+        Stamps `themeChosenAt`, so the Mini App onboarding does not ask again
+        someone who has already answered on iOS.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode, theme]
+              properties:
+                mode: { $ref: "#/components/schemas/ThemeMode" }
+                theme: { $ref: "#/components/schemas/Theme" }
+      responses:
+        "200":
+          description: Updated user + profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /v1/me/push-token:
     post:
       tags: [me]
@@ -3358,6 +3395,31 @@ components:
       type: string
       enum: [campus_only, citywide]
 
+    Theme:
+      type: string
+      enum: [light, dark]
+      description: |
+        EFFECTIVE colour theme — what the app paints and what the server bakes
+        into the Telegram match / date PNG cards. Two-valued on purpose: a
+        rendered PNG has no "follow the device" to follow.
+
+        On `SerializedUser` this is what the app should be painting RIGHT NOW,
+        and what the cards are already painted in. The client reconciles: if
+        what it renders differs, it PATCHes the difference up. That is the only
+        reason a card matches an app set to follow the phone.
+
+    ThemeMode:
+      type: string
+      enum: [system, light, dark]
+      description: |
+        How the effective theme was CHOSEN. The native client offers the
+        platform-standard third state; `system` never reaches a renderer,
+        because the client resolves it and reports the result in `theme`.
+
+        On `SerializedUser` this is which option the Settings picker checks.
+        `theme` alone could not tell "follow the phone, which happens to be
+        dark" from "dark", and those diverge the moment the phone flips.
+
     VerificationStatus:
       type: string
       enum: [unverified, pending, pending_review, verified, rejected]
@@ -3385,8 +3447,8 @@ components:
       description: Mirrors `serializeUser` in `public/routes/serializers.ts`
       required:
         [id, email, universityDomain, firstName, surname, age, gender, preference,
-         major, language, status, onboardingStep, termsAccepted, researchOptIn,
-         ticketBalance]
+         major, language, theme, themeMode, status, onboardingStep, termsAccepted,
+         researchOptIn, ticketBalance]
       properties:
         id: { type: string, format: uuid }
         email: { type: [string, "null"] }
@@ -3418,6 +3480,11 @@ components:
             `en` | `ru` | `uk` | `de` | `pl`. The client renders from the
             system locale, but needs this to know what the SERVER will write
             in — a push, a DM, a rendered card.
+        # Plain `$ref`, like `status` above and unlike `gender`: these are
+        # non-nullable, so the shape the generator silently drops does not
+        # arise. Their prose lives on the schemas themselves.
+        theme: { $ref: "#/components/schemas/Theme" }
+        themeMode: { $ref: "#/components/schemas/ThemeMode" }
         status: { $ref: "#/components/schemas/UserStatus" }
         onboardingStep: { $ref: "#/components/schemas/OnboardingStep" }
         termsAccepted: { type: boolean }

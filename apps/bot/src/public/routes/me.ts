@@ -39,6 +39,8 @@ import {
 } from "../../services/onboarding-agent.js";
 import { buildInterviewState, loadStateContext } from "./onboarding-state.js";
 import { getBotApi } from "../server.js";
+import { setUserThemeById } from "../../services/user-preferences.js";
+import { parseThemePayload } from "../theme-payload.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
 import {
   saveHomeLocationForUser,
@@ -500,6 +502,39 @@ meRouter.patch("/preferences", async (req: Request, res: Response): Promise<void
   res.json({
     user: serializeUser(user),
     profile: serializeProfile(profile),
+  });
+});
+
+/**
+ * PATCH /v1/me/theme — the native Settings theme picker (release plan S5).
+ *
+ * Takes both halves of the answer at once: `mode` is what the person picked
+ * (`system` | `light` | `dark`) and `theme` is the colour that choice resolves
+ * to right now (`light` | `dark`). For an explicit pick they are the same
+ * value; for `system` only the client can compute the second one, and it
+ * re-sends it whenever the phone flips appearance.
+ *
+ * Both are stored because they answer different questions: `mode` decides
+ * which radio the app checks, `theme` decides what the Telegram date / match
+ * PNG cards are painted in. Without the second one an app set to follow a
+ * light phone would keep receiving dark cards, which is exactly the split this
+ * endpoint exists to close.
+ */
+meRouter.patch("/theme", async (req: Request, res: Response): Promise<void> => {
+  const parsed = parseThemePayload(req.body);
+  if ("error" in parsed) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  await setUserThemeById(req.userId!, parsed.theme, parsed.mode);
+
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+  const profile = await prisma.profile.findUnique({ where: { userId: req.userId! } });
+
+  res.json({
+    user: serializeUser(user),
+    profile: profile ? serializeProfile(profile) : null,
   });
 });
 

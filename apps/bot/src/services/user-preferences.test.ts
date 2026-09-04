@@ -9,7 +9,7 @@ vi.mock("@gennety/db", () => ({
 }));
 
 import { prisma } from "@gennety/db";
-import { setUserLanguage, setUserTheme } from "./user-preferences.js";
+import { setUserLanguage, setUserTheme, setUserThemeById } from "./user-preferences.js";
 
 describe("user-preferences", () => {
   beforeEach(() => {
@@ -44,10 +44,37 @@ describe("user-preferences", () => {
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { telegramId: BigInt(42) },
-      data: { theme: "light", themeChosenAt: expect.any(Date) },
+      // The bot toggle has two states, so the mode it records is the theme.
+      data: { theme: "light", themeMode: "light", themeChosenAt: expect.any(Date) },
       select: { id: true },
     });
     expect(prisma.match.updateMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("setUserThemeById keeps mode and theme apart under `system`", async () => {
+    await setUserThemeById("u1", "light", "system");
+
+    // The whole point of the pair: the picker stays on "follow the phone"
+    // while the cards get painted in the colour the phone is showing now.
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: { theme: "light", themeMode: "system", themeChosenAt: expect.any(Date) },
+      select: { id: true },
+    });
+    expect(prisma.match.updateMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("setUserThemeById clears the cached card so it is not resent in the old theme", async () => {
+    await setUserThemeById("u1", "dark", "dark");
+
+    expect(prisma.match.updateMany).toHaveBeenCalledWith({
+      where: { userAId: "u1", status: "scheduled" },
+      data: { dateCardFileIdA: null },
+    });
+    expect(prisma.match.updateMany).toHaveBeenCalledWith({
+      where: { userBId: "u1", status: "scheduled" },
+      data: { dateCardFileIdB: null },
+    });
   });
 
   it("runs both writes inside prisma.$transaction, not as loose calls", async () => {

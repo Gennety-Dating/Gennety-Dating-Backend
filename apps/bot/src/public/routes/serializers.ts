@@ -18,6 +18,17 @@ export interface SerializedUser {
   preference: User["preference"];
   major: string | null;
   language: User["language"];
+  /**
+   * Effective colour theme — what the app paints and what the server bakes
+   * into the Telegram PNG cards. Two-valued on purpose (§ `Theme`).
+   */
+  theme: User["theme"];
+  /**
+   * How that theme was chosen: `system` (the iPhone decides), `light`, `dark`.
+   * The client needs it to show the right radio back; `theme` alone could not
+   * tell "follow the phone, which is dark now" from "dark".
+   */
+  themeMode: User["themeMode"];
   status: User["status"];
   onboardingStep: User["onboardingStep"];
   termsAccepted: boolean;
@@ -61,6 +72,8 @@ export function serializeUser(user: User): SerializedUser {
     preference: user.preference,
     major: user.major,
     language: user.language,
+    theme: user.theme,
+    themeMode: user.themeMode,
     status: user.status,
     onboardingStep: user.onboardingStep,
     termsAccepted: user.termsAccepted,
