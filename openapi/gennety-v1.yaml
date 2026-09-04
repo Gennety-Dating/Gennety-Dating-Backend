@@ -1635,11 +1635,28 @@ paths:
     get:
       tags: [chat]
       operationId: getChatHistory
-      summary: Oldest-first history slice for hydrating the chat view
+      summary: Oldest-first history page for hydrating and paging the chat view
+      description: |
+        Returns the newest `limit` messages, oldest-first within the page.
+        Pass `before` to page backwards: the response then holds the messages
+        immediately preceding that one, so the client prepends each page above
+        what it already shows.
+
+        `system` rows are never returned. The client drops them anyway, and
+        `/v1/chat/topics` counts messages the same way — a slice that
+        disagreed with the topic index would make its `depth` a page short.
       parameters:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: before
+          in: query
+          description: |
+            Message id to page backwards from, exclusive. A message id and not
+            a timestamp: `createdAt` ties are real (one turn writes the user
+            row and the assistant row inside the same request), and a
+            timestamp cursor would either skip a row or repeat one.
+          schema: { type: string }
       responses:
         "200":
           description: Messages with fresh signed image URLs
@@ -1647,11 +1664,59 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [messages]
+                required: [messages, hasMore]
                 properties:
                   messages:
                     type: array
                     items: { $ref: "#/components/schemas/ChatHistoryMessage" }
+                  hasMore:
+                    type: boolean
+                    description: Older messages exist before this page
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Unknown `before` cursor, or one belonging to another user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/chat/topics:
+    get:
+      tags: [chat]
+      operationId: getChatTopics
+      summary: Read-only index of past conversations, newest first
+      description: |
+        The chat agent holds ONE continuous conversation per user: there is no
+        thread id, no per-thread context and no forking, and this route does
+        not introduce any. A "topic" is a slice of that single transcript cut
+        at a silence longer than six hours — the client uses it to page
+        history back and scroll to a point in time, in the same room.
+
+        Titles are the user's own opening line after the silence, not a
+        generated summary: a model-written title would cost a call per topic
+        and drift between renders.
+
+        Nothing here can be sent to, renamed or deleted. The index looks back
+        over at most the newest 2000 messages; `hasMore` reports when older
+        conversation exists beyond that ceiling or beyond `limit`.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Topics, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [topics, hasMore]
+                properties:
+                  topics:
+                    type: array
+                    items: { $ref: "#/components/schemas/ChatTopic" }
+                  hasMore:
+                    type: boolean
+                    description: Older topics exist beyond the listed ones
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/tickets/appstore/transaction:
@@ -3900,6 +3965,34 @@ components:
             signedImageUrl:
               type: [string, "null"]
               description: 5-min TTL render URL; empty string when signing failed
+
+    ChatTopic:
+      type: object
+      required: [anchorId, title, snippet, startedAt, updatedAt, messageCount, depth]
+      properties:
+        anchorId:
+          type: string
+          description: |
+            First message of the topic. The topic has no row of its own
+            anywhere — the client pages `/v1/chat/history?before=` back until
+            this id is loaded, then scrolls the transcript to it.
+        title:
+          type: string
+          description: The user's first line after the silence, condensed
+        snippet:
+          type: string
+          description: The last message of the topic, condensed
+        startedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        messageCount:
+          type: integer
+          description: Messages inside this topic
+        depth:
+          type: integer
+          description: |
+            Messages from the anchor to the newest message, inclusive of both.
+            The client turns this into an exact number of history pages
+            instead of guessing and re-requesting.
 
     PhotosResponse:
       type: object

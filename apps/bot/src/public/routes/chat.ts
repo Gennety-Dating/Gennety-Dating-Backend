@@ -5,6 +5,7 @@ import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
 import { chatMessageLimiter, chatUploadLimiter } from "../rate-limit.js";
 import { runChatTurn } from "../../services/chat-agent.js";
+import { listChatTopics } from "../../services/chat-topics.js";
 import {
   uploadChatImage,
   createChatImageSignedUrl,
@@ -14,9 +15,11 @@ import { sniffImageMime } from "../../utils/image-sniff.js";
 /**
  * Gennety chat agent — multimodal AI chat for the mobile app.
  *
- * Two endpoints:
+ * Four endpoints:
  *   POST /v1/chat/upload   multipart image → opaque storage path
  *   POST /v1/chat/message  { text?, imageUrl? } → assistant reply
+ *   GET  /v1/chat/history  newest page, `before` pages backwards
+ *   GET  /v1/chat/topics   read-only index of past conversations
  *
  * Mobile flow: upload image first (returns `imageUrl`), then send a
  * `/message` referencing it. Either field is sufficient; both can be
@@ -131,20 +134,53 @@ chatRouter.post(
 );
 
 /**
- * GET /v1/chat/history — paginated, oldest-first slice. Mobile uses this
- * to hydrate the chat view on app open. Each row's storage path gets a
- * fresh signed URL (5-min TTL) for client-side rendering.
+ * GET /v1/chat/history — oldest-first slice, newest page first. Mobile uses
+ * this to hydrate the chat view on app open and, with `before`, to page
+ * backwards into older conversation. Each row's storage path gets a fresh
+ * signed URL (5-min TTL) for client-side rendering.
+ *
+ * `before` is a message id, not a timestamp: `createdAt` ties are real (a
+ * turn writes the user row and the assistant row inside the same request),
+ * and a timestamp cursor would either skip a row or repeat one. Ordering is
+ * `(createdAt, id)` on both sides so the cursor is total.
+ *
+ * `system` rows are excluded. The client already drops them before rendering,
+ * and `/topics` counts messages the same way — a slice that disagreed with
+ * the topic index would make `depth` point a page short.
  */
 chatRouter.get("/history", async (req: Request, res: Response): Promise<void> => {
   const limit = Math.min(Math.max(Number(req.query.limit ?? 50) || 50, 1), 100);
+  const rawBefore = req.query.before;
+  const before = typeof rawBefore === "string" && rawBefore ? rawBefore : null;
+
+  if (before) {
+    // A cursor from another user's stream must not page this one. Checking
+    // ownership here also turns a stale id (deleted account, wiped history)
+    // into an honest 404 instead of a silently empty page.
+    const owner = await prisma.message.findUnique({
+      where: { id: before },
+      select: { userId: true },
+    });
+    if (!owner || owner.userId !== req.userId!) {
+      res.status(404).json({ error: "Unknown cursor" });
+      return;
+    }
+  }
+
+  // One row over the page size: its existence is the `hasMore` answer, and
+  // it costs nothing next to a second COUNT.
   const rows = await prisma.message.findMany({
-    where: { userId: req.userId! },
-    orderBy: { createdAt: "desc" },
-    take: limit,
+    where: { userId: req.userId!, role: { not: "system" } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    ...(before ? { cursor: { id: before }, skip: 1 } : {}),
   });
-  rows.reverse();
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  page.reverse();
+
   const messages = await Promise.all(
-    rows.map(async (row) => ({
+    page.map(async (row) => ({
       id: row.id,
       role: row.role,
       content: row.content,
@@ -155,5 +191,19 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
       createdAt: row.createdAt.toISOString(),
     })),
   );
-  res.json({ messages });
+  res.json({ messages, hasMore });
+});
+
+/**
+ * GET /v1/chat/topics — the read-only index of past conversations.
+ *
+ * Not threads: see the header of `services/chat-topics.ts`. The agent's
+ * context is untouched by this route, and nothing here can be sent, renamed
+ * or deleted — a topic is a slice of the one continuous transcript, cut at a
+ * silence, that the client uses to scroll back to a point in time.
+ */
+chatRouter.get("/topics", async (req: Request, res: Response): Promise<void> => {
+  const limit = Math.min(Math.max(Number(req.query.limit ?? 50) || 50, 1), 100);
+  const { topics, hasMore } = await listChatTopics(req.userId!, limit);
+  res.json({ topics, hasMore });
 });
