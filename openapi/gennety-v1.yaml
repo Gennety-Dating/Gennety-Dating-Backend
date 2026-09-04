@@ -874,6 +874,57 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/tickets/history:
+    get:
+      tags: [me]
+      operationId: getTicketHistory
+      summary: Wallet movements, newest first
+      description: |
+        The account behind the balance: every credit and every spend, in the
+        order they happened. The wallet is shared with the Telegram bot, so a
+        ticket can arrive or leave while the app was never open — this route is
+        the only way the native tab can explain the number it shows.
+
+        **No money is returned, by design.** The ledger stores what Apple
+        charged in the buyer's storefront currency with no currency beside it,
+        so a euro purchase is indistinguishable from a dollar one; printing a
+        symbol in front of it would be a guess. The only place this product
+        shows a price is StoreKit's own `displayPrice`. Telegram Stars are left
+        out from the other side: they cannot be spent or bought on this screen.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+        - name: before
+          in: query
+          description: |
+            Ledger row id to page from, exclusive. A row id and not a
+            timestamp: `createdAt` ties are real (settling both slots of a gate
+            writes two rows in one transaction), and a timestamp cursor would
+            either skip a row or repeat one.
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: One page of movements
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries, hasMore]
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/TicketHistoryEntry" }
+                  hasMore:
+                    type: boolean
+                    description: Older movements exist after this page
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Ticket feature disabled, or unknown `before` cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/me/verification:
     get:
       tags: [me]
@@ -3768,6 +3819,42 @@ components:
             Server clock, for the same skew correction the countdowns use: the
             window's edges are the product, so a device clock several minutes
             out must not decide when the composer unlocks.
+
+    TicketHistoryEntry:
+      type: object
+      description: |
+        One movement of the ticket wallet. `delta` is signed: positive rows are
+        credits, negative rows are spends. Mirrors `TicketLedger` rows as
+        served by `public/routes/tickets-history.ts`.
+      required: [id, delta, reason, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Also the `before` cursor for the page after this row
+        delta:
+          type: integer
+          description: Signed change to the balance; never 0
+        reason:
+          type: string
+          description: |
+            Why the balance moved. Today one of `photo_bonus`, `video_bonus`,
+            `verification_bonus` (legacy, no new rows), `student_bonus`,
+            `welcome_gift`, `referral_milestone`, `promo`, `bump_bonus`,
+            `store_purchase`, `spend_match`, `refund`.
+
+            Deliberately a plain string and NOT an `enum`: reasons are added
+            server-side whenever a product mechanic grants or spends a ticket,
+            and swift-openapi-generator turns an `enum` into a closed Swift
+            type that THROWS on an unknown value — one additive server change
+            would then fail decoding for the whole page. Clients label an
+            unrecognised reason neutrally and still show the delta and the
+            date, which is the part that has to be right.
+          example: store_purchase
+        bundleSize:
+          type: integer
+          description: Bundle bought, for `store_purchase` rows (1 / 3 / 6)
+        createdAt: { type: string, format: date-time }
 
     TicketGateState:
       type: object
