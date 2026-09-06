@@ -398,7 +398,6 @@ describe("byChannel.revenueByKind", () => {
       rematch: 0,
       venue_change: 0,
       prime_time: 0,
-      meme_unlock: 0,
     });
   });
 
@@ -416,7 +415,6 @@ describe("byChannel.revenueByKind", () => {
       rematch: 0,
       venue_change: 0,
       prime_time: 0,
-      meme_unlock: 0,
     });
   });
 });

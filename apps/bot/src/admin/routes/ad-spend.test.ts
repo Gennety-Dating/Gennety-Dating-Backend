@@ -342,7 +342,6 @@ describe("GET /admin/analytics/acquisition-cost", () => {
               rematch: { purchases: 0, stars: 0, usdCents: 0 },
               venue_change: { purchases: 0, stars: 0, usdCents: 0 },
               prime_time: { purchases: 0, stars: 0, usdCents: 0 },
-              meme_unlock: { purchases: 0, stars: 0, usdCents: 0 },
             },
             refundedOnly: false,
           },
