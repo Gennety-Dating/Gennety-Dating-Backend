@@ -28,12 +28,16 @@ const matchFindUnique = vi.fn();
 const matchUpdate = vi.fn();
 const userFindUnique = vi.fn();
 const profileFindUnique = vi.fn();
+const placeCacheFindUnique = vi.fn();
+const placeCacheUpsert = vi.fn();
 vi.mock("@gennety/db", () => ({
   prisma: {
     match: { findUnique: matchFindUnique, update: matchUpdate },
     user: { findUnique: userFindUnique },
     // Read by the departure-point gate (`services/venue-origin.ts`).
     profile: { findUnique: profileFindUnique },
+    // Read/written by `/resolve` through `services/place-cache.ts`.
+    placeCache: { findUnique: placeCacheFindUnique, upsert: placeCacheUpsert },
   },
 }));
 
@@ -93,6 +97,10 @@ beforeEach(() => {
   // own market), so a default identity is needed alongside the per-case
   // `mockResolvedValueOnce` the `/select` tests set up.
   userFindUnique.mockResolvedValue({ id: "uid-A", language: "en" });
+  placeCacheFindUnique.mockReset();
+  placeCacheFindUnique.mockResolvedValue(null);
+  placeCacheUpsert.mockReset();
+  placeCacheUpsert.mockResolvedValue(undefined);
   tryFinalize.mockReset();
   tryFinalize.mockResolvedValue(undefined);
   sendVenuePostSaveAck.mockReset();
@@ -237,6 +245,100 @@ describe("GET /v1/location/search", () => {
     }
   });
 
+  // ── Autocomplete path (2026-09-04) ──────────────────────────────────────
+  //
+  // The billing change these cases exist to hold in place: a session token
+  // means Autocomplete, and Autocomplete means the per-keystroke request is
+  // cheap and coordinate-less. A regression here does not break the picker —
+  // it silently puts the ~20× more expensive Text Search back under it.
+
+  it("uses Autocomplete (not Text Search) when the client sends a session token", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    const prevKey = process.env.PLACES_API_KEY;
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          suggestions: [
+            {
+              placePrediction: {
+                placeId: "pid-1",
+                text: { text: "Lukianivska, Kyiv" },
+                structuredFormat: {
+                  mainText: { text: "Lukianivska" },
+                  secondaryText: { text: "Kyiv, Ukraine" },
+                },
+              },
+            },
+            // A query prediction has no placeId, so it could never be resolved
+            // into a departure point — it must not reach the picker.
+            { queryPrediction: { text: { text: "lukianivska metro" } } },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    try {
+      const res = await request(buildApp())
+        .get(`/v1/location/search?q=lukyanivska&session=${VALID_UUID}`)
+        .set("Authorization", `tma ${initData}`);
+      expect(res.status).toBe(200);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      const url = String(fetchSpy.mock.calls[0][0]);
+      expect(url).toBe("https://places.googleapis.com/v1/places:autocomplete");
+      // No field mask on autocomplete — which is also why no Enterprise field
+      // can be bought here by accident.
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["X-Goog-FieldMask"]).toBeUndefined();
+
+      const body = JSON.parse(String(fetchSpy.mock.calls[0][1]?.body)) as {
+        sessionToken?: string;
+        locationRestriction?: Record<string, unknown>;
+      };
+      // The token is what makes the whole episode one billable session.
+      expect(body.sessionToken).toBe(VALID_UUID);
+      // Autocomplete accepts a circle, unlike `searchText` — so the market is
+      // restricted by its real shape and no corner has to be trimmed.
+      expect(body.locationRestriction).toHaveProperty("circle");
+      expect(body.locationRestriction).not.toHaveProperty("rectangle");
+
+      // A prediction carries no coordinates; `/resolve` buys them on the tap.
+      expect(res.body.results).toEqual([
+        { placeId: "pid-1", name: "Lukianivska", address: "Kyiv, Ukraine" },
+      ]);
+    } finally {
+      fetchSpy.mockRestore();
+      if (prevKey === undefined) delete process.env.PLACES_API_KEY;
+      else process.env.PLACES_API_KEY = prevKey;
+    }
+  });
+
+  it("ignores a malformed session token and keeps the legacy Text Search path", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    const prevKey = process.env.PLACES_API_KEY;
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ places: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    try {
+      const res = await request(buildApp())
+        .get("/v1/location/search?q=lukyanivska&session=not-a-uuid")
+        .set("Authorization", `tma ${initData}`);
+      expect(res.status).toBe(200);
+      // Forwarding a malformed token would make Google reject the request, and
+      // a rejected autocomplete looks exactly like "no results" on screen.
+      expect(String(fetchSpy.mock.calls[0][0])).toContain("places:searchText");
+    } finally {
+      fetchSpy.mockRestore();
+      if (prevKey === undefined) delete process.env.PLACES_API_KEY;
+      else process.env.PLACES_API_KEY = prevKey;
+    }
+  });
+
   it("falls back to a deterministic stub when PLACES_API_KEY is unset", async () => {
     const initData = signInitData(BOT_TOKEN);
     const prevKey = process.env.PLACES_API_KEY;
@@ -252,6 +354,206 @@ describe("GET /v1/location/search", () => {
     } finally {
       if (prevKey !== undefined) process.env.PLACES_API_KEY = prevKey;
     }
+  });
+});
+
+describe("GET /v1/location/resolve", () => {
+  const withKey = async (run: () => Promise<void>): Promise<void> => {
+    const prevKey = process.env.PLACES_API_KEY;
+    process.env.PLACES_API_KEY = "test-key";
+    try {
+      await run();
+    } finally {
+      if (prevKey === undefined) delete process.env.PLACES_API_KEY;
+      else process.env.PLACES_API_KEY = prevKey;
+    }
+  };
+
+  it("buys the coordinates at the Essentials tier and forwards the session token", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    await withKey(async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: "pid-1",
+            formattedAddress: "Khreshchatyk 14, Kyiv",
+            location: { latitude: 50.45, longitude: 30.52 },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+      try {
+        const res = await request(buildApp())
+          .get(`/v1/location/resolve?placeId=pid-1&session=${VALID_UUID}`)
+          .set("Authorization", `tma ${initData}`);
+        expect(res.status).toBe(200);
+        expect(res.body.result).toMatchObject({ lat: 50.45, lng: 30.52 });
+
+        const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+        // The whole cost of this endpoint is in this one string. `displayName`
+        // would make it Pro for a name the prediction already gave us; anything
+        // from `rating` upward would make it Enterprise.
+        expect(headers["X-Goog-FieldMask"]).toBe("id,location,formattedAddress");
+        // Same token as the searches — this is what makes those searches free.
+        expect(String(fetchSpy.mock.calls[0][0])).toContain(`sessionToken=${VALID_UUID}`);
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+  });
+
+  it("answers from place_cache without calling Google", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    placeCacheFindUnique.mockResolvedValue({
+      placeId: "pid-1",
+      name: "Lukianivska",
+      address: "Kyiv",
+      lat: 50.45,
+      lng: 30.52,
+      photoRefs: [],
+      refreshedAt: new Date(),
+    });
+    await withKey(async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      try {
+        const res = await request(buildApp())
+          .get(`/v1/location/resolve?placeId=pid-1&session=${VALID_UUID}`)
+          .set("Authorization", `tma ${initData}`);
+        expect(res.status).toBe(200);
+        expect(res.body.result).toMatchObject({ lat: 50.45, lng: 30.52 });
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+  });
+
+  it("treats a cached row with no coordinates as a MISS", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    // The shape the photo path writes: refs only, no lat/lng. Resolving that to
+    // "found" would hand the picker a pin it cannot place.
+    placeCacheFindUnique.mockResolvedValue({
+      placeId: "pid-1",
+      name: null,
+      address: null,
+      lat: null,
+      lng: null,
+      photoRefs: ["places/x/photos/y"],
+      refreshedAt: new Date(),
+    });
+    await withKey(async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: "pid-1",
+            formattedAddress: "Kyiv",
+            location: { latitude: 50.45, longitude: 30.52 },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+      try {
+        const res = await request(buildApp())
+          .get(`/v1/location/resolve?placeId=pid-1&session=${VALID_UUID}`)
+          .set("Authorization", `tma ${initData}`);
+        expect(res.status).toBe(200);
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        // And the resolved coordinates are persisted for the next caller.
+        expect(placeCacheUpsert).toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+  });
+
+  it("never blanks a cached place name when it caches the resolved pin", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    // A row the PHOTO path wrote: it knows the name, not the coordinates. The
+    // resolve is a miss on coordinates and must fill them in — but Place
+    // Details is bought at the Essentials tier, which carries no display name,
+    // so `hit.name` is "". `writePlaceCache` only skips `undefined`, so writing
+    // that empty string through would erase the name this row already has.
+    placeCacheFindUnique.mockResolvedValue({
+      placeId: "pid-1",
+      name: "Zoloti Vorota",
+      address: null,
+      lat: null,
+      lng: null,
+      photoRefs: ["places/x/photos/y"],
+      refreshedAt: new Date(),
+    });
+    await withKey(async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: "pid-1",
+            formattedAddress: "Kyiv",
+            location: { latitude: 50.45, longitude: 30.52 },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+      try {
+        const res = await request(buildApp())
+          .get(`/v1/location/resolve?placeId=pid-1&session=${VALID_UUID}`)
+          .set("Authorization", `tma ${initData}`);
+        expect(res.status).toBe(200);
+        expect(placeCacheUpsert).toHaveBeenCalledTimes(1);
+        const write = placeCacheUpsert.mock.calls[0]![0] as {
+          create: Record<string, unknown>;
+          update: Record<string, unknown>;
+        };
+        expect(write.update).not.toHaveProperty("name");
+        expect(write.create).not.toHaveProperty("name");
+        expect(write.update.lat).toBe(50.45);
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+  });
+
+  it("refuses a place outside the caller's market with the block-card reason", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    await withKey(async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: "pid-berlin",
+            formattedAddress: "Berlin Hauptbahnhof",
+            // ~1200 km from Kyiv: inside no launched market.
+            location: { latitude: 52.525, longitude: 13.369 },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+      try {
+        const res = await request(buildApp())
+          .get(`/v1/location/resolve?placeId=pid-berlin&session=${VALID_UUID}`)
+          .set("Authorization", `tma ${initData}`);
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBeDefined();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+  });
+
+  it("rejects a place id that is not a place id, before spending anything", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    await withKey(async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      try {
+        for (const bad of ["", "../../etc", "x".repeat(257), "has space"]) {
+          const res = await request(buildApp())
+            .get(`/v1/location/resolve?placeId=${encodeURIComponent(bad)}&session=${VALID_UUID}`)
+            .set("Authorization", `tma ${initData}`);
+          expect(res.status).toBe(400);
+        }
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
   });
 });
 
@@ -532,6 +834,7 @@ describe("marketBoundingBox", () => {
       latitude: 89.9,
       longitude: 179.9,
       radiusKm: 200,
+      status: "active" as const,
       aliases: [],
     };
     const box = marketBoundingBox(polar);

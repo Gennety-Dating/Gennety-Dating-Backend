@@ -36,7 +36,9 @@ vi.mock("./openai.js", () => ({
   callOpenAIJson: (...args: unknown[]) => callOpenAIJson(...args),
 }));
 
-const { interpretVenueIntent, hoursEvidenceAdmits } = await import("./venue-intent-v2.js");
+const { interpretVenueIntent, hoursEvidenceAdmits, decidePlacesSweep } = await import(
+  "./venue-intent-v2.js"
+);
 const { isVenueOriginRefusal } = await import("./venue-origin.js");
 
 /**
@@ -289,5 +291,74 @@ describe("hoursEvidenceAdmits (PRODUCT_SPEC §3.7 — hours evidence)", () => {
         SLOT,
       ),
     ).toBe(false);
+  });
+});
+
+/**
+ * The Places spend gate.
+ *
+ * Google Places is the documented FALLBACK to the first-party `curated_venues`
+ * base, and until 2026-09-04 this path ignored that: it counted the eligible
+ * curated rows into `curatedEligible` and then ran the search anyway, up to
+ * three categories, on every single assignment — the most expensive request
+ * this product can issue, spent to widen a pool that already held ~186 venues
+ * in Kyiv.
+ *
+ * The distinctions between the three SKIPS are load-bearing, not cosmetic: one
+ * of them is an infra alarm, one is terminal, and one is reversible. Collapsing
+ * any two of them either re-spends the money or mislabels the failure.
+ */
+describe("decidePlacesSweep — the Places spend gate", () => {
+  const base = {
+    hasApiKey: true,
+    liveSearchEnabled: true,
+    reachable: true,
+    curatedEligible: 0,
+    threshold: 12,
+  };
+
+  it("searches when the curated pool is too thin to choose from", () => {
+    expect(decidePlacesSweep({ ...base, curatedEligible: 11 })).toBe("search");
+  });
+
+  it("skips the search once the curated pool reaches the threshold", () => {
+    // The whole saving, in one assertion. A Kyiv pair sits here.
+    expect(decidePlacesSweep({ ...base, curatedEligible: 12 })).toBe("skip-curated-deep");
+    expect(decidePlacesSweep({ ...base, curatedEligible: 200 })).toBe("skip-curated-deep");
+  });
+
+  it("treats threshold 0 as 'never search'", () => {
+    // The operator's off switch: a market whose catalog is trusted completely.
+    expect(decidePlacesSweep({ ...base, threshold: 0 })).toBe("skip-curated-deep");
+  });
+
+  it("reports a missing key as the provider being unavailable", () => {
+    // The ONLY skip that may become `provider_unavailable` — which is the
+    // failure reason that schedules a retry and pages the founder.
+    expect(decidePlacesSweep({ ...base, hasApiKey: false })).toBe("skip-provider-unavailable");
+  });
+
+  it("reports the demo runtime the same way, since it has no provider of its own", () => {
+    // Demo inherits production's PLACES_API_KEY through its generated .env, so
+    // the denial is code-owned (`demo/config.ts`) rather than key-shaped.
+    expect(decidePlacesSweep({ ...base, liveSearchEnabled: false })).toBe(
+      "skip-provider-unavailable",
+    );
+  });
+
+  it("does NOT call unreachable origins a provider failure", () => {
+    // Two origins no venue can sit between is a geometric fact about the pair.
+    // Labelling it `provider_unavailable` bought three retries of an
+    // impossibility and pointed the alarm at Google.
+    expect(decidePlacesSweep({ ...base, reachable: false })).toBe("skip-unreachable");
+  });
+
+  it("ranks the reasons so a real outage is never hidden behind a full catalog", () => {
+    // A deep pool plus no key must still say "no key": the caller reverses
+    // `skip-curated-deep` when nothing ranks, and reversing it into a sweep
+    // that cannot run would spin.
+    expect(
+      decidePlacesSweep({ ...base, hasApiKey: false, curatedEligible: 500 }),
+    ).toBe("skip-provider-unavailable");
   });
 });

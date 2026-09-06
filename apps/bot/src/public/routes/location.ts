@@ -25,15 +25,18 @@ import {
   resolveDepartureMarket,
   venueOriginRefusal,
 } from "../../services/venue-origin.js";
+import { readPlaceCache, writePlaceCache } from "../../services/place-cache.js";
 import type { Market } from "@gennety/shared";
 
 /**
  * Location Mini App endpoints (Phase 3.7 — concierge venue, map picker).
  *
- *   GET  /v1/location/search   — proxy to Places API (New) `searchText`,
- *                                so the user can type "Lukyanivska metro"
- *                                or "Khreshchatyk 14" and pick a real
- *                                place from autocomplete-style results.
+ *   GET  /v1/location/search   — proxy to Places **Autocomplete (New)**, so the
+ *                                user can type "Lukyanivska metro" or
+ *                                "Khreshchatyk 14" and pick a real place.
+ *   GET  /v1/location/resolve  — turns the picked prediction into coordinates
+ *                                (Place Details), closing the autocomplete
+ *                                session. Cached by `place_id`.
  *   POST /v1/location/select   — saves the resolved lat/lng + display
  *                                address as the user's commute origin.
  *                                Triggers `tryFinalize` if vibe text is
@@ -47,17 +50,64 @@ import type { Market } from "@gennety/shared";
  * A leaked key here costs us money (Places isn't free); a leaked key
  * in a Mini App bundle costs us a lot more because anyone can mirror
  * the bundle and quota-drain us.
+ *
+ * ## Why two endpoints where there used to be one (2026-09-04)
+ *
+ * The picker used to answer every debounced keystroke with a full Places
+ * **Text Search**, which is billed per request at the Pro tier — for search
+ * endpoints, `location` and `formattedAddress` are Pro fields, so there is no
+ * cheaper mask that still returns something usable. Typing one address cost
+ * three to six of those; a single departure point ran $0.10–$0.19.
+ *
+ * Autocomplete is the endpoint built for the per-keystroke case, and it is an
+ * order of magnitude cheaper on its own. It is FREE when the requests form a
+ * session: the same `sessionToken` on every autocomplete call and on the Place
+ * Details call that ends it moves them to the zero-cost "Autocomplete Session
+ * Usage" SKU. So the whole episode now costs one Place Details **Essentials**
+ * request — `id`, `location`, `formattedAddress` and nothing above them — which
+ * is where the ~20× saving comes from.
+ *
+ * The token is minted by the CLIENT, once per typing episode, because that is
+ * the boundary Google's session is defined by (the keystrokes that led to one
+ * choice) and the server has no way to see it. A reused token is billed as if
+ * absent, so the client discards it after a resolve.
+ *
+ * The cost of the split is that a prediction carries no coordinates — hence
+ * `/resolve`, and hence the market check moving there. It is one extra round
+ * trip on the tap, against several saved during the typing.
  */
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * One row the picker can show.
+ *
+ * `lat`/`lng` are OPTIONAL, and that is the whole shape change of the
+ * autocomplete switch: a prediction knows what a place is called and where to
+ * look it up, not where it is. A hit without coordinates is resolved through
+ * `/resolve` when the user taps it. The legacy Text Search branch still fills
+ * them, so an older Mini App bundle keeps working unchanged.
+ */
 interface PlaceSearchHit {
   placeId: string | undefined;
   name: string;
   address: string;
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
 }
+
+/**
+ * Autocomplete session token: a client-minted UUID v4.
+ *
+ * Validated rather than trusted because it is forwarded to Google verbatim. A
+ * malformed token would be rejected upstream, and a rejected autocomplete looks
+ * exactly like "no results" to the user — the same silent-failure shape the
+ * `locationRestriction` rectangle bug had (see `searchText`).
+ */
+const SESSION_TOKEN_REGEX = UUID_REGEX;
+
+/** Google's ceiling for a `circle` radius in Autocomplete / Nearby requests. */
+const MAX_CIRCLE_RADIUS_M = 50_000;
 
 export function createLocationRouter(api: Api<RawApi>): Router {
   const router = Router();
@@ -187,7 +237,28 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       return;
     }
 
+    // The client mints one token per typing episode and sends it with every
+    // keystroke, which is what makes the episode a billable-as-free session.
+    // Its ABSENCE is also the version signal: a Mini App bundle predating
+    // 2026-09-04 does not send one and needs coordinates in the response, so it
+    // keeps the old Text Search path. Retire that branch — and this comment —
+    // once no such bundle can still be cached (the Caddy `no-cache` rule on
+    // `*.html` bounds that to a single session).
+    const session = typeof req.query.session === "string" ? req.query.session : "";
+
     try {
+      if (session && SESSION_TOKEN_REGEX.test(session)) {
+        const results = await autocomplete(
+          apiKey,
+          query,
+          session,
+          hasBias ? { lat, lng } : null,
+          market,
+          actor.language,
+        );
+        res.status(200).json({ ok: true, results });
+        return;
+      }
       const results = await searchText(
         apiKey,
         query,
@@ -196,9 +267,111 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       );
       res.status(200).json({ ok: true, results });
     } catch (err) {
-      console.warn("[location/search] Places searchText failed:", err);
+      console.warn("[location/search] Places lookup failed:", err);
       res.status(200).json({ ok: true, results: [] });
     }
+  });
+
+  // GET /resolve?placeId=<id>&session=<uuid>
+  //
+  // The second half of one autocomplete session: the user tapped a prediction,
+  // and a prediction carries no coordinates. Passing the SAME `session` token
+  // Google saw on the keystrokes is what closes the session and makes those
+  // keystrokes free, so the token is required here rather than optional.
+  //
+  // Answered from `place_cache` whenever we already know the place — which, in
+  // a single launched city, is most of the time: a departure point is a metro
+  // station or a campus, and the same few dozen are picked over and over. A hit
+  // costs nothing and closes no session, which is correct: there was no
+  // upstream session to close, because there were no billed keystrokes to
+  // absolve. Google bills an unclosed session's requests individually, and at
+  // Autocomplete's own price that is still ~11× under a Text Search.
+  router.get("/resolve", locationSearchLimiter, async (req: Request, res: Response): Promise<void> => {
+    const actor = await authenticatedUser(req, res);
+    if (!actor) return;
+
+    const placeId = typeof req.query.placeId === "string" ? req.query.placeId.trim() : "";
+    // Places ids are opaque, so the only safe validation is shape + length: it
+    // goes into a URL path segment, and an unbounded one is a request we would
+    // pay for on a caller's whim.
+    if (!placeId || placeId.length > 256 || !/^[A-Za-z0-9_-]+$/.test(placeId)) {
+      res.status(400).json({ error: "invalid-place-id" });
+      return;
+    }
+    const session = typeof req.query.session === "string" ? req.query.session : "";
+
+    const apiKey = process.env.PLACES_API_KEY;
+
+    // A cached row without coordinates is not a hit: the picker's whole reason
+    // for calling this is the pin. Such a row exists whenever the photo path
+    // wrote the place first (`photoRefs` only), so it must fall through to
+    // Google rather than resolve to nothing.
+    const cached = await readPlaceCache(placeId);
+    let hit: PlaceSearchHit | null =
+      cached && cached.lat != null && cached.lng != null
+        ? {
+            placeId,
+            name: cached.name ?? "",
+            address: cached.address ?? "",
+            lat: cached.lat,
+            lng: cached.lng,
+          }
+        : null;
+
+    if (!hit) {
+      if (!apiKey) {
+        // Dev parity with `stubResults`: no key, no lookup, one fixed point so
+        // the picker still advances.
+        res.status(200).json({
+          ok: true,
+          result: { placeId, name: "Stub place", address: "Local dev stub", lat: 50.4501, lng: 30.5234 },
+        });
+        return;
+      }
+      try {
+        hit = await fetchPlaceEssentials(
+          apiKey,
+          placeId,
+          session && SESSION_TOKEN_REGEX.test(session) ? session : null,
+        );
+      } catch (err) {
+        console.warn(`[location/resolve] Place Details failed for ${placeId}:`, err);
+        res.status(502).json({ error: "upstream" });
+        return;
+      }
+      if (!hit || hit.lat == null || hit.lng == null) {
+        res.status(404).json({ error: "place-not-found" });
+        return;
+      }
+      // `name` is deliberately CONDITIONAL. Place Details is asked at the
+      // Essentials tier, which carries no `displayName`, so `hit.name` here is
+      // always `""` — and `writePlaceCache` only skips `undefined`, not an
+      // empty string, so writing it unconditionally would overwrite a real
+      // cached name with a blank one (the photo path stores a name; the board
+      // and any future reader would then have none). Omitting the key leaves
+      // that column untouched, which is exactly the "a resolve cannot blank
+      // the photo refs" symmetry `place-cache.ts` documents.
+      await writePlaceCache(placeId, {
+        ...(hit.name ? { name: hit.name } : {}),
+        address: hit.address,
+        lat: hit.lat,
+        lng: hit.lng,
+      });
+    }
+
+    // The market gate moves here from the search response filter: a prediction
+    // has no coordinates, so this is the first moment the question can be
+    // asked. Autocomplete was already restricted to the market's circle, so
+    // this is agreement rather than a second opinion — and it is the same
+    // circular test `assertDepartureOrigin` applies on the write, which is what
+    // keeps the picker from offering a place Confirm would then refuse.
+    const market = await resolveDepartureMarket(actor.id);
+    if (market && !checkDepartureOrigin(market, hit.lat!, hit.lng!).ok) {
+      res.status(400).json(venueOriginRefusal(market));
+      return;
+    }
+
+    res.status(200).json({ ok: true, result: hit });
   });
 
   router.post("/select", async (req: Request, res: Response): Promise<void> => {
@@ -403,6 +576,157 @@ export function marketBoundingBox(market: Market): {
   };
 }
 
+interface AutocompleteResponse {
+  suggestions?: {
+    placePrediction?: {
+      placeId?: string;
+      text?: { text?: string };
+      structuredFormat?: {
+        mainText?: { text?: string };
+        secondaryText?: { text?: string };
+      };
+    };
+  }[];
+}
+
+/**
+ * Places **Autocomplete (New)**, restricted to the caller's launched market.
+ *
+ * Three things make this the cheap path:
+ *
+ *  - It is the per-keystroke endpoint, priced accordingly.
+ *  - `sessionToken` ties the keystrokes to the `/resolve` call that follows, and
+ *    a closed session's autocomplete requests are billed at zero.
+ *  - There is no field mask to get wrong: a prediction is a name and an id, so
+ *    there is no way to accidentally buy an Enterprise field here.
+ *
+ * The market is a **circle**, and unlike `searchText` this endpoint accepts one
+ * for `locationRestriction` — so the restriction is now the market's real shape
+ * rather than a bounding box that has to be trimmed per result. That removes
+ * the corner-overshoot the old path had to filter out, and it is why the
+ * remaining market check lives on `/resolve` instead of here.
+ *
+ * `includeQueryPredictions` stays off (its default): a query prediction has no
+ * `placeId`, so it could not be resolved into a departure point and would be a
+ * row that does nothing when tapped.
+ */
+async function autocomplete(
+  apiKey: string,
+  query: string,
+  sessionToken: string,
+  bias: { lat: number; lng: number } | null,
+  market: Market | null,
+  language: Language | null,
+): Promise<PlaceSearchHit[]> {
+  const body: Record<string, unknown> = { input: query, sessionToken };
+  if (language) body.languageCode = language;
+  if (market) {
+    body.locationRestriction = {
+      circle: {
+        center: { latitude: market.latitude, longitude: market.longitude },
+        radius: Math.min(market.radiusKm * 1000, MAX_CIRCLE_RADIUS_M),
+      },
+    };
+    body.regionCode = market.countryCode;
+  } else if (bias) {
+    body.locationBias = {
+      circle: {
+        center: { latitude: bias.lat, longitude: bias.lng },
+        // Same 5km as the old bias: wide enough to surface nearby transit stops
+        // and landmarks, narrow enough to keep "metro" in the user's city.
+        radius: 5000,
+      },
+    };
+  }
+  const res = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    throw new Error(`Places autocomplete failed: ${res.status}`);
+  }
+  const json = (await res.json()) as AutocompleteResponse;
+  const hits: PlaceSearchHit[] = [];
+  for (const suggestion of json.suggestions ?? []) {
+    const prediction = suggestion.placePrediction;
+    // No id means nothing to resolve — a query prediction, or a malformed row.
+    if (!prediction?.placeId) continue;
+    const main = prediction.structuredFormat?.mainText?.text;
+    const secondary = prediction.structuredFormat?.secondaryText?.text;
+    const name = main ?? prediction.text?.text;
+    if (!name) continue;
+    hits.push({
+      placeId: prediction.placeId,
+      name,
+      // The structured secondary line IS the address line the picker showed
+      // from `formattedAddress` before, and it arrives here for free.
+      address: secondary ?? "",
+    });
+  }
+  return hits.slice(0, 8);
+}
+
+/**
+ * Place Details for one prediction, at the **Essentials** tier and no higher.
+ *
+ * The mask is exactly what the picker needs to drop a pin and store an origin:
+ * `id`, `location`, `formattedAddress`. On Place Details those are Essentials
+ * fields — `displayName` would have pushed the request to Pro for a string the
+ * autocomplete prediction already gave us, which is precisely the kind of
+ * accidental tier bump this whole change exists to remove.
+ *
+ * `sessionToken` rides along when the caller has one: it is what marks the
+ * preceding autocomplete requests as a completed session and drops their cost
+ * to zero. Passing a token that was already spent is billed as if none were
+ * sent, so a cache hit correctly sends nothing.
+ */
+async function fetchPlaceEssentials(
+  apiKey: string,
+  placeId: string,
+  sessionToken: string | null,
+): Promise<PlaceSearchHit | null> {
+  const url = new URL(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`);
+  if (sessionToken) url.searchParams.set("sessionToken", sessionToken);
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask": "id,location,formattedAddress",
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    throw new Error(`Places place details failed: ${res.status}`);
+  }
+  const place = (await res.json()) as PlacesV1Place;
+  const lat = place.location?.latitude;
+  const lng = place.location?.longitude;
+  if (lat == null || lng == null) return null;
+  return {
+    placeId: place.id ?? placeId,
+    // Essentials carries no display name — the picker already has the
+    // prediction's text, and buying the name again would cost the Pro tier.
+    name: "",
+    address: place.formattedAddress ?? "",
+    lat,
+    lng,
+  };
+}
+
+/**
+ * LEGACY per-keystroke Text Search — Pro tier, billed per request.
+ *
+ * Reached only by a Mini App bundle from before 2026-09-04, which does not send
+ * a session token and cannot resolve a coordinate-less prediction. Kept solely
+ * so a cached bundle keeps working through one session; `autocomplete` above is
+ * the live path. Delete this together with the `session`-absent branch in
+ * `/search`.
+ */
 async function searchText(
   apiKey: string,
   query: string,

@@ -182,6 +182,13 @@ async function pull() {
           },
           // Relax the ≤ MODERATE price ceiling for the premium tier only.
           /* strict */ SEED_TIER !== "premium",
+          // The ONE caller that buys the Enterprise + Atmosphere tier on
+          // purpose. The seeder writes `editorialSummary` into the curated row
+          // (below), where the scheduled-card blurb reads it for the life of
+          // that venue — so the top-tier request is paid once per place here
+          // instead of on every live selection, which is what the runtime mask
+          // stopped doing on 2026-09-04. See `SEARCH_MASK_WITH_SUMMARY`.
+          { editorialSummary: true },
         );
       } catch (err) {
         console.warn(`  ! ${universityDomain}/${category} search failed:`, err?.message ?? err);

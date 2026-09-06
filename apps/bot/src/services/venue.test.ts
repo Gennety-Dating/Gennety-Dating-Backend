@@ -153,7 +153,7 @@ describe("score (ranking)", () => {
 
 describe("createPlacesVenueClient.pickAtMidpoint", () => {
   let originalFetch: typeof globalThis.fetch;
-  let calls: { url: string; body: unknown }[];
+  let calls: { url: string; body: unknown; headers: Record<string, string> }[];
   let responses: unknown[];
 
   beforeEach(() => {
@@ -163,7 +163,7 @@ describe("createPlacesVenueClient.pickAtMidpoint", () => {
     globalThis.fetch = vi.fn(async (input: any, init: any) => {
       const url = typeof input === "string" ? input : input.url;
       const body = init?.body ? JSON.parse(init.body as string) : null;
-      calls.push({ url, body });
+      calls.push({ url, body, headers: (init?.headers ?? {}) as Record<string, string> });
       const next = responses.shift() ?? { places: [] };
       return new Response(JSON.stringify(next), {
         status: 200,
@@ -203,6 +203,39 @@ describe("createPlacesVenueClient.pickAtMidpoint", () => {
     const reqBody = calls[0]!.body as Record<string, unknown>;
     expect(reqBody.includedTypes).toEqual(["cafe"]);
     expect((reqBody.locationRestriction as any).circle.radius).toBe(1500);
+  });
+
+  // ── Billing tier, frozen (2026-09-04) ───────────────────────────────────
+  //
+  // Google bills a search at the highest SKU tier ANY requested field belongs
+  // to. Every field in the runtime mask is Pro or Enterprise, and the Enterprise
+  // ones (`rating`, `priceLevel`, `regularOpeningHours`) ARE the quality gate —
+  // so Enterprise is the floor and there is nothing to trim there.
+  //
+  // `editorialSummary` is the field that is not like the others: Atmosphere
+  // tier, ~14% dearer per request, and worth a blurb the runtime discards or
+  // degrades without. Re-adding it to the runtime mask is a one-word edit with
+  // nothing on screen to reveal it, which is what this case exists to catch.
+  it("asks for no Atmosphere-tier field on a live search", async () => {
+    responses = [{ places: [place()] }];
+    await createPlacesVenueClient("test-key").pickAtMidpoint!(midpointInput());
+    const mask = calls[0]!.headers["X-Goog-FieldMask"]!;
+    expect(mask).not.toContain("editorialSummary");
+    // The Enterprise floor is deliberate, not accidental — the gate reads these.
+    expect(mask).toContain("places.rating");
+    expect(mask).toContain("places.priceLevel");
+    expect(mask).toContain("places.regularOpeningHours");
+  });
+
+  it("buys the Atmosphere tier only when the seeder explicitly asks for it", async () => {
+    responses = [{ places: [place()] }, { places: [place()] }];
+    await searchVenueCandidates("test-key", midpointInput());
+    expect(calls[0]!.headers["X-Goog-FieldMask"]).not.toContain("editorialSummary");
+
+    // The seeder's opt-in: paid once per place, written to `curated_venues`,
+    // read for months — instead of re-bought on every live selection.
+    await searchVenueCandidates("test-key", midpointInput(), true, { editorialSummary: true });
+    expect(calls[1]!.headers["X-Goog-FieldMask"]).toContain("places.editorialSummary");
   });
 
   it("picks the highest-scoring candidate, NOT the first result", async () => {

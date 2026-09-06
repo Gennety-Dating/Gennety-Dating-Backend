@@ -2,6 +2,8 @@ import "./location.css";
 import {
   apiBase,
   searchLocations,
+  resolveLocation,
+  newLocationSessionToken,
   selectLocation,
   fetchVenueIntentState,
   interpretVenueIntentTma,
@@ -42,8 +44,13 @@ import { mapStyle } from "./map-style.js";
  *      point.
  *   3. The user can:
  *      - Tap the 📍 FAB → browser geolocation prompt → immediate save.
- *      - Type a query → debounced `GET /v1/location/search` → floating glass
- *        dropdown of up to 8 hits. Tap one → map recentres under the pin.
+ *      - Type a query → debounced `GET /v1/location/search` (Places
+ *        Autocomplete, one session token per typing episode) → floating glass
+ *        dropdown of up to 8 hits. Tap one → `GET /v1/location/resolve` buys
+ *        the coordinates for that single place and the map recentres under the
+ *        pin. The split is a billing one: a prediction is cheap and carries no
+ *        coordinates, so the expensive half is paid once per CHOICE instead of
+ *        once per keystroke.
  *      - Pan the map → the point under the pin becomes a "custom point".
  *   4. The in-page **Confirm** island POSTs `lat/lng + address` to
  *      `/v1/location/select`, which writes vibeLat/Lng/Address on the match and
@@ -157,6 +164,15 @@ let selectedLng: number = DEFAULT_CENTER[1];
 let selectedAddress: string | null = null;
 let confirming = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+/**
+ * The Places autocomplete session token for the typing episode in progress.
+ *
+ * Minted on the first keystroke of an episode and dropped the moment a place is
+ * resolved, because Google defines a session as "the keystrokes that led to one
+ * choice" and bills a reused token as though there were none. Null between
+ * episodes, which is exactly when there is nothing to charge for.
+ */
+let searchSession: string | null = null;
 let venueState: VenueIntentTmaState | null = null;
 let draft: VenueIntentDraft | null = null;
 /**
@@ -448,7 +464,12 @@ async function runSearch(query: string): Promise<void> {
     // Bias the search by the current pin position so "metro" disambiguates to
     // the user's city, not a global hit.
     const center = map ? { lat: selectedLat, lng: selectedLng } : null;
-    const hits = await searchLocations(app.initData, query, center);
+    // One token for the whole episode: minted here on the first keystroke that
+    // reaches the network, reused by every later one, and spent by the resolve
+    // in `pickHit`. Sending it is what turns these requests into a single
+    // billable session instead of a request each.
+    searchSession ??= newLocationSessionToken();
+    const hits = await searchLocations(app.initData, query, center, searchSession);
     renderResults(hits);
   } catch {
     // Soft-fail — searching is supplemental; the user can still pan the map.
@@ -475,7 +496,7 @@ function renderResults(hits: LocationSearchHit[]): void {
     secondary.textContent = hit.address;
     item.append(primary, secondary);
     item.addEventListener("click", () => {
-      pickHit(hit);
+      void pickHit(hit);
     });
     resultsEl.appendChild(item);
   }
@@ -504,8 +525,11 @@ function initMarketJump(): void {
   });
 }
 
-function pickHit(hit: LocationSearchHit): void {
+async function pickHit(hit: LocationSearchHit): Promise<void> {
   if (searchEl) searchEl.value = hit.name;
+  // Held for the whole tap, the resolve round trip included, so a late `/state`
+  // cannot recentre the map out from under a choice already in flight. Rolled
+  // back on every path below that fails to move the pin.
   originPicked = true;
   hideResults();
   // Dismiss the keyboard so the bottom island (Confirm) slides back in and the
@@ -515,8 +539,86 @@ function pickHit(hit: LocationSearchHit): void {
   // the full street + city; combining gives the bot's confirmation message a
   // stable "[Name], [Address]" shape.
   const label = hit.address ? `${hit.name}, ${hit.address}` : hit.name;
-  recenter(hit.lat, hit.lng, label);
-  app?.HapticFeedback?.selectionChanged?.();
+
+  // The legacy Text Search branch, and the dev stub, both carry coordinates.
+  if (hit.lat != null && hit.lng != null) {
+    recenter(hit.lat, hit.lng, label);
+    app?.HapticFeedback?.selectionChanged?.();
+    return;
+  }
+
+  // An autocomplete prediction does not. This is where coordinates are bought —
+  // once, for the ONE place the user actually chose — and sending the session
+  // token is what closes the session and makes every keystroke that led here
+  // free.
+  if (!app || !hit.placeId) {
+    originPicked = false;
+    return;
+  }
+  try {
+    const resolved = await resolveLocation(app.initData, hit.placeId, searchSession ?? "");
+    if (resolved.lat == null || resolved.lng == null) {
+      failedPick();
+      return;
+    }
+    // Spent only now that it has actually closed a session. A FAILED resolve
+    // deliberately keeps the token, so a retry can still close the same
+    // session — whereas carrying a spent one into the next typing episode
+    // would be billed as though there were no token at all.
+    searchSession = null;
+    recenter(
+      resolved.lat,
+      resolved.lng,
+      resolved.address ? `${hit.name}, ${resolved.address}` : label,
+    );
+    app.HapticFeedback?.selectionChanged?.();
+  } catch (err) {
+    // Soft-fail like `runSearch` — no modal — but NOT silent. Before this, a
+    // failed resolve did nothing observable at all: the row was dismissed, the
+    // pin did not move, and the tap simply had no effect, which reads as a
+    // broken app rather than as a failed lookup. The one refusal the server
+    // gives a reason for gets that reason shown; everything else puts the list
+    // back so the choice is still there to retry or change.
+    if (
+      err instanceof CalendarApiError &&
+      err.reason === "origin-outside-market" &&
+      market
+    ) {
+      showMarketRefusal();
+    }
+    failedPick();
+  }
+}
+
+/**
+ * Undo a pick that never landed: release the `originPicked` hold, re-open the
+ * results list, and give the same "that did not work" haptic the rest of the
+ * app uses. Re-showing the list is the part that matters — it is what makes
+ * the failure legible as "this row, again" rather than as nothing happening.
+ */
+function failedPick(): void {
+  originPicked = false;
+  app?.HapticFeedback?.notificationOccurred?.("error");
+  if (resultsEl && resultsEl.childElementCount > 0) {
+    resultsEl.classList.add("visible");
+  }
+}
+
+/**
+ * The out-of-market banner, shown for a REFUSED pick rather than for a panned
+ * pin. Same element and same sentence the map gate already uses
+ * (`applyMarketGate`), because it is the same refusal arriving through a
+ * different door.
+ */
+function showMarketRefusal(): void {
+  if (!market) return;
+  if (marketBlockTextEl) {
+    marketBlockTextEl.textContent = tr(lang, "locOutsideMarket").replaceAll(
+      "{city}",
+      market.city,
+    );
+  }
+  if (marketBlockEl) marketBlockEl.hidden = false;
 }
 
 async function handleConfirm(): Promise<void> {

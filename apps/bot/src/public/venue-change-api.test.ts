@@ -205,6 +205,43 @@ describe("GET /v1/venue-change/photo", () => {
     expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  // ── Width, which is a billing parameter (2026-09-04) ─────────────────────
+  //
+  // The width goes into the upstream URL, so each distinct width is a
+  // SEPARATELY BILLED Place Photo request for the same photograph. It used to
+  // be free-form, clamped to anything in 200…1600, behind nothing but a valid
+  // initData — i.e. an authenticated caller could multiply the Places bill
+  // ~1400× one pixel at a time, and every request would look legitimate.
+  it("asks Google only for the two widths the Mini App renders", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("image", { headers: { "content-type": "image/jpeg" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const widthFor = async (w: string): Promise<number> => {
+      fetchMock.mockClear();
+      await request(buildApp()).get(
+        `/v1/venue-change/photo?ref=${encodeURIComponent("places/x/photos/y")}&w=${w}&tma=${encodeURIComponent(rawInitData())}`,
+      );
+      const url = new URL(String(fetchMock.mock.calls[0]![0]));
+      return Number(url.searchParams.get("maxWidthPx"));
+    };
+
+    // The two the client actually uses pass through untouched.
+    expect(await widthFor("240")).toBe(240);
+    expect(await widthFor("1200")).toBe(1200);
+    // Everything else SNAPS to the nearest of them rather than being honoured.
+    // Snapping, not rejecting: an older cached bundle asks for 1000 and 1600
+    // (the pre-unification gallery/viewer widths) and must still get a picture
+    // — it just shares a cache entry, and a bill, with everyone else's.
+    expect(await widthFor("1000")).toBe(1200);
+    expect(await widthFor("1600")).toBe(1200);
+    expect(await widthFor("241")).toBe(240);
+    expect(await widthFor("999999")).toBe(1200);
+    expect(await widthFor("not-a-number")).toBe(1200);
+  });
+
   it("rejects a non-image upstream response", async () => {
     process.env.PLACES_API_KEY = "test-key";
     vi.stubGlobal(

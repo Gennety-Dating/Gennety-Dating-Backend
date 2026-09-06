@@ -310,6 +310,25 @@ interface SearchNearbyResponse {
   places?: PlaceV1[];
 }
 
+/**
+ * The runtime search mask. Every field here is Pro or Enterprise, which puts a
+ * `searchNearby` / `searchText` call in the **Enterprise** SKU:
+ * `rating`, `priceLevel` and `regularOpeningHours` are Enterprise, the rest
+ * (`displayName`, `formattedAddress`, `location`, `photos`, `businessStatus`,
+ * `googleMapsUri`, `primaryType`, `types`, `utcOffsetMinutes`) are Pro.
+ *
+ * The Enterprise four are the quality gate itself (`gate`, `isVenueOpenAt`,
+ * `evaluateInitialVenuePolicy`) — dropping them to reach Pro would not be an
+ * optimisation, it would remove the filter that keeps closed, expensive and
+ * low-rated places out. So Enterprise is the floor for a search we act on.
+ *
+ * **`editorialSummary` is deliberately NOT here** (removed 2026-09-04). It is
+ * the only Atmosphere-tier field the search ever asked for, and a request is
+ * billed at the highest tier ANY requested field belongs to — so that one field
+ * moved every single search from Enterprise to Enterprise + Atmosphere, on its
+ * own, for a blurb. Ask for it explicitly via {@link SEARCH_MASK_WITH_SUMMARY}
+ * where it is worth the tier; see `searchVenueCandidates`.
+ */
 const FIELD_MASK = [
   "places.displayName",
   "places.formattedAddress",
@@ -325,8 +344,20 @@ const FIELD_MASK = [
   "places.regularOpeningHours",
   "places.utcOffsetMinutes",
   "places.photos",
-  "places.editorialSummary",
 ].join(",");
+
+/**
+ * `FIELD_MASK` plus Google's own short blurb — an **Enterprise + Atmosphere**
+ * request, the most expensive SKU this codebase can issue.
+ *
+ * Used by exactly one caller: the curated-base seeder (`scripts/seed-venues.mjs`
+ * via `searchVenueCandidates(..., { editorialSummary: true })`). That is an
+ * operator run of a few hundred requests whose whole output is a row written
+ * once and read for months, so the blurb is bought where it is durable —
+ * `curated_venues.editorial_summary` — instead of being re-bought on every live
+ * selection that was only ever going to discard it.
+ */
+const SEARCH_MASK_WITH_SUMMARY = [FIELD_MASK, "places.editorialSummary"].join(",");
 
 export function createPlacesVenueClient(apiKey: string): VenueClient {
   return {
@@ -557,13 +588,14 @@ export async function fetchPlacePhotoNames(
 async function searchNearby(
   apiKey: string,
   input: MidpointVenueInput,
+  fieldMask: string = FIELD_MASK,
 ): Promise<PlaceV1[]> {
   const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": FIELD_MASK,
+      "X-Goog-FieldMask": fieldMask,
     },
     body: JSON.stringify({
       includedTypes: PLACES_TYPE_MAP[input.category],
@@ -778,6 +810,21 @@ export interface VenueCandidate {
   editorialSummary: string | null;
 }
 
+export interface SearchVenueCandidatesOptions {
+  /**
+   * Ask Google for its own short blurb, moving the request from the Enterprise
+   * SKU to **Enterprise + Atmosphere** (see {@link SEARCH_MASK_WITH_SUMMARY}).
+   *
+   * Default `false`, which is what every runtime caller wants: the live venue
+   * picker and the venue-change board discard the blurb or degrade without it
+   * (`services/venue-blurb.ts` falls back to category + the pair's vibe), so
+   * paying the top tier on every selection bought nothing. `true` belongs to
+   * the SEEDER alone, where the answer is written to `curated_venues` once and
+   * read for months.
+   */
+  editorialSummary?: boolean;
+}
+
 /**
  * Search + gate + rank candidates for seeding the curated venue base. Reuses
  * the exact production quality gate (strict tier) and score, so the curated
@@ -799,8 +846,13 @@ export async function searchVenueCandidates(
    * still applies. See PRODUCT_SPEC.md §Premium.
    */
   strict = true,
+  options: SearchVenueCandidatesOptions = {},
 ): Promise<VenueCandidate[]> {
-  const places = await searchNearby(apiKey, input);
+  const places = await searchNearby(
+    apiKey,
+    input,
+    options.editorialSummary ? SEARCH_MASK_WITH_SUMMARY : FIELD_MASK,
+  );
   return places
     .filter((p) => gate(p, input.category, strict))
     .map((p) => ({

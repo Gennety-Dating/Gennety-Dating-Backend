@@ -24,6 +24,8 @@ import {
   VENUE_CHANGE_TTL_HOURS,
 } from "@gennety/shared";
 import { haversineDistanceKm, type LatLng } from "./geo.js";
+import { PLACES_LIVE_SEARCH_ENABLED } from "../demo/config.js";
+import { readPlaceCacheMany, writePlaceCache } from "./place-cache.js";
 import { isVenueOpenAt, OFFERABLE_CATEGORY_FILTER } from "./curated-venue.js";
 import { meetsVenueQualityFloor } from "./initial-venue-policy.js";
 import {
@@ -540,7 +542,10 @@ export async function listPlacesVenuesNear(
   input: BuildCatalogInput,
 ): Promise<CatalogVenue[]> {
   const apiKey = process.env.PLACES_API_KEY;
-  if (!apiKey) return [];
+  // Demo mode is denied the paid search on purpose — it inherits production's
+  // `PLACES_API_KEY` and would bill a walkthrough to the real Google project.
+  // See `demo/config.ts` → `PLACES_LIVE_SEARCH_ENABLED`.
+  if (!apiKey || !PLACES_LIVE_SEARCH_ENABLED) return [];
   const radiusKm = input.radiusKm ?? VENUE_CHANGE_RADIUS_KM;
   const radiusMeters = Math.round(radiusKm * 1000);
 
@@ -644,7 +649,15 @@ interface PhotoCacheEntry {
  * `placeId` → its photo refs. In-process and unbounded-by-design: the whole
  * curated catalog of a launched market is ~130 venues, so this tops out at a
  * few hundred short strings even with every city loaded. Same single-process
- * assumption as `services/usage-limiter.ts` — a PM2 restart simply re-warms it.
+ * assumption as `services/usage-limiter.ts`.
+ *
+ * It is the FIRST of two layers, not the only one. A PM2 restart empties it —
+ * which is how a deploy used to throw a whole warmed city away — so a miss here
+ * now falls through to `place_cache` in the database before it falls through to
+ * Google (`services/place-cache.ts`). What stays exclusive to this layer is the
+ * NEGATIVE entry: an empty answer is held for minutes, and a short-lived "no
+ * news" belongs in memory rather than in a table whose whole point is durable
+ * facts.
  */
 const photoCache = new Map<string, PhotoCacheEntry>();
 
@@ -688,7 +701,36 @@ async function withCuratedPhotos(venues: CatalogVenue[]): Promise<CatalogVenue[]
   // Distinct ids only — the same place can legitimately appear once per board,
   // but this also protects against a future caller passing an un-deduped list.
   const ids = [...new Set(pending.map((v) => v.placeId as string))];
-  await mapWithConcurrency(ids, PHOTO_LOOKUP_CONCURRENCY, async (placeId) => {
+
+  // The durable layer, in ONE query for the whole board. Every id it answers is
+  // an id we do not ask Google about — which is what makes a deploy stop
+  // re-buying the city, since the in-process map above is empty after a
+  // restart. Only a non-empty stored set counts as an answer: an empty one is
+  // indistinguishable from a partial 200 (`fetchPlacePhotoNames`), so it must
+  // not be read as "this venue has no pictures".
+  //
+  // Read at THIS layer's freshness, not the table's. `place_cache` holds a row
+  // for 30 days because coordinates and addresses do not age — but a photo
+  // resource name rotates, and a stale one 404s into a category glyph. So the
+  // photos are trusted for the same single day the in-process entry above is,
+  // and the surviving remainder of that day is what the warmed entry inherits
+  // (rather than a fresh 24h, which would let a 23-hour-old row live 47).
+  const stored = await readPlaceCacheMany(ids, { ttlMs: PHOTO_CACHE_TTL_MS, now });
+  const unresolved: string[] = [];
+  for (const placeId of ids) {
+    const hit = stored.get(placeId);
+    const refs = hit?.photoRefs ?? [];
+    if (hit && refs.length > 0) {
+      photoCache.set(placeId, {
+        refs: refs.slice(0, VENUE_CHANGE_PHOTOS_PER_VENUE),
+        expiresAt: hit.refreshedAt.getTime() + PHOTO_CACHE_TTL_MS,
+      });
+    } else {
+      unresolved.push(placeId);
+    }
+  }
+
+  await mapWithConcurrency(unresolved, PHOTO_LOOKUP_CONCURRENCY, async (placeId) => {
     await lookupAndCachePhotos(apiKey, placeId);
   });
 
@@ -731,6 +773,11 @@ async function lookupAndCachePhotos(apiKey: string, placeId: string): Promise<st
     refs: refs ?? [],
     expiresAt: Date.now() + (found ? PHOTO_CACHE_TTL_MS : PHOTO_CACHE_FAILURE_TTL_MS),
   });
+  // Only a real answer is worth persisting, by the same rule the in-process TTL
+  // splits on: an empty array is a fact about the RESPONSE, not about the venue,
+  // and writing it to a 30-day cache would blank the board's pictures for a
+  // month. Fire-and-forget — a failed write costs one future lookup.
+  if (found) await writePlaceCache(placeId, { photoRefs: refs as string[] });
   return refs ?? [];
 }
 

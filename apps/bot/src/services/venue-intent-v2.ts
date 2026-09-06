@@ -33,6 +33,7 @@ import {
   type VenueRankCandidate,
 } from "@gennety/shared";
 import { env } from "../config.js";
+import { PLACES_LIVE_SEARCH_ENABLED } from "../demo/config.js";
 import { fetchWeatherForecast } from "./weather.js";
 import { midpoint, haversineDistanceKm, venueSearchRadiusMeters, commuteBoundingBox } from "./geo.js";
 import { callOpenAIJson } from "./openai.js";
@@ -502,6 +503,57 @@ function experienceToLegacyCategory(experience: VenueExperience | undefined): "c
   }
 }
 
+/**
+ * Whether this selection run may buy live Google Places candidates, and if not,
+ * WHY not — because the three reasons are not interchangeable downstream.
+ */
+export type PlacesSweepDecision =
+  /** Run the sweep now. */
+  | "search"
+  /**
+   * No key at all: local dev, or the demo runtime, which is denied the paid
+   * search on purpose (`demo/config.ts`). The ONLY decision that means the
+   * provider is genuinely unavailable, and so the only one `failureReason` may
+   * report as `provider_unavailable`.
+   */
+  | "skip-provider-unavailable"
+  /**
+   * The origins are further apart than even the widest rung of the geo ladder
+   * can bridge, so no candidate from anywhere could satisfy both. Searching
+   * would buy results the ranker is about to discard — and, before this was
+   * separated out, would also have labelled the outcome a provider outage and
+   * retried the same geometric impossibility three times.
+   */
+  | "skip-unreachable"
+  /**
+   * The curated pool is already deep enough to choose from. The common case in
+   * a launched market, and the one that used to be missing entirely: Places is
+   * the documented FALLBACK to `curated_venues`, but V2 counted the eligible
+   * curated rows and then searched anyway, on every assignment.
+   *
+   * NOT final — this is the one skip the caller may reverse. Eligibility is
+   * decided before the ranker and the geo ladder have had their say, so a pool
+   * that looked deep can still rank empty; the caller sweeps then, which is the
+   * only moment the money can still change the outcome.
+   */
+  | "skip-curated-deep";
+
+/** Pure policy — see {@link PlacesSweepDecision} for what each answer means. */
+export function decidePlacesSweep(input: {
+  hasApiKey: boolean;
+  /** False in the demo runtime, which inherits production's key. */
+  liveSearchEnabled: boolean;
+  /** Is there a geographic box both origins can meet inside? */
+  reachable: boolean;
+  curatedEligible: number;
+  threshold: number;
+}): PlacesSweepDecision {
+  if (!input.hasApiKey || !input.liveSearchEnabled) return "skip-provider-unavailable";
+  if (!input.reachable) return "skip-unreachable";
+  if (input.curatedEligible >= input.threshold) return "skip-curated-deep";
+  return "search";
+}
+
 function searchCategories(a: VenueIntentV2, b: VenueIntentV2): Array<"cafe" | "coffee_shop" | "restaurant" | "park" | "museum" | "lounge"> {
   const laneCategories = resolveVenueBridge(a, b).flatMap((lane) => {
     switch (lane) {
@@ -856,21 +908,29 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   const curatedEligible = selections.length;
 
   let placesCalls = 0;
-  let providerFailed = false;
   const apiKey = process.env.PLACES_API_KEY;
-  // A null box means the origins are further apart than even the widest rung
-  // can bridge, so no candidate from anywhere can satisfy both. Only reachable
-  // for a pair the departure-point gate could not apply to (a legacy account
-  // with no launched market); running the provider anyway spent real money on
-  // a search whose every result the ranker was about to discard.
-  if (apiKey && box) {
+  const sweep = decidePlacesSweep({
+    hasApiKey: Boolean(apiKey),
+    liveSearchEnabled: PLACES_LIVE_SEARCH_ENABLED,
+    reachable: box != null,
+    curatedEligible,
+    threshold: env.VENUE_PLACES_FALLBACK_MAX_CURATED,
+  });
+  let providerFailed = sweep === "skip-provider-unavailable";
+
+  /** One Places sweep — up to three categories, appended into `selections`. */
+  const sweepPlaces = async (): Promise<void> => {
+    if (!apiKey || !box) return;
     const radiusMeters = venueSearchRadiusMeters(haversineDistanceKm(originA, originB));
     for (const category of searchCategories(a, b)) {
       placesCalls += 1;
       try {
         const rows = await searchVenueCandidates(apiKey, { lat: mid.lat, lng: mid.lng, category, keywords: [], radiusMeters }, true);
         for (const row of rows) {
-          if (!isVenueOpenAt(row.openingHours, row.utcOffsetMinutes, match.agreedTime)) continue;
+          // `!` for the same reason as `hoursEvidenceAdmits` above: the guard
+          // at the top of this function rules out a null `agreedTime`, but the
+          // narrowing does not survive into a closure.
+          if (!isVenueOpenAt(row.openingHours, row.utcOffsetMinutes, match.agreedTime!)) continue;
           const selection = candidateFromPlaces(row, a, b);
           if (selection) selections.push(selection);
         }
@@ -879,25 +939,70 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
         break;
       }
     }
-  } else {
-    providerFailed = true;
+  };
+
+  /**
+   * Dedupe + climb the geo ladder. Pure CPU over plain objects, which is what
+   * makes it safe to run twice (see the rescue below).
+   *
+   * The ladder tries the pair's own commute tolerance first and widens only
+   * when that pass produced nothing at all. Everything except the two
+   * geographic caps is identical on each rung, so a widened run is a longer
+   * trip, never a worse venue. `geoRung` is 1-based and rides into the
+   * selection log and the reason line, so "how often does the engine have to
+   * stretch?" is a query, not a guess — if it stops being rare, the catalog is
+   * too thin for the city.
+   *
+   * No `.slice()` on the deduped list on purpose: the old `.slice(0, 30)` here
+   * truncated by POSITION before anything was scored.
+   */
+  const rankPool = () => {
+    const deduped = [...new Map(selections.map((row) => [row.rank.placeId, row])).values()];
+    const rankCandidates = deduped.map((row) => row.rank);
+    let geoRung = 1;
+    let ranked = rankVenueCandidates(rankCandidates, a, b, geoLadder[0]);
+    while (ranked.length === 0 && geoRung < geoLadder.length) {
+      geoRung += 1;
+      ranked = rankVenueCandidates(rankCandidates, a, b, geoLadder[geoRung - 1]!);
+    }
+    return { deduped, ranked, geoRung };
+  };
+
+  if (sweep === "search") await sweepPlaces();
+
+  let pool = rankPool();
+
+  /**
+   * The rescue. Places is the fallback, so the gate above skips it whenever the
+   * curated pool is deep — but "deep" is a count of ELIGIBLE rows, and
+   * eligibility is decided before the ranker and the geo ladder have had their
+   * say. A pool of twenty venues that every rung then rejects would, under a
+   * plain gate, fail the pair outright where the old unconditional sweep would
+   * have saved them.
+   *
+   * So the sweep is not removed, it is DEFERRED to the only state where it can
+   * still change the outcome: nothing ranked. That costs the same three
+   * requests the old code spent on every assignment, but now only on a run that
+   * was otherwise about to be a `no_candidates` failure — which is rare by
+   * construction and is exactly what the money is for.
+   */
+  if (pool.ranked.length === 0 && sweep === "skip-curated-deep") {
+    console.warn(
+      `[venue-intent-v2] ${matchId}: ${curatedEligible} eligible curated venues, none ranked — falling back to Places`,
+    );
+    await sweepPlaces();
+    pool = rankPool();
+  } else if (sweep === "skip-curated-deep") {
+    // Said out loud, because "we did not call Google" is the whole saving and
+    // it is otherwise indistinguishable in a log tail from "Google returned
+    // nothing". `placesCallCount: 0` on the selection-log row is the durable
+    // record; this line is what makes a live tail readable.
+    console.log(
+      `[venue-intent-v2] ${matchId}: Places search skipped — ${curatedEligible} eligible curated venues ranked ${pool.ranked.length} (threshold ${env.VENUE_PLACES_FALLBACK_MAX_CURATED})`,
+    );
   }
-  // Dedupe only — the old `.slice(0, 30)` here had the same defect as the one
-  // above: it truncated by position before anything was scored.
-  const deduped = [...new Map(selections.map((row) => [row.rank.placeId, row])).values()];
-  // Climb the ladder: the pair's own tolerance first, widening only when that
-  // pass produced nothing at all. Everything except the two geographic caps is
-  // identical on each rung, so a widened run is a longer trip, never a worse
-  // venue. `geoRung` is 1-based and rides into the selection log and the reason
-  // line, so "how often does the engine have to stretch?" is a query, not a
-  // guess — if it stops being rare, the catalog is too thin for the city.
-  const rankCandidates = deduped.map((row) => row.rank);
-  let geoRung = 1;
-  let ranked = rankVenueCandidates(rankCandidates, a, b, geoLadder[0]);
-  while (ranked.length === 0 && geoRung < geoLadder.length) {
-    geoRung += 1;
-    ranked = rankVenueCandidates(rankCandidates, a, b, geoLadder[geoRung - 1]!);
-  }
+
+  const { deduped, ranked, geoRung } = pool;
   if (geoRung > 1 && ranked.length > 0) {
     console.warn(
       `[venue-intent-v2] ${matchId}: no venue at the pair's own commute tolerance, widened to rung ${geoRung} (${geoLadder[geoRung - 1]!.commuteLimitKm} km)`,
