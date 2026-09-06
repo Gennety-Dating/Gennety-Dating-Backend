@@ -264,7 +264,7 @@ function buildDateHubKeyboard(
     kb.add(buildShareButton(match.id, lang)).row();
   }
 
-  // Enter the anonymous coordination chat while its window is open (T-30m…T+2h).
+  // Enter the anonymous coordination chat while its window is open (T-1h…T+2h).
   if (env.COORDINATION_FEATURE_ENABLED && isProxyOpen(match, now)) {
     kb.text(t(lang, "coordEnterBtn"), `coord:enter:${match.id}`).row();
   }

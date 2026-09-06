@@ -17,7 +17,7 @@ import { t, type Language, type TranslationKey } from "@gennety/shared";
 
 /** One card per real send in the coordination flow. */
 export type CoordCardVariant =
-  /** T-60m: the initiator picks how to coordinate. Photo = the partner. */
+  /** T-3h: the initiator picks how to coordinate. Photo = the partner. */
   | "offer"
   /** Variant B: the partner is asked to share their Telegram. Photo = asker. */
   | "ask"

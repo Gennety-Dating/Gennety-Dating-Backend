@@ -23,12 +23,14 @@ import type { CoordCardTheme } from "./coordination-card/index.js";
  * responsibilities, each gated by a DB timestamp so retries / overlapping
  * ticks never double-send:
  *
- *   1. **Offer (T-60m)** — DM the initiator (the female participant, or in a
+ *   1. **Offer (T-3h)** — DM the initiator (the female participant, or in a
  *      same-sex pair both sides — first tap wins) three ways to find each
  *      other at the venue: share my Telegram (A), request the partner's (B),
  *      or an anonymous bot-relayed chat (C). The offered buttons depend on
  *      who actually has a public `telegramUsername` (A/B need a `t.me/` link).
- *   2. **Open proxy (T-30m)** — for matches whose initiator chose Variant C,
+ *      Three hours out rather than one: Variant B needs the PARTNER to notice
+ *      a card and tap it, and an hour was not enough runway for that.
+ *   2. **Open proxy (T-1h)** — for matches whose initiator chose Variant C,
  *      open the anonymous window UNCONDITIONALLY (no partner consent — an
  *      offline partner must never strand the initiator) and DM both an
  *      "Enter chat" button.
@@ -59,7 +61,7 @@ interface CoordParticipant {
 }
 
 /**
- * Resolve who receives the T-60m offer. The female participant keeps the
+ * Resolve who receives the T-3h offer. The female participant keeps the
  * safety-first framing (mirrors `pre-date-safety.ts`); a same-sex pair with no
  * female participant opens the offer to both, and whoever taps first becomes
  * the initiator.
@@ -150,7 +152,7 @@ export async function runCoordinationTick(
   return result;
 }
 
-// 1. Offer at T-60m -----------------------------------------------------------
+// 1. Offer at T-3h ------------------------------------------------------------
 async function sendOffers(api: Api<RawApi>, now: Date, result: CoordinationResult): Promise<void> {
   const offerWindowEnd = new Date(now.getTime() + COORD_OFFER_HOURS * 60 * 60 * 1000);
 
@@ -177,7 +179,7 @@ async function sendOffers(api: Api<RawApi>, now: Date, result: CoordinationResul
     const recipients = resolveCoordRecipients(match.userA, match.userB);
 
     // A pair the Telegram fork cannot reach is NOT left without a way to find
-    // each other: the anonymous chat is selected for them and opens at T-30m
+    // each other: the anonymous chat is selected for them and opens at T-1h
     // like any other. Two reasons this is the right default rather than a
     // second menu on the app. The choice the fork offers is between exchanging
     // Telegram handles and not exchanging them — meaningless to someone who
@@ -212,8 +214,9 @@ async function sendOffers(api: Api<RawApi>, now: Date, result: CoordinationResul
             recipientHasUsername,
             partnerHasUsername,
           );
-          // The face in the frame is the PARTNER: an hour out, the card's job
-          // is "this is who you're about to meet", and the choice sits under it.
+          // The face in the frame is the PARTNER: a few hours out, the card's
+          // job is "this is who you're about to meet", and the choice sits
+          // under it.
           return sendCoordCard(
             api,
             r.telegramId,
@@ -235,7 +238,7 @@ async function sendOffers(api: Api<RawApi>, now: Date, result: CoordinationResul
   }
 }
 
-// 2. Open proxy at T-30m (unconditional once Variant C is chosen) -------------
+// 2. Open proxy at T-1h (unconditional once Variant C is chosen) --------------
 async function openProxies(
   api: Api<RawApi>,
   now: Date,
@@ -266,8 +269,8 @@ async function openProxies(
     for (const u of [match.userA, match.userB]) {
       // A mobile participant is told on their own rail. Before this the open
       // was a Telegram card and nothing else, so someone on the app got a
-      // window they were never informed about — for the thirty minutes it
-      // matters most.
+      // window they were never informed about — for the last hour before the
+      // date, when it matters most.
       if (u.platform === "mobile" || u.platform === "both") {
         const lang = (u.language ?? "en") as Language;
         await sendPushToUser(u.id, {

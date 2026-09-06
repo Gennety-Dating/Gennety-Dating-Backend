@@ -47,7 +47,7 @@ const mMsg = prisma.proxyMessage as unknown as {
 };
 
 const DATE = new Date("2026-08-10T18:00:00.000Z");
-const OPENS = new Date("2026-08-10T17:30:00.000Z");
+const OPENS = new Date("2026-08-10T17:00:00.000Z");
 const CLOSES = new Date("2026-08-10T20:00:00.000Z");
 
 function match(over: Record<string, unknown> = {}): any {
@@ -91,7 +91,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("proxyChatWindow", () => {
-  it("is T-30m … T+2h around the agreed time", () => {
+  it("is T-1h … T+2h around the agreed time", () => {
     const w = proxyChatWindow({ agreedTime: DATE, coordMethod: "proxy" });
     expect(w?.opensAt).toEqual(OPENS);
     expect(w?.closesAt).toEqual(CLOSES);
@@ -104,8 +104,8 @@ describe("proxyChatWindow", () => {
 
   /**
    * The window is derived from `agreedTime`, NOT read from `proxyOpenedAt` —
-   * that column is written by a 2-minute cron tick, and gating on it opens a
-   * 30-minute window up to two minutes late. Both surfaces read this function,
+   * that column is written by a 2-minute cron tick, and gating on it opens the
+   * window up to two minutes late. Both surfaces read this function,
    * so they cannot disagree about the edges.
    */
   it("is open on time even though no cron has stamped anything", () => {
@@ -262,7 +262,7 @@ describe("relayProxyMessage", () => {
   /**
    * The relay used to DM and nothing else, so a mobile partner learned of a
    * message by opening the app — on the one screen whose whole value is the
-   * half hour before a meeting.
+   * hour before a meeting.
    */
   it("pushes a mobile partner and does not DM them", async () => {
     await relayProxyMessage({ matchId: "m-1", senderUserId: "uid-A", body: "hi", now: DATE });

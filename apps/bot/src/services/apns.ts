@@ -114,7 +114,7 @@ export interface AlertPushInput {
  * Derived from `data.type` for the same reason `category` and
  * `mutable-content` are: these two types exist only inside the minutes that
  * make them urgent — a safety brief is sent at T-1.5h and never otherwise, the
- * chat-open notice at T-30m and never otherwise — so urgency is not a separate
+ * chat-open notice at T-1h and never otherwise — so urgency is not a separate
  * fact about a send, it is what the type IS. A second field could only ever
  * disagree with the first, silently: the level is invisible until someone has
  * Focus on, so a push that quietly lost it looks exactly like a push that

@@ -176,7 +176,7 @@ describe("runCoordinationTick — feature flag", () => {
   });
 });
 
-describe("runCoordinationTick — offer (T-60m)", () => {
+describe("runCoordinationTick — offer (T-3h)", () => {
   it("DMs only the female and stamps coordOfferSentAt", async () => {
     mMatch.findMany
       .mockResolvedValueOnce([
@@ -248,7 +248,7 @@ describe("runCoordinationTick — offer (T-60m)", () => {
   });
 });
 
-describe("runCoordinationTick — open proxy (T-30m, unconditional)", () => {
+describe("runCoordinationTick — open proxy (T-1h, unconditional)", () => {
   it("opens for both with no consent gate and sets proxyClosesAt = agreed + 2h", async () => {
     const agreedTime = new Date(NOW.getTime() + 20 * 60 * 1000); // 20 min out
     mMatch.findMany
