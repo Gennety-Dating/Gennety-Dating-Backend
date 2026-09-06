@@ -1,7 +1,12 @@
 import { Composer } from "grammy";
 import type { Api } from "grammy";
 import { prisma } from "@gennety/db";
-import { PROFILER_ANSWER_DEBOUNCE_MS } from "@gennety/shared";
+import {
+  PROFILER_ANSWER_DEBOUNCE_MS,
+  profilerQuestionAcceptsImage,
+  profilerQuestionById,
+  t,
+} from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { dispatchToChat } from "../../chat-queue.js";
 import {
@@ -12,6 +17,19 @@ import {
   recordProfilerSkip,
   resolveProfilerCapture,
 } from "../../services/profiler.js";
+import {
+  answerProfilerQuestionWithImage,
+  profilerImageFromMessage,
+} from "../../services/profiler-image-answer.js";
+import { answerProfilerQuestionWithLink } from "../../services/profiler-link-answer.js";
+import {
+  commentaryAroundLink,
+  describeShortVideoLink,
+  findShortVideoLink,
+} from "../../services/short-video/index.js";
+import { readMemeImage } from "../../services/vision/read-meme.js";
+import { env } from "../../config.js";
+import { downloadTelegramFile } from "../../services/storage.js";
 import { isProfilerRefusal } from "../../services/profiler-intent.js";
 import { isLikelyMetaQuestion } from "../../services/onboarding-collector.js";
 
@@ -26,7 +44,8 @@ import { isLikelyMetaQuestion } from "../../services/onboarding-collector.js";
  *
  * The cron, which has no grammY session, is the source of truth via
  * `Profile.profilerActiveQuestionId`; this router reads it lazily and only for
- * plain-text / skip-callback updates from completed users not in another flow.
+ * plain-text / image / skip-callback updates from completed users not in
+ * another flow.
  * Recording itself is guarded by an atomic claim on that column, so a stale or
  * replayed tap can never record twice or push out an extra question.
  *
@@ -169,6 +188,9 @@ profilerRouter.use(async (ctx, next) => {
     !ctx.session.expectingPhoto;
 
   if (text && !isCommand && idle) {
+    // A TikTok / Reels link is an answer attempt, never a meta question, so it
+    // suppresses the question-shaped test outright.
+    const link = env.SHORT_VIDEO_LINKS_ENABLED ? findShortVideoLink(text) : null;
     // An active question is NOT enough to claim the text: it must still own the
     // conversation — nothing else has happened since it was sent — or be
     // replied to directly. Once the user has done anything at all the question
@@ -177,9 +199,43 @@ profilerRouter.use(async (ctx, next) => {
     // separates a late answer from a new topic (`shouldCaptureProfilerAnswer`).
     const capture = await resolveProfilerCapture(BigInt(ctx.from.id), {
       replyToMessageId: ctx.message?.reply_to_message?.message_id,
-      looksLikeQuestion: isLikelyMetaQuestion(text),
+      looksLikeQuestion: link ? false : isLikelyMetaQuestion(text),
     });
     if (capture && ctx.chat) {
+      // A link, on a question that asked for a picture. Same gate as an image:
+      // the question itself must accept one, so a reel sent while "early bird
+      // or night owl" is live is still just text. Without this branch the URL
+      // would be stored verbatim as the answer — which is what used to happen,
+      // and what the icebreaker generator then had to read.
+      const question = link ? profilerQuestionById(capture.questionId) : undefined;
+      if (link && question && profilerQuestionAcceptsImage(question)) {
+        cancelAnswerFlush(ctx.chat.id);
+        const chatId = ctx.chat.id;
+        // Fetching the post and describing its cover frame is seconds, and the
+        // chat has said nothing since their link landed.
+        await ctx.replyWithChatAction("typing").catch(() => {});
+        const outcome = await answerProfilerQuestionWithLink(
+          link,
+          commentaryAroundLink(text),
+          capture.language,
+          {
+            analyze: (ref, language) =>
+              describeShortVideoLink(ctx.api, chatId, ref, language),
+            record: (answer, media) =>
+              recordProfilerAnswer(ctx.api, capture.userId, capture.questionId, answer, {
+                reactionTarget: { chatId, messageId: ctx.message?.message_id },
+                ...(media ? { media } : {}),
+              }),
+          },
+        );
+        if (outcome === "unavailable") {
+          await ctx
+            .reply(t(capture.language, "profilerLinkUnreadable"))
+            .catch(() => {});
+        }
+        return;
+      }
+
       bufferAnswerLine(
         ctx.chat.id,
         capture.userId,
@@ -188,6 +244,44 @@ profilerRouter.use(async (ctx, next) => {
         text,
         ctx.message?.message_id,
       );
+      return;
+    }
+  }
+
+  // A picture, when the live question asked for one ("send your favourite
+  // meme"). Same ownership rule as text — the question must still own the
+  // conversation — plus the question itself has to accept images, so a photo
+  // sent while "are you an early bird or a night owl" is live still falls
+  // through to the menu agent instead of burning that question.
+  const image = !text && idle ? profilerImageFromMessage(ctx.message) : null;
+  if (image && ctx.chat) {
+    const capture = await resolveProfilerCapture(BigInt(ctx.from.id), {
+      replyToMessageId: ctx.message?.reply_to_message?.message_id,
+    });
+    const question = capture ? profilerQuestionById(capture.questionId) : undefined;
+    if (capture && question && profilerQuestionAcceptsImage(question)) {
+      cancelAnswerFlush(ctx.chat.id);
+      const chatId = ctx.chat.id;
+      // The vision round-trip is seconds, not milliseconds, and the user is
+      // looking at a chat that has said nothing since their meme landed.
+      await ctx.replyWithChatAction("typing").catch(() => {});
+      const outcome = await answerProfilerQuestionWithImage(image, capture.language, {
+        download: (fileId) => downloadTelegramFile(ctx.api, fileId),
+        read: (img, caption) =>
+          readMemeImage(img, { language: capture.language, caption }),
+        record: (answer, media) =>
+          recordProfilerAnswer(ctx.api, capture.userId, capture.questionId, answer, {
+            reactionTarget: { chatId, messageId: ctx.message?.message_id },
+            ...(media ? { media } : {}),
+          }),
+      });
+      // Nothing usable and nothing to fall back on: say so once and leave the
+      // question live, so answering in words still works.
+      if (outcome !== "recorded" && outcome !== "recorded_caption") {
+        await ctx
+          .reply(t(capture.language, "profilerImageUnreadable"))
+          .catch(() => {});
+      }
       return;
     }
   }

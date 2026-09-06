@@ -10,9 +10,11 @@
 import { prisma } from "@gennety/db";
 import {
   CADENCE,
+  COORD_OFFER_HOURS,
   dropOutpacesNotices,
   premiumPlanDisplayPrice,
   PREMIUM_PLANS,
+  PROXY_OPEN_HOURS,
   VOICE_SELF_GENDER,
   VOICE_SELF_NAME,
 } from "@gennety/shared";
@@ -276,8 +278,14 @@ interface UserContext {
 /** How far back to look for an un-explained decline (24 hours). */
 const PENDING_REJECTION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-/** Minutes before `agreedTime` the anonymous coordination chat opens (T-30m). */
-const PROXY_OPEN_LEAD_MS = 30 * 60 * 1000;
+/**
+ * How long before `agreedTime` the anonymous coordination chat opens (T-1h).
+ *
+ * Derived from the shared constant rather than spelled as a literal: this
+ * number is quoted back to the user as a clock time, and a prompt that names
+ * the wrong hour is worse than one that stays vague.
+ */
+const PROXY_OPEN_LEAD_MS = PROXY_OPEN_HOURS * 60 * 60 * 1000;
 
 /**
  * Flattened view of the user's single live match, side-resolved so `partner`
@@ -470,10 +478,10 @@ export function describeActiveMatch(
       } else if (match.proxyClosedAt != null) {
         coord = `the coordination chat has closed.`;
       } else if (match.coordOfferSentAt != null) {
-        coord = `the coordination offer was already sent (~1h before); the anonymous "Enter chat" opens ~30 min before the date.`;
+        coord = `the coordination offer was already sent (~${COORD_OFFER_HOURS}h before); the anonymous "Enter chat" opens ~1h before the date.`;
       } else if (match.agreedTime != null) {
         const opensAt = new Date(match.agreedTime.getTime() - PROXY_OPEN_LEAD_MS);
-        coord = `coordination opens automatically before the date — a contact-share option ~1h before, and an anonymous "Enter chat" button ~30 min before (around ${formatClock(
+        coord = `coordination opens automatically before the date — a contact-share option ~${COORD_OFFER_HOURS}h before, and an anonymous "Enter chat" button ~1h before (around ${formatClock(
           opensAt,
           locale,
         )}).`;
