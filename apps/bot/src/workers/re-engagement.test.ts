@@ -83,6 +83,20 @@ describe("re-engagement worker", () => {
     expect(call.where.lastMessageAt).toBeUndefined();
   });
 
+  it("never nudges someone waiting for their city to open", async () => {
+    // They are not an abandoned session — they answered every step we can
+    // offer, and the thing they are waiting for is us. The nudge would name
+    // the city step (their `homeCityKey` is null by construction), which reads
+    // as the app having lost the answer they just gave.
+    (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const api = createMockApi();
+    await reEngagementTick(api, { now: DAY_TIME });
+
+    const call = (prisma.user.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.where.cityWaitlistEntry).toEqual({ is: null });
+  });
+
   it("returns 0 when nothing is due", async () => {
     (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     const api = createMockApi();

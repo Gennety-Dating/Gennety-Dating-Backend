@@ -233,10 +233,19 @@ start.command("start", async (ctx) => {
     return;
   }
 
-  const onboardingProfile = await prisma.profile.findUnique({
-    where: { userId: user.id },
-    select: { homeCityKey: true },
-  });
+  const [onboardingProfile, cityWaitlistEntry] = await Promise.all([
+    prisma.profile.findUnique({
+      where: { userId: user.id },
+      select: { homeCityKey: true },
+    }),
+    // A user on the city waitlist has no home location, so the gate below
+    // always routes them back to the Mini App — but the entry card must say
+    // "you're on the list", not "let's finish signing up".
+    prisma.cityWaitlistEntry.findUnique({
+      where: { userId: user.id },
+      select: { city: true },
+    }),
+  ]);
 
   if (
     shouldUseOnboardingMiniApp(
@@ -245,7 +254,7 @@ start.command("start", async (ctx) => {
       Boolean(onboardingProfile?.homeCityKey),
     )
   ) {
-    await sendOnboardingMiniAppPrompt(ctx, user);
+    await sendOnboardingMiniAppPrompt(ctx, { ...user, cityWaitlistEntry });
     return;
   }
 

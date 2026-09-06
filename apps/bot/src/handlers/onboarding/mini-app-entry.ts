@@ -23,12 +23,16 @@ import { buildMiniAppUrl } from "../../services/mini-app-url.js";
  * the current flow rather than erroring.
  */
 
-type OnboardingEntryUser = Pick<User, "language" | "theme" | "isEmailVerified">;
+type OnboardingEntryUser = Pick<User, "language" | "theme" | "isEmailVerified"> & {
+  /** Non-null while the user is waiting for their city to open. */
+  cityWaitlistEntry?: { city: string } | null;
+};
 
 const ENTRY_USER_SELECT = {
   language: true,
   theme: true,
   isEmailVerified: true,
+  cityWaitlistEntry: { select: { city: true } },
 } as const;
 
 function onboardingMiniAppUrl(lang: Language, theme: User["theme"]): string {
@@ -37,6 +41,55 @@ function onboardingMiniAppUrl(lang: Language, theme: User["theme"]): string {
     theme,
     query: { source: "telegram", v: Date.now().toString(36) },
   });
+}
+
+/**
+ * The card a user on the city waitlist gets instead of "let's finish the entry
+ * flow" — which for them is not true. Registration is over until we open their
+ * city; the button re-opens the Mini App on the waitlist screen, which is also
+ * where they can pick a different city.
+ */
+function waitlistMiniAppCopy(
+  lang: Language,
+  city: string,
+): { message: string; button: string } {
+  switch (lang) {
+    case "ru":
+      return {
+        button: "Открыть Gennety",
+        message:
+          `Ты в списке ожидания: в городе ${city} Gennety пока не работает. ` +
+          "Напишем первым, как только откроемся там. Если готов ходить на свидания в другом городе — открой Mini App и выбери его.",
+      };
+    case "uk":
+      return {
+        button: "Відкрити Gennety",
+        message:
+          `Ти в списку очікування: у місті ${city} Gennety поки не працює. ` +
+          "Напишемо першим, щойно відкриємось там. Якщо готовий ходити на побачення в іншому місті — відкрий Mini App і обери його.",
+      };
+    case "de":
+      return {
+        button: "Gennety öffnen",
+        message:
+          `Du stehst auf der Warteliste: In ${city} ist Gennety noch nicht am Start. ` +
+          "Wir melden uns bei dir zuerst, sobald wir dort öffnen. Wenn du in einer anderen Stadt auf Dates gehen möchtest, öffne die Mini App und wähle sie aus.",
+      };
+    case "pl":
+      return {
+        button: "Otwórz Gennety",
+        message:
+          `Jesteś na liście oczekujących: w mieście ${city} Gennety jeszcze nie działa. ` +
+          "Napiszemy do Ciebie jako do pierwszej osoby, gdy tylko tam ruszymy. Jeśli chcesz chodzić na randki w innym mieście — otwórz Mini App i wybierz je.",
+      };
+    default:
+      return {
+        button: "Open Gennety",
+        message:
+          `You're on the waitlist: Gennety isn't live in ${city} yet. ` +
+          "We'll write to you first the moment we open there. If you're ready to date in another city, open the Mini App and pick one.",
+      };
+  }
 }
 
 function onboardingMiniAppCopy(
@@ -89,7 +142,10 @@ export async function sendOnboardingMiniAppPrompt(
   user: OnboardingEntryUser | null,
 ): Promise<void> {
   const lang = (ctx.session.language ?? user?.language ?? "en") as Language;
-  const copy = onboardingMiniAppCopy(lang, Boolean(user?.isEmailVerified));
+  const waitlistCity = user?.cityWaitlistEntry?.city ?? null;
+  const copy = waitlistCity
+    ? waitlistMiniAppCopy(lang, waitlistCity)
+    : onboardingMiniAppCopy(lang, Boolean(user?.isEmailVerified));
   const keyboard = new InlineKeyboard().webApp(
     copy.button,
     onboardingMiniAppUrl(lang, user?.theme ?? "dark"),
