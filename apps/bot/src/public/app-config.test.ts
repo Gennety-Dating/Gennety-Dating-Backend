@@ -45,12 +45,30 @@ describe("GET /v1/app/config", () => {
   it("does not leak server-internal config keys", async () => {
     const res = await request(buildApp()).get("/v1/app/config");
     expect(Object.keys(res.body).sort()).toEqual([
+      "cityCatalog",
       "features",
       "minSupportedIosVersion",
       "serverNow",
       "supportedCities",
       "ticketProducts",
     ]);
+  });
+
+  it("publishes the waitlist tier separately from the launched one", async () => {
+    const res = await request(buildApp()).get("/v1/app/config");
+    // A native client that only knows `supportedCities` must keep seeing
+    // exactly the launched set — a waitlist city leaking in there would be a
+    // dating city it then tries (and fails) to save.
+    expect(res.body.supportedCities.map((c: { cityKey: string }) => c.cityKey)).toEqual([
+      "ua:kyiv",
+    ]);
+    expect(res.body.cityCatalog[0]).toMatchObject({
+      cityKey: "ua:kyiv",
+      status: "active",
+    });
+    expect(
+      res.body.cityCatalog.find((c: { cityKey: string }) => c.cityKey === "de:berlin"),
+    ).toMatchObject({ city: "Berlin", countryCode: "DE", status: "waitlist" });
   });
 
   // The app must load exactly the consumables this server will credit: a

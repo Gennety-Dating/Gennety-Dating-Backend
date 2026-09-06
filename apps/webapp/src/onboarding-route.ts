@@ -49,6 +49,12 @@ export type OnboardingPhase =
     }
   | { kind: "phone" }
   | { kind: "city" }
+  // The city waitlist. Reached by picking a city on the expansion list, and
+  // the only phase that is not a step towards a finished account: it is where
+  // registration ENDS until we open that city. The one way out is picking a
+  // different city, which is why the screen carries that button — nobody is
+  // trapped here, including a demo visitor mid-walkthrough.
+  | { kind: "waitlist" }
   // App color theme picker — shown once, right after the city gate (before the
   // visual animation, so the animation itself plays in the chosen theme).
   | { kind: "theme" }
@@ -90,6 +96,10 @@ export function preVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPha
   if (!user.termsAccepted) return { kind: "consent" };
   const contactPhase = unresolvedContactPhase(user);
   if (contactPhase) return contactPhase;
+  // Before the city check, not after: a waitlisted user has no home location
+  // by construction, so `{ kind: "city" }` would put them back on the picker
+  // they already answered and lose the fact that they answered it.
+  if (user.cityWaitlist) return { kind: "waitlist" };
   if (!user.homeLocation?.homeCityKey) return { kind: "city" };
   if (!user.themeChosen) return { kind: "theme" };
   return { kind: "visual", index: 0 };
@@ -102,6 +112,7 @@ export function postVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPh
   if (!user.termsAccepted) return { kind: "consent" };
   const contactPhase = unresolvedContactPhase(user);
   if (contactPhase) return contactPhase;
+  if (user.cityWaitlist) return { kind: "waitlist" };
   if (!user.homeLocation?.homeCityKey) return { kind: "city" };
   if (!user.themeChosen) return { kind: "theme" };
   if (user.invitedByPromo && !user.promoGiftSeen) return { kind: "promoGift" };

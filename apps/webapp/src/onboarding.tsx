@@ -5,6 +5,7 @@ import {
   acceptTelegramOnboardingConsent,
   completeTelegramOnboardingGate,
   fetchTelegramOnboardingState,
+  leaveTelegramOnboardingCityWaitlist,
   requestTelegramOnboardingOtp,
   resolveTelegramOnboardingCity,
   searchTelegramOnboardingCities,
@@ -23,6 +24,7 @@ import {
   type OnboardingTheme,
   type RegistrationTrack,
   type TelegramCityHit,
+  type TelegramCityWaitlist,
   type TelegramOnboardingState,
   type TelegramProfileBasics,
   type TelegramProfileLimits,
@@ -498,6 +500,10 @@ function App(): ReactElement {
       phase.kind === "otp" ||
       phase.kind === "phone" ||
       phase.kind === "city" ||
+      // The waitlist screen sits at the same depth as the city gate it
+      // replaces: nothing past it has been reached, so any stored visual
+      // progress is stale.
+      phase.kind === "waitlist" ||
       phase.kind === "theme"
     ) {
       void clearOnboardingProgress();
@@ -769,7 +775,15 @@ function App(): ReactElement {
         ) : null}
       </Scene>
       <Scene active={phase.kind === "city"}>
-        <CityGate markets={remoteUser?.supportedCities ?? []} onState={onState} />
+        <CityGate
+          cities={remoteUser?.cityCatalog ?? remoteUser?.supportedCities ?? []}
+          onState={onState}
+        />
+      </Scene>
+      <Scene active={phase.kind === "waitlist"}>
+        {remoteUser?.cityWaitlist ? (
+          <WaitlistGate waitlist={remoteUser.cityWaitlist} onState={onState} />
+        ) : null}
       </Scene>
       <Scene active={phase.kind === "theme"}>
         <ThemeGate selected={remoteUser?.theme ?? "dark"} onState={onState} />
@@ -1851,14 +1865,23 @@ function OtpGate(props: {
 }
 
 /**
- * Dating-city gate. Gennety is live in Kyiv only, and matching is strictly
- * same-city, so this screen offers ONLY launched markets (`markets`, served
- * from `/state.supportedCities`): they are tappable straight away, search
- * filters the same list server-side, and geolocation outside every market
- * explains that instead of saving somewhere the person can never be matched.
+ * Dating-city gate. The list is the server's city catalog
+ * (`/state.cityCatalog`), grouped by country, and it has two kinds of entry:
+ *
+ *   - a **launched market** — tapping it saves the dating city and registration
+ *     continues, exactly as before;
+ *   - a **waitlist city** — tapping it records the demand and routes to the
+ *     waitlist screen, where registration ends until we open there.
+ *
+ * The distinction is the server's (`status` on each hit), never a guess from
+ * the name: matching is strictly same-city, so getting it wrong in either
+ * direction is either a pool of one or a person turned away from a city we
+ * actually serve. A cached older bundle has neither `cityCatalog` nor a
+ * waitlist screen and falls back to `supportedCities` — the pre-waitlist
+ * picker, still correct.
  */
 function CityGate(props: {
-  markets: TelegramCityHit[];
+  cities: TelegramCityHit[];
   onState: (state: TelegramOnboardingState) => void;
 }): ReactElement {
   const s = useOnboardingStrings();
@@ -1871,8 +1894,20 @@ function CityGate(props: {
   const [note, setNote] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // No search yet → the launched markets themselves are the options.
-  const options = results ?? props.markets;
+  // No search yet → the whole catalog is the option list.
+  const options = results ?? props.cities;
+
+  // Country runs, in the order the server sent them. Grouping is presentation
+  // only — the server owns the order, so a new country needs no bundle change.
+  const groups = useMemo(() => {
+    const out: Array<{ countryCode: string; cities: TelegramCityHit[] }> = [];
+    for (const city of options) {
+      const last = out[out.length - 1];
+      if (last && last.countryCode === city.homeCountryCode) last.cities.push(city);
+      else out.push({ countryCode: city.homeCountryCode, cities: [city] });
+    }
+    return out;
+  }, [options]);
 
   useEffect(() => {
     if (!app?.initData) return;
@@ -1899,9 +1934,10 @@ function CityGate(props: {
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  // A query that matches no launched market is not a typo to shrug at — it is
-  // the "we're not there yet" case, and it deserves the same explanation the
-  // geolocation branch gives.
+  // A query that matches nothing in the catalog is not a typo to shrug at — it
+  // is a city this product has no plans for at all, and it deserves the same
+  // explanation the geolocation branch gives. (A city we HAVE plans for is now
+  // a hit with `status: "waitlist"`, not an empty result.)
   const searchMissed = results !== null && results.length === 0 && !searching && !error;
 
   // Reveal the city list above the keyboard. Telegram's WebView overlays the
@@ -1975,10 +2011,11 @@ function CityGate(props: {
         position.coords.latitude,
         position.coords.longitude,
       );
-      // Outside every launched market: say so and leave the choice open. The
-      // launched cities are already on screen, so the user can still pick one
-      // if they're ready to date there.
-      if (!resolved.supported || !resolved.city) {
+      // Outside every city we know: say so and leave the choice open, with the
+      // catalog already on screen. A waitlist city resolves with a city and
+      // `supported: false` — that is a real answer, so it goes through
+      // `choose` like any tap and lands on the waitlist screen.
+      if (!resolved.city) {
         setNote(s.cityOutsideMarket);
         app.HapticFeedback?.notificationOccurred("warning");
         return;
@@ -2018,24 +2055,112 @@ function CityGate(props: {
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
-        <div className="choice-row">
-          {options.map((city) => (
-            <button
-              key={`${city.homeCityKey}:${city.homePlaceId ?? city.label}`}
-              className="choice-button"
-              disabled={busy || geoBusy || !app?.initData}
-              onClick={() => void choose(city)}
-            >
-              <span>
-                <strong>{city.homeCity}</strong>
-                <small>{city.label}</small>
-              </span>
-              <span className="material-symbols-outlined">chevron_right</span>
-            </button>
-          ))}
-        </div>
+        {groups.map((group) => (
+          <div className="city-group" key={group.countryCode}>
+            <div className="city-group-title">
+              {s.cityCountries[group.countryCode] ?? group.countryCode}
+            </div>
+            <div className="choice-row">
+              {group.cities.map((city) => (
+                <button
+                  key={`${city.homeCityKey}:${city.homePlaceId ?? city.label}`}
+                  className="choice-button"
+                  disabled={busy || geoBusy || !app?.initData}
+                  onClick={() => void choose(city)}
+                >
+                  <span>
+                    <strong>{city.homeCity}</strong>
+                    <small>{city.label}</small>
+                  </span>
+                  {city.status === "waitlist" ? (
+                    <span className="city-soon">{s.cityComingSoon}</span>
+                  ) : (
+                    <span className="material-symbols-outlined">chevron_right</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
         {searching ? <div className="gate-meta">{s.citySearching}</div> : null}
       </div>
+    </GateShell>
+  );
+}
+
+/**
+ * The city waitlist screen — the one place registration ENDS instead of
+ * advancing.
+ *
+ * Reached by picking a city on the expansion list, and returned to on every
+ * relaunch until the person picks a different city: the server keeps the
+ * waitlist row, the routing reads it before it reads `homeLocation`, and every
+ * step past the city gate needs a home location this account does not have. So
+ * this is a real stop, not a modal over a flow that is still running
+ * underneath.
+ *
+ * The screen is deliberately not a dead end. "Choose another city" drops the
+ * row and returns to the picker — it is what a person who mis-tapped needs, it
+ * is what someone who really would date in Kyiv needs, and it is why the demo
+ * bot needs no special case for a visitor who taps Berlin mid-walkthrough.
+ *
+ * The "first in line" promise is copy about intent and nothing else. There is
+ * no queue, no position and no worker (see `CityWaitlistEntry`); what exists is
+ * a row per person per city, which is the demand signal that decides which
+ * market opens next.
+ */
+function WaitlistGate(props: {
+  waitlist: TelegramCityWaitlist;
+  onState: (state: TelegramOnboardingState) => void;
+}): ReactElement {
+  const s = useOnboardingStrings();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const city = props.waitlist.city;
+
+  // The arrival is the point of the screen, so it gets the same success haptic
+  // a completed gate gets — the choice registered, it just did not continue.
+  useEffect(() => {
+    app?.HapticFeedback?.notificationOccurred("success");
+  }, []);
+
+  async function changeCity(): Promise<void> {
+    if (!app?.initData || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const state = await leaveTelegramOnboardingCityWaitlist(app.initData);
+      props.onState(state);
+    } catch (err) {
+      setError(errorCopy(err, s));
+      app.HapticFeedback?.notificationOccurred("error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <GateShell>
+      <div className="waitlist-mark" aria-hidden="true">
+        <span className="material-symbols-outlined">schedule</span>
+      </div>
+      <h1>{s.waitlistTitle(city)}</h1>
+      <p>{s.waitlistLead(city)}</p>
+      {error ? <div className="gate-error">{error}</div> : null}
+      <div className="gate-note">{s.waitlistPriority}</div>
+      <div className="gate-stack">
+        <button
+          className="choice-button"
+          disabled={busy || !app?.initData}
+          onClick={() => void changeCity()}
+        >
+          <span>
+            <strong>{busy ? s.waitlistChanging : s.waitlistChangeCity}</strong>
+          </span>
+          <span className="material-symbols-outlined">location_city</span>
+        </button>
+      </div>
+      <div className="gate-meta">{s.waitlistMeta}</div>
     </GateShell>
   );
 }

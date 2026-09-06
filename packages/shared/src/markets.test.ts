@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  CITY_CATALOG,
   DEFAULT_MARKET,
   SUPPORTED_CITY_KEYS,
   SUPPORTED_MARKETS,
+  WAITLIST_CITIES,
+  cityForCoordinates,
+  findCityByKey,
   findMarketByCityKey,
   isSupportedCityKey,
+  isWaitlistCityKey,
   marketForCoordinates,
+  searchCityCatalog,
   searchMarkets,
 } from "./markets.js";
 import { cityKeyToTimeZone } from "./timezone.js";
@@ -89,5 +95,77 @@ describe("marketForCoordinates", () => {
   it("returns null for unusable coordinates instead of guessing", () => {
     expect(marketForCoordinates(Number.NaN, 30.5)).toBeNull();
     expect(marketForCoordinates(50.45, Number.POSITIVE_INFINITY)).toBeNull();
+  });
+});
+
+describe("the waitlist tier", () => {
+  it("keeps every catalog entry canonical, unique and timezone-resolvable", () => {
+    const keys = new Set<string>();
+    for (const city of CITY_CATALOG) {
+      expect(city.cityKey).toMatch(/^[a-z]{2}:[a-z0-9-]+$/);
+      expect(city.cityKey.startsWith(`${city.countryCode.toLowerCase()}:`)).toBe(true);
+      expect(keys.has(city.cityKey)).toBe(false);
+      keys.add(city.cityKey);
+      // A city whose timezone silently fell back to Kyiv would misfire the
+      // Profiler's local windows the day it launches.
+      expect(cityKeyToTimeZone(city.cityKey, city.countryCode)).toBe(
+        city.countryCode === "DE" ? "Europe/Berlin" : "Europe/Kyiv",
+      );
+    }
+  });
+
+  it("is the catalog minus the launched markets, in display order", () => {
+    expect(CITY_CATALOG).toEqual([...SUPPORTED_MARKETS, ...WAITLIST_CITIES]);
+    expect(CITY_CATALOG.filter((c) => c.status === "active")).toEqual(SUPPORTED_MARKETS);
+    // Countries stay in contiguous runs — the picker groups on this alone.
+    const countries = CITY_CATALOG.map((c) => c.countryCode);
+    expect(countries).toEqual([...new Set(countries)].flatMap((code) =>
+      countries.filter((c) => c === code),
+    ));
+  });
+
+  it("never lets a waitlist city pass as a launched market", () => {
+    for (const city of WAITLIST_CITIES) {
+      expect(isWaitlistCityKey(city.cityKey)).toBe(true);
+      expect(isSupportedCityKey(city.cityKey)).toBe(false);
+      expect(findMarketByCityKey(city.cityKey)).toBeNull();
+      expect(findCityByKey(city.cityKey)?.status).toBe("waitlist");
+    }
+    // …and the reverse: Kyiv is not demand to be recorded, it is a market.
+    expect(isWaitlistCityKey("ua:kyiv")).toBe(false);
+    // A city nobody has ever heard of is not "waitlisted", it is unknown.
+    expect(isWaitlistCityKey("pl:warsaw")).toBe(false);
+    expect(isWaitlistCityKey(null)).toBe(false);
+  });
+
+  it("searches the catalog in the languages a user actually types", () => {
+    const keysFor = (query: string): string[] =>
+      searchCityCatalog(query).map((city) => city.cityKey);
+    expect(keysFor("Берлин")).toEqual(["de:berlin"]);
+    expect(keysFor("München")).toEqual(["de:munich"]);
+    expect(keysFor("Кривой Рог")).toEqual(["ua:kryvyi-rih"]);
+    expect(keysFor("Одеса")).toEqual(["ua:odesa"]);
+    expect(keysFor("Кёльн")).toEqual(["de:cologne"]);
+    // Still first-party: a city we have no plans for stays unknown.
+    expect(keysFor("Warsaw")).toEqual([]);
+    expect(searchCityCatalog("  ")).toHaveLength(CITY_CATALOG.length);
+  });
+
+  it("keeps `searchMarkets` launched-only, whatever the catalog holds", () => {
+    // Registration's Kyiv-only rail and the city-switch offer both read this;
+    // widening it would be how a waitlist city reaches `homeCityKey`.
+    for (const query of ["Berlin", "Lviv", "Odesa", "München"]) {
+      expect(searchMarkets(query)).toEqual([]);
+    }
+  });
+
+  it("pre-selects a waitlist city from coordinates, but never as a market", () => {
+    expect(cityForCoordinates(52.52, 13.405)?.cityKey).toBe("de:berlin");
+    expect(cityForCoordinates(49.8397, 24.0297)?.cityKey).toBe("ua:lviv");
+    expect(marketForCoordinates(52.52, 13.405)).toBeNull();
+    // Kyiv still wins its own coordinates, from the same catalog scan.
+    expect(cityForCoordinates(50.4501, 30.5234)?.cityKey).toBe("ua:kyiv");
+    // Warsaw is in neither tier — no city, not a nearest guess.
+    expect(cityForCoordinates(52.2297, 21.0122)).toBeNull();
   });
 });

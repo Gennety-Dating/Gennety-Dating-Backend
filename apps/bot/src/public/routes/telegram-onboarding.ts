@@ -11,6 +11,7 @@ import {
 } from "@gennety/db";
 import {
   ALLOWED_EMAIL_DOMAINS,
+  isWaitlistCityKey,
   isUniversityEmail,
   LEGAL_DOCS_VERSION,
   MAX_AGE,
@@ -43,11 +44,18 @@ import {
   validateHomeLocationPayload,
 } from "../home-location.js";
 import {
-  resolveMarketFromCoordinates,
+  cityCatalogHits,
+  resolveCityFromCoordinates,
   searchCities,
   supportedCityHits,
   type CitySearchHit,
 } from "../city-search.js";
+import {
+  joinCityWaitlist,
+  leaveCityWaitlist,
+  serializeCityWaitlist,
+  type CityWaitlistState,
+} from "../city-waitlist.js";
 import { unresolvedTrackContactGate } from "../../services/contact-verification.js";
 import { grantInviteePremium, parseReferrer, referralSourceFromParam } from "../../services/referral.js";
 import {
@@ -98,6 +106,18 @@ type MiniUser = {
     latitude: number | null;
     longitude: number | null;
     locationUpdatedAt: Date | null;
+  } | null;
+  /**
+   * Set only while the user picked a city we have not launched. Mutually
+   * exclusive with a `profile.homeCityKey` — `/city/select` clears one when it
+   * writes the other — and checked FIRST by the routing, so a waitlisted user
+   * cannot walk into the rest of onboarding.
+   */
+  cityWaitlistEntry: {
+    cityKey: string;
+    city: string;
+    countryCode: string;
+    createdAt: Date;
   } | null;
 };
 
@@ -446,11 +466,14 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    // Geolocation can only ever PRE-SELECT a launched market. Outside every
-    // market the answer is an explicit `supported: false` with no city — the
-    // Mini App then explains that Gennety hasn't launched there yet instead of
-    // silently saving somewhere the user isn't.
-    const resolution = resolveMarketFromCoordinates(lat, lng);
+    // Geolocation can only ever PRE-SELECT a city, never commit one. Outside
+    // every city in the catalog the answer is an explicit `city: null` — the
+    // Mini App then explains that Gennety hasn't launched there instead of
+    // silently saving somewhere the user isn't. A waitlist city resolves with
+    // `supported: false` and a non-null city: the current client pre-fills it
+    // and lands on the waitlist screen, an older cached bundle reads
+    // `supported` first and shows its "not launched here" note, which is true.
+    const resolution = resolveCityFromCoordinates(lat, lng);
     res.json({ ok: true, supported: resolution.supported, city: resolution.city });
   });
 
@@ -468,13 +491,52 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    const validation = validateHomeLocationPayload((req.body ?? {}) as Record<string, unknown>);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+
+    // The waitlist fork. A city on the expansion list is a legitimate answer to
+    // this screen, not a bad request — it records demand and stops registration
+    // at the waitlist screen. Branching BEFORE the validator is deliberate:
+    // `validateHomeLocationPayload` stays the one unconditional gate on
+    // `Profile.homeCityKey`, so the iOS rail (`POST /v1/me/home-location`) and
+    // any future caller keep refusing an unlaunched city with no exception to
+    // reason about.
+    const requestedCityKey =
+      typeof body.homeCityKey === "string" ? body.homeCityKey.trim().toLowerCase() : "";
+    if (isWaitlistCityKey(requestedCityKey)) {
+      const joined = await joinCityWaitlist(user.id, requestedCityKey);
+      if (!joined.ok) {
+        res.status(400).json({ error: joined.error });
+        return;
+      }
+      // Joining is onboarding activity like any other answer: it resets the
+      // re-engagement chain so a stale, long-overdue touch cannot fire the
+      // instant this person leaves the waitlist again. (The worker skips them
+      // while the row exists — `workers/re-engagement.ts`.)
+      const waitlisted = await prisma.user.update({
+        where: { id: user.id },
+        data: { ...onboardingActivityPatch() },
+        select: miniUserSelect,
+      });
+      logTelegramOnboarding("city-waitlisted", waitlisted, {
+        cityKey: joined.entry.cityKey,
+      });
+      res.json(await serializeState(waitlisted));
+      return;
+    }
+
+    const validation = validateHomeLocationPayload(body);
     if (!validation.ok) {
       res.status(400).json({ error: validation.error });
       return;
     }
 
     await saveHomeLocationForUser(user.id, validation.data);
+    // A launched market and a waitlist row are mutually exclusive states: a
+    // user who was waiting for Berlin and then picks Kyiv is a Kyiv user, and
+    // leaving the row behind would keep them on the waitlist screen forever
+    // (the routing checks the waitlist first) and inflate Berlin's demand
+    // count with someone who no longer wants it.
+    await leaveCityWaitlist(user.id);
     const updated = await prisma.user.findUniqueOrThrow({
       where: { id: user.id },
       select: miniUserSelect,
@@ -483,6 +545,42 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     logTelegramOnboarding("city-selected", updated, {
       homeCityKey: validation.data.homeCityKey,
     });
+    res.json(await serializeState(updated));
+  });
+
+  /**
+   * Leave the city waitlist — the "choose another city" button on the waitlist
+   * screen. Deletes the row and returns the state, which now routes back to the
+   * city picker. Idempotent, so a double tap is harmless.
+   *
+   * A person is never trapped on the waitlist screen: this is the whole reason
+   * the screen has a way out, and the reason the demo bot needs no special case
+   * (a visitor who taps Berlin during a walkthrough is one tap from Kyiv).
+   */
+  router.post("/city/waitlist/leave", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+
+    const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
+    const gate = ensureReadyForLocation(user);
+    if (gate) {
+      res.status(409).json({ error: gate });
+      return;
+    }
+
+    await leaveCityWaitlist(user.id);
+    // Same reason as the join: this person is back on the city picker and
+    // actively using the app, so the chain restarts from now rather than
+    // firing an overdue touch a minute later.
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { ...onboardingActivityPatch() },
+      select: miniUserSelect,
+    });
+    logTelegramOnboarding("city-waitlist-left", updated);
     res.json(await serializeState(updated));
   });
 
@@ -803,6 +901,14 @@ const miniUserSelect = {
       locationUpdatedAt: true,
     },
   },
+  cityWaitlistEntry: {
+    select: {
+      cityKey: true,
+      city: true,
+      countryCode: true,
+      createdAt: true,
+    },
+  },
 } as const;
 
 function authenticate(req: Request): AuthOk | AuthErr {
@@ -928,7 +1034,20 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       // Launched markets (packages/shared/src/markets.ts). The Mini App renders
       // them as one-tap options and never has to hardcode a city list, so a new
       // market goes live with the server rather than a bundle redeploy.
+      //
+      // Kept alongside `cityCatalog` rather than replaced by it: a cached older
+      // bundle reads this field and must keep offering exactly the launched
+      // set, because it has no waitlist screen to send anyone to.
       supportedCities: supportedCityHits(),
+      // The full picker list — launched markets first, then the expansion
+      // cities, grouped by country in display order. Each hit carries its
+      // `status`, which is what the client renders as the coming-soon chip and
+      // what decides which branch of `/city/select` runs.
+      cityCatalog: cityCatalogHits(),
+      // Non-null while this user is waiting for their city to open. The client
+      // routes to the waitlist screen on this alone, before it looks at
+      // `homeLocation`.
+      cityWaitlist: serializeCityWaitlist(user.cityWaitlistEntry),
       // The Mini App's own profile screens (PRODUCT_SPEC §1.3). The client
       // routes to the first `null` here, so server state — not DeviceStorage —
       // is what decides where a reopened session resumes, and a user who
@@ -1010,6 +1129,14 @@ interface TelegramOnboardingStateDto {
     promoMonths: number;
     /** Every city registration currently accepts (Kyiv-only at launch). */
     supportedCities: CitySearchHit[];
+    /**
+     * Every city the picker offers, launched and waitlist alike, grouped by
+     * country in display order. Read `status` — a `waitlist` hit ends
+     * registration on the waitlist screen instead of continuing it.
+     */
+    cityCatalog: CitySearchHit[];
+    /** Set while this user is waiting for their city to open; else null. */
+    cityWaitlist: CityWaitlistState | null;
     /** The six facts the Mini App's own profile screens collect. */
     profileBasics: {
       firstName: string | null;

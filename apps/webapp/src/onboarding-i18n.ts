@@ -67,6 +67,18 @@ export interface OnboardingStrings {
   cityGeoDenied: string;
   /** Shown when geolocation / search lands outside every launched market. */
   cityOutsideMarket: string;
+  /** Chip on a picker option we have not launched in. */
+  cityComingSoon: string;
+  /** Country group headers in the picker, by ISO-3166 alpha-2 code. */
+  cityCountries: Record<string, string>;
+  // The city-waitlist screen (the phase registration ENDS on for a city we
+  // have not opened). `{city}` is the canonical city name from the catalog.
+  waitlistTitle: (city: string) => string;
+  waitlistLead: (city: string) => string;
+  waitlistPriority: string;
+  waitlistMeta: string;
+  waitlistChangeCity: string;
+  waitlistChanging: string;
   aiMemoryTitle: string;
   aiMemoryAria: string;
   aiMemoryAccept: string;
@@ -221,7 +233,7 @@ const en: OnboardingStrings = {
   otpChangeEmail: "Change email",
   cityTitle: "Your matching city",
   cityLead:
-    "Gennety is live in Kyiv for now. Choose it if you're ready to go on dates there — we do not save your home address.",
+    "Gennety is live in Kyiv. Pick your city — if we haven't opened there yet, we'll save your spot. We do not save your home address.",
   cityDetect: "Detect automatically",
   cityDetecting: "Detecting city...",
   cityGeoMeta: "Location is used only to choose your city",
@@ -230,7 +242,17 @@ const en: OnboardingStrings = {
   cityGeoUnavailable: "We couldn't open location access. Choose a city using search.",
   cityGeoDenied: "Location isn't available. Choose a city using search.",
   cityOutsideMarket:
-    "Gennety hasn't launched in your city yet — we're only in Kyiv so far, so there'd be nobody to match you with. Pick Kyiv if you're ready to go on dates there.",
+    "We don't know that city yet. Pick one from the list — Kyiv if you're ready to go on dates there, or any other and we'll save your spot.",
+  cityComingSoon: "Coming soon",
+  cityCountries: { UA: "Ukraine", DE: "Germany" },
+  waitlistTitle: (city) => `Gennety isn't in ${city} yet`,
+  waitlistLead: (city) =>
+    `Your application is saved. We're opening city by city, and ${city} is on the list.`,
+  waitlistPriority:
+    "You'll be among the first we write to when registration opens there — before anyone who signs up later.",
+  waitlistMeta: "Nothing else to do for now. We'll message you right here in Telegram.",
+  waitlistChangeCity: "Choose another city",
+  waitlistChanging: "One moment...",
   aiMemoryTitle: "Would you like to import memory from other AI apps to give your personal AI matchmaker more context about you?",
   aiMemoryAria: "ChatGPT, Claude and Gemini",
   aiMemoryAccept: "Yes, connect",
@@ -305,6 +327,7 @@ const en: OnboardingStrings = {
     "email-required": "Verify your university email first.",
     "location-required": "Choose your matching city first.",
     "city-not-supported": "Gennety isn't live in that city yet. Choose Kyiv to continue.",
+    "city-not-waitlisted": "We couldn't save that city. Pick one from the list.",
     "Invalid initData": "Open the Mini App from the bot chat to continue.",
     "Missing tma initData": "Open the Mini App from the bot chat to continue.",
     "Empty initData": "Open the Mini App from the bot chat to continue.",
@@ -400,7 +423,7 @@ const ru: OnboardingStrings = {
   otpChangeEmail: "Изменить почту",
   cityTitle: "Город для мэтчей",
   cityLead:
-    "Пока Gennety работает в Киеве. Выбери его, если готов ходить на свидания там — домашний адрес мы не сохраняем.",
+    "Gennety работает в Киеве. Выбери свой город — если мы там ещё не открылись, займём тебе место. Домашний адрес мы не сохраняем.",
   cityDetect: "Определить автоматически",
   cityDetecting: "Определяю город...",
   cityGeoMeta: "Используем геопозицию только для выбора города",
@@ -409,7 +432,17 @@ const ru: OnboardingStrings = {
   cityGeoUnavailable: "Не получилось открыть геолокацию. Выбери город через поиск.",
   cityGeoDenied: "Геолокация недоступна. Выбери город через поиск.",
   cityOutsideMarket:
-    "В твоём городе Gennety пока не запущен — мы работаем только в Киеве, и мэтчить тебя было бы не с кем. Выбери Киев, если готов ходить на свидания там.",
+    "Такой город мы пока не знаем. Выбери из списка: Киев — если готов ходить на свидания там, или любой другой — и мы займём тебе место.",
+  cityComingSoon: "Скоро",
+  cityCountries: { UA: "Украина", DE: "Германия" },
+  waitlistTitle: (city) => `В городе ${city} Gennety пока нет`,
+  waitlistLead: (city) =>
+    `Твоя заявка сохранена. Мы открываем города по одному, и ${city} есть в списке.`,
+  waitlistPriority:
+    "Когда там откроется регистрация, ты будешь среди первых, кому мы напишем, — раньше всех, кто зарегистрируется позже.",
+  waitlistMeta: "Пока делать ничего не нужно. Напишем тебе прямо здесь, в Telegram.",
+  waitlistChangeCity: "Выбрать другой город",
+  waitlistChanging: "Секунду...",
   aiMemoryTitle: "Хочешь импортировать память из других AI-приложений, чтобы дать личному AI-матчмейкеру больше контекста о тебе?",
   aiMemoryAria: "ChatGPT, Claude и Gemini",
   aiMemoryAccept: "Да, подключить",
@@ -484,6 +517,7 @@ const ru: OnboardingStrings = {
     "email-required": "Сначала подтверди университетскую почту.",
     "location-required": "Сначала выбери город для мэтчей.",
     "city-not-supported": "В этом городе Gennety пока не работает. Выбери Киев, чтобы продолжить.",
+    "city-not-waitlisted": "Не получилось сохранить этот город. Выбери из списка.",
     "Invalid initData": "Открой Mini App из чата с ботом, чтобы продолжить.",
     "Missing tma initData": "Открой Mini App из чата с ботом, чтобы продолжить.",
     "Empty initData": "Открой Mini App из чата с ботом, чтобы продолжить.",
@@ -579,7 +613,7 @@ const uk: OnboardingStrings = {
   otpChangeEmail: "Змінити пошту",
   cityTitle: "Місто для метчів",
   cityLead:
-    "Поки Gennety працює в Києві. Обери його, якщо готовий ходити на побачення там — домашню адресу ми не зберігаємо.",
+    "Gennety працює в Києві. Обери своє місто — якщо ми там ще не відкрилися, збережемо тобі місце. Домашню адресу ми не зберігаємо.",
   cityDetect: "Визначити автоматично",
   cityDetecting: "Визначаю місто...",
   cityGeoMeta: "Геопозицію використовуємо лише для вибору міста",
@@ -588,7 +622,17 @@ const uk: OnboardingStrings = {
   cityGeoUnavailable: "Не вдалося відкрити геолокацію. Обери місто через пошук.",
   cityGeoDenied: "Геолокація недоступна. Обери місто через пошук.",
   cityOutsideMarket:
-    "У твоєму місті Gennety ще не запущено — ми працюємо лише в Києві, тож метчити тебе не було б з ким. Обери Київ, якщо готовий ходити на побачення там.",
+    "Такого міста ми поки не знаємо. Обери зі списку: Київ — якщо готовий ходити на побачення там, або будь-яке інше — і ми збережемо тобі місце.",
+  cityComingSoon: "Скоро",
+  cityCountries: { UA: "Україна", DE: "Німеччина" },
+  waitlistTitle: (city) => `У місті ${city} Gennety поки немає`,
+  waitlistLead: (city) =>
+    `Твою заявку збережено. Ми відкриваємо міста по одному, і ${city} є в списку.`,
+  waitlistPriority:
+    "Щойно там відкриється реєстрація, ти будеш серед перших, кому ми напишемо, — раніше за всіх, хто зареєструється пізніше.",
+  waitlistMeta: "Поки робити нічого не треба. Напишемо тобі просто тут, у Telegram.",
+  waitlistChangeCity: "Обрати інше місто",
+  waitlistChanging: "Секунду...",
   aiMemoryTitle: "Хочеш імпортувати пам'ять з інших AI-застосунків, щоб дати особистому AI-матчмейкеру більше контексту про тебе?",
   aiMemoryAria: "ChatGPT, Claude і Gemini",
   aiMemoryAccept: "Так, підключити",
@@ -664,6 +708,7 @@ const uk: OnboardingStrings = {
     "email-required": "Спочатку підтвердь університетську пошту.",
     "location-required": "Спочатку обери місто для метчів.",
     "city-not-supported": "У цьому місті Gennety ще не працює. Обери Київ, щоб продовжити.",
+    "city-not-waitlisted": "Не вдалося зберегти це місто. Обери зі списку.",
     "Invalid initData": "Відкрий Mini App із чату з ботом, щоб продовжити.",
     "Missing tma initData": "Відкрий Mini App із чату з ботом, щоб продовжити.",
     "Empty initData": "Відкрий Mini App із чату з ботом, щоб продовжити.",
@@ -759,7 +804,7 @@ const de: OnboardingStrings = {
   otpChangeEmail: "E-Mail ändern",
   cityTitle: "Stadt für deine Matches",
   cityLead:
-    "Gennety ist vorerst in Kyjiw am Start. Wähle die Stadt, wenn du dort auf Dates gehen möchtest — deine Wohnadresse speichern wir nicht.",
+    "Gennety ist in Kyjiw am Start. Wähle deine Stadt — sind wir dort noch nicht, halten wir dir den Platz frei. Deine Wohnadresse speichern wir nicht.",
   cityDetect: "Automatisch erkennen",
   cityDetecting: "Stadt wird erkannt...",
   cityGeoMeta: "Der Standort wird nur zur Auswahl der Stadt verwendet",
@@ -768,7 +813,17 @@ const de: OnboardingStrings = {
   cityGeoUnavailable: "Standortzugriff konnte nicht geöffnet werden. Wähle die Stadt über die Suche.",
   cityGeoDenied: "Standort ist nicht verfügbar. Wähle die Stadt über die Suche.",
   cityOutsideMarket:
-    "In deiner Stadt ist Gennety noch nicht gestartet — wir sind bisher nur in Kyjiw, es gäbe also niemanden zum Matchen. Wähle Kyjiw, wenn du dort auf Dates gehen möchtest.",
+    "Diese Stadt kennen wir noch nicht. Wähle eine aus der Liste — Kyjiw, wenn du dort auf Dates gehen möchtest, oder eine andere, dann halten wir dir den Platz frei.",
+  cityComingSoon: "Bald",
+  cityCountries: { UA: "Ukraine", DE: "Deutschland" },
+  waitlistTitle: (city) => `In ${city} gibt es Gennety noch nicht`,
+  waitlistLead: (city) =>
+    `Deine Anmeldung ist gespeichert. Wir öffnen Stadt für Stadt, und ${city} steht auf der Liste.`,
+  waitlistPriority:
+    "Sobald die Registrierung dort startet, gehörst du zu den Ersten, denen wir schreiben — vor allen, die sich später anmelden.",
+  waitlistMeta: "Du musst jetzt nichts weiter tun. Wir melden uns direkt hier in Telegram.",
+  waitlistChangeCity: "Andere Stadt wählen",
+  waitlistChanging: "Einen Moment...",
   aiMemoryTitle: "Möchtest du Erinnerungen aus anderen KI-Apps importieren, damit dein persönlicher KI-Matchmaker mehr Kontext über dich hat?",
   aiMemoryAria: "ChatGPT, Claude und Gemini",
   aiMemoryAccept: "Ja, verbinden",
@@ -844,6 +899,7 @@ const de: OnboardingStrings = {
     "email-required": "Bestätige zuerst deine Universitäts-E-Mail.",
     "location-required": "Wähle zuerst deine Match-Stadt.",
     "city-not-supported": "In dieser Stadt gibt es Gennety noch nicht. Wähle Kyjiw, um fortzufahren.",
+    "city-not-waitlisted": "Diese Stadt konnten wir nicht speichern. Wähle eine aus der Liste.",
     "Invalid initData": "Öffne die Mini App aus dem Bot-Chat, um fortzufahren.",
     "Missing tma initData": "Öffne die Mini App aus dem Bot-Chat, um fortzufahren.",
     "Empty initData": "Öffne die Mini App aus dem Bot-Chat, um fortzufahren.",
@@ -939,7 +995,7 @@ const pl: OnboardingStrings = {
   otpChangeEmail: "Zmień e-mail",
   cityTitle: "Miasto dopasowań",
   cityLead:
-    "Na razie Gennety działa w Kijowie. Wybierz je, jeśli chcesz tam chodzić na randki — nie zapisujemy adresu domowego.",
+    "Gennety działa w Kijowie. Wybierz swoje miasto — jeśli jeszcze tam nie ruszyliśmy, zarezerwujemy Ci miejsce. Nie zapisujemy adresu domowego.",
   cityDetect: "Wykryj automatycznie",
   cityDetecting: "Wykrywanie miasta...",
   cityGeoMeta: "Lokalizacja służy wyłącznie do wyboru miasta",
@@ -948,7 +1004,17 @@ const pl: OnboardingStrings = {
   cityGeoUnavailable: "Nie udało się otworzyć lokalizacji. Wybierz miasto przez wyszukiwarkę.",
   cityGeoDenied: "Lokalizacja jest niedostępna. Wybierz miasto przez wyszukiwarkę.",
   cityOutsideMarket:
-    "W Twoim mieście Gennety jeszcze nie wystartowało — jesteśmy na razie tylko w Kijowie, więc nie byłoby kogo dopasować. Wybierz Kijów, jeśli chcesz tam chodzić na randki.",
+    "Tego miasta jeszcze nie znamy. Wybierz jedno z listy — Kijów, jeśli chcesz tam chodzić na randki, albo dowolne inne, a zarezerwujemy Ci miejsce.",
+  cityComingSoon: "Wkrótce",
+  cityCountries: { UA: "Ukraina", DE: "Niemcy" },
+  waitlistTitle: (city) => `W mieście ${city} Gennety jeszcze nie działa`,
+  waitlistLead: (city) =>
+    `Twoje zgłoszenie jest zapisane. Otwieramy miasto po mieście, a ${city} jest na liście.`,
+  waitlistPriority:
+    "Gdy tylko ruszy tam rejestracja, będziesz wśród pierwszych osób, do których napiszemy — przed wszystkimi, którzy zapiszą się później.",
+  waitlistMeta: "Na razie nie musisz nic robić. Napiszemy do Ciebie tutaj, na Telegramie.",
+  waitlistChangeCity: "Wybierz inne miasto",
+  waitlistChanging: "Chwileczkę...",
   aiMemoryTitle: "Chcesz zaimportować pamięć z innych aplikacji AI, aby Twój osobisty AI-matchmaker miał więcej kontekstu o Tobie?",
   aiMemoryAria: "ChatGPT, Claude i Gemini",
   aiMemoryAccept: "Tak, połącz",
@@ -1024,6 +1090,7 @@ const pl: OnboardingStrings = {
     "email-required": "Najpierw potwierdź uczelniany e-mail.",
     "location-required": "Najpierw wybierz miasto dopasowań.",
     "city-not-supported": "W tym mieście Gennety jeszcze nie działa. Wybierz Kijów, aby kontynuować.",
+    "city-not-waitlisted": "Nie udało się zapisać tego miasta. Wybierz jedno z listy.",
     "Invalid initData": "Otwórz Mini App z czatu z botem, aby kontynuować.",
     "Missing tma initData": "Otwórz Mini App z czatu z botem, aby kontynuować.",
     "Empty initData": "Otwórz Mini App z czatu z botem, aby kontynuować.",

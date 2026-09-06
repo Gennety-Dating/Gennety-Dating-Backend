@@ -1535,6 +1535,58 @@ button {
   gap: 16px;
 }
 
+/* City picker, grouped by country. The header is a quiet label, not a section
+   title — the screen already has one, and twenty cities under two loud
+   headings reads as two screens rather than one list. */
+.city-group + .city-group {
+  margin-top: 18px;
+}
+
+.city-group-title {
+  margin: 0 0 8px 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* "Coming soon" on a city we have not launched. It replaces the chevron rather
+   than joining it: the chevron promises the flow continues, and for these it
+   does not. Still fully tappable — the tap is what puts the person on the
+   list. */
+.city-soon {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+/* The waitlist screen's mark. A clock, not a cross: nothing failed, the city
+   is simply not open yet. */
+.waitlist-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 0 1.25rem;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.waitlist-mark .material-symbols-outlined {
+  color: var(--accent);
+  font-size: 28px;
+}
+
 .choice-button {
   min-height: 56px;
   border-radius: 18px;

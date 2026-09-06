@@ -52,7 +52,10 @@ const { MOCK_USER } = vi.hoisted(() => ({
       photos: [],
       eloScore: 600,
       eloMatchesPlayed: 3,
+      homeCity: "Kyiv",
+      homeCityKey: "ua:kyiv",
     },
+    cityWaitlistEntry: null,
   },
 }));
 
@@ -86,6 +89,9 @@ vi.mock("@gennety/db", () => ({
       findMany: vi.fn().mockResolvedValue([]),
     },
     noMatchNotice: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    cityWaitlistEntry: {
       findMany: vi.fn().mockResolvedValue([]),
     },
     report: {
@@ -235,6 +241,131 @@ describe("GET /admin/users", () => {
     const res = await request(app).get("/admin/users?limit=999").set(AUTH);
     expect(res.status).toBe(200);
     expect(res.body.limit).toBe(100);
+  });
+
+  it("reports the city and whether this person can be matched there", async () => {
+    const res = await request(app).get("/admin/users").set(AUTH);
+    expect(res.body.data[0].city).toEqual({
+      cityKey: "ua:kyiv",
+      city: "Kyiv",
+      countryCode: "UA",
+      status: "active",
+    });
+  });
+
+  it("reads a waitlisted user's city from the waitlist row", async () => {
+    // Twice: the health classifier reads the same table first, so a single
+    // `Once` would be spent before the list query ever runs.
+    const findMany = prisma.user.findMany as unknown as ReturnType<typeof vi.fn>;
+    const waitlisted = [
+      {
+        ...MOCK_USER,
+        profile: { ...MOCK_USER.profile, homeCity: null, homeCityKey: null },
+        cityWaitlistEntry: {
+          cityKey: "de:berlin",
+          city: "Berlin",
+          countryCode: "DE",
+          createdAt: new Date("2026-09-04T10:00:00Z"),
+        },
+      },
+    ];
+    findMany.mockResolvedValueOnce(waitlisted).mockResolvedValueOnce(waitlisted);
+
+    const res = await request(app).get("/admin/users").set(AUTH);
+    expect(res.body.data[0].city).toEqual({
+      cityKey: "de:berlin",
+      city: "Berlin",
+      countryCode: "DE",
+      status: "waitlist",
+    });
+  });
+
+  it("calls a legacy unlaunched dating city what it is: not matchable", async () => {
+    // Pre-gate accounts still hold keys like this. Nobody put them on the
+    // waitlist, but reporting them as `active` would claim we match them.
+    const findMany = prisma.user.findMany as unknown as ReturnType<typeof vi.fn>;
+    const legacy = [
+      {
+        ...MOCK_USER,
+        profile: { ...MOCK_USER.profile, homeCity: "Warsaw", homeCityKey: "pl:warsaw" },
+        cityWaitlistEntry: null,
+      },
+    ];
+    findMany.mockResolvedValueOnce(legacy).mockResolvedValueOnce(legacy);
+
+    const res = await request(app).get("/admin/users").set(AUTH);
+    expect(res.body.data[0].city).toMatchObject({
+      cityKey: "pl:warsaw",
+      city: "Warsaw",
+      status: "waitlist",
+    });
+  });
+
+  it("filters by city and by city status, in SQL rather than per page", async () => {
+    const findMany = prisma.user.findMany as unknown as ReturnType<typeof vi.fn>;
+    findMany.mockClear();
+
+    await request(app).get("/admin/users?cityStatus=waitlist").set(AUTH);
+    expect(findMany.mock.calls.at(-1)?.[0].where).toMatchObject({
+      AND: [{ cityWaitlistEntry: { isNot: null } }],
+    });
+
+    findMany.mockClear();
+    await request(app).get("/admin/users?cityKey=DE:Berlin").set(AUTH);
+    expect(findMany.mock.calls.at(-1)?.[0].where).toMatchObject({
+      AND: [
+        {
+          OR: [
+            { profile: { homeCityKey: "de:berlin" } },
+            { cityWaitlistEntry: { cityKey: "de:berlin" } },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("rejects an unknown cityStatus instead of ignoring it", async () => {
+    // A silently-dropped filter looks like "no such users", which is a
+    // different and much more alarming answer than "bad query".
+    const res = await request(app).get("/admin/users?cityStatus=nope").set(AUTH);
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("city catalog + waitlist", () => {
+  it("serves the catalog with both tiers, launched first", async () => {
+    const res = await request(app).get("/admin/cities").set(AUTH);
+    expect(res.status).toBe(200);
+    expect(res.body.cities[0]).toMatchObject({ cityKey: "ua:kyiv", status: "active" });
+    expect(res.body.cities.filter((c: { status: string }) => c.status === "active"))
+      .toHaveLength(1);
+    expect(
+      res.body.cities.find((c: { cityKey: string }) => c.cityKey === "de:berlin"),
+    ).toMatchObject({ city: "Berlin", countryCode: "DE", status: "waitlist" });
+  });
+
+  it("aggregates the waitlist per city", async () => {
+    const findMany = prisma.cityWaitlistEntry.findMany as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    findMany.mockResolvedValueOnce([
+      {
+        cityKey: "de:berlin",
+        city: "Berlin",
+        countryCode: "DE",
+        createdAt: new Date("2026-09-04T10:00:00Z"),
+        user: { gender: "female" },
+      },
+    ]);
+
+    const res = await request(app).get("/admin/analytics/waitlist").set(AUTH);
+    expect(res.status).toBe(200);
+    expect(res.body.totalWaiting).toBe(1);
+    expect(res.body.cities[0]).toMatchObject({
+      cityKey: "de:berlin",
+      total: 1,
+      female: 1,
+    });
   });
 });
 
