@@ -34,10 +34,10 @@
 # not.
 #
 # Usage:  ./scripts/extract-hero-footage-en.sh [source-dir]
-#         source-dir defaults to ~/Desktop/EN mp4
+#         source-dir defaults to ~/Desktop/_TO_GDRIVE/gennety-media/EN mp4
 set -euo pipefail
 
-SRC_DIR="${1:-$HOME/Desktop/EN mp4}"
+SRC_DIR="${1:-$HOME/Desktop/_TO_GDRIVE/gennety-media/EN mp4}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 BASICS="$SRC_DIR/IMG_2790.MP4"

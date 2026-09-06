@@ -149,9 +149,15 @@ export function checkBumpWindow(
 /**
  * When the card turns from the route to the spotter sign.
  *
- * The same moment the pre-date proxy chat opens, and for the same reason: at
- * half an hour out the question stops being "how do I get there" and becomes
- * "how do we find each other".
+ * At half an hour out the question stops being "how do I get there" and becomes
+ * "which of them is he".
+ *
+ * This used to be the same moment the pre-date proxy chat opened, and the
+ * coincidence was worth breaking rather than preserving: two sweeps were
+ * pushing at the same tick, and `chat_open` and `spotter` reached one card in
+ * whichever order APNs happened to deliver them. The chat now opens at T-1h
+ * (`PROXY_OPEN_HOURS`), so the card answers "how do we reach each other" first
+ * and "which of them is he" second — the order `DateDayStage` declares.
  */
 export const DATE_DAY_SPOTTER_LEAD_MINUTES = 30;
 

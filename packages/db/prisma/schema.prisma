@@ -34,7 +34,21 @@ enum Language {
 
 /// User-selected app color theme, applied across the Mini Apps and the
 /// server-rendered match / date cards. `dark` is the brand default.
+///
+/// This is the EFFECTIVE theme — what a server-rendered surface paints. It is
+/// deliberately two-valued: a PNG card has no "follow the device" to follow.
 enum Theme {
+  light
+  dark
+}
+
+/// How the effective theme is CHOSEN. Separate from `Theme` because the native
+/// iOS client offers the platform-standard third state, "follow the phone",
+/// while the surfaces that render server-side need a concrete colour. `system`
+/// therefore never reaches a renderer: the client resolves it and reports the
+/// result in `User.theme`.
+enum ThemeMode {
+  system
   light
   dark
 }
@@ -120,6 +134,10 @@ model User {
   /// screen or Settings). Distinguishes an explicit choice from the `dark`
   /// default, so the onboarding theme picker is shown exactly once.
   themeChosenAt              DateTime?                @map("theme_chosen_at")
+  /// How `theme` was chosen (iOS Settings; the bot writes only light/dark).
+  /// `system` means the iPhone decides and the client keeps `theme` in step
+  /// with it, so Telegram cards match what the app is showing right now.
+  themeMode                  ThemeMode                @default(dark) @map("theme_mode")
   status                     UserStatus               @default(onboarding)
   onboardingStep             OnboardingStep           @default(consent) @map("onboarding_step")
   /// Whether the user wants to enrich onboarding with memory exported from
@@ -382,9 +400,10 @@ model User {
   chatEvents                ChatEvent[]
   activityDays              UserActivityDay[]
   waitlistApplications      WaitlistApplication[]
+  cityWaitlistEntry         CityWaitlistEntry?
   eventTickets              EventTicket[]
-  eventPairingsAsA          EventRoundPairing[] @relation("EventPairingA")
-  eventPairingsAsB          EventRoundPairing[] @relation("EventPairingB")
+  eventPairingsAsA          EventRoundPairing[]        @relation("EventPairingA")
+  eventPairingsAsB          EventRoundPairing[]        @relation("EventPairingB")
   eventFeedback             EventFeedback[]
 
   matchesAsA          Match[]      @relation("MatchUserA")
@@ -1129,6 +1148,50 @@ model Profile {
   @@map("profiles")
 }
 
+/// One person waiting for Gennety to open in their city.
+///
+/// The city picker offers launched markets AND the cities on the expansion
+/// list (`packages/shared/src/markets.ts`). Picking a launched one writes
+/// `Profile.homeCityKey` and registration continues; picking a waitlist one
+/// writes a row here and registration STOPS at the waitlist screen.
+///
+/// This is a separate table, and not a `Profile.homeCityKey` value plus a flag,
+/// for one reason: `homeCityKey` is the hard matching boundary
+/// (`buildCandidateSql` joins on an exact equality). A waitlist key living
+/// there would mean the second person waiting in Berlin gets paired with the
+/// first, for a date in a city with no curated venues, no ops and no market.
+/// Keeping the two columns in different tables makes that impossible rather
+/// than merely discouraged — `validateHomeLocationPayload` still refuses every
+/// unlaunched city, unchanged.
+///
+/// Not a queue. There is no worker, no position and no ordering promise; the
+/// "you'll be first" line in the waitlist screen is copy about intent, and this
+/// table is the demand signal the founder reads per city before deciding which
+/// market opens next. One row per user (`@unique`): re-picking replaces the
+/// city, and picking a launched market deletes the row.
+model CityWaitlistEntry {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Canonical `<country>:<slug>` key, identical in shape to
+  /// `Profile.homeCityKey` and validated against `WAITLIST_CITIES` before the
+  /// write — a launched market must never land here, and neither must a city
+  /// the catalog does not know.
+  cityKey     String @map("city_key")
+  /// Display name and country frozen from the catalog at join time, so the
+  /// admin waitlist view reads without resolving keys, and a later rename in
+  /// the catalog cannot silently rewrite what this person actually chose.
+  city        String
+  countryCode String @map("country_code")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([cityKey, createdAt])
+  @@map("city_waitlist_entries")
+}
+
 /// One row per (user, Profiler question). The Profiler (PRODUCT_SPEC §Phase 1b)
 /// asks gender-specific questions in timed batches to fuel icebreakers and
 /// date-planning hints. Deliberately NOT an input to the matching algorithm.
@@ -1137,30 +1200,133 @@ model Profile {
 /// drop cycle re-asks only still-unanswered questions. `skipped`/`skipReturned`
 /// implement the "a skipped question comes back once per cycle, then drops"
 /// rule; `cycleId` records the drop cycle the row was last touched in.
+/// How a stored Profiler media pointer must be re-sent. See
+/// `ProfilerAnswer.memeKind`.
+enum ProfilerMediaKind {
+  photo
+  sticker
+
+  @@map("profiler_media_kind")
+}
+
 model ProfilerAnswer {
-  id           String           @id @default(uuid()) @db.Uuid
-  userId       String           @map("user_id") @db.Uuid
+  id            String             @id @default(uuid()) @db.Uuid
+  userId        String             @map("user_id") @db.Uuid
   /// Stable question identifier from the shared question bank (e.g. "f_date_spots").
-  questionId   String           @map("question_id")
-  priority     ProfilerPriority
+  questionId    String             @map("question_id")
+  priority      ProfilerPriority
   /// Free-text answer. Null while the question is only skipped (not answered).
-  answerText   String?          @map("answer_text")
-  answeredAt   DateTime?        @map("answered_at")
+  ///
+  /// For an image answer this is the vision-written one-sentence DESCRIPTION of
+  /// the picture, not a transcript — it is what the icebreaker and wingman
+  /// generators read, and they only ever consume text.
+  answerText    String?            @map("answer_text")
+  /// Telegram `file_id` of the image the answer arrived as, on the questions
+  /// that invite one (`acceptsImage`, today only humour: "send your favourite
+  /// meme"). Null for a typed answer.
+  ///
+  /// Telegram is the store and we hold the pointer — the same arrangement
+  /// `VoicePrompt.telegramFileId` and the profile photos already use. Nothing
+  /// is written to a bucket, so there is no retention sweep and no
+  /// `collectOwnedPaths` entry to keep in step; a `User` cascade takes the
+  /// pointer with the account.
+  ///
+  /// Bot-scoped by construction: a file_id minted by @gennetybot is not
+  /// resolvable by the demo bot, which is exactly why the demo path never
+  /// re-sends one (see `services/meme-unlock.ts`).
+  memeFileId    String?            @map("meme_file_id")
+  /// Which `send*` method resolves `memeFileId`. Telegram file_ids are
+  /// type-tagged — `sendPhoto` with a sticker's id fails — and everything that
+  /// is not a still sticker was captured as a JPEG thumbnail, so two values
+  /// cover the whole space.
+  memeKind      ProfilerMediaKind? @map("meme_kind")
+  /// Canonical URL of the TikTok / Reel this answer came from, when it came
+  /// from a link rather than an attached picture.
+  ///
+  /// Set ONLY alongside `memeFileId`, and only on the path where the
+  /// description actually came from the video — same rule as the pointer, for
+  /// the same reason: a link we could not read must never be paired with text
+  /// nobody verified against it.
+  ///
+  /// What it buys is the §3.12 reveal. `memeFileId` points at the COVER FRAME,
+  /// which carries a still joke fine but flattens one that is spoken or unfolds
+  /// over time, so the buyer also gets the link and can watch it. A dead link
+  /// by then is not a failed sale: the frame and the sentence were already
+  /// delivered, which is what they paid for.
+  memeSourceUrl String?            @map("meme_source_url")
+  answeredAt    DateTime?          @map("answered_at")
   /// True when the user tapped "Skip" instead of answering.
-  skipped      Boolean          @default(false)
+  skipped       Boolean            @default(false)
   /// True once a skipped question has been re-offered the one allowed time in
   /// its cycle, so it isn't surfaced a third time until the next drop cycle.
-  skipReturned Boolean          @default(false) @map("skip_returned")
+  skipReturned  Boolean            @default(false) @map("skip_returned")
   /// Drop cycle this row was last asked/answered in (ISO date of the drop).
-  cycleId      String           @map("cycle_id")
-  createdAt    DateTime         @default(now()) @map("created_at")
-  updatedAt    DateTime         @updatedAt @map("updated_at")
+  cycleId       String             @map("cycle_id")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, questionId])
   @@index([userId])
   @@map("profiler_answers")
+}
+
+/// Which platform a cached short-video analysis came from.
+enum ShortVideoPlatform {
+  tiktok
+  instagram
+
+  @@map("short_video_platform")
+}
+
+/// Cache of "what is this TikTok / Reel about", keyed by the platform's own id.
+///
+/// A short-video link answers the humour Profiler question the same way a sent
+/// meme does: we read the post's public caption and cover frame, and store the
+/// one sentence a vision pass writes about them. That work is per-VIDEO, not
+/// per-user — two people sharing the same viral reel get the same sentence —
+/// so it is cached here and the second share costs nothing at all: no fetch, no
+/// vision call, no upload.
+///
+/// Deliberately NOT attached to a user. Nothing in a row is private: the
+/// caption and cover frame are what the platform serves to anyone logged out,
+/// and the description is derived from them. There is no per-user analysis
+/// history here to leak, and a GDPR account deletion has nothing to sweep —
+/// what identifies the user is their `ProfilerAnswer` row, which cascades with
+/// the account as it always did.
+///
+/// `posterFileId` is bot-scoped, exactly like `ProfilerAnswer.memeFileId`: a
+/// pointer minted by @gennetybot is not resolvable by the demo bot, and the two
+/// run against separate databases, so a row can never travel to a bot that
+/// cannot open it.
+model ShortVideoAnalysis {
+  id           String             @id @default(uuid()) @db.Uuid
+  platform     ShortVideoPlatform
+  /// The platform's own id — TikTok's numeric video id, Instagram's shortcode.
+  /// Share stubs are resolved to this before lookup, so every share button on
+  /// both platforms collapses onto one row.
+  externalId   String             @map("external_id")
+  /// Tracking-stripped canonical URL, kept for debugging a bad description.
+  /// Never a share link: those carry the sharer's identity in their token.
+  canonicalUrl String             @map("canonical_url")
+  /// The one sentence stored as the Profiler answer, in the language of the
+  /// first person who shared it. Re-used across languages on purpose: a second
+  /// vision call to re-say the same thing costs more than the mismatch is
+  /// worth, and the Profiler's consumers are prompts, not UI copy.
+  description  String
+  authorName   String?            @map("author_name")
+  /// Telegram pointer to the cover frame, minted once so the §3.12 paid reveal
+  /// is not holding a CDN URL that expires days before anyone pays.
+  posterFileId String?            @map("poster_file_id")
+  /// Vision model that wrote `description`, so a bad generation can be found
+  /// and invalidated by model rather than one row at a time.
+  model        String
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  @@unique([platform, externalId])
+  @@map("short_video_analyses")
 }
 
 /// One optional voice prompt per user (VOICE_PROMPT_PRODUCT_SPEC.md).
@@ -1375,10 +1541,10 @@ model Match {
   /// entitlement into a permanent property, so a subscription lapsing
   /// mid-negotiation cannot re-lock slots the pair has already chosen (the
   /// same rule §3.5b applies to a settled ticket slot).
-  primeTimeUnlockedAt DateTime?  @map("prime_time_unlocked_at")
+  primeTimeUnlockedAt DateTime? @map("prime_time_unlocked_at")
   /// Who paid for the pass. Null when a subscription opened the band — which
   /// is also what makes the §9.1 dead-match refund a no-op for those pairs.
-  primeTimePaidById   String?    @map("prime_time_paid_by_id") @db.Uuid
+  primeTimePaidById   String?   @map("prime_time_paid_by_id") @db.Uuid
 
   agreedTime   DateTime? @map("agreed_time")
   venueName    String?   @map("venue_name")
@@ -2335,6 +2501,51 @@ model CuratedVenue {
   @@index([universityDomain, category, active])
   @@index([cityKey, tier, active])
   @@map("curated_venues")
+}
+
+/// Кэш ответов Google Places по `place_id` — единственный слой, который стоит
+/// между нами и повторно оплаченным Place Details.
+///
+/// **Зачем он есть.** Точку отправления в Mini App люди выбирают из одного и
+/// того же короткого списка: станции метро, корпуса вузов, пара площадей. До
+/// этой таблицы каждый такой выбор — включая двадцатый выбор «Лук'янівської» —
+/// стоил отдельного запроса, а единственный кэш жил в памяти процесса
+/// (`services/venue-change.ts` → `photoCache`) и умирал на каждом деплое, то
+/// есть город выкупался заново после каждого релиза.
+///
+/// **Что здесь можно хранить и сколько.** `place_id` разрешено хранить
+/// бессрочно (Google Maps Platform ToS), поэтому он и есть первичный ключ.
+/// Остальное — контент провайдера, и он живёт не дольше 30 дней: `refreshedAt`
+/// — это TTL, а не «когда создали», и запись старше
+/// `PLACE_CACHE_TTL_MS` считается промахом и перезапрашивается. Просроченные
+/// строки вычищает `prunePlaceCache` из ночного крона ревалидации, так что
+/// таблица не растёт бесконечно и не хранит контент дольше разрешённого.
+///
+/// **Чего здесь НЕТ и не будет — байтов фотографий.** Кэшировать сами
+/// изображения Google запрещено (то же правило, по которому дата-карточка
+/// тянет их на рендер и не сохраняет). Поэтому здесь только `photoRefs` —
+/// указатели, — а расход на Place Photo снижается не кэшем, а количеством
+/// запросов: ленивая подгрузка плиток и фиксированный набор ширин.
+model PlaceCache {
+  /// Google Places resource id. Storable indefinitely per Maps ToS.
+  placeId     String   @id @map("place_id")
+  /// Provider content — every field below expires with `refreshedAt`.
+  name        String?
+  address     String?
+  lat         Float?
+  lng         Float?
+  /// Photo RESOURCE NAMES (`places/X/photos/Y`), never bytes. An empty array
+  /// means "this answer carried no photos", which is NOT the same as "this
+  /// place has none" — see `fetchPlacePhotoNames`. Callers must not read an
+  /// empty array as authoritative.
+  photoRefs   String[] @default([]) @map("photo_refs")
+  /// When the provider content was last written. The TTL clock, not a birthday.
+  refreshedAt DateTime @map("refreshed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  /// Oldest-first, for the pruner.
+  @@index([refreshedAt])
+  @@map("place_cache")
 }
 
 /// Клиентская воронка нативного приложения (iOS 6.2).

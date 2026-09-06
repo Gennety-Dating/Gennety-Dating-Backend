@@ -14,7 +14,7 @@ import { PROXY_MAX_MESSAGE_LEN } from "@gennety/shared";
  * The third instance of the same hole the ticket gate and the calendar had: the
  * proxy relay existed only as a Telegram chat session, so an app user could not
  * read a message their partner sent, let alone answer one. Worse than those
- * two, because the window is thirty minutes wide and exists precisely for the
+ * two, because the window is a single hour wide and exists precisely for the
  * person standing outside a venue looking for someone.
  *
  *   GET  /v1/matches/:id/chat  — window state + messages (`?since=` for a delta)

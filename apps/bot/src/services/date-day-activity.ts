@@ -45,11 +45,14 @@ export const DATE_DAY_ATTRIBUTES_TYPE = "DateDayActivity";
  *   by itself — no push, so it still happens with the app killed, the network
  *   down and the phone in a pocket. A push for a transition the clock already
  *   describes would be a worse implementation, not a more complete one.
- * - **`chat_open` is declared but never sent yet.** The pre-date proxy chat
- *   exists only on Telegram (iOS task 4.5), so announcing "the chat is open"
- *   on a lock screen the app cannot follow up on would be the dead-button
- *   anti-pattern with extra steps. Wire it from `closeProxies`' sibling in
- *   `services/coordination.ts` when the native chat screen lands.
+ * - **`chat_open` waited for a screen to point at.** It was declared and
+ *   deliberately never sent while the pre-date proxy chat existed only on
+ *   Telegram (iOS task 4.5): announcing "the chat is open" on a lock screen the
+ *   app could not follow up on is the dead-button anti-pattern with extra
+ *   steps. The native chat screen landed, so `openProxies` in
+ *   `services/coordination.ts` now fires it for real — at T-1h since
+ *   2026-09-04, which also lifted it clear of the spotter beat below. The two
+ *   used to arrive in the same couple of minutes from two different sweeps.
  *
  * Two more arrived with the four-stage card:
  *
@@ -68,7 +71,7 @@ export const DATE_DAY_ATTRIBUTES_TYPE = "DateDayActivity";
  * card can show "by the window" on the spotter stage, and there is nowhere in
  * the product a person writes that down. Sending an invented one would be the
  * dead-button anti-pattern in text; the slot waits for the surface that fills
- * it, exactly as `chat_open` waited for the chat.
+ * it, exactly as `chat_open` waited for the native chat screen.
  */
 export type DateDayStage =
   | "icebreakers"

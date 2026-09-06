@@ -47,6 +47,28 @@ export const DEMO_MODE_ENABLED = env.DEMO_MODE_ENABLED;
  */
 export const PROTECT_PARTNER_MEDIA = !DEMO_MODE_ENABLED;
 
+/**
+ * May this process buy LIVE Google Places search results?
+ *
+ * `false` in demo mode, for the same reason the nightly re-validation cron is
+ * suppressed there (`index.ts`) and by the same mechanism — code-owned, not an
+ * env flag. `/opt/gennety-demo/.env` is generated as production's `.env` plus
+ * the overrides in `.env.demo`, so **every key `.env.demo` does not name is
+ * silently inherited**, `PLACES_API_KEY` included. A demo walkthrough therefore
+ * spends against the production Google project, and a Nearby Search is the most
+ * expensive request this codebase can issue (Enterprise tier, three per venue
+ * assignment). That inheritance is not hypothetical: it is exactly how the
+ * demo's own copy of the nightly cron ran unnoticed against production's bill.
+ *
+ * Nothing is given up. The demo carries its own full curated catalog (~1200
+ * active rows), which is the primary source in both modes — Places is the
+ * documented fallback — so a walkthrough still gets a real venue. The FREE
+ * lookups are deliberately NOT routed through here: photo resource names are
+ * billed at the zero-cost Place Details Essentials (IDs Only) tier, and the
+ * demo needs pictures on camera.
+ */
+export const PLACES_LIVE_SEARCH_ENABLED = !DEMO_MODE_ENABLED;
+
 export interface DemoIsolationConfig {
   FOUNDER_NOTIFY_ENABLED: boolean;
   TICKET_STARS_ENABLED: boolean;

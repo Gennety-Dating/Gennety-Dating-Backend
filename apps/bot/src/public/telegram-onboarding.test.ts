@@ -20,6 +20,8 @@ const userFindUniqueOrThrow = vi.fn();
 const userCreate = vi.fn();
 const userUpdate = vi.fn();
 const profileUpsert = vi.fn();
+const cityWaitlistUpsert = vi.fn();
+const cityWaitlistDeleteMany = vi.fn();
 const createAndSendOtp = vi.fn();
 const getOtpChallengeState = vi.fn();
 const verifyOtp = vi.fn();
@@ -34,6 +36,10 @@ vi.mock("@gennety/db", () => ({
     },
     profile: {
       upsert: profileUpsert,
+    },
+    cityWaitlistEntry: {
+      upsert: cityWaitlistUpsert,
+      deleteMany: cityWaitlistDeleteMany,
     },
   },
 }));
@@ -99,6 +105,7 @@ function miniUser(overrides: Record<string, unknown> = {}) {
     gender: null,
     preference: null,
     profile: null,
+    cityWaitlistEntry: null,
     ...overrides,
   };
 }
@@ -157,6 +164,9 @@ beforeEach(() => {
   userCreate.mockReset();
   userUpdate.mockReset();
   profileUpsert.mockReset();
+  cityWaitlistUpsert.mockReset();
+  cityWaitlistDeleteMany.mockReset();
+  cityWaitlistDeleteMany.mockResolvedValue({ count: 0 });
   createAndSendOtp.mockReset();
   getOtpChallengeState.mockReset();
   verifyOtp.mockReset();
@@ -397,8 +407,21 @@ describe("Telegram onboarding city gate", () => {
     expect(res.body.user.supportedCities).toMatchObject([{ homeCityKey: "ua:kyiv" }]);
   });
 
-  it("refuses a city Gennety has not launched", async () => {
-    userFindUnique.mockResolvedValue(miniUser());
+  it("waitlists a city on the expansion list instead of saving it as home", async () => {
+    // The load-bearing assertion is `profileUpsert` NOT being called: a
+    // waitlist key in `Profile.homeCityKey` is the matching boundary, and the
+    // second person waiting in Berlin would be paired with the first for a
+    // date in a city with no venues.
+    const user = miniUser();
+    const entry = {
+      cityKey: "de:berlin",
+      city: "Berlin",
+      countryCode: "DE",
+      createdAt: new Date("2026-09-04T10:00:00.000Z"),
+    };
+    userFindUnique.mockResolvedValue(user);
+    cityWaitlistUpsert.mockResolvedValue(entry);
+    userUpdate.mockResolvedValue(miniUser({ cityWaitlistEntry: entry }));
 
     const res = await request(buildApp())
       .post("/v1/telegram-onboarding/city/select")
@@ -411,27 +434,133 @@ describe("Telegram onboarding city gate", () => {
         longitude: 13.405,
       });
 
+    expect(res.status).toBe(200);
+    expect(profileUpsert).not.toHaveBeenCalled();
+    expect(cityWaitlistUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: user.id },
+        // Name and country come from our catalog, never from the request.
+        create: { userId: user.id, cityKey: "de:berlin", city: "Berlin", countryCode: "DE" },
+      }),
+    );
+    expect(res.body.user.cityWaitlist).toMatchObject({
+      cityKey: "de:berlin",
+      city: "Berlin",
+      countryCode: "DE",
+    });
+    expect(res.body.user.homeLocation).toBeNull();
+  });
+
+  it("refuses a city that is in neither tier of the catalog", async () => {
+    userFindUnique.mockResolvedValue(miniUser());
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/city/select")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({
+        homeCity: "Warsaw",
+        homeCountryCode: "PL",
+        homeCityKey: "pl:warsaw",
+        latitude: 52.2297,
+        longitude: 21.0122,
+      });
+
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("city-not-supported");
     expect(profileUpsert).not.toHaveBeenCalled();
+    expect(cityWaitlistUpsert).not.toHaveBeenCalled();
   });
 
-  it("only offers launched markets in search", async () => {
+  it("clears a waitlist row when the user settles on a launched market", async () => {
+    const user = miniUser({
+      cityWaitlistEntry: {
+        cityKey: "de:berlin",
+        city: "Berlin",
+        countryCode: "DE",
+        createdAt: new Date("2026-09-04T10:00:00.000Z"),
+      },
+    });
+    const savedProfile = {
+      homeCity: "Kyiv",
+      homeCountryCode: "UA",
+      homeCityKey: "ua:kyiv",
+      homePlaceId: null,
+      latitude: 50.4501,
+      longitude: 30.5234,
+      locationUpdatedAt: new Date("2026-09-04T11:00:00.000Z"),
+    };
+    userFindUnique.mockResolvedValue(user);
+    profileUpsert.mockResolvedValue(savedProfile);
+    userFindUniqueOrThrow.mockResolvedValue(
+      miniUser({ profile: savedProfile, cityWaitlistEntry: null }),
+    );
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/city/select")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({
+        homeCity: "Kyiv",
+        homeCountryCode: "UA",
+        homeCityKey: "ua:kyiv",
+        latitude: 50.4501,
+        longitude: 30.5234,
+      });
+
+    expect(res.status).toBe(200);
+    // Left behind, the row would keep routing this Kyiv user to the waitlist
+    // screen forever and inflate Berlin's demand count.
+    expect(cityWaitlistDeleteMany).toHaveBeenCalledWith({ where: { userId: user.id } });
+    expect(res.body.user.cityWaitlist).toBeNull();
+  });
+
+  it("leaves the waitlist on request and routes back to the picker", async () => {
+    const user = miniUser({
+      cityWaitlistEntry: {
+        cityKey: "de:berlin",
+        city: "Berlin",
+        countryCode: "DE",
+        createdAt: new Date("2026-09-04T10:00:00.000Z"),
+      },
+    });
+    userFindUnique.mockResolvedValue(user);
+    userUpdate.mockResolvedValue(miniUser({ cityWaitlistEntry: null }));
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/city/waitlist/leave")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(cityWaitlistDeleteMany).toHaveBeenCalledWith({ where: { userId: user.id } });
+    expect(res.body.user.cityWaitlist).toBeNull();
+  });
+
+  it("offers the whole catalog in search, each hit carrying its status", async () => {
     userFindUnique.mockResolvedValue(miniUser());
     const app = buildApp();
 
     const kyiv = await request(app)
       .get("/v1/telegram-onboarding/city/search?q=Киев")
       .set("Authorization", `tma ${signInitData()}`);
-    expect(kyiv.body.results).toMatchObject([{ homeCityKey: "ua:kyiv" }]);
+    expect(kyiv.body.results).toMatchObject([
+      { homeCityKey: "ua:kyiv", status: "active" },
+    ]);
 
     const berlin = await request(app)
       .get("/v1/telegram-onboarding/city/search?q=Berlin")
       .set("Authorization", `tma ${signInitData()}`);
-    expect(berlin.body.results).toEqual([]);
+    expect(berlin.body.results).toMatchObject([
+      { homeCityKey: "de:berlin", status: "waitlist" },
+    ]);
+
+    // A city in neither tier is still not a city this product knows.
+    const warsaw = await request(app)
+      .get("/v1/telegram-onboarding/city/search?q=Warsaw")
+      .set("Authorization", `tma ${signInitData()}`);
+    expect(warsaw.body.results).toEqual([]);
   });
 
-  it("reports an unlaunched market for geolocation instead of guessing", async () => {
+  it("names a waitlist city for geolocation without calling it supported", async () => {
     userFindUnique.mockResolvedValue(miniUser());
     const app = buildApp();
 
@@ -444,11 +573,22 @@ describe("Telegram onboarding city gate", () => {
       city: { homeCityKey: "ua:kyiv" },
     });
 
-    const outside = await request(app)
+    // `supported` still means "launched", so an older cached bundle reads it
+    // first and shows its "not launched here" note rather than saving.
+    const berlin = await request(app)
       .post("/v1/telegram-onboarding/city/resolve")
       .set("Authorization", `tma ${signInitData()}`)
       .send({ latitude: 52.52, longitude: 13.405 });
-    expect(outside.body).toMatchObject({ supported: false, city: null });
+    expect(berlin.body).toMatchObject({
+      supported: false,
+      city: { homeCityKey: "de:berlin", status: "waitlist" },
+    });
+
+    const nowhere = await request(app)
+      .post("/v1/telegram-onboarding/city/resolve")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ latitude: 52.2297, longitude: 21.0122 });
+    expect(nowhere.body).toMatchObject({ supported: false, city: null });
   });
 
   it.each(["accepted", "declined"] as const)(

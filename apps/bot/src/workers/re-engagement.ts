@@ -79,6 +79,15 @@ export async function reEngagementTick(
       // someone who never pressed Start.
       telegramId: { gt: 0n },
       platform: { in: ["telegram", "both"] },
+      // Someone on the city waitlist is not an abandoned session — they
+      // finished every step we can offer them, and the thing they are waiting
+      // for is us. Nudging them would name the city step they already
+      // answered (`homeCityKey` is null by construction for them), which reads
+      // as the app having lost their answer. Leaving the waitlist puts them
+      // back in the chain, restarted from that moment — both waitlist routes
+      // apply `onboardingActivityPatch`, so a touch that fell due while they
+      // were waiting cannot fire the second they come back.
+      cityWaitlistEntry: { is: null },
     },
     select: {
       telegramId: true,

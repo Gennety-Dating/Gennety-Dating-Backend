@@ -159,24 +159,58 @@ export async function primeTimeStarsInvoice(
 // Location Mini App API
 // ---------------------------------------------------------------------------
 
+/**
+ * One row in the departure picker.
+ *
+ * `lat`/`lng` are optional because the server answers from Places
+ * **Autocomplete**, and a prediction says what a place is called, not where it
+ * is. Coordinates arrive from {@link resolveLocation} when the user taps a row
+ * — one request per chosen place instead of one full search per keystroke.
+ */
 export interface LocationSearchHit {
   placeId?: string;
   name: string;
   address: string;
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
+}
+
+/**
+ * Mint an autocomplete session token.
+ *
+ * A session is "the keystrokes that led to one choice", and Google charges for
+ * it as a unit: every autocomplete request carrying this token, plus the Place
+ * Details call that ends it, is billed once instead of per keystroke. So the
+ * token must live exactly as long as one typing episode — reusing it across
+ * choices is billed as if there were no token at all, which is why
+ * `location.ts` drops it the moment a place is resolved.
+ *
+ * `crypto.randomUUID` needs a secure context; Telegram Mini Apps are always
+ * served over HTTPS, but the fallback keeps a http://localhost dev run working
+ * rather than throwing on the first keystroke.
+ */
+export function newLocationSessionToken(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
 }
 
 export async function searchLocations(
   initData: string,
   query: string,
   bias: { lat: number; lng: number } | null,
+  session?: string,
 ): Promise<LocationSearchHit[]> {
   const params = new URLSearchParams({ q: query });
   if (bias) {
     params.set("lat", bias.lat.toString());
     params.set("lng", bias.lng.toString());
   }
+  if (session) params.set("session", session);
   const res = await apiFetch(`${apiBase}/v1/location/search?${params.toString()}`, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
@@ -184,6 +218,28 @@ export async function searchLocations(
   if (!res.ok) throw await toError(res);
   const body = (await res.json()) as { ok: true; results: LocationSearchHit[] };
   return body.results;
+}
+
+/**
+ * Turn a picked prediction into coordinates, closing the autocomplete session.
+ *
+ * Pass the SAME token the searches used — that is what makes those searches
+ * free. The server answers from its own `place_id` cache when it can, in which
+ * case nothing is bought at all.
+ */
+export async function resolveLocation(
+  initData: string,
+  placeId: string,
+  session: string,
+): Promise<LocationSearchHit> {
+  const params = new URLSearchParams({ placeId, session });
+  const res = await apiFetch(`${apiBase}/v1/location/resolve?${params.toString()}`, {
+    method: "GET",
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok) throw await toError(res);
+  const body = (await res.json()) as { ok: true; result: LocationSearchHit };
+  return body.result;
 }
 
 export async function selectLocation(
@@ -347,6 +403,24 @@ export interface TelegramOnboardingState {
      */
     supportedCities: TelegramCityHit[];
     /**
+     * Every city the picker offers — launched markets first, then the cities on
+     * the expansion list, grouped by country in display order. Each hit carries
+     * a `status`: `active` continues registration, `waitlist` records the demand
+     * and ends it on the waitlist screen.
+     *
+     * Optional so an older cached bundle keeps working against a new server and
+     * vice versa (same rule as `aiMemoryExportEnabled`); absent falls back to
+     * `supportedCities`, i.e. exactly the pre-waitlist picker.
+     */
+    cityCatalog?: TelegramCityHit[];
+    /**
+     * Set while this user is waiting for their city to open. Checked BEFORE
+     * `homeLocation` when routing: it is what keeps a waitlisted person out of
+     * the rest of onboarding, and the server enforces the same thing (every
+     * step past the city gate needs a home location this user does not have).
+     */
+    cityWaitlist?: TelegramCityWaitlist | null;
+    /**
      * The five facts the Mini App's own profile screens collect. The client
      * routes to the first `null`, so a reopened session resumes exactly where
      * it stopped and a user who already answered in chat skips the screens.
@@ -419,6 +493,22 @@ export interface TelegramCityHit {
   homePlaceId: string | null;
   latitude: number;
   longitude: number;
+  /**
+   * `active` = a launched market. `waitlist` = a city on the expansion list.
+   * Optional for the same both-directions compatibility as `cityCatalog`; an
+   * absent value is read as `active`, which is what every hit an older server
+   * sends actually is.
+   */
+  status?: TelegramCityStatus;
+}
+
+export type TelegramCityStatus = "active" | "waitlist";
+
+export interface TelegramCityWaitlist {
+  cityKey: string;
+  city: string;
+  countryCode: string;
+  joinedAt: string;
 }
 
 export interface TelegramOnboardingCompleteResponse {
@@ -669,6 +759,24 @@ export async function selectTelegramOnboardingCity(
       latitude: city.latitude,
       longitude: city.longitude,
     }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TelegramOnboardingState;
+}
+
+/**
+ * Leave the city waitlist — the waitlist screen's "choose another city". The
+ * returned state routes back to the picker.
+ */
+export async function leaveTelegramOnboardingCityWaitlist(
+  initData: string,
+): Promise<TelegramOnboardingState> {
+  const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/city/waitlist/leave`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TelegramOnboardingState;

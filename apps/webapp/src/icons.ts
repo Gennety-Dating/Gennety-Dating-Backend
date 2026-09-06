@@ -191,12 +191,25 @@ const ICONS: Record<IconName, { d: string[]; solid?: boolean }> = {
   chevron: {
     d: ["M9.2 5.6 15.6 12l-6.4 6.4"],
   },
-  // Padlock — the "premium, locked" state on a venue's select button.
+  // Padlock — the "premium, locked" state: a venue's select button, the Premium
+  // screen's own benefit row, and the calendar's evening band.
+  //
+  // SOLID, not stroked, and that is the one decision here. Every surface that
+  // draws this glyph draws it small (13–15px) beside type that is 10–18px and
+  // 600–800 weight; at that size a 1.6 outline is thinner than the letters next
+  // to it and the lock reads as a hairline sketch rather than as a lock. Filled
+  // body + a filled shackle of the same weight keeps it legible as one shape at
+  // any size, white on burgundy or neutral ink on a pale slab.
+  //
+  // The shackle is a closed staple — outer arc out, inner arc back — rather
+  // than a stroked line, so it never thins out when the icon is scaled down;
+  // it overlaps the body by ~1px so the two fills never show a seam between.
   lock: {
     d: [
-      "M6 10.5h12a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 18 19.5H6A1.5 1.5 0 0 1 4.5 18v-6A1.5 1.5 0 0 1 6 10.5Z",
-      "M8 10.5V8a4 4 0 0 1 8 0v2.5",
+      "M6.8 10.9V8.6a5.2 5.2 0 0 1 10.4 0v2.3H15V8.6a3 3 0 0 0-6 0v2.3Z",
+      "M7.6 10h8.8a3.3 3.3 0 0 1 3.3 3.3v4a3.3 3.3 0 0 1-3.3 3.3H7.6a3.3 3.3 0 0 1-3.3-3.3v-4A3.3 3.3 0 0 1 7.6 10Z",
     ],
+    solid: true,
   },
   // Dismiss — the fullscreen photo viewer's own close control. Distinct from
   // Telegram's floating × (which closes the whole Mini App), so it sits inside

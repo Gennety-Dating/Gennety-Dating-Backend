@@ -25,10 +25,35 @@ export function appStoreConfigured(): boolean {
   );
 }
 
+const APPSTORE_PRODUCTION_HOST = "https://api.storekit.itunes.apple.com";
+const APPSTORE_SANDBOX_HOST = "https://api.storekit-sandbox.itunes.apple.com";
+
 export function appStoreHost(): string {
   return env.APPSTORE_ENVIRONMENT === "production"
-    ? "https://api.storekit.itunes.apple.com"
-    : "https://api.storekit-sandbox.itunes.apple.com";
+    ? APPSTORE_PRODUCTION_HOST
+    : APPSTORE_SANDBOX_HOST;
+}
+
+/**
+ * Both hosts, configured one first.
+ *
+ * Apple keeps production and sandbox transactions in SEPARATE stores, and a
+ * transaction only exists in the one that minted it — the other answers 404.
+ * `APPSTORE_ENVIRONMENT` therefore cannot be a single correct answer: a
+ * published app and its TestFlight/sandbox builds report to the same server at
+ * the same time, so whichever host we pinned, the other cohort's purchases
+ * would 404 → `unknown_transaction` → 422, and a 422 is precisely the answer
+ * the client never retries past. Apple's own guidance for the older
+ * verifyReceipt rail is the same shape (try production, fall back to sandbox
+ * on 21007); this is that rule for the Server API.
+ *
+ * Order still comes from the env so the common case costs one request: the
+ * cohort we expect most traffic from is asked first.
+ */
+function appStoreHosts(): [string, string] {
+  return env.APPSTORE_ENVIRONMENT === "production"
+    ? [APPSTORE_PRODUCTION_HOST, APPSTORE_SANDBOX_HOST]
+    : [APPSTORE_SANDBOX_HOST, APPSTORE_PRODUCTION_HOST];
 }
 
 let cachedKey: string | null = null;
@@ -149,16 +174,31 @@ export async function getVerifiedTransaction(
   transactionId: string,
 ): Promise<TransactionLookup> {
   if (!appStoreConfigured()) return { status: "unavailable" };
+  let sawUnavailable = false;
+  for (const host of appStoreHosts()) {
+    const lookup = await lookupOnHost(host, transactionId);
+    if (lookup.status === "ok") return lookup;
+    // `unavailable` is a transport verdict, not a verdict about the id: the
+    // other host may still hold it, so keep asking — but never downgrade to
+    // `not_found` afterwards. Answering `not_found` here would turn "Apple was
+    // briefly down" into a permanent 422 and burn a real purchase.
+    if (lookup.status === "unavailable") sawUnavailable = true;
+  }
+  return sawUnavailable ? { status: "unavailable" } : { status: "not_found" };
+}
+
+/** One host, one request. `not_found` here means "not in THIS store". */
+async function lookupOnHost(host: string, transactionId: string): Promise<TransactionLookup> {
   try {
     const res = await fetch(
-      `${appStoreHost()}/inApps/v1/transactions/${encodeURIComponent(transactionId)}`,
+      `${host}/inApps/v1/transactions/${encodeURIComponent(transactionId)}`,
       {
         headers: { Authorization: `Bearer ${appStoreProviderJwt()}` },
         signal: AbortSignal.timeout(APPSTORE_TIMEOUT_MS),
       },
     );
     if (res.status >= 500) {
-      console.warn(`[appstore] transaction lookup ${transactionId}: ${res.status}`);
+      console.warn(`[appstore] transaction lookup ${transactionId} on ${host}: ${res.status}`);
       return { status: "unavailable" };
     }
     if (!res.ok) return { status: "not_found" };
@@ -169,7 +209,7 @@ export async function getVerifiedTransaction(
     const transaction = payload ? toTransaction(payload) : null;
     return transaction ? { status: "ok", transaction } : { status: "not_found" };
   } catch (err) {
-    console.warn("[appstore] transaction lookup failed:", err);
+    console.warn(`[appstore] transaction lookup on ${host} failed:`, err);
     return { status: "unavailable" };
   }
 }

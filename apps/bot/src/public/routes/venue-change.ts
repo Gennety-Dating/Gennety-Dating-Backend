@@ -21,6 +21,7 @@ import {
 import { recordMiniAppAction } from "../../services/chat-events.js";
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 import { allowCrossOriginImage } from "../cross-origin-image.js";
+import { photoProxyLimiter } from "../rate-limit.js";
 
 /** Chat-timeline shorthand — every action on this board is one surface. */
 function noteBoardAction(telegramId: number, matchId: string, what: string): void {
@@ -142,7 +143,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
   // Telegram user (of our bot) can pull venue photos, and the `PLACES_API_KEY`
   // never leaves the server. Curated photos are absolute URLs the client loads
   // directly, so only the Places fallback uses this.
-  router.get("/photo", async (req: Request, res: Response): Promise<void> => {
+  router.get("/photo", photoProxyLimiter, async (req: Request, res: Response): Promise<void> => {
     const initData = typeof req.query.tma === "string" ? req.query.tma : "";
     if (!initData) {
       res.status(401).json({ error: "Missing tma initData" });
@@ -165,7 +166,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    const width = clampWidth(req.query.w);
+    const width = snapWidth(req.query.w);
     const url = buildPlacesPhotoUrl(ref, apiKey, width);
     if (!url) {
       res.status(404).json({ error: "photos-unavailable" });
@@ -527,10 +528,36 @@ function parseKeys(raw: unknown): string[] | null {
 }
 
 /** Clamp a requested photo width to a sane range (thumb → hero). */
-function clampWidth(raw: unknown): number {
+/**
+ * The only widths this proxy will ask Google for.
+ *
+ * The width is part of the upstream URL, so **each distinct width is a
+ * separately billed Place Photo request** — and it used to be a free parameter
+ * clamped to anything in 200…1600. Any authenticated caller could therefore
+ * multiply our Places bill by 1400× for the same photograph, one pixel at a
+ * time, and the client's own retry (`photo-retry.ts`) would have looked exactly
+ * the same in the logs.
+ *
+ * These two are what the Mini App actually renders — the 240px card tile and
+ * the shared gallery/fullscreen width — and `venue-photo-width.test.ts` is the
+ * guard that keeps the client from quietly growing a third.
+ */
+const ALLOWED_PHOTO_WIDTHS = [240, 1200] as const;
+
+/**
+ * Snap a requested width to the nearest allowed one.
+ *
+ * Snapping rather than rejecting, because an older cached Mini App bundle asks
+ * for widths this list does not contain (1000 in the gallery, 1600 fullscreen,
+ * before they were unified). Those must keep getting a picture; they just get
+ * it at a width that shares a cache entry — and a bill — with everyone else's.
+ */
+function snapWidth(raw: unknown): number {
   const n = typeof raw === "string" ? Number(raw) : NaN;
-  if (!Number.isFinite(n)) return 1000;
-  return Math.min(1600, Math.max(200, Math.round(n)));
+  if (!Number.isFinite(n)) return ALLOWED_PHOTO_WIDTHS[1];
+  return ALLOWED_PHOTO_WIDTHS.reduce((best, candidate) =>
+    Math.abs(candidate - n) < Math.abs(best - n) ? candidate : best,
+  );
 }
 
 function statusForReason(reason: string): number {

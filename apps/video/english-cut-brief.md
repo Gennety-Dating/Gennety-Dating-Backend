@@ -3,7 +3,7 @@
 > **Paste this whole file as the opening prompt of a fresh session.** It is
 > written to be executable without the conversation that produced it.
 >
-> Written 2026-08-23, after measuring every source in `~/Desktop/EN mp4`. Every
+> Written 2026-08-23, after measuring every source in `~/Desktop/_TO_GDRIVE/gennety-media/EN mp4`. Every
 > timestamp below is measured, not estimated; where I guessed I say so.
 
 ---
@@ -15,7 +15,7 @@ directory set. **Start here:**
 
 ```sh
 cd "/Users/pro/Desktop/Gennety Dating"      # the repo. All relative paths below are from here.
-ls "/Users/pro/Desktop/EN mp4"              # the seven source recordings (§3)
+ls "/Users/pro/Desktop/_TO_GDRIVE/gennety-media/EN mp4"              # the seven source recordings (§3)
 ```
 
 `CLAUDE.md` and `AGENTS.md` at that root carry the repo's standing rules and
@@ -102,7 +102,7 @@ sources, so `cut()` applies to all of them and **`cut_scaled()` is not needed**
 (that helper exists only for IMG_2730, which was 576×1248).
 
 ```
-~/Desktop/EN mp4/
+~/Desktop/_TO_GDRIVE/gennety-media/EN mp4/
   IMG_2790.MP4  138.7s  onboarding: Telegram chat → basics → back to chat → profiling Q&A
   IMG_2791.MP4   25.8s  the ideal-Friday answer, typed and sent, «Thinking…» under it
   IMG_2794.MP4   54.3s  the match decision → It's a match → Date Ticket → Ticket secured

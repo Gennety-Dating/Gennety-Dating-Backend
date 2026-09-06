@@ -3,6 +3,7 @@ import { prisma } from "@gennety/db";
 import { env } from "../../config.js";
 import { requireCanvasAuth } from "../canvas-auth.js";
 import { canvasLimiter } from "../rate-limit.js";
+import { isUuid } from "../../utils/uuid.js";
 import { isStrongEventQrSecret } from "../../services/event-qr.js";
 import {
   claimEventTicket,
@@ -86,8 +87,33 @@ function featureOff(res: Response): boolean {
 
 export const eventsPublicRouter: Router = Router();
 
-eventsPublicRouter.use(canvasLimiter);
+// Auth first, then the limiter: `canvasLimiter` keys on `req.userId` and falls
+// back to the IP only when there is none, and mounting it first meant the whole
+// events surface was bounded per ADDRESS — one campus NAT sharing 90/min —
+// which is precisely the shared-address problem that limiter was written to
+// avoid. Every other canvas router (`date-state`, `date-bump`, `date-radar`,
+// `scratch-map`) already mounts them in this order.
 eventsPublicRouter.use(requireCanvasAuth);
+eventsPublicRouter.use(canvasLimiter);
+
+/**
+ * Refuse a malformed `:id` / `:pairingId` before any handler runs.
+ *
+ * `Event.id` and `EventRoundPairing.id` are `@db.Uuid`, and Prisma answers a
+ * non-UUID with `P2023` rather than "no rows". Every handler here wraps its
+ * body in a try/catch that reports an unknown throw as `500 Internal server
+ * error`, so a mistyped id read as a broken server. Same guard, same reasoning
+ * and same 404 as `routes/matches.ts`.
+ */
+for (const name of ["id", "pairingId"] as const) {
+  eventsPublicRouter.param(name, (_req: Request, res: Response, next, value) => {
+    if (typeof value !== "string" || !isUuid(value)) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    next();
+  });
+}
 
 /** Open events in the caller's own market, with their own state on each. */
 eventsPublicRouter.get("/", async (req: Request, res: Response) => {

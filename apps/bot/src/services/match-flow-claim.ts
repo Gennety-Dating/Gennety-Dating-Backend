@@ -27,7 +27,7 @@ import type { MatchFlowState, SessionData } from "@gennety/shared";
  *
  * `coordination_chat` is deliberately NOT governed here: it is entered by an
  * explicit tap, relays media as well as text, and is already bounded by the
- * proxy window (T-30m → T+2h) with its own Leave button.
+ * proxy window (T-1h → T+2h) with its own Leave button.
  */
 
 /** The states that consume a plain message as their answer. */

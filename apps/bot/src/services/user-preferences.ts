@@ -1,4 +1,4 @@
-import { prisma, type Theme } from "@gennety/db";
+import { prisma, type Theme, type ThemeMode } from "@gennety/db";
 import type { Language } from "@gennety/shared";
 
 /**
@@ -47,8 +47,42 @@ export async function setUserTheme(
 ): Promise<{ id: string }> {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.update({
+      // The bot toggle has two states, so the mode it records is the theme
+      // itself: a Telegram user never asks to "follow the phone".
       where: { telegramId },
-      data: { theme, themeChosenAt: new Date() },
+      data: { theme, themeMode: theme, themeChosenAt: new Date() },
+      select: { id: true },
+    });
+    await clearOwnDateCardCache(tx, user.id);
+    return user;
+  });
+}
+
+/**
+ * Same write from the native client, which addresses the user by its own id
+ * (there is no Telegram id on a phone-registered account) and carries the
+ * extra `mode`.
+ *
+ * `mode` and `theme` are two different facts and both are stored: `mode` is
+ * what the person picked and what the iOS radio has to show back to them,
+ * `theme` is what a PNG card paints. They coincide for an explicit pick and
+ * diverge for `system`, where the client resolves the phone's appearance and
+ * re-reports it whenever it flips — that re-report is the only reason a
+ * Telegram card stays in step with an app set to follow the device.
+ *
+ * `themeChosenAt` is stamped here too: picking "follow the phone" IS a choice,
+ * and leaving the marker unset would make the Mini App onboarding show its
+ * theme picker to someone who has already answered the question on iOS.
+ */
+export async function setUserThemeById(
+  userId: string,
+  theme: Theme,
+  mode: ThemeMode,
+): Promise<{ id: string }> {
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.update({
+      where: { id: userId },
+      data: { theme, themeMode: mode, themeChosenAt: new Date() },
       select: { id: true },
     });
     await clearOwnDateCardCache(tx, user.id);

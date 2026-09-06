@@ -31,6 +31,23 @@ import { PROFILER_PRIORITY_WEIGHTS } from "./constants.js";
  *     the bank simply runs out after a couple of days and the Profiler goes
  *     quiet; with them the icebreaker fuel stays current, which is the whole
  *     point of asking weekly rather than at signup.
+ *
+ * A question that declares `acceptsImage` also states, in its own text, that
+ * the picture will be shown to the person's match before the date. That
+ * sentence is the consent, and it has to live HERE rather than in a follow-up
+ * prompt: asking after somebody has already handed over the thing is not
+ * asking. Withdrawal needs no machinery either — re-answering in words clears
+ * the stored pointer, and the pointer is the only thing that makes a reveal
+ * possible.
+ *
+ * A question may also declare `acceptsImage`, which means its invitation asks
+ * for a picture in so many words ("just send your favourite meme") and the bot
+ * reads one when it arrives — a vision pass turns the image into a sentence of
+ * description that is stored as the answer text like any other. Only the humour
+ * question does this today: "what makes you laugh" is the one trait people
+ * answer far better by showing than by describing, and a meme carries the
+ * register (dry, absurd, wholesome, extremely online) that "good jokes" does
+ * not. The image itself is never stored — see `services/vision/read-meme.ts`.
  */
 
 export type ProfilerPriority = "high" | "medium" | "low";
@@ -49,6 +66,12 @@ export interface ProfilerQuestion {
   priority: ProfilerPriority;
   /** Re-ask policy; omitted = `"once"`. */
   refresh?: ProfilerRefresh;
+  /**
+   * The question invites a picture and the bot reads one when it arrives
+   * (vision → one sentence of description, stored as the answer). Omitted =
+   * text only, and an image sent while the question is live is not an answer.
+   */
+  acceptsImage?: boolean;
   /** Localized prompt text, keyed by language. */
   text: Record<Language, string>;
 }
@@ -56,6 +79,16 @@ export interface ProfilerQuestion {
 /** True when the question's answer goes stale and should be re-asked each cycle. */
 export function isRefreshableProfilerQuestion(question: ProfilerQuestion): boolean {
   return question.refresh === "cycle";
+}
+
+/**
+ * True when an image sent while this question is live should be read as its
+ * answer. Deliberately opt-in per question rather than a blanket rule: a photo
+ * that lands during "are you an early bird or a night owl" is not an answer to
+ * it, and treating it as one would burn the question on a misdirected picture.
+ */
+export function profilerQuestionAcceptsImage(question: ProfilerQuestion): boolean {
+  return question.acceptsImage === true;
 }
 
 /** Weight an answer carries in icebreaker/hint generation (spec §5.3). */
@@ -81,11 +114,11 @@ const FEMALE_QUESTIONS: ProfilerQuestion[] = [
     gender: "female",
     priority: "high",
     text: {
-      en: "In talking with a guy, what matters more to you — chatting about everything, or keeping it to the point?",
-      ru: "Что для тебя важно в общении с парнем — болтать обо всём или говорить по делу?",
-      uk: "Що для тебе важливо в спілкуванні з хлопцем — балакати про все чи говорити по суті?",
-      de: "Was ist dir im Gespräch mit einem Typen wichtiger — über alles plaudern oder auf den Punkt kommen?",
-      pl: "Co jest dla ciebie ważne w rozmowie z chłopakiem — gadać o wszystkim czy mówić konkretnie?",
+      en: "How do you prefer to talk with a guy — long conversations about anything and everything, or short and to the point?",
+      ru: "Как тебе комфортнее общаться с парнем — долгие разговоры обо всём подряд или коротко и по делу?",
+      uk: "Як тобі комфортніше спілкуватися з хлопцем — довгі розмови про все підряд чи коротко і по суті?",
+      de: "Wie redest du lieber mit einem Typen — lange Gespräche über Gott und die Welt, oder kurz und auf den Punkt?",
+      pl: "Jak wolisz rozmawiać z chłopakiem — długie rozmowy o wszystkim, czy krótko i na temat?",
     },
   },
   {
@@ -138,6 +171,23 @@ const FEMALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
+    // Last of the high block rather than first: it is the one question that
+    // asks for a picture, and landing it after a few ordinary text answers
+    // means the invitation reads as a change of pace rather than as the bot
+    // demanding media from someone who has told it nothing yet.
+    id: "f_humor",
+    gender: "female",
+    priority: "high",
+    acceptsImage: true,
+    text: {
+      en: "What actually makes you laugh? Send your favourite meme or a reel if you like — I'll show it to your match before your date.",
+      ru: "Что тебя правда смешит? Можешь скинуть любимый мем или рил — покажу его твоему человеку перед свиданием.",
+      uk: "Що тебе справді смішить? Можеш скинути улюблений мем або рил — покажу його твоїй людині перед побаченням.",
+      de: "Worüber lachst du wirklich? Schick dein Lieblingsmeme oder ein Reel — ich zeige es deinem Match vor dem Date.",
+      pl: "Co naprawdę cię śmieszy? Wrzuć ulubionego mema albo rolkę — pokażę ją twojej osobie przed randką.",
+    },
+  },
+  {
     id: "f_turnoffs",
     gender: "female",
     priority: "medium",
@@ -171,18 +221,6 @@ const FEMALE_QUESTIONS: ProfilerQuestion[] = [
       uk: "Яку їжу ти могла б їсти хоч щодня — і чи є те, чого не їси зовсім?",
       de: "Welches Essen könntest du jeden Tag essen — und gibt es etwas, das du gar nicht isst?",
       pl: "Jakie jedzenie mogłabyś jeść codziennie — i czy jest coś, czego w ogóle nie jesz?",
-    },
-  },
-  {
-    id: "f_humor",
-    gender: "female",
-    priority: "medium",
-    text: {
-      en: "What actually makes you laugh?",
-      ru: "Что тебя правда смешит?",
-      uk: "Що тебе справді смішить?",
-      de: "Worüber lachst du wirklich?",
-      pl: "Co naprawdę cię śmieszy?",
     },
   },
   {
@@ -240,11 +278,11 @@ const FEMALE_QUESTIONS: ProfilerQuestion[] = [
     gender: "female",
     priority: "low",
     text: {
-      en: "Animals — do you have any, or want to?",
-      ru: "Животные — есть или хотелось бы?",
-      uk: "Тварини — є чи хотілося б?",
-      de: "Tiere — hast du welche oder hättest du gern welche?",
-      pl: "Zwierzaki — masz jakieś albo chciałabyś mieć?",
+      en: "Do you have any pets? If so, which ones?",
+      ru: "Есть ли у тебя домашние животные? Если да, то какие?",
+      uk: "Чи є в тебе домашні тварини? Якщо так, то які?",
+      de: "Hast du Haustiere? Wenn ja, welche?",
+      pl: "Masz jakieś zwierzaki? Jeśli tak, to jakie?",
     },
   },
 ];
@@ -300,15 +338,29 @@ const MALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
+    // See the note on `f_humor`: last of the high block on purpose.
+    id: "m_humor",
+    gender: "male",
+    priority: "high",
+    acceptsImage: true,
+    text: {
+      en: "What actually makes you laugh? Send your favourite meme or a reel if you like — I'll show it to your match before your date.",
+      ru: "Что тебя правда смешит? Можешь скинуть любимый мем или рил — покажу его твоему человеку перед свиданием.",
+      uk: "Що тебе справді смішить? Можеш скинути улюблений мем або рил — покажу його твоїй людині перед побаченням.",
+      de: "Worüber lachst du wirklich? Schick dein Lieblingsmeme oder ein Reel — ich zeige es deinem Match vor dem Date.",
+      pl: "Co naprawdę cię śmieszy? Wrzuć ulubionego mema albo rolkę — pokażę ją twojej osobie przed randką.",
+    },
+  },
+  {
     id: "m_planner",
     gender: "male",
     priority: "medium",
     text: {
-      en: "Are you more of a planner, or do you live in the moment?",
-      ru: "Ты больше плановый или живёшь моментом?",
-      uk: "Ти більше людина плану чи живеш моментом?",
-      de: "Bist du eher ein Planer oder lebst du im Moment?",
-      pl: "Jesteś bardziej osobą, która planuje, czy żyjesz chwilą?",
+      en: "Do you live by a plan and a schedule, or more spontaneously — however it goes?",
+      ru: "Ты живёшь скорее по плану и расписанию — или спонтанно, как пойдёт?",
+      uk: "Ти живеш радше за планом і розкладом — чи спонтанно, як піде?",
+      de: "Lebst du eher nach Plan und Kalender — oder spontan, wie es gerade kommt?",
+      pl: "Żyjesz raczej według planu i grafiku — czy spontanicznie, jak wyjdzie?",
     },
   },
   {
@@ -333,18 +385,6 @@ const MALE_QUESTIONS: ProfilerQuestion[] = [
       uk: "Яку їжу ти міг би їсти хоч щодня — і чи є те, чого не їси зовсім?",
       de: "Welches Essen könntest du jeden Tag essen — und gibt es etwas, das du gar nicht isst?",
       pl: "Jakie jedzenie mógłbyś jeść codziennie — i czy jest coś, czego w ogóle nie jesz?",
-    },
-  },
-  {
-    id: "m_humor",
-    gender: "male",
-    priority: "medium",
-    text: {
-      en: "What actually makes you laugh?",
-      ru: "Что тебя правда смешит?",
-      uk: "Що тебе справді смішить?",
-      de: "Worüber lachst du wirklich?",
-      pl: "Co naprawdę cię śmieszy?",
     },
   },
   {
@@ -414,11 +454,11 @@ const MALE_QUESTIONS: ProfilerQuestion[] = [
     gender: "male",
     priority: "low",
     text: {
-      en: "Animals — do you have any, or want to?",
-      ru: "Животные — есть или хотелось бы?",
-      uk: "Тварини — є чи хотілося б?",
-      de: "Tiere — hast du welche oder hättest du gern welche?",
-      pl: "Zwierzaki — masz jakieś albo chciałbyś mieć?",
+      en: "Do you have any pets? If so, which ones?",
+      ru: "Есть ли у тебя домашние животные? Если да, то какие?",
+      uk: "Чи є в тебе домашні тварини? Якщо так, то які?",
+      de: "Hast du Haustiere? Wenn ja, welche?",
+      pl: "Masz jakieś zwierzaki? Jeśli tak, to jakie?",
     },
   },
 ];
@@ -437,6 +477,18 @@ export function profilerQuestionBank(gender: Gender | null): ProfilerQuestion[] 
 /** Look up a question by id across both banks (for the answer handler). */
 export function profilerQuestionById(id: string): ProfilerQuestion | undefined {
   return [...FEMALE_QUESTIONS, ...MALE_QUESTIONS].find((q) => q.id === id);
+}
+
+/**
+ * Every question id that invites a picture, derived from the bank rather than
+ * hard-coded. The §Phase 4 paid meme reveal reads it to decide which stored
+ * answer its offer is about, so a future second image question is picked up
+ * without a parallel list drifting out of step with this one.
+ */
+export function profilerImageQuestionIds(): string[] {
+  return [...FEMALE_QUESTIONS, ...MALE_QUESTIONS]
+    .filter(profilerQuestionAcceptsImage)
+    .map((q) => q.id);
 }
 
 /** Localized prompt text for a question, falling back to English. */

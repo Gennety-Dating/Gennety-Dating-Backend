@@ -231,7 +231,7 @@ export async function handleCoordMethod(ctx: BotContext): Promise<void> {
     return;
   }
 
-  // method === "proxy" (Variant C) — locked in; the cron opens it at T-30m
+  // method === "proxy" (Variant C) — locked in; the cron opens it at T-1h
   // unconditionally (no partner consent).
   await prisma.match.update({
     where: { id: matchId },

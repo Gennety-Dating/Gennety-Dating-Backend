@@ -477,7 +477,11 @@ describe("describeActiveMatch", () => {
   it("announces when the proxy chat will open before the date", () => {
     const text = describeActiveMatch(scheduled(), NOW, "en-US", FEATURES_ON);
     expect(text).toContain("Find-each-other:");
-    expect(text).toContain("30 min before");
+    expect(text).toContain("~1h before");
+    // The CLOCK time is the part the agent quotes back, so it is what the
+    // assertion pins: a date at 19:00 opens its chat at 18:00. Naming the
+    // wrong hour here is worse than the vague fallback the null branch gives.
+    expect(text).toContain("around 18:00");
   });
 
   it("describes the venue-selection sub-stage", () => {

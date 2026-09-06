@@ -6,6 +6,7 @@ import {
   MIN_RATING_COUNT,
   type PlaceDetails,
 } from "./venue.js";
+import { prunePlaceCache } from "./place-cache.js";
 
 /**
  * Curated-venue re-validation cron (PRODUCT_SPEC §3.7).
@@ -214,6 +215,17 @@ export async function venueRevalidationTick(
   const batchSize = resolveBatchSize(options.batchSize);
   const apiKey = options.apiKey ?? process.env.PLACES_API_KEY ?? "";
   const fetchDetails = options.fetchDetails ?? fetchPlaceDetails;
+
+  // Expire the Places response cache FIRST, and unconditionally — before the
+  // no-key return below. It rides on this tick rather than on a cron of its own
+  // because this is already the job that owns "keep provider data honest", and
+  // it runs even when there is no key because the deadline is contractual
+  // rather than operational: Google's terms cap cached Places content at 30
+  // days, so an expired row is not merely stale, it is content we are no longer
+  // allowed to hold — and that is just as true on a deployment that cannot
+  // re-fetch it. Best-effort: `prunePlaceCache` never throws.
+  const pruned = await prunePlaceCache();
+  if (pruned > 0) console.log(`[place-cache] pruned ${pruned} expired place(s)`);
 
   // Without a key (local dev) there's nothing to validate against.
   if (!apiKey) return { scanned: 0, deactivated: 0, refreshed: 0, failed: 0 };

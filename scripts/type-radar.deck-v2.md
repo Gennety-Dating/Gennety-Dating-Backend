@@ -10,7 +10,7 @@
 ## Куда складывать
 
 ```
-~/Desktop/gennety-radar-v2/<id>.jpg      # ВНЕ репозитория
+~/Desktop/_TO_GDRIVE/gennety-media/gennety-radar-v2/<id>.jpg      # ВНЕ репозитория
 ```
 
 Имя файла — единственная связь кадра с его строкой. Ошибка в имени молча

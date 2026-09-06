@@ -1277,14 +1277,14 @@ async function submitPuppetLikes(
  *
  * **`runCoordinationTick` has to be replayed too, and used not to be.** It is a
  * SEPARATE sweep, called from `index.ts` on the real clock — so a demo that
- * replayed only the lifecycle silently skipped the whole hour before the date:
- * the "how do we find each other" offer at T-60m, the anonymous chat at T-30m,
- * and all five coordination cards, with `COORDINATION_FEATURE_ENABLED` on the
+ * replayed only the lifecycle silently skipped the hours before the date: the
+ * "how do we find each other" offer at T-3h, the anonymous chat at T-1h, and
+ * all five coordination cards, with `COORDINATION_FEATURE_ENABLED` on the
  * entire time. The first demo ever to reach a scheduled date is what surfaced
  * it — `coordOfferSentAt` and `proxyOpenedAt` were both still null at the end.
  *
  * **Why three stretches.** Running every gate back to back put T+25h four
- * seconds after T-30m, so `closeProxies` shut the anonymous chat before anyone
+ * seconds after the last pre-date gate, so `closeProxies` shut the anonymous chat before anyone
  * could open it: the visitor was handed a live "Enter chat" button that was dead
  * by the time they reached it. Both the coordination fork and the relay are real
  * decisions the visitor makes, so the replay stops at each and waits — see
@@ -1299,8 +1299,15 @@ interface Gate {
 const PRE_DATE_GATES: readonly Gate[] = [{ minutes: -120 }];
 /**
  * T-45m → the coordination sweep claims `coordOfferSentAt` and sends nothing
- * (the demo owns that card, see `sendDemoCoordOffer`); T-30m → wingman reveal,
- * safety brief, and `openProxies` opens the relay now that the method is set.
+ * (the demo owns that card, see `sendDemoCoordOffer`), the wingman reveal and
+ * safety brief land, and `openProxies` opens the relay now that the method is
+ * set; T-30m → the spotter beat on the date-day card.
+ *
+ * The gates stay at the DEMO's own pacing rather than mirroring production's
+ * T-3h / T-1h. Both still fall inside the real windows — which is the only
+ * thing the sweeps care about — and pushing the first gate out to T-3h would
+ * buy the visitor nothing but a longer wait between two cards they are looking
+ * at back to back.
  */
 const COORD_GATES: readonly Gate[] = [{ minutes: -45 }, { minutes: -30 }];
 /** T+25h → the feedback prompt (which flips the row to `completed`) + close. */

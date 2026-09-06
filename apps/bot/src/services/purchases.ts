@@ -415,7 +415,6 @@ export function normalizePrimeTimeRow(row: RawPrimeTimePurchaseRow): PurchaseRow
     createdAt: row.createdAt,
   };
 }
-
 /**
  * Totals over an already-normalized set. Refunded rows are counted separately
  * and excluded from the revenue figures — a refunded purchase is money the
@@ -520,7 +519,8 @@ async function loadPurchases(
   const wantsVenue = !filter.kind || filter.kind === "venue_change";
   const wantsPrime = !filter.kind || filter.kind === "prime_time";
 
-  const [ticketRows, subscriptionRows, rematchRows, venueRows, primeRows] = await Promise.all([
+  const [ticketRows, subscriptionRows, rematchRows, venueRows, primeRows] =
+    await Promise.all([
     wantsTickets
       ? prisma.ticketLedger.findMany({
           where: {
@@ -629,7 +629,7 @@ async function loadPurchases(
           },
         })
       : Promise.resolve([]),
-  ]);
+    ]);
 
   // An App Store ticket credit that Apple later revoked is clawed back with a
   // compensating `appstore:<txId>:refund` row rather than a status column, so
@@ -655,9 +655,13 @@ async function loadPurchases(
   ];
 
   const filtered = filter.status ? rows.filter((row) => row.status === filter.status) : rows;
-  const truncated = [ticketRows, subscriptionRows, rematchRows, venueRows, primeRows].some(
-    (source) => source.length >= take,
-  );
+  const truncated = [
+    ticketRows,
+    subscriptionRows,
+    rematchRows,
+    venueRows,
+    primeRows,
+  ].some((source) => source.length >= take);
   return { rows: sortPurchases(filtered), truncated };
 }
 

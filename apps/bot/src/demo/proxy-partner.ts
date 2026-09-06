@@ -135,7 +135,7 @@ function formatWhen(input: ProxyReplyInput): string | null {
 /**
  * Where the puppet is right now, keyed to how much it has already said.
  *
- * The demo compresses the whole 30-minute window into a couple of minutes of
+ * The demo compresses the whole hour-long window into a couple of minutes of
  * chat, so "on the way → arrived → settled in" has to be driven by turn count
  * rather than by the clock. Beat 0 is deliberately the one that asks a question:
  * it is sent before the visitor has written anything, and its job is to make

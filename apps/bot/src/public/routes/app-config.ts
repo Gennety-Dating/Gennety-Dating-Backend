@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { SUPPORTED_MARKETS } from "@gennety/shared";
+import { CITY_CATALOG, SUPPORTED_MARKETS } from "@gennety/shared";
 import { env } from "../../config.js";
 import { ticketProducts } from "../../services/appstore.js";
 
@@ -16,10 +16,17 @@ import { ticketProducts } from "../../services/appstore.js";
  * behind an "update the app" screen. `null` → no forced update (default).
  *
  * `supportedCities` is the launched-market list (packages/shared/src/markets.ts).
- * The dating-city step MUST offer only these — matching is strictly same-city,
- * so any other city is a pool of one. `POST /v1/me/home-location` rejects
- * anything else with `city-not-supported`; this field exists so the client can
- * render the constraint instead of discovering it as a 400.
+ * A dating city MUST be one of these — matching is strictly same-city, so any
+ * other city is a pool of one. `POST /v1/me/home-location` rejects anything
+ * else with `city-not-supported`; this field exists so the client can render
+ * the constraint instead of discovering it as a 400.
+ *
+ * `cityCatalog` adds the cities on the expansion list, each carrying its
+ * `status`. A client MAY offer them in the picker — that is what the Telegram
+ * Mini App does — but a `waitlist` city is a waitlist join, never a home
+ * location: the write endpoint is the waitlist one, and `/v1/me/home-location`
+ * keeps refusing it. A client that only knows `supportedCities` is still
+ * correct, just without the waitlist screen.
  */
 export const appConfigRouter: Router = Router();
 
@@ -32,6 +39,14 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       countryCode: market.countryCode,
       latitude: market.latitude,
       longitude: market.longitude,
+    })),
+    cityCatalog: CITY_CATALOG.map((city) => ({
+      cityKey: city.cityKey,
+      city: city.city,
+      countryCode: city.countryCode,
+      latitude: city.latitude,
+      longitude: city.longitude,
+      status: city.status,
     })),
     features: {
       phoneAuth: env.PHONE_AUTH_ENABLED,

@@ -14,7 +14,12 @@ vi.mock("@gennety/db", () => ({
 }));
 
 import { prisma } from "@gennety/db";
-import { PROFILER_ANSWER_WINDOW_MS, profilerQuestionBank } from "@gennety/shared";
+import {
+  PROFILER_ANSWER_WINDOW_MS,
+  profilerQuestionBank,
+  profilerQuestionById,
+  profilerQuestionText,
+} from "@gennety/shared";
 import {
   startProfilerBatch,
   recordProfilerAnswer,
@@ -231,9 +236,12 @@ describe("recordProfilerAnswer", () => {
       JSON.stringify(c[0] ?? {}).includes("profiler:skip:f_comm_style"),
     );
     expect(finalSend).toBeDefined();
+    // Matched against the live bank rather than a copy-pasted fragment: the
+    // assertion is "the question's own text was sent", and pinning the wording
+    // here only ever means editing this test whenever the copy is reworded.
     expect(
       (finalSend![0] as { rich_message?: { markdown?: string } }).rich_message?.markdown,
-    ).toMatch(/chatting about everything/i);
+    ).toContain(profilerQuestionText(profilerQuestionById("f_comm_style")!, "en"));
 
     expect(activeUpdate()?.profilerActiveQuestionId).toBe("f_comm_style");
   });

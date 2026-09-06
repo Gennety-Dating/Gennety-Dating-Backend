@@ -1,0 +1,1068 @@
+<!-- WHEN_TO_READ: You changed ANY product flow, Mini App screen, gate, or paid step — every such change owes a demo-mode impact check. Also read before touching the demo bot, its isolation gate, or its seed scripts. -->
+<!-- SOURCE: DEMO_MODE.md (moved unchanged) — migrated 2026-09-01 -->
+
+# Demo Mode
+
+> Product invariants live in [PRODUCT_SPEC.md](product-spec.md); architecture in
+> [ARCHITECTURE.md](../architecture/overview.md); the production runbook in
+> [deploy.md](../operations/deployment-runbook.md). This file owns one thing: the second bot we walk
+> investors, friends and colleagues through, and the rules that keep it both
+> faithful to the product and unable to touch it.
+
+## What it is
+
+A separate Telegram bot that shows the **entire** Gennety flow — onboarding,
+verification, the pitch, the decision, the ticket gate, calendar negotiation,
+venue selection, the venue-change board, the pre-date content and the post-date
+feedback — from one account, in about fifteen minutes, with no real partner, no
+real identity check, no real money and no waiting.
+
+Everything on screen is production code. What the demo changes is only:
+
+| | Production | Demo |
+|---|---|---|
+| The other person | a real matched user | a fixed synthetic profile, named in the visitor's own language |
+| Who that person can date | one live match at a time | the puppet is shared — every visitor gets their own live match with it |
+| Liveness verdict | AWS decides | always passes |
+| Photo validation | strict | off — any `MIN_PHOTOS` images, faces optional |
+| Contact rail | real email OTP / phone share | auto-satisfied; any OTP code is printed, never sent |
+| Departure point | must be inside Kyiv | **same gate**, plus a one-tap "drop the pin in Kyiv" |
+| Date Ticket | Telegram Stars | the existing **mock** rail (real screens, real prices, no charge) |
+| Venue change | 150⭐ | settled free |
+| Evening calendar band | 50⭐ (or Premium) | the lock is shown; the tap settles free |
+| Partner photos | forward/save-protected (clients blank them out of screenshots and screen recordings) | unprotected, so a walkthrough can be filmed |
+| Waiting | hours to days | ~12 seconds per step |
+| Pre-date content | fires at T-5h / T-1.5h / T+24h | replayed immediately |
+
+## The isolation invariant
+
+**Demo traffic must never be able to reach production data, production users or
+real money.** Four independent layers, none of which is a code path:
+
+| Layer | Production | Demo |
+|---|---|---|
+| Telegram bot | `@gennetybot` | its own token |
+| Database | Supabase `ophztqjrabwemkqwidkq` | a **separate Supabase project** |
+| Process | PM2 `gennety-bot`, `/opt/gennety`, :3101 | PM2 `gennety-demo`, `/opt/gennety-demo`, :3102 |
+| Mini App / API | `dating-calendar` → `dating-api` | `demo-app` → `demo-api` |
+
+The last row is forced rather than chosen: Mini App `initData` is HMAC-signed
+with the bot token, so only a process holding the demo token can verify a demo
+Mini App's calls — and `apps/webapp/src/api.ts` bakes `VITE_API_BASE_URL` at
+build time, so the demo needs its own build of the same source.
+
+Deliberately **shared**: the source tree, and the stateless third-party
+credentials (OpenAI, Google Places, AWS). Demo spend is real but negligible.
+
+**"Stateless" is the load-bearing word, and two credentials never qualified.**
+Twilio and Resend do not compute an answer — they *send something to a
+stranger*, on production's account, from the deployment we hand to outsiders.
+Email was short-circuited from the start (`services/email.ts` checks
+`OTP_LOG_TO_CONSOLE`); the phone rail was not, and `/v1/auth/phone` is mounted
+unconditionally, so until 2026-08-08 a code requested against `demo-api` sent a
+real SMS billed to production. Both rails now print instead of sending. Any
+future outbound-messaging provider owes the same branch **before** it ships.
+
+**`JWT_SECRET` is demo-owned, and the deploy refuses without it.** It was
+production's until an audit on 2026-08-08: both deployments signed and accepted
+the same `/v1/*` tokens, and `requireAuth` verifies a signature without looking
+the user up. The cause is structural rather than careless — the demo `.env` is
+production's plus the overrides in `.env.demo`, so **anything `.env.demo` does
+not name is inherited**. See the gate below.
+
+**Supabase Storage is NOT in that list** — it holds user media, so the demo
+points at its own project with its own `service_role` key and its own private
+`…-demo` buckets. Naming only the buckets is not enough, and that is the trap
+worth stating: the droplet's env is generated as production's `.env` plus
+`.env.demo`, so `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` must appear
+there explicitly or they inherit production's — which is what happened on day
+one (deploy.md, 2026-08-06). Demo-only bucket names meant nothing could land
+beside real objects, but the demo process was carrying a production credential
+with full access to real user media for no reason at all.
+
+### `DEMO_MODE_ENABLED` is not self-certifying
+
+The flag disables real safety properties — most importantly it makes
+`identityTrustConfigurationErrors` (`apps/bot/src/config.ts`) treat the process
+as a non-production runtime, which is what allows liveness to be waved through.
+
+So `assertDemoIsolation()` (`apps/bot/src/demo/config.ts`) runs **first** at
+boot and refuses to start a demo-flagged process that still carries
+production's own settings: founder notifications on, Telegram Stars on, or an
+admin API key present.
+
+**The practical consequence: setting `DEMO_MODE_ENABLED=true` in the production
+`.env` does not quietly turn off identity verification for real users — it
+stops the process from booting, naming the setting that gave it away.**
+
+Two things no automated check can verify are which bot and which database the
+process is talking to. `logDemoBanner()` prints both as the first lines of the
+log instead.
+
+### The inheritance gate lives in the deploy script, not in the process
+
+`assertDemoIsolation()` catches settings that are wrong on their face. It
+structurally **cannot** catch an inherited production secret: from inside the
+demo process, production's values are unknowable, so "is this the same
+`JWT_SECRET` production uses?" has no answer there. That is not a gap to fix in
+`demo/config.ts` — it is a reason the check has to live somewhere else.
+
+`scripts/deploy-demo.sh` runs it, because the server is the only place both
+`.env` files are readable at once. Before anything is synced, it compares
+`/opt/gennety/.env` with `/opt/gennety-demo/.env` and refuses to deploy when:
+
+- `BOT_TOKEN`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` or
+  `JWT_SECRET` is **identical in both**, or missing from the demo file (missing
+  means inherited — that is exactly how both known leaks happened);
+- `ADMIN_API_KEY`, `FOUNDER_BOT_TOKEN` or `FOUNDER_TELEGRAM_ID` is present at
+  all in the demo file.
+
+Adding a new secret to the demo deployment means adding it to that list. The
+gate caught the real `JWT_SECRET` violation the day it was written, which is the
+only endorsement worth having.
+
+## How it works
+
+### The driver is a worker, not a set of hooks
+
+`apps/bot/src/demo/driver.ts` runs on a short `setInterval`. Every tick it
+re-derives the visitor's situation from the database, asks the **pure**
+`decideDemoAction` (`demo/decide.ts`) what is owed, and performs it through the
+same production service a real partner's client would call.
+
+This is the single decision that keeps demo mode from rotting. There are **no
+callbacks wired into the pitch, calendar, venue or ticket handlers** — the same
+reasoning as `workers/peer-wait-shimmer.ts`, which re-derives who is waiting
+rather than tracking it. A change to a production flow shows up here as a
+different snapshot, not as a broken hook.
+
+| State | What the puppet does | Production function reused |
+|---|---|---|
+| active + verified, no match | explain matchmaking, create the match, dispatch the pitch | `createProposedMatch`, `dispatchMatches` |
+| `proposed`, visitor answered (either way) | accept | `applyMatchDecision` |
+| ticket gate, visitor paid | top up its wallet, then settle its own half | `grantTickets` → `useTicketFromBalance` |
+| calendar, visitor picked | counter with **different** slots, in the evening | `processCalendarSlotsUpdate` |
+| calendar, no overlap after 90s | give in and take one of theirs | `processCalendarSlotsUpdate` |
+| `negotiating_venue`, visitor confirmed | submit vibe + departure point | `interpretVenueIntent` → `confirmVenueIntent` |
+| board `liking`, visitor hearted | heart a **different** venue | `submitVenueLikes` |
+| board, still no overlap | heart one of theirs → agreement | `submitVenueLikes` |
+| board `agreed`, puppet is payer | settle | `settleFreeVenueChange` |
+| board restarted after a settle | heart a **different** venue again | `submitVenueLikes` |
+| `scheduled` | hand over the date card, then wait | — |
+| `scheduled`, visitor tapped / 7 min | explain the pre-date days, play the T-2h gate | `runDateLifecycleTick` + `runCoordinationTick` |
+| `scheduled`, ice-breakers sent, no `coordMethod` | send the coordination fork — all three buttons | `sendCoordCard` (`variant: "offer"`) |
+| fork, visitor tapped A or B | explain what the button would have done, hand the choice back | — (nothing is written) |
+| fork, visitor tapped C / 5 min | lock in the anonymous chat, play T-45m + T-30m | `runDateLifecycleTick` + `runCoordinationTick` |
+| relay open, puppet owes a line | write in the chat (LLM, in character) | `relayProxyMessage` |
+| relay open, visitor tapped / 7 min | close the chat, play T+25h | `runDateLifecycleTick` + `runCoordinationTick` |
+| terminal | say which ending it was, offer the way back | — |
+
+The two "different first" steps matter: they are what make the negotiation read
+like a person with their own calendar and their own taste, rather than a bot
+that says yes. The 90-second give-in exists so a demo can never dead-end.
+
+**And the counter lands in the EVENING, one slot per day, at a rotating hour.**
+The grid runs 13:00–19:30 Kyiv and arrives date-major and time-ascending, so
+taking the first free slot of each day — which is what `pickCounterSlots` did
+until 2026-08-17 — proposed **13:00 every single time, on every demo**. A
+puppet that only ever offers the middle of a working afternoon does not read as
+someone with a job, which is the whole thing this step exists to demonstrate.
+It now aims each successive slot at 18:00 / 19:00 / 17:00 — rotated so three
+counters read as one person's week rather than one hour repeated, and indexed
+rather than randomised, by the rule `preference-layout.ts` already states: a
+pattern re-rolled per render can never be reviewed twice. A day whose evening
+the visitor has already taken falls back to its own latest free slot, never to
+its 13:00 opener.
+
+**The puppet is topped up before it pays, not seeded with a lump.** The §3.5b
+gate needs BOTH slots settled before the Calendar is sent, and the demo settles
+the puppet's through `useTicketFromBalance` — a real production path, the one a
+partner with a ticket in their wallet takes. That path refuses at a zero
+balance, which is where every seeded puppet starts, so a visitor who chose
+**"pay only mine"** watched the demo stop dead: `insufficient-balance` every
+tick, no Calendar, and no second person to chase for the missing half. Paying
+for both never hit it, which is why it survived the first walkthroughs.
+`ensurePuppetTicket` grants one ticket when the balance is short, on demand
+rather than at seed time so it is still right after a process that has been up
+for weeks and many demos.
+
+### A refused move is reported, not retried forever
+
+Re-deriving state every tick is what keeps the driver from rotting, and it is
+also the one thing that can hide a dead demo: a move that gets refused is
+re-derived and re-attempted on the next tick, and the next, indefinitely. That
+is not hypothetical — a puppet with an empty ticket wallet logged
+`insufficient-balance` **1500 times over several hours** while a visitor sat in
+front of a demo that had stopped, and the tick summary said
+`acted=1 errors=0` the entire time because a refusal counted as an action.
+
+Every branch of `performAction` now returns `{ok} | {ok:false, reason}` instead
+of `void`; nothing swallows a refusal, and a **throw is counted the same way**
+(otherwise a reliably-throwing step would never reach the ceiling below).
+`failure-tracker.ts` counts consecutive refusals per (visitor, action) — pure,
+so it is testable without a database, a bot or a clock, the same split
+`decide.ts` already makes.
+
+At three in a row the demo **stops and says so** (`stuck`, all three languages).
+Three matters in both directions: at `DEMO_STEP_WAIT_MS` apart it is a little
+over half a minute, long enough to ride out a provider hiccup and short enough
+that nobody is left watching a chat that has quietly died.
+
+**But giving up is a pause, not a retirement** (corrected 2026-08-08). The first
+version held the action abandoned until a different action, a success, or
+`/restart`, which turned any *self-healing* refusal into a dead demo — found
+live, with a ready visitor, zero matches and `giving up on pitch` in the log.
+
+The ceiling now releases **one probe** after `DEMO_RETRY_AFTER_MS` (2 min). A
+failed probe pushes the deadline out and **cannot** re-announce: the driver
+announces only on the tick where the streak first equals the ceiling, so the
+count keeps climbing rather than resetting. The flood stays shut; the demo stops
+being able to die permanently.
+
+That matters more after the redo button's refusals began feeding this same
+ladder (the entry below) — more paths can now reach a ceiling that used to be
+permanent.
+
+The refusal that exposed it was a *production* bug, and is fixed there rather
+than here: a rejection reason wrote `negativeConstraints`, flipped
+`embeddingDirty`, and withheld the user from the very next pitch until the
+5-minute cron caught up. `appendNegativeConstraint` now refreshes immediately,
+like every other embedding-feeding writer. `ensureFreshEmbeddings`
+(`partners.ts`, beside `releaseMatchCooldown` and for the same reason) stays as
+a guard for the paths that legitimately leave the flag set — a finalize whose
+initial embedding failed is meant to stay dirty for the worker to retry, and a
+demo cannot wait that out in front of an audience. The message is deliberately vague about
+*what* broke — a visitor cannot act on `insufficient-balance` — and points at
+`/restart`, which is always available. A demo that admits a fault is
+recoverable; one that silently stops in front of an audience is not.
+
+The log follows the same rule: the refusal is written **once per streak**, at
+error level, with the action and the reason. A flood of identical warnings is
+indistinguishable from noise, which is precisely why the first one went
+unnoticed.
+
+**The scheduled date is left alone for minutes, not seconds.** The date card is
+the one screen in the demo whose interesting parts are *on it* — the
+venue-change board, Open in Maps, the blurred share copy — and the pre-date
+replay puts five more messages underneath it. Firing that replay twelve seconds
+after the date locked in was not a demo of those affordances, it was a slideshow
+past them. The driver now hands the card over with a short note naming what is
+worth touching plus a **«Что происходит дальше»** button, and only continues on
+the tap or after `DEMO_EXPLORE_WAIT_MS` (7 min), whichever comes first. The
+timer is the floor under a visitor who never taps, so the demo cannot stall in
+front of an audience; the button is the intended path.
+
+**Every pitch releases the match cooldown on BOTH participants, not just the
+puppet.** `createProposedMatch` enforces `lastMatchedAt < now − 24h` on each id
+it is handed, including a pair named explicitly — so the first pitch makes the
+*visitor* ineligible for a day, and the second pitch of the session (after a
+decline, after «continue the demo», or simply to see it again) silently
+produces nothing while the driver retries every tick. The cooldown protects a
+real candidate from being served up day after day; neither a stage prop nor a
+fifteen-minute demo account is that.
+
+Because the allocator returns a bare `null` for a dozen distinct reasons, the
+driver names the cause in the log rather than reporting "refused" — in a demo,
+a refusal means the chat has stopped in front of whoever is watching.
+
+### The puppet is named in the visitor's language
+
+`User.firstName` is a plain database column, printed verbatim by every surface
+that names the partner — the pitch, the match-card caption, the date card, the
+proxy chat, the concierge. Nothing translates it. So one Russian row put
+«Артём» in the middle of an otherwise entirely English, German or Polish
+pitch: the whole message was localized except the one word naming the person.
+
+So there is one row per **(language, gender)** — ten in all — and which one a
+visitor meets is decided by their own `User.language`
+(`pickDemoPartner`, falling back to `en` before they have chosen):
+
+| | ru | uk | en | de | pl |
+|---|---|---|---|---|---|
+| man, 29 | Артём | Назар | Ethan | Jonas | Kacper |
+| woman, 25 | Ева | Христина | Chloe | Lena | Zuzanna |
+
+Four things about that shape are load-bearing rather than tidy:
+
+- **Renaming ONE shared row per visitor is the obvious cheaper fix and is
+  wrong.** Two people can walk the demo at once (the puppet is deliberately
+  exempt from the single-live-match invariant, below), so they would flip the
+  name under each other — and by then the old name is already baked into every
+  message sent before the flip. A name has to be a property of a row, not of
+  whoever asked last.
+- **Only the NAME varies. The persona is shared per gender**
+  (`DEMO_PARTNER_PERSONAS`): same age, height, hobbies, bio, vibe axes, Elo.
+  The bio is the pitch generator's *input*, and that generator already writes
+  in the recipient's language, so a second copy of it per language would be
+  five prose texts to keep in step for nothing the visitor can see. Nothing
+  renders `hobbies` or the summary raw to a demo visitor.
+- **Photos are uploaded once per gender and written to all five rows.**
+  `file_id`s are per-bot, so a per-row upload would send the same image five
+  times into a real person's chat for an identical result. One face, five
+  names — and two visitors on different languages never see each other.
+- **Russian keeps the original `…001` / `…002` ids**, so a re-seed does not
+  orphan photos already uploaded against those rows. The rest of the band is
+  the language in the tens digit and the gender in the last (1 = male,
+  2 = female).
+
+The roster is derived from `SUPPORTED_LANGUAGES`, so adding a language to the
+product is a compile error in two small tables rather than a visitor silently
+meeting someone named in a stranger's language. `partners.test.ts` pins the
+completeness, the id band and the picker.
+
+**One thing this deliberately does not solve:** the demo market is Kyiv, so a
+German or Polish visitor is introduced to a Jonas or a Kacper who lives in
+Kyiv. Being named in your own language is worth more in a walkthrough than
+demographic plausibility, and the alternative — a Ukrainian name for everyone
+— is the thing being fixed.
+
+### The city waitlist has no demo branch, on purpose
+
+The demo market is Kyiv, and the city picker offers the same two tiers it does
+in production (§1.3) — so a visitor who taps Berlin lands on the real waitlist
+screen and the walkthrough stops there. That is correct: the screens are
+production code, and a demo that hid the waitlist would be showing a picker that
+does not exist.
+
+It is not a trap, which is the only reason it needs no special case. "Choose
+another city" drops the row and returns to the picker in one tap, so the
+walkthrough resumes on Kyiv. Nothing is written to `Profile`, so an aborted
+detour leaves no state behind. **The demo script says pick Kyiv;** if a visitor
+wanders, hand them the button rather than restarting the demo. Adding a
+demo-only branch here would mean the one screen a founder most wants to show
+investors — "we already have N people waiting in Berlin" — is the one screen the
+demo cannot show.
+
+### Blind decision, preserved
+
+The puppet answers only after the visitor has committed, and always with a yes.
+This is the same invariant the product enforces (PRODUCT_SPEC §3.4) — the demo
+does not weaken it, it simply has a partner who is reliably keen.
+
+### The pre-date replay needs no new lifecycle code — but it needs BOTH sweeps
+
+`runDateLifecycleTick(api, now)` accepts an injected clock and every step claims
+its own idempotency column, so the driver replays it at shifted gates and the
+real ice-breakers, emergency window, safety brief, wingman hint and feedback
+prompt fire in order.
+
+**`runCoordinationTick` is a SEPARATE sweep and has to be replayed too.** It is
+called from `index.ts` on the real clock, so a replay that shifted only the
+lifecycle silently skipped the hours before the date: the T-3h "how do we
+find each other" offer, the T-1h anonymous chat, and all five coordination
+cards — with `COORDINATION_FEATURE_ENABLED` on the entire time. The first demo
+ever to reach a scheduled date is what surfaced it; `coordOfferSentAt` and
+`proxyOpenedAt` were both still null when the run finished. It takes an injected
+clock as well, so the fix is to call both at every gate, plus one extra gate at
+T-45m so the offer and the chat opening read as two beats instead of arriving
+together.
+
+Gates: `agreedTime − 2h`, `− 45m`, `− 30m`, `+ 25h`.
+
+**They are replayed in three stretches, not one run, because two of them are
+real decisions.** Running every gate back to back put `+ 25h` four seconds after
+`− 30m`, so `closeProxies` shut the anonymous chat before anyone could open it:
+the visitor was handed a live "Enter chat" button that was dead by the time they
+reached it. The replay now stops at the coordination fork and again at the open
+relay, and each stretch resumes on the visitor's own tap or on a floor timer
+(`decide.ts` → `decidePredateAction`). The floors are what keep a demo from
+stalling in front of an audience; the buttons are the intended path.
+
+### The coordination fork is the demo's own screen
+
+The card the visitor sees at the fork is production's — `sendCoordCard`,
+`variant: "offer"`, the partner's photo in the polaroid, `coordOfferIntro` as the
+caption, `coordBtnShareSelf` / `coordBtnRequestPartner` / `coordBtnProxy` as the
+labels. What is demo-owned is the **sending** of it and its callback data
+(`demo:coord:*`), and that is the whole point of the arrangement:
+
+- production sends nothing at all here — `resolveCoordRecipients` needs both
+  sides reachable on Telegram and the puppet never is, so `sendOffers` silently
+  selects the anonymous chat and asks no question;
+- production's keyboard could not show the two contact-exchange buttons anyway:
+  it hides them without a public `@username`, and the puppet has none;
+- and production's `handleCoordMethod` would refuse the tap, because the visitor
+  is not an eligible offer recipient — except for variant A, which would
+  **succeed** for a visitor who does have a username, writing
+  `coordMethod: "share_self"` and permanently blocking the anonymous chat in
+  exchange for a contact reveal that reaches nobody.
+
+So the demo owns all three taps. **A and B are explained rather than performed**
+(founder decision — DECISIONS.md): the visitor is told what the button would do
+in production, what it costs (A is irreversible, B asks the other person), and
+why it cannot run here, and the choice is handed straight back with the
+remaining buttons. Nothing is written, so `coordMethod` stays null and the fork
+simply stays open — which is what lets someone read both before choosing. **C is
+performed**, and its four-field write mirrors `handleCoordMethod`'s own `proxy`
+branch, guarded on `coordMethod: null` so the tap and the floor timer cannot both
+fire.
+
+Because the method is set before the coordination sweep ever runs, production's
+auto-select for an unreachable pair is a no-op (it is guarded on the same
+column). Giving the puppet a fake `@username` to make A and B "work" was
+rejected: it would put a dead `t.me/` link in front of an investor. The full
+three-variant flow with a live partner is tested on `@gennetytestbot` with
+`scripts/dev-coord-offer-demo.mjs`.
+
+### The puppet talks in the anonymous chat
+
+The relay is the one place in the product where two people write to each other,
+and in demo the other person cannot type: no chat, no push token, nothing that
+could answer. A visitor who wrote "I'm here" into silence had been shown a broken
+feature, which is worse than not showing it.
+
+`demo/proxy-partner.ts` gives the puppet a voice — one small LLM call per turn
+(`MODELS.fast`), prompted as a person on their way to the date, with the real
+venue, the real time in the pair's own timezone, and the transcript so far. The
+situation advances by turn count rather than by the clock, because the demo
+compresses the whole 30-minute window into a couple of minutes: **it writes
+first** ("ten minutes out, where are you?" — which is what makes the visitor open
+the chat at all), then arrives, then settles into finding each other. It never
+starts a conversation about the date itself; the product deliberately has no such
+feature and a puppet that demoed one would be lying.
+
+Three bounds make it safe: prompt building is pure and unit-tested; every
+generation is validated (one line, ≤220 chars, no links, no broken character) and
+falls back to a scripted ladder, so the chat works with no `OPENAI_API_KEY` at
+all; and the puppet answers at most `DEMO_PROXY_MAX_PARTNER_MESSAGES` (8) times,
+so a stuck relay cannot become an open-ended bill.
+
+Delivery goes through the production `relayProxyMessage`, not a hand-written row
+plus DM, so the message is logged to `proxy_messages` and reaches the visitor by
+exactly the path, prefix and controls keyboard a real partner's would. It is
+called with an **injected clock** (`agreedTime − 15m`): that module derives the
+window from `agreedTime` on purpose, and the demo's date sits days in the real
+future, so without the shift the production path would honestly answer `closed`.
+Same idiom as the lifecycle replay.
+
+**A second venue change needs no puppet branch, and the cap is what stops it
+being a loop.** `decideVenueChangeAction` keys purely on `venueChangeStatus`,
+and the driver checks the board BEFORE the pre-date replay, so a visitor who
+restarts a settled board is answered generically — the puppet counters, agrees
+and settles again. That is exactly why `VENUE_CHANGE_MAX_PER_DATE` is a counter
+on the row rather than a count of purchases (PRODUCT_SPEC §3.7b): demo settles
+every change **free**, so nothing else here bounds it, and without the cap a
+visitor could keep the demo on the board and never reach the pre-date content
+at all.
+
+**A same-sex pair cannot show every screen.** The pre-date safety brief is
+addressed to the female participant, so a male visitor matched with the male
+puppet will correctly never see it — as with the "pay for us both" cover
+gesture, the wish card and express venue change, which are hetero-only by
+design. Covering those needs a second run from the other side.
+
+### What is held in memory (and why nothing is in the schema)
+
+Five maps in `driver.ts`: which narration beats a visitor has read, when the
+currently-owed action was first observed, which visitors are being acted on,
+which finished match a visitor has already been offered a way back from, and
+which of the two impossible coordination variants have already been explained.
+
+That last one is the only piece here that genuinely *cannot* be derived: tapping
+"share my Telegram" or "ask for theirs" writes nothing to the match — that is
+what keeps the fork open — so the product carries no trace of it. It only thins
+the re-offer keyboard, so losing it on restart shows a button that has already
+been read.
+
+**No table was added to `packages/db/prisma/schema.prisma` for demo mode**, and
+none should be — the schema is shared with production, and a demo-only table
+would ship to the real database on the next `db:push`. The cost is that a
+restart mid-demo can repeat one explanatory message. That is the right trade.
+
+**But "one explanatory message" is a claim each beat has to earn, and one of
+them did not.** The rest of the product state that matters — the match row, the
+ticket status, the calendar picks, the lifecycle idempotency columns — survives a
+restart because it is real product state. A forgotten in-memory guard is
+therefore harmless only when the *state it guards against* also moves on. Every
+narration beat is saved that way: its window closes by itself as the visitor
+progresses (`decideNarration` spells this out for `intro`, the one beat whose
+window needed an explicit upper bound).
+
+`redoOffered` was the exception, and it repeated far more than once. A terminal
+match is terminal **forever**, so nothing ever closed its window: the closing
+message went out again ~12 s after every single restart of `gennety-demo`,
+indefinitely, until the visitor tapped the button or ran `/restart`. Measured in
+the demo's own `chat_events` — one genuine finale 17 s after the match completed,
+then an identical one 27 s after a restart four hours later, same visitor, same
+match. The ending now also has to be **fresh**
+(`DEMO_ENDING_OFFER_MAX_AGE_MS`, 10 min) for the demo to speak to it, which is
+the clock-based equivalent of the state-based bound every other beat gets for
+free.
+
+The rule this leaves behind: **before relying on a map here, ask what closes the
+window when the map is gone.** If the answer is "nothing", the beat needs its own
+bound — not a schema column.
+
+## The narration
+
+The moments where the demo speaks as itself (`demo/script.ts`), each triggered
+by a state the product itself owns:
+
+1. **The language is picked** — what the demo is; and that the bot is a
+   conversational agent you can talk to by text or voice at any point, which is
+   the capability most easily missed because it has no button.
+2. **The bot has asked for photos** — in the real product they are validated and
+   later matched against your face; here they are not, so upload anything. The
+   count in that sentence is interpolated from `MIN_PHOTOS`, not written out:
+   the beat sits directly under the bot's own request, so the two disagreeing
+   about how many photos to send is the exact defect a hardcoded numeral
+   produces the next time the floor moves.
+3. **Onboarding done, liveness pending** — the check is real on screen and
+   always passes.
+4. **Verified** — how matching actually works, then the first profile with an
+   invitation to reply in plain text.
+5. **`scheduled`** — the date card is yours; here is what on it is live, tap when
+   you're done looking.
+6. **The tap, or 7 minutes** — what normally happens over the following days,
+   immediately followed by the first of it happening.
+7. **The coordination fork** — the question the product asks an hour out, above
+   the real card. Deliberately does NOT say which of the three are impossible
+   here: pressing one and being told what it does IS the demo of this screen.
+8. **A or B pressed** — what that button would have done in production, what it
+   costs, and why it cannot run against a puppet with no Telegram account.
+9. **The relay is open** — what the anonymous chat is, that it is the only
+   channel between two users in the whole product, and an invitation to write
+   into it (the puppet answers).
+10. **The tap, or 7 minutes** — the day-after question, then it arriving.
+11. **Terminal** — which ending this was, and the way back.
+
+Languages: `ru`, `uk`, `en` are written out; `de` and `pl` fall back to `en`.
+A deliberate scope call for long explanatory prose; adding the two blocks is the
+only change needed if a demo in those languages is ever required.
+
+**Message 1 waits for the LANGUAGE, not for the handoff.** It used to wait for
+the onboarding Mini App to hand the chat back, and that put it in the wrong
+place: `/complete` resumes the chat inside its own request, so the collector's
+first question — «чем тебе нравится заниматься?» — is already in the chat before
+the next tick can run. The visitor read a profile question above the message
+explaining what the demo even is. No tick-based beat keyed on the handoff can
+win that race, so the trigger moved earlier rather than the beat getting faster:
+`POST /language` is the Mini App's FIRST write (PRODUCT_SPEC §1.2 — the entry
+Mini App asks for the language before consent), so the message lands while the
+visitor is still inside the full-screen Mini App, minutes before the handoff,
+and is read when they come back out — directly above the question. That ordering
+is the whole point.
+
+Firing at `/start` is the other end of the same trade and is still wrong:
+`User.language` is null there, so the longest, most explanatory message in the
+demo resolved to English for everyone. The window is now open for the Mini App
+phase too, so a restart during those few minutes can repeat it — the same
+accepted `spokenBeats` tradeoff (below), over a slightly longer stretch.
+
+**Message 2 waits for the question, not for the collector.** The Type Radar gate
+intercepts the photos question *before* it is asked, so `currentQuestion` reaches
+`photos` while the chat is still showing the radar invite. Firing there put the
+note under that invite — minutes above the photo request, and directly in front
+of a Mini App the visitor was about to spend several minutes inside; the first
+person walked through the demo reported it as never sent. The trigger is the
+session's `expectingPhoto`, which flips only once the resume has actually asked
+for photos. Deliberately NOT `Profile.typeRadarCompletedAt`, the obvious
+alternative: that lands *before* the ~13s radar thinking sequence, so the note
+would drop into the middle of it and collapse the rich draft. `expectingPhoto`
+is also set identically whether the radar was submitted, skipped, disabled, or
+never shown for want of a deployed deck at that age band — so the demo needs no
+idea whether a radar step exists at all.
+
+**Message 4 says "regularly", not a number.** Production runs `DROP_CADENCE=weekly`
+— one Thursday drop — with a `daily` profile in code but inert (PRODUCT_SPEC
+§3.1). Copy here must not describe a cadence production does not run.
+
+## Recovery
+
+- **A pass is shown honestly.** The real decline card, the real reason prompt,
+  the real "this pair will never be shown again" consequence — then the demo
+  offers a button that deletes its own match history and re-pitches. The
+  lifetime pair ban (§3.2 filter 6) is not bypassed in the allocator; the demo
+  removes its own rows instead.
+
+  **The button is the only thing that starts a second run.** It used to be
+  decorative: the offer deleted the finished rows to make itself one-shot, which
+  also erased the only evidence that this visitor had ever matched — so the next
+  tick read the empty state as "the demo has not started" and pitched a fresh
+  profile twelve seconds later whether or not anyone pressed anything. The rows
+  now stay, `hasEverMatched` keeps the driver quiet, and the offer is made once
+  per ending (`redoOffered`, keyed by match id) **and only while that ending is
+  still fresh** — the map is wiped by every restart, so on its own it made the
+  offer once per *process* rather than once per ending (see "What is held in
+  memory" above).
+
+  **The button keeps working across restarts, which is why suppressing the
+  repeat costs nothing.** Its handler resolves the visitor from the database and
+  nothing else, so a visitor who scrolls back to the original message can still
+  start a second run days later — the freshness bound withholds a duplicate
+  *message*, never the way back.
+
+  **The tap answers, and it keeps its button until a profile actually
+  arrives.** It used to retire the keyboard first — double-tap protection — and
+  then discard whatever `startDemoMatch` returned, so a refused pitch left the
+  visitor with no button, no message, and nothing but `/restart`. That is not a
+  hypothetical: the allocator refused because the decline reason the visitor had
+  *just given* marked their embedding dirty (PRODUCT_SPEC → Embedding freshness,
+  fixed at the write), and the chat then sat unchanged for 44 seconds until the
+  driver's own three attempts exhausted themselves. Now the keyboard is retired
+  only on success, `restartDemoPitch` shares the driver's single-flight guard
+  instead (so a double tap — or a tick landing on the same visitor — cannot run
+  two pitches), a refusal says so immediately, and it **counts into the same
+  failure ladder** as the driver's attempts rather than being invisible to it.
+  A success clears the streak, so a give-up can never outlive its cause.
+
+  **A second run does not re-explain the product.** The "you're in the system,
+  here is how matchmaking actually works" message is delivered once, immediately
+  above the first pitch. `spokenBeats` is in memory (no demo-only schema, below),
+  so a deploy mid-demo forgets what a visitor has read — and the demo is
+  redeployed with every release, which is how a visitor came back from a pass and
+  was handed the whole explanation a second time. The deleted match rows are
+  durable proof it was already said: `clearDemoMatches` returns its delete count
+  and a non-zero one marks the beat spoken. The beats that describe a *match*
+  rather than the product — the date-card handover, the pre-date replay — are
+  deliberately forgotten instead, so the second run gets its own.
+
+  **A finished demo is not a decline.** The post-date feedback flips `scheduled`
+  to `completed`, which is terminal exactly like a pass — so for the first day of
+  demo mode a visitor who had just been walked from pitch to post-date feedback
+  was told "a pass is final, this pair will never be shown again". The two
+  endings now carry their own copy, chosen from the terminal status.
+
+  **The puppet has to answer a "no" for any of that to happen.** A first
+  decider leaves the row `proposed` whichever way they went (§3.4) — it goes
+  terminal only when the second side answers or the 24h TTL fires. So the
+  puppet accepts after a decline too, which both frees the recovery path and
+  makes the mixed-outcome reveal real: the visitor is told their match had said
+  yes, which is what the product actually does.
+- **`/restart`** wipes the account through the real `deleteUserAccount`, not a
+  bespoke reset — that function is the only code that knows every table,
+  storage object and founder-report snapshot a user touches.
+
+  **It must also reset `ctx.session`, and for a while it did not.** The chat
+  session is keyed by Telegram chat id and has no relation to `users`, so it
+  survives the deletion; `deleteUserAccount` now erases the row, but grammY
+  holds this chat's session in memory for the rest of the update and writes it
+  back when the handler returns — so without the in-place reset the delete is
+  immediately undone. The Telegram Settings → Delete path has always done this;
+  `/restart` is the same deletion and owes the same reset.
+
+  What it cost while missing is worth keeping, because it is the shape of every
+  future version of this bug: a brand-new visitor inherited the previous one's
+  `expectingPhoto: true`, which put them in the photo stage while the collector
+  was still asking profile questions. Three uploads then produced a Continue
+  button that finalized onboarding early, the guard refused, and the demo
+  dead-ended at the one step a visitor cannot skip. **A demo that deletes an
+  account must leave nothing of it in the chat** — the point of `/restart` is
+  that the next `/start` is a genuinely new person.
+
+Both are registered ahead of every other handler so they work from any state,
+and both are mounted only when `DEMO_MODE_ENABLED`.
+
+## The guarded branches in production code
+
+Ten, each a single `if`, each commented at the site:
+
+| File | What it does |
+|---|---|
+| `services/liveness-flow.ts` | skips the AWS verdict; runs the pipeline with stubbed evidence |
+| `services/verification-pipeline.ts` | a generic `depsOverride` seam (the only caller is demo) |
+| `handlers/matching/venue-change.ts` | `changeIsFree` → true |
+| `public/routes/telegram-onboarding.ts` | `/track` satisfies the phone rail; `/email/verify` accepts any code |
+| `handlers/router.ts` | mounts the demo composer |
+| `handlers/onboarding/conversational.ts` | skips the legacy single-face gate on upload |
+| `handlers/menu/edit-profile.ts` | the same, in the photo manager |
+| `services/venue-intent-v2.ts` | adds `demoMode: true` to the venue-intent state |
+| `services/match-engine.ts` | exempts the puppet from the single-live-match invariant (below) |
+| `public/routes/calendar.ts` | the Prime Time unlock settles free instead of minting a Stars invoice |
+
+**Why the last two exist — `PROFILE_MEDIA_VALIDATION_ENABLED=false` does not
+mean "nothing is checked".** It selects the *pre-rollout* validator instead of
+the current one: a `validateSingleFace` call that rejects scenery as `no_face`,
+plus (in the photo manager) a `gateProfilePhoto` identity check. So a demo
+visitor who was just told to upload any few images they have to hand had
+their landscape photos refused with "your face must be visible" — and the
+refusal left **no `media_validation_rejections` row**, because only the new
+validator writes those, which is what made it look like nothing had been
+rejected at all. The env var alone could never have delivered the promise in
+the table at the top of this file; these two branches are what do.
+
+**Why the allocator carries one — the puppet may hold several live matches at
+once.** `createProposedMatch` enforces the single-live-match invariant
+(PRODUCT_SPEC §3.2 filter 8) in two places: the eligibility re-read drops a
+participant who already holds a live row, and an explicit conflict query
+refuses the pair. Both are exactly right for a person — being double-booked
+means being sent on two dates — and both protect nobody on the puppet's side,
+because there is no date and no person there.
+
+Left in force they made the demo **one visitor at a time**, and worse than that
+sounds: a `scheduled` match never expires on its own (the row lingers until the
+T+24h feedback flow closes it, which in demo needs the visitor to walk to the
+end). One abandoned walkthrough therefore held the puppet for a full day, and
+every visitor after it got the "I'm stuck" message instead of a profile —
+observed live, `puppet already occupies live match …` three times, then the
+give-up.
+
+Three properties keep the exemption narrow, and each is pinned by a test
+(`services/match-engine-demo-puppet.test.ts`):
+
+- **The visitor is still held to the invariant.** Only the puppet's side is
+  excused, so a visitor who somehow holds a live match is refused exactly as
+  before. Two people can watch the demo at once; one person cannot be given two
+  simultaneous dates.
+- **The lifetime pair ban is untouched.** The same visitor still never sees the
+  same puppet twice — which is why the redo button deletes its own match rows
+  (`clearDemoMatches`) rather than relying on this.
+- **With the flag off the query is rebuilt byte-for-byte**, so the production
+  allocator — which also runs the real Thursday drop and the paid Rematch — has
+  the same shape, the same plan, and the same guard test pinning it
+  (`match-engine-eligibility.test.ts`). `demoPuppetIdsAmong` is not even called.
+
+Identification is the reserved `telegramId` band (`-777_000_0xx`) and nothing
+else: a demo-only column is forbidden here, and the flag itself cannot be set
+in production — `assertDemoIsolation()` refuses to boot.
+
+One consequence for debugging: the driver's `explainRefusal` no longer reports
+the puppet's live matches as a cause, because they are not one. A refusal
+naming a live match now always means the VISITOR.
+
+Plus `if (DEMO_MODE_ENABLED)` blocks in `index.ts`: the isolation assert +
+banner + driver, and **not** scheduling three crons — drop matching, the
+no-match notice, and curated venue re-validation.
+
+**The third one is there for cost, not correctness** (added 2026-08-23). The
+first two protect the product: the real matchmaker would cheerfully pair two
+investors with each other, and a visitor about to be handed a match must never
+read "we couldn't find anyone this week". Re-validation would break nothing —
+it was simply paying a second, identical Google bill every night to keep a
+~1200-row catalog fresh for a deployment that has had **one match in its entire
+life**, already completed, and no date traffic at all.
+
+It is code-owned rather than an env schedule for the same reason the storage
+leak happened: the demo `.env` is generated as production's plus `.env.demo`, so
+**anything that file does not name is inherited silently** — which is exactly
+how this cron came to be running here unnoticed. Accepted tradeoff (founder
+decision): the demo catalog slowly rots and may eventually offer a venue that
+has since closed. In a walkthrough nobody checks, and it is cheaper than the
+bill. If demo fidelity ever matters more, the knob is
+`VENUE_REVALIDATION_BATCH_SIZE` plus removing this branch — not an env schedule.
+
+**And one deliberate non-branch: `PROTECT_PARTNER_MEDIA`.** Partner photos are
+sent `protect_content` wherever they appear with a clear face (PRODUCT_SPEC
+§3.7a), and Telegram clients blank protected media out of a screenshot or a
+screen recording — so a demo filmed for an investor records a black rectangle
+exactly where the partner should be. The flag is therefore off in demo, which
+costs nothing: the partner there is a seeded puppet, not a person with a photo
+to protect.
+
+It is a **single exported constant** (`demo/config.ts`) read by all six
+senders — the pitch album (`handlers/matching/pitch.ts`), the match cards
+(`services/match-card/send.ts`), the scheduled date card
+(`services/scheduled-confirmation.ts`), the My Date hub
+(`handlers/menu/my-date.ts`), the venue wish card
+(`handlers/matching/venue-change.ts`) and the coordination cards
+(`services/coordination-card/send.ts`) — rather than six `if` blocks. Six
+copies of one rule is a rule a seventh sender never finds, and the failure is
+silent: a hardcoded `protect_content: true` on a new surface simply goes black
+on camera, with nothing failing and nobody told. The blurred date-card share
+copy is deliberately NOT routed through it — that one is unprotected in both
+modes, because the blur is what makes it safe to leave the platform.
+
+**The drop cron is disabled in code, not by an env schedule.** Every demo
+visitor is an active, verified Kyiv account, so the real engine would cheerfully
+pair two investors with each other. "The demo must never pair two visitors" is
+an invariant, not a setting.
+
+### The evening band is shown locked and opens for free
+
+The paid Prime Time band (PRIME_TIME_PRODUCT_SPEC §11) is a gate AND a paid
+step, so it owes this file an answer on both counts. It is **shown**: the last
+three times of every day carry their Premium plate and padlock, tapping one
+opens the real sheet with the real hero button, and only the settle is free —
+the same shape `changeIsFree` already gives the venue board, and for the same
+reason (Stars moves real money out of a visitor's real balance and has no mock
+rail the way the Date Ticket gate does).
+
+**So a demo shows the lock and never the Stars payment sheet.** Closing that gap
+means a mock rail for Stars, which is the same open decision the venue-change
+deviation below records.
+
+**The puppet obeys the lock rather than being exempted from it**, and that is
+not politeness: it counters through the production `processCalendarSlotsUpdate`,
+which REFUSES a locked slot, so a puppet reaching into the band would be turned
+down three times and give up (`failure-tracker.ts`). `pickCounterSlots` is
+handed the locked ISOs and skips them exactly as it skips a slot the visitor
+already took.
+
+Two consequences worth stating. The band survives for the visitor to walk into —
+if the puppet took 19:00 first there would be nothing locked left to demo. And
+the 2026-08-17 decision holds unchanged: the grid's last three slots are
+18:30/19:00/19:30, so 18:00 and 17:00 are still open and the puppet still
+counters in the evening rather than falling back to the 13:00 that decision
+exists to prevent.
+
+The driver asks production's own predicate (`primeTimeUnlockReason`) rather
+than keeping a demo copy of the question, so "the feature is off", "either side
+is premium" and "already paid" are all answered once, in one place.
+
+### Known deviation: the venue-change price screen
+
+The Date Ticket gate uses the shipped **mock** payment rail, so a demo visitor
+sees the real screens, the real prices and a working pay button. The venue
+change has no such rail — it is Stars-only — so demo settles it for free at
+agreement, reusing the Premium waiver path (which the Mini App already
+understands via its `settled: true` response). **A demo therefore shows the
+whole likes board but never the venue-change payment screen.** Closing that gap
+means building a mock rail for Stars; it is not worth it for one screen.
+
+## Setup
+
+One-time:
+
+1. Create the demo bot in BotFather; `/setdomain demo-app.gennety.com` (required
+   for camera permission inside the Telegram WebView).
+2. Create the second Supabase project; three `…-demo` storage buckets.
+3. DNS: `demo-app` and `demo-api` A records → the droplet. Two Caddy blocks.
+4. `/opt/gennety-demo/.env` (below), then `pnpm --filter @gennety/db db:push`.
+5. Seed the Kyiv venue catalog: `pnpm seed-venues:import --apply` against the
+   demo `DATABASE_URL`.
+6. `pnpm demo:seed -- --photos=<dir>` — see `scripts/seed-demo-partners.mjs`.
+7. `pm2 start … --name gennety-demo` in `/opt/gennety-demo`.
+
+Env that differs from production:
+
+```
+DEMO_MODE_ENABLED=true
+BOT_TOKEN=<demo bot>              DATABASE_URL=<demo supabase>
+PUBLIC_PORT=3102                  ADMIN_API_KEY=
+WEBAPP_URL=https://demo-app.gennety.com
+PUBLIC_BASE_URL=https://demo-api.gennety.com
+OTP_LOG_TO_CONSOLE=true                  # no mail is sent to typed addresses
+PROFILE_MEDIA_VALIDATION_ENABLED=false   # any images, faces optional
+FOUNDER_NOTIFY_ENABLED=false             # enforced by assertDemoIsolation
+TICKET_FEATURE_ENABLED=true  TICKET_STARS_ENABLED=false  TICKET_PAYMENT_MODE=mock
+VENUE_CHANGE_FEATURE_ENABLED=true   PREMIUM_FEATURE_ENABLED=true
+PHONE_AUTH_ENABLED=true
+SUPABASE_SELFIE_BUCKET=selfies-demo
+SUPABASE_PHOTO_BUCKET=profile-photos-demo
+SUPABASE_CHAT_BUCKET=chat-attachments-demo
+DEMO_PEER_DELAY_MS=12000   DEMO_TICK_MS=3000
+```
+
+`DEMO_TICK_MS=0` disables the puppet entirely — useful for walking onboarding
+alone without a match arriving.
+
+## Not to be confused with: synthetic test profiles
+
+PRODUCT_SPEC §3.1c adds a second kind of seeded person — a **synthetic test
+profile**, offered to a real friends-and-family tester in PRODUCTION when the
+real pool leaves them unpaired. The two look alike from a distance (both are
+`platform: "mobile"` rows with a negative `telegramId` and a bio written by
+hand) and are opposites in every way that matters:
+
+| | Demo puppet | Synthetic test profile |
+|---|---|---|
+| Where | demo database only | production |
+| Who sees it | the demo visitor, always | a real tester, only when nobody real is left |
+| What it does | accepts, then walks the whole flow | declines, every time |
+| Driven by | `demo/driver.ts`, re-deriving state each tick | `workers/synthetic-partner.ts`, one decision |
+| Reserved ids | `-777_000_0xx` | `-778_000_00x` |
+
+**Demo mode is unaffected by the synthetic fill and needs no branch for it.**
+The drop cron is not scheduled at all under `DEMO_MODE_ENABLED` (that is the
+invariant keeping two visitors from being paired with each other), so
+`runDropBatch`'s second pass never runs here; and the demo database has no rows
+carrying `syntheticAt`. `demo/decide.ts` is untouched.
+
+The id bands are deliberately distinct so a row is identifiable at a glance,
+and because the demo seeder's `resolveUploadChat` looks for a **positive**
+`telegramId` to find a real visitor — a rule that would quietly break if the
+two kinds of stand-in ever shared a range and one leaked across.
+
+## Deploying
+
+`./scripts/deploy-demo.sh` (or `pnpm demo:deploy`), **after** the production
+deploy is verified. It syncs the same working tree to `/opt/gennety-demo`,
+installs, builds, pushes the schema to the demo database with a drift check,
+restarts `gennety-demo`, and builds + ships a second Mini App bundle pointed at
+`demo-api`.
+
+That last step is what makes "the demo updates with production" true: one extra
+command per release, same source, no parallel implementation. See deploy.md.
+
+## Voice prompts: the recording is shown, the playback is not
+
+The demo puppet has **no voice prompt** (founder decision 2026-08-21), so a
+visitor walks the recording step in full — the ask, the recommendations, the
+skip button, the ingest and its verdict — and never hears one in the pitch,
+because the puppet's pitch simply omits a message it has nothing to fill.
+
+That is the feature's own fail-open path (PRODUCT_SPEC §1.3b: a missing clip
+skips the message, since the pitch must never fail for want of optional audio)
+exercised on every demo run rather than never, which is a small bonus.
+
+Stated plainly so it is not read as an oversight: **the demo cannot show what
+the feature looks like to the person receiving it.** Closing that gap costs one
+OGG per puppet, minted *through the demo bot* — Telegram `file_id`s are per-bot,
+the same trap `scripts/seed-demo-partners.mjs` already resolves an upload chat
+for — and it is not being done.
+
+`VOICE_PROMPT_ENABLED=true` in `.env.demo` so the step is part of the
+walkthrough, and `SUPABASE_VOICE_BUCKET=voice-prompts-demo` is named there
+**explicitly**: the demo env is production's `.env` plus that file, so a bucket
+it does not name is inherited from production — which is exactly how the demo
+spent its first day writing into production storage.
+
+`demo/decide.ts` needs no branch: the step is one-sided, so there is nothing for
+the puppet to answer.
+
+## The pitch album's video slot is not exercised here either
+
+Same shape as the voice prompt above, and worth stating for the same reason.
+Since 2026-08-22 the partner's profile video rides inside the match-card album
+rather than following it as its own message (PRODUCT_SPEC §3.3) — and the demo
+puppet has **no video**: `scripts/seed-demo-partners.mjs` writes
+`profileMedia` as photos only, so `motionOnlyProfileMedia` returns an empty
+list and the album is cards alone.
+
+So of that change the demo shows the two halves that live in text — the trust
+note folded into the pitch message, and the synergy label finally rendering
+bold instead of wrapped in literal asterisks (the puppet IS verified,
+`demo/partners.ts`) — and **not** the video tile. That half is verified on
+`@gennetytestbot`.
+
+Nothing about it needs a demo branch: the demo reaches the pitch through the
+ordinary `dispatchMatches` → `sendMatchProposal`, and `PROTECT_PARTNER_MEDIA`
+already rides the album that now carries the video.
+
+## Relationship intent: the visitor answers it, the puppet is seeded with one
+
+The last of the Mini App's own profile screens (PRODUCT_SPEC §1.3) is an
+ordinary onboarding step, so the demo inherits it from the same bundle — no
+gate, no paid step, no negotiation branch, and nothing in `demo/decide.ts`.
+
+The puppets carry an intent of their own (`DEMO_PARTNER_PERSONAS`), one step
+apart on the axis from each other, and that is not decoration: `intentMultiplier`
+returns exactly 1.0 whenever EITHER side has none, so an unseeded puppet would
+make every demo run silently exercise the absent-value branch rather than the
+factor. It changes nothing a visitor sees — `INTENT_FLOOR` is 1.0 in demo as in
+production, so the multiplier is a no-op there too — but it means the demo
+matches the way production will once the floor drops.
+
+## Premium: the monthly plan only, and a real charge behind it
+
+The Premium screen sells three plans in production — 1 / 3 / 6 months
+(PRODUCT_SPEC §3.8) — and **the demo is served the monthly one alone**, refused
+server-side rather than merely hidden from the catalog (`offeredPlans()` in
+`public/routes/premium.ts`), because the catalog is the client's list and not a
+boundary.
+
+The reason is not tidiness. **The demo has no mock rail for Stars, and this
+route has never consulted `TICKET_STARS_ENABLED`** — the flag
+`assertDemoIsolation` refuses to boot with, on the stated grounds that "Telegram
+Stars moves real money out of a visitor's real Telegram balance". So tapping
+Subscribe in the demo already mints a genuine invoice for a genuine charge. That
+predates the packages; what the packages would have changed is the size of it,
+from 750⭐ (~$18) to 3150⭐ (~$75) for one accidental tap on the biggest plan.
+
+Two things follow, and the second is the open one:
+
+- **The demo looks exactly as it did before this feature.** One plan, one price,
+  the same screen — capping costs the walkthrough nothing, because the packages
+  are a pricing choice rather than a product surface an investor needs to see.
+- **The underlying hole is NOT closed**, and closing it is a founder decision,
+  not a cleanup: either a mock rail for Stars (the shape the Date Ticket gate
+  already uses) or refusing to mint at all in demo, which would leave the
+  Subscribe button dead. Recorded in DECISIONS.md 2026-08-24.
+
+The expiry reminders need no branch here, but the reason narrowed on
+2026-08-24. They used to address only a non-auto-renewing entitlement,
+which a demo visitor never buys. They now also warn a LIVE recurring
+Stars subscriber that the next charge comes out of their Star balance —
+and a demo tap on Subscribe mints a REAL recurring invoice (the open hole
+recorded above), so a visitor who actually paid would now receive those
+two DMs on their real subscription. That is correct rather than a leak:
+the charge is real, so the warning about it should be too. It is one more
+reason the underlying hole is worth closing.
+
+## The Date Radar is unreachable for the same reason
+
+Everything the section below says about the Bump applies unchanged to the Radar
+(§6.3), and for the first of its two reasons: its window is T−45m to
+`agreedTime`, and the demo's `agreedTime` is at least tomorrow evening in real
+time. A visitor's ping would arrive on the real clock and be refused
+`too-early`, correctly, by a day.
+
+It needs no puppet branch either — and here the reason is one step stronger.
+The Radar is not a negotiation: it is two phones reporting independently, so
+the puppet has nothing to answer even in principle. A phone that never pings
+reads as `unknown`, which is exactly what the product shows a visitor whose
+partner has not set off yet.
+
+## The Date Bump is unreachable here, and it needs no puppet branch
+
+The Bump (PRODUCT_SPEC §6.2) is a two-sided step, so the rule below would
+normally demand a branch in `decide.ts`. It does not, and the reason is worth
+stating rather than discovering: **the demo can never enter
+`DATE_BUMP_PENDING` at all**, so there is no dead end for a puppet to rescue.
+
+Two independent reasons, and either alone is enough:
+
+- **The demo's date is days away, in real time.** The puppet counters with a
+  slot from the ordinary 6-day grid, so `agreedTime` is at least tomorrow
+  evening — and the bump window opens 15 minutes before it. The replay does not
+  help: it shifts a clock into `runDateLifecycleTick` / `runCoordinationTick`,
+  while a visitor's shake would arrive through `POST /v1/dates/:matchId/bump`
+  on the REAL clock and be refused `too-early`, correctly, by days.
+- **There is nothing to shake.** The shake is detected by the Living Canvas
+  (§6.1), which is a client surface; until it ships there is no screen in the
+  demo that could produce one.
+
+So a puppet branch would be code that can never run, which is worse than a
+stated limit — the same call this file already makes for the female-only
+pre-date safety brief. What it costs is real and named: **an investor walking
+the demo never sees the Bump, the reliability reward, the bonus ticket or the
+at-the-table icebreaker deck.**
+
+Closing it later is not a `decide.ts` branch either. The puppet's half could
+use the injected-clock idiom the proxy chat already uses
+(`relayProxyMessage` at `agreedTime − 15m`), but the visitor's half comes
+through the public route, which must not grow a demo branch — so making the
+Bump demoable means giving the demo a date that is genuinely minutes away,
+which is a change to how the demo schedules, not to how it puppets.
+
+## The Scratch Map fills, the Campus Radar cannot fire
+
+Two halves of §Scratch Map / §Campus Radar, and they land on opposite sides of
+the demo's line.
+
+**The Scratch Map works here, and needs no puppet branch** — it is one-sided by
+construction, so there is nothing for the puppet to answer. A visitor who turns
+the toggle on and opens the canvas uncovers tiles exactly as a real user would.
+Worth knowing rather than assuming: the demo's own database is separate, so
+those tiles are the visitor's own and nothing reaches production.
+
+**The Campus Radar can never fire here, structurally.** Its cron is not
+scheduled under `DEMO_MODE_ENABLED` at all — for the same reason drop matching
+is not, and it is the same reason exactly: a campus drop IS matching, and the
+demo must never pair two visitors with each other. Even scheduled it would find
+nothing: a demo visitor registers on the general track and has no
+`universityDomain`, so every campus's cohort is empty.
+
+So of §Campus Radar the demo shows nothing at all, and that is a stated limit
+rather than a gap to close. Verifying it needs `@gennetytestbot` with several
+seeded university accounts — which is also what verifying it will need in
+production, since production today has **zero** accounts carrying a university
+domain.
+
+## The rule for future work
+
+**Any change to a product flow, a Mini App screen, a gate, or a paid step must
+state how it behaves in demo mode.** Most changes need nothing — the driver
+re-derives state and the demo picks them up for free. The ones that do need
+attention are:
+
+- a new **gate** (something the user must pass) → does demo wave it through?
+- a new **paid step** → demo cannot charge; what happens instead?
+- a new **negotiation step** with two sides → the puppet needs a branch in
+  `decide.ts`, or the demo dead-ends there;
+- a change to how a **match is created or advanced** → check the driver's state
+  table above still matches reality.
+
+If the answer is not obvious from the change itself, **ask** rather than assume.
+The same rule AGENTS.md already applies to the iOS client under "Two Clients,
+One Backend".

@@ -17,7 +17,7 @@
  * disagree with the folder. They live under `src/` rather than `public/` for
  * exactly that reason: `public/` is copied verbatim and cannot be globbed.
  *
- * Prepared by `~/Desktop/gennety-preference-photos/prepare.mjs`, which resizes
+ * Prepared by `~/Desktop/_TO_GDRIVE/gennety-media/gennety-preference-photos/prepare.mjs`, which resizes
  * and re-encodes the originals — 2–6 MB PNGs — into what actually ships. Never
  * copy an original in by hand.
  *

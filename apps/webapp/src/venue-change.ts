@@ -50,6 +50,7 @@ import { wireContentInsets } from "./telegram-insets.js";
 import { returnParams } from "./return-to.js";
 import { referralChip } from "./referral-hint.js";
 import { loadPhotoWithRetry, domImageLoader } from "./photo-retry.js";
+import { loadWhenVisible, domObserverFactory } from "./photo-defer.js";
 
 const app = window.Telegram?.WebApp;
 app?.ready();
@@ -821,6 +822,12 @@ function photoTile(
   className: string,
   fallback: () => Node,
   extra: ElAttrs = {},
+  /**
+   * `false` for a tile the user has already asked to see — the fullscreen
+   * viewer — where deferring would add a wait to a deliberate tap and save
+   * nothing, since the tap IS the intent to load.
+   */
+  deferUntilVisible = true,
 ): HTMLElement {
   // A tile that does something on tap renders as a real <button> rather than a
   // div wearing a listener, so it gets the tap target, keyboard activation and
@@ -843,10 +850,16 @@ function photoTile(
   // One retry before giving up — see photo-retry.ts. The tile keeps shimmering
   // across the retry rather than flashing the glyph and taking it back, which
   // would read as the board glitching.
-  loadPhotoWithRetry(url, settle, {
-    load: domImageLoader,
-    schedule: (fn, ms) => window.setTimeout(fn, ms),
-  });
+  const start = (): void =>
+    loadPhotoWithRetry(url, settle, {
+      load: domImageLoader,
+      schedule: (fn, ms) => window.setTimeout(fn, ms),
+    });
+
+  // Deferred by default — a tile that has not been scrolled to has not been
+  // paid for. See `photo-defer.ts` for why `loading="lazy"` cannot do this job.
+  if (deferUntilVisible) loadWhenVisible(node, start, { createObserver: domObserverFactory() });
+  else start();
 
   return node;
 }
@@ -1611,7 +1624,12 @@ function openPhotoViewer(v: VenuePhotoSet, start: number): void {
   const index = Math.min(Math.max(start, 0), low.length - 1);
 
   const slides = low.map((u) =>
-    photoTile(u, "vc-viewer-shot", () => categoryIcon(v.category, "icon vc-viewer-glyph")),
+    // Eager, and it costs nothing: these are the SAME URLs the gallery rail
+    // just loaded, so the browser paints them from its own cache
+    // (`Cache-Control: private, max-age=86400` on the proxy) — which is the
+    // whole reason the rail and the viewer share one width. Deferring them
+    // would add a wait to a tap that already said "show me this photo".
+    photoTile(u, "vc-viewer-shot", () => categoryIcon(v.category, "icon vc-viewer-glyph"), {}, false),
   );
   const rail = el("div", { class: "vc-viewer-rail" }, slides);
 

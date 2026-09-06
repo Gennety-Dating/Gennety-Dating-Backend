@@ -537,3 +537,64 @@ describe("shouldPlayWelcome", () => {
     }
   });
 });
+
+describe("city waitlist routing", () => {
+  const WAITLIST = {
+    cityKey: "de:berlin",
+    city: "Berlin",
+    countryCode: "DE",
+    joinedAt: "2026-09-04T10:00:00.000Z",
+  };
+
+  it("holds a waitlisted user on the waitlist screen, both directions", () => {
+    const waiting = user({ isEmailVerified: true, cityWaitlist: WAITLIST });
+    expect(preVisualPhaseFromRemote(waiting)).toEqual({ kind: "waitlist" });
+    expect(postVisualPhaseFromRemote(waiting)).toEqual({ kind: "waitlist" });
+  });
+
+  it("outranks the city picker rather than falling back to it", () => {
+    // The waitlisted user has no home location by construction, so an
+    // order-of-checks slip here would send them back to the picker they just
+    // answered and silently drop the fact that they answered it.
+    expect(
+      preVisualPhaseFromRemote(
+        user({ isEmailVerified: true, cityWaitlist: WAITLIST, homeLocation: null }),
+      ),
+    ).toEqual({ kind: "waitlist" });
+  });
+
+  it("never outranks a gate the user still owes", () => {
+    // A waitlist row cannot exist before the contact rail is resolved (the
+    // server gates the endpoint), but the routing must not depend on that.
+    expect(
+      preVisualPhaseFromRemote(user({ isEmailVerified: false, cityWaitlist: WAITLIST })),
+    ).toEqual({ kind: "email" });
+    expect(
+      preVisualPhaseFromRemote(
+        user({ language: null, isEmailVerified: true, cityWaitlist: WAITLIST }),
+      ),
+    ).toEqual({ kind: "language" });
+  });
+
+  it("returns to the picker once the waitlist row is gone", () => {
+    expect(
+      preVisualPhaseFromRemote(user({ isEmailVerified: true, cityWaitlist: null })),
+    ).toEqual({ kind: "city" });
+  });
+
+  it("leaves a finished account alone", () => {
+    // Belt and braces: `completed` short-circuits before any city check, so a
+    // stale row could never resurrect the screen for an onboarded user.
+    expect(
+      preVisualPhaseFromRemote(
+        user({ onboardingStep: "completed", cityWaitlist: WAITLIST }),
+      ),
+    ).toEqual({ kind: "done" });
+  });
+
+  it("ignores a server that does not know about the waitlist at all", () => {
+    const legacy = user({ isEmailVerified: true });
+    delete (legacy as { cityWaitlist?: unknown }).cityWaitlist;
+    expect(preVisualPhaseFromRemote(legacy)).toEqual({ kind: "city" });
+  });
+});

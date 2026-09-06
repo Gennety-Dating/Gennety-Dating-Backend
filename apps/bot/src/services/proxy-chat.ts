@@ -85,10 +85,10 @@ function loadMatch(matchId: string) {
  * `proxyOpenedAt`/`proxyClosesAt`.
  *
  * Those columns are written by the 2-minute coordination tick, so gating on
- * them makes the window open up to two minutes late — on a 30-minute window
- * whose whole job is the last half hour before a meeting. Deriving it makes
- * both surfaces agree instantly and removes a dependency on cron timing for
- * something the schedule already determines. The stamps keep their real job:
+ * them makes the window open up to two minutes late — on a window whose whole
+ * job is the last hour before a meeting. Deriving it makes both surfaces agree
+ * instantly and removes a dependency on cron timing for something the schedule
+ * already determines. The stamps keep their real job:
  * `proxyOpenedAt` records that both sides were TOLD, and `proxyClosedAt` is a
  * force-close that still wins here.
  *
@@ -244,7 +244,7 @@ type Side = ProxyMatch["userA"];
  * Deliver on the partner's OWN rail — a Telegram DM, an APNs push, or both for
  * a `both`-platform account. Before this the relay only ever DM'd, so a mobile
  * partner learned of a message by opening the app, on the one screen whose
- * entire value is the thirty minutes before a meeting.
+ * entire value is the hour before a meeting.
  */
 async function deliverToPartner(
   sender: Side,
@@ -283,8 +283,8 @@ async function deliverToPartner(
   // The push CARRIES the message text, unlike the emergency-cancellation push
   // (§4.4), which deliberately withholds the partner's free text. The two are
   // not the same case: a cancellation reason is unbidden and emotionally
-  // loaded, while this is a chat the user opted into, in the last half hour
-  // before meeting, where "you have a new message" is exactly the notification
+  // loaded, while this is a chat the user opted into, in the last hour before
+  // meeting, where "you have a new message" is exactly the notification
   // that makes someone open the app to read "I'm by the door" thirty seconds
   // too late.
   if (partner.platform === "mobile" || partner.platform === "both") {

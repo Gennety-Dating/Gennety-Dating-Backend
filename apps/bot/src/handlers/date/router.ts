@@ -20,6 +20,7 @@ import {
   handleProxyRelay,
 } from "./coordination.js";
 import { handleDateCardShare } from "./date-card.js";
+import { handleMemeShow } from "./meme.js";
 import {
   matchFlowClaimIsLive,
   releaseMatchFlowClaim,
@@ -29,6 +30,7 @@ import {
  * Date-lifecycle router (Phase 4) — handles:
  *   - `emerg:start:*` / `emerg:confirm:*` / `emerg:abort:*` callbacks →
  *     emergency cancellation (tap → confirm guard → reason)
+ *   - `meme:show:*` callback → the §Phase 4 pre-date meme reveal
  *   - `feedback:voice:*` callback → opt into the voice-note feedback path
  *   - Free-text in `awaiting_emergency_reason` or `awaiting_feedback` state
  *
@@ -49,6 +51,13 @@ dateRouter.use(async (ctx, next) => {
   }
 
   const data = ctx.callbackQuery?.data;
+
+  // Pre-date meme reveal. Sits with the emergency button because it rides the
+  // same T-5h ice-breaker tick and lands on the same card stack.
+  if (data?.startsWith("meme:show:")) {
+    await handleMemeShow(ctx);
+    return;
+  }
 
   // Emergency cancellation button → confirmation guard → reason
   if (data?.startsWith("emerg:start:")) {

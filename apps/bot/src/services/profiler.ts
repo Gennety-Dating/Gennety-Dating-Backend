@@ -388,10 +388,15 @@ async function claimActiveQuestion(
 }
 
 /**
- * Resolve whether an incoming plain-text message belongs to the user's active
- * Profiler question (see `shouldCaptureProfilerAnswer` for the rule). Returns
- * the ids the router needs to buffer the answer, or null when the text is not
- * an answer and should fall through to the menu agent.
+ * Resolve whether an incoming message belongs to the user's active Profiler
+ * question (see `shouldCaptureProfilerAnswer` for the rule). Returns the ids
+ * the router needs to buffer the answer, or null when the message is not an
+ * answer and should fall through to the menu agent.
+ *
+ * The language comes back with them because the router needs it before the menu
+ * router — which is what populates `session.language` — has run, and an image
+ * answer is described in the user's own language at capture time. It is one
+ * more column on a row already being read.
  */
 export async function resolveProfilerCapture(
   telegramId: bigint,
@@ -405,11 +410,12 @@ export async function resolveProfilerCapture(
      */
     looksLikeQuestion?: boolean | undefined;
   } = {},
-): Promise<{ userId: string; questionId: string } | null> {
+): Promise<{ userId: string; questionId: string; language: Language } | null> {
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: {
       id: true,
+      language: true,
       profile: {
         select: {
           profilerActiveQuestionId: true,
@@ -434,7 +440,11 @@ export async function resolveProfilerCapture(
     },
   );
   if (!capture) return null;
-  return { userId: user.id, questionId: profile.profilerActiveQuestionId };
+  return {
+    userId: user.id,
+    questionId: profile.profilerActiveQuestionId,
+    language: (user.language ?? "en") as Language,
+  };
 }
 
 /**
@@ -635,16 +645,33 @@ export async function startProfilerBatch(
 }
 
 /**
- * Record a free-text answer to the user's active question and immediately send
- * the next question in the batch (or pause/finish). Returns false when the user
- * has no active question (stale/duplicate input).
+ * Record an answer to the user's active question and immediately send the next
+ * question in the batch (or pause/finish). Returns false when the user has no
+ * active question (stale/duplicate input).
+ *
+ * `media` is the Telegram `file_id` pointer for an answer that arrived as a
+ * picture (see `services/profiler-image-answer.ts`). It is written in the same
+ * upsert as the text, so an answer can never end up with a pointer to an image
+ * that describes something else. A text answer clears any pointer a previous
+ * image answer left, for the same reason: the two columns describe one answer
+ * and must move together.
  */
 export async function recordProfilerAnswer(
   api: Api<RawApi>,
   userId: string,
   questionId: string,
   text: string,
-  options: { now?: Date; reactionTarget?: MessageReactionTarget; wait?: Wait } = {},
+  options: {
+    now?: Date;
+    reactionTarget?: MessageReactionTarget;
+    wait?: Wait;
+    media?: {
+      fileId: string;
+      kind: "photo" | "sticker";
+      /** Set only for a link answer — the video the frame came from. */
+      sourceUrl?: string;
+    };
+  } = {},
 ): Promise<boolean> {
   const question = profilerQuestionById(questionId);
   if (!question) return false;
@@ -657,6 +684,16 @@ export async function recordProfilerAnswer(
   const claim = await claimActiveQuestion(userId, questionId);
   if (!claim.claimed) return false;
 
+  // Every field is written on every path, `null` included: a re-answer that
+  // arrives as plain text must CLEAR a pointer and a source URL left by an
+  // earlier picture, or the reveal would sell media the current answer is no
+  // longer about.
+  const media = {
+    memeFileId: options.media?.fileId ?? null,
+    memeKind: options.media?.kind ?? null,
+    memeSourceUrl: options.media?.sourceUrl ?? null,
+  };
+
   await prisma.profilerAnswer.upsert({
     where: { userId_questionId: { userId, questionId } },
     create: {
@@ -668,6 +705,7 @@ export async function recordProfilerAnswer(
       skipped: false,
       skipReturned: false,
       cycleId,
+      ...media,
     },
     update: {
       answerText,
@@ -675,6 +713,7 @@ export async function recordProfilerAnswer(
       skipped: false,
       skipReturned: false,
       cycleId,
+      ...media,
     },
   });
 

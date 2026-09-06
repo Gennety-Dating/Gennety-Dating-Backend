@@ -5,6 +5,7 @@ import {
   profilerQuestionText,
   profilerPriorityWeight,
   isRefreshableProfilerQuestion,
+  profilerQuestionAcceptsImage,
   scoreProfilerAnswers,
   formatProfilerAnswersBlock,
 } from "./profiler-questions.js";
@@ -42,6 +43,28 @@ describe("profilerQuestionBank", () => {
 
   it("treats a question without an explicit policy as ask-once", () => {
     expect(isRefreshableProfilerQuestion(profilerQuestionById("f_chronotype")!)).toBe(false);
+  });
+
+  it("only the humour question accepts an image, and it invites one in the copy", () => {
+    // Image capture is opt-in per question because the router burns the live
+    // question on whatever it accepts: a photo arriving during any OTHER
+    // question must fall through to the menu agent, not answer it. The copy
+    // check is the other half — a question that takes a picture without asking
+    // for one would only ever be answered with a picture by accident.
+    for (const gender of ["female", "male"] as const) {
+      const accepting = profilerQuestionBank(gender).filter((q) =>
+        profilerQuestionAcceptsImage(q),
+      );
+      expect(accepting.map((q) => q.id)).toEqual([`${gender[0]}_humor`]);
+      for (const lang of ["en", "ru", "uk", "de", "pl"] as const) {
+        // "meme" latin / "мем" cyrillic — the word itself is the invitation.
+        expect(accepting[0].text[lang].toLowerCase(), `${gender}/${lang}`).toMatch(/mem|мем/);
+      }
+    }
+  });
+
+  it("treats a question without an explicit image policy as text-only", () => {
+    expect(profilerQuestionAcceptsImage(profilerQuestionById("f_chronotype")!)).toBe(false);
   });
 
   it("returns empty for unknown gender", () => {

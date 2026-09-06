@@ -1,380 +1,139 @@
-> **Product invariants and user flow** live in [PRODUCT_SPEC.md](PRODUCT_SPEC.md).
-> **System architecture, data ownership, and API topology** live in [ARCHITECTURE.md](ARCHITECTURE.md).
-> **The isolated demo bot** lives in [DEMO_MODE.md](DEMO_MODE.md).
-> **Production deploy/runbook** lives in [deploy.md](deploy.md).
+# Gennety Dating — Project Operating Guide
 
-## Obsidian Memory Protocol
+Telegram-first AI matchmaking: the bot runs onboarding, matches a pair blind,
+negotiates a real venue, and hands the date off to a Mini App (plus a native
+iOS client on the same `/v1/*` API).
 
-This repo is indexed in the local Obsidian vault as part of Gennety Dating.
+**This is the single entry point for every coding agent** — the cross-tool
+`AGENTS.md` standard, deliberately not duplicated as `CLAUDE.md`. It is the only
+always-loaded document; everything else is read on demand from `docs/`.
 
-Before meaningful implementation work, read:
-- `/Users/pro/Documents/Obsidian Vault/Projects/Project Registry.md`
-- `/Users/pro/Documents/Obsidian Vault/Projects/Gennety Dating/Project Brief.md`
+> **Do not create a `CLAUDE.md`.** Claude Code discovers `AGENTS.md` natively, and
+> a second root instruction file is exactly the drift this layout removes. If a
+> tool ever needs the Claude-specific name, make it a one-line `@AGENTS.md`
+> pointer — never a copy. Same rule for `@imports`: do not add any here. Six of
+> them are what pulled 923k tokens into every session before 2026-09-01.
 
-After meaningful implementation, update Obsidian when relevant:
-- `Projects/Gennety Dating/Sessions/` for session summaries
-- `Projects/Gennety Dating/Changelogs/` for shipped behavior, UX, API, deploy, or user-facing changes
-- `Projects/Gennety Dating/ADRs/` for architecture, product strategy, data model, privacy, matching, or core assumption decisions
+## Stack
 
-Do not store secrets, raw env values, private keys, or sensitive user data in Obsidian.
-
-## Purpose
-
-This file is the operating manual for coding agents working in this repo. It
-should describe how to work effectively, not re-explain implementation details
-that are already obvious from code.
-
-When prose and code disagree:
-1. Treat code, tests, Prisma schema, and runtime config as the implementation
-   source of truth.
-2. Treat PRODUCT_SPEC.md as the source of truth for product invariants.
-3. Report the mismatch before making behavior-changing assumptions.
-
-## Current Stack
-
-- **Bot / backend process**: Node.js 20+, TypeScript, grammY, Express.
-- **Telegram Mini App**: Vite + TypeScript using Telegram WebApp globals. It is
-  currently a small vanilla TS app, not a React app.
-- **Video workspace**: Remotion + React in `apps/video` for local Studio preview
-  and programmatic video rendering. It is not part of the production bot or
-  Mini App runtime.
-- **Mobile surface**: the public `/v1/*` API, consumed by the native SwiftUI
-  app in the separate `Gennety-iOS` repo (`~/Desktop/Gennety-iOS`; its
-  OpenAPI contract is `openapi/gennety-v1.yaml` here). The legacy Expo
-  `mobile-handoff/` components were removed 2026-07-18.
-- **Database**: PostgreSQL + pgvector through Prisma (`packages/db`).
-- **AI / media / verification**: OpenAI, AWS Rekognition (Face Liveness for
-  identity + CompareFaces/moderation for media; replaced Persona 2026-07-26), Supabase
-  Storage, Google Places, Expo push.
-- **Shared package**: `packages/shared` for constants, types, i18n, and prompts.
-- **Workspace**: pnpm workspaces.
-
-Use official Telegram docs when changing Bot API or Mini App behavior:
-
-- https://core.telegram.org/bots/api
-- https://core.telegram.org/bots/webapps
+Node 20 + TypeScript · grammY · Express · Vite Mini App (vanilla TS) ·
+PostgreSQL + pgvector via Prisma · pnpm workspaces · OpenAI · AWS Rekognition ·
+Supabase Storage · Google Places · Remotion (`apps/video`, not production).
 
 ## Commands
 
-- Install: `pnpm install`
-- Dev bot: `pnpm dev:bot`
-- Dev Mini App: `pnpm dev:webapp`
-- Dev video Studio: `pnpm dev:video`
-- Render video: `pnpm render:video`
-- Build all: `pnpm build`
-- Lint all: `pnpm lint`
-- Test all: `pnpm test`
-- Typecheck all: `pnpm typecheck`
-- Dev DB up/down: `pnpm dev:db:up`, `pnpm dev:db:down`
-- Dev DB push/studio/reset: `pnpm dev:db:push`, `pnpm dev:db:studio`,
-  `pnpm dev:db:reset`
-- Test DB up/down/push: `pnpm test:db:up`, `pnpm test:db:down`,
-  `pnpm test:db:push`
-
-Prefer file-scoped or package-scoped verification while iterating:
-
-- Bot test file: `pnpm --filter @gennety/bot exec vitest run src/path/file.test.ts`
-- Shared test file: `pnpm --filter @gennety/shared exec vitest run src/path/file.test.ts`
-- Webapp test file: `pnpm --filter @gennety/webapp exec vitest run src/path/file.test.ts`
-- Bot typecheck: `pnpm --filter @gennety/bot typecheck`
-- DB generate: `pnpm --filter @gennety/db db:generate`
-- DB push: `pnpm --filter @gennety/db db:push`
-
-## Project Map
-
-```
-/
-├── apps/
-│   ├── bot/          # grammY bot, Express public/admin APIs, workers
-│   ├── video/        # Remotion Studio, compositions, and local renders
-│   └── webapp/       # Vite Telegram Calendar Mini App
-├── packages/
-│   ├── db/           # Prisma schema, client exports, DB helpers
-│   └── shared/       # constants, i18n, types, AI prompts
-├── scripts/          # local/deploy helper scripts
-├── AGENTS.md
-├── PRODUCT_SPEC.md
-├── ARCHITECTURE.md
-└── deploy.md
+```bash
+pnpm install
+pnpm dev:bot            # bot + APIs        pnpm dev:webapp   # Mini App
+pnpm build              pnpm lint           pnpm test         pnpm typecheck
+pnpm dev:db:up          pnpm dev:db:push    pnpm dev:db:studio
+# scope while iterating — faster and quieter:
+pnpm --filter @gennety/bot exec vitest run src/path/file.test.ts
+pnpm --filter @gennety/bot typecheck
+pnpm --filter @gennety/db db:push
 ```
 
-## Feature Workflow
+## Repository map
 
-1. Read the existing flow before editing. Start from routes/handlers, then
-   services, then shared constants/prompts, then tests.
-2. Identify whether the change affects product invariants, API contracts,
-   Prisma schema, env vars, cron/deploy behavior, or external services.
-3. Add or update focused tests first when behavior changes.
-4. Implement the smallest change that fits existing boundaries and naming.
-5. Run the narrowest useful tests/typecheck, then broaden only if risk justifies it.
-6. Do the documentation impact check described below.
-
-Avoid new abstractions unless they remove real duplication or protect a clear
-contract. Do not add dependencies without approval.
-
-## Bug Fix Workflow
-
-1. Reproduce the bug with a failing test, fixture, or narrow command when feasible.
-2. Find the root cause; avoid patching only the visible symptom.
-3. Check adjacent flows that share the same service, callback prefix, cron, or DB field.
-4. Add regression coverage for the failing behavior.
-5. Keep the patch small and avoid unrelated cleanup.
-
-## Review Workflow
-
-When asked to review, lead with findings, ordered by severity, with file/line
-references. Focus on:
-
-- Product invariant violations from PRODUCT_SPEC.md.
-- Trust boundary mistakes: Telegram initData, JWT, liveness session verdicts
-  (never a client claim), admin bearer auth.
-- Database safety: Prisma schema drift, raw SQL, vector indexes, cascade behavior.
-- Matchmaking invariants: no repeated pair, blind decision, no in-app user chat.
-- Verification bypasses: corporate email, liveness, face-match, skip penalties.
-- Worker side effects: cron idempotency, duplicate DMs, quiet hours, rate limits.
-- Mobile parity: does the change touch the `/v1/*` JWT surface or a product
-  flow the iOS app consumes? Spec updated same-commit; Telegram-only scope
-  explicit; channel-aware notifications (see "Two Clients, One Backend").
-- Missing tests for changed behavior.
-
-If no issues are found, say that clearly and mention any remaining test or
-runtime risk.
-
-## Two Clients, One Backend (Telegram + native iOS)
-
-This backend serves TWO product surfaces: the Telegram bot/Mini Apps AND the
-native SwiftUI app (separate repo `~/Desktop/Gennety-iOS`, contract =
-`openapi/gennety-v1.yaml` here, docs there: AGENTS/PRODUCT_SPEC/DESIGN/
-ARCHITECTURE/ROADMAP/IMPLEMENTATION_PLAN). Both share one Postgres and ONE
-matching pool (`User.platform`). Rules for every behavior change:
-
-1. **Design for both surfaces by default.** A new product mechanic, flow
-   change, or invariant change must state how it behaves on Telegram AND on
-   iOS. "Telegram-only" is a legitimate answer, but it must be an explicit,
-   recorded decision (like the existing Telegram-only feature flags), never
-   an accident of where the code happened to be written.
-2. **`/v1/*` JWT surface = the iOS contract.** Any change to those route
-   shapes updates `openapi/gennety-v1.yaml` in the SAME commit
-   (`pnpm openapi:lint`), and is additive unless explicitly approved —
-   the App Store cannot roll back shipped clients (kill switch:
-   `IOS_MIN_SUPPORTED_APP_VERSION`).
-3. **Mobile-relevant work gets recorded in the iOS repo.** If a backend
-   change creates client work (new endpoint to adopt, changed flow, new
-   push/Live-Activity event), add or update the task in
-   `~/Desktop/Gennety-iOS/IMPLEMENTATION_PLAN.md` (its AGENTS.md living-docs
-   protocol applies there).
-4. **Shared services stay channel-aware.** Notifications go through
-   channel-aware helpers (Telegram DM and/or APNs push — see
-   `notifyParticipant` / `services/push.ts`); never assume a user is
-   reachable via Telegram (`platform` may be `mobile`, `telegramId` may be
-   synthetic negative).
-
-## Product Guardrails
-
-Always preserve these unless the user explicitly asks to redesign the product
-and confirms the tradeoff:
-
-- No user-to-user in-app chat.
-- Contact verification stays mandatory and track-aware (Registration v2):
-  university-email OTP for the student track, trusted Telegram-contact phone
-  for the general track; matching admits the union of the two rails. Never
-  waive the gate or let one track bypass the other's rail.
-- Onboarding steps and required data are not skipped.
-- Blind decision invariant: users do not learn the partner's decision before
-  making their own.
-- Liveness/face-match verification stays meaningful: mandatory (no skip, no
-  unverified activation) when `MANDATORY_VERIFICATION_ENABLED` is on; the
-  legacy soft-skip + unverified Elo penalty applies only while it is off /
-  for grandfathered pre-flip users. A liveness check that does not clearly pass
-  is retryable, never `rejected` — that status is reserved for a real detected
-  face in the photo set that isn't the verified person.
-- Scheduled-date confirmations use Telegram `date_time` entity where applicable.
-- Telegram Bot API calls should go through grammY abstractions unless the API
-  surface is not typed yet; raw Bot API usage must be isolated and justified.
-
-Ask first before:
-
-- Changing user flow or product rules.
-- Adding external APIs or dependencies.
-- Changing Prisma schema, vector indexes, or destructive DB behavior.
-- Switching workspace/build systems.
-- Touching production secrets or irreversible deploy steps.
-
-## Demo Mode Impact Check
-
-This backend runs a **second, isolated deployment**: the demo bot
-([DEMO_MODE.md](DEMO_MODE.md)), which walks investors and friends through the
-whole product from one account — no real partner, no real identity check, no
-real money, no waiting. It is the same source tree behind one flag
-(`DEMO_MODE_ENABLED`) that production never sets.
-
-Most changes need nothing. The demo driver re-derives state on every tick
-instead of hooking into the matching handlers, so ordinary flow changes are
-picked up for free. Ask the question only when a change adds or moves one of:
-
-1. **A gate** — anything a user must pass (verification, a contact rail, a
-   validation step). Does demo wave it through, and where?
-2. **A paid step** — demo cannot charge. Is there a mock rail, is it free, or
-   is the screen skipped? Say which, because "skipped" means an investor never
-   sees that surface.
-3. **A two-sided negotiation step** — the puppet needs a branch in
-   `apps/bot/src/demo/decide.ts`, or the demo dead-ends there.
-4. **How a match is created or advanced** — re-check the driver's state table
-   in DEMO_MODE.md still describes reality.
-
-When the answer is not obvious from the change itself, **ask the user how it
-should behave in demo mode** rather than assuming. Same shape as the "Two
-Clients, One Backend" rule above, which forces the equivalent question for iOS.
-
-Two hard rules, not judgment calls:
-
-- **No demo-only table or column in `packages/db/prisma/schema.prisma`.** The
-  schema is shared, so it would ship to the production database. Demo
-  bookkeeping that cannot be derived from real product state lives in memory.
-- **Demo behavior stays inside `apps/bot/src/demo/`**, reached from production
-  modules only through a single commented `if (DEMO_MODE_ENABLED)`. If a change
-  needs more than that, it needs a design conversation first.
-
-## Documentation Impact Check
-
-After any code change, check whether docs need updates. Update docs only when
-the change affects:
-
-- Product invariants or major user flow.
-- Architecture boundaries, data ownership, or external integrations.
-- Public/admin API contracts.
-- Prisma schema, env vars, cron schedules, deployment, or rollback behavior.
-- Agent workflow rules in this file.
-
-Do not document local implementation details just because code changed. If no
-docs are affected, say `Docs unaffected` in the final response or PR notes.
-
-### DECISIONS.md — the context rule (MANDATORY, every session)
-
-Only files cross a session boundary; the conversation does not. So anything
-that would otherwise live only in chat MUST land in
-[DECISIONS.md](DECISIONS.md) — **in the same turn and the same commit as the
-work**, whatever the task:
-
-- a product decision the founder made in conversation (including "no, we are
-  not doing that");
-- a change of my own mind mid-task;
-- a deviation from the plan — different scope, approach, or order;
-- scope deliberately left undone, with the reason;
-- a document found to disagree with the code.
-
-This is a separate rule, not a special case of the impact check above.
-PRODUCT_SPEC and ARCHITECTURE record HOW the product works; DECISIONS.md
-records WHY it is that way and what was rejected. The second does not follow
-from the first, and it is the one that gets lost.
-
-**Read DECISIONS.md before starting a task.** An entry there can override the
-plan or a runbook block: the specs state intent, the journal states the latest
-decision. On conflict the journal wins, and the disagreement is resolved by
-editing the spec in the same turn.
-
-Client-side decisions go in the iOS repo's DECISIONS.md, under its rules.
-
-## Post-Implementation Git Workflow
-
-**Standing rule (single-branch journal — see CLAUDE.md): commit and push after
-EVERY change, no matter how small, before ending your turn.** This is durable,
-pre-authorized — do not ask first. Work directly on `main`; never create
-branches. The GitHub remote is a transparent, rollback-able log of each step, so
-the working tree must not accumulate mixed, hard-to-attribute changes between
-sessions.
-
-After any turn that edits/adds/deletes files, complete the Git handoff:
-
-1. Run the relevant tests, typecheck, or build for the change. Use narrow
-   verification while iterating and broaden when risk justifies it.
-2. Complete the Documentation Impact Check above, and update Obsidian when the
-   change warrants a session, changelog, or ADR note.
-3. Check `git status` and `git diff` before staging.
-4. Stage the changes for the work just done. Never stage `.env`, secrets, raw
-   logs, build artifacts, `node_modules`, or local tooling (`.claude/`,
-   `.agents/`, `.gstack/` are gitignored).
-5. Commit with a clear, scoped message.
-6. `git push origin HEAD` (i.e. to `origin/main`).
-
-A turn that changed **no** files (pure analysis, a question, a read-only answer)
-has nothing to record — do not create an empty commit. Roll back with
-`git revert` (or `git reset` for unpushed work). If relevant tests/typecheck/
-build fail, still commit to keep the journal current but call out the failing
-state in the commit/PR notes (the user has opted into this) unless told
-otherwise. If push is blocked by authorization, a protected branch, or a
-non-fast-forward, stop and report the exact cause.
-
-## Deployment
-
-`deploy.md` is canonical for production. When asked to deploy, read it first
-and proceed from the documented hostnames, paths, PM2 service names, Caddy
-routes, env-file locations, and rollback steps.
-
-Ask only when access is blocked, required secrets are missing from documented
-locations, or the requested action is destructive beyond the documented rollback.
-
-Production and local development must never share `BOT_TOKEN`; Telegram long
-polling delivers each update to only one consumer.
-
-## Local Development
-
-One-time setup:
-1. Create a separate dev bot in BotFather.
-2. `cp .env.local.example .env.local` and fill in dev values.
-3. `pnpm dev:db:up`
-4. `pnpm dev:db:push`
-
-Daily loop:
-
-- `pnpm dev:bot`
-- `pnpm dev:webapp`
-- `pnpm dev:db:studio`
-
-Env loading order is `.env.local` then `.env`; `.env.local` wins because
-dotenv does not override already-set keys. Delete `.env.local` only when you
-intentionally want local code to use production-like config.
-
-All cron jobs in `apps/bot/src/index.ts` also fire locally. The dev DB usually
-has no users, so they are mostly no-ops.
-
-Mini App local dev needs HTTPS tunneling, then `WEBAPP_URL` must point to the
-tunnel and the dev bot must be configured in BotFather.
-
-## Style And Safety
-
-- TypeScript strictness is intentional: no `any` unless there is no reasonable
-  typed alternative.
-- Use named exports and existing functional patterns.
-- Keep shared package changes backward-compatible unless explicitly approved.
-- Keep user-facing strings in shared i18n where the surrounding flow is localized.
-- Use shared constants for limits, timings, and product thresholds.
-- Do not commit `.env`, secrets, `node_modules`, build artifacts, or raw logs
-  containing user data.
-- Respect dirty working trees. Never revert unrelated user changes.
-
-## gstack
-
-### Web Browsing
-
-Always use the `/browse` skill from gstack for web browsing tasks. Never use
-`mcp__claude-in-chrome__*` tools.
-
-### Available Skills
-
-- `/plan-ceo-review` - CEO/founder-mode plan review.
-- `/plan-eng-review` - engineering plan review.
-- `/review` - pre-landing PR review.
-- `/ship` - ship workflow.
-- `/browse` - headless browser QA and dogfooding.
-- `/qa` - systematic web app QA.
-- `/setup-browser-cookies` - import cookies into browse session.
-- `/retro` - retrospective over commit history and work patterns.
-
-### Troubleshooting
-
-If gstack skills are not working, rebuild them:
-
-```sh
-cd .claude/skills/gstack && ./setup
 ```
+apps/bot/       grammY bot, Express public + admin APIs, cron workers
+apps/webapp/    Vite Telegram Mini App
+apps/video/     Remotion Studio (not part of the production runtime)
+packages/db/    Prisma schema + client            packages/shared/  i18n, types, prompts, constants
+scripts/        local + deploy helpers            openapi/          /v1 contract for the iOS repo
+docs/           ALL project documentation (see routing below)
+```
+
+## Non-negotiable rules
+
+1. **Blind decision invariant** — a user never learns the partner's decision
+   before making their own.
+2. **No user-to-user in-app chat.** Proxy chat only, within its derived window.
+3. **Verification is mandatory and track-aware** (university-email OTP or
+   trusted-contact phone). Never waive the gate or let one track bypass the
+   other's rail. A liveness check that does not clearly pass is *retryable*,
+   never `rejected`.
+4. **Demo mode owes an answer.** Any change to a product flow, Mini App screen,
+   gate, or paid step must state its demo-mode behaviour. If it isn't obvious,
+   **ask** — see `docs/product/demo-mode.md`.
+5. **Ask first** before changing user flow or product rules, adding an external
+   API or dependency, changing the Prisma schema / vector indexes / anything
+   destructive to the DB, or touching production secrets or irreversible deploy
+   steps.
+6. **Secrets never land in the repo.** No `.env`, keys, tokens, or raw logs
+   containing user data — not in code, not in `docs/`.
+7. **Respect dirty working trees.** Never revert unrelated user changes.
+8. Strict TypeScript (no `any` without cause); user-facing strings live in
+   shared i18n; limits/timings/thresholds live in shared constants.
+
+## Git journal workflow (single-branch)
+
+Solo repo, no CI, no reviewers. Work on `main`; commit and push after **every**
+change, however small — `git add -A`, scoped `git commit`, `git push origin HEAD`.
+This is pre-authorised: do not ask. Only a turn that changed no file skips it.
+Never create branches; roll back with `git revert`. Full mechanics:
+`docs/operations/agent-operating-manual.md` → "Post-Implementation Git Workflow".
+
+## Documentation routing — read on demand, never up front
+
+Every file under `docs/` opens with a `<!-- WHEN_TO_READ: … -->` line. Trust it.
+
+| When you are… | Read |
+|---|---|
+| **Starting any task** | `docs/architecture/decisions/INDEX.md` — grep it for your topic. It holds decisions that exist nowhere in the code. |
+| Changing product behaviour | `docs/product/product-spec.md` (Core Principles) → then the one file in `docs/product/domains/` |
+| Onboarding / profiler | `docs/product/domains/onboarding.md` |
+| Bot menu / mobile API | `docs/product/domains/main-menu.md` |
+| Matching, scoring, pitch, ticket gate | `docs/product/domains/matching-engine.md` |
+| Scheduling, venue, Premium, referral, promo, rematch | `docs/product/domains/scheduling-and-monetization.md` |
+| The date itself, feedback, emergency | `docs/product/domains/date-lifecycle.md` |
+| Reports, strikes, blocking | `docs/product/domains/trust-and-safety.md` |
+| Living Canvas, Date Bump, Radar, Scratch Map | `docs/product/domains/living-canvas.md` |
+| Quiet hours, GDPR, languages, loading marks | `docs/product/domains/cross-cutting.md` |
+| A single feature (events, voice, type radar, ads…) | `docs/product/domains/<feature>.md` |
+| Writing any user-facing copy | `docs/product/voice-and-tone.md` |
+| Anything touching the demo bot | `docs/product/demo-mode.md` |
+| System shape, endpoints, topology | `docs/architecture/overview.md` |
+| Any table, enum, or column | `docs/architecture/data-model.md` |
+| Adding a route, cron, or worker | `docs/architecture/api-surface.md` |
+| External providers, proxies, rate limits | `docs/architecture/integrations.md` |
+| Venue-intent / market / purchase ownership | `docs/architecture/ownership.md` |
+| **Deploying or rolling back** | `docs/operations/deployment-runbook.md` (canonical — do not ask for hostnames/paths/service names) |
+| Hosts, paths, PM2, env + credential locations | `docs/operations/environments.md` |
+| "Is X deployed yet?" | `docs/operations/deploy-journal/INDEX.md`, backlog in `pending.md` |
+| Testing a release | `docs/operations/runbooks/` |
+| The full agent workflow (this file is the short version) | `docs/operations/agent-operating-manual.md` |
+| Something historical/superseded | `docs/archive/` |
+
+Full tree with descriptions: `docs/README.md`.
+
+**Recording a decision** (product call in chat, change of mind, deviation,
+deliberate non-work): append to the newest file in
+`docs/architecture/decisions/` and add a row to its `INDEX.md`. Mandatory —
+this is the rule that keeps the next session from rebuilding what we rejected.
+
+## Stale references in source comments
+
+Source comments and `.env.example` still name the pre-2026-09-01 documents.
+Resolve them here (the root stubs also redirect):
+
+`deploy.md` → `docs/operations/` · `PRODUCT_SPEC.md §X` → `docs/product/` ·
+`ARCHITECTURE.md` → `docs/architecture/` · `DECISIONS.md` →
+`docs/architecture/decisions/` · `DEMO_MODE.md` → `docs/product/demo-mode.md` ·
+`AGENTS.md` → this file for the rules, `docs/operations/agent-operating-manual.md`
+for the full procedure ·
+`*_PRODUCT_SPEC.md` / `AD_SPEND_TRACKING_DESIGN.md` → `docs/product/domains/` ·
+`VOICE.md` → `docs/product/voice-and-tone.md` ·
+`PROD_TEST_PLAN.md` / `E2E_TEST_PLAN.md` → `docs/operations/runbooks/`.
+
+## Context discipline
+
+- **Never read a `docs/` file whole "to see what's in it."** Use the
+  `WHEN_TO_READ` line, then grep, then read the matching section.
+- The two index files (`decisions/INDEX.md`, `deploy-journal/INDEX.md`) exist so
+  you can find one entry instead of loading a journal. Use them first.
+- Read in slices of ≤300 lines; prefer `grep -n` over opening a large file.
+- Never paste deploy logs, `pm2 logs`, SQL dumps, or full test output into a
+  document — link to the command that reproduces it.
+- Plan first for complex behaviour changes; confirm the plan before editing.
+  (Claude Code: Plan Mode. Other tools: say the plan, then wait.)

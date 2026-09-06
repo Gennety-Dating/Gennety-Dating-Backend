@@ -55,6 +55,75 @@ export async function getBalance(userId: string): Promise<number> {
   return user?.ticketBalance ?? 0;
 }
 
+export interface TicketHistoryEntry {
+  id: string;
+  delta: number;
+  reason: TicketReason;
+  bundleSize: number | null;
+  createdAt: Date;
+}
+
+export type TicketHistoryPage =
+  | { status: "ok"; entries: TicketHistoryEntry[]; hasMore: boolean }
+  | { status: "bad_cursor" };
+
+/**
+ * One page of the wallet's movements, newest first (native Tickets tab, TH1).
+ *
+ * **Money is deliberately not returned.** `TicketLedger.amountCents` carries
+ * what Apple charged in the buyer's STOREFRONT currency, and the column has no
+ * currency beside it — an App Store row bought in euro is indistinguishable
+ * from a dollar row. Rendering it would put a wrong currency symbol in front of
+ * a right number, which is worse than showing no price at all; the product's
+ * standing rule is that the only place a price appears is StoreKit's own
+ * `displayPrice`. What a wallet history actually has to answer is "where did my
+ * tickets go", and that is `delta` + `reason` + the date.
+ *
+ * `amountStars` is left out for the same reason from the other side: Stars are
+ * a Telegram rail, and a number of them means nothing on a screen that cannot
+ * spend or buy them.
+ */
+export async function listTicketHistory(args: {
+  userId: string;
+  limit: number;
+  /** Ledger row id to page from, exclusive. */
+  before?: string | undefined;
+}): Promise<TicketHistoryPage> {
+  const { userId, limit, before } = args;
+
+  if (before) {
+    // The cursor must be one of THIS user's rows: a foreign id would otherwise
+    // page through somebody else's wallet.
+    const owner = await prisma.ticketLedger.findUnique({
+      where: { id: before },
+      select: { userId: true },
+    });
+    if (!owner || owner.userId !== userId) return { status: "bad_cursor" };
+  }
+
+  // `id` breaks `createdAt` ties, which are real: settling both slots of a gate
+  // writes two rows inside one transaction. Ordering by the timestamp alone
+  // would let a page boundary fall between them and either repeat a row or
+  // drop one.
+  const rows = await prisma.ticketLedger.findMany({
+    where: { userId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { id: true, delta: true, reason: true, bundleSize: true, createdAt: true },
+    take: limit + 1,
+    ...(before ? { cursor: { id: before }, skip: 1 } : {}),
+  });
+
+  const hasMore = rows.length > limit;
+  return {
+    status: "ok",
+    entries: rows.slice(0, limit).map((row) => ({
+      ...row,
+      reason: row.reason as TicketReason,
+    })),
+    hasMore,
+  };
+}
+
 /**
  * Credit `count` tickets and append the matching ledger row atomically.
  * Returns the new balance.

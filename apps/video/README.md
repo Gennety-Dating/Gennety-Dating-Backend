@@ -77,7 +77,7 @@ pnpm exec remotion render GennetyHeroEnglish out/gennety-hero-en.mp4 --crf=16
 | Source | `src/hero/` — one component, both cuts |
 | Footage | `public/footage/` — 18 Ukrainian clips · `public/footage/en/` — 19 English |
 | Sources (uk) | `IMG_2588` / `2590` / `2604` / `2730` / `2731` / `2771` / `2772` / `2775`, outside the repo |
-| Sources (en) | `IMG_2790` / `2791` / `2794` / `2795` / `2796` / `2798` / `2802`, in `~/Desktop/EN mp4` |
+| Sources (en) | `IMG_2790` / `2791` / `2794` / `2795` / `2796` / `2798` / `2802`, in `~/Desktop/_TO_GDRIVE/gennety-media/EN mp4` |
 | Plan | [`video-production-plan.md`](video-production-plan.md) — the cut |
 | Camera | [`motion-audit.md`](motion-audit.md) — the motion system |
 
@@ -256,7 +256,7 @@ change lands on the match-decision cut, where the story jumps forward anyway.
 `public/footage/` holds trimmed clips, not sources. Regenerate them with
 `./scripts/extract-hero-footage.sh [source-dir]` for the Ukrainian cut and
 `./scripts/extract-hero-footage-en.sh [source-dir]` for the English one
-(defaults to `~/Desktop/EN mp4`). Two scripts on purpose: the Ukrainian one is a
+(defaults to `~/Desktop/_TO_GDRIVE/gennety-media/EN mp4`). Two scripts on purpose: the Ukrainian one is a
 record of a specific set of recordings, thirteen of which no longer exist and
 can never be regenerated, so interleaving a second language would make both
 unreadable and put irreplaceable windows one careless edit away. What they share

@@ -5,6 +5,7 @@ import { env } from "../../config.js";
 import { isStrongEventQrSecret } from "../../services/event-qr.js";
 import { redeemPerk, scanEventTicket } from "../../services/event-ticket.js";
 import { gatekeeperLimiter } from "../rate-limit.js";
+import { isUuid } from "../../utils/uuid.js";
 
 /**
  * `/gk/*` — the venue door portal (LAUNCH_EVENTS_PRODUCT_SPEC.md §8).
@@ -78,6 +79,30 @@ function featureOff(res: Response): boolean {
 export const gatekeeperRouter: Router = Router();
 
 gatekeeperRouter.use(gatekeeperLimiter);
+
+/**
+ * A malformed `:eventId` / `:ticketId` never reaches Prisma.
+ *
+ * Both are `@db.Uuid`, and Prisma answers a non-UUID with `P2023` rather than
+ * "no rows". `requireStaff` looks the event's staff tokens up by `eventId`, so
+ * that throw surfaced as `500 Internal server error` on an UNAUTHENTICATED
+ * request — a wrong answer, and a stack trace anyone could write to the log.
+ *
+ * `eventId` IS the auth scope, so it is guarded here, before `requireStaff`
+ * runs: a token that names no valid event opens nothing, hence 401.
+ * `ticketId` is checked inside the perk handler instead — it is scanned by
+ * already-authenticated staff with a person in front of them, so it takes the
+ * shape every other scan refusal on this surface takes (HTTP 200 and a named
+ * outcome; see the scan route's own note on why a refusal must not be a 4xx),
+ * and a param guard would hand that answer out before auth.
+ */
+gatekeeperRouter.param("eventId", (_req: Request, res: Response, next, value) => {
+  if (typeof value !== "string" || !isUuid(value)) {
+    res.status(401).json({ error: "invalid_token" });
+    return;
+  }
+  next();
+});
 
 /** Exchange a token for the event it opens — the portal's first screen. */
 gatekeeperRouter.post(
@@ -159,6 +184,12 @@ gatekeeperRouter.post(
     if (featureOff(res)) return;
     try {
       const { ticketId } = req.params as { ticketId: string };
+      // `EventTicket.id` is a `@db.Uuid`: a non-UUID makes Prisma throw P2023,
+      // which the catch below would report as a 500 at the door.
+      if (!isUuid(ticketId)) {
+        res.json({ ok: false, reason: "unknown_ticket" });
+        return;
+      }
       const result = await redeemPerk(ticketId, req.staff!.eventId);
       res.json(result);
     } catch (err) {

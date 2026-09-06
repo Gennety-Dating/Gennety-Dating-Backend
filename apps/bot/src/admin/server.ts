@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import { timingSafeEqual } from "node:crypto";
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
+import { SUPPORTED_CITY_KEYS, findMarketByCityKey } from "@gennety/shared";
 import { env } from "../config.js";
 import { runFaceMatchVerificationDefault } from "../services/verification-pipeline.js";
 import { buildWeeklyMatchesReport } from "../services/weekly-matches-report.js";
@@ -20,6 +21,7 @@ import { retentionRouter } from "./routes/retention.js";
 import { datesRouter } from "./routes/dates.js";
 import { verificationRouter } from "./routes/verification.js";
 import { citiesRouter } from "./routes/cities.js";
+import { cityWaitlistRouter } from "./routes/city-waitlist.js";
 import { onboardingFunnelRouter } from "./routes/onboarding-funnel.js";
 import { venueConcentrationRouter } from "./routes/venue-concentration.js";
 import { monetizationRouter } from "./routes/monetization.js";
@@ -178,6 +180,10 @@ app.use(retentionRouter);
 app.use(datesRouter);
 app.use(verificationRouter);
 app.use(citiesRouter);
+// The city catalog + how many people are waiting per unlaunched city. Kept
+// apart from `citiesRouter`, which distributes the EXISTING user base — nobody
+// on the waitlist has a matching city to be distributed by.
+app.use(cityWaitlistRouter);
 app.use(onboardingFunnelRouter);
 app.use(venueConcentrationRouter);
 app.use(monetizationRouter);
@@ -538,6 +544,12 @@ const USER_SELECT = {
       // embedding (vector(1536)) intentionally excluded — saves bandwidth
     },
   },
+  // The city waitlist (`CityWaitlistEntry`). A user has EITHER a dating city on
+  // their profile or a waitlist row, never both, so the list's City column
+  // reads one shape from two sources — see `cityForRow`.
+  cityWaitlistEntry: {
+    select: { cityKey: true, city: true, countryCode: true, createdAt: true },
+  },
 } as const;
 
 /**
@@ -625,6 +637,60 @@ function parsePagination(
   };
 }
 
+/**
+ * The City column, from whichever of the two places this user's city lives.
+ *
+ * `active` — a launched market on the profile: this person can be matched.
+ * `waitlist` — a `CityWaitlistEntry`: this person chose a city we have not
+ * opened, and registration stopped there. `null` — they have not reached the
+ * city step yet, which is a third thing and must not render as either.
+ *
+ * The status is derived from WHERE the row was found, not from the key: the
+ * two columns cannot both be set (`/city/select` clears one when it writes the
+ * other), so the source is the fact.
+ */
+function cityForRow(user: {
+  profile?: { homeCity: string | null; homeCityKey: string | null } | null;
+  cityWaitlistEntry?: { cityKey: string; city: string; countryCode: string } | null;
+}): {
+  cityKey: string;
+  city: string;
+  countryCode: string | null;
+  status: "active" | "waitlist";
+} | null {
+  const waiting = user.cityWaitlistEntry;
+  if (waiting) {
+    return {
+      cityKey: waiting.cityKey,
+      city: waiting.city,
+      countryCode: waiting.countryCode,
+      status: "waitlist",
+    };
+  }
+  const cityKey = user.profile?.homeCityKey;
+  if (!cityKey) return null;
+  const market = findMarketByCityKey(cityKey);
+  return {
+    cityKey,
+    city: market?.city ?? user.profile?.homeCity ?? cityKey,
+    countryCode: market?.countryCode ?? null,
+    // A legacy account registered before the market gate can hold an
+    // unlaunched key here. It is not on the waitlist — nobody put it there —
+    // but calling it `active` would claim we match this person, and we do not:
+    // `isMarketPending` is exactly this state, and the city-switch offer is its
+    // answer. Reporting it as `waitlist` keeps the column honest about who can
+    // be matched, which is the question the column exists to answer.
+    status: market ? "active" : "waitlist",
+  };
+}
+
+/**
+ * `?cityStatus=` filter values for the users list. `active` = has a launched
+ * dating city; `waitlist` = waiting for their city to open; `none` = has not
+ * answered the city step at all.
+ */
+const CITY_STATUS_FILTER = new Set(["active", "waitlist", "none"] as const);
+
 const VERIFICATION_STATUS_FILTER = new Set([
   "unverified",
   "pending",
@@ -661,11 +727,51 @@ app.get("/admin/users", async (req: Request, res: Response) => {
     const { limit, offset } = page;
 
     const verificationStatus = String(req.query.verificationStatus ?? "");
-    const baseWhere =
+    const baseWhere: Record<string, unknown> =
       verificationStatus &&
       VERIFICATION_STATUS_FILTER.has(verificationStatus as never)
         ? { verificationStatus: verificationStatus as never }
         : {};
+
+    // City filters. Both push into the SQL rather than filtering the page in
+    // memory, so `total` and the pagination stay true to the filter — an
+    // in-memory filter would show "12 of 480" and page through mostly-empty
+    // screens.
+    const cityStatus = String(req.query.cityStatus ?? "").trim();
+    if (cityStatus && !CITY_STATUS_FILTER.has(cityStatus as never)) {
+      res.status(400).json({
+        error: `cityStatus must be one of: ${[...CITY_STATUS_FILTER].join(", ")}`,
+      });
+      return;
+    }
+    // One city, whichever side it lives on. A launched key can only be on a
+    // profile and a waitlist key only on an entry, so this resolves to a single
+    // branch in practice — and stays correct if that ever stops being true,
+    // rather than quietly returning half the rows.
+    const cityKey = String(req.query.cityKey ?? "").trim().toLowerCase();
+
+    // Collected into `AND` rather than assigned onto `baseWhere` directly:
+    // status and city both want an `OR`, and the second assignment would
+    // silently drop the first filter instead of intersecting with it.
+    const cityConditions: Array<Record<string, unknown>> = [];
+    if (cityStatus === "waitlist") {
+      cityConditions.push({ cityWaitlistEntry: { isNot: null } });
+    }
+    if (cityStatus === "active") {
+      cityConditions.push({ profile: { homeCityKey: { in: [...SUPPORTED_CITY_KEYS] } } });
+    }
+    if (cityStatus === "none") {
+      cityConditions.push({ cityWaitlistEntry: { is: null } });
+      cityConditions.push({
+        OR: [{ profile: { is: null } }, { profile: { homeCityKey: null } }],
+      });
+    }
+    if (cityKey) {
+      cityConditions.push({
+        OR: [{ profile: { homeCityKey: cityKey } }, { cityWaitlistEntry: { cityKey } }],
+      });
+    }
+    if (cityConditions.length > 0) baseWhere.AND = cityConditions;
 
     // Класс здоровья не лежит в базе — он вычисляется, поэтому фильтр по нему
     // применяется в приложении. Неизвестное значение отклоняем, а не
@@ -721,6 +827,10 @@ app.get("/admin/users", async (req: Request, res: Response) => {
       return {
         ...u,
         telegramId: u.telegramId.toString(),
+        // The City column: name, key and whether this person can be matched
+        // there. Computed server-side so the dashboard never has to know which
+        // city keys are launched.
+        city: cityForRow(u),
         // Бейдж класса в списке. Причина здесь намеренно короткая — полное
         // объяснение живёт в `/admin/users/:id/health`.
         health: {
@@ -871,6 +981,10 @@ app.get("/admin/users/:id", async (req: Request, res: Response) => {
     res.json({
       ...user,
       telegramId: user.telegramId.toString(),
+      // Same shape and same source of truth as the list's City column, so the
+      // card and the row can never disagree about whether this person can be
+      // matched where they are.
+      city: cityForRow(user),
       matches: matches.map((m) => {
         const isA = m.userAId === id;
         const partner = isA ? m.userB : m.userA;

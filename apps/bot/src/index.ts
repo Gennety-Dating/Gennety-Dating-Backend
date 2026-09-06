@@ -60,6 +60,7 @@ import { retentionTick } from "./workers/retention.js";
 import { activityRollupTick } from "./workers/activity-rollup.js";
 import { venueConcentrationAlertTick } from "./workers/venue-concentration-alert.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
+import { prunePlaceCache } from "./services/place-cache.js";
 import { retryDueVenueSelections } from "./services/venue-intent-v2.js";
 import { guardedTick } from "./utils/guarded-tick.js";
 
@@ -997,7 +998,21 @@ bot.start({
     // catalog slowly rots and may show a venue that has since closed — invisible
     // in a walkthrough, and cheaper than the bill.
     if (DEMO_MODE_ENABLED) {
-      console.log("[cron] Venue re-validation NOT scheduled (demo mode)");
+      // The scan is suppressed, but the Places cache still has to expire: its
+      // 30-day ceiling is Google's terms, not our housekeeping, and the demo
+      // fills the table through the same picker and photo paths production
+      // does. So the demo keeps the one half of this tick that costs nothing
+      // and is not optional.
+      console.log("[cron] Venue re-validation NOT scheduled (demo mode) — place-cache prune only");
+      cron.schedule(
+        VENUE_REVALIDATION_CRON_SCHEDULE,
+        guardedTick("place-cache-prune", () =>
+          prunePlaceCache().then((pruned) => {
+            if (pruned > 0) console.log(`[place-cache] pruned ${pruned} expired place(s)`);
+          }),
+        ),
+        { timezone: CRON_TIMEZONE },
+      );
     } else {
       cron.schedule(
         VENUE_REVALIDATION_CRON_SCHEDULE,

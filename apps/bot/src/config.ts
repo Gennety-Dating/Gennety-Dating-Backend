@@ -484,7 +484,7 @@ export const env = {
   //   STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY ?? "",
   //   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET ?? "",
 
-  // ── Pre-date coordination (T-60m contact-exchange / anonymous proxy) ──
+  // ── Pre-date coordination (T-3h contact-exchange / anonymous proxy) ──
   /// Master flag for the pre-date coordination step. When false (default), no
   /// coordination offer is ever sent and the proxy relay is inert — the whole
   /// feature ships dark. When true, the female participant (or first tapper in
@@ -518,6 +518,27 @@ export const env = {
   /// Telegram Stars (XTR) price of one settled venue change — one flat price
   /// for every path (agreed board pick, express). Env-tunable at launch.
   VENUE_CHANGE_STARS: Number(process.env.VENUE_CHANGE_STARS ?? "150"),
+  /// How thin the curated pool has to be before a selection run is allowed to
+  /// buy Google Places candidates. `0` disables the live search outright.
+  ///
+  /// Google Places is documented as the FALLBACK to the first-party
+  /// `curated_venues` base (docs/architecture/integrations.md), and the V1 path
+  /// (`services/curated-venue.ts` → `resolveVenue`) implements exactly that.
+  /// V2 did not: it computed the eligible curated count and then ran the search
+  /// anyway, up to three categories, on every single assignment — the most
+  /// expensive request this product can issue, spent to widen a pool that
+  /// already held ~186 venues in Kyiv. This is that missing gate.
+  ///
+  /// A THRESHOLD rather than an on/off, because the two markets it has to serve
+  /// are opposite: a launched city with a seeded catalog never needs the
+  /// provider, and a city seeded yesterday needs it for every pair. 12 is a
+  /// pool the ranker, the geo ladder and the diversity layer can all still work
+  /// inside — below it they are choosing between a handful of venues, which is
+  /// the state the provider exists to rescue.
+  VENUE_PLACES_FALLBACK_MAX_CURATED: Math.max(
+    0,
+    Math.min(500, Number(process.env.VENUE_PLACES_FALLBACK_MAX_CURATED ?? "12")),
+  ),
 
   // ── Prime Time (paid evening band in the calendar) ───────────
   /// Master flag for PRIME_TIME_PRODUCT_SPEC.md. When false (default) nothing
@@ -540,6 +561,33 @@ export const env = {
   /// deploy.md forbids. The Mini App shows Stars, and Telegram names the real
   /// sum in its own payment sheet.
   PRIME_TIME_STARS: Number(process.env.PRIME_TIME_STARS ?? "50"),
+
+  // ── Short-video links (TikTok / Instagram Reels as a Profiler answer) ──
+  /// Master switch. Off by default because this is the first and only path in
+  /// the bot that opens a URL a user typed: with it off, a link is just text
+  /// again and no outbound request is ever made on user input.
+  SHORT_VIDEO_LINKS_ENABLED: process.env.SHORT_VIDEO_LINKS_ENABLED === "true",
+  /// Budget for the whole metadata + poster fetch, redirect hops included. The
+  /// user is watching a typing indicator, so this is a UX bound, not a network
+  /// one: past ~10s the honest move is to fall back and let them answer in
+  /// words. Clamped so a fat-fingered override cannot hang a handler.
+  SHORT_VIDEO_FETCH_TIMEOUT_MS: Math.min(
+    20_000,
+    Math.max(2_000, Number(process.env.SHORT_VIDEO_FETCH_TIMEOUT_MS ?? "8000")),
+  ),
+
+  // ── Meme reveal (§Phase 4 pre-date reveal) ──
+  /// Master switch for the pre-date meme card. Off by default: the card rides
+  /// the ice-breaker tick, which fires for every scheduled date, so a
+  /// half-configured deploy would otherwise start showing people's memes to
+  /// their matches immediately.
+  ///
+  /// There is no price env any more. This was a 25⭐ purchase; the money was
+  /// never the issue (a reveal costs a fraction of a cent) but charging one
+  /// person to see what another person said about themselves made the second
+  /// person inventory. Consent now lives in the humour question's own copy,
+  /// and the reveal is free.
+  MEME_REVEAL_ENABLED: process.env.MEME_REVEAL_ENABLED === "true",
 
   // ── Venue observability + context (VENUE_ENGINE_IMPROVEMENT_PLAN 5.3 / 6) ──
   /// Weekly "one venue is taking the city" alert into the founder ops DM.

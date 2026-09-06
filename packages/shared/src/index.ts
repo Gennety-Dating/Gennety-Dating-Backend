@@ -19,6 +19,8 @@ export {
   profilerQuestionText,
   profilerPriorityWeight,
   isRefreshableProfilerQuestion,
+  profilerQuestionAcceptsImage,
+  profilerImageQuestionIds,
   scoreProfilerAnswers,
   formatProfilerAnswersBlock,
 } from "./profiler-questions.js";
@@ -64,14 +66,21 @@ export { cityKeyToTimeZone, isValidTimeZone, DEFAULT_TIME_ZONE } from "./timezon
 export {
   SUPPORTED_MARKETS,
   SUPPORTED_CITY_KEYS,
+  WAITLIST_CITIES,
+  WAITLIST_CITY_RADIUS_KM,
+  CITY_CATALOG,
   DEFAULT_MARKET,
+  findCityByKey,
   findMarketByCityKey,
   isSupportedCityKey,
+  isWaitlistCityKey,
   searchMarkets,
+  searchCityCatalog,
   marketForCoordinates,
+  cityForCoordinates,
   distanceKm,
 } from "./markets.js";
-export type { Market } from "./markets.js";
+export type { City, CityStatus, Market, WaitlistCity } from "./markets.js";
 export { tileFor, tileBounds, isTile } from "./geohash.js";
 export type { TileBounds } from "./geohash.js";
 export { t, escapeMd, interpolate, monthsPhrase } from "./i18n.js";
