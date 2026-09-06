@@ -63,7 +63,7 @@ describe("buildProductPlaybook", () => {
     it("describes the proxy chat + contact share when ON", () => {
       const text = buildProductPlaybook({ ...ALL_OFF, coordination: true });
       expect(text).toContain("Enter chat");
-      expect(text).toContain("30 minutes before");
+      expect(text).toContain("1 hour before");
       expect(text).toMatch(/share my Telegram contact/i);
     });
 

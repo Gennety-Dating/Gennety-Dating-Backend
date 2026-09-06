@@ -100,7 +100,7 @@ export type MatchFlowState =
   | "awaiting_report_details"
   /**
    * Active in the anonymous pre-date proxy chat (Variant C). Entered ONLY by
-   * tapping the "Enter chat" button the cron sends at T-30m, never implicitly —
+   * tapping the "Enter chat" button the cron sends at T-1h, never implicitly —
    * so normal bot use (/menu, settings, photos) is never hijacked into the
    * relay. While in this state, plain-text messages are forwarded to the match;
    * `activeMatchId` holds the proxy match. Reset to `idle` on "Leave chat" or

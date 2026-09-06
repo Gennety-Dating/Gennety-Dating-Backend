@@ -19,7 +19,7 @@
  */
 
 export interface PlaybookFeatures {
-  /** `COORDINATION_FEATURE_ENABLED` — T-60m contact share + T-30m proxy chat. */
+  /** `COORDINATION_FEATURE_ENABLED` — T-3h contact share + T-1h proxy chat. */
   coordination: boolean;
   /** `VENUE_CHANGE_FEATURE_ENABLED` — female-exclusive one-shot venue swap. */
   venueChange: boolean;
@@ -230,8 +230,8 @@ export function buildProductPlaybook(
   preDateLines.push(`- ~5h before: 3 personalised ice-breakers (easy openers) and the emergency-cancel window opens.`);
   preDateLines.push(`- ~1.5h before: the female participant gets a short safety brief.`);
   if (features.coordination) {
-    preDateLines.push(`- ~1h before: a coordination offer (find-each-other options, below).`);
-    preDateLines.push(`- ~30 min before: the anonymous coordination chat opens (below).`);
+    preDateLines.push(`- ~3h before: a coordination offer (find-each-other options, below).`);
+    preDateLines.push(`- ~1h before: the anonymous coordination chat opens (below).`);
   }
   preDateLines.push(`These arrive as DMs on their own — the user doesn't request them from you.`);
   preDateLines.push("");
@@ -239,13 +239,13 @@ export function buildProductPlaybook(
   preDateLines.push(`- The first anchor is always the venue pin: open it in Maps from the date card and head to that exact place at the agreed time.`);
   if (features.coordination) {
     preDateLines.push(
-      `- About 1h before, we offer a way to coordinate on-site. Which options appear depends on who has a public Telegram @username: share my Telegram contact, request the partner's, or an anonymous in-app chat. The female participant is offered first (or, in a same-sex pair, whoever taps first).`,
+      `- About 3h before, we offer a way to coordinate on-site. Which options appear depends on who has a public Telegram @username: share my Telegram contact, request the partner's, or an anonymous in-app chat. The female participant is offered first (or, in a same-sex pair, whoever taps first).`,
     );
     preDateLines.push(
-      `- The anonymous chat opens automatically 30 minutes before the date and closes 2h after. Both get an "Enter chat" button; inside they can text things like "I'm at the table by the window" or "running 5 min late". It is text-only, every message carries a Report button, and it closes itself. It exists ONLY to help them find each other and sort last-minute logistics — not to chat before the date.`,
+      `- The anonymous chat opens automatically 1 hour before the date and closes 2h after. Both get an "Enter chat" button; inside they can text things like "I'm at the table by the window" or "running 5 min late". It is text-only, every message carries a Report button, and it closes itself. It exists ONLY to help them find each other and sort last-minute logistics — not to chat before the date.`,
     );
     preDateLines.push(
-      `- So when someone asks "how will we find each other?": tell them to head to the venue pin in Maps, and that ~30 min before the date an "Enter chat" button appears to coordinate the exact spot (which entrance, which table, "I'm in a green jacket"), plus, ~1h before, an option to share Telegram contacts. Be specific about the timing — check the context for whether it's open yet.`,
+      `- So when someone asks "how will we find each other?": tell them to head to the venue pin in Maps, and that ~1h before the date an "Enter chat" button appears to coordinate the exact spot (which entrance, which table, "I'm in a green jacket"), plus, ~3h before, an option to share Telegram contacts. Be specific about the timing — check the context for whether it's open yet.`,
     );
   } else {
     preDateLines.push(
