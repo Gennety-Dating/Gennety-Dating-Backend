@@ -20,6 +20,7 @@ import { callOpenAIText } from "./openai.js";
 import { streamDraftsToChat } from "./ai-stream.js";
 import { AI_EMOJI } from "./ai-emoji.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
+import { sendMemeCard } from "./meme-reveal.js";
 import { sendPushToUser } from "./push.js";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
 import {
@@ -309,6 +310,8 @@ export async function runDateLifecycleTick(
       drafts: string[],
       emergencyText: string,
       emergKb: InlineKeyboard,
+      viewerUserId: string,
+      lang: Language,
     ): Promise<void> => {
       if (tgId <= 0n) return;
       const chatId = Number(tgId);
@@ -324,6 +327,28 @@ export async function runDateLifecycleTick(
           err instanceof Error ? err.message : err,
         );
       }
+      // The meme reveal card (§Phase 4), between the starters and the emergency
+      // card. This is the one moment in the product where someone is actively
+      // thinking about what to say to this specific person, which is the only
+      // moment the card is worth anything.
+      //
+      // Deliberately a separate message rather than a button on the last
+      // starter: the ice-breakers are one uninterrupted gift, and a card can
+      // also simply not be sent, which is what happens for the majority of
+      // matches — a partner who typed their humour answer has no meme to show,
+      // and `sendMemeCard` returns false without a word.
+      //
+      // Never allowed to throw: this is a nicety sitting in the middle of a
+      // claimed, once-only lifecycle beat, and the emergency card below is a
+      // safety surface that must land regardless.
+      await sendMemeCard(api, chatId, viewerUserId, match.id, lang).catch(
+        (err: unknown) => {
+          console.warn(
+            `[date-lifecycle] meme card failed for ${tgId}:`,
+            err instanceof Error ? err.message : err,
+          );
+        },
+      );
       await api
         .sendMessage(chatId, emergencyText, { reply_markup: emergKb, parse_mode: "Markdown" })
         .catch((err: unknown) => {
@@ -335,8 +360,22 @@ export async function runDateLifecycleTick(
     };
 
     await Promise.all([
-      deliver(match.userA.telegramId, draftsA, t(langA, "emergencyUnlocked"), emergKbA),
-      deliver(match.userB.telegramId, draftsB, t(langB, "emergencyUnlocked"), emergKbB),
+      deliver(
+        match.userA.telegramId,
+        draftsA,
+        t(langA, "emergencyUnlocked"),
+        emergKbA,
+        match.userA.id,
+        langA,
+      ),
+      deliver(
+        match.userB.telegramId,
+        draftsB,
+        t(langB, "emergencyUnlocked"),
+        emergKbB,
+        match.userB.id,
+        langB,
+      ),
     ]);
 
     // The native card starts at the same gate as the ice-breakers — push-to-
