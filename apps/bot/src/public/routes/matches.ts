@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth-middleware.js";
+import { isUuid } from "../../utils/uuid.js";
 import { getBotApi } from "../server.js";
 import { blockMatchPartner } from "../../services/user-block.js";
 import { agentTextLimiter } from "../rate-limit.js";
@@ -39,8 +40,32 @@ export const matchesRouter: Router = Router();
 
 matchesRouter.use(requireAuth);
 
+/**
+ * Refuse a malformed `:id` before any handler runs.
+ *
+ * `Match.id` is a `@db.Uuid`, and a non-UUID string does not read as "no such
+ * match" to Prisma — it throws `P2023` ("Error creating UUID"). Nothing in this
+ * router caught that, so `GET /v1/matches/x/venue-intent` answered `500
+ * Internal server error` and wrote a stack trace to the log, for what is only
+ * ever a caller's mistake. Thirteen routes here take an `:id`; `router.param`
+ * covers all of them at once and, because it keys on the NAME, leaves the
+ * sibling `/current` (which declares no `:id`) untouched.
+ *
+ * 404 rather than 400 for the same reason the handlers below answer 404 for a
+ * match that exists but is not the caller's: the surface never distinguishes
+ * "no such match" from "not yours".
+ */
+matchesRouter.param("id", (req: Request, res: Response, next, value) => {
+  if (typeof value !== "string" || !isUuid(value)) {
+    res.status(404).json({ error: "Match not found" });
+    return;
+  }
+  next();
+});
+
 // Express 5 types `req.params[k]` as `string | string[]` to support the
-// `foo[bar]` syntax. Our routes use plain `/:id`, so coerce to string.
+// `foo[bar]` syntax. Our routes use plain `/:id`, so coerce to string —
+// the shape itself is already guaranteed by the `param` guard above.
 function paramId(req: Request): string {
   const raw = req.params.id;
   return typeof raw === "string" ? raw : "";

@@ -37,6 +37,33 @@ const ALLOWED_IMAGE_MIME = new Set([
 ]);
 
 /**
+ * Is this a storage object key we are willing to put into a Supabase URL?
+ *
+ * Every key this module mints has the same shape — `{userId}/{timestamp}.{ext}`
+ * — so the predicate is a whitelist rather than a blacklist: slash-separated
+ * segments of `[A-Za-z0-9._-]`, no empty segment, and no `.`/`..` segment.
+ *
+ * It exists because the object key is interpolated into the request URL, and
+ * `fetch` parses that URL with the WHATWG algorithm, which COLLAPSES dot
+ * segments before the request goes out. So `a/../b` addresses `b`: any caller
+ * that decided "this key is yours" by testing a prefix has been walked past.
+ * The admin image proxy already refuses `..` on exactly this reasoning
+ * (`admin/server.ts` → `SUPABASE_PATH_RE`); this is that rule, applied once at
+ * the place the URL is actually built, so no future caller can miss it.
+ *
+ * Callers get the module's usual failure shape (`null`/`false`) rather than a
+ * throw — a refused key is indistinguishable from a missing object, which is
+ * the right answer to give someone probing for one.
+ */
+export function isSafeStorageObjectPath(path: string): boolean {
+  if (!path || path.length > 512) return false;
+  const segments = path.split("/");
+  return segments.every(
+    (segment) => segment !== "" && segment !== "." && segment !== ".." && /^[A-Za-z0-9._-]+$/.test(segment),
+  );
+}
+
+/**
  * Normalize a caller/upstream-supplied MIME into a known, ASCII-safe image
  * content-type. Strips parameters (`image/jpeg; charset=binary` → `image/jpeg`),
  * lower-cases, maps the `image/jpg` alias to `image/jpeg`, and falls back to
@@ -103,6 +130,7 @@ export async function uploadSelfie(
  */
 export async function downloadSelfie(path: string): Promise<Buffer | null> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  if (!isSafeStorageObjectPath(path)) return null;
 
   const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_SELFIE_BUCKET}/${path}`;
   try {
@@ -180,6 +208,7 @@ export async function uploadProfilePhoto(
  */
 export async function downloadProfilePhoto(path: string): Promise<Buffer | null> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  if (!isSafeStorageObjectPath(path)) return null;
 
   const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_PHOTO_BUCKET}/${path}`;
   try {
@@ -363,6 +392,7 @@ export async function createVoicePromptSignedUrl(
 /** Download a stored voice prompt (validation, or minting a Telegram file_id). */
 export async function downloadVoicePrompt(path: string): Promise<Buffer | null> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  if (!isSafeStorageObjectPath(path)) return null;
   const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_VOICE_BUCKET}/${path}`;
   try {
     const res = await fetch(url, {
@@ -379,6 +409,7 @@ export async function downloadVoicePrompt(path: string): Promise<Buffer | null> 
 /** Download a private chat attachment for server-side validation/copying. */
 export async function downloadChatImage(path: string): Promise<Buffer | null> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  if (!isSafeStorageObjectPath(path)) return null;
 
   const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_CHAT_BUCKET}/${path}`;
   try {
@@ -416,6 +447,7 @@ export async function deleteStorageObject(
   path: string,
 ): Promise<boolean> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return false;
+  if (!isSafeStorageObjectPath(path)) return false;
 
   const url = `${env.SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
   try {
@@ -490,6 +522,7 @@ async function createSignedUrl(
   expiresInSeconds: number,
 ): Promise<string | null> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  if (!isSafeStorageObjectPath(path)) return null;
 
   const url = `${env.SUPABASE_URL}/storage/v1/object/sign/${bucket}/${path}`;
   const res = await fetch(url, {

@@ -137,7 +137,7 @@ export interface SerializedMatch {
   partnerVibeSubmitted: boolean;
   safetyBriefAck: boolean;
   /**
-   * The §Phase 4 anonymous chat window for this pair — T-30m and T+2h — or
+   * The §Phase 4 anonymous chat window for this pair — T-1h and T+2h — or
    * null when there is none (feature off, or the pair coordinates another
    * way). It is what tells the date hub whether to offer the entry at all,
    * so the client does not need a second request on every open.

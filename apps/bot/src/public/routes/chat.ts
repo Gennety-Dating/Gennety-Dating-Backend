@@ -106,7 +106,7 @@ chatRouter.post(
       res.status(413).json({ error: "Text too long" });
       return;
     }
-    if (imageUrl && !imageUrl.startsWith(`${req.userId!}/`)) {
+    if (imageUrl && !isOwnChatImagePath(imageUrl, req.userId!)) {
       res.status(403).json({ error: "Image not owned by caller" });
       return;
     }
@@ -207,3 +207,25 @@ chatRouter.get("/topics", async (req: Request, res: Response): Promise<void> => 
   const { topics, hasMore } = await listChatTopics(req.userId!, limit);
   res.json({ topics, hasMore });
 });
+
+/**
+ * Does this storage key belong to the caller?
+ *
+ * The whole key is matched, not just its first segment. A `startsWith` test was
+ * not an ownership check: the key is interpolated into the Supabase URL, and
+ * `fetch` collapses dot segments before the request leaves, so
+ * `<caller>/../<victim>/1750000000000.jpg` passed the prefix and then addressed
+ * the victim's object — readable back through `GET /v1/chat/history`'s signed
+ * URL, and copyable into the caller's own profile through the concierge's
+ * `attach_profile_photo` tool (which only checks that the MESSAGE row is
+ * theirs, and it is).
+ *
+ * The shape below is exactly what `uploadChatImage` mints, so nothing the
+ * product can legitimately produce is refused. `storage.ts` refuses a
+ * traversing key a second time at the URL, which is the layer that covers any
+ * future caller; this is the layer that gives the honest 403.
+ */
+function isOwnChatImagePath(path: string, userId: string): boolean {
+  const match = /^([0-9a-f-]{36})\/(\d{1,20})\.(jpg|png|webp)$/i.exec(path);
+  return match?.[1]?.toLowerCase() === userId.toLowerCase();
+}

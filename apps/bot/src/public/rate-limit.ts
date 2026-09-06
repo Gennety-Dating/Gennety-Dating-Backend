@@ -121,6 +121,33 @@ export const locationSearchLimiter = make({
 });
 
 /**
+ * Venue photo proxy — 400/hour per Telegram Mini App session.
+ *
+ * This endpoint spends money on every miss: each request it serves is one
+ * Google **Place Photo** call, and it had no limit of its own. The only ceiling
+ * was the 100/min-per-IP global floor, which a shared campus NAT already makes
+ * generous, and nothing at all bounded an authenticated user over an hour.
+ *
+ * 400 is well clear of honest use and cheap to reason about: a board is 21 card
+ * tiles plus up to 6 gallery shots per venue opened, so an hour of unusually
+ * thorough browsing is comfortably inside it, while a script pointed at the
+ * proxy stops at a known cost. Keyed on the session (the `tma` initData) rather
+ * than the IP, because that is the party actually being metered — and because
+ * the whole point is to bound one user, not one campus.
+ */
+export const photoProxyLimiter = make({
+  windowMs: 3_600_000,
+  limit: 400,
+  keyGenerator: (req): string => {
+    const initData = typeof req.query.tma === "string" ? req.query.tma : "";
+    return initData
+      ? `photo-proxy:${createHash("sha256").update(initData).digest("hex").slice(0, 24)}`
+      : `photo-proxy:${ipKey(req)}`;
+  },
+  message: { error: "Too many photo requests, try again later." },
+});
+
+/**
  * City lookup for the website's pre-registration form. The visitor has no
  * account yet, so this is keyed by IP alone — the ceiling is higher than the
  * Mini App's because a debounced search-as-you-type burns several calls per
