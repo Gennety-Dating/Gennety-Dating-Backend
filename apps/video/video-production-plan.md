@@ -642,7 +642,7 @@ a capture cannot be translated.
 Seven recordings, all 576×1280 @ 30 fps — the same geometry as the Ukrainian
 sources, so `cut()` applies to all of them and `cut_scaled()` (which existed
 only for the 576×1248 `IMG_2730`) is not needed. They live in
-`~/Desktop/EN mp4`, outside the repo.
+`~/Desktop/_TO_GDRIVE/gennety-media/EN mp4`, outside the repo.
 
 | File | Length | What it carries |
 |---|---|---|

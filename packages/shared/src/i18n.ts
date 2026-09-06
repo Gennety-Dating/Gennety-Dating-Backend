@@ -836,6 +836,8 @@ const translations = {
     profilerNextAck: "Got it…",
     profilerNextFormulating: "Thinking…",
     profilerRefusalAck: "Okay, I won't push. I'll ask again another time 💛",
+    profilerImageUnreadable: "Hmm, I couldn't quite make that one out 😅 Tell me in words?",
+    profilerLinkUnreadable: "I can't open that one — it may be private or gone 😅 Tell me in words, or send a picture?",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
     venueChangeButton: "🔄 Change venue",
@@ -860,6 +862,18 @@ const translations = {
       "The late evening times didn't open, so your Stars are back. The rest of the calendar is unchanged.",
     primeTimeRefundedDateOff:
       "The date is off, so the Stars you spent on the late evening times are back with you.",
+    // Meme unlock (§Phase 4 pre-date reveal). The offer is a teaser on purpose:
+    // it says a meme EXISTS and what knowing it is worth, never anything about
+    // the meme itself — a description in the offer would be the product, given
+    // away for free.
+    memeCardTeaser:
+      "🎭 One more thing about {name}.\n\nWhen I asked what actually makes them laugh, they didn't type an answer — they sent a meme. That says more about a person than any three sentences could.\n\nWant to see it before you meet?",
+    memeCardBtn: "🎭 Show me",
+    memeRevealCaption: "🎭 What makes {name} laugh:",
+    memeRevealSource: "▶️ Watch it in full:",
+    memeRevealFallback:
+      "🎭 I couldn't re-send the picture itself, so here it is in words — what {name} sent when asked what makes them laugh:\n\n_{description}_",
+    memeRevealGone: "That question got answered again in words, so there's no meme here any more.",
     venuePayPromptDm: "You two picked a new place for your date.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 See it and decide",
     // Caption under the wish-card PNG, which already shows the venue name and
@@ -1159,10 +1173,10 @@ const translations = {
 
     // --- Pre-date coordination (feature-flagged) ---
     coordOfferIntro:
-      "Your date is in about an hour 🕐\n\n" +
+      "Your date is in about three hours 🕐\n\n" +
       "Want a way to find each other at the spot — flag a delay, or say where you're sitting? Pick one:",
     coordOfferNoContactNote:
-      "Your date is in about an hour 🕐\n\n" +
+      "Your date is in about three hours 🕐\n\n" +
       "Heads up: your match has no public Telegram username, so direct contact isn't possible. You can still use a private anonymous chat through me:",
     coordBtnShareSelf: "📲 Share my Telegram",
     coordBtnRequestPartner: "🙋 Ask them for theirs",
@@ -1172,7 +1186,7 @@ const translations = {
       "{name}: {link}\n\nTap to say hi — see you there!",
     coordRequestAck: "On it — I've asked them. I'll ping you the moment they say yes ✨",
     coordPartnerAskApprove:
-      "Your date in ~1h would love a way to find you at the spot 💬\n\n" +
+      "Your date in ~3h would love a way to find you at the spot 💬\n\n" +
       "Share your Telegram with {name}?",
     coordPartnerBtnApprove: "✨ Share",
     coordPartnerBtnDecline: "Not now",
@@ -1180,7 +1194,7 @@ const translations = {
       "{name} shared their Telegram so you can find each other 💬\n\n" +
       "{link}\n\nTap to say hi — have a great date!",
     coordPartnerDeclined:
-      "Your match would rather not share contacts right now — no worries. The anonymous chat opens ~30 min before, if you'd like to use that instead.",
+      "Your match would rather not share contacts right now — no worries. The anonymous chat opens ~1h before, if you'd like to use that instead.",
     coordProxyOpenedEnterPrompt:
       "Your anonymous chat is open 🕶\n\n" +
       "Messages go through me — no contacts shared. Use it to find each other or flag a delay. It closes a couple hours after the date.",
@@ -1198,14 +1212,14 @@ const translations = {
     coordAlreadyChosen: "You've already picked a coordination option for this date.",
     coordSharedAck: "Done — they can find you now 💬 Have a great date!",
     coordProxyChosenAck:
-      "Got it 🕶 Your anonymous chat opens about 30 minutes before the date — I'll send you the button then.",
+      "Got it 🕶 Your anonymous chat opens about an hour before the date — I'll send you the button then.",
     // Coordination card copy (services/coordination-card). Rendered INSIDE the
     // PNG, so: no emoji (the bundled fonts have no color-emoji glyphs and satori
     // drops them), and each `Head` line stays short (~18 Latin / ~14 Cyrillic
     // chars) — the display faces are wide and a wrapped third line breaks the
     // card's vertical rhythm. `Shared`/`Declined` carry no `Sub`: their line is
     // the chat caption's job, where it is tappable and selectable.
-    coordCardOfferKicker: "ONE HOUR TO GO",
+    coordCardOfferKicker: "THREE HOURS TO GO",
     coordCardOfferHead1: "Find each",
     coordCardOfferHead2: "other.",
     coordCardOfferSub: "Pick how you'll connect at the spot — contacts, or an anonymous chat.",
@@ -2130,6 +2144,8 @@ const translations = {
     profilerNextAck: "Принято…",
     profilerNextFormulating: "Думаю…",
     profilerRefusalAck: "Окей, не буду допытываться. Спрошу в другой раз 💛",
+    profilerImageUnreadable: "Хм, не смог разобрать 😅 Расскажи словами?",
+    profilerLinkUnreadable: "Не могу открыть — видимо, приватное или удалено 😅 Расскажи словами или скинь картинкой?",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
     venueChangeButton: "🔄 Сменить место",
@@ -2151,6 +2167,14 @@ const translations = {
       "Поздние вечерние времена не открылись, звёзды вернулись к тебе. Остальной календарь без изменений.",
     primeTimeRefundedDateOff:
       "Свидание не состоится, поэтому звёзды за поздние вечерние времена вернулись к тебе.",
+    memeCardTeaser:
+      "🎭 Ещё кое-что про {name}.\n\nКогда я спросил, что по-настоящему смешит, ответа словами не было — прилетел мем. Это говорит о человеке больше, чем любые три предложения.\n\nХочешь увидеть его до встречи?",
+    memeCardBtn: "🎭 Показать",
+    memeRevealCaption: "🎭 Что смешит {name}:",
+    memeRevealSource: "▶️ Посмотреть целиком:",
+    memeRevealFallback:
+      "🎭 Саму картинку переслать не вышло, поэтому словами — вот что прислал(а) {name} на вопрос, что смешит:\n\n_{description}_",
+    memeRevealGone: "На этот вопрос ответили заново словами — мема здесь больше нет.",
     venuePayPromptDm: "Вы вместе выбрали новое место для свидания.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 Посмотреть и решить",
     venueWishText:
@@ -2393,10 +2417,10 @@ const translations = {
 
     // --- Pre-date coordination (feature-flagged) ---
     coordOfferIntro:
-      "Свидание примерно через час 🕐\n\n" +
+      "Свидание примерно через три часа 🕐\n\n" +
       "Хочешь способ найти друг друга на месте — предупредить об опоздании или сказать, где сидишь? Выбери:",
     coordOfferNoContactNote:
-      "Свидание примерно через час 🕐\n\n" +
+      "Свидание примерно через три часа 🕐\n\n" +
       "Важно: у твоего мэтча нет публичного Telegram-юзернейма, поэтому обмен контактами невозможен. Но можно использовать анонимный чат через меня:",
     coordBtnShareSelf: "📲 Поделиться своим Telegram",
     coordBtnRequestPartner: "🙋 Попросить его контакт",
@@ -2406,7 +2430,7 @@ const translations = {
       "{name}: {link}\n\nНапиши пару слов — до встречи!",
     coordRequestAck: "Готово — я спросил. Сообщу сразу, как только согласятся ✨",
     coordPartnerAskApprove:
-      "Твоему свиданию через ~1ч пригодится способ найти тебя на месте 💬\n\n" +
+      "Твоему свиданию через ~3ч пригодится способ найти тебя на месте 💬\n\n" +
       "Поделиться своим Telegram с {name}?",
     coordPartnerBtnApprove: "✨ Поделиться",
     coordPartnerBtnDecline: "Не сейчас",
@@ -2414,7 +2438,7 @@ const translations = {
       "{name} поделился своим Telegram, чтобы вы нашли друг друга 💬\n\n" +
       "{link}\n\nНапиши пару слов — хорошего свидания!",
     coordPartnerDeclined:
-      "Твой мэтч пока не хочет делиться контактами — это окей. За ~30 минут до встречи откроется анонимный чат, если захочешь.",
+      "Твой мэтч пока не хочет делиться контактами — это окей. Примерно за час до встречи откроется анонимный чат, если захочешь.",
     coordProxyOpenedEnterPrompt:
       "Анонимный чат открыт 🕶\n\n" +
       "Сообщения идут через меня — контакты не раскрываются. Используй его, чтобы найти друг друга или предупредить об опоздании. Закроется через пару часов после свидания.",
@@ -2432,8 +2456,8 @@ const translations = {
     coordAlreadyChosen: "Ты уже выбрал способ координации для этого свидания.",
     coordSharedAck: "Готово — теперь тебя смогут найти 💬 Хорошего свидания!",
     coordProxyChosenAck:
-      "Принято 🕶 Анонимный чат откроется примерно за 30 минут до свидания — тогда пришлю кнопку.",
-    coordCardOfferKicker: "ЧАС ДО ВСТРЕЧИ",
+      "Принято 🕶 Анонимный чат откроется примерно за час до свидания — тогда пришлю кнопку.",
+    coordCardOfferKicker: "ТРИ ЧАСА ДО ВСТРЕЧИ",
     coordCardOfferHead1: "Найдите",
     coordCardOfferHead2: "друг друга.",
     coordCardOfferSub: "Выбери, как связаться на месте — контакты или анонимный чат.",
@@ -3345,6 +3369,8 @@ const translations = {
     profilerNextAck: "Прийнято…",
     profilerNextFormulating: "Обмірковую…",
     profilerRefusalAck: "Окей, не наполягаю. Запитаю іншим разом 💛",
+    profilerImageUnreadable: "Хм, не зміг розібрати 😅 Розкажи словами?",
+    profilerLinkUnreadable: "Не можу відкрити — мабуть, приватне або видалене 😅 Розкажи словами або скинь картинкою?",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
     venueChangeButton: "🔄 Змінити місце",
@@ -3366,6 +3392,14 @@ const translations = {
       "Пізні вечірні часи не відкрилися, тож зірки повернулися до тебе. Решта календаря без змін.",
     primeTimeRefundedDateOff:
       "Побачення не відбудеться, тож зірки за пізні вечірні часи повернулися до тебе.",
+    memeCardTeaser:
+      "🎭 Ще дещо про {name}.\n\nКоли я запитав, що по-справжньому смішить, відповіді словами не було — прилетів мем. Це говорить про людину більше, ніж будь-які три речення.\n\nХочеш побачити його до зустрічі?",
+    memeCardBtn: "🎭 Показати",
+    memeRevealCaption: "🎭 Що смішить {name}:",
+    memeRevealSource: "▶️ Подивитися повністю:",
+    memeRevealFallback:
+      "🎭 Саму картинку переслати не вийшло, тому словами — ось що надіслав(ла) {name} на питання, що смішить:\n\n_{description}_",
+    memeRevealGone: "На це питання відповіли наново словами — мема тут більше немає.",
     venuePayPromptDm: "Ви разом обрали нове місце для побачення.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 Подивитися й вирішити",
     venueWishText:
@@ -3608,10 +3642,10 @@ const translations = {
 
     // --- Pre-date coordination (feature-flagged) ---
     coordOfferIntro:
-      "Побачення приблизно за годину 🕐\n\n" +
+      "Побачення приблизно за три години 🕐\n\n" +
       "Хочеш спосіб знайти одне одного на місці — попередити про запізнення чи сказати, де сидиш? Обери:",
     coordOfferNoContactNote:
-      "Побачення приблизно за годину 🕐\n\n" +
+      "Побачення приблизно за три години 🕐\n\n" +
       "Важливо: у твого метчу немає публічного Telegram-юзернейму, тож обмін контактами неможливий. Але можна скористатись анонімним чатом через мене:",
     coordBtnShareSelf: "📲 Поділитися своїм Telegram",
     coordBtnRequestPartner: "🙋 Попросити його контакт",
@@ -3621,7 +3655,7 @@ const translations = {
       "{name}: {link}\n\nНапиши пару слів — до зустрічі!",
     coordRequestAck: "Готово — я запитав. Повідомлю одразу, щойно погодяться ✨",
     coordPartnerAskApprove:
-      "Твоєму побаченню за ~1год знадобиться спосіб знайти тебе на місці 💬\n\n" +
+      "Твоєму побаченню за ~3год знадобиться спосіб знайти тебе на місці 💬\n\n" +
       "Поділитися своїм Telegram з {name}?",
     coordPartnerBtnApprove: "✨ Поділитися",
     coordPartnerBtnDecline: "Не зараз",
@@ -3629,7 +3663,7 @@ const translations = {
       "{name} поділився своїм Telegram, щоб ви знайшли одне одного 💬\n\n" +
       "{link}\n\nНапиши пару слів — гарного побачення!",
     coordPartnerDeclined:
-      "Твій метч поки не хоче ділитися контактами — це окей. За ~30 хвилин до зустрічі відкриється анонімний чат, якщо захочеш.",
+      "Твій метч поки не хоче ділитися контактами — це окей. Приблизно за годину до зустрічі відкриється анонімний чат, якщо захочеш.",
     coordProxyOpenedEnterPrompt:
       "Анонімний чат відкрито 🕶\n\n" +
       "Повідомлення йдуть через мене — контакти не розкриваються. Користуйся, щоб знайти одне одного чи попередити про запізнення. Закриється за пару годин після побачення.",
@@ -3647,8 +3681,8 @@ const translations = {
     coordAlreadyChosen: "Ти вже обрав спосіб координації для цього побачення.",
     coordSharedAck: "Готово — тепер тебе зможуть знайти 💬 Гарного побачення!",
     coordProxyChosenAck:
-      "Прийнято 🕶 Анонімний чат відкриється приблизно за 30 хвилин до побачення — тоді надішлю кнопку.",
-    coordCardOfferKicker: "ГОДИНА ДО ЗУСТРІЧІ",
+      "Прийнято 🕶 Анонімний чат відкриється приблизно за годину до побачення — тоді надішлю кнопку.",
+    coordCardOfferKicker: "ТРИ ГОДИНИ ДО ЗУСТРІЧІ",
     coordCardOfferHead1: "Знайдіть",
     coordCardOfferHead2: "одне одного.",
     coordCardOfferSub: "Обери, як звʼязатися на місці — контакти або анонімний чат.",
@@ -4534,6 +4568,8 @@ const deTranslations: TranslationTable = {
   profilerNextAck: "Notiert…",
   profilerNextFormulating: "Denke nach…",
   profilerRefusalAck: "Okay, ich hake nicht nach. Frage ein andermal 💛",
+  profilerImageUnreadable: "Hm, das konnte ich nicht erkennen 😅 Erzählst du es mir in Worten?",
+  profilerLinkUnreadable: "Das kann ich nicht öffnen — wohl privat oder gelöscht 😅 Erzähl es mir in Worten oder schick ein Bild?",
 
   // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
   venueChangeButton: "🔄 Ort ändern",
@@ -4555,6 +4591,14 @@ const deTranslations: TranslationTable = {
     "Die späten Abendzeiten wurden nicht geöffnet, deine Sterne sind zurück. Der restliche Kalender bleibt unverändert.",
   primeTimeRefundedDateOff:
     "Das Date findet nicht statt, deine Sterne für die späten Abendzeiten sind zurück.",
+  memeCardTeaser:
+    "🎭 Noch etwas über {name}.\n\nAuf die Frage, worüber sie wirklich lachen, kam keine Antwort in Worten — sondern ein Meme. Das sagt mehr über einen Menschen als drei Sätze.\n\nMöchtest du es vor dem Treffen sehen?",
+  memeCardBtn: "🎭 Zeig es mir",
+  memeRevealCaption: "🎭 Worüber {name} lacht:",
+  memeRevealSource: "▶️ Ganz ansehen:",
+  memeRevealFallback:
+    "🎭 Das Bild selbst konnte ich nicht weiterschicken, also in Worten — das hat {name} auf die Frage geschickt, worüber sie lachen:\n\n_{description}_",
+  memeRevealGone: "Diese Frage wurde noch einmal in Worten beantwortet — hier gibt es kein Meme mehr.",
   venuePayPromptDm: "Ihr habt zusammen einen neuen Ort für euer Date gewählt.\n\n📍 {venue}",
   venuePayOpenBtn: "📍 Ansehen und entscheiden",
   venueWishText:
@@ -4799,10 +4843,10 @@ const deTranslations: TranslationTable = {
 
   // --- Pre-date coordination ---
   coordOfferIntro:
-    "Dein Date ist in etwa einer Stunde.\n\n" +
+    "Dein Date ist in etwa drei Stunden.\n\n" +
     "Wie wollt ihr euch am Ort finden? Wähl eine Option:",
   coordOfferNoContactNote:
-    "Dein Date ist in etwa einer Stunde.\n\n" +
+    "Dein Date ist in etwa drei Stunden.\n\n" +
     "Dein Match hat keinen öffentlichen Telegram-Namen, direkter Kontakt geht also nicht. Über mich läuft aber ein anonymer Chat:",
   coordBtnShareSelf: "📲 Mein Telegram teilen",
   coordBtnRequestPartner: "🙋 Kontakt anfragen",
@@ -4812,7 +4856,7 @@ const deTranslations: TranslationTable = {
     "{name}: {link}\n\nKurz Hallo sagen — bis gleich!",
   coordRequestAck: "Gefragt — sobald eine Zusage da ist, sag ich dir Bescheid ✨",
   coordPartnerAskApprove:
-    "Dein Date in ~1 Std. sucht einen Weg, dich am Ort zu finden 💬\n\n" +
+    "Dein Date in ~3 Std. sucht einen Weg, dich am Ort zu finden 💬\n\n" +
     "Dein Telegram mit {name} teilen?",
   coordPartnerBtnApprove: "✨ Teilen",
   coordPartnerBtnDecline: "Jetzt nicht",
@@ -4820,7 +4864,7 @@ const deTranslations: TranslationTable = {
     "{name} hat Telegram geteilt, damit ihr euch findet 💬\n\n" +
     "{link}\n\nKurz Hallo sagen — viel Spaß beim Date!",
   coordPartnerDeclined:
-    "Dein Match teilt gerade lieber keine Kontakte — kein Stress. Der anonyme Chat öffnet ~30 Min. vorher, falls du den nutzen willst.",
+    "Dein Match teilt gerade lieber keine Kontakte — kein Stress. Der anonyme Chat öffnet ~1 Std. vorher, falls du den nutzen willst.",
   coordProxyOpenedEnterPrompt:
     "Dein anonymer Chat ist offen 🕶\n\n" +
     "Nachrichten laufen über mich, Kontakte bleiben privat. Gut, um euch zu finden oder kurz Bescheid zu geben. Schließt ein paar Stunden nach dem Date.",
@@ -4839,8 +4883,8 @@ const deTranslations: TranslationTable = {
   coordAlreadyChosen: "Du hast für dieses Date schon eine Option gewählt.",
   coordSharedAck: "Erledigt — jetzt findet dich dein Date 💬 Viel Spaß!",
   coordProxyChosenAck:
-    "Alles klar 🕶 Dein anonymer Chat öffnet etwa 30 Minuten vor dem Date — den Button schick ich dir dann.",
-  coordCardOfferKicker: "NOCH EINE STUNDE",
+    "Alles klar 🕶 Dein anonymer Chat öffnet etwa eine Stunde vor dem Date — den Button schick ich dir dann.",
+  coordCardOfferKicker: "NOCH DREI STUNDEN",
   coordCardOfferHead1: "Findet",
   coordCardOfferHead2: "einander.",
   coordCardOfferSub: "Wähle, wie ihr euch vor Ort erreicht — Kontakte oder anonymer Chat.",
@@ -5719,6 +5763,8 @@ const plTranslations: TranslationTable = {
   profilerNextAck: "Zapisane…",
   profilerNextFormulating: "Myślę…",
   profilerRefusalAck: "Okej, nie drążę. Zapytam innym razem 💛",
+  profilerImageUnreadable: "Hm, nie udało mi się tego odczytać 😅 Opowiesz słowami?",
+  profilerLinkUnreadable: "Nie mogę tego otworzyć — chyba prywatne albo usunięte 😅 Opowiesz słowami albo wrzucisz obrazek?",
 
   // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
   venueChangeButton: "🔄 Zmień miejsce",
@@ -5740,6 +5786,14 @@ const plTranslations: TranslationTable = {
     "Późne wieczorne godziny nie zostały otwarte, gwiazdki wróciły do Ciebie. Reszta kalendarza bez zmian.",
   primeTimeRefundedDateOff:
     "Randka się nie odbędzie, więc gwiazdki za późne wieczorne godziny wróciły do Ciebie.",
+  memeCardTeaser:
+    "🎭 Jeszcze jedno o {name}.\n\nKiedy zapytałem, co naprawdę śmieszy, nie było odpowiedzi słowami — przyleciał mem. To mówi o człowieku więcej niż trzy zdania.\n\nChcesz go zobaczyć przed spotkaniem?",
+  memeCardBtn: "🎭 Pokaż",
+  memeRevealCaption: "🎭 Co śmieszy {name}:",
+  memeRevealSource: "▶️ Zobacz w całości:",
+  memeRevealFallback:
+    "🎭 Samego obrazka nie udało się przesłać, więc słowami — oto co wysłał(a) {name} na pytanie, co go/ją śmieszy:\n\n_{description}_",
+  memeRevealGone: "Na to pytanie odpowiedziano ponownie słowami — nie ma tu już mema.",
   venuePayPromptDm: "Razem wybraliście nowe miejsce na randkę.\n\n📍 {venue}",
   venuePayOpenBtn: "📍 Zobacz i zdecyduj",
   venueWishText:
@@ -5988,10 +6042,10 @@ const plTranslations: TranslationTable = {
 
   // --- Pre-date coordination ---
   coordOfferIntro:
-    "Twoja randka jest za jakąś godzinę.\n\n" +
+    "Twoja randka jest za jakieś trzy godziny.\n\n" +
     "Jak chcecie się znaleźć na miejscu? Wybierz opcję:",
   coordOfferNoContactNote:
-    "Twoja randka jest za jakąś godzinę.\n\n" +
+    "Twoja randka jest za jakieś trzy godziny.\n\n" +
     "Twój match nie ma publicznej nazwy na Telegramie, więc bezpośredni kontakt odpada. Zostaje anonimowy czat przeze mnie:",
   coordBtnShareSelf: "📲 Udostępnij mój Telegram",
   coordBtnRequestPartner: "🙋 Poproś o kontakt",
@@ -6001,7 +6055,7 @@ const plTranslations: TranslationTable = {
     "{name}: {link}\n\nNapisz cześć — do zobaczenia!",
   coordRequestAck: "Pytanie poszło. Dam znać, gdy tylko będzie zgoda ✨",
   coordPartnerAskApprove:
-    "Twoja randka za ~1 godz. — przydałby się sposób, żeby Cię znaleźć na miejscu 💬\n\n" +
+    "Twoja randka za ~3 godz. — przydałby się sposób, żeby Cię znaleźć na miejscu 💬\n\n" +
     "Udostępnić Twój Telegram dla {name}?",
   coordPartnerBtnApprove: "✨ Udostępnij",
   coordPartnerBtnDecline: "Nie teraz",
@@ -6009,7 +6063,7 @@ const plTranslations: TranslationTable = {
     "{name} udostępnia swój Telegram, żebyście się znaleźli 💬\n\n" +
     "{link}\n\nNapisz cześć — udanej randki!",
   coordPartnerDeclined:
-    "Twój match woli teraz nie wymieniać się kontaktami — bez stresu. Anonimowy czat otwiera się ~30 min wcześniej, jeśli wolisz tak.",
+    "Twój match woli teraz nie wymieniać się kontaktami — bez stresu. Anonimowy czat otwiera się ~1 godz. wcześniej, jeśli wolisz tak.",
   coordProxyOpenedEnterPrompt:
     "Anonimowy czat jest otwarty 🕶\n\n" +
     "Wiadomości idą przeze mnie, kontakty zostają prywatne. Przyda się, żeby się znaleźć albo dać znać o spóźnieniu. Zamyka się parę godzin po randce.",
@@ -6028,8 +6082,8 @@ const plTranslations: TranslationTable = {
   coordAlreadyChosen: "Opcja dla tej randki jest już wybrana.",
   coordSharedAck: "Gotowe — teraz można Cię znaleźć 💬 Udanej randki!",
   coordProxyChosenAck:
-    "Jasne 🕶 Anonimowy czat otworzy się jakieś 30 minut przed randką — wtedy wyślę przycisk.",
-  coordCardOfferKicker: "GODZINA DO SPOTKANIA",
+    "Jasne 🕶 Anonimowy czat otworzy się jakąś godzinę przed randką — wtedy wyślę przycisk.",
+  coordCardOfferKicker: "TRZY GODZINY DO SPOTKANIA",
   coordCardOfferHead1: "Znajdźcie",
   coordCardOfferHead2: "się.",
   coordCardOfferSub: "Wybierz, jak się skontaktować na miejscu — kontakt albo anonimowy czat.",
