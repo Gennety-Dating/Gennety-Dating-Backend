@@ -1,14 +1,18 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 162 entries
+# Deploy journal index — 166 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING |  | ответы профайлера мемом и ссылкой на короткое видео | [pending](./pending.md) |
+| PENDING |  | предсвиданное раскрытие мема: бесплатно и по согласию | [pending](./pending.md) |
+| PENDING |  | guard'ы: форма UUID, владение картинкой чата, путь в хранилище | [pending](./pending.md) |
+| PENDING |  | координация с T-60м на T-3ч, прокси в T-1ч | [pending](./pending.md) |
 | PENDING |  | лист ожидания по городам: новая таблица `city_waitlist_entries` | [pending](./pending.md) |
-| PENDING |  | карта переезжает на векторные тайлы + MapLibre (ARCHITECTURE.md → | [pending](./pending.md) |
+| Deployed | 2026-09-06 | карта переезжает на векторные тайлы + MapLibre (ARCHITECTURE.md → | [pending](./pending.md) |
 | PENDING |  | фотография места возвращается на дата-карточку (PRODUCT_SPEC §3.7a, | [pending](./pending.md) |
 | PENDING |  | карта перестаёт быть в водяных знаках: CARTO требует API-ключ | [pending](./pending.md) |
 | PENDING |  | карточку типажа можно отменить, и двойной тап больше не отвечает | [pending](./pending.md) |
