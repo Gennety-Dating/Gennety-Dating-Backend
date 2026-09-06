@@ -1,3 +1,6 @@
+<!-- WHEN_TO_READ: You are configuring or debugging the Hermes analytics agent. This file IS the system prompt — copy it whole. Verified against the live production API 2026-08-15, re-audited 2026-08-29. -->
+<!-- SOURCE: HERMES_AGENT_PROMPT.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Hermes Agent — системный промпт (Gennety Dating)
 
 > **Один файл, целиком.** Скопируй всё ниже в system-prompt Hermes. Раньше это

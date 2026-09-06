@@ -1,7 +1,10 @@
+<!-- WHEN_TO_READ: You are working on Venue Change v2 — the paid multiplayer venue-reselection board and its premium tier. -->
+<!-- SOURCE: VENUE_CHANGE_PRODUCT_SPEC.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Спецификация: Смена места свидания v2 — «Выбираем место вместе»
 
 > **Статус: дизайн-снимок 2026-07-11. Полностью заменяет v1.**
-> **Живое описание фичи — [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7b**, оно ушло
+> **Живое описание фичи — [PRODUCT_SPEC.md](../product-spec.md) §3.7b**, оно ушло
 > вперёд этого документа (дедуп каталога по `placeId`, премиум-радиус 5 км,
 > резолв фото курируемых мест, полноэкранная галерея — всё это август 2026).
 > Этот файл — исходный дизайн-док, а не источник правды по текущему поведению.

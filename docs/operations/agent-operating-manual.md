@@ -1,7 +1,10 @@
-> **Product invariants and user flow** live in [PRODUCT_SPEC.md](PRODUCT_SPEC.md).
-> **System architecture, data ownership, and API topology** live in [ARCHITECTURE.md](ARCHITECTURE.md).
-> **The isolated demo bot** lives in [DEMO_MODE.md](DEMO_MODE.md).
-> **Production deploy/runbook** lives in [deploy.md](deploy.md).
+<!-- WHEN_TO_READ: You need the coding-agent workflow: feature/bugfix/review loops, commands, project map, product guardrails, the demo-mode impact check, the documentation impact check, or the git journal mechanics. The short version of the non-negotiable rules is already in the root AGENTS.md — read this for the full procedure. -->
+<!-- SOURCE: AGENTS.md (moved unchanged) — migrated 2026-09-01 -->
+
+> **Product invariants and user flow** live in [PRODUCT_SPEC.md](../product/product-spec.md).
+> **System architecture, data ownership, and API topology** live in [ARCHITECTURE.md](../architecture/overview.md).
+> **The isolated demo bot** lives in [DEMO_MODE.md](../product/demo-mode.md).
+> **Production deploy/runbook** lives in [deploy.md](deployment-runbook.md).
 
 ## Obsidian Memory Protocol
 
@@ -203,7 +206,7 @@ Ask first before:
 ## Demo Mode Impact Check
 
 This backend runs a **second, isolated deployment**: the demo bot
-([DEMO_MODE.md](DEMO_MODE.md)), which walks investors and friends through the
+([DEMO_MODE.md](../product/demo-mode.md)), which walks investors and friends through the
 whole product from one account — no real partner, no real identity check, no
 real money, no waiting. It is the same source tree behind one flag
 (`DEMO_MODE_ENABLED`) that production never sets.
@@ -253,7 +256,7 @@ docs are affected, say `Docs unaffected` in the final response or PR notes.
 
 Only files cross a session boundary; the conversation does not. So anything
 that would otherwise live only in chat MUST land in
-[DECISIONS.md](DECISIONS.md) — **in the same turn and the same commit as the
+[DECISIONS.md](../architecture/decisions/INDEX.md) — **in the same turn and the same commit as the
 work**, whatever the task:
 
 - a product decision the founder made in conversation (including "no, we are
@@ -277,7 +280,7 @@ Client-side decisions go in the iOS repo's DECISIONS.md, under its rules.
 
 ## Post-Implementation Git Workflow
 
-**Standing rule (single-branch journal — see CLAUDE.md): commit and push after
+**Standing rule (single-branch journal — see the root AGENTS.md): commit and push after
 EVERY change, no matter how small, before ending your turn.** This is durable,
 pre-authorized — do not ask first. Work directly on `main`; never create
 branches. The GitHub remote is a transparent, rollback-able log of each step, so

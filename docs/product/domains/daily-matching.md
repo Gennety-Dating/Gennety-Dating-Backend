@@ -1,9 +1,12 @@
+<!-- WHEN_TO_READ: ACTIVE MIGRATION. You are touching matching cadence, `DROP_CADENCE`, or the weekly->daily transition. Phases 0-6 shipped 2026-08-02; production still runs the `weekly` profile. Read section 3.1 ('Что осталось') for the remaining work — sections 1-2 are background only. -->
+<!-- SOURCE: DAILY_MATCHING_IMPLEMENTATION_PLAN.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Переход на ежедневный matching — план имплементации
 
 > ## СТАТУС НА 2026-08-09: каркас отгружен, осталась последняя миля
 >
 > **Фазы 0–6 уехали в прод 2026-08-02** (релиз «daily-cadence matching migration
-> groundwork», см. [deploy.md](deploy.md)). Прод работает на профиле `weekly`,
+> groundwork», см. [deploy.md](../../operations/deployment-runbook.md)). Прод работает на профиле `weekly`,
 > `DROP_CADENCE` в `/opt/gennety/.env` не задан. Проверено по коду 2026-08-09 —
 > сводка в §3.0.
 >
@@ -27,7 +30,7 @@
 >
 > ---
 >
-> Основание: [DAILY_MATCHING_MIGRATION_AUDIT.md](DAILY_MATCHING_MIGRATION_AUDIT.md).
+> Основание: [DAILY_MATCHING_MIGRATION_AUDIT.md](../../archive/daily-matching-migration-audit.md).
 > Решения D1–D4 приняты владельцем продукта 2026-07-30, остальные —
 > рекомендации ниже. Продуктовые инварианты (слепое решение, нет чата,
 > lifetime-ban пары, одна живая пара, обязательная верификация, контактные
@@ -46,7 +49,7 @@
 > рефандов — добавлен обязательный предохранитель в Фазу 5; (4)
 > `HERMES_AGENT_PROMPT.md` и `REMATCH_PRODUCT_SPEC.md` ошибочно числились
 > «не затронуты» — оба реально затронуты, добавлены в Фазу 8. Подробности:
-> [DAILY_MATCHING_MIGRATION_AUDIT.md](DAILY_MATCHING_MIGRATION_AUDIT.md).
+> [DAILY_MATCHING_MIGRATION_AUDIT.md](../../archive/daily-matching-migration-audit.md).
 
 ---
 
@@ -78,8 +81,8 @@
 
 | Константа | Файл | Кто читает |
 |---|---|---|
-| `MATCH_TTL_MS = 24h` | [`services/match-expiry.ts:36`](apps/bot/src/services/match-expiry.ts#L36) | **только** сам sweep, который реально гасит матч |
-| `PROPOSAL_TTL_MS = 24h` | [`utils/countdown-plate.ts:26`](apps/bot/src/utils/countdown-plate.ts#L26) | кнопка обратного отсчёта ([`proposal-countdown.ts:125`](apps/bot/src/workers/proposal-countdown.ts#L125)), дедлайн-нудж ([`match-nudge.ts:127,167`](apps/bot/src/workers/match-nudge.ts#L127)), текст питча ([`pitch.ts:497`](apps/bot/src/handlers/matching/pitch.ts#L497)), поле `expiresAt` для iOS ([`matches-service.ts:319`](apps/bot/src/public/matches-service.ts#L319)) |
+| `MATCH_TTL_MS = 24h` | [`services/match-expiry.ts:36`](../../../apps/bot/src/services/match-expiry.ts#L36) | **только** сам sweep, который реально гасит матч |
+| `PROPOSAL_TTL_MS = 24h` | [`utils/countdown-plate.ts:26`](../../../apps/bot/src/utils/countdown-plate.ts#L26) | кнопка обратного отсчёта ([`proposal-countdown.ts:125`](../../../apps/bot/src/workers/proposal-countdown.ts#L125)), дедлайн-нудж ([`match-nudge.ts:127,167`](../../../apps/bot/src/workers/match-nudge.ts#L127)), текст питча ([`pitch.ts:497`](../../../apps/bot/src/handlers/matching/pitch.ts#L497)), поле `expiresAt` для iOS ([`matches-service.ts:319`](../../../apps/bot/src/public/matches-service.ts#L319)) |
 
 Сегодня они совпадают случайно. **Правка одной из них разъезжает то, что
 пользователь видит, с тем, когда матч реально умирает** — причём разъезжается
@@ -91,7 +94,7 @@
 Ваш интент — «человек отвечает до следующего вечера, ~до 17:30, с запасом
 на то, чтобы попасть в следующий дроп» — правильный. Но `dispatchedAt + 23:30`
 его не даёт, потому что **`dispatchedAt` проставляется поштучно**: очередь
-рассылки идёт с шагом 2 с ([`dispatch-queue.ts:18`](apps/bot/src/services/dispatch-queue.ts#L18)),
+рассылки идёт с шагом 2 с ([`dispatch-queue.ts:18`](../../../apps/bot/src/services/dispatch-queue.ts#L18)),
 то есть 900-й по счёту матч отправляется через 30 минут после начала батча —
 и его дедлайн приходится ровно на 18:00 следующего дня, то есть на сам батч.
 Запас съеден, гонка вернулась. Плюс у разных людей дедлайны разъезжаются,
@@ -117,7 +120,7 @@ deadline = max(
   запас прочности.
 
 Дополнительно: sweep expiry становится **preflight внутри батча** (прецедент
-уже есть — preflight эмбеддингов, [`match-engine.ts:1751`](apps/bot/src/services/match-engine.ts#L1751)),
+уже есть — preflight эмбеддингов, [`match-engine.ts:1751`](../../../apps/bot/src/services/match-engine.ts#L1751)),
 поэтому исход перестаёт зависеть от того, чей крон выстрелил первым.
 
 `MIN_DECISION_MS` нужен только для питчей вне цикла (Rematch). При D8 = off
@@ -179,7 +182,7 @@ deadline = max(
 ### 1.3. Cooldown 24 ч полностью аннулирует D1 — это не отдельная задача, а часть той же
 
 `createProposedMatch` ставит `lastMatchedAt = now` в момент создания пары
-([`match-engine.ts:1164`](apps/bot/src/services/match-engine.ts#L1164)), то есть
+([`match-engine.ts:1164`](../../../apps/bot/src/services/match-engine.ts#L1164)), то есть
 ~18:00. Фильтр 7 требует `lastMatchedAt < now − 24ч`. На батче следующего дня
 в 18:00 отсечка = вчерашние 18:00, строгое `<` не выполняется.
 
@@ -296,8 +299,8 @@ D8 лишал: возможность взять ребматч **каждый �
 
 | | Что это | Где живёт |
 |---|---|---|
-| **Доступность** | может ли он купить прямо сейчас | `checkRematchEligibility` ([`services/rematch.ts`](apps/bot/src/services/rematch.ts)) |
-| **Оферта** | пишем ли мы ему об этом | `sendRematchOfferIfEligible` ([`handlers/matching/rematch.ts`](apps/bot/src/handlers/matching/rematch.ts)) |
+| **Доступность** | может ли он купить прямо сейчас | `checkRematchEligibility` ([`services/rematch.ts`](../../../apps/bot/src/services/rematch.ts)) |
+| **Оферта** | пишем ли мы ему об этом | `sendRematchOfferIfEligible` ([`handlers/matching/rematch.ts`](../../../apps/bot/src/handlers/matching/rematch.ts)) |
 
 Склеены они потому, что у Rematch **нет ни одной pull-точки входа** — по спеке
 «pain-triggered entry points only, no menu row». Единственный способ купить —
@@ -311,10 +314,10 @@ D8 лишал: возможность взять ребматч **каждый �
 | Поле | Кто читает | Что читается вместо |
 |---|---|---|
 | `rematchWindowMs` | `rematch.ts:141,162,257` ✅ | — |
-| `rematchMaxPerInterval` | **никто** | `env.REMATCH_MAX_PER_WEEK` ([`config.ts:545`](apps/bot/src/config.ts#L545)) |
-| `rematchCooldownMs` | **никто** | `env.REMATCH_COOLDOWN_HOURS` ([`config.ts:549`](apps/bot/src/config.ts#L549)) |
-| `rematchBlackoutMs` | **никто** | `env.REMATCH_PRE_BATCH_BLACKOUT_HOURS` ([`config.ts:558`](apps/bot/src/config.ts#L558)) |
-| `rematchGiftCapMs` | **никто** | `env.REMATCH_GIFT_CAP_DAYS` ([`config.ts:554`](apps/bot/src/config.ts#L554)) |
+| `rematchMaxPerInterval` | **никто** | `env.REMATCH_MAX_PER_WEEK` ([`config.ts:545`](../../../apps/bot/src/config.ts#L545)) |
+| `rematchCooldownMs` | **никто** | `env.REMATCH_COOLDOWN_HOURS` ([`config.ts:549`](../../../apps/bot/src/config.ts#L549)) |
+| `rematchBlackoutMs` | **никто** | `env.REMATCH_PRE_BATCH_BLACKOUT_HOURS` ([`config.ts:558`](../../../apps/bot/src/config.ts#L558)) |
+| `rematchGiftCapMs` | **никто** | `env.REMATCH_GIFT_CAP_DAYS` ([`config.ts:554`](../../../apps/bot/src/config.ts#L554)) |
 
 Четыре мёртвых поля закреплены тестом `cadence.test.ts:72-76`, поэтому выглядят
 живыми. Тот, кто переключит `DROP_CADENCE=daily`, разумно предположит, что
@@ -354,7 +357,7 @@ apologise weekly» — и хуже того, что оно запрещало: �
 доступность выносится на поверхности, которые пользователь открывает сам.
 
 **A3.1 — закреплённый баннер (главная).** В режиме «тихих дропов»
-([`status-banner-view.ts:101`](apps/bot/src/services/status-banner-view.ts#L101))
+([`status-banner-view.ts:101`](../../../apps/bot/src/services/status-banner-view.ts#L101))
 баннер уже показывает «я ищу — проверяю каждый вечер» + кнопку «открыть меню».
 Заменить кнопку на вход в ребматч для eligible-пользователя. Наследует бесплатно:
 
@@ -368,7 +371,7 @@ apologise weekly» — и хуже того, что оно запрещало: �
 Проверка уже существует одной функцией.
 
 **A3.2 — `open_screen` у консьержа.** Добавить `rematch` в `SCREEN_ENTRIES`
-([`menu-agent.ts:1094`](apps/bot/src/services/menu-agent.ts#L1094)). Класс
+([`menu-agent.ts:1094`](../../../apps/bot/src/services/menu-agent.ts#L1094)). Класс
 `open`: ничего не мутирует, отдаёт настоящий callback, который модель не может
 выдумать, гейтится флагом как `tickets`/`premium`. Раздел про Rematch в
 плейбуке уже есть — агент знает правило асимметрии (женщине не говорить). Даёт
@@ -383,13 +386,13 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
 
 ##### A4. Копирайт, который станет ложью
 
-[`product-playbook.ts:272`](apps/bot/src/services/product-playbook.ts#L272)
+[`product-playbook.ts:272`](../../../apps/bot/src/services/product-playbook.ts#L272)
 зашивает «Limits: 2 per week, and 24h between runs» текстом. После A1+A2 агент
 будет называть пользователю неверные лимиты. Вывести числа из конфига — тем же
 приёмом, каким там уже читаются цены (`TICKET_PRICE_CENTS` и соседние), а не
 переписать строку.
 
-[`product-playbook.ts:151`](apps/bot/src/services/product-playbook.ts#L151)
+[`product-playbook.ts:151`](../../../apps/bot/src/services/product-playbook.ts#L151)
 («about once a week») трогать **не нужно** — это про частоту уведомлений,
 которая остаётся недельной. Проверено, распространённая ошибка при беглом
 чтении.
@@ -404,7 +407,7 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
 логе старта». Файл уже содержит предупреждение о будущем `daily` — нужно
 довести до конца: расписание и обоснование.
 
-**B2. Founder-digest.** [`onboarding-funnel.ts:27`](apps/bot/src/admin/routes/onboarding-funnel.ts#L27)
+**B2. Founder-digest.** [`onboarding-funnel.ts:27`](../../../apps/bot/src/admin/routes/onboarding-funnel.ts#L27)
 считает неделя-к-неделе через плоский `WEEK_MS`. При суточной каденции это
 агрегат семи дропов, а не одного. Не баг — но должно быть либо явно подписано в
 ответе, либо дополнено срезом по циклам.
@@ -437,7 +440,7 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
 
 **C2. Проверка зависших покупок.** Если когда-либо будет решено всё-таки
 выключить флаг: `REMATCH_REFUND_CRON_SCHEDULE` регистрируется в
-[`index.ts`](apps/bot/src/index.ts) под тем же `REMATCH_FEATURE_ENABLED` —
+[`index.ts`](../../../apps/bot/src/index.ts) под тем же `REMATCH_FEATURE_ENABLED` —
 выключение глушит и гарантированный возврат денег. Перед флипом:
 `select count(*) from rematch_purchases where status = 'processing'`.
 При ненулевом — сперва дождаться свипа. (После блока A этот сценарий не нужен,
@@ -463,7 +466,7 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
 - Валидация `DROP_CADENCE` при импорте модуля: неизвестное значение — throw,
   не молчаливый `undefined`-профиль (см. правку §2).
 - **Удалить мёртвый дублирующий расчёт** `nextMatchDispatchAt` /
-  `isMatchBatchProcessing` из [`packages/shared/src/status/format-status.ts`](packages/shared/src/status/format-status.ts#L140)
+  `isMatchBatchProcessing` из [`packages/shared/src/status/format-status.ts`](../../../packages/shared/src/status/format-status.ts#L140)
   (найдено при повторной проверке — см. аудит §1.1). Сегодня не вызывается
   нигде в проде, но экспортируется из публичного API `@gennety/shared` с
   зашитым «четверг 18:00» и без всякой связи с `DROP_CADENCE` — оставлять его
@@ -477,9 +480,9 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
 **Критерий выхода:** ничего не подключено, тесты зелёные.
 
 ### Фаза 1 — Timing-фундамент
-Главный риск всей миграции ([аудит §1.1](DAILY_MATCHING_MIGRATION_AUDIT.md)).
+Главный риск всей миграции ([аудит §1.1](../../archive/daily-matching-migration-audit.md)).
 
-- **Сначала переписать [`next-batch.test.ts`](apps/bot/src/services/next-batch.test.ts)** как
+- **Сначала переписать [`next-batch.test.ts`](../../../apps/bot/src/services/next-batch.test.ts)** как
   спецификацию: `*` в поле дня, суточные и недельные выражения, DST-переходы
   Europe/Kyiv, `getPrevious` для обеих каденций.
 - `parseWeeklyCron` → парсер, понимающий `*` и списки (`1,3,5`); переименовать
@@ -487,11 +490,11 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
 - `getNextBatchDate` — «следующее срабатывание крона» вместо «следующий
   четверг».
 - `getPreviousBatchDate` — через `CADENCE.intervalMs`, убрать хардкод
-  `next − 8 дней` ([`:160`](apps/bot/src/services/next-batch.ts#L160)).
+  `next − 8 дней` ([`:160`](../../../apps/bot/src/services/next-batch.ts#L160)).
 - `isWeeklyBatchProcessing`, `formatNextBatchDate` — согласовать.
-- [`weekly-status.ts:52-58`](apps/bot/src/services/weekly-status.ts#L52) — окно
+- [`weekly-status.ts:52-58`](../../../apps/bot/src/services/weekly-status.ts#L52) — окно
   `priorityBoosted` считается корректно в обеих каденциях.
-- [`index.ts:138`](apps/bot/src/index.ts#L138) — `NO_MATCH_NOTICE_CRON_SCHEDULE`
+- [`index.ts:138`](../../../apps/bot/src/index.ts#L138) — `NO_MATCH_NOTICE_CRON_SCHEDULE`
   вывести из профиля (D4 всё равно перенесёт его в отдельный крон, Фаза 4).
 
 **Критерий выхода:** `/v1/countdown` и закреплённый баннер корректно работают
@@ -499,13 +502,13 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
 сценарий, который сегодня бросает исключение.
 
 ### Фаза 2 — Match engine
-- [`match-engine.ts:60`](apps/bot/src/services/match-engine.ts#L60) —
+- [`match-engine.ts:60`](../../../apps/bot/src/services/match-engine.ts#L60) —
   `MATCH_COOLDOWN_MS` → `CADENCE.cooldownMs` (D7). **Отдельным тестом закрепить
   граничный случай:** пользователь с `lastMatchedAt` ровно на границе цикла
   обязан попадать в следующий батч.
-- [`:327-346`](apps/bot/src/services/match-engine.ts#L327) — `starvationBonus`
+- [`:327-346`](../../../apps/bot/src/services/match-engine.ts#L327) — `starvationBonus`
   берёт `CADENCE.starvationAlpha` (D6).
-- [`:1780-1812`](apps/bot/src/services/match-engine.ts#L1780) — доккоментарии
+- [`:1780-1812`](../../../apps/bot/src/services/match-engine.ts#L1780) — доккоментарии
   `standbyCount` / `missedWeeks`: «циклов», не «недель». Поля не переименовываем
   (D11). Подтвердить тестом, что занятые пользователи не инкрементятся (D2).
 - Переименовать `runWeeklyBatch` → `runDropBatch`, `previewWeeklyBatch` →
@@ -525,13 +528,13 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
   `(status, createdAt)` всё ещё пригоден, иначе фильтровать по `status` +
   считать дедлайн в памяти — объёмы это позволяют).
 - **Expiry как preflight внутри батча** — по образцу preflight эмбеддингов.
-- Каденция ноджей ([`match-nudge.ts:43-53`](apps/bot/src/workers/match-nudge.ts#L43))
+- Каденция ноджей ([`match-nudge.ts:43-53`](../../../apps/bot/src/workers/match-nudge.ts#L43))
   из профиля. Для суточного: `2ч / 8ч / дедлайн −1.5ч`. Проверить, что второй
   нодж не проваливается целиком в quiet hours 23:00–09:00 (при дропе 18:00
   он попадает на 02:00 → отложится до 09:00; это приемлемо и даже удачно —
   утреннее напоминание за 8.5 ч до дедлайна, но должно быть осознанным, а не
   побочным эффектом).
-- Stall-цепочка ([`match-stall.ts:37-48`](apps/bot/src/services/match-stall.ts#L37)):
+- Stall-цепочка ([`match-stall.ts:37-48`](../../../apps/bot/src/services/match-stall.ts#L37)):
   для суточного профиля `checkIn 12ч`, `timeout 24ч`, venue-ноджи `3ч/6ч` —
   иначе один «призрак» стоит партнёру два дропа.
 
@@ -540,14 +543,14 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
 
 ### Фаза 4 — Famine (D4, D5)
 - Отдельный крон уведомления, развязанный с батчем
-  ([`index.ts:414`](apps/bot/src/index.ts#L414)); интервал из профиля.
-- [`no-match-notifier.ts:76-93`](apps/bot/src/services/no-match-notifier.ts#L76)
+  ([`index.ts:414`](../../../apps/bot/src/index.ts#L414)); интервал из профиля.
+- [`no-match-notifier.ts:76-93`](../../../apps/bot/src/services/no-match-notifier.ts#L76)
   `computeTier` — считать **дни с начала текущей серии** (минимальный `dropDate`
   среди уведомлений после последнего матча), а не `count()` строк. Это
   одновременно чинит и совместимость при откате (§6).
 - `templateKeyForTier` — пороги в днях.
-- [`ticket-discount.ts`](apps/bot/src/services/ticket-discount.ts) +
-  [`constants.ts:113-115`](packages/shared/src/constants.ts#L113) — порог по
+- [`ticket-discount.ts`](../../../apps/bot/src/services/ticket-discount.ts) +
+  [`constants.ts:113-115`](../../../packages/shared/src/constants.ts#L113) — порог по
   дням (D5).
 - Проверить, что `@@unique([userId, dropDate])` выдерживает выбранную
   каденцию (при DM раз в 2–3 дня строк становится меньше — конфликта нет).
@@ -560,7 +563,7 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
   но `REMATCH_PRE_BATCH_BLACKOUT_HOURS` и `MAX_PER_WEEK` вывести из профиля,
   чтобы включение обратно не воспроизвело 25%-й блэкаут.
   **Предохранитель перед выключением (найдено при повторной проверке):**
-  `REMATCH_REFUND_CRON_SCHEDULE` регистрируется в [`index.ts:538`](apps/bot/src/index.ts#L538)
+  `REMATCH_REFUND_CRON_SCHEDULE` регистрируется в [`index.ts:538`](../../../apps/bot/src/index.ts#L538)
   под тем же флагом `REMATCH_FEATURE_ENABLED` — выключение флага глушит не
   только оферту, но и свип возврата зависших `rematch_purchases.status =
   'processing'`. Перед флипом обязательна проверка
@@ -568,9 +571,9 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
   ненулевом результате сперва дождаться завершения свипа, либо развести
   регистрацию крона от флага оферты.
 - Profiler:
-  - [`constants.ts:197`](packages/shared/src/constants.ts#L197) rush-окно →
+  - [`constants.ts:197`](../../../packages/shared/src/constants.ts#L197) rush-окно →
     `CADENCE.profilerRushWindowMs` (4 ч для суточного), иначе
-    [`isRushMode()`](apps/bot/src/services/profiler-schedule.ts#L104) навсегда
+    [`isRushMode()`](../../../apps/bot/src/services/profiler-schedule.ts#L104) навсегда
     `true`;
   - `cycleId` для `refresh: "cycle"` — ключ календарной недели вместо дроп-
     цикла (D9), иначе «что смотришь?» приходит ежедневно;
@@ -578,17 +581,17 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
 
 ### Фаза 6 — Поверхности
 - Баннер: режим `drop` рендерит часы, не дни
-  ([`status-banner-view.ts`](apps/bot/src/services/status-banner-view.ts),
-  [`status-timer.ts:306`](apps/bot/src/workers/status-timer.ts#L306)).
+  ([`status-banner-view.ts`](../../../apps/bot/src/services/status-banner-view.ts),
+  [`status-timer.ts:306`](../../../apps/bot/src/workers/status-timer.ts#L306)).
 - **i18n: ~17 ключей × 5 локалей.** Убрать статические «до четверга, 18:00» и
   «на этой неделе». Там, где нужно время, — подстановка из
   `formatNextBatchDate`, а не строка. Ключи `noMatchThisWeekTier1/2/3`,
   `noMatchStreamStart`, `matchDeclined*`, `matchExpired*`, `freezeConfirm*`,
   rematch-фрейминг. Формулировки — по D2 («пока ты свободен»), не «каждый день
   новый человек».
-- AI-промпты: [`product-playbook.ts:56,82`](apps/bot/src/services/product-playbook.ts#L56),
-  [`prompt-builder.ts:219,235`](apps/bot/src/services/prompt-builder.ts#L219),
-  [`agent-insights.ts:27`](apps/bot/src/services/agent-insights.ts#L27).
+- AI-промпты: [`product-playbook.ts:56,82`](../../../apps/bot/src/services/product-playbook.ts#L56),
+  [`prompt-builder.ts:219,235`](../../../apps/bot/src/services/prompt-builder.ts#L219),
+  [`agent-insights.ts:27`](../../../apps/bot/src/services/agent-insights.ts#L27).
   Последний критичен: `get_my_standing` отвечает на «почему меня не матчат» —
   он не должен говорить «за каждую неделю ожидания».
 
@@ -601,7 +604,7 @@ row / pain-triggered entry points only» → нужна запись в `DECISIO
   `~/Desktop/Gennety-iOS/IMPLEMENTATION_PLAN.md` в том же коммите.
 
 ### Фаза 8 — Аналитика, документация, тесты
-- Founder-digest ([`onboarding-funnel.ts:27,91-148`](apps/bot/src/admin/routes/onboarding-funnel.ts#L27)):
+- Founder-digest ([`onboarding-funnel.ts:27,91-148`](../../../apps/bot/src/admin/routes/onboarding-funnel.ts#L27)):
   недельное окно теперь агрегирует 7 дропов — либо добавить срез по циклам,
   либо явно задокументировать, что это агрегат.
 - `PRODUCT_SPEC.md` §3.1, §3.2, §3.5, §3.5c, §2.1, §Phase 1b, §3.11;

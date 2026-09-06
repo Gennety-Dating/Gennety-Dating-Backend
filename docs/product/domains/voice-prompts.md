@@ -1,8 +1,11 @@
+<!-- WHEN_TO_READ: You are working on voice prompts — the recorded onboarding answer, its storage, playback, or moderation. -->
+<!-- SOURCE: VOICE_PROMPT_PRODUCT_SPEC.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Voice Prompts — Architecture & Implementation Plan
 
 > **Status:** design settled, implementation in progress. Product invariants:
-> [PRODUCT_SPEC.md](PRODUCT_SPEC.md). Agent rules: [AGENTS.md](AGENTS.md).
-> Decision journal: [DECISIONS.md](DECISIONS.md).
+> [PRODUCT_SPEC.md](../product-spec.md). Agent rules: [AGENTS.md](../../operations/agent-operating-manual.md).
+> Decision journal: [DECISIONS.md](../../architecture/decisions/INDEX.md).
 >
 > This document took the Hinge Voice Prompt as its reference model and reports,
 > honestly, which parts of it this product can take and which parts it
@@ -326,7 +329,7 @@ constraint, not a preference. Past `finalize_onboarding` the §1.4 verification
 gate locks every surface except verification and photo re-upload, so a question
 asked after finalization never reaches the user. The last available slot is the
 end of the collector's own order
-([`ONBOARDING_QUESTIONS`](apps/bot/src/services/onboarding-collector.ts)):
+([`ONBOARDING_QUESTIONS`](../../../apps/bot/src/services/onboarding-collector.ts)):
 
 ```
 … friday_vibe → vibe_focus → ai_memory → context_dump → photos → voice_prompt → complete
@@ -406,7 +409,7 @@ step can be skipped and `sendVoicePromptAsk` appends the line naming the button,
 interpolated from `voicePromptSkipButton` so the two cannot drift.
 
 Copy lives in the collector's own question table
-([`onboarding-collector.ts`](apps/bot/src/services/onboarding-collector.ts)) in
+([`onboarding-collector.ts`](../../../apps/bot/src/services/onboarding-collector.ts)) in
 all five languages — deterministic template like the rest of onboarding, not
 model output. Only the surrounding strings (skip label and hint, the
 confirmation, the rejections, the pitch caption) are in
@@ -579,7 +582,7 @@ copying `appendVibeToSummary`, and then spent a section on the damage that does.
 Decision 6 reverses it, and the evidence is in the refresh worker itself.
 
 **`refreshDirtyEmbeddings` already composes the embedding input from several
-columns at refresh time** ([`workers/embedding-refresh.ts`](apps/bot/src/workers/embedding-refresh.ts)):
+columns at refresh time** ([`workers/embedding-refresh.ts`](../../../apps/bot/src/workers/embedding-refresh.ts)):
 
 ```ts
 let text = buildEmbeddingInput(baseSummary, row.psychologicalSummary ?? "");
@@ -664,7 +667,7 @@ services/account-deletion.ts         MODIFIED: collectOwnedPaths covers the audi
 ```
 
 **Where the voice note lands in the pitch.** The per-side sequence today
-([`pitch.ts`](apps/bot/src/handlers/matching/pitch.ts)) is: welcome-gift pre-roll →
+([`pitch.ts`](../../../apps/bot/src/handlers/matching/pitch.ts)) is: welcome-gift pre-roll →
 match cards or photo album → motion media → the streamed pitch → the verified
 trust card → the decision question. The voice note goes **between the trust card
 and the decision question**.

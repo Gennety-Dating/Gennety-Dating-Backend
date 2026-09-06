@@ -1,10 +1,13 @@
+<!-- WHEN_TO_READ: You are working on Rematch — the paid on-demand re-run of the matching engine. -->
+<!-- SOURCE: REMATCH_PRODUCT_SPEC.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Gennety Rematch — Product Specification
 
 > **Version:** 1.1 (2026-07-26 — implemented; reconciled with the shipped code).
 > Feature-flagged (`REMATCH_FEATURE_ENABLED`, default **off**). Telegram-only in
 > v1 (explicit, recorded decision — see *Two clients*). Product invariants live in
-> [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.11; architecture in
-> [ARCHITECTURE.md](ARCHITECTURE.md); deploy in [deploy.md](deploy.md).
+> [PRODUCT_SPEC.md](../product-spec.md) §3.11; architecture in
+> [ARCHITECTURE.md](../../architecture/overview.md); deploy in [deploy.md](../../operations/deployment-runbook.md).
 >
 > **Implementation map:** `services/rematch.ts` (eligibility, candidate, framing,
 > run), `services/rematch-refund.ts` (refunds + hourly sweep),
@@ -32,7 +35,7 @@ feature a monetization lever on one side and a retention gift on the other,
 from a single code path.
 
 **Rematch is not a new algorithm.** `findCandidatesFor()`
-([match-engine.ts:955](apps/bot/src/services/match-engine.ts#L955)) is already a
+([match-engine.ts:955](../../../apps/bot/src/services/match-engine.ts#L955)) is already a
 single-seeker rematch engine: same candidate SQL, same multi-factor re-rank as
 the weekly batch. Rematch is *orchestration* around it — payment, eligibility,
 limits, framing — not new matching logic. Everything below inherits the existing
@@ -413,7 +416,7 @@ no redeploy.
 `findRematchCandidate()`, `pickGiftFraming()`, `runRematch()`.
 
 **Phase 2 — payments.** `rematch:v1` branch in
-[payments.ts](apps/bot/src/handlers/payments.ts) (`pre_checkout` + settle),
+[payments.ts](../../../apps/bot/src/handlers/payments.ts) (`pre_checkout` + settle),
 invoice minting, refund + `refund_failed` bookkeeping, and the hourly retry
 worker.
 

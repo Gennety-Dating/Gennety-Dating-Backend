@@ -1,3 +1,6 @@
+<!-- WHEN_TO_READ: You are writing or changing ANY user-facing copy — LLM prompts (pitch, ice-breakers, nudges) or static i18n strings. Source of truth for how the bot talks. -->
+<!-- SOURCE: VOICE.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Gennety — Voice & Tone
 
 > Audience: **university students** on the student track, plus the general adult

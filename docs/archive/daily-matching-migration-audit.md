@@ -1,3 +1,6 @@
+<!-- WHEN_TO_READ: HISTORICAL. A 2026-07-30/31 code audit taken BEFORE any code changed; superseded by docs/product/domains/daily-matching.md. Read only for the reasoning behind decisions D1-D4. -->
+<!-- SOURCE: DAILY_MATCHING_MIGRATION_AUDIT.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Переход на ежедневный matching-цикл — аудит и план миграции
 
 > Статус: **анализ, код не менялся.** Аудит от 2026-07-30 против `main` (`29db1d9`).
@@ -6,7 +9,7 @@
 > города) считаются неизменными.
 >
 > **Повторная проверка 2026-07-31** (после того, как решения D1–D4 уже были
-> приняты и написан [план имплементации](DAILY_MATCHING_IMPLEMENTATION_PLAN.md)):
+> приняты и написан [план имплементации](../product/domains/daily-matching.md)):
 > код по-прежнему не менялся (`git diff origin/main` пуст, коммиты после
 > `b15ce87` не касаются ни одного файла из этого аудита — venue-engine,
 > referral, admin chat media). Найдено 4 новых пункта, пропущенных в первой

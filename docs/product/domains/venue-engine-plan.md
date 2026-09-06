@@ -1,3 +1,6 @@
+<!-- WHEN_TO_READ: You are changing venue selection/ranking. Stages 1-3 shipped; Stage 5 and Part 6 are still open. Pairs with docs/operations/runbooks/venue-catalog-audit.md. -->
+<!-- SOURCE: VENUE_ENGINE_IMPROVEMENT_PLAN.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Движок подбора мест — план улучшений
 
 > Статус: **план.** Составлен 2026-07-30, сверен с `main` (`28e807d`) после
@@ -22,8 +25,8 @@
 > репозитория — откат через `revert`), поэтому факт зафиксирован здесь.
 > §5.3 — отдельным коммитом. Обе части ждут деплоя (см. deploy.md).
 >
-> Связанные документы: [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7 / §3.7b / §3.8,
-> [VENUE_CATALOG_AUDIT_PROMPT.md](VENUE_CATALOG_AUDIT_PROMPT.md) (аудит
+> Связанные документы: [PRODUCT_SPEC.md](../product-spec.md) §3.7 / §3.7b / §3.8,
+> [VENUE_CATALOG_AUDIT_PROMPT.md](../../operations/runbooks/venue-catalog-audit.md) (аудит
 > каталога — предусловие этапов 2–3).
 
 ---
@@ -182,7 +185,7 @@ restaurant 34, coffee_shop 33, park 15, lounge 6, **museum 0**.
 ### Этап 2 — вайб как позвоночник `[D3, D5, D8, T3]` — **кодовый слой отгружен** (`dd257fd`)
 
 Предусловие для этапа 3. Требует прогона
-[аудита каталога](VENUE_CATALOG_AUDIT_PROMPT.md).
+[аудита каталога](../../operations/runbooks/venue-catalog-audit.md).
 
 **Отгружено:** `mapVibeTagsToFacets` (67 операторских тегов → канонические id,
 подключены в `categoryFacets`) и матрица близости фасетов вместо точного

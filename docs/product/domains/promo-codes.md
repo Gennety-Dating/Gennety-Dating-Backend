@@ -1,3 +1,6 @@
+<!-- WHEN_TO_READ: You are working on promo codes or independent campaign links (`scripts/promo-codes.mjs`). -->
+<!-- SOURCE: PROMO_CODES_PRODUCT_SPEC.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Gennety Dating — Promo Codes (independent campaign links)
 
 > Product-invariants + implementation contract for the **independent promo-code**

@@ -1,3 +1,6 @@
+<!-- WHEN_TO_READ: Operator procedure — run it AFTER adding new venues to `curated_venues`, to make the new rows actually usable by the matching engine. Paste it whole into a fresh session. -->
+<!-- SOURCE: VENUE_CATALOG_AUDIT_PROMPT.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Промт: аудит расширенного каталога заведений (`curated_venues`)
 
 > Операторский промт для новой сессии. Вставить целиком (или сказать

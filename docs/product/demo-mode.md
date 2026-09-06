@@ -1,8 +1,11 @@
+<!-- WHEN_TO_READ: You changed ANY product flow, Mini App screen, gate, or paid step — every such change owes a demo-mode impact check. Also read before touching the demo bot, its isolation gate, or its seed scripts. -->
+<!-- SOURCE: DEMO_MODE.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Demo Mode
 
-> Product invariants live in [PRODUCT_SPEC.md](PRODUCT_SPEC.md); architecture in
-> [ARCHITECTURE.md](ARCHITECTURE.md); the production runbook in
-> [deploy.md](deploy.md). This file owns one thing: the second bot we walk
+> Product invariants live in [PRODUCT_SPEC.md](product-spec.md); architecture in
+> [ARCHITECTURE.md](../architecture/overview.md); the production runbook in
+> [deploy.md](../operations/deployment-runbook.md). This file owns one thing: the second bot we walk
 > investors, friends and colleagues through, and the rules that keep it both
 > faithful to the product and unable to touch it.
 
@@ -313,6 +316,23 @@ Kyiv. Being named in your own language is worth more in a walkthrough than
 demographic plausibility, and the alternative — a Ukrainian name for everyone
 — is the thing being fixed.
 
+### The city waitlist has no demo branch, on purpose
+
+The demo market is Kyiv, and the city picker offers the same two tiers it does
+in production (§1.3) — so a visitor who taps Berlin lands on the real waitlist
+screen and the walkthrough stops there. That is correct: the screens are
+production code, and a demo that hid the waitlist would be showing a picker that
+does not exist.
+
+It is not a trap, which is the only reason it needs no special case. "Choose
+another city" drops the row and returns to the picker in one tap, so the
+walkthrough resumes on Kyiv. Nothing is written to `Profile`, so an aborted
+detour leaves no state behind. **The demo script says pick Kyiv;** if a visitor
+wanders, hand them the button rather than restarting the demo. Adding a
+demo-only branch here would mean the one screen a founder most wants to show
+investors — "we already have N people waiting in Berlin" — is the one screen the
+demo cannot show.
+
 ### Blind decision, preserved
 
 The puppet answers only after the visitor has committed, and always with a yes.
@@ -328,8 +348,8 @@ prompt fire in order.
 
 **`runCoordinationTick` is a SEPARATE sweep and has to be replayed too.** It is
 called from `index.ts` on the real clock, so a replay that shifted only the
-lifecycle silently skipped the whole hour before the date: the T-60m "how do we
-find each other" offer, the T-30m anonymous chat, and all five coordination
+lifecycle silently skipped the hours before the date: the T-3h "how do we
+find each other" offer, the T-1h anonymous chat, and all five coordination
 cards — with `COORDINATION_FEATURE_ENABLED` on the entire time. The first demo
 ever to reach a scheduled date is what surfaced it; `coordOfferSentAt` and
 `proxyOpenedAt` were both still null when the run finished. It takes an injected

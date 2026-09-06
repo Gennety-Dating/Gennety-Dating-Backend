@@ -1,3 +1,6 @@
+<!-- WHEN_TO_READ: You are working on acquisition-spend tracking, the channel x category model, CAC/LTV/ROAS, or the Ads tab of the admin dashboard. -->
+<!-- SOURCE: AD_SPEND_TRACKING_DESIGN.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Ввод расходов на трафик — реализовано
 
 > Статус: **реализовано.** Схема, админ-роуты, форма и таблица на дашборде,

@@ -1,8 +1,11 @@
+<!-- WHEN_TO_READ: You are working on the referral program ('Пригласи друга') — invite links, attribution, or rewards. -->
+<!-- SOURCE: REFERRAL_PRODUCT_SPEC.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Gennety Referral — Product Specification
 
 > Feature spec for the referral program ("Give a date, get a date").
-> Product invariants live in [PRODUCT_SPEC.md](PRODUCT_SPEC.md); architecture in
-> [ARCHITECTURE.md](ARCHITECTURE.md); deploy/runbook in [deploy.md](deploy.md).
+> Product invariants live in [PRODUCT_SPEC.md](../product-spec.md); architecture in
+> [ARCHITECTURE.md](../../architecture/overview.md); deploy/runbook in [deploy.md](../../operations/deployment-runbook.md).
 > Code, tests, and Prisma remain the source of truth for local mechanics.
 
 ## Overview

@@ -1,3 +1,6 @@
+<!-- WHEN_TO_READ: HISTORICAL SNAPSHOT (2026-07-18). The living roadmap is in the iOS repo at ~/Desktop/Gennety-iOS/ROADMAP.md — read that instead unless you specifically need the original approved MVP slice. -->
+<!-- SOURCE: IOS_APP_ROADMAP.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Gennety iOS — Технический Roadmap (MVP v1)
 
 > **Снимок на момент утверждения (2026-07-18).** Живая, обновляемая копия

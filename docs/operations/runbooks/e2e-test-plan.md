@@ -1,3 +1,6 @@
+<!-- WHEN_TO_READ: You are writing or running end-to-end tests, or need the E2E coverage map. -->
+<!-- SOURCE: E2E_TEST_PLAN.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Gennety Dating — План E2E-тестирования (pre-prod)
 
 > Назначение: полный прогон всех функций, API и внешних связок на **локальном
@@ -243,6 +246,8 @@ Registration v2 (не через email-обход). Placeholder существу
 | `pnpm dev:reset-onboarding:apply` | Чистый онбординг для A+B |
 | `pnpm dev:trigger-test-match` | Форс `proposed` + dispatch (реальный питч) |
 | `pnpm dev:watch-and-match` | Авто-матч, как только оба завершат онбординг |
+| `pnpm dev:meme-unlock` | Мем-разблокировка (§3.12): реальный vision-проход по картинке, bot-scoped `file_id`, свидание +3д и тизер-карточка тестеру |
+| `pnpm dev:short-video "<url>"` | Ссылка на TikTok/Reels (§Phase 1b): живой oEmbed/OG-проход, постер через SSRF-периметр, описание тем же vision-проходом; `--mint=<tgId>` проверяет ещё и загрузку постера |
 | `pnpm dev:e2e-full-flow` | Авто-прогон всей пост-онбординг цепочки (требует ticket-flag OFF) |
 | `pnpm --filter @gennety/bot exec tsx ../../scripts/dev-continue-date.mjs` | Провести текущий матч через все стадии (ticket-aware) |
 | `pnpm --filter @gennety/bot exec tsx ../../scripts/dev-trigger-scheduling.mjs` | Матч → mutual-accept → calendar (дальше люди сами) |
@@ -383,6 +388,17 @@ Registration v2 (не через email-обход). Placeholder существу
 - [ ] `dev-continue-date.mjs` (ticket-aware) ИЛИ вручную `advance-match-clock.ts`
 - [ ] Icebreakers (T-5ч, 3 на сторону) + emergency window
 - [ ] Female safety brief (T-1.5ч) + wingman reveal
+- [ ] Ссылка вместо мема (flag ON): на вопрос про юмор отправить рил/тикток →
+      в ответе лежит ОПИСАНИЕ ролика, а не URL; повторная отправка того же ролика
+      другим шэринговым линком отвечает мгновенно (кэш); приватный/удалённый пост
+      → `profilerLinkUnreadable`, вопрос остаётся живым; ссылка на любой другой
+      вопрос профайлера по-прежнему просто текст
+- [ ] Реавил ссылочного ответа: приходит обложка + описание + подсказка + ОТДЕЛЬНЫМ
+      сообщением ссылка на ролик (последним, без Markdown); у ответа-картинки
+      этого сообщения нет вовсе
+- [ ] Meme Unlock (T-5ч, сразу после icebreakers, flag ON): тизер НЕ показывает мем →
+      счёт в Stars → картинка + подсказка; повторный тап по старой карточке не списывает
+      второй раз; у партнёра-текстового ответа карточка не приходит вовсе
 - [ ] Coordination offer (T-1ч): Variant A (share self) / B (request partner + consent) / C (proxy)
 - [ ] Proxy chat open (T-30м): relay text-only, media отклоняется, Report-кнопка, `ProxyMessage`-лог; close (T+2ч)
 - [ ] Emergency protocol: confirmation guard → verbatim relay (blockquote) → cancel + peer Elo-bump

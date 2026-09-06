@@ -1,3 +1,6 @@
+<!-- WHEN_TO_READ: You are working on Type Radar — the appearance-preference deck, its calibration photos, scoring attributes, or the `V_type` re-rank. -->
+<!-- SOURCE: TYPE_RADAR_PRODUCT_SPEC.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Type Radar — "Choose Your Type" (visual preference calibration)
 
 > **Status: IMPLEMENTED (2026-07-22), shipped dark behind `TYPE_RADAR_ENABLED`
@@ -42,7 +45,7 @@
 > the Magic Prompt is delivered — so `age`/`gender`/`preference` are already
 > collected (age bands + gender set are read, not asked).
 > Photo dataset briefs + generation prompts:
-> [`scripts/type-radar.dataset.draft.json`](scripts/type-radar.dataset.draft.json).
+> [`scripts/type-radar.dataset.draft.json`](../../../scripts/type-radar.dataset.draft.json).
 
 ## Product summary
 
@@ -296,7 +299,7 @@ re-scanned legacy profiles) are neutral on the candidate side.
 ## Dataset
 
 - Canonical brief (attribute matrix, per-card generation prompts, acceptance
-  checklist): [`scripts/type-radar.deck-v2.md`](scripts/type-radar.deck-v2.md).
+  checklist): [`scripts/type-radar.deck-v2.md`](../../../scripts/type-radar.deck-v2.md).
   The v1 artefacts (`type-radar.dataset.draft.json`,
   `type-radar.prompts.compiled.json`, `type-radar.band-a.final.md`) describe the
   RETIRED five-feature deck; each now carries a `retired` marker at the top.

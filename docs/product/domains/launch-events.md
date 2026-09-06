@@ -1,3 +1,6 @@
+<!-- WHEN_TO_READ: You are working on Launch Events: the offline mixer, waitlist, ticket tiers, rounds/pairings, staff tokens, or post-event feedback. -->
+<!-- SOURCE: LAUNCH_EVENTS_PRODUCT_SPEC.md (moved unchanged) — migrated 2026-09-01 -->
+
 # Gennety — Launch Engine, Waitlist Admission & Offline Events
 
 > **Status: SPECIFICATION ONLY (2026-08-29).** No code, no schema, no flags ship
@@ -5,8 +8,8 @@
 > dark, behind its own feature flags, in four phases. Open founder decisions are
 > collected in §14 and MUST be resolved before Phase 1 is implemented.
 >
-> Product invariants live in [PRODUCT_SPEC.md](PRODUCT_SPEC.md); architecture in
-> [ARCHITECTURE.md](ARCHITECTURE.md); deploy in [deploy.md](deploy.md). This
+> Product invariants live in [PRODUCT_SPEC.md](../product-spec.md); architecture in
+> [ARCHITECTURE.md](../../architecture/overview.md); deploy in [deploy.md](../../operations/deployment-runbook.md). This
 > file owns one subsystem: city-launch events — waitlist admission, founder
 > moderation, ticketing, venue check-in, in-event Zero-Chat rounds, and the
 > post-event conversion loop back into the core 1-on-1 dating pipeline.
