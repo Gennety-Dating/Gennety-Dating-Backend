@@ -1398,160 +1398,186 @@ export async function runMenuAgentTurn(
     receipts.push(t(language, key));
   };
 
+  /**
+   * Провал вызова LLM посреди хода.
+   *
+   * Инструменты этого агента ПИШУТ в базу (`set_language`, `pause_matching`,
+   * `update_bio`, …), и записи применяются до того, как понадобится
+   * следующий ответ модели. `callOpenAI` бросает на любом не-2xx — 429 на
+   * вечернем пике или 5xx, — и до 2026-09-07 это исключение уносило с собой
+   * и `receipts` (единственный код-owned способ честно сказать, что именно
+   * применилось), и сохранение `messageHistory`. Пользователь получал
+   * главное меню в Telegram или 500 в приложении, матчинг при этом стоял на
+   * паузе, а агент на следующем ходу не знал, что уже сделал, и мог
+   * повторить запись.
+   *
+   * Откатить примененное нельзя: у инструментов нет компенсаций. Значит
+   * единственное честное поведение — досказать то, что мы знаем: чеки о
+   * применённом, сохранённая история и внятная реплика об ошибке.
+   */
+  let llmFailed = false;
+
   // Agent loop
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const response = await callOpenAI(
-      toApiMessages(truncateForApi(history, MAX_HISTORY_FOR_API)),
-      fetchFn,
-    );
-    const choice = response.choices[0];
-    if (!choice) break;
+  try {
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const response = await callOpenAI(
+        toApiMessages(truncateForApi(history, MAX_HISTORY_FOR_API)),
+        fetchFn,
+      );
+      const choice = response.choices[0];
+      if (!choice) break;
 
-    const assistantMsg = choice.message;
-    history.push({
-      role: "assistant",
-      content: assistantMsg.content,
-      ...(assistantMsg.tool_calls ? { tool_calls: assistantMsg.tool_calls } : {}),
-    });
+      const assistantMsg = choice.message;
+      history.push({
+        role: "assistant",
+        content: assistantMsg.content,
+        ...(assistantMsg.tool_calls ? { tool_calls: assistantMsg.tool_calls } : {}),
+      });
 
-    if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
-      break;
-    }
-
-    for (const toolCall of assistantMsg.tool_calls) {
-      const fnName = toolCall.function.name;
-      let args: Record<string, unknown>;
-      try {
-        args = JSON.parse(toolCall.function.arguments);
-      } catch {
-        args = {};
+      if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
+        break;
       }
 
-      // Budget check before anything runs: a write beyond the first is refused
-      // outright rather than executed and reported. The model is told to ask,
-      // so the second change becomes the user's next message — one intent, one
-      // write, always visible.
-      if (TOOL_KINDS[fnName] === "write" && writesUsed >= MAX_WRITES_PER_TURN) {
+      for (const toolCall of assistantMsg.tool_calls) {
+        const fnName = toolCall.function.name;
+        let args: Record<string, unknown>;
+        try {
+          args = JSON.parse(toolCall.function.arguments);
+        } catch {
+          args = {};
+        }
+
+        // Budget check before anything runs: a write beyond the first is refused
+        // outright rather than executed and reported. The model is told to ask,
+        // so the second change becomes the user's next message — one intent, one
+        // write, always visible.
+        if (TOOL_KINDS[fnName] === "write" && writesUsed >= MAX_WRITES_PER_TURN) {
+          history.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({
+              success: false,
+              error: "write_budget_exhausted",
+              instruction:
+                "You already changed something this turn, so this second change was NOT saved. Tell the user what you changed, name what else you were about to change, and ask them to confirm it in their next message.",
+            }),
+          });
+          continue;
+        }
+
+        let result: string;
+        /** Set by a write executor that actually persisted something. */
+        let receiptKey: Parameters<typeof t>[1] | null = null;
+        switch (fnName) {
+          case "update_bio": {
+            const outcome = await execUpdateBio(telegramId, args as { bio: string });
+            result = outcome.toolResult;
+            if (outcome.action) pendingAction = outcome.action;
+            else receiptKey = "editBioSaved";
+            break;
+          }
+          case "update_major":
+            result = await execUpdateMajor(telegramId, args as { major: string });
+            receiptKey = "editMajorSaved";
+            break;
+          case "update_age_range":
+            result = await execUpdateAgeRange(
+              telegramId,
+              args as { min_age: number; max_age: number },
+            );
+            receiptKey = "editAgeRangeSaved";
+            break;
+          case "update_partner_preferences":
+            result = await execUpdatePartnerPreferences(
+              telegramId,
+              args as { preferences: string },
+            );
+            receiptKey = "editPrefsDescriptionSaved";
+            break;
+          case "update_hobbies":
+            result = await execUpdateHobbies(telegramId, args as { hobbies: unknown });
+            receiptKey = "editHobbiesSaved";
+            break;
+          case "set_language":
+            result = await execSetLanguage(telegramId, args as { language?: unknown });
+            // Read AFTER the write, so this picks up the language just set —
+            // the receipt lands in the language the user is switching TO.
+            receiptKey = "settingsLanguageSaved";
+            break;
+          case "set_theme":
+            result = await execSetTheme(telegramId, args as { theme?: unknown });
+            receiptKey = "settingsThemeSaved";
+            break;
+          case "get_my_profile":
+            result = await execGetMyProfile(telegramId);
+            break;
+          case "get_my_standing":
+            result = await execGetMyStanding(telegramId);
+            break;
+          case "explain_my_match":
+            result = await execExplainMyMatch(telegramId);
+            break;
+          case "pause_matching":
+            result = await execPauseMatching(telegramId);
+            receiptKey = "pauseConfirmed";
+            break;
+          case "resume_matching":
+            result = await execResumeMatching(telegramId);
+            receiptKey = "resumeConfirmed";
+            break;
+          case "record_rejection_feedback":
+            result = await execRecordRejectionFeedback(
+              telegramId,
+              args as { match_id: string; reason: string },
+            );
+            break;
+          case "offer_cancel_premium": {
+            const outcome = await evaluatePremiumCancelOffer(telegramId);
+            result = outcome.toolResult;
+            if (outcome.action) pendingAction = outcome.action;
+            break;
+          }
+          case "propose_cancel_date": {
+            const outcome = await execProposeCancelDate(telegramId);
+            result = outcome.toolResult;
+            if (outcome.action) pendingAction = outcome.action;
+            break;
+          }
+          case "propose_close_account": {
+            const outcome = await execProposeCloseAccount(telegramId);
+            result = outcome.toolResult;
+            if (outcome.action) pendingAction = outcome.action;
+            break;
+          }
+          case "open_screen": {
+            const outcome = await execOpenScreen(telegramId, args as { screen?: unknown });
+            result = outcome.toolResult;
+            if (outcome.action) pendingAction = outcome.action;
+            break;
+          }
+          default:
+            result = JSON.stringify({ error: `Unknown tool: ${fnName}` });
+        }
+
+        // Only count and acknowledge a write that reported success — a rejected
+        // edit must neither burn the turn's budget nor tell the user it landed.
+        if (TOOL_KINDS[fnName] === "write" && toolReportedSuccess(result)) {
+          writesUsed++;
+          if (receiptKey) await receiptLine(receiptKey);
+        }
+
         history.push({
           role: "tool",
           tool_call_id: toolCall.id,
-          content: JSON.stringify({
-            success: false,
-            error: "write_budget_exhausted",
-            instruction:
-              "You already changed something this turn, so this second change was NOT saved. Tell the user what you changed, name what else you were about to change, and ask them to confirm it in their next message.",
-          }),
+          content: result,
         });
-        continue;
       }
-
-      let result: string;
-      /** Set by a write executor that actually persisted something. */
-      let receiptKey: Parameters<typeof t>[1] | null = null;
-      switch (fnName) {
-        case "update_bio": {
-          const outcome = await execUpdateBio(telegramId, args as { bio: string });
-          result = outcome.toolResult;
-          if (outcome.action) pendingAction = outcome.action;
-          else receiptKey = "editBioSaved";
-          break;
-        }
-        case "update_major":
-          result = await execUpdateMajor(telegramId, args as { major: string });
-          receiptKey = "editMajorSaved";
-          break;
-        case "update_age_range":
-          result = await execUpdateAgeRange(
-            telegramId,
-            args as { min_age: number; max_age: number },
-          );
-          receiptKey = "editAgeRangeSaved";
-          break;
-        case "update_partner_preferences":
-          result = await execUpdatePartnerPreferences(
-            telegramId,
-            args as { preferences: string },
-          );
-          receiptKey = "editPrefsDescriptionSaved";
-          break;
-        case "update_hobbies":
-          result = await execUpdateHobbies(telegramId, args as { hobbies: unknown });
-          receiptKey = "editHobbiesSaved";
-          break;
-        case "set_language":
-          result = await execSetLanguage(telegramId, args as { language?: unknown });
-          // Read AFTER the write, so this picks up the language just set —
-          // the receipt lands in the language the user is switching TO.
-          receiptKey = "settingsLanguageSaved";
-          break;
-        case "set_theme":
-          result = await execSetTheme(telegramId, args as { theme?: unknown });
-          receiptKey = "settingsThemeSaved";
-          break;
-        case "get_my_profile":
-          result = await execGetMyProfile(telegramId);
-          break;
-        case "get_my_standing":
-          result = await execGetMyStanding(telegramId);
-          break;
-        case "explain_my_match":
-          result = await execExplainMyMatch(telegramId);
-          break;
-        case "pause_matching":
-          result = await execPauseMatching(telegramId);
-          receiptKey = "pauseConfirmed";
-          break;
-        case "resume_matching":
-          result = await execResumeMatching(telegramId);
-          receiptKey = "resumeConfirmed";
-          break;
-        case "record_rejection_feedback":
-          result = await execRecordRejectionFeedback(
-            telegramId,
-            args as { match_id: string; reason: string },
-          );
-          break;
-        case "offer_cancel_premium": {
-          const outcome = await evaluatePremiumCancelOffer(telegramId);
-          result = outcome.toolResult;
-          if (outcome.action) pendingAction = outcome.action;
-          break;
-        }
-        case "propose_cancel_date": {
-          const outcome = await execProposeCancelDate(telegramId);
-          result = outcome.toolResult;
-          if (outcome.action) pendingAction = outcome.action;
-          break;
-        }
-        case "propose_close_account": {
-          const outcome = await execProposeCloseAccount(telegramId);
-          result = outcome.toolResult;
-          if (outcome.action) pendingAction = outcome.action;
-          break;
-        }
-        case "open_screen": {
-          const outcome = await execOpenScreen(telegramId, args as { screen?: unknown });
-          result = outcome.toolResult;
-          if (outcome.action) pendingAction = outcome.action;
-          break;
-        }
-        default:
-          result = JSON.stringify({ error: `Unknown tool: ${fnName}` });
-      }
-
-      // Only count and acknowledge a write that reported success — a rejected
-      // edit must neither burn the turn's budget nor tell the user it landed.
-      if (TOOL_KINDS[fnName] === "write" && toolReportedSuccess(result)) {
-        writesUsed++;
-        if (receiptKey) await receiptLine(receiptKey);
-      }
-
-      history.push({
-        role: "tool",
-        tool_call_id: toolCall.id,
-        content: result,
-      });
     }
+  } catch (error) {
+    // Не пробрасываем: то, что уже применилось, обязано быть подтверждено, а
+    // история — сохранена, иначе следующий ход повторит ту же запись.
+    console.error("[menu-agent] LLM call failed mid-turn", telegramId, error);
+    llmFailed = true;
   }
 
   // Persist history (only non-system messages to keep it lean; system prompt is
@@ -1577,8 +1603,13 @@ export async function runMenuAgentTurn(
   // out mid tool-loop) used to answer a Russian-speaking user with an English
   // sentence out of nowhere, which reads exactly like the bot switching
   // languages on its own.
-  const reply =
-    lastAssistant?.content ?? t(await userLanguage(telegramId), "agentFallbackError");
+  // При провале модели берём именно запасную реплику, а не последний
+  // ассистентский `content`: тот принадлежит предыдущему раунду и, скорее
+  // всего, был сопровождением tool-call'а — выдавать его за ответ значило бы
+  // сделать вид, что ход завершился нормально.
+  const reply = llmFailed
+    ? t(await userLanguage(telegramId), "agentFallbackError")
+    : (lastAssistant?.content ?? t(await userLanguage(telegramId), "agentFallbackError"));
 
   return {
     reply,

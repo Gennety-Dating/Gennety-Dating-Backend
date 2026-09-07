@@ -836,6 +836,43 @@ describe("menu-agent write budget", () => {
     expect(refusal).toBeDefined();
   });
 
+  /**
+   * Регрессия на дефект аудита 2026-09-06 («Обработка ошибок №1»).
+   *
+   * Инструменты пишут в базу до того, как понадобится следующий ответ
+   * модели. `callOpenAI` бросает на любом не-2xx, и это исключение уносило
+   * с собой и чеки о применённом, и сохранение истории: в Telegram человек
+   * получал главное меню, в приложении — 500, матчинг при этом стоял на
+   * паузе, а агент на следующем ходу не знал, что уже сделал.
+   */
+  it("сохраняет чек и историю, когда модель падает после применённой записи", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "update_major", args: { major: "Design" } }]),
+      )
+      .mockRejectedValueOnce(new Error("OpenAI API error: 429 Too Many Requests"));
+
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await runMenuAgentTurn(telegramId, "поменяй специальность", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    errors.mockRestore();
+
+    // Запись применена — откатить её нечем, значит промолчать о ней нельзя.
+    expect(majorWrites()).toBe(1);
+    expect(result.receipts).toHaveLength(1);
+    // Ход не взорвался: вызывающий получает реплику, а не исключение.
+    expect(result.reply).toBeTruthy();
+    // История сохранена, иначе следующий ход повторил бы ту же запись.
+    const historyWrite = (
+      prisma.user.update as ReturnType<typeof vi.fn>
+    ).mock.calls.find(
+      (c) => (c[0] as { data?: { messageHistory?: unknown } }).data?.messageHistory !== undefined,
+    );
+    expect(historyWrite).toBeDefined();
+  });
+
   it("does not spend the budget on a write that failed validation", async () => {
     const fetchFn = vi
       .fn()
