@@ -822,6 +822,10 @@ model ChatEvent {
   @@index([userId, createdAt])
   /// Backs the `deleteMessage` reconciliation lookup.
   @@index([telegramMessageId])
+  /// The retention sweep deletes by age alone. Without `createdAt` leading,
+  /// that nightly query is a sequential scan plus a full sort of the busiest
+  /// table here — it is written on every inbound and outbound message.
+  @@index([createdAt])
   @@map("chat_events")
 }
 
@@ -2061,6 +2065,8 @@ model ProxyMessage {
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
 
   @@index([matchId, createdAt])
+  /// Same reason as `chat_events`: the retention sweep filters on age alone.
+  @@index([createdAt])
   @@map("proxy_messages")
 }
 
@@ -3050,5 +3056,7 @@ model EventFeedback {
 
   @@unique([eventId, userId])
   @@index([eventId, safety])
+  /// Same reason as `chat_events`: the retention sweep filters on age alone.
+  @@index([createdAt])
   @@map("event_feedback")
 }
