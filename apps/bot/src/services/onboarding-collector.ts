@@ -812,13 +812,74 @@ const EXTRACTOR_ALLOWED_VALUES: Partial<
   relationship_intent: [...RELATIONSHIP_INTENTS],
 };
 
+/**
+ * Attempts at the extractor before giving up, and how long to wait between them.
+ *
+ * There were none. A 429 or a 5xx returned `EMPTY_EXTRACTION`, an empty
+ * `accepted` set produced the SAME question again, and the person saw the bot
+ * ask their name three times in a row with no explanation — on the first screen
+ * of the product, which is the one that decides whether they stay.
+ *
+ * Two retries, because the failures worth retrying (a rate answer, a blip) are
+ * over in seconds, and a third attempt would only make the silence longer.
+ * `Retry-After` is honoured when the server sends one: it is the only party
+ * that knows when it will be ready.
+ */
+const EXTRACTOR_ATTEMPTS = 3;
+const EXTRACTOR_BACKOFF_MS = [400, 1200];
+/** Never wait longer than this on a `Retry-After`; the person is waiting too. */
+const EXTRACTOR_MAX_BACKOFF_MS = 4000;
+
+function extractorBackoffMs(attempt: number, retryAfter: string | null): number {
+  const header = Number(retryAfter);
+  if (Number.isFinite(header) && header > 0) {
+    return Math.min(header * 1000, EXTRACTOR_MAX_BACKOFF_MS);
+  }
+  return EXTRACTOR_BACKOFF_MS[attempt] ?? EXTRACTOR_MAX_BACKOFF_MS;
+}
+
+/** Worth trying again: a rate answer or the server's own problem. */
+function extractorShouldRetry(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
 export async function extractWithOpenAI(
   text: string,
   question: OnboardingQuestion,
   language: Language,
   fetchFn: typeof fetch,
+  sleep: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<ExtractionResult> {
   if (!env.OPENAI_API_KEY) return EMPTY_EXTRACTION;
+
+  for (let attempt = 0; attempt < EXTRACTOR_ATTEMPTS; attempt += 1) {
+    const result = await extractOnce(text, question, language, fetchFn);
+    if (result.kind === "ok") return result.extraction;
+    const last = attempt === EXTRACTOR_ATTEMPTS - 1;
+    if (last || !result.retryable) {
+      if (result.retryable) {
+        console.warn(
+          `[onboarding-collector] extractor gave up after ${EXTRACTOR_ATTEMPTS} attempts`,
+        );
+      }
+      return EMPTY_EXTRACTION;
+    }
+    await sleep(extractorBackoffMs(attempt, result.retryAfter));
+  }
+  return EMPTY_EXTRACTION;
+}
+
+type ExtractOnce =
+  | { kind: "ok"; extraction: ExtractionResult }
+  | { kind: "failed"; retryable: boolean; retryAfter: string | null };
+
+async function extractOnce(
+  text: string,
+  question: OnboardingQuestion,
+  language: Language,
+  fetchFn: typeof fetch,
+): Promise<ExtractOnce> {
   const response = await fetchFn("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -855,13 +916,20 @@ export async function extractWithOpenAI(
   });
   if (!response.ok) {
     console.warn("[onboarding-collector] extractor failed", response.status);
-    return EMPTY_EXTRACTION;
+    return {
+      kind: "failed",
+      retryable: extractorShouldRetry(response.status),
+      retryAfter: response.headers?.get?.("retry-after") ?? null,
+    };
   }
   const body = (await response.json()) as {
     choices?: Array<{ message?: { content?: string | null } }>;
   };
   const content = body.choices?.[0]?.message?.content;
-  if (!content) return EMPTY_EXTRACTION;
+  // An empty completion is the model's answer, not a transport failure — the
+  // person simply said nothing extractable. Retrying would ask the same
+  // question of the same text and get the same nothing.
+  if (!content) return { kind: "ok", extraction: EMPTY_EXTRACTION };
   try {
     const parsed = JSON.parse(content) as {
       intent?: string;
@@ -883,9 +951,11 @@ export async function extractWithOpenAI(
       if (value === null || value === undefined) return [];
       return [{ field, evidence: candidate.evidence, value }];
     });
-    return { candidates, intent: asIntent(parsed.intent) };
+    return { kind: "ok", extraction: { candidates, intent: asIntent(parsed.intent) } };
   } catch {
-    return EMPTY_EXTRACTION;
+    // Malformed JSON from a 200 is the model's fault, not the network's, and a
+    // second identical request at temperature 0 gets the same body back.
+    return { kind: "ok", extraction: EMPTY_EXTRACTION };
   }
 }
 

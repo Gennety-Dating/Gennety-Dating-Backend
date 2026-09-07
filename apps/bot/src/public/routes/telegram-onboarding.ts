@@ -370,7 +370,18 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       // they don't have to do is go and find a real inbox, which for a
       // university-domain address they usually don't have anyway. The demo
       // process also runs with OTP_LOG_TO_CONSOLE=true, so no mail is sent.
-      if (!DEMO_MODE_ENABLED) {
+      //
+      // `NODE_ENV === "production"` overrides the flag, and nothing overrides
+      // that. The email gate is how somebody proves an address is theirs, so
+      // skipping it in a process that calls itself production would be account
+      // takeover by configuration — one edited line in the wrong `.env`. Demo
+      // isolation is enforced at deploy time (`scripts/deploy-demo.sh` refuses a
+      // demo that shares production's `BOT_TOKEN`, `DATABASE_URL`, Supabase keys
+      // or `JWT_SECRET`) and by `assertDemoIsolation` at boot; this is the last
+      // line, and it costs nothing because a real demo never sets NODE_ENV to
+      // production.
+      const demoBypassAllowed = DEMO_MODE_ENABLED && process.env.NODE_ENV !== "production";
+      if (!demoBypassAllowed) {
         const result = await verifyOtp(user.email, code);
         if (!result.ok) {
           const status = result.reason === "mismatch" ? 401 : 400;
