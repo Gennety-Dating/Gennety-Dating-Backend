@@ -180,6 +180,57 @@ describe("sendNoMatchNotices", () => {
     expect(mNoticeCreate).not.toHaveBeenCalled();
   });
 
+  // ── The run is paged, and the paging cannot spin ────────────────────────
+  //
+  // It used to read the whole active base in one `findMany` and then sleep two
+  // seconds between every send: ten thousand people is five and a half hours of
+  // one cron invocation, long enough that `guardedTick` swallows every later
+  // firing and a restart loses the tail.
+
+  it("keeps reading while a page comes back full", async () => {
+    const page = Array.from({ length: 500 }, (_, index) => ({
+      id: `full-${index}`,
+      telegramId: BigInt(1000 + index),
+      language: "en",
+    }));
+    mUserFindMany
+      .mockResolvedValueOnce(page)
+      .mockResolvedValueOnce([{ id: "tail", telegramId: 999n, language: "en" }]);
+    mMatchFindFirst.mockResolvedValue(null);
+    mNoticeFindFirst.mockResolvedValue(null);
+
+    const result = await sendNoMatchNotices(makeApi() as never, NOW, 0, makeStream() as never);
+
+    // The claim written for each person is what excludes them from the next
+    // read, so the walk moves forward without a cursor of its own.
+    expect(mUserFindMany).toHaveBeenCalledTimes(2);
+    expect(mUserFindMany.mock.calls[0]![0].take).toBe(500);
+    expect(result.notified).toBe(501);
+  });
+
+  it("stops instead of spinning on somebody it can never reach", async () => {
+    // A person on no rail at all gets NO notice row — deliberately — so the
+    // query cannot exclude them and would hand them back on every read. Without
+    // the seen-set the run would loop until the page cap, re-deciding the same
+    // person forty times.
+    const unreachable = Array.from({ length: 500 }, (_, index) => ({
+      id: `ghost-${index}`,
+      telegramId: BigInt(-7 - index),
+      platform: "ios",
+      language: "en",
+    }));
+    mUserFindMany.mockResolvedValue(unreachable);
+
+    const result = await sendNoMatchNotices(makeApi() as never, NOW, 0, makeStream() as never);
+
+    expect(result.skipped).toBe(500);
+    expect(result.notified).toBe(0);
+    // Two reads: the first yields the one fresh person, the second yields
+    // nobody new and ends the walk.
+    expect(mUserFindMany).toHaveBeenCalledTimes(2);
+    expect(mNoticeCreate).not.toHaveBeenCalled();
+  });
+
   it("sends tier-1 message for a user with no matches ever and no prior notice (first-ever check)", async () => {
     mUserFindMany.mockResolvedValueOnce([
       { id: "u1", telegramId: 111n, language: "en" },
