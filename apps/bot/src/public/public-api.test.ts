@@ -2033,6 +2033,9 @@ describe("POST /v1/me/photos", () => {
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/limit/i);
     expect(res.body.max).toBe(MAX_PHOTOS);
+    // The client switches on `code`; without it iOS shows "something went wrong".
+    expect(res.body.code).toBe("photo_limit");
+    expect(res.body.retryable).toBe(false);
   });
 
   it("cleans up storage when a concurrent upload fills the final slot", async () => {
@@ -2066,6 +2069,7 @@ describe("POST /v1/me/photos", () => {
       .attach("photo", JPEG, { filename: "p.jpg", contentType: "image/jpeg" });
 
     expect(res.status).toBe(409);
+    expect(res.body.code).toBe("photo_limit");
     expect(deleteStorageObject).toHaveBeenCalledWith(
       "profile-photos",
       `${user.id}/late.jpg`,
