@@ -574,6 +574,53 @@ describe("useTicketFromBalance — wallet refund accounting", () => {
     expect(claimData).not.toHaveProperty("paidForPartnerByA");
   });
 
+  // A spend is committed before the claim is attempted. When the settlement
+  // throws, nothing else can give the ticket back: the expiry rail reads the
+  // MATCH row, and that row says nobody paid.
+  it("refunds the whole spend when settlement throws before the claim lands", async () => {
+    mMatch.findUnique.mockResolvedValue(matchRow());
+    mMatch.updateMany.mockRejectedValue(new Error("db gone"));
+    const api = createApi();
+
+    await expect(useTicketFromBalance(api, 1001n, "match-1", "self")).rejects.toThrow(
+      "db gone",
+    );
+
+    expect(mSpend).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "uid-A", count: 1, reason: "spend_match" }),
+    );
+    expect(mGrant).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "uid-A", count: 1, reason: "refund" }),
+    );
+  });
+
+  it("keeps the ticket when settlement throws after the claim has landed", async () => {
+    // The claim is one atomic `updateMany`: if it applied, the ticket bought
+    // the slot and refunding would hand back something already spent well.
+    // Both slots settle here, so the hand-off to the scheduler is what throws —
+    // the post-claim messaging is deliberately best-effort and cannot.
+    const paidAt = new Date("2026-06-19T10:00:00Z");
+    let claimed = false;
+    mMatch.findUnique.mockImplementation(async () =>
+      claimed
+        ? matchRow({ ticketPaidA: paidAt, ticketPaidB: paidAt, paidForPartnerByA: true })
+        : matchRow(),
+    );
+    mMatch.updateMany.mockImplementation(async () => {
+      claimed = true;
+      return { count: 1 };
+    });
+    mStartScheduling.mockRejectedValue(new Error("scheduler down"));
+    const api = createApi();
+
+    await expect(useTicketFromBalance(api, 1001n, "match-1", "both")).rejects.toThrow(
+      "scheduler down",
+    );
+
+    expect(mSpend).toHaveBeenCalledWith(expect.objectContaining({ count: 2 }));
+    expect(mGrant).not.toHaveBeenCalled();
+  });
+
   it("does not refund when 'use 2' settles both slots (neither paid yet)", async () => {
     mMatch.findUnique.mockResolvedValue(matchRow());
     const api = createApi();
