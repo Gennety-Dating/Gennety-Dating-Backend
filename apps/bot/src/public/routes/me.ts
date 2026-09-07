@@ -695,7 +695,13 @@ meRouter.post(
     const existing = profile?.photos ?? [];
     const existingHashes = profile?.uploadedPhotoHashes ?? [];
     if (existing.length >= MAX_PHOTOS) {
-      res.status(409).json({ error: "Photo limit reached", max: MAX_PHOTOS });
+      // `code` is what the client switches on — without it iOS falls back to
+      // `photo.reject.generic` ("something went wrong") for a refusal it can
+      // explain precisely. `retryable: false`: deleting a photo is the only
+      // way out, retrying the same upload never is.
+      res
+        .status(409)
+        .json({ error: "Photo limit reached", code: "photo_limit", retryable: false, max: MAX_PHOTOS });
       return;
     }
 
@@ -791,7 +797,9 @@ meRouter.post(
       if (err instanceof ProfilePhotoCommitConflictError) {
         res.status(409).json({
           error: err.reason === "limit" ? "Photo limit reached" : "Photo already exists",
-          ...(err.reason === "limit" ? { max: MAX_PHOTOS } : { code: "duplicate_exact" }),
+          code: err.reason === "limit" ? "photo_limit" : "duplicate_exact",
+          retryable: false,
+          ...(err.reason === "limit" ? { max: MAX_PHOTOS } : {}),
         });
         return;
       }
