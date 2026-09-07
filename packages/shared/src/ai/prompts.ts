@@ -10,6 +10,8 @@
  * `response_format: { type: "json_object" }` on the OpenAI API.
  */
 
+import { UNTRUSTED_FENCE_RULE, fenceUntrusted } from "./untrusted.js";
+
 // ---------------------------------------------------------------------------
 // Voice core — the brand voice, in one place (see VOICE.md, source of truth)
 // ---------------------------------------------------------------------------
@@ -213,10 +215,18 @@ ${VOICE_SELF_GENDER}
 ## Subject
 - Reader: ${input.selfFirstName ?? "User"}
 - Match: ${input.otherFirstName ?? "Someone"}
-- Reader's bio: ${input.selfSummary ?? "(no bio)"}
-- Match's bio: ${input.otherSummary ?? "(no bio)"}
-- Match's occupation (what they do): ${input.otherOccupation?.trim() || "(not specified)"}
 - Output language: ${input.language}
+
+${UNTRUSTED_FENCE_RULE}
+
+Reader's bio:
+${fenceUntrusted("reader's bio", input.selfSummary)}
+
+Match's bio — PRIVATE. The reader has never seen it and must not see it here.
+Use it to find a compatibility hook; never repeat a phrase from it.
+${fenceUntrusted("match's bio", input.otherSummary)}
+
+- Match's occupation (what they do): ${input.otherOccupation?.trim() || "(not specified)"}
 - You MAY naturally reference the match's occupation in the pitch when it's a genuine compatibility hook, but only if it's provided above — never invent one.
 
 ## Output Requirements

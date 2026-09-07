@@ -221,6 +221,14 @@ export {
   parsePostDateFeedbackPrompt,
   parseReportTriagePrompt,
 } from "./ai/prompts.js";
+export {
+  UNTRUSTED_FENCE,
+  UNTRUSTED_FENCE_RULE,
+  neutralizeUntrusted,
+  fenceUntrusted,
+  containsContactChannel,
+  echoesVerbatim,
+} from "./ai/untrusted.js";
 export type {
   ParseLLMDumpInput,
   PitchAndSynergyInput,
