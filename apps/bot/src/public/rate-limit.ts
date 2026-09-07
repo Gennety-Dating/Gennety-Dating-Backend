@@ -2,10 +2,29 @@ import rateLimit, { ipKeyGenerator, MemoryStore, type Options } from "express-ra
 import type { Request } from "express";
 import { createHash } from "node:crypto";
 
-function make(opts: Partial<Options>) {
+/**
+ * Общая фабрика всех лимитеров этого файла.
+ *
+ * Экспортирована ради теста (`rate-limit.test.ts`): инвариант «429 всегда
+ * `application/json`» принадлежит именно ей, а не отдельным лимитерам, и
+ * проверять его на конкретном лимитере значит не проверять его для того,
+ * который напишут завтра. Тот же приём, что и у `resetGlobalRateLimit`
+ * ниже. В продакшн-коде вызывать не нужно — все лимитеры уже здесь.
+ */
+export function make(opts: Partial<Options>) {
   return rateLimit({
     standardHeaders: "draft-7",
     legacyHeaders: false,
+    // JSON по умолчанию, а не строка. Дефолт `express-rate-limit` — обычная
+    // строка, и Express 5 отдаёт её как `text/html`. Сгенерированный из
+    // OpenAPI клиент iOS требует на 429 строго `application/json` и на
+    // несовпадении content-type БРОСАЕТ: ветка `.tooManyRequests`, которая
+    // умеет сохранить пару токенов, до вызывающего не доходит, а ошибка
+    // чтения ответа неотличима от смерти сессии — человека выкидывает на
+    // экран входа без единого его действия. Дефолт здесь закрывает это для
+    // всех лимитеров разом, включая те, что напишут потом; частный
+    // `message` по-прежнему побеждает через spread ниже.
+    message: { error: "Too many requests, try again later." },
     ...opts,
   });
 }
@@ -29,7 +48,17 @@ function ipKey(req: Request): string {
 const globalLimiterStore = new MemoryStore();
 export const globalLimiter = make({
   windowMs: 60_000,
-  limit: 100,
+  // 600, а не 100. Этот пол стоит ДО аутентификации (`server.ts`), поэтому
+  // ключ у него может быть только по IP: ключ по токену подделывается
+  // случайной строкой в заголовке и пол перестаёт быть полом. А IP в этом
+  // продукте общий — он кампусный, за одним NAT сидят десятки людей. Считаем
+  // худший случай одного честного клиента: «Сегодня» — 4 запроса каждые
+  // 20 с (12/мин), канва в активном свидании — 3 запроса каждые 5 с
+  // (36/мин), прокси-чат — 15/мин. При 100/мин трёх одновременно активных
+  // за одним IP хватало, чтобы упереться в потолок, то есть 429 становился
+  // штатным ответом живому пользователю. 600/мин = 10 rps с одного адреса:
+  // грубый флуд по-прежнему отсекается, а честная толпа за NAT — нет.
+  limit: 600,
   store: globalLimiterStore,
 });
 
@@ -88,8 +117,17 @@ export const phoneOtpVerifyLimiter = make({
   message: { error: "Too many verification attempts." },
 });
 
-/** Refresh — 60/hour per IP. */
-export const refreshLimiter = make({ windowMs: 3_600_000, limit: 60 });
+/**
+ * Refresh — 600/hour per IP.
+ *
+ * `JWT_ACCESS_TTL` = 15 минут, значит каждый активный человек ротирует пару
+ * минимум четырежды в час. При 60/час общий NAT упирался в потолок на
+ * пятнадцатом активном пользователе, и дальше refresh отвечал 429 — то
+ * есть ровно там, где цена ошибки максимальна: неудачный refresh ведёт к
+ * экрану входа. Ключ остаётся по IP по той же причине, что и у
+ * `globalLimiter` (стоит до аутентификации), поэтому лечим потолком.
+ */
+export const refreshLimiter = make({ windowMs: 3_600_000, limit: 600 });
 
 /** Whisper / assistant voice — 30/hour per user (falls back to IP). */
 export const voiceLimiter = make({
