@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   identityTrustConfigurationErrors,
+  paymentTrustConfigurationErrors,
   type IdentityTrustConfiguration,
+  type PaymentTrustConfiguration,
 } from "./config.js";
 
 function productionReady(
@@ -110,6 +112,65 @@ describe("identity trust configuration", () => {
         { ...unsafe, OTP_LOG_TO_CONSOLE: false },
         "test",
       ),
+    ).toEqual([]);
+  });
+});
+
+/**
+ * Платёжный контур — та же дисциплина, что и у контура личности.
+ *
+ * Аудит 2026-09-06 нашёл асимметрию: фейковый OTP не пускал процесс в прод, а
+ * фейковые деньги пускали. Оба флага дефолтятся в небезопасную сторону
+ * (`TICKET_PAYMENT_MODE ?? "mock"`, `TICKET_STARS_ENABLED === "true"`), то
+ * есть опасное состояние — это ровно то, что даёт неполный `.env`.
+ */
+function paymentsProductionReady(
+  overrides: Partial<PaymentTrustConfiguration> = {},
+): PaymentTrustConfiguration {
+  return {
+    DEMO_MODE_ENABLED: false,
+    TICKET_FEATURE_ENABLED: true,
+    TICKET_STARS_ENABLED: true,
+    TICKET_PAYMENT_MODE: "mock",
+    ...overrides,
+  };
+}
+
+describe("payment trust configuration", () => {
+  it("accepts production: билеты включены, Stars — единственный рельс", () => {
+    expect(paymentTrustConfigurationErrors(paymentsProductionReady(), "production")).toEqual([]);
+  });
+
+  it("отказывается стартовать, когда mock-рельс открыт в проде", () => {
+    // Ровно то, что даёт потерянная при ротации строка: Stars выключены,
+    // значит PAY-1 не закрывает /intent + /confirm, а режим по умолчанию
+    // выдаёт clientSecret и принимает его же назад как доказательство оплаты.
+    const errors = paymentTrustConfigurationErrors(
+      paymentsProductionReady({ TICKET_STARS_ENABLED: false }),
+      "production",
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("TICKET_STARS_ENABLED must be true");
+  });
+
+  it("молчит, пока билеты вообще выключены", () => {
+    // Рельса нет — и запрещать нечего.
+    expect(
+      paymentTrustConfigurationErrors(
+        paymentsProductionReady({ TICKET_FEATURE_ENABLED: false, TICKET_STARS_ENABLED: false }),
+        "production",
+      ),
+    ).toEqual([]);
+  });
+
+  it("пропускает три не-продовых рантайма", () => {
+    const unsafe = paymentsProductionReady({ TICKET_STARS_ENABLED: false });
+    expect(paymentTrustConfigurationErrors(unsafe, "development")).toEqual([]);
+    expect(paymentTrustConfigurationErrors(unsafe, "test")).toEqual([]);
+    // Демо — не самозаверение: assertDemoIsolation ТРЕБУЕТ Stars выключенными
+    // (они двигали бы реальные звёзды посетителя) и отрабатывает раньше.
+    expect(
+      paymentTrustConfigurationErrors({ ...unsafe, DEMO_MODE_ENABLED: true }, "production"),
     ).toEqual([]);
   });
 });

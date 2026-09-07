@@ -1051,6 +1051,68 @@ export function assertIdentityTrustConfiguration(
   }
 }
 
+export interface PaymentTrustConfiguration {
+  DEMO_MODE_ENABLED: boolean;
+  TICKET_FEATURE_ENABLED: boolean;
+  TICKET_STARS_ENABLED: boolean;
+  TICKET_PAYMENT_MODE: "mock" | "stripe";
+}
+
+/**
+ * Fail closed before a production-like bot opens a payment rail that moves no
+ * money but hands out the goods.
+ *
+ * The asymmetry this closes was found by the 2026-09-06 audit: a fake OTP
+ * cannot start production (`identityTrustConfigurationErrors` above), but fake
+ * money could. `TICKET_PAYMENT_MODE` DEFAULTS to `"mock"` and
+ * `TICKET_STARS_ENABLED` defaults to false (it is an `=== "true"` read), so the
+ * unsafe state is what an incomplete `.env` produces — a single line lost in a
+ * rotation silently moves production onto a rail where the server issues a
+ * `clientSecret` and then accepts that same secret back as proof of payment.
+ *
+ * The dangerous condition is the mock rail being REACHABLE, not the mode alone:
+ * `PAY-1` (`routes/tickets.ts`, `routes/ticket.ts`) 404s `/intent` and
+ * `/confirm` whenever Stars is on, which is why production runs with Stars as
+ * the sole top-up rail (`docs/product/domains/matching-engine.md`). With Stars
+ * off, those routes are open and the mode decides what they do — and `"stripe"`
+ * is not implemented (it throws), so `"mock"` is the only thing they can be.
+ *
+ * Same three non-production runtimes as the identity gate, for the same
+ * reasons. Demo is exempt because `assertDemoIsolation()` REQUIRES
+ * `TICKET_STARS_ENABLED=false` — Stars would move real money out of a
+ * visitor's real Telegram balance — and that guard runs first at boot.
+ */
+export function paymentTrustConfigurationErrors(
+  config: PaymentTrustConfiguration = env,
+  runtime = process.env.NODE_ENV,
+): string[] {
+  if (runtime === "test") return [];
+  if (runtime === "development") return [];
+  if (config.DEMO_MODE_ENABLED) return [];
+  if (!config.TICKET_FEATURE_ENABLED) return [];
+
+  const errors: string[] = [];
+  if (!config.TICKET_STARS_ENABLED) {
+    errors.push(
+      "TICKET_STARS_ENABLED must be true when TICKET_FEATURE_ENABLED is on " +
+        "outside development: with Stars off the PAY-1 guard opens the " +
+        `/intent + /confirm rail, and TICKET_PAYMENT_MODE=${config.TICKET_PAYMENT_MODE} ` +
+        "issues a client secret and then accepts it back as proof of payment",
+    );
+  }
+  return errors;
+}
+
+export function assertPaymentTrustConfiguration(
+  config: PaymentTrustConfiguration = env,
+  runtime = process.env.NODE_ENV,
+): void {
+  const errors = paymentTrustConfigurationErrors(config, runtime);
+  if (errors.length > 0) {
+    throw new Error(`Unsafe payment configuration:\n- ${errors.join("\n- ")}`);
+  }
+}
+
 /**
  * Parse `TICKET_BUNDLE_STARS` ("<count>:<stars>,…") into a count→Stars map.
  * Falls back to the default (1→350, 3→830, 6→1350) when unset or fully invalid;
