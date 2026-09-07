@@ -34,6 +34,17 @@ export const PHONE_OTP_DAILY_CAP = 6;
 export const PHONE_CODE_LENGTH = 6;
 const PROVIDER_TIMEOUT_MS = 10_000;
 
+/**
+ * Провайдер строки-брони: заявка создана, доставка ещё не состоялась.
+ *
+ * Строка с этим значением не имеет ни `codeHash`, ни `providerRequestId`,
+ * поэтому `verifyPhoneCode` уводит её в локальную ветку и отвергает — ровно
+ * тот случай, который её комментарий называет безопасным по построению.
+ * Живёт она секунды: успех доставки переписывает провайдера на настоящего,
+ * провал — удаляет строку.
+ */
+const RESERVED_PROVIDER = "reserving";
+
 export type PhoneDeliveryChannel = "telegram" | "sms";
 
 export type PhoneCodeRequestResult =
@@ -204,8 +215,24 @@ async function twilioCheckVerification(
  * Create and deliver a phone code. Serialized per phone via a
  * transaction-scoped advisory lock (same rationale as `createAndSendOtp` in
  * `public/otp.ts`): concurrent requests cannot bypass the cooldown or send
- * competing codes. Delivery runs inside the bounded transaction so a failed
- * send rolls the challenge row back.
+ * competing codes.
+ *
+ * Delivery deliberately happens OUTSIDE the transaction — the same fix
+ * `public/otp.ts` already carries, and for the same reason. Holding an
+ * interactive transaction across an outbound HTTP call pins a pooled DB
+ * connection AND the advisory lock for the provider's whole timeout (up to
+ * 10s per rail, two rails in sequence). Prisma's pool is unconfigured, so on
+ * the production droplet it is a handful of connections, and the per-phone
+ * rate limiter does not bound *distinct* numbers: a slow Twilio was enough
+ * to starve the pool and stall the bot, both APIs and every cron worker in
+ * the single process. The anti-double-send property comes from the lock plus
+ * the persisted row, not from holding the connection across the network, so
+ * nothing is lost by committing first and sending after.
+ *
+ * The row is written before delivery as a reservation (`RESERVED_PROVIDER`),
+ * which is what keeps the cooldown and the daily cap honest while a send is
+ * in flight. Success rewrites it with the real provider; total failure
+ * deletes it, so a retry is not blocked by its own undelivered attempt.
  */
 export async function requestPhoneCode(
   rawPhone: string,
@@ -214,7 +241,10 @@ export async function requestPhoneCode(
   const phone = normalizePhone(rawPhone);
   if (!phone) return { ok: false, reason: "invalid_phone" };
 
-  return prisma.$transaction(
+  // Транзакция — ТОЛЬКО про базу: лок, кулдаун, суточный кап и бронь строки.
+  // Ни одного сетевого вызова внутри, поэтому и таймаут ей нужен короткий:
+  // всё, что она делает, — четыре запроса к локальному Postgres.
+  const reservation = await prisma.$transaction(
     async (tx) => {
       // $executeRawUnsafe, not $queryRawUnsafe: pg_advisory_xact_lock returns
       // `void`, which Prisma 6.19+ refuses to deserialize (P2010) — caught
@@ -237,8 +267,7 @@ export async function requestPhoneCode(
         now.getTime() - existing.createdAt.getTime() < PHONE_OTP_RESEND_COOLDOWN_MS
       ) {
         return {
-          ok: false as const,
-          reason: "cooldown" as const,
+          kind: "cooldown" as const,
           resendAvailableAt: new Date(
             existing.createdAt.getTime() + PHONE_OTP_RESEND_COOLDOWN_MS,
           ),
@@ -251,117 +280,153 @@ export async function requestPhoneCode(
         where: { phone, createdAt: { gt: new Date(now.getTime() - 24 * 3_600_000) } },
       });
       if (sentToday >= PHONE_OTP_DAILY_CAP) {
-        return { ok: false as const, reason: "daily_cap" as const };
+        return { kind: "daily_cap" as const };
       }
 
-      const expiresAt = new Date(now.getTime() + PHONE_OTP_TTL_MS);
-
-      const viaTelegram = async () => {
-        const code = generateOtp(PHONE_CODE_LENGTH);
-        const requestId = await sendViaTelegramGateway(phone, code);
-        if (!requestId) return null;
-        const codeHash = await bcrypt.hash(code, 10);
-        const row = await tx.phoneOtp.create({
-          data: {
-            phone,
-            provider: "telegram_gateway",
-            codeHash,
-            providerRequestId: requestId,
-            expiresAt,
-          },
-        });
-        return {
-          ok: true as const,
-          deliveredVia: "telegram" as const,
-          expiresAt,
-          resendAvailableAt: new Date(
-            row.createdAt.getTime() + PHONE_OTP_RESEND_COOLDOWN_MS,
-          ),
-        };
-      };
-
-      const viaTwilio = async () => {
-        const sid = await twilioStartVerification(phone);
-        if (!sid) return null;
-        const row = await tx.phoneOtp.create({
-          data: {
-            phone,
-            provider: "twilio_verify",
-            providerRequestId: sid,
-            expiresAt,
-          },
-        });
-        return {
-          ok: true as const,
-          deliveredVia: "sms" as const,
-          expiresAt,
-          resendAvailableAt: new Date(
-            row.createdAt.getTime() + PHONE_OTP_RESEND_COOLDOWN_MS,
-          ),
-        };
-      };
-
-      /**
-       * Non-production rail: print the code, send nothing.
-       *
-       * Dev and the demo deployment (DEMO_MODE.md) both run on production's
-       * `TWILIO_*` credentials — the demo's isolation guard deliberately lets
-       * stateless third-party keys through — and nothing in this module ever
-       * consulted `OTP_LOG_TO_CONSOLE`. So a code requested against
-       * `demo-api.gennety.com` (the route is mounted unconditionally, and
-       * `PHONE_AUTH_ENABLED` is on there) sent a REAL SMS billed to the
-       * production account, to any number on earth, from the deployment we hand
-       * to outsiders. `email.ts` has short-circuited on this flag since it was
-       * written; this is the phone rail catching up.
-       *
-       * Safe as the FIRST branch rather than a fallback because the flag cannot
-       * be set in a production-like runtime: `identityTrustConfigurationErrors`
-       * refuses to boot with `OTP_LOG_TO_CONSOLE` on unless the process is
-       * test, development, or demo. Production therefore never reaches it.
-       *
-       * The code is ours, so `verifyPhoneCode` checks it locally against the
-       * bcrypt hash — the same path the Gateway rail uses, and the reason this
-       * rail needs no provider at all.
-       */
-      const viaConsole = async () => {
-        const code = generateOtp(PHONE_CODE_LENGTH);
-        const codeHash = await bcrypt.hash(code, 10);
-        const row = await tx.phoneOtp.create({
-          data: { phone, provider: "console", codeHash, expiresAt },
-        });
-        console.log(`[phone-verification] console rail — code for ${phone}: ${code}`);
-        return {
-          ok: true as const,
-          // The wire contract is `telegram | sms`; there is no third value and
-          // adding one would be a client-visible change for a rail no client
-          // can reach. "sms" matches the default primary.
-          deliveredVia: "sms" as const,
-          expiresAt,
-          resendAvailableAt: new Date(
-            row.createdAt.getTime() + PHONE_OTP_RESEND_COOLDOWN_MS,
-          ),
-        };
-      };
-
-      // forceSms → Twilio only; otherwise the primary rail first with the
-      // other configured rail as automatic fallback
-      // (order = PHONE_CODE_PRIMARY_PROVIDER, default twilio).
-      const order = env.OTP_LOG_TO_CONSOLE
-        ? [viaConsole]
-        : options.forceSms
-          ? [viaTwilio]
-          : env.PHONE_CODE_PRIMARY_PROVIDER === "telegram"
-            ? [viaTelegram, viaTwilio]
-            : [viaTwilio, viaTelegram];
-      for (const attempt of order) {
-        const result = await attempt();
-        if (result) return result;
-      }
-
-      return { ok: false as const, reason: "unavailable" as const };
+      // Бронь. Она и держит кулдаун с суточным капом честными, пока доставка
+      // в полёте: параллельный запрос увидит её и получит `cooldown`, а не
+      // второй код. Именно эта строка заменяет собой удержание транзакции.
+      const row = await tx.phoneOtp.create({
+        data: {
+          phone,
+          provider: RESERVED_PROVIDER,
+          expiresAt: new Date(now.getTime() + PHONE_OTP_TTL_MS),
+        },
+        select: { id: true, createdAt: true, expiresAt: true },
+      });
+      return { kind: "reserved" as const, ...row };
     },
-    { timeout: 30_000 },
+    { timeout: 10_000 },
   );
+
+  if (reservation.kind === "cooldown") {
+    return {
+      ok: false,
+      reason: "cooldown",
+      resendAvailableAt: reservation.resendAvailableAt,
+    };
+  }
+  if (reservation.kind === "daily_cap") return { ok: false, reason: "daily_cap" };
+
+  const { id, expiresAt } = reservation;
+  const resendAvailableAt = new Date(
+    reservation.createdAt.getTime() + PHONE_OTP_RESEND_COOLDOWN_MS,
+  );
+
+  /** Дописать бронь под настоящего провайдера — доставка состоялась. */
+  const settle = async (data: {
+    provider: string;
+    codeHash?: string;
+    providerRequestId?: string;
+  }): Promise<void> => {
+    await prisma.phoneOtp.update({ where: { id }, data });
+  };
+
+  const viaTelegram = async () => {
+    const code = generateOtp(PHONE_CODE_LENGTH);
+    const requestId = await sendViaTelegramGateway(phone, code);
+    if (!requestId) return null;
+    const codeHash = await bcrypt.hash(code, 10);
+    await settle({
+      provider: "telegram_gateway",
+      codeHash,
+      providerRequestId: requestId,
+    });
+    return {
+      ok: true as const,
+      deliveredVia: "telegram" as const,
+      expiresAt,
+      resendAvailableAt,
+    };
+  };
+
+  const viaTwilio = async () => {
+    const sid = await twilioStartVerification(phone);
+    if (!sid) return null;
+    await settle({ provider: "twilio_verify", providerRequestId: sid });
+    return {
+      ok: true as const,
+      deliveredVia: "sms" as const,
+      expiresAt,
+      resendAvailableAt,
+    };
+  };
+
+  /**
+   * Non-production rail: print the code, send nothing.
+   *
+   * Dev and the demo deployment (DEMO_MODE.md) both run on production's
+   * `TWILIO_*` credentials — the demo's isolation guard deliberately lets
+   * stateless third-party keys through — and nothing in this module ever
+   * consulted `OTP_LOG_TO_CONSOLE`. So a code requested against
+   * `demo-api.gennety.com` (the route is mounted unconditionally, and
+   * `PHONE_AUTH_ENABLED` is on there) sent a REAL SMS billed to the
+   * production account, to any number on earth, from the deployment we hand
+   * to outsiders. `email.ts` has short-circuited on this flag since it was
+   * written; this is the phone rail catching up.
+   *
+   * Safe as the FIRST branch rather than a fallback because the flag cannot
+   * be set in a production-like runtime: `identityTrustConfigurationErrors`
+   * refuses to boot with `OTP_LOG_TO_CONSOLE` on unless the process is
+   * test, development, or demo. Production therefore never reaches it.
+   *
+   * The code is ours, so `verifyPhoneCode` checks it locally against the
+   * bcrypt hash — the same path the Gateway rail uses, and the reason this
+   * rail needs no provider at all.
+   */
+  const viaConsole = async () => {
+    const code = generateOtp(PHONE_CODE_LENGTH);
+    const codeHash = await bcrypt.hash(code, 10);
+    await settle({ provider: "console", codeHash });
+    console.log(`[phone-verification] console rail — code for ${phone}: ${code}`);
+    return {
+      ok: true as const,
+      // The wire contract is `telegram | sms`; there is no third value and
+      // adding one would be a client-visible change for a rail no client
+      // can reach. "sms" matches the default primary.
+      deliveredVia: "sms" as const,
+      expiresAt,
+      resendAvailableAt,
+    };
+  };
+
+  // forceSms → Twilio only; otherwise the primary rail first with the
+  // other configured rail as automatic fallback
+  // (order = PHONE_CODE_PRIMARY_PROVIDER, default twilio).
+  const order = env.OTP_LOG_TO_CONSOLE
+    ? [viaConsole]
+    : options.forceSms
+      ? [viaTwilio]
+      : env.PHONE_CODE_PRIMARY_PROVIDER === "telegram"
+        ? [viaTelegram, viaTwilio]
+        : [viaTwilio, viaTelegram];
+
+  try {
+    for (const attempt of order) {
+      const result = await attempt();
+      if (result) return result;
+    }
+  } catch (err) {
+    await releaseReservation(id);
+    throw err;
+  }
+
+  await releaseReservation(id);
+  return { ok: false, reason: "unavailable" };
+}
+
+/**
+ * Снять бронь, которую никто не доставил.
+ *
+ * Иначе повтор упирается в собственную недоставленную заявку: кулдаун ещё
+ * идёт, а слот суточного капа уже потрачен. `deleteMany` с условием по
+ * провайдеру, а не `delete` по id, — чтобы уже дописанную строку не удалить
+ * никогда, даже если ошибка прилетела после успешной отправки.
+ */
+async function releaseReservation(id: string): Promise<void> {
+  await prisma.phoneOtp
+    .deleteMany({ where: { id, provider: RESERVED_PROVIDER } })
+    .catch(() => {});
 }
 
 /**
