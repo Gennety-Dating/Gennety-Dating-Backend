@@ -373,6 +373,15 @@ paths:
         Editable: `major` (user); `hobbies`, `partnerPreferences`,
         `psychologicalSummary`, `ageRangeMin`, `ageRangeMax` (profile, nested
         under `profile`). Fixed identity fields are silently ignored.
+
+        **Clearing a text field: send an empty string, not `null`.** The patch is
+        built on key presence, and a generated Swift client cannot express
+        `null` — a nullable collapses to `Optional` and the synthesised encoder
+        uses `encodeIfPresent`, so `nil` removes the KEY rather than sending
+        `null`. An emptied field therefore looked to the server like "not
+        mentioned" and the old text survived a cheerful 200. `""` (or any
+        whitespace-only string) is the sentinel for "clear this", and the server
+        stores `null`. `null` itself still works for callers that can send it.
       requestBody:
         required: true
         content:
