@@ -6,12 +6,13 @@ import {
   AD_SPEND_CATEGORIES,
   UNATTRIBUTED_CHANNEL,
   categoryRequiresUnattributed,
+  classifyAdSpendChannel,
   isAdSpendCategory,
-  isSelfNormalizedChannel,
   isValidCurrency,
   isValidPeriod,
   type AdSpendCategory,
 } from "../../admin/utils/ad-spend.js";
+import { loadKnownAdSpendChannels } from "../../admin/utils/ad-spend-channels.js";
 import {
   parseIsoDay,
   verifyAdSpendLink,
@@ -79,10 +80,6 @@ const NOTE_REQUIRED: AdSpendCategory[] = ["offline_event", "influencer"];
 
 /** Currencies offered in the picker. Any ISO-4217 code is still accepted. */
 const CURRENCIES = ["USD", "UAH", "EUR", "GBP", "PLN"];
-
-/** A deliberately-shaped campaign key: `tg:<slug>` / `web:<slug>`, the two
- * prefixes `normalizeChannel` keeps verbatim from a signup's deep link. */
-const CAMPAIGN_CHANNEL_RE = /^(tg|web):[A-Za-z0-9_.-]+$/;
 
 interface PageState {
   token: string;
@@ -197,7 +194,7 @@ founderAdSpendRouter.post(
       note: str(body.note).trim(),
     };
 
-    const failure = await saveEntry(form, await loadChannelSuggestions());
+    const failure = await saveEntry(form, await loadKnownAdSpendChannels());
     if (failure) {
       await renderPage(res, 400, {
         token,
@@ -278,29 +275,6 @@ async function loadRows(link: AdSpendLinkPayload): Promise<AdSpendRow[]> {
 }
 
 /**
- * Channel suggestions: every channel real signups have actually arrived
- * through, unioned with everything already logged. Offered as a `datalist`
- * rather than a closed `select` because a brand-new campaign slug has no
- * signups yet and must still be typeable — `isSelfNormalizedChannel` is what
- * keeps a typo from becoming a channel nothing can ever match.
- *
- * Unlike `GET /admin/ad-spend/channels` this does not run the full
- * test-account classification: that costs a scan of every user to remove a
- * handful of suggestions, and a suggestion is not a commitment. The validation
- * that actually protects the data is identical.
- */
-async function loadChannelSuggestions(): Promise<string[]> {
-  const [userRows, spendRows] = await Promise.all([
-    prisma.user.findMany({ select: { referralSource: true }, distinct: ["referralSource"] }),
-    prisma.adSpend.findMany({ select: { channel: true }, distinct: ["channel"] }),
-  ]);
-  const channels = new Set<string>([UNATTRIBUTED_CHANNEL]);
-  for (const row of userRows) channels.add(normalizeChannel(row.referralSource));
-  for (const row of spendRows) channels.add(row.channel);
-  return [...channels].sort();
-}
-
-/**
  * Validate and upsert. Returns a human-readable Russian reason on rejection,
  * `null` on success. Every rule here is the admin route's rule reached through
  * the same shared predicates — this page is a second client of `ad_spend`, not
@@ -319,18 +293,13 @@ async function saveEntry(form: FormValues, knownChannels: string[]): Promise<str
     : form.channel;
 
   if (!channel) return "Укажи канал.";
-  if (!isSelfNormalizedChannel(channel, normalizeChannel)) {
+  // One rule, shared with `POST /admin/ad-spend` — this page is a second
+  // client of `ad_spend`, not a second definition of what a valid row is.
+  const verdict = classifyAdSpendChannel(channel, knownChannels, normalizeChannel);
+  if (verdict === "not-normalized") {
     return `Канал «${channel}» не в том формате. Нужно: organic, referral, mobile, web:*, tg:<slug> или ${UNATTRIBUTED_CHANNEL}.`;
   }
-  // `isSelfNormalizedChannel` alone is a weaker guard than it looks:
-  // `normalizeChannel` is the identity function for anything that isn't a
-  // `referral`/`web:`/`mobile` string, so free text like "Instagram Ads"
-  // re-normalizes to itself and passes. On the dashboard the closed `<select>`
-  // is what really prevents a ghost channel; this page's field is open (a
-  // brand-new campaign slug has no signups yet and must stay typeable), so the
-  // check the design doc promises has to be made here: either a channel that
-  // already exists, or something deliberately shaped like a campaign key.
-  if (!knownChannels.includes(channel) && !CAMPAIGN_CHANNEL_RE.test(channel)) {
+  if (verdict === "unknown-shape") {
     return (
       `Канала «${channel}» ещё нет, и он не похож на ключ кампании. ` +
       `Новый пиши как tg:<slug> или web:<slug> (латиницей, без пробелов) — ` +
@@ -412,7 +381,7 @@ function fmtUsd(cents: number): string {
 }
 
 async function renderPage(res: Response, status: number, state: PageState): Promise<void> {
-  const channels = await loadChannelSuggestions();
+  const channels = await loadKnownAdSpendChannels();
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
   res.setHeader("Cache-Control", "private, no-store");
   res.status(status).type("html").send(renderHtml(state, channels));

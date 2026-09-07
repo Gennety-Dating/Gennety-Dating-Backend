@@ -9,13 +9,14 @@ import {
   AD_SPEND_CATEGORIES,
   UNATTRIBUTED_CHANNEL,
   categoryRequiresUnattributed,
+  classifyAdSpendChannel,
   computeAcquisitionCost,
   isAdSpendCategory,
-  isSelfNormalizedChannel,
   isValidCurrency,
   isValidPeriod,
   type AcquisitionCostUserInput,
 } from "../utils/ad-spend.js";
+import { loadKnownAdSpendChannels } from "../utils/ad-spend-channels.js";
 
 /**
  * `/admin/ad-spend` — the founder's own record of acquisition spend
@@ -140,11 +141,31 @@ adSpendRouter.post("/admin/ad-spend", async (req: Request, res: Response) => {
       res.status(400).json({ error: `category must be one of ${AD_SPEND_CATEGORIES.join(", ")}` });
       return;
     }
-    if (!isSelfNormalizedChannel(channel, normalizeChannel)) {
+    // Two distinct rejections, because they need two different corrections.
+    // `not-normalized` means the string is malformed (padded, wrong case);
+    // `unknown-shape` means it is well-formed free text that would join
+    // against nothing — the "ghost channel" the design doc promises cannot be
+    // created, and which until now only the dashboard's closed <select> was
+    // actually preventing.
+    const channelVerdict = classifyAdSpendChannel(
+      channel,
+      await loadKnownAdSpendChannels(),
+      normalizeChannel,
+    );
+    if (channelVerdict === "not-normalized") {
       res.status(400).json({
         error:
           `channel must already be normalized (organic | referral | mobile | web:* | ` +
           `tg:<slug>) or the literal "${UNATTRIBUTED_CHANNEL}"`,
+      });
+      return;
+    }
+    if (channelVerdict === "unknown-shape") {
+      res.status(400).json({
+        error:
+          `channel "${channel}" does not exist yet and is not shaped like a campaign key. ` +
+          `Use an existing channel, or name a new one tg:<slug> / web:<slug> — otherwise ` +
+          `no signup can ever be attributed to this spend`,
       });
       return;
     }

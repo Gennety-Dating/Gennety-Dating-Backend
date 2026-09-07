@@ -225,6 +225,41 @@ describe("POST /admin/ad-spend", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects free text that no signup could ever carry", async () => {
+    // The gap this closes: `normalizeChannel` is the IDENTITY function for
+    // anything not starting with referral/web:/mobile, so "Instagram Ads"
+    // re-normalizes to itself and used to pass `isSelfNormalizedChannel`,
+    // logging spend against a channel nothing can ever join to. The design doc
+    // promised this was impossible; only the dashboard's closed <select> was
+    // actually delivering it.
+    const res = await request(app)
+      .post("/admin/ad-spend")
+      .send({ ...validBody, channel: "Instagram Ads" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("campaign key");
+  });
+
+  it("accepts a brand-new campaign slug with no signups behind it yet", async () => {
+    // The other half of the same rule — a new campaign has no users by
+    // definition, so "must already exist" alone would make it unloggable.
+    const res = await request(app)
+      .post("/admin/ad-spend")
+      .send({ ...validBody, channel: "tg:launch_sept" });
+    expect(res.status).toBe(200);
+  });
+
+  it("keeps an already-logged channel editable even if nothing matches its shape", async () => {
+    // A row written before this validation existed must stay correctable
+    // rather than being stranded behind a rule that postdates it. The union
+    // includes channels already present in `ad_spend`, which is what delivers
+    // that — here, MOCK_ROW's own channel.
+    spendChannelsDistinct.mockResolvedValueOnce([{ channel: "legacy free text" }]);
+    const res = await request(app)
+      .post("/admin/ad-spend")
+      .send({ ...validBody, channel: "legacy free text" });
+    expect(res.status).toBe(200);
+  });
+
   it("rejects a null-window category logged against a real channel", async () => {
     const res = await request(app)
       .post("/admin/ad-spend")

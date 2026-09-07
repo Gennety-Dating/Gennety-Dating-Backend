@@ -6,6 +6,7 @@ import {
   categoryRequiresUnattributed,
   computeAcquisitionCost,
   isAdSpendCategory,
+  classifyAdSpendChannel,
   isSelfNormalizedChannel,
   isValidCurrency,
   isValidPeriod,
@@ -104,6 +105,62 @@ describe("isSelfNormalizedChannel", () => {
     // Contains "referral" → normalizeChannel collapses it to the bare word.
     expect(isSelfNormalizedChannel("Referral User 42", normalizeChannel)).toBe(false);
     expect(isSelfNormalizedChannel("", normalizeChannel)).toBe(false);
+  });
+
+  it("is NOT sufficient on its own — the gap classifyAdSpendChannel exists to close", () => {
+    // Documents the trap rather than the fix: `normalizeChannel` is the
+    // identity function for anything not starting with referral/web:/mobile,
+    // so arbitrary free text is "self-normalized" and this predicate says yes.
+    // Anyone reaching for it as THE channel guard needs to see this first.
+    expect(isSelfNormalizedChannel("Instagram Ads", normalizeChannel)).toBe(true);
+  });
+});
+
+describe("classifyAdSpendChannel", () => {
+  const known = ["organic", "tg:insta_promo", "unattributed"];
+
+  it("accepts the sentinel and the fixed channels with nothing logged yet", () => {
+    // FIXED_CHANNELS must pass on an empty database: a signup can land on
+    // `organic` before any spend row or any other user exists.
+    for (const channel of ["unattributed", "organic", "referral", "mobile"]) {
+      expect(classifyAdSpendChannel(channel, [], normalizeChannel)).toBe("ok");
+    }
+  });
+
+  it("accepts a channel that already exists", () => {
+    expect(classifyAdSpendChannel("tg:insta_promo", known, normalizeChannel)).toBe("ok");
+  });
+
+  it("accepts a campaign-shaped channel with no signups behind it yet", () => {
+    // A new campaign has no users by definition — "must already exist" alone
+    // would make the first spend on it unloggable.
+    expect(classifyAdSpendChannel("tg:launch_sept", [], normalizeChannel)).toBe("ok");
+    expect(classifyAdSpendChannel("web:landing_b", [], normalizeChannel)).toBe("ok");
+  });
+
+  it("rejects free text that would join against nothing", () => {
+    expect(classifyAdSpendChannel("Instagram Ads", known, normalizeChannel)).toBe(
+      "unknown-shape",
+    );
+    expect(classifyAdSpendChannel("инстаграм", known, normalizeChannel)).toBe("unknown-shape");
+    // A prefix alone is not a campaign key — there is no slug to match on.
+    expect(classifyAdSpendChannel("tg:", known, normalizeChannel)).toBe("unknown-shape");
+  });
+
+  it("separates malformed from merely-unknown, because the fixes differ", () => {
+    expect(classifyAdSpendChannel("Referral User 42", known, normalizeChannel)).toBe(
+      "not-normalized",
+    );
+    expect(classifyAdSpendChannel("", known, normalizeChannel)).toBe("not-normalized");
+  });
+
+  it("keeps a legacy channel editable once it is in the known set", () => {
+    expect(classifyAdSpendChannel("legacy free text", [], normalizeChannel)).toBe(
+      "unknown-shape",
+    );
+    expect(
+      classifyAdSpendChannel("legacy free text", ["legacy free text"], normalizeChannel),
+    ).toBe("ok");
   });
 });
 

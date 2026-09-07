@@ -99,6 +99,63 @@ export function isSelfNormalizedChannel(
   return normalizeChannel(channel) === channel;
 }
 
+/**
+ * The channels `normalizeChannel` can produce without a campaign token. A
+ * signup can land on any of these with nobody having named a campaign.
+ */
+export const FIXED_CHANNELS: readonly string[] = ["organic", "referral", "mobile"];
+
+/**
+ * A deliberately-shaped campaign key — the two prefixes `normalizeChannel`
+ * carries through verbatim from a signup's deep link.
+ */
+const CAMPAIGN_CHANNEL_RE = /^(tg|web):[A-Za-z0-9_.-]+$/;
+
+export type AdSpendChannelVerdict =
+  /** Usable: it exists, or it is shaped like a channel a signup could carry. */
+  | "ok"
+  /** Not even the OUTPUT of `normalizeChannel` — e.g. padded, or `WEB:x`. */
+  | "not-normalized"
+  /** Well-formed but arbitrary free text: it would match nothing, ever. */
+  | "unknown-shape";
+
+/**
+ * Whether a channel can ever be joined against a real signup.
+ *
+ * **Why this exists next to `isSelfNormalizedChannel` rather than inside it.**
+ * That predicate is a much weaker guard than it reads as, and the gap was live
+ * in production: `normalizeChannel` is the IDENTITY function for anything that
+ * does not start with `referral` / `web:` / `mobile`, so "Instagram Ads"
+ * re-normalizes to itself and sails through. The design doc
+ * (`docs/product/domains/ad-spend-tracking.md`) promises that a typo cannot
+ * create a channel nothing will ever match — and nothing was delivering that
+ * promise. The dashboard's channel field is an `<input list=…>` datalist, not
+ * a closed `<select>`: it SUGGESTS real channels but accepts any string typed
+ * over them. So the only guard anywhere was a predicate that says yes to
+ * arbitrary text.
+ *
+ * A channel passes if it ALREADY EXISTS (any channel a real signup carries, or
+ * one spend has already been logged against — which also keeps a legacy row
+ * editable rather than stranding it) or if it is deliberately shaped as
+ * `tg:<slug>` / `web:<slug>`. The second clause is what keeps a brand-new
+ * campaign enterable: its slug has no signups yet, by definition.
+ *
+ * `knownChannels` is passed in, not read here — this module stays a leaf with
+ * no Prisma, the same way `computeAcquisitionCost` takes its rows.
+ */
+export function classifyAdSpendChannel(
+  channel: string,
+  knownChannels: readonly string[],
+  normalizeChannel: (src: string | null) => string,
+): AdSpendChannelVerdict {
+  if (!isSelfNormalizedChannel(channel, normalizeChannel)) return "not-normalized";
+  if (channel === UNATTRIBUTED_CHANNEL) return "ok";
+  if (FIXED_CHANNELS.includes(channel)) return "ok";
+  if (knownChannels.includes(channel)) return "ok";
+  if (CAMPAIGN_CHANNEL_RE.test(channel)) return "ok";
+  return "unknown-shape";
+}
+
 export function isValidPeriod(periodStart: Date, periodEnd: Date): boolean {
   return periodEnd.getTime() >= periodStart.getTime();
 }
