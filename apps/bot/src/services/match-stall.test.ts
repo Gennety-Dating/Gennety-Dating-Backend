@@ -33,6 +33,7 @@ import {
   STALL_TIMEOUT_MS,
   cancelPlanningByUser,
   cancelStalledMatch,
+  STALL_HARD_CEILING_MS,
   schedulingOwedKind,
   sideOwesAction,
   stallBaseFor,
@@ -228,8 +229,15 @@ describe("stall timing", () => {
 
 describe("stallReachableFor", () => {
   it("excludes the synthetic negative ids mobile-only accounts carry", () => {
-    expect(stallReachableFor(123n)).toBe(true);
-    expect(stallReachableFor(-123n)).toBe(false);
+    expect(stallReachableFor({ telegramId: 123n, platform: "telegram" })).toBe(true);
+    expect(stallReachableFor({ telegramId: -123n, platform: "mobile" })).toBe(false);
+  });
+
+  it("also excludes an app-only account that carries a REAL Telegram id", () => {
+    // Telegram Login stores a real positive id on someone who never pressed
+    // Start. The old `id > 0n` test called them reachable and would have asked
+    // a question they cannot see — then penalised them for not answering.
+    expect(stallReachableFor({ telegramId: 555n, platform: "mobile" })).toBe(false);
   });
 });
 
@@ -248,6 +256,7 @@ function dbRow(overrides: Record<string, unknown> = {}) {
     userA: {
       id: "user-a",
       telegramId: 11n,
+      platform: "telegram",
       language: "en",
       firstName: "Alice",
       theme: "dark",
@@ -255,6 +264,7 @@ function dbRow(overrides: Record<string, unknown> = {}) {
     userB: {
       id: "user-b",
       telegramId: 12n,
+      platform: "telegram",
       language: "en",
       firstName: "Bob",
       theme: "dark",
@@ -299,6 +309,57 @@ describe("cancelStalledMatch", () => {
     );
     expect(boostAcceptedSidePriority).toHaveBeenCalledWith("user-a");
     expect(boostAcceptedSidePriority).toHaveBeenCalledTimes(1);
+  });
+
+  // ── `negotiating` has to be a state you can leave ───────────────────────
+  //
+  // Refusing to cancel over someone who never saw the question is fair to them
+  // and unjust to everyone else: their partner watched "picking a time" forever
+  // and silently missed every following drop, and a mobile↔mobile pair had no
+  // exit at all — nothing else takes a match out of `negotiating`.
+
+  it("holds off while an unreachable side still owes something", async () => {
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      dbRow({
+        userB: {
+          id: "user-b",
+          telegramId: 12n,
+          platform: "mobile",
+          language: "en",
+          firstName: "Bob",
+          theme: "dark",
+        },
+      }),
+    );
+
+    const result = await cancelStalledMatch(mockApi(), "match-1", NOW);
+
+    expect(result.cancelled).toBe(false);
+    expect(prisma.match.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("releases the pair at the ceiling anyway, and blames nobody for it", async () => {
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      dbRow({
+        userB: {
+          id: "user-b",
+          telegramId: 12n,
+          platform: "mobile",
+          language: "en",
+          firstName: "Bob",
+          theme: "dark",
+        },
+      }),
+    );
+    const wayPastTheCeiling = new Date(NOW.getTime() + STALL_HARD_CEILING_MS);
+
+    const result = await cancelStalledMatch(mockApi(), "match-1", wayPastTheCeiling);
+
+    expect(result.cancelled).toBe(true);
+    // A question that was never delivered cannot be ignored, so the unreachable
+    // side is not a ghost — the release needs no culprit.
+    expect(result.ghostUserIds).not.toContain("user-b");
+    expect(applySilentIgnorePenalty).not.toHaveBeenCalledWith("user-b");
   });
 
   it("forgives the first silent ignore and penalises the next", async () => {

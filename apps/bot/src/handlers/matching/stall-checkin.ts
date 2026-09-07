@@ -161,7 +161,7 @@ export async function handleStallStillOn(ctx: BotContext): Promise<void> {
   // they aren't waiting on anyone, they're the other half of the same silence.
   const partner = isA ? match.userB : match.userA;
   if (sideOwesAction(match, isA ? "B" : "A")) return;
-  if (!stallReachableFor(partner.telegramId)) return;
+  if (!stallReachableFor(partner)) return;
 
   const partnerLang = (partner.language ?? "en") as Language;
   const actorUser = isA ? match.userA : match.userB;
