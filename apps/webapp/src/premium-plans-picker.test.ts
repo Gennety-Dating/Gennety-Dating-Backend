@@ -82,73 +82,117 @@ describe("the plan picker's selection polarity", () => {
     expect(meanAlpha(on)).toBeGreaterThan(meanAlpha(off));
   });
 
-  it("draws no white rim on the light theme", () => {
-    // A white edge held just inside a pale button on a pale page reads as a
-    // frame around the fill, not as light — the same correction the ticket
-    // store's recommended row needed.
-    expect(token(lightBlock, "--pm-seg-on-edge")).not.toContain("255, 255, 255");
+  it("draws NO rim around the chosen cell — not a border, not an inset ring", () => {
+    // Founder call, and the strongest wording of the session: a lit ring around
+    // the selection "looks cheap, really cheap". `inset 0 0 0 1px` is a frame
+    // however softly it is lit, so the whole rim token is gone rather than
+    // merely dimmed — a dimmer frame is still a frame, and this is exactly the
+    // shape a later "let's give it a subtle edge" would take.
+    const selected = rule(".pm-plan.is-selected");
+    expect(selected).not.toMatch(/(^|[^-])border:/);
+    expect(selected).not.toMatch(/outline:/);
+    expect(selected).not.toContain("box-shadow");
+    expect(CSS).not.toContain("--pm-seg-on-edge");
   });
 
-  it("keeps the selection borderless — depth from fill and inset light", () => {
-    // The fill and the rim moved off the cell and onto the tile that travels
-    // between cells, so this is where the borderless rule now has to hold. The
-    // tokens above are unchanged and still decide the polarity per theme; what
-    // changed is only which element wears them.
-    const thumb = rule(".pm-plan-thumb");
-    expect(thumb).not.toMatch(/(^|[^-])border:/);
-    expect(thumb).not.toMatch(/outline:/);
-    expect(thumb).toContain("var(--pm-seg-on)");
-    expect(thumb).toContain("var(--pm-seg-on-edge)");
-  });
-
-  it("leaves the chosen cell no fill of its own to stack under the tile", () => {
-    // Two tints on one cell would make the selected plan a different colour
-    // depending on which of the two you looked at.
-    expect(rule(".pm-plan.is-selected")).toMatch(/background:\s*transparent/);
+  it("tells the chosen cell apart with light alone", () => {
+    // What is left once the outline is gone, and all three are made of light:
+    // a brighter fill, the clouds drifting inside it, and a full-ink label.
+    const selected = rule(".pm-plan.is-selected");
+    expect(selected).toContain("var(--pm-seg-on)");
+    expect(selected).toContain("var(--pm-ink)");
   });
 });
 
-describe("the travelling selection", () => {
-  it("walks a stride the grid actually uses", () => {
-    // The tile is one cell wide and steps by one cell plus one gap. Both read
-    // the SAME `--pm-seg-gap`; hardcode either one and the tile lands between
-    // two cells at some screen width and looks fine at every other.
-    expect(rule(".pm-plans")).toContain("gap: var(--pm-seg-gap)");
-    const thumb = rule(".pm-plan-thumb");
-    expect(thumb).toContain("var(--pm-seg-gap)");
-    expect(thumb).toMatch(/translateX\(calc\(\(100% \+ var\(--pm-seg-gap\)\) \* var\(--pm-i/);
-  });
-
-  it("moves, and moves nothing else", () => {
-    // A transition on `all` here would animate the tile's width as the layout
-    // settles, i.e. the selection would visibly stretch on first paint.
-    const transition = /transition:\s*([^;]+);/.exec(rule(".pm-plan-thumb"))?.[1] ?? "";
-    expect(transition).toContain("transform");
-    expect(transition).not.toMatch(/\ball\b/);
-  });
-
-  it("shows its travelling lights only while travelling", () => {
-    // A streak of speed on a parked tile is just a smear across the fill.
-    for (const layer of [".pm-plan-thumb::before", ".pm-plan-thumb::after"]) {
+describe("the clouds inside the chosen cell", () => {
+  it("burns only on the cell that was chosen", () => {
+    // The whole justification for ambient motion on this screen — which argues
+    // against it one control below, on the CTA. It is allowed here because it is
+    // not decorating anything: it IS the selected state, it exists on exactly
+    // one of three cells, and it ends when that cell stops being the choice.
+    for (const layer of [".pm-plan::before,\n.pm-plan::after"]) {
       expect(rule(layer)).toMatch(/opacity:\s*0;/);
     }
-    expect(rule(".pm-plan-thumb.is-moving::before,\n.pm-plan-thumb.is-moving::after")).toMatch(
+    expect(rule(".pm-plan.is-selected::before,\n.pm-plan.is-selected::after")).toMatch(
       /opacity:\s*1;/,
     );
   });
 
-  it("keeps the words above the tile that slides past them", () => {
-    // The tile sits above the cells' fills so it can cross them; without the
-    // raise it would also cross their labels.
+  it("does not animate the two cells nobody chose", () => {
+    // Hidden is not enough: a paused animation costs nothing, a running one
+    // behind `opacity: 0` costs a composited layer per cell, forever.
+    expect(rule(".pm-plan::before,\n.pm-plan::after")).toContain("animation-play-state: paused");
+    expect(rule(".pm-plan.is-selected::before,\n.pm-plan.is-selected::after")).toContain(
+      "animation-play-state: running",
+    );
+  });
+
+  it("gives the two layers periods that do not divide each other", () => {
+    // Equal (or halved) periods put the layers back into the same arrangement
+    // every cycle, and the eye finds that loop within seconds — which is exactly
+    // when drifting weather turns back into a spinning GIF.
+    // Read from the whole sheet, not through `rule()`: the grouped
+    // `.pm-plan::before,\n.pm-plan::after` selector CONTAINS ".pm-plan::after {"
+    // as a substring, so the helper's `indexOf` hands back the grouped block
+    // instead of the standalone one. Each animation name appears in exactly one
+    // shorthand, which makes this unambiguous.
+    const a = Number(/animation:\s*pm-cloud-a\s+(\d+)s/.exec(CSS)?.[1]);
+    const b = Number(/animation:\s*pm-cloud-b\s+(\d+)s/.exec(CSS)?.[1]);
+    expect(a).toBeGreaterThan(0);
+    expect(b).toBeGreaterThan(0);
+    expect(b % a).not.toBe(0);
+    expect(a % b).not.toBe(0);
+  });
+
+  it("moves nothing but a transform", () => {
+    // `filter` or `background-position` here would repaint the cell every frame
+    // for the entire time a plan is selected, which on this screen is always.
+    for (const frames of ["@keyframes pm-cloud-a", "@keyframes pm-cloud-b"]) {
+      const at = CSS.indexOf(frames);
+      expect(at, `${frames} not found`).toBeGreaterThan(-1);
+      const body = CSS.slice(at, CSS.indexOf("\n}", at));
+      expect(body).not.toContain("filter:");
+      expect(body).not.toContain("background-position");
+      expect(body).toContain("translate3d");
+    }
+  });
+
+  it("drifts wider than the cell it is clipped to", () => {
+    // A cloud whose own falloff drifts into view stops being a cloud and starts
+    // being an ellipse. The layer is half again bigger than the cell in every
+    // direction, and the cell clips it.
+    const inset = /inset:\s*(-?\d+)%/.exec(rule(".pm-plan::before,\n.pm-plan::after"))?.[1];
+    expect(Number(inset)).toBeLessThanOrEqual(-30);
+    expect(rule(".pm-plan")).toContain("overflow: hidden");
+  });
+
+  it("lights the cell on dark and DEEPENS it on cream", () => {
+    // Same rule as every other mark on this screen: on the light theme the
+    // chosen cell is the darkest one, so what drifts inside it must be ink.
+    // White clouds there would read as holes punched through the chip.
+    expect(token(darkBlock, "--pm-cloud-a")).toContain("255, 255, 255");
+    expect(token(darkBlock, "--pm-cloud-b")).toContain("255, 255, 255");
+    expect(token(lightBlock, "--pm-cloud-a")).toContain("0, 0, 0");
+    expect(token(lightBlock, "--pm-cloud-b")).toContain("0, 0, 0");
+    expect(token(lightBlock, "--pm-cloud-a")).not.toContain("255");
+  });
+
+  it("keeps the words above the weather", () => {
+    // A bright mass drifting across the price would take the price with it.
     for (const row of [".pm-plan-head", ".pm-plan-meta"]) {
       expect(rule(row)).toContain("z-index: 2");
     }
-    expect(rule(".pm-plan-thumb")).toContain("z-index: 1");
+    expect(rule(".pm-plan::before,\n.pm-plan::after")).toContain("z-index: 0");
   });
 
-  it("can hold still for a reader who asked for no motion", () => {
+  it("holds still — but stays visible — for a reader who asked for no motion", () => {
+    // Freezing them is right; hiding or dimming them would take the answer to
+    // "which plan is chosen" away with the motion.
     const reduced = CSS.slice(CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
-    expect(reduced).toContain(".pm-plan-thumb");
+    const at = reduced.indexOf(".pm-plan::before,\n  .pm-plan::after");
+    expect(at, "the clouds are not frozen under reduced motion").toBeGreaterThan(-1);
+    expect(reduced.slice(at, at + 200)).toContain("animation: none");
+    expect(reduced.slice(at, at + 200)).not.toContain("opacity");
   });
 });
 
@@ -162,9 +206,7 @@ describe("the plan picker's layout", () => {
 
   it("animates only the fill and the label, never the layout", () => {
     // A transition on `all` would also animate padding/gap and make the row
-    // visibly reflow every time the user compares two plans. The cell's inset
-    // light is no longer in this list because the cell no longer has one — it
-    // travels on `.pm-plan-thumb` now.
+    // visibly reflow every time the user compares two plans.
     const cell = rule(".pm-plan");
     const transition = /transition:\s*([^;]+);/.exec(cell)?.[1] ?? "";
     expect(transition).toContain("background");

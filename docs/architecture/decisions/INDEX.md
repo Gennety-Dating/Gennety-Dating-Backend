@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 254 entries
+# Decision index — all 255 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-07 | выбранный тариф светится облаками изнутри, и рамки на нём нет | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | стеклянный подвал Premium отменён; выделение тарифа становится едущей плиткой | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | экран Premium: и ячейка, и кнопка называют месячную ставку, а сумма уходит под кнопку | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | подсветка кнопки Premium перестаёт дышать и начинает отвечать на палец | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
