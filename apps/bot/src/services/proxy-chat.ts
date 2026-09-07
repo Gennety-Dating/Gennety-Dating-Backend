@@ -11,6 +11,7 @@ import { getMainBotApi } from "./main-bot-api.js";
 import { sendPushToUser } from "./push.js";
 import { withRedactedSummary } from "./outbound-recorder.js";
 import { buildChatControlsKeyboard } from "./coordination.js";
+import { reactToMessage, type EmojiReaction } from "./message-reactions.js";
 
 /**
  * Anonymous pre-date proxy chat — the mechanics, shared by both surfaces
@@ -39,7 +40,38 @@ export type ProxyChatRefusal =
   | "wrong-state"
   | "closed"
   | "empty"
-  | "too-long";
+  | "too-long"
+  | "no-message"
+  | "own-message"
+  | "bad-reaction";
+
+/**
+ * The five emoji a person may put on their partner's message.
+ *
+ * **Closed set, and closed for two reasons that both bite.** Telegram accepts
+ * reactions only from its own fixed list, so a free-form emoji would work
+ * app-to-app and then silently do nothing on the rail most pairs actually have
+ * — `setMessageReaction` refuses everything else. And the product forbids
+ * like/dislike as a rating mechanic; an open keyboard lets 👎 back in through
+ * the side door, on the one screen where the other party is a person about to
+ * walk through the door.
+ *
+ * Written TELEGRAM-canonical: `❤` carries NO variation selector, because that
+ * is the exact string Telegram's list holds. Appending U+FE0F here would break
+ * `setMessageReaction` for the reaction the product cares about most.
+ *
+ * Chosen for what this screen is — the half hour before meeting, where the
+ * traffic is "on my way", "found it, thanks", "waiting": warmth, acknowledge,
+ * enthusiasm, laughter, thanks. 😂 is deliberately absent: Telegram's list
+ * carries 🤣 and not 😂, and an emoji that works on one rail only is worse
+ * than one fewer.
+ */
+export const PROXY_REACTIONS = ["❤", "👍", "🔥", "🤣", "🙏"] as const;
+export type ProxyReaction = (typeof PROXY_REACTIONS)[number];
+
+export function isProxyReaction(value: string): value is ProxyReaction {
+  return (PROXY_REACTIONS as readonly string[]).includes(value);
+}
 
 /**
  * How far one's OWN message got. Present on `mine` rows only — the states are
@@ -59,6 +91,16 @@ export interface ProxyChatMessageView {
   sentAt: Date;
   /** Undefined on the partner's messages. */
   status?: ProxyChatDeliveryStatus;
+  /**
+   * The emoji sitting on this message, from either side. Undefined when there
+   * is none.
+   *
+   * Unlike `status` this is NOT scoped to `mine`, and the asymmetry is the
+   * point: a delivery state is something the sender is told about their own
+   * message, while a reaction is a thing the other person did — visible to
+   * both, on whichever bubble carries it.
+   */
+  reaction?: string;
 }
 
 export interface ProxyChatView {
@@ -186,7 +228,14 @@ async function buildView(
     where: { matchId: match.id, ...(after ? { createdAt: { gt: after } } : {}) },
     orderBy: { createdAt: "desc" },
     take: PROXY_CHAT_PAGE_MAX,
-    select: { id: true, senderId: true, body: true, createdAt: true, deliveredAt: true },
+    select: {
+      id: true,
+      senderId: true,
+      body: true,
+      createdAt: true,
+      deliveredAt: true,
+      reaction: true,
+    },
   });
 
   const readAt = partnerReadAt(match, callerId);
@@ -205,6 +254,7 @@ async function buildView(
         body: row.body,
         sentAt: row.createdAt,
         ...(mine ? { status: deliveryStatus(row, readAt) } : {}),
+        ...(row.reaction ? { reaction: row.reaction } : {}),
       };
     }),
     maxMessageLength: PROXY_MAX_MESSAGE_LEN,
@@ -329,6 +379,108 @@ export async function relayProxyMessage(input: {
   }
 
   return { ok: true, view: await buildView(match, input.senderUserId, undefined, now) };
+}
+
+/**
+ * Put one emoji on the PARTNER's message, or take it off again.
+ *
+ * **Why a write and not a client-side flourish.** The same reason the delivery
+ * ticks stopped being a client guess (DECISIONS 2026-09-07): a reaction the
+ * other person never sees is decoration, and most pairs here are one app plus
+ * one Telegram. The row is the fact; both rails read it from the same place.
+ *
+ * **You cannot react to your own message.** Not a nicety — a reaction is
+ * something the reader does, and self-reacting would show the author a mark
+ * they made themselves, on the one screen built to say "I'm here, are you".
+ * The app hides the gesture on `mine`; this refuses it, because a hidden
+ * gesture is not a rule.
+ *
+ * **Passing null clears it.** Pressing the emoji already on the message is an
+ * un-react in every chat app anyone has used, and the client sends null for it
+ * rather than a second "reaction" value the storage would have to interpret.
+ *
+ * **The window does NOT gate this.** Sending is time-boxed because the chat
+ * exists to find each other; reacting to a line already said costs nobody
+ * anything, and refusing it after the window would leave the last "I'm
+ * outside" hanging with no way to answer while the pair is literally meeting.
+ * Reading is ungated for the same reason.
+ */
+export async function reactToProxyMessage(input: {
+  matchId: string;
+  messageId: string;
+  userId: string;
+  /** One of `PROXY_REACTIONS`, or null to remove the current one. */
+  reaction: string | null;
+  now?: Date;
+}): Promise<ProxyChatResult> {
+  if (!env.COORDINATION_FEATURE_ENABLED) return { ok: false, error: "disabled" };
+
+  if (input.reaction !== null && !isProxyReaction(input.reaction)) {
+    return { ok: false, error: "bad-reaction" };
+  }
+
+  const match = await loadMatch(input.matchId);
+  if (!match) return { ok: false, error: "not-found" };
+  if (input.userId !== match.userAId && input.userId !== match.userBId) {
+    return { ok: false, error: "forbidden" };
+  }
+  if (match.status !== "scheduled") return { ok: false, error: "wrong-state" };
+
+  // Scoped to the match, not just the id: a message id from ANOTHER match
+  // would otherwise be reactable by anyone who could guess it.
+  const message = await prisma.proxyMessage.findFirst({
+    where: { id: input.messageId, matchId: match.id },
+    select: { id: true, senderId: true, authorChatMessageId: true },
+  });
+  if (!message) return { ok: false, error: "no-message" };
+  if (message.senderId === input.userId) return { ok: false, error: "own-message" };
+
+  const now = input.now ?? new Date();
+  await prisma.proxyMessage.update({
+    where: { id: message.id },
+    data: { reaction: input.reaction },
+  });
+
+  // Best-effort onto the author's rail, exactly like delivery: a Telegram hiccup
+  // must not fail the tap. The row is already written, so the author sees it the
+  // next time they open the app either way.
+  await deliverReactionToAuthor(match, message.senderId, message.authorChatMessageId, input.reaction);
+
+  return { ok: true, view: await buildView(match, input.userId, undefined, now) };
+}
+
+/**
+ * Show the reaction to the person who wrote the line.
+ *
+ * Nothing happens for an app author: they have no Telegram copy of their own
+ * message, and their screen polls the row. Nothing happens either for a
+ * Telegram author whose message predates `authorChatMessageId` — old rows
+ * carry null, and a reaction on them is app-visible only. That is the whole
+ * migration story, and it decays on its own within one chat window.
+ */
+async function deliverReactionToAuthor(
+  match: ProxyMatch,
+  authorId: string,
+  authorChatMessageId: bigint | null,
+  reaction: string | null,
+): Promise<void> {
+  if (authorChatMessageId === null) return;
+
+  const author = authorId === match.userAId ? match.userA : match.userB;
+  const reachable =
+    author.telegramId > 0n && (author.platform === "telegram" || author.platform === "both");
+  if (!reachable) return;
+
+  const api = getMainBotApi();
+  if (!api) return;
+
+  // `reactToMessage` swallows its own failures; an empty list is how Telegram
+  // spells "remove", which is why clearing takes the same path as setting.
+  await reactToMessage(
+    api,
+    { chatId: Number(author.telegramId), messageId: Number(authorChatMessageId) },
+    reaction as EmojiReaction | null,
+  );
 }
 
 type Side = ProxyMatch["userA"];

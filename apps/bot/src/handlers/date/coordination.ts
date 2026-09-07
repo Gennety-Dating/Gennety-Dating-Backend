@@ -425,8 +425,21 @@ export async function handleProxyRelay(ctx: BotContext): Promise<void> {
   const partner = callerId === match.userA.id ? match.userB : match.userA;
   const clamped = body.slice(0, PROXY_MAX_MESSAGE_LEN);
 
+  // `ctx.message.message_id` is this line AS ITS AUTHOR SEES IT, in their own
+  // chat with the bot — which is exactly where a reaction from the partner has
+  // to land for the author to notice it. The relayed copy sitting in the
+  // recipient's chat is a different message and the wrong address: reacting
+  // there would show people marks they made themselves. Captured at write time
+  // because there is no second chance — nothing later carries this id back.
   await prisma.proxyMessage.create({
-    data: { matchId, senderId: callerId, body: clamped },
+    data: {
+      matchId,
+      senderId: callerId,
+      body: clamped,
+      ...(ctx.message?.message_id === undefined
+        ? {}
+        : { authorChatMessageId: BigInt(ctx.message.message_id) }),
+    },
   });
 
   const partnerLang = langOf(partner);

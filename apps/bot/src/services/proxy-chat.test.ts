@@ -16,12 +16,14 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
-const { mockSendPush, mockSendMessage, mockGetApi } = vi.hoisted(() => {
+const { mockSendPush, mockSendMessage, mockSetReaction, mockGetApi } = vi.hoisted(() => {
   const sendMessage = vi.fn().mockResolvedValue(undefined);
+  const setMessageReaction = vi.fn().mockResolvedValue(undefined);
   return {
     mockSendPush: vi.fn().mockResolvedValue(true),
     mockSendMessage: sendMessage,
-    mockGetApi: vi.fn(() => ({ sendMessage })),
+    mockSetReaction: setMessageReaction,
+    mockGetApi: vi.fn(() => ({ sendMessage, setMessageReaction })),
   };
 });
 vi.mock("./push.js", () => ({ sendPushToUser: mockSendPush }));
@@ -34,8 +36,10 @@ import { prisma } from "@gennety/db";
 import {
   readProxyChat,
   relayProxyMessage,
+  reactToProxyMessage,
   proxyChatWindow,
   proxyChatIsOpen,
+  PROXY_REACTIONS,
 } from "./proxy-chat.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -419,5 +423,240 @@ describe("relayProxyMessage", () => {
       now: DATE,
     });
     expect(res.ok).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reactions
+// ---------------------------------------------------------------------------
+
+/**
+ * `uid-A` is the Telegram side, `uid-B` the app side (see `match()`). So a
+ * message authored by A and reacted to by B is the case that has to reach
+ * Telegram, and the reverse is the case that must not try.
+ */
+describe("reactToProxyMessage", () => {
+  const fromA = {
+    id: "pm-1",
+    senderId: "uid-A",
+    authorChatMessageId: 777n,
+  };
+
+  beforeEach(() => {
+    mMsg.findFirst.mockResolvedValue(fromA);
+  });
+
+  it("writes the emoji and puts it on the author's OWN Telegram copy", async () => {
+    const res = await reactToProxyMessage({
+      matchId: "m-1",
+      messageId: "pm-1",
+      userId: "uid-B",
+      reaction: "❤",
+      now: DATE,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(mMsg.update).toHaveBeenCalledWith({
+      where: { id: "pm-1" },
+      data: { reaction: "❤" },
+    });
+    // Chat id is the AUTHOR's, message id is their own copy — not the relayed
+    // one, which lives in the reader's chat and is a different message.
+    expect(mockSetReaction).toHaveBeenCalledWith(
+      1001,
+      777,
+      [{ type: "emoji", emoji: "❤" }],
+      { is_big: false },
+    );
+  });
+
+  /**
+   * The regression this guards is invisible on screen and fatal on the wire:
+   * Telegram's list holds U+2764 alone, and the pretty red heart
+   * (U+2764 U+FE0F) is a DIFFERENT string that `setMessageReaction` refuses.
+   */
+  it("keeps the heart free of the variation selector", () => {
+    expect([...PROXY_REACTIONS[0]].map((c) => c.codePointAt(0))).toEqual([0x2764]);
+    expect(PROXY_REACTIONS).toHaveLength(5);
+    expect(PROXY_REACTIONS as readonly string[]).not.toContain("\u{1F602}");
+  });
+
+  it("clears with null, which Telegram spells as an empty list", async () => {
+    const res = await reactToProxyMessage({
+      matchId: "m-1",
+      messageId: "pm-1",
+      userId: "uid-B",
+      reaction: null,
+      now: DATE,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(mMsg.update).toHaveBeenCalledWith({
+      where: { id: "pm-1" },
+      data: { reaction: null },
+    });
+    expect(mockSetReaction).toHaveBeenCalledWith(1001, 777, [], { is_big: false });
+  });
+
+  it("refuses an emoji outside the closed set", async () => {
+    const res = await reactToProxyMessage({
+      matchId: "m-1",
+      messageId: "pm-1",
+      userId: "uid-B",
+      reaction: "\u{1F355}",
+      now: DATE,
+    });
+
+    expect(res).toEqual({ ok: false, error: "bad-reaction" });
+    expect(mMsg.update).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The app hides the gesture on one's own bubble, but a hidden gesture is not
+   * a rule — this is where the rule lives.
+   */
+  it("refuses a reaction on one's own message", async () => {
+    const res = await reactToProxyMessage({
+      matchId: "m-1",
+      messageId: "pm-1",
+      userId: "uid-A",
+      reaction: "\u{1F44D}",
+      now: DATE,
+    });
+
+    expect(res).toEqual({ ok: false, error: "own-message" });
+    expect(mMsg.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses a message that is not in this match", async () => {
+    mMsg.findFirst.mockResolvedValue(null);
+    const res = await reactToProxyMessage({
+      matchId: "m-1",
+      messageId: "pm-nope",
+      userId: "uid-B",
+      reaction: "\u{1F44D}",
+      now: DATE,
+    });
+
+    expect(res).toEqual({ ok: false, error: "no-message" });
+  });
+
+  it("refuses a caller who is not on the match", async () => {
+    const res = await reactToProxyMessage({
+      matchId: "m-1",
+      messageId: "pm-1",
+      userId: "uid-stranger",
+      reaction: "\u{1F44D}",
+      now: DATE,
+    });
+
+    expect(res).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  /**
+   * An app-authored line has no Telegram copy of its own, so there is nothing
+   * to react to on that rail — but the row is still written, and its author
+   * reads it off the next poll.
+   */
+  it("writes without touching Telegram when the author wrote from the app", async () => {
+    mMsg.findFirst.mockResolvedValue({
+      id: "pm-2",
+      senderId: "uid-B",
+      authorChatMessageId: null,
+    });
+
+    const res = await reactToProxyMessage({
+      matchId: "m-1",
+      messageId: "pm-2",
+      userId: "uid-A",
+      reaction: "\u{1F64F}",
+      now: DATE,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(mMsg.update).toHaveBeenCalledWith({
+      where: { id: "pm-2" },
+      data: { reaction: "\u{1F64F}" },
+    });
+    expect(mockSetReaction).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Rows written before `authorChatMessageId` existed carry null. They are
+   * app-visible only, and the whole migration story decays within one window.
+   */
+  it("survives a legacy row with no author message id", async () => {
+    mMsg.findFirst.mockResolvedValue({
+      id: "pm-old",
+      senderId: "uid-A",
+      authorChatMessageId: null,
+    });
+
+    const res = await reactToProxyMessage({
+      matchId: "m-1",
+      messageId: "pm-old",
+      userId: "uid-B",
+      reaction: "\u{1F525}",
+      now: DATE,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(mockSetReaction).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Sending is time-boxed; answering a line already said is not. Refusing here
+   * would leave the last "I'm outside" unanswerable at the exact moment the
+   * pair is meeting.
+   */
+  it("still works after the window has closed", async () => {
+    const afterClose = new Date(CLOSES.getTime() + 60 * 60 * 1000);
+    const res = await reactToProxyMessage({
+      matchId: "m-1",
+      messageId: "pm-1",
+      userId: "uid-B",
+      reaction: "\u{1F44D}",
+      now: afterClose,
+    });
+
+    expect(res.ok).toBe(true);
+  });
+
+  it("shows the reaction to BOTH sides, unlike the delivery status", async () => {
+    mMsg.findMany.mockResolvedValue([
+      {
+        id: "pm-1",
+        senderId: "uid-A",
+        body: "on my way",
+        createdAt: DATE,
+        deliveredAt: DATE,
+        reaction: "❤",
+      },
+    ]);
+
+    const asReader = await readProxyChat({ matchId: "m-1", userId: "uid-B", now: DATE });
+    const asAuthor = await readProxyChat({ matchId: "m-1", userId: "uid-A", now: DATE });
+
+    expect(asReader.ok && asReader.view.messages[0]!.reaction).toBe("❤");
+    expect(asAuthor.ok && asAuthor.view.messages[0]!.reaction).toBe("❤");
+    // The author sees a status on their own line; the reader does not.
+    expect(asAuthor.ok && asAuthor.view.messages[0]!.status).toBeDefined();
+    expect(asReader.ok && asReader.view.messages[0]!.status).toBeUndefined();
+  });
+
+  it("omits the key entirely when nobody has reacted", async () => {
+    mMsg.findMany.mockResolvedValue([
+      {
+        id: "pm-1",
+        senderId: "uid-A",
+        body: "on my way",
+        createdAt: DATE,
+        deliveredAt: DATE,
+        reaction: null,
+      },
+    ]);
+
+    const res = await readProxyChat({ matchId: "m-1", userId: "uid-B", now: DATE });
+    expect(res.ok && "reaction" in res.view.messages[0]!).toBe(false);
   });
 });

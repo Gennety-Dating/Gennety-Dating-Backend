@@ -21,11 +21,16 @@ export interface MessageReactionTarget {
 /**
  * Best-effort Telegram reaction. Reactions are cosmetic, so they must never
  * block onboarding, photo validation, or Profiler progression.
+ *
+ * `null` REMOVES whatever is on the message: Telegram spells "no reaction" as
+ * an empty list on the same call, so clearing is not a second endpoint and
+ * must not become a second code path here. The proxy chat needs it — pressing
+ * the emoji already on a message un-reacts, as it does in every chat app.
  */
 export async function reactToMessage(
   api: Api<RawApi>,
   target: MessageReactionTarget,
-  emoji: EmojiReaction,
+  emoji: EmojiReaction | null,
 ): Promise<void> {
   if (target.chatId === undefined || target.messageId === undefined) return;
 
@@ -33,7 +38,7 @@ export async function reactToMessage(
     await api.setMessageReaction(
       target.chatId,
       target.messageId,
-      [{ type: "emoji", emoji }],
+      emoji === null ? [] : [{ type: "emoji", emoji }],
       { is_big: false },
     );
   } catch (err) {

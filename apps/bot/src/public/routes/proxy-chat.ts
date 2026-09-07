@@ -3,6 +3,7 @@ import { requireAuth } from "../auth-middleware.js";
 import {
   readProxyChat,
   relayProxyMessage,
+  reactToProxyMessage,
   type ProxyChatRefusal,
   type ProxyChatView,
 } from "../../services/proxy-chat.js";
@@ -76,6 +77,42 @@ export function createProxyChatRouter(): Router {
     res.json(serialize(result.view));
   });
 
+  // PUT rather than POST, and that is not pedantry: one message carries at most
+  // one reaction, so pressing ❤ twice must leave the same state as pressing it
+  // once. A POST would invite a client to think it is appending to a list, and
+  // this endpoint has no list to append to.
+  router.put("/messages/:messageId/reaction", async (req: Request, res: Response): Promise<void> => {
+    const matchId = matchIdOf(req);
+    if (!matchId) {
+      res.status(404).json({ error: "match-not-found" });
+      return;
+    }
+    const messageId = (req.params as Record<string, string | undefined>).messageId;
+    if (typeof messageId !== "string" || !UUID_REGEX.test(messageId)) {
+      res.status(404).json({ error: "no-message" });
+      return;
+    }
+    // `null` is a VALUE here, not a missing field: it means "take the reaction
+    // off". Absent means the client sent a malformed body, and the two must not
+    // collapse into the same branch — one is an un-react, the other a bug.
+    const raw = (req.body as { reaction?: unknown } | undefined)?.reaction;
+    if (raw !== null && typeof raw !== "string") {
+      res.status(400).json({ error: "bad-reaction" });
+      return;
+    }
+    const result = await reactToProxyMessage({
+      matchId,
+      messageId,
+      userId: req.userId!,
+      reaction: raw,
+    });
+    if (!result.ok) {
+      answerFailure(res, result.error);
+      return;
+    }
+    res.json(serialize(result.view));
+  });
+
   return router;
 }
 
@@ -93,6 +130,9 @@ function serialize(view: ProxyChatView): Record<string, unknown> {
       // key is absent there, and `status: null` would invite a client to
       // render a fourth, empty state.
       ...(m.status ? { status: m.status } : {}),
+      // Same omit-don't-null rule as `status`, for the same reason: absent is
+      // "nobody reacted", and a null would invite an empty capsule.
+      ...(m.reaction ? { reaction: m.reaction } : {}),
     })),
     maxMessageLength: view.maxMessageLength,
     partnerFirstName: view.partnerFirstName,
@@ -107,14 +147,19 @@ function serialize(view: ProxyChatView): Record<string, unknown> {
  * routing bug that isn't there. `disabled` IS a 404, matching the Mini App
  * routes: with the feature off the endpoint does not exist, rather than
  * existing and being empty.
+ *
+ * `own-message` is 403 and not 400: the request is well-formed, the caller is
+ * simply not allowed to react to their own line. `bad-reaction` is 400 — an
+ * emoji outside the closed set is a malformed request, and answering 403 would
+ * send a client hunting for a permission it never needed.
  */
 function answerFailure(res: Response, error: ProxyChatRefusal): void {
   const status =
-    error === "forbidden"
+    error === "forbidden" || error === "own-message"
       ? 403
       : error === "wrong-state" || error === "closed"
         ? 409
-        : error === "empty" || error === "too-long"
+        : error === "empty" || error === "too-long" || error === "bad-reaction"
           ? 400
           : 404;
   res.status(status).json({ error });
