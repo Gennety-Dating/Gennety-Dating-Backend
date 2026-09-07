@@ -45,6 +45,48 @@ beforeEach(() => {
 });
 
 describe("retentionTick", () => {
+  // ── The sweep has to finish the table, not nibble at it ──────────────────
+  //
+  // One batch of 1000 rows per table per NIGHT is not a retention policy. The
+  // busiest table here is written on every inbound and outbound message, so any
+  // real traffic outruns it and the table grows forever — with the retention
+  // promise unkept and the erasure window quietly missed.
+
+  it("keeps deleting until the table is clean", async () => {
+    const full = Array.from({ length: 1000 }, (_, i) => ({ id: `c${i}` }));
+    chatEvent.findMany
+      .mockResolvedValueOnce(full)
+      .mockResolvedValueOnce(full)
+      .mockResolvedValueOnce([{ id: "tail" }]);
+    chatEvent.deleteMany
+      .mockResolvedValueOnce({ count: 1000 })
+      .mockResolvedValueOnce({ count: 1000 })
+      .mockResolvedValueOnce({ count: 1 });
+
+    const result = await retentionTick(NOW);
+
+    expect(result.chatEvents).toBe(2001);
+    // Three passes, and no fourth: the short batch proved the cutoff was
+    // exhausted, so the loop stopped instead of spending a query to confirm it.
+    expect(chatEvent.findMany).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops at the batch cap and says the backlog is still there", async () => {
+    const full = Array.from({ length: 1000 }, (_, i) => ({ id: `c${i}` }));
+    chatEvent.findMany.mockResolvedValue(full);
+    chatEvent.deleteMany.mockResolvedValue({ count: 1000 });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await retentionTick(NOW);
+
+    // The cap exists so a pathological backlog cannot pin the droplet's single
+    // core all night — but it may never pass for success.
+    expect(result.chatEvents).toBe(500_000);
+    expect(chatEvent.findMany).toHaveBeenCalledTimes(500);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("chat_events"));
+    warn.mockRestore();
+  });
+
   it("is a no-op when nothing is old enough", async () => {
     const result = await retentionTick(NOW);
     expect(result).toEqual({

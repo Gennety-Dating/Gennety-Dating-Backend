@@ -119,8 +119,27 @@ export const ORPHAN_SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
  */
 export const EVENT_FEEDBACK_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
-/** Rows removed per table per tick. */
+/** Rows removed per query. Small enough that one `IN (…)` delete stays cheap. */
 const BATCH_LIMIT = 1_000;
+
+/**
+ * Batches one table may take in a single sweep, before the sweep gives up and
+ * says so.
+ *
+ * The sweep used to take exactly ONE batch per table per day. That is not a
+ * retention policy, it is a rounding error: `chat_events` alone is written on
+ * every inbound and outbound message, so any real traffic outruns 1000 rows a
+ * day and the table then grows forever — with the retention promise unkept, the
+ * GDPR erasure window quietly missed, and the same table later read whole by
+ * the admin dashboards.
+ *
+ * So the sweep now runs until the table is clean. The cap exists only so a
+ * pathological backlog cannot pin the droplet's single core for hours: at
+ * 1000 rows a batch it clears half a million rows per table per night, which is
+ * several times the projected write rate, and hitting it is logged as the
+ * warning it is rather than passing silently.
+ */
+const MAX_BATCHES_PER_TABLE = 500;
 
 export interface RetentionSweepResult {
   emailOtps: number;
@@ -134,19 +153,35 @@ export interface RetentionSweepResult {
 }
 
 /**
- * Delete at most `BATCH_LIMIT` rows matching `where`, oldest first.
+ * Delete every row matching `where`, oldest first, in batches of `BATCH_LIMIT`.
  *
- * Prisma's `deleteMany` takes no `take`, so the batch is selected first and
+ * Prisma's `deleteMany` takes no `take`, so each batch is selected first and
  * deleted by id. That also keeps the delete off any index-less predicate.
+ *
+ * A short batch means the table is clean and the loop stops; the batch count is
+ * capped so one enormous backlog cannot occupy the whole night (see
+ * `MAX_BATCHES_PER_TABLE`).
  */
 async function deleteOldest(
+  label: string,
   findIds: (take: number) => Promise<Array<{ id: string }>>,
   deleteByIds: (ids: string[]) => Promise<{ count: number }>,
 ): Promise<number> {
-  const rows = await findIds(BATCH_LIMIT);
-  if (rows.length === 0) return 0;
-  const { count } = await deleteByIds(rows.map((r) => r.id));
-  return count;
+  let removed = 0;
+  for (let batch = 0; batch < MAX_BATCHES_PER_TABLE; batch += 1) {
+    const rows = await findIds(BATCH_LIMIT);
+    if (rows.length === 0) return removed;
+    const { count } = await deleteByIds(rows.map((r) => r.id));
+    removed += count;
+    // A batch that came back short exhausted the cutoff — nothing older is
+    // left. Stop before spending another query proving it.
+    if (rows.length < BATCH_LIMIT) return removed;
+  }
+  console.warn(
+    `[retention] ${label}: stopped at the ${MAX_BATCHES_PER_TABLE}-batch cap after ${removed} rows — ` +
+      "rows older than the cutoff remain and the next sweep will continue",
+  );
+  return removed;
 }
 
 export async function retentionTick(
@@ -160,6 +195,7 @@ export async function retentionTick(
   const eventFeedbackCutoff = new Date(now.getTime() - EVENT_FEEDBACK_RETENTION_MS);
 
   const emailOtps = await deleteOldest(
+    "email_otps",
     (take) =>
       prisma.emailOtp.findMany({
         where: { createdAt: { lt: otpCutoff } },
@@ -171,6 +207,7 @@ export async function retentionTick(
   );
 
   const phoneOtps = await deleteOldest(
+    "phone_otps",
     (take) =>
       prisma.phoneOtp.findMany({
         where: { createdAt: { lt: otpCutoff } },
@@ -182,6 +219,7 @@ export async function retentionTick(
   );
 
   const sessions = await deleteOldest(
+    "user_sessions",
     (take) =>
       prisma.userSession.findMany({
         // A row is only removable once it is BOTH unusable and past the
@@ -199,6 +237,7 @@ export async function retentionTick(
   );
 
   const proxyMessages = await deleteOldest(
+    "proxy_messages",
     (take) =>
       prisma.proxyMessage.findMany({
         where: { createdAt: { lt: proxyCutoff } },
@@ -210,6 +249,7 @@ export async function retentionTick(
   );
 
   const chatEvents = await deleteOldest(
+    "chat_events",
     (take) =>
       prisma.chatEvent.findMany({
         where: { createdAt: { lt: chatEventCutoff } },
@@ -224,6 +264,7 @@ export async function retentionTick(
   // и телефон со сбитой датой иначе либо пережил бы ретеншен, либо был бы
   // стёрт в день приёма.
   const clientEvents = await deleteOldest(
+    "client_events",
     (take) =>
       prisma.clientEvent.findMany({
         where: { receivedAt: { lt: clientEventCutoff } },
@@ -235,6 +276,7 @@ export async function retentionTick(
   );
 
   const eventFeedback = await deleteOldest(
+    "event_feedback",
     (take) =>
       prisma.eventFeedback.findMany({
         // `safety: "unsafe"` never ages out — see EVENT_FEEDBACK_RETENTION_MS.
@@ -258,18 +300,32 @@ export async function retentionTick(
   // the schema does not express. Anti-join rather than "load all keys and diff
   // in Node" so the work stays in Postgres and the batch limit is real.
   const orphanCutoff = new Date(now.getTime() - ORPHAN_SESSION_RETENTION_MS);
-  const orphanBotSessions = await prisma.$executeRaw`
-    DELETE FROM bot_sessions
-    WHERE key IN (
-      SELECT b.key
-      FROM bot_sessions b
-      LEFT JOIN users u ON u.telegram_id::text = b.key
-      WHERE u.id IS NULL
-        AND b.updated_at < ${orphanCutoff}
-      ORDER BY b.updated_at ASC
-      LIMIT ${BATCH_LIMIT}
-    )
-  `;
+  // Batched to exhaustion like every other table above: one batch a night left
+  // orphans accumulating whenever more than `BATCH_LIMIT` of them appeared in a
+  // day, and this is the one sweep no other code path ever repeats.
+  let orphanBotSessions = 0;
+  for (let batch = 0; batch < MAX_BATCHES_PER_TABLE; batch += 1) {
+    const removed = await prisma.$executeRaw`
+      DELETE FROM bot_sessions
+      WHERE key IN (
+        SELECT b.key
+        FROM bot_sessions b
+        LEFT JOIN users u ON u.telegram_id::text = b.key
+        WHERE u.id IS NULL
+          AND b.updated_at < ${orphanCutoff}
+        ORDER BY b.updated_at ASC
+        LIMIT ${BATCH_LIMIT}
+      )
+    `;
+    orphanBotSessions += removed;
+    if (removed < BATCH_LIMIT) break;
+    if (batch === MAX_BATCHES_PER_TABLE - 1) {
+      console.warn(
+        `[retention] bot_sessions: stopped at the ${MAX_BATCHES_PER_TABLE}-batch cap after ` +
+          `${orphanBotSessions} rows — orphans remain and the next sweep will continue`,
+      );
+    }
+  }
 
   const total =
     emailOtps +
