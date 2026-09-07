@@ -226,9 +226,14 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   Date Ticket; the bonus is granted idempotently via `Profile.videoBonusTicketAt`
   (same claim as onboarding, so it pays at most once across both surfaces).
   Removing the video does not reverse an already-granted bonus.
-- **My Tickets** — (only when `TICKET_FEATURE_ENABLED`) shows the user's
-  `ticketBalance` and a `web_app` button into the ticket store Mini App
-  (`tickets.html`) to pre-purchase bundles ahead of any date. See §3.5b.
+- **My Tickets** — (only when `TICKET_FEATURE_ENABLED`) a `web_app` row that
+  opens the ticket store Mini App (`tickets.html`) directly, to pre-purchase
+  bundles ahead of any date. The store draws the user's `ticketBalance` on its
+  own hero card, so since 2026-09-07 the row no longer sends a balance message
+  first (same pattern as Premium / Invite a friend). The old message survives
+  behind the `menu:tickets` callback for the two cases a `web_app` button
+  cannot serve: a dev environment whose `WEBAPP_URL` isn't HTTPS, and the
+  concierge agent's `open_screen("tickets")`. See §3.5b.
 - **Report / Help** — opens the support handle.
 
 **The concierge answers in the context of the last thing on screen
