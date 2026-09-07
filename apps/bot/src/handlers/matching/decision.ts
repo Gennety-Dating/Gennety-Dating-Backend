@@ -73,8 +73,8 @@ interface MatchView {
   status: string;
   calendarMessageIdA: number | null;
   calendarMessageIdB: number | null;
-  userA: { telegramId: bigint; language: string | null; syntheticAt: Date | null };
-  userB: { telegramId: bigint; language: string | null; syntheticAt: Date | null };
+  userA: { telegramId: bigint; platform: string | null; language: string | null; syntheticAt: Date | null };
+  userB: { telegramId: bigint; platform: string | null; language: string | null; syntheticAt: Date | null };
 }
 
 /**
@@ -105,8 +105,8 @@ async function loadMatch(matchId: string): Promise<MatchView | null> {
       status: true,
       calendarMessageIdA: true,
       calendarMessageIdB: true,
-      userA: { select: { telegramId: true, language: true, syntheticAt: true } },
-      userB: { select: { telegramId: true, language: true, syntheticAt: true } },
+      userA: { select: { telegramId: true, platform: true, language: true, syntheticAt: true } },
+      userB: { select: { telegramId: true, platform: true, language: true, syntheticAt: true } },
     },
   });
 }
@@ -136,6 +136,11 @@ function peerTelegramIdOf(match: MatchView, side: Side): bigint {
 
 function actorTelegramIdOf(match: MatchView, side: Side): bigint {
   return side === "A" ? match.userA.telegramId : match.userB.telegramId;
+}
+
+/** The actor's rail. Travels with the id everywhere the id decides a send. */
+function actorPlatformOf(match: MatchView, side: Side): string | null {
+  return side === "A" ? match.userA.platform : match.userB.platform;
 }
 
 function postAcceptMessageIdOf(match: MatchView, side: Side): number | null {
@@ -511,6 +516,7 @@ async function handleAccept(
     matchId: match.id,
     side,
     telegramId: actorTelegramIdOf(match, side),
+    platform: actorPlatformOf(match, side),
     previousMessageId: postAcceptMessageIdOf(match, side),
     text: t(lang, "matchAccepted"),
     options: {

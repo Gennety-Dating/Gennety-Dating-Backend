@@ -49,7 +49,8 @@ import {
   venueIntentMode,
 } from "../../services/venue-intent-v2.js";
 import { deliverScheduledConfirmation } from "../../services/scheduled-confirmation.js";
-import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
+import { telegramReachable } from "../../services/telegram-reach.js";
+import { toTelegramChatId } from "../../utils/telegram-target.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { renderTimeCard, type TimeCardTheme } from "../../services/time-card.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
@@ -215,8 +216,8 @@ export async function startVenueNegotiation(
     where: { id: matchId },
     select: {
       id: true,
-      userA: { select: { telegramId: true, language: true, theme: true } },
-      userB: { select: { telegramId: true, language: true, theme: true } },
+      userA: { select: { telegramId: true, platform: true, language: true, theme: true } },
+      userB: { select: { telegramId: true, platform: true, language: true, theme: true } },
     },
   });
   if (!match) return;
@@ -243,10 +244,10 @@ export async function startVenueNegotiation(
   };
 
   const sends: Array<Promise<unknown>> = [];
-  if (isTelegramTarget(match.userA.telegramId)) {
+  if (telegramReachable(match.userA)) {
     sends.push(sendSide(match.userA.telegramId, langA, match.userA.theme));
   }
-  if (isTelegramTarget(match.userB.telegramId)) {
+  if (telegramReachable(match.userB)) {
     sends.push(sendSide(match.userB.telegramId, langB, match.userB.theme));
   }
   await Promise.all(sends);
@@ -271,11 +272,12 @@ export async function startVenueNegotiation(
 export async function sendVenuePostSaveAck(
   api: Api<RawApi>,
   telegramId: bigint,
+  platform: string | null,
   matchId: string,
   side: "A" | "B",
   lang: Language,
 ): Promise<"venueWaitingPeer" | "venueVibeNoted" | "venueLocationNoted" | null> {
-  if (!isTelegramTarget(telegramId)) return null;
+  if (!telegramReachable({ telegramId, platform })) return null;
 
   const m = await prisma.match.findUnique({
     where: { id: matchId },
@@ -446,6 +448,10 @@ export async function handleVenueLocation(ctx: BotContext): Promise<void> {
   await sendVenuePostSaveAck(
     ctx.api,
     BigInt(ctx.from!.id),
+    // The update being handled arrived FROM this person's bot chat, so the chat
+    // demonstrably exists — evidence stronger than the column, which is only a
+    // prediction about it.
+    "telegram",
     matchId,
     side,
     lang,
@@ -563,6 +569,10 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
   await sendVenuePostSaveAck(
     ctx.api,
     BigInt(ctx.from!.id),
+    // The update being handled arrived FROM this person's bot chat, so the chat
+    // demonstrably exists — evidence stronger than the column, which is only a
+    // prediction about it.
+    "telegram",
     matchId,
     side,
     lang,
@@ -598,6 +608,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
       userA: {
         select: {
           telegramId: true,
+          platform: true,
           language: true,
           theme: true,
           gender: true,
@@ -610,6 +621,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
       userB: {
         select: {
           telegramId: true,
+          platform: true,
           language: true,
           theme: true,
           gender: true,
@@ -670,7 +682,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
   });
 
   const searchingRuns: Array<Promise<unknown>> = [];
-  if (isTelegramTarget(match.userA.telegramId)) {
+  if (telegramReachable(match.userA)) {
     searchingRuns.push(
       runStatusSequence(
         api,
@@ -680,7 +692,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
       ).catch(() => undefined),
     );
   }
-  if (isTelegramTarget(match.userB.telegramId)) {
+  if (telegramReachable(match.userB)) {
     searchingRuns.push(
       runStatusSequence(
         api,

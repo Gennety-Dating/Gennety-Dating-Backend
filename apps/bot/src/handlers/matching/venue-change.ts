@@ -44,7 +44,8 @@ import { env } from "../../config.js";
 import { DEMO_MODE_ENABLED, PROTECT_PARTNER_MEDIA } from "../../demo/config.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import type { BotContext } from "../../session.js";
-import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
+import { telegramReachable } from "../../services/telegram-reach.js";
+import { toTelegramChatId } from "../../utils/telegram-target.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import {
   evaluateVenueBoardEligibility,
@@ -124,6 +125,7 @@ const VC_SELECT = {
     select: {
       id: true,
       telegramId: true,
+      platform: true,
       language: true,
       theme: true,
       gender: true,
@@ -137,6 +139,7 @@ const VC_SELECT = {
     select: {
       id: true,
       telegramId: true,
+      platform: true,
       language: true,
       theme: true,
       gender: true,
@@ -997,7 +1000,7 @@ export async function submitVenueLikes(
 async function refreshBoardPing(api: Api<RawApi>, match: VcMatch, likerSide: Side): Promise<void> {
   const liker = userOfSide(match, likerSide);
   const recipient = userOfSide(match, otherSide(likerSide));
-  if (!isTelegramTarget(recipient.telegramId)) return;
+  if (!telegramReachable(recipient)) return;
 
   const chatId = toTelegramChatId(recipient.telegramId);
   const prevId =
@@ -1036,12 +1039,12 @@ async function refreshBoardPing(api: Api<RawApi>, match: VcMatch, likerSide: Sid
 
 /** Delete both sides' board-invite messages and forget their ids. */
 async function retireBoardPings(api: Api<RawApi>, match: VcMatch): Promise<void> {
-  const targets: Array<[bigint, number | null]> = [
-    [match.userA.telegramId, match.venueChangePingMsgIdA],
-    [match.userB.telegramId, match.venueChangePingMsgIdB],
+  const targets: Array<[bigint, string | null, number | null]> = [
+    [match.userA.telegramId, match.userA.platform, match.venueChangePingMsgIdA],
+    [match.userB.telegramId, match.userB.platform, match.venueChangePingMsgIdB],
   ];
-  for (const [telegramId, msgId] of targets) {
-    if (msgId == null || !isTelegramTarget(telegramId)) continue;
+  for (const [telegramId, platform, msgId] of targets) {
+    if (msgId == null || !telegramReachable({ telegramId, platform })) continue;
     await api.deleteMessage(toTelegramChatId(telegramId), msgId).catch(() => undefined);
   }
   if (match.venueChangePingMsgIdA == null && match.venueChangePingMsgIdB == null) return;
@@ -1194,7 +1197,7 @@ async function reachAgreement(
   const payerUser = userOfSide(fresh, payer);
   const initiatorId = fresh.venueChangeProposerId;
   const payerInitiated = initiatorId === payerUser.id;
-  if (payerUser.id !== finalizerUserId && payerInitiated && isTelegramTarget(payerUser.telegramId)) {
+  if (payerUser.id !== finalizerUserId && payerInitiated && telegramReachable(payerUser)) {
     const lang = langOf(payerUser.language);
     try {
       const kb = new InlineKeyboard().webApp(
@@ -1245,7 +1248,7 @@ async function agreeToKeep(api: Api<RawApi>, matchId: string, match: VcMatch): P
 
   const original = match.venueName ?? "";
   for (const user of [match.userA, match.userB]) {
-    if (!isTelegramTarget(user.telegramId)) continue;
+    if (!telegramReachable(user)) continue;
     await api
       .sendMessage(
         toTelegramChatId(user.telegramId),
@@ -1493,7 +1496,7 @@ export async function keepOriginalVenue(
     // We called off an agreement the partner was expecting — tell them plainly
     // that we'd rather keep the original. (An express mint they never saw stays
     // silent.)
-    if (isTelegramTarget(peer.telegramId)) {
+    if (telegramReachable(peer)) {
       await api
         .sendMessage(
           toTelegramChatId(peer.telegramId),
@@ -1529,7 +1532,7 @@ export async function keepOriginalVenue(
 async function refreshKeepNotice(api: Api<RawApi>, match: VcMatch, keeperSide: Side): Promise<void> {
   const recipientSide = otherSide(keeperSide);
   const recipient = userOfSide(match, recipientSide);
-  if (!isTelegramTarget(recipient.telegramId)) return;
+  if (!telegramReachable(recipient)) return;
 
   const chatId = toTelegramChatId(recipient.telegramId);
   const prevId =
@@ -1607,7 +1610,7 @@ export async function offerPartnerPay(
   if (claim.count === 0) return { ok: false, reason: "already-offered" };
 
   const him = userOfSide(match, otherSide(side));
-  if (isTelegramTarget(him.telegramId)) {
+  if (telegramReachable(him)) {
     const sent = await sendWishCard(api, match, me.firstName ?? "", him)
       .then(() => true)
       .catch((err) => {
@@ -1728,7 +1731,7 @@ export async function declineVenuePay(
 
   // Neutral notice to her — the original stands. No price, no pay button.
   const her = userOfSide(match, otherSide(side));
-  if (isTelegramTarget(her.telegramId)) {
+  if (telegramReachable(her)) {
     await api
       .sendMessage(
         toTelegramChatId(her.telegramId),
@@ -1925,7 +1928,7 @@ export async function settleVenuePayment(
 
   // Peer: express → the positive-frame surprise; board → updated card that
   // reveals who covered it (gendered by the payer).
-  if (isTelegramTarget(peer.telegramId)) {
+  if (telegramReachable(peer)) {
     const peerKey = wasExpress
       ? payer.gender === "male"
         ? "venueExpressPartnerFromM"
@@ -2041,7 +2044,7 @@ type SettleCardKey =
 
 async function sendUpdatedVenueCard(
   api: Api<RawApi>,
-  user: { telegramId: bigint; language: string | null },
+  user: { telegramId: bigint; platform: string | null; language: string | null },
   key: SettleCardKey,
   vars: Record<string, string>,
   agreedTime: Date,
@@ -2049,7 +2052,7 @@ async function sendUpdatedVenueCard(
   address: string,
   mapsUri: string | null,
 ): Promise<void> {
-  if (!isTelegramTarget(user.telegramId)) return;
+  if (!telegramReachable(user)) return;
   const lang = langOf(user.language);
   const base = t(lang, key, vars);
   const { text, entity } = buildDateTimeEntity(base, agreedTime, lang);
@@ -2127,7 +2130,7 @@ export async function sweepExpiredVenueChanges(
 
     const original = match.venueName ?? "";
     for (const user of [match.userA, match.userB]) {
-      if (!isTelegramTarget(user.telegramId)) continue;
+      if (!telegramReachable(user)) continue;
       await api
         .sendMessage(
           toTelegramChatId(user.telegramId),

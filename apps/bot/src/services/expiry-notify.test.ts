@@ -28,6 +28,7 @@ function side(overrides: Partial<SideClassification>): SideClassification {
     side: "A",
     userId: "user-a",
     telegramId: 100n,
+    platform: "telegram",
     language: "en",
     theme: "dark",
     pitchMessageId: 11,

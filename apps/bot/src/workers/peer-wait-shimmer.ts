@@ -2,7 +2,8 @@ import type { Api, RawApi } from "grammy";
 import { GrammyError } from "grammy";
 import { prisma } from "@gennety/db";
 import type { Language } from "@gennety/shared";
-import { isTelegramTarget, toTelegramChatId } from "../utils/telegram-target.js";
+import { telegramReachable } from "../services/telegram-reach.js";
+import { toTelegramChatId } from "../utils/telegram-target.js";
 import { issuePeerWaitDraft, peerWaitLabel } from "../services/peer-wait.js";
 import { venueChangeSideWaiting, type VenueChangeWaitRow } from "./peer-wait-venue-change.js";
 
@@ -208,8 +209,8 @@ export async function peerWaitShimmerTick(
       peerWaitEditedAtB: true,
       peerWaitStartedAtA: true,
       peerWaitStartedAtB: true,
-      userA: { select: { id: true, telegramId: true, language: true, firstName: true, gender: true } },
-      userB: { select: { id: true, telegramId: true, language: true, firstName: true, gender: true } },
+      userA: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true, gender: true } },
+      userB: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true, gender: true } },
     },
   });
 
@@ -234,7 +235,7 @@ export async function peerWaitShimmerTick(
       const waiting = isSideWaitingOnPeer(match as PeerWaitMatchRow, side);
 
       if (!waiting && fallbackMessageId === null && startedAt === null) continue;
-      if (!isTelegramTarget(me.telegramId)) continue;
+      if (!telegramReachable(me)) continue;
 
       work.push({
         matchId: match.id,

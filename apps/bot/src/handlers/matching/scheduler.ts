@@ -5,7 +5,7 @@ import { prisma, type Theme } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
-import { isTelegramTarget } from "../../utils/telegram-target.js";
+import { telegramReachable } from "../../services/telegram-reach.js";
 import { zonedParts, wallToUtc } from "../../services/profiler-schedule.js";
 import {
   sendOrEditPostAcceptMessage,
@@ -223,8 +223,8 @@ export async function startScheduling(
     select: {
       calendarMessageIdA: true,
       calendarMessageIdB: true,
-      userA: { select: { telegramId: true, language: true, theme: true } },
-      userB: { select: { telegramId: true, language: true, theme: true } },
+      userA: { select: { telegramId: true, platform: true, language: true, theme: true } },
+      userB: { select: { telegramId: true, platform: true, language: true, theme: true } },
     },
   });
   if (!match) return;
@@ -240,6 +240,7 @@ export async function startScheduling(
         matchId,
         "A",
         match.userA.telegramId,
+        match.userA.platform,
         match.calendarMessageIdA,
         t(langA, captionKey),
         langA,
@@ -255,6 +256,7 @@ export async function startScheduling(
         matchId,
         "B",
         match.userB.telegramId,
+        match.userB.platform,
         match.calendarMessageIdB,
         t(langB, captionKey),
         langB,
@@ -289,8 +291,8 @@ export async function sendCalendarCard(
     select: {
       calendarMessageIdA: true,
       calendarMessageIdB: true,
-      userA: { select: { telegramId: true, language: true, theme: true } },
-      userB: { select: { telegramId: true, language: true, theme: true } },
+      userA: { select: { telegramId: true, platform: true, language: true, theme: true } },
+      userB: { select: { telegramId: true, platform: true, language: true, theme: true } },
     },
   });
   if (!match) return;
@@ -302,6 +304,7 @@ export async function sendCalendarCard(
     matchId,
     side,
     user.telegramId,
+    user.platform,
     existingMsgId,
     t(lang, "matchScheduleAfterTicket"),
     lang,
@@ -338,13 +341,14 @@ async function replaceCalendarMessage(
   matchId: string,
   side: PostAcceptSide,
   telegramId: bigint,
+  platform: string | null,
   previousMessageId: number | null,
   text: string,
   lang: Language,
   theme: Theme,
   resend = false,
 ): Promise<void> {
-  if (!isTelegramTarget(telegramId)) return;
+  if (!telegramReachable({ telegramId, platform })) return;
 
   const options = {
     reply_markup: buildCalendarKeyboard(calendarUrl(matchId, lang, theme), lang),
@@ -355,6 +359,7 @@ async function replaceCalendarMessage(
     matchId,
     side,
     telegramId,
+    platform,
     previousMessageId,
     text,
     options,
@@ -364,11 +369,15 @@ async function replaceCalendarMessage(
 
 async function deleteCalendarMessages(
   api: Api<RawApi>,
-  targets: ReadonlyArray<{ telegramId: bigint; messageId: number | null }>,
+  targets: ReadonlyArray<{
+    telegramId: bigint;
+    platform: string | null;
+    messageId: number | null;
+  }>,
 ): Promise<void> {
   await Promise.all(
-    targets.map(async ({ telegramId, messageId }) => {
-      if (messageId === null || !isTelegramTarget(telegramId)) return;
+    targets.map(async ({ telegramId, platform, messageId }) => {
+      if (messageId === null || !telegramReachable({ telegramId, platform })) return;
       await api.deleteMessage(Number(telegramId), messageId).catch(() => {});
     }),
   );
@@ -584,7 +593,9 @@ export async function processCalendarSlotsUpdate(
 
   const peerLang = ((isA ? match.userB.language : match.userA.language) ?? "en") as Language;
   const peerTelegramId = isA ? match.userB.telegramId : match.userA.telegramId;
+  const peerPlatform = isA ? match.userB.platform : match.userA.platform;
   const actorTelegramId = telegramId;
+  const actorPlatform = isA ? match.userA.platform : match.userB.platform;
 
   if (intersection.length === 1) {
     const agreed = intersection[0]!;
@@ -592,10 +603,12 @@ export async function processCalendarSlotsUpdate(
     await deleteCalendarMessages(api, [
       {
         telegramId: match.userA.telegramId,
+        platform: match.userA.platform,
         messageId: match.calendarMessageIdA,
       },
       {
         telegramId: match.userB.telegramId,
+        platform: match.userB.platform,
         messageId: match.calendarMessageIdB,
       },
     ]);
@@ -635,13 +648,14 @@ export async function processCalendarSlotsUpdate(
     // so it's visible the moment they close it. Subsequent updates rely
     // on the Mini App's polling + the match-nudge cron.
     const sends: Array<Promise<unknown>> = [];
-    if (isTelegramTarget(peerTelegramId)) {
+    if (telegramReachable({ telegramId: peerTelegramId, platform: peerPlatform })) {
       sends.push(
         replaceCalendarMessage(
           api,
           matchId,
           isA ? "B" : "A",
           peerTelegramId,
+          peerPlatform,
           isA ? match.calendarMessageIdB : match.calendarMessageIdA,
           t(peerLang, "matchSchedulePeerProposed"),
           peerLang,
@@ -650,7 +664,7 @@ export async function processCalendarSlotsUpdate(
         ).catch(() => {}),
       );
     }
-    if (isTelegramTarget(actorTelegramId)) {
+    if (telegramReachable({ telegramId: actorTelegramId, platform: actorPlatform })) {
       // No confirmation MESSAGE any more (PRODUCT_SPEC §3.6b): the actor gets
       // the waiting shimmer instead, held by `workers/peer-wait-shimmer.ts` for
       // as long as the peer hasn't picked. Started here rather than left to the
@@ -672,13 +686,14 @@ export async function processCalendarSlotsUpdate(
     // sees the counter-proposal state inside the Mini App; the peer needs
     // the Telegram nudge because their partner changed the negotiation.
     const sends: Array<Promise<unknown>> = [];
-    if (isTelegramTarget(peerTelegramId)) {
+    if (telegramReachable({ telegramId: peerTelegramId, platform: peerPlatform })) {
       sends.push(
         replaceCalendarMessage(
           api,
           matchId,
           isA ? "B" : "A",
           peerTelegramId,
+          peerPlatform,
           isA ? match.calendarMessageIdB : match.calendarMessageIdA,
           t(peerLang, "matchSchedulePeerSuggestedAlternative"),
           peerLang,

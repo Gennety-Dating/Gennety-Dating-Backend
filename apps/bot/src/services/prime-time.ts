@@ -60,7 +60,8 @@ export function isPrimeTimeSlot(
 /** The participant fields the rule reads. Kept structural so callers select narrowly. */
 export interface PrimeTimeParticipant extends PremiumHead {
   telegramId: bigint;
-  platform?: string | null;
+  /** Required: reachability is a platform question — see telegram-reach.ts. */
+  platform: string | null;
 }
 
 export interface PrimeTimeMatch {

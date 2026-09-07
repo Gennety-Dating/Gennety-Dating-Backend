@@ -4,7 +4,8 @@ import type { InlineKeyboardMarkup } from "grammy/types";
 import { prisma, type Theme } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
-import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
+import { telegramReachable } from "../../services/telegram-reach.js";
+import { toTelegramChatId } from "../../utils/telegram-target.js";
 import { startScheduling, sendCalendarCard } from "./scheduler.js";
 import {
   amountForScope,
@@ -69,6 +70,9 @@ export function ticketGateDeadline(now: Date = new Date()): Date {
 interface TicketUser {
   id: string;
   telegramId: bigint;
+  /** Reachability is a platform question, never `telegramId > 0` — see
+   *  services/telegram-reach.ts. */
+  platform: string | null;
   language: string | null;
   theme: Theme;
   gender: "male" | "female" | null;
@@ -122,8 +126,8 @@ const TICKET_SELECT = {
   calendarMessageIdB: true,
   userAId: true,
   userBId: true,
-  userA: { select: { id: true, telegramId: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, premiumUntil: true, profile: { select: { photos: true } } } },
-  userB: { select: { id: true, telegramId: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, premiumUntil: true, profile: { select: { photos: true } } } },
+  userA: { select: { id: true, telegramId: true, platform: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, premiumUntil: true, profile: { select: { photos: true } } } },
+  userB: { select: { id: true, telegramId: true, platform: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, premiumUntil: true, profile: { select: { photos: true } } } },
 } as const;
 
 function loadTicketMatch(matchId: string): Promise<TicketMatch | null> {
@@ -390,7 +394,7 @@ async function markPartnerPaidSeenAndNotify(
   if (!match) return;
   const covered = selfUser(match, coveredSide);
   const payer = peerUser(match, coveredSide);
-  if (isTelegramTarget(payer.telegramId)) {
+  if (telegramReachable(payer)) {
     await api
       .sendMessage(
         toTelegramChatId(payer.telegramId),
@@ -612,7 +616,7 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
 
   const sends: Array<Promise<unknown>> = [];
   for (const user of [match.userA, match.userB]) {
-    if (!isTelegramTarget(user.telegramId)) continue;
+    if (!telegramReachable(user)) continue;
     sends.push(
       api.sendMessage(
         toTelegramChatId(user.telegramId),
@@ -847,7 +851,7 @@ async function settleTicket(
   // hadn't already paid — otherwise `claimedCount` is 1 and it was just his own).
   const coveredPartnerNow =
     (scope === "partner" && claimedCount > 0) || (scope === "both" && claimedCount === 2);
-  if (coveredPartnerNow && isTelegramTarget(me.telegramId)) {
+  if (coveredPartnerNow && telegramReachable(me)) {
     const peer = peerUser(match, side);
     const effectId = env.MESSAGE_EFFECT_TICKET_ID;
     await api
@@ -873,12 +877,12 @@ async function settleTicket(
   // exactly once per real payment; no extra idempotency column is needed.
   if (claimedCount > 0 && !coveredPartnerNow && !bothPaid) {
     const peer = peerUser(match, side);
-    if (isTelegramTarget(me.telegramId)) {
+    if (telegramReachable(me)) {
       await api
         .sendMessage(toTelegramChatId(me.telegramId), t(langOf(me), "ticketGateWaiting"))
         .catch(() => {});
     }
-    if (isTelegramTarget(peer.telegramId)) {
+    if (telegramReachable(peer)) {
       await api
         .sendMessage(
           toTelegramChatId(peer.telegramId),
@@ -1478,7 +1482,7 @@ async function deliverPartnerPaidReveal(
   coveredSide: Side,
 ): Promise<boolean> {
   const covered = selfUser(match, coveredSide);
-  if (!isTelegramTarget(covered.telegramId)) return false;
+  if (!telegramReachable(covered)) return false;
 
   const claim = await prisma.match.updateMany({
     where: { id: match.id, partnerPaidNudgedAt: null },
@@ -1632,7 +1636,7 @@ export async function refundAndFallbackToScheduling(
 
   emitTicketEvent("ticket_refunded", { matchId, side: paidSide });
   const payer = selfUser(match, paidSide);
-  if (isTelegramTarget(payer.telegramId)) {
+  if (telegramReachable(payer)) {
     await api.sendMessage(toTelegramChatId(payer.telegramId), t(langOf(payer), "ticketRefundedDm"));
   }
 }

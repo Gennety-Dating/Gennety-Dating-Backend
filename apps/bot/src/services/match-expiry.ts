@@ -43,6 +43,9 @@ export interface SideClassification {
   side: "A" | "B";
   userId: string;
   telegramId: bigint;
+  /** Reachability is a platform question, never `telegramId > 0` — see
+   *  services/telegram-reach.ts. */
+  platform: string | null;
   language: string | null;
   /** `User.theme` — the expiry card renders in the recipient's own chrome. */
   theme: string | null;
@@ -97,12 +100,14 @@ interface CandidateMatch {
   dispatchedAt: Date | null;
   userA: {
     telegramId: bigint;
+    platform: string | null;
     language: string | null;
     theme: string | null;
     syntheticAt: Date | null;
   };
   userB: {
     telegramId: bigint;
+    platform: string | null;
     language: string | null;
     theme: string | null;
     syntheticAt: Date | null;
@@ -158,10 +163,10 @@ export async function expireStaleMatches(now: Date = new Date()): Promise<Expiry
       pitchMessageIdB: true,
       dispatchedAt: true,
       userA: {
-        select: { telegramId: true, language: true, theme: true, syntheticAt: true },
+        select: { telegramId: true, platform: true, language: true, theme: true, syntheticAt: true },
       },
       userB: {
-        select: { telegramId: true, language: true, theme: true, syntheticAt: true },
+        select: { telegramId: true, platform: true, language: true, theme: true, syntheticAt: true },
       },
     },
   });
@@ -230,6 +235,7 @@ async function classifyAndPenalise(
       side: "A" as const,
       userId: match.userAId,
       telegramId: match.userA.telegramId,
+      platform: match.userA.platform,
       language: match.userA.language,
       theme: match.userA.theme,
       pitchMessageId: match.pitchMessageIdA,
@@ -239,6 +245,7 @@ async function classifyAndPenalise(
       side: "B" as const,
       userId: match.userBId,
       telegramId: match.userB.telegramId,
+      platform: match.userB.platform,
       language: match.userB.language,
       theme: match.userB.theme,
       pitchMessageId: match.pitchMessageIdB,
@@ -256,6 +263,7 @@ async function classifyAndPenalise(
         side: m.side,
         userId: m.userId,
         telegramId: m.telegramId,
+        platform: m.platform,
         language: m.language,
         theme: m.theme,
         pitchMessageId: m.pitchMessageId,
@@ -295,6 +303,7 @@ async function classifyAndPenalise(
       side: m.side,
       userId: m.userId,
       telegramId: m.telegramId,
+      platform: m.platform,
       language: m.language,
       theme: m.theme,
       pitchMessageId: m.pitchMessageId,

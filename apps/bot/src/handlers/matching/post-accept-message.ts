@@ -1,7 +1,8 @@
 import type { Api, RawApi } from "grammy";
 import type { InlineKeyboardMarkup, ParseMode } from "grammy/types";
 import { prisma } from "@gennety/db";
-import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
+import { toTelegramChatId } from "../../utils/telegram-target.js";
+import { telegramReachable } from "../../services/telegram-reach.js";
 
 export type PostAcceptSide = "A" | "B";
 
@@ -58,6 +59,8 @@ export async function sendOrEditPostAcceptMessage(args: {
   matchId: string;
   side: PostAcceptSide;
   telegramId: bigint;
+  /** Recipient's rail. Required — see `telegramReachable`. */
+  platform: string | null;
   previousMessageId: number | null;
   text: string;
   options?: PostAcceptMessageOptions;
@@ -74,12 +77,17 @@ export async function sendOrEditPostAcceptMessage(args: {
     matchId,
     side,
     telegramId,
+    platform,
     previousMessageId,
     text,
     options = {},
     forceResend = false,
   } = args;
-  if (!isTelegramTarget(telegramId)) return previousMessageId;
+  // Reachability is a platform question, never `telegramId > 0`: a Telegram
+  // Login account carries a real positive id and no bot chat. `platform` is
+  // required by `telegramReachable`, so a caller that forgot to select it is a
+  // compile error rather than a card sent into a chat that does not exist.
+  if (!telegramReachable({ telegramId, platform })) return previousMessageId;
 
   const chatId = toTelegramChatId(telegramId);
   const { message_effect_id: _messageEffectId, ...editOptions } = options;

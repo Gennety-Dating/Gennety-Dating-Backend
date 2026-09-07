@@ -429,7 +429,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
 
     const user = await prisma.user.findUnique({
       where: { telegramId: BigInt(auth.user.id) },
-      select: { id: true, language: true },
+      select: { id: true, platform: true, language: true },
     });
     if (!user) {
       res.status(404).json({ error: "user-not-found" });
@@ -472,10 +472,11 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     // user with no chat-side cue — past UX feedback was that this
     // read as the bot ignoring them. The same helper is used by the
     // bot-side handlers, so the wording stays consistent across paths.
-    const actorLang = (user.language ?? "en") as Parameters<typeof sendVenuePostSaveAck>[4];
+    const actorLang = (user.language ?? "en") as Parameters<typeof sendVenuePostSaveAck>[5];
     void sendVenuePostSaveAck(
       api,
       BigInt(auth.user.id),
+      user.platform,
       matchId,
       isA ? "A" : "B",
       actorLang,

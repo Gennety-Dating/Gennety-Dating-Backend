@@ -35,7 +35,7 @@ import { sendPushToUser } from "./push.js";
 import { telegramReachable, pushReachable } from "./telegram-reach.js";
 import { getMainBotApi } from "./main-bot-api.js";
 import { buildMiniAppUrl } from "./mini-app-url.js";
-import { isTelegramTarget, toTelegramChatId } from "../utils/telegram-target.js";
+import { toTelegramChatId } from "../utils/telegram-target.js";
 import { RECAP_DELAY_MS, THUMBS_OPEN_DELAY_MS, MUTUAL_MATCH_WINDOW_MS } from "./event-recap.js";
 // Service → handler, which is the direction this repo already takes for
 // exactly this function: `public/matches-service.ts` imports it so the gate
@@ -208,7 +208,7 @@ async function sendRecapMessage(userId: string, n: EventRecapNotification): Prom
 
   const sends: Array<Promise<unknown>> = [];
 
-  if (telegramReachable(user) && isTelegramTarget(user.telegramId)) {
+  if (telegramReachable(user) && telegramReachable(user)) {
     const api = getMainBotApi();
     if (api) {
       const url = buildMiniAppUrl("event", {

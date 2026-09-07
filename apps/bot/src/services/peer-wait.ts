@@ -1,7 +1,8 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
-import { isTelegramTarget, toTelegramChatId } from "../utils/telegram-target.js";
+import { telegramReachable } from "./telegram-reach.js";
+import { toTelegramChatId } from "../utils/telegram-target.js";
 import { sendRichMessageDraft, thinkingHtml } from "./telegram-rich.js";
 
 /**
@@ -185,8 +186,8 @@ export function startPeerWaitShimmer(
         // Without it the only available test was "not A", which is exactly the
         // degenerate rule this resolution exists to avoid.
         userBId: true,
-        userA: { select: { telegramId: true, language: true, firstName: true } },
-        userB: { select: { telegramId: true, language: true, firstName: true } },
+        userA: { select: { telegramId: true, platform: true, language: true, firstName: true } },
+        userB: { select: { telegramId: true, platform: true, language: true, firstName: true } },
       },
     });
     if (!match) return;
@@ -204,7 +205,7 @@ export function startPeerWaitShimmer(
     if (!isA && !isB) return;
     const me = isA ? match.userA : match.userB;
     const peer = isA ? match.userB : match.userA;
-    if (!isTelegramTarget(me.telegramId)) return;
+    if (!telegramReachable(me)) return;
     await issuePeerWaitDraft(api, {
       chatId: toTelegramChatId(me.telegramId),
       matchId,
