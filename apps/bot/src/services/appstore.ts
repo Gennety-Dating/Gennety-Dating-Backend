@@ -125,6 +125,17 @@ export interface AppStoreTransaction {
   priceCents: number | null;
   /** ISO currency of {@link priceCents} (`USD`, `EUR`, …). */
   currency: string | null;
+  /**
+   * Who the app said was buying, as a UUID the client sets at purchase time
+   * (`Product.PurchaseOption.appAccountToken`) and Apple echoes back.
+   *
+   * `null` for anything bought before the client started sending it — which is
+   * why the check that reads this is "verify when present" rather than
+   * "require". Ownership was otherwise decided by a race: `externalPaymentId`
+   * is unique, so whoever submitted a given `transactionId` first got the
+   * tickets.
+   */
+  appAccountToken: string | null;
 }
 
 export type TransactionLookup =
@@ -143,6 +154,10 @@ function toTransaction(payload: Record<string, unknown>): AppStoreTransaction | 
     productId: typeof payload.productId === "string" ? payload.productId : null,
     quantity: typeof payload.quantity === "number" && payload.quantity > 0 ? payload.quantity : 1,
     revocationDate: typeof payload.revocationDate === "number" ? payload.revocationDate : null,
+    appAccountToken:
+      typeof payload.appAccountToken === "string" && payload.appAccountToken
+        ? payload.appAccountToken.toLowerCase()
+        : null,
     expiresDate: typeof payload.expiresDate === "number" ? payload.expiresDate : null,
     // Apple reports `price` in milliunits of the currency (9990 = $9.99), so
     // cents = price / 10.

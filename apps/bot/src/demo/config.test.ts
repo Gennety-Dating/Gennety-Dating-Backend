@@ -75,6 +75,7 @@ describe("identity trust gate interaction", () => {
   function config(overrides: Partial<IdentityTrustConfiguration> = {}): IdentityTrustConfiguration {
     return {
       OTP_LOG_TO_CONSOLE: false,
+      RESEND_API_KEY: "re_live_key",
       DEV_OTP_BYPASS_TELEGRAM_IDS: new Set(),
       DEMO_MODE_ENABLED: false,
       MANDATORY_VERIFICATION_ENABLED: false,

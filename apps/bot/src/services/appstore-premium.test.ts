@@ -29,6 +29,7 @@ function tx(over: Partial<AppStoreTransaction> = {}): AppStoreTransaction {
     expiresDate: EXPIRES,
     priceCents: 999,
     currency: "USD",
+    appAccountToken: null,
     ...over,
   };
 }

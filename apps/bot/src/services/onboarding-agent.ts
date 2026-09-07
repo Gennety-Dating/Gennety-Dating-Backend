@@ -53,6 +53,7 @@ import {
   type OnboardingField,
   type OnboardingInput,
   type OnboardingQuestion,
+  validateFactValue,
 } from "./onboarding-collector.js";
 import { hasTrackVerifiedContact } from "./contact-verification.js";
 
@@ -1458,7 +1459,25 @@ async function execSaveProfileData(
     return JSON.stringify({ success: false, error: "User not found." });
   }
 
-  const firstName = args.first_name?.trim() || user.firstName;
+  // Through the one validator, not around it.
+  //
+  // The collector requires `/^[\p{L}'-]{2,40}$/u` for a name; this tool's own
+  // schema said `{ type: "string" }` and the column has no length. So the agent
+  // was a second, wider writer of the same field — and `firstName` is not a
+  // decorative field: it is interpolated into the PARTNER's system prompt, which
+  // makes an unvalidated name a cross-user injection channel with the product's
+  // own voice behind it.
+  let firstName = user.firstName;
+  if (args.first_name !== undefined) {
+    const checked = validateFactValue("first_name", args.first_name);
+    if (checked.value === undefined) {
+      return JSON.stringify({
+        success: false,
+        error: `Cannot save first_name (${checked.reason}). Ask the user for a real given name.`,
+      });
+    }
+    firstName = checked.value as string;
+  }
   const age = args.age ?? user.age;
   const gender = args.gender ?? (user.gender as "male" | "female" | null);
   const preference =

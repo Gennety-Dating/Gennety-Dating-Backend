@@ -980,6 +980,18 @@ export const env = {
 
 export interface IdentityTrustConfiguration {
   OTP_LOG_TO_CONSOLE: boolean;
+  /**
+   * The mail key, and it belongs in this boundary rather than beside it.
+   *
+   * `sendOtpEmail` printed the code to stdout whenever this was empty — the
+   * SECOND branch of `OTP_LOG_TO_CONSOLE || !RESEND_API_KEY`, and only the
+   * first was guarded here. The key is assembled as
+   * `RESEND_API_KEY ?? SMTP_PASS ?? ""`, so losing either variable produced an
+   * empty string, and losing it silently: every registration code in plaintext
+   * in the log, and no email sent. Access to logs then IS the email gate, and
+   * the email gate is a trust boundary of this product.
+   */
+  RESEND_API_KEY: string;
   DEV_OTP_BYPASS_TELEGRAM_IDS: ReadonlySet<bigint>;
   DEMO_MODE_ENABLED: boolean;
   MANDATORY_VERIFICATION_ENABLED: boolean;
@@ -1018,6 +1030,12 @@ export function identityTrustConfigurationErrors(
   const errors: string[] = [];
   if (config.OTP_LOG_TO_CONSOLE) {
     errors.push("OTP_LOG_TO_CONSOLE must be false outside development");
+  }
+  if (!config.RESEND_API_KEY) {
+    errors.push(
+      "RESEND_API_KEY (or SMTP_PASS) must be set — without it registration codes " +
+        "are printed to the log instead of emailed",
+    );
   }
   if (config.DEV_OTP_BYPASS_TELEGRAM_IDS.size > 0) {
     errors.push("DEV_OTP_BYPASS_TELEGRAM_IDS must be empty outside development");
