@@ -105,6 +105,80 @@ function founderChatId(): number {
   return Number(env.FOUNDER_TELEGRAM_ID);
 }
 
+/**
+ * Anonymous ops alert for ANY scheduled job.
+ *
+ * The status-timer notifier below predates this and stayed as it is because its
+ * wording is specific and its runner has its own heartbeat. This one is what
+ * the other twenty-five jobs get: before it, they failed into `console.error`
+ * on a droplet nobody watches, so a subsystem could be down for days and the
+ * first signal would be a person asking why nothing happened.
+ */
+export async function notifyFounderSubsystemHealth(
+  subsystem: string,
+  state: "degraded" | "recovered",
+  consecutiveFailures: number,
+): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+  const text =
+    state === "degraded"
+      ? `⚠️ «${subsystem}» падает ${consecutiveFailures} тик(а/ов) подряд.`
+      : `✅ «${subsystem}» снова работает — после ${consecutiveFailures} упавших тиков.`;
+  try {
+    await api.sendMessage(founderChatId(), text);
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} subsystem health notify failed`, { subsystem, err });
+  }
+}
+
+/**
+ * A handler blew up while answering a person.
+ *
+ * `bot.catch` used to be the end of the road: log the error, apologise to the
+ * user, move on. That is fine for one bad update and wrong for a broken deploy,
+ * where the same exception fires for everybody and nobody is told.
+ *
+ * Rate-limited hard, because the failure mode being reported is precisely the
+ * one that would otherwise send a message per update: the first error in a
+ * window is announced, the rest are counted and folded into the next one.
+ */
+const HANDLER_ALERT_WINDOW_MS = 15 * 60 * 1000;
+let handlerAlertWindowStartedAt = 0;
+let handlerErrorsSinceAlert = 0;
+
+export async function notifyFounderHandlerError(
+  summary: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+
+  handlerErrorsSinceAlert += 1;
+  const nowMs = now.getTime();
+  if (nowMs - handlerAlertWindowStartedAt < HANDLER_ALERT_WINDOW_MS) return;
+
+  const suppressed = handlerErrorsSinceAlert - 1;
+  handlerAlertWindowStartedAt = nowMs;
+  handlerErrorsSinceAlert = 0;
+
+  const lines = [`🛑 Ошибка в обработчике: ${summary.slice(0, 400)}`];
+  if (suppressed > 0) {
+    lines.push(`…и ещё ${suppressed} за последние 15 минут.`);
+  }
+  try {
+    await api.sendMessage(founderChatId(), lines.join("\n"));
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} handler error notify failed`, err);
+  }
+}
+
+/** Test seam: the window is module state, and tests must not inherit it. */
+export function __resetHandlerAlertsForTests(): void {
+  handlerAlertWindowStartedAt = 0;
+  handlerErrorsSinceAlert = 0;
+}
+
 /** Anonymous ops alert for the pinned status-timer worker. */
 export async function notifyFounderStatusTimerHealth(
   state: "degraded" | "recovered",

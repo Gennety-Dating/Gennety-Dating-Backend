@@ -31,6 +31,7 @@ const {
   buildLiveActivityPayload,
   liveActivityTopic,
   resetApnsCachesForTest,
+  isProviderCredentialFailure,
   TIME_SENSITIVE_PUSH_TYPES,
 } = await import("./apns.js");
 
@@ -194,5 +195,28 @@ describe("payload builders", () => {
         "stale-date": 1_800_000_000,
       },
     });
+  });
+});
+
+describe("isProviderCredentialFailure", () => {
+  /**
+   * A dead device token is ordinary: the row is cleared and that person stops
+   * getting pushes. An expired signing key is the opposite — every push to
+   * EVERYONE fails, forever — and both used to end in the same `console.warn`,
+   * so the rail could be down for days before anyone noticed.
+   */
+  it("recognises the refusals that are about our own key", () => {
+    expect(isProviderCredentialFailure(403, "InvalidProviderToken")).toBe(true);
+    expect(isProviderCredentialFailure(403, "ExpiredProviderToken")).toBe(true);
+    expect(isProviderCredentialFailure(400, "BadCertificateEnvironment")).toBe(true);
+    // A 403 whose reason we do not recognise is still about authorisation.
+    expect(isProviderCredentialFailure(403, null)).toBe(true);
+  });
+
+  it("leaves an ordinary dead device token alone", () => {
+    expect(isProviderCredentialFailure(410, "Unregistered")).toBe(false);
+    expect(isProviderCredentialFailure(400, "BadDeviceToken")).toBe(false);
+    expect(isProviderCredentialFailure(500, "InternalServerError")).toBe(false);
+    expect(isProviderCredentialFailure(0, "transport")).toBe(false);
   });
 });

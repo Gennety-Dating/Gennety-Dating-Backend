@@ -1,6 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { guardedTick } from "./guarded-tick.js";
 
+/**
+ * Let the tick's own promise chain settle.
+ *
+ * Counting microtasks by hand used to work and stopped the moment the chain
+ * grew a health step — which is exactly the kind of coupling a test should not
+ * have to a private implementation detail. A macrotask boundary is true
+ * whatever the chain looks like.
+ */
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
 describe("guardedTick", () => {
   beforeEach(() => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -29,7 +39,7 @@ describe("guardedTick", () => {
     // Let the first run finish; a subsequent tick runs again.
     resolve();
     await gate;
-    await Promise.resolve();
+    await settle();
     cb();
     expect(task).toHaveBeenCalledTimes(2);
   });
@@ -42,8 +52,7 @@ describe("guardedTick", () => {
 
     const cb = guardedTick("test", task);
     cb();
-    await Promise.resolve();
-    await Promise.resolve();
+    await settle();
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('"test" tick failed:'),
       expect.any(Error),
