@@ -798,7 +798,7 @@ async function handleVenueNudges(
     const targets = (["A", "B"] as MatchSide[])
       .filter((side) => sideOwesAction(match, side))
       .map((side) => (side === "A" ? match.userA : match.userB))
-      .filter((user) => stallReachableFor(user.telegramId));
+      .filter((user) => stallReachableFor(user));
     if (targets.length === 0) continue;
 
     const claim = await prisma.match.updateMany({
@@ -879,8 +879,9 @@ async function handleStallChain(
     for (const side of owing) {
       const user = side === "A" ? match.userA : match.userB;
       // A side that cannot receive an inline keyboard is never asked, and
-      // (see `cancelStalledMatch`) never timed out either.
-      if (!stallReachableFor(user.telegramId)) continue;
+      // (see `cancelStalledMatch`) never counted as a ghost — though the match
+      // itself still lapses at the hard ceiling.
+      if (!stallReachableFor(user)) continue;
 
       // Phase-scoped: a stamp left over from the scheduling step must not
       // suppress the venue step's question (see `stallCheckInAskedAt`).
@@ -926,7 +927,7 @@ async function handleStallChain(
       // broken. Skipped when both sides are quiet — nobody is owed an update on
       // a wait they are themselves causing.
       const partnerOwes = sideOwesAction(match, side === "A" ? "B" : "A");
-      if (partnerOwes || !stallReachableFor(partner.telegramId)) continue;
+      if (partnerOwes || !stallReachableFor(partner)) continue;
 
       const partnerLang = (partner.language ?? "en") as Language;
       const askedLabel = user.firstName ?? t(partnerLang, "stallPartnerFallbackName");

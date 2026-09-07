@@ -1169,7 +1169,13 @@ describe("matchNudgeTick — rails, the cases that are not per-cadence", () => {
   // positive id) means it still sends the DM it always sent. Swapping that
   // helper for `telegramReachable` while adding rails here would silently start
   // cancelling matches on people who were never asked.
-  it("leaves the venue step on its own predicate — no push rail, no rewrite", async () => {
+  it("leaves the venue step on its own predicate — no push rail, and no Telegram send to an app-only account", async () => {
+    // A REAL positive id on `platform: "mobile"` is the Telegram Login
+    // population: they never pressed Start, so there is no chat to put an
+    // inline keyboard in. The venue step has no push rail of its own, so the
+    // honest outcome is that they get nothing here — and the match still ends,
+    // because `cancelStalledMatch` now has a ceiling that does not depend on
+    // anyone being reachable.
     routeQueries({
       venue: [makeVenueMatch({ userA: railUser("she", 424242n, "mobile", "Alice") })],
     });
@@ -1178,8 +1184,7 @@ describe("matchNudgeTick — rails, the cases that are not per-cadence", () => {
     const result = await matchNudgeTick(api, { now: DAY_TIME });
 
     expect(mPush).not.toHaveBeenCalled();
-    expect(result.venueNudges).toBe(1);
-    expect(api.sendMessage).toHaveBeenCalledTimes(1);
-    expect(api.sendMessage.mock.calls[0][0]).toBe(424242);
+    expect(result.venueNudges).toBe(0);
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 });

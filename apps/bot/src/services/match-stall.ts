@@ -7,6 +7,7 @@ import { boostAcceptedSidePriority } from "./match-decision-shared.js";
 import { refundMatchTickets, ticketRefundNoticeKey } from "./ticket-refund.js";
 import { sendPushToUser } from "./push.js";
 import { refundPrimeTimeForDeadMatch } from "./prime-time-purchase.js";
+import { telegramReachable } from "./telegram-reach.js";
 
 /**
  * Stall handling for the two open-ended planning phases (PRODUCT_SPEC §3.5c).
@@ -89,8 +90,8 @@ export const STALL_MATCH_SELECT = {
   stallConfirmedAtB: true,
   venueNudge1SentAt: true,
   venueNudge2SentAt: true,
-  userA: { select: { id: true, telegramId: true, language: true, firstName: true, theme: true } },
-  userB: { select: { id: true, telegramId: true, language: true, firstName: true, theme: true } },
+  userA: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true, theme: true } },
+  userB: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true, theme: true } },
 } as const;
 
 /** Minimal shape the pure predicates below operate on. */
@@ -267,13 +268,40 @@ export function stallDeadlineAt(row: StallMatchRow, side: MatchSide): Date | nul
 }
 
 /**
- * Can we actually run the chain against this side? The question is an inline
- * keyboard in a Telegram chat; a mobile-only row (synthetic negative
- * `telegramId`) has no way to answer, and cancelling on someone we never asked
- * would be indefensible. Such a match is left untouched.
+ * Can we actually run the chain against this side?
+ *
+ * The question is an inline keyboard in a Telegram chat, so someone we cannot
+ * reach there never saw it, and penalising them for not answering would be
+ * indefensible. That much was always right. What was wrong is `telegramId > 0n`
+ * as the test — the same wrong test this codebase carried in 43 other places
+ * (see services/telegram-reach.ts) — and the conclusion drawn from it, which
+ * was to leave the match untouched forever.
  */
-export function stallReachableFor(telegramId: bigint): boolean {
-  return telegramId > 0n;
+export function stallReachableFor(user: { telegramId: bigint; platform: string | null }): boolean {
+  return telegramReachable(user);
+}
+
+/**
+ * The ceiling that makes `negotiating` an escapable state.
+ *
+ * Refusing to cancel over someone who never saw the question is fair to them
+ * and unjust to everyone else: their partner watches "picking a time" forever
+ * and silently misses every following drop, and a mobile↔mobile pair had no
+ * exit at all — `expireStaleMatches` only takes `proposed`, and the ticket
+ * expiry only takes an open gate.
+ *
+ * So unreachability buys time, not immortality. Past this, the match lapses no
+ * matter who could answer. Nobody is penalised on this path: the ghost
+ * treatment needs evidence of ignoring, and there is none for a question that
+ * was never delivered. Three stall windows is long enough that it can only fire
+ * on a pair that is genuinely going nowhere.
+ */
+export const STALL_HARD_CEILING_MS = STALL_TIMEOUT_MS * 3;
+
+/** When a match lapses regardless of whether anyone could be asked. */
+export function stallCeilingAt(row: StallMatchRow): Date | null {
+  const anchor = stallAnchorAt(row);
+  return anchor ? new Date(anchor.getTime() + STALL_HARD_CEILING_MS) : null;
 }
 
 // Deliberately four flat, non-nesting prefixes. `stall:cancel:` +
@@ -316,6 +344,8 @@ export function buildStallCancelConfirmKeyboard(
 type StallParticipant = {
   id: string;
   telegramId: bigint;
+  /** Reachability is a platform question — see services/telegram-reach.ts. */
+  platform: string | null;
   language: string | null;
   firstName: string | null;
 };
@@ -398,17 +428,24 @@ export async function cancelStalledMatch(
     };
   });
 
-  // Never cancel over a side that could not have answered the question.
-  if (sides.some((s) => s.owes && !stallReachableFor(s.user.telegramId))) return empty;
+  // Never PENALISE a side that could not have answered the question — but do not
+  // let that hold the match open forever either. Past the ceiling the pair is
+  // released, and the unreachable side is not counted as a ghost.
+  const ceiling = stallCeilingAt(match);
+  const pastCeiling = ceiling !== null && ceiling <= now;
+  const unreachableOwes = sides.some((s) => s.owes && !stallReachableFor(s.user));
+  if (unreachableOwes && !pastCeiling) return empty;
   // The deadline is re-derived here, from a row read AFTER the caller decided.
   // That closes the race where someone taps 🟢 in the window between the
   // worker's scan and this call: their deadline moves, nothing has expired any
   // more, and the cancellation is abandoned instead of overriding their answer.
-  if (!sides.some((s) => s.ghosted)) return empty;
+  if (!sides.some((s) => s.ghosted) && !pastCeiling) return empty;
 
   if (!(await claimCancellation(matchId, phase, null))) return empty;
 
-  const ghosts = sides.filter((s) => s.ghosted);
+  // A question that was never delivered cannot be ignored, so a side we could
+  // not reach is never a ghost — even when the ceiling is what ended the match.
+  const ghosts = sides.filter((s) => s.ghosted && stallReachableFor(s.user));
   // Compensated only for actually doing their part. Someone who owes but whose
   // own clock hadn't run out gets neither the penalty nor the boost.
   const waiting = sides.filter((s) => !s.owes);
@@ -468,7 +505,7 @@ export async function cancelStalledMatch(
     const key = side.ghosted ? "stallTimeoutSelf" : "stallTimeoutPartnerGone";
     const body = `${t(lang, key, { name: partnerName(other, lang) })}${refundLineFor(side.user.id, lang)}`;
 
-    if (!stallReachableFor(side.user.telegramId)) {
+    if (!stallReachableFor(side.user)) {
       // A mobile-only participant can't be asked (which is why they are never
       // the ghost), but their match still just ended — silently dropping it from
       // `/v1/matches/current` on the next poll is not an explanation.
@@ -570,7 +607,7 @@ export async function cancelPlanningByUser(
     `${t(otherLang, "stallPeerCancelled", { name: partnerName(actor, otherLang) })}` +
     refundLineFor(other.id, otherLang);
 
-  if (stallReachableFor(other.telegramId)) {
+  if (stallReachableFor(other)) {
     try {
       await api.sendMessage(Number(other.telegramId), otherBody);
     } catch (err) {
