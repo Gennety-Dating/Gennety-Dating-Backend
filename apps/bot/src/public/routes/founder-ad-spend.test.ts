@@ -67,6 +67,52 @@ describe("GET /v1/founder/ad-spend/:token", () => {
     expect(res.text).toContain('<option value="unattributed">');
   });
 
+  it("picks channels with a <select>, never a <datalist>", async () => {
+    // iOS Safari does not implement <datalist> for text inputs: the suggestion
+    // list never appears, so on the one device this page exists for the picker
+    // was an empty text box. This assertion is the whole reason the control
+    // changed — it must not regress back.
+    const res = await request(buildApp()).get(`/v1/founder/ad-spend/${token()}`);
+    expect(res.text).not.toContain("datalist");
+    expect(res.text).toContain('<select id="channel" name="channel">');
+    // Plus a free-text escape hatch, which is the one thing a list cannot do.
+    expect(res.text).toContain('name="channelNew"');
+  });
+
+  it("puts the form above the already-logged list", async () => {
+    // The list is context; adding a row is why the link was tapped. With a few
+    // entries logged, list-first puts the first input below the fold.
+    adSpendFindMany.mockResolvedValue([
+      {
+        id: "row-1",
+        channel: "tg:promo",
+        category: "performance_ads",
+        amount: 1,
+        currency: "USD",
+        amountUsdCents: 100,
+        note: null,
+      },
+    ]);
+    const res = await request(buildApp()).get(`/v1/founder/ad-spend/${token()}`);
+    expect(res.text.indexOf("Добавить расход")).toBeLessThan(
+      res.text.indexOf("Что уже внесено"),
+    );
+  });
+
+  it("keeps every tap target at 48px or more", async () => {
+    const res = await request(buildApp()).get(`/v1/founder/ad-spend/${token()}`);
+    expect(res.text).toContain("min-height: 48px");
+    // 16px inputs: anything smaller and iOS zooms the page on focus.
+    expect(res.text).toContain("font-size: 16px");
+    expect(res.text).toContain("viewport-fit=cover");
+  });
+
+  it("collapses the period behind <details> when it is the week's default", async () => {
+    const res = await request(buildApp()).get(`/v1/founder/ad-spend/${token()}`);
+    expect(res.text).toContain("<details>");
+    expect(res.text).not.toContain("<details open>");
+  });
+
   it("shows what is already logged for the week, with a total", async () => {
     adSpendFindMany.mockResolvedValue([
       {
@@ -189,6 +235,37 @@ describe("POST /v1/founder/ad-spend/:token", () => {
       .send({ ...good, channel: "tg:launch_sept" });
     expect(res.status).toBe(303);
     expect(adSpendUpsert.mock.calls[0]![0].create.channel).toBe("tg:launch_sept");
+  });
+
+  it("lets a typed channel beat the picked one", async () => {
+    // The two controls exist because a `<select>` cannot express a campaign
+    // that has no signups yet. If the picker won, that field could never be
+    // used — it is the only way a new campaign gets entered.
+    const res = await request(buildApp())
+      .post(`/v1/founder/ad-spend/${token()}`)
+      .type("form")
+      .send({ ...good, channel: "tg:promo", channelNew: "tg:launch_sept" });
+    expect(res.status).toBe(303);
+    expect(adSpendUpsert.mock.calls[0]![0].create.channel).toBe("tg:launch_sept");
+  });
+
+  it("falls back to the picked channel when nothing was typed", async () => {
+    await request(buildApp())
+      .post(`/v1/founder/ad-spend/${token()}`)
+      .type("form")
+      .send({ ...good, channel: "tg:promo", channelNew: "  " });
+    expect(adSpendUpsert.mock.calls[0]![0].create.channel).toBe("tg:promo");
+  });
+
+  it("reopens the collapsed block when the rejected submit had edited it", async () => {
+    // A 400 that hides the offending field behind a closed <details> is a
+    // dead end on a phone.
+    const res = await request(buildApp())
+      .post(`/v1/founder/ad-spend/${token()}`)
+      .type("form")
+      .send({ ...good, channel: "Instagram Ads", periodStart: "2026-08-10" });
+    expect(res.status).toBe(400);
+    expect(res.text).toContain("<details open>");
   });
 
   it("requires a note where a bare number would be unreadable later", async () => {

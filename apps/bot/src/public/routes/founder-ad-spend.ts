@@ -183,8 +183,14 @@ founderAdSpendRouter.post(
     }
 
     const body = (req.body ?? {}) as Record<string, unknown>;
+    // The channel arrives from one of two controls: a `<select>` of what
+    // exists, and a free-text field for a campaign that does not exist yet.
+    // The typed one wins — someone who took the trouble to type a slug over
+    // a picked value meant the slug, and the reverse rule would silently
+    // discard the only input a new campaign can be entered through.
+    const typedChannel = str(body.channelNew).trim();
     const form: FormValues = {
-      channel: str(body.channel).trim(),
+      channel: typedChannel || str(body.channel).trim(),
       category: str(body.category),
       periodStart: str(body.periodStart) || link.weekStart,
       periodEnd: str(body.periodEnd) || link.weekEnd,
@@ -387,19 +393,51 @@ async function renderPage(res: Response, status: number, state: PageState): Prom
   res.status(status).type("html").send(renderHtml(state, channels));
 }
 
+/**
+ * Everything below renders one screen for one thumb.
+ *
+ * The page is opened from a Telegram message, on a phone, to log a number the
+ * founder already knows. That framing decides the layout, and three choices
+ * here look odd on a desktop and are right on a phone:
+ *
+ *   1. **The form comes BEFORE the list of what is already logged.** The list
+ *      is context; adding a row is the reason the link was tapped. With three
+ *      entries logged, a list-first layout puts the first input below the fold.
+ *      A one-line summary carries the context the list would have given.
+ *   2. **Channel is a `<select>`, not the `<datalist>` this started as.** iOS
+ *      Safari does not implement `<datalist>` for text inputs — the suggestion
+ *      list simply never appears. On the one device this page exists for, the
+ *      picker was an empty text box. A native `<select>` is the best control
+ *      mobile has (a full-height wheel), and a separate free-text field covers
+ *      the case a list cannot: a campaign slug with no signups behind it yet.
+ *   3. **Period and the USD override live inside `<details>`.** Both are right
+ *      as prefilled almost every time — the link names the week — and
+ *      `<details>` is the one disclosure widget that needs no JavaScript.
+ *
+ * Every control is at least 48px tall for the same reason the delete button is
+ * 44px: this is a form filled with a thumb, not a mouse.
+ */
+
+/** Chevron for the selects — `appearance: none` removes the native one, and
+ * helmet's default CSP allows `img-src data:`, so no extra header is needed. */
+const CHEVRON =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8"><path d="M1 1l5 5 5-5" stroke="#9a9aa2" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>`,
+  );
+
 function renderRows(state: PageState): string {
   if (state.rows.length === 0) {
     return `<p class="empty">За эту неделю ещё ничего не внесено.</p>`;
   }
-  const totalUsd = state.rows.reduce((sum, r) => sum + r.amountUsdCents, 0);
-  const items = state.rows
+  return `<ul class="rows">${state.rows
     .map((row) => {
       const cat = isAdSpendCategory(row.category) ? CATEGORY_LABEL[row.category] : row.category;
       const note = row.note ? `<div class="note">${esc(row.note)}</div>` : "";
       return `
       <li>
         <div class="row-main">
-          <div>
+          <div class="row-text">
             <div class="row-channel">${esc(row.channel)}</div>
             <div class="row-meta">${esc(cat)} · ${row.amount} ${esc(row.currency)} · ${fmtUsd(row.amountUsdCents)}</div>
             ${note}
@@ -411,20 +449,21 @@ function renderRows(state: PageState): string {
         </div>
       </li>`;
     })
-    .join("");
-  return `<ul class="rows">${items}</ul>
-    <div class="total">Итого за неделю: <strong>${fmtUsd(totalUsd)}</strong></div>`;
+    .join("")}</ul>`;
 }
 
 function renderHtml(state: PageState, channels: string[]): string {
   const { link, token, form } = state;
   const action = `/v1/founder/ad-spend/${encodeURIComponent(token)}`;
+  const weekLabel = `${fmtDay(link.weekStart)} – ${fmtDay(link.weekEnd)}`;
 
   const categoryOptions = AD_SPEND_CATEGORIES.map((cat) => {
     const selected = (form.category ?? "performance_ads") === cat ? " selected" : "";
     const win = AD_SPEND_ATTRIBUTION_WINDOW_DAYS[cat];
-    const hint = win === null ? "без атрибуции" : `окно ${win} дн.`;
-    return `<option value="${cat}"${selected}>${esc(CATEGORY_LABEL[cat])} — ${hint}</option>`;
+    // Short suffix: a native iOS picker truncates a long option, and the
+    // window is a hint rather than part of the name.
+    const hint = win === null ? "без атриб." : `${win} дн.`;
+    return `<option value="${cat}"${selected}>${esc(CATEGORY_LABEL[cat])} · ${hint}</option>`;
   }).join("");
 
   const currencyOptions = CURRENCIES.map((c) => {
@@ -432,57 +471,120 @@ function renderHtml(state: PageState, channels: string[]): string {
     return `<option value="${c}"${selected}>${c}</option>`;
   }).join("");
 
-  const datalist = channels
-    .map((c) => `<option value="${esc(c)}"></option>`)
-    .join("");
+  const channelOptions = [
+    `<option value="">— выбери канал —</option>`,
+    ...channels.map((c) => {
+      const selected = form.channel === c ? " selected" : "";
+      return `<option value="${esc(c)}"${selected}>${esc(c)}</option>`;
+    }),
+  ].join("");
+
+  // A rejected submit whose channel was TYPED must come back in the field it
+  // was typed into, not silently reappear as a selected option that does not
+  // exist in the list.
+  const typedChannel = form.channel && !channels.includes(form.channel) ? form.channel : "";
 
   const notice = state.notice
-    ? `<div class="notice ${state.notice.kind}">${esc(state.notice.text)}</div>`
+    ? `<div class="notice ${state.notice.kind}" role="status">${esc(state.notice.text)}</div>`
     : "";
+
+  const totalUsd = state.rows.reduce((sum, r) => sum + r.amountUsdCents, 0);
+  const summary =
+    state.rows.length === 0
+      ? `<div class="strip empty-strip">За эту неделю пока ничего не внесено</div>`
+      : // "записей: N" rather than a declined "N записей": Russian plural
+        // selection already exists twice in this repo (`founder-notify.ts` and
+        // a private `slavicPlural` in shared i18n), and a third copy for one
+        // label is worse than a phrasing that is correct for every N.
+        `<div class="strip">Итого за неделю: <strong>${fmtUsd(totalUsd)}</strong> <span class="strip-sub">· записей: ${state.rows.length}</span></div>`;
+
+  // Open the collapsed block when a rejected submit carried a period that is
+  // NOT the week's default — otherwise the founder would be sent back to a
+  // form whose offending field is hidden.
+  const periodEdited =
+    (form.periodStart != null && form.periodStart !== link.weekStart) ||
+    (form.periodEnd != null && form.periodEnd !== link.weekEnd) ||
+    Boolean(form.amountUsd);
 
   return `<!doctype html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Расходы на привлечение · ${esc(fmtDay(link.weekStart))} – ${esc(fmtDay(link.weekEnd))}</title>
+<title>Расходы · ${esc(weekLabel)}</title>
 <style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: #0b0b0d; color: #f2f2f4; font: 16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-  header { padding: 22px 16px 6px; }
-  h1 { margin: 0; font-size: 20px; }
-  .sub { color: #9a9aa2; font-size: 13px; margin-top: 4px; }
-  main { padding: 8px 14px 48px; max-width: 560px; margin: 0 auto; }
-  .card { background: #141417; border: 1px solid #26262b; border-radius: 14px; padding: 14px; margin: 12px 0; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: #8b8b93; margin: 0 0 10px; font-weight: 600; }
-  label { display: block; font-size: 13px; color: #9a9aa2; margin: 12px 0 5px; }
-  input, select, textarea {
-    width: 100%; padding: 11px 12px; font-size: 16px; font-family: inherit;
-    background: #1d1d21; color: #f2f2f4; border: 1px solid #33333a; border-radius: 10px;
+  :root { color-scheme: dark; --gold: #d9a441; --bg: #0b0b0d; --card: #141417; --line: #26262b; --field: #1d1d21; --muted: #9a9aa2; --faint: #6a6a72; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: #f2f2f4;
+    font: 16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    /* iPhone notch + home indicator. */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
-  input:focus, select:focus, textarea:focus { outline: 2px solid #d9a441; outline-offset: -1px; }
+  header { padding: 20px 16px 4px; max-width: 560px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  main { padding: 6px 14px 40px; max-width: 560px; margin: 0 auto; }
+
+  .strip { font-size: 14px; color: var(--muted); padding: 14px 2px 0; }
+  .strip strong { color: #f2f2f4; }
+  .strip-sub { color: var(--faint); }
+  .empty-strip { color: var(--faint); }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin: 10px 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #8b8b93; margin: 0 0 12px; font-weight: 600; }
+
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  input, select {
+    width: 100%; min-height: 48px; padding: 12px 13px;
+    /* 16px is load-bearing: anything smaller makes iOS zoom the page on focus. */
+    font-size: 16px; font-family: inherit;
+    background: var(--field); color: #f2f2f4; border: 1px solid #33333a; border-radius: 12px;
+  }
+  select {
+    appearance: none; -webkit-appearance: none;
+    background-image: url("${CHEVRON}");
+    background-repeat: no-repeat; background-position: right 14px center;
+    padding-right: 38px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--gold); outline-offset: -1px; }
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .hint { font-size: 12px; color: #6a6a72; margin-top: 5px; }
-  button.save {
-    width: 100%; margin-top: 18px; padding: 14px; font-size: 16px; font-weight: 600;
-    background: #d9a441; color: #1a1400; border: 0; border-radius: 10px;
+  .pair.amount { grid-template-columns: 1.6fr 1fr; }
+  .pair label { margin-top: 0; }
+  .stack > * + * { margin-top: 8px; }
+  .hint { font-size: 12px; color: var(--faint); margin-top: 7px; line-height: 1.45; }
+
+  details { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+  summary {
+    font-size: 13px; color: var(--muted); cursor: pointer; list-style: none;
+    min-height: 34px; display: flex; align-items: center; gap: 7px;
   }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "▾"; color: var(--faint); font-size: 11px; }
+  details[open] summary::after { content: "▴"; }
+
+  button.save {
+    width: 100%; margin-top: 20px; min-height: 52px; padding: 15px;
+    font-size: 17px; font-weight: 600; font-family: inherit;
+    background: var(--gold); color: #1a1400; border: 0; border-radius: 12px;
+  }
+  button.save:active { background: #c2913a; }
+
   .rows { list-style: none; margin: 0; padding: 0; }
-  .rows li { border-bottom: 1px solid #26262b; padding: 10px 0; }
+  .rows li { border-bottom: 1px solid var(--line); }
   .rows li:last-child { border-bottom: 0; }
-  .row-main { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
-  .row-channel { font-weight: 600; font-size: 15px; }
-  .row-meta { color: #9a9aa2; font-size: 13px; margin-top: 2px; }
-  .note { color: #b9b9c0; font-size: 13px; font-style: italic; margin-top: 4px; }
-  /* 44px is the minimum comfortable touch target; this control deletes a row,
-     so a near-miss is the expensive kind of mistake. */
-  .del { background: none; border: 0; color: #6a6a72; font-size: 18px; min-width: 44px; min-height: 44px; }
-  .total { margin-top: 12px; padding-top: 10px; border-top: 1px solid #26262b; font-size: 14px; color: #9a9aa2; }
-  .total strong { color: #f2f2f4; }
-  .empty { color: #6a6a72; margin: 0; font-size: 14px; }
-  .notice { padding: 11px 13px; border-radius: 10px; font-size: 14px; margin: 12px 0; }
+  .row-main { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+  .row-text { min-width: 0; padding: 12px 0; }
+  .row-channel { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+  .row-meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .note { color: #b9b9c0; font-size: 13px; font-style: italic; margin-top: 4px; overflow-wrap: anywhere; }
+  /* 44px minimum: this control deletes a row, so a near-miss is the expensive
+     kind of mistake. */
+  .del { background: none; border: 0; color: var(--faint); font-size: 17px; min-width: 44px; min-height: 44px; flex: 0 0 auto; }
+  .empty { color: var(--faint); margin: 0; font-size: 14px; }
+
+  .notice { padding: 12px 14px; border-radius: 12px; font-size: 14px; margin: 12px 0 0; line-height: 1.45; }
   .notice.ok { background: #16301c; border: 1px solid #2c5c37; color: #b6e8c2; }
   .notice.error { background: #331819; border: 1px solid #5f2c2e; color: #f3bcbe; }
 </style>
@@ -490,64 +592,65 @@ function renderHtml(state: PageState, channels: string[]): string {
 <body>
   <header>
     <h1>💸 Расходы на привлечение</h1>
-    <div class="sub">Неделя ${esc(fmtDay(link.weekStart))} – ${esc(fmtDay(link.weekEnd))}</div>
+    <div class="sub">Неделя ${esc(weekLabel)}</div>
   </header>
   <main>
     ${notice}
 
-    <section class="card">
-      <h2>Уже внесено</h2>
-      ${renderRows(state)}
-    </section>
-
     <form class="card" method="post" action="${action}">
       <h2>Добавить расход</h2>
 
-      <label for="category">Категория</label>
-      <select id="category" name="category">${categoryOptions}</select>
+      <label for="amount">Сколько потратил</label>
+      <div class="pair amount">
+        <input id="amount" name="amount" type="number" inputmode="decimal" step="any" min="0"
+               enterkeyhint="next" placeholder="5000" value="${esc(form.amount ?? "")}">
+        <select id="currency" name="currency" aria-label="Валюта">${currencyOptions}</select>
+      </div>
 
       <label for="channel">Канал</label>
-      <input id="channel" name="channel" list="channels" autocapitalize="off" autocorrect="off"
-             placeholder="tg:my_campaign" value="${esc(form.channel ?? "")}">
-      <datalist id="channels">${datalist}</datalist>
-      <div class="hint">Продакшн и агентство пишутся на «${UNATTRIBUTED_CHANNEL}» — поле можно оставить пустым, подставится само.</div>
-
-      <div class="pair">
-        <div>
-          <label for="periodStart">Начало</label>
-          <input id="periodStart" name="periodStart" type="date" value="${esc(form.periodStart ?? link.weekStart)}">
-        </div>
-        <div>
-          <label for="periodEnd">Конец</label>
-          <input id="periodEnd" name="periodEnd" type="date" value="${esc(form.periodEnd ?? link.weekEnd)}">
-        </div>
+      <div class="stack">
+        <select id="channel" name="channel">${channelOptions}</select>
+        <input id="channelNew" name="channelNew" type="text" autocapitalize="off" autocorrect="off"
+               spellcheck="false" enterkeyhint="next" placeholder="или новый: tg:my_campaign"
+               value="${esc(typedChannel)}">
       </div>
+      <div class="hint">Нижнее поле — только для канала, которого ещё нет в списке; если оно заполнено, побеждает оно. Продакшн и агентство уходят на «${UNATTRIBUTED_CHANNEL}» сами, канал можно не трогать.</div>
 
-      <div class="pair">
-        <div>
-          <label for="amount">Сумма</label>
-          <!-- step="any", not "1": the stored column is an Int and the server
-               rounds, but a browser told step="1" refuses to submit "1500.50"
-               at all, which would block the very input the rounding exists for. -->
-          <input id="amount" name="amount" type="number" inputmode="decimal" step="any" min="0"
-                 placeholder="5000" value="${esc(form.amount ?? "")}">
-        </div>
-        <div>
-          <label for="currency">Валюта</label>
-          <select id="currency" name="currency">${currencyOptions}</select>
-        </div>
-      </div>
-
-      <label for="amountUsd">Эквивалент в USD <span class="hint">— необязательно</span></label>
-      <input id="amountUsd" name="amountUsd" type="number" inputmode="decimal" step="0.01" min="0"
-             placeholder="посчитаю сам по примерному курсу" value="${esc(form.amountUsd ?? "")}">
-      <div class="hint">Записывается один раз и потом не пересчитывается — если курс важен, впиши точный.</div>
+      <label for="category">Категория</label>
+      <select id="category" name="category">${categoryOptions}</select>
+      <div class="hint">Число рядом с категорией — сколько дней после периода регистрация ещё засчитывается этой трате.</div>
 
       <label for="note">Заметка</label>
-      <input id="note" name="note" placeholder="какой блогер / что за мероприятие" value="${esc(form.note ?? "")}">
+      <input id="note" name="note" enterkeyhint="done"
+             placeholder="какой блогер / что за мероприятие" value="${esc(form.note ?? "")}">
+
+      <details${periodEdited ? " open" : ""}>
+        <summary>Период и курс — обычно менять не нужно</summary>
+        <div class="pair">
+          <div>
+            <label for="periodStart">Начало</label>
+            <input id="periodStart" name="periodStart" type="date" value="${esc(form.periodStart ?? link.weekStart)}">
+          </div>
+          <div>
+            <label for="periodEnd">Конец</label>
+            <input id="periodEnd" name="periodEnd" type="date" value="${esc(form.periodEnd ?? link.weekEnd)}">
+          </div>
+        </div>
+        <label for="amountUsd">Эквивалент в USD</label>
+        <input id="amountUsd" name="amountUsd" type="number" inputmode="decimal" step="0.01" min="0"
+               placeholder="посчитаю сам по примерному курсу" value="${esc(form.amountUsd ?? "")}">
+        <div class="hint">Записывается один раз и потом не пересчитывается — если курс важен, впиши точный.</div>
+      </details>
 
       <button class="save" type="submit">Сохранить</button>
     </form>
+
+    ${summary}
+
+    <section class="card">
+      <h2>Что уже внесено</h2>
+      ${renderRows(state)}
+    </section>
   </main>
 </body>
 </html>`;
