@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-process.env.VOICE_PROMPT_ENABLED = "true";
+// `config.js` reads this flag once, at import time — and ESM evaluates every
+// import in this file before its first statement runs. A plain top-level
+// assignment therefore landed too late and the whole step disabled itself, so
+// these tests only ever passed by accident: the main checkout has an untracked
+// `.env` that already sets the flag. A fresh worktree does not, and ~11 tests
+// failed there for a reason that had nothing to do with the code under test.
+// `vi.hoisted` runs before the imports, which is the only place this works.
+vi.hoisted(() => {
+  process.env.VOICE_PROMPT_ENABLED = "true";
+});
 
 vi.mock("@gennety/db", () => ({
   prisma: { user: { findUnique: vi.fn() } },
