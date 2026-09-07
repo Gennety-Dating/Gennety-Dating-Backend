@@ -24,7 +24,10 @@ import {
   activatePremiumPackage,
   formatPremiumUntil,
 } from "../services/premium.js";
-import { notifyFounderPurchase } from "../services/founder-notify.js";
+import {
+  notifyFounderPurchase,
+  notifyFounderPaymentStuck,
+} from "../services/founder-notify.js";
 import {
   primeTimeFeatureLive,
   primeTimeUnlockReason,
@@ -219,7 +222,36 @@ async function langForTelegramId(telegramId: number | undefined): Promise<Langua
   return (user?.language ?? "en") as Language;
 }
 
-/** Credit the wallet / settle the gate once Telegram confirms Stars moved. */
+/** The `successful_payment` Telegram just confirmed, exactly as grammY types it. */
+type StarsPayment = NonNullable<NonNullable<BotContext["message"]>["successful_payment"]>;
+
+/**
+ * What became of one confirmed charge. Every settlement branch below returns
+ * one of these, because "fell off the end of the function" is indistinguishable
+ * from "delivered" and that ambiguity is what let charges disappear.
+ *
+ * `compensated` marks the failures that already handed the money back, or that
+ * left it in a durable row a sweep owns (the gate's `gate_refund_pending`, the
+ * venue/prime lost-race refunds, a rematch parked in `refund_failed`). Those are
+ * ordinary outcomes, announced by the refund notifier, and must NOT raise the
+ * alarm — an alarm that fires on the expected case stops being read.
+ */
+type Settlement = { ok: true } | { ok: false; reason: string; compensated?: boolean };
+
+/**
+ * Credit the wallet / settle the gate once Telegram confirms Stars moved.
+ *
+ * This is only the accounting shell. It exists because grammY's `bot.catch` is
+ * the wrong place to end a payment: it answers a generic "Something went wrong,
+ * please try again" — an invitation to pay a second time — and leaves no trace
+ * beyond a `console.error` on the droplet. Nothing about throwing makes Telegram
+ * redeliver the update either; the offset is committed either way. So a charge
+ * that reaches `bot.catch` is money we took, goods we never handed over, and
+ * nobody knows.
+ *
+ * Hence the invariant this shell enforces: **every confirmed charge ends in a
+ * grant, a refund, or a founder alert carrying the charge id.** Nothing else.
+ */
 export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
   const payment = ctx.message?.successful_payment;
   if (!payment) return;
@@ -236,39 +268,95 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
     });
   }
 
+  let outcome: Settlement;
+  try {
+    outcome = await settleSuccessfulPayment(ctx, payment);
+  } catch (err) {
+    console.error(
+      `[stars] settlement threw payload=${payment.invoice_payload} ` +
+        `charge=${payment.telegram_payment_charge_id}`,
+      err,
+    );
+    outcome = { ok: false, reason: "threw" };
+  }
+  if (outcome.ok || outcome.compensated === true) return;
+
+  await reportUnsettledPayment(ctx, payment, outcome.reason);
+}
+
+/**
+ * The charge is real and nothing was delivered. Tell the two parties who can
+ * act on that: the founder, who can refund it by charge id, and the payer, who
+ * would otherwise be staring at a generic error and reaching for their wallet
+ * again.
+ *
+ * The founder DM is awaited rather than fired-and-forgotten — it is the only
+ * record of this charge that will exist, so losing it to a process exit would
+ * defeat the point.
+ */
+async function reportUnsettledPayment(
+  ctx: BotContext,
+  payment: StarsPayment,
+  reason: string,
+): Promise<void> {
+  const telegramId = BigInt(ctx.from!.id);
+  console.error(
+    `[stars] UNSETTLED CHARGE user=${telegramId} payload=${payment.invoice_payload} ` +
+      `stars=${payment.total_amount} charge=${payment.telegram_payment_charge_id} reason=${reason}`,
+  );
+
+  const user = await prisma.user
+    .findUnique({ where: { telegramId }, select: { id: true, language: true } })
+    .catch(() => null);
+
+  await notifyFounderPaymentStuck({
+    telegramId,
+    userId: user?.id ?? null,
+    amountStars: payment.total_amount,
+    payload: payment.invoice_payload,
+    externalPaymentId: payment.telegram_payment_charge_id,
+    reason,
+  });
+
+  const lang = (user?.language ?? "en") as Language;
+  await ctx.reply(t(lang, "paymentStuckDm")).catch(() => {});
+}
+
+/** The settlement itself — one branch per invoice payload family. */
+async function settleSuccessfulPayment(
+  ctx: BotContext,
+  payment: StarsPayment,
+): Promise<Settlement> {
   const count = parseStoreInvoicePayload(payment.invoice_payload);
   if (count == null || ticketBundleFor(count) == null) {
     // Not a store bundle — try §Premium subscription, then the §3.7b venue
     // change, then the §3.5b date gate, before giving up so a foreign payload
     // still credits nothing.
-    const sub = parseSubInvoicePayload(payment.invoice_payload);
-    if (sub != null) {
-      const plan = premiumPlanById(sub.plan);
+    const subscription = parseSubInvoicePayload(payment.invoice_payload);
+    if (subscription != null) {
+      const plan = premiumPlanById(subscription.plan);
       // An unknown plan cannot be priced or granted; leave it unsettled rather
       // than guessing a length. `parseSubInvoicePayload` already refuses foreign
-      // tags, so this only fires if the catalog and the payload map diverge.
-      if (!plan) return;
-      if (plan.recurring) await handlePremiumSuccessfulPayment(ctx, payment);
-      else await handlePremiumPackagePayment(ctx, plan, payment);
-      return;
+      // tags, so this only fires if the catalog and the payload map diverge —
+      // a deploy that dropped a plan while its invoice links were still live.
+      if (!plan) return { ok: false, reason: "unknown-premium-plan" };
+      return plan.recurring
+        ? await handlePremiumSuccessfulPayment(ctx, payment)
+        : await handlePremiumPackagePayment(ctx, plan, payment);
     }
     const venue = parseVenueInvoicePayload(payment.invoice_payload);
     if (venue != null) {
-      await handleVenueSuccessfulPayment(ctx, venue.matchId, payment);
-      return;
+      return await handleVenueSuccessfulPayment(ctx, venue.matchId, payment);
     }
     const rematch = parseRematchInvoicePayload(payment.invoice_payload);
     if (rematch != null) {
-      await handleRematchSuccessfulPayment(ctx, payment);
-      return;
+      return await handleRematchSuccessfulPayment(ctx, payment);
     }
     const prime = parsePrimeInvoicePayload(payment.invoice_payload);
     if (prime != null) {
-      await handlePrimeTimeSuccessfulPayment(ctx, prime.matchId, payment);
-      return;
+      return await handlePrimeTimeSuccessfulPayment(ctx, prime.matchId, payment);
     }
-    await handleGateSuccessfulPayment(ctx, payment);
-    return;
+    return await handleGateSuccessfulPayment(ctx, payment);
   }
 
   const telegramId = BigInt(ctx.from!.id);
@@ -276,7 +364,10 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
     where: { telegramId },
     select: { id: true, language: true },
   });
-  if (!user) return;
+  // Stars have moved and there is nobody to credit. Rare (the account would
+  // have to vanish between the invoice and the payment) but it used to end the
+  // handler in silence, which is the one thing a charge may never do.
+  if (!user) return { ok: false, reason: "user-not-found" };
 
   // Log the Telegram charge id for manual reconciliation.
   console.info(
@@ -306,7 +397,7 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
         `[stars] store purchase duplicate ignored user=${user.id} ` +
           `charge=${payment.telegram_payment_charge_id}`,
       );
-      return;
+      return { ok: true };
     }
     throw err;
   }
@@ -329,6 +420,7 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
   } catch {
     await ctx.reply(text.replace(/[*_`[\]]/g, "")).catch(() => {});
   }
+  return { ok: true };
 }
 
 /**
@@ -347,13 +439,13 @@ async function handlePremiumSuccessfulPayment(
     is_recurring?: boolean;
     is_first_recurring?: boolean;
   },
-): Promise<void> {
+): Promise<Settlement> {
   const telegramId = BigInt(ctx.from!.id);
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: { id: true, language: true },
   });
-  if (!user) return;
+  if (!user) return { ok: false, reason: "user-not-found" };
 
   // Prefer Telegram's authoritative expiry; fall back to now + 30d defensively
   // (a subscription payment should always carry it).
@@ -377,8 +469,9 @@ async function handlePremiumSuccessfulPayment(
     amount: payment.total_amount,
     currency: "XTR",
   });
-  // Duplicate redelivery, or an unknown user — nothing to announce.
-  if (!result.applied) return;
+  // Duplicate redelivery, or an unknown user — nothing to announce. Settled
+  // either way: the first delivery granted the period.
+  if (!result.applied) return { ok: true };
 
   // DM only on the first period; auto-renewals settle silently.
   if (isFirst) {
@@ -392,6 +485,7 @@ async function handlePremiumSuccessfulPayment(
       await ctx.reply(text.replace(/[*_`[\]]/g, "")).catch(() => {});
     }
   }
+  return { ok: true };
 }
 
 /**
@@ -421,13 +515,13 @@ async function handlePremiumPackagePayment(
   ctx: BotContext,
   plan: PremiumPlan,
   payment: { total_amount: number; telegram_payment_charge_id: string },
-): Promise<void> {
+): Promise<Settlement> {
   const telegramId = BigInt(ctx.from!.id);
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: { id: true, language: true },
   });
-  if (!user) return;
+  if (!user) return { ok: false, reason: "user-not-found" };
 
   console.info(
     `[stars] premium package user=${user.id} plan=${plan.id} months=${plan.months} ` +
@@ -443,8 +537,9 @@ async function handlePremiumPackagePayment(
     currency: "XTR",
     detail: `пакет ${plan.months} мес.`,
   });
-  // Duplicate redelivery, or an unknown user — nothing to announce.
-  if (!result.applied) return;
+  // Duplicate redelivery, or an unknown user — nothing to announce. Settled
+  // either way: the first delivery granted the months.
+  if (!result.applied) return { ok: true };
 
   const lang = (user.language ?? "en") as Language;
   const text = t(lang, "premiumPackageWelcomeDm", {
@@ -456,6 +551,7 @@ async function handlePremiumPackagePayment(
   } catch {
     await ctx.reply(text.replace(/[*_`[\]]/g, "")).catch(() => {});
   }
+  return { ok: true };
 }
 
 /**
@@ -470,7 +566,7 @@ async function handleVenueSuccessfulPayment(
   ctx: BotContext,
   matchId: string,
   payment: { total_amount: number; telegram_payment_charge_id: string },
-): Promise<void> {
+): Promise<Settlement> {
   const telegramId = BigInt(ctx.from!.id);
   console.info(
     `[stars] venue-change payment user=${telegramId} match=${matchId} ` +
@@ -491,7 +587,13 @@ async function handleVenueSuccessfulPayment(
       `[stars] venue-change settle failed user=${telegramId} match=${matchId} ` +
         `reason=${result.reason}`,
     );
+    return {
+      ok: false,
+      reason: `venue:${result.reason ?? "unknown"}`,
+      compensated: result.refunded === true,
+    };
   }
+  return { ok: true };
 }
 
 /**
@@ -506,7 +608,7 @@ async function handlePrimeTimeSuccessfulPayment(
   ctx: BotContext,
   matchId: string,
   payment: { total_amount: number; telegram_payment_charge_id: string },
-): Promise<void> {
+): Promise<Settlement> {
   const telegramId = BigInt(ctx.from!.id);
   console.info(
     `[stars] prime-time payment user=${telegramId} match=${matchId} ` +
@@ -527,7 +629,13 @@ async function handlePrimeTimeSuccessfulPayment(
       `[stars] prime-time settle failed user=${telegramId} match=${matchId} ` +
         `reason=${result.reason}`,
     );
+    return {
+      ok: false,
+      reason: `prime:${result.reason ?? "unknown"}`,
+      compensated: result.refunded === true,
+    };
   }
+  return { ok: true };
 }
 
 /**
@@ -554,13 +662,13 @@ async function handleRematchSuccessfulPayment(
     total_amount: number;
     telegram_payment_charge_id: string;
   },
-): Promise<void> {
+): Promise<Settlement> {
   const telegramId = BigInt(ctx.from!.id);
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: { id: true, language: true },
   });
-  if (!user) return;
+  if (!user) return { ok: false, reason: "user-not-found" };
   const lang = (user.language ?? "en") as Language;
 
   const {
@@ -597,7 +705,7 @@ async function handleRematchSuccessfulPayment(
         `[stars] rematch duplicate ignored user=${user.id} ` +
           `charge=${payment.telegram_payment_charge_id}`,
       );
-      return;
+      return { ok: true };
     }
     throw err;
   }
@@ -660,7 +768,9 @@ async function handleRematchSuccessfulPayment(
     await ctx
       .reply(t(lang, refunded ? "rematchNoCandidate" : "rematchRefundPending", {}))
       .catch(() => {});
-    return;
+    // Compensated either way: a refund that fails parks the row in
+    // `refund_failed`, which the hourly sweep retries.
+    return { ok: false, reason: "rematch:no-candidate", compensated: true };
   }
 
   // (3b) Delivered. Mark settled BEFORE dispatching: the match already exists,
@@ -726,7 +836,10 @@ async function handleRematchSuccessfulPayment(
         t(lang, refunded ? "rematchUndelivered" : "rematchUndeliveredPending", {}),
       )
       .catch(() => {});
+    return { ok: false, reason: "rematch:undelivered", compensated: true };
   }
+
+  return { ok: true };
 }
 
 /**
@@ -739,9 +852,13 @@ async function handleRematchSuccessfulPayment(
 async function handleGateSuccessfulPayment(
   ctx: BotContext,
   payment: { invoice_payload: string; total_amount: number; telegram_payment_charge_id: string },
-): Promise<void> {
+): Promise<Settlement> {
   const gate = parseGateInvoicePayload(payment.invoice_payload);
-  if (!gate) return; // foreign payload — credit/settle nothing
+  // Nothing recognised this payload — not a bundle, not a subscription, not a
+  // venue/rematch/prime/gate charge. `pre_checkout` refuses unknown payloads,
+  // so reaching here means an invoice we minted outlived the code that could
+  // honour it. Money in, nothing owed to anyone: escalate rather than shrug.
+  if (!gate) return { ok: false, reason: "unrecognised-payload" };
 
   const telegramId = BigInt(ctx.from!.id);
   // The charge id is durably recorded before the atomic slot CAS. That makes a
@@ -767,5 +884,11 @@ async function handleGateSuccessfulPayment(
       `[stars] gate settle failed user=${telegramId} match=${gate.matchId} ` +
         `scope=${gate.scope} reason=${result.reason}`,
     );
+    // Every `ok: false` the gate returns has already refunded the Stars or
+    // parked them in `gate_refund_pending` for the sweep — see
+    // `applyStarsTicketPayment`. The payer is whole, so this is a logged
+    // outcome, not an unsettled charge.
+    return { ok: false, reason: `gate:${result.reason}`, compensated: true };
   }
+  return { ok: true };
 }

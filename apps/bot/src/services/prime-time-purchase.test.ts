@@ -160,6 +160,30 @@ describe("settlePrimeTimePayment", () => {
     expect(res).toMatchObject({ ok: false, reason: "not-participant" });
     expect(db.primeTimePurchase.create).not.toHaveBeenCalled();
   });
+
+  // Not writing a row is only half the answer. The other half is the money:
+  // these two refusals happen BEFORE anything durable exists, so no sweep will
+  // ever find the charge. Whoever refuses the settle has to give the Stars back
+  // on the spot, and say whether that worked.
+  it("hands the Stars back when the match is gone, and says so", async () => {
+    const api = fakeApi();
+    db.match.findUnique.mockResolvedValue(null);
+
+    const res = await settlePrimeTimePayment(api, 100n, "m1", "charge-lost");
+
+    expect(res).toMatchObject({ ok: false, reason: "match-not-found", refunded: true });
+    expect(api.refundStarPayment).toHaveBeenCalledWith(100, "charge-lost");
+  });
+
+  it("reports `refunded: false` when even the refund fails, so the caller escalates", async () => {
+    const api = fakeApi();
+    api.refundStarPayment.mockRejectedValue(new Error("telegram down"));
+    db.match.findUnique.mockResolvedValue(matchRow());
+
+    const res = await settlePrimeTimePayment(api, 999n, "m1", "charge-stuck");
+
+    expect(res).toMatchObject({ ok: false, reason: "not-participant", refunded: false });
+  });
 });
 
 function purchaseRow(over: Record<string, unknown> = {}) {

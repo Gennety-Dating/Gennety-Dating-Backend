@@ -144,6 +144,8 @@ const translations = {
     ticketStorePurchased:
       "✨ Payment received — *{count}* ticket(s) added!\n\nBalance: *{balance}*",
     ticketStoreCheckoutError: "Couldn't confirm that payment. Try again in a moment.",
+    paymentStuckDm:
+      "Your payment went through, but we couldn't hand over what you bought — something broke on our side.\n\nDon't pay again. We've already been alerted and will either deliver it or return your Stars.",
     ticketStoreInvoiceTitle: "Gennety Date Tickets",
     ticketStoreInvoiceDesc:
       "{count} Date Ticket(s) added to your wallet. Each ticket covers one date.",
@@ -1502,6 +1504,8 @@ const translations = {
     ticketStorePurchased:
       "✨ Оплата прошла — добавлено *{count}* билет(ов)!\n\nБаланс: *{balance}*",
     ticketStoreCheckoutError: "Не удалось подтвердить оплату. Попробуй ещё раз.",
+    paymentStuckDm:
+      "Оплата прошла, но выдать покупку не получилось — сломалось на нашей стороне.\n\nНе плати второй раз. Мы уже знаем и либо выдадим, либо вернём звёзды.",
     ticketStoreInvoiceTitle: "Билеты Gennety",
     ticketStoreInvoiceDesc:
       "Пополнение кошелька: {count} 🎟️. Каждый билет покрывает одно свидание.",
@@ -2729,6 +2733,8 @@ const translations = {
     ticketStorePurchased:
       "✨ Оплату отримано — додано *{count}* квиток(ів)!\n\nБаланс: *{balance}*",
     ticketStoreCheckoutError: "Не вдалося підтвердити оплату. Спробуй ще раз.",
+    paymentStuckDm:
+      "Оплата пройшла, але видати покупку не вдалося — зламалося на нашому боці.\n\nНе плати вдруге. Ми вже знаємо і або видамо, або повернемо зірки.",
     ticketStoreInvoiceTitle: "Квитки Gennety",
     ticketStoreInvoiceDesc:
       "Поповнення гаманця: {count} 🎟️. Кожен квиток покриває одне побачення.",
@@ -4092,6 +4098,8 @@ const deTranslations: TranslationTable = {
   ticketStorePurchased:
     "✨ Zahlung erhalten — *{count}* Ticket(s) hinzugefügt!\n\nGuthaben: *{balance}*",
   ticketStoreCheckoutError: "Zahlung konnte nicht bestätigt werden. Versuch es gleich noch mal.",
+  paymentStuckDm:
+    "Deine Zahlung ist durchgegangen, aber wir konnten dir das Gekaufte nicht aushändigen — bei uns ist etwas kaputtgegangen.\n\nZahl nicht noch einmal. Wir sind bereits informiert und liefern es entweder nach oder erstatten deine Stars.",
   ticketStoreInvoiceTitle: "Gennety Date-Tickets",
   ticketStoreInvoiceDesc:
     "{count} Date-Ticket(s) für deine Wallet. Jedes Ticket deckt ein Date ab.",
@@ -5285,6 +5293,8 @@ const plTranslations: TranslationTable = {
   ticketStorePurchased:
     "✨ Płatność otrzymana — dodano *{count}* bilet(ów)!\n\nSaldo: *{balance}*",
   ticketStoreCheckoutError: "Nie udało się potwierdzić płatności. Spróbuj ponownie.",
+  paymentStuckDm:
+    "Płatność przeszła, ale nie udało się wydać zakupu — coś zepsuło się po naszej stronie.\n\nNie płać drugi raz. Już o tym wiemy i albo wydamy zakup, albo zwrócimy gwiazdki.",
   ticketStoreInvoiceTitle: "Bilety Gennety",
   ticketStoreInvoiceDesc:
     "{count} bilet(ów) dodanych do portfela. Każdy bilet pokrywa jedną randkę.",

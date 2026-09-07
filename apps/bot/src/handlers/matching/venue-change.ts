@@ -1781,11 +1781,36 @@ export async function settleVenuePayment(
   payerTelegramId: bigint,
   matchId: string,
   telegramChargeId: string,
-): Promise<{ ok: boolean; reason?: string }> {
+): Promise<{ ok: boolean; reason?: string; refunded?: boolean }> {
+  const giveBack = async (): Promise<boolean> => {
+    try {
+      await api.refundStarPayment(Number(payerTelegramId), telegramChargeId);
+      console.warn(
+        `[venue-change] unsettleable charge refunded match=${matchId} charge=${telegramChargeId}`,
+      );
+      return true;
+    } catch (err) {
+      console.error(
+        `[venue-change] unsettleable charge could NOT be refunded match=${matchId} ` +
+          `charge=${telegramChargeId}:`,
+        err,
+      );
+      return false;
+    }
+  };
+
   const match = await loadMatch(matchId);
-  if (!match) return { ok: false, reason: "match-not-found" };
+  // Both of these run BEFORE the durable pre-settle row exists, so there is
+  // nothing for the sweep to find later — the charge would live only in a log
+  // line. Hand the Stars straight back, the way the ticket gate does when it
+  // cannot resolve a payer row. `refunded: false` tells the caller to escalate.
+  if (!match) {
+    return { ok: false, reason: "match-not-found", refunded: await giveBack() };
+  }
   const side = sideOfUser(match, payerTelegramId);
-  if (!side) return { ok: false, reason: "not-participant" };
+  if (!side) {
+    return { ok: false, reason: "not-participant", refunded: await giveBack() };
+  }
   const payer = userOfSide(match, side);
 
   // (1) Durable pre-settle record. Unique charge id ⇒ exactly-once.
@@ -1873,7 +1898,9 @@ export async function settleVenuePayment(
       payerTelegramId,
       VENUE_PURCHASE_REFUNDED_RACE,
     );
-    return { ok: false, reason: "not-agreed" };
+    // A refund that fails parks the row in `refund_failed` for the sweep, so
+    // the charge is owned either way.
+    return { ok: false, reason: "not-agreed", refunded: true };
   }
 
   await prisma.venueChangePurchase.update({
