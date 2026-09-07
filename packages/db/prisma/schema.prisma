@@ -423,6 +423,10 @@ model User {
 
   promoRedemption PromoRedemption?
 
+  /// The status-timer walks active accounts in id order, once a minute, a page
+  /// at a time. Without `[status, id]` that page is a scan of the whole users
+  /// table plus a sort — every minute, forever.
+  @@index([status, id])
   @@index([status, reEngagementNextAt])
   @@index([status, suspendedUntil])
   /// The premium expiry-reminder sweep runs hourly and asks one question of the

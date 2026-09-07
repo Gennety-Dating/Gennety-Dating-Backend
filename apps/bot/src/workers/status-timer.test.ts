@@ -46,6 +46,32 @@ function active(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * Answer `user.findMany` the way the database does, one query at a time.
+ *
+ * The tick asks two questions now — the paged rotation over `status: "active"`,
+ * and the small set of accounts that left `active` with a banner still pinned —
+ * instead of one `OR` no index could serve. A mock that returns the same array
+ * to both hands every user to the tick twice, which is not a shape the database
+ * can produce.
+ */
+function mockUsers(rows: Array<Record<string, unknown>>) {
+  mockPrisma.user.findMany.mockImplementation(
+    async (args: { where?: { status?: unknown }; take?: number }) => {
+      const status = args?.where?.status;
+      let matching = rows;
+      if (status === "active") {
+        matching = rows.filter((row) => row.status === "active");
+      } else if (typeof status === "object" && status !== null && "not" in status) {
+        matching = rows.filter(
+          (row) => row.status !== "active" && row.statusMessageId !== null,
+        );
+      }
+      return args?.take === undefined ? matching : matching.slice(0, args.take);
+    },
+  );
+}
+
 /** A live-match row shaped like the worker's own `select`. `u1` is side A. */
 let nextMatchSeq = 0;
 
@@ -105,7 +131,7 @@ function makeApi() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockPrisma.user.findMany.mockResolvedValue([]);
+  mockUsers([]);
   mockPrisma.user.findUnique.mockResolvedValue(null);
   mockPrisma.user.update.mockResolvedValue({});
   mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
@@ -115,7 +141,7 @@ beforeEach(() => {
 
 describe("statusTimerTick", () => {
   it("self-heals an active user with a null DB pointer", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([active({ statusMessageId: null })]);
+    mockUsers([active({ statusMessageId: null })]);
     const api = makeApi();
 
     const result = await statusTimerTick(api, { now: NOW });
@@ -139,7 +165,7 @@ describe("statusTimerTick", () => {
   // the weekly batch (§3.2 filter 8), so the drop countdown is replaced rather
   // than supplemented.
   it("replaces the drop countdown with the date countdown", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockUsers([active()]);
     mockMatches([
       liveMatch({
         status: "scheduled",
@@ -171,7 +197,7 @@ describe("statusTimerTick", () => {
   });
 
   it("shows the reply deadline while the user's own decision is open", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockUsers([active()]);
     mockMatches([
       liveMatch({
         status: "proposed",
@@ -193,7 +219,7 @@ describe("statusTimerTick", () => {
   });
 
   it("ignores a proposed match whose pitch has not reached this side yet", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockUsers([active()]);
     mockMatches([
       liveMatch({
         status: "proposed",
@@ -211,7 +237,7 @@ describe("statusTimerTick", () => {
   });
 
   it("prefers the most progressed row when legacy data has several live matches", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockUsers([active()]);
     mockMatches([
       liveMatch({ status: "negotiating" }),
       liveMatch({
@@ -233,7 +259,7 @@ describe("statusTimerTick", () => {
     // both people are active answers to both of them. If the merge did not
     // de-duplicate, that single match would vote twice — and `pickCurrentMatch`
     // would be choosing between two copies of the same row.
-    mockPrisma.user.findMany.mockResolvedValue([
+    mockUsers([
       active(),
       active({ id: "u2", telegramId: 43n, statusMessageId: 101 }),
     ]);
@@ -257,8 +283,64 @@ describe("statusTimerTick", () => {
     expect(texts.every((text) => text.includes("Blur Cafe"))).toBe(true);
   });
 
+  // ── The tick is bounded, and the rotation is what keeps it fair ──────────
+  //
+  // It used to read EVERY active account every minute, with a profile join and
+  // a `WHERE` no index covered. The failure that invites is not a late banner:
+  // the runner guards against overlap, so a tick that overruns its minute makes
+  // the next ones no-ops and the countdown freezes for the whole base at once.
+
+  it("takes only a page of accounts and resumes after it on the next tick", async () => {
+    const base = ["a", "b", "c", "d"].map((id, index) =>
+      active({ id, telegramId: BigInt(40 + index), statusMessageId: 100 + index }),
+    );
+    mockUsers(base);
+    const cursor = { lastUserId: null as string | null };
+
+    const first = await statusTimerTick(makeApi(), {
+      now: NOW,
+      renderCache: new Map(),
+      cursor,
+      activeUsersPerTick: 2,
+    });
+
+    expect(first.eligible).toBe(2);
+    expect(cursor.lastUserId).toBe("b");
+
+    const second = await statusTimerTick(makeApi(), {
+      now: NOW,
+      renderCache: new Map(),
+      cursor,
+      activeUsersPerTick: 2,
+    });
+
+    // The second tick asked for accounts AFTER "b" — nobody is refreshed twice
+    // while somebody else waits.
+    const resumed = mockPrisma.user.findMany.mock.calls
+      .map((call: unknown[]) => (call[0] as { where?: { id?: { gt?: string } } }).where?.id?.gt)
+      .filter(Boolean);
+    expect(resumed).toEqual(["b"]);
+    expect(second.eligible).toBe(2);
+  });
+
+  it("starts the rotation over once it reaches the end of the base", async () => {
+    mockUsers([active()]);
+    const cursor = { lastUserId: "somewhere" as string | null };
+
+    await statusTimerTick(makeApi(), {
+      now: NOW,
+      renderCache: new Map(),
+      cursor,
+      activeUsersPerTick: 50,
+    });
+
+    // A short page is the end of the base. Leaving the cursor where it stopped
+    // would strand everyone before it, forever.
+    expect(cursor.lastUserId).toBeNull();
+  });
+
   it("re-pins a tracked message during the hourly physical audit", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockUsers([active()]);
     const api = makeApi();
     api.getChat.mockResolvedValue({ pinned_message: { message_id: 999 } });
     const signature = buildStatusBannerView("ru", { now: NOW }).signature;
@@ -276,7 +358,7 @@ describe("statusTimerTick", () => {
   });
 
   it("replaces a deleted Telegram message in the same tick", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockUsers([active()]);
     const api = makeApi();
     api.editMessageText.mockRejectedValue(
       telegramError(400, "Bad Request: message to edit not found"),
@@ -299,7 +381,7 @@ describe("statusTimerTick", () => {
     "pending_investigation",
     "banned",
   ])("clears a tracked banner for a %s account", async (status) => {
-    mockPrisma.user.findMany.mockResolvedValue([active({ status })]);
+    mockUsers([active({ status })]);
     const api = makeApi();
 
     const result = await statusTimerTick(api, { now: NOW });
@@ -313,7 +395,7 @@ describe("statusTimerTick", () => {
   });
 
   it("keeps an inactive pointer when unpinning fails transiently", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([active({ status: "paused" })]);
+    mockUsers([active({ status: "paused" })]);
     const api = makeApi();
     api.unpinChatMessage.mockRejectedValue(new Error("network reset"));
     const retryState = new Map();
@@ -333,7 +415,7 @@ describe("statusTimerTick", () => {
   });
 
   it("honours retry_after and does not retry every minute", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockUsers([active()]);
     const api = makeApi();
     api.editMessageText.mockRejectedValue(
       telegramError(429, "Too Many Requests", 120),
@@ -361,7 +443,7 @@ describe("statusTimerTick", () => {
     ["5xx", telegramError(503, "Service Unavailable")],
     ["network", new Error("network reset")],
   ])("backs off after a transient %s failure", async (_label, error) => {
-    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockUsers([active()]);
     const api = makeApi();
     api.editMessageText.mockRejectedValue(error);
     const retryState = new Map();
@@ -377,7 +459,7 @@ describe("statusTimerTick", () => {
   });
 
   it("clears an unreachable pointer and applies a long cooldown", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockUsers([active()]);
     const api = makeApi();
     api.editMessageText.mockRejectedValue(
       telegramError(403, "Forbidden: bot was blocked by the user"),

@@ -16,6 +16,30 @@ import { filterRematchEligible } from "../services/rematch.js";
 import { isMarketPending } from "../handlers/menu/city-switch.js";
 
 const MAX_EDITS_PER_SECOND = 25;
+/**
+ * Active accounts one tick will look at.
+ *
+ * The tick used to read EVERY active account, every minute, with a profile
+ * join, no `take`, and a `WHERE` no index covered. The failure it invites is
+ * not "the banner is a little late": `createStatusTimerRunner` guards against
+ * overlap, so a tick that overruns its minute makes the next ones no-ops, and
+ * the countdown then freezes for the whole base at once.
+ *
+ * The bound is also honest about what a tick can physically do. At
+ * `MAX_EDITS_PER_SECOND` a 60-second tick can perform about 1500 edits, so
+ * reading tens of thousands of rows to act on at most fifteen hundred of them
+ * is work thrown away. A cursor walks the base in rotation instead: every
+ * account is still reached, just over several minutes rather than in one, and
+ * the banner's content is a countdown that moves in minutes anyway.
+ */
+const ACTIVE_USERS_PER_TICK = 1_500;
+/**
+ * Accounts whose pointer needs clearing per tick — they left `active` while a
+ * pinned banner was still up. This set is naturally tiny (it drains as it is
+ * processed and nothing refills it in bulk), so it is read whole rather than
+ * paged, and merely capped so a mass suspension cannot swamp a tick.
+ */
+const STALE_POINTERS_PER_TICK = 500;
 const PIN_AUDIT_INTERVAL_MS = 60 * 60 * 1000;
 const MAX_TRANSIENT_BACKOFF_MS = 15 * 60 * 1000;
 const UNREACHABLE_BACKOFF_MS = 6 * 60 * 60 * 1000;
@@ -25,6 +49,16 @@ interface RetryEntry {
   retryAt: number;
 }
 
+/**
+ * Where the rotation stopped last tick — the id of the last active account
+ * looked at, or `null` to start from the beginning.
+ *
+ * Deliberately in memory rather than in the database: it is a fairness hint,
+ * not state anyone depends on. A restart resuming from the top costs one extra
+ * pass over accounts that were about to be refreshed anyway.
+ */
+const defaultCursor = { lastUserId: null as string | null };
+
 export interface StatusTimerOptions {
   now?: Date;
   renderCache?: Map<string, string>;
@@ -32,6 +66,10 @@ export interface StatusTimerOptions {
   pinAuditAt?: Map<string, number>;
   forcePinAudit?: boolean;
   sleep?: (ms: number) => Promise<void>;
+  /** Test seam: the rotation cursor, so a test can pin or observe it. */
+  cursor?: { lastUserId: string | null };
+  /** Test seam: how many active accounts this tick may take. */
+  activeUsersPerTick?: number;
 }
 
 export interface StatusTimerResult {
@@ -61,28 +99,61 @@ export async function statusTimerTick(
   const retryState = options.retryState ?? defaultRetryState;
   const pinAuditAt = options.pinAuditAt ?? defaultPinAuditAt;
   const sleep = options.sleep ?? defaultSleep;
+  const cursor = options.cursor ?? defaultCursor;
+  const activeLimit = options.activeUsersPerTick ?? ACTIVE_USERS_PER_TICK;
 
-  // Active rows are reconciled even when the pointer is null. Non-active rows
-  // are selected only when a stale pointer still needs cleanup.
-  const users = await prisma.user.findMany({
+  const select = {
+    id: true,
+    telegramId: true,
+    language: true,
+    status: true,
+    statusMessageId: true,
+    // §1.1 — an account registered in a city we haven't launched gets a
+    // waitlist banner instead of a countdown to a drop it can't be in.
+    profile: { select: { homeCityKey: true, homeCity: true } },
+  } as const;
+  // Reachable over Telegram at all: a mobile-only account carries a synthetic
+  // negative id and has no chat to pin anything in.
+  const reachable = {
+    telegramId: { gt: 0n },
+    platform: { in: ["telegram" as const, "both" as const] },
+  };
+
+  // Two queries where there used to be one `OR`. The `OR` spanned `status` and
+  // `statusMessageId`, so no index could serve it and the whole users table was
+  // scanned once a minute; split, the active side is an index range over
+  // `[status, id]` and can be paged by cursor.
+  const activeUsers = await prisma.user.findMany({
     where: {
-      telegramId: { gt: 0n },
-      platform: { in: ["telegram", "both"] },
-      OR: [{ status: "active" }, { statusMessageId: { not: null } }],
+      ...reachable,
+      status: "active",
+      ...(cursor.lastUserId ? { id: { gt: cursor.lastUserId } } : {}),
     },
-    select: {
-      id: true,
-      telegramId: true,
-      language: true,
-      status: true,
-      statusMessageId: true,
-      // §1.1 — an account registered in a city we haven't launched gets a
-      // waitlist banner instead of a countdown to a drop it can't be in.
-      profile: { select: { homeCityKey: true, homeCity: true } },
-    },
+    orderBy: { id: "asc" },
+    take: activeLimit,
+    select,
   });
 
-  const activeUsers = users.filter((user) => user.status === "active");
+  // A page that came back short means the rotation reached the end of the base;
+  // the next tick starts from the top. Otherwise it resumes after the last row
+  // seen, so nobody is refreshed twice while somebody else waits.
+  const lastSeen = activeUsers.at(-1);
+  cursor.lastUserId = activeUsers.length < activeLimit ? null : (lastSeen?.id ?? null);
+
+  // Accounts that left `active` with a banner still pinned. Not part of the
+  // rotation: the set drains as it is processed, so leaving it behind a cursor
+  // would strand pointers for however long a full pass takes.
+  const stalePointers = await prisma.user.findMany({
+    where: {
+      ...reachable,
+      status: { not: "active" },
+      statusMessageId: { not: null },
+    },
+    take: STALE_POINTERS_PER_TICK,
+    select,
+  });
+
+  const users = [...activeUsers, ...stalePointers];
   const result: StatusTimerResult = {
     eligible: activeUsers.length,
     tracked: activeUsers.filter((user) => user.statusMessageId !== null).length,

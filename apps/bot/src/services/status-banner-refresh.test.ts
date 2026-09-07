@@ -45,6 +45,30 @@ function scheduledAt(venueName: string | null) {
   };
 }
 
+/**
+ * Answer `user.findMany` the way the database does, one query at a time.
+ *
+ * `refreshStatusBanners` asks for a specific set of ids; the status-timer tick
+ * — exercised by one test here — asks two separate questions, the paged
+ * rotation over `status: "active"` and the small set that left `active` with a
+ * banner still pinned. One array returned to every caller hands the tick the
+ * same user twice, which the database cannot do.
+ */
+function mockUsers(rows: Array<Record<string, unknown>>) {
+  mockPrisma.user.findMany.mockImplementation(
+    async (args: { where?: { status?: unknown }; take?: number }) => {
+      const status = args?.where?.status;
+      let matching = rows;
+      if (typeof status === "object" && status !== null && "not" in status) {
+        matching = rows.filter(
+          (row) => row.status !== "active" && row.statusMessageId !== null,
+        );
+      }
+      return args?.take === undefined ? matching : matching.slice(0, args.take);
+    },
+  );
+}
+
 function api() {
   return {
     editMessageText: vi.fn().mockResolvedValue({}),
@@ -69,7 +93,7 @@ beforeEach(() => {
 
 describe("refreshStatusBanners", () => {
   it("edits the pinned banner with the new venue immediately", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([participant()]);
+    mockUsers([participant()]);
     mockPrisma.match.findMany.mockResolvedValue([scheduledAt("Aroma Kava")]);
     const bot = api();
 
@@ -83,7 +107,7 @@ describe("refreshStatusBanners", () => {
   });
 
   it("satisfies the next tick, so the venue is not re-sent a minute later", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([participant()]);
+    mockUsers([participant()]);
     mockPrisma.match.findMany.mockResolvedValue([scheduledAt("Aroma Kava")]);
     const bot = api();
     await refreshStatusBanners(bot, ["u1"], NOW);
@@ -94,7 +118,7 @@ describe("refreshStatusBanners", () => {
       getChat: vi.fn().mockResolvedValue({ pinned_message: { message_id: 100 } }),
       pinChatMessage: vi.fn(),
     } as never;
-    mockPrisma.user.findMany.mockResolvedValue([participant()]);
+    mockUsers([participant()]);
     mockPrisma.match.findMany.mockResolvedValue([scheduledAt("Aroma Kava")]);
 
     const result = await statusTimerTick(tickApi, { now: NOW });
@@ -104,7 +128,7 @@ describe("refreshStatusBanners", () => {
   });
 
   it("does nothing when the render is already current", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([participant()]);
+    mockUsers([participant()]);
     mockPrisma.match.findMany.mockResolvedValue([scheduledAt("Aroma Kava")]);
     const bot = api();
 
@@ -117,7 +141,7 @@ describe("refreshStatusBanners", () => {
   it("skips a user with no banner yet — creation belongs to the tick", async () => {
     // The `statusMessageId: { not: null }` filter is what excludes them, so the
     // query simply returns nothing.
-    mockPrisma.user.findMany.mockResolvedValue([]);
+    mockUsers([]);
     const bot = api();
 
     await refreshStatusBanners(bot, ["u1"], NOW);
@@ -127,7 +151,7 @@ describe("refreshStatusBanners", () => {
   });
 
   it("never throws when Telegram rejects the edit", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([participant()]);
+    mockUsers([participant()]);
     mockPrisma.match.findMany.mockResolvedValue([scheduledAt("Aroma Kava")]);
     const bot = api();
     bot.editMessageText.mockRejectedValue(
@@ -148,7 +172,7 @@ describe("refreshStatusBanners", () => {
   });
 
   it("treats a lost race with the tick as done, not as a failure", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([participant()]);
+    mockUsers([participant()]);
     mockPrisma.match.findMany.mockResolvedValue([scheduledAt("Aroma Kava")]);
     const bot = api();
     bot.editMessageText.mockRejectedValue(
