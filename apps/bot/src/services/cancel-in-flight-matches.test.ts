@@ -15,7 +15,10 @@ vi.mock("@gennety/db", () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
-    ticketLedger: { create: vi.fn() },
+    // `findMany` — план возвратов сверяется с реестром: возвращается то, за
+    // что действительно платили. Пустой список означал бы «никто не платил»,
+    // поэтому фикстуры ниже сеют след оплаты явно.
+    ticketLedger: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     // `grantTickets` uses the array form.
     $transaction: vi.fn(),
   },
@@ -46,7 +49,7 @@ const mMatch = prisma.match as unknown as {
   updateMany: MockFn;
 };
 const mUser = prisma.user as unknown as { findUnique: MockFn; update: MockFn };
-const mLedger = prisma.ticketLedger as unknown as { create: MockFn };
+const mLedger = prisma.ticketLedger as unknown as { create: MockFn; findMany: MockFn };
 const mTx = prisma.$transaction as unknown as MockFn;
 const mComp = applyEmergencyCancellationPeerBoost as unknown as MockFn;
 const mPush = sendPushToUser as unknown as MockFn;
@@ -284,7 +287,31 @@ describe("cancelInFlightMatchesForUser — Date Ticket refunds", () => {
     ...over,
   });
 
+  /**
+   * След оплаты в реестре.
+   *
+   * `ticketPaid*` означает «слот закрыт», а не «за слот заплатили»: ту же
+   * отметку ставит Premium-ветка гейта, закрывая слот бесплатно. Поэтому
+   * фикстура «за свидание заплатили» обязана включать и реестр — иначе она
+   * описывала бы подписчика, а не плательщика.
+   */
+  function paidBy(...userIds: string[]): void {
+    mLedger.findMany.mockResolvedValue(
+      userIds.map((userId) => ({ userId, matchId: "m1", delta: -1, amountStars: null, amountCents: null })),
+    );
+  }
+
   function gate(over: Record<string, unknown> = {}): void {
+    // След оплаты выводится из той же фикстуры, что и отметки на матче: кто
+    // по её смыслу заплатил, тот и оставил строку в реестре. Иначе тест
+    // «за свидание заплатили» описывал бы подписчика, чей слот закрыт
+    // бесплатно, — и молча проверял бы сломанное поведение.
+    const row = paidGate(over) as Record<string, unknown>;
+    const payers = new Set<string>();
+    if (row.ticketPaidA !== null) payers.add(row.paidForPartnerByB ? PARTNER : LEAVING);
+    if (row.ticketPaidB !== null) payers.add(row.paidForPartnerByA ? LEAVING : PARTNER);
+    paidBy(...payers);
+
     mMatch.findMany.mockResolvedValueOnce([
       {
         id: "m1",

@@ -88,6 +88,16 @@ const prismaMock = {
         db.ledger.push(data);
         return data;
       }),
+    // План возвратов сверяется с реестром: возвращается то, за что
+    // действительно платили, а не всё, что помечено оплаченным.
+    findMany: async ({
+      where,
+    }: {
+      where: { matchId: string; userId: { in: string[] } };
+    }) =>
+      db.ledger.filter(
+        (row) => row.matchId === where.matchId && where.userId.in.includes(row.userId as string),
+      ),
   },
   $transaction: async (ops: PromiseLike<unknown>[]) => {
     const balancesBefore = new Map([...db.users].map(([id, u]) => [id, u.ticketBalance]));
@@ -116,7 +126,15 @@ const {
   ticketRefundNoticeKey,
 } = await import("./ticket-refund.js");
 
-function seedMatch(over: Partial<MatchRow> = {}): void {
+/**
+ * @param opts.coveredByPremium стороны, чей слот закрыла подписка, а не оплата.
+ *   Для них след в реестре НЕ создаётся — ровно как в проде, где Premium-ветка
+ *   гейта пишет нулевую строку без денег.
+ */
+function seedMatch(
+  over: Partial<MatchRow> = {},
+  opts: { coveredByPremium?: Array<"A" | "B"> } = {},
+): void {
   db.match = {
     id: "m1",
     ticketStatus: "completed",
@@ -128,6 +146,34 @@ function seedMatch(over: Partial<MatchRow> = {}): void {
     userBId: B,
     ...over,
   };
+
+  // `ticketPaid*` означает «слот закрыт», а не «за слот заплатили» — эти два
+  // факта разошлись, когда появился Premium. Фикстура обязана моделировать
+  // ОБА: отметку на матче и след оплаты в реестре. Без второго тест «слот
+  // оплачен» проверял бы ровно то, что сломано.
+  const premium = new Set(opts.coveredByPremium ?? []);
+  const payers = new Set<string>();
+  if (db.match.ticketPaidA !== null && !premium.has("A")) {
+    payers.add(db.match.paidForPartnerByB ? db.match.userBId : db.match.userAId);
+  }
+  if (db.match.ticketPaidB !== null && !premium.has("B")) {
+    payers.add(db.match.paidForPartnerByA ? db.match.userAId : db.match.userBId);
+  }
+  for (const userId of payers) {
+    db.ledger.push({ userId, matchId: "m1", delta: -1, reason: "spend_match" });
+  }
+}
+
+
+/**
+ * Только строки возврата.
+ *
+ * В реестре теперь лежит и след оплаты, который сеет `seedMatch` — без него
+ * план возвратов справедливо не увидит, за что платили. Ассерты про возврат
+ * должны смотреть на возвраты, а не на весь журнал.
+ */
+function refundRows(): Array<Record<string, unknown>> {
+  return db.ledger.filter((row) => row.reason === "refund");
 }
 
 beforeEach(() => {
@@ -154,6 +200,44 @@ describe("planMatchTicketRefunds", () => {
       language: "ru",
       platform: "mobile",
     });
+  });
+
+  /**
+   * Регрессия на дефект аудита 2026-09-06 («Бизнес-логика, высокий риск»).
+   *
+   * Premium-ветка гейта закрывает слот БЕСПЛАТНО, ставя ту же отметку
+   * `ticketPaidA/B`, что и оплата. План возвратов смотрел только на неё — и
+   * отменённое свидание клало подписчику в кошелёк НАСТОЯЩИЙ билет, которого
+   * он не покупал. Билет тратится на гейт наравне с купленными, то есть
+   * подписка печатала валюту, и тем быстрее, чем чаще отменяются свидания.
+   */
+  it("не возвращает билет за слот, закрытый подпиской", async () => {
+    // A — подписчик: слот закрыт, денег не было. B заплатил за свой.
+    seedMatch({}, { coveredByPremium: ["A"] });
+
+    const plan = await planMatchTicketRefunds("m1");
+
+    expect(plan).toHaveLength(1);
+    expect(plan[0]!.userId).toBe(B);
+    expect(plan[0]!.slots).toEqual(["B"]);
+  });
+
+  it("ничего не планирует, когда подписка закрыла оба слота", async () => {
+    seedMatch({}, { coveredByPremium: ["A", "B"] });
+    expect(await planMatchTicketRefunds("m1")).toEqual([]);
+  });
+
+  it("возвращает Stars-оплату гейта: денег в строке достаточно, списания нет", async () => {
+    // Stars-гейт не трогает кошелёк — он пишет нулевую строку с `amountStars`.
+    // Признак оплаты обязан её узнавать, иначе честный плательщик потерял бы
+    // возврат ровно так же тихо, как подписчик его получал.
+    seedMatch({}, { coveredByPremium: ["A", "B"] });
+    db.ledger.push({ userId: A, matchId: "m1", delta: 0, reason: "gate_payment", amountStars: 150 });
+
+    const plan = await planMatchTicketRefunds("m1");
+
+    expect(plan).toHaveLength(1);
+    expect(plan[0]!.userId).toBe(A);
   });
 
   it("credits BOTH slots to the payer who covered their partner", async () => {
@@ -218,8 +302,8 @@ describe("refundMatchTickets", () => {
     expect(db.users.get(A)!.ticketBalance).toBe(1);
     expect(db.users.get(B)!.ticketBalance).toBe(1);
     expect(outcomes.map((o) => o.refunded)).toEqual([1, 1]);
-    expect(db.ledger.map((r) => r.reason)).toEqual(["refund", "refund"]);
-    expect(db.ledger.map((r) => r.matchId)).toEqual(["m1", "m1"]);
+    expect(refundRows().map((r) => r.reason)).toEqual(["refund", "refund"]);
+    expect(refundRows().map((r) => r.matchId)).toEqual(["m1", "m1"]);
   });
 
   it("gives the coverer two tickets", async () => {
@@ -239,7 +323,7 @@ describe("refundMatchTickets", () => {
 
     expect(db.users.get(A)!.ticketBalance).toBe(1);
     expect(db.users.get(B)!.ticketBalance).toBe(1);
-    expect(db.ledger).toHaveLength(2);
+    expect(refundRows()).toHaveLength(2);
     expect(second.map((o) => o.refunded)).toEqual([0, 0]);
   });
 
@@ -249,14 +333,14 @@ describe("refundMatchTickets", () => {
     await refundMatchTickets("m1");
 
     expect(db.users.get(A)!.ticketBalance).toBe(2);
-    expect(db.ledger).toHaveLength(2);
+    expect(refundRows()).toHaveLength(2);
   });
 
   it("never credits a balance below zero or a negative delta", async () => {
     seedMatch();
     await refundMatchTickets("m1");
 
-    for (const row of db.ledger) expect(row.delta).toBe(1);
+    for (const row of refundRows()) expect(row.delta).toBe(1);
     for (const user of db.users.values()) expect(user.ticketBalance).toBeGreaterThanOrEqual(0);
   });
 
@@ -269,13 +353,13 @@ describe("refundMatchTickets", () => {
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0].userId).toBe(B);
     expect(db.users.get(B)!.ticketBalance).toBe(1);
-    expect(db.ledger).toHaveLength(1);
+    expect(refundRows()).toHaveLength(1);
   });
 
   it("returns an empty result for an unpaid match", async () => {
     seedMatch({ ticketPaidA: null, ticketPaidB: null });
     expect(await refundMatchTickets("m1")).toEqual([]);
-    expect(db.ledger).toEqual([]);
+    expect(refundRows()).toEqual([]);
   });
 
   it("resumes a partially-applied refund instead of re-crediting the first slot", async () => {
@@ -289,7 +373,7 @@ describe("refundMatchTickets", () => {
 
     expect(outcomes[0].refunded).toBe(1); // only the outstanding slot
     expect(db.users.get(A)!.ticketBalance).toBe(2);
-    expect(db.ledger).toHaveLength(2);
+    expect(refundRows()).toHaveLength(2);
   });
 });
 
