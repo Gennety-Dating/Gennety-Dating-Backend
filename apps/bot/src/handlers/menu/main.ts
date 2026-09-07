@@ -101,12 +101,22 @@ function buildMainMenuKeyboardFor(
   const videoLabel = t(lang, "menuVideo") + (videoReward ? " 🎁" : "");
   kb.text(videoLabel, "menu:video").row();
 
-  // Ticket wallet entry — only when the Date Ticket feature is live. Kept as
-  // a message (not a direct web_app row) on purpose: the balance shown there
-  // is the whole reason someone taps it, and founder preference is to keep
-  // that number visible before the Mini App opens.
+  // Ticket wallet entry — only when the Date Ticket feature is live. Opens the
+  // store Mini App directly (2026-09-07, reversing the 2026-08-29 carve-out
+  // that kept it a message): `tickets.html` draws the balance itself — the 3D
+  // ticket hero is rendered from its own `GET /v1/tickets/wallet` — so the
+  // balance message this used to send showed the same number one tap earlier
+  // and nothing besides. Same HTTPS fallback as Premium below (Telegram
+  // rejects a non-HTTPS web_app button), and `handleMyTickets` stays alive
+  // behind `menu:tickets` for that fallback and for the concierge agent's
+  // `open_screen("tickets")`, which can only hand over a callback button.
   if (env.TICKET_FEATURE_ENABLED) {
-    kb.text(t(lang, "menuMyTickets"), "menu:tickets").row();
+    const ticketsUrl = buildMiniAppUrl("tickets", { lang, theme });
+    if (ticketsUrl.startsWith("https://")) {
+      kb.webApp(t(lang, "menuMyTickets"), ticketsUrl).row();
+    } else {
+      kb.text(t(lang, "menuMyTickets"), "menu:tickets").row();
+    }
   }
 
   // Gennety Premium entry — only when the Premium feature is live. Opens the

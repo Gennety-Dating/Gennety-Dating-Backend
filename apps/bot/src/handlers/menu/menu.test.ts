@@ -379,7 +379,7 @@ describe("Menu — main keyboard", () => {
   });
 });
 
-describe("Menu — Premium / Referral rows open the Mini App directly", () => {
+describe("Menu — Premium / Referral / My Tickets rows open the Mini App directly", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "active" });
@@ -430,7 +430,10 @@ describe("Menu — Premium / Referral rows open the Mini App directly", () => {
     }
   });
 
-  it("still renders My Tickets as the balance message, not a direct web_app row", async () => {
+  // 2026-09-07: My Tickets joined the same pattern. The balance message it used
+  // to open showed a number `tickets.html` renders on its own hero card, so the
+  // row now opens the store Mini App in one tap.
+  it("renders the My Tickets row as a web_app button, not a callback", async () => {
     mutableEnv.TICKET_FEATURE_ENABLED = true;
     const ctx = createMockCtx({});
     await showMainMenu(ctx);
@@ -438,8 +441,23 @@ describe("Menu — Premium / Referral rows open the Mini App directly", () => {
     const flat = kb.inline_keyboard.flat();
     const ticketsBtn = flat.find((b: { text: string }) => b.text === t("en", "menuMyTickets"));
     expect(ticketsBtn).toBeDefined();
-    expect(ticketsBtn.callback_data).toBe("menu:tickets");
-    expect(ticketsBtn.web_app).toBeUndefined();
+    expect(ticketsBtn.callback_data).toBeUndefined();
+    expect(ticketsBtn.web_app?.url).toContain("/tickets.html");
+    expect(ticketsBtn.web_app?.url).toContain("lang=en");
+  });
+
+  it("falls back to the My Tickets callback when WEBAPP_URL isn't real HTTPS", async () => {
+    mutableEnv.TICKET_FEATURE_ENABLED = true;
+    const original = env.WEBAPP_URL;
+    mutableEnv.WEBAPP_URL = "http://localhost:5173";
+    try {
+      const ctx = createMockCtx({});
+      await showMainMenu(ctx);
+      const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+      expect(JSON.stringify(kb.inline_keyboard)).toContain('"menu:tickets"');
+    } finally {
+      mutableEnv.WEBAPP_URL = original;
+    }
   });
 });
 
