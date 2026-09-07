@@ -326,14 +326,11 @@ function haptic(kind: "success" | "error"): void {
  * or WKWebView, both speak them, and one stream cannot double-fire on a tap.
  */
 function wireGlassPress(btn: HTMLElement): void {
-  const track = (e: PointerEvent): void => {
+  const press = (e: PointerEvent): void => {
     const r = btn.getBoundingClientRect();
     if (!r.width || !r.height) return;
     btn.style.setProperty("--pm-px", `${((e.clientX - r.left) / r.width) * 100}%`);
     btn.style.setProperty("--pm-py", `${((e.clientY - r.top) / r.height) * 100}%`);
-  };
-  const press = (e: PointerEvent): void => {
-    track(e);
     btn.classList.add("is-pressed");
     // A soft IMPACT, not a notification: this is the surface yielding under the
     // finger, not the outcome of anything. `haptic()` above is the other kind.
@@ -343,44 +340,11 @@ function wireGlassPress(btn: HTMLElement): void {
       /* haptics are optional — absent on desktop and web */
     }
   };
-  // While the finger is DOWN the light goes where it goes. Sliding a thumb along
-  // a held button and watching the highlight follow is the single clearest tell
-  // that the surface is a material and not a picture of one — and it costs one
-  // event listener, because the property it writes is already the one the
-  // stylesheet reads. No custom-property transition on purpose: the pointer
-  // stream is already ~60Hz, and an eased one would make the light lag the
-  // finger, which is precisely the feeling being avoided.
-  const drag = (e: PointerEvent): void => {
-    if (btn.classList.contains("is-pressed")) track(e);
-  };
   const release = (): void => btn.classList.remove("is-pressed");
   btn.addEventListener("pointerdown", press);
-  btn.addEventListener("pointermove", drag);
   btn.addEventListener("pointerup", release);
   btn.addEventListener("pointercancel", release);
   btn.addEventListener("pointerleave", release);
-}
-
-/**
- * Teach the scroller how tall the floating action bar is.
- *
- * The bar is `position: absolute` so the page can pass under its glass, which
- * means it no longer reserves its own space and the last thing in the scroll
- * would end up permanently behind it. Its height is not a constant worth
- * hardcoding: ~145px with the plan picker, ~95px without, plus the safe-area
- * inset, plus whatever a locale does to the terms line. So measure the real
- * element and let CSS do the arithmetic.
- */
-function wireFooterInset(page: HTMLElement, action: HTMLElement): void {
-  const apply = (): void => {
-    const h = Math.ceil(action.getBoundingClientRect().height);
-    if (h > 0) page.style.setProperty("--pm-footer-h", `${h}px`);
-  };
-  apply();
-  // The bar resizes for reasons this module does not own — a font finishing its
-  // load, the terms line switching between the one-off and the renewal copy, the
-  // keyboard-free safe area changing on rotation.
-  if (typeof ResizeObserver !== "undefined") new ResizeObserver(apply).observe(action);
 }
 
 /** Numeric DD.MM.YYYY — the active plate shows the expiry date this way. */
@@ -704,8 +668,6 @@ function renderOffer(state: PremiumState): void {
 
   page.append(scroll, action);
   root.replaceChildren(page);
-  // After the append: the bar has to be in the document to have a height.
-  wireFooterInset(page, action);
 }
 
 async function subscribe(btn: HTMLButtonElement, plan: string): Promise<void> {
@@ -834,11 +796,7 @@ app?.expand?.();
 
 // Bot API 8.0+ — immersive fullscreen removes the top sheet gap so the paid
 // composition fills the screen. Older clients silently fall through to expand().
-// These two MUST equal `--bg` for the matching theme in premium.css. The light
-// ground is deliberately deeper than the shared #f5f5f5 (white cards need a step
-// to sit on); if Telegram's own chrome keeps the old value, the seam shows as a
-// paler strip above the header and below the bottom bar.
-const chromeColor = document.documentElement.dataset.theme === "light" ? "#eeeef0" : "#030303";
+const chromeColor = document.documentElement.dataset.theme === "light" ? "#f5f5f5" : "#030303";
 try {
   if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
     app.requestFullscreen?.();
