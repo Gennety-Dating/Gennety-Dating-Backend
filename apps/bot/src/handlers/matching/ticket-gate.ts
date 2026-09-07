@@ -1360,10 +1360,44 @@ export async function useTicketFromBalance(
   }
 
   const count = ticketsForScope(scope);
+  // What the actor already held before the spend — the baseline the throw path
+  // below needs to tell "this spend bought it" from "it was already paid for".
+  const heldBefore = slotsHeldBy(match, side);
   const spend = await spendTickets({ userId: me.id, count, reason: "spend_match", matchId });
   if (!spend.ok) return { ok: false, reason: "insufficient-balance" };
 
-  const { result, claimedCount } = await settleTicket(api, telegramId, matchId, scope);
+  let settled: Awaited<ReturnType<typeof settleTicket>>;
+  try {
+    settled = await settleTicket(api, telegramId, matchId, scope);
+  } catch (error) {
+    // The spend is already committed, so a throw here used to burn the ticket
+    // outright — and the expiry rail could not give it back either, because
+    // that rail reads the MATCH row and the row says nobody paid.
+    //
+    // The claim itself is one atomic `updateMany`, so whatever threw either
+    // happened before it (nothing was taken) or after it (the claim stands).
+    // A fresh read tells which, and we refund exactly the slots this spend did
+    // not buy — the same arithmetic as the normal path below, just with the
+    // claimed count re-derived instead of returned.
+    const fresh = await loadTicketMatch(matchId);
+    const claimed = fresh ? slotsHeldBy(fresh, side) - heldBefore : 0;
+    const lost = Math.max(0, count - Math.max(0, claimed));
+    if (lost > 0) {
+      // Never let the compensation's own failure replace the original error:
+      // that error is what tells ops what actually broke.
+      await grantTickets({ userId: me.id, count: lost, reason: "refund", matchId }).catch(
+        (refundError: unknown) => {
+          console.error(
+            `[tickets] settle threw and the compensating refund failed too — ` +
+              `user=${me.id} match=${matchId} tickets=${lost}`,
+            refundError,
+          );
+        },
+      );
+    }
+    throw error;
+  }
+  const { result, claimedCount } = settled;
   // Refund the surplus = tickets spent minus slots actually settled. A hard
   // failure / idempotent duplicate settles 0 (full refund); a "both"/"use 2"
   // spend that only settled one slot because the partner had already paid
@@ -1373,6 +1407,32 @@ export async function useTicketFromBalance(
     await grantTickets({ userId: me.id, count: refundCount, reason: "refund", matchId });
   }
   return result;
+}
+
+/**
+ * How many gate slots on this match are paid for BY this side.
+ *
+ * Only what this side actually bought counts: a slot the partner covered
+ * carries their `paidForPartnerBy*` flag, and counting it here would make a
+ * compensating refund believe a ticket was spent well when it was not.
+ */
+function slotsHeldBy(
+  match: {
+    ticketPaidA: Date | null;
+    ticketPaidB: Date | null;
+    paidForPartnerByA: boolean | null;
+    paidForPartnerByB: boolean | null;
+  },
+  side: Side,
+): number {
+  const minePaid = (side === "A" ? match.ticketPaidA : match.ticketPaidB) !== null;
+  const partnerPaid = (side === "A" ? match.ticketPaidB : match.ticketPaidA) !== null;
+  const iCoveredPartner = (side === "A" ? match.paidForPartnerByA : match.paidForPartnerByB) === true;
+  const partnerCoveredMe = (side === "A" ? match.paidForPartnerByB : match.paidForPartnerByA) === true;
+  let held = 0;
+  if (minePaid && !partnerCoveredMe) held += 1;
+  if (partnerPaid && iCoveredPartner) held += 1;
+  return held;
 }
 
 // ── Completion + free-fallback (shared by confirm + cron) ───────────────────
