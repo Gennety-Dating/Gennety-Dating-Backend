@@ -191,10 +191,25 @@ export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
 pnpm --filter @gennety/db db:push
 ```
 
-There is no Prisma migrations directory in this repo at the moment, so the
-current workflow is Prisma `db:push`. Before risky schema changes, take a
-Supabase backup from the Supabase dashboard. The droplet currently does not
-have `pg_dump` installed.
+**There IS a migrations directory now** (`packages/db/prisma/migrations/`,
+added 2026-09-07 by the audit finding "Миграции БД"), but it has **not been
+adopted on prod yet** — that takes three one-time steps, and they are written
+down in [`packages/db/prisma/migrations/README.md`](../../packages/db/prisma/migrations/README.md):
+verify the set against a shadow database, `migrate resolve --applied 0_baseline`,
+then `db:deploy`. Until those run, the workflow below (`db:push`) is still what
+prod uses, and mixing the two would leave the migration table lying about what
+has been applied.
+
+After adoption the deploy step becomes `pnpm --filter @gennety/db db:deploy`
+and `db:push` stops being used against prod at all. The reason to move is not
+tidiness: with `db:push` there is no way back. Rolling the CODE back while the
+schema has already moved is not a degradation, it is a full outage of the
+public API the iOS client depends on.
+
+Before risky schema changes, take a Supabase backup from the Supabase
+dashboard. The droplet still does not have `pg_dump` installed — migrations
+give a reproducible ORDER of changes, not a backup, and the two are not
+substitutes.
 
 Prisma refuses to add a `@unique` column without `--accept-data-loss`, even when
 the column is brand new (it cannot know the column will be all-`NULL`). Before
