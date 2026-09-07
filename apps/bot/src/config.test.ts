@@ -4,6 +4,8 @@ import {
   paymentTrustConfigurationErrors,
   type IdentityTrustConfiguration,
   type PaymentTrustConfiguration,
+  runtimeConfigurationErrors,
+  type RuntimeConfiguration,
 } from "./config.js";
 
 function productionReady(
@@ -185,5 +187,78 @@ describe("payment trust configuration", () => {
     expect(
       paymentTrustConfigurationErrors({ ...unsafe, DEMO_MODE_ENABLED: true }, "production"),
     ).toEqual([]);
+  });
+});
+
+describe("runtime configuration", () => {
+  /**
+   * `required()` guards exactly two variables; everything else falls back to
+   * `""`. The failures that produces are silent by construction: without
+   * `JWT_SECRET` the public server logs one line and returns, so PM2 shows the
+   * bot green, `/admin/health` answers, and the entire native iOS API is dead —
+   * discovered by users complaining.
+   */
+  function complete(overrides: Partial<RuntimeConfiguration> = {}): RuntimeConfiguration {
+    return {
+      JWT_SECRET: "j".repeat(64),
+      OPENAI_API_KEY: "sk-live",
+      PHONE_AUTH_ENABLED: true,
+      TWILIO_ACCOUNT_SID: "AC",
+      TWILIO_AUTH_TOKEN: "token",
+      TWILIO_VERIFY_SERVICE_SID: "VA",
+      APNS_KEY_PATH: "/keys/AuthKey.p8",
+      APNS_KEY_ID: "KEY",
+      APNS_TEAM_ID: "TEAM",
+      TICKET_FEATURE_ENABLED: true,
+      APPSTORE_KEY_PATH: "/keys/SubscriptionKey.p8",
+      APPSTORE_KEY_ID: "AKEY",
+      APPSTORE_ISSUER_ID: "issuer",
+      ...overrides,
+    };
+  }
+
+  it("accepts a complete configuration", () => {
+    expect(runtimeConfigurationErrors(complete(), "production")).toEqual([]);
+  });
+
+  it("refuses to start with the native API silently disabled", () => {
+    expect(runtimeConfigurationErrors(complete({ JWT_SECRET: "" }), "production")).toEqual([
+      expect.stringContaining("JWT_SECRET"),
+    ]);
+  });
+
+  it("requires a live rail's credentials, and only a live rail's", () => {
+    // The flag is what says the rail is on, so its keys stop being optional.
+    expect(
+      runtimeConfigurationErrors(complete({ TWILIO_AUTH_TOKEN: "" }), "production"),
+    ).toEqual([expect.stringContaining("TWILIO_AUTH_TOKEN")]);
+    // Switched off, the same absence is simply the truth.
+    expect(
+      runtimeConfigurationErrors(
+        complete({ PHONE_AUTH_ENABLED: false, TWILIO_AUTH_TOKEN: "" }),
+        "production",
+      ),
+    ).toEqual([]);
+  });
+
+  it("refuses a half-configured APNs, and accepts none at all", () => {
+    // APNs has no feature flag — "configured or not" is the whole switch — so
+    // the rule is coherence. A partial set makes `apnsConfigured()` answer
+    // false and every push is dropped with a warning nobody reads.
+    expect(runtimeConfigurationErrors(complete({ APNS_KEY_ID: "" }), "production")).toEqual([
+      expect.stringContaining("half-configured"),
+    ]);
+    expect(
+      runtimeConfigurationErrors(
+        complete({ APNS_KEY_PATH: "", APNS_KEY_ID: "", APNS_TEAM_ID: "" }),
+        "production",
+      ),
+    ).toEqual([]);
+  });
+
+  it("stays out of the way in test and development", () => {
+    const empty = complete({ JWT_SECRET: "", OPENAI_API_KEY: "" });
+    expect(runtimeConfigurationErrors(empty, "test")).toEqual([]);
+    expect(runtimeConfigurationErrors(empty, "development")).toEqual([]);
   });
 });

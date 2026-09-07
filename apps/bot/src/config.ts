@@ -1142,6 +1142,100 @@ export function paymentTrustConfigurationErrors(
   return errors;
 }
 
+/**
+ * The keys whose ABSENCE disables a live rail without stopping the process.
+ *
+ * `required()` at the top of this file guards exactly two variables. Everything
+ * else falls back to `""`, and the failures that produces are silent by
+ * construction: without `JWT_SECRET` the public server logs one line and simply
+ * returns, so PM2 shows the bot green, `/admin/health` answers, and the entire
+ * native iOS API is dead. It is discovered by users complaining.
+ *
+ * This is the third assert in this file and it follows the same rule as the
+ * other two: fail closed at boot, where a misconfiguration is a deploy that
+ * refuses, rather than at runtime, where it is a product that lies.
+ */
+export interface RuntimeConfiguration {
+  JWT_SECRET: string;
+  OPENAI_API_KEY: string;
+  PHONE_AUTH_ENABLED: boolean;
+  TWILIO_ACCOUNT_SID: string;
+  TWILIO_AUTH_TOKEN: string;
+  TWILIO_VERIFY_SERVICE_SID: string;
+  APNS_KEY_PATH: string;
+  APNS_KEY_ID: string;
+  APNS_TEAM_ID: string;
+  TICKET_FEATURE_ENABLED: boolean;
+  APPSTORE_KEY_PATH: string;
+  APPSTORE_KEY_ID: string;
+  APPSTORE_ISSUER_ID: string;
+}
+
+export function runtimeConfigurationErrors(
+  config: RuntimeConfiguration = env,
+  runtime = process.env.NODE_ENV,
+): string[] {
+  if (runtime === "test" || runtime === "development") return [];
+
+  const errors: string[] = [];
+  if (!config.JWT_SECRET) {
+    errors.push("JWT_SECRET must be set — without it the whole native /v1 API is dead");
+  }
+  if (!config.OPENAI_API_KEY) {
+    errors.push("OPENAI_API_KEY must be set — the product is an AI matchmaker");
+  }
+
+  // Rails that are switched on: the flag says the rail is live, so its
+  // credentials are not optional.
+  if (config.PHONE_AUTH_ENABLED) {
+    const twilio = [
+      ["TWILIO_ACCOUNT_SID", config.TWILIO_ACCOUNT_SID],
+      ["TWILIO_AUTH_TOKEN", config.TWILIO_AUTH_TOKEN],
+      ["TWILIO_VERIFY_SERVICE_SID", config.TWILIO_VERIFY_SERVICE_SID],
+    ] as const;
+    for (const [name, value] of twilio) {
+      if (!value) errors.push(`${name} must be set while PHONE_AUTH_ENABLED is true`);
+    }
+  }
+  if (config.TICKET_FEATURE_ENABLED) {
+    const appstore = [
+      ["APPSTORE_KEY_PATH", config.APPSTORE_KEY_PATH],
+      ["APPSTORE_KEY_ID", config.APPSTORE_KEY_ID],
+      ["APPSTORE_ISSUER_ID", config.APPSTORE_ISSUER_ID],
+    ] as const;
+    for (const [name, value] of appstore) {
+      if (!value) errors.push(`${name} must be set while TICKET_FEATURE_ENABLED is true`);
+    }
+  }
+
+  // APNs has no feature flag — "configured or not" is the whole switch. So the
+  // rule is about COHERENCE rather than presence: all three or none. A partial
+  // set is the actual hazard, because `apnsConfigured()` then answers false and
+  // every push is dropped with a warning nobody reads.
+  const apns = [
+    ["APNS_KEY_PATH", config.APNS_KEY_PATH],
+    ["APNS_KEY_ID", config.APNS_KEY_ID],
+    ["APNS_TEAM_ID", config.APNS_TEAM_ID],
+  ] as const;
+  const apnsSet = apns.filter(([, value]) => Boolean(value));
+  if (apnsSet.length > 0 && apnsSet.length < apns.length) {
+    const missing = apns.filter(([, value]) => !value).map(([name]) => name);
+    errors.push(`APNs is half-configured — missing ${missing.join(", ")}`);
+  }
+
+  return errors;
+}
+
+export function assertRuntimeConfiguration(
+  config: RuntimeConfiguration = env,
+  runtime = process.env.NODE_ENV,
+): void {
+  const errors = runtimeConfigurationErrors(config, runtime);
+  if (errors.length > 0) {
+    throw new Error(`Incomplete runtime configuration:\n- ${errors.join("\n- ")}`);
+  }
+}
+
 export function assertPaymentTrustConfiguration(
   config: PaymentTrustConfiguration = env,
   runtime = process.env.NODE_ENV,

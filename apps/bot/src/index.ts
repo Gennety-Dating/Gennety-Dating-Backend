@@ -11,6 +11,7 @@ import { CADENCE } from "@gennety/shared";
 import {
   assertIdentityTrustConfiguration,
   assertPaymentTrustConfiguration,
+  assertRuntimeConfiguration,
   env,
 } from "./config.js";
 import {
@@ -61,6 +62,7 @@ import { sweepPrimeTimeRefunds } from "./services/prime-time-purchase.js";
 import { primeTimeFeatureLive } from "./services/prime-time.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { retentionTick } from "./workers/retention.js";
+import { verificationStuckSweep } from "./services/verification-stuck.js";
 import { activityRollupTick } from "./workers/activity-rollup.js";
 import { venueConcentrationAlertTick } from "./workers/venue-concentration-alert.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
@@ -102,6 +104,11 @@ assertIdentityTrustConfiguration();
 // состояние тут ровно то, которое даёт неполный `.env` (оба флага
 // дефолтятся в небезопасную сторону).
 assertPaymentTrustConfiguration();
+
+// И третья: ключи, отсутствие которых не роняет процесс, а тихо гасит рельс.
+// Без `JWT_SECRET` публичный сервер печатает одну строку и просто выходит —
+// PM2 зелёный, `/admin/health` отвечает, а весь нативный iOS-API мёртв.
+assertRuntimeConfiguration();
 
 const bot = createBot(env.BOT_TOKEN);
 // Publish the main bot Api so context-less services (founder-notify) can act
@@ -906,6 +913,17 @@ bot.start({
     );
     console.log(
       `[cron] Data retention scheduled: "${RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+    );
+
+    // People parked in `pending_review` by an inconclusive face match. They are
+    // outside matching entirely, they got there through our infrastructure
+    // rather than anything they did, and the admin view that lists them is a
+    // pull endpoint nobody polls. Shares the nightly schedule because a stuck
+    // review is measured in days, not minutes.
+    cron.schedule(
+      RETENTION_CRON_SCHEDULE,
+      guardedTick("verification-stuck", () => verificationStuckSweep().then(() => undefined)),
+      { timezone: CRON_TIMEZONE },
     );
 
     // Post-event recap + mutual sweep. Logs only when something happened, so a

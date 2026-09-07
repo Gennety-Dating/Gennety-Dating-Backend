@@ -86,11 +86,23 @@ enum Platform {
 enum VerificationStatus {
   unverified
   pending
-  /// Liveness passed at Persona but the face-match pipeline produced an
-  /// inconclusive score (in [REVIEW, VERIFY) — see env.FACE_MATCH_THRESHOLD_*).
-  /// Admin moderates these in the dashboard; users stay on `active` status
-  /// (they can browse, but appear with a "review" badge to potential
-  /// matches and accrue the unverified Elo penalty until cleared).
+  /// Liveness passed but the face-match pipeline produced an inconclusive
+  /// score (in [REVIEW, VERIFY) — see env.FACE_MATCH_THRESHOLD_*). Admin
+  /// moderates these in the dashboard.
+  ///
+  /// **They are NOT matched while they sit here**, and this comment used to say
+  /// the opposite — that they "appear with a review badge to potential matches
+  /// and accrue the unverified Elo penalty until cleared". Both eligibility
+  /// scans in `match-engine.ts` require `verified`, or `unverified` with an
+  /// explicit skip; neither has ever admitted this status. A schema that
+  /// describes behaviour the code does not have is worse than no comment: it
+  /// guarantees the next reader's mistake.
+  ///
+  /// The consequence is real and it is OURS: an infrastructure hiccup in the
+  /// face-match provider parks a person outside the product with no button to
+  /// press and no timer running. `verificationStuckSweep` reports them so a
+  /// human clears it — see services/verification-stuck.ts for why it reports
+  /// rather than auto-rejects.
   pending_review
   verified
   rejected
