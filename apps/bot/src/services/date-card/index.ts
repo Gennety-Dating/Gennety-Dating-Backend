@@ -3,12 +3,11 @@ import { fileURLToPath } from "node:url";
 import type { Api, RawApi } from "grammy";
 import type { InlineKeyboardButton } from "grammy/types";
 import satori from "satori";
-import { Resvg } from "@resvg/resvg-js";
 import { t, type Language } from "@gennety/shared";
 import { downloadProfileImage } from "../storage.js";
 import { butterflyPng, type ButterflyMark } from "../match-card/collage.js";
 import { blurFacesInPhoto } from "./face-blur.js";
-import { toPngBuffer, duotonePng, grainPng } from "./image.js";
+import { toPngBuffer, duotonePng, grainPng, svgToPng} from "./image.js";
 import { resolveVenuePhoto } from "./photo-source.js";
 import { buildCardElement, CARD_W, CARD_H, type CardNode, type CardTheme } from "./template.js";
 import { resolveCreditPlacement } from "./credit-placement.js";
@@ -192,10 +191,7 @@ export async function renderDateCard(
       height: CARD_H,
       fonts: loadFonts(),
     });
-    const png = new Resvg(svg, { fitTo: { mode: "width", value: CARD_W } })
-      .render()
-      .asPng();
-    return Buffer.from(png);
+    return await svgToPng(svg, CARD_W);
   } catch (err) {
     console.warn("[date-card] render failed:", err);
     return null;

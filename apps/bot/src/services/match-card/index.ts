@@ -12,8 +12,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import satori from "satori";
-import { Resvg } from "@resvg/resvg-js";
-import { grainPng, toPngBuffer } from "../date-card/image.js";
+import { grainPng, toPngBuffer, svgToPng} from "../date-card/image.js";
 import { buildCollageLayer, butterflyPng, CARD_W, CARD_H, type ButterflyMark } from "./collage.js";
 import {
   buildMatchCardElement,
@@ -98,13 +97,7 @@ async function rasterize(element: CardNode, bg: string = GRAPHITE): Promise<Buff
     height: CARD_H,
     fonts: loadFonts(),
   });
-  const png = new Resvg(svg, {
-    fitTo: { mode: "width", value: CARD_W },
-    background: bg,
-  })
-    .render()
-    .asPng();
-  return Buffer.from(png);
+  return await svgToPng(svg, CARD_W, bg);
 }
 
 export async function renderMatchCard(input: MatchCardInput): Promise<Buffer | null> {

@@ -34,7 +34,7 @@ import { fileURLToPath } from "node:url";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { butterflyPng, type ButterflyMark } from "./match-card/collage.js";
-import { grainPng } from "./date-card/image.js";
+import { grainPng, svgToPng} from "./date-card/image.js";
 
 /** Square poster, matching the expiry card — the offer belongs to that family. */
 export const REMATCH_CARD_W = 1080;
@@ -417,13 +417,7 @@ export async function renderRematchCard(input: RematchCardInput): Promise<Buffer
       height: REMATCH_CARD_H,
       fonts: loadFonts(),
     });
-    const png = new Resvg(svg, {
-      fitTo: { mode: "width", value: REMATCH_CARD_W },
-      background: palette(input.theme).bg,
-    })
-      .render()
-      .asPng();
-    return Buffer.from(png);
+    return await svgToPng(svg, REMATCH_CARD_W, palette(input.theme).bg);
   } catch (err) {
     console.warn("[rematch-card] render failed:", err);
     return null;

@@ -24,9 +24,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import satori from "satori";
-import { Resvg } from "@resvg/resvg-js";
 import type { Language } from "@gennety/shared";
 import { LOCALE_TAGS, RENDER_TZ } from "./datetime-entity.js";
+import { svgToPng } from "./date-card/image.js";
 
 /** Wide banner: Telegram renders a ~2.4:1 photo as a compact strip, not a wall. */
 export const TIME_CARD_W = 1000;
@@ -207,12 +207,7 @@ export async function renderTimeCard(input: TimeCardInput): Promise<Buffer | nul
       buildTimeCardElement(input) as unknown as Parameters<typeof satori>[0],
       { width: TIME_CARD_W, height: TIME_CARD_H, fonts: loadFonts() },
     );
-    const png = new Resvg(svg, {
-      fitTo: { mode: "width", value: TIME_CARD_W },
-      background: palette(input.theme).bg,
-    })
-      .render()
-      .asPng();
+    const png = await svgToPng(svg, TIME_CARD_W, palette(input.theme).bg);
     return Buffer.from(png);
   } catch (err) {
     console.warn("[time-card] render failed:", err);

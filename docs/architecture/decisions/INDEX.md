@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 257 entries
+# Decision index — all 258 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-07 | растеризация карточек уехала с главного потока | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | `venueLat/venueLng` означает заведение, и это стало проверяемо | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | menu-агент: запись применена, модель упала, человеку не сказали ничего | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | свидание больше нельзя назначить в прошлом | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
