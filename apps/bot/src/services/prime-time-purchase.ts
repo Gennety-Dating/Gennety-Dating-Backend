@@ -132,6 +132,12 @@ export async function createPrimeInvoiceLink(
 export interface PrimeTimeSettleResult {
   ok: boolean;
   reason?: string;
+  /**
+   * Whether the money is accounted for — refunded outright, or parked in a
+   * durable row the sweep owns. `false` means a charge nobody is tracking, and
+   * the payment handler escalates it to the founder.
+   */
+  refunded?: boolean;
 }
 
 /**
@@ -154,6 +160,25 @@ export async function settlePrimeTimePayment(
   matchId: string,
   telegramChargeId: string,
 ): Promise<PrimeTimeSettleResult> {
+  // Used by the two pre-row failures below, which happen before anything
+  // durable is written and would otherwise leave the charge in a log line only.
+  const giveBack = async (): Promise<boolean> => {
+    try {
+      await api.refundStarPayment(Number(payerTelegramId), telegramChargeId);
+      console.warn(
+        `[prime-time] unsettleable charge refunded match=${matchId} charge=${telegramChargeId}`,
+      );
+      return true;
+    } catch (err) {
+      console.error(
+        `[prime-time] unsettleable charge could NOT be refunded match=${matchId} ` +
+          `charge=${telegramChargeId}:`,
+        err,
+      );
+      return false;
+    }
+  };
+
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     select: {
@@ -166,11 +191,15 @@ export async function settlePrimeTimePayment(
       userB: { select: { id: true, telegramId: true, firstName: true, language: true } },
     },
   });
-  if (!match) return { ok: false, reason: "match-not-found" };
+  if (!match) {
+    return { ok: false, reason: "match-not-found", refunded: await giveBack() };
+  }
 
   const isA = match.userA.telegramId === payerTelegramId;
   const isB = match.userB.telegramId === payerTelegramId;
-  if (!isA && !isB) return { ok: false, reason: "not-participant" };
+  if (!isA && !isB) {
+    return { ok: false, reason: "not-participant", refunded: await giveBack() };
+  }
   const payer = isA ? match.userA : match.userB;
   const peer = isA ? match.userB : match.userA;
 
@@ -224,7 +253,9 @@ export async function settlePrimeTimePayment(
       payerTelegramId,
       PRIME_PURCHASE_REFUNDED_RACE,
     );
-    return { ok: false, reason: "already-unlocked" };
+    // A refund that fails parks the row for the sweep, so the charge is owned
+    // either way.
+    return { ok: false, reason: "already-unlocked", refunded: true };
   }
 
   await prisma.primeTimePurchase

@@ -23,11 +23,16 @@ vi.mock("../services/premium.js", () => ({
 }));
 // Settled via dynamic import in handleSuccessfulPayment's gate branch.
 vi.mock("./matching/ticket-gate.js", () => ({ applyStarsTicketPayment: vi.fn() }));
+vi.mock("../services/founder-notify.js", () => ({
+  notifyFounderPurchase: vi.fn(),
+  notifyFounderPaymentStuck: vi.fn(),
+}));
 
 import { prisma } from "@gennety/db";
 import { grantTickets } from "../services/ticket-wallet.js";
 import { activateOrExtendPremium, activatePremiumPackage } from "../services/premium.js";
 import { applyStarsTicketPayment } from "./matching/ticket-gate.js";
+import { notifyFounderPaymentStuck } from "../services/founder-notify.js";
 import { handlePreCheckout, handleSuccessfulPayment } from "./payments.js";
 
 const findUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>;
@@ -36,10 +41,16 @@ const grant = grantTickets as unknown as ReturnType<typeof vi.fn>;
 const activatePremium = activateOrExtendPremium as unknown as ReturnType<typeof vi.fn>;
 const activatePackage = activatePremiumPackage as unknown as ReturnType<typeof vi.fn>;
 const settleStars = applyStarsTicketPayment as unknown as ReturnType<typeof vi.fn>;
+const stuck = notifyFounderPaymentStuck as unknown as ReturnType<typeof vi.fn>;
 
 const GATE_UUID = "22222222-2222-4222-8222-222222222222";
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  // The settlement shell looks the payer up again when it has to report an
+  // unsettled charge, so the user lookup must always answer with a promise.
+  findUnique.mockResolvedValue(null);
+});
 
 function preCheckoutCtx(q: {
   invoice_payload: string;
@@ -234,7 +245,7 @@ describe("handleSuccessfulPayment", () => {
     expect(reply).not.toHaveBeenCalled();
   });
 
-  it("ignores a payment whose payload isn't one of our bundles", async () => {
+  it("credits nothing for a payload that is not one of our bundles — and escalates the charge", async () => {
     const { ctx, reply } = successCtx({
       invoice_payload: "store:99", // 99 is not a real bundle
       currency: "XTR",
@@ -243,7 +254,15 @@ describe("handleSuccessfulPayment", () => {
     });
     await handleSuccessfulPayment(ctx);
     expect(grant).not.toHaveBeenCalled();
-    expect(reply).not.toHaveBeenCalled();
+    // Telegram confirmed 9999 Stars for something we cannot honour. Crediting
+    // nothing is right; saying nothing is not.
+    expect(stuck).toHaveBeenCalledTimes(1);
+    expect(stuck.mock.calls[0]![0]).toMatchObject({
+      reason: "unrecognised-payload",
+      externalPaymentId: "charge_2",
+      amountStars: 9999,
+    });
+    expect(reply).toHaveBeenCalledTimes(1);
   });
 
   it("settles the date gate on a valid gate payload (no wallet credit)", async () => {
@@ -261,7 +280,7 @@ describe("handleSuccessfulPayment", () => {
     expect(grant).not.toHaveBeenCalled();
   });
 
-  it("ignores a foreign payload (neither store nor gate)", async () => {
+  it("settles nothing for a foreign payload (neither store nor gate) — and escalates it", async () => {
     const { ctx } = successCtx({
       invoice_payload: "ref_whatever",
       currency: "XTR",
@@ -271,6 +290,80 @@ describe("handleSuccessfulPayment", () => {
     await handleSuccessfulPayment(ctx);
     expect(settleStars).not.toHaveBeenCalled();
     expect(grant).not.toHaveBeenCalled();
+    expect(stuck).toHaveBeenCalledTimes(1);
+  });
+
+  // ── The settlement shell: no charge may end in silence ──────────────────
+  //
+  // Each of these used to end the handler with a bare `return` or by throwing
+  // into grammY's `bot.catch`. In both cases Telegram had already moved the
+  // Stars, nothing was granted, and the only trace was a line in the droplet's
+  // log — there is no ledger row to reconcile against when the failure happens
+  // BEFORE the ledger write.
+
+  it("escalates a charge whose payer no longer exists", async () => {
+    findUnique.mockResolvedValue(null);
+    const { ctx, reply } = successCtx({
+      invoice_payload: "store:3",
+      currency: "XTR",
+      total_amount: 830,
+      telegram_payment_charge_id: "charge_ghost",
+    });
+
+    await handleSuccessfulPayment(ctx);
+
+    expect(grant).not.toHaveBeenCalled();
+    expect(stuck).toHaveBeenCalledTimes(1);
+    expect(stuck.mock.calls[0]![0]).toMatchObject({
+      reason: "user-not-found",
+      externalPaymentId: "charge_ghost",
+      userId: null,
+    });
+    // And the payer is told not to pay again, rather than being handed
+    // `bot.catch`'s "try again".
+    expect(reply).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a failed credit escape into bot.catch — it reports the charge instead", async () => {
+    findUnique.mockResolvedValue({ id: "u1", language: "en" });
+    // Anything that is NOT the duplicate-charge P2002: the wallet write failed
+    // and the man is out 830 Stars with an empty ledger.
+    grant.mockRejectedValue(new Error("connection pool timed out"));
+    const { ctx, reply } = successCtx({
+      invoice_payload: "store:3",
+      currency: "XTR",
+      total_amount: 830,
+      telegram_payment_charge_id: "charge_boom",
+    });
+
+    await expect(handleSuccessfulPayment(ctx)).resolves.toBeUndefined();
+
+    expect(stuck).toHaveBeenCalledTimes(1);
+    expect(stuck.mock.calls[0]![0]).toMatchObject({
+      reason: "threw",
+      externalPaymentId: "charge_boom",
+      userId: "u1",
+    });
+    expect(reply).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays quiet when the gate refuses a payment, because the gate already refunded it", async () => {
+    // The distinction the alarm depends on: an `ok: false` from the gate is an
+    // ordinary, compensated outcome (`applyStarsTicketPayment` refunds or parks
+    // the charge in `gate_refund_pending`). Alerting on it would fire the alarm
+    // on the expected case and train the founder to ignore it.
+    settleStars.mockResolvedValue({ ok: false, reason: "wrong-state" });
+    const { ctx, reply } = successCtx({
+      invoice_payload: `gate:${GATE_UUID}:both`,
+      currency: "XTR",
+      total_amount: 700,
+      telegram_payment_charge_id: "charge_late",
+    });
+
+    await handleSuccessfulPayment(ctx);
+
+    expect(stuck).not.toHaveBeenCalled();
+    expect(reply).not.toHaveBeenCalled();
   });
 });
 

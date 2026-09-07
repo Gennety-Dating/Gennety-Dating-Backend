@@ -40,7 +40,10 @@ vi.mock("../services/premium.js", () => ({
   activateOrExtendPremium: vi.fn(),
   formatPremiumUntil: () => "19 August 2026",
 }));
-vi.mock("../services/founder-notify.js", () => ({ notifyFounderPurchase: vi.fn() }));
+vi.mock("../services/founder-notify.js", () => ({
+  notifyFounderPurchase: vi.fn(),
+  notifyFounderPaymentStuck: vi.fn(),
+}));
 vi.mock("../services/rematch.js", () => ({
   runRematch: vi.fn(),
   REMATCH_PROCESSING: "processing",
@@ -65,6 +68,7 @@ import { runStatusSequence, NEVER_CUT_SHORT } from "../services/ai-stream.js";
 import { runRematch } from "../services/rematch.js";
 import { refundRematchPurchase } from "../services/rematch-refund.js";
 import { dispatchMatches } from "../services/dispatch-queue.js";
+import { notifyFounderPaymentStuck } from "../services/founder-notify.js";
 import { handleSuccessfulPayment } from "./payments.js";
 
 const findUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>;
@@ -74,6 +78,7 @@ const status = runStatusSequence as unknown as ReturnType<typeof vi.fn>;
 const engine = runRematch as unknown as ReturnType<typeof vi.fn>;
 const refund = refundRematchPurchase as unknown as ReturnType<typeof vi.fn>;
 const dispatch = dispatchMatches as unknown as ReturnType<typeof vi.fn>;
+const stuck = notifyFounderPaymentStuck as unknown as ReturnType<typeof vi.fn>;
 
 const MATCH_ID = "33333333-3333-4333-8333-333333333333";
 
@@ -178,16 +183,28 @@ describe("rematch search animation", () => {
     expect(dispatch).toHaveBeenCalledWith(expect.anything(), [MATCH_ID]);
   });
 
-  it("leaves the row `processing` for the sweep when the engine throws", async () => {
+  it("leaves the row `processing` for the sweep when the engine throws, and tells the founder", async () => {
     // The refund contract predates this change and must survive it: an engine
-    // throw is NOT caught here, so the durable pre-transaction row stays
-    // `processing` and the hourly sweep reverses the charge.
+    // throw does not settle or refund anything here, so the durable
+    // pre-transaction row stays `processing` and the hourly sweep reverses the
+    // charge.
+    //
+    // What changed is where the throw lands. It used to escape into grammY's
+    // `bot.catch`, which answered "Something went wrong, please try again" —
+    // asking a man who has just been charged to pay again — and left no record
+    // of the charge anywhere but a log line. Now it is caught at the settlement
+    // shell, which reports the charge id to the founder.
     engine.mockRejectedValueOnce(new Error("db is down"));
     const { ctx } = payCtx();
 
-    await expect(handleSuccessfulPayment(ctx)).rejects.toThrow("db is down");
+    await expect(handleSuccessfulPayment(ctx)).resolves.toBeUndefined();
     expect(updatePurchase).not.toHaveBeenCalled();
     expect(refund).not.toHaveBeenCalled();
+    expect(stuck).toHaveBeenCalledTimes(1);
+    expect(stuck.mock.calls[0]![0]).toMatchObject({
+      reason: "threw",
+      externalPaymentId: "charge-1",
+    });
   });
 });
 

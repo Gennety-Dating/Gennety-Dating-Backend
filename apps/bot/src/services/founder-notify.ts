@@ -633,6 +633,81 @@ export async function notifyFounderPurchaseRefunded(notice: {
   }
 }
 
+/**
+ * DM the founder that money moved and the goods did NOT — the one payment
+ * outcome nobody else reports.
+ *
+ * Every settled rail already announces itself (`notifyFounderPurchase`) and
+ * every compensated one announces the reversal (`notifyFounderPurchaseRefunded`).
+ * What had no voice at all was the third outcome: Telegram confirmed the Stars,
+ * and the handler then returned early or threw before writing anything durable.
+ * There is no ledger row to reconcile against in that case — a `console.error`
+ * on a droplet was the entire audit trail — so this is deliberately loud and
+ * carries the charge id, which is the only thing `refundStarPayment` needs.
+ *
+ * Two things make it different from the notifiers above, and both are the point:
+ *
+ *  1. **The payer may not exist in our database.** `user-not-found` is one of
+ *     the failures being reported, so the identity block degrades to the raw
+ *     Telegram id rather than returning early the way the others do. A
+ *     notification we drop here is a charge nobody ever learns about.
+ *  2. **It is not best-effort at the call site.** The caller awaits it, because
+ *     it is the last thing standing between a silent charge and a refund.
+ */
+export interface FounderPaymentStuckNotice {
+  /** Telegram id of the payer — the only identity guaranteed to exist. */
+  telegramId: bigint;
+  /** Our user id, when the payer resolved at all. */
+  userId?: string | null;
+  amountStars?: number | null;
+  /** The invoice payload, so the founder can see what was bought. */
+  payload?: string | null;
+  externalPaymentId?: string | null;
+  /** Machine reason in the handler's own words (`user-not-found`, `threw`). */
+  reason: string;
+}
+
+export async function notifyFounderPaymentStuck(
+  notice: FounderPaymentStuckNotice,
+): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+
+  try {
+    const user = notice.userId
+      ? await prisma.user
+          .findUnique({ where: { id: notice.userId }, select: FOUNDER_PAYER_SELECT })
+          .catch(() => null)
+      : null;
+
+    const amount = formatPurchaseAmount({
+      amountStars: notice.amountStars ?? null,
+      amountCents: null,
+      currency: null,
+      usdCents: notice.amountStars != null ? starsToUsdCents(notice.amountStars) : null,
+      amountIsEstimate: notice.amountStars != null,
+    });
+
+    const lines = [
+      "🚨 Оплата прошла, товар НЕ выдан",
+      ...(user ? payerLines(user) : [`👤 Telegram ID: ${notice.telegramId.toString()}`]),
+      `💵 ${amount}`,
+      `❗️ Причина: ${notice.reason}`,
+    ];
+    if (notice.payload) lines.push(`🧾 Payload: ${notice.payload}`);
+    if (notice.externalPaymentId) lines.push(`Charge: ${notice.externalPaymentId}`);
+    lines.push("Вернуть звёзды можно по этому charge id.");
+
+    await api.sendMessage(founderChatId(), lines.join("\n"));
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} notifyFounderPaymentStuck failed`, {
+      telegramId: notice.telegramId.toString(),
+      reason: notice.reason,
+      err,
+    });
+  }
+}
+
 /** Prisma `select` for the payer identity block shared by both notifiers. */
 const FOUNDER_PAYER_SELECT = {
   id: true,

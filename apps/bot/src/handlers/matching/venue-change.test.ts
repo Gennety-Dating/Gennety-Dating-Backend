@@ -902,6 +902,29 @@ describe("settleVenuePayment", () => {
     expect(api.refundStarPayment).not.toHaveBeenCalled();
   });
 
+  // A settle refused before the durable pre-settle row exists leaves nothing
+  // for the sweep to reverse, so the refund has to happen right here.
+  it("hands the Stars back when the match is gone, and says so", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(null);
+
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-lost");
+
+    expect(res).toMatchObject({ ok: false, reason: "match-not-found", refunded: true });
+    expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-lost");
+    expect(mPurchase.create).not.toHaveBeenCalled();
+  });
+
+  it("reports `refunded: false` when even the refund fails, so the caller escalates", async () => {
+    const api = fakeApi();
+    api.refundStarPayment.mockRejectedValue(new Error("telegram down"));
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    const res = await settleVenuePayment(api, 999n, "m1", "charge-stuck");
+
+    expect(res).toMatchObject({ ok: false, reason: "not-participant", refunded: false });
+  });
+
   it("refunds a payment that lost the parallel-pay race", async () => {
     const api = fakeApi();
     mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangePaidById: "a" }));
