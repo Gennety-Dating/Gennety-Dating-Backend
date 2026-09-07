@@ -18,14 +18,14 @@
  * of that default, matching every other `*_CRON_SCHEDULE` in this codebase.
  */
 
-import { CADENCE } from "@gennety/shared";
+import { CADENCE, DEFAULT_TIME_ZONE } from "@gennety/shared";
 
 /** Canonical schedule shared by node-cron, Telegram and /v1/countdown. */
 export const MATCH_CRON_SCHEDULE =
   process.env.MATCH_CRON_SCHEDULE ?? CADENCE.cron;
 
 /** Timezone for batch scheduling — matches node-cron `timezone` option. */
-export const CRON_TIMEZONE = process.env.CRON_TIMEZONE ?? "Europe/Kyiv";
+export const CRON_TIMEZONE = process.env.CRON_TIMEZONE ?? DEFAULT_TIME_ZONE;
 
 interface ParsedDropCron {
   minute: number;

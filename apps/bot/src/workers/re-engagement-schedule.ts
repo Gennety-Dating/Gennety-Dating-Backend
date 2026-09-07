@@ -18,11 +18,12 @@
  */
 
 import {
+  DEFAULT_TIME_ZONE,
   QUIET_START_HOUR as SHARED_QUIET_START_HOUR,
   QUIET_END_HOUR as SHARED_QUIET_END_HOUR,
 } from "@gennety/shared";
 
-export const KYIV_TZ = "Europe/Kyiv";
+export const KYIV_TZ = DEFAULT_TIME_ZONE;
 // Из общего пакета: здесь стояла вторая копия тех же чисел, и правка одной
 // половины разошлась бы с другой беззвучно.
 export const QUIET_START_HOUR = SHARED_QUIET_START_HOUR;

@@ -1,4 +1,10 @@
-import { formatDate, formatSlot, formatTime, slotDayKey } from "./slots.js";
+import {
+  FALLBACK_TIME_ZONE,
+  formatDate,
+  formatSlot,
+  formatTime,
+  slotDayKey,
+} from "./slots.js";
 import {
   savePickedSet,
   loadPickedSet,
@@ -130,6 +136,13 @@ interface DayGroup {
 }
 
 let view: ViewState = "dates";
+/**
+ * The market's clock, as the server reports it. Every label and every day key
+ * is built in this zone rather than the device's: a traveller must not read one
+ * time here and another in the chat for the same slot. Server value wins as
+ * soon as the first `state` lands.
+ */
+let timeZone = FALLBACK_TIME_ZONE;
 let proposedTimes: string[] = [];
 let peerSlots = new Set<string>();
 let peerSeen = new Set<string>();
@@ -271,6 +284,7 @@ async function boot(): Promise<void> {
 }
 
 function applyState(state: CalendarState, firstLoad: boolean): void {
+  if (state.timeZone) timeZone = state.timeZone;
   proposedTimes = state.proposedTimes;
   peerSlots = new Set(state.peerSlots);
   confirmedMine = new Set(state.mySlots);
@@ -547,7 +561,7 @@ function openPremiumFromPrime(): void {
 // ── Bottom sheet ───────────────────────────────────────────────
 
 function buildSheetContent(group: DayGroup): void {
-  if (sheetTitleEl) sheetTitleEl.textContent = formatDate(group.date, lang);
+  if (sheetTitleEl) sheetTitleEl.textContent = formatDate(group.date, lang, timeZone);
   if (!sheetBodyEl) return;
   // A poll-driven rebuild (the peer marked a slot) must not yank the user
   // back up the list mid-pick — it wipes and re-appends every row, which
@@ -567,7 +581,7 @@ function buildSheetContent(group: DayGroup): void {
   for (const row of planDayRows(group.isos, primeSlots)) {
     const btn = renderSlotShell(row.iso, "time");
     const cls = classifySlot(row.iso, selected, peerSlots);
-    paintSlotState(btn, cls, null, formatTime(new Date(row.iso), lang), isNewPeerSlot(row.iso));
+    paintSlotState(btn, cls, null, formatTime(new Date(row.iso), lang, timeZone), isNewPeerSlot(row.iso));
 
     if (row.bandStart) band = openPrimeBand(body);
 
@@ -849,9 +863,9 @@ function renderAgreed(): void {
   `;
   const slot = new Date(agreedTime);
   agreedEl.querySelector<HTMLElement>('[data-role="date"]')!.textContent =
-    formatDate(slot, lang);
+    formatDate(slot, lang, timeZone);
   agreedEl.querySelector<HTMLElement>('[data-role="time"]')!.textContent =
-    formatTime(slot, lang);
+    formatTime(slot, lang, timeZone);
   agreedEl.querySelector<HTMLElement>('[data-role="subtitle"]')!.textContent =
     tr(lang, "agreedSubtitle");
 
@@ -909,7 +923,7 @@ function renderWaiting(): void {
   for (const iso of Array.from(confirmedMine).sort()) {
     const chip = document.createElement("span");
     chip.className = "saved-pick-chip";
-    chip.textContent = formatSlot(new Date(iso), lang);
+    chip.textContent = formatSlot(new Date(iso), lang, timeZone);
     picksEl.appendChild(chip);
   }
 
@@ -963,10 +977,10 @@ function renderMultiOverlap(): void {
     text.className = "overlap-text";
     const dayEl = document.createElement("span");
     dayEl.className = "overlap-day";
-    dayEl.textContent = `${formatDate(date, lang)},`;
+    dayEl.textContent = `${formatDate(date, lang, timeZone)},`;
     const timeEl = document.createElement("span");
     timeEl.className = "overlap-time";
-    timeEl.textContent = formatTime(date, lang);
+    timeEl.textContent = formatTime(date, lang, timeZone);
     text.append(dayEl, timeEl);
     card.appendChild(text);
 
@@ -1048,8 +1062,13 @@ interface DateParts {
 
 function formatDateParts(date: Date): DateParts {
   const locale = localeFor(lang);
-  const weekday = date.toLocaleDateString(locale, { weekday: "long" });
-  const dayOfMonth = date.toLocaleDateString(locale, { day: "numeric", month: "long" });
+  // Market clock, not the device's — same rule as every other label here.
+  const weekday = date.toLocaleDateString(locale, { weekday: "long", timeZone });
+  const dayOfMonth = date.toLocaleDateString(locale, {
+    day: "numeric",
+    month: "long",
+    timeZone,
+  });
   return { weekday: `${weekday},`, dayOfMonth };
 }
 
@@ -1435,7 +1454,7 @@ function groupedByDay(): DayGroup[] {
   const groups = new Map<string, DayGroup>();
   for (const iso of proposedTimes) {
     const date = new Date(iso);
-    const key = slotDayKey(date);
+    const key = slotDayKey(date, timeZone);
     const existing = groups.get(key);
     if (existing) {
       existing.isos.push(iso);
