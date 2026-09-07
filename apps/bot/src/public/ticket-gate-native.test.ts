@@ -107,6 +107,41 @@ describe("GET /v1/matches/:id/ticket-gate", () => {
     expect(res.body.partnerPhotoUrl).toContain("/v1/match-media/partner-photo?");
   });
 
+  // ── The wire enum is a contract, not a dump of the column ───────────────
+  //
+  // `Match.ticketStatus` is a free-form string carrying six values; the spec
+  // promises five. The sixth, `refund_pending`, used to be handed over verbatim
+  // — and the generated Swift enum is `@frozen`, so it decoded as an error,
+  // `TicketGateModel.refresh()` swallowed it under `try?`, and the gate screen
+  // showed "no connection" on a live connection.
+
+  it("reports the transient refund_pending state as the refunded it converges to", async () => {
+    getTicketState.mockResolvedValue({
+      ok: true,
+      state: { ...baseState, ticketStatus: "refund_pending" },
+    });
+
+    const res = await request(buildApp()).get(`/v1/matches/${VALID_UUID}/ticket-gate`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("refunded");
+  });
+
+  it("never leaks a status the spec does not list, whatever the column says", async () => {
+    getTicketState.mockResolvedValue({
+      ok: true,
+      state: { ...baseState, ticketStatus: "some_future_substate" },
+    });
+
+    const res = await request(buildApp()).get(`/v1/matches/${VALID_UUID}/ticket-gate`);
+
+    expect(res.status).toBe(200);
+    // `pending` is the only fallback that cannot lie in a costly direction: a
+    // closed gate offering to be paid again is refused server-side, while a
+    // false `completed` would hide a gate that is still open.
+    expect(res.body.status).toBe("pending");
+  });
+
   it("resolves the mobile-first caller by their synthetic negative telegramId", async () => {
     getTicketState.mockResolvedValue({ ok: true, state: baseState });
 

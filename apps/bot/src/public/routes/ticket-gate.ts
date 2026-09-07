@@ -186,13 +186,63 @@ async function telegramIdOf(userId: string): Promise<bigint | null> {
  * and deriving it means hard-coding "men may cover" into the app. Computed here
  * so the rule stays server-owned and re-validated on `/use` regardless.
  */
+/**
+ * The five statuses the wire contract knows, in the order they appear in the
+ * spec. Kept here rather than imported because it is a PUBLIC vocabulary, not
+ * the internal column's value set — see `wireTicketStatus`.
+ */
+type WireTicketStatus = "pending" | "partial" | "completed" | "expired" | "refunded";
+
+/**
+ * Project the internal `ticketStatus` onto the five values the API promises.
+ *
+ * `Match.ticketStatus` is a free-form string column carrying a sub-state machine
+ * with SIX values; the spec's enum has five. The extra one, `refund_pending`, is
+ * the transient state between "the window lapsed" and "the credit landed and the
+ * Calendar went out" — and it used to be handed to clients verbatim.
+ *
+ * That was not a cosmetic mismatch. The generated Swift enum is `@frozen`, so an
+ * unlisted string is a `DecodingError`; `TicketGateModel.refresh()` runs under
+ * `try?`, turns the error into `scene = .offline`, and the gate screen then
+ * reads "no connection" on a perfectly good connection — permanently, if the
+ * state was already loaded.
+ *
+ * So the boundary normalizes instead of leaking. `refund_pending` reads as
+ * `refunded` because that is what it converges to: the gate is over, the money
+ * is on its way back, and the expiry tick retries until the column agrees.
+ *
+ * Anything else is a value this function has never heard of — a sub-state added
+ * later without passing through here. It is logged and reported as `pending`,
+ * the only choice that cannot lie in a costly direction: the worst case is that
+ * a closed gate offers to be paid again, and every action re-validates
+ * server-side and refuses. Claiming `completed` or `refunded` would instead hide
+ * a gate that is genuinely still open.
+ */
+function wireTicketStatus(internal: string): WireTicketStatus {
+  switch (internal) {
+    case "pending":
+    case "partial":
+    case "completed":
+    case "expired":
+    case "refunded":
+      return internal;
+    case "refund_pending":
+      return "refunded";
+    default:
+      console.error(
+        `[ticket-gate] ticketStatus "${internal}" has no wire projection — reporting "pending"`,
+      );
+      return "pending";
+  }
+}
+
 async function nativeState(
   state: TicketStateView,
   userId: string,
   matchId: string,
 ): Promise<Record<string, unknown>> {
   return {
-    status: state.ticketStatus,
+    status: wireTicketStatus(state.ticketStatus),
     iPaid: state.iPaid,
     partnerPaid: state.partnerPaid,
     bothPaid: state.bothPaid,
