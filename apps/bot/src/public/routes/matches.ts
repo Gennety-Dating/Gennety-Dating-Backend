@@ -140,7 +140,12 @@ matchesRouter.post("/:id/decision", async (req: Request, res: Response): Promise
     return;
   }
 
-  const result = await applyMatchDecision(id, req.userId!, decision);
+  // Optional free text from the confirm card. Bounded here rather than trusted:
+  // it ends up in `Profile.negativeConstraints`, which the matcher reads.
+  const rawReason = req.body?.reason;
+  const reason = typeof rawReason === "string" ? rawReason.slice(0, 1000) : undefined;
+
+  const result = await applyMatchDecision(id, req.userId!, decision, reason);
   if (!result) {
     res.status(404).json({ error: "Match not found or not actionable" });
     return;

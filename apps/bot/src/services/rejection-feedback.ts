@@ -5,7 +5,20 @@ import { attachDeclineReasonToMatchEvent } from "./match-events.js";
 type MatchSide = "A" | "B";
 
 export interface RecordRejectionFeedbackInput {
-  telegramId: bigint;
+  /**
+   * Who is explaining. One of the two, and `userId` is the reason this is a
+   * pair rather than a single field.
+   *
+   * The function used to take a Telegram id and nothing else, which made it
+   * structurally unreachable from the native rail — and that rail is where a
+   * growing share of declines happen. The reason it collects lands in
+   * `Profile.negativeConstraints`, which the matcher reads directly, so a
+   * person living in the app declined five times and kept being offered the
+   * same type, while their neighbour in Telegram tuned their matching from the
+   * first decline.
+   */
+  telegramId?: bigint;
+  userId?: string;
   matchId: string;
   reason: string;
   requireConcreteReason?: boolean;
@@ -53,10 +66,17 @@ export async function recordRejectionFeedback(
     };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { telegramId: input.telegramId },
-    select: { id: true, language: true },
-  });
+  const user = input.userId
+    ? await prisma.user.findUnique({
+        where: { id: input.userId },
+        select: { id: true, language: true },
+      })
+    : input.telegramId !== undefined
+      ? await prisma.user.findUnique({
+          where: { telegramId: input.telegramId },
+          select: { id: true, language: true },
+        })
+      : null;
   if (!user) {
     return { success: false, code: "user_not_found", error: "User not found." };
   }
