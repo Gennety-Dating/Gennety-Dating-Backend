@@ -57,7 +57,20 @@ export type MintCredentialsResult =
 export interface MintCredentialsOptions {
   /** Inject an STS client (or test double). */
   client?: Pick<STSClient, "send">;
+  /** Override the deadline; the default is {@link DEFAULT_TIMEOUT_MS}. */
+  timeoutMs?: number;
 }
+
+/**
+ * Deadline for `AssumeRole`, matching the Rekognition call next door.
+ *
+ * This was the one external call in the product with no timeout at all.
+ * `STSClient` is built without a `requestHandler`, and `@smithy/node-http-handler`
+ * defaults `requestTimeout` to 0 — which does not mean "fast", it means no timer
+ * is set. So `POST /v1/verification/native/init` could hang for minutes while
+ * the client showed a refusal for a check that was never refused.
+ */
+const DEFAULT_TIMEOUT_MS = 10_000;
 
 let cachedClient: STSClient | null = null;
 
@@ -92,6 +105,11 @@ export async function mintLivenessCredentials(
   const client = options.client ?? getStsClient();
   if (!client) return { ok: false, error: "not_configured" };
 
+  // Same `AbortController` shape `face-match.ts` already uses — the deadline
+  // belongs to the call, not to the SDK's defaults.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+
   try {
     const output = await client.send(
       new AssumeRoleCommand({
@@ -103,6 +121,7 @@ export async function mintLivenessCredentials(
         ),
         Policy: SESSION_POLICY,
       }),
+      { abortSignal: controller.signal },
     );
 
     const creds = output.Credentials;
@@ -128,6 +147,8 @@ export async function mintLivenessCredentials(
   } catch (err) {
     console.error("[liveness-credentials] AssumeRole failed", { userId, err });
     return { ok: false, error: "api" };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

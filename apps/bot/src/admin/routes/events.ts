@@ -772,13 +772,25 @@ eventsRouter.post("/admin/events/:id/staff-tokens", async (req: Request, res: Re
       return;
     }
 
-    const raw = randomBytes(24).toString("base64url");
+    const secret = randomBytes(24).toString("base64url");
     const row = await prisma.eventStaffToken.create({
-      data: { eventId: id, label, tokenHash: await bcrypt.hash(raw, 10) },
+      data: { eventId: id, label, tokenHash: await bcrypt.hash(secret, 10) },
       select: { id: true, label: true, createdAt: true },
     });
     console.log(`${LOG_PREFIX} staff token minted`, { eventId: id, tokenId: row.id, label });
-    res.json({ data: { ...row, createdAt: row.createdAt.toISOString() }, token: raw });
+    // `<rowId>.<secret>`: the id half is a PUBLIC lookup key, not a credential.
+    //
+    // Without it a bcrypt hash cannot be looked up by equality, so the door
+    // scanner's every request compared the presented token against EVERY live
+    // token for the event. `bcryptjs` is pure JavaScript at cost 10 — roughly
+    // 100 ms of main-thread CPU per comparison — so twenty doors meant up to two
+    // seconds of the event loop per scan, in the process that also runs the bot
+    // and both APIs. A queue at the entrance was a self-inflicted denial of
+    // service. With the id, it is one comparison.
+    res.json({
+      data: { ...row, createdAt: row.createdAt.toISOString() },
+      token: `${row.id}.${secret}`,
+    });
   } catch (err) {
     console.error(`${LOG_PREFIX} staff token error:`, err);
     res.status(500).json({ error: "Internal server error" });
