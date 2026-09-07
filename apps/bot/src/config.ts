@@ -1,6 +1,7 @@
 import { config } from "dotenv";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { ticketBundleFor } from "@gennety/shared";
 
 const workspaceRoot = resolve(import.meta.dirname, "../../..");
 
@@ -447,7 +448,20 @@ export const env = {
   /// Per-ticket price in cents. Mirrored onto `Match.ticketPriceCents` at
   /// offer time so an in-flight match keeps its quoted price even if this
   /// changes mid-deploy.
-  TICKET_PRICE_CENTS: Number(process.env.TICKET_PRICE_CENTS ?? "849"),
+  ///
+  /// The default is DERIVED from the bundle table rather than repeated. It used
+  /// to be the literal `699` while `TICKET_BUNDLES` said `700`, and prod sets
+  /// neither — so `/v1/tickets/wallet` quoted 699 and the store charged 700 for
+  /// the same single ticket, and the Mini App's shelf and the date gate showed
+  /// different prices on adjacent screens. One cent, but the number a client is
+  /// shown must be the number it is charged. The price has since moved to 849
+  /// in `TICKET_BUNDLES`, and it moved in exactly one place because of this.
+  ///
+  /// The literal below is not the price — it is the answer to "the bundle table
+  /// lost its single-ticket row", which is a bug, not a configuration.
+  TICKET_PRICE_CENTS: Number(
+    process.env.TICKET_PRICE_CENTS ?? String(ticketBundleFor(1)?.priceCents ?? 849),
+  ),
   /// How long the second side has to pay once the first has (the `partial`
   /// window) before the ticket-expiry cron refunds the payer and opens the
   /// Calendar for free. Fractional hours allowed for fast manual testing.

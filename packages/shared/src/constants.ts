@@ -219,11 +219,17 @@ export const MAX_AGE = 55;
 /**
  * Height boundaries, in centimetres.
  *
- * One source of truth for three readers that must agree or the product
+ * One source of truth for FOUR readers that must agree or the product
  * contradicts itself: the collector's `height_out_of_range` validation, the
- * native client's `height_wheel` `ui_hint` bounds, and the Telegram Mini App's
- * height drum (which reads them from `/v1/telegram-onboarding/state`). They
- * used to be literals in the collector and a private copy in `ui-hints.ts`.
+ * native client's `height_wheel` `ui_hint` bounds, the Telegram Mini App's
+ * height drum (which reads them from `/v1/telegram-onboarding/state`), and the
+ * concierge agent's `save_profile_data` tool.
+ *
+ * The fourth was missed when this constant was introduced and stayed a literal
+ * — with WIDER bounds (120..230). A height of 135 written by the agent was
+ * accepted and then unrepresentable: neither the iOS wheel nor the Mini App
+ * drum could show it, it could not be chosen again, and the first profile edit
+ * snapped it into range. A number nobody can re-enter is worse than a refusal.
  */
 export const MIN_HEIGHT_CM = 140;
 export const MAX_HEIGHT_CM = 220;

@@ -8,6 +8,8 @@ import {
   profilePhotoMedia,
   MAX_HOBBIES,
   MAX_HOBBY_LENGTH,
+  MIN_HEIGHT_CM,
+  MAX_HEIGHT_CM,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { gateProfilePhoto } from "./face-match-gate.js";
@@ -103,7 +105,13 @@ export async function applyChatProfilePatch(
     userPatch.preference = args.preference;
   }
   if (typeof args.height === "number" && Number.isInteger(args.height)) {
-    if (args.height < 120 || args.height > 230) {
+    // Из общего пакета, а не литералом. Этот инструмент был четвёртым
+    // писателем роста и единственным, кто не знал про константу — причём с
+    // более ШИРОКИМИ границами. Записанные им 135 см принимались, а потом ни
+    // колесо в iOS, ни барабан Mini App не могли это значение изобразить:
+    // выбрать его заново было нельзя, и первое же редактирование профиля
+    // сдвигало рост в границы.
+    if (args.height < MIN_HEIGHT_CM || args.height > MAX_HEIGHT_CM) {
       return { ok: false, detail: "Height out of range" };
     }
     profilePatch.height = args.height;

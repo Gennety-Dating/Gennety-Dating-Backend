@@ -407,58 +407,24 @@ meRouter.delete(
 );
 
 /**
- * POST /v1/me/location — persist the user's "home base" coordinates used by
- * the Meet-Halfway matching algorithm.
+ * `POST /v1/me/location` was here and is gone (audit 2026-09-06, «обход
+ * канонизации»).
  *
- * Distinct from `Match.vibeLat{A,B}` which are per-match commute pins set
- * during venue negotiation — this is the persistent baseline read by the
- * match engine when scoring candidates.
+ * It was a second writer of `Profile.latitude/longitude` that accepted any
+ * point on Earth. `home-location.ts` exists precisely to stop that: its
+ * docstring says in as many words that the client's coordinates are replaced
+ * by the market's own, because "a drifting/spoofed centroid would land in
+ * `Profile.latitude/longitude`" — the exact columns this route wrote directly.
  *
- * Validation: lat ∈ [-90, 90], lng ∈ [-180, 180], both finite numbers.
- * Does NOT mark the embedding dirty — geolocation isn't part of the
- * psychological context that feeds the embedding.
+ * It could not be fixed by routing it through the canonicaliser either: it took
+ * a bare lat/lng with no city key, so there was nothing to canonicalise
+ * AGAINST. And it had no caller anywhere — not iOS, not the Mini App, not the
+ * web app — so its only remaining effect was to leave open an invariant the
+ * rest of the code treats as guaranteed, including the city analytics that read
+ * those columns. Removed from the router and from `openapi/gennety-v1.yaml`.
+ *
+ * The canonical writer is `POST /v1/me/home-location` below.
  */
-meRouter.post("/location", async (req: Request, res: Response): Promise<void> => {
-  const { latitude, longitude } = (req.body ?? {}) as {
-    latitude?: unknown;
-    longitude?: unknown;
-  };
-
-  if (
-    typeof latitude !== "number" ||
-    !Number.isFinite(latitude) ||
-    latitude < -90 ||
-    latitude > 90
-  ) {
-    res.status(400).json({ error: "Invalid latitude" });
-    return;
-  }
-  if (
-    typeof longitude !== "number" ||
-    !Number.isFinite(longitude) ||
-    longitude < -180 ||
-    longitude > 180
-  ) {
-    res.status(400).json({ error: "Invalid longitude" });
-    return;
-  }
-
-  const now = new Date();
-  const profile = await prisma.profile.upsert({
-    where: { userId: req.userId! },
-    update: { latitude, longitude, locationUpdatedAt: now },
-    create: { userId: req.userId!, latitude, longitude, locationUpdatedAt: now },
-  });
-
-  const user = await prisma.user.findUniqueOrThrow({
-    where: { id: req.userId! },
-  });
-
-  res.json({
-    user: serializeUser(user),
-    profile: serializeProfile(profile),
-  });
-});
 
 /**
  * POST /v1/me/home-location — persist the canonical dating city selected

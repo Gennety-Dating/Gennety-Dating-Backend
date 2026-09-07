@@ -473,30 +473,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
-  /v1/me/location:
-    post:
-      tags: [me]
-      operationId: setRawLocation
-      summary: Persist raw home-base coordinates (Meet-Halfway baseline)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [latitude, longitude]
-              properties:
-                latitude: { type: number, minimum: -90, maximum: 90 }
-                longitude: { type: number, minimum: -180, maximum: 180 }
-      responses:
-        "200":
-          description: Updated user + profile
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MeResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
   /v1/me/home-location:
     post:
       tags: [me]

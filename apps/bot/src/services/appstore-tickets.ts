@@ -5,8 +5,17 @@ import {
   type AppStoreTransaction,
 } from "./appstore.js";
 import { env } from "../config.js";
-import { getBalance, grantTickets, isUniqueViolation } from "./ticket-wallet.js";
-import { notifyFounderPurchase, notifyFounderPurchaseRefunded } from "./founder-notify.js";
+import {
+  clawbackTickets,
+  getBalance,
+  grantTickets,
+  isUniqueViolation,
+} from "./ticket-wallet.js";
+import {
+  notifyFounderPurchase,
+  notifyFounderPurchaseRefunded,
+  notifyFounderSubsystemHealth,
+} from "./founder-notify.js";
 
 /**
  * StoreKit 2 ticket credits + refund claw-backs (IOS_APP_ROADMAP task 0.10).
@@ -108,21 +117,17 @@ export async function refundAppStoreTransaction(
   if (!credit) return { status: "no_credit" };
 
   try {
-    const [updated] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id: credit.userId },
-        data: { ticketBalance: { decrement: credit.delta } },
-        select: { ticketBalance: true },
-      }),
-      prisma.ticketLedger.create({
-        data: {
-          userId: credit.userId,
-          delta: -credit.delta,
-          reason: "refund",
-          externalPaymentId: `appstore:${tx.transactionId}:refund`,
-        },
-      }),
-    ]);
+    // Through the wallet's guarded writer, not around it. This used to be an
+    // unconditional `user.update({ decrement })` — the one write in the product
+    // that bypassed the CAS whose docstring says the balance can never go
+    // negative — so "buy six, spend six, refund at Apple" left the wallet at
+    // −6, and the next free bonus quietly paid that debt off.
+    const clawback = await clawbackTickets({
+      userId: credit.userId,
+      count: credit.delta,
+      externalPaymentId: `appstore:${tx.transactionId}:refund`,
+    });
+
     void notifyFounderPurchaseRefunded({
       userId: credit.userId,
       kind: "tickets",
@@ -133,7 +138,24 @@ export async function refundAppStoreTransaction(
       reason: "Apple вернул покупку (refund/revoke)",
       externalPaymentId: `appstore:${tx.transactionId}`,
     });
-    return { status: "refunded", balance: updated.ticketBalance };
+
+    if (clawback.shortfall > 0) {
+      // Spent before the refund arrived, so there is nothing left to take back.
+      // The tickets bought real dates; the loss is real and belongs in front of
+      // a person rather than inside a balance nobody reads.
+      console.error(
+        `[appstore] refund exceeded the wallet: user=${credit.userId} ` +
+          `refunded=${credit.delta} reclaimed=${clawback.taken} ` +
+          `shortfall=${clawback.shortfall} charge=appstore:${tx.transactionId}`,
+      );
+      void notifyFounderSubsystemHealth(
+        `возврат App Store: ${clawback.shortfall} билет(ов) уже потрачено`,
+        "degraded",
+        clawback.shortfall,
+      );
+    }
+
+    return { status: "refunded", balance: clawback.balance };
   } catch (err) {
     if (isUniqueViolation(err)) return { status: "already_refunded" };
     throw err;
