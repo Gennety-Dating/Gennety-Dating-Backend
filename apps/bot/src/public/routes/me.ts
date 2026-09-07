@@ -219,7 +219,10 @@ meRouter.patch("/", async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: "Field too long: major" });
       return;
     }
-    userUpdate.major = v as string | null;
+    // Same sentinel as the profile text fields below: an emptied field is a
+    // clear, and `null` is what "cleared" looks like in the column.
+    userUpdate.major =
+      typeof v === "string" && v.trim() === "" ? null : (v as string | null);
   }
 
   // --- profile: hobbies ----------------------------------------------------
@@ -273,13 +276,23 @@ meRouter.patch("/", async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: `Field too long: ${field}` });
       return;
     }
-    if (field === "partnerPreferences" && typeof v === "string") {
-      const trimmed = v.trim();
-      if (!trimmed) {
-        res.status(400).json({ error: "Invalid partnerPreferences" });
-        return;
-      }
-      profileUpdate[field] = trimmed;
+    // An empty string is a CLEAR, not a value.
+    //
+    // The client cannot send `null` here and never could: the generator
+    // collapses a nullable into `Optional`, and the synthesised encoder uses
+    // `encodeIfPresent` — so `nil` does not become `"field": null`, it makes the
+    // key disappear, and this route builds its patch on `hasOwnProperty`. The
+    // app therefore sent `nil` for an emptied field, got a cheerful 200, and the
+    // old text came straight back on the next load. `partnerPreferences` was
+    // worse still: an empty string was a 400, so that field could not be cleared
+    // by any means at all.
+    //
+    // A sentinel rather than `oneOf: [$ref, null]`, which the generator does not
+    // support — the spec says so in three separate places.
+    if (typeof v === "string" && v.trim() === "") {
+      profileUpdate[field] = null;
+    } else if (field === "partnerPreferences" && typeof v === "string") {
+      profileUpdate[field] = v.trim();
     } else {
       profileUpdate[field] = v as string | null;
     }

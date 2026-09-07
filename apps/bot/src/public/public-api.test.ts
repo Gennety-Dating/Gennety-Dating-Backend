@@ -1524,21 +1524,71 @@ describe("PATCH /v1/me", () => {
     );
   });
 
-  it.each(["   ", "x".repeat(501)])(
-    "rejects invalid partnerPreferences without changing the saved profile",
-    async (partnerPreferences) => {
-      const user = await seedUser();
-      seedProfile(user.id, { partnerPreferences: "kind" });
-      const res = await request(app)
-        .patch("/v1/me")
-        .set("Authorization", `Bearer ${signAccess(user.id)}`)
-        .send({ profile: { partnerPreferences } });
+  it("rejects an over-long partnerPreferences without changing the saved profile", async () => {
+    const user = await seedUser();
+    seedProfile(user.id, { partnerPreferences: "kind" });
+    const res = await request(app)
+      .patch("/v1/me")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ profile: { partnerPreferences: "x".repeat(501) } });
 
-      expect(res.status).toBe(400);
-      expect(userById(user.id)?.profile?.partnerPreferences).toBe("kind");
-      expect(embeddingRefreshMocks.refreshUserEmbedding).not.toHaveBeenCalled();
-    },
-  );
+    expect(res.status).toBe(400);
+    expect(userById(user.id)?.profile?.partnerPreferences).toBe("kind");
+    expect(embeddingRefreshMocks.refreshUserEmbedding).not.toHaveBeenCalled();
+  });
+
+  // ── Clearing a text field ────────────────────────────────────────────────
+  //
+  // A generated Swift client cannot send `null`: a nullable collapses to
+  // `Optional`, the synthesised encoder uses `encodeIfPresent`, and `nil`
+  // removes the KEY rather than sending `null`. This route builds its patch on
+  // key presence, so an emptied field read as "not mentioned" and the old text
+  // came back on the next load behind a cheerful 200. `partnerPreferences` was
+  // worse: an empty value was a 400, so it could not be cleared at all.
+  it.each([
+    ["an empty string", ""],
+    ["whitespace, which is what an emptied field often is", "   "],
+  ])("clears partnerPreferences on %s", async (_label, partnerPreferences) => {
+    const user = await seedUser();
+    seedProfile(user.id, { partnerPreferences: "kind" });
+    const res = await request(app)
+      .patch("/v1/me")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ profile: { partnerPreferences } });
+
+    expect(res.status).toBe(200);
+    expect(userById(user.id)?.profile?.partnerPreferences).toBeNull();
+  });
+
+  it("clears the bio and the major the same way", async () => {
+    const user = await seedUser({ major: "Computer Science" });
+    seedProfile(user.id, { psychologicalSummary: "quiet, reads a lot" });
+    const res = await request(app)
+      .patch("/v1/me")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ major: "", profile: { psychologicalSummary: "" } });
+
+    expect(res.status).toBe(200);
+    const stored = userById(user.id)!;
+    expect(stored.major).toBeNull();
+    expect(stored.profile?.psychologicalSummary).toBeNull();
+  });
+
+  it("still leaves a field alone when the key is absent", async () => {
+    // The other half of the contract: "not mentioned" must keep meaning "do
+    // not touch", or a partial edit would wipe everything it did not send.
+    const user = await seedUser({ major: "Computer Science" });
+    seedProfile(user.id, { partnerPreferences: "kind" });
+    const res = await request(app)
+      .patch("/v1/me")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ profile: { hobbies: ["reading"] } });
+
+    expect(res.status).toBe(200);
+    const stored = userById(user.id)!;
+    expect(stored.major).toBe("Computer Science");
+    expect(stored.profile?.partnerPreferences).toBe("kind");
+  });
 
   it("silently ignores fixed identity fields (firstName, age, status, email, photos)", async () => {
     const user = await seedUser({ firstName: "Alice", age: 22, status: "active" });
