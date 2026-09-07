@@ -4,13 +4,12 @@
  * Всё только на чтение. Модуль отделён от правил намеренно: правила должны
  * проверяться юнит-тестами без базы, а здесь живёт всё, что знает про Prisma.
  */
-import { prisma } from "@gennety/db";
+import { prisma, Prisma } from "@gennety/db";
 import { env } from "../../config.js";
 import {
   HEALTH_CONFIG,
   classifyUser,
   computeRegistrationBursts,
-  median,
   type ClassifiedUser,
   type HealthConfig,
   type HealthUserInput,
@@ -97,19 +96,49 @@ async function countInboundByUser(): Promise<Map<string, number>> {
  * Каждое входящее событие сопоставляется с ближайшим предыдущим исходящим;
  * подряд идущие сообщения юзера дают один замер, а не N.
  */
-async function medianResponseSeconds(
+export async function medianResponseSeconds(
   userIds: readonly string[],
 ): Promise<Map<string, { medianSec: number | null; samples: number }>> {
   const out = new Map<string, { medianSec: number | null; samples: number }>();
   if (userIds.length === 0) return out;
 
-  let rows: Array<{ userId: string; direction: string; createdAt: Date }> = [];
+  // Computed in SQL, not in the process.
+  //
+  // This used to `findMany` every `chat_events` row belonging to every user on
+  // the dashboard — no `take`, no aggregation — and fold them in Node. That
+  // table is written on every inbound and outbound message, so opening the
+  // admin during a drop pulled the busiest table in the database into the heap
+  // of the process that is also serving Telegram and the Mini App, on a droplet
+  // with 2 GB and one core.
+  //
+  // The window function reproduces the old rule exactly: an inbound message
+  // counts as a reply only when the event immediately before it was outbound,
+  // which is what "consecutive user messages give one measurement, not N"
+  // means. `percentile_cont` matches `median()`'s averaging of the two middle
+  // values on an even count.
+  let rows: Array<{ userId: string; medianSec: number | null; samples: bigint }> = [];
   try {
-    rows = await prisma.chatEvent.findMany({
-      where: { userId: { in: [...userIds] } },
-      select: { userId: true, direction: true, createdAt: true },
-      orderBy: { createdAt: "asc" },
-    });
+    rows = await prisma.$queryRaw<
+      Array<{ userId: string; medianSec: number | null; samples: bigint }>
+    >`
+      WITH ordered AS (
+        SELECT user_id,
+               direction,
+               created_at,
+               LAG(created_at) OVER (PARTITION BY user_id ORDER BY created_at) AS prev_at,
+               LAG(direction)  OVER (PARTITION BY user_id ORDER BY created_at) AS prev_direction
+          FROM chat_events
+         WHERE user_id IN (${Prisma.join([...userIds])})
+      )
+      SELECT user_id AS "userId",
+             percentile_cont(0.5) WITHIN GROUP (
+               ORDER BY EXTRACT(EPOCH FROM (created_at - prev_at))
+             ) AS "medianSec",
+             COUNT(*) AS samples
+        FROM ordered
+       WHERE direction = 'in' AND prev_direction = 'out'
+       GROUP BY user_id
+    `;
   } catch (err) {
     console.warn(
       "[admin] user-health: chat_events unavailable, reply timing skipped:",
@@ -118,31 +147,11 @@ async function medianResponseSeconds(
     return out;
   }
 
-  const byUser = new Map<string, Array<{ direction: string; createdAt: Date }>>();
-  for (const r of rows) {
-    let list = byUser.get(r.userId);
-    if (!list) {
-      list = [];
-      byUser.set(r.userId, list);
-    }
-    list.push({ direction: r.direction, createdAt: r.createdAt });
-  }
-
-  for (const [userId, events] of byUser) {
-    const gaps: number[] = [];
-    let lastOutAt: Date | null = null;
-    for (const e of events) {
-      if (e.direction === "out") {
-        lastOutAt = e.createdAt;
-        continue;
-      }
-      if (lastOutAt) {
-        gaps.push((e.createdAt.getTime() - lastOutAt.getTime()) / 1000);
-        // Съедаем исходящее: следующая реплика юзера подряд — не «ответ».
-        lastOutAt = null;
-      }
-    }
-    out.set(userId, { medianSec: median(gaps), samples: gaps.length });
+  for (const row of rows) {
+    out.set(row.userId, {
+      medianSec: row.medianSec === null ? null : Number(row.medianSec),
+      samples: Number(row.samples),
+    });
   }
 
   return out;
