@@ -1,13 +1,14 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 287 entries
+# Decision index — all 288 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
 | 2026-09-08 | счётчик «в поиске в городе»: порог 250, и решает его сервер | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
+| 2026-09-07 | билет, исчезнувший в разрыве между списанием и слотом | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | три границы доверия, у которых не было замка | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | четыре числа, которые называли одно и то же по-разному | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | у схемы появился порядок изменений, но принимать его на проде — отдельный шаг | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
