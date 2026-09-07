@@ -166,19 +166,83 @@ export async function recordScratchPing(input: {
     return { state: existing, uncovered: false };
   }
 
-  const percent = percentFor(tiles, market);
-  const row = await prisma.userScratchMap.upsert({
-    where: { userId: input.userId },
-    create: {
-      userId: input.userId,
-      exploredTiles: tiles,
-      exploredPercent: percent,
-    },
-    update: { exploredTiles: tiles, exploredPercent: percent },
-    select: { exploredTiles: true, exploredPercent: true, discoveredVenues: true },
+  const row = await mergeScratchMap({
+    userId: input.userId,
+    tiles,
+    venues: existing.discoveredVenues,
+    tilesInMarket: tilesInMarket(market),
   });
 
   return { state: row, uncovered: true };
+}
+
+/**
+ * Fold tiles and venues into the row in ONE statement.
+ *
+ * Both writers here were read-modify-write over whole arrays: read the row,
+ * compute the new list in JavaScript, write the list back. Two writers exist —
+ * the canvas ping and the Date Bump — and nothing ordered them: no version
+ * column, no conditional `updateMany`, no `array_append`. The `@unique` on
+ * `userId` stops a duplicate ROW; it does nothing about a lost ELEMENT. Ping
+ * and bump landing together meant the venue simply never appeared, and unlike a
+ * tile (which the next ping re-adds) a verified visit does not come back.
+ *
+ * The merge is a set union in SQL, so concurrent writers compose instead of
+ * overwriting. `exploredPercent` is recomputed from the MERGED cardinality
+ * rather than from what the caller counted, because the caller counted before
+ * the other writer existed — the denominator is a per-market constant the
+ * database does not know, so it is passed in.
+ *
+ * Same shape, and for the same stated reason, as `services/activity.ts`: doing
+ * it in one statement is what makes it atomic.
+ */
+async function mergeScratchMap(input: {
+  userId: string;
+  tiles: readonly string[];
+  venues: readonly string[];
+  tilesInMarket: number;
+}): Promise<ScratchState> {
+  const rows = await prisma.$queryRaw<
+    Array<{ exploredTiles: string[]; exploredPercent: number; discoveredVenues: string[] }>
+  >`
+    INSERT INTO user_scratch_maps
+      (id, user_id, explored_tiles, explored_percent, discovered_venues, created_at, updated_at)
+    VALUES (
+      gen_random_uuid(),
+      ${input.userId}::uuid,
+      ${[...input.tiles]}::text[],
+      LEAST(1, cardinality(${[...input.tiles]}::text[])::float / ${input.tilesInMarket}),
+      ${[...input.venues]}::text[],
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (user_id) DO UPDATE SET
+      explored_tiles = merged.tiles,
+      discovered_venues = merged.venues,
+      explored_percent = LEAST(1, cardinality(merged.tiles)::float / ${input.tilesInMarket}),
+      updated_at = NOW()
+    FROM (
+      SELECT
+        ARRAY(
+          SELECT DISTINCT unnest(user_scratch_maps.explored_tiles || ${[...input.tiles]}::text[])
+          ORDER BY 1
+        ) AS tiles,
+        ARRAY(
+          SELECT DISTINCT unnest(user_scratch_maps.discovered_venues || ${[...input.venues]}::text[])
+          ORDER BY 1
+        ) AS venues
+    ) AS merged
+    RETURNING
+      explored_tiles   AS "exploredTiles",
+      explored_percent AS "exploredPercent",
+      discovered_venues AS "discoveredVenues"
+  `;
+  const row = rows[0];
+  return {
+    exploredTiles: row?.exploredTiles ?? [...input.tiles],
+    exploredPercent: row?.exploredPercent ?? 0,
+    discoveredVenues: row?.discoveredVenues ?? [...input.venues],
+  };
 }
 
 /**
@@ -230,19 +294,11 @@ export async function recordVerifiedVisit(input: {
         venues.length === existing.discoveredVenues.length;
       if (unchanged) continue;
 
-      await prisma.userScratchMap.upsert({
-        where: { userId },
-        create: {
-          userId,
-          exploredTiles: tiles,
-          exploredPercent: percentFor(tiles, market),
-          discoveredVenues: venues,
-        },
-        update: {
-          exploredTiles: tiles,
-          exploredPercent: percentFor(tiles, market),
-          discoveredVenues: venues,
-        },
+      await mergeScratchMap({
+        userId,
+        tiles,
+        venues,
+        tilesInMarket: tilesInMarket(market),
       });
     } catch (err) {
       console.error("[scratch-map] verified visit failed for", userId, err);

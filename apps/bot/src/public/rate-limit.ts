@@ -1,6 +1,8 @@
 import rateLimit, { ipKeyGenerator, MemoryStore, type Options } from "express-rate-limit";
 import type { Request } from "express";
-import { createHash } from "node:crypto";
+import { normalizePhoneE164 } from "@gennety/shared";
+import { env } from "../config.js";
+import { validateInitData } from "./init-data.js";
 
 /**
  * Общая фабрика всех лимитеров этого файла.
@@ -96,6 +98,21 @@ export const otpVerifyLimiter = make({
 });
 
 /**
+ * One phone number, one bucket.
+ *
+ * The durable backstop (per-phone cooldown + daily cap) already works on the
+ * normalised number, so this only ever cost extra database and advisory-lock
+ * work — but a limiter keyed on formatting is not a limiter on the thing it
+ * names. Falls back to the raw string when the number cannot be parsed at all:
+ * that request is going to be refused downstream anyway, and it should still
+ * count against something.
+ */
+export function phoneKey(req: Request): string {
+  const raw = (req.body?.phone ?? "").toString();
+  return normalizePhoneE164(raw) ?? raw.toLowerCase().replace(/\s+/g, "");
+}
+
+/**
  * Phone code send — 5/hour per (phone + IP). First anti-SMS-pumping line;
  * the durable backstop (per-phone cooldown + daily cap) lives in
  * `services/phone-verification.ts` because this counter is in-memory.
@@ -103,8 +120,9 @@ export const otpVerifyLimiter = make({
 export const phoneOtpRequestLimiter = make({
   windowMs: 3_600_000,
   limit: 5,
-  keyGenerator: (req): string =>
-    `phone-otp-req:${(req.body?.phone ?? "").toString()}:${ipKey(req)}`,
+  // Normalised, because the SERVICE normalises: keyed on the raw string,
+  // `+15551234567` and `1 555 123 4567` are two buckets for one number.
+  keyGenerator: (req): string => `phone-otp-req:${phoneKey(req)}:${ipKey(req)}`,
   message: { error: "Too many code requests, try again later." },
 });
 
@@ -112,8 +130,7 @@ export const phoneOtpRequestLimiter = make({
 export const phoneOtpVerifyLimiter = make({
   windowMs: 3_600_000,
   limit: 10,
-  keyGenerator: (req): string =>
-    `phone-otp-vrf:${(req.body?.phone ?? "").toString()}:${ipKey(req)}`,
+  keyGenerator: (req): string => `phone-otp-vrf:${phoneKey(req)}:${ipKey(req)}`,
   message: { error: "Too many verification attempts." },
 });
 
@@ -144,17 +161,36 @@ export const agentTextLimiter = make({
   message: { error: "Too many assistant requests, slow down for a bit." },
 });
 
+/**
+ * Who the Mini App request is FROM, for metering purposes.
+ *
+ * Keying on the raw `initData` string looked right and was not: Telegram issues
+ * a fresh `auth_date` and `hash` every time the window opens, so the bucket
+ * moved with them. "60 an hour per session" reset by closing and reopening the
+ * Mini App — and behind that limiter sits paid Google Places quota.
+ *
+ * The `user.id` inside is the stable part, and it has to be the VALIDATED one:
+ * an id read without checking the signature could simply be edited, which is
+ * the same bypass wearing a different hat. Falls back to the IP when the
+ * signature does not hold, which is exactly what an unauthenticated caller
+ * deserves.
+ */
+function miniAppKey(req: Request, scope: string, initData?: string): string {
+  const header = req.get("authorization") ?? "";
+  const raw =
+    initData ?? (header.startsWith("tma ") ? header.slice(4).trim() : "");
+  if (raw && env.BOT_TOKEN) {
+    const parsed = validateInitData(raw, env.BOT_TOKEN);
+    if (parsed.valid) return `${scope}:tg:${parsed.user.id}`;
+  }
+  return `${scope}:${ipKey(req)}`;
+}
+
 /** Places autocomplete — 60/hour per Telegram Mini App session. */
 export const locationSearchLimiter = make({
   windowMs: 3_600_000,
   limit: 60,
-  keyGenerator: (req): string => {
-    const auth = req.get("authorization") ?? "";
-    const sessionKey = auth
-      ? createHash("sha256").update(auth).digest("hex").slice(0, 24)
-      : ipKey(req);
-    return `location-search:${sessionKey}`;
-  },
+  keyGenerator: (req): string => miniAppKey(req, "location-search"),
   message: { error: "Too many location searches, try again later." },
 });
 
@@ -176,12 +212,12 @@ export const locationSearchLimiter = make({
 export const photoProxyLimiter = make({
   windowMs: 3_600_000,
   limit: 400,
-  keyGenerator: (req): string => {
-    const initData = typeof req.query.tma === "string" ? req.query.tma : "";
-    return initData
-      ? `photo-proxy:${createHash("sha256").update(initData).digest("hex").slice(0, 24)}`
-      : `photo-proxy:${ipKey(req)}`;
-  },
+  // Same rotation problem as the search limiter above, and the same fix: the
+  // hash of a string Telegram re-issues on every open is a bucket that resets
+  // on every open. Here the initData arrives in the query rather than a header,
+  // because this URL goes straight into an `<img src>`.
+  keyGenerator: (req): string =>
+    miniAppKey(req, "photo-proxy", typeof req.query.tma === "string" ? req.query.tma : ""),
   message: { error: "Too many photo requests, try again later." },
 });
 
