@@ -25,6 +25,7 @@ import {
   sendMatchWelcomeGiftPreroll,
 } from "../handlers/matching/pitch.js";
 import { dispatchMatches } from "./dispatch-queue.js";
+import { GrammyError } from "grammy";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mSendPitch = sendMatchProposal as unknown as MockFn;
@@ -123,6 +124,47 @@ describe("dispatchMatches", () => {
       skipWelcomeGiftPreroll: { A: true, B: false },
     });
     expect(mSendPitch).toHaveBeenNthCalledWith(2, {}, "m2", {});
+  });
+
+  it("does not retry a 403 — the chat is shut, not busy", async () => {
+    // Three attempts at a door that is closed delays every remaining pitch in
+    // the drop and spends rate budget the rest of the batch needs.
+    mSendPitch.mockRejectedValue(
+      new GrammyError(
+        "Call failed",
+        { ok: false, error_code: 403, description: "Forbidden: bot was blocked by the user" },
+        "sendMessage",
+        {},
+      ),
+    );
+    mMatchFindUnique.mockResolvedValue({
+      dispatchedAt: null,
+      pitchMessageIdA: null,
+      pitchMessageIdB: null,
+    });
+
+    const result = await dispatchMatches({} as any, ["m1"], 0, 3, 0);
+
+    expect(result.failed).toBe(1);
+    expect(mSendPitch).toHaveBeenCalledTimes(1);
+  });
+
+  it("still retries a refusal that waiting can fix", async () => {
+    mSendPitch
+      .mockRejectedValueOnce(
+        new GrammyError(
+          "Call failed",
+          { ok: false, error_code: 429, description: "Too Many Requests" },
+          "sendMessage",
+          {},
+        ),
+      )
+      .mockResolvedValueOnce(undefined);
+
+    const result = await dispatchMatches({} as any, ["m1"], 0, 3, 0);
+
+    expect(result.dispatched).toBe(1);
+    expect(mSendPitch).toHaveBeenCalledTimes(2);
   });
 
   it("salvages dispatchedAt when one side got the pitch but dispatch threw", async () => {

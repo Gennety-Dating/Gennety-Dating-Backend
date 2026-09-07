@@ -1783,6 +1783,11 @@ async function loadEligibleUsersForIds(
       ...requestedWhere,
       status: "active",
       onboardingStep: "completed",
+      // Telegram has told us this chat is shut (services/bot-blocked.ts).
+      // Matching them anyway costs their partner a day of waiting for an answer
+      // that cannot come, and spends the candidate on a lifetime pair ban all
+      // the same. Cleared the moment they message the bot again.
+      botBlockedAt: null,
       gender: { not: null },
       preference: { not: null },
       AND: [
@@ -1837,6 +1842,11 @@ async function loadEligibleUsersForIds(
       ...requestedWhere,
       status: "active",
       onboardingStep: "completed",
+      // Telegram has told us this chat is shut (services/bot-blocked.ts).
+      // Matching them anyway costs their partner a day of waiting for an answer
+      // that cannot come, and spends the candidate on a lifetime pair ban all
+      // the same. Cleared the moment they message the bot again.
+      botBlockedAt: null,
       gender: { not: null },
       preference: { not: null },
       AND: [

@@ -4,6 +4,7 @@ import {
   sendMatchProposal,
   sendMatchWelcomeGiftPreroll,
 } from "../handlers/matching/pitch.js";
+import { isPermanentTelegramRefusal } from "./bot-blocked.js";
 
 /**
  * Rate-limited dispatch queue for match pitches.
@@ -186,6 +187,10 @@ export async function dispatchMatches(
           break;
         } catch (error) {
           lastError = error;
+          // A 403 is the chat telling us it is shut. Retrying it twice more
+          // changes nothing, delays every remaining pitch in the batch, and
+          // spends rate budget the rest of the drop needs.
+          if (isPermanentTelegramRefusal(error)) break;
           if (attempt < maxAttempts) await delay(delayMs);
         }
       }
