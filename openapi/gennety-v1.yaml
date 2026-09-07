@@ -3938,6 +3938,14 @@ components:
             `partial` = exactly one slot settled. `expired`/`refunded` mean the
             window lapsed and the Calendar opened for free — anything paid came
             back.
+
+            These five are the whole public vocabulary. The server's own
+            `ticketStatus` column is a wider free-form sub-state machine and is
+            projected onto this set at the boundary (`wireTicketStatus`) — its
+            transient `refund_pending` is reported as `refunded`, which is what
+            it converges to. Clients may treat this enum as closed; widening it
+            is a breaking change for any already-shipped build whose generated
+            enum is frozen.
         iPaid: { type: boolean }
         partnerPaid: { type: boolean }
         bothPaid: { type: boolean }
