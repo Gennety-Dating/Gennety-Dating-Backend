@@ -599,6 +599,10 @@ const translations = {
     // Toast on a check-in button whose match has since resolved. The question
     // message keeps its buttons forever, so this is a normal tap, not an edge case.
     stallActionExpired: "That one's already settled — nothing left to answer here.",
+    // Alert on an Accept/Pass button whose match row is gone or already past
+    // the deciding stage. Deleting an account cascades the row away and leaves
+    // the pitch card in the chat forever, so this is a normal tap, not an edge case.
+    matchCardExpiredAlert: "This match card isn't live any more — nothing left to decide here.",
     stallVenueNudge:
       "All that's left is marking where you'll be setting off from — then I'll pick a place that works for both of you.",
     stallCheckInScheduling:
@@ -1921,6 +1925,7 @@ const translations = {
       "Небольшое напоминание — окно, чтобы ответить на этот мэтч, закроется примерно через {hours}ч. Если хочешь пойти, просто скажи да сейчас; если нет — тоже окей.",
     stallPartnerFallbackName: "твой мэтч",
     stallActionExpired: "Здесь уже всё решилось — отвечать больше не нужно.",
+    matchCardExpiredAlert: "Эта карточка мэтча уже неактивна — решать здесь больше нечего.",
     stallVenueNudge:
       "Осталось отметить, откуда поедешь — и я подберу место, удобное вам обоим.",
     stallCheckInScheduling:
@@ -3150,6 +3155,7 @@ const translations = {
       "Невелике нагадування — вікно, щоб відповісти на цей метч, закриється приблизно за {hours}год. Якщо хочеш піти, просто скажи так зараз; якщо ні — теж окей.",
     stallPartnerFallbackName: "твій метч",
     stallActionExpired: "Тут уже все вирішилося — відповідати більше не потрібно.",
+    matchCardExpiredAlert: "Ця картка метчу вже неактивна — вирішувати тут більше нічого.",
     stallVenueNudge:
       "Залишилося відмітити, звідки поїдеш — і я підберу місце, зручне вам обом.",
     stallCheckInScheduling:
@@ -4365,6 +4371,7 @@ const deTranslations: TranslationTable = {
     "Kurzer Hinweis — dein Fenster, um auf dieses Match zu antworten, schließt in etwa {hours}h. Wenn du hingehen möchtest, sag jetzt einfach ja; kein Problem, wenn nicht.",
   stallPartnerFallbackName: "dein Match",
   stallActionExpired: "Das hat sich schon erledigt — hier gibt es nichts mehr zu beantworten.",
+  matchCardExpiredAlert: "Diese Match-Karte ist nicht mehr aktiv — hier gibt es nichts mehr zu entscheiden.",
   stallVenueNudge:
     "Es fehlt nur noch, wo du losfährst — dann finde ich einen Ort, der für euch beide passt.",
   stallCheckInScheduling:
@@ -5559,6 +5566,7 @@ const plTranslations: TranslationTable = {
     "Małe przypomnienie — okno na odpowiedź na to dopasowanie zamknie się za około {hours}h. Jeśli chcesz iść, po prostu powiedz teraz tak; jeśli nie — też w porządku.",
   stallPartnerFallbackName: "twoje dopasowanie",
   stallActionExpired: "To już się rozstrzygnęło — nie ma tu na co odpowiadać.",
+  matchCardExpiredAlert: "Ta karta dopasowania nie jest już aktywna — nie ma tu już nic do decydowania.",
   stallVenueNudge:
     "Zostało tylko zaznaczyć, skąd wyruszasz — wtedy znajdę miejsce wygodne dla was oboje.",
   stallCheckInScheduling:

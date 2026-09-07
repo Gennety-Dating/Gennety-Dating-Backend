@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
-import { DEFAULT_SESSION } from "@gennety/shared";
+import { DEFAULT_SESSION, t } from "@gennety/shared";
 
 const { mClaimMatchDecision, mUpdateEloScores, mRefreshUserEmbedding, mRefreshStatusBanners } =
   vi.hoisted(() => ({
@@ -2084,6 +2084,45 @@ describe("matching decision flow", () => {
     });
 
     await handleMatchDecision(ctx);
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  it("answers an alert, not the accepted toast, when the row is already resolved", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(matchRow({ status: "cancelled" }));
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:accept:match-1",
+      fromId: 1001,
+    });
+
+    await handleMatchDecision(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+      text: t("en", "matchCardExpiredAlert"),
+      show_alert: true,
+    });
+    // The dead keyboard goes with the alert.
+    expect(ctx.editMessageReplyMarkup).toHaveBeenCalled();
+  });
+
+  it("answers an alert when the match row is gone (partner deleted their account)", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(null);
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:accept:match-1",
+      fromId: 1001,
+    });
+
+    await handleMatchDecision(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+      text: t("en", "matchCardExpiredAlert"),
+      show_alert: true,
+    });
+    expect(ctx.editMessageReplyMarkup).toHaveBeenCalled();
     expect(mMatch.update).not.toHaveBeenCalled();
   });
 });
