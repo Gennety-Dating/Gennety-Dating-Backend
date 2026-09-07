@@ -28,9 +28,11 @@ vi.mock("./appstore.js", () => ({
 
 const grantTickets = vi.fn();
 const getBalance = vi.fn();
+const clawbackTickets = vi.fn();
 vi.mock("./ticket-wallet.js", () => ({
   grantTickets,
   getBalance,
+  clawbackTickets,
   isUniqueViolation: (err: unknown) =>
     typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002",
 }));
@@ -131,25 +133,43 @@ describe("creditAppStoreTransaction", () => {
 });
 
 describe("refundAppStoreTransaction", () => {
-  it("claws back the credited amount with a compensating refund row", async () => {
+  it("claws back through the wallet's guarded writer, not around it", async () => {
     ledgerFindUnique.mockResolvedValue({ userId: "u1", delta: 3 });
-    userUpdate.mockResolvedValue({ ticketBalance: -1 });
+    clawbackTickets.mockResolvedValue({ taken: 3, shortfall: 0, balance: 1 });
+
     await expect(
       refundAppStoreTransaction({ ...okTx, revocationDate: 123 }),
-    ).resolves.toEqual({ status: "refunded", balance: -1 });
-    expect(ledgerCreate).toHaveBeenCalledWith({
-      data: {
-        userId: "u1",
-        delta: -3,
-        reason: "refund",
-        externalPaymentId: "appstore:tx-1:refund",
-      },
+    ).resolves.toEqual({ status: "refunded", balance: 1 });
+
+    // The unconditional `user.update({ decrement })` this used to do was the
+    // one write in the product that bypassed the CAS whose docstring says the
+    // balance can never go negative.
+    expect(clawbackTickets).toHaveBeenCalledWith({
+      userId: "u1",
+      count: 3,
+      externalPaymentId: "appstore:tx-1:refund",
     });
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("reports a refund that outran the wallet instead of carrying it as debt", async () => {
+    // Buy six, spend six, refund at Apple. The balance used to land at −6 — a
+    // number that is not a count of anything — and the next free bonus quietly
+    // paid that debt off, so the loss never appeared as a loss.
+    ledgerFindUnique.mockResolvedValue({ userId: "u1", delta: 6 });
+    clawbackTickets.mockResolvedValue({ taken: 0, shortfall: 6, balance: 0 });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await refundAppStoreTransaction({ ...okTx, revocationDate: 123 });
+
+    expect(result).toEqual({ status: "refunded", balance: 0 });
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("shortfall=6"));
+    error.mockRestore();
   });
 
   it("is exactly-once and ignores unknown credits / non-revoked transactions", async () => {
     ledgerFindUnique.mockResolvedValue({ userId: "u1", delta: 3 });
-    ledgerCreate.mockRejectedValue({ code: "P2002" });
+    clawbackTickets.mockRejectedValue({ code: "P2002" });
     await expect(
       refundAppStoreTransaction({ ...okTx, revocationDate: 123 }),
     ).resolves.toEqual({ status: "already_refunded" });

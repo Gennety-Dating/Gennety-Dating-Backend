@@ -89,6 +89,7 @@ const {
   grantWelcomeGiftIfEligible,
   grantPhotoBonusIfEligible,
   grantVideoBonusIfEligible,
+  clawbackTickets,
 } = await import("./ticket-wallet.js");
 
 beforeEach(() => {
@@ -211,5 +212,65 @@ describe("video bonus", () => {
     db.profile.profileMedia = [{ type: "photo", photo: "p1" }];
     const res = await grantVideoBonusIfEligible("u1");
     expect(res.granted).toBe(false);
+  });
+});
+
+describe("clawbackTickets", () => {
+  /**
+   * The App Store refund path used to decrement the balance directly, past the
+   * CAS whose docstring says it can never go negative. The decision encoded
+   * here: the wallet clamps at zero and the shortfall is REPORTED, because a
+   * hidden debt paid off by the next free bonus is exactly how "buy, spend,
+   * refund" becomes free dates nobody ever sees.
+   */
+  it("takes back what is there", async () => {
+    db.user.ticketBalance = 5;
+
+    const result = await clawbackTickets({
+      userId: "u1",
+      count: 3,
+      externalPaymentId: "appstore:tx:refund",
+    });
+
+    expect(result).toEqual({ taken: 3, shortfall: 0, balance: 2 });
+    expect(db.ledger.at(-1)).toMatchObject({ delta: -3, reason: "refund" });
+  });
+
+  it("clamps at zero and names the shortfall", async () => {
+    // Bought six, spent six, then Apple refunds. There is nothing to take back
+    // — those tickets bought real dates.
+    db.user.ticketBalance = 0;
+
+    const result = await clawbackTickets({
+      userId: "u1",
+      count: 6,
+      externalPaymentId: "appstore:tx:refund",
+    });
+
+    expect(result).toEqual({ taken: 0, shortfall: 6, balance: 0 });
+  });
+
+  it("takes the part it can and reports the rest", async () => {
+    db.user.ticketBalance = 2;
+
+    const result = await clawbackTickets({
+      userId: "u1",
+      count: 6,
+      externalPaymentId: "appstore:tx:refund",
+    });
+
+    expect(result).toEqual({ taken: 2, shortfall: 4, balance: 0 });
+    // The ledger records what ACTUALLY moved, so `sum(delta)` still equals the
+    // balance — that invariant is what makes the wallet auditable at all.
+    expect(db.ledger.at(-1)).toMatchObject({ delta: -2 });
+  });
+
+  it("writes no ledger row when there was nothing to take", async () => {
+    db.user.ticketBalance = 0;
+    const before = db.ledger.length;
+
+    await clawbackTickets({ userId: "u1", count: 4, externalPaymentId: "x" });
+
+    expect(db.ledger).toHaveLength(before);
   });
 });

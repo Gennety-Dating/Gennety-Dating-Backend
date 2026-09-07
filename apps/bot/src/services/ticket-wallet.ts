@@ -230,6 +230,77 @@ export async function spendTickets(args: {
   });
 }
 
+/**
+ * Take back tickets that were paid for and then refunded upstream.
+ *
+ * The App Store refund path used to do this itself, with an unconditional
+ * `user.update({ decrement })` — straight past the guarded writer above whose
+ * whole docstring is "the balance can never go negative". Buy six, spend six,
+ * refund at Apple, and the wallet showed **−6**: a number that is not a count
+ * of anything, silently paid off by the next free bonus, so the loss never
+ * appeared as a loss.
+ *
+ * The decision this encodes: **the wallet clamps at zero, and the shortfall is
+ * reported rather than carried.**
+ *
+ * - Clamping, because the balance is a count of tickets a person holds, and
+ *   there is no such thing as minus one ticket. Tickets already spent bought
+ *   real dates; those cannot be un-bought.
+ * - Reporting, because the alternative — a hidden debt extinguished by future
+ *   bonuses — is exactly how "buy, spend, refund" becomes free dates that
+ *   nobody ever sees. A shortfall is a fact for a person to act on, not
+ *   bookkeeping to absorb.
+ *
+ * The ledger stays honest either way: the row records what was ACTUALLY taken,
+ * so `sum(delta)` still equals the balance.
+ */
+export async function clawbackTickets(args: {
+  userId: string;
+  count: number;
+  externalPaymentId: string;
+}): Promise<{ taken: number; shortfall: number; balance: number }> {
+  const { userId, count, externalPaymentId } = args;
+  if (count <= 0) return { taken: 0, shortfall: 0, balance: await getBalance(userId) };
+
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.user.findUnique({
+      where: { id: userId },
+      select: { ticketBalance: true },
+    });
+    const available = Math.max(0, before?.ticketBalance ?? 0);
+    const taken = Math.min(available, count);
+
+    if (taken > 0) {
+      // Same CAS discipline as `spendTickets`: a concurrent spend between the
+      // read and the write must lose, not underflow.
+      const res = await tx.user.updateMany({
+        where: { id: userId, ticketBalance: { gte: taken } },
+        data: { ticketBalance: { decrement: taken } },
+      });
+      if (res.count === 0) {
+        const now = await tx.user.findUnique({
+          where: { id: userId },
+          select: { ticketBalance: true },
+        });
+        return { taken: 0, shortfall: count, balance: now?.ticketBalance ?? 0 };
+      }
+      await tx.ticketLedger.create({
+        data: { userId, delta: -taken, reason: "refund", externalPaymentId },
+      });
+    }
+
+    const after = await tx.user.findUnique({
+      where: { id: userId },
+      select: { ticketBalance: true },
+    });
+    return {
+      taken,
+      shortfall: count - taken,
+      balance: after?.ticketBalance ?? 0,
+    };
+  });
+}
+
 interface BonusResult {
   granted: boolean;
   balance: number;
