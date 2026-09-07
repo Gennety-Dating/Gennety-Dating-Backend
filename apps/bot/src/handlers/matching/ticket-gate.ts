@@ -1510,6 +1510,107 @@ async function deliverPartnerPaidReveal(
   }
 }
 
+/**
+ * Give back any wallet ticket that was spent on this match and never paired
+ * with a slot or a refund.
+ *
+ * Both sides are checked because either could have been the one who paid: a
+ * "both" spend is made by one person for two slots, and a crash between the
+ * spend and the claim leaves that row alone with nothing to show for it.
+ *
+ * Idempotent by the same key the ordinary expiry refund uses, so a retry — or
+ * an overlap with that path — credits once. That key is also why this is safe
+ * to call unconditionally: when there is nothing orphaned, it finds nothing.
+ */
+/**
+ * Finish a refund that was claimed and then stranded.
+ *
+ * `refund_pending` is a promise: the gate has stopped taking money and owes it
+ * back. Both rails that could keep that promise are scoped to a LIVE match —
+ * the expiry sweep selects `status: "negotiating"`, the cancellation rail skips
+ * this status on purpose — so a match that left `negotiating` in the window
+ * between the claim and the credit (the partner freezes their account, the pair
+ * is cancelled) took the promise with it. The ticket was simply gone.
+ *
+ * What a dead match changes is only the SCHEDULING half: there is no Calendar
+ * to open for a pair that no longer exists. The money half does not care how
+ * the match ended, so this path performs the refund alone and then finalises
+ * the status.
+ */
+export async function settleStrandedTicketRefund(
+  api: Api<RawApi>,
+  matchId: string,
+): Promise<boolean> {
+  const match = await loadTicketMatch(matchId);
+  if (!match) return false;
+  if (match.ticketStatus !== "refund_pending") return false;
+
+  const paidSide: Side | null =
+    match.ticketPaidA !== null ? "A" : match.ticketPaidB !== null ? "B" : null;
+  if (!paidSide) {
+    // Nothing was ever claimed, so there is no provider charge to reverse —
+    // only a possible orphaned wallet spend.
+    await refundOrphanedSpends(match);
+  } else if (!(await refundPaidTicketSide(api, match, paidSide))) {
+    // Still not refunded: leave the row `refund_pending` so the next sweep
+    // retries rather than reporting a debt as settled.
+    return false;
+  }
+
+  const finalized = await prisma.match.updateMany({
+    where: { id: matchId, ticketStatus: "refund_pending" },
+    data: { ticketStatus: "refunded", ticketExpiresAt: null },
+  });
+  if (finalized.count === 0) return false;
+
+  console.warn(`[ticket-gate] stranded refund settled for match=${matchId}`);
+  if (paidSide) {
+    const payer = selfUser(match, paidSide);
+    if (telegramReachable(payer)) {
+      await api
+        .sendMessage(toTelegramChatId(payer.telegramId), t(langOf(payer), "ticketRefundedDm"))
+        .catch(() => {});
+    }
+  }
+  return true;
+}
+
+async function refundOrphanedSpends(match: TicketMatch): Promise<void> {
+  for (const side of ["A", "B"] as const) {
+    const payer = selfUser(match, side);
+    const spends = await prisma.ticketLedger.findMany({
+      where: { userId: payer.id, matchId: match.id, reason: "spend_match", delta: { lt: 0 } },
+      select: { delta: true },
+    });
+    if (spends.length === 0) continue;
+
+    const spent = spends.reduce((total, row) => total + Math.abs(row.delta), 0);
+    const refunds = await prisma.ticketLedger.findMany({
+      where: { userId: payer.id, matchId: match.id, reason: "refund", delta: { gt: 0 } },
+      select: { delta: true },
+    });
+    const returned = refunds.reduce((total, row) => total + row.delta, 0);
+    const owed = spent - returned;
+    if (owed <= 0) continue;
+
+    console.warn(
+      `[ticket-gate] orphaned spend on match=${match.id} user=${payer.id}: ` +
+        `spent ${spent}, returned ${returned} — refunding ${owed}`,
+    );
+    try {
+      await grantTickets({
+        userId: payer.id,
+        count: owed,
+        reason: "refund",
+        matchId: match.id,
+        externalPaymentId: `orphan-spend-refund:${match.id}:${payer.id}`,
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
+  }
+}
+
 async function refundPaidTicketSide(
   api: Api<RawApi>,
   match: TicketMatch,
@@ -1600,6 +1701,17 @@ export async function refundAndFallbackToScheduling(
       data: { ticketStatus: "expired", ticketExpiresAt: null },
     });
     if (expired.count === 0) return;
+    // No slot was ever claimed — but a ticket may still have been SPENT.
+    //
+    // `useTicketFromBalance` commits the wallet spend and then claims the slot
+    // in a separate transaction. Between the two there is a window, and it is a
+    // reachable one: an `uncaughtException` deliberately `process.exit(1)`s. A
+    // process that dies there leaves a `spend_match` row with no slot and no
+    // compensating refund, and this branch used to walk straight past it —
+    // marking the gate `expired` and opening the Calendar for free, which HIDES
+    // the loss instead of showing it. A ticket bought with money simply
+    // disappeared.
+    await refundOrphanedSpends(match);
     await startScheduling(api, matchId, { afterTicketGate: true });
     return;
   }

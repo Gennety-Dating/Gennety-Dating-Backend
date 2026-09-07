@@ -789,6 +789,12 @@ describe("ticket expiry — durable provider and wallet refunds", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mMatch.findUnique.mockReset();
+    // `clearAllMocks` clears recorded calls but NOT a queued
+    // `mockResolvedValueOnce`, so a test that queues more pages than it
+    // consumes poisons the next one. Reset the queue and answer every extra
+    // query the way a database does: with an empty page.
+    mLedger.findMany.mockReset();
+    mLedger.findMany.mockResolvedValue([]);
     mMatch.updateMany.mockResolvedValue({ count: 1 });
     mStartScheduling.mockResolvedValue(undefined);
     mGrant.mockResolvedValue(undefined);
@@ -830,6 +836,52 @@ describe("ticket expiry — durable provider and wallet refunds", () => {
       }),
     );
     expect(api.sendMessage).toHaveBeenCalledWith(1001, t("en", "ticketRefundedDm"));
+  });
+
+  it("returns a ticket spent on a slot that was never claimed", async () => {
+    // `useTicketFromBalance` commits the wallet spend and claims the slot in a
+    // SEPARATE transaction. A process that dies between them — and an
+    // `uncaughtException` deliberately `process.exit(1)`s — leaves a
+    // `spend_match` row with no slot and no compensating refund. This branch
+    // used to walk straight past it, mark the gate `expired` and open the
+    // Calendar for free, which hides the loss instead of showing it.
+    mMatch.findUnique.mockResolvedValueOnce(
+      // Nothing paid: no slot was ever claimed.
+      matchRow({ ticketStatus: "pending" }),
+    );
+    mLedger.findMany
+      .mockResolvedValueOnce([{ delta: -1 }]) // A spent one
+      .mockResolvedValueOnce([]) // and it was never returned
+      .mockResolvedValueOnce([]) // B spent nothing
+      .mockResolvedValueOnce([]);
+    const api = createApi();
+
+    await refundAndFallbackToScheduling(api, "match-1");
+
+    expect(mGrant).toHaveBeenCalledWith({
+      userId: "uid-A",
+      count: 1,
+      reason: "refund",
+      matchId: "match-1",
+      externalPaymentId: "orphan-spend-refund:match-1:uid-A",
+    });
+    // The Calendar still opens — the pair keeps their date, they just keep the
+    // ticket too.
+    expect(mStartScheduling).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not double-refund a spend that was already returned", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(matchRow({ ticketStatus: "pending" }));
+    mLedger.findMany
+      .mockResolvedValueOnce([{ delta: -1 }])
+      .mockResolvedValueOnce([{ delta: 1 }]) // already given back
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const api = createApi();
+
+    await refundAndFallbackToScheduling(api, "match-1");
+
+    expect(mGrant).not.toHaveBeenCalled();
   });
 
   it("restores a wallet ticket exactly once when a wallet-funded gate expires", async () => {
