@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 288 entries
+# Decision index — all 289 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-07 | сплошная перепроверка: «закоммичено» не значит «починено» | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | шесть находок про то, чего человек не видит: тап, который соврал, и часы, которых пять | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | три ночи, две длины кода и правило, которого нет | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | четыре ключа и два счётчика, считавшие не то | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
