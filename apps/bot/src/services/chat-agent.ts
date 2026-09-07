@@ -6,6 +6,8 @@ import {
   MIN_AGE,
   VOICE_SELF_GENDER,
   VOICE_SELF_NAME,
+  t,
+  type Language,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
@@ -198,12 +200,12 @@ async function runTurnInner(
   while (iteration < MAX_TOOL_ITERATIONS) {
     const completion = await callOpenAI(messages, fetchFn);
     if (!completion) {
-      lastReply = fallbackReply();
+      lastReply = await fallbackReply(userId);
       break;
     }
     const choice = completion.choices[0];
     if (!choice) {
-      lastReply = fallbackReply();
+      lastReply = await fallbackReply(userId);
       break;
     }
 
@@ -232,7 +234,7 @@ async function runTurnInner(
     iteration++;
   }
 
-  if (!lastReply) lastReply = fallbackReply();
+  if (!lastReply) lastReply = await fallbackReply(userId);
 
   const persisted = await prisma.message.create({
     data: { userId, role: "assistant", content: lastReply },
@@ -247,8 +249,21 @@ async function runTurnInner(
   };
 }
 
-function fallbackReply(): string {
-  return "Sorry — I had trouble thinking that one through. Could you say that again?";
+/**
+ * The line the user gets when the model gives us nothing usable — no
+ * completion, no choice, or a tool loop that ran out of rounds.
+ *
+ * Localized, and for the reason the menu agent already wrote down when it fixed
+ * the same defect: an English sentence appearing out of nowhere reads exactly
+ * like the bot deciding on its own to switch languages. The language is looked
+ * up only here, so a healthy turn never pays for the query.
+ */
+async function fallbackReply(userId: string): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { language: true },
+  });
+  return t((user?.language ?? "en") as Language, "agentFallbackError");
 }
 
 async function buildChatMessages(userId: string): Promise<OpenAIChatMessage[]> {
