@@ -4,6 +4,7 @@ import { sessionMiddleware } from "./session.js";
 import { installApiLimits } from "./api-limits.js";
 import { installBotBlockedObserver, clearBotBlocked } from "./services/bot-blocked.js";
 import { notifyFounderHandlerError } from "./services/founder-notify.js";
+import { installStaleCallbackAnswers } from "./services/callback-answers.js";
 import { sequentializeByChat } from "./chat-queue.js";
 import { botRateLimit } from "./bot-rate-limit.js";
 import { start } from "./handlers/start.js";
@@ -46,6 +47,10 @@ export function createBot(token: string): Bot<BotContext> {
   // because that is where the refusal actually arrives, and almost all of them
   // swallow their own errors on purpose. See services/bot-blocked.ts.
   installBotBlockedObserver(bot.api);
+
+  // A callback answer that arrived too late is not an error worth telling
+  // anyone about — see services/callback-answers.ts.
+  installStaleCallbackAnswers(bot.api);
 
   // Chat timeline — outbound half. Installed on the Api itself rather than as
   // middleware, because most of what a user sees is sent OUTSIDE a handler
