@@ -1149,6 +1149,11 @@ model Profile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([profilerNextAt])
+  /// The embedding refresher selects `embeddingDirty = true` ordered by
+  /// `embeddingDirtyAt`, on both the every-few-minutes worker and the weekly
+  /// preflight that gates matching. `Profile` had no index covering either
+  /// column, so both were a sequential scan plus a sort of the profile table.
+  @@index([embeddingDirty, embeddingDirtyAt])
   @@map("profiles")
 }
 

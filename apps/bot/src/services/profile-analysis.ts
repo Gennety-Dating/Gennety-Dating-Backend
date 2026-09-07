@@ -307,6 +307,16 @@ export function buildEmbeddingInput(
 
 export interface EmbeddingClient {
   embed(input: string): Promise<number[]>;
+  /**
+   * Embed a whole batch in ONE request.
+   *
+   * The Embeddings API takes up to 2048 inputs per call, and the weekly
+   * preflight has thousands of dirty profiles to refresh before matching can
+   * run. Asking for them one at a time turned that into a serial wall of HTTP
+   * round-trips in front of the drop. Order is part of the contract: the
+   * returned vectors line up with the inputs, index for index.
+   */
+  embedMany(inputs: string[]): Promise<number[][]>;
 }
 
 export interface FallbackProfileAnalysisInput {
@@ -336,29 +346,61 @@ export interface FallbackProfileAnalysisInput {
 const EMBEDDING_TIMEOUT_MS = 30_000;
 
 export function createOpenAIEmbeddingClient(apiKey: string): EmbeddingClient {
+  async function embedMany(inputs: string[]): Promise<number[][]> {
+    if (inputs.length === 0) return [];
+    const res = await openaiFetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ model: EMBEDDING_MODEL, input: inputs }),
+      // One request carrying many inputs is legitimately slower than one
+      // carrying a single input, so the deadline scales with the batch — but
+      // stays bounded, because the caller's own timeout is what leaves the rows
+      // dirty for a retry rather than hanging the preflight.
+      signal: AbortSignal.timeout(EMBEDDING_TIMEOUT_MS + inputs.length * 100),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`OpenAI embeddings failed: ${res.status} ${body}`);
+    }
+    const json = (await res.json()) as {
+      data: Array<{ embedding: number[]; index?: number }>;
+    };
+    const rows = json.data;
+    if (!Array.isArray(rows) || rows.length !== inputs.length) {
+      throw new Error(
+        `Unexpected embeddings response: asked for ${inputs.length}, got ${rows?.length}`,
+      );
+    }
+    // The API documents `data` as index-tagged rather than order-guaranteed, so
+    // the vectors are placed by `index` when it is present. Silently trusting
+    // array order here would mismatch a person's vector with someone else's
+    // text — an error nothing downstream could ever detect.
+    const vectors = new Array<number[] | undefined>(inputs.length);
+    rows.forEach((row, position) => {
+      const at = row.index ?? position;
+      if (!Array.isArray(row.embedding) || row.embedding.length !== EMBEDDING_DIMS) {
+        throw new Error(`Unexpected embedding shape: length ${row.embedding?.length}`);
+      }
+      if (at < 0 || at >= inputs.length) {
+        throw new Error(`Embedding response carried an out-of-range index ${at}`);
+      }
+      vectors[at] = row.embedding;
+    });
+    const missing = vectors.findIndex((vec) => vec === undefined);
+    if (missing !== -1) {
+      throw new Error(`Embedding response skipped input ${missing}`);
+    }
+    return vectors as number[][];
+  }
+
   return {
+    embedMany,
     async embed(input: string): Promise<number[]> {
-      const res = await openaiFetch("https://api.openai.com/v1/embeddings", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({ model: EMBEDDING_MODEL, input }),
-        signal: AbortSignal.timeout(EMBEDDING_TIMEOUT_MS),
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(`OpenAI embeddings failed: ${res.status} ${body}`);
-      }
-      const json = (await res.json()) as {
-        data: Array<{ embedding: number[] }>;
-      };
-      const vec = json.data?.[0]?.embedding;
-      if (!Array.isArray(vec) || vec.length !== EMBEDDING_DIMS) {
-        throw new Error(`Unexpected embedding shape: length ${vec?.length}`);
-      }
-      return vec;
+      const [vec] = await embedMany([input]);
+      return vec!;
     },
   };
 }

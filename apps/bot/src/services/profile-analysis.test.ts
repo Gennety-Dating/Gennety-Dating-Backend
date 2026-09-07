@@ -130,7 +130,7 @@ describe("evidence-first AI-memory parsing", () => {
 
   it("does not persist arbitrary long prose when repair cannot validate it", async () => {
     vi.mocked(callOpenAIJson).mockResolvedValueOnce(null);
-    const client = { embed: vi.fn() };
+    const client = { embed: vi.fn(), embedMany: vi.fn() };
 
     const result = await analyseAndSaveProfile(
       "user-invalid",
@@ -145,7 +145,7 @@ describe("evidence-first AI-memory parsing", () => {
 
   it("rejects partial JSON when the repair service fails", async () => {
     vi.mocked(callOpenAIJson).mockRejectedValueOnce(new Error("repair unavailable"));
-    const client = { embed: vi.fn() };
+    const client = { embed: vi.fn(), embedMany: vi.fn() };
 
     const result = await analyseAndSaveProfile(
       "user-partial",
@@ -159,7 +159,7 @@ describe("evidence-first AI-memory parsing", () => {
   });
 
   it("saves a sparse V2 import without creating a meaningless empty embedding", async () => {
-    const client = { embed: vi.fn() };
+    const client = { embed: vi.fn(), embedMany: vi.fn() };
 
     const result = await analyseAndSaveProfile(
       "user-sparse",
@@ -235,6 +235,7 @@ describe("profile analysis embedding retry", () => {
   it("queues an AI-memory profile for retry when embedding generation fails", async () => {
     const client = {
       embed: vi.fn().mockRejectedValue(new Error("OpenAI unavailable")),
+      embedMany: vi.fn().mockRejectedValue(new Error("OpenAI unavailable")),
     };
     const dump = JSON.stringify({
       personality_traits: ["curious", "warm", "direct"],
@@ -270,6 +271,7 @@ describe("profile analysis embedding retry", () => {
   it("queues a fallback profile for retry when embedding generation fails", async () => {
     const client = {
       embed: vi.fn().mockRejectedValue(new Error("OpenAI unavailable")),
+      embedMany: vi.fn().mockRejectedValue(new Error("OpenAI unavailable")),
     };
 
     const result = await saveFallbackProfileAnalysis(

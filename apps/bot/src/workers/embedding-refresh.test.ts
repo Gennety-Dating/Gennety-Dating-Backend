@@ -90,6 +90,8 @@ const {
   refreshAllDirtyEmbeddings,
   refreshUserEmbedding,
 } = await import("./embedding-refresh.js");
+const { prisma: mockedPrisma } = await import("@gennety/db");
+const findMany = mockedPrisma.profile.findMany as unknown as ReturnType<typeof vi.fn>;
 const { env: testEnv } = await import("../config.js");
 
 beforeEach(() => {
@@ -115,13 +117,29 @@ function seedDirty(id: string, dirtyAt: Date | null): ProfileRow {
   return row;
 }
 
+/**
+ * An `EmbeddingClient` stand-in built from a single-input `embed`.
+ *
+ * The worker calls `embedMany` — one request per chunk rather than one per
+ * profile — so `embedMany` is what the production code exercises, while `embed`
+ * stays the per-input hook these tests assert on. Counting both is the point:
+ * `embed` says how many profiles were embedded, `embedMany` how many HTTP
+ * requests that took.
+ */
+function embeddingClient(stub: { embed: ReturnType<typeof vi.fn> }) {
+  const embedMany = vi.fn(async (inputs: string[]) =>
+    Promise.all(inputs.map((input) => stub.embed(input) as Promise<number[]>)),
+  );
+  return { ...stub, embedMany };
+}
+
 describe("embeddingRefreshTick (M-2)", () => {
   it("recomputes dirty profiles and clears the flag", async () => {
     seedDirty("p1", new Date("2026-01-01T00:00:00Z"));
 
-    const stubClient = {
+    const stubClient = embeddingClient({
       embed: vi.fn().mockResolvedValue(new Array(1536).fill(0.1)),
-    };
+    });
 
     const result = await embeddingRefreshTick({ client: stubClient });
 
@@ -138,14 +156,14 @@ describe("embeddingRefreshTick (M-2)", () => {
 
     // Simulate the user editing again WHILE the embed call is in flight.
     let resolveEmbed: (v: number[]) => void = () => {};
-    const stubClient = {
+    const stubClient = embeddingClient({
       embed: vi.fn(
         () =>
           new Promise<number[]>((r) => {
             resolveEmbed = r;
           }),
       ),
-    };
+    });
 
     const tick = embeddingRefreshTick({ client: stubClient });
 
@@ -167,14 +185,14 @@ describe("embeddingRefreshTick (M-2)", () => {
     const sameTimestamp = new Date("2026-01-01T00:00:00.000Z");
     const row = seedDirty("same-ms", sameTimestamp);
     let resolveEmbed: (v: number[]) => void = () => {};
-    const stubClient = {
+    const stubClient = embeddingClient({
       embed: vi.fn(
         () =>
           new Promise<number[]>((resolve) => {
             resolveEmbed = resolve;
           }),
       ),
-    };
+    });
 
     const tick = embeddingRefreshTick({ client: stubClient });
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -189,9 +207,9 @@ describe("embeddingRefreshTick (M-2)", () => {
 
   it("counts failures without throwing", async () => {
     seedDirty("p3", new Date("2026-01-01T00:00:00Z"));
-    const stubClient = {
+    const stubClient = embeddingClient({
       embed: vi.fn().mockRejectedValue(new Error("OpenAI down")),
-    };
+    });
 
     const result = await embeddingRefreshTick({ client: stubClient });
 
@@ -201,9 +219,9 @@ describe("embeddingRefreshTick (M-2)", () => {
 
   it("repairs a legacy dirty row with no dirty timestamp", async () => {
     seedDirty("p4", null);
-    const stubClient = {
+    const stubClient = embeddingClient({
       embed: vi.fn().mockResolvedValue(new Array(1536).fill(0.2)),
-    };
+    });
 
     const result = await embeddingRefreshTick({ client: stubClient });
 
@@ -214,9 +232,9 @@ describe("embeddingRefreshTick (M-2)", () => {
   it("refreshes one requested user without touching another dirty row", async () => {
     seedDirty("p5", new Date("2026-01-01T00:00:00Z"));
     seedDirty("p6", new Date("2026-01-02T00:00:00Z"));
-    const stubClient = {
+    const stubClient = embeddingClient({
       embed: vi.fn().mockResolvedValue(new Array(1536).fill(0.3)),
-    };
+    });
 
     const result = await refreshUserEmbedding("user-p6", {
       client: stubClient,
@@ -232,21 +250,71 @@ describe("embeddingRefreshTick (M-2)", () => {
     for (let index = 0; index < 25; index += 1) {
       seedDirty(`all-${index}`, new Date(2026, 0, index + 1));
     }
-    const stubClient = {
+    const stubClient = embeddingClient({
       embed: vi.fn().mockResolvedValue(new Array(1536).fill(0.4)),
-    };
+    });
 
     const result = await refreshAllDirtyEmbeddings({ client: stubClient });
 
     expect(result).toEqual({ scanned: 25, refreshed: 25, failed: 0, stillDirty: 0 });
     expect(stubClient.embed).toHaveBeenCalledTimes(25);
+    // …in ONE request. The preflight used to open an HTTP round-trip per dirty
+    // profile, so thousands of them became a serial wall in front of the drop.
+    expect(stubClient.embedMany).toHaveBeenCalledTimes(1);
+    expect(stubClient.embedMany.mock.calls[0]![0]).toHaveLength(25);
+  });
+
+  it("pages the preflight instead of reading every dirty profile at once", async () => {
+    // 600 dirty rows: the read is capped at 512, so the snapshot takes two
+    // pages — and each page is embedded in chunks of 256 rather than one
+    // request per profile. Before this, the preflight issued ONE unbounded
+    // `findMany` and 600 HTTP round-trips.
+    for (let index = 0; index < 600; index += 1) {
+      seedDirty(`page-${index}`, new Date(2026, 0, 1, 0, 0, index));
+    }
+    const stubClient = embeddingClient({
+      embed: vi.fn().mockResolvedValue(new Array(1536).fill(0.6)),
+    });
+
+    const result = await refreshAllDirtyEmbeddings({ client: stubClient });
+
+    expect(result).toEqual({ scanned: 600, refreshed: 600, failed: 0, stillDirty: 0 });
+    const pageSizes = findMany.mock.calls.map(
+      (call: unknown[]) => (call[0] as { take?: number }).take,
+    );
+    expect(pageSizes).toEqual([512, 512]);
+    // 256 + 256 on the first page, 88 on the second.
+    expect(stubClient.embedMany.mock.calls.map((c) => c[0].length)).toEqual([256, 256, 88]);
+  });
+
+  it("fails only the rows in the request that failed", async () => {
+    // A chunk is a blast radius, not a transaction: the rest of the snapshot
+    // must still land, and the failed rows stay dirty for the next pass.
+    for (let index = 0; index < 300; index += 1) {
+      seedDirty(`chunk-${index}`, new Date(2026, 0, 1, 0, 0, index));
+    }
+    const embedMany = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("OpenAI down"))
+      .mockImplementation(async (inputs: string[]) =>
+        inputs.map(() => new Array(1536).fill(0.7)),
+      );
+    const stubClient = { embed: vi.fn(), embedMany };
+
+    const result = await refreshAllDirtyEmbeddings({ client: stubClient });
+
+    expect(result.scanned).toBe(300);
+    expect(result.failed).toBe(256);
+    expect(result.refreshed).toBe(44);
+    expect(profiles.get("chunk-0")!.embeddingDirty).toBe(true);
+    expect(profiles.get("chunk-299")!.embeddingDirty).toBe(false);
   });
 
   it("leaves an immediate refresh dirty when its deadline expires", async () => {
     seedDirty("timeout", new Date("2026-01-01T00:00:00Z"));
-    const stubClient = {
+    const stubClient = embeddingClient({
       embed: vi.fn(() => new Promise<number[]>(() => {})),
-    };
+    });
 
     const result = await refreshUserEmbedding("user-timeout", {
       client: stubClient,
