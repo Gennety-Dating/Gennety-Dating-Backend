@@ -57,6 +57,22 @@ function tokenIsDead(result: { ok: boolean; status?: number; reason?: string | n
  * Send a push to a single mobile user. Resolves `true` when APNs accepted
  * the notification; `false` (never throws) when the user has no token,
  * APNs isn't configured, or delivery failed.
+ *
+ * **Quiet hours are the CALLER's business, and deliberately so** (audit
+ * 2026-09-06, «дублирование тихих часов»). This rail carries two different
+ * kinds of message and only one of them may be delayed:
+ *
+ *  - Proactive — nudges, re-engagement, announcements. Every one of those
+ *    already asks `isQuietHours` before it gets here, exactly as the Telegram
+ *    side does (`matchNudgeTick` returns early on it). That is the same rule
+ *    applied at the same place on both rails.
+ *  - Transactional — a match decision, a paid ticket settling, a date about to
+ *    start. Holding one of those until nine in the morning would not be
+ *    politeness; it would be the product failing to answer something the person
+ *    is waiting on right now.
+ *
+ * A blanket check here could not tell them apart, and would silence the second
+ * kind to be polite about the first.
  */
 export async function sendPushToUser(
   userId: string,

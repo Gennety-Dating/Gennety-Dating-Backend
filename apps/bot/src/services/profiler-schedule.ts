@@ -20,10 +20,7 @@ import {
   type ProfilerQuestion,
 } from "@gennety/shared";
 import type { Gender } from "@gennety/shared";
-
-/** Kyiv-style quiet window, applied in the USER's local time. */
-const QUIET_START_HOUR = 23;
-const QUIET_END_HOUR = 9;
+import { isQuietHourIn } from "@gennety/shared";
 
 export interface ZonedParts {
   year: number;
@@ -94,10 +91,19 @@ export function localHour(date: Date, timeZone: string | null | undefined): numb
   return zonedParts(date, resolveZone(timeZone)).hour;
 }
 
-/** True when the local time falls in the [23:00, 09:00) quiet window. */
+/**
+ * True when the local time falls in the [23:00, 09:00) quiet window.
+ *
+ * The rule itself lives in `@gennety/shared`; this only resolves WHICH zone —
+ * and unlike the two bot workers, the Profiler asks in the person's own zone,
+ * because it messages one person at a time about their own evening.
+ *
+ * There used to be three implementations of the same window: two in the Kyiv
+ * zone and this one in the user's, written from scratch rather than calling
+ * either neighbour. Values agreed, frames of reference did not.
+ */
 export function isQuietHourLocal(date: Date, timeZone: string | null | undefined): boolean {
-  const h = localHour(date, timeZone);
-  return h >= QUIET_START_HOUR || h < QUIET_END_HOUR;
+  return isQuietHourIn(date, resolveZone(timeZone));
 }
 
 /**

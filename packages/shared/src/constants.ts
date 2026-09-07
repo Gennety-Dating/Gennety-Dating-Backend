@@ -339,10 +339,17 @@ export const VENUE_CHANGE_TTL_HOURS = 12;
  * third. A lapse costs nothing and does not count against this.
  */
 export const VENUE_CHANGE_MAX_PER_DATE = 2;
-/** Minimum length of the mandatory explanation comment the female must write. */
-export const VENUE_CHANGE_MIN_COMMENT_LEN = 10;
-/** Max characters stored/relayed for the venue-change comment (emergency-reason clamp). */
-export const VENUE_CHANGE_MAX_COMMENT_LEN = 1000;
+// `VENUE_CHANGE_MIN_COMMENT_LEN` and `VENUE_CHANGE_MAX_COMMENT_LEN` were here
+// and are gone (audit 2026-09-06, «мёртвая спецификация»).
+//
+// They described "the mandatory explanation comment the female must write" for
+// a venue change. There is no such step: the implementation says so in as many
+// words — "No free text anywhere — the board carries no comment channel" — and
+// neither constant was read anywhere in the product.
+//
+// This file is read as the spec for these rules, so a constant here is a
+// requirement, not a note. Leaving two that describe a step nobody built means
+// the next edit builds against them.
 
 /** Gennety Premium (§Premium, feature-flagged). */
 /**

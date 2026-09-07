@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@gennety/db";
-import { generateOtp } from "@gennety/shared";
+import { generateOtp, OTP_LENGTH, OTP_TTL_MS } from "@gennety/shared";
 import { env } from "../config.js";
 
 /**
@@ -27,11 +27,27 @@ import { env } from "../config.js";
  * Twilio spend.
  */
 
+/**
+ * Policy that is genuinely the phone rail's own: SMS costs money, email does
+ * not, so this rail carries a cooldown and a daily cap the email one has no
+ * reason to.
+ */
 export const PHONE_OTP_MAX_ATTEMPTS = 5;
 export const PHONE_OTP_RESEND_COOLDOWN_MS = 60_000;
-export const PHONE_OTP_TTL_MS = 10 * 60_000;
 export const PHONE_OTP_DAILY_CAP = 6;
-export const PHONE_CODE_LENGTH = 6;
+
+/**
+ * Validity and length come from the SHARED constants, not a second copy.
+ *
+ * They were duplicated here with the same values, which is the shape of a
+ * divergence rather than a divergence: editing `OTP_TTL_MS` would have moved
+ * the email rail alone, and "the code is valid for ten minutes" would have
+ * become untrue in exactly half of the flows — while every screen kept saying
+ * it. Re-exported rather than deleted so the phone-side call sites keep reading
+ * a name that says which rail they are on.
+ */
+export const PHONE_OTP_TTL_MS = OTP_TTL_MS;
+export const PHONE_CODE_LENGTH = OTP_LENGTH;
 const PROVIDER_TIMEOUT_MS = 10_000;
 
 /**
