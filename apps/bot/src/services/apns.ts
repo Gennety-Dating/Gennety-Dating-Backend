@@ -304,6 +304,73 @@ function http2Post(
 }
 
 /**
+ * Refusals that are about OUR credentials, not about one device.
+ *
+ * These are the ones nobody notices. A dead device token is normal and already
+ * handled — the row is cleared and the person simply stops getting pushes. An
+ * expired signing key is the opposite: every push to EVERYONE fails, forever,
+ * and each call site logs a warning and returns `false` exactly as it would for
+ * one uninstalled app. The whole rail can be down for days and the first signal
+ * would be somebody asking why they never hear from us.
+ */
+const PROVIDER_FAILURE_REASONS = new Set([
+  "InvalidProviderToken",
+  "ExpiredProviderToken",
+  "MissingProviderToken",
+  "BadCertificate",
+  "BadCertificateEnvironment",
+  "TopicDisallowed",
+  "Forbidden",
+]);
+
+/** One alert per window; the rest are the same outage repeating. */
+const PROVIDER_ALERT_WINDOW_MS = 60 * 60 * 1000;
+let providerAlertedAt = 0;
+
+/**
+ * Whether this refusal is about our credentials rather than one device.
+ *
+ * Exported because it is the whole decision — everything below it is one log
+ * line and one rate-limited DM.
+ */
+export function isProviderCredentialFailure(
+  status: number,
+  reason: string | null,
+): boolean {
+  return status === 403 || PROVIDER_FAILURE_REASONS.has(reason ?? "");
+}
+
+function reportProviderFailure(status: number, reason: string | null): void {
+  if (!isProviderCredentialFailure(status, reason)) return;
+
+  console.error(
+    `[apns] PROVIDER CREDENTIALS REJECTED (${status} ${reason ?? "?"}) — ` +
+      "every push is failing, not just this one",
+  );
+
+  const nowMs = Date.now();
+  if (nowMs - providerAlertedAt < PROVIDER_ALERT_WINDOW_MS) return;
+  providerAlertedAt = nowMs;
+  // Dynamic import: `founder-notify` reaches for Prisma and the bot Api, and
+  // this module is deliberately dependency-light so the push rail can be tested
+  // without either.
+  void import("./founder-notify.js")
+    .then((mod) =>
+      mod.notifyFounderSubsystemHealth(
+        `APNs (${reason ?? status})`,
+        "degraded",
+        1,
+      ),
+    )
+    .catch(() => {});
+}
+
+/** Test seam: the alert window is module state and must not leak between tests. */
+export function __resetApnsProviderAlertForTests(): void {
+  providerAlertedAt = 0;
+}
+
+/**
  * Deliver one notification to one device token. Never throws — transport
  * failures come back as `{ ok: false, status: 0, reason: "transport" }` so
  * callers can decide whether the token is dead (`Unregistered` etc.) or the
@@ -343,6 +410,7 @@ export async function sendApnsNotification(
     } catch {
       // Non-JSON error body — keep the status code only.
     }
+    reportProviderFailure(res.status, reason);
     return { ok: false, status: res.status, reason };
   } catch (err) {
     console.warn("[apns] send failed:", err);

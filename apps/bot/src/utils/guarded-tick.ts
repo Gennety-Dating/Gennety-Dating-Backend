@@ -20,12 +20,54 @@
  * The returned callback is intentionally `() => void` (not async): cron/Node
  * ignore the return value, and swallowing here keeps the scheduler decoupled
  * from the task's promise.
+ *
+ * It is also where a job's HEALTH is noticed, and that is deliberate. Before
+ * this, exactly one worker in the product told anyone when it broke — the
+ * status timer, through its own bespoke runner — while twenty-five other jobs
+ * (matching, payments sweeps, verification, refunds, retention) failed into
+ * `console.error` on a droplet nobody is watching. A whole subsystem could stop
+ * for days and the first signal would be a user asking why nothing happened.
+ * Every one of those jobs already passes through this function, so this is the
+ * one place that can see all of them.
  */
+
+/** Consecutive failures before a job is called broken rather than unlucky. */
+const FAILURE_ALERT_THRESHOLD = 3;
+
+export interface GuardedTickDeps {
+  /** Injected in tests; defaults to the founder ops feed. */
+  notifyHealth?: (
+    subsystem: string,
+    state: "degraded" | "recovered",
+    consecutiveFailures: number,
+  ) => Promise<void>;
+}
+
 export function guardedTick(
   name: string,
   task: () => Promise<unknown>,
+  deps: GuardedTickDeps = {},
 ): () => void {
   let running = false;
+  let consecutiveFailures = 0;
+  let degradedAlertSent = false;
+
+  const notifyHealth = async (
+    state: "degraded" | "recovered",
+    failures: number,
+  ): Promise<void> => {
+    try {
+      const notify =
+        deps.notifyHealth ??
+        (await import("../services/founder-notify.js")).notifyFounderSubsystemHealth;
+      await notify(name, state, failures);
+    } catch (err) {
+      // The alert is the last line, so it must never become the failure it was
+      // reporting: a broken notifier would otherwise mask every broken job.
+      console.warn(`[cron] "${name}" health notify failed:`, err);
+    }
+  };
+
   return () => {
     if (running) {
       console.warn(`[cron] "${name}" still in flight — skipping this tick`);
@@ -42,7 +84,24 @@ export function guardedTick(
       result = Promise.reject(err);
     }
     void result
-      .catch((err) => console.error(`[cron] "${name}" tick failed:`, err))
+      .then(async () => {
+        const previousFailures = consecutiveFailures;
+        consecutiveFailures = 0;
+        // Recovery is announced only when a degradation was, so a single
+        // failed tick stays what it is: an entry in the log.
+        if (degradedAlertSent) {
+          degradedAlertSent = false;
+          await notifyHealth("recovered", previousFailures);
+        }
+      })
+      .catch(async (err) => {
+        console.error(`[cron] "${name}" tick failed:`, err);
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= FAILURE_ALERT_THRESHOLD && !degradedAlertSent) {
+          degradedAlertSent = true;
+          await notifyHealth("degraded", consecutiveFailures);
+        }
+      })
       .finally(() => {
         running = false;
       });

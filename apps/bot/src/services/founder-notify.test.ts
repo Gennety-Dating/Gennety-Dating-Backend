@@ -75,6 +75,8 @@ import {
   notifyFounderAdSpendReminder,
   isFounderFeedSuppressedRuntime,
   __resetFounderApiForTests,
+  __resetHandlerAlertsForTests,
+  notifyFounderHandlerError,
   type FounderAccountUser,
 } from "./founder-notify.js";
 import { verifyAdSpendLink } from "./founder-ad-spend-link.js";
@@ -115,6 +117,34 @@ beforeEach(() => {
   adSpendFindMany.mockResolvedValue([]);
   eventFindUnique.mockResolvedValue(null);
   __resetFounderApiForTests();
+});
+
+describe("handler-error alerts", () => {
+  beforeEach(() => __resetHandlerAlertsForTests());
+
+  it("announces the first failure and folds the storm into the next window", async () => {
+    // The failure being reported is precisely the one that would otherwise send
+    // a message per update: a deploy where every handler throws.
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    const start = new Date("2026-09-07T10:00:00Z");
+
+    await notifyFounderHandlerError("update 1: boom", start);
+    await notifyFounderHandlerError("update 2: boom", new Date(start.getTime() + 60_000));
+    await notifyFounderHandlerError("update 3: boom", new Date(start.getTime() + 120_000));
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    // Past the window, the next one carries what was swallowed.
+    await notifyFounderHandlerError(
+      "update 4: boom",
+      new Date(start.getTime() + 16 * 60_000),
+    );
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    // Two were swallowed between the announcements; the fourth is itself the
+    // one being announced, so it is not among them.
+    expect(String(sendMessage.mock.calls[1]![1])).toContain("и ещё 2");
+  });
 });
 
 describe("the founder bot's own Bot API limits", () => {
