@@ -61,7 +61,34 @@ import {
  *  it — this is the notification that there is no match. */
 export const NO_MATCH_PUSH_TYPE = "match.none";
 
-export const DEFAULT_NOTIFY_DELAY_MS = 2000;
+/**
+ * Pause between two notices.
+ *
+ * It was two full seconds, which on a base of ten thousand is five and a half
+ * hours of one cron invocation sending — long enough that `guardedTick`
+ * swallows every subsequent firing, and long enough that a restart loses the
+ * tail. Two seconds was never the limit anyway: Telegram allows one message per
+ * second to the SAME chat and about thirty a second across different ones, and
+ * every notice here goes to a different person.
+ *
+ * Since `api-limits.ts` the real guard is the global throttler, which queues
+ * and paces every outbound call whatever this value says. What is left is a
+ * politeness floor that keeps the throttler's queue short: ten notices a second
+ * turns the same base into a quarter of an hour.
+ */
+export const DEFAULT_NOTIFY_DELAY_MS = 100;
+
+/**
+ * Candidates read per query, and how many such reads one invocation may make.
+ *
+ * The query is its own cursor: claiming a `NoMatchNotice` row excludes that
+ * person from the next read, so re-reading walks forward on its own. The one
+ * thing it cannot exclude is a person on no rail at all — no row is written for
+ * them, deliberately — so the loop also stops as soon as a read returns nobody
+ * it has not already seen.
+ */
+const NOTICE_BATCH = 500;
+const MAX_NOTICE_BATCHES = 40;
 
 /**
  * Window (ms) used to decide whether a user "got matched in this drop".
@@ -213,43 +240,46 @@ export async function sendNoMatchNotices(
   // `isUniqueViolation` below) remains the actual DB-level guarantee.
   const notifyCutoff = new Date(now.getTime() - CADENCE.famineNoticeIntervalMs);
 
-  const candidates = await prisma.user.findMany({
-    where: {
-      status: "active",
-      onboardingStep: "completed",
-      // Exclude users who got a match dispatched in this drop window
-      AND: [
-        {
-          matchesAsA: {
-            none: { dispatchedAt: { gte: recentSince } },
+  const readCandidates = () =>
+    prisma.user.findMany({
+      take: NOTICE_BATCH,
+      orderBy: { id: "asc" },
+      where: {
+        status: "active",
+        onboardingStep: "completed",
+        // Exclude users who got a match dispatched in this drop window
+        AND: [
+          {
+            matchesAsA: {
+              none: { dispatchedAt: { gte: recentSince } },
+            },
           },
-        },
-        {
-          matchesAsB: {
-            none: { dispatchedAt: { gte: recentSince } },
+          {
+            matchesAsB: {
+              none: { dispatchedAt: { gte: recentSince } },
+            },
           },
-        },
-        // Throttle: skip anyone notified within the last famineNoticeIntervalMs.
-        {
-          noMatchNotices: {
-            none: { dropDate: { gte: notifyCutoff } },
+          // Throttle: skip anyone notified within the last famineNoticeIntervalMs.
+          {
+            noMatchNotices: {
+              none: { dropDate: { gte: notifyCutoff } },
+            },
           },
-        },
-      ],
-    },
-    select: {
-      id: true,
-      telegramId: true,
-      // Load-bearing: the rail predicates read `platform`, and a row that
-      // doesn't select it arrives as `undefined` — which `telegramReachable`
-      // reads as "pre-column row, assume Telegram" and `pushReachable` reads
-      // as "no app rail". The result is not an exception; it is a notice
-      // addressed to a chat the user will never open.
-      platform: true,
-      language: true,
-      profile: { select: { homeCityKey: true, homeCity: true } },
-    },
-  });
+        ],
+      },
+      select: {
+        id: true,
+        telegramId: true,
+        // Load-bearing: the rail predicates read `platform`, and a row that
+        // doesn't select it arrives as `undefined` — which `telegramReachable`
+        // reads as "pre-column row, assume Telegram" and `pushReachable` reads
+        // as "no app rail". The result is not an exception; it is a notice
+        // addressed to a chat the user will never open.
+        platform: true,
+        language: true,
+        profile: { select: { homeCityKey: true, homeCity: true } },
+      },
+    });
 
   const result: NoMatchNotifyResult = {
     notified: 0,
@@ -262,8 +292,43 @@ export async function sendNoMatchNotices(
     errors: [],
   };
 
-  for (let i = 0; i < candidates.length; i++) {
-    const u = candidates[i]!;
+  /**
+   * Walk the candidates a page at a time instead of holding the whole active
+   * base in memory.
+   *
+   * The read is its own cursor: claiming a `NoMatchNotice` excludes that person
+   * from the next page, so re-reading moves forward without one. What it cannot
+   * exclude is somebody on no rail at all — no row is written for them by
+   * design — so `seen` is what stops the walk from handing the same unreachable
+   * person back forever.
+   */
+  async function* candidateStream() {
+    const seen = new Set<string>();
+    for (let batch = 0; batch < MAX_NOTICE_BATCHES; batch += 1) {
+      const page = await readCandidates();
+      // Filtered and recorded in the same pass, so a page that somehow repeats
+      // a row cannot process the same person twice either.
+      const fresh = page.filter((candidate) => {
+        if (seen.has(candidate.id)) return false;
+        seen.add(candidate.id);
+        return true;
+      });
+      if (fresh.length === 0) return;
+      for (const candidate of fresh) yield candidate;
+      if (page.length < NOTICE_BATCH) return;
+    }
+    console.warn(
+      `[no-match-notify] stopped at the ${MAX_NOTICE_BATCHES}-page cap — ` +
+        "candidates remain and the next run will continue",
+    );
+  }
+
+  let processed = 0;
+  for await (const u of candidateStream()) {
+    processed += 1;
+    // Paced between notices rather than after the last one, so the run does not
+    // end on a pointless sleep.
+    if (processed > 1) await delay(delayMs);
 
     const viaTelegram = telegramReachable(u);
     const viaPush = pushReachable(u);
@@ -344,7 +409,7 @@ export async function sendNoMatchNotices(
       result.errors.push({ userId: u.id, error: message });
       result.failed++;
       console.error(
-        `[no-match-notify] ${i + 1}/${candidates.length} userId=${u.id} claim FAILED: ${message}`,
+        `[no-match-notify] #${processed} userId=${u.id} claim FAILED: ${message}`,
       );
       continue;
     }
@@ -524,13 +589,10 @@ export async function sendNoMatchNotices(
       result.errors.push({ userId: u.id, error: message });
       result.failed++;
       console.error(
-        `[no-match-notify] ${i + 1}/${candidates.length} userId=${u.id} FAILED: ${message}`,
+        `[no-match-notify] #${processed} userId=${u.id} FAILED: ${message}`,
       );
     }
 
-    if (i < candidates.length - 1) {
-      await delay(delayMs);
-    }
   }
 
   console.log(
