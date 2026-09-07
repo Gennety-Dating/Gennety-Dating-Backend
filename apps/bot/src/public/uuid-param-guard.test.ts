@@ -118,6 +118,8 @@ describe("/v1/matches/:id — UUID shape guard", () => {
       id,
       "11111111-1111-4111-8111-111111111111",
       "accept",
+      // A decline may carry an explanation; an accept never does.
+      undefined,
     );
   });
 });

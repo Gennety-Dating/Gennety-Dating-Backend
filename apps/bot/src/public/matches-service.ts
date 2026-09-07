@@ -46,6 +46,7 @@ import {
   pickCurrentMatch,
 } from "../services/active-match-priority.js";
 import { ticketGateFor } from "./ticket-gate-state.js";
+import { recordRejectionFeedback } from "../services/rejection-feedback.js";
 
 /**
  * Mobile-only wrappers around the existing match-engine pipeline. These
@@ -506,6 +507,14 @@ async function serializePartnerVoicePrompt(
  * Apply an accept/decline on a match. Mirrors `handleMatchDecision` in
  * `handlers/matching/decision.ts` but without the grammY notifications.
  *
+ * `reason` is the half that used to be missing, and "mirrors" was the word that
+ * hid it: the Telegram branch feeds a decline reason into
+ * `recordRejectionFeedback`, which writes `Profile.negativeConstraints` — a
+ * field the matcher reads directly. Without it, someone living in the app could
+ * decline five times and keep being offered the same type, while their
+ * neighbour in Telegram tuned their matching from the first decline. Optional,
+ * because a decline without an explanation is still a decline.
+ *
  * Returns the reloaded `SerializedMatch` or `null` if the user isn't on
  * this match / the match is already terminal.
  */
@@ -513,6 +522,7 @@ export async function applyMatchDecision(
   matchId: string,
   userId: string,
   decision: MatchDecision,
+  reason?: string,
 ): Promise<SerializedMatch | null> {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
@@ -688,6 +698,26 @@ export async function applyMatchDecision(
     targetId,
     actionType: "DECLINED",
   });
+
+  // Best-effort, and deliberately after the decision is recorded: the decline
+  // itself must not depend on the explanation landing.
+  if (reason && reason.trim()) {
+    const recorded = await recordRejectionFeedback({
+      userId,
+      matchId,
+      reason,
+      // The app collects free text from someone who has just tapped "no"; the
+      // concierge's stricter floor exists because IT can ask a follow-up
+      // question, and a route cannot.
+      requireConcreteReason: false,
+    }).catch((err: unknown) => {
+      console.warn(`[matches] decline reason not recorded for ${matchId}:`, err);
+      return null;
+    });
+    if (recorded && !recorded.success) {
+      console.warn(`[matches] decline reason rejected for ${matchId}: ${recorded.code}`);
+    }
+  }
 
   if (peerPrior === null) {
     // First decider declines: KEEP `proposed` so the peer's keyboard stays

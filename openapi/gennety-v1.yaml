@@ -2477,6 +2477,15 @@ paths:
                 decision:
                   type: string
                   enum: [accept, decline]
+                reason:
+                  type: string
+                  maxLength: 1000
+                  description: |
+                    Optional free text explaining a `decline`. It is recorded as
+                    rejection feedback and folded into the user's own
+                    `negativeConstraints`, which the matcher reads directly — so
+                    sending it is how the app tunes future matches. Ignored on
+                    `accept`. A decline without one is still a decline.
       responses:
         "200":
           description: Reloaded match state
