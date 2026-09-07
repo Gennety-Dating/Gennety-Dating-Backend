@@ -11,6 +11,7 @@ import {
   type StatusBannerStage,
   type StatusBannerView,
 } from "./status-banner-view.js";
+import { BoundedMap } from "../utils/bounded-map.js";
 
 export type StatusBannerFailureKind =
   | "missing"
@@ -47,8 +48,18 @@ const creationLocks = new Map<string, Promise<void>>();
  * (`status-banner-refresh.ts`). With one cache the push simply satisfies the
  * next tick; with two, the tick would re-send an identical body and lean on
  * Telegram's "message is not modified" to notice.
+ *
+ * Bounded: the value is `JSON.stringify(view)`, a few hundred bytes, and the
+ * key space is every account the worker has ever served. Nothing removes the
+ * entry of someone who stopped being active, so unbounded this is tens of
+ * megabytes on a 2 GB droplet. A miss costs one edit that Telegram answers
+ * "message is not modified" — already handled as `unchanged`, never a failure.
  */
-export const statusBannerRenderCache = new Map<string, string>();
+const STATUS_BANNER_RENDER_CACHE_MAX = 10_000;
+
+export const statusBannerRenderCache = new BoundedMap<string, string>(
+  STATUS_BANNER_RENDER_CACHE_MAX,
+);
 
 export function buildStatusBannerKeyboard(view: StatusBannerView): InlineKeyboard {
   return new InlineKeyboard()
