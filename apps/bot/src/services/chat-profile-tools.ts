@@ -6,6 +6,8 @@ import {
   MIN_AGE,
   normalizeProfileMedia,
   profilePhotoMedia,
+  MAX_HOBBIES,
+  MAX_HOBBY_LENGTH,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { gateProfilePhoto } from "./face-match-gate.js";
@@ -107,11 +109,31 @@ export async function applyChatProfilePatch(
     profilePatch.height = args.height;
   }
   if (Array.isArray(args.hobbies)) {
+    // Нормализация — да, тихое усечение — нет.
+    //
+    // Раньше здесь резалось до 12×48, тогда как публичный API принимает
+    // максимум 10×50. Консьерж записывал одиннадцатый и двенадцатый интерес,
+    // человек открывал приложение, сохранял профиль — и они исчезали
+    // навсегда, потому что iOS берёт первые десять. Молчали обе стороны.
+    //
+    // Отказ вместо усечения — это ещё и поведение соседнего поля в этой же
+    // функции (`partnerPreferences` возвращает `ok:false` с внятным
+    // текстом). Агент скажет человеку, что интересов слишком много, вместо
+    // того чтобы решить за него, какие два выбросить.
     const hobbies = args.hobbies
       .filter((h): h is string => typeof h === "string")
-      .map((h) => h.trim().slice(0, 48))
-      .filter((h) => h.length > 0)
-      .slice(0, 12);
+      .map((h) => h.trim())
+      .filter((h) => h.length > 0);
+    if (hobbies.length > MAX_HOBBIES) {
+      return { ok: false, detail: `Keep it to ${MAX_HOBBIES} interests or fewer` };
+    }
+    const tooLong = hobbies.find((h) => h.length > MAX_HOBBY_LENGTH);
+    if (tooLong !== undefined) {
+      return {
+        ok: false,
+        detail: `Each interest must be ${MAX_HOBBY_LENGTH} characters or less`,
+      };
+    }
     if (hobbies.length > 0) {
       profilePatch.hobbies = hobbies;
       touchedEmbedding = true;

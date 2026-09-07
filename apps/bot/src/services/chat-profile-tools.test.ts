@@ -110,6 +110,68 @@ describe("chat agent profile tools", () => {
     expect(refreshEmbedding).toHaveBeenCalledWith("user-1");
   });
 
+  /**
+   * Регрессия на дефект аудита 2026-09-06 («Архитектура», высокий риск).
+   *
+   * Предел интересов был задан ТРИЖДЫ тремя наборами чисел: публичный API
+   * отвергал >10 и >50 жёстким 400, этот агент молча резал до 12×48, iOS
+   * молча брал первые 10. Расходились не пределы, а последствия: консьерж
+   * записывал двенадцать интересов, человек открывал приложение, сохранял
+   * профиль — и два исчезали навсегда, ни одна сторона об этом не сказала.
+   */
+  it("отказывается записать больше интересов, чем принимает API", async () => {
+    const upsertProfile = vi.fn();
+    const result = await applyChatProfilePatch(
+      "user-1",
+      { hobbies: Array.from({ length: 11 }, (_, i) => `hobby-${i}`) },
+      {
+        findUser: vi.fn().mockResolvedValue({ onboardingStep: "completed" }),
+        updateUser: vi.fn(),
+        upsertProfile,
+        refreshEmbedding: vi.fn(),
+      },
+    );
+
+    // Отказ, а не тихое усечение: выбирать за человека, какой интерес
+    // выбросить, — не работа инструмента. Так же ведёт себя соседнее поле
+    // `partnerPreferences` в этой же функции.
+    expect(result.ok).toBe(false);
+    expect(upsertProfile).not.toHaveBeenCalled();
+  });
+
+  it("отказывается записать слишком длинный интерес", async () => {
+    const upsertProfile = vi.fn();
+    const result = await applyChatProfilePatch(
+      "user-1",
+      { hobbies: ["a".repeat(51)] },
+      {
+        findUser: vi.fn().mockResolvedValue({ onboardingStep: "completed" }),
+        updateUser: vi.fn(),
+        upsertProfile,
+        refreshEmbedding: vi.fn(),
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(upsertProfile).not.toHaveBeenCalled();
+  });
+
+  it("принимает ровно десять интересов — предел API, а не на один меньше", async () => {
+    const upsertProfile = vi.fn().mockResolvedValue(undefined);
+    const result = await applyChatProfilePatch(
+      "user-1",
+      { hobbies: Array.from({ length: 10 }, (_, i) => `hobby-${i}`) },
+      {
+        findUser: vi.fn().mockResolvedValue({ onboardingStep: "completed" }),
+        updateUser: vi.fn(),
+        upsertProfile,
+        refreshEmbedding: vi.fn().mockResolvedValue(undefined),
+      },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
   it("keeps a saved profile edit successful when immediate refresh fails", async () => {
     const result = await applyChatProfilePatch(
       "user-1",

@@ -228,6 +228,23 @@ export const MAX_BIO_LENGTH = 500;
 export const MAX_PARTNER_PREFERENCES_LENGTH = 500;
 export const MAX_MAJOR_LENGTH = 100;
 
+/**
+ * Интересы: сколько штук и какой длины.
+ *
+ * Числа жили в ТРЁХ местах тремя разными наборами: публичный API отвергал
+ * >10 и >50 жёстким 400, агент-консьерж молча резал до 12×48, iOS молча брал
+ * первые 10. Разошлись не пределы, а последствия: консьерж записывал 12
+ * интересов, человек открывал приложение, сохранял профиль — и два
+ * исчезали навсегда. Комментарий в самом `ProfileModel` предупреждал, что
+ * это единственное место, где можно молча испортить данные.
+ *
+ * Взяты числа публичного API: он контракт, его же держит iOS, и только
+ * агент был выбросом. Соседние `MAX_BIO_LENGTH` / `MAX_MAJOR_LENGTH` лежат
+ * здесь с самого начала — эти просто не доехали.
+ */
+export const MAX_HOBBIES = 10;
+export const MAX_HOBBY_LENGTH = 50;
+
 /** Phase 4: Date lifecycle timing */
 /** How many hours before the date ice-breakers & emergency window unlock */
 export const DATE_ALERT_HOURS = 5;

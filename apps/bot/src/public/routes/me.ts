@@ -13,6 +13,8 @@ import {
   profilePhotoMedia,
   t,
   type Language,
+  MAX_HOBBIES,
+  MAX_HOBBY_LENGTH,
 } from "@gennety/shared";
 import { env } from "../../config.js";
 import { requireAuth } from "../auth-middleware.js";
@@ -237,7 +239,7 @@ meRouter.patch("/", async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: "Invalid hobbies" });
       return;
     } else {
-      if (v.length > 10) {
+      if (v.length > MAX_HOBBIES) {
         res.status(400).json({ error: "Field too long: hobbies" });
         return;
       }
@@ -246,7 +248,7 @@ meRouter.patch("/", async (req: Request, res: Response): Promise<void> => {
           res.status(400).json({ error: "Invalid hobbies" });
           return;
         }
-        if (item.length > 50) {
+        if (item.length > MAX_HOBBY_LENGTH) {
           res.status(400).json({ error: "Field too long: hobbies" });
           return;
         }
