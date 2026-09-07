@@ -8,7 +8,11 @@ import "./config.js";
 import cron from "node-cron";
 import { ensureMatchPairIndex } from "@gennety/db";
 import { CADENCE } from "@gennety/shared";
-import { assertIdentityTrustConfiguration, env } from "./config.js";
+import {
+  assertIdentityTrustConfiguration,
+  assertPaymentTrustConfiguration,
+  env,
+} from "./config.js";
 import {
   DEMO_MODE_ENABLED,
   assertDemoIsolation,
@@ -93,6 +97,11 @@ if (DEMO_MODE_ENABLED) {
   assertDemoIsolation();
 }
 assertIdentityTrustConfiguration();
+// И та же дисциплина для денег. До 2026-09-07 её не было: фейковый OTP
+// процесс в прод не пускал, фейковые деньги — пускали, хотя опасное
+// состояние тут ровно то, которое даёт неполный `.env` (оба флага
+// дефолтятся в небезопасную сторону).
+assertPaymentTrustConfiguration();
 
 const bot = createBot(env.BOT_TOKEN);
 // Publish the main bot Api so context-less services (founder-notify) can act
