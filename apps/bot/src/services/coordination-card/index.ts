@@ -2,11 +2,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Api, RawApi } from "grammy";
 import satori from "satori";
-import { Resvg } from "@resvg/resvg-js";
 import type { Language } from "@gennety/shared";
 import { downloadProfileImage } from "../storage.js";
 import { butterflyPng, type ButterflyMark } from "../match-card/collage.js";
-import { toPngBuffer, grainPng } from "../date-card/image.js";
+import { toPngBuffer, grainPng, svgToPng} from "../date-card/image.js";
 import { coordCardCopy, type CoordCardVariant } from "./copy.js";
 import {
   buildCoordCardElement,
@@ -145,8 +144,7 @@ export async function renderCoordinationCard(
       height: CARD_H,
       fonts: loadFonts(),
     });
-    const png = new Resvg(svg, { fitTo: { mode: "width", value: CARD_W } }).render().asPng();
-    return Buffer.from(png);
+    return await svgToPng(svg, CARD_W);
   } catch (err) {
     console.warn("[coordination-card] render failed:", err);
     return null;

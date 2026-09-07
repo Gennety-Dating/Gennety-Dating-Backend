@@ -34,7 +34,7 @@ import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { butterflyPng, type ButterflyMark } from "./match-card/collage.js";
 import { hourglassArt } from "./expiry-card-hourglass.js";
-import { grainPng } from "./date-card/image.js";
+import { grainPng, svgToPng} from "./date-card/image.js";
 
 /** Square poster: dominant enough for an emotional beat, lighter than the 1350 keepsake date card. */
 export const EXPIRY_CARD_W = 1080;
@@ -444,13 +444,9 @@ export async function renderExpiryCard(input: ExpiryCardInput): Promise<Buffer |
       height: EXPIRY_CARD_H,
       fonts: loadFonts(),
     });
-    const png = new Resvg(svg, {
-      fitTo: { mode: "width", value: EXPIRY_CARD_W },
-      background: palette(input.theme).bg,
-    })
-      .render()
-      .asPng();
-    return Buffer.from(png);
+    // Растеризация уехала в рабочий поток: на главном она блокировала
+    // весь процесс (см. `services/render/pool.ts`).
+    return await svgToPng(svg, EXPIRY_CARD_W, palette(input.theme).bg);
   } catch (err) {
     console.warn("[expiry-card] render failed:", err);
     return null;

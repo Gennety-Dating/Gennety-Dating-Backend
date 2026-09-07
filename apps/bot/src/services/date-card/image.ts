@@ -1,9 +1,5 @@
-import { createCanvas, loadImage, type Canvas } from "@napi-rs/canvas";
-
-function hexRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.replace("#", ""), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
+import { createCanvas, type Canvas } from "@napi-rs/canvas";
+import { runRenderJob } from "../render/pool.js";
 
 /**
  * Re-encode an arbitrary image buffer (JPEG / WebP / PNG …) to a real PNG.
@@ -17,17 +13,13 @@ function hexRgb(hex: string): [number, number, number] {
  *
  * Returns `null` on any decode failure so the caller can fall back to a
  * placeholder / gradient instead of embedding undecodable bytes.
+ *
+ * Считается вне главного потока (`services/render/pool.ts`) — декодирование и
+ * перекодирование фотографии синхронны и блокируют loop.
  */
 export async function toPngBuffer(buffer: Buffer): Promise<Buffer | null> {
-  try {
-    const img = await loadImage(buffer);
-    const canvas = createCanvas(img.width, img.height) as Canvas;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0);
-    return canvas.toBuffer("image/png");
-  } catch {
-    return null;
-  }
+  const out = await runRenderJob({ kind: "to-png", bytes: buffer });
+  return out === null ? null : Buffer.from(out);
 }
 
 /**
@@ -37,17 +29,8 @@ export async function toPngBuffer(buffer: Buffer): Promise<Buffer | null> {
  * a multi-hundred-KB source image. Returns `null` on decode failure.
  */
 export async function resizePng(buffer: Buffer, targetW: number): Promise<Buffer | null> {
-  try {
-    const img = await loadImage(buffer);
-    const w = Math.max(1, Math.round(targetW));
-    const h = Math.max(1, Math.round((img.height / img.width) * w));
-    const canvas = createCanvas(w, h) as Canvas;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0, w, h);
-    return canvas.toBuffer("image/png");
-  } catch {
-    return null;
-  }
+  const out = await runRenderJob({ kind: "resize-png", bytes: buffer, targetW });
+  return out === null ? null : Buffer.from(out);
 }
 
 /**
@@ -57,6 +40,9 @@ export async function resizePng(buffer: Buffer, targetW: number): Promise<Buffer
  * stock Places/curated image reads as part of the card, not pasted in.
  *
  * Returns `null` on decode failure so the caller falls back to a gradient.
+ *
+ * Попиксельный цикл на 1000×690 — это 2,76 млн итераций; он тоже уехал в
+ * рабочий поток.
  */
 export async function duotonePng(
   buffer: Buffer,
@@ -66,45 +52,39 @@ export async function duotonePng(
   h: number,
   mix = 1,
 ): Promise<Buffer | null> {
-  try {
-    const img = await loadImage(buffer);
-    const canvas = createCanvas(w, h) as Canvas;
-    const ctx = canvas.getContext("2d");
-    // cover-fit
-    const ar = img.width / img.height;
-    const tr = w / h;
-    let dw = w;
-    let dh = h;
-    let dx = 0;
-    let dy = 0;
-    if (ar > tr) {
-      dh = h;
-      dw = h * ar;
-      dx = (w - dw) / 2;
-    } else {
-      dw = w;
-      dh = w / ar;
-      dy = (h - dh) / 2;
-    }
-    ctx.drawImage(img, dx, dy, dw, dh);
-    const data = ctx.getImageData(0, 0, w, h);
-    const px = data.data;
-    const [sr, sg, sb] = hexRgb(shadow);
-    const [hr, hg, hb] = hexRgb(high);
-    for (let i = 0; i < px.length; i += 4) {
-      const lum = (0.299 * px[i]! + 0.587 * px[i + 1]! + 0.114 * px[i + 2]!) / 255;
-      const dr = sr + (hr - sr) * lum;
-      const dg = sg + (hg - sg) * lum;
-      const db = sb + (hb - sb) * lum;
-      px[i] = px[i]! * (1 - mix) + dr * mix;
-      px[i + 1] = px[i + 1]! * (1 - mix) + dg * mix;
-      px[i + 2] = px[i + 2]! * (1 - mix) + db * mix;
-    }
-    ctx.putImageData(data, 0, 0);
-    return canvas.toBuffer("image/png");
-  } catch {
-    return null;
-  }
+  const out = await runRenderJob({
+    kind: "duotone",
+    bytes: buffer,
+    shadow,
+    high,
+    w,
+    h,
+    mix,
+  });
+  return out === null ? null : Buffer.from(out);
+}
+
+/**
+ * Растеризовать SVG в PNG вне главного потока.
+ *
+ * Единственная точка входа для всех семи рендереров карточек. До 2026-09-07
+ * каждый звал `new Resvg(...).render().asPng()` у себя, на главном потоке —
+ * см. обоснование в `services/render/pool.ts`.
+ */
+export async function svgToPng(
+  svg: string,
+  fitToWidth?: number,
+  background?: string,
+): Promise<Buffer> {
+  const out = await runRenderJob({
+    kind: "svg-to-png",
+    svg,
+    ...(fitToWidth === undefined ? {} : { fitToWidth }),
+    ...(background === undefined ? {} : { background }),
+  });
+  // `svg-to-png` не возвращает `null`: там нечего декодировать, а поломанный
+  // SVG — это исключение, а не пустой результат.
+  return Buffer.from(out!);
 }
 
 /**
