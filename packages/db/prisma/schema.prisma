@@ -830,6 +830,9 @@ model ChatEvent {
   /// that nightly query is a sequential scan plus a full sort of the busiest
   /// table here — it is written on every inbound and outbound message.
   @@index([createdAt])
+  /// The admin's inbound-per-user aggregate groups on `userId` filtered by
+  /// `direction`, which was covered by nothing at all.
+  @@index([direction, userId])
   @@map("chat_events")
 }
 

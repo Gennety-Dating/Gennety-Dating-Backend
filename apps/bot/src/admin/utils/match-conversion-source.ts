@@ -27,6 +27,9 @@ import type { ConversionMatchInput } from "./match-conversion.js";
  */
 const REFUND_REASONS = ["refund", "gate_refunded"] as const;
 
+/** Row count past which the whole-history funnel needs rethinking — see below. */
+const CONVERSION_MATCH_WARN_AT = 50_000;
+
 const MATCH_SELECT = {
   id: true,
   source: true,
@@ -81,6 +84,27 @@ export async function loadConversionMatches(
     prisma.match.findMany({ select: MATCH_SELECT, orderBy: { createdAt: "desc" } }),
     loadRefundedSlots(),
   ]);
+
+  // Deliberately unbounded, and deliberately noisy about it.
+  //
+  // The funnel is defined over the WHOLE history of pairs (founder decision,
+  // DECISIONS.md 2026-08-15) — that is the reason it works from the day it
+  // ships instead of starting at zero. A `take` here would not bound the
+  // metric, it would silently change what it measures, which is worse than the
+  // memory it saves. `matches` also grows per PAIR, not per message, so it is
+  // orders of magnitude smaller than the `chat_events` read this module used to
+  // do beside it.
+  //
+  // What it cannot do is grow forever inside the process serving Telegram. So
+  // the threshold is a tripwire, not a limit: when it fires, the decision above
+  // is the one to revisit — a period window, a materialised aggregate, or the
+  // separate admin process — rather than a `take` slipped in quietly.
+  if (matches.length > CONVERSION_MATCH_WARN_AT) {
+    console.warn(
+      `[admin] match-conversion loaded ${matches.length} matches into the bot process — ` +
+        `past ${CONVERSION_MATCH_WARN_AT} this needs a windowed or precomputed funnel`,
+    );
+  }
 
   return matches.map((m) => ({
     id: m.id,
