@@ -119,6 +119,7 @@ describe("getVerifiedTransaction", () => {
         expiresDate: null,
         priceCents: null,
         currency: null,
+        appAccountToken: null,
       },
     });
   });

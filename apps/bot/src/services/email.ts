@@ -9,9 +9,25 @@ export async function sendOtpEmail(to: string, otp: string): Promise<void> {
   // is configured, or when OTP_LOG_TO_CONSOLE=true is set explicitly (handy
   // when .env shares SMTP_PASS with prod but the dev sender domain isn't
   // verified in Resend). Prod has the key set and the flag unset.
-  if (env.OTP_LOG_TO_CONSOLE || !env.RESEND_API_KEY) {
+  // Printing the code is a DEVELOPMENT affordance and nothing else, so it needs
+  // the explicit flag — and only the flag.
+  //
+  // It used to fire on `|| !env.RESEND_API_KEY` as well, which turned a missing
+  // mail key into "print every registration code to stdout and send nothing".
+  // Two failures wearing one face: the codes leak (access to logs becomes the
+  // email gate, and that gate is a trust boundary here) and registration
+  // degrades in silence. `assertIdentityTrustConfiguration` now refuses to
+  // start production without the key, so reaching this branch means a
+  // development runtime that did not ask for console codes — and there the
+  // honest answer is to fail loudly rather than pretend a code was sent.
+  if (env.OTP_LOG_TO_CONSOLE) {
     console.log(`[otp:dev] code for ${to}: ${otp}`);
     return;
+  }
+  if (!env.RESEND_API_KEY) {
+    throw new Error(
+      "sendOtpEmail: RESEND_API_KEY is empty — refusing to print the code instead of sending it",
+    );
   }
 
   const res = await fetch("https://api.resend.com/emails", {

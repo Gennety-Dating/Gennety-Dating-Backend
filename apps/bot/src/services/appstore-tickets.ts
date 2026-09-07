@@ -31,7 +31,14 @@ import {
 export type AppStoreCreditResult =
   | { status: "credited"; balance: number; credited: number }
   | { status: "already_processed"; balance: number }
-  | { status: "invalid"; reason: "bad_jws" | "unknown_transaction" | "wrong_bundle" | "unknown_product" | "revoked" }
+  | { status: "invalid"; reason:
+        | "bad_jws"
+        | "unknown_transaction"
+        | "wrong_bundle"
+        | "unknown_product"
+        | "revoked"
+        | "wrong_owner";
+    }
   | { status: "unavailable" };
 
 /**
@@ -55,6 +62,35 @@ export async function creditAppStoreTransaction(
   }
   if (tx.revocationDate !== null) {
     return { status: "invalid", reason: "revoked" };
+  }
+  // Whose purchase is this?
+  //
+  // Nothing used to ask. `externalPaymentId` is unique, so ownership was
+  // settled by a race: whoever submitted a given `transactionId` first got the
+  // tickets. `appAccountToken` is the client-set UUID Apple echoes back, and it
+  // is the only field in the payload that says who was buying.
+  //
+  // Verified when present rather than required, because builds already in the
+  // wild do not set it and refusing them would break real purchases. A mismatch
+  // is refused outright; an absent token is recorded so the day it is always
+  // present is visible in the logs rather than guessed at.
+  // Both sides folded here rather than trusting the decoder alone: this type is
+  // also built by the webhook path, and a UUID's case carries no meaning.
+  if (
+    tx.appAccountToken !== null &&
+    tx.appAccountToken.toLowerCase() !== userId.toLowerCase()
+  ) {
+    console.error(
+      `[appstore] transaction ${tx.transactionId} was bought by ` +
+        `${tx.appAccountToken} but claimed by ${userId}`,
+    );
+    return { status: "invalid", reason: "wrong_owner" };
+  }
+  if (tx.appAccountToken === null) {
+    console.info(
+      `[appstore] transaction ${tx.transactionId} carries no appAccountToken — ` +
+        "ownership unverified (pre-token client build)",
+    );
   }
   const perPurchase = ticketCountForProduct(tx.productId);
   if (!perPurchase) return { status: "invalid", reason: "unknown_product" };

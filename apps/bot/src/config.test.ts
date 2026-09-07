@@ -11,6 +11,7 @@ function productionReady(
 ): IdentityTrustConfiguration {
   return {
     OTP_LOG_TO_CONSOLE: false,
+    RESEND_API_KEY: "re_live_key",
     DEV_OTP_BYPASS_TELEGRAM_IDS: new Set(),
     DEMO_MODE_ENABLED: false,
     MANDATORY_VERIFICATION_ENABLED: true,
@@ -27,6 +28,18 @@ function productionReady(
 describe("identity trust configuration", () => {
   it("accepts a production-ready configuration", () => {
     expect(identityTrustConfigurationErrors(productionReady(), "production")).toEqual([]);
+  });
+
+  it("refuses to start production without a mail key", () => {
+    // `sendOtpEmail` used to print the code to stdout whenever this was empty
+    // — the second branch of `OTP_LOG_TO_CONSOLE || !RESEND_API_KEY`, and only
+    // the first was guarded here. The key is assembled as
+    // `RESEND_API_KEY ?? SMTP_PASS ?? ""`, so losing either variable produced
+    // an empty string quietly: every registration code in plaintext in the log
+    // and no email sent, which makes access to logs the email gate itself.
+    expect(
+      identityTrustConfigurationErrors(productionReady({ RESEND_API_KEY: "" }), "production"),
+    ).toEqual([expect.stringContaining("RESEND_API_KEY")]);
   });
 
   it("rejects the legacy soft gate and a disabled liveness provider", () => {

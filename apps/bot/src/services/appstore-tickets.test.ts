@@ -51,6 +51,7 @@ const okTx = {
   expiresDate: null,
   priceCents: 1647,
   currency: "USD",
+  appAccountToken: null,
 };
 
 beforeEach(() => {
@@ -133,6 +134,54 @@ describe("creditAppStoreTransaction", () => {
 });
 
 describe("refundAppStoreTransaction", () => {
+  it("refuses a transaction someone else bought", async () => {
+    // Ownership used to be decided by a race: `externalPaymentId` is unique, so
+    // whoever submitted a given `transactionId` first got the tickets.
+    getVerifiedTransaction.mockResolvedValue({
+      status: "ok",
+      transaction: { ...okTx, appAccountToken: "11111111-1111-4111-8111-111111111111" },
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await creditAppStoreTransaction(
+      "22222222-2222-4222-8222-222222222222",
+      "tx-1",
+    );
+
+    expect(result).toEqual({ status: "invalid", reason: "wrong_owner" });
+    expect(grantTickets).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it("credits a purchase whose token matches, case-insensitively", async () => {
+    getVerifiedTransaction.mockResolvedValue({
+      status: "ok",
+      transaction: { ...okTx, appAccountToken: "AAAAAAAA-1111-4111-8111-111111111111" },
+    });
+    grantTickets.mockResolvedValue(3);
+
+    const result = await creditAppStoreTransaction(
+      "aaaaaaaa-1111-4111-8111-111111111111",
+      "tx-1",
+    );
+
+    expect(result).toMatchObject({ status: "credited" });
+  });
+
+  it("still credits a build that predates the token", async () => {
+    // Refusing these would break purchases already in the wild, so the check is
+    // "verify when present", not "require".
+    getVerifiedTransaction.mockResolvedValue({
+      status: "ok",
+      transaction: { ...okTx, appAccountToken: null },
+    });
+    grantTickets.mockResolvedValue(3);
+
+    const result = await creditAppStoreTransaction("any-user", "tx-1");
+
+    expect(result).toMatchObject({ status: "credited" });
+  });
+
   it("claws back through the wallet's guarded writer, not around it", async () => {
     ledgerFindUnique.mockResolvedValue({ userId: "u1", delta: 3 });
     clawbackTickets.mockResolvedValue({ taken: 3, shortfall: 0, balance: 1 });
