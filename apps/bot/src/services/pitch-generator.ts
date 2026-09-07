@@ -3,6 +3,8 @@ import { MODELS } from "../models.js";
 import { openaiFetch } from "./openai-fetch.js";
 import type { Language } from "@gennety/shared";
 import {
+  containsContactChannel,
+  echoesVerbatim,
   pitchAndSynergyPrompt,
   proposeSchedulingPrompt,
   venueSelectionPrompt,
@@ -136,6 +138,28 @@ export function createOpenAIPitchClient(apiKey: string): PitchClient {
       if (!pitch || !synergyReason) {
         throw new Error("OpenAI pitch missing required fields");
       }
+
+      // The server's half of the prompt-injection defence.
+      //
+      // Both bios go into this one call and the answer is shown to the owner of
+      // ONE of them, so an instruction written into a bio is competing directly
+      // with the prompt's "do not quote verbatim" rule — and that rule is an
+      // instruction, not a check. The partner's `psychologicalSummary` is
+      // deliberately private: no API serialises it, and the voice transcript
+      // folded into it is the same. These two lines are what actually keeps it
+      // that way, whatever the model decided to do.
+      //
+      // A refusal costs the pair a generated pitch and falls back to the
+      // deterministic one — cheap next to leaking a stranger's private profile,
+      // and cheap next to putting a phishing link on the product's own card.
+      const produced = `${pitch}\n${synergyReason}`;
+      if (echoesVerbatim(produced, input.otherSummary)) {
+        throw new Error("OpenAI pitch echoed the partner's private summary verbatim");
+      }
+      if (containsContactChannel(produced)) {
+        throw new Error("OpenAI pitch carried a contact channel");
+      }
+
       return {
         pitch,
         synergyScore: clampSynergyScore(parsed.synergy_score),

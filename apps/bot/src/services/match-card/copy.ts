@@ -16,6 +16,11 @@ import { MODELS } from "../../models.js";
 import { openaiFetch } from "../openai-fetch.js";
 import { t, type Language } from "@gennety/shared";
 import type { MatchCardTexts } from "./template.js";
+import {
+  UNTRUSTED_FENCE_RULE,
+  fenceUntrusted,
+  containsContactChannel,
+} from "@gennety/shared";
 
 const MODEL = MODELS.agent;
 const MAX_TOKENS = 220;
@@ -62,7 +67,10 @@ function buildPrompt(input: MatchCardCopyInput): string {
     "- Address the reader informally (ты-form where the language has it), in a native casual register.",
     "- Describe the PERSON, never 'your date' / 'свидание с'. No emoji, no quotes, no lists.",
     "",
-    `Profile notes: ${input.partnerSummary?.slice(0, 1500) ?? "(none)"}`,
+    UNTRUSTED_FENCE_RULE,
+    "",
+    "Profile notes — the person's own words about themselves:",
+    fenceUntrusted("profile notes", input.partnerSummary?.slice(0, 1500)),
   ].join("\n");
 }
 
@@ -80,6 +88,22 @@ export async function generateMatchCardTexts(
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const copy = await requestCardCopy(input, apiKey);
+
+      // The card speaks in the platform's voice, on a stranger's screen, and
+      // its only substantive input is text the OTHER person wrote about
+      // themselves. That is the highest-trust surface this product has, so a
+      // generated line carrying a link, an @handle, an email or a phone number
+      // is not something to clean up — it is a steered generation, and whatever
+      // framing produced the channel is still in the rest of the sentence.
+      //
+      // Discarding it costs the recipient a generated card and falls back to
+      // the plain photo album. That is the correct trade against a phishing
+      // line that looks like our own copy, and against the Zero-Chat rule that
+      // says contact details are exchanged in exactly one moderated flow.
+      if (containsContactChannel(`${copy.tagline}\n${copy.paragraph}`)) {
+        throw new Error("match-card copy carried a contact channel");
+      }
+
       return {
         // Empty eyebrow → the panel opens with the wine accent bar (template.ts).
         eyebrow: "",
