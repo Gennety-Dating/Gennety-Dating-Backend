@@ -11,8 +11,8 @@ vi.mock("../config.js", () => ({ env: mockEnv }));
 
 vi.mock("@gennety/db", () => ({
   prisma: {
-    match: { findUnique: vi.fn() },
-    proxyMessage: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
+    match: { findUnique: vi.fn(), update: vi.fn() },
+    proxyMessage: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   },
 }));
 
@@ -39,11 +39,12 @@ import {
 } from "./proxy-chat.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
-const mMatch = prisma.match as unknown as { findUnique: MockFn };
+const mMatch = prisma.match as unknown as { findUnique: MockFn; update: MockFn };
 const mMsg = prisma.proxyMessage as unknown as {
   create: MockFn;
   findMany: MockFn;
   findFirst: MockFn;
+  update: MockFn;
 };
 
 const DATE = new Date("2026-08-10T18:00:00.000Z");
@@ -59,6 +60,8 @@ function match(over: Record<string, unknown> = {}): any {
     agreedTime: DATE,
     coordMethod: "proxy",
     proxyClosedAt: null,
+    proxyReadAtA: null,
+    proxyReadAtB: null,
     userA: {
       id: "uid-A",
       telegramId: 1001n,
@@ -84,6 +87,8 @@ beforeEach(() => {
   mMsg.findMany.mockResolvedValue([]);
   mMsg.findFirst.mockResolvedValue(null);
   mMsg.create.mockResolvedValue({ id: "pm-1" });
+  mMsg.update.mockResolvedValue({});
+  mMatch.update.mockResolvedValue({});
 });
 
 // ---------------------------------------------------------------------------
@@ -162,10 +167,16 @@ describe("readProxyChat", () => {
     expect(res).toEqual({ ok: false, error: "disabled" });
   });
 
-  it("labels each message by whether the caller sent it, and nothing more", async () => {
+  /**
+   * The sender is told about their OWN reply and nothing else. A status on the
+   * partner's message would be telling them about themselves — so the key is
+   * absent there, not null: `null` would invite a client to draw a fourth,
+   * empty state.
+   */
+  it("says who sent each message, and carries a status on the caller's own only", async () => {
     mMsg.findMany.mockResolvedValue([
-      { id: "pm-2", senderId: "uid-B", body: "at the door", createdAt: new Date(2) },
-      { id: "pm-1", senderId: "uid-A", body: "on my way", createdAt: new Date(1) },
+      { id: "pm-2", senderId: "uid-B", body: "at the door", createdAt: new Date(2), deliveredAt: null },
+      { id: "pm-1", senderId: "uid-A", body: "on my way", createdAt: new Date(1), deliveredAt: null },
     ]);
     const res = await readProxyChat({ matchId: "m-1", userId: "uid-A", now: DATE });
     expect(res.ok).toBe(true);
@@ -173,7 +184,60 @@ describe("readProxyChat", () => {
     // Fetched newest-first so the cap keeps the recent end; rendered oldest-first.
     expect(res.view.messages.map((m) => m.id)).toEqual(["pm-1", "pm-2"]);
     expect(res.view.messages.map((m) => m.mine)).toEqual([true, false]);
-    expect(Object.keys(res.view.messages[0]!).sort()).toEqual(["body", "id", "mine", "sentAt"]);
+    expect(Object.keys(res.view.messages[0]!).sort()).toEqual([
+      "body",
+      "id",
+      "mine",
+      "sentAt",
+      "status",
+    ]);
+    expect(Object.keys(res.view.messages[1]!).sort()).toEqual(["body", "id", "mine", "sentAt"]);
+  });
+
+  /**
+   * The three states come from three facts the server holds, and from nothing
+   * else: a row, a rail that accepted it, a cursor a person moved. Timing and
+   * the shape of the conversation are never consulted.
+   */
+  it("derives the three states from the row, the rail and the partner's cursor", async () => {
+    mMatch.findUnique.mockResolvedValue(match({ proxyReadAtB: new Date(10) }));
+    mMsg.findMany.mockResolvedValue([
+      // Read: the partner's cursor is past it.
+      { id: "pm-1", senderId: "uid-A", body: "one", createdAt: new Date(5), deliveredAt: new Date(5) },
+      // Delivered: a rail took it, but the cursor has not reached it.
+      { id: "pm-2", senderId: "uid-A", body: "two", createdAt: new Date(20), deliveredAt: new Date(20) },
+      // Sent: logged, and no rail has accepted it.
+      { id: "pm-3", senderId: "uid-A", body: "three", createdAt: new Date(30), deliveredAt: null },
+    ]);
+    const res = await readProxyChat({ matchId: "m-1", userId: "uid-A", now: DATE });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // `findMany` is newest-first in production; the view reverses it.
+    expect(res.view.messages.map((m) => m.status)).toEqual(["sent", "delivered", "read"]);
+  });
+
+  /**
+   * "Read" is a claim about another person, so it may only be made when that
+   * person actually looked. Reading is the ONLY thing that moves the cursor.
+   */
+  it("advances the caller's read cursor when the partner has said something new", async () => {
+    mMsg.findFirst.mockResolvedValue({ id: "pm-9" });
+    await readProxyChat({ matchId: "m-1", userId: "uid-A", now: DATE });
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "m-1" },
+      data: { proxyReadAtA: DATE },
+    });
+  });
+
+  /**
+   * The app polls this every four seconds for up to three hours. A cursor that
+   * rewrote itself on every poll would be ~2700 pointless UPDATEs per open
+   * chat, on the table the moderation trail depends on.
+   */
+  it("does not touch the cursor when there is nothing new from the partner", async () => {
+    mMsg.findFirst.mockResolvedValue(null);
+    await readProxyChat({ matchId: "m-1", userId: "uid-A", now: DATE });
+    expect(mMatch.update).not.toHaveBeenCalled();
   });
 
   /**
@@ -256,6 +320,51 @@ describe("relayProxyMessage", () => {
     expect(order).toEqual(["log", "deliver"]);
     expect(mMsg.create).toHaveBeenCalledWith({
       data: { matchId: "m-1", senderId: "uid-A", body: "hi" },
+      select: { id: true },
+    });
+  });
+
+  /**
+   * The second tick is a fact, not an optimism: it appears only once a rail has
+   * ACCEPTED the message.
+   */
+  it("stamps delivery once a rail accepted the message", async () => {
+    mockSendPush.mockResolvedValue(true);
+    await relayProxyMessage({ matchId: "m-1", senderUserId: "uid-A", body: "hi", now: DATE });
+    expect(mMsg.update).toHaveBeenCalledWith({
+      where: { id: "pm-1" },
+      data: { deliveredAt: DATE },
+    });
+  });
+
+  /**
+   * An unreachable partner leaves one tick — which is the truth. It repairs
+   * itself the moment they open the chat: reading moves their cursor, and
+   * "read" outranks "delivered" without ever needing this stamp.
+   */
+  it("leaves delivery unstamped when no rail took the message", async () => {
+    // The default partner is mobile-only (negative Telegram id), so the DM
+    // branch is skipped and the push is the only rail there is.
+    mockSendPush.mockResolvedValue(false);
+    await relayProxyMessage({ matchId: "m-1", senderUserId: "uid-A", body: "hi", now: DATE });
+    expect(mMsg.update).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A `both` partner whose DM fails but whose push lands HAS been reached.
+   * `Promise.all` would have reported the first rejection and called that a
+   * failed delivery.
+   */
+  it("counts delivery when one rail of two succeeds", async () => {
+    mMatch.findUnique.mockResolvedValue(
+      match({ userB: { id: "uid-B", telegramId: 2002n, platform: "both", language: "en", firstName: "Bob" } }),
+    );
+    mockSendMessage.mockRejectedValueOnce(new Error("blocked by user"));
+    mockSendPush.mockResolvedValue(true);
+    await relayProxyMessage({ matchId: "m-1", senderUserId: "uid-A", body: "hi", now: DATE });
+    expect(mMsg.update).toHaveBeenCalledWith({
+      where: { id: "pm-1" },
+      data: { deliveredAt: DATE },
     });
   });
 

@@ -246,6 +246,69 @@ describe("runCoordinationTick — offer (T-3h)", () => {
       data: { coordOfferSentAt: NOW },
     });
   });
+
+  /**
+   * Founder decision 2026-09-07. Both sides here are perfectly reachable on
+   * Telegram and both have usernames, so the fork COULD run — and deliberately
+   * does not, because one of them is on the app. The two contact-exchange
+   * variants hand over a `t.me/` link, which would finish the coordination on
+   * the surface the app cannot see, in the hour the app's chat screen exists
+   * for.
+   */
+  it("asks nothing when either side is on the app, and selects the anonymous chat", async () => {
+    mMatch.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "m1",
+          userA: user({ id: "A", gender: "female", telegramId: 1001n, platform: "both" }),
+          userB: user({ id: "B", gender: "male", telegramId: 1002n, telegramUsername: "bob" }),
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const api = makeApi();
+    const res = await runCoordinationTick(api, NOW);
+
+    expect(res.offers).toBe(0);
+    expect(api.sendPhoto).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    // The same two columns a tap writes, so `openProxies` and both relays
+    // treat this pair identically — there is no second code path.
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "m1", status: "scheduled", coordMethod: null },
+      data: { coordMethod: "proxy", coordChosenAt: NOW },
+    });
+  });
+
+  /**
+   * The guard is `pushReachable`, not "has a mobile id": a pair with no app
+   * between them keeps the fork it has always had.
+   */
+  it("still offers the fork to a pair that is Telegram-only", async () => {
+    mMatch.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "m1",
+          userA: user({ id: "A", gender: "female", telegramId: 1001n, platform: "telegram" }),
+          userB: user({
+            id: "B",
+            gender: "male",
+            telegramId: 1002n,
+            telegramUsername: "bob",
+            platform: "telegram",
+          }),
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const api = makeApi();
+    const res = await runCoordinationTick(api, NOW);
+
+    expect(res.offers).toBe(1);
+    expect(api.sendPhoto).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("runCoordinationTick — open proxy (T-1h, unconditional)", () => {

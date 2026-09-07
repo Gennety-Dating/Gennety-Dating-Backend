@@ -1857,11 +1857,24 @@ model Match {
   coordPartnerConsent Boolean?  @map("coord_partner_consent")
   /// Terminal stamp: contact revealed (A/B) or proxy method locked in (C).
   coordResolvedAt     DateTime? @map("coord_resolved_at")
-  /// Variant C anonymous proxy window. Opened at T-30m by the coordination
+  /// Variant C anonymous proxy window. Opened at T-1h by the coordination
   /// cron, closed at agreed_time + PROXY_CLOSE_AFTER_HOURS.
   proxyOpenedAt       DateTime? @map("proxy_opened_at")
   proxyClosesAt       DateTime? @map("proxy_closes_at")
   proxyClosedAt       DateTime? @map("proxy_closed_at")
+  /// How far each side has READ the proxy chat — a cursor, not a per-message
+  /// flag: someone opening the screen reads everything above the fold at once,
+  /// and a column per message would store the same instant N times.
+  ///
+  /// Written only by `readProxyChat`, which only the app calls, and only while
+  /// its chat screen is on the phone. That is what makes it honest rather than
+  /// inferred: the cursor moves because a person was looking, not because a
+  /// server guessed. **A partner on the Telegram rail never advances it** —
+  /// the Bot API gives bots no read receipts — so a message to them settles at
+  /// "delivered" and never reaches "read". That is the truth about that rail,
+  /// not a gap to paper over with a guess.
+  proxyReadAtA        DateTime? @map("proxy_read_at_a")
+  proxyReadAtB        DateTime? @map("proxy_read_at_b")
 
   /// --- Venue change v2 (feature-flagged, paid multiplayer board) ---
   /// String sub-state layered on a `scheduled` match — like `ticketStatus`
@@ -2047,6 +2060,15 @@ model ProxyMessage {
   senderId  String   @map("sender_id") @db.Uuid
   body      String
   createdAt DateTime @default(now()) @map("created_at")
+  /// When the message actually reached the partner's OWN rail: the bot's
+  /// `sendMessage` resolved, or APNs accepted the push. Null means it exists in
+  /// the log and nowhere else yet.
+  ///
+  /// A fact about DELIVERY only. Whether the partner then looked at it is a
+  /// different question, with a different answer per rail, and it lives in
+  /// `Match.proxyReadAtA/B` — not here, because "read" is not a property of one
+  /// message but of how far someone got.
+  deliveredAt DateTime? @map("delivered_at")
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
 

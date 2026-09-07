@@ -41,11 +41,24 @@ export type ProxyChatRefusal =
   | "empty"
   | "too-long";
 
+/**
+ * How far one's OWN message got. Present on `mine` rows only — the states are
+ * what the sender is told about their own reply, and a status on the partner's
+ * message would be telling them about themselves.
+ *
+ * Computed here rather than shipped as raw timestamps for the reason the whole
+ * module exists: two surfaces deriving "read" from two columns would sooner or
+ * later derive it differently, and this is a claim about another person.
+ */
+export type ProxyChatDeliveryStatus = "sent" | "delivered" | "read";
+
 export interface ProxyChatMessageView {
   id: string;
   mine: boolean;
   body: string;
   sentAt: Date;
+  /** Undefined on the partner's messages. */
+  status?: ProxyChatDeliveryStatus;
 }
 
 export interface ProxyChatView {
@@ -70,6 +83,8 @@ const matchSelect = {
   agreedTime: true,
   coordMethod: true,
   proxyClosedAt: true,
+  proxyReadAtA: true,
+  proxyReadAtB: true,
   userA: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true } },
   userB: { select: { id: true, telegramId: true, platform: true, language: true, firstName: true } },
 } as const;
@@ -124,6 +139,28 @@ function sidesOf(match: ProxyMatch, callerId: string) {
   return { me, partner };
 }
 
+/** How far the PARTNER of `callerId` has read. Null = never opened the screen. */
+function partnerReadAt(match: ProxyMatch, callerId: string): Date | null {
+  return callerId === match.userAId ? match.proxyReadAtB : match.proxyReadAtA;
+}
+
+/**
+ * The sender's own three states, from three facts the server actually holds.
+ *
+ * Nothing here is inferred from timing or from the shape of the conversation:
+ * "sent" is a row, "delivered" is a rail that accepted it, "read" is a cursor a
+ * person moved by opening the screen. A fourth state is not missing — a failed
+ * send never becomes a row at all, so the client has an error to show and no
+ * status to draw.
+ */
+function deliveryStatus(
+  row: { createdAt: Date; deliveredAt: Date | null },
+  readAt: Date | null,
+): ProxyChatDeliveryStatus {
+  if (readAt && readAt >= row.createdAt) return "read";
+  return row.deliveredAt ? "delivered" : "sent";
+}
+
 async function buildView(
   match: ProxyMatch,
   callerId: string,
@@ -149,8 +186,10 @@ async function buildView(
     where: { matchId: match.id, ...(after ? { createdAt: { gt: after } } : {}) },
     orderBy: { createdAt: "desc" },
     take: PROXY_CHAT_PAGE_MAX,
-    select: { id: true, senderId: true, body: true, createdAt: true },
+    select: { id: true, senderId: true, body: true, createdAt: true, deliveredAt: true },
   });
+
+  const readAt = partnerReadAt(match, callerId);
 
   return {
     open: proxyChatIsOpen(match, now),
@@ -158,12 +197,16 @@ async function buildView(
     closesAt: window?.closesAt ?? null,
     // Fetched newest-first so the cap keeps the RECENT end of a long window,
     // then reversed: the screen renders oldest to newest.
-    messages: rows.reverse().map((row) => ({
-      id: row.id,
-      mine: row.senderId === callerId,
-      body: row.body,
-      sentAt: row.createdAt,
-    })),
+    messages: rows.reverse().map((row) => {
+      const mine = row.senderId === callerId;
+      return {
+        id: row.id,
+        mine,
+        body: row.body,
+        sentAt: row.createdAt,
+        ...(mine ? { status: deliveryStatus(row, readAt) } : {}),
+      };
+    }),
     maxMessageLength: PROXY_MAX_MESSAGE_LEN,
     partnerFirstName: partner.firstName,
     serverNow: now,
@@ -176,6 +219,12 @@ async function buildView(
  * Deliberately succeeds while the window is shut: the client has to render
  * "the chat opens at 19:30" before it opens and "the chat has closed" after,
  * and a refusal there leaves it with nothing to say. Only sending is gated.
+ *
+ * **Reading here is what moves the caller's read cursor**, and the honesty of
+ * the partner's "read" tick rests entirely on that: this endpoint is called by
+ * the app, and the app calls it only while its chat screen is on the phone. A
+ * background refresh or a prefetch would turn the cursor into a lie, so if one
+ * is ever added it must not come through this function.
  */
 export async function readProxyChat(input: {
   matchId: string;
@@ -193,7 +242,38 @@ export async function readProxyChat(input: {
   if (match.status !== "scheduled") return { ok: false, error: "wrong-state" };
 
   const now = input.now ?? new Date();
-  return { ok: true, view: await buildView(match, input.userId, input.since, now) };
+  const view = await buildView(match, input.userId, input.since, now);
+  await markRead(match, input.userId, now);
+  return { ok: true, view };
+}
+
+/**
+ * Advance the caller's read cursor — but only when something of the partner's
+ * is actually sitting above it.
+ *
+ * The guard is not micro-optimisation: the app polls this every four seconds
+ * for up to three hours, and a cursor that rewrites itself on every poll would
+ * be ~2700 pointless UPDATEs per open chat, on the one table the moderation
+ * trail depends on.
+ */
+async function markRead(match: ProxyMatch, callerId: string, now: Date): Promise<void> {
+  const mine = callerId === match.userAId;
+  const current = mine ? match.proxyReadAtA : match.proxyReadAtB;
+
+  const unread = await prisma.proxyMessage.findFirst({
+    where: {
+      matchId: match.id,
+      senderId: { not: callerId },
+      ...(current ? { createdAt: { gt: current } } : {}),
+    },
+    select: { id: true },
+  });
+  if (!unread) return;
+
+  await prisma.match.update({
+    where: { id: match.id },
+    data: mine ? { proxyReadAtA: now } : { proxyReadAtB: now },
+  });
 }
 
 /**
@@ -223,17 +303,30 @@ export async function relayProxyMessage(input: {
   const now = input.now ?? new Date();
   if (!proxyChatIsOpen(match, now)) return { ok: false, error: "closed" };
 
-  await prisma.proxyMessage.create({
+  const message = await prisma.proxyMessage.create({
     data: { matchId: match.id, senderId: input.senderUserId, body },
+    select: { id: true },
   });
 
   const { me, partner } = sidesOf(match, input.senderUserId);
   // Best-effort by rule: an unreachable partner must not fail the sender's
   // send. The message is logged and on their screen the next time they open
   // the chat, which is the one delivery path that cannot break.
-  await deliverToPartner(me, partner, match.id, body).catch((err) =>
-    console.warn(`[proxy-chat] delivery failed for match ${match.id}:`, err),
-  );
+  const delivered = await deliverToPartner(me, partner, match.id, body).catch((err) => {
+    console.warn(`[proxy-chat] delivery failed for match ${match.id}:`, err);
+    return false;
+  });
+
+  // Stamped only on a rail that ACCEPTED it. An unreachable partner leaves this
+  // null and the sender sees one tick — which is the truth, and which repairs
+  // itself the moment they open the chat: reading sets their cursor, and "read"
+  // outranks "delivered" without needing this stamp at all.
+  if (delivered) {
+    await prisma.proxyMessage.update({
+      where: { id: message.id },
+      data: { deliveredAt: now },
+    });
+  }
 
   return { ok: true, view: await buildView(match, input.senderUserId, undefined, now) };
 }
@@ -245,20 +338,25 @@ type Side = ProxyMatch["userA"];
  * a `both`-platform account. Before this the relay only ever DM'd, so a mobile
  * partner learned of a message by opening the app, on the one screen whose
  * entire value is the hour before a meeting.
+ *
+ * Returns whether ANY rail accepted it, which is what the sender's second tick
+ * means. `allSettled` rather than `all` for exactly that reason: a `both`
+ * partner whose DM fails but whose push lands HAS been reached, and reporting
+ * the first rejection would call that a failure.
  */
 async function deliverToPartner(
   sender: Side,
   partner: Side,
   matchId: string,
   body: string,
-): Promise<void> {
+): Promise<boolean> {
   const lang = (partner.language ?? "en") as Language;
   const senderName = sender.firstName?.trim();
   const prefix = senderName
     ? t(lang, "coordProxyRelayNamedPrefix", { name: senderName })
     : t(lang, "coordProxyRelayPrefix");
 
-  const jobs: Promise<unknown>[] = [];
+  const jobs: Promise<boolean>[] = [];
 
   const api = getMainBotApi();
   const telegramReachable =
@@ -275,6 +373,7 @@ async function deliverToPartner(
           await api.sendMessage(Number(partner.telegramId), `${prefix}${body}`, {
             reply_markup: buildChatControlsKeyboard(matchId, lang),
           });
+          return true;
         },
       ),
     );
@@ -297,5 +396,6 @@ async function deliverToPartner(
     );
   }
 
-  await Promise.all(jobs);
+  const results = await Promise.allSettled(jobs);
+  return results.some((r) => r.status === "fulfilled" && r.value);
 }

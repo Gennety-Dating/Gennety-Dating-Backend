@@ -228,12 +228,49 @@ method, and never got a window. Two changes close it:
   T-3h. That is the right default rather than a second menu, because the other
   two variants exchange `t.me/` handles — meaningless to someone who has none —
   and the MVP scope already keeps only variant C on the app.
+- **Since 2026-09-07 that default covers any pair with the app in it** (founder
+  decision), not only one the fork cannot reach: `sendOffers` checks
+  `pushReachable` on EITHER side and, if it holds, writes `coordMethod: "proxy"`
+  without asking. The fork is not removed — a pair that is Telegram-only on both
+  sides still gets all three buttons. What changed is the reasoning: a `t.me/`
+  handle moves the pair onto Telegram three hours before they meet, so the
+  winning branch of the question would leave the surface the question was asked
+  about, and the app's chat screen — built for exactly that hour — would sit
+  empty. One rail per pair beats a choice whose answer takes the pair away.
+  It takes only ONE participant on the app for that split to happen, which is
+  why the check is `||` and not `&&`.
 - The relay moved into `services/proxy-chat.ts`, shared by the Telegram handler
   and `GET/POST /v1/matches/{id}/chat` (JWT), so the two surfaces cannot drift
   on the window, the log, or what the partner receives. Delivery follows the
   partner's OWN rail — a DM, an APNs push carrying the message text, or both.
   Before this the relay only ever DM'd, so a mobile partner learned of a message
   by opening the app.
+
+**Delivery states (2026-09-07).** A sender is told how far their own message
+got, and every state is a fact the server holds rather than an inference:
+
+| State | What it means | Where it comes from |
+|---|---|---|
+| `sent` | logged, and nowhere else yet | the `proxy_messages` row |
+| `delivered` | a rail the partner has ACCEPTED it | `ProxyMessage.deliveredAt`, stamped when `sendMessage` resolves or APNs takes the push |
+| `read` | the partner's cursor is at or past it | `Match.proxyReadAtA/B`, moved by `readProxyChat` |
+
+Three things about this are load-bearing:
+
+- **It is computed server-side** and shipped as `ProxyChatMessage.status`, not
+  as raw timestamps. Two surfaces deriving "read" independently would sooner or
+  later derive it differently, and this is a claim about another person.
+- **The cursor moves only in `readProxyChat`**, which only the app calls, and
+  only while its chat screen is on the phone. That is the whole basis for the
+  claim. A background refresh or a prefetch routed through that function would
+  turn it into a lie.
+- **A partner on the Telegram rail never reaches `read`.** The Bot API gives
+  bots no read receipts, so `delivered` is the honest ceiling there, and the
+  third state is in practice a signal that both sides are on the app. Clients
+  render its absence as "not known to be read", never as "unread".
+
+There is no `failed` state: a send that fails never becomes a row, so the client
+has an error to show and no status to draw.
 
 The window is derived from `agreedTime` (T-1h … T+2h) rather than read from
 `proxyOpenedAt`/`proxyClosesAt`: those are written by the 2-minute tick, which

@@ -89,6 +89,10 @@ function serialize(view: ProxyChatView): Record<string, unknown> {
       mine: m.mine,
       body: m.body,
       sentAt: m.sentAt.toISOString(),
+      // Omitted, not null, on the partner's messages: the contract says the
+      // key is absent there, and `status: null` would invite a client to
+      // render a fourth, empty state.
+      ...(m.status ? { status: m.status } : {}),
     })),
     maxMessageLength: view.maxMessageLength,
     partnerFirstName: view.partnerFirstName,

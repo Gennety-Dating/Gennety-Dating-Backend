@@ -12,7 +12,7 @@ import { env } from "../config.js";
 import { sendCoordCard } from "./coordination-card/send.js";
 import { sendPushToUser } from "./push.js";
 import { advanceDateDayActivities } from "./date-day-activity.js";
-import { telegramReachable } from "./telegram-reach.js";
+import { pushReachable, telegramReachable } from "./telegram-reach.js";
 import type { CoordCardTheme } from "./coordination-card/index.js";
 
 /**
@@ -189,7 +189,20 @@ async function sendOffers(api: Api<RawApi>, now: Date, result: CoordinationResul
     //
     // It writes the same two columns a tap writes, so `openProxies` below and
     // both relays treat such a pair identically — no second code path.
-    if (recipients.length === 0) {
+    //
+    // **Since 2026-09-07 the same default covers any pair with the app in it**
+    // (founder decision), not just one the fork cannot reach. The two
+    // contact-exchange variants hand over a `t.me/` link, which moves the pair
+    // onto Telegram three hours before they meet — so a pair that has an app
+    // between them would finish coordinating on the surface the app cannot see,
+    // and the screen built for exactly that hour would sit empty. One rail per
+    // pair is worth more than a choice whose winning branch leaves.
+    //
+    // Deliberately `pushReachable` on EITHER side, not both: it takes only one
+    // participant on the app for a contact exchange to split the pair.
+    const onTheApp = pushReachable(match.userA) || pushReachable(match.userB);
+
+    if (recipients.length === 0 || onTheApp) {
       await prisma.match.updateMany({
         where: { id: match.id, status: "scheduled", coordMethod: null },
         data: { coordMethod: "proxy", coordChosenAt: now },

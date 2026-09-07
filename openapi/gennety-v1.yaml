@@ -3754,6 +3754,34 @@ components:
             user id here would be identity the screen has no use for.
         body: { type: string }
         sentAt: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [sent, delivered, read]
+          description: |
+            How far one's OWN message got. **Present only when `mine` is true** —
+            these states are what a sender is told about their own reply, and
+            putting one on the partner's message would be telling them about
+            themselves.
+
+            Server-computed rather than derived from raw timestamps, because two
+            surfaces deriving "read" independently would eventually derive it
+            differently, and this is a claim about another person:
+
+            - `sent` — logged to `proxy_messages`, and nowhere else yet.
+            - `delivered` — a rail the partner actually has ACCEPTED it: the
+              bot's `sendMessage` resolved, or APNs took the push. For a `both`
+              partner one accepted rail is enough.
+            - `read` — the partner's read cursor is at or past this message.
+              The cursor moves only in `readProxyChat`, which only the app calls,
+              and only while its chat screen is open.
+
+            **A partner on the Telegram rail never reaches `read`,** and this is
+            not a gap: the Bot API gives bots no read receipts, so the honest
+            ceiling for that rail is `delivered`. Clients must render the absence
+            of `read` as "not known to be read", never as "unread".
+
+            There is no `failed`: a send that fails never becomes a row, so the
+            client has an error to show and no status to draw.
 
     PendingFeedback:
       type: object
