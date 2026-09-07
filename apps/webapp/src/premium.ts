@@ -620,36 +620,11 @@ function renderOffer(state: PremiumState): void {
     const picker = el("div", "pm-plans");
     picker.setAttribute("role", "radiogroup");
 
-    // The selection is ONE tile that travels to the cell you tapped, not three
-    // fills lighting and unlighting in place. Purely decorative to a screen
-    // reader — `aria-checked` on the cells is what actually reports the state —
-    // so it is hidden from the tree rather than described in it.
-    const thumb = el("span", "pm-plan-thumb");
-    thumb.setAttribute("aria-hidden", "true");
-    picker.append(thumb);
-
-    let settle = 0;
-    /**
-     * Send the tile to a position. `animate` is false for the initial paint:
-     * CSS transitions never run on a first computed style, but saying so out
-     * loud stops a later "let's animate it in" from being added by accident —
-     * the tile gliding in from the left on open would announce a choice the
-     * user has not made yet.
-     */
-    const moveTo = (index: number, animate: boolean): void => {
-      picker.style.setProperty("--pm-i", String(index));
-      if (!animate) return;
-      // The travelling lights live only for the journey. The timeout is the
-      // journey's length (the CSS transition's own 420ms); `transitionend`
-      // would be the tidier hook and is the wrong one — it does not fire when
-      // the tile is redirected mid-flight by a second tap, which is exactly the
-      // case where the lights must not get stuck on.
-      thumb.classList.add("is-moving");
-      window.clearTimeout(settle);
-      settle = window.setTimeout(() => thumb.classList.remove("is-moving"), 420);
-    };
-
-    for (const [index, plan] of plans.entries()) {
+    // The selection stays where it is and lights up in place: the chosen cell
+    // fills with slow drifting clouds (`.pm-plan::before/::after`), which is
+    // entirely a CSS state of `.is-selected`. Nothing here has to move it,
+    // measure it, or time it — the class is the whole mechanism.
+    for (const plan of plans) {
       const row = el("button", "pm-plan") as HTMLButtonElement;
       row.type = "button";
       row.setAttribute("role", "radio");
@@ -681,12 +656,10 @@ function renderOffer(state: PremiumState): void {
       row.append(head, meta);
       row.addEventListener("click", () => {
         if (busy) return;
-        // Re-tapping the chosen plan is not a switch. Without this the tile
-        // replays its arrival lights while standing still, which is the one
-        // state they were designed never to be seen in.
+        // Re-tapping the chosen plan is not a switch: nothing changes, so
+        // nothing should tick under the finger or repaint.
         if (selected?.id === plan.id) return;
         selected = plan;
-        moveTo(index, true);
         for (const other of picker.querySelectorAll(".pm-plan")) {
           const isMe = other === row;
           other.classList.toggle("is-selected", isMe);
@@ -705,16 +678,6 @@ function renderOffer(state: PremiumState): void {
       row.setAttribute("aria-checked", isSelected ? "true" : "false");
       picker.append(row);
     }
-    // Park the tile on whatever the server made default — today the monthly
-    // plan, i.e. position 0, but the catalog decides the order and this must not
-    // assume it. `Math.max` covers the case where nothing matched at all.
-    moveTo(
-      Math.max(
-        0,
-        plans.findIndex((p) => p.id === selected?.id),
-      ),
-      false,
-    );
     action.append(picker);
   }
 

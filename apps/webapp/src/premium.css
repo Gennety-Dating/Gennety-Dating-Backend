@@ -60,13 +60,18 @@
      which on dark means brighter and on light means more tinted. */
   --pm-seg: rgba(255, 255, 255, 0.07);
   --pm-seg-on: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.1) 100%);
-  --pm-seg-on-edge:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.14);
-  /* The two lights the selection carries WHILE IT TRAVELS, both dark when it is
-     parked. `sheen` is the streak along its leading face; `bloom` is the swell
-     inside it. Neither is ambient — see the note on `.pm-plan-thumb`. */
-  --pm-seg-sheen: rgba(255, 255, 255, 0.22);
-  --pm-seg-bloom: rgba(255, 255, 255, 0.2);
+  /* NO RIM TOKEN HERE ANY MORE. The selected cell used to carry
+     `inset 0 0 0 1px` — a one-pixel ring all the way round — and a ring is a
+     frame however softly it is lit. It reads cheap, which is the opposite of
+     what this screen is for. The chosen cell is now told apart by three things
+     that are all made of light rather than outline: a brighter fill, the clouds
+     drifting inside it, and a label at full ink. */
+  /* The clouds drifting inside the CHOSEN cell — light on this theme, so the
+     chosen plan is quite literally the brightest thing in the control. Two
+     densities: the layers cross at different speeds and the denser one has to
+     stay readable through the thinner. */
+  --pm-cloud-a: rgba(255, 255, 255, 0.22);
+  --pm-cloud-b: rgba(255, 255, 255, 0.13);
 
   --pm-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --tg-content-top: 56px;
@@ -92,13 +97,12 @@
      a pale page reads as a frame drawn around it, not as light. */
   --pm-seg: rgba(0, 0, 0, 0.04);
   --pm-seg-on: linear-gradient(180deg, rgba(0, 0, 0, 0.13) 0%, rgba(0, 0, 0, 0.09) 100%);
-  --pm-seg-on-edge: inset 0 0 0 1px rgba(0, 0, 0, 0.09);
-  /* Ink, like everything else that separates on cream. The travelling tile is
-     the DARKEST thing in the control here, so its own lights have to deepen it
-     as it moves — a white streak across a dark tile on a pale page would read as
-     a hole punched in it, which is the same inversion `--pm-seg-on` avoids. */
-  --pm-seg-sheen: rgba(0, 0, 0, 0.1);
-  --pm-seg-bloom: rgba(0, 0, 0, 0.09);
+  /* The clouds INVERT here, exactly like every other mark on cream: the chosen
+     cell is the darkest cell, so what drifts inside it has to deepen it. White
+     clouds in an ink-tinted chip on a pale page would read as holes punched
+     through it — the same inversion `--pm-seg-on` exists to avoid. */
+  --pm-cloud-a: rgba(0, 0, 0, 0.1);
+  --pm-cloud-b: rgba(0, 0, 0, 0.06);
 
   /* On the cream page the CTA flips to an ink-black glass with white text — the
      "black shades" side of the monochrome identity, high-contrast and glossy. */
@@ -523,7 +527,6 @@ body {
   /* One number, two consumers: the grid's gap and the travelling tile's stride.
      They are the same distance by construction, and a tile that walks a stride
      the grid does not use lands between two cells. */
-  --pm-seg-gap: 7px;
   position: relative;
   display: grid;
   /* `minmax(0, 1fr)`, not `1fr`: the bare keyword is `minmax(auto, 1fr)`, so a
@@ -532,76 +535,9 @@ body {
      different objects rather than as one control with three positions, and the
      widths would then also shift per locale. */
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--pm-seg-gap);
+  gap: 7px;
 }
 
-/* THE SELECTION, AS ONE TRAVELLING TILE.
- *
- * Three cells used to light and unlight independently: tap a plan and one fill
- * appeared here while another disappeared there. Nothing moved, so nothing
- * connected the two halves of the event, and the control read as three lamps
- * rather than as one switch with three positions.
- *
- * Now a single tile slides to the cell you tapped. That is the whole idea: the
- * eye follows a moving object without being asked to, so the answer to "which
- * one is chosen" is delivered by the motion itself before any fill is read. It
- * also states something three independent fills never could — that these are
- * three positions of ONE control, which is the same argument that already makes
- * the cells equal width.
- *
- * The stride is one cell plus one gap. The percentage in `translateX` is of the
- * tile's OWN box, and the tile is exactly one cell wide, so `100% + gap` is that
- * stride exactly, at any screen width, with no measuring in JS.
- *
- * The curve overshoots by a hair (1.24) and settles. A linear or ease-out glide
- * arrives and stops dead, which reads as a thing being repositioned; the small
- * overshoot reads as a thing with mass that was thrown and caught. */
-.pm-plan-thumb {
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: calc((100% - var(--pm-seg-gap) * 2) / 3);
-  border-radius: 16px;
-  background: var(--pm-seg-on);
-  box-shadow: var(--pm-seg-on-edge);
-  transform: translateX(calc((100% + var(--pm-seg-gap)) * var(--pm-i, 0)));
-  transition: transform 420ms cubic-bezier(0.34, 1.24, 0.4, 1);
-  pointer-events: none;
-}
-/* The swell inside the glass while it travels. Rises with the movement and is
-   already draining as the tile lands, so the light settles INTO the chosen cell
-   rather than switching off on arrival. */
-.pm-plan-thumb::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(70% 140% at 50% 50%, var(--pm-seg-bloom) 0%, transparent 68%);
-  opacity: 0;
-  transition: opacity 320ms ease;
-  pointer-events: none;
-}
-/* The streak along the face of the moving tile — light smeared by speed. It is
-   the one thing here that would look wrong sitting still, which is exactly why
-   it only exists while the tile is in motion. */
-.pm-plan-thumb::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, transparent 6%, var(--pm-seg-sheen) 50%, transparent 94%);
-  opacity: 0;
-  transition: opacity 320ms ease;
-  pointer-events: none;
-}
-.pm-plan-thumb.is-moving::before,
-.pm-plan-thumb.is-moving::after {
-  opacity: 1;
-  /* Up fast, down slow: the same asymmetry the CTA's press uses. */
-  transition-duration: 130ms;
-}
 .pm-plan {
   position: relative;
   display: flex;
@@ -613,40 +549,95 @@ body {
   border-radius: 16px;
   padding: 9px 6px;
   background: var(--pm-seg);
-  /* Unselected labels stand back. The selection is now carried by a tile that
-     slides between cells, and a fill alone is a quiet signal at these alphas —
-     the chosen plan also being the only one at full ink is what makes "chosen"
-     legible in the half-second before the eye reaches the fill. */
+  /* The clouds are children of this box and drift wider than it; without this
+     they would spill over the neighbouring cells and the gaps between them. */
+  overflow: hidden;
+  /* Unselected labels stand back. At these alphas the fill is the quiet half of
+     the signal — the chosen plan also being the only one at full ink is what
+     makes "chosen" legible in the half-second before the fill is read. */
   color: var(--pm-ink-soft);
   font-family: "Inter", system-ui, sans-serif;
   cursor: pointer;
   /* Only the fill, the label's ink and the press scale move; a transition on
      `all` would also animate the layout properties above and make the row
-     visibly reflow every time the user compares two plans. The selection's own
-     light travels on `.pm-plan-thumb`, not here. */
+     visibly reflow every time the user compares two plans. There is no
+     box-shadow in this list because the cell has none — see `.is-selected`. */
   transition:
     background 200ms ease,
     color 200ms ease,
     transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* THE CLOUDS.
+ *
+ * The chosen cell is lit from inside by soft cloud-like masses that drift, very
+ * slowly, and never settle. Two layers of two blobs each, on different periods
+ * (17s and 23s): the periods are coprime enough that the pattern they make
+ * together takes minutes to come back around, so it reads as weather rather than
+ * as a loop. Every blob is a radial gradient with no hard stop anywhere in it —
+ * a cloud with an edge is a shape, and a shape moving inside a button is a
+ * cartoon.
+ *
+ * They live at `inset: -45%`, i.e. the layer is half again bigger than the cell
+ * in every direction, so drifting by a few percent can never bring a blob's own
+ * falloff into view. What is on screen is always the middle of a much larger
+ * sky.
+ *
+ * This IS ambient motion, and this screen argues against ambient motion on the
+ * CTA one control below. The difference is what it is saying: the CTA's old
+ * bloom played on the one object that is always there, forever, decorating
+ * nothing. This plays on exactly ONE of three cells and stops the moment that
+ * cell stops being the chosen one — it is not decoration, it is the state.
+ * Which is also why the animation is PAUSED on the other two rather than merely
+ * hidden: nothing should be animating that nobody chose. */
+.pm-plan::before,
+.pm-plan::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: -45%;
+  opacity: 0;
+  /* Slower in than out. The clouds gather in the cell you chose and thin out of
+     the one you left, and gathering should be the half you notice. */
+  transition: opacity 420ms ease;
+  animation-play-state: paused;
+  pointer-events: none;
+}
+.pm-plan::before {
+  background:
+    radial-gradient(38% 46% at 26% 34%, var(--pm-cloud-a) 0%, transparent 72%),
+    radial-gradient(32% 40% at 74% 66%, var(--pm-cloud-b) 0%, transparent 70%);
+  animation: pm-cloud-a 17s ease-in-out infinite;
+}
+.pm-plan::after {
+  background:
+    radial-gradient(42% 50% at 66% 24%, var(--pm-cloud-b) 0%, transparent 74%),
+    radial-gradient(30% 38% at 32% 76%, var(--pm-cloud-a) 0%, transparent 68%);
+  animation: pm-cloud-b 23s ease-in-out infinite;
+}
+.pm-plan.is-selected::before,
+.pm-plan.is-selected::after {
+  opacity: 1;
+  animation-play-state: running;
 }
 /* The cells answer a touch the same way the CTA does, one size down: the whole
    footer should feel like one material. */
 .pm-plan:active {
   transform: scale(0.97);
 }
-/* The chosen cell gives its fill UP — the travelling tile is parked on it and
-   supplies it, and stacking the cell's own tint under the tile would make the
-   selected plan a different colour depending on which of the two you were
-   looking at. What the cell keeps is its label, at full ink. */
+/* The chosen cell: a brighter fill, a full-ink label, and the clouds over that
+   fill. NO box-shadow — no rim, no ring, nothing that draws an outline around
+   the choice. The fill is the floor the clouds are lit against; take it away and
+   they have nothing to raise. */
 .pm-plan.is-selected {
-  background: transparent;
+  background: var(--pm-seg-on);
   color: var(--pm-ink);
 }
-/* `z-index: 2` on both text rows: the travelling tile sits at 1, above the
-   cells' own fills so it can slide across them, and the words have to stay above
-   IT — otherwise the tile passes over a neighbour's label on its way by. A
-   positioned parent with `z-index: auto` paints its whole subtree at one level,
-   so the raise has to be on the rows themselves, not on the cell. */
+/* `z-index: 2` on both text rows: the clouds sit at 0, above the cell's fill,
+   and the words have to stay above THEM — otherwise a bright mass drifts across
+   the price and takes it with it. A positioned parent with `z-index: auto`
+   paints its whole subtree at one level, so the raise has to be on the rows
+   themselves, not on the cell. */
 .pm-plan-head {
   position: relative;
   z-index: 2;
@@ -895,6 +886,40 @@ body {
 }
 /* `pm-cta-glow` (the breathing inner bloom) is gone on purpose — the CTA's light
    is static at rest and moves only under a finger. See the note on `.pm-cta`. */
+/* THE WEATHER INSIDE THE CHOSEN CELL. Two paths, both slow ovals rather than
+   lines — clouds do not commute — running in opposite directions on periods that
+   do not divide each other, so the two layers cross in a new arrangement every
+   time. Transform only: no `filter`, no `background-position`, nothing that
+   would repaint. The layer composites on the GPU and the cell never reflows. */
+@keyframes pm-cloud-a {
+  0% {
+    transform: translate3d(-3%, -2%, 0) scale(1.04) rotate(0deg);
+  }
+  33% {
+    transform: translate3d(4%, 2%, 0) scale(1.14) rotate(3deg);
+  }
+  66% {
+    transform: translate3d(1%, 4%, 0) scale(1.08) rotate(-2deg);
+  }
+  100% {
+    transform: translate3d(-3%, -2%, 0) scale(1.04) rotate(0deg);
+  }
+}
+@keyframes pm-cloud-b {
+  0% {
+    transform: translate3d(3%, 2%, 0) scale(1.12) rotate(0deg);
+  }
+  40% {
+    transform: translate3d(-4%, -1%, 0) scale(1.02) rotate(-4deg);
+  }
+  75% {
+    transform: translate3d(-1%, -4%, 0) scale(1.1) rotate(2deg);
+  }
+  100% {
+    transform: translate3d(3%, 2%, 0) scale(1.12) rotate(0deg);
+  }
+}
+
 /* Star — a smooth twinkle: swells and dims, then settles. */
 @keyframes pm-twinkle {
   0% {
@@ -950,17 +975,14 @@ body {
   /* The CTA is NOT listed here any more: its resting light no longer animates,
      so there is nothing to hold still, and the press response is a 260ms fade
      plus a 1.5% scale — feedback for a deliberate touch, not ambient motion. */
-  /* The selection stops travelling and simply appears where it was sent. The
-     tile is the one thing on this screen whose motion crosses the viewport, so
-     it is also the one that has to be able to not move at all. Its two
-     travelling lights go with it — they describe a journey that no longer
-     happens. */
-  .pm-plan-thumb {
-    transition: none;
-  }
-  .pm-plan-thumb::before,
-  .pm-plan-thumb::after {
-    display: none;
+  /* The clouds stop drifting and hold their positions. They are NOT hidden: they
+     are the selected state itself, not an ornament laid on top of it, and a
+     reader who asked for less motion still has to be able to see which plan is
+     chosen. The rule above deliberately does not list them — it dims what it
+     freezes, and dimming this would take the brightness with it. */
+  .pm-plan::before,
+  .pm-plan::after {
+    animation: none !important;
   }
   /* Freeze the shimmer to a legible solid so the wordmark never sits mid-fade. */
   .pm-shimmer {
