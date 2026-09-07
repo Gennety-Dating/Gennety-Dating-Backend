@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const phoneOtpCreate = vi.fn();
 const phoneOtpFindFirst = vi.fn();
 const phoneOtpUpdateMany = vi.fn();
+const phoneOtpUpdate = vi.fn();
+const phoneOtpDeleteMany = vi.fn();
 const phoneOtpCount = vi.fn();
 const queryRawUnsafe = vi.fn();
 
@@ -12,6 +14,8 @@ const prismaMock = {
     create: phoneOtpCreate,
     findFirst: phoneOtpFindFirst,
     updateMany: phoneOtpUpdateMany,
+    update: phoneOtpUpdate,
+    deleteMany: phoneOtpDeleteMany,
     count: phoneOtpCount,
   },
   $executeRawUnsafe: queryRawUnsafe,
@@ -76,6 +80,8 @@ beforeEach(() => {
   phoneOtpCreate.mockReset();
   phoneOtpFindFirst.mockReset();
   phoneOtpUpdateMany.mockReset();
+  phoneOtpUpdate.mockReset();
+  phoneOtpDeleteMany.mockReset();
   phoneOtpCount.mockReset();
   queryRawUnsafe.mockReset();
   envMock.PHONE_CODE_PRIMARY_PROVIDER = "twilio";
@@ -92,7 +98,20 @@ beforeEach(() => {
     ...data,
   }));
   phoneOtpUpdateMany.mockResolvedValue({ count: 1 });
+  phoneOtpUpdate.mockResolvedValue({});
+  phoneOtpDeleteMany.mockResolvedValue({ count: 1 });
 });
+
+/**
+ * Данные, которыми доставка дописала бронь.
+ *
+ * Строка теперь пишется дважды: `create` внутри транзакции — бронь без
+ * провайдера, `update` после коммита — настоящий провайдер и код. Провайдер
+ * проверяется здесь, а не в `create`, потому что там его больше нет.
+ */
+function settled(): Record<string, unknown> {
+  return phoneOtpUpdate.mock.calls[0]![0].data as Record<string, unknown>;
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -126,7 +145,7 @@ describe("console rail (OTP_LOG_TO_CONSOLE)", () => {
 
     await requestPhoneCode("+380631234567");
 
-    const { data } = phoneOtpCreate.mock.calls[0][0];
+    const data = settled();
     expect(data.provider).toBe("console");
     expect(data.codeHash).toEqual(expect.any(String));
     // Twilio is the only rail that keeps the code for us; this one must not
@@ -193,7 +212,7 @@ describe("requestPhoneCode", () => {
 
     const result = await requestPhoneCode("+380631234567");
     expect(result).toMatchObject({ ok: true, deliveredVia: "sms" });
-    const created = phoneOtpCreate.mock.calls[0]![0].data;
+    const created = settled();
     expect(created.provider).toBe("twilio_verify");
     expect(created.codeHash).toBeUndefined();
     expect(created.providerRequestId).toBe("VE100");
@@ -210,7 +229,7 @@ describe("requestPhoneCode", () => {
 
     const result = await requestPhoneCode("+380631234567");
     expect(result).toMatchObject({ ok: true, deliveredVia: "telegram" });
-    expect(phoneOtpCreate.mock.calls[0]![0].data.provider).toBe("telegram_gateway");
+    expect(settled().provider).toBe("telegram_gateway");
   });
 
   it("delivers via Telegram Gateway first when it is set as the primary", async () => {
@@ -222,7 +241,7 @@ describe("requestPhoneCode", () => {
 
     const result = await requestPhoneCode("+380631234567");
     expect(result).toMatchObject({ ok: true, deliveredVia: "telegram" });
-    const created = phoneOtpCreate.mock.calls[0]![0].data;
+    const created = settled();
     expect(created.provider).toBe("telegram_gateway");
     expect(created.codeHash).toEqual(expect.any(String));
     expect(created.providerRequestId).toBe("req-1");
@@ -237,7 +256,7 @@ describe("requestPhoneCode", () => {
 
     const result = await requestPhoneCode("+380631234567");
     expect(result).toMatchObject({ ok: true, deliveredVia: "sms" });
-    const created = phoneOtpCreate.mock.calls[0]![0].data;
+    const created = settled();
     expect(created.provider).toBe("twilio_verify");
     expect(created.providerRequestId).toBe("VE123");
   });
@@ -277,6 +296,41 @@ describe("requestPhoneCode", () => {
     expect(phoneOtpCreate).not.toHaveBeenCalled();
   });
 
+  /**
+   * Регрессия на дефект аудита 2026-09-06 («Конкурентность №1»).
+   *
+   * Доставка шла ВНУТРИ `prisma.$transaction`, то есть каждая заявка держала
+   * соединение пула и transaction-scoped advisory lock всё время внешнего
+   * HTTP-вызова — до 10 с на рельс, два рельса подряд. Пул не сконфигурирован,
+   * на дроплете это единицы соединений, а лимитер частоты не ограничивает
+   * РАЗНЫЕ номера. Медленный Twilio исчерпывал пул и останавливал бота, оба
+   * API и все кроны разом — в одном процессе. Почтовый рельс (`public/otp.ts`)
+   * это уже пережил и вылечил; здесь тот же фикс.
+   */
+  it("не ходит в сеть, пока транзакция открыта", async () => {
+    const fetchMock = stubProviders({
+      twilioStart: () => jsonResponse({ sid: "VE900" }, 201),
+    });
+
+    let fetchCallsAtCommit = -1;
+    prismaMock.$transaction.mockImplementationOnce(
+      async (callback: (tx: unknown) => unknown) => {
+        const out = await callback(prismaMock);
+        fetchCallsAtCommit = fetchMock.mock.calls.length;
+        return out;
+      },
+    );
+
+    const result = await requestPhoneCode("+380631234567");
+
+    expect(result).toMatchObject({ ok: true, deliveredVia: "sms" });
+    // Ноль на момент коммита — ни одного провайдера не звали, пока
+    // соединение и advisory lock были заняты.
+    expect(fetchCallsAtCommit).toBe(0);
+    // И при этом доставка всё-таки состоялась — после коммита.
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
+  });
+
   it("reports unavailable when both rails fail", async () => {
     stubProviders({
       checkSendAbility: () => jsonResponse({ ok: false }),
@@ -285,7 +339,15 @@ describe("requestPhoneCode", () => {
 
     const result = await requestPhoneCode("+380631234567");
     expect(result).toEqual({ ok: false, reason: "unavailable" });
-    expect(phoneOtpCreate).not.toHaveBeenCalled();
+    // Бронь была создана до попыток доставки — и снята, когда ни один рельс
+    // не сработал. Иначе повтор упёрся бы в собственную недоставленную
+    // заявку: кулдаун идёт, слот суточного капа потрачен.
+    expect(phoneOtpCreate).toHaveBeenCalledTimes(1);
+    expect(phoneOtpCreate.mock.calls[0]![0].data.provider).toBe("reserving");
+    expect(phoneOtpUpdate).not.toHaveBeenCalled();
+    expect(phoneOtpDeleteMany).toHaveBeenCalledWith({
+      where: { id: "row-1", provider: "reserving" },
+    });
   });
 });
 
