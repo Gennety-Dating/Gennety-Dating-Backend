@@ -35,6 +35,10 @@
   --pm-cta-top: rgba(255, 255, 255, 0.14);
   --pm-cta-gloss: rgba(255, 255, 255, 0.14);
   --pm-cta-glow: rgba(255, 255, 255, 0.13);
+  /* The light the glass returns under a finger. Brighter than the resting glow
+     — it has to be visible against it — but still white on white, never a hue:
+     a tinted press would be the one colour on a monochrome screen. */
+  --pm-cta-touch: rgba(255, 255, 255, 0.3);
 
   /* Inline "see the places" chip — a small solid pill that inverts the page:
      white fill + black text on the dark theme. */
@@ -93,6 +97,10 @@
   --pm-cta-gloss: rgba(255, 255, 255, 0.16);
   /* Light-in-the-glass bloom on the ink pill — a soft inner glow, not a sweep. */
   --pm-cta-glow: rgba(255, 255, 255, 0.16);
+  /* The pill is ink-black on this theme too, so the press highlight stays white
+     and only goes a touch stronger — the cream page around it raises the eye's
+     adaptation, and 0.3 read as a smudge rather than as a catch of light. */
+  --pm-cta-touch: rgba(255, 255, 255, 0.34);
 
   /* Inline chip inverts the cream page — black fill + white text on the light
      theme. */
@@ -457,8 +465,8 @@ body {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 11px;
-  padding: 8px 20px calc(14px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
+  gap: 9px;
+  padding: 8px 20px calc(12px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
   background: var(--bg);
 }
 /* A soft, tall scroll-fade above the opaque footer — no hard divider line, and
@@ -476,8 +484,8 @@ body {
 .pm-price {
   text-align: center;
   color: var(--text-muted);
-  font-size: 13.5px;
-  margin: 2px 0 0;
+  font-size: 13px;
+  margin: 1px 0 0;
 }
 
 /* The referral cross-promo is NOT here any more: it is the shared
@@ -516,20 +524,28 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   border: none;
   border-radius: 16px;
-  padding: 10px 6px;
+  padding: 9px 6px;
   background: var(--pm-seg);
   color: var(--pm-ink);
   font-family: "Inter", system-ui, sans-serif;
   cursor: pointer;
-  /* Only the fill and the inner light move on selection; a transition on
+  /* Only the fill, its inner light and the press scale move; a transition on
      `all` would also animate the layout properties above and make the row
      visibly reflow every time the user compares two plans. */
   transition:
     background 160ms ease,
-    box-shadow 160ms ease;
+    box-shadow 160ms ease,
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* The cells answer a touch the same way the CTA does, one size down: the whole
+   footer should feel like one material. No travelling light here though — at
+   ~52px tall a highlight has nowhere to travel, and three of them competing
+   under one thumb would be noise. */
+.pm-plan:active {
+  transform: scale(0.97);
 }
 .pm-plan.is-selected {
   background: var(--pm-seg-on);
@@ -561,34 +577,45 @@ body {
   letter-spacing: 0;
   white-space: nowrap;
 }
+/* Exactly one line lives here now. Kept as its own element rather than folded
+   into `.pm-plan` so the name row and the price row stay two independently
+   centred rows whatever a locale does to either. */
 .pm-plan-meta {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
   min-width: 0;
 }
+/* The cell's price — and for 3/6 months it is the monthly RATE, not the total.
+   The cell used to stack both, and the total was the number that made the best
+   value look like the expensive option: the 6-month plan has the largest sum
+   and the smallest monthly cost. One line per cell also means all three cells
+   are read on the same unit. The sum actually charged is on the terms line
+   under the CTA, where it is stated for the plan actually selected. */
 .pm-plan-price {
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
 }
-/* The per-month figure is what makes the discount legible as a RATE rather than
-   as a bigger number — the 6-month cell has the largest price and the smallest
-   monthly cost, and without this line it simply looks like the expensive one. */
-.pm-plan-permonth {
-  color: var(--pm-ink-soft);
-  font-size: 10.5px;
-  font-weight: 600;
-  white-space: nowrap;
-}
 
-/* THE HERO ACTION — a clean liquid-glass pill (same recipe as the onboarding
-   AI-memory primary): a bright glossy fill (so the label is always fully
-   legible), a radial top gloss, a real 1px rim, and one soft, even glare that
-   travels across every few seconds. Generously rounded, monochrome,
-   high-contrast label. */
+/* THE HERO ACTION — a liquid-glass pill that is STILL until it is touched.
+ *
+ * It used to breathe: a bloom inside the pill swelled and dimmed on a 5.2s loop.
+ * Ambient motion is the cheapest kind of "premium" — it plays whether or not
+ * anyone is watching, and within two seconds it is wallpaper. What reads as
+ * expensive is a surface that does nothing until you touch it and then answers
+ * exactly: the light appears UNDER THE THUMB (`--pm-px`/`--pm-py`, set from
+ * `wireGlassPress`), the pill sinks toward the page, its cast shadow tightens as
+ * the gap closes, and on release the whole thing settles back on one curve.
+ *
+ * Deliberately not liquid METAL: a brushed anisotropic sheen needs a hue and a
+ * moving light source to read as metal at all, and this screen is monochrome by
+ * identity — there is no colour to spend on it. Glass keeps the palette and
+ * gains a physics. */
 .pm-cta {
+  /* The touch point in the pill's own box; centre until a finger says otherwise. */
+  --pm-px: 50%;
+  --pm-py: 50%;
   position: relative;
   overflow: hidden;
   width: 100%;
@@ -598,9 +625,9 @@ body {
   gap: 9px;
   border: none;
   border-radius: 30px;
-  padding: 19px 24px;
+  padding: 16px 24px;
   font-family: "Inter", system-ui, sans-serif;
-  font-size: 16.5px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--pm-cta-fg);
@@ -618,12 +645,18 @@ body {
     inset 0 1px 0 var(--pm-cta-top),
     inset 0 -10px 20px rgba(0, 0, 0, 0.45),
     0 16px 40px rgba(0, 0, 0, 0.55);
-  transition: transform 0.15s ease, opacity 0.2s ease;
+  /* One curve for the whole press. A true spring would wobble a 30px-radius
+     pill and undo the point of the exercise; this is a fast-out, long-settle
+     ease — the shape of something heavy coming to rest. */
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
 }
-/* Inner glow — a soft, wide bloom that lives INSIDE the pill (no travelling
-   streak, no hard edges). A single centred radial that gently breathes, so the
-   light reads as coming from within the glass rather than sweeping across it. */
-.pm-cta::after {
+/* The resting light — a soft, wide bloom INSIDE the pill (no travelling streak,
+   no hard edges), so the light reads as trapped in the glass. It is the same
+   bloom the old animation swelled to at its midpoint, simply held still. */
+.pm-cta::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -633,16 +666,49 @@ body {
     var(--pm-cta-glow) 0%,
     transparent 66%
   );
-  opacity: 0.7;
-  animation: pm-cta-glow 5.2s ease-in-out infinite;
+  opacity: 0.62;
   pointer-events: none;
+}
+/* The press specular — a tighter catch of light at the touch point. It rises in
+   120ms (a surface that answers late feels broken) and drains over 420ms, and
+   that asymmetry is the whole effect: light LEAVING glass, not a state being
+   switched off. Painted after the resting bloom and before the label, which
+   holds `z-index: 1` and so is never dimmed or washed by either. */
+.pm-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    42% 132% at var(--pm-px) var(--pm-py),
+    var(--pm-cta-touch) 0%,
+    transparent 64%
+  );
+  opacity: 0;
+  transition: opacity 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+/* `:active` is the fallback for anything that never sends pointer events; it
+   lights the centre, because only a real pointer can say where the finger was. */
+.pm-cta.is-pressed::after,
+.pm-cta:active::after {
+  opacity: 1;
+  transition-duration: 120ms;
 }
 .pm-cta > * {
   position: relative;
   z-index: 1;
 }
+/* Pressed: the pill sinks toward the page, so its cast shadow tightens and dims
+   in the same breath. A scale on its own reads as a picture being made smaller
+   — the shadow is what makes it a physical press. */
+.pm-cta.is-pressed,
 .pm-cta:active {
-  transform: scale(0.98);
+  transform: scale(0.985);
+  box-shadow:
+    inset 0 1px 0 var(--pm-cta-top),
+    inset 0 -10px 20px rgba(0, 0, 0, 0.5),
+    0 6px 16px rgba(0, 0, 0, 0.5);
 }
 .pm-cta[disabled] {
   opacity: 0.6;
@@ -724,19 +790,8 @@ body {
     background-position: 0% 0;
   }
 }
-/* The inner glow breathes: a slow, gentle swell of the bloom inside the pill —
-   never a sweep, never a hard edge. */
-@keyframes pm-cta-glow {
-  0%,
-  100% {
-    opacity: 0.5;
-    transform: scale(0.97);
-  }
-  50% {
-    opacity: 0.85;
-    transform: scale(1.02);
-  }
-}
+/* `pm-cta-glow` (the breathing inner bloom) is gone on purpose — the CTA's light
+   is static at rest and moves only under a finger. See the note on `.pm-cta`. */
 /* Star — a smooth twinkle: swells and dims, then settles. */
 @keyframes pm-twinkle {
   0% {
@@ -784,13 +839,14 @@ body {
   .pm-plate,
   .pm-benefit-wrap,
   .pm-benefit-tile.is-play .icon,
-  .pm-more,
-  .pm-cta::after {
-    /* Keep the inner glow, just hold it still (no breathing) at a soft level. */
+  .pm-more {
     animation: none !important;
     opacity: 0.55;
     transform: none;
   }
+  /* The CTA is NOT listed here any more: its resting light no longer animates,
+     so there is nothing to hold still, and the press response is a 260ms fade
+     plus a 1.5% scale — feedback for a deliberate touch, not ambient motion. */
   /* Freeze the shimmer to a legible solid so the wordmark never sits mid-fade. */
   .pm-shimmer {
     animation: none !important;

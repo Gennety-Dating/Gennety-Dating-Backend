@@ -2,6 +2,7 @@ import { apiFetch } from "./api.js";
 import "./theme.css";
 import "./premium.css";
 import { icon, type IconName } from "./icons";
+import { ctaLabel, ctaTerms } from "./premium-cta-label.js";
 import { butterflyLoader } from "./butterfly-loader";
 import { wireContentInsets } from "./telegram-insets";
 import { wireReturnBackButton, returnParams } from "./return-to.js";
@@ -76,14 +77,22 @@ interface Copy {
   plan6: string;
   planPerMonth: (p: string) => string;
   planSave: (pct: number) => string;
-  planOneOff: string;
+  /**
+   * The terms line under a PACKAGE's button. It now carries the total, because
+   * the button above it states a monthly RATE for every plan (§3.8): the sum
+   * actually charged has to be legible somewhere before the invoice opens, and
+   * this line already exists, so it costs the footer no height. Keep it to one
+   * row — a wrap here grows a `flex: none` footer and pushes the CTA up.
+   */
+  planOneOff: (total: string) => string;
   price: (p: string) => string;
   subscribe: (p: string) => string;
   /**
-   * The CTA for a PACKAGE. Separate from `subscribe` because that one appends a
-   * "/mo" rate suffix, and a package's price is a total: rendering "$75.56/mo"
-   * on the button that charges $75.56 once misstates the price on the one
-   * control whose whole job is to state it.
+   * The CTA for a package when the server could NOT give us a monthly rate —
+   * `premiumPlanPerMonthDisplay` returns null whenever the configured price
+   * display has no parseable amount. The button then states the total with no
+   * rate suffix, because "$75.56/mo" on the control that charges $75.56 once is
+   * the one lie this screen must never tell. The cells degrade the same way.
    */
   buyPackage: (p: string) => string;
   activeBadge: string;
@@ -116,7 +125,7 @@ const COPY: Record<Lang, Copy> = {
   plan6: "6 months",
   planPerMonth: (p: string) => `${p}/mo`,
   planSave: (pct: number) => `−${pct}%`,
-  planOneOff: "one payment · no auto-renewal",
+  planOneOff: (t) => `${t} once · no auto-renewal`,
   price: (p) => `${p}/month · cancel anytime`,
     subscribe: (p) => `Subscribe — ${p}/mo`,
     buyPackage: (p) => `Get Premium — ${p}`,
@@ -148,7 +157,7 @@ const COPY: Record<Lang, Copy> = {
   plan6: "6 месяцев",
   planPerMonth: (p: string) => `${p}/мес`,
   planSave: (pct: number) => `−${pct}%`,
-  planOneOff: "один платёж · без автопродления",
+  planOneOff: (t) => `${t} разово · без автопродления`,
   price: (p) => `${p}/месяц · отмена в любой момент`,
     subscribe: (p) => `Оформить — ${p}/мес`,
     buyPackage: (p) => `Оформить — ${p}`,
@@ -180,7 +189,7 @@ const COPY: Record<Lang, Copy> = {
   plan6: "6 місяців",
   planPerMonth: (p: string) => `${p}/міс`,
   planSave: (pct: number) => `−${pct}%`,
-  planOneOff: "один платіж · без автопродовження",
+  planOneOff: (t) => `${t} разово · без автопродовження`,
   price: (p) => `${p}/місяць · скасування будь-коли`,
     subscribe: (p) => `Оформити — ${p}/міс`,
     buyPackage: (p) => `Оформити — ${p}`,
@@ -212,7 +221,9 @@ const COPY: Record<Lang, Copy> = {
   plan6: "6 Monate",
   planPerMonth: (p: string) => `${p}/Mon.`,
   planSave: (pct: number) => `−${pct}%`,
-  planOneOff: "einmalige Zahlung · keine Verlängerung",
+  /* "einmalig", not "einmalige Zahlung": the total now sits in this line, and
+     the longer noun pushed it past one row on a 320px screen. */
+  planOneOff: (t) => `${t} einmalig · keine Verlängerung`,
   price: (p) => `${p}/Monat · jederzeit kündbar`,
     subscribe: (p) => `Abonnieren — ${p}/Mon.`,
     buyPackage: (p) => `Premium holen — ${p}`,
@@ -244,7 +255,7 @@ const COPY: Record<Lang, Copy> = {
   plan6: "6 miesięcy",
   planPerMonth: (p: string) => `${p}/mies.`,
   planSave: (pct: number) => `−${pct}%`,
-  planOneOff: "jedna płatność · bez odnowienia",
+  planOneOff: (t) => `${t} jednorazowo · bez odnowienia`,
   price: (p) => `${p}/miesiąc · anulujesz kiedy chcesz`,
     subscribe: (p) => `Subskrybuj — ${p}/mies.`,
     buyPackage: (p) => `Kup Premium — ${p}`,
@@ -296,6 +307,44 @@ function haptic(kind: "success" | "error"): void {
   } catch {
     /* noop */
   }
+}
+
+/**
+ * Liquid-glass press for the CTA: the specular lands WHERE the finger lands.
+ *
+ * The pill is a piece of dark glass, and the difference between a texture and a
+ * response is where its light comes from. A bloom that always swells out of the
+ * centre is something the button does on its own; a highlight that appears under
+ * the thumb and drains away when it lifts is the glass answering the touch —
+ * that, not more animation, is what reads as expensive. So the resting state is
+ * now perfectly still and ALL the motion is spent on the half second the finger
+ * is down.
+ *
+ * Two custom properties carry the touch point into the stylesheet; the rise, the
+ * settle, and the shadow collapsing as the pill presses into the page are CSS.
+ * Pointer events rather than touch+mouse pairs: Telegram's WebView is Chromium
+ * or WKWebView, both speak them, and one stream cannot double-fire on a tap.
+ */
+function wireGlassPress(btn: HTMLElement): void {
+  const press = (e: PointerEvent): void => {
+    const r = btn.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    btn.style.setProperty("--pm-px", `${((e.clientX - r.left) / r.width) * 100}%`);
+    btn.style.setProperty("--pm-py", `${((e.clientY - r.top) / r.height) * 100}%`);
+    btn.classList.add("is-pressed");
+    // A soft IMPACT, not a notification: this is the surface yielding under the
+    // finger, not the outcome of anything. `haptic()` above is the other kind.
+    try {
+      app?.HapticFeedback?.impactOccurred("soft");
+    } catch {
+      /* haptics are optional — absent on desktop and web */
+    }
+  };
+  const release = (): void => btn.classList.remove("is-pressed");
+  btn.addEventListener("pointerdown", press);
+  btn.addEventListener("pointerup", release);
+  btn.addEventListener("pointercancel", release);
+  btn.addEventListener("pointerleave", release);
 }
 
 /** Numeric DD.MM.YYYY — the active plate shows the expiry date this way. */
@@ -491,7 +540,10 @@ function renderOffer(state: PremiumState): void {
   const cards: Array<
     [IconName, "twinkle" | "flutter", string, string, string, { label: string; href: string }?]
   > = [
-    ["heart", "twinkle", s.b1t, s.b1d, s.b1x],
+    // Filled heart, not the outline one: the three cards under it (lock, star,
+    // map) all carry solid marks, and a hairline heart at 22px read as a
+    // lighter, thinner glyph than its neighbours.
+    ["heart-filled", "twinkle", s.b1t, s.b1d, s.b1x],
     // The padlock is deliberately the SAME glyph the calendar plates a locked
     // row with: a user arriving from that tap recognises it before reading a
     // word. Same precedent as the venue board's own `vc-premium-hint`.
@@ -539,18 +591,17 @@ function renderOffer(state: PremiumState): void {
   btn.append(btnLabel);
   const terms = el("p", "pm-price");
 
+  // EVERY plan states a monthly RATE on the button, packages included: that is
+  // the unit the three cells are compared on since they stopped printing totals,
+  // and a button answering in a different unit than the control above it is how
+  // someone ends up believing they picked a different price. The sum actually
+  // charged moves to the terms line. Both rules — and the fallback for when the
+  // server can give no rate at all — live in `premium-cta-label.ts`, which is
+  // import-safe and therefore unit tested; this module is not.
   const paint = (): void => {
-    const price = selected?.priceDisplay ?? state.priceDisplay;
-    // "/mo" belongs only on the recurring plan. A package charges its total
-    // once, so appending a rate to it would put a wrong price on the button.
-    btnLabel.textContent =
-      selected && !selected.recurring ? s.buyPackage(price) : s.subscribe(price);
-    // The monthly plan keeps the terms line exactly as it shipped. A package
-    // replaces it with the ONE thing that differs and is not visible on the row
-    // above: it does not come back next month. Saying that only where it is
-    // true also keeps the line to one row — the Russian "renews monthly ·
-    // cancel anytime" wrapped to two and grew this `flex: none` footer.
-    terms.textContent = selected && !selected.recurring ? s.planOneOff : s.price(price);
+    const total = selected?.priceDisplay ?? state.priceDisplay;
+    btnLabel.textContent = ctaLabel(s, selected, total);
+    terms.textContent = ctaTerms(s, selected, total);
   };
 
   if (plans.length > 1) {
@@ -572,11 +623,18 @@ function renderOffer(state: PremiumState): void {
         head.append(el("span", "pm-plan-save", s.planSave(plan.discountPct)));
       }
 
+      // ONE price line per cell, and it is a monthly RATE wherever the plan has
+      // one. The cell used to stack the total above the rate; the total is the
+      // figure that makes the 6-month plan look like the expensive one, it is
+      // not what the choice is made on, and dropping it takes a whole row out of
+      // a `flex: none` footer for all three cells at once. It is not lost: the
+      // terms line under the CTA states it for the plan actually selected.
       const meta = el("span", "pm-plan-meta");
-      meta.append(el("span", "pm-plan-price", plan.priceDisplay ?? `${plan.stars} ⭐`));
-      if (plan.perMonthDisplay && plan.months > 1) {
-        meta.append(el("span", "pm-plan-permonth", s.planPerMonth(plan.perMonthDisplay)));
-      }
+      const cellPrice =
+        plan.months > 1 && plan.perMonthDisplay
+          ? s.planPerMonth(plan.perMonthDisplay)
+          : (plan.priceDisplay ?? `${plan.stars} ⭐`);
+      meta.append(el("span", "pm-plan-price", cellPrice));
 
       row.append(head, meta);
       row.addEventListener("click", () => {
@@ -601,6 +659,7 @@ function renderOffer(state: PremiumState): void {
 
   paint();
   btn.addEventListener("click", () => void subscribe(btn, selected?.id ?? "monthly"));
+  wireGlassPress(btn);
   action.append(btn);
 
   // Only the price/terms sit under the button now. How to cancel lives in the
