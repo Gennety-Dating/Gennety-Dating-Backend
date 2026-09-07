@@ -63,12 +63,44 @@
   --pm-seg-on-edge:
     inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 
+  /* The resting hairline on an unselected plan chip — the edge of the material,
+     not a border: one pixel of light along the top only. */
+  --pm-seg-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  /* THE FOOTER GLASS. The action bar is a translucent panel with the page
+     scrolling UNDER it, so `backdrop-filter` has something real to bend — on the
+     near-black page it is the benefit cards (#161616) passing behind it that
+     make the material read as glass rather than as a painted gradient. */
+  --pm-footer-glass: rgba(8, 8, 10, 0.62);
+  --pm-footer-edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+  /* Elevation for the benefit cards. Nothing on the dark theme: a #161616 card
+     on a #030303 page is already two clearly different tones, and a drop shadow
+     under it would only smear the page. The light theme is where this earns its
+     keep — see the note there. */
+  --pm-card-lift: 0 0 0 rgba(0, 0, 0, 0);
+
+  /* The CTA's top rim while pressed. It DIMS rather than brightens: the light
+     source stays where it is and the pill tilts away from it, which is what
+     selling "pressed" needs — a rim that brightens reads as the object rising. */
+  --pm-cta-top-press: rgba(255, 255, 255, 0.08);
+
   --pm-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --tg-content-top: 56px;
   --tg-content-bottom: 0px;
 }
 
 :root[data-theme="light"] {
+  /* A DEEPER ground than the shared `--bg` (#f5f5f5) this screen used to inherit.
+     Premium's light theme is mostly white objects — white benefit cards, a white
+     plate, pale plan chips — and at #f5f5f5 the page sat 4% away from the cards
+     on it: not enough of a step to tell one surface from the next, so the whole
+     screen washed into a single bright field. Six percent of ground is what buys
+     every white object on top of it an edge without drawing one.
+     NOTE: `chromeColor` in premium.ts quotes this value for Telegram's own
+     header and bottom bar — the two must not drift apart. */
+  --bg: #eeeef0;
+
   --pm-ink: #0d0d0d;
   --pm-ink-soft: rgba(0, 0, 0, 0.64);
   --pm-glow: rgba(0, 0, 0, 0.2);
@@ -85,9 +117,14 @@
   /* Same rule, opposite direction: on cream, "more present" is more ink. No
      white gradient and no white rim — a white edge held inside a pale button on
      a pale page reads as a frame drawn around it, not as light. */
-  --pm-seg: rgba(0, 0, 0, 0.04);
-  --pm-seg-on: linear-gradient(180deg, rgba(0, 0, 0, 0.13) 0%, rgba(0, 0, 0, 0.09) 100%);
-  --pm-seg-on-edge: inset 0 0 0 1px rgba(0, 0, 0, 0.09);
+  --pm-seg: rgba(0, 0, 0, 0.06);
+  --pm-seg-on: linear-gradient(180deg, rgba(0, 0, 0, 0.17) 0%, rgba(0, 0, 0, 0.115) 100%);
+  --pm-seg-on-edge: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+  /* An ink hairline, not a light one. On the dark theme a chip's edge is where
+     light catches it; on cream the same edge is where the material stops and the
+     page shows — drawn in shadow, because white light held inside a pale chip on
+     a pale page reads as a frame someone drew, not as an edge. */
+  --pm-seg-edge: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
 
   /* On the cream page the CTA flips to an ink-black glass with white text — the
      "black shades" side of the monochrome identity, high-contrast and glossy. */
@@ -101,6 +138,20 @@
      and only goes a touch stronger — the cream page around it raises the eye's
      adaptation, and 0.3 read as a smudge rather than as a catch of light. */
   --pm-cta-touch: rgba(255, 255, 255, 0.34);
+  --pm-cta-top-press: rgba(255, 255, 255, 0.11);
+
+  /* The footer glass over cream. Kept NEAR the ground tone and only 68% opaque:
+     what passes under it should read as blurred content, never as a grey band
+     laid over the page. */
+  --pm-footer-glass: rgba(240, 240, 243, 0.68);
+  --pm-footer-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  /* THE FIX for white-on-white. A white card on a near-white page has no tonal
+     step to separate it, so the screen reads as one bright field with text
+     floating on it. A shadow gives every card an edge made of depth instead of
+     ink — two layers: a tight 1px contact shadow that says "this object touches
+     the page here", and a wide soft one that says "and it sits above it". */
+  --pm-card-lift: 0 1px 2px rgba(0, 0, 0, 0.05), 0 10px 26px rgba(0, 0, 0, 0.06);
 
   /* Inline chip inverts the cream page — black fill + white text on the light
      theme. */
@@ -171,7 +222,15 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: calc(30px + env(safe-area-inset-top) + var(--tg-content-top)) 20px 24px;
+  /* The bottom pad clears the action bar, which no longer takes space in the
+     flex column — it floats over this scroller so its glass has something to
+     bend. `--pm-footer-h` is measured from the real element by `wireFooterInset`
+     (the bar is ~145px with the plan picker and ~95px without, and both change
+     per locale), and the fallback keeps the last row reachable if that never
+     runs. 24px of air on top of it so the referral chip does not sit welded to
+     the glass. */
+  padding: calc(30px + env(safe-area-inset-top) + var(--tg-content-top)) 20px
+    calc(24px + var(--pm-footer-h, 190px));
 }
 
 .pm-center {
@@ -323,7 +382,10 @@ body {
 .pm-benefit-wrap {
   border-radius: 22px;
   background: var(--surface);
-  box-shadow: var(--pm-glass-edge);
+  /* Inner edge + elevation. `--pm-card-lift` is empty on the dark theme, where
+     the card and the page are already 8% apart in tone, and does the separating
+     on the light one, where #ffffff on the ground is not a step the eye can see. */
+  box-shadow: var(--pm-glass-edge), var(--pm-card-lift);
   overflow: hidden;
   animation: pm-rise 0.5s ease both;
 }
@@ -458,28 +520,40 @@ body {
   animation: pm-rise 0.5s ease 0.42s both;
 }
 
-/* ── Pinned action bar ────────────────────────────────────────────────── */
+/* ── The action bar: a floating pane of glass ─────────────────────────── */
+/* It used to be an opaque block in the flex column with a 34px fade above it —
+   a painted approximation of depth. It is now a real material: taken out of
+   flow, floated over the scroller (which pads itself by exactly this height),
+   translucent, and blurring whatever passes beneath. The benefit cards sliding
+   under it are what make it glass; the fade is gone because there is no longer
+   anything to hide — content does not vanish into the footer, it goes BEHIND it.
+   The saturation boost is not decoration: blurring alone drains colour out of
+   what shows through, and 180% puts back what the blur took. */
 .pm-action {
-  position: relative;
-  z-index: 2;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 8px 20px calc(12px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
-  background: var(--bg);
-}
-/* A soft, tall scroll-fade above the opaque footer — no hard divider line, and
-   a shorter gap so expanded cards don't get crowded under it. */
-.pm-action::before {
-  content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: -34px;
-  height: 34px;
-  background: linear-gradient(to top, var(--bg) 12%, transparent);
-  pointer-events: none;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px 20px calc(12px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
+  background: var(--pm-footer-glass);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  /* One hairline of light along the top edge — where the glass begins. This is
+     the edge of a material, not a divider rule: it is a single pixel, it carries
+     no colour of its own, and it exists because a translucent panel with no lip
+     reads as a smudge over the page. */
+  box-shadow: var(--pm-footer-edge);
+}
+/* Without backdrop-filter the panel would be a flat translucent wash with text
+   legible straight through it. Fall back to the opaque bar this replaced. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .pm-action {
+    background: var(--bg);
+  }
 }
 .pm-price {
   text-align: center;
@@ -529,6 +603,10 @@ body {
   border-radius: 16px;
   padding: 9px 6px;
   background: var(--pm-seg);
+  /* Even at rest a chip now carries its own edge. It sits ON the footer glass,
+     so without one the three of them dissolve into the panel — worst on cream,
+     where an untinted chip and the pane behind it are the same brightness. */
+  box-shadow: var(--pm-seg-edge);
   color: var(--pm-ink);
   font-family: "Inter", system-ui, sans-serif;
   cursor: pointer;
@@ -708,10 +786,14 @@ body {
 .pm-cta.is-pressed,
 .pm-cta:active {
   transform: scale(0.985);
+  /* Three things move together, and only together do they read as a press: the
+     top rim DIMS (the light stayed put; the pill tilted away from it), the base
+     shadow inside deepens (the glass is thicker where it is compressed), and the
+     cast shadow tightens toward the page it is approaching. */
   box-shadow:
-    inset 0 1px 0 var(--pm-cta-top),
-    inset 0 -10px 20px rgba(0, 0, 0, 0.5),
-    0 6px 16px rgba(0, 0, 0, 0.5);
+    inset 0 1px 0 var(--pm-cta-top-press),
+    inset 0 -14px 26px rgba(0, 0, 0, 0.55),
+    0 4px 12px rgba(0, 0, 0, 0.5);
 }
 .pm-cta[disabled] {
   opacity: 0.6;

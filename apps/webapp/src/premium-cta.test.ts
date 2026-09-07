@@ -4,6 +4,11 @@ import { describe, expect, it } from "vitest";
 // Non-empty only because vite.config.ts lists this stylesheet in
 // `test.css.include` — vitest stubs CSS imports otherwise.
 import CSS from "./premium.css?raw";
+// The screen's own source, as text. `premium.ts` cannot be imported (it calls
+// `WebApp.ready()` and `load()` on import), but one guard below needs to see a
+// colour it hardcodes for Telegram's chrome — the same precedent as reading
+// verification.html to check its inlined copy of shared keyframes.
+import TS from "./premium.ts?raw";
 import { ctaLabel, ctaTerms, type CtaCopy } from "./premium-cta-label";
 
 /**
@@ -125,5 +130,78 @@ describe("the slimmed footer", () => {
     // The stacked total was ~13px of a `flex: none` footer per cell, and it was
     // the number that made the 6-month plan look like the expensive one.
     expect(CSS).not.toContain(".pm-plan-permonth");
+  });
+});
+
+describe("the action bar's glass", () => {
+  it("has something behind it to blur", () => {
+    // The whole difference between glass and a painted gradient. The bar is out
+    // of flow so the scroller runs underneath it; put it back in the flex column
+    // and `backdrop-filter` samples the page's own flat background — the blur
+    // still "works", and nothing looks any different, which is how this would
+    // get quietly undone.
+    const action = rule(".pm-action");
+    expect(action).toMatch(/position:\s*absolute/);
+    expect(action).toContain("backdrop-filter");
+  });
+
+  it("keeps the scroller clear of the bar it no longer displaces", () => {
+    // An absolute bar reserves no space. Without this pad the referral chip —
+    // the last thing in the scroll — sits behind the glass with no way to reach
+    // it, on a screen whose whole job is to be scrolled to the end.
+    expect(rule(".pm-scroll")).toContain("var(--pm-footer-h");
+  });
+
+  it("puts back the colour the blur drains", () => {
+    expect(rule(".pm-action")).toMatch(/saturate\(\s*1[5-9]\d%\s*\)/);
+  });
+
+  it("falls back to an opaque bar where backdrop-filter is unsupported", () => {
+    // Translucent with no blur is not a softer version of this material, it is a
+    // wash with the page legible straight through the button.
+    expect(CSS).toContain("@supports not ((backdrop-filter");
+  });
+});
+
+describe("the light theme's separation", () => {
+  const lightBlock = CSS.slice(CSS.indexOf(':root[data-theme="light"]'));
+
+  /** The value of a custom property inside a block of the stylesheet. */
+  function token(block: string, name: string): string {
+    const m = new RegExp(`${name}:\\s*([^;]+);`).exec(block);
+    expect(m, `${name} not defined in that block`).not.toBeNull();
+    return m![1].trim();
+  }
+
+  it("stands the page off the white cards it carries", () => {
+    // The complaint this exists for: white cards on a #f5f5f5 page are a 4% step
+    // — not enough to tell one surface from the next, so the screen reads as one
+    // bright field. The ground has to sit measurably below #ffffff.
+    const bg = token(lightBlock, "--bg");
+    const channel = parseInt(bg.slice(1, 3), 16);
+    expect(channel).toBeLessThanOrEqual(0xf0);
+  });
+
+  it("keeps Telegram's chrome on the same ground as the page", () => {
+    // Two files carry this colour: the stylesheet paints the page, and
+    // `chromeColor` in premium.ts tells Telegram what to paint its header and
+    // bottom bar. A drift shows as a paler strip at both ends of the screen.
+    expect(TS).toContain(token(lightBlock, "--bg"));
+  });
+
+  it("lifts the cards on light and leaves the dark page alone", () => {
+    // Depth, not ink: a white card gets its edge from the shadow under it. On
+    // the near-black page the same shadow would only smear #030303.
+    expect(token(lightBlock, "--pm-card-lift")).toContain("rgba(0, 0, 0, 0.0");
+    const darkBlock = CSS.slice(0, CSS.indexOf(':root[data-theme="light"]'));
+    expect(token(darkBlock, "--pm-card-lift")).toMatch(/0 0 0 rgba\(0, 0, 0, 0\)/);
+  });
+
+  it("gives an unselected plan chip an edge of its own", () => {
+    // The chips sit ON the footer glass now. An untinted chip and the pane
+    // behind it are the same brightness on cream — three of them dissolve into
+    // the panel without one.
+    expect(rule(".pm-plan")).toContain("var(--pm-seg-edge)");
+    expect(token(lightBlock, "--pm-seg-edge")).toContain("0, 0, 0");
   });
 });
