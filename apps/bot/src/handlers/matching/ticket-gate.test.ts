@@ -344,6 +344,92 @@ describe("ticket gate post-accept status message", () => {
     });
   });
 
+  // ── The reveal is a delivery, and the deferral depends on it ────────────
+  //
+  // The nudge marker used to be burned before the send and the send swallowed
+  // by `.catch(() => {})`, while `skipSide` was computed before either. One
+  // failed DM therefore spent the only marker AND withheld her Calendar,
+  // waiting on a message she never got. Both tickets paid, gate `completed`,
+  // and the date quietly stopped existing.
+
+  function coveredCompletionRows() {
+    const paid = new Date("2026-06-19T10:00:00Z");
+    const completed = matchRow({
+      ticketStatus: "completed",
+      ticketPaidA: paid,
+      ticketPaidB: paid,
+      paidForPartnerByA: true,
+    });
+    mMatch.findUnique
+      .mockResolvedValueOnce(matchRow())
+      .mockResolvedValueOnce(
+        matchRow({ ticketPaidA: paid, ticketPaidB: paid, paidForPartnerByA: true }),
+      )
+      .mockResolvedValueOnce(completed)
+      .mockResolvedValue(completed);
+  }
+
+  it("sends her the Calendar anyway when the reveal DM fails, and gives the nudge marker back", async () => {
+    coveredCompletionRows();
+    const api = createApi();
+    // Her chat is the one that fails; his takt-1 confirmation still lands.
+    api.sendMessage.mockImplementation(async (chatId: number) => {
+      if (chatId === 1002) throw new Error("Forbidden: bot was blocked by the user");
+      return { message_id: 700 };
+    });
+
+    await applyTicketPayment(api, 1001n, "match-1", "both");
+
+    // Her Calendar is NOT withheld: there is no reveal for her to open.
+    expect(mStartScheduling).toHaveBeenCalledWith(api, "match-1", {
+      afterTicketGate: true,
+    });
+    // And the marker is released, so a later completion may try the reveal again.
+    const released = mMatch.updateMany.mock.calls.filter(
+      (c: unknown[]) => (c[0] as { data?: Record<string, unknown> })?.data?.partnerPaidNudgedAt === null,
+    );
+    expect(released.length).toBe(1);
+  });
+
+  it("never defers her Calendar when she has no Telegram reach at all", async () => {
+    // A mobile-only account carries a synthetic negative id, so the reveal DM
+    // cannot be delivered at any point. Deferring would hold her time picker
+    // hostage to an open that can never come from Telegram — she still gets the
+    // reveal from the ticket card in the app.
+    const paid = new Date("2026-06-19T10:00:00Z");
+    const mobileOnly = (over: Record<string, unknown> = {}) => {
+      const row = matchRow(over);
+      return { ...row, userB: { ...row.userB, telegramId: -4242n } };
+    };
+    const completed = mobileOnly({
+      ticketStatus: "completed",
+      ticketPaidA: paid,
+      ticketPaidB: paid,
+      paidForPartnerByA: true,
+    });
+    mMatch.findUnique
+      .mockResolvedValueOnce(mobileOnly())
+      .mockResolvedValueOnce(
+        mobileOnly({ ticketPaidA: paid, ticketPaidB: paid, paidForPartnerByA: true }),
+      )
+      .mockResolvedValueOnce(completed)
+      .mockResolvedValue(completed);
+    const api = createApi();
+
+    await applyTicketPayment(api, 1001n, "match-1", "both");
+
+    expect(mStartScheduling).toHaveBeenCalledWith(api, "match-1", {
+      afterTicketGate: true,
+    });
+    // The marker is never claimed either — nothing was sent, so nothing may
+    // record that it was.
+    const claimed = mMatch.updateMany.mock.calls.filter(
+      (c: unknown[]) =>
+        (c[0] as { data?: Record<string, unknown> })?.data?.partnerPaidNudgedAt instanceof Date,
+    );
+    expect(claimed.length).toBe(0);
+  });
+
   it("does not nudge her at completion if she already opened the reveal (seen stamped)", async () => {
     const paid = new Date("2026-06-19T10:00:00Z");
     mMatch.findUnique

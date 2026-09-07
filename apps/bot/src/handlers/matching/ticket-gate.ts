@@ -1415,31 +1415,30 @@ export async function completeTicketGateAndUnlockScheduling(
     : null;
   // When he covered HER ticket, hold her Calendar back until she opens the
   // "he paid your ticket ❤️" reveal — she should feel the surprise before we
-  // ask her to pick a time. Her card is delivered from `markPartnerPaidSeenAndNotify`
-  // when she opens; the payer's Calendar still goes out now. If she raced ahead
-  // and already saw it, don't defer.
-  const deferHerCalendar = coveredSide !== null && done?.partnerPaidSeenAt == null;
-
-  if (done && coveredSide && done.partnerPaidSeenAt === null && done.partnerPaidNudgedAt === null) {
-    const claim = await prisma.match.updateMany({
-      where: { id: matchId, partnerPaidNudgedAt: null },
-      data: { partnerPaidNudgedAt: new Date() },
-    });
-    if (claim.count > 0) {
-      const covered = selfUser(done, coveredSide);
-      const payer = peerUser(done, coveredSide);
-      if (isTelegramTarget(covered.telegramId)) {
-        await api
-          .sendMessage(
-            toTelegramChatId(covered.telegramId),
-            t(langOf(covered), "ticketPartnerPaidDm", { name: payer.firstName ?? "" }),
-            // She was already covered — the button is "view your ticket", not "get".
-            { reply_markup: buildTicketKeyboard(matchId, langOf(covered), covered.theme, "ticketViewButton") },
-          )
-          .catch(() => {});
-      }
-    }
+  // ask her to pick a time. Her card is delivered from
+  // `markPartnerPaidSeenAndNotify` when she opens; the payer's Calendar still
+  // goes out now. If she raced ahead and already saw it, don't defer.
+  //
+  // The deferral therefore has a precondition, and it used to go unchecked:
+  // there must BE a reveal for her to open. `deferHerCalendar` was computed
+  // before the send, the nudge marker was burned before the send, and the send
+  // itself was swallowed by `.catch(() => {})`. One Telegram hiccup — or a
+  // partner with no Telegram reach at all — spent the only marker, and the
+  // Calendar was then withheld waiting for her to open a message that did not
+  // exist. The gate read `completed`, both tickets were paid, and the date
+  // quietly stopped happening.
+  //
+  // So the deferral now follows the delivery instead of predicting it.
+  let revealDelivered = false;
+  if (done && coveredSide && done.partnerPaidSeenAt === null) {
+    revealDelivered =
+      // A previous completion already delivered it; her Calendar is legitimately
+      // waiting on that one.
+      done.partnerPaidNudgedAt !== null ||
+      (await deliverPartnerPaidReveal(api, done, coveredSide));
   }
+  const deferHerCalendar =
+    coveredSide !== null && done?.partnerPaidSeenAt == null && revealDelivered;
 
   // The persistent ticket card stays in chat untouched; the Calendar is sent as
   // a SEPARATE message that follows it. `calendarMessageId*` is NOT null here —
@@ -1454,6 +1453,65 @@ export async function completeTicketGateAndUnlockScheduling(
     afterTicketGate: true,
     ...(deferHerCalendar && coveredSide ? { skipSide: coveredSide } : {}),
   });
+}
+
+/**
+ * Deliver the goodwill-cover reveal to the partner whose ticket was paid for,
+ * and report whether it actually reached her — the answer decides whether her
+ * Calendar waits for her to open it.
+ *
+ * `partnerPaidNudgedAt` is claimed BEFORE the send, because it is what stops two
+ * concurrent completions from both DMing her; but a claim that does not end in a
+ * delivered message is released again, so the next completion (or the expiry
+ * sweep) may try once more. A marker meaning "we sent it" must never be left
+ * standing over a message we did not send.
+ *
+ * A partner with no Telegram reach never claims the marker at all: there is no
+ * DM to deliver, and pretending otherwise would hold her Calendar hostage to an
+ * open that cannot happen. She still gets the reveal the other way — the ticket
+ * card in the app re-derives it, and opening it stamps `partnerPaidSeenAt`
+ * through `notePartnerPaidSeen`.
+ */
+async function deliverPartnerPaidReveal(
+  api: Api<RawApi>,
+  match: TicketMatch,
+  coveredSide: Side,
+): Promise<boolean> {
+  const covered = selfUser(match, coveredSide);
+  if (!isTelegramTarget(covered.telegramId)) return false;
+
+  const claim = await prisma.match.updateMany({
+    where: { id: match.id, partnerPaidNudgedAt: null },
+    data: { partnerPaidNudgedAt: new Date() },
+  });
+  // Lost the claim to a concurrent completion, which is sending it right now.
+  if (claim.count === 0) return true;
+
+  const payer = peerUser(match, coveredSide);
+  const lang = langOf(covered);
+  try {
+    await api.sendMessage(
+      toTelegramChatId(covered.telegramId),
+      t(lang, "ticketPartnerPaidDm", { name: payer.firstName ?? "" }),
+      // She was already covered — the button is "view your ticket", not "get".
+      { reply_markup: buildTicketKeyboard(match.id, lang, covered.theme, "ticketViewButton") },
+    );
+    return true;
+  } catch (err) {
+    console.error(
+      `[ticket-gate] partner-paid reveal failed match=${match.id} side=${coveredSide}:`,
+      err,
+    );
+    // Give the marker back so the reveal can be retried, and tell the caller not
+    // to defer her Calendar on a message she never received.
+    await prisma.match
+      .updateMany({
+        where: { id: match.id, partnerPaidSeenAt: null },
+        data: { partnerPaidNudgedAt: null },
+      })
+      .catch(() => {});
+    return false;
+  }
 }
 
 async function refundPaidTicketSide(
