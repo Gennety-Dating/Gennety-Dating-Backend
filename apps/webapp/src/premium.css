@@ -666,7 +666,10 @@ body {
     var(--pm-cta-glow) 0%,
     transparent 66%
   );
-  opacity: 0.62;
+  /* 0.68 is the midpoint of the swell this replaces (the old keyframes ran the
+     bloom 0.5 → 0.85), so the pill rests at exactly the brightness the animation
+     spent most of its cycle passing through. */
+  opacity: 0.68;
   pointer-events: none;
 }
 /* The press specular — a tighter catch of light at the touch point. It rises in
