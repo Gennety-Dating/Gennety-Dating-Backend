@@ -260,12 +260,7 @@ export async function handleMatchDecision(ctx: BotContext): Promise<void> {
   }
   if (!matchId) return;
 
-  await ctx.answerCallbackQuery({
-    text: t(
-      ctx.session.language,
-      action === "accept" ? "matchAcceptedToast" : "matchDecisionSavedToast",
-    ),
-  });
+  const lang = ctx.session.language;
 
   // The confirmation card carries a single live button. Strip its keyboard the
   // moment it's tapped so a double-tap can't re-enter the commit path (which is
@@ -275,17 +270,30 @@ export async function handleMatchDecision(ctx: BotContext): Promise<void> {
   }
 
   const match = await loadMatch(matchId);
-  if (!match) return;
   // Blind-decision keeps the row in `proposed` until both sides decide,
-  // so the only ways a callback should arrive on a non-proposed row are:
+  // so the only ways a callback should arrive on a missing or non-proposed row
+  // are:
+  //   - the partner deleted their account, which cascades the row away while
+  //     the pitch card keeps its live buttons in the chat forever,
   //   - the user's own decision raced (their second tap on the same row),
   //     in which case the row is already `cancelled` / `negotiating` /
-  //     `expired` and we should no-op,
+  //     `expired`,
   //   - or the row is `completed` (date already happened).
-  if (match.status !== "proposed") return;
+  // None of those recorded a decision, so the tap gets an alert saying so —
+  // never the "Accepted!" toast — and the provably dead keyboard goes with it.
+  // The callback is answered HERE rather than eagerly at the top of the
+  // handler: a query can only be answered once, so an eager plain answer would
+  // make this alert impossible.
+  const side = match && match.status === "proposed" ? await sideForCaller(ctx, match) : null;
+  if (!match || !side) {
+    await ctx.answerCallbackQuery({ text: t(lang, "matchCardExpiredAlert"), show_alert: true });
+    await ctx.editMessageReplyMarkup().catch(() => {});
+    return;
+  }
 
-  const side = await sideForCaller(ctx, match);
-  if (!side) return;
+  await ctx.answerCallbackQuery({
+    text: t(lang, action === "accept" ? "matchAcceptedToast" : "matchDecisionSavedToast"),
+  });
 
   if (action === "accept") {
     // Capture the public Telegram username on the path to every scheduled date,
