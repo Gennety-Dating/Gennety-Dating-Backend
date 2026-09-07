@@ -5,12 +5,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const userFindUnique = vi.fn();
 const userUpdate = vi.fn();
 const scratchFindUnique = vi.fn();
-const scratchUpsert = vi.fn();
+const scratchMerge = vi.fn();
 
 vi.mock("@gennety/db", () => ({
   prisma: {
     user: { findUnique: userFindUnique, update: userUpdate },
-    userScratchMap: { findUnique: scratchFindUnique, upsert: scratchUpsert },
+    userScratchMap: { findUnique: scratchFindUnique },
+    // Запись идёт одним `INSERT ... ON CONFLICT DO UPDATE`: read-modify-write
+    // над целыми массивами терял элементы, когда пинг карты и Date Bump
+    // приходили одновременно.
+    $queryRaw: (...args: unknown[]) => scratchMerge(...args),
   },
 }));
 
@@ -22,7 +26,7 @@ vi.mock("./canvas-auth.js", () => ({
 }));
 
 const { scratchMapRouter } = await import("./routes/scratch-map.js");
-const { tileFor } = await import("@gennety/shared");
+const { tileFor, isTile } = await import("@gennety/shared");
 
 function buildApp() {
   const app = express();
@@ -39,13 +43,17 @@ beforeEach(() => {
     .mockResolvedValue({ scratchMapOptIn: true, profile: { homeCityKey: "ua:kyiv" } });
   userUpdate.mockReset().mockResolvedValue({});
   scratchFindUnique.mockReset().mockResolvedValue(null);
-  scratchUpsert.mockReset().mockImplementation(({ create, update }: any) =>
-    Promise.resolve({
-      exploredTiles: update?.exploredTiles ?? create.exploredTiles,
-      exploredPercent: update?.exploredPercent ?? create.exploredPercent,
-      discoveredVenues: update?.discoveredVenues ?? create.discoveredVenues ?? [],
-    }),
-  );
+  scratchMerge.mockReset().mockImplementation((_strings: unknown, ...values: unknown[]) => {
+    const flat = [...new Set(values.filter((v): v is string[] => Array.isArray(v)).flat())];
+    const tiles = flat.filter((v) => isTile(v)).sort();
+    return Promise.resolve([
+      {
+        exploredTiles: tiles,
+        exploredPercent: tiles.length > 0 ? 0.001 : 0,
+        discoveredVenues: flat.filter((v) => !isTile(v)).sort(),
+      },
+    ]);
+  });
 });
 
 describe("GET /v1/scratch", () => {
@@ -92,7 +100,7 @@ describe("POST /v1/scratch/ping", () => {
     const res = await request(buildApp()).post("/v1/scratch/ping").send(CENTRE);
 
     expect(res.body.uncovered).toBe(false);
-    expect(scratchUpsert).not.toHaveBeenCalled();
+    expect(scratchMerge).not.toHaveBeenCalled();
   });
 
   // 409, not 403: it is a setting rather than a permission, and the client's
@@ -157,7 +165,7 @@ describe("PUT /v1/scratch/opt-in", () => {
 
     expect(res.body.optIn).toBe(false);
     expect(res.body.exploredTiles).toEqual(["u8vmxh", "u8vmxj"]);
-    expect(scratchUpsert).not.toHaveBeenCalled();
+    expect(scratchMerge).not.toHaveBeenCalled();
   });
 
   it("refuses anything that is not a boolean", async () => {

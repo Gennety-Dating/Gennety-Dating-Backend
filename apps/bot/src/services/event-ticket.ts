@@ -2,6 +2,7 @@ import { prisma } from "@gennety/db";
 import { env } from "../config.js";
 import { ADMITTED_TIERS } from "./event-admission.js";
 import { EVENT_QR_VERSION, newQrNonce, signEventQr, verifyEventQr } from "./event-qr.js";
+import { isUniqueViolation } from "./ticket-wallet.js";
 
 /**
  * Event tickets: claiming a spot, minting the door code, and admitting someone
@@ -90,10 +91,33 @@ export async function claimEventTicket(
       WHERE id = ${tierId}::uuid AND claimed < capacity`;
     if (claimed === 0) return { ok: false as const, reason: "tier_full" as const };
 
-    const ticket = await tx.eventTicket.create({
-      data: { eventId, tierId, userId, qrNonce: newQrNonce() },
-      select: { id: true },
-    });
+    // The `findUnique` above makes a SEQUENTIAL double-tap free; this makes a
+    // SIMULTANEOUS one free too. Two taps in the same instant both pass that
+    // check, and the second then hits the unique index — which is the index
+    // doing its job, but it arrived at the person as a 500 for a ticket they
+    // already hold. The seat was never at risk (the capacity CAS above is
+    // correct); only the answer was.
+    let ticket: { id: string };
+    try {
+      ticket = await tx.eventTicket.create({
+        data: { eventId, tierId, userId, qrNonce: newQrNonce() },
+        select: { id: true },
+      });
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      // Someone else's transaction created it between the check and here. Give
+      // back the seat this one claimed and answer the way the sequential path
+      // does — the ticket exists, and that is what was asked for.
+      await tx.$executeRaw`
+        UPDATE event_ticket_tiers SET claimed = claimed - 1, updated_at = NOW()
+        WHERE id = ${tierId}::uuid AND claimed > 0`;
+      const existingNow = await tx.eventTicket.findUnique({
+        where: { eventId_userId: { eventId, userId } },
+        select: { id: true },
+      });
+      if (!existingNow) throw err;
+      return { ok: true as const, ticketId: existingNow.id, created: false };
+    }
     return { ok: true as const, ticketId: ticket.id, created: true };
   });
 }

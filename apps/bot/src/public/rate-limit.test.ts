@@ -1,7 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { make } from "./rate-limit.js";
+import { make, phoneKey } from "./rate-limit.js";
 
 /**
  * Регрессия на дефект аудита 2026-09-06.
@@ -51,5 +51,38 @@ describe("rate limiter 429 contract", () => {
 
     expect(limited.headers["content-type"]).toMatch(/application\/json/);
     expect(limited.body).toEqual({ error: "Too many OTP requests, try again later." });
+  });
+});
+
+/**
+ * Ключ, по которому лимитер считает.
+ *
+ * Оба дефекта аудита здесь одного рода: ключ строился на строке, которая
+ * меняется без изменения того, что она называет. У телефона это
+ * форматирование, у Mini App — `auth_date`/`hash`, которые Telegram
+ * перевыпускает при каждом открытии окна. Ведро, которое сбрасывается
+ * закрытием и открытием окна, ведром не является.
+ */
+describe("ключ телефонного лимитера", () => {
+  function key(phone: string): string {
+    return phoneKey({ body: { phone } } as never);
+  }
+
+  it("сводит разные записи одного номера в один ключ", () => {
+    const canonical = key("+15551234567");
+    expect(key("1 555 123 4567")).toBe(canonical);
+    expect(key("+1 (555) 123-4567")).toBe(canonical);
+    expect(key("+1-555-123-4567")).toBe(canonical);
+  });
+
+  it("не смешивает разные номера", () => {
+    expect(key("+15551234567")).not.toBe(key("+15551234568"));
+  });
+
+  it("считает и то, что разобрать не удалось", () => {
+    // Такой запрос всё равно откажут ниже по течению, но он обязан
+    // засчитаться против чего-то, а не получить пустой ключ.
+    expect(key("не телефон")).not.toBe("");
+    expect(key("не телефон")).toBe(key("НЕ ТЕЛЕФОН"));
   });
 });
