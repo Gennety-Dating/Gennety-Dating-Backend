@@ -1975,11 +1975,31 @@ export async function computePairwiseDistances(
 
   // Build a batch SQL query: for each pair compute cosine distance.
   // We chunk to avoid extremely large queries.
+  //
+  // Grouped by city FIRST, and that is not an optimisation with a trade-off:
+  // `areMutuallyCompatible` requires an identical `homeCityKey`, so every
+  // cross-city pair this loop used to build was built only to be thrown away
+  // on its first line. The pair set is byte-for-byte the same; what changes is
+  // that the work is now Σ(nᵢ²) per city instead of N² over the whole country.
+  //
+  // On a droplet with 2 GB and one core the difference is not academic: 2000
+  // eligible users in one pass is ~2 million visited combinations and a
+  // half-million-element array of pair objects, in the same process that serves
+  // the bot, both Express apps and every cron.
+  const byCity = new Map<string, BatchUser[]>();
+  for (const user of users) {
+    if (!user.homeCityKey || !user.embeddingLiteral) continue;
+    const bucket = byCity.get(user.homeCityKey);
+    if (bucket) bucket.push(user);
+    else byCity.set(user.homeCityKey, [user]);
+  }
+
   const pairs: Array<{ aId: string; bId: string; aEmb: string; bEmb: string }> = [];
-  for (let i = 0; i < users.length; i++) {
-    for (let j = i + 1; j < users.length; j++) {
-      const a = users[i]!;
-      const b = users[j]!;
+  for (const cityUsers of byCity.values()) {
+    for (let i = 0; i < cityUsers.length; i++) {
+    for (let j = i + 1; j < cityUsers.length; j++) {
+      const a = cityUsers[i]!;
+      const b = cityUsers[j]!;
       if (!areMutuallyCompatible(a, b)) continue;
       if (!a.embeddingLiteral || !b.embeddingLiteral) continue;
       // Defense-in-depth: refuse to splice anything that doesn't match the
@@ -1994,6 +2014,7 @@ export async function computePairwiseDistances(
         continue;
       }
       pairs.push({ aId: a.id, bId: b.id, aEmb: a.embeddingLiteral, bEmb: b.embeddingLiteral });
+    }
     }
   }
 
@@ -2257,21 +2278,83 @@ export async function runDropBatch(): Promise<DropBatchResult> {
  * before the parameter existed — `loadEligibleUsers()` is called with no
  * arguments, which is what `match-engine-eligibility.test.ts` pins.
  */
+/**
+ * People one city may bring to a single drop.
+ *
+ * The pair matrix is quadratic and it lives in the heap of the process that
+ * also serves the bot, both Express apps and every cron, on 2 GB and one core.
+ * Grouping by city (see `computePairwiseDistances`) removes the pairs that were
+ * only ever built to be discarded, but it cannot bound a single city that grows
+ * — and one city IS the unit this product grows in.
+ *
+ * Nobody cut here is lost. They come back as `missedUserIds`, which is the
+ * product's existing answer to "eligible this week, unpaired": it increments
+ * `standbyCount` and `missedWeeks`, and `standbyCount` is exactly what the
+ * selection below sorts by. So a cut is a place in next week's queue, ahead of
+ * everyone who was matched — a rotation, not a loss.
+ */
+const MAX_POOL_PER_CITY = 400;
+
+/**
+ * Keep each city's pool inside `MAX_POOL_PER_CITY`, longest wait first.
+ *
+ * Ties break on `id` so two runs over the same data choose the same people:
+ * this decides who is in a drop, and "roughly the same" is not good enough for
+ * that.
+ */
+export function capPoolPerCity(
+  users: readonly BatchUser[],
+  limit: number = MAX_POOL_PER_CITY,
+): { kept: BatchUser[]; cut: BatchUser[] } {
+  const byCity = new Map<string, BatchUser[]>();
+  for (const user of users) {
+    const key = user.homeCityKey ?? "";
+    const bucket = byCity.get(key);
+    if (bucket) bucket.push(user);
+    else byCity.set(key, [user]);
+  }
+
+  const kept: BatchUser[] = [];
+  const cut: BatchUser[] = [];
+  for (const [city, bucket] of byCity) {
+    if (bucket.length <= limit) {
+      kept.push(...bucket);
+      continue;
+    }
+    const ordered = [...bucket].sort(
+      (l, r) => r.standbyCount - l.standbyCount || l.id.localeCompare(r.id),
+    );
+    kept.push(...ordered.slice(0, limit));
+    cut.push(...ordered.slice(limit));
+    console.warn(
+      `[match-engine] city "${city}": ${bucket.length} eligible, taking ${limit} — ` +
+        `${bucket.length - limit} carried to the next drop by standby order`,
+    );
+  }
+  return { kept, cut };
+}
+
 export async function previewDropBatch(
   restrictToUserIds?: readonly string[],
 ): Promise<DropBatchPlan> {
-  const users = restrictToUserIds
+  const eligible = restrictToUserIds
     ? await loadEligibleUsersForIds(prisma, restrictToUserIds)
     : await loadEligibleUsers();
+  const { kept: users, cut: carried } = capPoolPerCity(eligible);
   if (users.length === 0) {
-    return { eligible: 0, pairs: 0, finalPairs: [], missedUserIds: [] };
+    return {
+      eligible: eligible.length,
+      pairs: 0,
+      finalPairs: [],
+      missedUserIds: carried.map((u) => u.id),
+    };
   }
   if (users.length === 1) {
     return {
-      eligible: 1,
+      eligible: eligible.length,
       pairs: 0,
       finalPairs: [],
-      missedUserIds: [users[0]!.id],
+      missedUserIds: [users[0]!.id, ...carried.map((u) => u.id)],
     };
   }
 
@@ -2316,10 +2399,17 @@ export async function previewDropBatch(
   }
 
   return {
-    eligible: users.length,
+    // Everyone the eligibility scan found, not only those this run could fit —
+    // the number is read as "how many people were up for a match this week".
+    eligible: eligible.length,
     pairs: finalPairs.length,
     finalPairs,
-    missedUserIds: users.filter((u) => !pairedIds.has(u.id)).map((u) => u.id),
+    missedUserIds: [
+      ...users.filter((u) => !pairedIds.has(u.id)).map((u) => u.id),
+      // Carried over rather than dropped: this is the list that raises their
+      // standby priority for the next drop.
+      ...carried.map((u) => u.id),
+    ],
   };
 }
 
