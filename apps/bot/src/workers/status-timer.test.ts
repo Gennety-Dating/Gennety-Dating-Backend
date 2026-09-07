@@ -47,8 +47,15 @@ function active(overrides: Record<string, unknown> = {}) {
 }
 
 /** A live-match row shaped like the worker's own `select`. `u1` is side A. */
+let nextMatchSeq = 0;
+
 function liveMatch(overrides: Record<string, unknown> = {}) {
+  nextMatchSeq += 1;
   return {
+    // Identity and age are what the banner-stage merge sorts and de-duplicates
+    // on, so a fixture without them describes a row the database never returns.
+    id: `m${nextMatchSeq}`,
+    createdAt: new Date(Date.UTC(2026, 6, 20, 0, 0, nextMatchSeq)),
     status: "negotiating",
     userAId: "u1",
     userBId: "u2",
@@ -61,6 +68,27 @@ function liveMatch(overrides: Record<string, unknown> = {}) {
     pitchMessageIdB: null,
     ...overrides,
   };
+}
+
+/**
+ * Answer `match.findMany` the way the database does, one side at a time.
+ *
+ * `loadBannerStages` asks two questions — "matches where these users are A" and
+ * "…where they are B" — instead of one `OR`, so a mock that returns the same
+ * array to both hands every match to the merge twice. That is not what the
+ * database does, and a fixture that pretends otherwise tests the merge against
+ * a shape it will never see.
+ */
+function mockMatches(rows: ReturnType<typeof liveMatch>[]) {
+  mockPrisma.match.findMany.mockImplementation(
+    async (args: { where?: { userAId?: unknown; userBId?: unknown } }) => {
+      const side = args?.where?.userAId !== undefined ? "userAId" : "userBId";
+      const ids = new Set(
+        ((args?.where?.[side] as { in?: string[] } | undefined)?.in ?? []) as string[],
+      );
+      return rows.filter((row) => ids.has(row[side] as string));
+    },
+  );
 }
 
 function makeApi() {
@@ -81,7 +109,8 @@ beforeEach(() => {
   mockPrisma.user.findUnique.mockResolvedValue(null);
   mockPrisma.user.update.mockResolvedValue({});
   mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
-  mockPrisma.match.findMany.mockResolvedValue([]);
+  nextMatchSeq = 0;
+  mockMatches([]);
 });
 
 describe("statusTimerTick", () => {
@@ -111,7 +140,7 @@ describe("statusTimerTick", () => {
   // than supplemented.
   it("replaces the drop countdown with the date countdown", async () => {
     mockPrisma.user.findMany.mockResolvedValue([active()]);
-    mockPrisma.match.findMany.mockResolvedValue([
+    mockMatches([
       liveMatch({
         status: "scheduled",
         agreedTime: new Date("2026-07-21T18:00:00.000Z"),
@@ -143,7 +172,7 @@ describe("statusTimerTick", () => {
 
   it("shows the reply deadline while the user's own decision is open", async () => {
     mockPrisma.user.findMany.mockResolvedValue([active()]);
-    mockPrisma.match.findMany.mockResolvedValue([
+    mockMatches([
       liveMatch({
         status: "proposed",
         dispatchedAt: new Date("2026-07-21T03:40:00.000Z"),
@@ -165,7 +194,7 @@ describe("statusTimerTick", () => {
 
   it("ignores a proposed match whose pitch has not reached this side yet", async () => {
     mockPrisma.user.findMany.mockResolvedValue([active()]);
-    mockPrisma.match.findMany.mockResolvedValue([
+    mockMatches([
       liveMatch({
         status: "proposed",
         dispatchedAt: new Date("2026-07-21T03:40:00.000Z"),
@@ -183,7 +212,7 @@ describe("statusTimerTick", () => {
 
   it("prefers the most progressed row when legacy data has several live matches", async () => {
     mockPrisma.user.findMany.mockResolvedValue([active()]);
-    mockPrisma.match.findMany.mockResolvedValue([
+    mockMatches([
       liveMatch({ status: "negotiating" }),
       liveMatch({
         status: "scheduled",
@@ -197,6 +226,33 @@ describe("statusTimerTick", () => {
 
     const [, , text] = api.editMessageText.mock.calls[0]!;
     expect(text).toContain("Blur Cafe");
+  });
+
+  it("counts a match once when BOTH of its users are in the same tick", async () => {
+    // The banner-stage read is two queries now, one per side, and a pair where
+    // both people are active answers to both of them. If the merge did not
+    // de-duplicate, that single match would vote twice — and `pickCurrentMatch`
+    // would be choosing between two copies of the same row.
+    mockPrisma.user.findMany.mockResolvedValue([
+      active(),
+      active({ id: "u2", telegramId: 43n, statusMessageId: 101 }),
+    ]);
+    mockMatches([
+      liveMatch({
+        status: "scheduled",
+        agreedTime: new Date("2026-07-21T18:00:00.000Z"),
+        venueName: "Blur Cafe",
+      }),
+    ]);
+    const api = makeApi();
+
+    const result = await statusTimerTick(api, { now: NOW, renderCache: new Map() });
+
+    // Both sides get their own banner, and both name the same venue.
+    expect(result.edited).toBe(2);
+    const texts = api.editMessageText.mock.calls.map((c: unknown[]) => c[2] as string);
+    expect(texts).toHaveLength(2);
+    expect(texts.every((text) => text.includes("Blur Cafe"))).toBe(true);
   });
 
   it("re-pins a tracked message during the hourly physical audit", async () => {

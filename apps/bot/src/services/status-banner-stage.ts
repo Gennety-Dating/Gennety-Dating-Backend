@@ -84,27 +84,54 @@ export async function loadBannerStages(
   const stages = new Map<string, StatusBannerStage>();
   if (userIds.length === 0) return stages;
 
-  const live = await prisma.match.findMany({
-    where: {
-      status: { in: [...ACTIVE_MATCH_STATUSES] },
-      OR: [{ userAId: { in: userIds } }, { userBId: { in: userIds } }],
-    },
-    // `pickCurrentMatch` breaks ties by input order, so the newest row within
-    // a status has to come first.
-    orderBy: { createdAt: "desc" },
-    select: {
-      status: true,
-      userAId: true,
-      userBId: true,
-      agreedTime: true,
-      venueName: true,
-      dispatchedAt: true,
-      acceptedByA: true,
-      acceptedByB: true,
-      pitchMessageIdA: true,
-      pitchMessageIdB: true,
-    },
-  });
+  // Two queries rather than one `OR`, because this is the hottest read in the
+  // system: the status-timer worker runs it every minute for every active
+  // account. An `OR` across two different columns cannot use one index — the
+  // planner either bitmap-ORs two scans or falls back to a sequential scan of
+  // `matches`, and the second becomes the tick's whole budget as the table
+  // grows. Split, each half is a plain index lookup: `[userAId, status]` and
+  // `[userBId, status]` (packages/db/prisma/schema.prisma).
+  //
+  // The merge below has to restore what the single query got for free.
+  const select = {
+    id: true,
+    status: true,
+    createdAt: true,
+    userAId: true,
+    userBId: true,
+    agreedTime: true,
+    venueName: true,
+    dispatchedAt: true,
+    acceptedByA: true,
+    acceptedByB: true,
+    pitchMessageIdA: true,
+    pitchMessageIdB: true,
+  } as const;
+
+  const [asA, asB] = await Promise.all([
+    prisma.match.findMany({
+      where: { status: { in: [...ACTIVE_MATCH_STATUSES] }, userAId: { in: userIds } },
+      select,
+    }),
+    prisma.match.findMany({
+      where: { status: { in: [...ACTIVE_MATCH_STATUSES] }, userBId: { in: userIds } },
+      select,
+    }),
+  ]);
+
+  // `pickCurrentMatch` breaks ties by input order, so the newest row within a
+  // status still has to come first — the ordering is part of the contract, not
+  // a convenience of the query that used to produce it. A pair where both sides
+  // are in `userIds` appears in both halves, so it is de-duplicated on the way
+  // in; without that a single match would vote twice for the same user.
+  const seen = new Set<string>();
+  const live = [...asA, ...asB]
+    .filter((match) => {
+      if (seen.has(match.id)) return false;
+      seen.add(match.id);
+      return true;
+    })
+    .sort((l, r) => r.createdAt.getTime() - l.createdAt.getTime());
 
   const wanted = new Set(userIds);
   const candidates = new Map<
