@@ -26,19 +26,26 @@ const { env } = vi.hoisted(() => ({
     FOUNDER_TELEGRAM_ID: "999",
     PUBLIC_BASE_URL: "https://dating-api.gennety.com",
     ADMIN_DASHBOARD_URL: "",
+    ADMIN_API_KEY: "test-admin-key",
   },
 }));
 vi.mock("../config.js", () => ({ env }));
 
-const { updateMany, findUnique, createReport } = vi.hoisted(() => ({
-  updateMany: vi.fn(),
-  findUnique: vi.fn(),
-  createReport: vi.fn(),
-}));
+const { updateMany, findUnique, createReport, adSpendFindMany, eventFindUnique } = vi.hoisted(
+  () => ({
+    updateMany: vi.fn(),
+    findUnique: vi.fn(),
+    createReport: vi.fn(),
+    adSpendFindMany: vi.fn().mockResolvedValue([]),
+    eventFindUnique: vi.fn().mockResolvedValue(null),
+  }),
+);
 vi.mock("@gennety/db", () => ({
   prisma: {
     user: { updateMany, findUnique },
     founderReport: { create: createReport },
+    adSpend: { findMany: adSpendFindMany },
+    event: { findUnique: eventFindUnique },
   },
 }));
 
@@ -65,6 +72,7 @@ import {
   __resetFounderApiForTests,
   type FounderAccountUser,
 } from "./founder-notify.js";
+import { verifyAdSpendLink } from "./founder-ad-spend-link.js";
 
 function accountUser(over: Partial<FounderAccountUser> = {}): FounderAccountUser {
   return {
@@ -98,6 +106,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   env.FOUNDER_NOTIFY_ENABLED = false;
   env.ADMIN_DASHBOARD_URL = "";
+  env.ADMIN_API_KEY = "test-admin-key";
+  adSpendFindMany.mockResolvedValue([]);
+  eventFindUnique.mockResolvedValue(null);
   __resetFounderApiForTests();
 });
 
@@ -291,18 +302,86 @@ describe("notifyFounderAdSpendReminder", () => {
     expect(text).not.toContain("//ad-spend");
   });
 
+  it("carries a one-tap link to the mobile form, not only the dashboard", async () => {
+    // The whole point of the rework: the dashboard link is useless from a
+    // phone (its Bearer key lives in sessionStorage, which Telegram's in-app
+    // browser always opens empty), so the reminder must carry a login-free one.
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    await notifyFounderAdSpendReminder(new Date("2026-08-17T00:00:00Z"));
+    const [, text] = sendMessage.mock.calls[0]!;
+    expect(text).toContain("https://dating-api.gennety.com/v1/founder/ad-spend/");
+
+    // The token must be live and must name the week the message names.
+    const token = /ad-spend\/([\w-]+\.[\w-]+)/.exec(text as string)?.[1];
+    expect(token).toBeTruthy();
+    expect(verifyAdSpendLink(token!)).toEqual(
+      expect.objectContaining({ weekStart: "2026-08-17", weekEnd: "2026-08-23" }),
+    );
+  });
+
+  it("derives the closed week from the calendar when given no date", async () => {
+    // It used to be handed `now - 7d`, which only lands on a Monday because
+    // the cron fires at 09:00 Kyiv. Fixing the hour must not move the week.
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    vi.useFakeTimers();
+    try {
+      // Monday 02:00 Kyiv = Sunday 23:00 UTC — the exact case `now - 7d` got
+      // wrong, naming a Sun–Sat window no dashboard entry could match.
+      vi.setSystemTime(new Date("2026-08-23T23:00:00Z"));
+      await notifyFounderAdSpendReminder();
+    } finally {
+      vi.useRealTimers();
+    }
+    const [, text] = sendMessage.mock.calls[0]!;
+    expect(text).toContain("17 августа");
+    expect(text).toContain("23 августа");
+  });
+
+  it("reports what is already logged instead of nagging unconditionally", async () => {
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    adSpendFindMany.mockResolvedValue([
+      { channel: "tg:promo", amountUsdCents: 12_000 },
+      { channel: "tg:promo", amountUsdCents: 3_000 },
+    ]);
+    await notifyFounderAdSpendReminder(new Date("2026-08-17T00:00:00Z"));
+    const [, text] = sendMessage.mock.calls[0]!;
+    expect(text).toContain("2 записи");
+    expect(text).toContain("$150.00");
+    expect(text).toContain("tg:promo");
+    expect(text).not.toContain("ещё не внесены");
+  });
+
+  it("says the week is empty when nothing is logged", async () => {
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    adSpendFindMany.mockResolvedValue([]);
+    await notifyFounderAdSpendReminder(new Date("2026-08-17T00:00:00Z"));
+    const [, text] = sendMessage.mock.calls[0]!;
+    expect(text).toContain("ещё не внесены");
+  });
+
   it("degrades to a linkless reminder rather than sending nothing", async () => {
     env.FOUNDER_NOTIFY_ENABLED = true;
     env.ADMIN_DASHBOARD_URL = "";
+    // No signing key → no tokenized form link either. The nudge still lands.
+    env.ADMIN_API_KEY = "";
     await notifyFounderAdSpendReminder(new Date("2026-08-17T00:00:00Z"));
     expect(sendMessage).toHaveBeenCalledTimes(1);
     const [, text] = sendMessage.mock.calls[0]!;
     expect(text).not.toContain("/ad-spend");
+    expect(text).toContain("17 августа");
   });
 
   it("never throws when Telegram rejects the send", async () => {
     env.FOUNDER_NOTIFY_ENABLED = true;
     sendMessage.mockRejectedValueOnce(new Error("blocked"));
+    await expect(
+      notifyFounderAdSpendReminder(new Date("2026-08-17T00:00:00Z")),
+    ).resolves.toBeUndefined();
+  });
+
+  it("never throws when the spend lookup fails", async () => {
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    adSpendFindMany.mockRejectedValueOnce(new Error("db down"));
     await expect(
       notifyFounderAdSpendReminder(new Date("2026-08-17T00:00:00Z")),
     ).resolves.toBeUndefined();

@@ -972,9 +972,12 @@ bot.start({
     if (env.FOUNDER_NOTIFY_ENABLED) {
       cron.schedule(
         AD_SPEND_REMINDER_CRON_SCHEDULE,
-        guardedTick("ad-spend-reminder", () =>
-          notifyFounderAdSpendReminder(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
-        ),
+        // No argument: the notifier derives the closed Mon–Sun week from the
+        // calendar itself. Passing `now - 7d` (what this used to do) only
+        // produced a Monday because the schedule happens to be 09:00 Kyiv —
+        // move the hour before 03:00 and the same subtraction lands on Sunday
+        // in UTC, silently naming a week no dashboard entry matches.
+        guardedTick("ad-spend-reminder", () => notifyFounderAdSpendReminder()),
         { timezone: CRON_TIMEZONE },
       );
       console.log(

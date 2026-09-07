@@ -961,6 +961,9 @@ interface StarsGateLedgerRecord {
   reason: string;
   externalPaymentId: string | null;
   bundleSize: number | null;
+  /** Carried so a refund can say how much came back. Without it the founder
+   * DM printed a literal "amount unknown" on every date-ticket refund. */
+  amountStars: number | null;
 }
 
 type MatchUpdateManyArgs = Parameters<typeof prisma.match.updateMany>[0];
@@ -1043,6 +1046,7 @@ async function recordStarsGatePayment(input: {
       reason: true,
       externalPaymentId: true,
       bundleSize: true,
+      amountStars: true,
     },
   });
   if (existing) {
@@ -1070,6 +1074,7 @@ async function recordStarsGatePayment(input: {
         reason: true,
         externalPaymentId: true,
         bundleSize: true,
+        amountStars: true,
       },
     });
     // Founder ops feed. Only a genuinely NEW charge row reaches here — a
@@ -1101,6 +1106,7 @@ async function recordStarsGatePayment(input: {
         reason: true,
         externalPaymentId: true,
         bundleSize: true,
+        amountStars: true,
       },
     });
     if (!raced || raced.userId !== payer.id || raced.matchId !== input.matchId) throw error;
@@ -1171,6 +1177,7 @@ async function refundStarsLedgerRecord(
     void notifyFounderPurchaseRefunded({
       userId: record.userId,
       kind: "date_ticket",
+      amountStars: record.amountStars,
       reason: "гейт не закрылся — Stars вернулись плательщику",
       externalPaymentId: chargeId,
     });
@@ -1222,6 +1229,7 @@ export async function retryPendingStarsGateRefunds(api: Api<RawApi>): Promise<nu
       reason: true,
       externalPaymentId: true,
       bundleSize: true,
+      amountStars: true,
       user: { select: { telegramId: true } },
     },
     take: 200,
@@ -1476,6 +1484,7 @@ async function refundPaidTicketSide(
       reason: true,
       externalPaymentId: true,
       bundleSize: true,
+      amountStars: true,
     },
   });
   if (stars.length > 0) {

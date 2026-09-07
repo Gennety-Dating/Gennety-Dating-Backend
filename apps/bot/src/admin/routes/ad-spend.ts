@@ -173,6 +173,16 @@ adSpendRouter.post("/admin/ad-spend", async (req: Request, res: Response) => {
       res.status(400).json({ error: "amount must be a positive number" });
       return;
     }
+    // `AdSpend.amount` is an Int (whole currency units — cents live only in
+    // `amountUsdCents`). A fractional amount used to pass this gate and then
+    // die inside Prisma, surfacing as an opaque 500 on a form the founder had
+    // just filled in correctly by every visible rule.
+    if (!Number.isInteger(amount)) {
+      res
+        .status(400)
+        .json({ error: "amount must be a whole number of the currency's major unit" });
+      return;
+    }
     if (!Number.isInteger(amountUsdCents) || amountUsdCents < 0) {
       res.status(400).json({ error: "amountUsdCents must be a non-negative integer" });
       return;

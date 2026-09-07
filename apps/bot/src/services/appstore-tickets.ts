@@ -100,7 +100,10 @@ export async function refundAppStoreTransaction(
 
   const credit = await prisma.ticketLedger.findUnique({
     where: { externalPaymentId: `appstore:${tx.transactionId}` },
-    select: { userId: true, delta: true },
+    // `amountCents` rides along purely for the founder DM: without it the
+    // refund notification printed "amount unknown" for every App Store
+    // clawback, which is the one number that message exists to carry.
+    select: { userId: true, delta: true, amountCents: true },
   });
   if (!credit) return { status: "no_credit" };
 
@@ -123,7 +126,11 @@ export async function refundAppStoreTransaction(
     void notifyFounderPurchaseRefunded({
       userId: credit.userId,
       kind: "tickets",
-      reason: "Apple refunded/revoked the purchase",
+      amountCents: credit.amountCents,
+      // `TicketLedger` has no currency column, so the charge currency is
+      // recovered from the notification Apple sent rather than from our row.
+      currency: tx.currency,
+      reason: "Apple вернул покупку (refund/revoke)",
       externalPaymentId: `appstore:${tx.transactionId}`,
     });
     return { status: "refunded", balance: updated.ticketBalance };

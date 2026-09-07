@@ -152,12 +152,23 @@ export function formatPurchaseAmount(row: {
   amountIsEstimate: boolean;
 }): string {
   if (row.amountStars != null) {
-    const usd = row.usdCents != null ? ` (≈ ${formatUsdCents(row.usdCents)})` : "";
+    // `amountIsEstimate` used to be accepted and then ignored — the `≈` was
+    // hard-wired to "this row has Stars". Reading the flag is what the
+    // parameter always claimed to do, and it keeps a caller that knows the
+    // real price from having its certainty overwritten.
+    const marker = row.amountIsEstimate ? "≈ " : "";
+    const usd = row.usdCents != null ? ` (${marker}${formatUsdCents(row.usdCents)})` : "";
     return `${row.amountStars} ⭐${usd}`;
   }
   if (row.amountCents != null) {
-    const currency = row.currency && row.currency !== "USD" ? ` ${row.currency}` : "";
-    return `${formatUsdCents(row.amountCents)}${currency}`;
+    const currency = row.currency ?? "USD";
+    if (currency === "USD") return formatUsdCents(row.amountCents);
+    // A non-USD rail (the App Store outside the US) charges in local currency,
+    // and `amountCents` is that currency's minor unit — never dollars. This
+    // used to render `$9.99 EUR`, a dollar sign glued to a euro amount, which
+    // reads as a converted figure that was never computed. There is no stored
+    // rate to convert with, so the honest answer is the local amount.
+    return `${(row.amountCents / 100).toFixed(2)} ${currency}`;
   }
   return "amount unknown";
 }

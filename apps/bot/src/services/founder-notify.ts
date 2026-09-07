@@ -7,10 +7,12 @@ import { getMainBotApi } from "./main-bot-api.js";
 import { buildWeeklyMatchesReport } from "./weekly-matches-report.js";
 import {
   formatPurchaseAmount,
+  formatUsdCents,
   purchaseKindLabel,
   starsToUsdCents,
   type PurchaseKind,
 } from "./purchases.js";
+import { isoDay, previousWeek, signAdSpendLink } from "./founder-ad-spend-link.js";
 import type { Venue } from "./venue.js";
 
 /**
@@ -26,7 +28,8 @@ import type { Venue } from "./venue.js";
  *      money movement (ticket store, date gate, Premium, Rematch, venue
  *      change; Telegram Stars and App Store alike), with who paid and how much.
  *   6. `notifyFounderAdSpendReminder` — weekly nudge to log acquisition spend
- *      for the week that just closed (AD_SPEND_TRACKING_DESIGN.md). Rides
+ *      for the week that just closed, carrying a one-tap link to the mobile
+ *      form (`docs/product/domains/ad-spend-tracking.md`). Rides
  *      `FOUNDER_NOTIFY_ENABLED` alone — no feature flag of its own, because
  *      the reminder is worthless without the feed it already gates on.
  *
@@ -107,10 +110,15 @@ export async function notifyFounderStatusTimerHealth(
 ): Promise<void> {
   const api = getFounderApi();
   if (!api) return;
+  // Names the user-visible consequence, not just the worker. "Status timer
+  // degraded" is only actionable if you remember what that worker drives.
   const text =
     state === "degraded"
-      ? `⚠️ Status timer degraded after ${consecutiveFailures} consecutive failed ticks.`
-      : `✅ Status timer recovered after ${consecutiveFailures} failed ticks.`;
+      ? `⚠️ Воркер закреплённого статуса не отвечает: ${consecutiveFailures} ` +
+        `${plural(consecutiveFailures, "тик", "тика", "тиков")} подряд с ошибкой.\n` +
+        `Закреплённые сообщения перестали обновляться — проверь логи бота.`
+      : `✅ Воркер закреплённого статуса ожил после ${consecutiveFailures} ` +
+        `${plural(consecutiveFailures, "неудачного тика", "неудачных тиков", "неудачных тиков")}.`;
   try {
     await api.sendMessage(founderChatId(), text);
   } catch (err) {
@@ -123,10 +131,12 @@ export async function notifyFounderStatusTimerHealth(
  *
  * Fired at write time rather than left to the admin hub, because this is the
  * one post-event answer where waiting for someone to open a dashboard is the
- * wrong outcome. The ids are the whole payload: the reporter's own words are
- * carried only when they wrote some, and even then this DM is the founder's
- * private ops channel, which is where the profile-and-photos disclosure on
- * account closure already lives.
+ * wrong outcome. It carries the REPORTER's name and handle (plus the event and
+ * the reporter's own words when they wrote some) for exactly that reason: an
+ * alert whose point is "reach this person now" that only prints two UUIDs
+ * still routes through the dashboard, which is the delay it exists to avoid.
+ * The disclosure is narrower than the profile-and-photos dump the
+ * account-closure notification already makes in this same private DM.
  */
 export async function notifyFounderEventSafetyFlag(input: {
   eventId: string;
@@ -136,12 +146,45 @@ export async function notifyFounderEventSafetyFlag(input: {
   const api = getFounderApi();
   if (!api) return;
   try {
-    const lines = [
-      `🚨 Event safety flag: UNSAFE`,
-      `event=${input.eventId}`,
-      `user=${input.userId}`,
-    ];
-    if (input.text) lines.push("", input.text);
+    // Two ids were the whole message before, and on a phone that is a dead
+    // end: a safety report is the one alert whose value is being able to
+    // reach the person NOW, and looking up who `user=<uuid>` is meant opening
+    // the dashboard first. The disclosure this adds — a name and a handle —
+    // is strictly narrower than what the account-closed notification in this
+    // same DM already carries.
+    const [event, user] = await Promise.all([
+      prisma.event.findUnique({
+        where: { id: input.eventId },
+        select: { title: true, cityKey: true, startsAt: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: input.userId },
+        select: { firstName: true, telegramUsername: true, phone: true },
+      }),
+    ]);
+
+    const lines = ["🚨 Отметка «небезопасно» после мероприятия"];
+    if (event) {
+      const when = event.startsAt.toLocaleDateString("ru-RU", {
+        timeZone: "Europe/Kyiv",
+        dateStyle: "medium",
+      });
+      lines.push(`📍 ${event.title} · ${event.cityKey} · ${when}`);
+    }
+    if (user) {
+      const contact = [
+        user.telegramUsername ? `@${user.telegramUsername}` : null,
+        user.phone,
+      ].filter(Boolean);
+      // Explicitly "who reported", not a bare 👤: this id is the person who
+      // felt unsafe, never the person they are reporting, and a name printed
+      // under a 🚨 with no label reads as the opposite.
+      lines.push(
+        `🙋 Сообщил(а): ${user.firstName ?? "—"}${contact.length ? ` · ${contact.join(" · ")}` : ""}`,
+      );
+    }
+    lines.push(`event=${input.eventId}`, `user=${input.userId}`);
+    if (input.text) lines.push("", `«${input.text}»`);
     await api.sendMessage(founderChatId(), lines.join("\n"));
   } catch (err) {
     console.warn(`${FOUNDER_LOG} event safety notify failed`, { eventId: input.eventId, err });
@@ -157,9 +200,13 @@ export async function notifyFounderVenueSelectionFailure(
   const api = getFounderApi();
   if (!api) return;
   try {
+    // Says what it costs the pair, because that is what decides whether the
+    // founder acts now or reads it over coffee.
     await api.sendMessage(
       founderChatId(),
-      `⚠️ Venue Intent V2 finalization failed\nmatch=${matchId}\nreason=${reason}\nattempts=${attempts}`,
+      `⚠️ Не удалось подобрать место для пары — свидание висит без адреса.\n` +
+        `Причина: ${reason} (попыток: ${attempts})\n` +
+        `match=${matchId}`,
     );
   } catch (err) {
     console.warn(`${FOUNDER_LOG} venue-selection failure notify failed`, { matchId, err });
@@ -188,12 +235,13 @@ export async function notifyFounderVenueConcentration(
   if (!api || alerts.length === 0) return;
   const lines = alerts.map(
     (row) =>
-      `• ${row.cityKey}: ${row.sharePct.toFixed(0)}% — ${row.count} of ${row.assignments} dates went to one venue (${row.placeId}); ${row.uniqueVenues} distinct venues used`,
+      `• ${row.cityKey}: ${row.sharePct.toFixed(0)}% — ${row.count} из ${row.assignments} свиданий ушли в одно место (${row.placeId}); всего задействовано мест: ${row.uniqueVenues}`,
   );
   try {
     await api.sendMessage(
       founderChatId(),
-      `📍 Venue concentration (last ${windowDays}d)\n${lines.join("\n")}\n\nSmall sample sizes skew this — check the count before acting.`,
+      `📍 Одно место забирает город (за ${windowDays} дн.)\n${lines.join("\n")}\n\n` +
+        `На малых числах это арифметика, а не поломка — сначала посмотри на количество свиданий.`,
     );
   } catch (err) {
     console.warn(`${FOUNDER_LOG} venue-concentration notify failed`, err);
@@ -592,6 +640,8 @@ export async function notifyFounderPurchaseRefunded(notice: {
   kind: PurchaseKind;
   amountStars?: number | null;
   amountCents?: number | null;
+  /** Charge currency for the `amountCents` rail. Omit on the Stars rail. */
+  currency?: string | null;
   /** Why it came back, in the source's own words (`refunded_no_candidate`). */
   reason?: string | null;
   externalPaymentId?: string | null;
@@ -609,7 +659,7 @@ export async function notifyFounderPurchaseRefunded(notice: {
     const amount = formatPurchaseAmount({
       amountStars: notice.amountStars ?? null,
       amountCents: notice.amountCents ?? null,
-      currency: null,
+      currency: notice.currency ?? null,
       usdCents:
         notice.amountCents ??
         (notice.amountStars != null ? starsToUsdCents(notice.amountStars) : null),
@@ -722,34 +772,78 @@ export async function notifyFounderWeeklyMatches(matchIds: string[]): Promise<vo
 // ───────────────────────────────────────────────────────────────────────────
 
 /**
- * A Monday-morning nudge naming the week that just closed and pointing at the
- * dashboard's ad-spend form (AD_SPEND_TRACKING_DESIGN.md). Nothing is read or
- * written here — unlike `notifyFounderWeeklyMatches`, there is no snapshot to
- * persist, so a failure costs nothing beyond the message not arriving.
+ * A Monday-morning nudge naming the week that just closed, carrying a one-tap
+ * link to the founder's mobile ad-spend form
+ * (`GET /v1/founder/ad-spend/:token`, `public/routes/founder-ad-spend.ts`).
  *
- * `weekOf` is the Monday the closed week STARTED on; the message names the
- * full Mon–Sun range so the founder never has to do the arithmetic.
+ * **Why the link is not the dashboard's `/ad-spend` any more.** It was, and on
+ * a phone that link went nowhere useful: the dashboard authenticates with a
+ * Bearer `ADMIN_API_KEY` held in `sessionStorage`, and Telegram opens links in
+ * a fresh in-app browser where that store is always empty. Tapping the
+ * reminder meant hunting down the admin key before typing a single number, so
+ * in practice the entry waited for a desk — and CAC/ROAS on the dashboard went
+ * stale for exactly as long. The tokenized form removes the login step; the
+ * dashboard link stays in the message as the second line, because editing
+ * history and reading the CAC that comes out of it still belong there.
+ *
+ * **`weekOf` is derived, not passed.** The caller used to hand in
+ * `Date.now() - 7d`, which only landed on a Monday because the cron fires at
+ * 09:00 Kyiv; at any hour before 03:00 the same subtraction lands on Sunday in
+ * UTC and the reminder would name a Sun–Sat window matching no dashboard entry.
+ * `previousUtcWeek` reads the weekday instead, so the message is independent of
+ * when the cron runs. An explicit argument is still accepted for tests and for
+ * a manual re-send of an older week.
+ *
+ * The message also states what is ALREADY logged for that week. Without it the
+ * reminder is unconditional nagging: a founder who entered Friday's spend on
+ * Sunday still gets told on Monday to go do it, which is how a weekly nudge
+ * teaches you to ignore it.
  */
-export async function notifyFounderAdSpendReminder(weekOf: Date): Promise<void> {
+export async function notifyFounderAdSpendReminder(weekOf?: Date): Promise<void> {
   const api = getFounderApi();
   if (!api) return;
 
   try {
-    const start = startOfUtcDay(weekOf);
-    const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const week = weekOf
+      ? { start: startOfUtcDay(weekOf), end: new Date(startOfUtcDay(weekOf).getTime() + 6 * 86_400_000) }
+      : previousWeek();
+    const { start, end } = week;
     const fmt = (d: Date) =>
-      d.toLocaleDateString("ru-RU", { timeZone: "Europe/Kyiv", day: "numeric", month: "long" });
+      d.toLocaleDateString("ru-RU", { timeZone: "UTC", day: "numeric", month: "long" });
 
-    const dashboardLine = env.ADMIN_DASHBOARD_URL
-      ? `\n${env.ADMIN_DASHBOARD_URL.replace(/\/+$/, "")}/ad-spend`
-      : "\n(укажи адрес дашборда в ADMIN_DASHBOARD_URL, чтобы здесь была ссылка)";
+    // Overlap, not containment — the same rule the admin list and the form
+    // page use, so "already logged" means the same thing in all three.
+    const logged = await prisma.adSpend.findMany({
+      where: { periodEnd: { gte: start }, periodStart: { lte: end } },
+      select: { channel: true, amountUsdCents: true },
+    });
 
-    const message =
-      `💸 Не забудь внести расходы на привлечение за неделю ` +
-      `${fmt(start)} – ${fmt(end)}` +
-      dashboardLine;
+    const lines: string[] = [];
+    if (logged.length === 0) {
+      lines.push(`💸 Расходы на привлечение за ${fmt(start)} – ${fmt(end)} ещё не внесены.`);
+    } else {
+      const totalUsd = logged.reduce((sum, r) => sum + r.amountUsdCents, 0);
+      const channels = [...new Set(logged.map((r) => r.channel))].join(", ");
+      lines.push(
+        `💸 Расходы за ${fmt(start)} – ${fmt(end)}: ` +
+          `${logged.length} ${plural(logged.length, "запись", "записи", "записей")} ` +
+          `на ${formatUsdCents(totalUsd)} (${channels}).`,
+        `Если что-то ещё не учтено — добавь:`,
+      );
+    }
 
-    await api.sendMessage(founderChatId(), message, {
+    const token = signAdSpendLink({ weekStart: isoDay(start), weekEnd: isoDay(end) });
+    if (token) {
+      lines.push(`${env.PUBLIC_BASE_URL.replace(/\/+$/, "")}/v1/founder/ad-spend/${token}`);
+    }
+    if (env.ADMIN_DASHBOARD_URL) {
+      lines.push(`Вся история и CAC: ${env.ADMIN_DASHBOARD_URL.replace(/\/+$/, "")}/ad-spend`);
+    }
+    if (!token && !env.ADMIN_DASHBOARD_URL) {
+      lines.push("(ни ADMIN_API_KEY, ни ADMIN_DASHBOARD_URL не заданы — ссылки нет)");
+    }
+
+    await api.sendMessage(founderChatId(), lines.join("\n"), {
       link_preview_options: { is_disabled: true },
     });
   } catch (err) {

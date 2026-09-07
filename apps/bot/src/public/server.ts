@@ -35,6 +35,7 @@ import { premiumAppStoreRouter } from "./routes/premium-appstore.js";
 import { clientEventsRouter } from "./routes/client-events.js";
 import { appStoreWebhookRouter } from "./routes/appstore-webhook.js";
 import { founderReportRouter } from "./routes/founder-report.js";
+import { founderAdSpendRouter } from "./routes/founder-ad-spend.js";
 import { verificationRouter } from "./routes/verification.js";
 import { createCalendarRouter } from "./routes/calendar.js";
 import { createFeedbackRouter } from "./routes/feedback.js";
@@ -543,6 +544,11 @@ app.use("/v1/scratch", scratchMapRouter);
 // unguessable token in the path is the authorization (no JWT/initData). Ops-only
 // and inert unless FOUNDER_NOTIFY_ENABLED (reports are never created otherwise).
 app.use("/v1/founder", founderReportRouter);
+// Founder ad-spend form, same tokenized-link device and the other half of the
+// Monday reminder. Writes `ad_spend`, so its token is a scoped, expiring
+// delegation of ADMIN_API_KEY rather than an independent credential — see
+// `services/founder-ad-spend-link.ts`.
+app.use("/v1/founder", founderAdSpendRouter);
 // Launch events, attendee side (LAUNCH_EVENTS_PRODUCT_SPEC.md). Dual-rail auth
 // like the canvas — one screen, two clients, the same answer.
 app.use("/v1/events", eventsPublicRouter);
