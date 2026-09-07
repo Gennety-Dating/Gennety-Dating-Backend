@@ -254,6 +254,14 @@ export function rowToVenue(row: CuratedVenueRow): Venue {
     googleMapsUri: row.googleMapsUri,
     placeId: row.placeId,
     source: "curated",
+    // Координаты площадки. В строке они есть всегда (`lat`/`lng` в схеме
+    // не-nullable), но сюда не переносились — и финализаторы, которым нечего
+    // было записать, писали в `Match.venueLat/Lng` середину маршрута. Отсюда
+    // и росла двусмысленность колонки: Date Bump со своими 100 метрами
+    // сверял человека с точкой в километре от столика
+    // (аудит 2026-09-06, «Архитектура №1»; см. `services/venue-location.ts`).
+    lat: row.lat,
+    lng: row.lng,
     // Read straight off the row when the nightly re-validation cron has already
     // resolved it. `resolveVenue` below only pays a Place Details request when
     // this is still null, i.e. for a venue the scan has not reached — which is
