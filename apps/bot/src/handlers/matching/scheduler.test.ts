@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll, afterEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
 import { DEFAULT_SESSION, t, setVariantRng } from "@gennety/shared";
 
@@ -66,6 +66,24 @@ import {
   CALENDAR_TIME_SLOTS,
 } from "./scheduler.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
+
+/**
+ * Часы прибиты (фейкается только `Date`, таймеры настоящие).
+ *
+ * Фикстуры этого файла — жёсткие даты, а с 2026-09-07 календарь отвергает
+ * слот, который уже наступил (`slot-in-past`): свидание не может быть в
+ * прошлом. Без фиксации времени тесты зависели бы от того, в каком месяце
+ * их запускают.
+ */
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-04-30T12:00:00.000Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 import { env } from "../../config.js";
 import { wallToUtc } from "../../services/profiler-schedule.js";
@@ -379,6 +397,50 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
       userB: { telegramId: 1002n, language: "en" },
     });
   }
+
+  /**
+   * Регрессия на дефект аудита 2026-09-06 («Бизнес-логика №1»).
+   *
+   * Проверялась только принадлежность слота выданной сетке. Сетка же
+   * составляется ОДИН раз при открытии календаря («завтра … +6 дней»), а
+   * фаза планирования живёт до 48 часов и продлевается чек-ином — к моменту
+   * второго выбора часть сетки уже наступила. Принятый прошлый слот не
+   * выглядит поломкой: он тихо отключает все пред-свиданческие рельсы (они
+   * фильтруют `agreedTime > now`), а через сутки матч сам уходит в
+   * `completed` с опросом «как прошло свидание», которого не было. Билеты
+   * при этом не возвращаются — отмены не происходило.
+   */
+  it("отвергает слот из сетки, который уже наступил", async () => {
+    const stale = new Date(Date.now() - 3 * 3_600_000);
+    mockMatchInState({ proposedTimes: [stale] });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const result = await processCalendarSlotsUpdate(createApi(), 1001n, "match-1", [
+      stale.toISOString(),
+    ]);
+
+    expect(result).toEqual({ ok: false, reason: "slot-in-past" });
+    // Ничего не записано и никакая фиксация не запущена.
+    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mStartVenue).not.toHaveBeenCalled();
+  });
+
+  it("не отдаёт наступившие слоты в состоянии календаря", async () => {
+    const stale = new Date(Date.now() - 3 * 3_600_000);
+    const live = new Date(Date.now() + 26 * 3_600_000);
+    mockMatchInState({ proposedTimes: [stale, live], availableTimesA: [stale] });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const state = await getCalendarState(1001n, "match-1");
+
+    expect(state.ok).toBe(true);
+    if (!state.ok) return;
+    // Сетку задаёт `proposedTimes` — наступившей клетки в ней больше нет.
+    expect(state.proposedTimes).toEqual([live.toISOString()]);
+    // А `mySlots` не фильтруется: это факт о том, что человек отметил, и
+    // врать о нём нельзя — клетка просто не будет нарисована.
+    expect(state.mySlots).toEqual([stale.toISOString()]);
+  });
 
   it("rejects an ISO that's not on the proposedTimes allowlist (security boundary)", async () => {
     mockMatchInState({

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll, afterEach } from "vitest";
 import { t, setVariantRng } from "@gennety/shared";
 
 // Pin the variant picker to the canonical i18n string for exact-match asserts.
@@ -76,6 +76,23 @@ function createApi() {
   } as any;
 }
 
+/**
+ * Часы прибиты (фейкается только `Date`, таймеры настоящие).
+ *
+ * Единственная фикстура времени здесь — `2026-06-20T16:00:00Z`, а с
+ * 2026-09-07 `startVenueNegotiation` отказывается фиксировать свидание,
+ * назначенное в прошлом. Без фиксации часов тест зависел бы от того, в
+ * каком месяце его запускают.
+ */
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-06-19T12:00:00.000Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 beforeEach(() => {
   mMatch.findUnique.mockReset();
   mMatch.findFirst.mockReset();
@@ -86,6 +103,28 @@ beforeEach(() => {
   mFinalize.mockReset().mockResolvedValue(undefined);
   mRenderTimeCard.mockReset().mockResolvedValue(Buffer.from("png"));
   mPeerWaitShimmer.mockReset();
+});
+
+describe("startVenueNegotiation — время в прошлом", () => {
+  /**
+   * Подстраховка к фиксу «Бизнес-логика №1» (аудит 2026-09-06). Прошлое
+   * время отсекает `processCalendarSlotsUpdate` — единственный вызывающий, —
+   * но запись `agreedTime` необратима по последствиям: все пред-свиданческие
+   * рельсы фильтруют `agreedTime > now` и на прошедшем времени молча не
+   * срабатывают, а матч через сутки сам уходит в `completed` с опросом о
+   * свидании, которого не было.
+   */
+  it("отказывается фиксировать и не трогает матч", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const api = createApi();
+
+    await startVenueNegotiation(api, "m1", new Date(Date.now() - 3_600_000));
+
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(errors).toHaveBeenCalled();
+    errors.mockRestore();
+  });
 });
 
 describe("startVenueNegotiation — location-first intro", () => {

@@ -184,6 +184,21 @@ export async function startVenueNegotiation(
   // exactly once. Same updateMany-with-count guard used in decision.ts /
   // match-expiry.ts — a non-atomic findUnique-then-update would double-DM both
   // users and clobber `agreedTime` / `calendarMessageId*`.
+  // Подстраховка, а не основная проверка: время в прошлое отсекает
+  // `processCalendarSlotsUpdate` (единственный вызывающий). Guard стоит
+  // здесь потому, что запись `agreedTime` необратима по последствиям — все
+  // пред-свиданческие рельсы фильтруют `agreedTime > now` и на прошедшем
+  // времени молча не срабатывают, а матч через сутки сам уходит в
+  // `completed` с опросом о свидании, которого не было.
+  if (agreedTime.getTime() <= Date.now()) {
+    console.error(
+      "[venue-negotiation] refusing to lock a past agreedTime",
+      matchId,
+      agreedTime.toISOString(),
+    );
+    return;
+  }
+
   const claim = await prisma.match.updateMany({
     where: { id: matchId, status: "negotiating" },
     data: {
