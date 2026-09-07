@@ -75,6 +75,24 @@ export const CALENDAR_SLOT_COUNT = CALENDAR_DAY_COUNT * CALENDAR_TIME_SLOTS.leng
 export const CALENDAR_TIME_ZONE = "Europe/Kyiv";
 
 /**
+ * Запас, на который слот обязан отстоять от «сейчас», чтобы его ещё можно
+ * было выбрать.
+ *
+ * Минута — не продуктовое правило, а защита от гонки: слот не должен
+ * протухнуть между проверкой и фиксацией в соседнем запросе. Настоящий
+ * инвариант здесь один — свидание не может быть в прошлом, — и сознательно
+ * не превращён в «за N часов до встречи»: сетка начинается «завтра», но
+ * зафиксировать её слот за несколько часов до самой встречи это законный
+ * сценарий, и запрет был бы уже продуктовым решением, а не починкой.
+ */
+export const MIN_SLOT_LEAD_MS = 60_000;
+
+/** Слот ещё можно выбрать: он в будущем с запасом на гонку. */
+export function isSlotSelectable(slot: Date, now: Date = new Date()): boolean {
+  return slot.getTime() > now.getTime() + MIN_SLOT_LEAD_MS;
+}
+
+/**
  * Generate the calendar grid: the next `dayCount` consecutive days starting
  * tomorrow (in Europe/Kyiv), with fourteen exact time options per day (every
  * 30 min from 13:00 through 19:30 Kyiv local). No weekday filter — past UX
@@ -364,6 +382,16 @@ export type CalendarPickResult =
         | "match-not-found"
         | "wrong-state"
         | "invalid-slot"
+        /**
+         * Слот принадлежит сетке, но уже наступил.
+         *
+         * Сетка выдаётся ОДИН раз при открытии календаря и покрывает
+         * «завтра … +6 дней», а фаза планирования живёт до 48 часов и
+         * продлевается чек-ином. К моменту второго выбора часть сетки
+         * оказывается в прошлом, и до 2026-09-07 её принимали: проверялась
+         * только принадлежность списку.
+         */
+        | "slot-in-past"
         /** A locked evening slot from a pair that has not opened the band. */
         | "prime-time-locked"
         | "user-not-found"
@@ -462,6 +490,17 @@ export async function processCalendarSlotsUpdate(
   const allowed = new Set(match.proposedTimes.map((d) => d.getTime()));
   for (const p of picks) {
     if (!allowed.has(p.getTime())) return { ok: false, reason: "invalid-slot" };
+  }
+  // Принадлежности сетке мало. Сетка составляется один раз, а живёт пара в
+  // фазе планирования до 48 часов — часть слотов к моменту выбора уже
+  // наступила. Принятый прошлый слот не выглядит сломанным: он тихо
+  // отключает ВСЕ пред-свиданческие рельсы (они фильтруют `agreedTime > now`)
+  // и через сутки доводит матч до `completed` с опросом «как прошло
+  // свидание», которого не было; билеты при этом не возвращаются, потому что
+  // отмены не происходило.
+  const now = new Date();
+  for (const p of picks) {
+    if (!isSlotSelectable(p, now)) return { ok: false, reason: "slot-in-past" };
   }
 
   /**
@@ -748,16 +787,22 @@ export async function getCalendarState(
   const peer = isA ? match.availableTimesB : match.availableTimesA;
 
   const live = primeTimeFeatureLive();
+  // Наступившие слоты из сетки не отдаются вовсе: клиент не должен рисовать
+  // клетку, тап по которой сервер обязан отклонить. `mySlots`/`peerSlots`
+  // при этом НЕ фильтруются — это факт о том, что человек уже отметил, и
+  // прятать его значило бы врать о состоянии; клетка просто не рисуется,
+  // потому что сетку задаёт `proposedTimes`.
+  const selectable = match.proposedTimes.filter((d) => isSlotSelectable(d));
   return {
     ok: true,
-    proposedTimes: match.proposedTimes.map((d) => d.toISOString()),
+    proposedTimes: selectable.map((d) => d.toISOString()),
     mySlots: mine.map((d) => d.toISOString()),
     peerSlots: peer.map((d) => d.toISOString()),
     agreedTime: match.agreedTime?.toISOString() ?? null,
     isFirstMover: peer.length === 0,
     primeTime: {
       locked: live && primeTimeUnlockReason(match) === null,
-      slots: live ? lockedSlotsOf(match.proposedTimes) : [],
+      slots: live ? lockedSlotsOf(selectable) : [],
       stars: env.PRIME_TIME_STARS,
     },
   };

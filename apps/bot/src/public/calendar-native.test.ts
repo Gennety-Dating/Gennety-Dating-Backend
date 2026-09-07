@@ -7,9 +7,27 @@
  * agree on — status mapping, the full-set (not delta) submission contract, and
  * the projection, including the timezone the grid must be drawn in.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
+
+/**
+ * Часы прибиты (фейкается только `Date`, таймеры настоящие).
+ *
+ * Фикстуры этого файла — жёсткие даты, а с 2026-09-07 календарь отвергает
+ * слот, который уже наступил (`slot-in-past`): свидание не может быть в
+ * прошлом. Без фиксации времени тесты зависели бы от того, в каком месяце
+ * их запускают.
+ */
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-08-09T12:00:00.000Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 
 const VALID_UUID = "33333333-3333-4333-8333-333333333333";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -23,6 +41,10 @@ const processCalendarSlotsUpdate = vi.fn();
 vi.mock("../handlers/matching/scheduler.js", () => ({
   getCalendarState: (...a: unknown[]) => getCalendarState(...a),
   processCalendarSlotsUpdate: (...a: unknown[]) => processCalendarSlotsUpdate(...a),
+  // Не заглушка: настоящая семантика хелпера. Маршрут фильтрует им сетку,
+  // чтобы клиент не рисовал клетку, тап по которой сервер обязан отклонить.
+  isSlotSelectable: (slot: Date, now: Date = new Date()) =>
+    slot.getTime() > now.getTime() + 60_000,
 }));
 
 const userFindUnique = vi.fn();

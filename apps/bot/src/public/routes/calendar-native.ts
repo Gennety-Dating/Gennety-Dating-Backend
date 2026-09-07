@@ -6,6 +6,7 @@ import {
   getCalendarState,
   processCalendarSlotsUpdate,
   type CalendarStateResult,
+  isSlotSelectable,
 } from "../../handlers/matching/scheduler.js";
 
 /**
@@ -128,7 +129,11 @@ async function proposedTimesFor(matchId: string): Promise<string[]> {
     where: { id: matchId },
     select: { proposedTimes: true },
   });
-  return (match?.proposedTimes ?? []).map((d) => d.toISOString());
+  // Та же фильтрация, что и в `getCalendarState`: наступивший слот сервер
+  // всё равно отклонит (`slot-in-past`), и рисовать его клиенту незачем.
+  return (match?.proposedTimes ?? [])
+    .filter((d) => isSlotSelectable(d))
+    .map((d) => d.toISOString());
 }
 
 function nativeState(
@@ -169,9 +174,13 @@ function answerFailure(res: Response, reason: string): void {
         : // 402: the slot exists and the caller may have it — for a price.
           reason === "prime-time-locked"
           ? 402
-          : reason === "invalid-iso" || reason === "invalid-slot"
-            ? 400
-            : 404;
+          : // 409, а не 400: слот был настоящим, это мир уехал вперёд, пока
+            // клиент держал сетку. Тот же класс, что и `wrong-state`.
+            reason === "slot-in-past"
+            ? 409
+            : reason === "invalid-iso" || reason === "invalid-slot"
+              ? 400
+              : 404;
   res.status(status).json({ error: reason });
 }
 

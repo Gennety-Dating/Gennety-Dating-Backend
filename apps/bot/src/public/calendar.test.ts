@@ -13,10 +13,28 @@
  * `handlers/matching/scheduler.test.ts` — here we mock the functions so
  * the test stays focused on the HTTP boundary.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
 import { createHmac } from "node:crypto";
+
+/**
+ * Часы прибиты (фейкается только `Date`, таймеры настоящие).
+ *
+ * Фикстуры этого файла — жёсткие даты, а с 2026-09-07 календарь отвергает
+ * слот, который уже наступил (`slot-in-past`): свидание не может быть в
+ * прошлом. Без фиксации времени тесты зависели бы от того, в каком месяце
+ * их запускают.
+ */
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-05-08T12:00:00.000Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 
 const BOT_TOKEN = "123456:test-bot-token-for-calendar-suite";
 const VALID_UUID = "11111111-1111-4111-8111-111111111111";
