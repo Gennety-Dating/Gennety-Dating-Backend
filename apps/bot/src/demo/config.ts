@@ -91,6 +91,23 @@ export interface DemoIsolationConfig {
  * the log name the bot and the database host, so a misconfigured `.env` is
  * something you see immediately rather than discover from your users.
  */
+/**
+ * What this guard does NOT check, and where that is checked instead.
+ *
+ * The two things that decide whether a demo can touch real people — the bot
+ * token and the database — are not verifiable from inside one process: it has
+ * no way to know which values production uses. They are enforced one layer up,
+ * at deploy time: `scripts/deploy-demo.sh` refuses to deploy a demo whose
+ * `BOT_TOKEN`, `DATABASE_URL`, Supabase keys or `JWT_SECRET` match production's,
+ * or that is missing them entirely (which would mean inheriting them).
+ *
+ * What remains is a `.env` edited by hand on the droplet AFTER a deploy. For
+ * that, `telegram-onboarding.ts` refuses the OTP bypass whenever
+ * `NODE_ENV === "production"` regardless of this flag, and the banner printed at
+ * boot names the bot and the database out loud. Closing it completely at
+ * runtime needs one declared fact — which database is production — and that is
+ * a value for the deployment to state, not for this file to guess.
+ */
 export function demoIsolationErrors(
   config: DemoIsolationConfig = env,
 ): string[] {

@@ -867,3 +867,117 @@ describe("validateFactValue", () => {
     );
   });
 });
+
+describe("extractor retries", () => {
+  /**
+   * There were none. A 429 or a 5xx returned an empty extraction, an empty
+   * `accepted` set produced the SAME question again, and the person saw the bot
+   * ask their name three times in a row with no explanation — on the first
+   * screen of the product, which is the one that decides whether they stay.
+   */
+  const ok = () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                intent: "answer",
+                candidates: [
+                  { field: "first_name", evidence: "Алиса", string_value: "Алиса" },
+                ],
+              }),
+            },
+          },
+        ],
+      }),
+      { status: 200 },
+    );
+
+  const noSleep = async () => {};
+
+  it("rides out a rate answer and returns the extraction", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("rate limited", { status: 429 }))
+      .mockResolvedValueOnce(ok());
+
+    const result = await extractWithOpenAI(
+      "Алиса",
+      "first_name_age",
+      "ru",
+      fetchFn as unknown as typeof fetch,
+      noSleep,
+    );
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(result.candidates[0]?.field).toBe("first_name");
+  });
+
+  it("waits as long as the server asked, and no longer", async () => {
+    const slept: number[] = [];
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response("slow down", { status: 429, headers: { "retry-after": "2" } }),
+      )
+      .mockResolvedValueOnce(
+        // A minute is longer than anyone will sit in front of a chat waiting.
+        new Response("slow down", { status: 429, headers: { "retry-after": "60" } }),
+      )
+      .mockResolvedValueOnce(ok());
+
+    await extractWithOpenAI("Алиса", "first_name_age", "ru", fetchFn as unknown as typeof fetch, async (ms) => {
+      slept.push(ms);
+    });
+
+    expect(slept).toEqual([2000, 4000]);
+  });
+
+  it("does not retry a refusal that waiting cannot fix", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response("bad request", { status: 400 }));
+
+    await extractWithOpenAI("Алиса", "first_name_age", "ru", fetchFn as unknown as typeof fetch, noSleep);
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry an answer the model actually gave", async () => {
+    // An empty completion means the person said nothing extractable. Asking the
+    // same question of the same text gets the same nothing.
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ choices: [{ message: { content: "" } }] }), {
+          status: 200,
+        }),
+      );
+
+    const result = await extractWithOpenAI(
+      "…",
+      "first_name_age",
+      "ru",
+      fetchFn as unknown as typeof fetch,
+      noSleep,
+    );
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(result.candidates).toEqual([]);
+  });
+
+  it("gives up after three attempts rather than holding the chat open", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response("down", { status: 503 }));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await extractWithOpenAI(
+      "Алиса",
+      "first_name_age",
+      "ru",
+      fetchFn as unknown as typeof fetch,
+      noSleep,
+    );
+
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+    expect(result.candidates).toEqual([]);
+  });
+});
