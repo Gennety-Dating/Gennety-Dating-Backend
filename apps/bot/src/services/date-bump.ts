@@ -51,6 +51,7 @@ import { pushReachable, telegramReachable } from "./telegram-reach.js";
 import { callOpenAIText } from "./openai.js";
 import { grantTickets, isUniqueViolation } from "./ticket-wallet.js";
 import { sideOf } from "./date-state.js";
+import { venueCoordinatesOf } from "./venue-location.js";
 
 export type BumpRefusal =
   /** The caller is on neither side of this match. */
@@ -129,6 +130,9 @@ export async function recordBump(input: RecordBumpInput): Promise<BumpOutcome> {
       agreedTime: true,
       venueLat: true,
       venueLng: true,
+      // Признак того, что `venueLat/Lng` означает заведение, а не середину
+      // маршрута: `venue-location.ts`.
+      venueMidpointLat: true,
       venuePlaceId: true,
     },
   });
@@ -138,12 +142,16 @@ export async function recordBump(input: RecordBumpInput): Promise<BumpOutcome> {
   if (!side) return refuse("not-participant");
 
   if (match.status !== "scheduled" || !match.agreedTime) return refuse("wrong-state");
-  if (match.venueLat === null || match.venueLng === null) return refuse("wrong-state");
+  // На legacy-строке колонка держит СЕРЕДИНУ МАРШРУТА, а не заведение, и
+  // сверять с ней радиус в 100 метров бессмысленно: точка отстоит от столика
+  // на 0,5–5 км. «Не знаем» честнее, чем «слишком далеко» по чужой точке.
+  const venuePoint = venueCoordinatesOf(match);
+  if (venuePoint === null) return refuse("wrong-state");
 
   const window = checkBumpWindow(match.agreedTime, at);
   if (window !== "ok") return refuse(window);
 
-  if (!withinVenue(coords, { lat: match.venueLat, lng: match.venueLng })) {
+  if (!withinVenue(coords, venuePoint)) {
     return refuse("too-far");
   }
 

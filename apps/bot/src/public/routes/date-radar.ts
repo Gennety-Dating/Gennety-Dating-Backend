@@ -13,6 +13,7 @@ import {
   viewOfPeer,
 } from "../../services/date-radar.js";
 import { notifyPartnerArrived } from "../../services/date-day-activity.js";
+import { venueCoordinatesOf } from "../../services/venue-location.js";
 
 /**
  * `POST /v1/dates/:matchId/proximity` — one side's position ping
@@ -95,6 +96,8 @@ dateRadarRouter.post(
           agreedTime: true,
           venueLat: true,
           venueLng: true,
+          // Признак семантики колонки — см. `services/venue-location.ts`.
+          venueMidpointLat: true,
         },
       }),
       // The caller's OWN city zone. Matching is same-city (§3.2 filter 5), so
@@ -111,12 +114,11 @@ dateRadarRouter.post(
       res.status(REFUSAL_STATUS["not-participant"]!).json({ error: "not-participant" });
       return;
     }
-    if (
-      match.status !== "scheduled" ||
-      !match.agreedTime ||
-      match.venueLat === null ||
-      match.venueLng === null
-    ) {
+    // На legacy-строке `venueLat/Lng` держит середину маршрута, а не
+    // заведение (`services/venue-location.ts`): радар считал бы прибытие и
+    // ETA до перекрёстка в километре от столика.
+    const venuePoint = venueCoordinatesOf(match);
+    if (match.status !== "scheduled" || !match.agreedTime || venuePoint === null) {
       res.status(409).json({ error: "wrong-state" });
       return;
     }
@@ -128,7 +130,7 @@ dateRadarRouter.post(
       return;
     }
 
-    const venue = { lat: match.venueLat, lng: match.venueLng };
+    const venue = venuePoint;
     const here = { lat, lng };
     const arrived = hasArrived(here, venue);
     const eta = arrived ? null : estimateEta(here, venue, mode);

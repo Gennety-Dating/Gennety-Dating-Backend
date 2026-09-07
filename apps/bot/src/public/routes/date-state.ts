@@ -11,6 +11,7 @@ import {
 import { deriveDateState, sideOf } from "../../services/date-state.js";
 import { deadlineFor } from "../../services/proposal-deadline.js";
 import type { BumpDeck } from "../../services/date-bump.js";
+import { venueCoordinatesOf } from "../../services/venue-location.js";
 
 /**
  * `GET /v1/date/state` — everything the Living Canvas draws, in one call
@@ -45,6 +46,8 @@ const MATCH_SELECT = {
   venueName: true,
   venueAddress: true,
   venueLat: true,
+  // Признак семантики колонки — см. `services/venue-location.ts`.
+  venueMidpointLat: true,
   venueLng: true,
   venueGoogleMapsUri: true,
 } as const;
@@ -172,8 +175,12 @@ dateStateRouter.get("/state", async (req: Request, res: Response): Promise<void>
             ? {
                 name: usable.venueName,
                 address: usable.venueAddress,
-                lat: usable.venueLat,
-                lng: usable.venueLng,
+                // Пин ставится только по достоверно известной точке
+                // заведения. У legacy-строк колонка держит середину
+                // маршрута, и пин уезжал на перекрёсток в километре от
+                // места встречи (`services/venue-location.ts`).
+                lat: venueCoordinatesOf(usable)?.lat ?? null,
+                lng: venueCoordinatesOf(usable)?.lng ?? null,
                 mapsUri: usable.venueGoogleMapsUri,
               }
             : null,

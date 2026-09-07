@@ -2105,6 +2105,11 @@ describe("venue negotiation finalization", () => {
       name: "Test Cafe",
       address: "123 Test St",
       googleMapsUri: "https://maps.google.com/?cid=test",
+      // Координаты САМОГО заведения, намеренно не совпадающие с серединой
+      // маршрута: без них тест «к заведению, а не к середине» не может
+      // отличить одно от другого (аудит 2026-09-06, «Архитектура №1»).
+      lat: 50.4712,
+      lng: 30.5551,
     });
   });
 
@@ -2117,10 +2122,12 @@ describe("venue negotiation finalization", () => {
       agreedTime: new Date("2026-05-16T16:00:00.000Z"),
       vibeTextA: "quiet cafe",
       vibeTextB: "quiet cafe",
-      vibeLatA: 50.45,
-      vibeLngA: 30.52,
-      vibeLatB: 50.45,
-      vibeLngB: 30.52,
+      // Разные отправные точки: середина обязана отличаться от координат
+      // заведения, иначе тест ничего не проверяет.
+      vibeLatA: 50.4,
+      vibeLngA: 30.5,
+      vibeLatB: 50.5,
+      vibeLngB: 30.54,
       parsedCategoryA: null,
       parsedCategoryB: null,
       userA: { id: "uid-A", telegramId: 1001n, language: "en" },
@@ -2130,16 +2137,30 @@ describe("venue negotiation finalization", () => {
 
     await tryFinalize(api, "match-venue-1");
 
+    // Название этого теста утверждало «к заведению, а не к середине» с самого
+    // начала, но фикстура давала обеим сторонам ОДНУ точку — середина
+    // совпадала с заведением, и ассерт проходил, пока код писал середину.
+    // Теперь точки разные, и колонка проверяется по существу.
     expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "match-venue-1", status: "negotiating_venue" },
         data: expect.objectContaining({
           status: "scheduled",
-          venueLat: 50.45,
-          venueLng: 30.52,
+          venueLat: 50.4712,
+          venueLng: 30.5551,
         }),
       }),
     );
+    // Середина никуда не делась — она нужна смене места, — но живёт в своей
+    // колонке, и она же служит признаком новой семантики
+    // (`services/venue-location.ts`).
+    const written = mMatch.updateMany.mock.calls.at(-1)![0].data as {
+      venueMidpointLat: number;
+      venueMidpointLng: number;
+    };
+    expect(written.venueMidpointLat).toEqual(expect.any(Number));
+    expect(written.venueMidpointLat).not.toBe(50.4712);
+    expect(written.venueMidpointLng).toEqual(expect.any(Number));
     const finalCalls = api.sendMessage.mock.calls.filter((call: unknown[]) => {
       const opts = call[2] as { entities?: unknown[] } | undefined;
       return Array.isArray(opts?.entities);

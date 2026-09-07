@@ -699,8 +699,16 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
       status: "scheduled",
       venueName: venue.name,
       venueAddress: venue.address,
-      venueLat: mid.lat,
-      venueLng: mid.lng,
+      // Колонка означает ЗАВЕДЕНИЕ, а не середину маршрута. Раньше сюда
+      // писалась `mid`, и Date Bump со своим радиусом в 100 метров сверял
+      // человека с точкой, отстоящей от столика на 0,5–5 км (радиус поиска
+      // от середины). Середина по-прежнему нужна — смене места, — но живёт
+      // теперь в своей колонке. Она же служит признаком того, что строку
+      // писал автор, различающий эти два понятия: см. `venue-location.ts`.
+      venueLat: venue.lat ?? null,
+      venueLng: venue.lng ?? null,
+      venueMidpointLat: mid.lat,
+      venueMidpointLng: mid.lng,
       venueGoogleMapsUri: venue.googleMapsUri,
       // Date-card imagery ref (feature-flagged render; harmless to store always).
       venuePhotoName: venue.photoName ?? null,

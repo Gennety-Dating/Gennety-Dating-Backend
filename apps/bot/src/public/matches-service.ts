@@ -878,8 +878,13 @@ async function finalizeMatchVenue(matchId: string): Promise<void> {
       status: "scheduled",
       venueName: venue.name,
       venueAddress: venue.address,
-      venueLat: mid.lat,
-      venueLng: mid.lng,
+      // Паритет с ботом и с V2: колонка означает заведение, середина уезжает
+      // в свою (`venue-location.ts` объясняет, почему это же поле работает
+      // признаком новой семантики).
+      venueLat: venue.lat ?? null,
+      venueLng: venue.lng ?? null,
+      venueMidpointLat: mid.lat,
+      venueMidpointLng: mid.lng,
       // Parity with the bot path: curated venues always carry a Maps URI.
       venueGoogleMapsUri: venue.googleMapsUri,
     },
