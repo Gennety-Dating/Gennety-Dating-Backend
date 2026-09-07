@@ -52,7 +52,10 @@ interface CancelOptions {
   strict?: boolean;
 }
 
-type CancellationDb = Pick<typeof prisma, "match">;
+// `ticketLedger` — потому что план возвратов теперь сверяется с реестром:
+// возвращается то, за что действительно платили, а не всё, что помечено
+// оплаченным (Premium закрывает слот бесплатно той же отметкой).
+type CancellationDb = Pick<typeof prisma, "match" | "ticketLedger">;
 
 /**
  * Claim all cancellation state changes using the caller's DB client. Passing a

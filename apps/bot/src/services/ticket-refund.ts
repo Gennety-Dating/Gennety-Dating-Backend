@@ -68,7 +68,7 @@ export interface TicketRefundOutcome {
   platform: string;
 }
 
-type RefundDb = Pick<typeof prisma, "match">;
+type RefundDb = Pick<typeof prisma, "match" | "ticketLedger">;
 
 const MATCH_REFUND_SELECT = {
   id: true,
@@ -117,8 +117,39 @@ export async function planMatchTicketRefunds(
   }
   if (bySlot.length === 0) return [];
 
+  /*
+   * Возвращаем ТО, ЧТО ДЕЙСТВИТЕЛЬНО ПЛАТИЛИ, а не то, что помечено оплаченным.
+   *
+   * `ticketPaidA/B` — это «слот закрыт», а не «за слот заплатили». Их же
+   * ставит Premium-ветка гейта (`ticket-gate.ts`), которая закрывает слот
+   * БЕСПЛАТНО, по активной подписке. До 2026-09-07 возврат смотрел только на
+   * эти отметки — и отменённое свидание клало подписчику в кошелёк настоящий
+   * билет, которого он никогда не покупал. Билет тратится на гейт наравне с
+   * купленными, то есть это была эмиссия валюты из подписки, причём тем
+   * быстрее, чем чаще отменяются свидания.
+   *
+   * Признак берём из реестра, а не из нового поля в схеме: настоящая оплата
+   * ВСЕГДА оставляет там след — списание из кошелька (`delta < 0`, одна
+   * транзакция с уменьшением баланса) либо деньги на строке (`amountStars`
+   * для Stars-гейта, `amountCents` для App Store). Premium-ветка пишет
+   * нулевую строку `premium_gate` без денег — и она нам даже не нужна:
+   * правило «нет следа оплаты — нет возврата» верно и тогда, когда та
+   * best-effort запись не удалась.
+   */
+  const ledger = await db.ticketLedger.findMany({
+    where: { matchId: match.id, userId: { in: [match.userAId, match.userBId] } },
+    select: { userId: true, delta: true, amountStars: true, amountCents: true },
+  });
+  const actuallyPaid = new Set(
+    ledger
+      .filter((row) => row.delta < 0 || (row.amountStars ?? 0) > 0 || (row.amountCents ?? 0) > 0)
+      .map((row) => row.userId),
+  );
+  const paidSlots = bySlot.filter(({ payerId }) => actuallyPaid.has(payerId));
+  if (paidSlots.length === 0) return [];
+
   const credits = new Map<string, TicketRefundCredit>();
-  for (const { slot, payerId } of bySlot) {
+  for (const { slot, payerId } of paidSlots) {
     const payer = payerId === match.userAId ? match.userA : match.userB;
     const existing = credits.get(payerId);
     if (existing) {
