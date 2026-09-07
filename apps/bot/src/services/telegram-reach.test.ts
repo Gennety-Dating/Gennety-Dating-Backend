@@ -30,9 +30,13 @@ describe("telegramReachable", () => {
   /**
    * A row predating the column falls back to the id, so no existing Telegram
    * user loses anything on the deploy that introduces this.
+   *
+   * `null` is that row — and it is now the ONLY way to express "unknown".
+   * Omitting the field used to mean the same thing, which is what made a
+   * forgotten `select` indistinguishable from a legacy row; the field is
+   * required so the compiler asks the question instead.
    */
   it("falls back to the id when platform is unknown", () => {
-    expect(telegramReachable({ telegramId: 1001n })).toBe(true);
     expect(telegramReachable({ telegramId: 1001n, platform: null })).toBe(true);
     expect(telegramReachable({ telegramId: -1n, platform: null })).toBe(false);
   });

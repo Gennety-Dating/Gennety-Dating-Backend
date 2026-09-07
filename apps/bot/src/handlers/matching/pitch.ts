@@ -14,7 +14,7 @@ import {
   splitPitchIntoDrafts,
   type PitchResult,
 } from "../../services/pitch-generator.js";
-import { isTelegramTarget } from "../../utils/telegram-target.js";
+import { telegramReachable } from "../../services/telegram-reach.js";
 import { renderCountdownButtonLabel } from "../../utils/countdown-plate.js";
 import { minutesLeftUntilDeadline } from "../../services/proposal-deadline.js";
 import {
@@ -449,6 +449,7 @@ export async function sendMatchWelcomeGiftPreroll(
         select: {
           id: true,
           telegramId: true,
+          platform: true,
           gender: true,
           language: true,
         },
@@ -457,6 +458,7 @@ export async function sendMatchWelcomeGiftPreroll(
         select: {
           id: true,
           telegramId: true,
+          platform: true,
           gender: true,
           language: true,
         },
@@ -470,7 +472,7 @@ export async function sendMatchWelcomeGiftPreroll(
   let sent = 0;
   let sentA = false;
   let sentB = false;
-  if (isTelegramTarget(match.userA.telegramId) && match.pitchMessageIdA == null) {
+  if (telegramReachable(match.userA) && match.pitchMessageIdA == null) {
     const langA: Language = match.userA.language ?? "en";
     const didSend = await deliverWelcomeGiftPreroll(
       api,
@@ -484,7 +486,7 @@ export async function sendMatchWelcomeGiftPreroll(
       sentA = true;
     }
   }
-  if (isTelegramTarget(match.userB.telegramId) && match.pitchMessageIdB == null) {
+  if (telegramReachable(match.userB) && match.pitchMessageIdB == null) {
     const langB: Language = match.userB.language ?? "en";
     const didSend = await deliverWelcomeGiftPreroll(
       api,
@@ -535,8 +537,9 @@ export async function sendMatchProposal(
           age: true,
           gender: true,
           language: true,
-          // Read only by the app rail (`sendMatchDropPush`): whether a push is
-          // worth attempting is a platform question, never `telegramId > 0`.
+          // Reachability on BOTH rails is a platform question, never
+          // `telegramId > 0`: `sendMatchDropPush` asks it for the app, and
+          // `telegramReachable` asks it for the bot chat.
           platform: true,
           theme: true,
           verificationStatus: true,
@@ -789,7 +792,7 @@ export async function sendMatchProposal(
   // adding bubbles. The voice stays last before "yes or no" by design
   // (PRODUCT_SPEC §1.3b).
   const sendA = (async () => {
-    if (!isTelegramTarget(match.userA.telegramId) || match.pitchMessageIdA != null) {
+    if (!telegramReachable(match.userA) || match.pitchMessageIdA != null) {
       return;
     }
     const chatA = Number(match.userA.telegramId);
@@ -845,7 +848,7 @@ export async function sendMatchProposal(
     await sendDecisionQuestion(api, chatA, langA, match.userB.gender);
   })();
   const sendB = (async () => {
-    if (!isTelegramTarget(match.userB.telegramId) || match.pitchMessageIdB != null) {
+    if (!telegramReachable(match.userB) || match.pitchMessageIdB != null) {
       return;
     }
     const chatB = Number(match.userB.telegramId);

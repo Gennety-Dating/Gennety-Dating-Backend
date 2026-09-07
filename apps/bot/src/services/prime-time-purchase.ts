@@ -3,7 +3,7 @@ import { prisma, type Prisma } from "@gennety/db";
 import { buildPrimeInvoicePayload, t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { notifyFounderPurchase, notifyFounderPurchaseRefunded } from "./founder-notify.js";
-import { isTelegramTarget } from "../utils/telegram-target.js";
+import { telegramReachable } from "./telegram-reach.js";
 import { getMainBotApi } from "./main-bot-api.js";
 
 /**
@@ -187,8 +187,8 @@ export async function settlePrimeTimePayment(
       userAId: true,
       userBId: true,
       primeTimeUnlockedAt: true,
-      userA: { select: { id: true, telegramId: true, firstName: true, language: true } },
-      userB: { select: { id: true, telegramId: true, firstName: true, language: true } },
+      userA: { select: { id: true, telegramId: true, platform: true, firstName: true, language: true } },
+      userB: { select: { id: true, telegramId: true, platform: true, firstName: true, language: true } },
     },
   });
   if (!match) {
@@ -268,7 +268,7 @@ export async function settlePrimeTimePayment(
   // The partner's grid changes under them within one poll, so tell them why.
   // Quiet and one line — the buyer's own confirmation is the Mini App redrawing
   // with the band open, which is a better receipt than a message.
-  if (isTelegramTarget(peer.telegramId)) {
+  if (telegramReachable(peer)) {
     const lang = (peer.language ?? "en") as Language;
     await api
       .sendMessage(
@@ -308,13 +308,13 @@ export async function refundPrimeTimeForDeadMatch(
     where: { matchId, status: PRIME_PURCHASE_SETTLED },
     select: {
       ...PRIME_PURCHASE_SELECT,
-      user: { select: { telegramId: true, language: true } },
+      user: { select: { telegramId: true, platform: true, language: true } },
     },
   });
 
   let refunded = 0;
   for (const row of rows) {
-    if (!isTelegramTarget(row.user.telegramId)) continue;
+    if (!telegramReachable(row.user)) continue;
     const ok = await refundPrimeTimePurchase(
       api,
       {
@@ -384,7 +384,7 @@ export async function sweepPrimeTimeRefunds(
       where: { status: PRIME_PURCHASE_PROCESSING, createdAt: { lt: staleBefore } },
       select: {
       ...PRIME_PURCHASE_SELECT,
-      user: { select: { telegramId: true, language: true } },
+      user: { select: { telegramId: true, platform: true, language: true } },
       },
       orderBy: { createdAt: "asc" },
       take: SWEEP_STALE_BUDGET,
@@ -393,7 +393,7 @@ export async function sweepPrimeTimeRefunds(
       where: { status: PRIME_PURCHASE_REFUND_FAILED },
       select: {
       ...PRIME_PURCHASE_SELECT,
-      user: { select: { telegramId: true, language: true } },
+      user: { select: { telegramId: true, platform: true, language: true } },
       },
       // `resolvedAt` is stamped on every attempt, successful or not, so a row
       // that keeps failing sinks behind rows tried longer ago and the retry
@@ -416,7 +416,7 @@ export async function sweepPrimeTimeRefunds(
   for (const row of rows) {
     // A mobile-only user carries a synthetic negative id and cannot hold a
     // Stars charge, so there is nothing to reverse through this rail.
-    if (!isTelegramTarget(row.user.telegramId)) {
+    if (!telegramReachable(row.user)) {
       result.skipped++;
       continue;
     }

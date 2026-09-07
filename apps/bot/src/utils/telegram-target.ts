@@ -1,26 +1,30 @@
 /**
- * Mobile-first synthetic users carry a NEGATIVE `telegramId` (see
- * `apps/bot/src/public/mobile-user.ts`) so they don't collide with real
- * Telegram chat ids. Sending to a negative chat id throws "chat not found"
- * — and historically (M-17) that exception bubbled up and aborted entire
- * fan-out batches.
+ * Turning a `telegramId` into the chat id Telegram's API wants.
  *
- * Use these helpers wherever a worker is about to call
- * `api.sendMessage(Number(user.telegramId), …)`. Calling code stays compact
- * and a single conversion point makes it obvious which paths are
- * Telegram-only vs platform-aware.
+ * This module used to also export `isTelegramTarget(telegramId) === id > 0n`,
+ * used in 43 places as the test for "can the bot message this person". It was
+ * the wrong test, and `services/telegram-reach.ts` had said so in its own
+ * header since Telegram Login shipped: that rail stores a REAL positive id on
+ * an app-only account, and the bot cannot open a chat with someone who never
+ * pressed Start.
+ *
+ * Two definitions of one rule is a bug that does not throw. The wrong copy
+ * addressed messages to people who would never see them — a pitch that reached
+ * only one side, a partner waiting 24 hours for an answer, a candidate spent on
+ * a lifetime pair ban — and the silence came back looking like a choice. So the
+ * predicate is gone rather than deprecated: `telegramReachable` is the only
+ * remaining answer, and it requires `platform`, which makes a forgotten
+ * `select` a compile error instead of a quiet misdelivery.
+ *
+ * What survives here is the conversion, whose own guard is a defensive assert
+ * about a value that should never have reached it — not a policy decision.
  */
-
-/** True when this telegramId belongs to a real Telegram chat (positive). */
-export function isTelegramTarget(telegramId: bigint | null | undefined): boolean {
-  return telegramId !== null && telegramId !== undefined && telegramId > 0n;
-}
 
 /**
  * Convert a positive `telegramId` to the `number` Telegram's API expects.
- * Throws when called on a mobile-only synthetic id — call sites should
- * gate with `isTelegramTarget` first. The throw is defensive, not the
- * happy path; if it ever fires, that path leaked a non-Telegram user.
+ * Throws when called on a mobile-only synthetic id — call sites gate with
+ * `telegramReachable` first. The throw is defensive, not the happy path; if it
+ * ever fires, that path leaked a non-Telegram user.
  */
 export function toTelegramChatId(telegramId: bigint): number {
   if (telegramId <= 0n) {

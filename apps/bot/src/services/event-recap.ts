@@ -39,7 +39,7 @@ import { sendPushToUser } from "./push.js";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
 import { getMainBotApi } from "./main-bot-api.js";
 import { buildMiniAppUrl } from "./mini-app-url.js";
-import { isTelegramTarget, toTelegramChatId } from "../utils/telegram-target.js";
+import { toTelegramChatId } from "../utils/telegram-target.js";
 
 const LOG_PREFIX = "[event-recap]";
 
@@ -326,7 +326,7 @@ export async function sendMutualReveal(
   });
 
   const sends: Array<Promise<unknown>> = [];
-  if (telegramReachable(peer) && isTelegramTarget(peer.telegramId)) {
+  if (telegramReachable(peer) && telegramReachable(peer)) {
     const api = getMainBotApi();
     if (api) {
       const url = buildMiniAppUrl("event", {

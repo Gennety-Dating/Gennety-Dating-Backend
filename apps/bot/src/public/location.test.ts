@@ -96,7 +96,9 @@ beforeEach(() => {
   // `/search` resolves the DB user too (it restricts results to the caller's
   // own market), so a default identity is needed alongside the per-case
   // `mockResolvedValueOnce` the `/select` tests set up.
-  userFindUnique.mockResolvedValue({ id: "uid-A", language: "en" });
+  // `platform` rides along because the post-save ack refuses to send without
+  // knowing the rail — see services/telegram-reach.ts.
+  userFindUnique.mockResolvedValue({ id: "uid-A", platform: "telegram", language: "en" });
   placeCacheFindUnique.mockReset();
   placeCacheFindUnique.mockResolvedValue(null);
   placeCacheUpsert.mockReset();
@@ -637,7 +639,7 @@ describe("POST /v1/location/select", () => {
       userBId: "uid-B",
       status: "negotiating_venue",
     });
-    userFindUnique.mockResolvedValueOnce({ id: "uid-other" });
+    userFindUnique.mockResolvedValueOnce({ id: "uid-other", platform: "telegram" });
     const initData = signInitData(BOT_TOKEN);
     const res = await request(buildApp())
       .post("/v1/location/select")
@@ -653,7 +655,7 @@ describe("POST /v1/location/select", () => {
       userBId: "uid-B",
       status: "negotiating_venue",
     });
-    userFindUnique.mockResolvedValueOnce({ id: "uid-A" });
+    userFindUnique.mockResolvedValueOnce({ id: "uid-A", platform: "telegram" });
     matchUpdate.mockResolvedValueOnce({});
     const initData = signInitData(BOT_TOKEN);
 
@@ -688,8 +690,11 @@ describe("POST /v1/location/select", () => {
     const ackArgs = sendVenuePostSaveAck.mock.calls[0]!;
     expect(ackArgs[0]).toBe(fakeApi);
     expect(ackArgs[1]).toBe(5986970093n); // actor's telegramId
-    expect(ackArgs[2]).toBe(VALID_UUID);
-    expect(ackArgs[3]).toBe("A"); // side
+    // The rail travels with the id: reachability is a platform question, and
+    // the ack refuses to send without being told which rail it is answering on.
+    expect(ackArgs[2]).toBe("telegram");
+    expect(ackArgs[3]).toBe(VALID_UUID);
+    expect(ackArgs[4]).toBe("A"); // side
   });
 
   it("writes vibeLatB/LngB/AddressB when caller is user B (mirror case)", async () => {
@@ -699,7 +704,7 @@ describe("POST /v1/location/select", () => {
       userBId: "uid-B",
       status: "negotiating_venue",
     });
-    userFindUnique.mockResolvedValueOnce({ id: "uid-B" });
+    userFindUnique.mockResolvedValueOnce({ id: "uid-B", platform: "telegram" });
     matchUpdate.mockResolvedValueOnce({});
     const initData = signInitData(BOT_TOKEN);
 
@@ -726,7 +731,7 @@ describe("POST /v1/location/select", () => {
       userBId: "uid-B",
       status: "negotiating_venue",
     });
-    userFindUnique.mockResolvedValueOnce({ id: "uid-A" });
+    userFindUnique.mockResolvedValueOnce({ id: "uid-A", platform: "telegram" });
     matchUpdate.mockResolvedValueOnce({});
     const initData = signInitData(BOT_TOKEN);
     const huge = "x".repeat(2000);
@@ -751,7 +756,7 @@ describe("POST /v1/location/select", () => {
       userBId: "uid-B",
       status: "negotiating_venue",
     });
-    userFindUnique.mockResolvedValueOnce({ id: "uid-A" });
+    userFindUnique.mockResolvedValueOnce({ id: "uid-A", platform: "telegram" });
     const initData = signInitData(BOT_TOKEN);
 
     const res = await request(buildApp())
@@ -775,7 +780,7 @@ describe("POST /v1/location/select", () => {
       userBId: "uid-B",
       status: "negotiating_venue",
     });
-    userFindUnique.mockResolvedValueOnce({ id: "uid-A" });
+    userFindUnique.mockResolvedValueOnce({ id: "uid-A", platform: "telegram" });
     matchUpdate.mockResolvedValueOnce({});
     const initData = signInitData(BOT_TOKEN);
 

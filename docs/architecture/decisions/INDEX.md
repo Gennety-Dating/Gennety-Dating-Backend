@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 270 entries
+# Decision index — all 271 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-07 | у «бот может написать этому человеку» осталось одно определение | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | админка перестала тянуть ленту сообщений в кучу бота | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | рассылка «сегодня без пар» спала пять с половиной часов | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | минутный тик перестал читать всю базу ради полутора тысяч правок | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

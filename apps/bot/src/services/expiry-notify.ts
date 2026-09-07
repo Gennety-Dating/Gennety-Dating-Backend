@@ -2,7 +2,7 @@ import { InputFile, type Api, type RawApi } from "grammy";
 import { GrammyError } from "grammy";
 import { t, type Language, type TranslationKey } from "@gennety/shared";
 import type { MatchExpiry, SideClassification } from "./match-expiry.js";
-import { isTelegramTarget } from "../utils/telegram-target.js";
+import { telegramReachable } from "./telegram-reach.js";
 import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
 import {
   renderExpiryCard,
@@ -207,7 +207,7 @@ async function clearPitchKeyboard(
   side: SideClassification,
 ): Promise<void> {
   if (side.pitchMessageId == null) return;
-  if (!isTelegramTarget(side.telegramId)) return;
+  if (!telegramReachable(side)) return;
   const lang: Language = (side.language as Language) ?? "en";
   try {
     await api.editMessageText(
@@ -246,7 +246,7 @@ export async function sendExpiryNotifications(
   for (let i = 0; i < sides.length; i++) {
     const side = sides[i]!;
 
-    if (!isTelegramTarget(side.telegramId)) {
+    if (!telegramReachable(side)) {
       skipped++;
       continue;
     }

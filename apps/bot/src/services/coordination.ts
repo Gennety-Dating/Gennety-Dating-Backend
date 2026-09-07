@@ -51,7 +51,8 @@ export interface CoordinationResult {
 interface CoordParticipant {
   id: string;
   telegramId: bigint;
-  platform?: string | null;
+  /** Required: reachability is a platform question — see telegram-reach.ts. */
+  platform: string | null;
   language: string | null;
   theme?: string | null;
   firstName: string | null;

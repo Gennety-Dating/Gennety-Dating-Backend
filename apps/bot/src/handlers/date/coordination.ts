@@ -48,6 +48,18 @@ interface CoordMatch {
 interface CoordUser {
   id: string;
   telegramId: bigint;
+  /**
+   * Load-bearing, and it was missing.
+   *
+   * `resolveCoordRecipients` decides who can be offered the contact-exchange
+   * fork by `telegramReachable`, whose whole point is that `telegramId > 0` is
+   * not the test — a Telegram-login account carries a real positive id and no
+   * bot chat. With `platform` absent from the select the predicate read
+   * `undefined`, fell back to "assume Telegram", and the offer went to someone
+   * who can never see it. That module's own header cites this file as the place
+   * that learned the lesson in §4.5; the `select` had never caught up.
+   */
+  platform: string | null;
   language: string | null;
   theme: string | null;
   firstName: string | null;
@@ -59,6 +71,7 @@ interface CoordUser {
 const coordUserSelect = {
   id: true,
   telegramId: true,
+  platform: true,
   language: true,
   // Card chrome follows the RECIPIENT's theme, and the first profile photo is
   // what fills the card's polaroid — both only exist for the coordination

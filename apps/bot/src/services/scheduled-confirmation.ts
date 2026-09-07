@@ -46,7 +46,7 @@ import {
   buildVenueChangeButton,
 } from "../handlers/matching/venue-change.js";
 import { PROTECT_PARTNER_MEDIA } from "../demo/config.js";
-import { isTelegramTarget } from "../utils/telegram-target.js";
+import { telegramReachable } from "./telegram-reach.js";
 import { runStatusSequence, NEVER_CUT_SHORT } from "./ai-stream.js";
 import { dateCardSteps } from "./analysis-status.js";
 import { refreshStatusBanners } from "./status-banner-refresh.js";
@@ -68,6 +68,9 @@ export function buildVenueMapsUrl(venue: Venue): string {
 
 interface ScheduledConfirmationInput {
   telegramId: bigint;
+  /** Reachability is a platform question, never `telegramId > 0` — see
+   *  services/telegram-reach.ts. */
+  platform: string | null;
   text: string;
   entity: MessageEntity;
   keyboard: InlineKeyboardMarkup;
@@ -99,7 +102,7 @@ async function sendScheduledConfirmation(
   api: Api<RawApi>,
   input: ScheduledConfirmationInput,
 ): Promise<{ fileId: string | null; cardBuffer: Buffer | null }> {
-  if (!isTelegramTarget(input.telegramId)) return { fileId: null, cardBuffer: null };
+  if (!telegramReachable(input)) return { fileId: null, cardBuffer: null };
   const chatId = Number(input.telegramId);
 
   if (env.DATE_CARD_FEATURE_ENABLED) {
@@ -208,6 +211,7 @@ export async function deliverScheduledConfirmation(
         select: {
           id: true,
           telegramId: true,
+          platform: true,
           language: true,
           theme: true,
           gender: true,
@@ -220,6 +224,7 @@ export async function deliverScheduledConfirmation(
         select: {
           id: true,
           telegramId: true,
+          platform: true,
           language: true,
           theme: true,
           gender: true,
@@ -323,6 +328,7 @@ export async function deliverScheduledConfirmation(
   const [resultA, resultB] = await Promise.all([
     sendScheduledConfirmation(api, {
       telegramId: match.userA.telegramId,
+      platform: match.userA.platform,
       text: textA,
       entity: entA,
       keyboard: mapsKeyboardA,
@@ -337,6 +343,7 @@ export async function deliverScheduledConfirmation(
     }).finally(() => refreshStatusBanners(api, [match.userA.id]).catch(() => {})),
     sendScheduledConfirmation(api, {
       telegramId: match.userB.telegramId,
+      platform: match.userB.platform,
       text: textB,
       entity: entB,
       keyboard: mapsKeyboardB,
