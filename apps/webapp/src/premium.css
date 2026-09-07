@@ -62,6 +62,11 @@
   --pm-seg-on: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.1) 100%);
   --pm-seg-on-edge:
     inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  /* The two lights the selection carries WHILE IT TRAVELS, both dark when it is
+     parked. `sheen` is the streak along its leading face; `bloom` is the swell
+     inside it. Neither is ambient — see the note on `.pm-plan-thumb`. */
+  --pm-seg-sheen: rgba(255, 255, 255, 0.22);
+  --pm-seg-bloom: rgba(255, 255, 255, 0.2);
 
   --pm-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --tg-content-top: 56px;
@@ -88,6 +93,12 @@
   --pm-seg: rgba(0, 0, 0, 0.04);
   --pm-seg-on: linear-gradient(180deg, rgba(0, 0, 0, 0.13) 0%, rgba(0, 0, 0, 0.09) 100%);
   --pm-seg-on-edge: inset 0 0 0 1px rgba(0, 0, 0, 0.09);
+  /* Ink, like everything else that separates on cream. The travelling tile is
+     the DARKEST thing in the control here, so its own lights have to deepen it
+     as it moves — a white streak across a dark tile on a pale page would read as
+     a hole punched in it, which is the same inversion `--pm-seg-on` avoids. */
+  --pm-seg-sheen: rgba(0, 0, 0, 0.1);
+  --pm-seg-bloom: rgba(0, 0, 0, 0.09);
 
   /* On the cream page the CTA flips to an ink-black glass with white text — the
      "black shades" side of the monochrome identity, high-contrast and glossy. */
@@ -509,6 +520,11 @@ body {
  * Borderless like everything else here — the selected cell is distinguished by
  * a brighter fill and an inset rim of light, never by an outline. */
 .pm-plans {
+  /* One number, two consumers: the grid's gap and the travelling tile's stride.
+     They are the same distance by construction, and a tile that walks a stride
+     the grid does not use lands between two cells. */
+  --pm-seg-gap: 7px;
+  position: relative;
   display: grid;
   /* `minmax(0, 1fr)`, not `1fr`: the bare keyword is `minmax(auto, 1fr)`, so a
      longer label ("6 месяцев" vs "1 месяц") widens its own cell and the three
@@ -516,7 +532,75 @@ body {
      different objects rather than as one control with three positions, and the
      widths would then also shift per locale. */
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
+  gap: var(--pm-seg-gap);
+}
+
+/* THE SELECTION, AS ONE TRAVELLING TILE.
+ *
+ * Three cells used to light and unlight independently: tap a plan and one fill
+ * appeared here while another disappeared there. Nothing moved, so nothing
+ * connected the two halves of the event, and the control read as three lamps
+ * rather than as one switch with three positions.
+ *
+ * Now a single tile slides to the cell you tapped. That is the whole idea: the
+ * eye follows a moving object without being asked to, so the answer to "which
+ * one is chosen" is delivered by the motion itself before any fill is read. It
+ * also states something three independent fills never could — that these are
+ * three positions of ONE control, which is the same argument that already makes
+ * the cells equal width.
+ *
+ * The stride is one cell plus one gap. The percentage in `translateX` is of the
+ * tile's OWN box, and the tile is exactly one cell wide, so `100% + gap` is that
+ * stride exactly, at any screen width, with no measuring in JS.
+ *
+ * The curve overshoots by a hair (1.24) and settles. A linear or ease-out glide
+ * arrives and stops dead, which reads as a thing being repositioned; the small
+ * overshoot reads as a thing with mass that was thrown and caught. */
+.pm-plan-thumb {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc((100% - var(--pm-seg-gap) * 2) / 3);
+  border-radius: 16px;
+  background: var(--pm-seg-on);
+  box-shadow: var(--pm-seg-on-edge);
+  transform: translateX(calc((100% + var(--pm-seg-gap)) * var(--pm-i, 0)));
+  transition: transform 420ms cubic-bezier(0.34, 1.24, 0.4, 1);
+  pointer-events: none;
+}
+/* The swell inside the glass while it travels. Rises with the movement and is
+   already draining as the tile lands, so the light settles INTO the chosen cell
+   rather than switching off on arrival. */
+.pm-plan-thumb::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(70% 140% at 50% 50%, var(--pm-seg-bloom) 0%, transparent 68%);
+  opacity: 0;
+  transition: opacity 320ms ease;
+  pointer-events: none;
+}
+/* The streak along the face of the moving tile — light smeared by speed. It is
+   the one thing here that would look wrong sitting still, which is exactly why
+   it only exists while the tile is in motion. */
+.pm-plan-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent 6%, var(--pm-seg-sheen) 50%, transparent 94%);
+  opacity: 0;
+  transition: opacity 320ms ease;
+  pointer-events: none;
+}
+.pm-plan-thumb.is-moving::before,
+.pm-plan-thumb.is-moving::after {
+  opacity: 1;
+  /* Up fast, down slow: the same asymmetry the CTA's press uses. */
+  transition-duration: 130ms;
 }
 .pm-plan {
   position: relative;
@@ -529,29 +613,43 @@ body {
   border-radius: 16px;
   padding: 9px 6px;
   background: var(--pm-seg);
-  color: var(--pm-ink);
+  /* Unselected labels stand back. The selection is now carried by a tile that
+     slides between cells, and a fill alone is a quiet signal at these alphas —
+     the chosen plan also being the only one at full ink is what makes "chosen"
+     legible in the half-second before the eye reaches the fill. */
+  color: var(--pm-ink-soft);
   font-family: "Inter", system-ui, sans-serif;
   cursor: pointer;
-  /* Only the fill, its inner light and the press scale move; a transition on
+  /* Only the fill, the label's ink and the press scale move; a transition on
      `all` would also animate the layout properties above and make the row
-     visibly reflow every time the user compares two plans. */
+     visibly reflow every time the user compares two plans. The selection's own
+     light travels on `.pm-plan-thumb`, not here. */
   transition:
-    background 160ms ease,
-    box-shadow 160ms ease,
+    background 200ms ease,
+    color 200ms ease,
     transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 /* The cells answer a touch the same way the CTA does, one size down: the whole
-   footer should feel like one material. No travelling light here though — at
-   ~52px tall a highlight has nowhere to travel, and three of them competing
-   under one thumb would be noise. */
+   footer should feel like one material. */
 .pm-plan:active {
   transform: scale(0.97);
 }
+/* The chosen cell gives its fill UP — the travelling tile is parked on it and
+   supplies it, and stacking the cell's own tint under the tile would make the
+   selected plan a different colour depending on which of the two you were
+   looking at. What the cell keeps is its label, at full ink. */
 .pm-plan.is-selected {
-  background: var(--pm-seg-on);
-  box-shadow: var(--pm-seg-on-edge);
+  background: transparent;
+  color: var(--pm-ink);
 }
+/* `z-index: 2` on both text rows: the travelling tile sits at 1, above the
+   cells' own fills so it can slide across them, and the words have to stay above
+   IT — otherwise the tile passes over a neighbour's label on its way by. A
+   positioned parent with `z-index: auto` paints its whole subtree at one level,
+   so the raise has to be on the rows themselves, not on the cell. */
 .pm-plan-head {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -581,6 +679,8 @@ body {
    into `.pm-plan` so the name row and the price row stay two independently
    centred rows whatever a locale does to either. */
 .pm-plan-meta {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -850,6 +950,18 @@ body {
   /* The CTA is NOT listed here any more: its resting light no longer animates,
      so there is nothing to hold still, and the press response is a 260ms fade
      plus a 1.5% scale — feedback for a deliberate touch, not ambient motion. */
+  /* The selection stops travelling and simply appears where it was sent. The
+     tile is the one thing on this screen whose motion crosses the viewport, so
+     it is also the one that has to be able to not move at all. Its two
+     travelling lights go with it — they describe a journey that no longer
+     happens. */
+  .pm-plan-thumb {
+    transition: none;
+  }
+  .pm-plan-thumb::before,
+  .pm-plan-thumb::after {
+    display: none;
+  }
   /* Freeze the shimmer to a legible solid so the wordmark never sits mid-fade. */
   .pm-shimmer {
     animation: none !important;

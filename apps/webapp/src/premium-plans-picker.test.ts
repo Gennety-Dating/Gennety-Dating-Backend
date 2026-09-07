@@ -89,11 +89,66 @@ describe("the plan picker's selection polarity", () => {
     expect(token(lightBlock, "--pm-seg-on-edge")).not.toContain("255, 255, 255");
   });
 
-  it("keeps the selected cell borderless — depth from fill and inset light", () => {
-    const selected = rule(".pm-plan.is-selected");
-    expect(selected).not.toMatch(/(^|[^-])border:/);
-    expect(selected).not.toMatch(/outline:/);
-    expect(selected).toContain("box-shadow");
+  it("keeps the selection borderless — depth from fill and inset light", () => {
+    // The fill and the rim moved off the cell and onto the tile that travels
+    // between cells, so this is where the borderless rule now has to hold. The
+    // tokens above are unchanged and still decide the polarity per theme; what
+    // changed is only which element wears them.
+    const thumb = rule(".pm-plan-thumb");
+    expect(thumb).not.toMatch(/(^|[^-])border:/);
+    expect(thumb).not.toMatch(/outline:/);
+    expect(thumb).toContain("var(--pm-seg-on)");
+    expect(thumb).toContain("var(--pm-seg-on-edge)");
+  });
+
+  it("leaves the chosen cell no fill of its own to stack under the tile", () => {
+    // Two tints on one cell would make the selected plan a different colour
+    // depending on which of the two you looked at.
+    expect(rule(".pm-plan.is-selected")).toMatch(/background:\s*transparent/);
+  });
+});
+
+describe("the travelling selection", () => {
+  it("walks a stride the grid actually uses", () => {
+    // The tile is one cell wide and steps by one cell plus one gap. Both read
+    // the SAME `--pm-seg-gap`; hardcode either one and the tile lands between
+    // two cells at some screen width and looks fine at every other.
+    expect(rule(".pm-plans")).toContain("gap: var(--pm-seg-gap)");
+    const thumb = rule(".pm-plan-thumb");
+    expect(thumb).toContain("var(--pm-seg-gap)");
+    expect(thumb).toMatch(/translateX\(calc\(\(100% \+ var\(--pm-seg-gap\)\) \* var\(--pm-i/);
+  });
+
+  it("moves, and moves nothing else", () => {
+    // A transition on `all` here would animate the tile's width as the layout
+    // settles, i.e. the selection would visibly stretch on first paint.
+    const transition = /transition:\s*([^;]+);/.exec(rule(".pm-plan-thumb"))?.[1] ?? "";
+    expect(transition).toContain("transform");
+    expect(transition).not.toMatch(/\ball\b/);
+  });
+
+  it("shows its travelling lights only while travelling", () => {
+    // A streak of speed on a parked tile is just a smear across the fill.
+    for (const layer of [".pm-plan-thumb::before", ".pm-plan-thumb::after"]) {
+      expect(rule(layer)).toMatch(/opacity:\s*0;/);
+    }
+    expect(rule(".pm-plan-thumb.is-moving::before,\n.pm-plan-thumb.is-moving::after")).toMatch(
+      /opacity:\s*1;/,
+    );
+  });
+
+  it("keeps the words above the tile that slides past them", () => {
+    // The tile sits above the cells' fills so it can cross them; without the
+    // raise it would also cross their labels.
+    for (const row of [".pm-plan-head", ".pm-plan-meta"]) {
+      expect(rule(row)).toContain("z-index: 2");
+    }
+    expect(rule(".pm-plan-thumb")).toContain("z-index: 1");
+  });
+
+  it("can hold still for a reader who asked for no motion", () => {
+    const reduced = CSS.slice(CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced).toContain(".pm-plan-thumb");
   });
 });
 
@@ -105,13 +160,22 @@ describe("the plan picker's layout", () => {
     expect(plans).not.toMatch(/grid-template-columns:\s*repeat\(3,\s*1fr\)/);
   });
 
-  it("animates only the fill and its light, never the layout", () => {
+  it("animates only the fill and the label, never the layout", () => {
     // A transition on `all` would also animate padding/gap and make the row
-    // visibly reflow every time the user compares two plans.
+    // visibly reflow every time the user compares two plans. The cell's inset
+    // light is no longer in this list because the cell no longer has one — it
+    // travels on `.pm-plan-thumb` now.
     const cell = rule(".pm-plan");
     const transition = /transition:\s*([^;]+);/.exec(cell)?.[1] ?? "";
     expect(transition).toContain("background");
-    expect(transition).toContain("box-shadow");
+    expect(transition).toContain("color");
     expect(transition).not.toMatch(/\ball\b/);
+  });
+
+  it("stands the unselected labels back from the chosen one", () => {
+    // Two states, two inks. Reading them off the same token would leave the
+    // fill as the only signal, and at these alphas the fill is the quiet half.
+    expect(rule(".pm-plan")).toContain("color: var(--pm-ink-soft)");
+    expect(rule(".pm-plan.is-selected")).toContain("color: var(--pm-ink)");
   });
 });
