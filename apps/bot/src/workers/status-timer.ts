@@ -14,6 +14,7 @@ import type { StatusBannerStage } from "../services/status-banner-view.js";
 import { loadBannerStages } from "../services/status-banner-stage.js";
 import { filterRematchEligible } from "../services/rematch.js";
 import { isMarketPending } from "../handlers/menu/city-switch.js";
+import { BoundedMap } from "../utils/bounded-map.js";
 
 const MAX_EDITS_PER_SECOND = 25;
 /**
@@ -84,8 +85,17 @@ export interface StatusTimerResult {
   permanentFailures: number;
 }
 
-const defaultRetryState = new Map<string, RetryEntry>();
-const defaultPinAuditAt = new Map<string, number>();
+/**
+ * Per-chat bookkeeping for the tick. Bounded for the same reason as the render
+ * cache next door: the key space is every account this worker has ever served,
+ * the process lives for weeks, and an entry is only removed for someone the
+ * tick actually revisits. Losing either entry is harmless — a dropped
+ * `retryState` restarts the backoff, a dropped `pinAuditAt` buys one extra pin
+ * audit — so eviction can never cost more than one API call.
+ */
+const TICK_STATE_MAX = 10_000;
+const defaultRetryState = new BoundedMap<string, RetryEntry>(TICK_STATE_MAX);
+const defaultPinAuditAt = new BoundedMap<string, number>(TICK_STATE_MAX);
 const defaultSleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
