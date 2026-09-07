@@ -17,9 +17,16 @@
  * late-night drop-offs don't bunch several touches into the next morning.
  */
 
+import {
+  QUIET_START_HOUR as SHARED_QUIET_START_HOUR,
+  QUIET_END_HOUR as SHARED_QUIET_END_HOUR,
+} from "@gennety/shared";
+
 export const KYIV_TZ = "Europe/Kyiv";
-export const QUIET_START_HOUR = 23;
-export const QUIET_END_HOUR = 9;
+// Из общего пакета: здесь стояла вторая копия тех же чисел, и правка одной
+// половины разошлась бы с другой беззвучно.
+export const QUIET_START_HOUR = SHARED_QUIET_START_HOUR;
+export const QUIET_END_HOUR = SHARED_QUIET_END_HOUR;
 export const FREE_WINDOW_START_HOUR = 13;
 export const EVENING_HOUR = 19;
 export const AFTERNOON_HOUR = 14;
