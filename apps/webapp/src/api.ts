@@ -24,6 +24,13 @@ export interface CalendarState {
   agreedTime: string | null;
   isFirstMover: boolean;
   /**
+   * The market's clock, as the server reports it — the zone every label and
+   * day key is built in. Optional so a bundle running against a server that
+   * predates the field falls back to `FALLBACK_TIME_ZONE` instead of
+   * formatting in the device zone again.
+   */
+  timeZone?: string;
+  /**
    * The paid evening band (PRIME_TIME_PRODUCT_SPEC §7). `locked` is the whole
    * gate: it is already false for a premium pair, a paid pair, and a pair the
    * feature cannot reach — the client never re-derives any of that, it just

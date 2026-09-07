@@ -13,6 +13,26 @@
  * map can be extended without touching the scheduler.
  */
 
+/**
+ * The product's one zone: the fallback for an unresolvable city AND the
+ * canonical clock every market-wide decision is made in.
+ *
+ * It was five separate string literals — the calendar grid
+ * (`handlers/matching/scheduler.ts`), the render zone for absolute date/time
+ * text (`services/datetime-entity.ts`, and through it the date card), the drop
+ * cron (`services/next-batch.ts`), quiet hours (`workers/quiet-hours.ts`) and
+ * the re-engagement windows (`workers/re-engagement-schedule.ts`). Identical
+ * values, five places to miss. The waitlist already holds fifteen German
+ * cities, and on the first non-UA market a half-updated set of literals would
+ * split behaviour silently, with every half defensible on its own.
+ *
+ * Deliberately NOT per-user, even though `Profile.timeZone` is populated: a
+ * date belongs to two people, and both sides of a match must read the same
+ * wall-clock figures on the same card. That is a product decision (see the
+ * scheduling comments in `handlers/matching/venue-negotiation.ts`), not an
+ * oversight. What per-user zones do own is what a single person sees about
+ * their own day — and that already flows through `cityKeyToTimeZone`.
+ */
 export const DEFAULT_TIME_ZONE = "Europe/Kyiv";
 
 /** Country code (ISO-3166 alpha-2, upper-case) → representative IANA zone. */

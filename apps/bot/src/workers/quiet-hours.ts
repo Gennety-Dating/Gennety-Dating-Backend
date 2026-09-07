@@ -16,11 +16,16 @@
  * Когда рынков станет два, менять придётся эту строку, а не искать три
  * реализации.
  */
-import { isQuietHourIn, QUIET_END_HOUR, QUIET_START_HOUR } from "@gennety/shared";
+import {
+  DEFAULT_TIME_ZONE,
+  isQuietHourIn,
+  QUIET_END_HOUR,
+  QUIET_START_HOUR,
+} from "@gennety/shared";
 
 export const QUIET_START = QUIET_START_HOUR;
 export const QUIET_END = QUIET_END_HOUR;
-export const QUIET_TZ = "Europe/Kyiv";
+export const QUIET_TZ = DEFAULT_TIME_ZONE;
 
 /** Момент попадает в киевское окно тишины [23:00, 09:00). */
 export function isQuietHours(now: Date = new Date()): boolean {

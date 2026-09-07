@@ -2,7 +2,7 @@ import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import type { InlineKeyboardMarkup } from "grammy/types";
 import { prisma, type Theme } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { DEFAULT_TIME_ZONE, t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
 import { telegramReachable } from "../../services/telegram-reach.js";
@@ -72,7 +72,7 @@ export const CALENDAR_SLOT_COUNT = CALENDAR_DAY_COUNT * CALENDAR_TIME_SLOTS.leng
  * would write 13:00 UTC (≈16:00 Kyiv) and the "13:00" the user picked would
  * drift. We resolve each Kyiv wall-clock slot to its exact UTC instant instead.
  */
-export const CALENDAR_TIME_ZONE = "Europe/Kyiv";
+export const CALENDAR_TIME_ZONE = DEFAULT_TIME_ZONE;
 
 /**
  * Запас, на который слот обязан отстоять от «сейчас», чтобы его ещё можно
@@ -739,6 +739,14 @@ export type CalendarStateResult =
       agreedTime: string | null;
       isFirstMover: boolean;
       /**
+       * The clock the grid is written in. Sent rather than assumed: the Mini
+       * App formatted every slot with the DEVICE zone, so a traveller read one
+       * time in the browser and a different one in the chat for the same
+       * instant — and the grouping into days was wrong with it. The client has
+       * no business deriving this; the server owns the market.
+       */
+      timeZone: string;
+      /**
        * Prime Time (PRIME_TIME_PRODUCT_SPEC.md §6). `slots` is the whole band
        * and is populated whether or not it is locked, so a pair that HAS opened
        * it still sees what their subscription or pass bought — the venue board
@@ -815,6 +823,7 @@ export async function getCalendarState(
     peerSlots: peer.map((d) => d.toISOString()),
     agreedTime: match.agreedTime?.toISOString() ?? null,
     isFirstMover: peer.length === 0,
+    timeZone: CALENDAR_TIME_ZONE,
     primeTime: {
       locked: live && primeTimeUnlockReason(match) === null,
       slots: live ? lockedSlotsOf(selectable) : [],

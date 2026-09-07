@@ -1,5 +1,5 @@
 import type { MessageEntity } from "grammy/types";
-import type { Language } from "@gennety/shared";
+import { DEFAULT_TIME_ZONE, type Language } from "@gennety/shared";
 
 /**
  * Build a `date_time` MessageEntity for the scheduled-match confirmation.
@@ -24,7 +24,7 @@ import type { Language } from "@gennety/shared";
  * as this entity's fallback text — the entity itself resolves to the user's
  * own timezone when tapped.
  */
-export const RENDER_TZ = "Europe/Kyiv";
+export const RENDER_TZ = DEFAULT_TIME_ZONE;
 const CALENDAR_AFFORDANCE = "📅 ";
 
 export const LOCALE_TAGS: Record<Language, string> = {
