@@ -2087,8 +2087,21 @@ export async function sweepExpiredVenueChanges(
 ): Promise<number> {
   if (!env.VENUE_CHANGE_FEATURE_ENABLED) return 0;
 
+  // `status: "scheduled"` is the part that was missing, and every other CAS in
+  // this file carries it.
+  //
+  // Cancelling a match does not clear the `venueChange*` columns, so a pair
+  // whose date was called off still had an `agreed` venue change with a live
+  // deadline sitting on the row. Hours later this sweep found it and sent BOTH
+  // of them a message about where they are meeting — including someone who had
+  // left by blocking their partner for safety. A message about a date that no
+  // longer exists is bad; that one is worse than bad.
   const due = await prisma.match.findMany({
-    where: { venueChangeStatus: "agreed", venueChangeExpiresAt: { lte: now } },
+    where: {
+      status: "scheduled",
+      venueChangeStatus: "agreed",
+      venueChangeExpiresAt: { lte: now },
+    },
     select: VC_SELECT,
   });
 
@@ -2099,7 +2112,12 @@ export async function sweepExpiredVenueChanges(
       const hasLikes =
         parseLikes(match.venueLikesA).length > 0 || parseLikes(match.venueLikesB).length > 0;
       const claim = await prisma.match.updateMany({
-        where: { id: match.id, venueChangeStatus: "agreed", venueChangeExpressAt: { not: null } },
+        where: {
+          id: match.id,
+          status: "scheduled",
+          venueChangeStatus: "agreed",
+          venueChangeExpressAt: { not: null },
+        },
         data: {
           venueChangeStatus: hasLikes ? "liking" : null,
           venueChangeName: null,
@@ -2118,7 +2136,15 @@ export async function sweepExpiredVenueChanges(
     }
 
     const claim = await prisma.match.updateMany({
-      where: { id: match.id, venueChangeStatus: "agreed", venueChangeExpressAt: null },
+      // Re-asserted here as well: the match can be cancelled between the scan
+      // above and this write, and that is exactly the window the notification
+      // would fall into.
+      where: {
+        id: match.id,
+        status: "scheduled",
+        venueChangeStatus: "agreed",
+        venueChangeExpressAt: null,
+      },
       data: {
         venueChangeStatus: "lapsed",
         venueChangeResolvedAt: now,

@@ -16,12 +16,16 @@ const envMock = { EVENTS_FEATURE_ENABLED: true, EVENT_QR_SECRET: "a".repeat(64) 
 vi.mock("../config.js", () => ({ env: envMock }));
 
 const staffTokenFindMany = vi.fn();
+const staffTokenFindFirst = vi.fn();
 const eventFindUnique = vi.fn();
 const tierFindMany = vi.fn();
 const ticketFindMany = vi.fn();
 vi.mock("@gennety/db", () => ({
   prisma: {
-    eventStaffToken: { findMany: (...a: unknown[]) => staffTokenFindMany(...a) },
+    eventStaffToken: {
+      findMany: (...a: unknown[]) => staffTokenFindMany(...a),
+      findFirst: (...a: unknown[]) => staffTokenFindFirst(...a),
+    },
     event: { findUnique: (...a: unknown[]) => eventFindUnique(...a) },
     eventTicketTier: { findMany: (...a: unknown[]) => tierFindMany(...a) },
     eventTicket: { findMany: (...a: unknown[]) => ticketFindMany(...a) },
@@ -67,6 +71,7 @@ beforeEach(() => {
   staffTokenFindMany.mockResolvedValue([
     { id: TOKEN_ID, tokenHash: "hash", label: "Front door" },
   ]);
+  staffTokenFindFirst.mockResolvedValue({ id: TOKEN_ID, tokenHash: "hash", label: "Front door" });
   compare.mockResolvedValue(true);
 });
 
@@ -106,6 +111,53 @@ describe("staff auth", () => {
     expect(staffTokenFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { eventId: OTHER_EVENT, revokedAt: null } }),
     );
+  });
+
+  // ── One comparison, not one per door ────────────────────────────────────
+  //
+  // A bcrypt hash cannot be looked up by equality, so every request used to
+  // compare the presented token against every live token for the event.
+  // `bcryptjs` is pure JavaScript at cost 10 — about 100 ms of main-thread CPU
+  // per comparison — so twenty doors meant up to two seconds of the event loop
+  // per scan, in the process that also runs the bot and both APIs. The queue at
+  // the entrance was a self-inflicted denial of service.
+
+  it("looks the token up by its public id half and compares exactly once", async () => {
+    const res = await request(app)
+      .post(`/gk/${EVENT_ID}/auth`)
+      .set("Authorization", `Bearer ${TOKEN_ID}.secret-half`)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(staffTokenFindMany).not.toHaveBeenCalled();
+    expect(compare).toHaveBeenCalledTimes(1);
+    // The secret alone is hashed; the id half is a lookup key, not a credential.
+    expect(compare).toHaveBeenCalledWith("secret-half", "hash");
+  });
+
+  it("will not let a token from one party open the door at another", async () => {
+    // The id half is public, so the query has to be scoped by event too.
+    staffTokenFindFirst.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post(`/gk/${OTHER_EVENT}/auth`)
+      .set("Authorization", `Bearer ${TOKEN_ID}.secret-half`)
+      .send({});
+
+    expect(res.status).toBe(401);
+    expect(staffTokenFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: TOKEN_ID, eventId: OTHER_EVENT, revokedAt: null },
+      }),
+    );
+  });
+
+  it("still accepts a token minted before the format changed", async () => {
+    // Refusing these would lock staff out of a live event.
+    const res = await request(app).post(`/gk/${EVENT_ID}/auth`).set(...auth()).send({});
+
+    expect(res.status).toBe(200);
+    expect(staffTokenFindMany).toHaveBeenCalled();
   });
 
   // A phone left behind a bar must not open the next party.

@@ -31,10 +31,20 @@ interface StaffRequest extends Request {
 /**
  * Resolve a staff token.
  *
- * The token is bcrypt-hashed, so it cannot be looked up by equality — every
- * live token for the named event is compared. That is bounded by how many
- * doors one party has (a handful), and the event id in the URL is what keeps
- * it from becoming a scan of every token ever minted.
+ * A token is `<rowId>.<secret>`, and the id half is a public lookup key: it
+ * names the row, the secret is what proves the bearer holds it. That makes
+ * authentication exactly ONE bcrypt comparison.
+ *
+ * It used to compare against every live token for the event, because a bcrypt
+ * hash cannot be looked up by equality. `bcryptjs` is pure JavaScript at cost
+ * 10 — around 100 ms of main-thread CPU per comparison — so twenty doors meant
+ * up to two seconds of the event loop per scan, in the process that also runs
+ * the bot and both APIs. A queue at the entrance was a self-inflicted denial of
+ * service.
+ *
+ * Tokens minted before the format change have no id half, and those still fall
+ * back to the scan: refusing them would lock staff out of a live event, and the
+ * fallback costs nothing once they have been re-minted.
  */
 async function requireStaff(req: StaffRequest, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -50,6 +60,29 @@ async function requireStaff(req: StaffRequest, res: Response, next: NextFunction
       return;
     }
 
+    const separator = raw.indexOf(".");
+    if (separator > 0) {
+      const tokenId = raw.slice(0, separator);
+      const secret = raw.slice(separator + 1);
+      // Scoped by `eventId` as well: the id is public, so it must not let a
+      // token from one party open the door at another.
+      const candidate = secret
+        ? await prisma.eventStaffToken.findFirst({
+            where: { id: tokenId, eventId, revokedAt: null },
+            select: { id: true, tokenHash: true, label: true },
+          })
+        : null;
+      if (candidate && (await bcrypt.compare(secret, candidate.tokenHash))) {
+        req.staff = { tokenId: candidate.id, eventId, label: candidate.label };
+        next();
+        return;
+      }
+      res.status(401).json({ error: "invalid_token" });
+      return;
+    }
+
+    // Legacy token (no id half). Kept working so a change of format cannot lock
+    // staff out mid-event; it disappears as tokens are re-minted.
     const candidates = await prisma.eventStaffToken.findMany({
       where: { eventId, revokedAt: null },
       select: { id: true, tokenHash: true, label: true },

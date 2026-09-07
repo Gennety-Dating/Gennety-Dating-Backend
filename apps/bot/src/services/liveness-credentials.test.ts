@@ -136,3 +136,51 @@ describe("mintLivenessCredentials", () => {
     expect(result).toEqual({ ok: false, error: "api" });
   });
 });
+
+describe("the deadline", () => {
+  /**
+   * This was the one external call in the product with no timeout at all.
+   * `STSClient` is built without a `requestHandler`, and
+   * `@smithy/node-http-handler` defaults `requestTimeout` to 0 — which does not
+   * mean fast, it means no timer is set. `/v1/verification/native/init` could
+   * hang for minutes while the client showed a refusal for a check that was
+   * never refused.
+   */
+  it("passes an abort signal to STS", async () => {
+    const send = vi.fn().mockResolvedValue({
+      Credentials: {
+        AccessKeyId: "AKIA",
+        SecretAccessKey: "secret",
+        SessionToken: "token",
+        Expiration: new Date("2026-09-07T12:00:00Z"),
+      },
+    });
+
+    await mintLivenessCredentials("user-1", { client: { send } });
+
+    const [, requestOptions] = send.mock.calls[0]!;
+    expect(requestOptions?.abortSignal).toBeInstanceOf(AbortSignal);
+    expect(requestOptions.abortSignal.aborted).toBe(false);
+  });
+
+  it("aborts once the deadline passes", async () => {
+    let captured: AbortSignal | undefined;
+    const send = vi.fn(
+      (_cmd: unknown, opts?: { abortSignal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          captured = opts?.abortSignal;
+          captured?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+
+    const result = await mintLivenessCredentials("user-1", {
+      client: { send } as never,
+      timeoutMs: 1,
+    });
+
+    expect(captured?.aborted).toBe(true);
+    // A hang answers as an API failure, which the route already knows how to
+    // report — rather than never answering at all.
+    expect(result).toEqual({ ok: false, error: "api" });
+  });
+});
