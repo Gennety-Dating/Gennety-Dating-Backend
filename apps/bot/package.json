@@ -17,6 +17,8 @@
     "@aws-sdk/client-sts": "^3.1095.0",
     "@gennety/db": "workspace:*",
     "@gennety/shared": "workspace:*",
+    "@grammyjs/auto-retry": "^2.0.2",
+    "@grammyjs/transformer-throttler": "^1.2.1",
     "@napi-rs/canvas": "^1.0.0",
     "@resvg/resvg-js": "^2.6.2",
     "bcryptjs": "^3.0.2",

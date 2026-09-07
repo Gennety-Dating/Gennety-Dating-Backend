@@ -4,6 +4,7 @@ import { prisma, type Prisma } from "@gennety/db";
 import { env } from "../config.js";
 import { downloadProfileImage } from "./storage.js";
 import { getMainBotApi } from "./main-bot-api.js";
+import { installApiLimits } from "../api-limits.js";
 import { buildWeeklyMatchesReport } from "./weekly-matches-report.js";
 import {
   formatPurchaseAmount,
@@ -92,6 +93,10 @@ function getFounderApi(): Api<RawApi> | null {
     return null;
   }
   founderApi = new Api(env.FOUNDER_BOT_TOKEN);
+  // A second bot token means a second, independent set of Bot API limits, and
+  // this one sends in bursts: eleven notifiers, several of which fire together
+  // after the Thursday batch. It pays the same rules as the main bot.
+  installApiLimits(founderApi);
   return founderApi;
 }
 

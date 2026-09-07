@@ -1,6 +1,7 @@
 import { Bot } from "grammy";
 import type { BotContext } from "./session.js";
 import { sessionMiddleware } from "./session.js";
+import { installApiLimits } from "./api-limits.js";
 import { sequentializeByChat } from "./chat-queue.js";
 import { botRateLimit } from "./bot-rate-limit.js";
 import { start } from "./handlers/start.js";
@@ -30,6 +31,14 @@ function isPendingAccountActionCallback(data: string | undefined): boolean {
 
 export function createBot(token: string): Bot<BotContext> {
   const bot = new Bot<BotContext>(token);
+
+  // Bot API limits — rate throttling and 429 replay. See api-limits.ts.
+  //
+  // Installed BEFORE the recorder because grammY composes transformers back to
+  // front: whatever is installed last ends up outermost. The recorder has to be
+  // the outer one, or a replayed 429 would write the same message into the chat
+  // timeline twice — one send the user made would read as two.
+  installApiLimits(bot.api);
 
   // Chat timeline — outbound half. Installed on the Api itself rather than as
   // middleware, because most of what a user sees is sent OUTSIDE a handler

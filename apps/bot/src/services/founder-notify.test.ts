@@ -1,15 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { sendMessage, sendPhoto, sendMediaGroup, ApiCtor } = vi.hoisted(() => {
+const { sendMessage, sendPhoto, sendMediaGroup, useTransformers, ApiCtor } = vi.hoisted(() => {
   const sendMessage = vi.fn().mockResolvedValue({});
   const sendPhoto = vi.fn().mockResolvedValue({});
   const sendMediaGroup = vi.fn().mockResolvedValue({});
+  // The founder bot is a second Bot API token with its own rate limits, so it
+  // gets the same throttler + 429 replay as the main one — which means this
+  // stand-in has to own a `config` like the real `Api` does.
+  const useTransformers = vi.fn();
   const ApiCtor = vi.fn().mockImplementation(() => ({
     sendMessage,
     sendPhoto,
     sendMediaGroup,
+    config: { use: useTransformers },
   }));
-  return { sendMessage, sendPhoto, sendMediaGroup, ApiCtor };
+  return { sendMessage, sendPhoto, sendMediaGroup, useTransformers, ApiCtor };
 });
 
 vi.mock("grammy", () => ({
@@ -99,6 +104,22 @@ beforeEach(() => {
   env.FOUNDER_NOTIFY_ENABLED = false;
   env.ADMIN_DASHBOARD_URL = "";
   __resetFounderApiForTests();
+});
+
+describe("the founder bot's own Bot API limits", () => {
+  it("throttles and replays 429s on the second token too", async () => {
+    // Eleven notifiers share this token and several fire together after the
+    // Thursday batch. A second bot is a second, independent set of limits — it
+    // does not inherit the main bot's transformers.
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    findUnique.mockResolvedValue(null);
+
+    await notifyFounderAdSpendReminder(new Date("2026-09-07T09:00:00Z"));
+
+    expect(ApiCtor).toHaveBeenCalledTimes(1);
+    expect(useTransformers).toHaveBeenCalledTimes(1);
+    expect(useTransformers.mock.calls[0]).toHaveLength(2);
+  });
 });
 
 describe("production-only runtime guard", () => {
