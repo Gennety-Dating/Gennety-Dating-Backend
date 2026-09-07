@@ -2069,6 +2069,28 @@ model ProxyMessage {
   /// `Match.proxyReadAtA/B` — not here, because "read" is not a property of one
   /// message but of how far someone got.
   deliveredAt DateTime? @map("delivered_at")
+  /// The emoji the RECIPIENT put on this message, or null.
+  ///
+  /// One column rather than a `proxy_message_reactions` table, and that is a
+  /// product fact rather than a shortcut: this chat has exactly two people in
+  /// it, so a reaction is an answer, not a tally. "2 👍" cannot occur — nobody
+  /// reacts to their own line (the app hides the gesture, the service refuses
+  /// it) — so per-user rows would buy nothing but joins. Re-reacting
+  /// overwrites: the last thing someone pressed is what they meant.
+  ///
+  /// Stored as the TELEGRAM-canonical string (`❤`, no variation selector) so
+  /// it goes straight into `setMessageReaction` without normalising at the
+  /// boundary. Clients that want the red glyph append U+FE0F for display.
+  reaction String?
+  /// Telegram id of this message IN ITS AUTHOR'S OWN CHAT — set only when the
+  /// author sent it from Telegram.
+  ///
+  /// This is the address a reaction has to be delivered to, and it is the
+  /// author's own copy rather than the relayed one: a reaction is shown to the
+  /// person who WROTE the line, and their copy is the message they sent the
+  /// bot. Null for app-sent messages — their author has no Telegram copy of
+  /// their own line, and reads the reaction in the app instead.
+  authorChatMessageId BigInt? @map("author_chat_message_id")
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
 

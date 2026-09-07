@@ -2311,6 +2311,103 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/matches/{id}/chat/messages/{messageId}/reaction:
+    put:
+      tags: [matches]
+      operationId: reactToProxyChatMessage
+      summary: Put one emoji on the partner's message, or take it off
+      description: |
+        The pre-date chat's only non-text act. A reaction is a WRITE rather
+        than a client-side flourish for the same reason the delivery ticks
+        stopped being a client guess: most pairs here are one app plus one
+        Telegram, and a mark the other person never sees is decoration.
+
+        **How the partner sees it.** If they wrote the line from Telegram, the
+        bot sets a native Telegram reaction on *their own copy* of the message
+        — the one they sent the bot, not the relayed copy in the reader's chat,
+        which is a different message and the wrong address. If they wrote it
+        from the app, they read it off this state on their next poll. Delivery
+        is best-effort in both directions: a Telegram hiccup never fails the
+        tap, because the row is already written.
+
+        **PUT, not POST.** One message carries at most one reaction, so
+        pressing ❤ twice must leave the state pressing it once left. A POST
+        would suggest appending to a list this endpoint does not have.
+
+        **`reaction: null` removes it** — pressing the emoji already on a
+        message un-reacts, as it does in every chat app. Null is a value here,
+        not an absent field; an absent field is a malformed body (400).
+
+        **You cannot react to your own message** (403 `own-message`). A
+        reaction is something the reader does; self-reacting would show authors
+        marks they made themselves.
+
+        **The window does not gate this.** Sending is time-boxed because the
+        chat exists to find each other, but answering a line already said costs
+        nobody anything — and refusing after T+2h would leave the last "I'm
+        outside" unanswerable at the exact moment the pair is meeting. Reading
+        is ungated for the same reason.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+          description: |
+            `ProxyChatMessage.id`. Scoped to the match server-side, so an id
+            belonging to another match is a 404 rather than someone else's
+            message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reaction]
+              properties:
+                reaction:
+                  type: [string, "null"]
+                  enum: ["❤", "👍", "🔥", "🤣", "🙏", null]
+                  description: |
+                    One of the five, or `null` to clear. The set is closed to
+                    Telegram's own reaction vocabulary — see
+                    `ProxyChatMessage.reaction` for why, including why `❤`
+                    carries no variation selector and why there is no 😂.
+      responses:
+        "200":
+          description: Reaction applied or cleared; the new state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyChatState" }
+        "400":
+          description: |
+            `bad-reaction` — the body was malformed, or the emoji is outside
+            the closed set. Malformed rather than forbidden: a client sending
+            🍕 has a bug, not a missing permission.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: |
+            `forbidden` — not a participant of this match. `own-message` — the
+            caller wrote the message they are reacting to.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: |
+            No such match, no such message in this match, or the coordination
+            feature is off.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: This match is not a scheduled date.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/matches/{id}/ticket-gate:
     get:
       tags: [matches]
@@ -3793,6 +3890,32 @@ components:
 
             There is no `failed`: a send that fails never becomes a row, so the
             client has an error to show and no status to draw.
+        reaction:
+          type: string
+          enum: ["❤", "👍", "🔥", "🤣", "🙏"]
+          description: |
+            The emoji the RECIPIENT put on this message. Absent when there is
+            none — never `null`, the same rule `status` follows: an explicit
+            null would invite a client to draw an empty capsule.
+
+            **Present on either side's message,** unlike `status`. The asymmetry
+            is deliberate: a delivery state is what a sender is told about their
+            own line, while a reaction is a thing the OTHER person did, and both
+            of them see it.
+
+            **One per message, last write wins.** This chat holds exactly two
+            people, so a reaction is an answer rather than a tally — "2 👍"
+            cannot occur, because nobody may react to their own message.
+
+            **The set is closed, and closed to Telegram's list specifically.**
+            Telegram accepts reactions only from its own fixed vocabulary, so
+            anything else would work app-to-app and then silently do nothing on
+            the rail most pairs actually have. That is also why `❤` carries
+            **no** variation selector here: U+2764 alone is the exact string
+            Telegram's list holds, and appending U+FE0F would break
+            `setMessageReaction`. A client wanting the red glyph appends U+FE0F
+            for DISPLAY only. (Same reason the set has 🤣 and not 😂 — Telegram
+            has no 😂.)
 
     PendingFeedback:
       type: object
