@@ -46,7 +46,7 @@ invariants for free.
 | # | Decision | Consequence |
 |---|---|---|
 | **D1** | **Refund only when the engine finds nobody.** Payment buys an introduction, not a date. | A decline, a ghost, or a failed negotiation is **not** refunded. Stated in the offer copy *before* payment. |
-| **D2** | **Rematch ≠ Date Ticket.** | The $6.99 §3.5b ticket gate still applies normally after mutual accept. `ticket-gate.ts` is untouched. |
+| **D2** | **Rematch ≠ Date Ticket.** | The $8.49 §3.5b ticket gate still applies normally after mutual accept. `ticket-gate.ts` is untouched. |
 | **D3** | **2 paid rematches per rolling week, 24 h cooldown between them.** | Caps pool burn and revenue-per-man alike. |
 | **D4** | **Pain-triggered CTA only — no permanent main-menu row.** | The button appears in the no-match DM and after a terminal failed match. The product never looks like a shop. |
 
@@ -397,7 +397,7 @@ master switch.
 | `REMATCH_FAILED_LOOKBACK_DAYS` | `14` | Window for the `failed` gift framing. |
 | `REMATCH_REFUND_CRON_SCHEDULE` | `0 * * * *` | Refund retry / abandoned-purchase sweep. Registered only when the feature is on. |
 
-**Pricing note.** 150⭐ follows the ticket rate ($6.99 / 350⭐ = $0.02/⭐ → 150⭐ ≈
+**Pricing note.** 150⭐ follows the ticket rate ($8.49 / 425⭐ = $0.02/⭐ → 150⭐ ≈
 $3.00 ≈ the $2.99 label). `PREMIUM_STARS` documents a more conservative
 $0.024/⭐ small-pack rate, at which 150⭐ bills nearer $3.59. If we want the strict
 "never under-promise the charge" convention Premium follows, either drop

@@ -137,14 +137,19 @@ export const VOICE_PROMPT_WAVEFORM_BUCKETS = 40;
  * Ticket store bundles for the pre-purchase Mini App. `priceCents` is the
  * TOTAL charged for the bundle; per-ticket price is `priceCents / count`.
  * Payment is mocked in v1 (`TICKET_PAYMENT_MODE=mock`).
- *   1 ticket  — $7.00  ($7.00/ea)
- *   3 tickets — $16.47 ($5.49/ea)
- *   6 tickets — $26.94 ($4.49/ea)
+ *
+ * The bundle totals are the single price less a STATED discount, rounded to the
+ * cent — not a round per-ticket price whose discount fell out of the division.
+ * The store's badge derives its percent from these numbers
+ * (`storeBundles` in the Mini App), so they must round back to 20 and 35.
+ *   1 ticket  — $8.49  ($8.49/ea)
+ *   3 tickets — $20.37 ($6.79/ea, -20%)
+ *   6 tickets — $33.12 ($5.52/ea, -35%)
  */
 export const TICKET_BUNDLES = [
-  { count: 1, priceCents: 700 },
-  { count: 3, priceCents: 1647 },
-  { count: 6, priceCents: 2694 },
+  { count: 1, priceCents: 849 },
+  { count: 3, priceCents: 2037 },
+  { count: 6, priceCents: 3312 },
 ] as const;
 
 export type TicketBundleSize = (typeof TICKET_BUNDLES)[number]["count"];

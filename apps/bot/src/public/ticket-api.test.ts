@@ -35,7 +35,7 @@ vi.mock("../services/ticket-payment.js", () => ({
   createTicketIntent: (...a: unknown[]) => createTicketIntent(...a),
   verifyTicketPayment: (...a: unknown[]) => verifyTicketPayment(...a),
   amountForScope: (scope: string, price: number) => (scope === "both" ? price * 2 : price),
-  gateStarsForScope: (scope: string) => (scope === "both" ? 700 : 350),
+  gateStarsForScope: (scope: string) => (scope === "both" ? 850 : 425),
 }));
 
 vi.mock("../services/ticket-analytics.js", () => ({ emitTicketEvent: vi.fn() }));
@@ -73,7 +73,7 @@ function signInitData(botToken: string): string {
 
 const baseState = {
   ticketStatus: "pending",
-  priceCents: 699,
+  priceCents: 849,
   myGender: "male",
   mySide: "A",
   iPaid: false,
@@ -85,7 +85,7 @@ const baseState = {
   paymentMode: "mock",
   myBalance: 0,
   selfDiscountPct: 0,
-  selfPriceCents: 699,
+  selfPriceCents: 849,
   myPhotoUrl: null,
   partnerPhotoUrl: null,
 };
@@ -163,25 +163,25 @@ describe("GET /v1/matches/:id/ticket/state", () => {
 describe("POST /v1/matches/:id/ticket/intent", () => {
   it("creates a mock intent on the happy path (self)", async () => {
     getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
-    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_x", amountCents: 699, mode: "mock" });
+    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_x", amountCents: 849, mode: "mock" });
     const res = await request(buildApp())
       .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
       .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
       .send({ scope: "self" });
     expect(res.status).toBe(200);
     expect(res.body.clientSecret).toBe("mock_pi_x");
-    expect(res.body.amountCents).toBe(699);
+    expect(res.body.amountCents).toBe(849);
     expect(createTicketIntent).toHaveBeenCalledWith({
       payerId: "5986970093",
       matchId: VALID_UUID,
       scope: "self",
-      amountCents: 699,
+      amountCents: 849,
     });
   });
 
   it("charges double for scope 'both' (male)", async () => {
     getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
-    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_y", amountCents: 1398, mode: "mock" });
+    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_y", amountCents: 1698, mode: "mock" });
     const res = await request(buildApp())
       .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
       .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
@@ -191,16 +191,16 @@ describe("POST /v1/matches/:id/ticket/intent", () => {
       payerId: "5986970093",
       matchId: VALID_UUID,
       scope: "both",
-      amountCents: 1398,
+      amountCents: 1698,
     });
   });
 
   it("uses the discounted selfPriceCents for a 'self' intent when a famine discount is active", async () => {
     getTicketState.mockResolvedValueOnce({
       ok: true,
-      state: { ...baseState, selfDiscountPct: 77, selfPriceCents: 161 },
+      state: { ...baseState, selfDiscountPct: 77, selfPriceCents: 195 },
     });
-    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_d", amountCents: 161, mode: "mock" });
+    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_d", amountCents: 195, mode: "mock" });
     const res = await request(buildApp())
       .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
       .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
@@ -210,22 +210,22 @@ describe("POST /v1/matches/:id/ticket/intent", () => {
       payerId: "5986970093",
       matchId: VALID_UUID,
       scope: "self",
-      amountCents: 161,
+      amountCents: 195,
     });
   });
 
   it("keeps full 'both' price even when the actor has a famine discount", async () => {
     getTicketState.mockResolvedValueOnce({
       ok: true,
-      state: { ...baseState, selfDiscountPct: 77, selfPriceCents: 161 },
+      state: { ...baseState, selfDiscountPct: 77, selfPriceCents: 195 },
     });
-    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_b", amountCents: 1398, mode: "mock" });
+    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_b", amountCents: 1698, mode: "mock" });
     await request(buildApp())
       .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
       .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
       .send({ scope: "both" });
     expect(createTicketIntent).toHaveBeenCalledWith(
-      expect.objectContaining({ scope: "both", amountCents: 1398 }),
+      expect.objectContaining({ scope: "both", amountCents: 1698 }),
     );
   });
 
@@ -269,7 +269,7 @@ describe("POST /v1/matches/:id/ticket/confirm", () => {
       payerId: "5986970093",
       matchId: VALID_UUID,
       scope: "self",
-      amountCents: 699,
+      amountCents: 849,
     });
     expect(applyTicketPayment).toHaveBeenCalledWith(fakeApi, 5986970093n, VALID_UUID, "self");
   });
@@ -356,7 +356,7 @@ describe("POST /v1/matches/:id/ticket/use", () => {
       .send({ scope: "self" });
     expect(res.status).toBe(200);
     expect(res.body.starsEnabled).toBe(true);
-    expect(res.body.stars).toEqual({ self: 350, both: 700, partner: 350 });
+    expect(res.body.stars).toEqual({ self: 425, both: 850, partner: 425 });
   });
 
   it("maps insufficient-balance → 409", async () => {

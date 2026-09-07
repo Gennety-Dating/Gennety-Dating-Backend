@@ -918,7 +918,7 @@ async function settleTicket(
 }
 
 /**
- * Money path: mark the acting side's ticket(s) paid. Scope `both` ($13.98) and
+ * Money path: mark the acting side's ticket(s) paid. Scope `both` ($16.98) and
  * `partner` are male-only; `both` also settles the partner's ticket.
  */
 export async function applyTicketPayment(

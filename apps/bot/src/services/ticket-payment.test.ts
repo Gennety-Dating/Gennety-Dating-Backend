@@ -24,7 +24,7 @@ describe("mock ticket payment intents", () => {
       payerId: "user-1",
       matchId: "match-1",
       scope: "self",
-      amountCents: 699,
+      amountCents: 849,
     });
 
     await expect(
@@ -33,7 +33,7 @@ describe("mock ticket payment intents", () => {
         payerId: "user-2",
         matchId: "match-1",
         scope: "self",
-        amountCents: 699,
+        amountCents: 849,
       }),
     ).resolves.toEqual({ ok: false });
 
@@ -43,7 +43,7 @@ describe("mock ticket payment intents", () => {
         payerId: "user-1",
         matchId: "match-1",
         scope: "self",
-        amountCents: 699,
+        amountCents: 849,
       }),
     ).resolves.toEqual({ ok: true });
 
@@ -53,7 +53,7 @@ describe("mock ticket payment intents", () => {
         payerId: "user-1",
         matchId: "match-1",
         scope: "self",
-        amountCents: 699,
+        amountCents: 849,
       }),
     ).resolves.toEqual({ ok: false });
   });

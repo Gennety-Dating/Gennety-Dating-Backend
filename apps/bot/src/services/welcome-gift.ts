@@ -15,7 +15,7 @@ import { env } from "../config.js";
  *      no text; it is pure emotional garnish and is skipped gracefully when no
  *      asset is recorded for the (gender, language) pair.
  *   2. The gift **DM** (`welcomeGiftTicket`) — the substance, carrying the
- *      $6.99 value anchor + an optional message effect.
+ *      $8.49 value anchor + an optional message effect.
  *
  * Both parts are best-effort: the ticket is already credited before this runs,
  * so a missing asset, a stale `file_id`, or a Bot API hiccup must never strand

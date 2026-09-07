@@ -17,7 +17,7 @@ import type { TicketStrings } from "./i18n.js";
  *   reads as a ticket from the perforation, the real notch cutouts and the
  *   stub itself.
  * - NOT "Admit two" / "На двоих". One ticket admits ONE person — a man paying
- *   $13.98 "for us both" buys TWO of them (PRODUCT_SPEC §3.5b) — so that line
+ *   $16.98 "for us both" buys TWO of them (PRODUCT_SPEC §3.5b) — so that line
  *   was telling a user who pays for their own slot that their partner is
  *   already covered. It is gone from the header and from the stub.
  * - NOT the "curated date ticket" label or the marketing tagline. The

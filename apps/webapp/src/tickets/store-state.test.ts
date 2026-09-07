@@ -5,9 +5,9 @@ describe("storeBundles", () => {
   it("exposes the three documented bundles with per-ticket pricing", () => {
     const bundles = storeBundles();
     expect(bundles.map((b) => [b.count, b.priceCents, b.perTicketCents])).toEqual([
-      [1, 700, 700],
-      [3, 1647, 549],
-      [6, 2694, 449],
+      [1, 849, 849],
+      [3, 2037, 679],
+      [6, 3312, 552],
     ]);
   });
 
@@ -20,8 +20,8 @@ describe("storeBundles", () => {
     const bundles = storeBundles();
     expect(bundles.map((b) => [b.count, b.discountPct])).toEqual([
       [1, 0],
-      [3, 22],
-      [6, 36],
+      [3, 20],
+      [6, 35],
     ]);
   });
 
@@ -32,12 +32,12 @@ describe("storeBundles", () => {
   it("applies the famine discount to the single bundle only", () => {
     const bundles = storeBundles(77);
     const single = bundles.find((b) => b.count === 1)!;
-    // 77% off $7.00 → $1.61.
-    expect([single.priceCents, single.perTicketCents, single.famineDiscountPct]).toEqual([161, 161, 77]);
+    // 77% off $8.49 → $1.95.
+    expect([single.priceCents, single.perTicketCents, single.famineDiscountPct]).toEqual([195, 195, 77]);
     // 3/6 bundles keep catalog price + no famine flag.
     expect(bundles.filter((b) => b.count !== 1).map((b) => [b.priceCents, b.famineDiscountPct])).toEqual([
-      [1647, 0],
-      [2694, 0],
+      [2037, 0],
+      [3312, 0],
     ]);
   });
 
@@ -49,8 +49,8 @@ describe("storeBundles", () => {
 
 describe("formatUsd", () => {
   it("formats bundle totals", () => {
-    expect(formatUsd(700)).toBe("$7.00");
-    expect(formatUsd(1647)).toBe("$16.47");
-    expect(formatUsd(2694)).toBe("$26.94");
+    expect(formatUsd(849)).toBe("$8.49");
+    expect(formatUsd(2037)).toBe("$20.37");
+    expect(formatUsd(3312)).toBe("$33.12");
   });
 });

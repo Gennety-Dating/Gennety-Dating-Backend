@@ -935,7 +935,7 @@ When enabled, mutual accept creates one live **post-accept status/CTA** per
 Telegram side (tracked in `Match.calendarMessageIdA/B`): accepted/waiting →
 premium **Date Ticket** card → Calendar. The ticket card carries a `web_app`
 button opening the Ticket Mini App (`apps/webapp/ticket.html`, React +
-pure-CSS 3D). Each ticket is **$6.99** (mock) or **350 ⭐** (Telegram Stars).
+pure-CSS 3D). Each ticket is **$8.49** (mock) or **425 ⭐** (Telegram Stars).
 **Payment (production): Telegram Stars (XTR).** With `TICKET_STARS_ENABLED` the
 date gate and the store both pay natively in Telegram Stars — the Mini App opens
 a server-issued invoice link (`createInvoiceLink`, empty provider token,
@@ -952,7 +952,7 @@ credit until granted exactly once).
 `pre_checkout_query` re-validates payload + Star amount within Telegram's 10 s
 window. The famine single-ticket discount is **USD-only** and never applies to a
 Stars purchase. Star prices are env-tunable (`TICKET_BUNDLE_STARS`, default
-`1:350,3:830,6:1350`; the gate derives its per-scope price from the 1-ticket
+`1:425,3:1020,6:1650`; the gate derives its per-scope price from the 1-ticket
 entry — self/partner 1×, both 2×).
 **Payment (fallback): mock.** When `TICKET_STARS_ENABLED` is off, the legacy
 mock (`TICKET_PAYMENT_MODE=mock`) fully simulates a Stripe-style flow that
@@ -963,9 +963,9 @@ match/bundle, scope, and amount, and can be consumed only once. While Stars is
 on, the mock `intent`/`confirm` routes 404 (PAY-1 guard) so Stars is the sole
 purchase rail; the free wallet "Use a ticket" path is unaffected.
 
-- **Pricing.** Male users get "Pay for us both — $13.98" (settles BOTH tickets,
-  sets `paidForPartnerBy*`) plus "Pay only mine — $6.99". Female users get a
-  single "Pay my ticket — $6.99". The server re-validates that pay-for-both is
+- **Pricing.** Male users get "Pay for us both — $16.98" (settles BOTH tickets,
+  sets `paidForPartnerBy*`) plus "Pay only mine — $8.49". Female users get a
+  single "Pay my ticket — $8.49". The server re-validates that pay-for-both is
   male-only.
   **The covering option is always the hero button** — the one burgundy rung of
   the Mini App's button ladder — at every wallet balance
@@ -1045,7 +1045,7 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   their first-ever match pitch** (`handlers/matching/pitch.ts` →
   `services/welcome-gift.ts`): an optional gender-specific Telegram **video
   note** (кружок, founder message) followed by the gift DM (the
-  `welcomeGiftTicket` copy, $6.99 value anchor + optional
+  `welcomeGiftTicket` copy, $8.49 value anchor + optional
   `MESSAGE_EFFECT_GIFT_ID` effect). The `sendVideoNote` API carries no caption,
   so the text is a separate message; a missing video asset degrades gracefully
   to the DM only. The weekly dispatch queue intentionally waits before sending
@@ -1067,13 +1067,13 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   welcome perk; the general/phone track gets none), the welcome gift above, and by bundle
   purchases in the store
   Mini App (`tickets.html`, opened from the
-  **My Tickets** menu): **1 / $7.00**, **3 / $16.47** ($5.49 ea), **6 / $26.94**
-  ($4.49 ea). Every balance change is written atomically with an append-only
+  **My Tickets** menu): **1 / $8.49**, **3 / $20.37** ($6.79 ea, −20%), **6 / $33.12**
+  ($5.52 ea, −35%). Every balance change is written atomically with an append-only
   `TicketLedger` audit row (`services/ticket-wallet.ts`). At the gate, a user
   with tickets sees **"Use a ticket"** instead of paying:
   - female / single-self → "Use my ticket" when `balance ≥ 1`;
   - male with `balance ≥ 2` → "Use 2 tickets (you + your date)" or "Use 1 (self)";
-  - male with `balance = 1` → "Pay for both 🎟️ + $6.99" (his ticket on his own
+  - male with `balance = 1` → "Pay for both 🎟️ + $8.49" (his ticket on his own
     slot + one ticket's price for hers — never the doubled `both` price) as the
     hero, "Use 1 (self)" as the alternative; either way he may still
     **additionally** pay or use a ticket for his date afterwards (the post-self

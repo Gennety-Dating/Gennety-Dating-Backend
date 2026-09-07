@@ -107,7 +107,7 @@ export interface PurchaseTotals {
 /**
  * Telegram's Stars→USD rate is not exposed by any API, so a founder-facing
  * dollar figure has to come from a documented constant. This is the ticket
- * rate the product already prices against ($6.99 / 350⭐), and every figure
+ * rate the product already prices against ($8.49 / 425⭐), and every figure
  * derived from it is labelled an estimate — small Star packs bill nearer
  * $0.024/⭐, so this is the conservative end.
  */

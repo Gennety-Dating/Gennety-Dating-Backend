@@ -37,14 +37,14 @@ date."*
 - **Referrer** — a **milestone ladder** (`REFERRAL_LADDER`, default
   `1:1:1,3:1:1,5:1:1,10:2:2` = `count:ticketsDelta:monthsDelta`). Cumulative
   totals unlocked at each rung, with the dollar value shown in the Mini App
-  (`$6.99`/ticket + `PREMIUM_PRICE_USD_DISPLAY`/month):
+  (`$8.49`/ticket + `PREMIUM_PRICE_USD_DISPLAY`/month):
 
   | Verified friends | Total tickets | Total Premium months | ≈ $ value ($17.99 Premium) |
   |---|---|---|---|
-  | 1 | 1 | 1 | $24.98 |
-  | 3 | 2 | 2 | $49.96 |
-  | 5 | 3 | 3 | $74.94 |
-  | 10 | 5 | 5 | $124.90 |
+  | 1 | 1 | 1 | $26.48 |
+  | 3 | 2 | 2 | $52.96 |
+  | 5 | 3 | 3 | $79.44 |
+  | 10 | 5 | 5 | $132.40 |
 
 ## Mechanics
 

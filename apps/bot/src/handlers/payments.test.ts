@@ -7,7 +7,7 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 vi.mock("../config.js", () => ({
-  env: { TICKET_BUNDLE_STARS: { 1: 350, 3: 830, 6: 1350 }, PREMIUM_STARS: 500 },
+  env: { TICKET_BUNDLE_STARS: { 1: 425, 3: 1020, 6: 1650 }, PREMIUM_STARS: 500 },
 }));
 vi.mock("../services/ticket-wallet.js", () => ({
   grantTickets: vi.fn(),
@@ -77,7 +77,7 @@ describe("handlePreCheckout", () => {
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: "store:3",
       currency: "XTR",
-      total_amount: 830,
+      total_amount: 1020,
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(true, undefined);
@@ -90,7 +90,7 @@ describe("handlePreCheckout", () => {
     // Telegram silently cancels the payment.
     const answerPreCheckoutQuery = vi.fn().mockResolvedValue(true);
     const ctx = {
-      preCheckoutQuery: { invoice_payload: "store:1", currency: "XTR", total_amount: 350 },
+      preCheckoutQuery: { invoice_payload: "store:1", currency: "XTR", total_amount: 425 },
       answerPreCheckoutQuery,
       get session(): never {
         throw new Error("Cannot access session data: session key is undefined");
@@ -117,7 +117,7 @@ describe("handlePreCheckout", () => {
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: "store:3",
       currency: "USD",
-      total_amount: 830,
+      total_amount: 1020,
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
@@ -127,18 +127,18 @@ describe("handlePreCheckout", () => {
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: "ref_whatever",
       currency: "XTR",
-      total_amount: 830,
+      total_amount: 1020,
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
   });
 
-  it("approves a valid gate payment at the correct Star amount (both = 700) while the gate is open", async () => {
+  it("approves a valid gate payment at the correct Star amount (both = 850) while the gate is open", async () => {
     matchFindUnique.mockResolvedValue({ status: "negotiating", ticketStatus: "pending" });
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: `gate:${GATE_UUID}:both`,
       currency: "XTR",
-      total_amount: 700,
+      total_amount: 850,
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(true, undefined);
@@ -148,7 +148,7 @@ describe("handlePreCheckout", () => {
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: `gate:${GATE_UUID}:self`,
       currency: "XTR",
-      total_amount: 700, // self should be 350
+      total_amount: 850, // self should be 425
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
@@ -161,7 +161,7 @@ describe("handlePreCheckout", () => {
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: `gate:${GATE_UUID}:both`,
       currency: "XTR",
-      total_amount: 700,
+      total_amount: 850,
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
@@ -172,7 +172,7 @@ describe("handlePreCheckout", () => {
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: `gate:${GATE_UUID}:self`,
       currency: "XTR",
-      total_amount: 350,
+      total_amount: 425,
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
@@ -183,7 +183,7 @@ describe("handlePreCheckout", () => {
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: `gate:${GATE_UUID}:self`,
       currency: "XTR",
-      total_amount: 350,
+      total_amount: 425,
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
@@ -197,7 +197,7 @@ describe("handleSuccessfulPayment", () => {
     const { ctx, reply } = successCtx({
       invoice_payload: "store:3",
       currency: "XTR",
-      total_amount: 830,
+      total_amount: 1020,
       telegram_payment_charge_id: "charge_1",
     });
 
@@ -210,7 +210,7 @@ describe("handleSuccessfulPayment", () => {
       bundleSize: 3,
       // Star prices are env-tunable, so what was actually charged is frozen on
       // the row rather than re-derived from `bundleSize` by a later reader.
-      amountStars: 830,
+      amountStars: 1020,
       externalPaymentId: "charge_1",
     });
     expect(reply).toHaveBeenCalledTimes(1);
@@ -225,7 +225,7 @@ describe("handleSuccessfulPayment", () => {
     const { ctx, reply } = successCtx({
       invoice_payload: "store:3",
       currency: "XTR",
-      total_amount: 830,
+      total_amount: 1020,
       telegram_payment_charge_id: "charge_dup",
     });
 
@@ -251,7 +251,7 @@ describe("handleSuccessfulPayment", () => {
     const { ctx } = successCtx({
       invoice_payload: `gate:${GATE_UUID}:both`,
       currency: "XTR",
-      total_amount: 700,
+      total_amount: 850,
       telegram_payment_charge_id: "charge_g",
     });
     await handleSuccessfulPayment(ctx);
@@ -289,7 +289,7 @@ describe("premium subscription (sub:premium)", () => {
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: "sub:premium",
       currency: "XTR",
-      total_amount: 350,
+      total_amount: 425,
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());

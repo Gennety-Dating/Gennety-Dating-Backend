@@ -30,9 +30,9 @@ export interface StoreBundleView {
 }
 
 const RAW_BUNDLES = [
-  { count: 1, priceCents: 700 },
-  { count: 3, priceCents: 1647 },
-  { count: 6, priceCents: 2694 },
+  { count: 1, priceCents: 849 },
+  { count: 3, priceCents: 2037 },
+  { count: 6, priceCents: 3312 },
 ] as const;
 
 /** Mirror of the server's `discountedCents` (services/ticket-discount.ts). */

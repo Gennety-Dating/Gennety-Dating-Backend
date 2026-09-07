@@ -421,7 +421,7 @@ export const env = {
   /// Master flag for the Date Ticket gate. When false (default), mutual
   /// accept goes straight to the Calendar Mini App exactly as before — the
   /// whole feature ships dark. When true, both users must pay (mock) for a
-  /// $6.99 ticket before scheduling unlocks. Telegram-only in v1 (the mobile
+  /// $8.49 ticket before scheduling unlocks. Telegram-only in v1 (the mobile
   /// decision path still schedules directly).
   TICKET_FEATURE_ENABLED: process.env.TICKET_FEATURE_ENABLED === "true",
   /// Master flag for Type Radar (PRODUCT_SPEC §Type Radar). When false
@@ -447,7 +447,7 @@ export const env = {
   /// Per-ticket price in cents. Mirrored onto `Match.ticketPriceCents` at
   /// offer time so an in-flight match keeps its quoted price even if this
   /// changes mid-deploy.
-  TICKET_PRICE_CENTS: Number(process.env.TICKET_PRICE_CENTS ?? "699"),
+  TICKET_PRICE_CENTS: Number(process.env.TICKET_PRICE_CENTS ?? "849"),
   /// How long the second side has to pay once the first has (the `partial`
   /// window) before the ticket-expiry cron refunds the payer and opens the
   /// Calendar for free. Fractional hours allowed for fast manual testing.
@@ -471,7 +471,7 @@ export const env = {
   /// provider token (empty provider token + `currency: "XTR"`).
   TICKET_STARS_ENABLED: process.env.TICKET_STARS_ENABLED === "true",
   /// Star price (XTR) per store bundle, as `<count>:<stars>` pairs. Default
-  /// `1:350,3:830,6:1350` (~350⭐/ticket ≈ $5–7, matching the $6.99 anchor, with
+  /// `1:425,3:1020,6:1650` (425⭐/ticket at the unchanged $0.02/⭐ rate ≈ $8.50, matching the $8.49 anchor, with
   /// the same bundle discount as the USD bundles). The date gate derives its
   /// per-scope price from the 1-ticket entry (self/partner = 1×, both = 2×).
   /// Override e.g. `TICKET_BUNDLE_STARS=1:250,3:590,6:960`.
@@ -670,7 +670,7 @@ export const env = {
   /// Telegram-only in v1 (explicit decision — Stars is a Telegram rail).
   REMATCH_FEATURE_ENABLED: process.env.REMATCH_FEATURE_ENABLED === "true",
   /// Telegram Stars (XTR) price of one rematch. 150⭐ matches VENUE_CHANGE_STARS
-  /// and the ticket rate ($6.99 / 350⭐ = $0.02/⭐ → 150⭐ ≈ $3.00 ≈ the $2.99
+  /// and the ticket rate ($8.49 / 425⭐ = $0.02/⭐ → 150⭐ ≈ $3.00 ≈ the $2.99
   /// founder price). NB: PREMIUM_STARS documents a more conservative
   /// $0.024/⭐ small-pack rate, at which 150⭐ bills nearer $3.59. If we want the
   /// strict "never under-promise the charge" convention Premium follows, either
@@ -1053,11 +1053,11 @@ export function assertIdentityTrustConfiguration(
 
 /**
  * Parse `TICKET_BUNDLE_STARS` ("<count>:<stars>,…") into a count→Stars map.
- * Falls back to the default (1→350, 3→830, 6→1350) when unset or fully invalid;
+ * Falls back to the default (1→425, 3→1020, 6→1650) when unset or fully invalid;
  * invalid individual pairs are skipped. Star amounts are whole XTR (not cents).
  */
 function parseStarBundles(raw: string | undefined): Readonly<Record<number, number>> {
-  const fallback: Record<number, number> = { 1: 350, 3: 830, 6: 1350 };
+  const fallback: Record<number, number> = { 1: 425, 3: 1020, 6: 1650 };
   if (!raw) return fallback;
   const out: Record<number, number> = {};
   for (const pair of raw.split(",")) {

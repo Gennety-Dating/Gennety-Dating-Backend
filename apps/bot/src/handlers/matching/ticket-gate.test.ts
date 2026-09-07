@@ -27,11 +27,11 @@ vi.mock("../../config.js", () => ({
   env: {
     WEBAPP_URL: "https://test.invalid/calendar",
     TICKET_PAYMENT_WINDOW_HOURS: 1,
-    TICKET_PRICE_CENTS: 699,
+    TICKET_PRICE_CENTS: 849,
     TICKET_PAYMENT_MODE: "mock",
     // The gate freezes the Stars price on its ledger row, so the Star bundle
     // table has to exist here like it does in the real config.
-    TICKET_BUNDLE_STARS: { 1: 350, 3: 830, 6: 1350 },
+    TICKET_BUNDLE_STARS: { 1: 425, 3: 1020, 6: 1650 },
     MESSAGE_EFFECT_MUTUAL_ID: "fx-hearts",
     PREMIUM_FEATURE_ENABLED: true,
   },
@@ -99,7 +99,7 @@ function matchRow(overrides: Record<string, unknown> = {}) {
     id: "match-1",
     status: "negotiating",
     ticketStatus: "pending",
-    ticketPriceCents: 699,
+    ticketPriceCents: 849,
     ticketPaidA: null,
     ticketPaidB: null,
     paidForPartnerByA: false,

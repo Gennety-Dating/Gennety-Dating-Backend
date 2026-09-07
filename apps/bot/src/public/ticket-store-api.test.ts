@@ -12,7 +12,7 @@ import { createHmac } from "node:crypto";
 
 const BOT_TOKEN = "123456:test-bot-token-for-store-suite";
 
-vi.mock("../config.js", () => ({ env: { BOT_TOKEN, TICKET_PRICE_CENTS: 699 } }));
+vi.mock("../config.js", () => ({ env: { BOT_TOKEN, TICKET_PRICE_CENTS: 849 } }));
 
 const userFindUnique = vi.fn();
 vi.mock("@gennety/db", () => ({ prisma: { user: { findUnique: (...a: unknown[]) => userFindUnique(...a) } } }));
@@ -96,23 +96,23 @@ describe("GET /v1/tickets/wallet", () => {
 describe("POST /v1/tickets/store/intent", () => {
   it("charges the discounted price for the single bundle", async () => {
     getActiveDiscount.mockResolvedValueOnce({ pct: 77, expiresAt });
-    createStoreIntent.mockResolvedValueOnce({ clientSecret: "mock_store_pi_x", amountCents: 161, count: 1, mode: "mock" });
+    createStoreIntent.mockResolvedValueOnce({ clientSecret: "mock_store_pi_x", amountCents: 195, count: 1, mode: "mock" });
     const res = await request(buildApp())
       .post("/v1/tickets/store/intent")
       .set("Authorization", `tma ${auth()}`)
       .send({ count: 1 });
     expect(res.status).toBe(200);
-    expect(createStoreIntent).toHaveBeenCalledWith({ userId: "u1", count: 1, amountCents: 161 });
+    expect(createStoreIntent).toHaveBeenCalledWith({ userId: "u1", count: 1, amountCents: 195 });
   });
 
   it("ignores the discount for the 3-pack", async () => {
     getActiveDiscount.mockResolvedValue({ pct: 77, expiresAt });
-    createStoreIntent.mockResolvedValueOnce({ clientSecret: "mock_store_pi_y", amountCents: 1647, count: 3, mode: "mock" });
+    createStoreIntent.mockResolvedValueOnce({ clientSecret: "mock_store_pi_y", amountCents: 2037, count: 3, mode: "mock" });
     await request(buildApp())
       .post("/v1/tickets/store/intent")
       .set("Authorization", `tma ${auth()}`)
       .send({ count: 3 });
-    expect(createStoreIntent).toHaveBeenCalledWith({ userId: "u1", count: 3, amountCents: 1647 });
+    expect(createStoreIntent).toHaveBeenCalledWith({ userId: "u1", count: 3, amountCents: 2037 });
   });
 });
 
@@ -127,10 +127,10 @@ describe("POST /v1/tickets/store/confirm", () => {
       .send({ count: 1, clientSecret: "mock_store_pi_x" });
     expect(res.status).toBe(200);
     expect(verifyStorePayment).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "u1", count: 1, amountCents: 161 }),
+      expect.objectContaining({ userId: "u1", count: 1, amountCents: 195 }),
     );
     expect(grantTickets).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "u1", count: 1, reason: "store_purchase", amountCents: 161 }),
+      expect.objectContaining({ userId: "u1", count: 1, reason: "store_purchase", amountCents: 195 }),
     );
     expect(consumeActiveDiscount).toHaveBeenCalledWith("u1");
     expect(res.body.discountPct).toBe(0);
@@ -143,7 +143,7 @@ describe("POST /v1/tickets/store/confirm", () => {
       .set("Authorization", `tma ${auth()}`)
       .send({ count: 3, clientSecret: "mock_store_pi_y" });
     expect(verifyStorePayment).toHaveBeenCalledWith(
-      expect.objectContaining({ count: 3, amountCents: 1647 }),
+      expect.objectContaining({ count: 3, amountCents: 2037 }),
     );
     expect(consumeActiveDiscount).not.toHaveBeenCalled();
   });

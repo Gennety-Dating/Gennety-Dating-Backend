@@ -226,7 +226,7 @@ export function App(): ReactElement {
   );
 
   // Male "cover both" holding exactly one wallet ticket: spend it on his own
-  // slot, then open the single-price ($6.99) payment for the partner's slot —
+  // slot, then open the single-price ($8.49) payment for the partner's slot —
   // 🎫 + one ticket's money, never the doubled "pay for both". If the partner
   // settled concurrently we just show the refreshed (cover-partner/success)
   // screen instead of a redundant charge.

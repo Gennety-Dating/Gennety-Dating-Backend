@@ -819,7 +819,7 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   existing per-request voice limiter, not the token budget.
 - Date Ticket (feature-flagged monetization): `TICKET_FEATURE_ENABLED`
   (default `false` — leave off until launch), `TICKET_PAYMENT_MODE`
-  (`mock` default / `stripe`), `TICKET_PRICE_CENTS` (default `699`),
+  (`mock` default / `stripe`), `TICKET_PRICE_CENTS` (default `849`),
   `TICKET_PAYMENT_WINDOW_HOURS` (default `24`).
   - **Real payments = Telegram Stars (XTR), the production rail.**
     `TICKET_STARS_ENABLED` (default `false`) makes the date gate **and** the
@@ -827,7 +827,7 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
     `pre_checkout_query` + `successful_payment` (`handlers/payments.ts`). Needs
     **no** merchant account / provider token (empty provider token +
     `currency: "XTR"`); Stars→TON withdrawal is a Telegram-side setting.
-    `TICKET_BUNDLE_STARS` (default `1:350,3:830,6:1350`, `<count>:<stars>` pairs)
+    `TICKET_BUNDLE_STARS` (default `1:425,3:1020,6:1650`, `<count>:<stars>` pairs)
     sets the per-bundle Star price; the gate derives its per-scope price from the
     1-ticket entry (self/partner 1×, both 2×). **Requires the additive unique
     `ticket_ledger.external_payment_id` column to be deployed first** (the
@@ -1055,7 +1055,7 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   `handlers/payments.ts`; no merchant account, same XTR mechanics as tickets and
   independent of `TICKET_STARS_ENABLED`). The refund-retry cron is registered
   only when the flag is on. No Mini App change, no new system dependency.
-  **Pricing note:** 150⭐ follows the ticket rate ($6.99/350⭐ = $0.02/⭐ → ≈$3.00);
+  **Pricing note:** 150⭐ follows the ticket rate ($8.49/425⭐ = $0.02/⭐ → ≈$3.00);
   at the more conservative $0.024/⭐ rate documented under `PREMIUM_STARS`, 150⭐
   bills nearer $3.59 — if you want Premium's strict "never under-promise the
   charge" convention, set `REMATCH_STARS=125` or raise the display price (both

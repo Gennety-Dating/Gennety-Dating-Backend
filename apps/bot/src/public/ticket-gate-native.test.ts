@@ -55,7 +55,7 @@ function buildApp() {
 
 const baseState = {
   ticketStatus: "pending",
-  priceCents: 699,
+  priceCents: 849,
   myGender: "male" as "male" | "female" | null,
   mySide: "A",
   iPaid: false,
@@ -68,7 +68,7 @@ const baseState = {
   paymentMode: "mock",
   myBalance: 2,
   selfDiscountPct: 0,
-  selfPriceCents: 699,
+  selfPriceCents: 849,
   myPhotoUrl: `/v1/matches/${VALID_UUID}/ticket/photo/self`,
   partnerPhotoUrl: `/v1/matches/${VALID_UUID}/ticket/photo/partner`,
 };
@@ -95,7 +95,7 @@ describe("GET /v1/matches/:id/ticket-gate", () => {
       partnerPaid: false,
       partnerFirstName: "Sam",
       balance: 2,
-      priceCents: 699,
+      priceCents: 849,
     });
     // The Telegram-only rails must not leak: a client that branched on them
     // would be branching on a currency it can never charge in.

@@ -26,7 +26,7 @@ vi.mock("@gennety/db", () => ({
 }));
 vi.mock("../config.js", () => ({
   env: {
-    TICKET_BUNDLE_STARS: { 1: 350, 3: 830, 6: 1350 },
+    TICKET_BUNDLE_STARS: { 1: 425, 3: 1020, 6: 1650 },
     PREMIUM_STARS: 500,
     MESSAGE_EFFECT_REMATCH_ID: "",
   },

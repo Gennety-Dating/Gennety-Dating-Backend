@@ -13,7 +13,7 @@ import {
 function state(overrides: Partial<TicketState> = {}): TicketState {
   return {
     ticketStatus: "pending",
-    priceCents: 699,
+    priceCents: 849,
     myGender: "male",
     mySide: "A",
     iPaid: false,
@@ -26,7 +26,7 @@ function state(overrides: Partial<TicketState> = {}): TicketState {
     paymentMode: "mock",
     myBalance: 0,
     selfDiscountPct: 0,
-    selfPriceCents: 699,
+    selfPriceCents: 849,
     myPhotoUrl: null,
     partnerPhotoUrl: null,
     ...overrides,
@@ -77,12 +77,12 @@ describe("deriveOfferButtons (balance 0 = money path)", () => {
   it("male gets pay-for-both (primary, doubled) + pay-self", () => {
     const btns = deriveOfferButtons(state({ myGender: "male", myBalance: 0 }));
     expect(btns).toHaveLength(2);
-    expect(btns[0]).toEqual({ action: "pay", scope: "both", amountCents: 1398, ticketCost: 0, primary: true });
-    expect(btns[1]).toEqual({ action: "pay", scope: "self", amountCents: 699, ticketCost: 0, primary: false });
+    expect(btns[0]).toEqual({ action: "pay", scope: "both", amountCents: 1698, ticketCost: 0, primary: true });
+    expect(btns[1]).toEqual({ action: "pay", scope: "self", amountCents: 849, ticketCost: 0, primary: false });
   });
   it("female gets a single self-pay button", () => {
     const btns = deriveOfferButtons(state({ myGender: "female", myBalance: 0 }));
-    expect(btns).toEqual([{ action: "pay", scope: "self", amountCents: 699, ticketCost: 0, primary: true }]);
+    expect(btns).toEqual([{ action: "pay", scope: "self", amountCents: 849, ticketCost: 0, primary: true }]);
   });
   it("unknown gender never offers pay-for-both", () => {
     const btns = deriveOfferButtons(state({ myGender: null, myBalance: 0 }));
@@ -102,7 +102,7 @@ describe("deriveOfferButtons (famine single-ticket discount)", () => {
     const btns = deriveOfferButtons(
       state({ myGender: "male", myBalance: 0, selfDiscountPct: 77, selfPriceCents: 161 }),
     );
-    expect(btns[0]).toEqual({ action: "pay", scope: "both", amountCents: 1398, ticketCost: 0, primary: true });
+    expect(btns[0]).toEqual({ action: "pay", scope: "both", amountCents: 1698, ticketCost: 0, primary: true });
     expect(btns[1]).toEqual({ action: "pay", scope: "self", amountCents: 161, ticketCost: 0, primary: false });
   });
   it("wallet 'use' paths ignore the discount (using a ticket is free)", () => {
@@ -126,14 +126,14 @@ describe("deriveOfferButtons (balance-aware)", () => {
   it("male with 1 ticket leads with cover-both (ticket + single price), self second", () => {
     const btns = deriveOfferButtons(state({ myGender: "male", myBalance: 1 }));
     // Cover-both shortcut: 🎫 on his own slot + one ticket's price for the
-    // partner — never the doubled $13.98 when he already holds a ticket. It is
+    // partner — never the doubled $16.98 when he already holds a ticket. It is
     // the HERO here: balance 1 is the state most men reach this screen in (the
     // welcome gift is exactly one ticket), and the ladder used to invert at
     // precisely that balance, pointing the nudge the wrong way.
     expect(btns[0]).toEqual({
       action: "use-self-pay-partner",
       scope: "both",
-      amountCents: 699,
+      amountCents: 849,
       ticketCost: 1,
       primary: true,
     });
@@ -156,7 +156,7 @@ describe("deriveOfferButtons (balance-aware)", () => {
     it("male with no tickets is offered his own ticket only (never 'pay for both')", () => {
       const btns = deriveOfferButtons(state({ myGender: "male", myBalance: 0, partnerPaid: true }));
       expect(btns).toEqual([
-        { action: "pay", scope: "self", amountCents: 699, ticketCost: 0, primary: true },
+        { action: "pay", scope: "self", amountCents: 849, ticketCost: 0, primary: true },
       ]);
     });
     it("male with 1 ticket is offered the self spend only (no cover-both combo)", () => {
@@ -178,18 +178,18 @@ describe("deriveCoverPartnerButtons", () => {
   it("offers a ticket (primary) or money when balance remains", () => {
     const btns = deriveCoverPartnerButtons(state({ myGender: "male", iPaid: true, myBalance: 1 }));
     expect(btns[0]).toEqual({ action: "use", scope: "partner", amountCents: 0, ticketCost: 1, primary: true });
-    expect(btns[1]).toEqual({ action: "pay", scope: "partner", amountCents: 699, ticketCost: 0, primary: false });
+    expect(btns[1]).toEqual({ action: "pay", scope: "partner", amountCents: 849, ticketCost: 0, primary: false });
   });
   it("offers only money when no tickets left", () => {
     const btns = deriveCoverPartnerButtons(state({ myGender: "male", iPaid: true, myBalance: 0 }));
-    expect(btns).toEqual([{ action: "pay", scope: "partner", amountCents: 699, ticketCost: 0, primary: true }]);
+    expect(btns).toEqual([{ action: "pay", scope: "partner", amountCents: 849, ticketCost: 0, primary: true }]);
   });
 });
 
 describe("formatting helpers", () => {
   it("formats cents as USD", () => {
-    expect(formatUsd(699)).toBe("$6.99");
-    expect(formatUsd(1398)).toBe("$13.98");
+    expect(formatUsd(849)).toBe("$8.49");
+    expect(formatUsd(1698)).toBe("$16.98");
   });
   it("formats countdown spans", () => {
     const en = { hours: "{n}h", minutes: "{n}m", soon: "under a minute" };
@@ -231,7 +231,7 @@ describe("Gennety Premium covers the subscriber's own slot", () => {
       state({ myGender: "male", iPaid: true, myPremiumActive: true, myBalance: 0 }),
     );
     expect(buttons).toHaveLength(1);
-    expect(buttons[0]!).toMatchObject({ action: "pay", scope: "partner", amountCents: 699 });
+    expect(buttons[0]!).toMatchObject({ action: "pay", scope: "partner", amountCents: 849 });
     expect(buttons.some((b) => b.scope === "both")).toBe(false);
   });
 
