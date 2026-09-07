@@ -1,13 +1,14 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 283 entries
+# Decision index — all 284 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
 | 2026-09-08 | счётчик «в поиске в городе»: порог 250, и решает его сервер | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
+| 2026-09-07 | подбор пар перестал строить страну целиком | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | сломаться молча стало нельзя | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | «подбираем время» перестало быть состоянием без выхода | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | текст, написанный одним человеком, перестал распоряжаться ответом для другого | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
