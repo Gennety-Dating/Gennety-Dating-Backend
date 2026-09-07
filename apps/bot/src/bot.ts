@@ -2,6 +2,7 @@ import { Bot } from "grammy";
 import type { BotContext } from "./session.js";
 import { sessionMiddleware } from "./session.js";
 import { installApiLimits } from "./api-limits.js";
+import { installBotBlockedObserver, clearBotBlocked } from "./services/bot-blocked.js";
 import { sequentializeByChat } from "./chat-queue.js";
 import { botRateLimit } from "./bot-rate-limit.js";
 import { start } from "./handlers/start.js";
@@ -40,11 +41,24 @@ export function createBot(token: string): Bot<BotContext> {
   // timeline twice — one send the user made would read as two.
   installApiLimits(bot.api);
 
+  // Remember terminal 403s. Installed here rather than at the ~40 send sites
+  // because that is where the refusal actually arrives, and almost all of them
+  // swallow their own errors on purpose. See services/bot-blocked.ts.
+  installBotBlockedObserver(bot.api);
+
   // Chat timeline — outbound half. Installed on the Api itself rather than as
   // middleware, because most of what a user sees is sent OUTSIDE a handler
   // (cron workers, the date lifecycle, Mini App routes) and all of it goes
   // through this one `Api`. See services/outbound-recorder.ts.
   bot.api.config.use(outboundRecorder);
+
+  // An update FROM a chat is proof the door is open — better proof than a
+  // successful send, because it came from the person. Placed at the very top so
+  // it also covers the payment handlers below, which terminate the update.
+  bot.use(async (ctx, next) => {
+    if (ctx.from?.id !== undefined) void clearBotBlocked(BigInt(ctx.from.id));
+    await next();
+  });
 
   // Middleware chain
   bot.use(sequentializeByChat());

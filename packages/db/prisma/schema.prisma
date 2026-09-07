@@ -224,6 +224,19 @@ model User {
   /// Null = no banner pinned (either pre-finalize, or user unpinned / deleted).
   /// Cleared by the status-timer worker on 400/403 edit failures.
   statusMessageId            Int?                     @map("status_message_id")
+  /// When Telegram last told us this chat is permanently shut: a 403
+  /// ("bot was blocked by the user", "chat not found", "user is deactivated").
+  ///
+  /// The classification existed before this column and went nowhere — every
+  /// send site read the refusal, swallowed it, and tried again next week. A
+  /// person who had blocked the bot therefore kept being matched: the pitch
+  /// reached only their partner, who waited a day for an answer that could not
+  /// come, and the candidate was spent on a lifetime pair ban either way. In a
+  /// small pool that is direct, invisible damage to matching.
+  ///
+  /// Cleared the moment any update arrives from that chat — pressing Start
+  /// again is the unblock, and it is the only evidence worth trusting.
+  botBlockedAt               DateTime?                @map("bot_blocked_at")
   /// Identity origin. Mobile-first users are created with a synthetic negative
   /// `telegramId` (Telegram never issues negative IDs) — Telegram-targeting
   /// workers MUST filter `telegramId: { gt: 0 }` or `platform: { in: [telegram, both] }`.
