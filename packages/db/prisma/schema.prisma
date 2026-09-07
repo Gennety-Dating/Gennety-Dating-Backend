@@ -2000,6 +2000,16 @@ model Match {
 
   @@index([status, createdAt])
   @@index([userAId, userBId])
+  /// "Every live match these users are in" — the shape behind the status
+  /// banner, My Date, the profiler and a dozen other reads. It is asked as
+  /// `userAId IN (…) OR userBId IN (…)`, which no single index can serve, so
+  /// the hot caller (services/status-banner-stage.ts, once a minute for every
+  /// active account) splits it in two and these are the halves. Without the
+  /// `userBId`-leading one that half was a sequential scan of `matches`: fine
+  /// today, and the thing that stops the minute tick from fitting in a minute
+  /// as the table grows.
+  @@index([userAId, status])
+  @@index([userBId, status])
   /// Drives the ticket-expiry cron's sweep for `partial`/`pending` rows
   /// whose `ticketExpiresAt` has lapsed.
   @@index([ticketStatus, ticketExpiresAt])
