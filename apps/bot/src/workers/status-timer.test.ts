@@ -250,7 +250,9 @@ describe("statusTimerTick", () => {
 
     // Both sides get their own banner, and both name the same venue.
     expect(result.edited).toBe(2);
-    const texts = api.editMessageText.mock.calls.map((c: unknown[]) => c[2] as string);
+    const texts: string[] = api.editMessageText.mock.calls.map(
+      (c: unknown[]) => c[2] as string,
+    );
     expect(texts).toHaveLength(2);
     expect(texts.every((text) => text.includes("Blur Cafe"))).toBe(true);
   });
