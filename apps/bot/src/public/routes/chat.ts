@@ -3,6 +3,7 @@ import multer, { MulterError } from "multer";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
+import { requireAgentAccess } from "../agent-access-middleware.js";
 import { chatMessageLimiter, chatUploadLimiter } from "../rate-limit.js";
 import { runChatTurn } from "../../services/chat-agent.js";
 import { listChatTopics } from "../../services/chat-topics.js";
@@ -24,6 +25,12 @@ import { sniffImageMime } from "../../utils/image-sniff.js";
  * Mobile flow: upload image first (returns `imageUrl`), then send a
  * `/message` referencing it. Either field is sufficient; both can be
  * combined for a captioned image.
+ *
+ * The two spending routes carry `requireAgentAccess` — the same rule the
+ * Telegram router and `/v1/assistant` ask. The read routes deliberately do
+ * not: showing someone the conversation they already had costs no tokens and
+ * writes nothing, and a history that went blank on suspension would read as
+ * data loss rather than as enforcement.
  */
 
 export const chatRouter: Router = Router();
@@ -58,6 +65,7 @@ function chatUploadWithErrorHandling(
 
 chatRouter.post(
   "/upload",
+  requireAgentAccess,
   chatUploadLimiter,
   chatUploadWithErrorHandling,
   async (req: Request, res: Response): Promise<void> => {
@@ -90,6 +98,7 @@ chatRouter.post(
 
 chatRouter.post(
   "/message",
+  requireAgentAccess,
   chatMessageLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const rawText = req.body?.text;

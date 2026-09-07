@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 257 entries
+# Decision index — all 258 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-07 | агентский аудит: iOS-чат работает на другом агенте, и гейт доступа у него не спрашивали | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | у прокси-чата появились настоящие статусы доставки; развилка координации схлопнута для всех, у кого есть приложение | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | форма расходов пересобрана под большой палец; `<datalist>` на iOS не существует | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-07 | билет $8.49, а скидка пакета стала заданным числом, а не следствием округления | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

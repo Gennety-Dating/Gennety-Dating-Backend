@@ -33,6 +33,11 @@ vi.mock("./auth-middleware.js", () => ({
 vi.mock("./usage-middleware.js", () => ({
   usageGuard: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
+// Кто допущен к агенту — предмет `chat-agent-access.test.ts`; здесь проверяется
+// граница владения картинкой, и гейт нейтрализуется наравне с остальными.
+vi.mock("./agent-access-middleware.js", () => ({
+  requireAgentAccess: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
 vi.mock("./rate-limit.js", () => ({
   chatMessageLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
   chatUploadLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
