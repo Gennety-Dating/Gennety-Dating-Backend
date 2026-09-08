@@ -430,11 +430,15 @@ model User {
   eventPairingsAsA          EventRoundPairing[]        @relation("EventPairingA")
   eventPairingsAsB          EventRoundPairing[]        @relation("EventPairingB")
   eventFeedback             EventFeedback[]
+  hdyhauResponse            HdyhauResponse?
 
   matchesAsA          Match[]      @relation("MatchUserA")
   matchesAsB          Match[]      @relation("MatchUserB")
   matchEventsAuthored MatchEvent[] @relation("MatchEventActor")
   matchEventsTargeted MatchEvent[] @relation("MatchEventTarget")
+
+  referralEventsShared   ReferralEvent[] @relation("ReferralEventReferrer")
+  referralEventsReceived ReferralEvent[] @relation("ReferralEventInvitee")
 
   reportsFiled   Report[] @relation("ReportReporter")
   reportsAgainst Report[] @relation("ReportReported")
@@ -2106,11 +2110,11 @@ model VenueSelectionLog {
 /// time-boxed carve-out to the "NO IN-APP CHAT" product invariant — relayed
 /// content is fully logged and reportable. Cascades on Match deletion (GDPR).
 model ProxyMessage {
-  id        String   @id @default(uuid()) @db.Uuid
-  matchId   String   @map("match_id") @db.Uuid
-  senderId  String   @map("sender_id") @db.Uuid
-  body      String
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String    @id @default(uuid()) @db.Uuid
+  matchId     String    @map("match_id") @db.Uuid
+  senderId    String    @map("sender_id") @db.Uuid
+  body        String
+  createdAt   DateTime  @default(now()) @map("created_at")
   /// When the message actually reached the partner's OWN rail: the bot's
   /// `sendMessage` resolved, or APNs accepted the push. Null means it exists in
   /// the log and nowhere else yet.
@@ -2729,6 +2733,205 @@ model AdSpend {
   @@unique([channel, category, periodStart, periodEnd])
   @@index([periodStart])
   @@map("ad_spend")
+}
+
+/// Виральная воронка шеринга: ровно те её шаги, которые сервер ВИДИТ САМ.
+///
+/// Существующая реферальная связка (`User.referralSource` → `referral:<id>`,
+/// `User.referralCountedAt`) отвечает на вопрос «кто кого привёл и когда тот
+/// активировался», но не на вопрос «сколько приглашений для этого понадобилось».
+/// Без знаменателя K-фактор не раскладывается на `i × c`: невозможно отличить
+/// «мало кто делится» от «делятся, но по ссылке не приходят», а это два разных
+/// продуктовых действия.
+///
+/// `kind` — обычная строка, а не Prisma enum, по той же причине, что и
+/// `Match.source` / `AdSpend.category`: новый шаг воронки не должен стоить
+/// миграции. Закрытый перечень живёт в `services/referral-events.ts` и
+/// проверяется на записи.
+///
+/// `dedupeKey` детерминированный и уникальный — он И ЕСТЬ гарантия
+/// идемпотентности. Клик по инвайт-ссылке ключуется по «реферер + кликнувший +
+/// UTC-день», так что человек, десять раз нажавший `/start`, даёт одну единицу
+/// в знаменатель конверсии, а не десять. Шеринг ключуется по id подготовленного
+/// Telegram-сообщения: это ровно один акт шеринга, и повтор его не удваивает.
+///
+/// PII здесь нет: только внутренние uuid и `telegramId` внутри `dedupeKey` —
+/// то же, что уже лежит в `users`. Наружу (виральные эндпоинты Hermes) уходят
+/// исключительно агрегаты.
+model ReferralEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  /// `share_sheet_opened` | `invite_sent` | `invite_link_clicked`.
+  kind       String
+  /// Тот, кто делится. Null для клика по ссылке, чей `referral:<id>` не
+  /// разрешился в существующего пользователя (удалённый аккаунт, битая ссылка):
+  /// такой клик всё равно факт, и терять его нельзя.
+  referrerId String?  @map("referrer_id") @db.Uuid
+  /// Кликнувший, если он уже известен как пользователь. Null, когда клик привёл
+  /// человека, аккаунт которого в этот момент ещё не создан.
+  inviteeId  String?  @map("invitee_id") @db.Uuid
+  /// Поверхность: `tg` | `tg-mini` | `ios` | `web`.
+  surface    String
+  /// Детерминированный ключ идемпотентности (см. заголовок модели).
+  dedupeKey  String   @unique @map("dedupe_key")
+  occurredAt DateTime @default(now()) @map("occurred_at")
+
+  referrer User? @relation("ReferralEventReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  invitee  User? @relation("ReferralEventInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  /// Воронка за окно: одно сканирование на «шеров / инвайтов / кликов».
+  @@index([kind, occurredAt])
+  /// «Сколько инвайтов отправил ЭТОТ реферер за окно наблюдения когорты» — то
+  /// самое `i` в `K = i × c`.
+  @@index([referrerId, occurredAt])
+  @@map("referral_events")
+}
+
+/// Ответ на онбординговый вопрос «откуда вы про нас узнали» (HDYHAU).
+///
+/// Зачем он нужен, если есть `User.referralSource`: тот отвечает, по какой
+/// ССЫЛКЕ человек пришёл, а этот — что человек СЧИТАЕТ источником. Расхождение
+/// между ними и есть тёмное сарафанное радио: пришёл «органикой», а говорит
+/// «друг рассказал лично» — значит, привёл его живой человек, которого ни одна
+/// ссылка не зафиксировала. Именно на этой разнице калибруется `K_wom`
+/// (`admin/utils/virality.ts` → `hdyhauWomShare`).
+///
+/// Один ответ на пользователя (`userId` — первичный ключ): вопрос задаётся один
+/// раз, переспрашивать нечего, а повторная отправка формы должна ОБНОВЛЯТЬ строку,
+/// а не плодить их. `promptVersion` хранит, какую именно формулировку и какой
+/// набор вариантов человек видел, — без этого смена вариантов задним числом
+/// переписывает историю распределения.
+///
+/// Свободного текста здесь нет и быть не может: `answer` проверяется по
+/// закрытому перечню (`services/hdyhau.ts`), поэтому в таблицу не попадает ни
+/// имя, ни ссылка, ни что-либо ещё, что человек мог бы вписать руками.
+model HdyhauResponse {
+  userId        String   @id @map("user_id") @db.Uuid
+  /// Значение из закрытого перечня `HDYHAU_ANSWERS`.
+  answer        String
+  /// Версия формулировки вопроса и набора вариантов (`HDYHAU_PROMPT_VERSION`).
+  promptVersion String   @map("prompt_version")
+  /// Где именно спросили: `tg-mini` | `ios` | `tg`.
+  surface       String
+  answeredAt    DateTime @default(now()) @map("answered_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Распределение ответов за период — одно сканирование по индексу.
+  @@index([answeredAt])
+  @@index([answer, answeredAt])
+  @@map("hdyhau_responses")
+}
+
+/// Предагрегат виральности В РАЗРЕЗЕ ДНЯ ПРИВЛЕЧЕНИЯ — та половина расчёта,
+/// у которой зерно «календарный день», а не «когорта».
+///
+/// Здесь живёт непрямая виральность: базовая органика (скользящее среднее),
+/// её сигма, органический прирост сверх базы и `K_wom`. Считается фоновой
+/// задачей (`workers/virality-rollup.ts`), а не на запросе, ровно по причине из
+/// ТЗ: читать это должен дашборд и агент, а не продовые таблицы под нагрузкой.
+///
+/// `scope` — `global` либо `city:<key>` либо `university:<domain>`. Кластерный
+/// срез хранится строками, а не колонками, потому что число кластеров растёт с
+/// каждым запущенным городом, а число колонок расти не должно.
+///
+/// Отсутствующее измерение — `null`, никогда не `0`. Это то же правило, на
+/// котором стоит `cohort-retention.ts`: «база ещё не набрана» и «прироста нет» —
+/// разные утверждения, и путать их значит показывать фаундеру ноль там, где
+/// данных просто не было.
+model ViralityDay {
+  /// UTC-день регистрации (совпадает с бакетом `user_activity_days`).
+  day   DateTime @db.Date
+  /// `global` | `city:<key>` | `university:<domain>`.
+  scope String
+
+  /// Регистрации этого дня, всего и в разбивке по типу привлечения.
+  signups         Int
+  /// `normalizeChannel(referralSource) === "organic"` — неразмеченный приток.
+  organicSignups  Int @map("organic_signups")
+  /// Пришедшие по личной инвайт-ссылке (`referral:*`) — прямая виральность.
+  referralSignups Int @map("referral_signups")
+  /// Всё остальное размеченное (кампании, mobile, web) — «семя» для WOM.
+  seedSignups     Int @map("seed_signups")
+
+  /// Скользящее среднее органики за предыдущие `BASELINE_WINDOW_DAYS` дней.
+  /// Null, пока окно не набрано (`immature`) — см. `womStatus`.
+  baselineOrganic Float? @map("baseline_organic")
+  /// Выборочное СКО органики в том же окне. Основа порога аномалий (2σ).
+  baselineStdDev  Float? @map("baseline_std_dev")
+  /// `max(0, organicSignups - baselineOrganic)`. Null, когда базы ещё нет.
+  organicUplift   Float? @map("organic_uplift")
+  /// `organicUplift / seedSignups`. Null, когда делить не на что.
+  kWom            Float? @map("k_wom")
+  /// `ok` | `immature` (окно базы не набрано) | `no-seed` (нулевой знаменатель).
+  /// Существует, чтобы читатель отличал «прироста нет» от «посчитать было нельзя».
+  womStatus       String @map("wom_status")
+
+  computedAt DateTime @map("computed_at")
+
+  @@id([day, scope])
+  /// Временной ряд одного среза — то, из чего рисуется график и ищутся аномалии.
+  @@index([scope, day])
+  @@map("virality_days")
+}
+
+/// Предагрегат виральности В РАЗРЕЗЕ КОГОРТЫ — вторая половина расчёта.
+///
+/// Строка = «когорта, зарегистрировавшаяся `cohortDate`, в срезе `scope`,
+/// измеренная через `maturityDay` дней». Именно это позволяет показать
+/// созревание K-фактора матрицей D1/D3/D7/D14/D30: одна и та же когорта даёт
+/// пять строк, а не пять колонок, поэтому добавить D60 — вставка, а не миграция.
+///
+/// `mature = false` означает, что окно наблюдения ещё не закрылось: когорте
+/// сегодняшнего дня физически неоткуда взять D7. Такие строки пишутся (чтобы
+/// матрица не зияла дырами), но помечены, и дашборд обязан показывать их иначе.
+model ViralityCohort {
+  /// T0 — UTC-день регистрации когорты.
+  cohortDate  DateTime @map("cohort_date") @db.Date
+  /// Окно наблюдения T в днях от T0 (1 / 3 / 7 / 14 / 30).
+  maturityDay Int      @map("maturity_day")
+  /// `global` | `city:<key>` | `university:<domain>`.
+  scope       String
+
+  /// Размер когорты — знаменатель K_direct.
+  cohortSize  Int @map("cohort_size")
+  /// Сколько человек когорты вообще открыли шеринг хотя бы раз.
+  sharers     Int
+  /// Инвайтов отправлено когортой за окно (числитель `i`).
+  invitesSent Int @map("invites_sent")
+  /// Уникальных переходов по их ссылкам за окно.
+  linkClicks  Int @map("link_clicks")
+  /// Приглашённые, ДОШЕДШИЕ до активации (верификация) за окно — числитель K.
+  activations Int
+
+  /// `invitesSent / cohortSize` — то самое `i`.
+  invitesPerUser       Float  @map("invites_per_user")
+  /// `linkClicks / invitesSent`. Null при нулевых инвайтах.
+  clickRate            Float? @map("click_rate")
+  /// `activations / linkClicks` — конверсия перехода в активацию. Null при нуле кликов.
+  activationRate       Float? @map("activation_rate")
+  /// `activations / cohortSize` = `i × c`. Прямой K-фактор когорты.
+  kDirect              Float  @map("k_direct")
+  /// Медиана времени от регистрации реферера до активации приглашённого, в часах.
+  /// Null, когда за окно не активировался ни один приглашённый.
+  cycleTimeMedianHours Float? @map("cycle_time_median_hours")
+
+  /// `K_wom` дня привлечения этой когорты, скопированный сюда, чтобы `kTotal`
+  /// не пересобирался джойном на каждом чтении. Null — считать было нельзя.
+  kWom   Float? @map("k_wom")
+  /// `kDirect + (kWom ?? 0)`. Blended K.
+  kTotal Float  @map("k_total")
+
+  /// Закрылось ли окно наблюдения. False = строка неполна по построению.
+  mature     Boolean
+  computedAt DateTime @map("computed_at")
+
+  @@id([cohortDate, maturityDay, scope])
+  /// Матрица созревания одного среза за период — одно сканирование.
+  @@index([scope, cohortDate])
+  /// Срез «все когорты на одном дне зрелости» — линия K-фактора во времени.
+  @@index([maturityDay, cohortDate])
+  @@map("virality_cohorts")
 }
 
 /// One offline launch event / batch drop / mixer in a launched market
