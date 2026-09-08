@@ -12,6 +12,8 @@
 | `0_baseline` | Продовая база **как она есть** на 2026-09-07 | `migrate diff --from-empty --to-schema-datasource`, снято с живой базы |
 | `20260907120000_trunk_catchup` | То, что уже в `schema.prisma` ствола, но ещё не выкачено (meme-поля профайлера, `city_waitlist_entries`, `short_video_analyses`, `place_cache`) | `migrate diff` от живой базы к схеме ствола |
 | `20260907120100_audit_indexes_and_bot_blocked` | Изменения самого аудита: `users.bot_blocked_at` и восемь индексов | `migrate diff` от схемы ствола к схеме ветки |
+| `20260908090000_proxy_chat_delivery` | Колонки прокси-чата, приехавшие со ствола | `migrate diff` |
+| `20260908120000_virality_tracking` | Виральность: `referral_events`, `hdyhau_responses`, `virality_days`, `virality_cohorts`. **Чисто аддитивная** — ни одной изменённой или удалённой колонки | Написана вручную и **сверена** с `migrate diff --from-empty --to-schema-datamodel`: колонки, индексы и внешние ключи совпадают дословно (теневая база недоступна — см. оговорку ниже) |
 
 Разбиение по авторству намеренное. Слить всё в одну миграцию было бы проще, но
 тогда ветка аудита стала бы той, что выкатывает чужую невыкаченную работу, — а
