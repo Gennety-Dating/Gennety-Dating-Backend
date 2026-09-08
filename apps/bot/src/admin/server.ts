@@ -32,6 +32,7 @@ import { adSpendRouter } from "./routes/ad-spend.js";
 import { eventsRouter } from "./routes/events.js";
 import { userHealthRouter } from "./routes/user-health.js";
 import { activityRouter } from "./routes/activity.js";
+import { viralityRouter } from "./routes/virality.js";
 import { classifyAllUsers } from "./utils/user-health-source.js";
 import { USER_HEALTH_CLASSES, type UserHealthClass } from "./utils/user-health.js";
 import { purchaseSummariesForUsers, purchasesForUser } from "../services/purchases.js";
@@ -208,6 +209,10 @@ app.use(eventsRouter);
 // Путь длиннее, чем `/admin/users/:id`, поэтому затенить его не может.
 app.use(userHealthRouter);
 app.use(activityRouter);
+// Виральность: K-фактор (прямой и сарафанный), матрица созревания когорт,
+// кластерный срез и аномалии. Читает предагрегат `virality_days` /
+// `virality_cohorts`, который наполняет `workers/virality-rollup.ts`.
+app.use(viralityRouter);
 
 type AdminProfileSnapshot = {
   height: number | null;

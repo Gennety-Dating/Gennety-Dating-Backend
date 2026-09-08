@@ -22,6 +22,7 @@ import {
 } from "../services/status-banner.js";
 import { syncTelegramUsername } from "../utils/username.js";
 import { referralSourceFromParam } from "../services/referral.js";
+import { recordInviteClickFromStartPayload } from "../services/referral-events.js";
 import { promoSourceFromParam } from "../services/promo.js";
 import { shouldUseOnboardingMiniApp } from "./onboarding-mini-app-gate.js";
 import { transitionAccountStatus } from "../services/account-status-transitions.js";
@@ -216,6 +217,20 @@ start.command("start", async (ctx) => {
   // Opportunistically capture the public Telegram username for the pre-date
   // coordination contact-exchange variants. Best-effort, never blocks /start.
   void syncTelegramUsername(telegramId, ctx.from?.username).catch(() => {});
+
+  // Переход по инвайт-ссылке — знаменатель конверсии прямой виральности.
+  // Пишется для КАЖДОГО `/start` с реферальным payload, а не только для новых
+  // аккаунтов: человек, который перешёл и не зарегистрировался, — это ровно тот
+  // случай, ради которого метрика существует, и не увидеть его значит считать
+  // конверсию перехода равной 100% по построению. Дедупликация по «реферер +
+  // перешедший + сутки» живёт в `services/referral-events.ts`.
+  void recordInviteClickFromStartPayload({
+    payload: startPayload,
+    channelPrefix: "tg",
+    clickerKey: String(telegramId),
+    surface: "tg",
+    inviteeId: user.id,
+  }).catch(() => {});
 
   // Sync session from DB
   ctx.session.onboardingStep = user.onboardingStep as typeof ctx.session.onboardingStep;

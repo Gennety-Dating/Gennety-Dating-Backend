@@ -64,6 +64,7 @@ import { runSelfieRetention } from "./services/selfie-retention.js";
 import { retentionTick } from "./workers/retention.js";
 import { verificationStuckSweep } from "./services/verification-stuck.js";
 import { activityRollupTick } from "./workers/activity-rollup.js";
+import { viralityRollupTick } from "./workers/virality-rollup.js";
 import { venueConcentrationAlertTick } from "./workers/venue-concentration-alert.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
 import { prunePlaceCache } from "./services/place-cache.js";
@@ -967,6 +968,27 @@ bot.start({
     );
     console.log(
       `[cron] Activity rollup scheduled: "${ACTIVITY_ROLLUP_CRON_SCHEDULE}" (UTC)`,
+    );
+
+    // Пересчёт виральности в `virality_days` / `virality_cohorts`.
+    //
+    // UTC, как и rollup активности, и по той же причине: бакет — календарный
+    // день UTC, поэтому пересчёт обязан идти после его закрытия, а не когда
+    // проснулся Киев. Прогон идемпотентен и переписывает окно целиком, так что
+    // пропущенная ночь не оставляет дыры — следующая закроет тот же диапазон.
+    cron.schedule(
+      env.VIRALITY_ROLLUP_CRON_SCHEDULE,
+      guardedTick("virality-rollup", async () => {
+        const r = await viralityRollupTick();
+        console.log(
+          `[virality-rollup] ${r.from}..${r.to} scopes=${r.scopes} ` +
+            `days=${r.dayRows} cohorts=${r.cohortRows}`,
+        );
+      }),
+      { timezone: "UTC" },
+    );
+    console.log(
+      `[cron] Virality rollup scheduled: "${env.VIRALITY_ROLLUP_CRON_SCHEDULE}" (UTC)`,
     );
 
     // Weekly venue-concentration alarm. Registered only when the alert is on:

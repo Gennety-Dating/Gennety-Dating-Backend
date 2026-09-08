@@ -5,6 +5,7 @@ import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import { buildReferralLink, buildReferralStateView } from "../../services/referral.js";
+import { recordInviteSent, recordShareSheetOpened } from "../../services/referral-events.js";
 import { referralCardImage } from "../../services/referral-card/index.js";
 
 /**
@@ -15,6 +16,7 @@ import { referralCardImage } from "../../services/referral-card/index.js";
  *
  *   GET  /v1/referral/state          — ladder + progress + $ value + invite link
  *   POST /v1/referral/share-message  — mint a one-tap savePreparedInlineMessage
+ *   POST /v1/referral/share-result   — client reports whether the share was sent
  *   GET  /v1/referral/card?u=&v=&sig= — serve the invite card JPEG (public, HMAC)
  */
 
@@ -151,11 +153,65 @@ export function createReferralRouter(): Router {
         result as Parameters<typeof api.savePreparedInlineMessage>[1],
         { allow_user_chats: true, allow_group_chats: true, allow_channel_chats: true },
       );
+      // Первый шаг виральной воронки. Ключуется по id подготовленного
+      // сообщения, поэтому повторный вызов из-за ретрая клиента не удваивает
+      // знаменатель. Аналитика никогда не мешает шерингу: ошибка проглочена.
+      void recordShareSheetOpened({
+        referrerId: user.id,
+        preparedMessageId: prepared.id,
+        surface: "tg-mini",
+      }).catch(() => {});
       res.status(200).json({ ok: true, id: prepared.id });
     } catch (err) {
       console.warn("[referral] savePreparedInlineMessage failed", err);
       res.status(502).json({ error: "share-failed" });
     }
+  });
+
+  /**
+   * Итог шеринга, о котором может отчитаться ТОЛЬКО клиент.
+   *
+   * Сервер видит подготовку сообщения и не видит отправку: выбрал ли человек
+   * чат или закрыл шторку, знает лишь колбэк `WebApp.shareMessage`. Считать
+   * отправкой саму подготовку значило бы завышать `i` в `K = i × c` на все
+   * передуманные шеринги — то есть занижать конверсию перехода ровно на ту же
+   * величину и объявлять проблемой ссылку вместо шторки.
+   *
+   * `sent: false` не пишется никуда: несостоявшийся шеринг уже посчитан как
+   * `share_sheet_opened`, и отдельное событие «не отправил» было бы вторым
+   * источником правды об одном факте.
+   */
+  router.post("/share-result", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+    const body = (req.body ?? {}) as { id?: unknown; sent?: unknown };
+    const preparedMessageId = typeof body.id === "string" ? body.id.trim().slice(0, 64) : "";
+    if (!preparedMessageId) {
+      res.status(400).json({ error: "id-required" });
+      return;
+    }
+    const user = await prisma.user.findUnique({
+      where: { telegramId: BigInt(auth.user.id) },
+      select: { id: true },
+    });
+    if (!user) {
+      res.status(404).json({ error: "user-not-found" });
+      return;
+    }
+
+    const recorded =
+      body.sent === true
+        ? await recordInviteSent({
+            referrerId: user.id,
+            preparedMessageId,
+            surface: "tg-mini",
+          })
+        : false;
+
+    res.status(200).json({ ok: true, recorded });
   });
 
   // PUBLIC signed image — Telegram fetches this to render the shared photo, so
