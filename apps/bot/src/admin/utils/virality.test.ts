@@ -556,6 +556,57 @@ describe("калибровка WOM", () => {
     expect(c.upliftFromBaseline).toBe(5);
   });
 
+  it("честный знаменатель и стационарная база дают доверие ok", () => {
+    const c = calibrateWom({
+      organicSignups: 200,
+      seedSignups: 100,
+      baselineUplift: 20,
+      hdyhau: summarizeHdyhau([]),
+      upliftShareOfOrganic: 0.1,
+    });
+    expect(c.confidence).toBe("ok");
+    expect(c.confidenceReasons).toEqual([]);
+  });
+
+  it("крошечная семенная когорта подрывает доверие, но число всё равно видно", () => {
+    const c = calibrateWom({
+      organicSignups: 500,
+      seedSignups: 3,
+      baselineUplift: 60,
+      hdyhau: summarizeHdyhau([]),
+      upliftShareOfOrganic: 0.12,
+    });
+    expect(c.confidence).toBe("low");
+    expect(c.confidenceReasons.join(" ")).toMatch(/too small a denominator/);
+    // Прятать число нельзя: именно по нему видно, что метод сломался.
+    expect(c.kWom).toBe(20);
+  });
+
+  it("растущий продукт распознаётся: база не объясняет почти ничего", () => {
+    const c = calibrateWom({
+      organicSignups: 300,
+      seedSignups: 100,
+      baselineUplift: 280,
+      hdyhau: summarizeHdyhau([]),
+      // 93% органики объявлено приростом — это наклон кривой, а не сарафан.
+      upliftShareOfOrganic: 0.93,
+    });
+    expect(c.confidence).toBe("low");
+    expect(c.confidenceReasons.join(" ")).toMatch(/growth ramp/);
+  });
+
+  it("доля семени ниже порога тоже подрывает доверие", () => {
+    const c = calibrateWom({
+      organicSignups: 1000,
+      seedSignups: 20, // 2% привлечения
+      baselineUplift: 50,
+      hdyhau: summarizeHdyhau([]),
+      upliftShareOfOrganic: 0.05,
+    });
+    expect(c.confidence).toBe("low");
+    expect(c.confidenceReasons.join(" ")).toMatch(/% of acquisition/);
+  });
+
   it("без базы и без опроса честно говорит, что метода нет", () => {
     const c = calibrateWom({
       organicSignups: 0,

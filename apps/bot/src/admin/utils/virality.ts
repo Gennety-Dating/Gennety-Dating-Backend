@@ -381,18 +381,19 @@ export function withOrganicBaseline(
  * регистрацией и приростом в три человека дал бы `K_wom = 3` и в среднем
  * перевесил бы неделю честных данных. Читать фаундеру нужно именно это число.
  */
-export function periodWom(days: readonly DayMetrics[]): {
-  uplift: number | null;
-  seed: number;
-  organic: number;
-  kWom: number | null;
-  measurableDays: number;
-} {
+export function periodWom(days: readonly DayMetrics[]): PeriodWom {
   const measurable = days.filter((d) => d.organicUplift !== null);
   const seed = measurable.reduce((a, d) => a + d.seedSignups, 0);
   const organic = measurable.reduce((a, d) => a + d.organicSignups, 0);
   if (measurable.length === 0) {
-    return { uplift: null, seed: 0, organic: 0, kWom: null, measurableDays: 0 };
+    return {
+      uplift: null,
+      seed: 0,
+      organic: 0,
+      kWom: null,
+      measurableDays: 0,
+      upliftShareOfOrganic: null,
+    };
   }
   const uplift = measurable.reduce((a, d) => a + (d.organicUplift ?? 0), 0);
   return {
@@ -401,7 +402,28 @@ export function periodWom(days: readonly DayMetrics[]): {
     organic,
     kWom: ratio(uplift, seed),
     measurableDays: measurable.length,
+    upliftShareOfOrganic: ratio(uplift, organic),
   };
+}
+
+export interface PeriodWom {
+  uplift: number | null;
+  seed: number;
+  organic: number;
+  kWom: number | null;
+  measurableDays: number;
+  /**
+   * Какая доля всей органики объявлена приростом над базой.
+   *
+   * Это проверка ПРЕДПОСЫЛКИ метода, а не ещё одна метрика. Скользящая база
+   * описывает «сколько органики приходит, когда ничего не происходит», и это
+   * утверждение имеет смысл только на более-менее стационарном ряде. На
+   * растущем продукте органика каждый день выше вчерашней, поэтому база всегда
+   * отстаёт, и «прирост» получается каждый день — то есть весь рост продукта
+   * записывается в сарафанное радио. Когда эта доля близка к единице, база
+   * ничего не объясняет, и `K_wom` меряет не WOM, а наклон кривой.
+   */
+  upliftShareOfOrganic: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -703,7 +725,31 @@ export interface WomCalibration {
   kWom: number | null;
   /** Почему выбран именно этот метод — для агента, а не для человека. */
   reason: string;
+  /**
+   * Можно ли на это число опираться. Число возвращается в любом случае —
+   * прятать его значило бы лишить читателя возможности увидеть, что метод
+   * сломался, — но `low` обязано быть показано рядом с ним.
+   */
+  confidence: "ok" | "low";
+  /** Что именно подрывает доверие. Пусто при `ok`. */
+  confidenceReasons: string[];
 }
+
+/**
+ * Минимальная «семенная» когорта, при которой делить на неё осмысленно.
+ *
+ * И абсолютный порог, и доля: десять платных регистраций на полторы тысячи
+ * органических — это не знаменатель, а случайность, и весь органический рост
+ * продукта, поделённый на них, даёт `K_wom` в единицах, которых не бывает.
+ */
+export const WOM_MIN_SEED = 10;
+export const WOM_MIN_SEED_SHARE = 0.05;
+
+/**
+ * Доля органики, объявленная приростом, выше которой базовая линия перестаёт
+ * что-либо объяснять (продукт в фазе роста — см. `upliftShareOfOrganic`).
+ */
+export const WOM_MAX_UPLIFT_SHARE = 0.5;
 
 /**
  * Свести две независимые оценки устной виральности в одну.
@@ -721,6 +767,8 @@ export function calibrateWom(params: {
   baselineUplift: number | null;
   hdyhau: HdyhauSummary;
   minCoverage?: number;
+  /** `uplift / organic` за тот же период — проверка предпосылки метода. */
+  upliftShareOfOrganic?: number | null;
 }): WomCalibration {
   const minCoverage = params.minCoverage ?? HDYHAU_MIN_COVERAGE;
   const coverage =
@@ -748,6 +796,36 @@ export function calibrateWom(params: {
         ? "no survey answers from organic arrivals"
         : `survey coverage ${coverage} < ${minCoverage}`;
 
+  // Доверие проверяется ОТДЕЛЬНО от выбора метода: оба метода делят на одну и
+  // ту же семенную когорту, и слишком маленький знаменатель ломает их одинаково.
+  const confidenceReasons: string[] = [];
+  const totalSignups = params.organicSignups + params.seedSignups;
+  if (params.seedSignups > 0 && params.seedSignups < WOM_MIN_SEED) {
+    confidenceReasons.push(
+      `seed cohort is ${params.seedSignups} (< ${WOM_MIN_SEED}) — too small a denominator to divide by`,
+    );
+  }
+  if (
+    params.seedSignups > 0 &&
+    totalSignups > 0 &&
+    params.seedSignups / totalSignups < WOM_MIN_SEED_SHARE
+  ) {
+    confidenceReasons.push(
+      `seed cohort is ${round((params.seedSignups / totalSignups) * 100, 1)}% of acquisition — ` +
+        `attributing all organic uplift to it overstates K_wom`,
+    );
+  }
+  if (
+    params.upliftShareOfOrganic !== null &&
+    params.upliftShareOfOrganic !== undefined &&
+    params.upliftShareOfOrganic > WOM_MAX_UPLIFT_SHARE
+  ) {
+    confidenceReasons.push(
+      `${round(params.upliftShareOfOrganic * 100, 1)}% of organic reads as uplift — the trailing ` +
+        `baseline explains almost nothing, which is what a growth ramp looks like, not word of mouth`,
+    );
+  }
+
   return {
     method,
     coverage,
@@ -755,6 +833,8 @@ export function calibrateWom(params: {
     upliftFromSurvey: surveyUplift,
     kWom: uplift === null ? null : ratio(uplift, params.seedSignups),
     reason,
+    confidence: confidenceReasons.length > 0 ? "low" : "ok",
+    confidenceReasons,
   };
 }
 
