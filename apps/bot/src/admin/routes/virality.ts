@@ -69,6 +69,13 @@ const CACHE_TTL_SECONDS = 600;
  */
 const STALE_AFTER_HOURS = 36;
 
+/**
+ * День зрелости, на котором стоит заголовочная цифра сводки.
+ *
+ * Фиксирован намеренно — см. развёрнутое обоснование у места использования.
+ */
+const HEADLINE_MATURITY_DAY = 7;
+
 function badRequest(res: Response, error: string): void {
   res.status(400).json({ error });
 }
@@ -245,6 +252,7 @@ viralityRouter.get(
             seedSignups: wom.seed,
             baselineUplift: wom.uplift,
             hdyhau,
+            upliftShareOfOrganic: wom.upliftShareOfOrganic,
           });
 
           const byMaturity: Record<string, CohortAggregate & { kTotal: number | null }> = {};
@@ -260,13 +268,28 @@ viralityRouter.get(
             };
           }
 
-          // Заголовочная цифра — самый ДЛИННЫЙ день зрелости, у которого есть
-          // хотя бы одна зрелая когорта: он ближе всех к полному циклу. Брать
-          // D1 «потому что данных больше» значило бы публиковать заведомо
-          // заниженный K и объяснять им отсутствие роста.
-          const headlineDay = [...MATURITY_DAYS]
-            .sort((a, b) => b - a)
-            .find((d) => (byMaturity[String(d)]?.matureCohorts ?? 0) > 0);
+          // Заголовочная цифра — ФИКСИРОВАННЫЙ день зрелости, а не «самый
+          // длинный доступный».
+          //
+          // Это исправление, а не вкус: зрелыми на D30 в любом окне могут быть
+          // только САМЫЕ СТАРЫЕ когорты этого окна, поэтому «самый длинный
+          // доступный» превращал главное число дашборда в отчёт о позапрошлом
+          // месяце — и на реальных данных оно показывало K_direct = 0 рядом с
+          // графиком, где D7 явно ненулевой. Фиксированный день ещё и сравним
+          // между запросами: при плавающем выборе смена периода меняла бы
+          // измерительный прибор, а не измеряемое.
+          //
+          // D7 — потому что ритм продукта недельный (один дроп в неделю), то
+          // есть это первый день зрелости, к которому виральный цикл вообще
+          // успевает замкнуться. Полная лестница остаётся в `byMaturity`.
+          const headlineDay =
+            (byMaturity[String(HEADLINE_MATURITY_DAY)]?.matureCohorts ?? 0) > 0
+              ? HEADLINE_MATURITY_DAY
+              : // Пока D7-когорт нет вовсе (окно моложе недели), берём самый
+                // длинный из имеющихся, чтобы карточка не пустовала на старте.
+                [...MATURITY_DAYS]
+                  .sort((a, b) => b - a)
+                  .find((d) => (byMaturity[String(d)]?.matureCohorts ?? 0) > 0);
           const headline = headlineDay ? byMaturity[String(headlineDay)] : null;
 
           return {
@@ -305,6 +328,7 @@ viralityRouter.get(
               uplift: wom.uplift,
               kWomBaseline: wom.kWom,
               measurableDays: wom.measurableDays,
+              upliftShareOfOrganic: wom.upliftShareOfOrganic,
               calibration,
             },
             hdyhau,

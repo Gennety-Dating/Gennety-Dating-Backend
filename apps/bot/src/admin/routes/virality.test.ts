@@ -190,17 +190,17 @@ describe("валидация параметров", () => {
 });
 
 describe("summary", () => {
-  it("отдаёт K по самому длинному дню зрелости, где есть зрелые когорты", async () => {
+  it("заголовок стоит на D7, даже когда есть зрелые когорты подлиннее", async () => {
+    // Зрелыми на D30 могут быть только САМЫЕ СТАРЫЕ когорты окна, поэтому
+    // «самый длинный доступный» превращал главное число в отчёт о прошлом
+    // месяце. День фиксирован; остальная лестница лежит в `byMaturity`.
     cohortFindMany.mockResolvedValue([
-      cohortRow({ cohortDate: "2026-05-01", maturityDay: 1, cohortSize: 100, activations: 1 }),
       cohortRow({ cohortDate: "2026-05-01", maturityDay: 7, cohortSize: 100, activations: 5 }),
-      // Незрелая D30 не должна становиться заголовочной, даже будучи длиннее.
       cohortRow({
         cohortDate: "2026-05-01",
         maturityDay: 30,
         cohortSize: 100,
-        activations: 0,
-        mature: false,
+        activations: 40,
       }),
     ]);
 
@@ -211,8 +211,48 @@ describe("summary", () => {
     expect(res.status).toBe(200);
     expect(res.body.kpi.maturityDay).toBe(7);
     expect(res.body.kpi.kDirect).toBe(0.05);
-    expect(res.body.byMaturity["30"].matureCohorts).toBe(0);
-    expect(res.body.byMaturity["30"].kDirect).toBeNull();
+    expect(res.body.byMaturity["30"].kDirect).toBe(0.4);
+  });
+
+  it("пока D7-когорт нет вовсе, карточка не пустует — берётся что есть", async () => {
+    cohortFindMany.mockResolvedValue([
+      cohortRow({ cohortDate: "2026-05-19", maturityDay: 1, cohortSize: 50, activations: 2 }),
+      cohortRow({
+        cohortDate: "2026-05-19",
+        maturityDay: 7,
+        cohortSize: 50,
+        activations: 0,
+        mature: false,
+      }),
+    ]);
+
+    const res = await request(app)
+      .get("/admin/analytics/virality/summary?from=2026-05-19&to=2026-05-20")
+      .set(AUTH);
+
+    expect(res.body.kpi.maturityDay).toBe(1);
+    expect(res.body.kpi.kDirect).toBe(0.04);
+    expect(res.body.byMaturity["7"].matureCohorts).toBe(0);
+    expect(res.body.byMaturity["7"].kDirect).toBeNull();
+  });
+
+  it("помечает K_wom недостоверным, когда семенная когорта ничтожна", async () => {
+    dayFindMany.mockResolvedValue([
+      // Один платный на 60 органических, органика вся «сверх базы».
+      dayRow({ day: "2026-05-02", organic: 60, seed: 1, baseline: 2, uplift: 58, kWom: 58 }),
+    ]);
+    cohortFindMany.mockResolvedValue([
+      cohortRow({ cohortDate: "2026-05-02", maturityDay: 7, cohortSize: 10, activations: 1 }),
+    ]);
+
+    const res = await request(app)
+      .get("/admin/analytics/virality/summary?from=2026-05-01&to=2026-05-20")
+      .set(AUTH);
+
+    expect(res.body.wom.calibration.confidence).toBe("low");
+    expect(res.body.wom.calibration.confidenceReasons.length).toBeGreaterThan(0);
+    // Число не спрятано: по нему и видно, что метод сломался.
+    expect(res.body.wom.kWomBaseline).toBe(58);
   });
 
   it("на пустых данных отдаёт null, а не нули", async () => {
