@@ -41,6 +41,7 @@ vi.mock("./agent-access-middleware.js", () => ({
 vi.mock("./rate-limit.js", () => ({
   chatMessageLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
   chatUploadLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
+  voiceLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
 const { chatRouter } = await import("./routes/chat.js");

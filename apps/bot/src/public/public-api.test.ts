@@ -918,6 +918,7 @@ vi.mock("../services/onboarding-agent.js", () => ({
 }));
 
 vi.mock("../services/menu-agent.js", () => ({
+  AGENT_TOOLS: [],
   runMenuAgentTurn: vi.fn(async (_tgId: bigint, text: string) => ({
     reply: `menu:${text}`,
   })),
