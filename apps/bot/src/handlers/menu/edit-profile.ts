@@ -1270,7 +1270,16 @@ async function sendReferenceExpiredPrompt(
     .catch(() => {});
 }
 
-function photoValidationMessage(
+/**
+ * Локализованный отказ по причине из валидатора.
+ *
+ * Экспортирован, а не оставлен приватным, потому что тот же набор причин
+ * приходит теперь и мимо менеджера фотографий — из `handlers/photo.ts`, куда
+ * попадает снимок, присланный в чат просто так. Две копии этого switch
+ * разъехались бы на первой же новой причине, и разъехались бы молча: `default`
+ * у обеих отвечает одинаково.
+ */
+export function photoValidationMessage(
   language: Parameters<typeof t>[0],
   reason: MediaValidationReason,
 ): string {

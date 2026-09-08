@@ -25,6 +25,7 @@ import { validateUserProfilePhoto } from "./profile-media-validation/profile-pho
 import {
   commitProfilePhotoCandidate,
   type PhotoConsensusCommitResult,
+  type PhotoConsensusStatus,
 } from "./profile-media-validation/identity-consensus.js";
 import type { MediaValidationReason } from "./profile-media-validation/types.js";
 import {
@@ -33,9 +34,38 @@ import {
 } from "./profile-media-validation/photo-state.js";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 
+/**
+ * Почему `attachChatProfilePhoto` отказала — в машинном виде.
+ *
+ * Соседний `detail` написан для МОДЕЛИ: он по-английски и в третьем лице («ask
+ * the user for a photo where it isn't hidden»), потому что мобильный
+ * `chat-agent` его не показывает, а пересказывает своими словами. Поверхность
+ * без модели в цикле — телеграм-хендлер фотографий — пересказать его не может,
+ * а показать как есть не имеет права: человек увидел бы английскую фразу про
+ * самого себя в третьем лице. Поэтому причина едет отдельным полем, а
+ * локализованную реплику выбирает вызывающий.
+ */
+export type ChatPhotoRejection =
+  | MediaValidationReason
+  | "bad_payload"
+  | "not_owned"
+  | "image_unavailable"
+  | "max_photos";
+
 export interface ChatToolResult {
   ok: boolean;
   detail?: string;
+  /** Причина отказа фото-инструмента; у остальных инструментов её нет. */
+  reason?: ChatPhotoRejection;
+  /**
+   * Чем кончилась удачная попытка приложить фото.
+   *
+   * Одного `ok: true` тут мало: при `pending` и `capped` фотография проверки
+   * прошла, но в альбом ещё НЕ попала — личность не подтверждена второй
+   * карточкой. Сказать про них «добавил» значило бы соврать, поэтому статус
+   * едет наружу, а не остаётся внутри `detail`.
+   */
+  photo?: { consensus: PhotoConsensusStatus; total: number };
 }
 
 interface ChatProfilePatchDeps {
@@ -268,16 +298,22 @@ export async function attachChatProfilePhoto(
   raw: unknown,
   deps: ChatPhotoDeps = photoDeps,
 ): Promise<ChatToolResult> {
-  if (!raw || typeof raw !== "object") return { ok: false, detail: "Bad payload" };
+  if (!raw || typeof raw !== "object") {
+    return { ok: false, detail: "Bad payload", reason: "bad_payload" };
+  }
   const path = (raw as { imageUrl?: unknown }).imageUrl;
   if (typeof path !== "string" || !path.startsWith(`${userId}/`)) {
-    return { ok: false, detail: "Image not owned by user" };
+    return { ok: false, detail: "Image not owned by user", reason: "not_owned" };
   }
 
   const owned = await deps.findOwnedMessageImage(userId, path);
-  if (!owned?.imageUrl) return { ok: false, detail: "Image not found" };
+  if (!owned?.imageUrl) {
+    // Та же причина, что и у чужого пути: для человека «эта картинка не твоя» и
+    // «этой картинки нет» — одно и то же сообщение, разводить их незачем.
+    return { ok: false, detail: "Image not found", reason: "not_owned" };
+  }
   const buffer = await deps.downloadChatImage(path);
-  if (!buffer) return { ok: false, detail: "Image unavailable" };
+  if (!buffer) return { ok: false, detail: "Image unavailable", reason: "image_unavailable" };
 
   const mime = path.toLowerCase().endsWith(".png")
     ? "image/png"
@@ -288,7 +324,7 @@ export async function attachChatProfilePhoto(
   const profile = await deps.findProfile(userId);
   const existing = profile?.photos ?? [];
   if (existing.length >= MAX_PHOTOS) {
-    return { ok: false, detail: `Max ${MAX_PHOTOS} photos` };
+    return { ok: false, detail: `Max ${MAX_PHOTOS} photos`, reason: "max_photos" };
   }
 
   let gateScore = 0;
@@ -305,6 +341,7 @@ export async function attachChatProfilePhoto(
       return {
         ok: false,
         detail: chatPhotoValidationDetail(validation.reason),
+        reason: validation.reason,
       };
     } else {
       gateScore = validation.value.identitySimilarity ?? 0;
@@ -312,24 +349,43 @@ export async function attachChatProfilePhoto(
     }
   } else {
     const vision = await deps.validateSingleFace(buffer, mime);
-    if (!vision.ok) return { ok: false, detail: "Vision service unavailable" };
+    if (!vision.ok) {
+      return {
+        ok: false,
+        detail: "Vision service unavailable",
+        reason: "processing_unavailable",
+      };
+    }
     if (!vision.valid) {
-      return { ok: false, detail: "Photo must contain exactly one clear face" };
+      return {
+        ok: false,
+        detail: "Photo must contain exactly one clear face",
+        reason: "no_face",
+      };
     }
 
     const gate = await deps.gateProfilePhoto(userId, buffer);
     if (gate.kind === "blocked") {
-      return { ok: false, detail: "Photo does not match verification selfie" };
+      return {
+        ok: false,
+        detail: "Photo does not match verification selfie",
+        reason: "identity_mismatch",
+      };
     }
     if (gate.kind === "reference_expired") {
       return {
         ok: false,
         detail:
           "The user's verification selfie has expired — they must run verification again before changing photos",
+        reason: "reference_expired",
       };
     }
     if (gate.kind === "unavailable") {
-      return { ok: false, detail: "Identity verification is temporarily unavailable" };
+      return {
+        ok: false,
+        detail: "Identity verification is temporarily unavailable",
+        reason: "processing_unavailable",
+      };
     }
     gateScore = gate.score ?? 0;
   }
@@ -352,6 +408,7 @@ export async function attachChatProfilePhoto(
       return {
         ok: true,
         detail: chatConsensusDetail(consensus),
+        photo: { consensus: consensus.status, total: consensus.photos.length },
       };
     } catch (err) {
       await deps.deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, uploaded.path).catch(() => false);
@@ -388,7 +445,9 @@ export async function attachChatProfilePhoto(
   }
 
   deps.queueVerificationRerun(userId);
-  return { ok: true };
+  // Ветка без консенсуса (валидация выключена) кладёт фото в альбом сразу,
+  // поэтому «accepted» здесь — факт, а не упрощение.
+  return { ok: true, photo: { consensus: "accepted", total: nextPhotos.length } };
 }
 
 function chatPhotoValidationDetail(reason: MediaValidationReason): string {

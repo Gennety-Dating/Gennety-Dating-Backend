@@ -14,6 +14,7 @@ import { matchingRouter } from "./handlers/matching/router.js";
 import { dateRouter } from "./handlers/date/router.js";
 import { profilerRouter } from "./handlers/profiler/router.js";
 import { voiceHandler } from "./handlers/voice.js";
+import { photoHandler } from "./handlers/photo.js";
 import { interactionRecorder } from "./handlers/interaction-recorder.js";
 import { outboundRecorder } from "./services/outbound-recorder.js";
 import { invalidatePendingAccountAction } from "./handlers/menu/account-action.js";
@@ -145,6 +146,14 @@ export function createBot(token: string): Bot<BotContext> {
   // Voice notes → Whisper → transcript injected as text, then fall through.
   // Must run before the FSM/menu routers, both of which read `ctx.message.text`.
   bot.use(voiceHandler);
+
+  // Фотографии → тот же конвейер, что у `attach_profile_photo` мобильного чата.
+  // Стоит рядом с голосом и по той же причине: роутеры ниже читают
+  // `ctx.message.text`, которого у снимка нет, поэтому до этого хендлера любая
+  // присланная фотография открывала главное меню. Сам он уступает дорогу всем,
+  // кто уже владеет чатом (менеджер фотографий, прокси-чат, онбординг) — см.
+  // шапку `handlers/photo.ts`.
+  bot.use(photoHandler);
 
   // Matching / scheduling flow (only active for completed users)
   bot.use(matchingRouter);

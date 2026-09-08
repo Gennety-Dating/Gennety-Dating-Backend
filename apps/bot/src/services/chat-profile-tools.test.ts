@@ -222,7 +222,11 @@ describe("chat agent profile tools", () => {
       },
     );
 
-    expect(result).toEqual({ ok: false, detail: "Photo must contain exactly one clear face" });
+    expect(result).toEqual({
+      ok: false,
+      detail: "Photo must contain exactly one clear face",
+      reason: "no_face",
+    });
   });
 
   it("uses the unified identity gate when media validation is enabled", async () => {
@@ -265,6 +269,7 @@ describe("chat agent profile tools", () => {
     expect(result).toEqual({
       ok: false,
       detail: "All photos must belong to the same person",
+      reason: "identity_mismatch",
     });
   });
 
