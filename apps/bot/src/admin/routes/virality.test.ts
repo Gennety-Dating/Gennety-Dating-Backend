@@ -355,11 +355,13 @@ describe("clusters", () => {
 });
 
 describe("anomalies", () => {
+  // Разброс здесь (4) заведомо больше пуассоновского пола (√4 = 2), поэтому
+  // делится на наблюдённое СКО и числа читаются напрямую.
   it("находит всплеск сверх порога и ставит сильнейший первым", async () => {
     dayFindMany.mockResolvedValue([
-      dayRow({ day: "2026-05-02", organic: 12, baseline: 4, stdDev: 1 }), // z = 8
-      dayRow({ day: "2026-05-03", organic: 7, baseline: 4, stdDev: 1 }), // z = 3
-      dayRow({ day: "2026-05-04", organic: 5, baseline: 4, stdDev: 1 }), // z = 1 — не аномалия
+      dayRow({ day: "2026-05-02", organic: 20, baseline: 4, stdDev: 4 }), // z = 4
+      dayRow({ day: "2026-05-03", organic: 13, baseline: 4, stdDev: 4 }), // z = 2.25
+      dayRow({ day: "2026-05-04", organic: 5, baseline: 4, stdDev: 4 }), // z = 0.25 — не аномалия
     ]);
 
     const res = await request(app)
@@ -369,17 +371,29 @@ describe("anomalies", () => {
     expect(res.status).toBe(200);
     expect(res.body.count).toBe(2);
     expect(res.body.anomalies[0].at).toBe("2026-05-02");
-    expect(res.body.anomalies[0].zScore).toBe(8);
+    expect(res.body.anomalies[0].zScore).toBe(4);
     expect(res.body.pointsChecked).toBe(3);
   });
 
   it("уважает переданную сигму", async () => {
     dayFindMany.mockResolvedValue([
-      dayRow({ day: "2026-05-03", organic: 7, baseline: 4, stdDev: 1 }), // z = 3
+      dayRow({ day: "2026-05-03", organic: 13, baseline: 4, stdDev: 4 }), // z = 2.25
     ]);
     const strict = await request(app)
       .get("/admin/analytics/virality/anomalies?sigma=4&from=2026-05-01&to=2026-05-10")
       .set(AUTH);
     expect(strict.body.count).toBe(0);
+  });
+
+  it("ровный ряд с нулевым СКО больше не выпадает из проверки", async () => {
+    dayFindMany.mockResolvedValue([
+      // Пять дней ровно по 5 дали выборочное σ = 0; пол √5 ≈ 2.24 её заменяет.
+      dayRow({ day: "2026-05-02", organic: 30, baseline: 5, stdDev: 0 }),
+    ]);
+    const res = await request(app)
+      .get("/admin/analytics/virality/anomalies?from=2026-05-01&to=2026-05-10")
+      .set(AUTH);
+    expect(res.body.count).toBe(1);
+    expect(res.body.anomalies[0].stdDev).toBe(2.24);
   });
 });
