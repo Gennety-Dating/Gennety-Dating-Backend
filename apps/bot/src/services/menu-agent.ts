@@ -33,6 +33,7 @@ import { transitionAccountStatus } from "./account-status-transitions.js";
 import { getPremiumCancelContext, formatPremiumUntil } from "./premium.js";
 import { explainMatch, getMatchmakingStanding } from "./agent-insights.js";
 import { checkRematchEligibility } from "./rematch.js";
+import { isMarketPending } from "../handlers/menu/city-switch.js";
 import { STALL_ASK_CANCEL_PREFIX } from "./match-stall.js";
 import { setUserLanguage, setUserTheme } from "./user-preferences.js";
 
@@ -513,7 +514,7 @@ export const AGENT_TOOLS = [
     function: {
       name: "open_screen",
       description:
-        "Give the user a button that opens an existing screen, when what they want lives there rather than in chat. Use it instead of describing where to tap. Choose: profile (view their profile card), photos (add/remove photos), edit_bio (rewrite 'About me' in the editor, where they can see the current text first), settings (language, theme, account), tickets (Date Ticket balance and store), premium (subscription), rematch (search for a new person right now — see the Rematch section of the playbook for who may hear about it at all; the tool refuses on its own for everyone else, so a refusal means say nothing about it).",
+        "Give the user a button that opens an existing screen, when what they want lives there rather than in chat. Use it instead of describing where to tap. Choose: profile (view their profile card), photos (add/remove photos), edit_bio (rewrite 'About me' in the editor, where they can see the current text first), settings (language, theme, account), tickets (Date Ticket balance and store), premium (subscription), help (how the product works — offer it whenever someone is confused about the flow), referral (invite a friend — give a date, get a date), city (move the account to a launched market — only for someone registered in a city we have not launched; the tool refuses on its own otherwise), rematch (search for a new person right now — see the Rematch section of the playbook for who may hear about it at all; the tool refuses on its own for everyone else, so a refusal means say nothing about it).",
       parameters: {
         type: "object",
         properties: {
@@ -526,6 +527,9 @@ export const AGENT_TOOLS = [
               "settings",
               "tickets",
               "premium",
+              "help",
+              "referral",
+              "city",
               "rematch",
             ],
           },
@@ -1114,7 +1118,7 @@ const SCREEN_ENTRIES: Record<
   {
     labelKey: Parameters<typeof t>[1];
     data: string;
-    flag?: "tickets" | "premium" | "rematch";
+    flag?: "tickets" | "premium" | "rematch" | "referral";
   }
 > = {
   profile: { labelKey: "menuMyProfile", data: "menu:profile" },
@@ -1133,6 +1137,18 @@ const SCREEN_ENTRIES: Record<
   // boundary. The gate happens to cover her case for free — Rematch is
   // male-only — along with rate limits and a live match.
   rematch: { labelKey: "statusButtonRematch", data: "rematch:open", flag: "rematch" },
+  // Всегда доступна: справка — единственный экран, который нужен ровно тогда,
+  // когда человек не понимает продукт, то есть в момент, когда любой гейт
+  // выглядел бы отпиской.
+  help: { labelKey: "menuHelp", data: "menu:help" },
+  // «Подари свидание». В меню обычно открывается Mini App'ом, а этот callback
+  // живёт как запасной путь — комментарий в `menu/main.ts` прямо оставлял его
+  // «для любого будущего вызывающего»; вот он и появился.
+  referral: { labelKey: "menuInviteFriend", data: "menu:referral", flag: "referral" },
+  // Смена города. НЕ пишущий инструмент, и это выбор: в продукте это карточка
+  // с объяснением и одним подтверждением, а второй путь мимо неё означал бы
+  // необратимую правку с голоса. Гейт per-user — ниже, в `execOpenScreen`.
+  city: { labelKey: "menuCitySwitch", data: "menu:city" },
 };
 
 async function userLanguage(telegramId: bigint): Promise<Language> {
@@ -1143,10 +1159,13 @@ async function userLanguage(telegramId: bigint): Promise<Language> {
   return (user?.language ?? "en") as Language;
 }
 
-function featureOn(flag: "tickets" | "premium" | "rematch" | undefined): boolean {
+function featureOn(
+  flag: "tickets" | "premium" | "rematch" | "referral" | undefined,
+): boolean {
   if (!flag) return true;
   if (flag === "tickets") return env.TICKET_FEATURE_ENABLED === true;
   if (flag === "rematch") return env.REMATCH_FEATURE_ENABLED === true;
+  if (flag === "referral") return env.REFERRAL_FEATURE_ENABLED === true;
   return env.PREMIUM_FEATURE_ENABLED === true;
 }
 
@@ -1193,6 +1212,27 @@ async function execOpenScreen(
           success: false,
           error:
             "Not available for this user. Answer their actual question without mentioning this option, and show no button.",
+        }),
+        action: null,
+      };
+    }
+  }
+
+  // Смена города осмысленна ровно для того, кто зарегистрирован в
+  // незапущенном рынке: подбор внутригородской, и до переезда у него не
+  // работает ничего. Всем остальным кнопка предлагала бы уехать из города, где
+  // они как раз и ищут.
+  if (screen === "city") {
+    const profile = await prisma.user.findUnique({
+      where: { telegramId },
+      select: { profile: { select: { homeCityKey: true } } },
+    });
+    if (!isMarketPending(profile?.profile?.homeCityKey)) {
+      return {
+        toolResult: JSON.stringify({
+          success: false,
+          error:
+            "Their city is already a launched market, so there is nothing to switch. Answer their actual question and show no button.",
         }),
         action: null,
       };
