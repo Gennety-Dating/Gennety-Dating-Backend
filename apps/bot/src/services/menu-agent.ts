@@ -503,6 +503,15 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "propose_report_partner",
+      description:
+        "Call when the user describes something WRONG about the person they were matched with — rudeness, pressure, a fake profile, anything that made them uncomfortable or unsafe. This surfaces the same Report button the match card carries; you never file anything yourself, and the report is only sent after they pick a category on the next screen. Call it as soon as the complaint is concrete — do not interview them first, and do not ask them to repeat what happened. Do NOT call it for ordinary disappointment ('not my type', 'no spark'): that is rejection feedback, not a report.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "propose_close_account",
       description:
         "Call ONLY when the user clearly wants to delete, close, or take a long break from their account. This surfaces the account-closure entry, which offers freezing (keeps everything, reversible with /start) before deletion. You NEVER delete or freeze anything yourself. Do NOT call for a temporary pause of matching — use pause_matching for that.",
@@ -569,6 +578,7 @@ export const TOOL_KINDS: Record<string, ToolKind> = {
   record_rejection_feedback: "write",
   offer_cancel_premium: "confirm",
   propose_cancel_date: "confirm",
+  propose_report_partner: "confirm",
   propose_close_account: "confirm",
   open_screen: "open",
 };
@@ -1352,6 +1362,69 @@ async function execProposeCancelDate(
  * keeps the profile) above deleting, then runs its own nonce-bound two-step
  * confirmation. The agent must not be able to skip past the softer option.
  */
+/**
+ * Пожаловаться на человека из матча.
+ *
+ * Кнопка та же, что на карточке матча (`report:open:<id>`), и это существенно:
+ * за ней стоит экран выбора категории с кнопкой «назад», то есть случайный тап
+ * отменяем, а сама жалоба уходит только после осознанного выбора. Агент здесь
+ * не судья и не фильтр — он доводит человека до готовой формы.
+ *
+ * **Спрашивать подробности до кнопки запрещено промптом, и это правило про
+ * людей, а не про интерфейс.** Человек, которому только что было неприятно, не
+ * должен пересказывать это дважды: один раз агенту ради «уточнения», второй —
+ * в форме. Поэтому инструмент зовётся сразу, как жалоба стала конкретной.
+ *
+ * Берётся последний матч в любой живой или завершённой стадии: неприятное чаще
+ * всплывает ПОСЛЕ свидания, и отказать «потому что матч уже completed» значило
+ * бы закрыть дверь ровно в тот момент, когда она нужнее всего.
+ */
+async function execProposeReportPartner(
+  telegramId: bigint,
+): Promise<{ toolResult: string; action: MenuAgentAction | null }> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, language: true },
+  });
+  if (!user) {
+    return { toolResult: JSON.stringify({ success: false, error: "User not found." }), action: null };
+  }
+
+  const match = await prisma.match.findFirst({
+    where: {
+      OR: [{ userAId: user.id }, { userBId: user.id }],
+      status: {
+        in: ["proposed", "negotiating", "negotiating_venue", "scheduled", "completed"],
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (!match) {
+    return {
+      toolResult: JSON.stringify({
+        success: false,
+        error:
+          "They have no match to report — nobody has been paired with them. Take what they said seriously anyway, and tell them support can help if something happened elsewhere. Show no button.",
+      }),
+      action: null,
+    };
+  }
+
+  const lang = user.language ?? (await userLanguage(telegramId));
+  return {
+    toolResult: JSON.stringify({
+      success: true,
+      instruction:
+        "The Report button is attached to your reply automatically. Acknowledge what they told you in one short line — do not restate it back to them, do not ask for details, and do not promise an outcome.",
+    }),
+    action: {
+      kind: "entry_point",
+      entry: { label: t(lang, "reportBtn"), callbackData: `report:open:${match.id}` },
+    },
+  };
+}
+
 async function execProposeCloseAccount(
   telegramId: bigint,
 ): Promise<{ toolResult: string; action: MenuAgentAction | null }> {
@@ -1506,6 +1579,12 @@ export async function executeAgentTool(
     }
     case "propose_cancel_date": {
       const outcome = await execProposeCancelDate(telegramId);
+      result = outcome.toolResult;
+      if (outcome.action) action = outcome.action;
+      break;
+    }
+    case "propose_report_partner": {
+      const outcome = await execProposeReportPartner(telegramId);
       result = outcome.toolResult;
       if (outcome.action) action = outcome.action;
       break;
