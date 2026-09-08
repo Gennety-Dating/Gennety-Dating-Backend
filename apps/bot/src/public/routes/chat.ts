@@ -4,7 +4,7 @@ import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
 import { requireAgentAccess } from "../agent-access-middleware.js";
-import { chatMessageLimiter, chatUploadLimiter } from "../rate-limit.js";
+import { chatMessageLimiter, chatUploadLimiter, voiceLimiter } from "../rate-limit.js";
 import { runChatTurn } from "../../services/chat-agent.js";
 import { listChatTopics } from "../../services/chat-topics.js";
 import {
@@ -12,6 +12,7 @@ import {
   createChatImageSignedUrl,
 } from "../../services/storage.js";
 import { sniffImageMime } from "../../utils/image-sniff.js";
+import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 
 /**
  * Gennety chat agent — multimodal AI chat for the mobile app.
@@ -41,6 +42,12 @@ chatRouter.use(usageGuard);
 const CHAT_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 const CHAT_TEXT_MAX_LENGTH = 4_000;
 const SIGNED_URL_TTL_S = 300;
+
+/** Аудио: лимит Whisper, а не картиночные 8 МБ. */
+const voiceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: WHISPER_MAX_BYTES },
+});
 
 const chatUpload = multer({
   storage: multer.memoryStorage(),
@@ -143,6 +150,64 @@ chatRouter.post(
       // только на телеграм-поверхности: `/v1/assistant` уже несло их в DTO, а
       // этот маршрут ронял на пол — приложение узнавало об изменении профиля
       // исключительно из прозы модели.
+      ...(turn.receipts ? { receipts: turn.receipts } : {}),
+      ...(turn.action ? { action: turn.action } : {}),
+    });
+  },
+);
+
+/**
+ * POST /v1/chat/voice — голосовая реплика в чат приложения.
+ *
+ * Близнец `/v1/assistant/voice`, и это не дублирование: у поверхностей разные
+ * циклы и разные хранилища истории, а общий у них Whisper и набор
+ * инструментов. Расшифровка возвращается вместе с ответом — человек должен
+ * видеть, что именно услышал агент, иначе неверно понятая фраза выглядит как
+ * его собственная ошибка.
+ *
+ * Картинку голосом не приложить: запись и вложение — разные ходы.
+ */
+chatRouter.post(
+  "/voice",
+  requireAgentAccess,
+  voiceLimiter,
+  voiceUpload.single("file"),
+  async (req: Request, res: Response): Promise<void> => {
+    if (!req.file) {
+      res.status(400).json({ error: "Missing file" });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { language: true },
+    });
+
+    const transcript = await transcribeVoice(req.file.buffer, {
+      mime: req.file.mimetype,
+      ...(user?.language ? { language: user.language } : {}),
+    });
+    if (!transcript) {
+      res.status(422).json({ error: "Could not transcribe audio" });
+      return;
+    }
+
+    const turn = await runChatTurn({
+      userId: req.userId!,
+      text: transcript,
+      imageUrl: null,
+    });
+
+    res.json({
+      message: {
+        id: turn.id,
+        role: turn.role,
+        content: turn.content,
+        imageUrl: turn.imageUrl,
+        createdAt: turn.createdAt.toISOString(),
+      },
+      uiHint: null,
+      transcript,
       ...(turn.receipts ? { receipts: turn.receipts } : {}),
       ...(turn.action ? { action: turn.action } : {}),
     });

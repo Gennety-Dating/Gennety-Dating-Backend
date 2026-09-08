@@ -1693,6 +1693,24 @@ paths:
                   uiHint:
                     $ref: "#/components/schemas/UiHint"
                     description: Always null for chat-agent turns today; contract slot for future hints
+                  receipts:
+                    type: array
+                    items: { type: string }
+                    description: >-
+                      Code-owned confirmations of writes that ACTUALLY landed,
+                      already localised to the account language. Absent when the
+                      turn changed nothing. Render them after the reply, as
+                      Telegram does: without them the only evidence of a profile
+                      change is the model's own prose, which it is free to
+                      phrase however it likes — including describing an edit
+                      that silently failed.
+                  action:
+                    $ref: "#/components/schemas/AgentAction"
+                    description: >-
+                      A native affordance the agent asked for but cannot render
+                      itself. Absent on an ordinary turn. Nothing here mutates
+                      anything: every irreversible action stays behind a control
+                      the person still has to tap.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -1702,6 +1720,65 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "413":
           description: Text too long
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/chat/voice:
+    post:
+      tags: [chat]
+      operationId: sendChatVoice
+      summary: Send a voice note as a chat turn
+      description: |
+        Twin of `/v1/assistant/voice`, and not duplication: the two surfaces keep
+        their own loops and their own history stores, and share only Whisper and
+        the tool set.
+
+        The transcript comes back with the reply on purpose — the person has to
+        see what the agent actually heard, otherwise a misheard sentence reads
+        as their own mistake rather than the machine's.
+
+        No image can ride along: a recording and an attachment are separate
+        turns.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Assistant reply plus what was heard
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, transcript]
+                properties:
+                  message: { $ref: "#/components/schemas/ChatMessage" }
+                  transcript:
+                    type: string
+                    description: What Whisper heard; show it as the person's own message
+                  uiHint: { $ref: "#/components/schemas/UiHint" }
+                  receipts:
+                    type: array
+                    items: { type: string }
+                  action: { $ref: "#/components/schemas/AgentAction" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Account not allowed to talk to the agent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Could not transcribe audio
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3566,6 +3643,36 @@ components:
         inviteeMonths:
           type: integer
           description: Premium months an invited user receives as a welcome gift
+
+    AgentAction:
+      description: >-
+        What the client must put on screen after the agent's text. The agent
+        never runs a sensitive flow itself — it hands over the same control the
+        menu would have shown, so the guarded handler, its confirmation copy and
+        its nonces stay the single implementation.
+      oneOf:
+        - type: object
+          required: [kind]
+          properties:
+            kind: { type: string, enum: [premium_cancel_confirm] }
+        - type: object
+          required: [kind]
+          properties:
+            kind: { type: string, enum: [premium_cancel_appstore] }
+        - type: object
+          required: [kind, entry]
+          properties:
+            kind: { type: string, enum: [entry_point] }
+            entry:
+              type: object
+              required: [label, callbackData]
+              properties:
+                label:
+                  type: string
+                  description: Already localised server-side; never model-authored
+                callbackData:
+                  type: string
+                  description: An EXISTING product callback; the agent cannot invent one
 
     Language:
       type: string
