@@ -3665,7 +3665,7 @@ components:
             kind: { type: string, enum: [entry_point] }
             entry:
               type: object
-              required: [label, callbackData]
+              required: [label]
               properties:
                 label:
                   type: string
@@ -3673,6 +3673,13 @@ components:
                 callbackData:
                   type: string
                   description: An EXISTING product callback; the agent cannot invent one
+                url:
+                  type: string
+                  description: >-
+                    Mini App address, for boards that have no callback at all
+                    (venue change). Exactly one of `callbackData` and `url` is
+                    present, and the server builds both — the model names a
+                    screen, never an address.
 
     Language:
       type: string

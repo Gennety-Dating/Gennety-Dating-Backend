@@ -35,6 +35,10 @@ import { explainMatch, getMatchmakingStanding } from "./agent-insights.js";
 import { checkRematchEligibility } from "./rematch.js";
 import { isMarketPending } from "../handlers/menu/city-switch.js";
 import { recordPostDateFeedback } from "../handlers/date/feedback.js";
+import {
+  buildVenueChangeButton,
+  shouldOfferVenueChange,
+} from "../handlers/matching/venue-change.js";
 import { pendingFeedbackFor } from "./post-date-feedback.js";
 import { STALL_ASK_CANCEL_PREFIX } from "./match-stall.js";
 import { setUserLanguage, setUserTheme } from "./user-preferences.js";
@@ -74,7 +78,16 @@ export interface AgentEntryPoint {
   /** Already localized — resolved server-side, never model-authored. */
   label: string;
   /** Existing `callback_data`; the agent cannot invent one. */
-  callbackData: string;
+  callbackData?: string;
+  /**
+   * Mini App URL — для досок, у которых callback'а нет вовсе (смена площадки).
+   *
+   * Ровно один из двух полей заполнен, и оба строит сервер: адрес собирается
+   * тем же `buildMiniAppUrl`, что и кнопка на карточке свидания, поэтому
+   * подставить сюда чужую ссылку модель не может — она вообще не видит этих
+   * значений, а только просит открыть названный экран.
+   */
+  url?: string;
 }
 
 /**
@@ -505,6 +518,15 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "propose_venue_change",
+      description:
+        "Call when the user wants the meeting PLACE changed for a date that is already booked — 'can we go somewhere else', 'that cafe is too loud', 'too far from me'. This opens the venue board, where both sides pick and the change only happens if they agree; you change nothing yourself. Do NOT call it for cancelling the date (propose_cancel_date), for the time, or before a place has been chosen at all.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "record_date_feedback",
       description:
         "Record how a date actually went, in the user's own words, when they tell you about it in conversation. Call it only after a date has happened and only when they have said something concrete about it — a sentence about the person, the evening, or whether they'd see them again. Pass what they said, not your summary of it. Do NOT invent a rating or a yes/no about a second date: those live in the form, and the form stays available either way. Do NOT call this for a complaint about the person — that is propose_report_partner.",
@@ -599,6 +621,7 @@ export const TOOL_KINDS: Record<string, ToolKind> = {
   record_rejection_feedback: "write",
   offer_cancel_premium: "confirm",
   propose_cancel_date: "confirm",
+  propose_venue_change: "confirm",
   record_date_feedback: "write",
   propose_report_partner: "confirm",
   propose_close_account: "confirm",
@@ -1418,6 +1441,79 @@ async function execProposeCancelDate(
  * вообще спрашивать. Свидание, о котором продукт ещё не спросил, могло час
  * назад закончиться, и записывать о нём что-либо рано.
  */
+/**
+ * Открыть доску смены места.
+ *
+ * Доска у этой фичи — Mini App, и callback'а у неё нет вовсе, поэтому точка
+ * входа несёт ссылку, а не `callback_data`. Собирает её тот же
+ * `buildVenueChangeButton`, что вешает кнопку на карточку свидания: два пути к
+ * одному экрану, но адрес считает один код.
+ *
+ * **Смена — договорённость двоих, а не заявка одного**, и это причина, по
+ * которой инструмент относится к классу `confirm`: он открывает доску, где
+ * второй человек тоже выбирает, и ничего не меняет сам. Пишущий инструмент
+ * здесь означал бы, что место переехало по просьбе одной стороны.
+ *
+ * Только для `scheduled`: пока место ещё выбирается (`negotiating_venue`),
+ * менять нечего — там идёт первичный выбор, и доска поверх него предлагала бы
+ * поменять то, чего ещё нет.
+ */
+async function execProposeVenueChange(
+  telegramId: bigint,
+): Promise<{ toolResult: string; action: MenuAgentAction | null }> {
+  if (!shouldOfferVenueChange()) {
+    return {
+      toolResult: JSON.stringify({
+        success: false,
+        error: "Changing the venue isn't available right now. Say so plainly; show no button.",
+      }),
+      action: null,
+    };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, language: true, theme: true },
+  });
+  if (!user) {
+    return { toolResult: JSON.stringify({ success: false, error: "User not found." }), action: null };
+  }
+
+  const match = await prisma.match.findFirst({
+    where: {
+      status: "scheduled",
+      emergencyCancelledBy: null,
+      OR: [{ userAId: user.id }, { userBId: user.id }],
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (!match) {
+    return {
+      toolResult: JSON.stringify({
+        success: false,
+        error:
+          "There is no booked date whose place could change. If they are still choosing a place, that is the venue step itself — say so and show no button.",
+      }),
+      action: null,
+    };
+  }
+
+  const lang = user.language ?? (await userLanguage(telegramId));
+  const button = buildVenueChangeButton(match.id, lang, user.theme ?? "dark");
+  return {
+    toolResult: JSON.stringify({
+      success: true,
+      instruction:
+        "The board button is attached to your reply automatically. Say in one line that the other person picks too and the place only moves if you both agree — do not promise the change.",
+    }),
+    action: {
+      kind: "entry_point",
+      entry: { label: button.text, url: button.web_app.url },
+    },
+  };
+}
+
 async function execRecordDateFeedback(
   telegramId: bigint,
   args: { feedback?: unknown },
@@ -1663,6 +1759,12 @@ export async function executeAgentTool(
     }
     case "propose_cancel_date": {
       const outcome = await execProposeCancelDate(telegramId);
+      result = outcome.toolResult;
+      if (outcome.action) action = outcome.action;
+      break;
+    }
+    case "propose_venue_change": {
+      const outcome = await execProposeVenueChange(telegramId);
       result = outcome.toolResult;
       if (outcome.action) action = outcome.action;
       break;

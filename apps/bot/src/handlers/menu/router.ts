@@ -275,9 +275,15 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       } else if (result.action?.kind === "premium_cancel_appstore") {
         await sendPremiumCancelAppStoreGuide(ctx);
       } else if (result.action?.kind === "entry_point") {
-        const { label, callbackData } = result.action.entry;
+        const { label, callbackData, url } = result.action.entry;
+        // Доска смены площадки живёт Mini App'ом и callback'а не имеет вовсе,
+        // поэтому кнопка бывает двух видов. Строит обе сервер: модель называет
+        // экран, а не адрес.
+        const keyboard = url
+          ? new InlineKeyboard().webApp(label, url)
+          : new InlineKeyboard().text(label, callbackData ?? "");
         await ctx.reply(t(ctx.session.language, "agentEntryPrompt"), {
-          reply_markup: new InlineKeyboard().text(label, callbackData),
+          reply_markup: keyboard,
         });
       }
     } catch (err) {
