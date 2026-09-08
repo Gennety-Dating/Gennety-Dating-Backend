@@ -663,6 +663,18 @@ export const env = {
   /// раньше правки манифеста и анкеты App Privacy сделало бы это заявление
   /// ложным (iOS `docs/appstore-review-notes.md` §7).
   CLIENT_EVENTS_ENABLED: process.env.CLIENT_EVENTS_ENABLED === "true",
+  /// Онбординговый опрос об источнике перехода (`/v1/hdyhau`). Дефолт —
+  /// ВЫКЛЮЧЕНО, и это не осторожность: где именно в онбординге стоит вопрос —
+  /// продуктовое решение (`AGENTS.md`, правило 5), а сервер к нему готов
+  /// раньше, чем оно принято. Пока флаг выключен, маршрут отвечает 404, а
+  /// виральные эндпоинты просто показывают пустое распределение и считают
+  /// `K_wom` по базовой линии — калибровка опросом включается сама, как только
+  /// покрытие ответов дорастает до `HDYHAU_MIN_COVERAGE`.
+  HDYHAU_SURVEY_ENABLED: process.env.HDYHAU_SURVEY_ENABLED === "true",
+  /// Расписание пересчёта виральности (`workers/virality-rollup.ts`).
+  /// По умолчанию 03:40 — после ночных задач и заведомо после полуночи UTC, на
+  /// которой закрывается дневной бакет регистраций.
+  VIRALITY_ROLLUP_CRON_SCHEDULE: process.env.VIRALITY_ROLLUP_CRON_SCHEDULE ?? "40 3 * * *",
   /// Telegram Stars (XTR) monthly price of a Gennety Premium subscription
   /// (`subscription_period` is fixed at 30 days by Telegram). 750⭐ is what
   /// Telegram's own Star store charges for $17.99, which is why the two values

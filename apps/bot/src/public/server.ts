@@ -33,6 +33,7 @@ import { accountStatusRouter } from "./routes/account-status.js";
 import { ticketsAppStoreRouter } from "./routes/tickets-appstore.js";
 import { premiumAppStoreRouter } from "./routes/premium-appstore.js";
 import { clientEventsRouter } from "./routes/client-events.js";
+import { hdyhauRouter } from "./routes/hdyhau.js";
 import { appStoreWebhookRouter } from "./routes/appstore-webhook.js";
 import { founderReportRouter } from "./routes/founder-report.js";
 import { founderAdSpendRouter } from "./routes/founder-ad-spend.js";
@@ -471,6 +472,17 @@ app.use("/v1/referral", (req, res, next) => {
   }
   if (!referralRouter) referralRouter = createReferralRouter();
   referralRouter(req, res, next);
+});
+
+// Опрос об источнике перехода (HDYHAU) — обе клиентские авторизации, одна
+// ручка, флаг по умолчанию выключен. Гейт стоит до маршрутизатора: выключенный
+// опрос не должен намекать на своё существование (как `/v1/client/events`).
+app.use("/v1/hdyhau", (req, res, next) => {
+  if (!env.HDYHAU_SURVEY_ENABLED) {
+    res.status(404).json({ error: "hdyhau-disabled" });
+    return;
+  }
+  hdyhauRouter(req, res, next);
 });
 
 // Liveness/readiness probe — unauthenticated, intentionally cheap.

@@ -516,6 +516,88 @@ export function computeCohort(params: {
   };
 }
 
+export interface CohortAggregate {
+  maturityDay: number;
+  /** Сколько когорт попало в период. */
+  cohorts: number;
+  /** Из них зрелых — только они и посчитаны ниже. */
+  matureCohorts: number;
+  cohortSize: number;
+  sharers: number;
+  invitesSent: number;
+  linkClicks: number;
+  activations: number;
+  /** Доля когорты, открывшей шеринг хоть раз. */
+  shareRate: number | null;
+  invitesPerUser: number | null;
+  clickRate: number | null;
+  activationRate: number | null;
+  /** `i × c` за период. */
+  kDirect: number | null;
+  cycleTimeMedianHours: number | null;
+}
+
+/**
+ * Свести когорты одного дня зрелости за период в одно число.
+ *
+ * Отношение сумм, а не среднее отношений. Когорта из двух человек, один из
+ * которых кого-то привёл, даёт `K = 0.5`; усреднив её с честной сотней, где
+ * `K = 0.04`, получаем 0.27 — число, которого не наблюдал никто. Правило то же,
+ * что в `periodWom`, и нарушать его на маленькой базе особенно дорого.
+ *
+ * Считаются ТОЛЬКО зрелые когорты. Незрелые остаются в `cohorts`, чтобы
+ * читатель видел, сколько данных ещё не пришло, но в числитель не попадают:
+ * когорта, прожившая три дня из тридцати, занижает D30 просто тем, что она
+ * молодая, и подмешивать её значит объявлять падением течение времени.
+ *
+ * `null` вместо нуля, когда зрелых когорт нет вовсе, — то же правило, что
+ * всюду в файле.
+ */
+export function aggregateCohorts(
+  rows: readonly CohortMetrics[],
+  options: { matureOnly?: boolean } = {},
+): CohortAggregate | null {
+  if (rows.length === 0) return null;
+  const matureOnly = options.matureOnly ?? true;
+  const maturityDay = rows[0].maturityDay;
+  const counted = matureOnly ? rows.filter((r) => r.mature) : [...rows];
+
+  const sum = (pick: (r: CohortMetrics) => number): number =>
+    counted.reduce((acc, r) => acc + pick(r), 0);
+
+  const cohortSize = sum((r) => r.cohortSize);
+  const invitesSent = sum((r) => r.invitesSent);
+  const linkClicks = sum((r) => r.linkClicks);
+  const activations = sum((r) => r.activations);
+  const sharers = sum((r) => r.sharers);
+
+  // Медиана медиан, а не медиана всех циклов: подневные значения уже свёрнуты
+  // при записи предагрегата, и восстанавливать из них исходное распределение
+  // нельзя. Это оценка, и она названа медианой когорт, а не медианой циклов.
+  const cycle = median(
+    counted
+      .map((r) => r.cycleTimeMedianHours)
+      .filter((v): v is number => v !== null),
+  );
+
+  return {
+    maturityDay,
+    cohorts: rows.length,
+    matureCohorts: counted.length,
+    cohortSize,
+    sharers,
+    invitesSent,
+    linkClicks,
+    activations,
+    shareRate: ratio(sharers, cohortSize),
+    invitesPerUser: ratio(invitesSent, cohortSize),
+    clickRate: ratio(linkClicks, invitesSent),
+    activationRate: ratio(activations, linkClicks),
+    kDirect: ratio(activations, cohortSize),
+    cycleTimeMedianHours: cycle === null ? null : round(cycle, 1),
+  };
+}
+
 /** Сгруппировать активации по рефереру — вход для `computeCohort`. */
 export function groupActivations(
   rows: readonly ActivationRow[],

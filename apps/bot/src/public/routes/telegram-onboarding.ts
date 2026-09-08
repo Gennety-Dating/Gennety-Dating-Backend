@@ -58,6 +58,7 @@ import {
 } from "../city-waitlist.js";
 import { unresolvedTrackContactGate } from "../../services/contact-verification.js";
 import { grantInviteePremium, parseReferrer, referralSourceFromParam } from "../../services/referral.js";
+import { recordInviteClickFromStartPayload } from "../../services/referral-events.js";
 import {
   grantPromoRewardsForUser,
   parsePromoCode,
@@ -947,14 +948,33 @@ async function findOrCreateTelegramUser(
   telegramId: bigint,
   source: unknown,
 ): Promise<MiniUser> {
+  const rawParam =
+    typeof source === "string" && source.trim() ? source.trim().slice(0, 48) : null;
+
   const existing = await prisma.user.findUnique({
     where: { telegramId },
     select: miniUserSelect,
   });
+
+  // Переход по инвайт-ссылке фиксируется и для УЖЕ существующего аккаунта, и
+  // это главная причина, по которой событие вообще нужно: первое касание
+  // (`referralSource`) у такого человека занято давно, поэтому его переход не
+  // виден нигде — а это ровно тот клик, который никого не привёл. Параметр
+  // `startapp` приходит только при открытии по ссылке, не при обычном запуске
+  // из меню, так что повтор здесь означает настоящий повторный переход.
+  // Дедупликация «реферер + перешедший + сутки» — в `referral-events.ts`.
+  if (rawParam) {
+    void recordInviteClickFromStartPayload({
+      payload: rawParam,
+      channelPrefix: "tg-mini",
+      clickerKey: String(telegramId),
+      surface: "tg-mini",
+      inviteeId: existing?.id ?? null,
+    }).catch(() => {});
+  }
+
   if (existing) return existing;
 
-  const rawParam =
-    typeof source === "string" && source.trim() ? source.trim().slice(0, 48) : null;
   const referral = rawParam
     ? /^promo_/i.test(rawParam)
       ? promoSourceFromParam(rawParam, "tg-mini")

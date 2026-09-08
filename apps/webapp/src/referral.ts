@@ -254,6 +254,23 @@ function render(state: ReferralState): void {
   btn.addEventListener("click", () => void onShare(btn));
 }
 
+/**
+ * Сообщить серверу исход шеринга. Полностью best-effort: это аналитика, и её
+ * сбой не имеет права ни задержать шторку, ни показать пользователю ошибку —
+ * приглашение к этому моменту уже отправлено.
+ */
+async function reportShareResult(id: string, sent: boolean): Promise<void> {
+  try {
+    await apiFetch(`${apiBase}/v1/referral/share-result`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `tma ${getInitData()}` },
+      body: JSON.stringify({ id, sent }),
+    });
+  } catch {
+    // Потерянное событие воронки — приемлемо; сорванный шеринг — нет.
+  }
+}
+
 let sharing = false;
 async function onShare(btn: HTMLButtonElement): Promise<void> {
   if (sharing) return;
@@ -283,6 +300,11 @@ async function onShare(btn: HTMLButtonElement): Promise<void> {
     if (sheet) {
       sheet(data.id, (sent) => {
         if (sent) app?.HapticFeedback?.notificationOccurred("success");
+        // Единственное место, где вообще известно, ушло приглашение или человек
+        // закрыл шторку: сервер видит только подготовку сообщения. Без этого
+        // отчёта «отправлено» пришлось бы считать по подготовкам, и конверсия
+        // перехода занижалась бы на все передуманные шеринги.
+        void reportShareResult(data.id, sent);
       });
     } else {
       // Older clients without shareMessage — nothing to open.
