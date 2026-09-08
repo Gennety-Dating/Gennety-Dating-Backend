@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 305 entries
+# Decision index — all 306 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-08 | рассказ о свидании записывается из разговора, но оценки остаются в форме | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-08 | агент умеет довести до жалобы, и не расспрашивает по дороге | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-08 | три экрана агенту, и смена города НЕ стала пишущим инструментом | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-08 | фотография в телеграм-чате перестала открывать меню | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

@@ -34,6 +34,8 @@ import { getPremiumCancelContext, formatPremiumUntil } from "./premium.js";
 import { explainMatch, getMatchmakingStanding } from "./agent-insights.js";
 import { checkRematchEligibility } from "./rematch.js";
 import { isMarketPending } from "../handlers/menu/city-switch.js";
+import { recordPostDateFeedback } from "../handlers/date/feedback.js";
+import { pendingFeedbackFor } from "./post-date-feedback.js";
 import { STALL_ASK_CANCEL_PREFIX } from "./match-stall.js";
 import { setUserLanguage, setUserTheme } from "./user-preferences.js";
 
@@ -503,6 +505,25 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "record_date_feedback",
+      description:
+        "Record how a date actually went, in the user's own words, when they tell you about it in conversation. Call it only after a date has happened and only when they have said something concrete about it — a sentence about the person, the evening, or whether they'd see them again. Pass what they said, not your summary of it. Do NOT invent a rating or a yes/no about a second date: those live in the form, and the form stays available either way. Do NOT call this for a complaint about the person — that is propose_report_partner.",
+      parameters: {
+        type: "object",
+        properties: {
+          feedback: {
+            type: "string",
+            description:
+              "What the user said about the date, as close to their own words as possible. At least 10 characters.",
+          },
+        },
+        required: ["feedback"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "propose_report_partner",
       description:
         "Call when the user describes something WRONG about the person they were matched with — rudeness, pressure, a fake profile, anything that made them uncomfortable or unsafe. This surfaces the same Report button the match card carries; you never file anything yourself, and the report is only sent after they pick a category on the next screen. Call it as soon as the complaint is concrete — do not interview them first, and do not ask them to repeat what happened. Do NOT call it for ordinary disappointment ('not my type', 'no spark'): that is rejection feedback, not a report.",
@@ -578,6 +599,7 @@ export const TOOL_KINDS: Record<string, ToolKind> = {
   record_rejection_feedback: "write",
   offer_cancel_premium: "confirm",
   propose_cancel_date: "confirm",
+  record_date_feedback: "write",
   propose_report_partner: "confirm",
   propose_close_account: "confirm",
   open_screen: "open",
@@ -1379,6 +1401,68 @@ async function execProposeCancelDate(
  * всплывает ПОСЛЕ свидания, и отказать «потому что матч уже completed» значило
  * бы закрыть дверь ровно в тот момент, когда она нужнее всего.
  */
+/**
+ * Записать рассказ о прошедшем свидании.
+ *
+ * Идёт тем же конвейером, что голосовая заметка (`recordPostDateFeedback`), и
+ * это главное свойство: разговорный путь не заводит второго хранилища и второй
+ * трактовки, он просто ещё одна дверь к тому же анализу.
+ *
+ * **Оценок и «пойду ли на второе» здесь нет намеренно.** Форма спрашивает
+ * химию числом от 1 до 10 и ответ про вторую встречу — величины, которые
+ * человек выбирает сам. Позволить модели вывести их из прозы значило бы
+ * записать в метрику её догадку под видом его ответа. Форма при этом никуда не
+ * девается: рассказ агенту её не отменяет и не дублирует.
+ *
+ * Матч берётся у `pendingFeedbackFor` — того же источника, что решает, пора ли
+ * вообще спрашивать. Свидание, о котором продукт ещё не спросил, могло час
+ * назад закончиться, и записывать о нём что-либо рано.
+ */
+async function execRecordDateFeedback(
+  telegramId: bigint,
+  args: { feedback?: unknown },
+): Promise<string> {
+  const text = typeof args.feedback === "string" ? args.feedback.trim() : "";
+  if (text.length < 10) {
+    return JSON.stringify({
+      success: false,
+      error:
+        "Too short to be worth recording. Ask one open question about how the evening went, and call this again with what they answer.",
+    });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, language: true },
+  });
+  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+
+  const pending = await pendingFeedbackFor(user.id);
+  if (!pending) {
+    return JSON.stringify({
+      success: false,
+      error:
+        "There is no finished date waiting for feedback. Keep talking about it normally — just do not record anything.",
+    });
+  }
+
+  const lang = user.language ?? (await userLanguage(telegramId));
+  const recorded = await recordPostDateFeedback({
+    userId: user.id,
+    matchId: pending.matchId,
+    text,
+    language: lang,
+  });
+  if (!recorded.ok) {
+    return JSON.stringify({ success: false, error: `Not recorded: ${recorded.reason}` });
+  }
+  return JSON.stringify({
+    success: true,
+    instruction:
+      "Saved. Thank them in one line and move on — do not read it back to them, and do not ask for a rating.",
+  });
+}
+
 async function execProposeReportPartner(
   telegramId: bigint,
 ): Promise<{ toolResult: string; action: MenuAgentAction | null }> {
@@ -1583,6 +1667,10 @@ export async function executeAgentTool(
       if (outcome.action) action = outcome.action;
       break;
     }
+    case "record_date_feedback":
+      result = await execRecordDateFeedback(telegramId, args as { feedback?: unknown });
+      receiptKey = "feedbackThanks";
+      break;
     case "propose_report_partner": {
       const outcome = await execProposeReportPartner(telegramId);
       result = outcome.toolResult;
