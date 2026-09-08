@@ -1356,6 +1356,131 @@ const MAX_TOOL_ROUNDS = 4;
  * from scratch on every turn (dynamic knowledge + user context), so the
  * first system message in the history is always replaced.
  */
+/**
+ * Выполнить один вызов инструмента и вернуть всё, что об этом должен знать
+ * вызывающий: результат для модели, ключ чека и native-действие.
+ *
+ * Вынесено из цикла `runMenuAgentTurn`, чтобы у поверхностей мог быть свой
+ * цикл при общем наборе инструментов. Ключ здесь — `telegramId`, и это не
+ * привязка к Telegram: колонка заполнена у всех, мобильным выдаётся
+ * синтетический отрицательный id (см. `platform` в схеме), и `/v1/assistant`
+ * уже сегодня водит через эти же исполнители пользователей приложения.
+ *
+ * Бюджет записей намеренно остался снаружи: он про ход целиком, а не про
+ * отдельный вызов, и считать его должен тот, кто владеет ходом.
+ */
+export interface AgentToolOutcome {
+  /** JSON-строка, которая уходит модели как результат инструмента. */
+  result: string;
+  /** Проставляется исполнителем записи, которая действительно сохранилась. */
+  receiptKey: Parameters<typeof t>[1] | null;
+  /** Native-действие, которое агент не умеет нарисовать сам. */
+  action: MenuAgentAction | null;
+}
+
+export async function executeAgentTool(
+  telegramId: bigint,
+  fnName: string,
+  args: Record<string, unknown>,
+): Promise<AgentToolOutcome> {
+  let result: string;
+  let receiptKey: Parameters<typeof t>[1] | null = null;
+  let action: MenuAgentAction | null = null;
+
+  switch (fnName) {
+    case "update_bio": {
+      const outcome = await execUpdateBio(telegramId, args as { bio: string });
+      result = outcome.toolResult;
+      if (outcome.action) action = outcome.action;
+      else receiptKey = "editBioSaved";
+      break;
+    }
+    case "update_major":
+      result = await execUpdateMajor(telegramId, args as { major: string });
+      receiptKey = "editMajorSaved";
+      break;
+    case "update_age_range":
+      result = await execUpdateAgeRange(
+        telegramId,
+        args as { min_age: number; max_age: number },
+      );
+      receiptKey = "editAgeRangeSaved";
+      break;
+    case "update_partner_preferences":
+      result = await execUpdatePartnerPreferences(
+        telegramId,
+        args as { preferences: string },
+      );
+      receiptKey = "editPrefsDescriptionSaved";
+      break;
+    case "update_hobbies":
+      result = await execUpdateHobbies(telegramId, args as { hobbies: unknown });
+      receiptKey = "editHobbiesSaved";
+      break;
+    case "set_language":
+      result = await execSetLanguage(telegramId, args as { language?: unknown });
+      // Read AFTER the write, so this picks up the language just set —
+      // the receipt lands in the language the user is switching TO.
+      receiptKey = "settingsLanguageSaved";
+      break;
+    case "set_theme":
+      result = await execSetTheme(telegramId, args as { theme?: unknown });
+      receiptKey = "settingsThemeSaved";
+      break;
+    case "get_my_profile":
+      result = await execGetMyProfile(telegramId);
+      break;
+    case "get_my_standing":
+      result = await execGetMyStanding(telegramId);
+      break;
+    case "explain_my_match":
+      result = await execExplainMyMatch(telegramId);
+      break;
+    case "pause_matching":
+      result = await execPauseMatching(telegramId);
+      receiptKey = "pauseConfirmed";
+      break;
+    case "resume_matching":
+      result = await execResumeMatching(telegramId);
+      receiptKey = "resumeConfirmed";
+      break;
+    case "record_rejection_feedback":
+      result = await execRecordRejectionFeedback(
+        telegramId,
+        args as { match_id: string; reason: string },
+      );
+      break;
+    case "offer_cancel_premium": {
+      const outcome = await evaluatePremiumCancelOffer(telegramId);
+      result = outcome.toolResult;
+      if (outcome.action) action = outcome.action;
+      break;
+    }
+    case "propose_cancel_date": {
+      const outcome = await execProposeCancelDate(telegramId);
+      result = outcome.toolResult;
+      if (outcome.action) action = outcome.action;
+      break;
+    }
+    case "propose_close_account": {
+      const outcome = await execProposeCloseAccount(telegramId);
+      result = outcome.toolResult;
+      if (outcome.action) action = outcome.action;
+      break;
+    }
+    case "open_screen": {
+      const outcome = await execOpenScreen(telegramId, args as { screen?: unknown });
+      result = outcome.toolResult;
+      if (outcome.action) action = outcome.action;
+      break;
+    }
+    default:
+      result = JSON.stringify({ error: `Unknown tool: ${fnName}` });
+  }
+
+  return { result, receiptKey, action };
+}
+
 export async function runMenuAgentTurn(
   telegramId: bigint,
   userMessage: string,
@@ -1465,99 +1590,12 @@ export async function runMenuAgentTurn(
           continue;
         }
 
-        let result: string;
-        /** Set by a write executor that actually persisted something. */
-        let receiptKey: Parameters<typeof t>[1] | null = null;
-        switch (fnName) {
-          case "update_bio": {
-            const outcome = await execUpdateBio(telegramId, args as { bio: string });
-            result = outcome.toolResult;
-            if (outcome.action) pendingAction = outcome.action;
-            else receiptKey = "editBioSaved";
-            break;
-          }
-          case "update_major":
-            result = await execUpdateMajor(telegramId, args as { major: string });
-            receiptKey = "editMajorSaved";
-            break;
-          case "update_age_range":
-            result = await execUpdateAgeRange(
-              telegramId,
-              args as { min_age: number; max_age: number },
-            );
-            receiptKey = "editAgeRangeSaved";
-            break;
-          case "update_partner_preferences":
-            result = await execUpdatePartnerPreferences(
-              telegramId,
-              args as { preferences: string },
-            );
-            receiptKey = "editPrefsDescriptionSaved";
-            break;
-          case "update_hobbies":
-            result = await execUpdateHobbies(telegramId, args as { hobbies: unknown });
-            receiptKey = "editHobbiesSaved";
-            break;
-          case "set_language":
-            result = await execSetLanguage(telegramId, args as { language?: unknown });
-            // Read AFTER the write, so this picks up the language just set —
-            // the receipt lands in the language the user is switching TO.
-            receiptKey = "settingsLanguageSaved";
-            break;
-          case "set_theme":
-            result = await execSetTheme(telegramId, args as { theme?: unknown });
-            receiptKey = "settingsThemeSaved";
-            break;
-          case "get_my_profile":
-            result = await execGetMyProfile(telegramId);
-            break;
-          case "get_my_standing":
-            result = await execGetMyStanding(telegramId);
-            break;
-          case "explain_my_match":
-            result = await execExplainMyMatch(telegramId);
-            break;
-          case "pause_matching":
-            result = await execPauseMatching(telegramId);
-            receiptKey = "pauseConfirmed";
-            break;
-          case "resume_matching":
-            result = await execResumeMatching(telegramId);
-            receiptKey = "resumeConfirmed";
-            break;
-          case "record_rejection_feedback":
-            result = await execRecordRejectionFeedback(
-              telegramId,
-              args as { match_id: string; reason: string },
-            );
-            break;
-          case "offer_cancel_premium": {
-            const outcome = await evaluatePremiumCancelOffer(telegramId);
-            result = outcome.toolResult;
-            if (outcome.action) pendingAction = outcome.action;
-            break;
-          }
-          case "propose_cancel_date": {
-            const outcome = await execProposeCancelDate(telegramId);
-            result = outcome.toolResult;
-            if (outcome.action) pendingAction = outcome.action;
-            break;
-          }
-          case "propose_close_account": {
-            const outcome = await execProposeCloseAccount(telegramId);
-            result = outcome.toolResult;
-            if (outcome.action) pendingAction = outcome.action;
-            break;
-          }
-          case "open_screen": {
-            const outcome = await execOpenScreen(telegramId, args as { screen?: unknown });
-            result = outcome.toolResult;
-            if (outcome.action) pendingAction = outcome.action;
-            break;
-          }
-          default:
-            result = JSON.stringify({ error: `Unknown tool: ${fnName}` });
-        }
+        const { result, receiptKey, action } = await executeAgentTool(
+          telegramId,
+          fnName,
+          args,
+        );
+        if (action) pendingAction = action;
 
         // Only count and acknowledge a write that reported success — a rejected
         // edit must neither burn the turn's budget nor tell the user it landed.
