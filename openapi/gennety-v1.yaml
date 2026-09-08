@@ -2367,12 +2367,22 @@ paths:
               properties:
                 reaction:
                   type: [string, "null"]
-                  enum: ["❤", "👍", "🔥", "🤣", "🙏", null]
                   description: |
-                    One of the five, or `null` to clear. The set is closed to
-                    Telegram's own reaction vocabulary — see
+                    One of `❤` `👍` `🔥` `🤣` `🙏`, or `null` to clear. The set
+                    is closed to Telegram's own reaction vocabulary — see
                     `ProxyChatMessage.reaction` for why, including why `❤`
                     carries no variation selector and why there is no 😂.
+                    Anything else is a 400 `bad-reaction`.
+
+                    **Deliberately spelled out in prose rather than as an
+                    `enum`,** and this is the same trap `InterviewState.reaction`
+                    documents: `enum: [..., null]` makes swift-openapi-generator
+                    emit a phantom `_empty_ = ""` case, so a client clearing a
+                    reaction would send an empty string where the contract says
+                    null. Caught here on the first regeneration. The response
+                    side keeps its enum — it is not nullable, so it is safe —
+                    and the server validates this field either way, so the
+                    contract loses nothing but the landmine.
       responses:
         "200":
           description: Reaction applied or cleared; the new state
