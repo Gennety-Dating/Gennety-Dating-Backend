@@ -71,6 +71,11 @@ const ALLOWED_IDENTICAL_UK_RU = new Set<string>([
   // worse than recording that there is none.
   "eventRoundPushBody",
   "referralCardFooter",
+  // Вариант ответа опроса HDYHAU. «Реклама» — одно слово, и оно совпадает в
+  // обоих языках. Выдумывать различие, чтобы удовлетворить эту проверку, было
+  // бы хуже, чем записать, что различия нет (тот же довод, что у
+  // `eventRoundPushBody`). Остальные семь вариантов НЕ в списке и различаются.
+  "hdyhauAd",
   "coordCardAskHead2",
   "photoReceived",
   // Deliberate fixed English brand line in all five locales (PRODUCT_SPEC §3.7a).

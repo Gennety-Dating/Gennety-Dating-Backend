@@ -333,14 +333,18 @@ export function withOrganicBaseline(
     }
 
     const { mean, stdDev } = stats(window);
-    const uplift = Math.max(0, day.organicSignups - mean);
+    // Прирост округляется ОДИН раз, и `kWom` считается уже из округлённого:
+    // иначе делённые друг на друга показанные числа не дают показанную ставку,
+    // и первый же человек, проверивший строку на калькуляторе, перестаёт
+    // доверять всей таблице.
+    const uplift = round(Math.max(0, day.organicSignups - mean), 2);
     const kWom = day.seedSignups > 0 ? round(uplift / day.seedSignups) : null;
 
     out.push({
       ...day,
       baselineOrganic: round(mean, 2),
       baselineStdDev: stdDev === null ? null : round(stdDev, 2),
-      organicUplift: round(uplift, 2),
+      organicUplift: uplift,
       kWom,
       womStatus: day.seedSignups > 0 ? "ok" : "no-seed",
     });
