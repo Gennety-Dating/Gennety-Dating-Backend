@@ -11,6 +11,55 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — агентская сессия 2026-09-08: гейт `/v1/chat`, счётчик города,
+маршрут языка.** Схема Prisma НЕ меняется, миграций нет. Четыре коммита:
+`925d01b`, `07e2fd0`, `59b6414`, `1bb665f`.
+
+**Одна новая переменная окружения, необязательная:**
+
+```
+SEARCHERS_COUNTER_MIN=250     # по умолчанию 250; ставить только чтобы отличалось
+```
+
+Ниже этого числа `GET /v1/countdown` отдаёт `searchersInCity: null`, и клиент
+не рисует строку «в поиске в городе». Значение выбрано основателем; менять его
+можно выкатом бэкенда, без релиза в App Store — ради этого оно и на сервере.
+
+**Изменение поведения, заметное клиенту:** `POST /v1/chat/message` и
+`POST /v1/chat/upload` теперь спрашивают `evaluateAgentAccess`, как это давно
+делают `/v1/assistant` и меню бота. Забаненный, приостановленный, под
+расследованием и удерживаемый верификационной картой аккаунт получает 403
+(недоонбордившийся — 409) вместо хода модели. До этого он гонял мультимодальные
+ходы и писал в профиль, просто находясь в iOS, а не в Telegram. Читающие
+`/v1/chat/history` и `/v1/chat/topics` намеренно оставлены открытыми.
+
+**Проверка после выката:**
+
+```
+# гейт: живой токен обычного пользователя обязан по-прежнему получать 200
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://<host>/v1/chat/message \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"text":"привет"}'                       # ожидается 200
+
+# счётчик: поле присутствует и равно null, пока город не набрал порог
+curl -sS https://<host>/v1/countdown -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import json,sys; print("searchersInCity:", json.load(sys.stdin)["searchersInCity"])'
+
+# язык: сохраняется и отдаётся обратно
+curl -sS -X PATCH https://<host>/v1/me/language -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"language":"uk"}' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["user"]["language"])'
+```
+
+**Откат:** отдельного отката не требует — схемы не трогает, переменная
+необязательная. Если гейт окажется слишком строгим, снимается возвратом
+`925d01b`; остальные три коммита независимы.
+
+**Влияние на iOS:** `searchersInCity` и `patchLanguage` появились в контракте —
+клиент их ещё не читает, обе клиентские половины не сделаны (CL1 и один вызов
+в настройках). Пустой ответ приложение переживает: поле nullable.
+
+
 **PENDING — ремедиация аудита 2026-09-06: 75 находок, обе ветки
 `fix/audit-remediations-p1` (2026-09-07).** **Есть изменение схемы Prisma И
 изменение способа её накатывания.** 47 коммитов в бэкенде, 8 в iOS.
