@@ -138,6 +138,13 @@ chatRouter.post(
       // Chat turns are free-form, so no hint is derived yet — the field
       // exists so the generated client handles both surfaces uniformly.
       uiHint: null,
+      // Код-владельческие подтверждения записей и native-действие, которое
+      // агент не умеет нарисовать сам. Раньше и то и другое существовало
+      // только на телеграм-поверхности: `/v1/assistant` уже несло их в DTO, а
+      // этот маршрут ронял на пол — приложение узнавало об изменении профиля
+      // исключительно из прозы модели.
+      ...(turn.receipts ? { receipts: turn.receipts } : {}),
+      ...(turn.action ? { action: turn.action } : {}),
     });
   },
 );

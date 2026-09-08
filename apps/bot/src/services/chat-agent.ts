@@ -1,22 +1,22 @@
 import { prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
-import {
-  MAX_AGE,
-  MAX_PHOTOS,
-  MIN_AGE,
-  VOICE_SELF_GENDER,
-  VOICE_SELF_NAME,
-  t,
-  type Language,
-} from "@gennety/shared";
+import { t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { createChatImageSignedUrl } from "./storage.js";
 import {
   applyChatProfilePatch,
   attachChatProfilePhoto,
-  type ChatToolResult,
 } from "./chat-profile-tools.js";
+import {
+  AGENT_TOOLS,
+  MAX_WRITES_PER_TURN,
+  TOOL_KINDS,
+  executeAgentTool,
+  toolReportedSuccess,
+  type MenuAgentAction,
+} from "./menu-agent.js";
+import { buildSystemPrompt } from "./prompt-builder.js";
 
 /**
  * Gennety chat agent — the multimodal AI chat backing `/v1/chat/message`,
@@ -34,56 +34,56 @@ const HISTORY_LIMIT = 30;
 const MAX_TOOL_ITERATIONS = 3;
 const TIMEOUT_MS = 45_000;
 
-const SYSTEM_PROMPT = `You are Gennety — the user's personal AI matchmaker at Gennety Dating: young, sharp, with quiet self-respect. A half-friend who is visibly good at his job — never a hype-man, never corporate.
+/**
+ * Чатовая надстройка над общим системным промптом.
+ *
+ * Персона, продуктовый плейбук, контекст пользователя, лента событий и
+ * закрепление языка приходят из `buildSystemPrompt` — того же, что кормит
+ * телеграм-агента. Здесь остаётся ровно то, чего у той поверхности нет и быть
+ * не может: картинки. Дублировать персону во второй раз значило бы завести
+ * второго агента с тем же именем и другим характером — ровно то расхождение,
+ * которое эта задача закрывает.
+ */
+const CHAT_ADDENDUM = `## This surface: chat with images
 
-${VOICE_SELF_GENDER}
+The person is in the app's Chat tab, not in Telegram. Two things follow.
 
-${VOICE_SELF_NAME}
+1. **They can attach photos.** When an image is clearly a head-and-shoulders
+   portrait of the user themselves, call \`attach_profile_photo\` with the
+   \`imageUrl\` token from their most recent turn. Never attach group photos,
+   screenshots, memes, or photos that are not of them. If unsure, ask first.
+2. **A few profile fields live only here.** \`update_profile\` covers what the
+   other tools do not — \`preference\` and \`height\`. Everything else has its
+   own tool; use that one instead, and never both for the same fact.
 
-Your mission is to gather a rich profile of the user through natural, friendly conversation and to silently update their profile record in the background as you learn things.
+Age and gender are fixed after onboarding and this tab opens only afterwards,
+so treat them as read-only: if someone says one of them is wrong, say support
+can correct it and move on.`
 
-## Strict Product Rules
-- This app has a "Zero-Chat" philosophy: users NEVER message each other through our platform. We match people and schedule first dates. Never offer or imply in-app chat between users.
-- Age must be between ${MIN_AGE} and ${MAX_AGE} (inclusive). If a user's stated age is outside this range, kindly explain we cannot serve them.
-- A user can have at most ${MAX_PHOTOS} profile photos.
-
-## Your Job
-1. Welcome the user warmly. Ask open questions about who they are, what they enjoy, and what they're looking for.
-2. As the conversation progresses, extract structured facts. Whenever you learn ANY of these with high confidence, call the \`update_profile\` tool with just the fields you learned (do NOT re-send fields the user hasn't mentioned this turn):
-   - age (integer ${MIN_AGE}-${MAX_AGE}) — ONLY during onboarding; fixed afterwards
-   - gender ("male" | "female") — ONLY during onboarding; fixed afterwards
-   - preference ("men" | "women" | "both")
-   - height (integer cm)
-   - hobbies (array of short strings)
-   - partnerPreferences (one short sentence)
-3. When a user attaches an image and it is clearly a head-and-shoulders portrait of themselves, call \`attach_profile_photo\` with the imageUrl token from the user's most recent turn. Do NOT attach group photos, screenshots, memes, or photos that aren't of the user. If unsure, ask before attaching.
-4. Keep replies short, warm, conversational — understatement over hype, never try to sound cool (overdone slang reads as try-hard; one casual word max, usually zero). Chat-style lowercase sentence openings are fine; keep names capitalized. Never list the schema back to the user. Never say "I am updating your profile" — just chat.
-5. After calling tools, continue the conversation naturally with the user's next question or a gentle follow-up.
-6. Age and gender are locked once onboarding is complete — the server will ignore them. If an onboarded user says one of them is wrong, don't promise a fix: tell them support can correct it and move on.
-
-You speak the user's language (auto-detect), in an informal, native register. Keep replies under ~3 sentences unless the user explicitly asks for more detail.`;
-
-const TOOLS = [
+/**
+ * Инструменты, которых нет у общего набора, — всё, что чат умеет один.
+ *
+ * **`update_profile` сознательно сужен до `preference` и `height`.** Прежде он
+ * принимал ещё `hobbies` и `partnerPreferences`, но у обоих с этого хода есть
+ * собственные инструменты (`update_hobbies`, `update_partner_preferences`), и
+ * два пути к одному полю — это модель, выбирающая между ними наугад, и две
+ * записи там, где бюджет хода разрешает одну. `age` и `gender` убраны потому,
+ * что были мертвы: `applyChatProfilePatch` игнорирует их у завершивших
+ * онбординг, а вкладка «Чат» открывается только после него.
+ */
+const CHAT_TOOLS = [
   {
     type: "function" as const,
     function: {
       name: "update_profile",
       description:
-        "Patch the user's profile with high-confidence facts you have just learned. Only include fields you are sure about; omit everything else.",
+        "Patch the two profile fields no other tool covers: who they want to be matched with, and their height. Only include what you are sure about.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
-          age: { type: "integer", minimum: MIN_AGE, maximum: MAX_AGE },
-          gender: { type: "string", enum: ["male", "female"] },
           preference: { type: "string", enum: ["men", "women", "both"] },
           height: { type: "integer", minimum: 120, maximum: 230 },
-          hobbies: {
-            type: "array",
-            items: { type: "string", maxLength: 48 },
-            maxItems: 12,
-          },
-          partnerPreferences: { type: "string", maxLength: 280 },
         },
       },
     },
@@ -105,6 +105,26 @@ const TOOLS = [
     },
   },
 ];
+
+/**
+ * Что уходит модели: семнадцать общих инструментов плюс два чатовых.
+ * Порядок значения не имеет, а совпадений имён нет — проверяется тестом.
+ */
+const ALL_TOOLS = [...AGENT_TOOLS, ...CHAT_TOOLS];
+
+/**
+ * Класс чатовых инструментов. Оба пишут, значит оба попадают под бюджет хода:
+ * одно сообщение — одно намерение, и вторая запись в том же ходу отвергается,
+ * а не применяется молча (тот же довод, что в `menu-agent`).
+ */
+const CHAT_TOOL_KINDS: Record<string, "write"> = {
+  update_profile: "write",
+  attach_profile_photo: "write",
+};
+
+function toolKind(name: string): string | undefined {
+  return TOOL_KINDS[name] ?? CHAT_TOOL_KINDS[name];
+}
 
 interface OpenAIToolCall {
   id: string;
@@ -152,6 +172,15 @@ export interface ChatTurnResult {
   content: string;
   imageUrl: null;
   createdAt: Date;
+  /**
+   * Подтверждения записей, которые ДЕЙСТВИТЕЛЬНО применились. Их пишет код, а
+   * не модель: иначе единственным свидетельством правки профиля была бы её
+   * проза, которую она вольна сочинить — включая рассказ об изменении, молча
+   * не сохранившемся.
+   */
+  receipts?: string[];
+  /** Native-действие, которое агент не умеет нарисовать сам. */
+  action?: MenuAgentAction;
 }
 
 export interface ChatDeps {
@@ -189,23 +218,37 @@ async function runTurnInner(
   const { userId, text, imageUrl } = input;
   const fetchFn = deps.fetchFn ?? openaiFetch;
 
+  // `telegramId` — ключ общих исполнителей, и это не привязка к Telegram:
+  // колонка заполнена у всех, мобильным выдаётся синтетический отрицательный
+  // id. Читается один раз за ход вместе с языком, на котором пишутся чеки.
+  const account = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { telegramId: true, language: true },
+  });
+  if (!account) throw new Error(`Unknown user ${userId}`);
+  const telegramId = account.telegramId;
+  const language = (account.language ?? "en") as Language;
+
   await prisma.message.create({
     data: { userId, role: "user", content: text, imageUrl },
   });
 
-  const messages = await buildChatMessages(userId);
+  const messages = await buildChatMessages(userId, telegramId);
 
   let iteration = 0;
   let lastReply = "";
+  let writesUsed = 0;
+  const receipts: string[] = [];
+  let pendingAction: MenuAgentAction | null = null;
   while (iteration < MAX_TOOL_ITERATIONS) {
     const completion = await callOpenAI(messages, fetchFn);
     if (!completion) {
-      lastReply = await fallbackReply(userId);
+      lastReply = fallbackReply(language);
       break;
     }
     const choice = completion.choices[0];
     if (!choice) {
-      lastReply = await fallbackReply(userId);
+      lastReply = fallbackReply(language);
       break;
     }
 
@@ -224,17 +267,46 @@ async function runTurnInner(
     }
 
     for (const tc of choice.message.tool_calls) {
-      const result = await executeTool(userId, tc);
+      const name = tc.function.name;
+
+      // Бюджет проверяется ДО запуска: вторая запись за ход отвергается, а не
+      // применяется и потом объясняется. Модели сказано попросить — значит
+      // второе изменение становится следующим сообщением человека.
+      if (toolKind(name) === "write" && writesUsed >= MAX_WRITES_PER_TURN) {
+        messages.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            success: false,
+            error: "write_budget_exhausted",
+            instruction:
+              "You already changed something this turn, so this second change was NOT saved. Tell the user what you changed, name what else you were about to change, and ask them to confirm it in their next message.",
+          }),
+        });
+        continue;
+      }
+
+      const outcome = await executeTool(userId, telegramId, tc);
+      if (outcome.action) pendingAction = outcome.action;
+
+      // Считается и подтверждается только запись, отчитавшаяся об успехе:
+      // отклонённая правка не должна ни жечь бюджет, ни говорить человеку,
+      // что она применилась.
+      if (toolKind(name) === "write" && toolReportedSuccess(outcome.result)) {
+        writesUsed++;
+        if (outcome.receiptKey) receipts.push(t(language, outcome.receiptKey));
+      }
+
       messages.push({
         role: "tool",
         tool_call_id: tc.id,
-        content: JSON.stringify(result),
+        content: outcome.result,
       });
     }
     iteration++;
   }
 
-  if (!lastReply) lastReply = await fallbackReply(userId);
+  if (!lastReply) lastReply = fallbackReply(language);
 
   const persisted = await prisma.message.create({
     data: { userId, role: "assistant", content: lastReply },
@@ -246,6 +318,8 @@ async function runTurnInner(
     content: persisted.content,
     imageUrl: null,
     createdAt: persisted.createdAt,
+    ...(receipts.length > 0 ? { receipts } : {}),
+    ...(pendingAction ? { action: pendingAction } : {}),
   };
 }
 
@@ -255,18 +329,21 @@ async function runTurnInner(
  *
  * Localized, and for the reason the menu agent already wrote down when it fixed
  * the same defect: an English sentence appearing out of nowhere reads exactly
- * like the bot deciding on its own to switch languages. The language is looked
- * up only here, so a healthy turn never pays for the query.
+ * like the bot deciding on its own to switch languages.
+ *
+ * **Язык больше не ищется здесь — он приходит аргументом.** Прежняя редакция
+ * запрашивала его сама, чтобы здоровый ход не платил за запрос. Теперь ход всё
+ * равно читает аккаунт: общим исполнителям нужен `telegramId`. Язык берётся из
+ * того же запроса, так что запрос на ход по-прежнему ровно один, а не два.
  */
-async function fallbackReply(userId: string): Promise<string> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { language: true },
-  });
-  return t((user?.language ?? "en") as Language, "agentFallbackError");
+function fallbackReply(language: Language): string {
+  return t(language, "agentFallbackError");
 }
 
-async function buildChatMessages(userId: string): Promise<OpenAIChatMessage[]> {
+async function buildChatMessages(
+  userId: string,
+  telegramId: bigint,
+): Promise<OpenAIChatMessage[]> {
   const rows = await prisma.message.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
@@ -274,7 +351,13 @@ async function buildChatMessages(userId: string): Promise<OpenAIChatMessage[]> {
   });
   rows.reverse();
 
-  const out: OpenAIChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }];
+  // Общий промпт плюс чатовая надстройка: персона, плейбук, контекст
+  // пользователя, лента и закрепление языка приходят оттуда же, откуда их
+  // берёт Telegram, — второй персоны у продукта быть не должно.
+  const base = await buildSystemPrompt(telegramId);
+  const out: OpenAIChatMessage[] = [
+    { role: "system", content: `${base}\n\n${CHAT_ADDENDUM}` },
+  ];
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
@@ -323,7 +406,7 @@ async function callOpenAI(
         model: MODEL,
         max_completion_tokens: 512,
         temperature: 0.7,
-        tools: TOOLS,
+        tools: ALL_TOOLS,
         messages,
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -342,20 +425,27 @@ async function callOpenAI(
 
 async function executeTool(
   userId: string,
+  telegramId: bigint,
   call: OpenAIToolCall,
-): Promise<ChatToolResult> {
+): Promise<{ result: string; receiptKey: Parameters<typeof t>[1] | null; action: MenuAgentAction | null }> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(call.function.arguments || "{}");
   } catch {
-    return { ok: false, detail: "Invalid JSON arguments" };
+    return { result: JSON.stringify({ ok: false, detail: "Invalid JSON arguments" }), receiptKey: null, action: null };
   }
 
+  // Сначала чатовые: они работают с `userId` и с картинками, которых у общего
+  // набора нет. Всё остальное уходит общему исполнителю — тому же, что водит
+  // Telegram, поэтому расхождению поведения взяться неоткуда.
   if (call.function.name === "update_profile") {
-    return applyChatProfilePatch(userId, parsed);
+    const outcome = await applyChatProfilePatch(userId, parsed);
+    return { result: JSON.stringify(outcome), receiptKey: outcome.ok ? "editProfileSaved" : null, action: null };
   }
   if (call.function.name === "attach_profile_photo") {
-    return attachChatProfilePhoto(userId, parsed);
+    const outcome = await attachChatProfilePhoto(userId, parsed);
+    return { result: JSON.stringify(outcome), receiptKey: outcome.ok ? "editProfilePhotosSaved" : null, action: null };
   }
-  return { ok: false, detail: `Unknown tool ${call.function.name}` };
+
+  return executeAgentTool(telegramId, call.function.name, parsed as Record<string, unknown>);
 }

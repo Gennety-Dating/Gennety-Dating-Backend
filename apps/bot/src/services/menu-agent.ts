@@ -256,7 +256,15 @@ export function toApiMessages(history: ChatMessage[]): ChatMessage[] {
 // Tool Definitions
 // ---------------------------------------------------------------------------
 
-const TOOLS = [
+/**
+ * Инструменты агента — общие для обеих поверхностей.
+ *
+ * Экспортируются вместе с `TOOL_KINDS`, `MAX_WRITES_PER_TURN`,
+ * `toolReportedSuccess` и `executeAgentTool`: у Telegram и приложения свои
+ * циклы (у первого история в `User.messageHistory` и пузыри, у второго таблица
+ * `Message` и картинки), а общее у них ровно одно — что именно умеет агент.
+ */
+export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
@@ -1673,7 +1681,7 @@ async function callOpenAI(
     body: JSON.stringify({
       model: MODELS.agent,
       messages,
-      tools: TOOLS,
+      tools: AGENT_TOOLS,
       tool_choice: "auto",
       temperature: 0.5,
       // Raised from 512. This budget also covers reasoning tokens, and Cyrillic

@@ -30,6 +30,19 @@ vi.mock("./chat-profile-tools.js", () => ({
   applyChatProfilePatch: vi.fn(),
   attachChatProfilePhoto: vi.fn(),
 }));
+// Промпт и общий набор инструментов — предмет `chat-agent-tools.test.ts`;
+// здесь они только мешают, а настоящий `buildSystemPrompt` потянул бы за собой
+// пол-базы.
+vi.mock("./prompt-builder.js", () => ({
+  buildSystemPrompt: vi.fn(async () => "SYSTEM"),
+}));
+vi.mock("./menu-agent.js", () => ({
+  AGENT_TOOLS: [],
+  TOOL_KINDS: {},
+  MAX_WRITES_PER_TURN: 1,
+  toolReportedSuccess: () => false,
+  executeAgentTool: vi.fn(),
+}));
 
 const { runChatTurn } = await import("./chat-agent.js");
 
@@ -53,7 +66,7 @@ beforeEach(() => {
 
 describe("chat agent fallback", () => {
   it("answers in the user's language when the model returns nothing", async () => {
-    userFindUnique.mockResolvedValue({ language: "ru" });
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
 
     const result = await runChatTurn(
       { userId: USER, text: "привет", imageUrl: null },
@@ -63,12 +76,12 @@ describe("chat agent fallback", () => {
     expect(result.content).toBe(t("ru", "agentFallbackError"));
     expect(userFindUnique).toHaveBeenCalledWith({
       where: { id: USER },
-      select: { language: true },
+      select: { telegramId: true, language: true },
     });
   });
 
   it("falls back to English when the account has no language yet", async () => {
-    userFindUnique.mockResolvedValue({ language: null });
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: null });
 
     const result = await runChatTurn(
       { userId: USER, text: "hi", imageUrl: null },
@@ -78,7 +91,15 @@ describe("chat agent fallback", () => {
     expect(result.content).toBe(t("en", "agentFallbackError"));
   });
 
-  it("does not look up the language on a healthy turn", async () => {
+  /**
+   * Прежняя редакция требовала НОЛЬ запросов на здоровом ходу: язык искался
+   * только в аварийной ветке. С подключением общего набора инструментов ход
+   * читает аккаунт всегда — исполнителям нужен `telegramId`. Требование
+   * поэтому изменилось на то, которое и было ценным: запрос ОДИН, а не два.
+   * Язык берётся из него же, отдельного похода в базу за ним больше нет.
+   */
+  it("читает аккаунт ровно один раз за ход", async () => {
+    userFindUnique.mockResolvedValue({ telegramId: 1n, language: "ru" });
     const reply: typeof fetch = (async () =>
       new Response(
         JSON.stringify({ choices: [{ message: { content: "Привет!" } }] }),
@@ -91,6 +112,6 @@ describe("chat agent fallback", () => {
     );
 
     expect(result.content).toBe("Привет!");
-    expect(userFindUnique).not.toHaveBeenCalled();
+    expect(userFindUnique).toHaveBeenCalledTimes(1);
   });
 });
