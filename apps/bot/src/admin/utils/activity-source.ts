@@ -31,6 +31,27 @@ const TEST_TELEGRAM_IDS = (env.ADMIN_TEST_TELEGRAM_IDS ?? "")
   })
   .filter((v): v is bigint => v !== null);
 
+/**
+ * The `where` fragment that means "a real account", ready to spread into any
+ * query whose subject is a `User` row.
+ *
+ * Exported because `virality-source.ts` needs exactly this population and
+ * nothing else: a K-factor whose denominator counts the founder's own test
+ * account and whose numerator does not is not a smaller number, it is a wrong
+ * one. The comment on `TEST_TELEGRAM_IDS` above says why there must be one
+ * list; this says why there must be one FILTER.
+ */
+export function realUserFilter(includeTest = false): {
+  syntheticAt?: null;
+  telegramId?: { notIn: bigint[] };
+} {
+  if (includeTest) return {};
+  return {
+    syntheticAt: null,
+    ...(TEST_TELEGRAM_IDS.length > 0 ? { telegramId: { notIn: TEST_TELEGRAM_IDS } } : {}),
+  };
+}
+
 export interface LoadActivityOptions {
   /**
    * Include test and synthetic accounts. Off by default.

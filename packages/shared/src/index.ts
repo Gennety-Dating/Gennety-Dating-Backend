@@ -249,3 +249,15 @@ export type {
   PostDateFeedbackInput,
   ReportTriageInput,
 } from "./ai/prompts.js";
+
+export {
+  HDYHAU_ANSWERS,
+  HDYHAU_PROMPT_VERSION,
+  HDYHAU_WOM_ANSWERS,
+  HDYHAU_SURFACES,
+  isHdyhauAnswer,
+  isWordOfMouthAnswer,
+  hdyhauAnswerLabelKey,
+  isHdyhauSurface,
+} from "./hdyhau.js";
+export type { HdyhauAnswer, HdyhauSurface } from "./hdyhau.js";
