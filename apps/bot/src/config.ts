@@ -608,6 +608,13 @@ export const env = {
     1,
     Math.min(90, Number(process.env.VENUE_CONCENTRATION_ALERT_WINDOW_DAYS ?? "7")),
   ),
+  /// Со скольких людей «в поиске» город начинает показывать счётчик на
+  /// «Сегодня» (`services/city-searchers.ts`). Живёт здесь, а не в клиенте,
+  /// чтобы подбор числа стоил выката бэкенда, а не релиза в App Store.
+  SEARCHERS_COUNTER_MIN: Math.max(
+    0,
+    Number(process.env.SEARCHERS_COUNTER_MIN ?? "250"),
+  ),
   /// Season + weather as a SOFT ranking multiplier (PRODUCT_SPEC §3.7,
   /// VENUE_ENGINE_IMPROVEMENT_PLAN 5.3). Never a filter: a rained-out park
   /// sinks a few places, it is never removed — a wrong forecast or a provider

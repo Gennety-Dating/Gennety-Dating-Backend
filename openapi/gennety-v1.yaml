@@ -2882,7 +2882,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [nextDropAt, serverNow, weeklyStatus, standbyCount, priorityBoosted, resolvedAt]
+                required: [nextDropAt, serverNow, weeklyStatus, standbyCount, priorityBoosted, resolvedAt, searchersInCity]
                 properties:
                   nextDropAt: { type: string, format: date-time }
                   serverNow:
@@ -2897,6 +2897,17 @@ paths:
                   resolvedAt:
                     type: [string, "null"]
                     format: date-time
+                  searchersInCity:
+                    type: [integer, "null"]
+                    description: >-
+                      People currently searching in this user's city, or null
+                      when there is nothing to show. The server owns the
+                      visibility rule (SEARCHERS_COUNTER_MIN, default 250) so
+                      the number can be tuned by a backend deploy rather than
+                      an App Store release; null covers both "city below the
+                      threshold" and "no city chosen" because the client
+                      renders them identically. Never rounded or invented —
+                      when a number is present it is the real count.
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/date/state:
