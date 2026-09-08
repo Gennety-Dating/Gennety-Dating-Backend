@@ -170,6 +170,25 @@ export function ratio(numerator: number, denominator: number, dp = 4): number | 
   return round(numerator / denominator, dp);
 }
 
+/**
+ * Доля шага воронки — то же деление, но с проверкой, что знаменатель вообще
+ * может быть знаменателем.
+ *
+ * Числитель больше знаменателя означает не рекордную конверсию, а НЕДОСЧЁТ
+ * предыдущего шага, и это здесь не гипотетический случай, а норма для всей
+ * истории до появления `referral_events`: активации восстанавливаются из
+ * `referralCountedAt`, который существовал всегда, а клики и инвайты — только с
+ * момента, когда завели таблицу. Показать в такой строке «конверсию 200%»
+ * значило бы выдать дыру в инструменте за поведение пользователей.
+ *
+ * Поэтому `null`: доля не измерена. Проверить это утверждение читатель может по
+ * той же строке — числитель и знаменатель лежат рядом.
+ */
+export function funnelRate(numerator: number, denominator: number, dp = 4): number | null {
+  if (denominator <= 0 || numerator > denominator) return null;
+  return round(numerator / denominator, dp);
+}
+
 /** Медиана. Пустой ряд — `null` (медианы у пустоты нет, а не ноль). */
 export function median(values: readonly number[]): number | null {
   if (values.length === 0) return null;
@@ -508,8 +527,8 @@ export function computeCohort(params: {
     linkClicks,
     activations,
     invitesPerUser: cohortSize > 0 ? round(invitesSent / cohortSize) : 0,
-    clickRate: ratio(linkClicks, invitesSent),
-    activationRate: ratio(activations, linkClicks),
+    clickRate: funnelRate(linkClicks, invitesSent),
+    activationRate: funnelRate(activations, linkClicks),
     kDirect,
     cycleTimeMedianHours: cycleMedian === null ? null : round(cycleMedian, 1),
     kWom: params.kWom,
@@ -593,10 +612,10 @@ export function aggregateCohorts(
     invitesSent,
     linkClicks,
     activations,
-    shareRate: ratio(sharers, cohortSize),
+    shareRate: funnelRate(sharers, cohortSize),
     invitesPerUser: ratio(invitesSent, cohortSize),
-    clickRate: ratio(linkClicks, invitesSent),
-    activationRate: ratio(activations, linkClicks),
+    clickRate: funnelRate(linkClicks, invitesSent),
+    activationRate: funnelRate(activations, linkClicks),
     kDirect: ratio(activations, cohortSize),
     cycleTimeMedianHours: cycle === null ? null : round(cycle, 1),
   };
@@ -774,12 +793,11 @@ export function detectOrganicAnomalies(
   const out: Anomaly[] = [];
   for (const day of series) {
     const { baselineOrganic, baselineStdDev } = day;
-    if (baselineOrganic === null || baselineStdDev === null || baselineStdDev <= 0) {
-      // Ровный ряд (σ = 0) не даёт порога: любое отличие бесконечно велико в
-      // сигмах, и порог 2σ выродился бы в «любое изменение — аномалия».
-      continue;
-    }
-    const z = (day.organicSignups - baselineOrganic) / baselineStdDev;
+    if (baselineOrganic === null) continue; // база не набрана — судить не о чем
+    const spread = effectiveSpread(baselineOrganic, baselineStdDev);
+    if (spread === null) continue;
+
+    const z = (day.organicSignups - baselineOrganic) / spread;
     if (Math.abs(z) < sigma) continue;
     out.push({
       kind: z > 0 ? "organic_spike" : "organic_drop",
@@ -787,12 +805,38 @@ export function detectOrganicAnomalies(
       scope,
       observed: day.organicSignups,
       expected: baselineOrganic,
-      stdDev: baselineStdDev,
+      // Возвращается ИМЕННО тот разброс, на который поделено, а не хранимое
+      // выборочное СКО: иначе читатель, перемноживший показанные числа, не
+      // получит показанный z и решит, что ошибся кто-то другой.
+      stdDev: round(spread, 2),
       zScore: round(z, 2),
       direction: z > 0 ? "up" : "down",
     });
   }
   return out;
+}
+
+/**
+ * Разброс, относительно которого меряется отклонение дня.
+ *
+ * Пуассоновский пол `√base`, а не голое выборочное СКО, и вот почему это не
+ * украшение. Ряд регистраций — счётные данные: у потока со средним λ разброс
+ * сам по себе около `√λ`, даже когда ничего не происходит. Ровный на вид
+ * участок (пять дней ровно по 2) даёт выборочное σ = 0, а с нулём в знаменателе
+ * порог 2σ вырождается: либо любое отличие бесконечно велико, либо — как было
+ * здесь до этой правки — такие дни молча выпадают из проверки. Второе хуже
+ * первого: слепой оказывается ровно та ситуация, ради которой метрика заведена,
+ * — тихий маленький город, в котором вдруг случился кампусный дроп.
+ *
+ * Берётся МАКСИМУМ из наблюдённого и пуассоновского: на шумном ряде остаётся
+ * наблюдённый (не выдумываем чувствительности, которой нет), на ровном
+ * появляется пол (не теряем всплеск). Нулевая база порога всё равно не даёт —
+ * там и истории никакой нет.
+ */
+function effectiveSpread(baseline: number, sampleStdDev: number | null): number | null {
+  const poisson = Math.sqrt(Math.max(0, baseline));
+  const spread = Math.max(sampleStdDev ?? 0, poisson);
+  return spread > 0 ? spread : null;
 }
 
 /**

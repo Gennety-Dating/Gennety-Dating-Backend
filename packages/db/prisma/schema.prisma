@@ -2908,7 +2908,12 @@ model ViralityCohort {
   invitesPerUser       Float  @map("invites_per_user")
   /// `linkClicks / invitesSent`. Null при нулевых инвайтах.
   clickRate            Float? @map("click_rate")
-  /// `activations / linkClicks` — конверсия перехода в активацию. Null при нуле кликов.
+  /// `activations / linkClicks` — конверсия перехода в активацию. Null при нуле
+  /// кликов И при их недосчёте (кликов меньше, чем активаций): активации
+  /// восстанавливаются из `referralCountedAt`, который существовал всегда, а
+  /// клики — только с появления `referral_events`, поэтому у старых когорт
+  /// знаменатель заведомо неполон. Доля, посчитанная по неполному знаменателю,
+  /// была бы дырой в инструменте, выданной за поведение людей.
   activationRate       Float? @map("activation_rate")
   /// `activations / cohortSize` = `i × c`. Прямой K-фактор когорты.
   kDirect              Float  @map("k_direct")

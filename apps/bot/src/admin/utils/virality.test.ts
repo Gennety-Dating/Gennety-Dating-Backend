@@ -10,6 +10,7 @@ import {
   computeCohort,
   detectCycleTimeAnomalies,
   detectOrganicAnomalies,
+  funnelRate,
   groupActivations,
   median,
   parseScope,
@@ -70,6 +71,17 @@ describe("мелкая арифметика", () => {
     expect(ratio(3, 0)).toBeNull();
     expect(ratio(0, 0)).toBeNull();
     expect(ratio(1, 4)).toBe(0.25);
+  });
+
+  it("доля шага воронки не бывает больше единицы — это недосчёт, а не конверсия", () => {
+    // Активации восстанавливаются из `referralCountedAt` (существовал всегда),
+    // клики — только с появления `referral_events`. У старой когорты
+    // знаменатель заведомо неполон, и 2/1 значит «клик не записали», а не
+    // «конверсия 200%».
+    expect(funnelRate(2, 1)).toBeNull();
+    expect(funnelRate(1, 1)).toBe(1);
+    expect(funnelRate(1, 4)).toBe(0.25);
+    expect(funnelRate(0, 0)).toBeNull();
   });
 
   it("у пустого ряда нет медианы, а не медиана ноль", () => {
@@ -273,6 +285,29 @@ describe("когортный K-фактор", () => {
     expect(metrics.activationRate).toBe(0.5);
     expect(metrics.kDirect).toBe(0.25);
     expect(metrics.mature).toBe(true);
+  });
+
+  it("не выдаёт конверсию, когда клики недосчитаны: это дыра в инструменте", () => {
+    // Ровно случай исторической когорты: активации есть (из `referralCountedAt`),
+    // а событие клика записать было некому.
+    const metrics = computeCohort({
+      cohortDate: "2026-05-01",
+      cohortDay: COHORT_DAY,
+      maturityDay: 7,
+      members,
+      events: [funnel("invite_link_clicked", "r1", "2026-05-02T13:00:00Z")],
+      activationsByReferrer: groupActivations([
+        activation("r1", "2026-05-02T14:00:00Z"),
+        activation("r2", "2026-05-03T14:00:00Z"),
+      ]),
+      kWom: null,
+      now: NOW,
+    });
+    expect(metrics.activations).toBe(2);
+    expect(metrics.linkClicks).toBe(1);
+    expect(metrics.activationRate).toBeNull();
+    // Прямой K при этом честен: он не зависит от воронки событий вообще.
+    expect(metrics.kDirect).toBe(0.5);
   });
 
   it("считает время цикла от регистрации РЕФЕРЕРА до активации приглашённого", () => {
@@ -563,8 +598,35 @@ describe("аномалии органики", () => {
     expect(found.map((f) => f.kind)).toContain("organic_drop");
   });
 
-  it("на идеально ровном ряде молчит: у σ = 0 нет порога", () => {
+  it("на идеально ровном ряде всё равно видит всплеск — через пуассоновский пол", () => {
+    // Выборочное σ окна = 0. Без пола такой день молча выпадал бы из проверки —
+    // и слепым оказывался бы ровно тихий город, в котором случился дроп.
     const rows = withOrganicBaseline(series([...Array(BASELINE_WINDOW_DAYS).fill(5), 500]));
+    const found = detectOrganicAnomalies(rows, GLOBAL_SCOPE);
+    expect(found).toHaveLength(1);
+    expect(found[0].kind).toBe("organic_spike");
+    // √5 ≈ 2.24 — на него и поделено, и это же число возвращено читателю.
+    expect(found[0].stdDev).toBe(2.24);
+    expect(found[0].zScore).toBeCloseTo((500 - 5) / Math.sqrt(5), 1);
+  });
+
+  it("на ровном ряде не поднимает шум из-за колебания в один человек", () => {
+    // База 5, пол √5 ≈ 2.24: отклонение на 2 человека — это меньше сигмы.
+    const rows = withOrganicBaseline(series([...Array(BASELINE_WINDOW_DAYS).fill(5), 7]));
+    expect(detectOrganicAnomalies(rows, GLOBAL_SCOPE)).toEqual([]);
+  });
+
+  it("при нулевой базе порога нет — истории тоже нет", () => {
+    const rows = withOrganicBaseline(series([...Array(BASELINE_WINDOW_DAYS).fill(0), 3]));
+    expect(detectOrganicAnomalies(rows, GLOBAL_SCOPE)).toEqual([]);
+  });
+
+  it("на шумном ряде остаётся наблюдённое СКО, а не пуассоновский пол", () => {
+    // Разброс 0..20 вокруг средних 10: выборочное σ ≈ 10 много больше √10.
+    const noisy = Array.from({ length: BASELINE_WINDOW_DAYS }, (_, i) => (i % 2 ? 0 : 20));
+    const rows = withOrganicBaseline(series([...noisy, 25]));
+    // 25 при базе ~10 и σ ~10 — это 1.5σ, то есть НЕ аномалия. С полом √10
+    // (≈3.2) это было бы 4.7σ и ложной тревогой.
     expect(detectOrganicAnomalies(rows, GLOBAL_SCOPE)).toEqual([]);
   });
 
