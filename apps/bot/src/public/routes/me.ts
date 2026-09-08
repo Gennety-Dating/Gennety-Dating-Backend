@@ -41,8 +41,12 @@ import {
 } from "../../services/onboarding-agent.js";
 import { buildInterviewState, loadStateContext } from "./onboarding-state.js";
 import { getBotApi } from "../server.js";
-import { setUserThemeById } from "../../services/user-preferences.js";
+import {
+  setUserLanguageById,
+  setUserThemeById,
+} from "../../services/user-preferences.js";
 import { parseThemePayload } from "../theme-payload.js";
+import { parseLanguagePayload } from "../language-payload.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
 import {
   saveHomeLocationForUser,
@@ -509,6 +513,36 @@ meRouter.patch("/theme", async (req: Request, res: Response): Promise<void> => {
   }
 
   await setUserThemeById(req.userId!, parsed.theme, parsed.mode);
+
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+  const profile = await prisma.profile.findUnique({ where: { userId: req.userId! } });
+
+  res.json({
+    user: serializeUser(user),
+    profile: profile ? serializeProfile(profile) : null,
+  });
+});
+
+/**
+ * PATCH /v1/me/language — язык аккаунта после онбординга (дефект S6).
+ *
+ * Выбор языка в приложении применяется мгновенно и локально, но до этого
+ * маршрута никуда не уезжал: `User.language` писался ровно один раз, на
+ * онбординге. Поэтому человек, переключивший язык в настройках, продолжал
+ * получать пуши, вопросы интервью и PNG-карточки Telegram на языке
+ * регистрации — интерфейс говорил одно, а всё, что приходит извне, другое.
+ *
+ * Это дефект, а не отсутствующая настройка: сама настройка на клиенте есть с
+ * 2026-09-04, ей просто некуда было писать.
+ */
+meRouter.patch("/language", async (req: Request, res: Response): Promise<void> => {
+  const parsed = parseLanguagePayload(req.body);
+  if ("error" in parsed) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  await setUserLanguageById(req.userId!, parsed.language);
 
   const user = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
   const profile = await prisma.profile.findUnique({ where: { userId: req.userId! } });

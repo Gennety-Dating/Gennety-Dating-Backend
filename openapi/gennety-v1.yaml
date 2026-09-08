@@ -719,6 +719,45 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/me/language:
+    patch:
+      tags: [me]
+      operationId: patchLanguage
+      summary: Set the account language (Settings picker)
+      description: |
+        Closes release-plan defect S6. The app has had a language picker since
+        2026-09-04 and applies it instantly and locally, but until this route
+        the choice went nowhere: `User.language` was written once, during
+        onboarding. Anyone who switched kept receiving pushes, interview
+        questions and rendered Telegram cards in the language they registered
+        in — the interface said one thing and everything arriving from outside
+        said another.
+
+        Only the codes in `Language` are accepted; near-misses such as `ru-RU`
+        or `EN` are refused rather than normalised, because a value no renderer
+        recognises would break all three surfaces at once.
+
+        Writing this also clears the account's cached date/match card PNGs, so
+        the next card is rendered in the new language instead of being served
+        from a cache painted in the old one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [language]
+              properties:
+                language: { $ref: "#/components/schemas/Language" }
+      responses:
+        "200":
+          description: Updated user + profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /v1/me/push-token:
     post:
       tags: [me]

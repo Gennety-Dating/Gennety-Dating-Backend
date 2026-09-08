@@ -41,6 +41,32 @@ export async function setUserLanguage(
   });
 }
 
+/**
+ * То же, что `setUserLanguage`, но по `id` — для JWT-поверхности, где
+ * `telegramId` не спрашивают.
+ *
+ * Сброс кэша карточек здесь не деталь, а половина смысла: карточки свидания и
+ * матча рисуются PNG-ом на языке аккаунта, и без сброса человек, сменивший
+ * язык в приложении, продолжал бы получать их на прежнем. Ровно этот разрыв
+ * маршрут и закрывает: до него `User.language` писался один раз на онбординге,
+ * поэтому пуши, вопросы интервью и карточки Telegram оставались на языке
+ * регистрации (дефект S6 плана релиза).
+ */
+export async function setUserLanguageById(
+  userId: string,
+  language: Language,
+): Promise<{ id: string }> {
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.update({
+      where: { id: userId },
+      data: { language },
+      select: { id: true },
+    });
+    await clearOwnDateCardCache(tx, user.id);
+    return user;
+  });
+}
+
 export async function setUserTheme(
   telegramId: bigint,
   theme: Theme,
