@@ -20,6 +20,62 @@ export interface TranscribeOptions {
 }
 
 /**
+ * Containers OpenAI accepts on the transcription endpoint, as file extensions.
+ * @see https://platform.openai.com/docs/guides/speech-to-text
+ */
+const SUPPORTED_EXTENSIONS = new Set([
+  "flac",
+  "m4a",
+  "mp3",
+  "mp4",
+  "mpeg",
+  "mpga",
+  "oga",
+  "ogg",
+  "wav",
+  "webm",
+]);
+
+/** MIME types whose subtype is not itself the extension OpenAI expects. */
+const EXTENSION_ALIASES: Record<string, string> = {
+  "audio/opus": "ogg",
+  "audio/vorbis": "ogg",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "m4a",
+  "audio/mp4": "m4a",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "audio/wave": "wav",
+  "audio/x-wav": "wav",
+  "audio/vnd.wave": "wav",
+  "audio/x-flac": "flac",
+};
+
+/**
+ * Filename to upload the buffer under.
+ *
+ * OpenAI reads the container from the uploaded FILE NAME, so the name has to
+ * agree with the bytes: an AAC recording sent as `voice.ogg` is rejected as a
+ * malformed OGG, not decoded as AAC. The name used to be hardcoded to
+ * `voice.ogg`, which was invisible for as long as the only caller was Telegram
+ * — voice notes really are Opus in OGG — and would have failed every upload
+ * from the iOS chat, which records m4a.
+ *
+ * An unrecognised type returns null rather than guessing an extension. A wrong
+ * guess costs a Whisper round-trip and comes back as the same failure; callers
+ * already treat a failure as "ask them to type it instead".
+ */
+function transcriptionFilename(mime: string): string | null {
+  const normalized = mime.split(";")[0]!.trim().toLowerCase();
+  const aliased = EXTENSION_ALIASES[normalized];
+  if (aliased) return `voice.${aliased}`;
+
+  const subtype = normalized.split("/")[1] ?? "";
+  if (SUPPORTED_EXTENSIONS.has(subtype)) return `voice.${subtype}`;
+  return null;
+}
+
+/**
  * Transcribe a voice-note buffer via OpenAI Whisper.
  *
  * Returns the transcript, or an empty string if the API key is missing,
@@ -43,9 +99,15 @@ export async function transcribeVoice(
   const fetchFn = options.fetchFn ?? fetch;
   const mime = options.mime ?? "audio/ogg";
 
+  const filename = transcriptionFilename(mime);
+  if (!filename) {
+    console.warn("Voice transcription skipped: unsupported audio type", mime);
+    return "";
+  }
+
   const form = new FormData();
   const blob = new Blob([new Uint8Array(buffer)], { type: mime });
-  form.append("file", blob, "voice.ogg");
+  form.append("file", blob, filename);
   form.append("model", WHISPER_MODEL);
   form.append("response_format", "json");
   if (options.language) form.append("language", options.language);

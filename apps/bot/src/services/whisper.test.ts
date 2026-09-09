@@ -89,6 +89,55 @@ describe("transcribeVoice", () => {
     expect(await transcribeVoice(big, { fetchFn })).toBe("");
     expect(fetchFn).not.toHaveBeenCalled();
   });
+
+  /**
+   * Имя файла — это и есть заявленный контейнер: OpenAI читает формат из него,
+   * а не из MIME-типа блоба. Пока единственным вызывающим был Telegram,
+   * захардкоженное `voice.ogg` совпадало с байтами случайно; запись с айфона
+   * приходит в m4a, и под чужим именем была бы отвергнута как битый OGG.
+   */
+  describe("filename", () => {
+    async function filenameFor(mime: string): Promise<string | null> {
+      const fetchFn = vi.fn().mockResolvedValue(okJson({ text: "ok" }));
+      await transcribeVoice(buffer, { fetchFn, mime });
+      if (fetchFn.mock.calls.length === 0) return null;
+      const form = fetchFn.mock.calls[0][1].body as FormData;
+      const file = form.get("file");
+      return file instanceof File ? file.name : null;
+    }
+
+    it("names a Telegram voice note as OGG", async () => {
+      expect(await filenameFor("audio/ogg")).toBe("voice.ogg");
+    });
+
+    it("names an iOS chat recording as m4a", async () => {
+      expect(await filenameFor("audio/m4a")).toBe("voice.m4a");
+      expect(await filenameFor("audio/x-m4a")).toBe("voice.m4a");
+      expect(await filenameFor("audio/mp4")).toBe("voice.m4a");
+    });
+
+    it("ignores charset parameters and letter case on the MIME type", async () => {
+      expect(await filenameFor("AUDIO/OGG; codecs=opus")).toBe("voice.ogg");
+    });
+
+    it("maps codec-named types onto their container", async () => {
+      expect(await filenameFor("audio/opus")).toBe("voice.ogg");
+      expect(await filenameFor("audio/aac")).toBe("voice.m4a");
+    });
+
+    it("accepts a subtype that is already a supported extension", async () => {
+      expect(await filenameFor("audio/wav")).toBe("voice.wav");
+      expect(await filenameFor("audio/webm")).toBe("voice.webm");
+    });
+
+    it("refuses to guess an extension for an unknown type, without calling out", async () => {
+      const fetchFn = vi.fn().mockResolvedValue(okJson({ text: "ok" }));
+      expect(
+        await transcribeVoice(buffer, { fetchFn, mime: "application/octet-stream" }),
+      ).toBe("");
+      expect(fetchFn).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("transcribeVoice with no API key", () => {
@@ -102,4 +151,5 @@ describe("transcribeVoice with no API key", () => {
     expect(await fn(Buffer.from("x"), { fetchFn })).toBe("");
     expect(fetchFn).not.toHaveBeenCalled();
   });
+
 });
