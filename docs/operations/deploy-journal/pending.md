@@ -11,6 +11,43 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — прокси-чат: реакции-эмодзи, закрытый набор из пяти (2026-09-09).**
+**Есть изменение схемы Prisma** — миграция `20260909000000_proxy_chat_reactions`,
+**чисто аддитивная**: две nullable-колонки в `proxy_messages`, ни одной изменённой
+или удалённой. Коммиты бэкенда: `dbfdc803`, `b7db6916`. Парный релиз iOS: `4aa91d4`.
+
+```sql
+ALTER TABLE "proxy_messages" ADD COLUMN "reaction" TEXT,
+ADD COLUMN "author_chat_message_id" BIGINT;
+```
+
+**Миграция написана отдельно от кода, и это важно:** коммит с реакциями принёс
+колонки в `schema.prisma`, но файла миграции не завёл. `migrate deploy` оставил бы
+прод без обеих колонок, которых слитый код ждёт, — P2022-крашлуп, ровно тот класс,
+ради которого заведена находка H02. Найдено сверкой миграций со схемой на живом
+PostgreSQL 16 уже после сведения веток в ствол.
+
+**Проверка перед выкатом** (пусто = миграции точно описывают схему):
+
+```
+prisma migrate diff --from-migrations prisma/migrations \
+  --to-schema-datamodel prisma/schema.prisma --shadow-database-url "$SHADOW_URL"
+```
+
+**Проверка после выката:**
+
+```
+psql "$DATABASE_URL" -c "\d proxy_messages" | grep -E 'reaction|author_chat_message_id'
+```
+
+**Откат:** код откатывается свободно — колонки nullable, при откате их просто
+никто не читает. Снимать миграцию не требуется и не рекомендуется.
+
+**Demo-режим:** не затрагивает. **iOS:** требует сборки с `4aa91d4` и новее —
+жест реакции обращается к обеим колонкам.
+
+---
+
 **PENDING — агентская сессия 2026-09-08: гейт `/v1/chat`, счётчик города,
 маршрут языка.** Схема Prisma НЕ меняется, миграций нет. Четыре коммита:
 `925d01b`, `07e2fd0`, `59b6414`, `1bb665f`.
