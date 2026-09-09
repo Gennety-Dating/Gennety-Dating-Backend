@@ -31,7 +31,7 @@ import { recordRejectionFeedback } from "./rejection-feedback.js";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 import { transitionAccountStatus } from "./account-status-transitions.js";
 import { getPremiumCancelContext, formatPremiumUntil } from "./premium.js";
-import { explainMatch, getMatchmakingStanding } from "./agent-insights.js";
+import { explainMatch, getMatchmakingStanding, getPhotoReview } from "./agent-insights.js";
 import { checkRematchEligibility } from "./rematch.js";
 import { isMarketPending } from "../handlers/menu/city-switch.js";
 import { recordPostDateFeedback } from "../handlers/date/feedback.js";
@@ -509,6 +509,15 @@ export const AGENT_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "review_my_photos",
+      description:
+        "Read a review of the user's OWN profile photos: how many they have, whether any are stuck waiting on the identity check, which positions make their face hard to recognise, and which single photo reads strongest and which weakest. Call when they ask what is wrong with their photos, which one to swap out, which to put first, or why their profile isn't working. Read-only — it cannot delete, reorder or upload anything.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "propose_cancel_date",
       description:
         "Call when the user wants to CANCEL their date — whether it is already booked or still being planned (they are picking a time, or marking where they'll set off from). Covers 'something came up', 'I can't make it', 'my plans changed', and 'how do I cancel'. This only surfaces the cancellation button — you NEVER cancel a date yourself and text alone never cancels one. Cancelling is irreversible and the match cannot be restored, so the user still confirms on a red button afterwards. If their message is ambiguous between asking HOW cancelling works and actually wanting to cancel, ask one short clarifying question first ('have your plans changed?') and call this only once they say yes. Do NOT call for questions about the date, for changing the venue, or for running late.",
@@ -609,6 +618,7 @@ export const TOOL_KINDS: Record<string, ToolKind> = {
   get_my_profile: "read",
   get_my_standing: "read",
   explain_my_match: "read",
+  review_my_photos: "read",
   update_bio: "write",
   update_major: "write",
   update_age_range: "write",
@@ -929,6 +939,33 @@ async function execExplainMyMatch(telegramId: bigint): Promise<string> {
       "never say a partner scored low on anything, and never mention Elo, attractiveness scoring, embeddings or internal numbers. " +
       "`attractivenessBalance` may only be described as how close a fit the two are overall. " +
       "Never reveal the partner's accept/decline decision.",
+  });
+}
+
+async function execReviewMyPhotos(telegramId: bigint): Promise<string> {
+  const review = await getPhotoReview(telegramId);
+  if (!review) return JSON.stringify({ success: false, error: "User not found." });
+
+  if (review.photoCount === 0) {
+    return JSON.stringify({
+      success: true,
+      review,
+      instruction:
+        "There are no photos on this profile at all, so there is nothing to review — say that plainly and warmly, and offer to open 'My photos' with open_screen('photos'). Do not speculate about photos you cannot see.",
+    });
+  }
+
+  return JSON.stringify({
+    success: true,
+    review,
+    instruction:
+      "Look at their photos WITH them, the way a matchmaker would: concrete, kind, and short. Lead with the ONE change that would help most and name the photo by its position ('the third one'). " +
+      "`hardToRecognise` lists positions where the face is genuinely hard to match — small in frame, turned away, in shadow, or one face among several. That is the most actionable finding here: those photos read as somebody else. " +
+      "`standouts.strongest` is the one worth showing first; `standouts.weakest` is the one to replace. When `standouts` is null the ordering is simply unknown — say nothing about which photo is best and never infer it from the other fields. " +
+      "`pendingIdentityCheck` above zero means that many uploaded photos are not visible to anyone yet while the identity check finishes; it clears by itself once enough photos agree with each other, so report it as a wait, not a rejection. " +
+      "If `photoCount` is below `minPhotos`, that outranks every other finding. " +
+      "NEVER quote or imply a score, percentage, rating, ranking position or Elo, and NEVER name the facial traits the pass measured (symmetry, eye distance, face shape, feature regularity) — they asked which photo to change, not to be graded on their face. " +
+      "You cannot change photos yourself; offer open_screen('photos') so they can.",
   });
 }
 
@@ -1736,6 +1773,9 @@ export async function executeAgentTool(
       break;
     case "explain_my_match":
       result = await execExplainMyMatch(telegramId);
+      break;
+    case "review_my_photos":
+      result = await execReviewMyPhotos(telegramId);
       break;
     case "pause_matching":
       result = await execPauseMatching(telegramId);

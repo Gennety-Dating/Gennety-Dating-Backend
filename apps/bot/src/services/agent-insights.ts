@@ -1,5 +1,11 @@
 import { prisma } from "@gennety/db";
-import { CADENCE, MIN_PHOTOS, PHOTO_BONUS_TICKET_THRESHOLD } from "@gennety/shared";
+import {
+  CADENCE,
+  FACE_SIMILARITY_THRESHOLD,
+  MAX_PHOTOS,
+  MIN_PHOTOS,
+  PHOTO_BONUS_TICKET_THRESHOLD,
+} from "@gennety/shared";
 
 /**
  * Read-only matchmaking insight for the menu agent.
@@ -235,4 +241,177 @@ export async function explainMatch(telegramId: bigint): Promise<MatchExplanation
         }
       : null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Photo review — "which of my photos is letting me down?"
+// ---------------------------------------------------------------------------
+
+/**
+ * How far above the accepted floor a photo still counts as hard to recognise.
+ *
+ * Every stored score already cleared `FACE_SIMILARITY_THRESHOLD` — the upload
+ * gate rejects the rest — so an absolute "bad" band would be empty by
+ * construction. The band that carries information is the one just above the
+ * floor: a photo that only barely matched is one where the face is small,
+ * turned away, shaded or shared with other people, and that is precisely the
+ * photo worth replacing.
+ */
+const FACE_MATCH_WEAK_MARGIN = 0.1;
+
+/**
+ * Minimum spread between the best- and worst-scoring stored photo before the
+ * pair is worth naming at all. Within a few points the ordering is model
+ * noise, and "your fourth photo is the weakest one" said about noise is advice
+ * the user can act on and be wrong.
+ */
+const STANDOUT_MIN_SPREAD = 8;
+
+export interface PhotoReview {
+  photoCount: number;
+  minPhotos: number;
+  maxPhotos: number;
+  /**
+   * Accepted static photos that have not yet formed the 2+ photo identity
+   * cluster. They are uploaded but invisible — nobody sees them and they do
+   * not count toward the minimum, which is otherwise a silent state.
+   */
+  pendingIdentityCheck: number;
+  /** 1-based positions where the face is measurably harder to match. */
+  hardToRecognise: number[];
+  /** False for unverified users and legacy rows: no per-photo face data. */
+  faceDataAvailable: boolean;
+  /**
+   * Ordinal standouts from the stored vision pass, or null when the stored
+   * ranking cannot be trusted to still line up with the current photos.
+   */
+  standouts: { strongest: number; weakest: number } | null;
+}
+
+interface StoredPhotoScore {
+  index: number;
+  score: number;
+}
+
+/**
+ * Narrow read of `Profile.eloSeedDetails`, which is a `Json?` column and so
+ * arrives as `unknown`. Anything that deviates from the written shape is
+ * treated as absent rather than repaired: a half-parsed ranking would still
+ * produce a confident "replace photo 3".
+ */
+function parseSeedPhotos(raw: unknown): StoredPhotoScore[] | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const photos = (raw as { photos?: unknown }).photos;
+  if (!Array.isArray(photos) || photos.length === 0) return null;
+
+  const parsed: StoredPhotoScore[] = [];
+  for (const entry of photos) {
+    if (typeof entry !== "object" || entry === null) return null;
+    const { index, score } = entry as { index?: unknown; score?: unknown };
+    if (typeof index !== "number" || !Number.isInteger(index) || index < 1) return null;
+    if (typeof score !== "number" || !Number.isFinite(score)) return null;
+    parsed.push({ index, score });
+  }
+  return parsed;
+}
+
+/**
+ * Read-only, per-photo review of the user's own profile photos.
+ *
+ * Nothing here runs a vision pass, and that is the whole point: the per-photo
+ * numbers already exist. `Profile.eloSeedDetails.photos[]` keeps the score the
+ * cold-start pass gave each individual photo, and `Profile.photoFaceScores[]`
+ * keeps each photo's face-match similarity, written 1:1 with `photos[]` by the
+ * upload gate. Reviewing photos is therefore a read, not an inference — an
+ * earlier reading of this code concluded the opposite and deferred the feature
+ * as needing new infrastructure (see DECISIONS.md).
+ *
+ * The two sources are not equally trustworthy over time, and they are guarded
+ * differently:
+ *
+ *   - `photoFaceScores` is rewritten by the upload gate on every photo edit,
+ *     so it is aligned with `photos[]` by construction. It is used whenever
+ *     its length matches.
+ *   - `eloSeedDetails` is frozen at seeding time and never revisited. Photos
+ *     cannot be reordered in this product, so a set that has changed since the
+ *     seed has either a different count (a removal) or a later `faceMatchedAt`
+ *     (an upload). Failing either check drops the ranking entirely rather than
+ *     renumbering it, because a stale ranking is not a weaker answer — it
+ *     names the wrong photo.
+ */
+export async function getPhotoReview(telegramId: bigint): Promise<PhotoReview | null> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: {
+      faceMatchedAt: true,
+      profile: {
+        select: {
+          photos: true,
+          photoFaceScores: true,
+          pendingPhotoCandidates: true,
+          eloSeedDetails: true,
+          eloSeededAt: true,
+        },
+      },
+    },
+  });
+  if (!user) return null;
+
+  const profile = user.profile;
+  const photoCount = profile?.photos?.length ?? 0;
+  const faceScores = profile?.photoFaceScores ?? [];
+  // A length mismatch means the row predates per-photo scoring (or the user is
+  // unverified). Positions cannot be inferred from a shorter list, so the
+  // whole signal is withheld instead of being aligned by guesswork.
+  const faceDataAvailable = faceScores.length > 0 && faceScores.length === photoCount;
+
+  const hardToRecognise: number[] = [];
+  if (faceDataAvailable) {
+    faceScores.forEach((score, position) => {
+      if (score < FACE_SIMILARITY_THRESHOLD + FACE_MATCH_WEAK_MARGIN) {
+        hardToRecognise.push(position + 1);
+      }
+    });
+  }
+
+  return {
+    photoCount,
+    minPhotos: MIN_PHOTOS,
+    maxPhotos: MAX_PHOTOS,
+    pendingIdentityCheck: profile?.pendingPhotoCandidates?.length ?? 0,
+    hardToRecognise,
+    faceDataAvailable,
+    standouts: standoutsFor(
+      profile?.eloSeedDetails,
+      photoCount,
+      profile?.eloSeededAt ?? null,
+      user.faceMatchedAt,
+    ),
+  };
+}
+
+function standoutsFor(
+  seedDetails: unknown,
+  photoCount: number,
+  seededAt: Date | null,
+  faceMatchedAt: Date | null,
+): PhotoReview["standouts"] {
+  // Naming a strongest and a weakest out of one photo says nothing.
+  if (photoCount < 2 || !seededAt) return null;
+  // A photo uploaded after the seed ran shifts every position after it.
+  if (faceMatchedAt && faceMatchedAt.getTime() > seededAt.getTime()) return null;
+
+  const stored = parseSeedPhotos(seedDetails);
+  if (!stored || stored.length !== photoCount) return null;
+
+  let strongest = stored[0]!;
+  let weakest = stored[0]!;
+  for (const entry of stored) {
+    if (entry.score > strongest.score) strongest = entry;
+    if (entry.score < weakest.score) weakest = entry;
+  }
+  if (strongest.score - weakest.score < STANDOUT_MIN_SPREAD) return null;
+  if (strongest.index > photoCount || weakest.index > photoCount) return null;
+
+  return { strongest: strongest.index, weakest: weakest.index };
 }
