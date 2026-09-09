@@ -491,7 +491,10 @@ function renderOffer(state: PremiumState): void {
   const cards: Array<
     [IconName, "twinkle" | "flutter", string, string, string, { label: string; href: string }?]
   > = [
-    ["heart", "twinkle", s.b1t, s.b1d, s.b1x],
+    // Filled heart, not the outline one: the three cards under it (lock, star,
+    // map) all carry solid marks, and a hairline heart at 22px read as a
+    // lighter, thinner glyph than its neighbours.
+    ["heart-filled", "twinkle", s.b1t, s.b1d, s.b1x],
     // The padlock is deliberately the SAME glyph the calendar plates a locked
     // row with: a user arriving from that tap recognises it before reading a
     // word. Same precedent as the venue board's own `vc-premium-hint`.

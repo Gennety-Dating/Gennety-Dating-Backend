@@ -179,6 +179,17 @@ input.search::placeholder {
   line-height: 1.3;
   color: var(--text);
 }
+/* The "why is this list empty" row. Never a choice, so it keeps none of
+   `.result`'s tap affordances — no pointer, no press highlight. */
+.result.notice {
+  cursor: default;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+.result.notice:active {
+  background: transparent;
+}
 .result .secondary {
   font-size: 12px;
   color: var(--text-dim);

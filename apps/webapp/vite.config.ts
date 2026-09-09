@@ -8,6 +8,12 @@ import { resolve } from "node:path";
  * later is a one-line `input` addition.
  */
 export default defineConfig({
+  /// MapLibre spawns its worker with `{ type: "module" }`, so the worker Vite
+  /// emits for it has to be a real ES module. Vite's default worker format is
+  /// `iife`, which is not one.
+  worker: {
+    format: "es",
+  },
   build: {
     outDir: "dist",
     target: "es2022",

@@ -6,6 +6,7 @@ import { planDayRows } from "./prime-band.js";
 // `premium-prime-benefit.test.ts`. `index.html` carries the stylesheet inline.
 import MAIN from "./main.ts?raw";
 import HTML from "../index.html?raw";
+import ICONS from "./icons.ts?raw";
 
 const DAY = [
   "2026-05-11T10:00:00.000Z", // 13:00 Kyiv
@@ -118,7 +119,7 @@ describe("time sheet — the evening band's wiring", () => {
 
   it("prices the band with the authored star rather than the platform emoji", () => {
     expect(MAIN).toContain('icon("star", "icon prime-star")');
-    expect(MAIN).toContain('cta.append(...priceLabel("primeBandCta"))');
+    expect(MAIN).toContain('note.append(...priceLabel("primeBandCta"))');
     // The unlock sheet's own button quotes the same charge the same way.
     expect(MAIN).toContain('priceLabel("primeSheetCtaPay")');
   });
@@ -231,8 +232,49 @@ describe("time sheet — the evening band's styling", () => {
     expect(band).toMatch(/padding:\s*8px/);
   });
 
-  it("gives the caption a real hit target", () => {
-    // 11px + 11px + a 13px line at 1.35 ≈ 40px.
-    expect(rule(".prime-band-cta")).toMatch(/padding:\s*11px/);
+  it("leaves the caption a footnote rather than a second way in", () => {
+    // The three locked rows are the controls and they all open the same sheet.
+    // A caption drawn as a fourth button under them promises a destination that
+    // does not exist, so it is a plain span: no button, no press state, no hit
+    // target to protect, and taps fall through to the band's own handler.
+    expect(MAIN).toContain('note.className = "prime-band-note"');
+    expect(MAIN).not.toContain('cta.setAttribute("aria-haspopup", "dialog")');
+    expect(MAIN).not.toContain("prime-band-cta");
+    expect(HTML).not.toContain(".prime-band-cta");
+
+    const note = rule(".prime-band-note");
+    expect(note).toContain("pointer-events: none");
+    expect(note).toMatch(/font-size:\s*12px/);
+    expect(note).not.toContain("background:");
+    expect(note).not.toContain("box-shadow:");
+    expect(note).not.toContain("cursor:");
+  });
+
+  it("gives the footnote the tray's own ink, held back, and never burgundy", () => {
+    // Burgundy on this sheet means "your partner marked this" — it is the wash
+    // on the rows directly above this line. The footnote takes the slab's own
+    // ink at half strength instead, and the token flips to dark ink in the
+    // light theme so "white" does not become "invisible".
+    const note = rule(".prime-band-note");
+    expect(note).toContain("color: var(--pt-note)");
+    expect(note).not.toContain("--brand");
+    expect(HTML).toMatch(/--pt-note: rgba\(255, 255, 255, 0\.5\);/);
+    expect(HTML).toMatch(/--pt-note: rgba\(29, 29, 29, 0\.5\);/);
+  });
+
+  it("keeps the whole locked slab one tap target", () => {
+    expect(rule(".prime-band:not(.is-open)")).toContain("cursor: pointer");
+  });
+
+  it("prices with the blunt star, scaled to the line it ends", () => {
+    // One glyph across the product — the fat, rounded one, never the hairline
+    // five-spike star that aliases into a smudge at price size. It is drawn at
+    // 17px beside the unlock sheet's 17px button type and steps down to 15px on
+    // the band's 12px footnote, where a 17px star would be the loudest thing in
+    // a section built to be quiet.
+    expect(rule(".prime-star")).toMatch(/width:\s*17px/);
+    expect(rule(".prime-band-note .prime-star")).toMatch(/width:\s*15px/);
+    expect(ICONS).toContain("star: {");
+    expect(ICONS).not.toContain("M12 3.6l2.5 5.1 5.6.8");
   });
 });

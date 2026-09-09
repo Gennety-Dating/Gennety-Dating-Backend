@@ -268,7 +268,18 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       res.status(200).json({ ok: true, results });
     } catch (err) {
       console.warn("[location/search] Places lookup failed:", err);
-      res.status(200).json({ ok: true, results: [] });
+      // 502, NOT an empty 200. An empty list is a real answer here — the market
+      // restriction makes "nothing matches" the correct response to plenty of
+      // what gets typed in a launched city — so answering an upstream failure
+      // with one leaves the caller no way to tell a miss from an outage, and
+      // the picker then cannot say which happened either. That is how a Places
+      // key whose API restrictions stopped listing Places API (New) — 403
+      // PERMISSION_DENIED on every call, found 2026-09-07 — read on screen as
+      // "the search just never finds anything", for as long as it did.
+      //
+      // The picker still soft-fails on this: no modal, the map is untouched,
+      // the point can still be dropped by hand. It only stops being silent.
+      res.status(502).json({ error: "search-unavailable" });
     }
   });
 
