@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { tr } from "./i18n.js";
 
 // maplibre-gl is mocked at module level: it is an ESM package with named
 // exports and a WebGL runtime, and neither survives this suite's fake DOM.
@@ -9,9 +10,13 @@ vi.mock("maplibre-gl", () => ({
   Marker: vi.fn(),
 }));
 vi.mock("maplibre-gl/dist/maplibre-gl.css", () => ({}));
+// The factory REPLACES the module, which is also what keeps the real one's
+// `setWorkerUrl(...)` side effect — and its `?worker&url` import, which only
+// Vite can resolve — out of the test environment.
 vi.mock("./map-style.js", () => ({ mapStyle: vi.fn(() => ({ version: 8 })) }));
 
-const { selectLocationMock, fetchVenueIntentStateMock, interpretVenueIntentTmaMock, confirmVenueIntentTmaMock } = vi.hoisted(() => ({
+const { searchLocationsMock, selectLocationMock, fetchVenueIntentStateMock, interpretVenueIntentTmaMock, confirmVenueIntentTmaMock } = vi.hoisted(() => ({
+  searchLocationsMock: vi.fn(),
   selectLocationMock: vi.fn(),
   fetchVenueIntentStateMock: vi.fn(),
   interpretVenueIntentTmaMock: vi.fn(),
@@ -20,7 +25,12 @@ const { selectLocationMock, fetchVenueIntentStateMock, interpretVenueIntentTmaMo
 
 vi.mock("./api.js", () => ({
   apiBase: "",
-  searchLocations: vi.fn(),
+  searchLocations: searchLocationsMock,
+  // Both halves of one autocomplete session. The factory REPLACES the module,
+  // so an export missing here throws the moment the picker reaches for it —
+  // and typing a query reaches for the token on the first keystroke.
+  newLocationSessionToken: vi.fn(() => "11111111-1111-4111-8111-111111111111"),
+  resolveLocation: vi.fn(),
   selectLocation: selectLocationMock,
   fetchVenueIntentState: fetchVenueIntentStateMock,
   interpretVenueIntentTma: interpretVenueIntentTmaMock,
@@ -55,7 +65,17 @@ class FakeElement {
   className = "";
   classList = new FakeClassList();
   disabled = false;
-  innerHTML = "";
+  private html = "";
+  get innerHTML(): string {
+    return this.html;
+  }
+  set innerHTML(value: string) {
+    this.html = value;
+    // Real DOM: assigning innerHTML replaces the children. The picker clears
+    // the results list exactly this way before every render, so a fake that
+    // ignored it would stack rows from one search on top of the last.
+    if (value === "") this.children = [];
+  }
   style: Record<string, string> = {};
   textContent = "";
   value = "";
@@ -73,14 +93,28 @@ class FakeElement {
 
   append(..._children: FakeElement[]): void {}
 
+  appendChild(child: FakeElement): FakeElement {
+    this.children.push(child);
+    return child;
+  }
+
+  get childElementCount(): number {
+    return this.children.length;
+  }
+
   replaceChildren(...children: FakeElement[]): void {
     this.children = children;
   }
 
-  click(): void {
-    for (const handler of this.listeners.get("click") ?? []) {
-      handler({ target: this });
+  /** Dispatch to whatever the app registered for `type`. */
+  fire(type: string, event: unknown = { target: this }): void {
+    for (const handler of this.listeners.get(type) ?? []) {
+      handler(event);
     }
+  }
+
+  click(): void {
+    this.fire("click");
   }
 
   contains(target: unknown): boolean {
@@ -205,6 +239,8 @@ async function loadLocationApp(options: {
 } = {}) {
   vi.resetModules();
   vi.useFakeTimers();
+  searchLocationsMock.mockReset();
+  searchLocationsMock.mockResolvedValue([]);
   selectLocationMock.mockReset();
   selectLocationMock.mockResolvedValue(undefined);
   fetchVenueIntentStateMock.mockReset();
@@ -601,5 +637,62 @@ describe("Location Mini App loading cover", () => {
 
     expect(document.getElementById("vibe-stage")!.hidden).toBe(false);
     expect(boot.classList.contains("done")).toBe(true);
+  });
+});
+
+describe("Location Mini App departure search", () => {
+  async function typeQuery(document: FakeDocument, text: string): Promise<void> {
+    const search = document.getElementById("search")!;
+    search.value = text;
+    search.fire("input");
+    // Past the 350ms debounce, then let the request's microtasks settle.
+    await vi.advanceTimersByTimeAsync(400);
+    await flushPromises();
+  }
+
+  it("names the outage instead of showing an empty list when the lookup fails", async () => {
+    const { document } = await loadLocationApp();
+    searchLocationsMock.mockRejectedValue(new Error("HTTP 502: search-unavailable"));
+
+    await typeQuery(document, "khreshchatyk");
+
+    const results = document.getElementById("results")!;
+    // The dropdown OPENS on a failure, which is the whole point: a dead
+    // provider and "no such place" used to be the same blank screen, and that
+    // is how a 403-ing Places key stayed invisible.
+    expect(results.classList.contains("visible")).toBe(true);
+    expect(results.children).toHaveLength(1);
+    expect(results.children[0].className).toContain("notice");
+    expect(results.children[0].textContent).toBe(tr("en", "locSearchUnavailable"));
+  });
+
+  it("does not let a stale rejection cover results that already arrived", async () => {
+    const { document } = await loadLocationApp();
+    let rejectFirst: (err: Error) => void = () => undefined;
+    searchLocationsMock.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+    searchLocationsMock.mockImplementationOnce(() =>
+      Promise.resolve([{ placeId: "pid", name: "Khreshchatyk", address: "Kyiv" }]),
+    );
+
+    await typeQuery(document, "khr");
+    await typeQuery(document, "khresh");
+
+    const results = document.getElementById("results")!;
+    expect(results.children).toHaveLength(1);
+    expect(results.children[0].className).toBe("result");
+
+    rejectFirst(new Error("HTTP 502: search-unavailable"));
+    await flushPromises();
+
+    // The older query lost the race, so its failure is not news about the
+    // list on screen — without the sequence guard it would repaint a working
+    // result set as an outage.
+    expect(results.children).toHaveLength(1);
+    expect(results.children[0].className).toBe("result");
   });
 });

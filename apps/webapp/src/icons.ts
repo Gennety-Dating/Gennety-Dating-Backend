@@ -149,8 +149,27 @@ const ICONS: Record<IconName, { d: string[]; solid?: boolean }> = {
       "M6 15.5V11a5 5 0 0 1 5-5h4.5",
     ],
   },
+  /**
+   * The Stars mark — a price glyph, not a rating one. Every surface that draws
+   * it draws it small (13-17px) beside 13-18px type, so it is built for that
+   * size rather than for a 24px box.
+   *
+   * FATTER and BLUNTER than a textbook star, on purpose. The classic 0.38
+   * inner/outer ratio gives five hairline spikes that, at 14px over a silver
+   * slab, alias into a grey smudge and read as decoration. This one runs a 0.50
+   * ratio and rounds every corner (2.4px of travel at the tips, 1.75px in the
+   * valleys), which keeps the five-point silhouette unmistakable while the mass
+   * stays solid at price size. It also fills more of its box — same CSS pixels,
+   * visibly larger mark.
+   *
+   * Shared, not per-screen: the calendar's evening caption, the unlock sheet's
+   * button and the venue board's chips all quote Stars, and a tier that changes
+   * its own currency mark between screens reads as two products.
+   */
   star: {
-    d: ["M12 3.6l2.5 5.1 5.6.8-4 3.9 1 5.6-5.1-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.8L12 3.6Z"],
+    d: [
+      "M11.16 4.1Q12 2.4 12.84 4.1L14.2 6.86Q14.82 8.12 16.21 8.32L19.25 8.76Q21.13 9.03 19.77 10.36L17.57 12.51Q16.57 13.48 16.8 14.86L17.32 17.89Q17.64 19.77 15.96 18.88L13.24 17.45Q12 16.8 10.76 17.45L8.04 18.88Q6.36 19.77 6.68 17.89L7.2 14.86Q7.43 13.48 6.43 12.51L4.23 10.36Q2.87 9.03 4.75 8.76L7.79 8.32Q9.18 8.12 9.8 6.86Z",
+    ],
     solid: true,
   },
   /**

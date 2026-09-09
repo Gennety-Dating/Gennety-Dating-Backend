@@ -165,6 +165,15 @@ let selectedAddress: string | null = null;
 let confirming = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 /**
+ * Sequence number of the newest dispatched search.
+ *
+ * Debounced typing still overlaps — a slow request can settle after a later,
+ * faster one — and the failure notice below is what makes that matter: without
+ * this guard a single stale rejection would paint "search is unavailable" over
+ * results that had already arrived. Only the newest query may touch the list.
+ */
+let searchSeq = 0;
+/**
  * The Places autocomplete session token for the typing episode in progress.
  *
  * Minted on the first keystroke of an episode and dropped the moment a place is
@@ -460,6 +469,7 @@ function initSearch(): void {
 
 async function runSearch(query: string): Promise<void> {
   if (!app) return;
+  const seq = ++searchSeq;
   try {
     // Bias the search by the current pin position so "metro" disambiguates to
     // the user's city, not a global hit.
@@ -470,11 +480,17 @@ async function runSearch(query: string): Promise<void> {
     // billable session instead of a request each.
     searchSession ??= newLocationSessionToken();
     const hits = await searchLocations(app.initData, query, center, searchSession);
+    if (seq !== searchSeq) return;
     renderResults(hits);
   } catch {
-    // Soft-fail — searching is supplemental; the user can still pan the map.
-    // Don't surface a modal alert that would feel intrusive.
-    hideResults();
+    if (seq !== searchSeq) return;
+    // Soft-fail — searching is supplemental; the user can still pan the map,
+    // and that is exactly what this row tells them. What it is NOT any more is
+    // silent: hiding the dropdown made a dead provider look identical to "no
+    // such place", so the picker found nothing and gave nobody a reason. It
+    // still refuses to throw a modal — the point can be dropped by hand, so
+    // this is a footnote, not an interruption.
+    showSearchNotice(tr(lang, "locSearchUnavailable"));
   }
 }
 
@@ -505,6 +521,23 @@ function renderResults(hits: LocationSearchHit[]): void {
 
 function hideResults(): void {
   resultsEl?.classList.remove("visible");
+}
+
+/**
+ * One non-selectable row saying why the list has nothing in it.
+ *
+ * It borrows the results island so the explanation lands where the user is
+ * already looking, and carries `notice` so nothing about it — cursor, press
+ * state, click handler — reads as something that can be picked.
+ */
+function showSearchNotice(text: string): void {
+  if (!resultsEl) return;
+  resultsEl.innerHTML = "";
+  const item = document.createElement("div");
+  item.className = "result notice";
+  item.textContent = text;
+  resultsEl.appendChild(item);
+  resultsEl.classList.add("visible");
 }
 
 function initShareCurrentLocation(): void {

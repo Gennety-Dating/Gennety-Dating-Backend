@@ -227,7 +227,11 @@ describe("GET /v1/location/search", () => {
     }
   });
 
-  it("returns an empty list rather than an error when Places rejects the query", async () => {
+  // An empty list is a legitimate answer here (the market restriction produces
+  // plenty of them), so spending it on an upstream failure too would leave the
+  // picker unable to tell a miss from an outage — which is precisely what hid a
+  // 403-ing Places key behind "nothing found" (2026-09-07).
+  it("answers 502 rather than an empty list when Places rejects the query", async () => {
     const initData = signInitData(BOT_TOKEN);
     const prevKey = process.env.PLACES_API_KEY;
     process.env.PLACES_API_KEY = "test-key";
@@ -238,8 +242,8 @@ describe("GET /v1/location/search", () => {
       const res = await request(buildApp())
         .get("/v1/location/search?q=lukyanivska")
         .set("Authorization", `tma ${initData}`);
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual({ ok: true, results: [] });
+      expect(res.status).toBe(502);
+      expect(res.body).toEqual({ error: "search-unavailable" });
     } finally {
       fetchSpy.mockRestore();
       if (prevKey === undefined) delete process.env.PLACES_API_KEY;

@@ -690,17 +690,28 @@ function primeCrest(): HTMLElement {
 }
 
 /**
- * The band's one paywall affordance: a single quiet action row under the last
- * locked slot. Deliberately not a filled button — the loud one lives in the
- * sheet this opens, and there is exactly one of those per screen.
+ * The band's footnote: one small line under the last locked slot naming what
+ * the evening costs.
+ *
+ * NOT a button, and that is the whole point. Every locked row above it is
+ * already a control that opens the unlock sheet — a caption drawn as a second
+ * button under them promises a different destination and delivers the same one,
+ * which is the sort of thing that makes a paywall read as two paywalls. So this
+ * is a plain `<span>`: it states the price and nothing else, and the tap it
+ * receives falls through to the band's own handler exactly like a tap on the
+ * slab's padding does.
+ *
+ * Nothing is lost by dropping the button. Pointer: the band carries the single
+ * click listener, so the caption never needed one. Keyboard: the locked rows
+ * are real `<button>`s carrying `aria-haspopup="dialog"`, so the sheet still
+ * has a focusable path to it — one fewer redundant tab stop, not one fewer
+ * route in.
  */
 function primeBandCaption(): HTMLElement {
-  const cta = document.createElement("button");
-  cta.type = "button";
-  cta.className = "prime-band-cta";
-  cta.setAttribute("aria-haspopup", "dialog");
-  cta.append(...priceLabel("primeBandCta"));
-  return cta;
+  const note = document.createElement("span");
+  note.className = "prime-band-note";
+  note.append(...priceLabel("primeBandCta"));
+  return note;
 }
 
 /**

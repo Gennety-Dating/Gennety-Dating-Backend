@@ -89,6 +89,15 @@
         /* The padlock: a neutral ink at the weight of the type beside it, not
          * a brand colour and not a whisper — it is the row's only state mark. */
         --pt-lock: rgba(255, 255, 255, 0.72);
+        /* The band's footnote. White, but held well back — the tray's own ink
+         * at half strength rather than burgundy, which in this sheet already
+         * means "your partner marked this" on the rows right above it.
+         *
+         * Held back because it is no longer the way in: every locked row is a
+         * control that opens the same unlock sheet, so a loud line under them
+         * competes with three controls to say what one of them already says.
+         * The price is the only thing it adds, and a price is a footnote. */
+        --pt-note: rgba(255, 255, 255, 0.5);
         --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Display",
           "Inter", system-ui, sans-serif;
         --safe-top: env(safe-area-inset-top, 0px);
@@ -159,6 +168,10 @@
         --pt-bf-a: #2a2a2e;
         --pt-bf-b: #050505;
         --pt-lock: rgba(29, 29, 29, 0.55);
+        /* Same instruction, mirrored: "the tray's own ink, held back" is white
+         * on the dark slab and near-black on the pale one. A literal #fff here
+         * would be a caption you cannot read at all. */
+        --pt-note: rgba(29, 29, 29, 0.5);
       }
 
       * { box-sizing: border-box; }
@@ -1007,7 +1020,10 @@
        * state paints its own translucent gradient instead, so re-pointing the
        * variable here re-tones ONLY the empty evening rows and leaves "you",
        * "your partner" and "both" reading exactly as they do everywhere else. */
-      .prime-band:not(.is-open) { --slot-bg: var(--pt-card); }
+      /* `cursor: pointer` on the same selector: the whole locked slab is one
+       * tap target — the rows, the header, the footnote and the gaps between
+       * them all lead to the same sheet. */
+      .prime-band:not(.is-open) { --slot-bg: var(--pt-card); cursor: pointer; }
       /* Open band: the grouping is still useful, the tier decoration is not —
        * nothing is being sold any more, and a paid-for section that keeps
        * shimmering is the upsell continuing after the sale. Rows fall back to
@@ -1125,30 +1141,49 @@
         z-index: 1;
       }
 
-      /* The band's one paywall affordance. Quiet by construction: no fill, no
-       * border, brand text on the tray's own ground — the loud button lives in
-       * the sheet this opens. Burgundy is deliberately kept HERE and nowhere
-       * else in the band: it is the one line that asks for money, and it is the
-       * board's rule too (a silver slab, a burgundy call to action).
-       * Padding keeps it a ≥40px hit target. */
-      .prime-band-cta {
-        appearance: none;
+      /* The band's footnote — a small, quiet line, not a control.
+       *
+       * No fill, no rim, no press state and no hit target to protect: the three
+       * locked rows above it are the controls, they all open the same unlock
+       * sheet, and anything drawn under them that LOOKS like a fourth way in
+       * only promises a second destination that does not exist. What is left is
+       * the one fact the rows cannot show — the price — so it is styled the way
+       * a price footnote is: 12px, mid weight, the tray's ink at half strength,
+       * tucked under the last row rather than spaced away from it.
+       *
+       * `pointer-events: none` so the tap falls straight through to the band's
+       * own handler. The caption is the only child of the slab that is not a
+       * button, and without this it would be the one spot inside the section
+       * where a tap hits a different element than every other spot.
+       *
+       * `display: block`, not flex: the price is an inline chip inside one
+       * sentence, and a flex container would make the sentence and the chip two
+       * items that break apart at their own widths on a narrow screen. */
+      .prime-band-note {
         display: block;
         width: 100%;
         margin: -2px 0 0;
-        padding: 11px 12px;
-        border: 0;
-        border-radius: 14px;
-        background: none;
-        color: var(--brand-light);
-        font: inherit;
-        font-size: 13px;
-        font-weight: 600;
+        padding: 6px 12px 4px;
+        color: var(--pt-note);
+        font-size: 12px;
+        font-weight: 500;
         line-height: 1.35;
         text-align: center;
-        cursor: pointer;
+        pointer-events: none;
       }
-      .prime-band-cta:active { opacity: 0.65; }
+      /* Scaled to the footnote it now ends. The glyph is the same fat, rounded
+       * star everywhere; only this instance steps down from the 17px it takes
+       * beside the unlock sheet's 17px button type, because a 17px star on a
+       * 12px line stops being a unit and becomes the loudest thing in the
+       * section — which is exactly what this line is not. */
+      .prime-band-note .prime-price {
+        margin-left: 5px;
+        vertical-align: -3px;
+      }
+      .prime-band-note .prime-star {
+        width: 15px;
+        height: 15px;
+      }
       /* The Stars price, as a chip at the end of the sentence rather than a
        * second clause behind a separator. Used by the band's caption and by the
        * unlock sheet's own button, so it inherits whatever colour it lands on:
@@ -1157,15 +1192,25 @@
         display: inline-flex;
         align-items: center;
         gap: 3px;
-        margin-left: 7px;
+        margin-left: 6px;
         font-weight: 700;
         /* inline-flex sits on its own baseline; this puts the chip back on the
-         * sentence's. */
-        vertical-align: -2px;
+         * sentence's. Deeper than it was, because the star grew — the offset
+         * tracks half the difference between the glyph box and the text's
+         * cap height.
+         *
+         * Only the band's caption is affected: on the unlock sheet's own button
+         * the chip is a flex item, where `vertical-align` does nothing and
+         * `align-items: center` already owns the answer. */
+        vertical-align: -4px;
       }
+      /* Bigger than the type it prices, on purpose: the star IS the price's
+       * unit, and at 14px it sat below the weight of the 700 numeral beside it
+       * and read as punctuation. The glyph itself is also fatter now (see
+       * `icons.ts`), so the two changes compound. */
       .prime-star {
-        width: 14px;
-        height: 14px;
+        width: 17px;
+        height: 17px;
         flex: 0 0 auto;
       }
 

@@ -60,6 +60,14 @@ interface Strings {
    *
    * Both headers are rendered uppercase by CSS, so they are written in normal
    * sentence case here.
+   *
+   * The locked header is the bare tier name in EVERY locale, and deliberately
+   * so: the crest sits immediately left of it and the caption right under it
+   * already says which hours are being opened, so a translated "evening, with
+   * Premium" only restates its own neighbours. One shimmering word beside the
+   * mark is the whole label — and it is the same word the venue board and the
+   * Premium Mini App put on this tier, which is what makes the three read as
+   * one purchase.
    */
   primeBandLocked: string;
   /** Same section once the band is open — neutral, no offer left to make. */
@@ -109,6 +117,7 @@ interface Strings {
   locErrGeoTimeout: string;
   locErrGeoUnsupported: string;
   locErrMapUnavailable: string;
+  locSearchUnavailable: string;
   // Verification Mini App (AWS Rekognition Face Liveness)
   verifyConsentTitle: string;
   verifyConsentLead: string;
@@ -169,7 +178,7 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Other time",
     legendOverlap: "Both",
     badgeNew: "NEW",
-    primeBandLocked: "Evening · with Premium",
+    primeBandLocked: "Premium",
     primeBandOpen: "Evening",
     primeBandOpenTag: "Available",
     primeBandCta: "Open the evening for you two {stars}",
@@ -203,6 +212,7 @@ const dict: Record<Lang, Strings> = {
     locErrGeoTimeout: "Location lookup timed out. Try again, or type an address.",
     locErrGeoUnsupported: "Location sharing isn't available in this browser. You can still type an address or tap the map.",
     locErrMapUnavailable: "The map couldn't load. Check your connection and try again.",
+    locSearchUnavailable: "Search is unavailable right now — tap the map to drop your pin.",
     verifyConsentTitle: "Before we start",
     verifyConsentLead:
       "This check records a short video of your face. That is biometric data, so we need your explicit permission first.",
@@ -268,7 +278,7 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Другое время",
     legendOverlap: "Совпало",
     badgeNew: "NEW",
-    primeBandLocked: "Вечер · с Premium",
+    primeBandLocked: "Premium",
     primeBandOpen: "Вечер",
     primeBandOpenTag: "Доступно",
     primeBandCta: "Открыть вечер для вас двоих {stars}",
@@ -302,6 +312,7 @@ const dict: Record<Lang, Strings> = {
     locErrGeoTimeout: "Поиск геолокации занял слишком много времени. Попробуй ещё раз или введи адрес.",
     locErrGeoUnsupported: "Геолокация недоступна в этом браузере. Можно ввести адрес или тапнуть по карте.",
     locErrMapUnavailable: "Не удалось загрузить карту. Проверь соединение и попробуй ещё раз.",
+    locSearchUnavailable: "Поиск сейчас недоступен — поставь точку на карте.",
     verifyConsentTitle: "Прежде чем начать",
     verifyConsentLead:
       "Проверка записывает короткое видео твоего лица. Это биометрические данные, поэтому нам нужно твоё явное согласие.",
@@ -367,7 +378,7 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Інший час",
     legendOverlap: "Збіг",
     badgeNew: "NEW",
-    primeBandLocked: "Вечір · з Premium",
+    primeBandLocked: "Premium",
     primeBandOpen: "Вечір",
     primeBandOpenTag: "Доступно",
     primeBandCta: "Відкрити вечір для вас двох {stars}",
@@ -401,6 +412,7 @@ const dict: Record<Lang, Strings> = {
     locErrGeoTimeout: "Пошук геолокації тривав занадто довго. Спробуй ще раз або введи адресу.",
     locErrGeoUnsupported: "Геолокація недоступна в цьому браузері. Можна ввести адресу або тапнути по карті.",
     locErrMapUnavailable: "Не вдалося завантажити карту. Перевір з'єднання та спробуй ще раз.",
+    locSearchUnavailable: "Пошук зараз недоступний — постав точку на карті.",
     verifyConsentTitle: "Перш ніж почати",
     verifyConsentLead:
       "Перевірка записує коротке відео твого обличчя. Це біометричні дані, тому нам потрібна твоя явна згода.",
@@ -466,7 +478,7 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Andere Zeit",
     legendOverlap: "Beide",
     badgeNew: "NEW",
-    primeBandLocked: "Abend · mit Premium",
+    primeBandLocked: "Premium",
     primeBandOpen: "Abend",
     primeBandOpenTag: "Verfügbar",
     primeBandCta: "Den Abend für euch beide öffnen {stars}",
@@ -500,6 +512,7 @@ const dict: Record<Lang, Strings> = {
     locErrGeoTimeout: "Standortsuche ist abgelaufen. Versuch es erneut oder gib eine Adresse ein.",
     locErrGeoUnsupported: "Standortfreigabe ist in diesem Browser nicht verfügbar. Du kannst eine Adresse eingeben oder auf die Karte tippen.",
     locErrMapUnavailable: "Die Karte konnte nicht geladen werden. Prüfe deine Verbindung und versuch es erneut.",
+    locSearchUnavailable: "Die Suche ist gerade nicht verfügbar — tippe auf die Karte, um deinen Punkt zu setzen.",
     verifyConsentTitle: "Bevor wir starten",
     verifyConsentLead:
       "Diese Prüfung nimmt ein kurzes Video deines Gesichts auf. Das sind biometrische Daten, deshalb brauchen wir vorher deine ausdrückliche Einwilligung.",
@@ -566,7 +579,7 @@ const dict: Record<Lang, Strings> = {
     legendAlternative: "Inny termin",
     legendOverlap: "Oboje",
     badgeNew: "NEW",
-    primeBandLocked: "Wieczór · z Premium",
+    primeBandLocked: "Premium",
     primeBandOpen: "Wieczór",
     primeBandOpenTag: "Dostępne",
     primeBandCta: "Otwórz wieczór dla was dwojga {stars}",
@@ -600,6 +613,7 @@ const dict: Record<Lang, Strings> = {
     locErrGeoTimeout: "Wyszukiwanie lokalizacji trwało zbyt długo. Spróbuj ponownie albo wpisz adres.",
     locErrGeoUnsupported: "Udostępnianie lokalizacji nie jest dostępne w tej przeglądarce. Możesz wpisać adres albo kliknąć mapę.",
     locErrMapUnavailable: "Nie udało się załadować mapy. Sprawdź połączenie i spróbuj ponownie.",
+    locSearchUnavailable: "Wyszukiwarka jest teraz niedostępna — dotknij mapy, aby postawić punkt.",
     verifyConsentTitle: "Zanim zaczniemy",
     verifyConsentLead:
       "Ta weryfikacja nagrywa krótkie wideo twojej twarzy. To dane biometryczne, więc najpierw potrzebujemy twojej wyraźnej zgody.",
