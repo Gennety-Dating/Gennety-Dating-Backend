@@ -74,8 +74,23 @@ ALTER TABLE "profiles" ADD COLUMN "match_radius" "public"."MatchRadius"
   NOT NULL DEFAULT 'campus_only';
 ```
 
-**Влияние на demo-режим:** нет. **Влияние на iOS:** нет — поле в клиенте не
-используется; спека iOS-репозитория синхронизируется отдельно.
+**Влияние на demo-режим:** нет.
+
+> **ВЛИЯНИЕ НА iOS: ЛОМАЮЩЕЕ. НЕ ВЫКАТЫВАТЬ РАНЬШЕ РЕЛИЗА iOS.**
+> В `Gennety-iOS` спека лежит своей копией
+> (`Packages/APIClient/Sources/APIClient/openapi.yaml`), и сгенерированный код
+> **закоммичен** (`GeneratedSources/Types.swift`). Там `matchRadius` стоит в
+> `required` у `SerializedProfile`, поэтому сгенерировано необязательное
+> свойство `public var matchRadius: Components.Schemas.MatchRadius` с
+> синтезированным `Decodable`. Ответ без этого ключа даёт `keyNotFound` — и
+> падает не поле, а разбор `SerializedProfile` целиком, то есть `GET /v1/me`
+> и каждый `PATCH /v1/me/*`. Это несущий маршрут приложения.
+>
+> Порядок: сначала iOS убирает поле из своей копии спеки, перегенерирует
+> `GeneratedSources` и выпускает сборку; только потом выкатывается этот
+> бэкенд. Первоначально в этом блоке стояло «влияние на iOS: нет» — неверно:
+> проверка шла по коду приложения (`App/`, `Tests/`), где поля правда нет, а
+> ломается сгенерированный слой, который в этот греп не попадал.
 
 ---
 
