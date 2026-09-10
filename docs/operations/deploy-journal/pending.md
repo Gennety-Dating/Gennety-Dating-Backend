@@ -11,6 +11,76 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — снос `profiles.match_radius` и типа `MatchRadius` (2026-09-10).**
+**Есть изменение схемы Prisma** — миграция `20260910000000_drop_match_radius`,
+**разрушающая**: удаляются одна колонка и один enum-тип.
+
+> **ПОРЯДОК ВЫКАТА ОБРАТНЫЙ ОБЫЧНОМУ: СНАЧАЛА КОД, ПОТОМ МИГРАЦИЯ.**
+> Код предыдущего релиза выбирает `match_radius` в `serializeProfile`
+> (`GET /v1/me`, каждый `PATCH /v1/me/*`) и в админской аудитории. Уронить
+> колонку до выката кода — значит положить оба маршрута, а `GET /v1/me` держит
+> iOS-клиент. Для аддитивных миграций порядок противоположный; здесь — нет.
+
+```sql
+ALTER TABLE "profiles" DROP COLUMN "match_radius";
+DROP TYPE "public"."MatchRadius";
+```
+
+**Что уходит из API:** `PATCH /v1/me/preferences` (единственный писатель поля)
+и `profile.matchRadius` в ответах `/v1/me`. **Клиентов это не задевает:** поле
+не упомянуто ни в iOS (`git grep` по `origin/main` — пусто), ни в вебапе, ни в
+Telegram-хендлерах. Ручку не вызывал никто, поэтому в каждой строке лежит
+`@default('campus_only')` — значение, которого пользователь не выбирал.
+
+**Почему сносим, а не реализуем:** решение основателя, разбор в журнале решений
+(`2026-09-10 — matchRadius снят`). Кратко: подбор поле не читал ни разу, а его
+дефолт (`campus_only`) противоречил поведению движка (город целиком).
+
+**Теневая проверка НЕ выполнена** — на машине сборки нет Postgres (та же
+оговорка, что в `packages/db/prisma/migrations/README.md`). Выполнить перед
+выкатом:
+
+```
+prisma migrate diff --from-migrations prisma/migrations \
+  --to-schema-datamodel prisma/schema.prisma --shadow-database-url "$SHADOW_URL" --exit-code
+```
+
+Что проверено здесь: `0_baseline` — единственное место, где создаются тип и
+колонка; ни одна из пяти миграций между ними их не трогает; `DROP TYPE`
+безопасен, потому что тип не используется больше нигде в наборе.
+
+**Проверка после выката** (обе команды должны вернуть пусто):
+
+```
+psql "$DATABASE_URL" -c "\d profiles" | grep match_radius
+psql "$DATABASE_URL" -tAc "select 1 from pg_type where typname='MatchRadius'"
+```
+
+**Проверка живого API** (поля быть не должно):
+
+```
+curl -s -H "Authorization: Bearer $TOKEN" https://<host>/v1/me | jq '.profile.matchRadius'
+curl -s -o /dev/null -w '%{http_code}\n' -X PATCH -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"matchRadius":"citywide"}' \
+  https://<host>/v1/me/preferences    # ожидается 404
+```
+
+**Откат:** поле восстанавливается дефолтом — выбора пользователя в нём никогда
+не было, терять нечего.
+
+```sql
+CREATE TYPE "public"."MatchRadius" AS ENUM ('campus_only', 'citywide');
+ALTER TABLE "profiles" ADD COLUMN "match_radius" "public"."MatchRadius"
+  NOT NULL DEFAULT 'campus_only';
+```
+
+**Влияние на demo-режим:** нет. **Влияние на iOS:** нет — поле в клиенте не
+используется; спека iOS-репозитория синхронизируется отдельно.
+
+---
+
+# Gennety Dating Deploy
+
 **PENDING — прокси-чат: реакции-эмодзи, закрытый набор из пяти (2026-09-09).**
 **Есть изменение схемы Prisma** — миграция `20260909000000_proxy_chat_reactions`,
 **чисто аддитивная**: две nullable-колонки в `proxy_messages`, ни одной изменённой

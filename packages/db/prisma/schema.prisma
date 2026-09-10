@@ -108,11 +108,6 @@ enum VerificationStatus {
   rejected
 }
 
-enum MatchRadius {
-  campus_only
-  citywide
-}
-
 /// Priority bucket for a Profiler question. Drives both the order questions
 /// are asked in (high first) and the weight their answer carries when fueling
 /// icebreakers/hints (see `PROFILER_PRIORITY_WEIGHTS` in @gennety/shared).
@@ -1010,8 +1005,6 @@ model Profile {
   /// admin dashboard can spot the *specific* offending photo when a user
   /// lands in `pending_review`, instead of recomputing N Rekognition calls.
   photoFaceScores           Float[]                      @default([]) @map("photo_face_scores")
-  /// Mobile-side match radius preference. Telegram users inherit the default.
-  matchRadius               MatchRadius                  @default(campus_only) @map("match_radius")
   /// Persistent "home base" coordinates used by the Meet-Halfway matching
   /// algorithm to compute great-circle distance / midpoints between candidates.
   /// Distinct from `Match.vibeLat{A,B}` which are per-match commute pins set
@@ -1019,8 +1012,9 @@ model Profile {
   /// yet (legacy rows, declined OS prompt). Updated via `POST /v1/me/location`.
   latitude                  Float?                       @map("latitude")
   longitude                 Float?                       @map("longitude")
-  /// Freshness marker for the home coordinates. The matching engine can
-  /// fall back to `matchRadius`-only scoring when this is stale or null.
+  /// Freshness marker for the home coordinates. There is no radius-only
+  /// fallback: `buildCandidateQuery` requires non-null `latitude`/`longitude`,
+  /// so a profile without coordinates is simply outside the eligible pool.
   locationUpdatedAt         DateTime?                    @map("location_updated_at")
   /// Canonical dating city selected during onboarding. This is the hard
   /// local matching boundary: users can match across university domains only
@@ -2510,11 +2504,12 @@ model NoMatchNotice {
 /// Hand-curated first-date venues, scoped per university domain. This is the
 /// PRIMARY source for the concierge venue picker (PRODUCT_SPEC §3.7): Google
 /// Places is only consulted as a fallback when no curated venue is in range.
-/// The product's hyper-local rule (both matched users share `universityDomain`)
-/// keeps the geography — and therefore the curation effort — small.
+/// The city rule (both matched users share `homeCityKey`) keeps the geography
+/// — and therefore the curation effort — small. It used to be a university
+/// rule; `universityDomain` here is affinity only, as `cityKey` below says.
 ///
-/// Standalone model (no user relation): scoped by the `universityDomain` string
-/// the same way the matching pipeline filters candidates. Populated by
+/// Standalone model (no user relation): scoped by `cityKey`, the same boundary
+/// `buildCandidateQuery` filters candidates on. Populated by
 /// `scripts/seed-venues.mjs` (Places-backed pull → manual review → import).
 model CuratedVenue {
   id               String    @id @default(uuid()) @db.Uuid

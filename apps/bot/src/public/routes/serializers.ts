@@ -49,7 +49,6 @@ export interface SerializedProfile {
   ageRangeMin: number | null;
   ageRangeMax: number | null;
   photos: string[];
-  matchRadius: Profile["matchRadius"];
   standbyCount: number;
   latitude: number | null;
   longitude: number | null;
@@ -90,7 +89,6 @@ export function serializeProfile(profile: Profile): SerializedProfile {
     ageRangeMin: profile.ageRangeMin,
     ageRangeMax: profile.ageRangeMax,
     photos: profile.photos,
-    matchRadius: profile.matchRadius,
     standbyCount: profile.standbyCount,
     latitude: profile.latitude,
     longitude: profile.longitude,

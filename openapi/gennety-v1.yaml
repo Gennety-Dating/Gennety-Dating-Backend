@@ -659,29 +659,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: Promo feature disabled }
 
-  /v1/me/preferences:
-    patch:
-      tags: [me]
-      operationId: patchPreferences
-      summary: Update match radius preference
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [matchRadius]
-              properties:
-                matchRadius: { $ref: "#/components/schemas/MatchRadius" }
-      responses:
-        "200":
-          description: Updated user + profile
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MeResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
   /v1/me/theme:
     patch:
       tags: [me]
@@ -3800,10 +3777,6 @@ components:
       type: string
       enum: [consent, language, conversational, completed]
 
-    MatchRadius:
-      type: string
-      enum: [campus_only, citywide]
-
     Theme:
       type: string
       enum: [light, dark]
@@ -4279,7 +4252,7 @@ components:
       description: Mirrors `serializeProfile` in `public/routes/serializers.ts`
       required:
         [hobbies, partnerPreferences, psychologicalSummary, ageRangeMin, ageRangeMax,
-         photos, matchRadius, standbyCount, latitude, longitude, locationUpdatedAt,
+         photos, standbyCount, latitude, longitude, locationUpdatedAt,
          homeCity, homeCountryCode, homeCityKey, homePlaceId]
       properties:
         hobbies:
@@ -4294,7 +4267,6 @@ components:
           maxItems: 10
           items: { type: string }
           description: Up to 10 opaque storage paths — render via signed URLs from /v1/me/photos
-        matchRadius: { $ref: "#/components/schemas/MatchRadius" }
         standbyCount: { type: integer }
         latitude: { type: [number, "null"] }
         longitude: { type: [number, "null"] }

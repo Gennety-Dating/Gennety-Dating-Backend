@@ -720,5 +720,3 @@ Supported first-class flows:
   (400), and a launched one is canonicalized server-side. The client renders
   the constraint from `GET /v1/app/config` rather than discovering it as an
   error. The same endpoint is how an existing account moves to a launched city.
-- `/v1/me/preferences` (`matchRadius` ∈ `campus_only` / `citywide`) stores
-  the user's future radius preference.

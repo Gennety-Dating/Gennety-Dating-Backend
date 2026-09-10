@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 317 entries
+# Decision index — all 318 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-10 | `matchRadius` снят: подбор его никогда не читал, а дефолт врал | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-09 | две ветки не приземлены намеренно: их работа уже в стволе | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-09 | Whisper узнаёт формат по имени файла, и имя перестало быть захардкоженным | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-09 | ревизия фотографий оказалась чтением, а не новым проходом vision | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

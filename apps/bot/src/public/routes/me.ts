@@ -197,7 +197,7 @@ meRouter.post("/promo/claim", async (req: Request, res: Response): Promise<void>
  *            `ageRangeMin`, `ageRangeMax`
  *
  * Fixed identity fields (`firstName`, `surname`, `age`, `universityDomain`,
- * `email`, `gender`, `preference`, `status`, `photos`, `matchRadius`) are
+ * `email`, `gender`, `preference`, `status`, `photos`) are
  * silently ignored — clients may send a whole object back; we don't punish
  * them with a 400 for touching read-only fields.
  *
@@ -456,30 +456,6 @@ meRouter.post("/home-location", async (req: Request, res: Response): Promise<voi
   }
 
   const profile = await saveHomeLocationForUser(req.userId!, validation.data);
-  const user = await prisma.user.findUniqueOrThrow({
-    where: { id: req.userId! },
-  });
-
-  res.json({
-    user: serializeUser(user),
-    profile: serializeProfile(profile),
-  });
-});
-
-/** PATCH /v1/me/preferences — currently exposes `matchRadius` only. */
-meRouter.patch("/preferences", async (req: Request, res: Response): Promise<void> => {
-  const radius = req.body?.matchRadius;
-  if (radius !== "campus_only" && radius !== "citywide") {
-    res.status(400).json({ error: "Invalid matchRadius" });
-    return;
-  }
-
-  const profile = await prisma.profile.upsert({
-    where: { userId: req.userId! },
-    update: { matchRadius: radius },
-    create: { userId: req.userId!, matchRadius: radius },
-  });
-
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: req.userId! },
   });

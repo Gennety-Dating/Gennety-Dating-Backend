@@ -47,7 +47,6 @@ audienceRouter.get(
               select: {
                 hobbies: true,
                 psychologicalSummary: true,
-                matchRadius: true,
                 latitude: true,
                 longitude: true,
               },
@@ -87,8 +86,6 @@ audienceRouter.get(
           legacy_student: 0,
           unknown: 0,
         };
-        // Match radius
-        const matchRadius = { campus_only: 0, citywide: 0, unknown: 0 };
         // Geo feasibility
         let geoKnown = 0;
 
@@ -111,12 +108,7 @@ audienceRouter.get(
             attachmentStyle[detectAttachmentStyle(p.psychologicalSummary)]++;
             humorStyle[detectHumorStyle(p.psychologicalSummary)]++;
             communicationStyle[detectCommunicationStyle(p.psychologicalSummary)]++;
-            if (p.matchRadius === "campus_only") matchRadius.campus_only++;
-            else if (p.matchRadius === "citywide") matchRadius.citywide++;
-            else matchRadius.unknown++;
             if (p.latitude !== null && p.longitude !== null) geoKnown++;
-          } else {
-            matchRadius.unknown++;
           }
         }
 
@@ -145,7 +137,6 @@ audienceRouter.get(
             value: v, count: communicationStyle[v] ?? 0,
           })),
           registrationTracks,
-          matchRadius,
           geo: {
             known: geoKnown,
             unknown: users.length - geoKnown,

@@ -134,7 +134,6 @@ type ProfileRow = {
   uploadedPhotoHashes?: string[];
   pendingPhotoCandidates?: unknown[];
   acceptedPhotoCount?: number;
-  matchRadius: "campus_only" | "citywide";
   standbyCount?: number;
   lastMissedAt?: Date | null;
   latitude?: number | null;
@@ -751,7 +750,6 @@ vi.mock("@gennety/db", async () => {
             uploadedPhotoHashes: create.uploadedPhotoHashes ?? [],
             pendingPhotoCandidates: create.pendingPhotoCandidates ?? [],
             acceptedPhotoCount: create.acceptedPhotoCount ?? 0,
-            matchRadius: create.matchRadius ?? "campus_only",
             standbyCount: create.standbyCount ?? 0,
             lastMissedAt: create.lastMissedAt ?? null,
             latitude: create.latitude ?? null,
@@ -1341,29 +1339,6 @@ describe("GET /v1/me", () => {
   });
 });
 
-describe("PATCH /v1/me/preferences", () => {
-  beforeEach(resetDb);
-
-  it("rejects invalid matchRadius", async () => {
-    const user = await seedUser();
-    const res = await request(app)
-      .patch("/v1/me/preferences")
-      .set("Authorization", `Bearer ${signAccess(user.id)}`)
-      .send({ matchRadius: "worldwide" });
-    expect(res.status).toBe(400);
-  });
-
-  it("persists campus_only / citywide", async () => {
-    const user = await seedUser();
-    const res = await request(app)
-      .patch("/v1/me/preferences")
-      .set("Authorization", `Bearer ${signAccess(user.id)}`)
-      .send({ matchRadius: "citywide" });
-    expect(res.status).toBe(200);
-    expect(res.body.profile.matchRadius).toBe("citywide");
-  });
-});
-
 describe("POST /v1/me/home-location", () => {
   beforeEach(resetDb);
 
@@ -1479,7 +1454,6 @@ describe("PATCH /v1/me", () => {
       ageRangeMin: null,
       ageRangeMax: null,
       photos: [],
-      matchRadius: "campus_only",
       ...overrides,
     };
     const u = db.users.get(userId)!;
@@ -1606,7 +1580,6 @@ describe("PATCH /v1/me", () => {
         universityDomain: "evil.edu",
         gender: "male",
         preference: "both",
-        matchRadius: "citywide",
         profile: { photos: ["replace-me.jpg"] },
         major: "Math",
       });
@@ -1621,7 +1594,6 @@ describe("PATCH /v1/me", () => {
     expect(stored.gender).toBe("female");
     expect(stored.preference).toBe("men");
     expect(stored.profile?.photos).toEqual(["keep-me.jpg"]);
-    expect(stored.profile?.matchRadius).toBe("campus_only");
     // The allowed field still applies:
     expect(stored.major).toBe("Math");
   });
@@ -1762,7 +1734,6 @@ describe("DELETE /v1/me", () => {
       ageRangeMin: null,
       ageRangeMax: null,
       photos: [`${user.id}/p1.jpg`, `${user.id}/p2.jpg`],
-      matchRadius: "campus_only",
     };
     const res = await request(app)
       .delete("/v1/me")
@@ -1911,7 +1882,6 @@ describe("GET /v1/me/photos", () => {
       ageRangeMin: null,
       ageRangeMax: null,
       photos: ["p/a.jpg", "p/b.jpg"],
-      matchRadius: "campus_only",
     };
     const res = await request(app)
       .get("/v1/me/photos")
@@ -1976,7 +1946,6 @@ describe("POST /v1/me/photos", () => {
       ageRangeMin: null,
       ageRangeMax: null,
       photos: ["p/a.jpg"],
-      matchRadius: "campus_only",
     };
     const res = await request(app)
       .post("/v1/me/photos")
@@ -2025,7 +1994,6 @@ describe("POST /v1/me/photos", () => {
       ageRangeMin: null,
       ageRangeMax: null,
       photos: Array.from({ length: MAX_PHOTOS }, (_, index) => `${index + 1}.jpg`),
-      matchRadius: "campus_only",
     };
     const res = await request(app)
       .post("/v1/me/photos")
@@ -2057,7 +2025,6 @@ describe("POST /v1/me/photos", () => {
         { length: MAX_PHOTOS - 1 },
         (_, index) => `${index + 1}.jpg`,
       ),
-      matchRadius: "campus_only",
     };
     vi.mocked(uploadProfilePhoto).mockImplementationOnce(async () => {
       u.profile!.photos.push("concurrent.jpg");
@@ -2213,7 +2180,6 @@ describe("DELETE /v1/me/photos/:index", () => {
         ageRangeMin: null,
         ageRangeMax: null,
         photos,
-        matchRadius: "campus_only",
       };
       return user;
     })();
@@ -2618,7 +2584,6 @@ describe("/v1/matches/*", () => {
         psychologicalSummary: null,
         ageRangeMin: null,
         ageRangeMax: null,
-        matchRadius: "campus_only",
         photos: [],
         timeZone,
       },
@@ -2668,7 +2633,6 @@ describe("/v1/matches/*", () => {
         psychologicalSummary: null,
         ageRangeMin: null,
         ageRangeMax: null,
-        matchRadius: "campus_only",
         photos,
       },
     });
@@ -3249,7 +3213,6 @@ describe("GET /v1/countdown", () => {
         ageRangeMin: null,
         ageRangeMax: null,
         photos: [],
-        matchRadius: "campus_only",
         standbyCount: 2,
         lastMissedAt: new Date(),
       },

@@ -589,7 +589,6 @@ const USER_DETAIL_SELECT = {
       ...USER_SELECT.profile.select,
       profileMedia: true,
       eloSeedDetails: true,
-      matchRadius: true,
       timeZone: true,
       latitude: true,
       longitude: true,
