@@ -272,6 +272,23 @@ export const canvasLimiter = make({
 });
 
 /**
+ * Curated-venue photos for the iOS standby canvas — 240/min per IP.
+ *
+ * Keyed by address because this route has no rail to key by: the image loader
+ * sends no header, and the signed link is its only credential. That makes the
+ * limiter a flood guard and nothing more — the signature already restricts what
+ * can be asked for, and the photo cache already makes a repeat free. 240 is ten
+ * canvases' worth of pins and cards within one minute behind one address, which
+ * a campus NAT can honestly reach.
+ */
+export const venuePhotoLimiter = make({
+  windowMs: 60_000,
+  limit: 240,
+  keyGenerator: (req): string => `venue-photo:${ipKey(req)}`,
+  message: { error: "Too many photo requests, try again later." },
+});
+
+/**
  * The venue door portal (`/gk/*`).
  *
  * Keyed by IP, and that is the honest key here rather than a compromise: staff

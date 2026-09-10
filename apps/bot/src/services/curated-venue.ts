@@ -421,3 +421,299 @@ export const OFFERABLE_CATEGORY_FILTER: string[] = [...EXCLUDED_VENUE_CATEGORIES
 export function isOfferableVenueCategory(category: string): boolean {
   return !(EXCLUDED_VENUE_CATEGORIES as readonly string[]).includes(category);
 }
+
+// ---------------------------------------------------------------------------
+// Standby showcase — the iOS canvas while nothing is scheduled
+// ---------------------------------------------------------------------------
+
+/**
+ * How many places the standby canvas shows.
+ *
+ * Each one is drawn twice — a photo pin on the map and a card in the carousel
+ * under it — and Kyiv alone holds ~275 distinct places. All of them would be a
+ * map buried under thumbnails and a carousel nobody reaches the end of; two
+ * dozen is the city's best, each one swipe from the next.
+ */
+export const SHOWCASE_LIMIT = 24;
+
+/**
+ * How long one city's selection is served from memory. The catalog changes by
+ * an operator import or the nightly re-validation, never by the minute, while
+ * every canvas open in a city asks the same question — reading ~1,000 rows with
+ * their opening-hours JSON on each open would be paying for an answer we hold.
+ */
+export const SHOWCASE_CACHE_TTL_MS = 10 * 60 * 1000;
+
+/** Cities remembered at once — bounds the cache against junk keys. */
+const SHOWCASE_CACHE_MAX_CITIES = 32;
+
+/** The catalog columns the showcase reads (a subset of the Prisma row). */
+export interface ShowcaseCandidate {
+  id: string;
+  placeId: string | null;
+  name: string;
+  address: string;
+  category: string;
+  priority: number;
+  lat: number;
+  lng: number;
+  editorialSummary: string | null;
+  vibeTags: string[];
+  facetTags: string[];
+  utcOffsetMinutes: number | null;
+  openingHours: RegularOpeningHours | null;
+  photoRefs: string[];
+  rating: number | null;
+  userRatingCount: number | null;
+}
+
+/** A moment of the venue's week, in its own wall-clock time (day 0 = Sunday). */
+export interface ShowcaseOpeningPoint {
+  day: number;
+  hour: number;
+  minute: number;
+}
+
+/** One opening window. No `close` is how Google says "around the clock". */
+export interface ShowcaseOpeningPeriod {
+  open: ShowcaseOpeningPoint;
+  close?: ShowcaseOpeningPoint;
+}
+
+/**
+ * One place as the canvas receives it, minus the photo links: those are signed
+ * per response (`public/showcase-photos.ts`), so only whether there IS a photo
+ * is decided here. The Places resource name never leaves the server.
+ */
+export interface ShowcasePlace {
+  id: string;
+  placeId: string | null;
+  name: string;
+  address: string;
+  category: string;
+  lat: number;
+  lng: number;
+  editorialSummary: string | null;
+  vibeTags: string[];
+  facetTags: string[];
+  utcOffsetMinutes: number | null;
+  openingHours: ShowcaseOpeningPeriod[];
+  hasPhoto: boolean;
+}
+
+/**
+ * Which rows are copies of one real place.
+ *
+ * The catalog holds a row per university domain, so one café in Podil can be
+ * three rows with three ids — on the map, three pins stacked on one spot. The
+ * Google place id is the real identity (the Scratch Map keys on it for the same
+ * reason); a hand-entered row without one falls back to its name and a position
+ * rounded to ~10 m.
+ */
+function placeKey(row: ShowcaseCandidate): string {
+  if (row.placeId) return `place:${row.placeId}`;
+  return `name:${row.name.trim().toLocaleLowerCase()}@${row.lat.toFixed(4)},${row.lng.toFixed(4)}`;
+}
+
+/**
+ * Showcase order: the operator's own verdict first (`priority`, 1 = best
+ * first-date spot), then a photo — a card without one is the one thing on this
+ * screen that looks broken — then Google's rating and how many people gave it.
+ * The id last, so equal places always come out in the same order.
+ */
+function compareShowcase(a: ShowcaseCandidate, b: ShowcaseCandidate): number {
+  if (a.priority !== b.priority) return a.priority - b.priority;
+  const photoA = a.photoRefs.length > 0 ? 0 : 1;
+  const photoB = b.photoRefs.length > 0 ? 0 : 1;
+  if (photoA !== photoB) return photoA - photoB;
+  const ratingA = a.rating ?? -1;
+  const ratingB = b.rating ?? -1;
+  if (ratingA !== ratingB) return ratingB - ratingA;
+  const votesA = a.userRatingCount ?? -1;
+  const votesB = b.userRatingCount ?? -1;
+  if (votesA !== votesB) return votesB - votesA;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/**
+ * Pure selection: one copy per real place, the product's standing exclusions
+ * applied, the best {@link SHOWCASE_LIMIT} kept, in walking order.
+ *
+ * The exclusions are the ones that already hold everywhere else — a category
+ * the product never offers (`museum`) and an operator-blocked name. The tier is
+ * NOT filtered: the founder's brief asks for every active place, and a tier
+ * decides who pays for a venue change, not whether a place is worth seeing.
+ */
+export function selectShowcase(
+  rows: ShowcaseCandidate[],
+  limit: number = SHOWCASE_LIMIT,
+): ShowcaseCandidate[] {
+  const byPlace = new Map<string, ShowcaseCandidate>();
+  for (const row of rows) {
+    if (!isOfferableVenueCategory(row.category)) continue;
+    if (isBlockedVenueName(row.name)) continue;
+    if (!Number.isFinite(row.lat) || !Number.isFinite(row.lng)) continue;
+    const key = placeKey(row);
+    const seen = byPlace.get(key);
+    byPlace.set(key, seen && compareShowcase(seen, row) <= 0 ? seen : row);
+  }
+  const chosen = [...byPlace.values()].sort(compareShowcase).slice(0, Math.max(0, limit));
+  return orderAsWalk(chosen);
+}
+
+/**
+ * Order places so that neighbouring cards are neighbouring pins.
+ *
+ * The carousel moves the map: every swipe flies the camera to the next card's
+ * pin. In ranking order that flight would cross the city on every swipe; as a
+ * walk — start at the best place, then always the nearest one not yet shown —
+ * it is a street or two, and the map reads as a route rather than a slideshow.
+ * Greedy nearest-neighbour rather than an optimal tour: with two dozen stops the
+ * difference is invisible, and the first card must stay the best place.
+ */
+export function orderAsWalk<T extends { lat: number; lng: number }>(places: T[]): T[] {
+  if (places.length <= 2) return [...places];
+  const remaining = [...places];
+  const walk: T[] = [remaining.shift()!];
+  while (remaining.length > 0) {
+    const here = walk[walk.length - 1];
+    let nearest = 0;
+    let nearestKm = Infinity;
+    remaining.forEach((place, index) => {
+      const km = haversineDistanceKm(here, place);
+      if (km < nearestKm) {
+        nearestKm = km;
+        nearest = index;
+      }
+    });
+    walk.push(remaining.splice(nearest, 1)[0]);
+  }
+  return walk;
+}
+
+type RawOpeningPoint = { day?: number | null; hour?: number | null; minute?: number | null };
+
+function openingPoint(raw: RawOpeningPoint | null | undefined): ShowcaseOpeningPoint | null {
+  if (!raw) return null;
+  const day = raw.day ?? 0;
+  const hour = raw.hour ?? 0;
+  const minute = raw.minute ?? 0;
+  if (![day, hour, minute].every((n) => Number.isInteger(n))) return null;
+  // 24 is legal in the hour: some sources write the end of a day as 24:00.
+  if (day < 0 || day > 6 || hour < 0 || hour > 24 || minute < 0 || minute > 59) return null;
+  return { day, hour, minute };
+}
+
+/**
+ * Google's `regularOpeningHours.periods`, reduced to plain integers a client can
+ * do arithmetic on. Missing fields read as zero — the same reading
+ * {@link isVenueOpenAt} uses, so the canvas and the concierge never disagree
+ * about whether a place is open. A period that cannot be read is dropped rather
+ * than guessed at; an empty list means "unknown", never "closed all week".
+ */
+export function normalizeOpeningPeriods(
+  hours: RegularOpeningHours | null | undefined,
+): ShowcaseOpeningPeriod[] {
+  const periods: ShowcaseOpeningPeriod[] = [];
+  for (const period of hours?.periods ?? []) {
+    const open = openingPoint(period?.open);
+    if (!open) continue;
+    if (!period.close) {
+      periods.push({ open });
+      continue;
+    }
+    const close = openingPoint(period.close);
+    if (!close) continue;
+    periods.push({ open, close });
+  }
+  return periods;
+}
+
+function toShowcasePlace(row: ShowcaseCandidate): ShowcasePlace {
+  const summary = row.editorialSummary?.trim();
+  return {
+    id: row.id,
+    placeId: row.placeId,
+    name: row.name,
+    address: row.address,
+    category: row.category,
+    lat: row.lat,
+    lng: row.lng,
+    editorialSummary: summary ? summary : null,
+    vibeTags: row.vibeTags,
+    facetTags: row.facetTags,
+    utcOffsetMinutes: row.utcOffsetMinutes,
+    openingHours: normalizeOpeningPeriods(row.openingHours),
+    hasPhoto: row.photoRefs.length > 0,
+  };
+}
+
+const showcaseCache = new Map<string, { at: number; places: ShowcasePlace[] }>();
+
+/**
+ * The standby canvas's places for one city, in display order. `now` is for
+ * tests; callers pass nothing.
+ */
+export async function getShowcaseVenues(
+  cityKey: string,
+  now: number = Date.now(),
+): Promise<ShowcasePlace[]> {
+  const cached = showcaseCache.get(cityKey);
+  if (cached && now - cached.at < SHOWCASE_CACHE_TTL_MS) return cached.places;
+
+  const rows = await prisma.curatedVenue.findMany({
+    where: { cityKey, active: true, category: { notIn: OFFERABLE_CATEGORY_FILTER } },
+    select: {
+      id: true,
+      placeId: true,
+      name: true,
+      address: true,
+      category: true,
+      priority: true,
+      lat: true,
+      lng: true,
+      editorialSummary: true,
+      vibeTags: true,
+      facetTags: true,
+      utcOffsetMinutes: true,
+      openingHours: true,
+      photoRefs: true,
+      rating: true,
+      userRatingCount: true,
+    },
+  });
+
+  const places = selectShowcase(
+    rows.map((r) => ({
+      ...r,
+      openingHours: (r.openingHours as RegularOpeningHours | null) ?? null,
+    })),
+  ).map(toShowcasePlace);
+
+  showcaseCache.delete(cityKey);
+  if (showcaseCache.size >= SHOWCASE_CACHE_MAX_CITIES) {
+    const oldest = showcaseCache.keys().next().value;
+    if (oldest !== undefined) showcaseCache.delete(oldest);
+  }
+  showcaseCache.set(cityKey, { at: now, places });
+  return places;
+}
+
+/** Test-only: forget every cached selection. */
+export function resetShowcaseCache(): void {
+  showcaseCache.clear();
+}
+
+/**
+ * The cover photo of one catalog row, for the signed photo route — or null when
+ * the row is gone, retired, or not yet reached by the nightly scan. A retired
+ * row answering nothing is what makes its already-minted links stop with it.
+ */
+export async function showcasePhotoRef(venueId: string): Promise<string | null> {
+  const row = await prisma.curatedVenue.findUnique({
+    where: { id: venueId },
+    select: { active: true, photoRefs: true },
+  });
+  if (!row?.active) return null;
+  return row.photoRefs[0] ?? null;
+}

@@ -3467,6 +3467,47 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/venues/showcase:
+    get:
+      tags: [date]
+      operationId: getVenueShowcase
+      summary: Curated places for the standby canvas
+      description: >
+        What the canvas shows while nothing is scheduled (IDLE_EXPLORING): the
+        city's curated places, drawn as photo pins on the map and as a card
+        carousel under it, in one call. Takes either rail, like the rest of
+        the canvas.
+
+
+        **One entry per REAL place.** The catalog holds a row per university
+        domain, so one café can be three rows; the list is deduplicated by
+        Google place id before it is ranked, otherwise one café would be three
+        pins stacked on one spot. Categories the product never offers
+        (`museum`) and operator-blocked names are left out, as everywhere else.
+
+
+        **Capped at 24 and already in display order**: the best-ranked place
+        first (operator priority, then having a photo, then Google rating),
+        then always the nearest place not yet shown — so a swipe of the
+        carousel moves the map a street or two rather than across the city.
+      parameters:
+        - name: cityKey
+          in: query
+          required: false
+          description: >
+            City to show, e.g. `ua:kyiv`. Omitted — the caller's own home city
+            (`Profile.homeCityKey`). A caller with no city at all gets an empty
+            list and `cityKey: null`, not an error.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The places, in display order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenueShowcase" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3556,6 +3597,109 @@ components:
             real venue, so a row id would give two people who sat in the same
             café different histories.
           items: { type: string }
+
+    VenueShowcase:
+      type: object
+      required: [cityKey, venues]
+      properties:
+        cityKey:
+          type: [string, "null"]
+          description: The city the list is for; null when the caller has none.
+        venues:
+          type: array
+          items: { $ref: "#/components/schemas/ShowcaseVenue" }
+
+    ShowcaseVenue:
+      type: object
+      required:
+        - id
+        - placeId
+        - name
+        - address
+        - category
+        - lat
+        - lng
+        - editorialSummary
+        - vibeTags
+        - facetTags
+        - utcOffsetMinutes
+        - openingHours
+        - photoUrl
+        - thumbnailUrl
+      properties:
+        id:
+          type: string
+          description: Catalog row id of the copy that speaks for this place.
+        placeId: { type: [string, "null"] }
+        name: { type: string }
+        address: { type: string }
+        category:
+          type: string
+          description: >
+            A catalog category — `cafe`, `coffee_shop`, `restaurant`, `park`,
+            `lounge` today. A documented string rather than an `enum` for the
+            same reason as the canvas `state`: a category added on the server
+            must not fail decoding in an App Store build that cannot be rolled
+            back.
+        lat: { type: number }
+        lng: { type: number }
+        editorialSummary:
+          type: [string, "null"]
+          description: >
+            Google's short description, when the catalog carries one. Usually
+            null today — the catalog stopped requesting it to save Places cost —
+            so a client must have something else to say (the address).
+        vibeTags:
+          type: array
+          description: Operator vibe tags (`cozy`, `books`, `vinyl`, `view`, …).
+          items: { type: string }
+        facetTags:
+          type: array
+          description: Canonical V2 facets (`quiet`, `romantic_public`, …).
+          items: { type: string }
+        utcOffsetMinutes:
+          type: [integer, "null"]
+          description: >
+            The venue's offset from UTC. Opening hours are its local wall
+            clock; without the offset a client cannot say open or closed.
+        openingHours:
+          type: array
+          description: >
+            Weekly periods in the venue's local time (day 0 = Sunday), as
+            Google reports them. Empty means UNKNOWN — never "closed". A period
+            without `close` means open around the clock. The client works out
+            "open until …" live from these instead of receiving a verdict,
+            because the canvas stays open past the moment a verdict would flip.
+          items: { $ref: "#/components/schemas/ShowcaseOpeningPeriod" }
+        photoUrl:
+          type: [string, "null"]
+          description: >
+            Card photo, 1200 px wide: an absolute signed link, valid for at
+            least a day and identical for every list served that UTC day. The
+            venue id is in the PATH (`/v1/venues/{id}/photo`), so a cache keyed
+            by host + path keeps one entry per place across re-signing. Needs
+            no Authorization header. Null while the catalog has no photo for
+            the place.
+        thumbnailUrl:
+          type: [string, "null"]
+          description: The same photo at 240 px, for the map pin. Null exactly when `photoUrl` is.
+
+    ShowcaseOpeningPeriod:
+      type: object
+      required: [open]
+      properties:
+        open: { $ref: "#/components/schemas/ShowcaseOpeningPoint" }
+        close: { $ref: "#/components/schemas/ShowcaseOpeningPoint" }
+
+    ShowcaseOpeningPoint:
+      type: object
+      required: [day, hour, minute]
+      properties:
+        day:
+          type: integer
+          description: 0 = Sunday … 6 = Saturday.
+        hour: { type: integer }
+        minute: { type: integer }
 
     DateStateVenue:
       type: object

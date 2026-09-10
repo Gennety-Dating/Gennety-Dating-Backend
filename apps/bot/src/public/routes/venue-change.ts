@@ -5,7 +5,7 @@ import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import { buildPlacesPhotoUrl } from "../../services/venue.js";
 import { prisma } from "@gennety/db";
-import { readResponseBuffer } from "../../utils/bounded-response.js";
+import { fetchPlacesPhoto, snapWidth } from "../places-photo.js";
 import {
   getVenueBoardState,
   getVenueChangeCatalog,
@@ -55,82 +55,6 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * open fetch proxy for arbitrary Google URLs.
  */
 const PHOTO_REF_REGEX = /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_.-]+$/;
-/**
- * Total budget for one proxied photo, retries included — deliberately the same
- * 10s the single-attempt version spent, so the retry below cannot make an
- * `<img>` wait any longer than it already could.
- */
-const PHOTO_PROXY_TIMEOUT_MS = 10_000;
-/**
- * Per-attempt ceiling. Google's photo endpoint answers in ~250ms warm, and the
- * failure this exists for is a TCP *connect* timeout that resolves in well
- * under a second — so a short attempt plus a retry beats one long wait.
- */
-const PHOTO_PROXY_ATTEMPT_TIMEOUT_MS = 4_000;
-const PHOTO_PROXY_MAX_ATTEMPTS = 3;
-const PHOTO_PROXY_RETRY_DELAY_MS = 150;
-const PHOTO_PROXY_MAX_BYTES = 10 * 1024 * 1024;
-
-/**
- * One attempt at the upstream photo, classified into the only three answers the
- * caller can act on.
- *
- * The split between `transient` and `permanent` is the whole point: a connect
- * timeout to Google's CDN is worth another go, while a 403, a non-image body or
- * an oversized file will fail identically however many times we ask. Before
- * this, `readResponseBuffer` throwing on an oversized image landed in the same
- * `catch` as a network error, so a retry loop would have re-downloaded it.
- */
-type PhotoAttempt =
-  | { kind: "image"; contentType: string; body: Buffer }
-  | { kind: "transient"; reason: string }
-  | { kind: "permanent"; reason: string };
-
-// `Response` in this module is Express's — the upstream one is the global.
-type FetchResponse = globalThis.Response;
-
-async function fetchPhotoOnce(url: string, timeoutMs: number): Promise<PhotoAttempt> {
-  let upstream: FetchResponse;
-  try {
-    upstream = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-  } catch (err) {
-    // Network-shaped: DNS, TCP connect, TLS, or our own abort.
-    return { kind: "transient", reason: describeFetchError(err) };
-  }
-
-  if (!upstream.ok) {
-    await upstream.body?.cancel().catch(() => undefined);
-    const reason = `HTTP ${upstream.status}`;
-    // 5xx / 429 / 408 are the upstream saying "not now"; a 4xx is a verdict.
-    const retryable = upstream.status >= 500 || upstream.status === 429 || upstream.status === 408;
-    return retryable ? { kind: "transient", reason } : { kind: "permanent", reason };
-  }
-
-  const contentType = upstream.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().startsWith("image/")) {
-    await upstream.body?.cancel().catch(() => undefined);
-    return { kind: "permanent", reason: `content-type ${contentType || "(none)"}` };
-  }
-
-  try {
-    return { kind: "image", contentType, body: await readResponseBuffer(upstream, PHOTO_PROXY_MAX_BYTES) };
-  } catch (err) {
-    // Oversized, or the body died mid-stream. Either way, asking again for the
-    // same bytes is not a fix.
-    return { kind: "permanent", reason: describeFetchError(err) };
-  }
-}
-
-/** Compact one-line cause, so a flaky day doesn't fill the log with stacks. */
-function describeFetchError(err: unknown): string {
-  const cause = (err as { cause?: unknown } | undefined)?.cause;
-  const code = (cause as { code?: string } | undefined)?.code;
-  if (code) return code;
-  if (err instanceof Error) return err.name === "TimeoutError" ? "timeout" : err.message;
-  return String(err);
-}
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function createVenueChangeRouter(api: Api<RawApi>): Router {
   const router = Router();
@@ -173,59 +97,20 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    // Retry a transient upstream failure within the same overall budget.
-    //
-    // The board opens ~13 tiles at once and the client replaces a failed tile
-    // with the category glyph, so a single dropped connection used to leave a
-    // permanent hole in the gallery for the rest of the session. Measured on
-    // the droplet (2026-08-08): occasional `ETIMEDOUT` connecting to Google's
-    // photo CDN, roughly one request in ten under a parallel burst, in BOTH
-    // deployments — it went unnoticed only because production has never had a
-    // date reach this board.
-    const deadline = Date.now() + PHOTO_PROXY_TIMEOUT_MS;
-    let attempts = 0;
-    let lastReason = "no attempt";
-
-    while (attempts < PHOTO_PROXY_MAX_ATTEMPTS) {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) break;
-      attempts += 1;
-
-      const result = await fetchPhotoOnce(url, Math.min(remaining, PHOTO_PROXY_ATTEMPT_TIMEOUT_MS));
-
-      if (result.kind === "image") {
-        if (attempts > 1) {
-          // Rare by definition, so one line per rescue is cheap — and it is the
-          // only signal that the upstream path is degrading before it starts
-          // costing users actual photos.
-          console.warn(
-            `[venue-change] photo recovered on attempt ${attempts} (last: ${lastReason})`,
-          );
-        }
-        res.setHeader("Content-Type", result.contentType);
-        allowCrossOriginImage(res);
-        // Cache so the same image used as a card thumbnail and a detail hero
-        // isn't re-fetched from Google. Private — it's tied to the signed ref.
-        res.setHeader("Cache-Control", "private, max-age=86400");
-        res.status(200).send(result.body);
-        return;
-      }
-
-      lastReason = result.reason;
-      if (result.kind === "permanent") break;
-      if (Date.now() + PHOTO_PROXY_RETRY_DELAY_MS >= deadline) break;
-      await sleep(PHOTO_PROXY_RETRY_DELAY_MS);
+    // Retries and both log lines live in `places-photo.ts`, shared with the
+    // iOS canvas's own proxy (`/v1/venues/:id/photo`) — see there for which
+    // failures are worth a second attempt and why.
+    const result = await fetchPlacesPhoto(url, "[venue-change]");
+    if (!result.ok) {
+      res.status(502).json({ error: "upstream" });
+      return;
     }
-
-    // Always logged. Until 2026-08-08 the two non-throwing failures here (a
-    // non-OK upstream and a non-image body) answered 502 in complete silence,
-    // so a systematic upstream problem — a quota, a revoked key, a 429 storm —
-    // was invisible in the logs and looked exactly like "photos just don't
-    // work". Whatever the cause, it now says so.
-    console.warn(
-      `[venue-change] photo proxy failed after ${attempts} attempt(s): ${lastReason}`,
-    );
-    res.status(502).json({ error: "upstream" });
+    res.setHeader("Content-Type", result.contentType);
+    allowCrossOriginImage(res);
+    // Cache so the same image used as a card thumbnail and a detail hero
+    // isn't re-fetched from Google. Private — it's tied to the signed ref.
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.status(200).send(result.body);
   });
 
   router.get("/state", async (req: Request, res: Response): Promise<void> => {
@@ -525,39 +410,6 @@ function parseKeys(raw: unknown): string[] | null {
     keys.push(k);
   }
   return keys;
-}
-
-/** Clamp a requested photo width to a sane range (thumb → hero). */
-/**
- * The only widths this proxy will ask Google for.
- *
- * The width is part of the upstream URL, so **each distinct width is a
- * separately billed Place Photo request** — and it used to be a free parameter
- * clamped to anything in 200…1600. Any authenticated caller could therefore
- * multiply our Places bill by 1400× for the same photograph, one pixel at a
- * time, and the client's own retry (`photo-retry.ts`) would have looked exactly
- * the same in the logs.
- *
- * These two are what the Mini App actually renders — the 240px card tile and
- * the shared gallery/fullscreen width — and `venue-photo-width.test.ts` is the
- * guard that keeps the client from quietly growing a third.
- */
-const ALLOWED_PHOTO_WIDTHS = [240, 1200] as const;
-
-/**
- * Snap a requested width to the nearest allowed one.
- *
- * Snapping rather than rejecting, because an older cached Mini App bundle asks
- * for widths this list does not contain (1000 in the gallery, 1600 fullscreen,
- * before they were unified). Those must keep getting a picture; they just get
- * it at a width that shares a cache entry — and a bill — with everyone else's.
- */
-function snapWidth(raw: unknown): number {
-  const n = typeof raw === "string" ? Number(raw) : NaN;
-  if (!Number.isFinite(n)) return ALLOWED_PHOTO_WIDTHS[1];
-  return ALLOWED_PHOTO_WIDTHS.reduce((best, candidate) =>
-    Math.abs(candidate - n) < Math.abs(best - n) ? candidate : best,
-  );
 }
 
 function statusForReason(reason: string): number {

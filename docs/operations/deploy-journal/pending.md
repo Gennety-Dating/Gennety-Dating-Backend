@@ -11,6 +11,37 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — витрина ожидания на iOS-канве: `/v1/venues/showcase` + подписанные фото мест (2026-09-11).**
+**Схема Prisma не меняется, миграций нет.** Только код: роутер `/v1/venues`
+(`public/routes/venues.ts`), выборка в `services/curated-venue.ts`, подписи ссылок
+в `public/showcase-photos.ts` и общий фото-прокси `public/places-photo.ts` — в него
+вынесен цикл ретраев из venue-change, поведение Mini App не меняется. Новых
+переменных окружения нет: подпись — `BOT_TOKEN`, база ссылок — `PUBLIC_BASE_URL`,
+фото — `PLACES_API_KEY`.
+
+**Проверка после выката** (`$JWT` — токен любого пользователя с городом):
+
+```
+curl -s -H "Authorization: Bearer $JWT" "$API/v1/venues/showcase" \
+  | jq '.cityKey, (.venues | length), .venues[0].name, .venues[0].thumbnailUrl'
+# ссылка из ответа открывается БЕЗ заголовка авторизации:
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "<thumbnailUrl из ответа>"
+```
+
+Ожидается `"ua:kyiv"`, число до 24, имя места и `200 image/jpeg`. **Пустой список
+при `cityKey: "ua:kyiv"`** значит, что у строк каталога нет `city_key` — прогнать
+`scripts/backfill-venue-city-key.mjs`. Все `thumbnailUrl: null` — ночная
+ревалидация ещё не заполнила `photo_refs`.
+
+**Откат:** свободный, только код. iOS до выката (и после отката) получает 404 на
+`/v1/venues/showcase` и показывает прежнюю шторку ожидания — клиент к этому устойчив
+по построению.
+
+**Влияние на iOS:** парный релиз — витрина на канве (Gennety-iOS, ветка
+`standby-showcase`). **Demo-mode:** не затронут.
+
+---
+
 **PENDING — прокси-чат: реакции-эмодзи, закрытый набор из пяти (2026-09-09).**
 **Есть изменение схемы Prisma** — миграция `20260909000000_proxy_chat_reactions`,
 **чисто аддитивная**: две nullable-колонки в `proxy_messages`, ни одной изменённой

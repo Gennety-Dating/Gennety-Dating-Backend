@@ -246,6 +246,22 @@ would then be two copies of one handler with a rule that they must never
 diverge, so the split moves to where the difference actually is — how the
 caller proves who they are — and nothing else is duplicated.
 
+**The standby showcase — iOS only, `IDLE_EXPLORING` only (2026-09-11).** While
+nothing is scheduled, the native canvas shows the city's curated places instead
+of the idle sheet: photo pins on the map and a card carousel under it, swiping a
+card flies the map to its pin and tapping a pin scrolls to its card. One call,
+`GET /v1/venues/showcase` (either rail, like the rest of the canvas): one entry
+per real place — the catalog holds a row per university domain — `museum` and
+blocked names excluded, the 24 best by operator priority, then a photo, then
+Google rating, ordered as a walk so neighbouring cards are neighbouring pins.
+Photos arrive as signed links to `GET /v1/venues/:id/photo`, because an image
+loader sends no header. Opening hours travel as raw local periods and the client
+derives "open until …" itself: the canvas stays open past the moment any
+server-side verdict would flip. It is a showcase, not an offer — nothing on it
+books, changes or suggests a venue for a match. An empty list (no city, no
+catalog) simply leaves the ordinary idle sheet in place. The Mini App canvas is
+unchanged.
+
 ### 6.5 Scratch Map — the city you have actually been in
 
 A dark veil over Kyiv with a hole punched through it wherever this person has
