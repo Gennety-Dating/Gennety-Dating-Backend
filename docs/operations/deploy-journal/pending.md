@@ -11,6 +11,47 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — часто посещаемые места: `/v1/frequent-places/*` и блок партнёра в `/v1/matches/current` (2026-09-11).**
+**Есть изменение схемы Prisma** — миграция `20260911200000_frequent_places`, аддитивная:
+`users.frequent_places_opt_in` (`NOT NULL DEFAULT true`), таблицы `user_place_visits` и
+`user_hidden_places`. Коммит `11cf3118`. Идёт ПОСЛЕ миграции музыки
+(`20260911190000_profile_music_tracks`) — порядок имён совпадает с порядком приземления.
+
+**Порядок выката — миграция СТРОГО ДО кода.** Prisma без `select` читает все колонки
+`users`, так что новый код против базы без миграции падает P2022 на любом чтении
+пользователя, а не только в новых местах.
+
+1. Миграция: `pnpm --filter @gennety/db db:deploy`.
+2. Бот: обычный рестарт. Webapp не меняется.
+
+**Переменные окружения:** новых нет. Флага у функции нет — она включена сразу, но сбор
+идёт только с клиента, который шлёт точки; выпущенного такого клиента сегодня нет
+(iOS-трекер едет своей сборкой).
+
+**Проверка после выката:**
+
+```
+# колонка и таблицы на месте, все включены по умолчанию:
+psql "$DATABASE_URL" -c "select frequent_places_opt_in, count(*) from users group by 1"
+psql "$DATABASE_URL" -c "select count(*) from user_place_visits"
+# геозоны Киева отдаются (JWT любого тестового аккаунта):
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/frequent-places/fences | head -c 300
+```
+
+Ожидается: одна строка `t | <все>`, `0` визитов, `"optIn":true` и массив `fences` с
+`radiusM` 35/40/50.
+
+**Откат:** `git revert 11cf3118` и рестарт бота. Миграцию откатывать не нужно: она
+аддитивная, и старый код новые колонку и таблицы не читает.
+
+**Влияние на iOS:** в спеке пять новых операций (`/v1/frequent-places/*`) и
+необязательное поле `SerializedMatch.partnerFrequentPlaces`. Сборка iOS с трекером и
+блоком ждёт этого выката; до него ручки отвечают 404, и клиент молчит.
+**Demo-mode:** ветки нет; блок в демо пуст по построению (`docs/product/demo-mode.md` →
+«Frequently visited places stay empty»).
+
+---
+
 **PENDING — Музыка в профиле (Spotify), оба флага выключены (2026-09-11).**
 **Есть изменение схемы Prisma** — миграция `20260911190000_profile_music_tracks`,
 чисто аддитивная: новая таблица `profile_music_tracks` (FK на `users`, каскад).

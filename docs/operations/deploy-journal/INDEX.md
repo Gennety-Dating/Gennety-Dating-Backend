@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 171 entries
+# Deploy journal index — 172 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING |  | часто посещаемые места: `/v1/frequent-places/*` и блок партнёра в `/v1/matches/current` | [pending](./pending.md) |
 | PENDING |  | музыка в профиле (Spotify): поиск для всех, импорт топа за вторым флагом; оба флага выключены | [pending](./pending.md) |
 | PENDING |  | транспортный док на канве Mini App: Uber и карты в одно касание | [pending](./pending.md) |
 | PENDING |  | Date Terminal (Contact Sync), Stripe и mock-рельс вычищены, хаб вместо `no_candidates` | [pending](./pending.md) |
