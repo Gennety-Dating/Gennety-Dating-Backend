@@ -935,7 +935,7 @@ When enabled, mutual accept creates one live **post-accept status/CTA** per
 Telegram side (tracked in `Match.calendarMessageIdA/B`): accepted/waiting →
 premium **Date Ticket** card → Calendar. The ticket card carries a `web_app`
 button opening the Ticket Mini App (`apps/webapp/ticket.html`, React +
-pure-CSS 3D). Each ticket is **$8.49** (mock) or **425 ⭐** (Telegram Stars).
+pure-CSS 3D). Each ticket is **$8.49** (USD shelf price) or **425 ⭐** (Telegram Stars).
 **Payment (production): Telegram Stars (XTR).** With `TICKET_STARS_ENABLED` the
 date gate and the store both pay natively in Telegram Stars — the Mini App opens
 a server-issued invoice link (`createInvoiceLink`, empty provider token,
@@ -954,14 +954,27 @@ window. The famine single-ticket discount is **USD-only** and never applies to a
 Stars purchase. Star prices are env-tunable (`TICKET_BUNDLE_STARS`, default
 `1:425,3:1020,6:1650`; the gate derives its per-scope price from the 1-ticket
 entry — self/partner 1×, both 2×).
-**Payment (fallback): mock.** When `TICKET_STARS_ENABLED` is off, the legacy
-mock (`TICKET_PAYMENT_MODE=mock`) fully simulates a Stripe-style flow that
-updates the DB but moves no money; `mock`→`stripe` remains the alternate
-production switch (`services/ticket-payment.ts`). Mock payment intents are
-server-issued, expire after 15 minutes, are bound to the exact payer,
-match/bundle, scope, and amount, and can be consumed only once. While Stars is
-on, the mock `intent`/`confirm` routes 404 (PAY-1 guard) so Stars is the sole
-purchase rail; the free wallet "Use a ticket" path is unaffected.
+**No-charge settle (demo / local dev only, 2026-09-11).** Stars is the only
+rail that moves money in the Telegram product. The legacy fallback is gone:
+`TICKET_PAYMENT_MODE` (`mock`, a simulated Stripe-style intent/confirm flow,
+with `mock`→`stripe` as a production switch that never went live), the Stripe
+stubs, the in-memory mock intents in `services/ticket-payment.ts`, the four
+`intent`/`confirm` routes and the Mini App's fake card screen
+(`MockPayment.tsx`). What replaced it is not a payment rail.
+`ticketPurchaseRail()` answers `stars`, `no-charge` or `none` — served to the
+Mini App as `rail` on the gate state and the wallet — and `no-charge` (Stars
+off AND the demo runtime `DEMO_MODE_ENABLED` or `NODE_ENV` development/test)
+opens `POST /v1/matches/:id/ticket/settle-no-charge` and
+`POST /v1/tickets/store/settle-no-charge`: the gate settles, or the bundle is
+credited (a `store_purchase` ledger row at the shelf price), with the same
+checks as the Stars invoice routes and no payment sheet — same screens, same
+prices. Everywhere else they answer `404 no-charge-unavailable`. It is decided
+by the runtime, never by a config default, so an incomplete production `.env`
+cannot open it; production still refuses to boot with `TICKET_FEATURE_ENABLED`
+on and `TICKET_STARS_ENABLED` off (`paymentTrustConfigurationErrors`), now
+because nothing could be sold. The free wallet "Use a ticket" path is
+unaffected, and iOS never touched any of this (StoreKit →
+`/v1/tickets/appstore/transaction`, spend via `/ticket-gate/use`).
 
 - **Pricing.** Male users get "Pay for us both — $16.98" (settles BOTH tickets,
   sets `paidForPartnerBy*`) plus "Pay only mine — $8.49". Female users get a
@@ -1081,8 +1094,9 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   Spends are atomic and guarded against going negative; a spend whose match-slot
   claim doesn't apply is refunded to the ledger. New TMA endpoints:
   `POST /v1/matches/:id/ticket/use` (gate spend) and `/v1/tickets/*`
-  (wallet + store). Store purchases and the gate share the mock/stripe
-  abstraction in `services/ticket-payment.ts`.
+  (wallet + store). Store purchases and the gate share one rail decision,
+  `ticketPurchaseRail()` in `services/ticket-payment.ts` (it replaced the
+  mock/Stripe abstraction on 2026-09-11).
 - **Famine discount (single ticket).** A one-time loyalty perk for a user the
   weekly batch left unpaired for a **2nd consecutive week or more** (no-match
   `tier ≥ FAMINE_DISCOUNT_MIN_TIER`). The §3.1 no-match DM grants and announces
@@ -1093,9 +1107,9 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   (`services/ticket-discount.ts`; persisted on `User.ticketDiscount*`). The
   Mini Apps render a "−77%" badge + the reduced price; `both`/`partner` scopes,
   the 3/6 store bundles, and the free wallet "Use my ticket" path are
-  unaffected. The server always re-derives the charged price (the mock intent is
-  amount-bound, so a stale discount auto-fails verify) and consumes via a CAS so
-  a double-confirm redeems exactly once. Re-granted/refreshed each later famine
+  unaffected. The server always re-derives the charged price (until 2026-09-11
+  the mock intent was amount-bound, so a stale discount auto-failed verify) and
+  consumes via a CAS so a double-confirm redeems exactly once. Re-granted/refreshed each later famine
   week until used. Inert unless `TICKET_FEATURE_ENABLED`; Telegram-only in v1.
 - **The discount slot is ONE slot, shared with the post-event perk, and the
   collision rule is asymmetric on purpose.** A user who fills in the §11 form
@@ -1168,7 +1182,9 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   / `expired` on timeout. `refund_pending` is an internal retry state and renders
   as closed in the Mini App. **Refund/expiry policy:** the hourly `ticket-expiry`
   cron returns the original Telegram Stars charge (or restores the wallet
-  ticket), durably retries provider failures, and only after a successful refund
+  ticket; a slot settled with neither — Premium-covered, or the demo/dev
+  no-charge settle — has nothing to reverse), durably retries provider
+  failures, and only after a successful refund
   **opens the Calendar for free**. An already-accepted match is never killed by
   a payment stall, and a failed refund is never announced as successful.
 - **The date didn't happen → the ticket comes back (2026-07-29).** One rule, no

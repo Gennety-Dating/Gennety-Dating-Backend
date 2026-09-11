@@ -833,10 +833,11 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
   `pm2 restart gennety-bot --update-env`. Whisper (audio) stays under the
   existing per-request voice limiter, not the token budget.
 - Date Ticket (feature-flagged monetization): `TICKET_FEATURE_ENABLED`
-  (default `false` — leave off until launch), `TICKET_PAYMENT_MODE`
-  (`mock` default / `stripe`), `TICKET_PRICE_CENTS` (default `849`),
-  `TICKET_PAYMENT_WINDOW_HOURS` (default `24`).
-  - **Real payments = Telegram Stars (XTR), the production rail.**
+  (default `false` — leave off until launch), `TICKET_PRICE_CENTS` (default
+  `849`), `TICKET_PAYMENT_WINDOW_HOURS` (default `24`). **`TICKET_PAYMENT_MODE`
+  is obsolete (2026-09-11)** — the `mock`/`stripe` switch was removed and
+  nothing reads it; delete it from `.env`.
+  - **Real payments = Telegram Stars (XTR), the only rail that moves money.**
     `TICKET_STARS_ENABLED` (default `false`) makes the date gate **and** the
     store pay natively in Telegram Stars via `WebApp.openInvoice` +
     `pre_checkout_query` + `successful_payment` (`handlers/payments.ts`). Needs
@@ -849,20 +850,24 @@ curl -s -X POST https://dating-api.gennety.com/v1/auth/phone/request \
     Telegram charge id — exactly-once store credit and durable date-gate
     refunds; non-destructive). Gate payments are recorded before settlement;
     the hourly expiry worker retries `gate_refund_pending` rows and opens free
-    scheduling only after Telegram confirms the refund. When Stars
-    is on, the mock `/{ticket,tickets/store}/{intent,confirm}` routes 404 (PAY-1)
-    so Stars is the sole purchase rail; the free wallet "Use a ticket" path is
-    unaffected. Redeploy the Mini App bundle (`ticket.html` + `tickets.html`) so
-    the ⭐-priced `openInvoice` buttons ship. Rollback: flip
-    `TICKET_STARS_ENABLED` back to `false` — the mock returns exactly as before;
-    the additive column may stay. Star prices are env-tunable at launch without
+    scheduling only after Telegram confirms the refund. Stars is the sole
+    purchase rail: the mock `/{ticket,tickets/store}/{intent,confirm}` routes
+    were removed on 2026-09-11, and their `…/settle-no-charge` replacements
+    exist only in the demo and local dev (production answers `404
+    no-charge-unavailable`, decided by the runtime rather than by env); the free
+    wallet "Use a ticket" path is unaffected. Redeploy the Mini App bundle
+    (`ticket.html` + `tickets.html`) so the ⭐-priced `openInvoice` buttons
+    ship. Rollback: flipping `TICKET_STARS_ENABLED` back to `false` no longer
+    brings back a free fallback — with `TICKET_FEATURE_ENABLED` on, production
+    refuses to boot that way (`paymentTrustConfigurationErrors`: nothing could
+    be sold), so the only off switch is `TICKET_FEATURE_ENABLED` itself; the
+    additive column may stay. Star prices are env-tunable at launch without
     a code change. The famine single-ticket discount is USD-only and is inert on
     Stars purchases.
-  - Going live with **Stripe** instead (alternate path) additionally needs
-    `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
-  `STRIPE_WEBHOOK_SECRET` + `TICKET_PAYMENT_MODE=stripe` (see the
-  `// TODO: Stripe Production Mode` branches in
-  `services/ticket-payment.ts`). Requires `db:push` of the new `Match`
+  - **No Stripe path (removed 2026-09-11).** The `STRIPE_*` keys were never
+    live; the `// TODO: Stripe Production Mode` stubs went with
+    `TICKET_PAYMENT_MODE`, and nothing reads `STRIPE_*` any more.
+  - The ticket feature requires `db:push` of the new `Match`
   ticket columns first — including the additive `partner_paid_seen_at` /
   `partner_paid_nudged_at` columns backing the §3.5b goodwill-cover read-receipt
   (the payer's "she saw it ❤️" DM + the guaranteed completion nudge). The

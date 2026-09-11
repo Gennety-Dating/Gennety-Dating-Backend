@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 168 entries
+# Deploy journal index — 169 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING |  | Date Terminal (Contact Sync), Stripe и mock-рельс вычищены, хаб вместо `no_candidates` | [pending](./pending.md) |
 | PENDING |  | витрина ожидания на iOS-канве: `/v1/venues/showcase` + подписанные фото мест | [pending](./pending.md) |
 | PENDING |  | «Мои билеты» открывают магазин без промежуточного сообщения | [pending](./pending.md) |
 | PENDING |  | ответы профайлера мемом и ссылкой на короткое видео | [pending](./pending.md) |

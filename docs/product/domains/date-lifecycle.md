@@ -1,4 +1,4 @@
-<!-- WHEN_TO_READ: You are changing what happens around the date itself: the spotter sign, the safety brief, the did-you-meet check, post-date feedback, pre-date coordination, or the emergency protocol (Phase 4). -->
+<!-- WHEN_TO_READ: You are changing what happens around the date itself: the spotter sign, the safety brief, the Date Terminal invite and reminder (T-45m / T-15m), the did-you-meet check, post-date feedback, pre-date coordination, or the emergency protocol (Phase 4). -->
 <!-- SOURCE: PRODUCT_SPEC.md (lines 6516-6890) — migrated 2026-09-01 -->
 
 ## Phase 4 — Date Lifecycle
@@ -22,9 +22,32 @@ columns on `matches`.
 | T − 1.5 h | **Pre-date safety brief** to the female user, on whichever rails reach her — Telegram DM and/or APNs push (`safety.brief`, **time-sensitive**, §Phase 4 → Pre-date safety brief). Gender selects the recipient; `platform` selects the rail. | `safetyNoteSentAt` |
 | T − 1.5 h | **Wingman hint reveal push** — the asymmetric tip is unmasked at this gate (the mobile serializer enforces it independently) | `wingmanSentAt` |
 | T − 1 h | **Anonymous proxy chat opens** (feature-flagged, Variant C only) — DM both the "Enter chat" button, and advance the Live Activity to `chat_open`. Moved out from T−30m on 2026-09-04 alongside the offer, which also lifted it clear of the spotter beat — the two used to push the same card from two different sweeps in the same tick. | `proxyOpenedAt` |
+| T − 45 min | **Date Terminal invite** (Telegram-only) — one DM per side with a single `web_app` button, "🎟 Open the Date Terminal" (Contact Sync, §6.4a). Step 2d of the tick, `sendDateTerminalBeats` (`services/date-terminal-invite.ts`); anchored on `DATE_RADAR_LEAD_MINUTES`. See below. | `terminalInviteSentAt` |
+| T − 15 min (until T + 30 min) | **Date Terminal reminder** — the same button, anchored on `DATE_BUMP_OPENS_MINUTES`, still sent up to `DATE_TERMINAL_REMINDER_GRACE_MINUTES` (30) after the date time. See below. | `terminalReminderSentAt` |
 | Date moment | (no automated action — users meet in person) | — |
 | T + 2 h | **Anonymous proxy chat auto-closes** (feature-flagged) | `proxyClosedAt` |
 | T + 24 h | **"Did you actually meet?"** on Telegram, then the **feedback prompt** — each side on its own rail (DM and/or push — see below); LLM parses positives/negatives and updates `negativeConstraints` accordingly | `feedbackPromptedAt` |
+
+### Date Terminal invite and reminder (T-45m / T-15m, Telegram-only, 2026-09-11)
+
+The bot's way into the Date Terminal (§6.4a), sent by step 2d of
+`runDateLifecycleTick` (`sendDateTerminalBeats`,
+`services/date-terminal-invite.ts`). Both are one DM per Telegram side with a
+single inline `web_app` button, "🎟 Open the Date Terminal"; copy keys
+`dateTerminalInvite`, `dateTerminalReminder`, `dateTerminalBtn` in
+`packages/shared` i18n (en/ru/uk/de/pl).
+
+- **Invite at T-45m, reminder at T-15m, the reminder still sent until T+30m.**
+  The windows are disjoint, so a process that was down across T-45m sends only
+  the reminder.
+- **Exactly-once per match** via `Match.terminalInviteSentAt` /
+  `Match.terminalReminderSentAt`, each claimed BEFORE the DM goes out.
+- **Skipped:** legacy rows whose stored venue coordinates are the route
+  midpoint (recognised by `venueMidpointLat` being null); app-only users — the
+  invite has no push leg; a pair that has already synced, whose reminder is
+  claimed silently; and the demo entirely, which replays the lifecycle on a
+  shifted clock while the terminal reads the real one — the same structural
+  limit as the Date Bump (DEMO_MODE.md).
 
 ### The spotter sign and the one-tap vibe read (2026-09-01)
 

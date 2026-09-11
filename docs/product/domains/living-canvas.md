@@ -1,4 +1,4 @@
-<!-- WHEN_TO_READ: You are changing the Living Canvas or viral mechanics: the derived state machine, Date Bump, Date Radar, the canvas screen, Scratch Map, or Campus Radar (Phase 6). -->
+<!-- WHEN_TO_READ: You are changing the Living Canvas or viral mechanics: the derived state machine, Date Bump, the Date Terminal (Contact Sync, §6.4a), Date Radar, the canvas screen, Scratch Map, or Campus Radar (Phase 6). -->
 <!-- SOURCE: PRODUCT_SPEC.md (lines 7001-7327) — migrated 2026-09-01 -->
 
 ## Phase 6 — Living Canvas & Viral Mechanics
@@ -216,7 +216,8 @@ whatever phrasing a future edit invents.
 The flows behind them — accepting a pitch, picking a slot, answering the
 feedback form — live in the bot, and the canvas is a map and a status surface
 in v1, not a second place to accept a date. The two things it genuinely owns
-are the Bump's shake and the Radar's ping.
+are the Bump's shake and the Radar's ping — on iOS; since 2026-09-11 the Mini
+App canvas hands the shake to the Date Terminal (§6.4a).
 
 **The poll cadence is per state, not flat.** Five seconds inside the radar and
 the bump window, where the answer changes without the user and a stale reading
@@ -234,7 +235,9 @@ detector built on it works on iOS and silently never fires elsewhere. iOS also
 requires a user gesture before motion is delivered at all, so a permission
 throw reads as *denied* (ask again from a real tap) rather than *unsupported*
 (this phone cannot) — telling a user their phone cannot do something it can is
-the worse of the two errors.
+the worse of the two errors. In the Mini App this detector (`canvas/shake.ts`)
+now runs only on the Date Terminal (§6.4a, 2026-09-11), which imports it; the
+canvas page itself no longer reads motion.
 
 **Both surfaces read one endpoint.** `/v1/date/state`, `/v1/dates/:id/bump` and
 `/v1/dates/:id/proximity` accept a JWT *or* Telegram `initData`
@@ -261,6 +264,61 @@ server-side verdict would flip. It is a showcase, not an offer — nothing on it
 books, changes or suggests a venue for a match. An empty list (no city, no
 catalog) simply leaves the ordinary idle sheet in place. The Mini App canvas is
 unchanged.
+
+### 6.4a Date Terminal (Contact Sync) — the bot's way into the date day
+
+**`canvas.html` has no way in from the bot, and it still has none of its own.**
+Nothing in the chat links to it, so on Telegram the date-day half of this phase
+— the radar, the Bump, the table deck — lived on a page nobody was sent to. The
+Date Terminal (2026-09-11) is the first entry point: its own Mini App page,
+`apps/webapp/date-terminal.html` (Vite entry `date-terminal`, `MiniAppPage`
+`"date-terminal"` in `services/mini-app-url.ts`), a React screen built on the
+existing `Ticket3D` card, which links on to `canvas.html` ("Map"). **Contact
+Sync is only the UI name for the Date Bump gesture** — nothing new on the
+server: the page reads `GET /v1/date/state` and posts
+`POST /v1/dates/:matchId/bump` over `initData`, like the canvas.
+
+**Two ways in.**
+
+- **The bot**, at T-45m (`DATE_RADAR_LEAD_MINUTES`) with a reminder at T-15m
+  (`DATE_BUMP_OPENS_MINUTES`): one DM per Telegram side carrying a single
+  `web_app` button, "🎟 Open the Date Terminal" — `sendDateTerminalBeats`,
+  step 2d of `runDateLifecycleTick`. Timing, grace and exactly-once markers are
+  in §Phase 4.
+- **The canvas.** In `DATE_RADAR_ACTIVE` and `DATE_BUMP_PENDING` the Mini App
+  canvas's sheet action is "Open the Date Terminal" — also after this side has
+  already shaken, because the two shakes must land within 10 s of each other,
+  so shaking again together is legitimate. The Mini App canvas no longer reads
+  motion itself; the iOS native canvas is unchanged and keeps its own shake.
+
+**The lock mirrors the server; it does not replace it.** Contact Sync is usable
+only while the state is `DATE_BUMP_PENDING` (T-15m … T+2h) AND the phone's own
+GPS (`navigator.geolocation.watchPosition`) puts it within 100 m of the venue —
+the client's copy of `BUMP_VENUE_RADIUS_M`. The screen shows "Arrival at
+{venue}: X m" with an arrival ring, and **nothing about the partner**, the same
+rule as a single shake in §6.2. The server still re-checks everything on every
+post.
+
+**Motion and haptics.** `DeviceMotionEvent` permission is requested from a tap
+(iOS delivers no motion without a gesture). Every shake impulse fires
+`Telegram.WebApp.HapticFeedback.impactOccurred("medium")` and a "Liquid Glass
+Shockwave" — a canvas refraction of the dark glass plus a masked
+`backdrop-filter` ring over the page; every full shake — as §6.4's detector
+(`canvas/shake.ts`) counts it — posts the bump.
+
+**A mutual sync tears the ticket.** When the server confirms the pair:
+`impactOccurred("rigid")` + `notificationOccurred("success")`, the ticket tears
+along its perforation (`--perf-y`), and the at-the-table icebreaker deck
+(`match.deck` from `/v1/date/state`, §6.2) slides out. Opened after the sync,
+the page shows the torn ticket and the deck silently.
+
+**Always dark.** The page is dark in both themes, locks orientation and disables
+vertical swipes while it is open.
+
+**Not reached in the demo.** The invite and reminder are never sent under
+`DEMO_MODE_ENABLED` — the demo replays the lifecycle on a shifted clock while
+the terminal reads the real one, the same structural limit as the Bump
+(DEMO_MODE.md).
 
 ### 6.5 Scratch Map — the city you have actually been in
 

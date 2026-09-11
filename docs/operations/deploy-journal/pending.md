@@ -11,6 +11,56 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — Date Terminal (Contact Sync), Stripe и mock-рельс вычищены, хаб вместо `no_candidates` (2026-09-11).**
+**Есть изменение схемы Prisma** — миграция `20260911120000_date_terminal_and_hub_fallback`,
+аддитивная: `matches.terminal_invite_sent_at`, `matches.terminal_reminder_sent_at`
+(обе nullable), `curated_venues.is_hub_fallback` (`NOT NULL DEFAULT false`), плюс одна
+строка данных — `UPDATE`, закрепляющий киевский хаб по `place_id`. Коммиты: `983b7f1e`
+(платежи), `5e3275a5` (схема + хаб), `af758831` (терминал) и коммит с документацией.
+
+**Порядок выката — миграция СТРОГО ДО кода.** Prisma без `select` читает все колонки
+модели, так что новый код против базы без миграции падает P2022 на любом чтении
+`matches` и `curated_venues`, а не только в новых местах.
+
+1. Миграция: `pnpm --filter @gennety/db db:deploy` (если baseline на проде ещё не
+   принят — сначала шаги из `packages/db/prisma/migrations/README.md`).
+2. Webapp: `pnpm --filter @gennety/webapp build` и выкладка `dist/` — в нём новая
+   страница `date-terminal.html`. ДО бота или вместе с ним: кнопка T-45m ведёт на
+   `${WEBAPP_URL}/date-terminal.html`. Демо собирает свой бандл — пересобрать и его.
+3. Бот: обычный рестарт.
+
+**Переменные окружения:** новых нет. `TICKET_PAYMENT_MODE` код больше не читает —
+строку можно удалить из `.env` прода и демо (оставленная безвредна).
+`TICKET_STARS_ENABLED=true` на проде обязателен, как и был (ассерт на старте). Демо
+остаётся с `TICKET_STARS_ENABLED=false`.
+
+**Проверка после выката:**
+
+```
+# хаб закреплён (строк по числу доменных копий места):
+psql "$DATABASE_URL" -c "select distinct name from curated_venues where is_hub_fallback"
+# страница терминала отдаётся:
+curl -s -o /dev/null -w '%{http_code}\n' "$WEBAPP_URL/date-terminal.html"
+# сообщения терминала и хаб видны в логе бота:
+pm2 logs gennety-bot --lines 400 --nostream | grep -E "\[date-terminal\]|hub fallback"
+```
+
+Ожидается `ТРІШКИ БІЛЬШЕ на Золотих Воротах` и `200`. На проде
+`POST /v1/matches/:id/ticket/settle-no-charge` и `/v1/tickets/store/settle-no-charge`
+любому валидному вызову отвечают `404 no-charge-unavailable` — это и есть проверка,
+что no-charge не открыт там, где двигаются деньги.
+
+**Откат:** код — свободно; миграцию не откатывать — nullable-колонки и колонка с
+дефолтом старому коду безвредны (он перечисляет только известные ему поля).
+
+**Влияние на iOS:** нет — контракт OpenAPI и нативные маршруты не менялись; нативная
+канва по-прежнему трясёт сама через `/v1/dates/:id/bump`. **Demo-mode:** платный гейт
+и магазин закрываются тапом без экрана оплаты (no-charge вместо mock); сообщений
+Date Terminal в демо нет (демо проигрывает жизненный цикл на сдвинутых часах); хаб
+работает и в демо, если в демо-базе есть каталог города.
+
+---
+
 **PENDING — витрина ожидания на iOS-канве: `/v1/venues/showcase` + подписанные фото мест (2026-09-11).**
 **Схема Prisma не меняется, миграций нет.** Только код: роутер `/v1/venues`
 (`public/routes/venues.ts`), выборка в `services/curated-venue.ts`, подписи ссылок

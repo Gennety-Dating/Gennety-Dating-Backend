@@ -27,7 +27,7 @@ Everything on screen is production code. What the demo changes is only:
 | Photo validation | strict | off — any `MIN_PHOTOS` images, faces optional |
 | Contact rail | real email OTP / phone share | auto-satisfied; any OTP code is printed, never sent |
 | Departure point | must be inside Kyiv | **same gate**, plus a one-tap "drop the pin in Kyiv" |
-| Date Ticket | Telegram Stars | the existing **mock** rail (real screens, real prices, no charge) |
+| Date Ticket | Telegram Stars | the **no-charge settle** (real screens, real prices; the pay tap settles at once, no payment sheet) |
 | Venue change | 150⭐ | settled free |
 | Evening calendar band | 50⭐ (or Premium) | the lock is shown; the tap settles free |
 | Partner photos | forward/save-protected (clients blank them out of screenshots and screen recordings) | unprotected, so a walkthrough can be filmed |
@@ -774,12 +774,13 @@ step, so it owes this file an answer on both counts. It is **shown**: the last
 three times of every day carry their Premium plate and padlock, tapping one
 opens the real sheet with the real hero button, and only the settle is free —
 the same shape `changeIsFree` already gives the venue board, and for the same
-reason (Stars moves real money out of a visitor's real balance and has no mock
-rail the way the Date Ticket gate does).
+reason (Stars moves real money out of a visitor's real balance, and the band has
+no no-charge route of its own the way the Date Ticket gate does).
 
 **So a demo shows the lock and never the Stars payment sheet.** Closing that gap
-means a mock rail for Stars, which is the same open decision the venue-change
-deviation below records.
+would mean imitating Telegram's own sheet, which the demo does nowhere — the
+Date Ticket gate's fake card screen went with its mock rail on 2026-09-11, and
+the venue-change deviation below records the same limit.
 
 **The puppet obeys the lock rather than being exempted from it**, and that is
 not politeness: it counters through the production `processCalendarSlotsUpdate`,
@@ -801,13 +802,15 @@ is premium" and "already paid" are all answered once, in one place.
 
 ### Known deviation: the venue-change price screen
 
-The Date Ticket gate uses the shipped **mock** payment rail, so a demo visitor
-sees the real screens, the real prices and a working pay button. The venue
-change has no such rail — it is Stars-only — so demo settles it for free at
+The Date Ticket gate uses the **no-charge settle** (2026-09-11 — it replaced the
+mock payment rail), so a demo visitor sees the real screens, the real prices and
+a working pay button whose tap settles at once, with no payment sheet. The venue
+change has no such route — it is Stars-only — so demo settles it for free at
 agreement, reusing the Premium waiver path (which the Mini App already
 understands via its `settled: true` response). **A demo therefore shows the
 whole likes board but never the venue-change payment screen.** Closing that gap
-means building a mock rail for Stars; it is not worth it for one screen.
+means a no-charge settle for the venue change too; it is not worth it for one
+screen.
 
 ## Setup
 
@@ -834,7 +837,7 @@ PUBLIC_BASE_URL=https://demo-api.gennety.com
 OTP_LOG_TO_CONSOLE=true                  # no mail is sent to typed addresses
 PROFILE_MEDIA_VALIDATION_ENABLED=false   # any images, faces optional
 FOUNDER_NOTIFY_ENABLED=false             # enforced by assertDemoIsolation
-TICKET_FEATURE_ENABLED=true  TICKET_STARS_ENABLED=false  TICKET_PAYMENT_MODE=mock
+TICKET_FEATURE_ENABLED=true  TICKET_STARS_ENABLED=false   # no-charge settle; TICKET_PAYMENT_MODE is obsolete
 VENUE_CHANGE_FEATURE_ENABLED=true   PREMIUM_FEATURE_ENABLED=true
 PHONE_AUTH_ENABLED=true
 SUPABASE_SELFIE_BUCKET=selfies-demo
@@ -951,8 +954,8 @@ server-side rather than merely hidden from the catalog (`offeredPlans()` in
 `public/routes/premium.ts`), because the catalog is the client's list and not a
 boundary.
 
-The reason is not tidiness. **The demo has no mock rail for Stars, and this
-route has never consulted `TICKET_STARS_ENABLED`** — the flag
+The reason is not tidiness. **Premium has no no-charge settle in the demo, and
+this route has never consulted `TICKET_STARS_ENABLED`** — the flag
 `assertDemoIsolation` refuses to boot with, on the stated grounds that "Telegram
 Stars moves real money out of a visitor's real Telegram balance". So tapping
 Subscribe in the demo already mints a genuine invoice for a genuine charge. That
@@ -965,9 +968,10 @@ Two things follow, and the second is the open one:
   the same screen — capping costs the walkthrough nothing, because the packages
   are a pricing choice rather than a product surface an investor needs to see.
 - **The underlying hole is NOT closed**, and closing it is a founder decision,
-  not a cleanup: either a mock rail for Stars (the shape the Date Ticket gate
-  already uses) or refusing to mint at all in demo, which would leave the
-  Subscribe button dead. Recorded in DECISIONS.md 2026-08-24.
+  not a cleanup: either a no-charge settle (the shape the Date Ticket gate
+  uses — a mock rail until 2026-09-11) or refusing to mint at all in demo,
+  which would leave the Subscribe button dead. Recorded in DECISIONS.md
+  2026-08-24.
 
 The expiry reminders need no branch here, but the reason narrowed on
 2026-08-24. They used to address only a non-auto-renewing entitlement,
@@ -1008,9 +1012,11 @@ Two independent reasons, and either alone is enough:
   help: it shifts a clock into `runDateLifecycleTick` / `runCoordinationTick`,
   while a visitor's shake would arrive through `POST /v1/dates/:matchId/bump`
   on the REAL clock and be refused `too-early`, correctly, by days.
-- **There is nothing to shake.** The shake is detected by the Living Canvas
-  (§6.1), which is a client surface; until it ships there is no screen in the
-  demo that could produce one.
+- **Nothing in the demo bot leads to a screen that shakes.** On Telegram the
+  shake is detected by the Date Terminal (§6.4a; the Mini App canvas gave up
+  its own motion code on 2026-09-11), and the bot's only way into it is the
+  T-45m / T-15m invite, which the demo never sends (below). `canvas.html`,
+  which hands off to the terminal, has no way in from the bot either.
 
 So a puppet branch would be code that can never run, which is worse than a
 stated limit — the same call this file already makes for the female-only
@@ -1024,6 +1030,18 @@ use the injected-clock idiom the proxy chat already uses
 through the public route, which must not grow a demo branch — so making the
 Bump demoable means giving the demo a date that is genuinely minutes away,
 which is a change to how the demo schedules, not to how it puppets.
+
+## The Date Terminal invite is not sent here
+
+The T-45m invite and T-15m reminder that open the Date Terminal (§6.4a,
+`services/date-terminal-invite.ts`) are skipped under `DEMO_MODE_ENABLED`
+entirely, for the Bump's first reason above: the demo replays the lifecycle on
+a shifted clock, while the terminal reads `/v1/date/state` and posts the bump on
+the real one. An invite fired by the replay would open a screen whose date is
+still a day or more away, with Contact Sync locked — a button into a screen
+that cannot work yet. No puppet branch either: the terminal is one side's own
+screen, not a negotiation. It becomes demoable when the Bump does, by the same
+change to how the demo schedules.
 
 ## The Scratch Map fills, the Campus Radar cannot fire
 

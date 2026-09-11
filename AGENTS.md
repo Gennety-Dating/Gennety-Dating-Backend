@@ -88,7 +88,7 @@ Every file under `docs/` opens with a `<!-- WHEN_TO_READ: … -->` line. Trust i
 | Scheduling, venue, Premium, referral, promo, rematch | `docs/product/domains/scheduling-and-monetization.md` |
 | The date itself, feedback, emergency | `docs/product/domains/date-lifecycle.md` |
 | Reports, strikes, blocking | `docs/product/domains/trust-and-safety.md` |
-| Living Canvas, Date Bump, Radar, Scratch Map | `docs/product/domains/living-canvas.md` |
+| Living Canvas, Date Bump / Date Terminal, Radar, Scratch Map | `docs/product/domains/living-canvas.md` |
 | Quiet hours, GDPR, languages, loading marks | `docs/product/domains/cross-cutting.md` |
 | A single feature (events, voice, type radar, ads…) | `docs/product/domains/<feature>.md` |
 | Writing any user-facing copy | `docs/product/voice-and-tone.md` |

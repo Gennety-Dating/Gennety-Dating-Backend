@@ -217,9 +217,10 @@ picked up for free. Ask the question only when a change adds or moves one of:
 
 1. **A gate** — anything a user must pass (verification, a contact rail, a
    validation step). Does demo wave it through, and where?
-2. **A paid step** — demo cannot charge. Is there a mock rail, is it free, or
-   is the screen skipped? Say which, because "skipped" means an investor never
-   sees that surface.
+2. **A paid step** — demo cannot charge. Does it take the no-charge settle
+   (real screen, the pay tap settles at once — the Date Ticket gate's shape),
+   is it free, or is the screen skipped? Say which, because "skipped" means an
+   investor never sees that surface.
 3. **A two-sided negotiation step** — the puppet needs a branch in
    `apps/bot/src/demo/decide.ts`, or the demo dead-ends there.
 4. **How a match is created or advanced** — re-check the driver's state table

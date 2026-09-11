@@ -597,6 +597,30 @@ run found nothing**, so `minimalRelaxation` lost its `commute_12_km` branch and
 the no-candidates notice no longer suggests relaxing a distance the user cannot
 see a control for.
 
+**An empty pool ends at the city's hub, not in `negotiating_venue` (hub
+fallback, 2026-09-11).** `finalizeVenueIntentV2` (`services/venue-intent-v2.ts`)
+used to leave the pair in `negotiating_venue` whenever the ranked pool came back
+empty. Now, when the pool is empty on a **terminal** outcome — `no_candidates:*`
+always, `provider_unavailable` only on attempt ≥ 3 (earlier
+`provider_unavailable` attempts still retry at 1 / 5 / 15 min) — and the run is
+live rather than shadow, `chooseHubFallback` picks from the city's whole active
+`base`-tier curated catalog, ignoring the commute box. The venue must still have
+a Maps link, a valid category, hours evidence that it is open at the slot, and
+clear the initial quality/price floor. A row pinned with
+`CuratedVenue.isHubFallback` wins (the one nearest the pair's midpoint if
+several are pinned); with no pin, the most central eligible café —
+`cafe`/`coffee_shop` first, then distance to the market centre in whole km, then
+catalog `priority`, then rating. It is locked exactly like a ranked pick: status
+`scheduled`, `venueSource` `curated`, a `venueSelectionReason` starting "Hub
+fallback: …", and the ordinary scheduled confirmation card to the pair;
+`VenueSelectionLog` records `selectedSource: "hub_fallback"` with
+`topCandidates.hubFallback {after, attempts, pinned}`. Only when not even a hub
+is open at the slot does the old failure path run — the notice to the pair plus
+a founder alert. Kyiv's pin (migration
+`20260911120000_date_terminal_and_hub_fallback`): ТРІШКИ БІЛЬШЕ на Золотих
+Воротах, Volodymyrska 40/2 (place_id `ChIJCf0hmzbP1EARL6cbjd3G1i4`; 4.5★ /
+2,289 reviews, open 09:00–22:00).
+
 **Only `base`-tier venues are ever auto-assigned.** `CuratedVenue.tier` decides
 which pool a venue belongs to, and the automatic first assignment reads `base`
 only (§Premium for `premium`; §3.7b for the board). The third value,
@@ -1340,7 +1364,7 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   - **The cap is a counter on the row (`Match.venueChangeCount`), not a derived
     count of purchases**, because a Premium pair settles free and writes no
     purchase row — and so does every demo visitor (DEMO_MODE.md settles the
-    board free, Stars having no mock rail). Those are exactly the cohorts money
+    board free, nothing standing in for Stars there). Those are exactly the cohorts money
     does not bound, so they are the ones the counter has to.
 - **The way back (`keep-original`).** At any point before a change is paid for,
   either side can say "actually, let's just stay where we were": it withdraws
@@ -1564,9 +1588,9 @@ rather than being sold one specific thing. These properties are load-bearing:
   access is ending would point at a purchase path that does not exist — the same
   reasoning §3.5b uses to withhold the Premium counterfactual from `/v1/*`.
 
-**Demo mode sells the monthly plan only.** The demo has no mock rail for Stars,
-and this route has never consulted `TICKET_STARS_ENABLED`, so a tap there
-already mints a real invoice for a real charge; the packages stay out so one
+**Demo mode sells the monthly plan only.** Premium has no no-charge settle in
+the demo, and this route has never consulted `TICKET_STARS_ENABLED`, so a tap
+there already mints a real invoice for a real charge; the packages stay out so one
 accidental tap cannot cost a visitor ~$75 instead of ~$18. Refused server-side
 rather than merely hidden — the catalog is the client's list, not the boundary.
 
