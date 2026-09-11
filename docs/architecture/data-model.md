@@ -44,6 +44,7 @@ Columns (≈ 35; grouped by purpose):
 | Telegram UI | `statusMessageId` (pinned banner) |
 | Push (mobile) | `pushToken`, `pushPlatform` |
 | Verification | `biometricConsentAt` / `biometricConsentVersion` (explicit Art. 9(2)(a) consent, captured on its own screen; `beginLivenessCheck` refuses to mint a session without it, so the gate is server-side and both clients are bound by it), `verificationStatus`, `personaInquiryId` (unique), `verifiedAt`, `verificationSkippedAt`, `verifiedSelfiePath`, `faceMatchScore`, `faceMatchedAt`, `selfiePath` (legacy). Matching admits only `verified` plus the persisted pre-flip cohort (`unverified` with non-null `verificationSkippedAt`). `personaInquiryId` keeps its historical name but now holds the AWS Face Liveness session id (the provider swap was deliberately schema-free); it stays the `(session, faceMatchedAt)` idempotency marker. `pendingLivenessSessionId` is deliberately a SEPARATE column: it holds the session currently in flight (written at `/init`, cleared at a terminal outcome) purely so `completeLivenessCheck` can refuse a client-supplied session id the user did not mint. It cannot be folded into `personaInquiryId`, which means "the session that produced the stored reference selfie" and is what `triggerVerificationRerun` reruns against — a not-yet-completed session must never land there. Production-like startup fails closed unless liveness is enabled and configured (AWS credentials + `LIVENESS_STS_ROLE_ARN`), verification is mandatory, and Rekognition/profile-media validation are enabled — there is no sandbox escape hatch any more. |
+| Location features | `scratchMapOptIn` (default **false** — authorises collecting Scratch Map tiles; its own column because a consent that authorises NEW collection is never inferred from a broader tick) and `frequentPlacesOptIn` (default **true**, founder decision 2026-09-11 — the one deliberate exception to that rule; see `user_place_visits`). Both stop collection when switched off and keep what is already stored. |
 | Attribution | `referralSource` (`tg:start_param` / `mobile:utm=…` / `referral:USER_ID`) |
 | Tickets (feature-flagged) | `ticketBalance` — materialized ticket-wallet balance; running sum of `TicketLedger.delta` (see `ticket_ledger`). `ticketDiscountPct` / `ticketDiscountGrantedAt` / `ticketDiscountExpiresAt` / `ticketDiscountConsumedAt` — one-time famine single-ticket discount (PRODUCT_SPEC §3.5b; active ⇔ `pct > 0 AND consumedAt IS NULL AND expiresAt > now`), owned by `services/ticket-discount.ts`. `ticketDiscountSource` (`famine` | `event_feedback`) names WHICH mechanism filled that one slot — analytics only, never read by pricing; see `event_feedback`. |
 | Premium (feature-flagged) | `premiumUntil` / `premiumSince` / `premiumProvider` (`telegram_stars`\|`app_store`\|`referral`) / `premiumAutoRenew` / `premiumExternalId` — Gennety Premium subscription head (PRODUCT_SPEC §3.8 / §Premium). Materialized from the append-only `subscription_ledger`; active ⇔ `premiumUntil > now`. `premiumExternalId` is the recurring anchor (Stars charge id / App Store `originalTransactionId`) used to reconcile renewals + find the owner from a webhook. Owned by `services/premium.ts`; inert-to-write unless `PREMIUM_FEATURE_ENABLED`, but an existing entitlement is honored regardless of the flag. `provider: "referral"` marks a complimentary comp grant (`grantComplimentaryPremiumMonths`) that never sets an auto-renew anchor. | `premiumReminder3dAt` / `premiumReminder1dAt` are the expiry-reminder once-markers (PRODUCT_SPEC §3.8): the 3-day and 24-hour DMs are sent at most once per PAID PERIOD, so every path that advances `premiumUntil` clears both — otherwise a renewing user is warned once in their life and every later period lapses in silence. Set for BOTH reminder cohorts (PRODUCT_SPEC §3.8): a non-auto-renewing entitlement whose access really is ending, AND a live recurring Telegram Stars subscription, which is warned that the coming charge is taken from the Star balance with no card fallback. (Until 2026-08-24 this was non-renewing only, which left the recurring cohort — the one that can actually lose a subscription to an empty balance — with no warning at all.) A recurring **App Store** subscription is still never marked: Apple runs its own billing retry and there is no Star balance to top up, so neither message is true for that rail. One pair of markers serves both cohorts because they are mutually exclusive at any instant (`premiumAutoRenew` true vs false). Swept by `workers/premium-expiry-reminder.ts` off `@@index([premiumUntil])`, which exists because that hourly sweep asks one question of the whole table and the column is null on most rows. **`activateOrExtendPremium` may only ever EXTEND `premiumUntil`** (a `max()` against the stored value): a monthly subscriber who buys a 3/6-month package holds an expiry months out, and their next 30-day renewal carries an earlier one — writing it through would delete the package they just paid for. `revokePremium` stays the one path allowed to shorten it.
@@ -608,6 +609,28 @@ One consequence that is easy to misread: because this table is the substrate,
 `activityCoverageFrom` field on the response is what says which is which, and it
 deliberately does NOT apply the test filter — it answers "what does the table
 cover", not "who is in it".
+
+### `user_place_visits`
+
+Frequently visited places (`docs/product/domains/frequent-places.md`): one row
+per person × Google place id × local calendar day on which a stay of at least 15
+minutes was read from two foreground fixes. **No coordinate, no time of day, no
+duration** — the row's shape is the privacy design. Unique
+`(userId, placeId, visitDay)`, so a long stay writes once (`createMany …
+skipDuplicates`); index `(visitDay)` for the 180-day sweep in
+`workers/retention.ts`. `placeId` has no FK, the rule
+`user_scratch_maps.discoveredVenues` follows: retiring a catalog row never
+rewrites anyone's history, the read just stops showing a place it cannot find.
+Attended dates count as visits but are read from `matches` at query time, not
+copied here. **No summary table**: at day resolution this log already is the
+aggregate — a profile read is a few hundred rows on the unique index, ranked in
+memory. Cascades with the user.
+
+### `user_hidden_places`
+
+Places their owner took off the frequently-visited block, keyed
+`(userId, placeId)`. Hiding stops the showing, not the counting. Cascades with
+the user.
 
 ### `media_validation_rejections`
 

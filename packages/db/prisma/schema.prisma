@@ -193,6 +193,22 @@ model User {
   /// ping) or when a Date Bump is verified at a venue, and what is stored is
   /// a geohash-6 tile (~1.2 km), never a raw coordinate.
   scratchMapOptIn            Boolean                  @default(false) @map("scratch_map_opt_in")
+  /// Consent for frequently visited places (docs/product/domains/
+  /// frequent-places.md): noticing which catalog venues this person keeps
+  /// coming back to, and showing the top three on their profile and to their
+  /// current match.
+  ///
+  /// **Default TRUE — a founder decision (2026-09-11) that departs from the
+  /// rule the consent above states** ("a consent that authorises new collection
+  /// is never inferred from a broader tick"). It is recorded as an exception,
+  /// not a change of that rule: `scratchMapOptIn` and `biometricConsentAt` keep
+  /// it. What keeps the default bearable is what is stored — a place id and a
+  /// calendar day in `user_place_visits`, never a coordinate or a time — and
+  /// that collection still needs the OS location permission and the app open.
+  /// Switching it off stops collection and removes the block from the profile
+  /// and from the match at once; stored days are kept, like the Scratch Map's
+  /// tiles, and age out with the 180-day window.
+  frequentPlacesOptIn        Boolean                  @default(true) @map("frequent_places_opt_in")
   emailOtp                   String?                  @map("email_otp")
   emailOtpExpiresAt          DateTime?                @map("email_otp_expires_at")
   /// True once the user has successfully verified an OTP for `email`.
@@ -416,6 +432,8 @@ model User {
   voicePrompt               VoicePrompt?
   musicTracks               ProfileMusicTrack[]
   scratchMap                UserScratchMap?
+  placeVisits               UserPlaceVisit[]
+  hiddenPlaces              UserHiddenPlace[]
   ticketLedger              TicketLedger[]
   subscriptionLedger        SubscriptionLedger[]
   rematchPurchases          RematchPurchase[]
@@ -1534,6 +1552,61 @@ model UserScratchMap {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_scratch_maps")
+}
+
+/// One day on which a person stayed at a catalog place long enough for it to
+/// count (docs/product/domains/frequent-places.md). Written by the server when
+/// two foreground fixes at least 15 minutes apart both land unambiguously on
+/// the same place; a date the person attended counts too, but is read from
+/// `Match` at query time rather than copied here.
+///
+/// **A place and a day, and that is the whole privacy design.** No coordinate,
+/// no time of day, no duration: the row can say "Sens, some day in September"
+/// and nothing narrower. One row per person × place × local day, so a long
+/// stay is one visit rather than one per fix. Swept after 180 days
+/// (`workers/retention.ts`) — the ranking never looks further back — and gone
+/// with the account by cascade.
+///
+/// There is no summary table on purpose: at day resolution this log already
+/// IS the aggregate. A profile read is a few hundred rows on the unique index
+/// at most, ranked in memory, so the time decay is always current and no job
+/// has to keep a second copy of the same fact in step.
+model UserPlaceVisit {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  /// Google Place id — the identity every catalog reader dedupes on, for the
+  /// reason `UserScratchMap.discoveredVenues` gives: the catalog holds one row
+  /// per university domain. No FK, so retiring a catalog row never rewrites
+  /// someone's history; the read simply stops showing a place it cannot find.
+  placeId String @map("place_id")
+
+  /// The local calendar day of the stay, in the person's own city.
+  visitDay DateTime @map("visit_day") @db.Date
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, placeId, visitDay])
+  /// The retention sweep reads oldest-first across everyone.
+  @@index([visitDay])
+  @@map("user_place_visits")
+}
+
+/// A place its owner took off their frequently-visited block. Hiding stops the
+/// SHOWING, not the counting: un-hiding brings the place back at the rank it
+/// earned, the same "a toggle never silently deletes" rule the Scratch Map
+/// keeps. Keyed by Google Place id for the same reason as `UserPlaceVisit`.
+model UserHiddenPlace {
+  userId    String   @map("user_id") @db.Uuid
+  placeId   String   @map("place_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, placeId])
+  @@map("user_hidden_places")
 }
 
 enum MatchStatus {

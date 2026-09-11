@@ -1067,6 +1067,16 @@ seeded university accounts — which is also what verifying it will need in
 production, since production today has **zero** accounts carrying a university
 domain.
 
+## Frequently visited places stay empty
+
+**No puppet branch** — the feature is one-sided, so there is nothing for the
+puppet to answer, and the doll's block (`partnerFrequentPlaces`) is empty
+because the doll has no visits. A visitor's own block stays empty too, and
+structurally: the only dwell source is the iOS app's foreground tracker, which a
+Telegram demo never runs; the Date Bump cannot fire here (above); and one
+attended date is below every threshold (3 visit days for a museum, 5 for the
+rest). Verifying the feature needs the iOS app against the dev bot.
+
 ## The rule for future work
 
 **Any change to a product flow, a Mini App screen, a gate, or a paid step must

@@ -49,6 +49,7 @@ import {
 } from "../services/active-match-priority.js";
 import { ticketGateFor } from "./ticket-gate-state.js";
 import { recordRejectionFeedback } from "../services/rejection-feedback.js";
+import { partnerFrequentPlaces, type PartnerPlace } from "../services/frequent-places.js";
 
 /**
  * Mobile-only wrappers around the existing match-engine pipeline. These
@@ -191,6 +192,14 @@ export interface SerializedMatch {
    * nothing. Display-only — read the `ProfileMusicTrack` model comment.
    */
   partnerMusicTracks?: MusicTrack[];
+  /**
+   * The partner's frequently visited places (docs/product/domains/
+   * frequent-places.md): at most three catalog places, each a name and a
+   * category and nothing else — no visit count, no day, no position. Empty when
+   * the partner switched the feature off, hid them, or has none that qualify.
+   * Shown to the match by founder decision (2026-09-11).
+   */
+  partnerFrequentPlaces: PartnerPlace[];
   timeZone: string | null;
   /**
    * Server's current wall-clock at the time of this response, ISO. The
@@ -485,9 +494,26 @@ export async function getCurrentMatchForUser(
     ...(env.PROFILE_MUSIC_ENABLED
       ? { partnerMusicTracks: partner.musicTracks.map(serializeMusicTrack) }
       : {}),
+    partnerFrequentPlaces: await partnerPlacesBestEffort(
+      side === "A" ? match.userBId : match.userAId,
+    ),
     timeZone: me.profile?.timeZone ?? null,
     serverTimeAt: new Date().toISOString(),
   };
+}
+
+/**
+ * The partner's places, or none. Best-effort by construction: the block is a
+ * garnish on the match, and a failure reading it must never cost the caller
+ * `/v1/matches/current` — the screen their date runs on.
+ */
+async function partnerPlacesBestEffort(partnerId: string): Promise<PartnerPlace[]> {
+  try {
+    return await partnerFrequentPlaces(partnerId);
+  } catch (err) {
+    console.error("[frequent-places] partner block failed for", partnerId, err);
+    return [];
+  }
 }
 
 /**

@@ -7,6 +7,7 @@ const proxyMessage = { findMany: vi.fn(), deleteMany: vi.fn() };
 const chatEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
 const clientEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
 const eventFeedback = { findMany: vi.fn(), deleteMany: vi.fn() };
+const userPlaceVisit = { findMany: vi.fn(), deleteMany: vi.fn() };
 const $executeRaw = vi.fn();
 
 vi.mock("@gennety/db", () => ({
@@ -18,6 +19,7 @@ vi.mock("@gennety/db", () => ({
     chatEvent,
     clientEvent,
     eventFeedback,
+    userPlaceVisit,
     $executeRaw,
   },
 }));
@@ -31,12 +33,23 @@ const {
   CLIENT_EVENT_RETENTION_MS,
   EVENT_FEEDBACK_RETENTION_MS,
   ORPHAN_SESSION_RETENTION_MS,
+  PLACE_VISIT_RETENTION_DAYS,
 } = await import("./retention.js");
 
 const NOW = new Date("2026-08-01T03:45:00.000Z");
+const ALL_MODELS = [
+  emailOtp,
+  phoneOtp,
+  userSession,
+  proxyMessage,
+  chatEvent,
+  clientEvent,
+  eventFeedback,
+  userPlaceVisit,
+];
 
 beforeEach(() => {
-  for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent, eventFeedback]) {
+  for (const model of ALL_MODELS) {
     model.findMany.mockReset().mockResolvedValue([]);
     model.deleteMany.mockReset().mockResolvedValue({ count: 0 });
   }
@@ -97,9 +110,10 @@ describe("retentionTick", () => {
       chatEvents: 0,
       clientEvents: 0,
       eventFeedback: 0,
+      placeVisits: 0,
       orphanBotSessions: 0,
     });
-    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent, eventFeedback]) {
+    for (const model of ALL_MODELS) {
       expect(model.deleteMany).not.toHaveBeenCalled();
     }
   });
@@ -212,9 +226,26 @@ describe("retentionTick", () => {
     expect(EVENT_FEEDBACK_RETENTION_MS).toBe(90 * 24 * 60 * 60 * 1000);
   });
 
+  it("sweeps frequent-place days on the ranking's own window, by calendar day", async () => {
+    // A day older than the window can no longer move anything a person or
+    // their match sees — keeping it would be holding where someone was for no
+    // reader at all. `visit_day` is a DATE, so the cutoff is a UTC midnight.
+    userPlaceVisit.findMany.mockResolvedValue([{ id: "v1" }]);
+    userPlaceVisit.deleteMany.mockResolvedValue({ count: 1 });
+
+    const result = await retentionTick(NOW);
+
+    expect(PLACE_VISIT_RETENTION_DAYS).toBe(180);
+    expect(userPlaceVisit.findMany.mock.calls[0][0]).toMatchObject({
+      where: { visitDay: { lt: new Date("2026-02-02T00:00:00.000Z") } },
+      orderBy: { visitDay: "asc" },
+    });
+    expect(result.placeVisits).toBe(1);
+  });
+
   it("batches each table so one tick cannot run away", async () => {
     await retentionTick(NOW);
-    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent, clientEvent, eventFeedback]) {
+    for (const model of ALL_MODELS) {
       expect(model.findMany.mock.calls[0][0].take).toBe(1_000);
     }
   });
@@ -235,6 +266,7 @@ describe("retentionTick", () => {
       chatEvents: 0,
       clientEvents: 0,
       eventFeedback: 0,
+      placeVisits: 0,
       orphanBotSessions: 0,
     });
   });

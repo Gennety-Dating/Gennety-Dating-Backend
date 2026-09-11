@@ -93,6 +93,7 @@ export {
 export type { City, CityStatus, Market, WaitlistCity } from "./markets.js";
 export { tileFor, tileBounds, isTile } from "./geohash.js";
 export type { TileBounds } from "./geohash.js";
+export * from "./frequent-places.js";
 export { t, escapeMd, interpolate, monthsPhrase } from "./i18n.js";
 export type { TranslationKey } from "./i18n.js";
 export { tv, setVariantRng, variantAlternates, VARIANT_KEYS } from "./i18n-variants.js";

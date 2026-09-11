@@ -3644,6 +3644,179 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/frequent-places:
+    get:
+      tags: [me]
+      operationId: getFrequentPlaces
+      summary: The caller's frequently visited places, and the consent they run under
+      description: >
+        The places the caller's match sees (`hidden: false`, best first, at
+        most three and at most two of one category), then the ones the caller
+        hid (`hidden: true`), plus the opt-in — one call draws the profile
+        section. `visits` is the number of distinct days with a visit in the
+        last 180 days and is the owner's alone; the match receives a name and
+        a category (`SerializedMatch.partnerFrequentPlaces`).
+
+
+        A place qualifies at 5 visit days for cafés, coffee shops, restaurants
+        and lounges, and at 3 for museums. A visit is a stay of at least 15
+        minutes read from two foreground fixes, or a date the caller attended
+        there. Only active catalog places ever appear. Switched off, the list
+        is empty and nothing is read.
+      responses:
+        "200":
+          description: The caller's places
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FrequentPlaces" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/frequent-places/opt-in:
+    put:
+      tags: [me]
+      operationId: putFrequentPlacesOptIn
+      summary: Turn frequently visited places on or off
+      description: >
+        **On by default** (founder decision 2026-09-11). Off stops collection
+        at once and removes the block from the profile and from the match; the
+        visit days already stored are kept and age out after 180 days — the
+        Scratch Map's rule that a toggle never silently deletes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "200":
+          description: The new setting and the list it leaves
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/FrequentPlaces"
+                  - type: object
+                    required: [ok]
+                    properties:
+                      ok: { type: boolean, const: true }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/frequent-places/{placeId}/visibility:
+    put:
+      tags: [me]
+      operationId: putFrequentPlaceVisibility
+      summary: Hide one place from the block, or bring it back
+      description: >
+        Hiding stops the SHOWING, not the counting: the place keeps its visits
+        and returns at the rank it earned when brought back, and meanwhile the
+        next place takes its slot — for the owner and the match alike, at once.
+      parameters:
+        - name: placeId
+          in: path
+          required: true
+          description: Google Place id, as `FrequentPlace.placeId` carries it.
+          schema: { type: string, pattern: "^[A-Za-z0-9_-]{1,255}$" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hidden]
+              properties:
+                hidden: { type: boolean }
+      responses:
+        "200":
+          description: The list after the change
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/FrequentPlaces"
+                  - type: object
+                    required: [ok]
+                    properties:
+                      ok: { type: boolean, const: true }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/frequent-places/fences:
+    get:
+      tags: [me]
+      operationId: getFrequentPlaceFences
+      summary: The caller's city as circles, for the client's pre-filter
+      description: >
+        A client sends a fix to `/v1/frequent-places/presence` only when it
+        lies within `radiusM` plus the fix's own accuracy of some fence — the
+        same reach the server calls "not away" — so a position leaves the phone
+        only when the person is at one of our places. `policy` carries the
+        client's numbers so none is compiled into an app build. `fences` is
+        empty while the caller is opted out: there is then nothing to send.
+        Safe to cache for a day.
+      responses:
+        "200":
+          description: Fences and policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FrequentPlaceFences" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/frequent-places/presence:
+    post:
+      tags: [me]
+      operationId: postFrequentPlacePresence
+      summary: One foreground fix at a place, or "I left"
+      description: >
+        Either a fix — `lat`, `lng`, `accuracyM` (iOS `horizontalAccuracy`)
+        and `ageSeconds` (how old the fix is by the DEVICE's own clock, so a
+        wrong device date can neither make a stale fix fresh nor stretch a
+        stay) — or `{ "away": true }`, sent when a fix lands clear of every
+        fence while a stay may be open. The away report carries no position.
+
+
+        The server reads the fix against its catalog and drops it: coordinates
+        are never stored or logged. A visit is written only when two fixes at
+        least 15 minutes apart land on the same place with no departure in
+        between. The answer is `{ ok: true }` either way, deliberately — a fix
+        is not a receipt.
+
+
+        Foreground only: there is no background-location entitlement in the
+        iOS app. Called when the app becomes active and every
+        `policy.probeIntervalSeconds` while it stays open.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 'A fix (all four numbers) or `{ "away": true }` alone.'
+              properties:
+                lat: { type: number }
+                lng: { type: number }
+                accuracyM: { type: number, minimum: 0 }
+                ageSeconds: { type: number, minimum: 0 }
+                away: { type: boolean }
+      responses:
+        "200":
+          description: Accepted (whether or not it completed a visit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: >
+            `opted-out` — the caller switched the feature off. Not worth
+            retrying; the client stops sending.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/venues/showcase:
     get:
       tags: [date]
@@ -3774,6 +3947,95 @@ components:
             real venue, so a row id would give two people who sat in the same
             café different histories.
           items: { type: string }
+
+    FrequentPlaces:
+      type: object
+      required: [optIn, places]
+      properties:
+        optIn:
+          type: boolean
+          description: Whether collection and the block are on. On by default.
+        places:
+          type: array
+          description: >
+            Shown places first (best first, at most three, at most two of one
+            category), then the ones the caller hid. Empty while opted out.
+          items: { $ref: "#/components/schemas/FrequentPlace" }
+
+    FrequentPlace:
+      type: object
+      required: [placeId, name, category, visits, hidden]
+      properties:
+        placeId:
+          type: string
+          description: >
+            Google Place id — the catalog's identity for a real place. Never a
+            catalog row id: the catalog holds several rows per place.
+        name: { type: string }
+        category:
+          type: string
+          description: >
+            `cafe` | `coffee_shop` | `restaurant` | `lounge` | `museum`. A string
+            rather than an enum so a category added later does not break
+            decoding in a shipped build.
+        visits:
+          type: integer
+          description: Distinct days with a visit in the last 180 days. The owner's alone.
+        hidden:
+          type: boolean
+          description: >
+            Hidden by the caller. Kept in this list so it can be brought back;
+            never shown to the match.
+
+    PartnerFrequentPlace:
+      type: object
+      required: [placeId, name, category]
+      description: >
+        One of the partner's frequently visited places — a name and a category,
+        and nothing else: no visit count, no day, no position.
+      properties:
+        placeId: { type: string }
+        name: { type: string }
+        category:
+          type: string
+          description: Same vocabulary as `FrequentPlace.category`.
+
+    FrequentPlaceFences:
+      type: object
+      required: [optIn, cityKey, policy, fences]
+      properties:
+        optIn: { type: boolean }
+        cityKey:
+          type: [string, "null"]
+          description: The city the fences are for.
+        policy: { $ref: "#/components/schemas/FrequentPlacePolicy" }
+        fences:
+          type: array
+          items: { $ref: "#/components/schemas/FrequentPlaceFence" }
+
+    FrequentPlacePolicy:
+      type: object
+      required: [maxAccuracyM, fixMaxAgeSeconds, probeIntervalSeconds]
+      properties:
+        maxAccuracyM:
+          type: number
+          description: Drop a fix whose horizontal accuracy is worse than this, in metres.
+        fixMaxAgeSeconds:
+          type: integer
+          description: Drop a fix older than this by the device's clock.
+        probeIntervalSeconds:
+          type: integer
+          description: Take one more fix this often while the app stays open.
+
+    FrequentPlaceFence:
+      type: object
+      required: [lat, lng, radiusM]
+      properties:
+        lat: { type: number }
+        lng: { type: number }
+        radiusM:
+          type: number
+          description: The server's own radius for the place's category, in metres.
 
     VenueShowcase:
       type: object
@@ -5147,6 +5409,18 @@ components:
             nothing. A property of the PERSON, so it belongs on the pitch and
             never on a lock-screen surface.
           items: { $ref: "#/components/schemas/MusicTrack" }
+        partnerFrequentPlaces:
+          type: array
+          description: |
+            The partner's frequently visited places (founder decision
+            2026-09-11): at most three active catalog places, each a name and a
+            category and nothing else — no visit count, no day, no position.
+            Empty when the partner switched the feature off, hid them, or has
+            none that qualify.
+
+            Not in `required` on purpose: a build that reads it has to keep
+            decoding a server that predates it.
+          items: { $ref: "#/components/schemas/PartnerFrequentPlace" }
         timeZone:
           type: [string, "null"]
           description: |

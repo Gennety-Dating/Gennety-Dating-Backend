@@ -1,4 +1,5 @@
 import { prisma } from "@gennety/db";
+import { FREQUENT_PLACE_WINDOW_DAYS } from "@gennety/shared";
 
 /**
  * Data-retention sweep (audit DATA-1).
@@ -119,6 +120,16 @@ export const ORPHAN_SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
  */
 export const EVENT_FEEDBACK_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
+/**
+ * Frequently-visited-places days (`user_place_visits`, 2026-09-11).
+ *
+ * Not a policy of its own: the ranking never looks past its window, so a day
+ * older than that can no longer change anything a person or their match sees,
+ * and keeping it would be holding where someone was for no reader at all. Tied
+ * to the shared window constant so the two cannot drift apart.
+ */
+export const PLACE_VISIT_RETENTION_DAYS = FREQUENT_PLACE_WINDOW_DAYS;
+
 /** Rows removed per query. Small enough that one `IN (…)` delete stays cheap. */
 const BATCH_LIMIT = 1_000;
 
@@ -149,6 +160,7 @@ export interface RetentionSweepResult {
   chatEvents: number;
   clientEvents: number;
   eventFeedback: number;
+  placeVisits: number;
   orphanBotSessions: number;
 }
 
@@ -295,6 +307,24 @@ export async function retentionTick(
     (ids) => prisma.eventFeedback.deleteMany({ where: { id: { in: ids } } }),
   );
 
+  // `visit_day` is a calendar DATE, so the cutoff is a UTC midnight: a row is
+  // swept the night its day passes the window, give or take the timezone hour.
+  const placeVisitCutoff = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) -
+      PLACE_VISIT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  );
+  const placeVisits = await deleteOldest(
+    "user_place_visits",
+    (take) =>
+      prisma.userPlaceVisit.findMany({
+        where: { visitDay: { lt: placeVisitCutoff } },
+        select: { id: true },
+        orderBy: { visitDay: "asc" },
+        take,
+      }),
+    (ids) => prisma.userPlaceVisit.deleteMany({ where: { id: { in: ids } } }),
+  );
+
   // Raw, because there is no relation to traverse: the join is
   // `users.telegram_id::text = bot_sessions.key`, which is exactly the coupling
   // the schema does not express. Anti-join rather than "load all keys and diff
@@ -335,13 +365,14 @@ export async function retentionTick(
     chatEvents +
     clientEvents +
     eventFeedback +
+    placeVisits +
     orphanBotSessions;
   if (total > 0) {
     console.log(
       `[retention] emailOtps=${emailOtps} phoneOtps=${phoneOtps} ` +
         `sessions=${sessions} proxyMessages=${proxyMessages} chatEvents=${chatEvents} ` +
         `clientEvents=${clientEvents} eventFeedback=${eventFeedback} ` +
-        `orphanBotSessions=${orphanBotSessions}`,
+        `placeVisits=${placeVisits} orphanBotSessions=${orphanBotSessions}`,
     );
   }
   return {
@@ -352,6 +383,7 @@ export async function retentionTick(
     chatEvents,
     clientEvents,
     eventFeedback,
+    placeVisits,
     orphanBotSessions,
   };
 }

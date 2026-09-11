@@ -25,6 +25,7 @@ import { gatekeeperRouter } from "./routes/gatekeeper.js";
 import { dateBumpRouter } from "./routes/date-bump.js";
 import { dateRadarRouter } from "./routes/date-radar.js";
 import { scratchMapRouter } from "./routes/scratch-map.js";
+import { frequentPlacesRouter } from "./routes/frequent-places.js";
 import { venuesRouter } from "./routes/venues.js";
 import { appConfigRouter } from "./routes/app-config.js";
 import { phoneAuthRouter } from "./routes/phone-auth.js";
@@ -587,6 +588,9 @@ app.use("/v1/dates", dateRadarRouter);
 // client polls while nothing is happening, and it is gated by a consent of its
 // own rather than by being logged in.
 app.use("/v1/scratch", scratchMapRouter);
+// Frequently visited places. Same shape as the Scratch Map, for the same
+// reasons: its own consent, either rail, and a foreground-only presence call.
+app.use("/v1/frequent-places", frequentPlacesRouter);
 // Curated places for the iOS standby canvas (IDLE_EXPLORING). The list is a
 // canvas call and takes either rail; the photo route under it is reached by a
 // signed link instead, because an image loader sends no header at all.

@@ -41,6 +41,7 @@ docs/
 │       ├── venue-engine-plan.md             Venue ranking improvements; Stage 5 + Part 6 still open
 │       └── launch-events.md · voice-prompts.md · type-radar.md · rematch.md · prime-time.md · profile-music.md
 │           promo-codes.md · referral.md · venue-change.md · ad-spend-tracking.md
+│           frequent-places.md (catalog places a person keeps returning to — detection, thresholds, what the match sees)
 ├── operations/
 │   ├── deployment-runbook.md  ★ CANONICAL deploy/rollback/DB-ops/logs/Caddy procedure.
 │   ├── environments.md        Droplet, paths, PM2, Caddy, env + credential locations, endpoints, dev↔prod isolation.
