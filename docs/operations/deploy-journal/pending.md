@@ -11,6 +11,40 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — транспортный док на канве Mini App: Uber и карты в одно касание (2026-09-11).**
+**Только webapp.** Коммит `d9cd0798`. Схема, миграции и бот не меняются: доку хватает
+того, что `/v1/date/state` уже отдаёт (точка и имя места).
+
+1. Webapp: `pnpm --filter @gennety/webapp build` и выкладка `dist/` — меняется бандл
+   `canvas.html`. Демо собирает свой бандл — пересобрать и его.
+2. Бот: рестарт не нужен.
+
+**Переменные окружения:** одна новая, необязательная и только для СБОРКИ webapp —
+`VITE_UBER_CLIENT_ID` (client id нашего developer-приложения Uber; уходит в
+Uber-ссылку как `client_id`, атрибуция поездки). Не задана — ссылка уходит без неё;
+сейчас её нет, и собирать можно без неё.
+
+**Проверка после выката:**
+
+```
+# в бандле канвы есть док:
+grep -l "m.uber.com/looking" dist/assets/canvas-*.js
+```
+
+Руками: открыть канву в окне радара (T-45m … начало свидания) — над шторкой два
+стеклянных острова, «N min by car / You're X km away». «Uber» открывает Uber с местом
+свидания в пункте назначения; кнопка карт — Apple Maps на iPhone, Google Maps на
+Android, маршрут в выбранном режиме. В пределах 100 м от места док уходит сам; в
+`DATE_SCHEDULED` он поднимается тапом по булавке.
+
+**Откат:** `git revert d9cd0798` и пересборка webapp — состояния нет.
+
+**Влияние на iOS:** нет — нативная канва и контракт OpenAPI не менялись.
+**Demo-mode:** отдельной логики нет — док идёт за состоянием `/v1/date/state`, как вся
+канва.
+
+---
+
 **PENDING — Date Terminal (Contact Sync), Stripe и mock-рельс вычищены, хаб вместо `no_candidates` (2026-09-11).**
 **Есть изменение схемы Prisma** — миграция `20260911120000_date_terminal_and_hub_fallback`,
 аддитивная: `matches.terminal_invite_sent_at`, `matches.terminal_reminder_sent_at`
