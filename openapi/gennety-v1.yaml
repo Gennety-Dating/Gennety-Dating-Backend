@@ -28,6 +28,10 @@ tags:
   - name: chat
   - name: matches
   - name: countdown
+  - name: music
+    description: >-
+      Spotify tracks pinned to a profile, catalogue search, and the one-time
+      top-tracks import. Display-only — never a matching or AI input.
 
 security:
   - bearerAuth: []
@@ -1293,6 +1297,179 @@ paths:
             `wrong-state` — the date has not been closed out yet. Deliberately
             not a 404: the match exists and the caller is on it, and a 404
             would send the client looking for a routing bug that is not there.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/me/music:
+    get:
+      tags: [music]
+      operationId: getMyMusic
+      summary: The caller's pinned tracks, in display order
+      description: |
+        Up to three Spotify tracks (decision 2026-09-11). 404 while
+        `PROFILE_MUSIC_ENABLED` is off — which is also how a client learns to
+        hide the section. Display-only: the tracks never feed matching or any
+        AI (Spotify Developer Policy).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MusicTracksResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Feature disabled }
+    put:
+      tags: [music]
+      operationId: setMyMusic
+      summary: Replace the pinned tracks
+      description: |
+        Spotify track ids only, in display order; `[]` clears the set. The
+        server resolves every id to Spotify's own metadata before saving — a
+        client cannot put a title or a cover of its choosing on a profile —
+        and saves nothing unless every id resolves.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [trackIds]
+              properties:
+                trackIds:
+                  type: array
+                  maxItems: 3
+                  uniqueItems: true
+                  items: { type: string, pattern: "^[0-9A-Za-z]{22}$" }
+      responses:
+        "200":
+          description: Saved — the set as it now stands
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MusicTracksResponse" }
+        "400":
+          description: "`invalid_track_ids`, `too_many_tracks` or `duplicate_tracks`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Feature disabled }
+        "422":
+          description: "`track_not_found` — Spotify does not serve one of the ids; nothing was saved"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: "`upstream_unavailable` — Spotify did not answer; nothing was saved"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: |
+            `rate_limited` (Spotify's app-wide quota — deliberately not our 429,
+            which would read as "you, slow down") or `not_configured`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/music/search:
+    get:
+      tags: [music]
+      operationId: searchMusic
+      summary: Search Spotify's catalogue for tracks
+      description: |
+        Runs server-side on the app's Client Credentials token — no Spotify
+        login. At most 10 results (Spotify's development-mode cap). 404 while
+        `PROFILE_MUSIC_ENABLED` is off.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 100 }
+      responses:
+        "200":
+          description: Matching tracks, in Spotify's order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MusicTracksResponse" }
+        "400":
+          description: "`bad_query` — under 2 or over 100 characters after trimming"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Feature disabled }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502":
+          description: "`upstream_unavailable` — Spotify did not answer"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: "`rate_limited` (Spotify's app-wide quota) or `not_configured`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/integrations/spotify/authorize:
+    post:
+      tags: [music]
+      operationId: startSpotifyImport
+      summary: Begin the one-time Spotify top-tracks import
+      description: |
+        Returns Spotify's authorize URL (scope `user-top-read` only, PKCE).
+        Open it in `ASWebAuthenticationSession` with the callback scheme
+        `gennety`. Spotify sends the browser to our callback, which exchanges
+        the code, reads the top tracks once, keeps no Spotify token, and ends
+        in `gennety://spotify-import?status=<status>`:
+
+        - `ok` — fetch `GET /v1/integrations/spotify/top-tracks`
+        - `cancelled` — the person pressed Cancel on Spotify's page
+        - `empty` — no listening history yet
+        - `not_allowed` — the account is not on the development-mode
+          allow-list (Spotify's 403); offer search
+        - `expired` — the attempt went stale or was replayed; start again
+        - `failed` — anything else
+
+        404 unless both `PROFILE_MUSIC_ENABLED` and `SPOTIFY_TOP_TRACKS_ENABLED`
+        are on (`AppConfig.features.spotifyTopTracks`).
+      responses:
+        "200":
+          description: Spotify's authorize URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authorizeUrl]
+                properties:
+                  authorizeUrl: { type: string, format: uri }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Feature disabled }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503":
+          description: "`not_configured` — Spotify credentials or redirect URI missing"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/integrations/spotify/top-tracks:
+    get:
+      tags: [music]
+      operationId: getSpotifyTopTracks
+      summary: The candidates from a just-finished import
+      description: |
+        Up to 15 of the caller's Spotify top tracks (about the last six
+        months), held for 15 minutes after the import and dropped as soon as
+        the caller saves with `PUT /v1/me/music`.
+      responses:
+        "200":
+          description: Candidates, Spotify's order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MusicTracksResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: "`no_import` — nothing fresh to show (or the feature is off)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3843,6 +4020,18 @@ components:
             premium: { type: boolean }
             referral: { type: boolean }
             promo: { type: boolean }
+            profileMusic:
+              type: boolean
+              description: >-
+                Music on the profile. False → hide the section entirely;
+                `/v1/me/music` and `/v1/music/search` answer 404.
+            spotifyTopTracks:
+              type: boolean
+              description: >-
+                The one-time Spotify top-tracks import is available. False →
+                hide "Connect Spotify" and offer search only. Expected to stay
+                false: a development-mode Spotify app admits five allow-listed
+                accounts.
         ticketProducts:
           type: array
           description: |
@@ -4762,6 +4951,42 @@ components:
         error: { type: string, enum: [origin-outside-market] }
         market: { $ref: "#/components/schemas/Market" }
 
+    MusicTrack:
+      type: object
+      description: |
+        A Spotify track as Gennety shows it (decision 2026-09-11). Every field
+        is Spotify's own answer for `spotifyTrackId`, re-read at least weekly.
+        Spotify's branding rules apply wherever it is drawn: the full Spotify
+        logo, the cover neither cropped nor overlaid, and a link to
+        `spotifyUrl`.
+      required:
+        [spotifyTrackId, title, artists, albumName, coverUrl, spotifyUrl, previewUrl, explicit]
+      properties:
+        spotifyTrackId: { type: string }
+        title: { type: string }
+        artists:
+          type: string
+          description: Artist names joined with ", " in Spotify's order
+        albumName: { type: [string, "null"] }
+        coverUrl:
+          type: [string, "null"]
+          description: Spotify CDN image, about 300 px — render as is, never cropped
+        spotifyUrl:
+          type: string
+          description: "`https://open.spotify.com/track/<id>` — opens the Spotify app when installed"
+        previewUrl:
+          type: [string, "null"]
+          description: Null for every app Spotify registered after 2024-11-27 — expect null
+        explicit: { type: boolean }
+
+    MusicTracksResponse:
+      type: object
+      required: [tracks]
+      properties:
+        tracks:
+          type: array
+          items: { $ref: "#/components/schemas/MusicTrack" }
+
     MyVoicePrompt:
       type: object
       description: |
@@ -4914,6 +5139,14 @@ components:
           description: 24h decision deadline; only for dispatched `proposed` matches
         partnerVoicePrompt:
           $ref: "#/components/schemas/PartnerVoicePrompt"
+        partnerMusicTracks:
+          type: array
+          description: |
+            The partner's pinned tracks, in their order (decision 2026-09-11).
+            Absent while `PROFILE_MUSIC_ENABLED` is off; `[]` when they pinned
+            nothing. A property of the PERSON, so it belongs on the pitch and
+            never on a lock-screen surface.
+          items: { $ref: "#/components/schemas/MusicTrack" }
         timeZone:
           type: [string, "null"]
           description: |

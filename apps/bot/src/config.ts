@@ -382,6 +382,36 @@ export const env = {
   /// the pitch sends nothing extra, and the `/v1/*` routes 404 — an existing
   /// row keeps its data and simply stops being read.
   VOICE_PROMPT_ENABLED: process.env.VOICE_PROMPT_ENABLED === "true",
+
+  /// Music on the profile (decision 2026-09-11): up to three Spotify tracks a
+  /// person pins to their profile, shown there and to their match partner.
+  /// Default OFF — ships dark. Off → `/v1/me/music`, `/v1/music/*` and
+  /// `/v1/integrations/spotify/*` all 404, `partnerMusicTracks` is left out of
+  /// the match, and the nightly metadata refresh does not run; existing rows
+  /// keep their data and simply stop being read.
+  PROFILE_MUSIC_ENABLED: process.env.PROFILE_MUSIC_ENABLED === "true",
+  /// Spotify app credentials (developer.spotify.com/dashboard). Server-side
+  /// only: search runs here on the app's own Client Credentials token, and the
+  /// top-tracks code exchange happens in our callback — no client ever holds
+  /// either value. Required while PROFILE_MUSIC_ENABLED is on.
+  SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID ?? "",
+  SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET ?? "",
+  /// The one-time "import my Spotify top tracks" (OAuth 2.0 + PKCE, scope
+  /// `user-top-read`). Default OFF and expected to STAY off: since 2026-02 a
+  /// development-mode Spotify app admits at most five hand-allow-listed users
+  /// (everyone else gets 403), and Extended Quota is granted only to
+  /// organisations with ≥250k MAU. Built so the allow-listed accounts can
+  /// exercise it; search is the path everyone else has.
+  SPOTIFY_TOP_TRACKS_ENABLED: process.env.SPOTIFY_TOP_TRACKS_ENABLED === "true",
+  /// Our OAuth callback, byte for byte as registered on the Spotify app —
+  /// `https://dating-api.gennety.com/v1/integrations/spotify/callback` in
+  /// production. See `spotifyRedirectUri` for the two accepted shapes.
+  SPOTIFY_REDIRECT_URI: spotifyRedirectUri(process.env.SPOTIFY_REDIRECT_URI),
+  /// Nightly re-fetch of pinned tracks' metadata. The Spotify Developer Terms
+  /// allow only temporary caching and require shown data to be current, so a
+  /// row older than a week is re-read and a track Spotify dropped is deleted.
+  MUSIC_TRACK_REFRESH_CRON_SCHEDULE:
+    process.env.MUSIC_TRACK_REFRESH_CRON_SCHEDULE ?? "20 4 * * *",
   /// Deprecated emergency rollback toggle. Upload handlers now fail closed and
   /// never publish media after a provider or local-processing failure.
   PROFILE_MEDIA_VALIDATION_FAIL_OPEN:
@@ -1166,6 +1196,11 @@ export interface RuntimeConfiguration {
   APPSTORE_KEY_PATH: string;
   APPSTORE_KEY_ID: string;
   APPSTORE_ISSUER_ID: string;
+  PROFILE_MUSIC_ENABLED: boolean;
+  SPOTIFY_CLIENT_ID: string;
+  SPOTIFY_CLIENT_SECRET: string;
+  SPOTIFY_TOP_TRACKS_ENABLED: boolean;
+  SPOTIFY_REDIRECT_URI: string;
 }
 
 export function runtimeConfigurationErrors(
@@ -1202,6 +1237,25 @@ export function runtimeConfigurationErrors(
     ] as const;
     for (const [name, value] of appstore) {
       if (!value) errors.push(`${name} must be set while TICKET_FEATURE_ENABLED is true`);
+    }
+  }
+  if (config.PROFILE_MUSIC_ENABLED) {
+    const spotify = [
+      ["SPOTIFY_CLIENT_ID", config.SPOTIFY_CLIENT_ID],
+      ["SPOTIFY_CLIENT_SECRET", config.SPOTIFY_CLIENT_SECRET],
+    ] as const;
+    for (const [name, value] of spotify) {
+      if (!value) errors.push(`${name} must be set while PROFILE_MUSIC_ENABLED is true`);
+    }
+  }
+  if (config.SPOTIFY_TOP_TRACKS_ENABLED) {
+    if (!config.PROFILE_MUSIC_ENABLED) {
+      errors.push(
+        "SPOTIFY_TOP_TRACKS_ENABLED needs PROFILE_MUSIC_ENABLED — the import has nowhere to put what it finds",
+      );
+    }
+    if (!config.SPOTIFY_REDIRECT_URI) {
+      errors.push("SPOTIFY_REDIRECT_URI must be set while SPOTIFY_TOP_TRACKS_ENABLED is true");
     }
   }
 
@@ -1330,6 +1384,30 @@ function safeHttpsUrl(raw: string | undefined, name: string): string {
     // fall through to the warning below
   }
   console.warn(`[config] ${name} is not a valid https: URL — ignoring it.`);
+  return "";
+}
+
+/**
+ * `SPOTIFY_REDIRECT_URI`, accepted only in a shape Spotify itself still takes
+ * (its 2025-02 security change): https, or plain http on a loopback IP literal
+ * for local work. Spotify refuses `localhost`, so this does too — a boot
+ * warning beats an "Invalid redirect URI" page halfway through the flow.
+ */
+function spotifyRedirectUri(raw: string | undefined): string {
+  const value = (raw ?? "").trim();
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:") return value;
+    if (url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "[::1]")) {
+      return value;
+    }
+  } catch {
+    // fall through to the warning below
+  }
+  console.warn(
+    "[config] SPOTIFY_REDIRECT_URI must be https (or http on 127.0.0.1 / [::1]) — ignoring it.",
+  );
   return "";
 }
 

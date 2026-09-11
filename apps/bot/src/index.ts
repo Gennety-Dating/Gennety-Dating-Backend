@@ -68,6 +68,7 @@ import { viralityRollupTick } from "./workers/virality-rollup.js";
 import { venueConcentrationAlertTick } from "./workers/venue-concentration-alert.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
 import { prunePlaceCache } from "./services/place-cache.js";
+import { refreshStaleMusicTracks } from "./services/music/profile-music.js";
 import { retryDueVenueSelections } from "./services/venue-intent-v2.js";
 import { guardedTick } from "./utils/guarded-tick.js";
 
@@ -708,6 +709,27 @@ bot.start({
       ),
     );
     console.log(`[cron] Profiler scheduled: "${PROFILER_CRON_SCHEDULE}"`);
+
+    // Music on the profile: re-read pinned tracks' metadata nightly. The
+    // Spotify Terms allow only temporary caching and require what is shown to
+    // be current; a track Spotify dropped is deleted rather than kept stale.
+    if (env.PROFILE_MUSIC_ENABLED) {
+      cron.schedule(
+        env.MUSIC_TRACK_REFRESH_CRON_SCHEDULE,
+        guardedTick("music-track-refresh", () =>
+          refreshStaleMusicTracks().then((r) => {
+            if (r.refreshed > 0 || r.removed > 0 || r.failed > 0) {
+              console.log(
+                `[music-track-refresh] refreshed=${r.refreshed} removed=${r.removed} failed=${r.failed}`,
+              );
+            }
+          }),
+        ),
+      );
+      console.log(
+        `[cron] Music track refresh scheduled: "${env.MUSIC_TRACK_REFRESH_CRON_SCHEDULE}"`,
+      );
+    }
 
     // Match nudge: proposal (3h/10h), scheduling and venue (6h/12h) reminders,
     // plus the planning-stage stall chain — "still in?" at 24h, cancellation at

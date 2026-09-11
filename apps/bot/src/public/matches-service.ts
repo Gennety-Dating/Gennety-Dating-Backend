@@ -11,6 +11,8 @@ import {
 import { resolveVenue } from "../services/curated-venue.js";
 import { proxyChatWindow } from "../services/proxy-chat.js";
 import { createVoicePromptSignedUrl } from "../services/storage.js";
+import { MUSIC_TRACK_SELECT, serializeMusicTrack } from "../services/music/profile-music.js";
+import type { MusicTrack } from "../services/music/spotify.js";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
 import {
   applyReportAction,
@@ -183,6 +185,12 @@ export interface SerializedMatch {
     waveform: number[];
     audioUrl: string | null;
   } | null;
+  /**
+   * The partner's pinned tracks, in their order (decision 2026-09-11). Left
+   * out entirely while PROFILE_MUSIC_ENABLED is off; `[]` when they pinned
+   * nothing. Display-only — read the `ProfileMusicTrack` model comment.
+   */
+  partnerMusicTracks?: MusicTrack[];
   timeZone: string | null;
   /**
    * Server's current wall-clock at the time of this response, ISO. The
@@ -352,6 +360,7 @@ export async function getCurrentMatchForUser(
           voicePrompt: {
             select: { durationSec: true, waveform: true, storagePath: true },
           },
+          musicTracks: { orderBy: { position: "asc" }, select: MUSIC_TRACK_SELECT },
         },
       },
       userB: {
@@ -364,6 +373,7 @@ export async function getCurrentMatchForUser(
           voicePrompt: {
             select: { durationSec: true, waveform: true, storagePath: true },
           },
+          musicTracks: { orderBy: { position: "asc" }, select: MUSIC_TRACK_SELECT },
         },
       },
     },
@@ -472,6 +482,9 @@ export async function getCurrentMatchForUser(
     proxyChatClosesAt: proxyWindow?.closesAt.toISOString() ?? null,
     proposalDeadlineAt,
     partnerVoicePrompt: await serializePartnerVoicePrompt(partner.voicePrompt),
+    ...(env.PROFILE_MUSIC_ENABLED
+      ? { partnerMusicTracks: partner.musicTracks.map(serializeMusicTrack) }
+      : {}),
     timeZone: me.profile?.timeZone ?? null,
     serverTimeAt: new Date().toISOString(),
   };

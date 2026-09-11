@@ -11,6 +11,70 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — Музыка в профиле (Spotify), оба флага выключены (2026-09-11).**
+**Есть изменение схемы Prisma** — миграция `20260911190000_profile_music_tracks`,
+чисто аддитивная: новая таблица `profile_music_tracks` (FK на `users`, каскад).
+Проверена на живом Postgres: база ствола + эта миграция = схема ветки
+(`migrate diff` пуст), настоящий код сервиса прогнан против таблицы.
+
+**Порядок выката — миграция СТРОГО ДО кода.** `/v1/matches/current` теперь выбирает
+`musicTracks` у партнёра при любом значении флага, и без таблицы это P2021 на
+главном экране iOS. Старый код таблицу не видит, так что «схема раньше кода»
+безопасна.
+
+1. Миграция: `pnpm --filter @gennety/db db:deploy` (если baseline на проде ещё не
+   принят — сначала шаги из `packages/db/prisma/migrations/README.md`).
+2. Бот: обычный рестарт. Webapp не менялся.
+
+**Переменные окружения** — все новые и все необязательные, пока флаг выключен:
+`PROFILE_MUSIC_ENABLED=false`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`,
+`SPOTIFY_TOP_TRACKS_ENABLED=false`, `SPOTIFY_REDIRECT_URI`,
+`MUSIC_TRACK_REFRESH_CRON_SCHEDULE` (по умолчанию `20 4 * * *`). С
+`PROFILE_MUSIC_ENABLED=true` без ключей бот не стартует (`runtimeConfigurationErrors`),
+с `SPOTIFY_TOP_TRACKS_ENABLED=true` — без redirect URI и без первого флага.
+
+**Включение — отдельный шаг основателя, не часть выката:**
+1. Приложение на developer.spotify.com/dashboard (владельцу нужен Spotify Premium —
+   правило development mode с 2026-02). Ключи — в `/opt/gennety/.env`.
+2. `PROFILE_MUSIC_ENABLED=true`, рестарт. Поиск работает у всех.
+3. Импорт топа — только для ≤5 тестовых аккаунтов: redirect URI
+   `https://dating-api.gennety.com/v1/integrations/spotify/callback` на приложении
+   (байт в байт), аккаунты — в User Management приложения,
+   `SPOTIFY_TOP_TRACKS_ENABLED=true`. Остальным Spotify отвечает 403, приложение
+   показывает «импорт недоступен, найди поиском».
+
+**Проверка после выката:**
+
+```
+# таблица на месте
+psql "$DATABASE_URL" -c '\d profile_music_tracks'
+# флаги видны клиенту и выключены
+curl -s https://dating-api.gennety.com/v1/app/config | jq '.features | {profileMusic, spotifyTopTracks}'
+# выключенная фича — 404 до авторизации
+curl -s -o /dev/null -w '%{http_code}\n' 'https://dating-api.gennety.com/v1/music/search?q=ab'
+# главный экран не упал на новом select
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer <jwt>" https://dating-api.gennety.com/v1/matches/current
+```
+
+После включения: `GET /v1/music/search?q=radiohead` с JWT → 200 и до 10 треков;
+в логе бота на старте — `[cron] Music track refresh scheduled`.
+
+**Откат:** выключить `PROFILE_MUSIC_ENABLED` — ручки 404, поле партнёра пропадает,
+cron не планируется, строки остаются. Откат кода при применённой миграции безопасен:
+таблицу старый код не видит. Удалять таблицу не нужно.
+
+**Демо:** наследует флаги прода, которые не переопределяет. Включённая на проде
+музыка включится и в демо с теми же ключами — это поиск по каталогу, безвредно.
+Импорт топа в демо не работает (redirect URI указывает на прод) и включать его там
+незачем.
+
+**iOS:** контракт аддитивный — новые пути (тег `music`),
+`AppConfig.features.profileMusic` / `spotifyTopTracks`, необязательное
+`SerializedMatch.partnerMusicTracks`. Старая сборка ничего не замечает; новая
+прячет секцию, пока `features.profileMusic` = false.
+
+---
+
 **PENDING — транспортный док на канве Mini App: Uber и карты в одно касание (2026-09-11).**
 **Только webapp.** Коммит `d9cd0798`. Схема, миграции и бот не меняются: доку хватает
 того, что `/v1/date/state` уже отдаёт (точка и имя места).

@@ -385,6 +385,30 @@ export const chatMessageLimiter = make({
   message: { error: "Too many chat messages, slow down for a bit." },
 });
 
+/**
+ * Music search — 60/min per user.
+ *
+ * Search-as-you-type behind the client's debounce is a handful of calls per
+ * query, so 60/min is far above honest use and still bounds a client stuck in
+ * a loop. The ceiling that actually matters is Spotify's, and it is app-wide:
+ * every Gennety user shares one Client Credentials quota — which is why the
+ * service also caches answers (`services/music/spotify.ts`).
+ */
+export const musicSearchLimiter = make({
+  windowMs: 60_000,
+  limit: 60,
+  keyGenerator: (req): string => `music-search:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many searches, slow down for a bit." },
+});
+
+/** Spotify top-tracks import start — 10/hour per user; each is a trip to Spotify. */
+export const spotifyImportLimiter = make({
+  windowMs: 3_600_000,
+  limit: 10,
+  keyGenerator: (req): string => `spotify-import:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many import attempts, try again later." },
+});
+
 /** Mobile chat image upload — 30/hour per user (falls back to IP). */
 export const chatUploadLimiter = make({
   windowMs: 3_600_000,

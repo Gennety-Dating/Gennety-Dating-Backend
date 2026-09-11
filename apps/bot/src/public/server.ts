@@ -51,6 +51,8 @@ import { createProxyChatRouter } from "./routes/proxy-chat.js";
 import { createUserBlocksRouter } from "./routes/user-blocks.js";
 import { ticketsHistoryRouter } from "./routes/tickets-history.js";
 import { createVoicePromptRouter } from "./routes/voice-prompt.js";
+import { createMusicSearchRouter, createProfileMusicRouter } from "./routes/music.js";
+import { createSpotifyImportRouter } from "./routes/spotify-import.js";
 import { createNativeFeedbackRouter } from "./routes/feedback-native.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createRadarRouter } from "./routes/radar.js";
@@ -124,6 +126,9 @@ let nativeTicketGateRouter: ReturnType<typeof createNativeTicketGateRouter> | nu
 let nativeCalendarRouter: ReturnType<typeof createNativeCalendarRouter> | null = null;
 let proxyChatRouter: ReturnType<typeof createProxyChatRouter> | null = null;
 let voicePromptRouter: ReturnType<typeof createVoicePromptRouter> | null = null;
+let profileMusicRouter: ReturnType<typeof createProfileMusicRouter> | null = null;
+let musicSearchRouter: ReturnType<typeof createMusicSearchRouter> | null = null;
+let spotifyImportRouter: ReturnType<typeof createSpotifyImportRouter> | null = null;
 let nativeFeedbackRouter: ReturnType<typeof createNativeFeedbackRouter> | null = null;
 let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
@@ -517,6 +522,35 @@ app.use("/v1/me/voice-prompt", (req, res, next) => {
   }
   if (!voicePromptRouter) voicePromptRouter = createVoicePromptRouter();
   voicePromptRouter(req, res, next);
+});
+// Music on the profile (decision 2026-09-11). Same more-specific-prefix rule
+// for `/v1/me/music`; every music route 404s before auth while the feature is
+// off, which is also what tells the client to hide the section.
+app.use("/v1/me/music", (req, res, next) => {
+  if (!env.PROFILE_MUSIC_ENABLED) {
+    res.status(404).json({ error: "profile-music-disabled" });
+    return;
+  }
+  if (!profileMusicRouter) profileMusicRouter = createProfileMusicRouter();
+  profileMusicRouter(req, res, next);
+});
+app.use("/v1/music", (req, res, next) => {
+  if (!env.PROFILE_MUSIC_ENABLED) {
+    res.status(404).json({ error: "profile-music-disabled" });
+    return;
+  }
+  if (!musicSearchRouter) musicSearchRouter = createMusicSearchRouter();
+  musicSearchRouter(req, res, next);
+});
+// The Spotify top-tracks import — a second flag on top of the first, expected
+// to stay off: a development-mode Spotify app admits five allow-listed accounts.
+app.use("/v1/integrations/spotify", (req, res, next) => {
+  if (!env.PROFILE_MUSIC_ENABLED || !env.SPOTIFY_TOP_TRACKS_ENABLED) {
+    res.status(404).json({ error: "spotify-import-disabled" });
+    return;
+  }
+  if (!spotifyImportRouter) spotifyImportRouter = createSpotifyImportRouter();
+  spotifyImportRouter(req, res, next);
 });
 
 // Mount /v1/me/verification BEFORE /v1/me so Express tries the more-specific

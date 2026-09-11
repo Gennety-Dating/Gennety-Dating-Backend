@@ -213,9 +213,41 @@ describe("runtime configuration", () => {
       APPSTORE_KEY_PATH: "/keys/SubscriptionKey.p8",
       APPSTORE_KEY_ID: "AKEY",
       APPSTORE_ISSUER_ID: "issuer",
+      PROFILE_MUSIC_ENABLED: true,
+      SPOTIFY_CLIENT_ID: "spotify-id",
+      SPOTIFY_CLIENT_SECRET: "spotify-secret",
+      SPOTIFY_TOP_TRACKS_ENABLED: false,
+      SPOTIFY_REDIRECT_URI: "",
       ...overrides,
     };
   }
+
+  it("requires Spotify's credentials while music is on, and the redirect only for the import", () => {
+    expect(
+      runtimeConfigurationErrors(complete({ SPOTIFY_CLIENT_SECRET: "" }), "production"),
+    ).toEqual([expect.stringContaining("SPOTIFY_CLIENT_SECRET")]);
+    // Off, the missing keys are simply the truth.
+    expect(
+      runtimeConfigurationErrors(
+        complete({ PROFILE_MUSIC_ENABLED: false, SPOTIFY_CLIENT_ID: "", SPOTIFY_CLIENT_SECRET: "" }),
+        "production",
+      ),
+    ).toEqual([]);
+    expect(
+      runtimeConfigurationErrors(complete({ SPOTIFY_TOP_TRACKS_ENABLED: true }), "production"),
+    ).toEqual([expect.stringContaining("SPOTIFY_REDIRECT_URI")]);
+    // The import alone has nowhere to put what it finds.
+    expect(
+      runtimeConfigurationErrors(
+        complete({
+          PROFILE_MUSIC_ENABLED: false,
+          SPOTIFY_TOP_TRACKS_ENABLED: true,
+          SPOTIFY_REDIRECT_URI: "https://api.example/v1/integrations/spotify/callback",
+        }),
+        "production",
+      ),
+    ).toEqual([expect.stringContaining("PROFILE_MUSIC_ENABLED")]);
+  });
 
   it("accepts a complete configuration", () => {
     expect(runtimeConfigurationErrors(complete(), "production")).toEqual([]);

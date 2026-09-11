@@ -1318,6 +1318,30 @@ profile dirty and refreshes in one place) and read by `handlers/matching/pitch.t
 `workers/embedding-refresh.ts` and `public/routes/voice-prompt.ts`. Inert unless
 `VOICE_PROMPT_ENABLED`.
 
+### `profile_music_tracks`
+
+Up to three Spotify tracks a person pinned to their profile (decision
+2026-09-11): `position` 0..2, `@@unique([userId, position])` +
+`@@unique([userId, spotifyTrackId])`, `onDelete: Cascade`. Columns mirror the
+`MusicTrack` contract — `spotifyTrackId`, `title`, `artists` (joined with ", "),
+`albumName`, `coverUrl` (Spotify's CDN URL; bytes are never copied),
+`spotifyUrl` (built as `open.spotify.com/track/<id>`, not taken from Spotify's
+response), `previewUrl` (null for every app registered after 2024-11-27),
+`explicit`, `refreshedAt`.
+
+**A cache of Spotify's metadata, not our data.** The Developer Terms allow only
+temporary caching and require what is shown to be current, so the nightly
+`refreshStaleMusicTracks` re-reads rows older than a week and deletes a track
+Spotify no longer serves. `refreshedAt` is indexed for that scan.
+
+**Display-only, by contract.** The Developer Policy forbids analysing Spotify
+content for "building profiles of users" and ingesting it into any ML/AI model,
+so no embedding, matcher, pitch or prompt reads this table.
+`services/music/ai-boundary.test.ts` fails when a reader appears outside
+`services/music/profile-music.ts` (the single writer) and
+`public/matches-service.ts` (the partner's tracks on the pitch). Inert unless
+`PROFILE_MUSIC_ENABLED`.
+
 ### `date_bump_sessions`
 
 One row per match, created by the first shake (PRODUCT_SPEC §6.2). Columns:

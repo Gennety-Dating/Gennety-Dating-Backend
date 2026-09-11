@@ -58,6 +58,10 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       premium: env.PREMIUM_FEATURE_ENABLED,
       referral: env.REFERRAL_FEATURE_ENABLED,
       promo: env.PROMO_FEATURE_ENABLED,
+      // Music on the profile. The client hides the section while this is off,
+      // and hides "Connect Spotify" unless the top-tracks import is on too.
+      profileMusic: env.PROFILE_MUSIC_ENABLED,
+      spotifyTopTracks: env.PROFILE_MUSIC_ENABLED && env.SPOTIFY_TOP_TRACKS_ENABLED,
     },
     // The StoreKit consumable ladder, in ladder order. Sent from here rather
     // than hard-coded in the app because the server is the side that decides

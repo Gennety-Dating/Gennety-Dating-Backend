@@ -32,3 +32,5 @@ process.env.WEBAPP_URL ??= "https://test.invalid/calendar";
 delete process.env.AWS_ACCESS_KEY_ID;
 delete process.env.AWS_SECRET_ACCESS_KEY;
 delete process.env.AWS_REGION;
+delete process.env.SPOTIFY_CLIENT_ID;
+delete process.env.SPOTIFY_CLIENT_SECRET;
