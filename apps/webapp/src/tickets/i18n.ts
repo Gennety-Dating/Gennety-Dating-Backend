@@ -33,7 +33,6 @@ export interface StoreStrings {
   successTitle: string;
   successSub: string;
   done: string;
-  processing: string;
   back: string;
   loading: string;
   errGeneric: string;
@@ -51,7 +50,6 @@ const en: StoreStrings = {
   successTitle: "Tickets added",
   successSub: "Your wallet now holds {n}. Use them when your next date is set.",
   done: "Done",
-  processing: "Processing…",
   back: "← Back",
   loading: "Loading your wallet…",
   errGeneric: "Something went wrong. Reopen this from the bot.",
@@ -69,7 +67,6 @@ const ru: StoreStrings = {
   successTitle: "Билеты добавлены",
   successSub: "Теперь в кошельке {n}. Используй их, когда назначишь свидание.",
   done: "Готово",
-  processing: "Обработка…",
   back: "← Назад",
   loading: "Загружаем кошелёк…",
   errGeneric: "Что-то пошло не так. Открой заново из бота.",
@@ -87,7 +84,6 @@ const uk: StoreStrings = {
   successTitle: "Квитки додано",
   successSub: "Тепер у гаманці {n}. Використай їх, коли призначиш побачення.",
   done: "Готово",
-  processing: "Обробка…",
   back: "← Назад",
   loading: "Завантажуємо гаманець…",
   errGeneric: "Щось пішло не так. Відкрий знову з бота.",
@@ -105,7 +101,6 @@ const de: StoreStrings = {
   successTitle: "Tickets hinzugefügt",
   successSub: "Dein Guthaben beträgt jetzt {n}. Nutze sie für dein nächstes Date.",
   done: "Fertig",
-  processing: "Verarbeitung…",
   back: "← Zurück",
   loading: "Dein Guthaben wird geladen…",
   errGeneric: "Etwas ist schiefgelaufen. Öffne dies erneut aus dem Bot.",
@@ -123,7 +118,6 @@ const pl: StoreStrings = {
   successTitle: "Bilety dodane",
   successSub: "W portfelu masz teraz {n}. Użyj ich, gdy ustalisz randkę.",
   done: "Gotowe",
-  processing: "Przetwarzanie…",
   back: "← Wstecz",
   loading: "Ładujemy Twój portfel…",
   errGeneric: "Coś poszło nie tak. Otwórz to ponownie z bota.",

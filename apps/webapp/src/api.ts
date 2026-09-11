@@ -934,7 +934,6 @@ export interface TicketState {
   iCoveredPartner: boolean;
   bothPaid: boolean;
   expiresAt: string | null;
-  paymentMode: "mock" | "stripe";
   /** Actor's ticket-wallet balance — drives the "use a ticket" buttons. */
   myBalance: number;
   /** Active famine single-ticket discount percent (0 = none); `self` only. */
@@ -947,10 +946,16 @@ export interface TicketState {
   /** Relative proxy path to the partner's first profile photo (null if none). */
   partnerPhotoUrl: string | null;
   /** When true, the gate pay buttons are priced + paid in Telegram Stars via
-   *  `openInvoice` (the mock USD intent/confirm path is disabled server-side). */
+   *  `openInvoice` — the only rail that moves money. */
   starsEnabled?: boolean;
   /** Per-scope Star (XTR) prices when `starsEnabled` (null otherwise). */
   stars?: { self: number; both: number; partner: number } | null;
+  /**
+   * How a pay button settles. `stars` is the only rail that moves money;
+   * `no-charge` settles on the tap and exists only in the demo and local
+   * development; `none` means nothing can be bought here.
+   */
+  rail?: TicketPurchaseRail;
   /** Drives the "invite a friend instead" referral cross-promo link. */
   referralEnabled?: boolean;
   /**
@@ -985,11 +990,8 @@ export function ticketPhotoSrc(relPath: string | null, initData: string): string
   return `${apiBase}${relPath}?a=${encodeURIComponent(initData)}`;
 }
 
-export interface TicketIntent {
-  clientSecret: string;
-  amountCents: number;
-  mode: "mock" | "stripe";
-}
+/** Mirrors `TicketPurchaseRail` in the bot's `services/ticket-payment.ts`. */
+export type TicketPurchaseRail = "stars" | "no-charge" | "none";
 
 const ticketBase = (matchId: string): string =>
   `${apiBase}/v1/matches/${encodeURIComponent(matchId)}/ticket`;
@@ -1006,30 +1008,20 @@ export async function fetchTicketState(
   return (await res.json()) as TicketState & { ok: true };
 }
 
-export async function createTicketIntent(
+/**
+ * Settle the gate WITHOUT a charge — the demo and local development only
+ * (`rail === "no-charge"`). Everywhere money can move the route answers 404:
+ * Stars (`createTicketStarsInvoice`) is the only rail there.
+ */
+export async function settleTicketNoCharge(
   initData: string,
   matchId: string,
   scope: TicketScope,
-): Promise<TicketIntent> {
-  const res = await apiFetch(`${ticketBase(matchId)}/intent`, {
+): Promise<TicketState> {
+  const res = await apiFetch(`${ticketBase(matchId)}/settle-no-charge`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify({ scope }),
-  });
-  if (!res.ok) throw await toError(res);
-  return (await res.json()) as TicketIntent;
-}
-
-export async function confirmTicketPayment(
-  initData: string,
-  matchId: string,
-  scope: TicketScope,
-  clientSecret: string,
-): Promise<TicketState> {
-  const res = await apiFetch(`${ticketBase(matchId)}/confirm`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
-    body: JSON.stringify({ scope, clientSecret }),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TicketState & { ok: true };
@@ -1053,8 +1045,8 @@ export async function useTicketFromWallet(
 /**
  * Create a Telegram Stars (XTR) invoice link for a date-gate payment. The Mini
  * App opens the returned link with `WebApp.openInvoice()`; the gate is settled
- * server-side by the bot's `successful_payment` handler. Replaces the mock USD
- * intent/confirm flow when Stars is enabled.
+ * server-side by the bot's `successful_payment` handler. The only rail that
+ * moves money.
  */
 export async function createTicketStarsInvoice(
   initData: string,
@@ -1071,7 +1063,7 @@ export async function createTicketStarsInvoice(
 }
 
 // ---------------------------------------------------------------------------
-// Ticket store / wallet Mini App API (pre-purchase bundles, mock payment)
+// Ticket store / wallet Mini App API (pre-purchase bundles)
 // ---------------------------------------------------------------------------
 
 export interface WalletState {
@@ -1082,8 +1074,10 @@ export interface WalletState {
   /** ISO deadline of the active discount, or null. */
   discountExpiresAt: string | null;
   /** When true, the store sells bundles for Telegram Stars via `openInvoice`
-   *  (the mock USD intent/confirm path is disabled server-side). */
+   *  — the only rail that moves money. */
   starsEnabled?: boolean;
+  /** How a bundle purchase settles — see `TicketState.rail`. */
+  rail?: TicketPurchaseRail;
   /** Star (XTR) price per bundle count (`{ "1": 350, "3": 830, "6": 1350 }`)
    *  when `starsEnabled`; null otherwise. */
   bundleStars?: Record<string, number> | null;
@@ -1103,13 +1097,6 @@ export interface StoreBundle {
   priceCents: number;
 }
 
-export interface StoreIntent {
-  clientSecret: string;
-  amountCents: number;
-  count: number;
-  mode: "mock" | "stripe";
-}
-
 const storeBase = `${apiBase}/v1/tickets`;
 
 export async function fetchWalletState(initData: string): Promise<WalletState> {
@@ -1121,28 +1108,19 @@ export async function fetchWalletState(initData: string): Promise<WalletState> {
   return (await res.json()) as WalletState & { ok: true };
 }
 
-export async function createStoreIntent(
+/**
+ * Credit a bundle WITHOUT a charge — the demo and local development only
+ * (`rail === "no-charge"`). Everywhere money can move the route answers 404:
+ * Stars (`createStoreStarsInvoice`) is the only rail there.
+ */
+export async function settleStoreNoCharge(
   initData: string,
   count: number,
-): Promise<StoreIntent> {
-  const res = await apiFetch(`${storeBase}/store/intent`, {
+): Promise<WalletState> {
+  const res = await apiFetch(`${storeBase}/store/settle-no-charge`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify({ count }),
-  });
-  if (!res.ok) throw await toError(res);
-  return (await res.json()) as StoreIntent;
-}
-
-export async function confirmStorePurchase(
-  initData: string,
-  count: number,
-  clientSecret: string,
-): Promise<WalletState> {
-  const res = await apiFetch(`${storeBase}/store/confirm`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
-    body: JSON.stringify({ count, clientSecret }),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as WalletState & { ok: true };

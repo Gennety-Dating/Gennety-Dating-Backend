@@ -439,12 +439,6 @@ export const env = {
   /// for a purely cosmetic beat that nonetheless holds the user ~10s, flippable
   /// with `pm2 restart --update-env` rather than a redeploy.
   RADAR_THINKING_ENABLED: process.env.RADAR_THINKING_ENABLED !== "false",
-  /// Payment backend. `mock` (default) fully simulates Stripe with no
-  /// credentials — `services/ticket-payment.ts` mints a fake clientSecret and
-  /// trusts the client confirm. `stripe` is the production path (real
-  /// PaymentIntent + webhook), gated behind the `// TODO: Stripe Production
-  /// Mode` branches and not yet implemented.
-  TICKET_PAYMENT_MODE: (process.env.TICKET_PAYMENT_MODE ?? "mock") as "mock" | "stripe",
   /// Per-ticket price in cents. Mirrored onto `Match.ticketPriceCents` at
   /// offer time so an in-flight match keeps its quoted price even if this
   /// changes mid-deploy.
@@ -474,15 +468,16 @@ export const env = {
   /// `TICKET_PRICE_CENTS` above. Inert unless `TICKET_FEATURE_ENABLED`.
   FAMINE_DISCOUNT_PCT: Number(process.env.FAMINE_DISCOUNT_PCT ?? "77"),
   FAMINE_DISCOUNT_TTL_DAYS: Number(process.env.FAMINE_DISCOUNT_TTL_DAYS ?? "30"),
-  /// Telegram Stars (XTR) — the REAL production payment rail for Date Tickets.
-  /// When false (default) the store + date gate keep the mock/stripe flow; when
-  /// true, "My Tickets" shows native in-chat Star invoice buttons (1/3/6
-  /// bundles) that credit the wallet on `successful_payment`, and the §3.5b date
-  /// gate pays natively via `WebApp.openInvoice`. Stars is the primary rail —
-  /// the mock survives only as the `TICKET_STARS_ENABLED=false` fallback (the
-  /// PAY-1 guard 404s the mock intent/confirm routes while Stars is on). Only
-  /// meaningful with `TICKET_FEATURE_ENABLED`. Needs no merchant account /
-  /// provider token (empty provider token + `currency: "XTR"`).
+  /// Telegram Stars (XTR) — the ONLY payment rail for Date Tickets in the
+  /// Telegram product. When true, "My Tickets" shows native in-chat Star
+  /// invoice buttons (1/3/6 bundles) that credit the wallet on
+  /// `successful_payment`, and the §3.5b date gate pays natively via
+  /// `WebApp.openInvoice`. When false, nothing can be bought — except in the
+  /// demo and local development, which settle paid steps without a charge
+  /// (`services/ticket-payment.ts` → `ticketPurchaseRail`); production refuses
+  /// to boot that way (`assertPaymentTrustConfiguration`). Only meaningful with
+  /// `TICKET_FEATURE_ENABLED`. Needs no merchant account / provider token
+  /// (empty provider token + `currency: "XTR"`).
   TICKET_STARS_ENABLED: process.env.TICKET_STARS_ENABLED === "true",
   /// Star price (XTR) per store bundle, as `<count>:<stars>` pairs. Default
   /// `1:425,3:1020,6:1650` (425⭐/ticket at the unchanged $0.02/⭐ rate ≈ $8.50, matching the $8.49 anchor, with
@@ -490,13 +485,6 @@ export const env = {
   /// per-scope price from the 1-ticket entry (self/partner = 1×, both = 2×).
   /// Override e.g. `TICKET_BUNDLE_STARS=1:250,3:590,6:960`.
   TICKET_BUNDLE_STARS: parseStarBundles(process.env.TICKET_BUNDLE_STARS),
-  // TODO: Stripe Production Mode — populate from the Stripe dashboard and keep
-  // out of git (.env only). Switching to live payments is: set these +
-  // TICKET_PAYMENT_MODE=stripe + fill the `case "stripe"` branches in
-  // services/ticket-payment.ts + add the /v1/webhooks/stripe raw-body route.
-  //   STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY ?? "",
-  //   STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY ?? "",
-  //   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET ?? "",
 
   // ── Pre-date coordination (T-3h contact-exchange / anonymous proxy) ──
   /// Master flag for the pre-date coordination step. When false (default), no
@@ -1106,27 +1094,25 @@ export interface PaymentTrustConfiguration {
   DEMO_MODE_ENABLED: boolean;
   TICKET_FEATURE_ENABLED: boolean;
   TICKET_STARS_ENABLED: boolean;
-  TICKET_PAYMENT_MODE: "mock" | "stripe";
 }
 
 /**
- * Fail closed before a production-like bot opens a payment rail that moves no
- * money but hands out the goods.
+ * Fail closed before a production-like bot opens a ticket feature it has no
+ * way to charge for.
  *
- * The asymmetry this closes was found by the 2026-09-06 audit: a fake OTP
- * cannot start production (`identityTrustConfigurationErrors` above), but fake
- * money could. `TICKET_PAYMENT_MODE` DEFAULTS to `"mock"` and
- * `TICKET_STARS_ENABLED` defaults to false (it is an `=== "true"` read), so the
- * unsafe state is what an incomplete `.env` produces — a single line lost in a
- * rotation silently moves production onto a rail where the server issues a
- * `clientSecret` and then accepts that same secret back as proof of payment.
+ * The asymmetry this first closed was found by the 2026-09-06 audit: a fake
+ * OTP cannot start production (`identityTrustConfigurationErrors` above), but
+ * fake money could — `TICKET_STARS_ENABLED` defaults to false (it is an
+ * `=== "true"` read), and with Stars off the gate and the store used to fall
+ * onto a mock rail where the server issued a `clientSecret` and then accepted
+ * that same secret back as proof of payment.
  *
- * The dangerous condition is the mock rail being REACHABLE, not the mode alone:
- * `PAY-1` (`routes/tickets.ts`, `routes/ticket.ts`) 404s `/intent` and
- * `/confirm` whenever Stars is on, which is why production runs with Stars as
- * the sole top-up rail (`docs/product/domains/matching-engine.md`). With Stars
- * off, those routes are open and the mode decides what they do — and `"stripe"`
- * is not implemented (it throws), so `"mock"` is the only thing they can be.
+ * That mock rail is gone (decision 2026-09-11). Stars is the only rail that
+ * moves money, and the no-charge settle that replaced the mock is decided by
+ * the RUNTIME (demo / development — `ticketPurchaseRail`), never by this flag.
+ * So production with Stars off is no longer a free-tickets hazard; it is a
+ * paywall nobody can pay, which is still a deploy that must refuse rather than
+ * a product that silently cannot sell.
  *
  * Same three non-production runtimes as the identity gate, for the same
  * reasons. Demo is exempt because `assertDemoIsolation()` REQUIRES
@@ -1146,9 +1132,8 @@ export function paymentTrustConfigurationErrors(
   if (!config.TICKET_STARS_ENABLED) {
     errors.push(
       "TICKET_STARS_ENABLED must be true when TICKET_FEATURE_ENABLED is on " +
-        "outside development: with Stars off the PAY-1 guard opens the " +
-        `/intent + /confirm rail, and TICKET_PAYMENT_MODE=${config.TICKET_PAYMENT_MODE} ` +
-        "issues a client secret and then accepts it back as proof of payment",
+        "outside development: Stars is the only ticket payment rail, so with it " +
+        "off the date gate and the store have no way to take payment",
     );
   }
   return errors;

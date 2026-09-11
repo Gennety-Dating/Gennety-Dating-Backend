@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactElement } from "react";
 import { ButterflyLoader } from "../butterfly-loader-react.js";
 import {
   fetchWalletState,
-  createStoreIntent,
   createStoreStarsInvoice,
-  confirmStorePurchase,
+  settleStoreNoCharge,
   CalendarApiError,
-  type StoreIntent,
 } from "../api.js";
 import {
   pickLang as pickStoreLang,
@@ -28,7 +26,6 @@ import {
   strings as ticketStrings,
 } from "../ticket/i18n.js";
 import { Ticket3D } from "../ticket/Ticket3D.js";
-import { MockPayment } from "../ticket/MockPayment.js";
 import { useActionBarSpace } from "../ticket/action-bar.js";
 import { Confetti } from "../ticket/Confetti.js";
 import { returnParams } from "../return-to.js";
@@ -52,14 +49,6 @@ type Phase =
       discountPct: number;
       starsEnabled: boolean;
       bundleStars: Record<string, number> | null;
-    }
-  | {
-      kind: "mock";
-      balance: number;
-      bundle: StoreBundleView;
-      intent: StoreIntent;
-      processing: boolean;
-      discountPct: number;
     };
 
 function haptic(type: "light" | "success" | "error"): void {
@@ -72,8 +61,6 @@ function haptic(type: "light" | "success" | "error"): void {
 export function App(): ReactElement {
   const s = storeStrings(lang);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
-  const phaseRef = useRef<Phase>(phase);
-  phaseRef.current = phase;
   // Kept separate from `Phase` (rather than threaded through every `setPhase`
   // call site) since it never changes what screen is shown, only whether a
   // quiet secondary link appears on it.
@@ -114,13 +101,28 @@ export function App(): ReactElement {
     void load();
   }, [load, s.errGeneric]);
 
+  // Demo and local development only (`rail === "no-charge"`): the bundle is
+  // credited on the tap, with no payment screen in between. Production never
+  // draws these USD bundles — with Stars on, the Star bundles are the only ones
+  // on the shelf — and the route answers 404 wherever money can move. The card
+  // form that used to sit on this path imitated a Stripe integration that never
+  // shipped (decision 2026-09-11).
   const startPurchase = useCallback(
-    async (balance: number, discountPct: number, bundle: StoreBundleView): Promise<void> => {
+    async (bundle: StoreBundleView): Promise<void> => {
       haptic("light");
       try {
-        const intent = await createStoreIntent(initData, bundle.count);
-        setPhase({ kind: "mock", balance, bundle, intent, processing: false, discountPct });
+        const wallet = await settleStoreNoCharge(initData, bundle.count);
+        haptic("success");
+        setPhase({
+          kind: "view",
+          balance: wallet.balance,
+          justBought: bundle.count,
+          discountPct: wallet.discountPct,
+          starsEnabled: false,
+          bundleStars: null,
+        });
       } catch (err) {
+        haptic("error");
         app?.showAlert(errorText(err, s));
       }
     },
@@ -168,30 +170,6 @@ export function App(): ReactElement {
     [s],
   );
 
-  const completePurchase = useCallback(async (): Promise<void> => {
-    setPhase((p) => (p.kind === "mock" ? { ...p, processing: true } : p));
-    const current = phaseRef.current;
-    if (current.kind !== "mock") return;
-    try {
-      const wallet = await confirmStorePurchase(initData, current.bundle.count, current.intent.clientSecret);
-      haptic("success");
-      setReferralEnabled(Boolean(wallet.referralEnabled));
-      setPremiumActive(Boolean(wallet.premiumActive));
-      setPhase({
-        kind: "view",
-        balance: wallet.balance,
-        justBought: current.bundle.count,
-        discountPct: wallet.discountPct,
-        starsEnabled: Boolean(wallet.starsEnabled),
-        bundleStars: wallet.bundleStars ?? null,
-      });
-    } catch (err) {
-      haptic("error");
-      app?.showAlert(errorText(err, s));
-      setPhase((p) => (p.kind === "mock" ? { ...p, processing: false } : p));
-    }
-  }, [s]);
-
   if (phase.kind === "loading") {
     return (
       <div className="ticket-page ticket-center">
@@ -202,44 +180,6 @@ export function App(): ReactElement {
   if (phase.kind === "error") {
     return <div className="ticket-page ticket-center"><p className="ticket-error">{phase.message}</p></div>;
   }
-  if (phase.kind === "mock") {
-    const amount = formatUsd(phase.intent.amountCents);
-    return (
-      <div className="ticket-page has-bar">
-        <div className="ticket-scroll">
-          <MockPayment amountCents={phase.intent.amountCents} strings={ticketS} />
-        </div>
-        <footer className="action-bar" ref={barRef}>
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={phase.processing}
-            onClick={() => void completePurchase()}
-          >
-            {phase.processing ? s.processing : fill(ticketS.mockPayNow, { amount })}
-          </button>
-          <button
-            type="button"
-            className="btn-text"
-            disabled={phase.processing}
-            onClick={() =>
-              setPhase({
-                kind: "view",
-                balance: phase.balance,
-                justBought: null,
-                discountPct: phase.discountPct,
-                starsEnabled: false,
-                bundleStars: null,
-              })
-            }
-          >
-            {s.back}
-          </button>
-        </footer>
-      </div>
-    );
-  }
-
   const bought = phase.justBought !== null;
   return (
     <div className="ticket-page has-bar">
@@ -301,7 +241,7 @@ export function App(): ReactElement {
               key={b.count}
               type="button"
               className={`store-bundle${b.bestValue ? " store-bundle-best" : ""}${b.famineDiscountPct > 0 ? " store-bundle-famine" : ""}`}
-              onClick={() => void startPurchase(phase.balance, phase.discountPct, b)}
+              onClick={() => void startPurchase(b)}
             >
               {b.famineDiscountPct > 0 ? (
                 <span className="store-badge store-badge-famine">

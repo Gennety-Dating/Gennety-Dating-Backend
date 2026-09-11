@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactElement } from "react";
 import { ButterflyLoader } from "../butterfly-loader-react.js";
 import {
   fetchTicketState,
-  createTicketIntent,
   createTicketStarsInvoice,
-  confirmTicketPayment,
+  settleTicketNoCharge,
   useTicketFromWallet,
   ticketPhotoSrc,
   CalendarApiError,
   type TicketState,
-  type TicketIntent,
   type TicketScope,
 } from "../api.js";
 import { pickLang, strings, fill, type TicketStrings } from "./i18n.js";
@@ -26,7 +24,6 @@ import {
 } from "./ticket-state.js";
 import { Ticket3D } from "./Ticket3D.js";
 import { useActionBarSpace } from "./action-bar.js";
-import { MockPayment } from "./MockPayment.js";
 import { Confetti } from "./Confetti.js";
 import { PartialTimer } from "./PartialTimer.js";
 import { PartnerPaidCard } from "./PartnerPaidCard.js";
@@ -45,8 +42,7 @@ document.documentElement?.setAttribute("lang", lang);
 type Phase =
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  | { kind: "view"; state: TicketState }
-  | { kind: "mock"; state: TicketState; scope: TicketScope; intent: TicketIntent; processing: boolean };
+  | { kind: "view"; state: TicketState };
 
 function haptic(type: "light" | "success" | "error"): void {
   const h = app?.HapticFeedback;
@@ -116,10 +112,6 @@ export function App(): ReactElement {
   // reserves exactly its height at the end (see action-bar.ts).
   const barRef = useActionBarSpace();
 
-  // Ref to the latest phase so imperative MainButton handlers read fresh values.
-  const phaseRef = useRef<Phase>(phase);
-  phaseRef.current = phase;
-
   const load = useCallback(async (): Promise<void> => {
     try {
       const state = await fetchTicketState(initData, matchId);
@@ -160,17 +152,28 @@ export function App(): ReactElement {
   }, [screen, load]);
 
   // ── Payment actions ──────────────────────────────────────────────────────
-  const startPayment = useCallback(
-    async (state: TicketState, scope: TicketScope): Promise<void> => {
+  // Demo and local development only (`rail === "no-charge"`): the gate settles
+  // on the tap, with no payment screen in between. Production never gets here —
+  // Stars is on there, so every pay button opens the native invoice below, and
+  // the route answers 404 wherever money can move. The card form that used to
+  // sit on this path imitated a Stripe integration that never shipped
+  // (decision 2026-09-11).
+  const settleWithoutCharge = useCallback(
+    async (scope: TicketScope): Promise<void> => {
       haptic("light");
       try {
-        const intent = await createTicketIntent(initData, matchId, scope);
-        setPhase({ kind: "mock", state, scope, intent, processing: false });
+        const next = await settleTicketNoCharge(initData, matchId, scope);
+        haptic("success");
+        setPhase({ kind: "view", state: next });
       } catch (err) {
+        haptic("error");
         app?.showAlert(errorText(err, s));
+        // A refusal usually means a stale screen (the partner settled first,
+        // the gate closed) — re-read rather than leave a dead button.
+        void load();
       }
     },
-    [s],
+    [s, load],
   );
 
   // Native Telegram Stars payment for the gate. Opens the invoice; the bot
@@ -236,13 +239,14 @@ export function App(): ReactElement {
       const next = await useTicketFromWallet(initData, matchId, "self");
       if (!next.bothPaid && next.iPaid && !next.partnerPaid) {
         // Self covered with a wallet ticket; now pay one ticket's price for the
-        // partner — natively in Stars when enabled, else the mock USD screen.
+        // partner — natively in Stars, or (demo / development) without a charge.
         if (next.starsEnabled) {
           setPhase({ kind: "view", state: next });
           void startStarsPayment("partner");
         } else {
-          const intent = await createTicketIntent(initData, matchId, "partner");
-          setPhase({ kind: "mock", state: next, scope: "partner", intent, processing: false });
+          const settled = await settleTicketNoCharge(initData, matchId, "partner");
+          haptic("success");
+          setPhase({ kind: "view", state: settled });
         }
       } else {
         haptic("success");
@@ -260,25 +264,10 @@ export function App(): ReactElement {
       if (b.action === "use") void spendTicket(b.scope);
       else if (b.action === "use-self-pay-partner") void useSelfThenPayPartner();
       else if (state.starsEnabled) void startStarsPayment(b.scope);
-      else void startPayment(state, b.scope);
+      else void settleWithoutCharge(b.scope);
     },
-    [spendTicket, startPayment, startStarsPayment, useSelfThenPayPartner],
+    [spendTicket, settleWithoutCharge, startStarsPayment, useSelfThenPayPartner],
   );
-
-  const completePayment = useCallback(async (): Promise<void> => {
-    setPhase((p) => (p.kind === "mock" ? { ...p, processing: true } : p));
-    const current = phaseRef.current;
-    if (current.kind !== "mock") return;
-    try {
-      const next = await confirmTicketPayment(initData, matchId, current.scope, current.intent.clientSecret);
-      haptic("success");
-      setPhase({ kind: "view", state: next });
-    } catch (err) {
-      haptic("error");
-      app?.showAlert(errorText(err, s));
-      setPhase((p) => (p.kind === "mock" ? { ...p, processing: false } : p));
-    }
-  }, [s]);
 
   // No Telegram MainButton/BackButton — we render our own buttons fixed to the
   // bottom of the full-screen web app (see the .action-bar footers below).
@@ -294,35 +283,6 @@ export function App(): ReactElement {
   if (phase.kind === "error") {
     return <div className="ticket-page ticket-center"><p className="ticket-error">{phase.message}</p></div>;
   }
-  if (phase.kind === "mock") {
-    const amount = formatUsd(phase.intent.amountCents);
-    return (
-      <div className="ticket-page has-bar">
-        <div className="ticket-scroll">
-          <MockPayment amountCents={phase.intent.amountCents} strings={s} />
-        </div>
-        <footer className="action-bar" ref={barRef}>
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={phase.processing}
-            onClick={() => void completePayment()}
-          >
-            {phase.processing ? s.processing : fill(s.mockPayNow, { amount })}
-          </button>
-          <button
-            type="button"
-            className="btn-text"
-            disabled={phase.processing}
-            onClick={() => setPhase({ kind: "view", state: phase.state })}
-          >
-            {s.back}
-          </button>
-        </footer>
-      </div>
-    );
-  }
-
   const state = phase.state;
   const sc = deriveScreen(state, { coverDeferred });
   const myPhotoSrc = ticketPhotoSrc(state.myPhotoUrl, initData);

@@ -12,8 +12,6 @@ import {
   ticketsForScope,
   gateStarsForScope,
   type TicketScope,
-  type PaymentMode,
-  refundTicketPayment,
 } from "../../services/ticket-payment.js";
 import {
   notifyFounderPurchase,
@@ -175,7 +173,6 @@ export interface TicketStateView {
   iCoveredPartner: boolean;
   bothPaid: boolean;
   expiresAt: string | null;
-  paymentMode: PaymentMode;
   /** The actor's current ticket-wallet balance (balance-aware gate buttons). */
   myBalance: number;
   /**
@@ -253,7 +250,6 @@ export function buildTicketStateView(match: TicketMatch, side: Side): TicketStat
     iCoveredPartner,
     bothPaid: iPaid && partnerPaid,
     expiresAt: match.ticketExpiresAt ? match.ticketExpiresAt.toISOString() : null,
-    paymentMode: env.TICKET_PAYMENT_MODE,
     myBalance: me.ticketBalance,
     selfDiscountPct: discount?.pct ?? 0,
     selfPriceCents: discount
@@ -1740,11 +1736,12 @@ async function refundPaidTicketSide(
     return true;
   }
 
-  const fallback = await refundTicketPayment({
-    matchId: match.id,
-    amountCents: match.ticketPriceCents,
-  });
-  return fallback.ok;
+  // No Stars charge and no wallet spend: the slot was settled without money —
+  // a Premium-covered slot, or the demo / development `no-charge` rail — so
+  // there is nothing to reverse. (This used to call a provider-refund stub that
+  // was a no-op for the mock rail and threw for a Stripe rail that never
+  // shipped; decision 2026-09-11.)
+  return true;
 }
 
 /**

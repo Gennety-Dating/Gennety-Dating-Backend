@@ -640,10 +640,10 @@ function buildAccountClosedHeader(
 export interface FounderPurchaseNotice {
   userId: string;
   kind: PurchaseKind;
-  provider: "telegram_stars" | "app_store" | "mock";
+  provider: "telegram_stars" | "app_store" | "no_charge";
   /** Stars charged (Telegram rail). */
   amountStars?: number | null;
-  /** Exact money in cents (App Store / mock rail). */
+  /** Exact money in cents (App Store / the no-charge rail's shelf price). */
   amountCents?: number | null;
   currency?: string | null;
   /** Short human description: "3 tickets", "оба слота", "продление". */
@@ -872,10 +872,10 @@ function payerLines(user: FounderPayer): string[] {
   return lines;
 }
 
-function providerLabel(provider: "telegram_stars" | "app_store" | "mock"): string {
+function providerLabel(provider: FounderPurchaseNotice["provider"]): string {
   if (provider === "telegram_stars") return "Telegram Stars";
   if (provider === "app_store") return "App Store";
-  return "mock (деньги не двигались)";
+  return "без оплаты — демо/dev (деньги не двигались)";
 }
 
 // ───────────────────────────────────────────────────────────────────────────

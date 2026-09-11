@@ -28,7 +28,6 @@ vi.mock("../../config.js", () => ({
     WEBAPP_URL: "https://test.invalid/calendar",
     TICKET_PAYMENT_WINDOW_HOURS: 1,
     TICKET_PRICE_CENTS: 849,
-    TICKET_PAYMENT_MODE: "mock",
     // The gate freezes the Stars price on its ledger row, so the Star bundle
     // table has to exist here like it does in the real config.
     TICKET_BUNDLE_STARS: { 1: 425, 3: 1020, 6: 1650 },

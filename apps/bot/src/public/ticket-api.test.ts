@@ -29,12 +29,10 @@ vi.mock("../handlers/matching/ticket-gate.js", () => ({
   notePartnerPaidSeen: (...a: unknown[]) => notePartnerPaidSeen(...a),
 }));
 
-const createTicketIntent = vi.fn();
-const verifyTicketPayment = vi.fn();
+/** The rail the route sees; the real function reads the runtime, so it is stubbed. */
+let rail: "stars" | "no-charge" | "none" = "no-charge";
 vi.mock("../services/ticket-payment.js", () => ({
-  createTicketIntent: (...a: unknown[]) => createTicketIntent(...a),
-  verifyTicketPayment: (...a: unknown[]) => verifyTicketPayment(...a),
-  amountForScope: (scope: string, price: number) => (scope === "both" ? price * 2 : price),
+  ticketPurchaseRail: () => rail,
   gateStarsForScope: (scope: string) => (scope === "both" ? 850 : 425),
 }));
 
@@ -82,7 +80,6 @@ const baseState = {
   partnerPaidForMe: false,
   bothPaid: false,
   expiresAt: null,
-  paymentMode: "mock",
   myBalance: 0,
   selfDiscountPct: 0,
   selfPriceCents: 849,
@@ -96,8 +93,7 @@ beforeEach(() => {
   useTicketFromBalance.mockReset();
   notePartnerPaidSeen.mockReset();
   notePartnerPaidSeen.mockResolvedValue(undefined);
-  createTicketIntent.mockReset();
-  verifyTicketPayment.mockReset();
+  rail = "no-charge";
   getTicketPhoto.mockReset();
   downloadProfileImage.mockReset();
   toAvatarThumbnail.mockReset();
@@ -114,6 +110,8 @@ describe("GET /v1/matches/:id/ticket/state", () => {
     expect(res.body.ok).toBe(true);
     expect(res.body.ticketStatus).toBe("pending");
     expect(res.body.partnerName).toBe("Sam");
+    // The client picks its pay path from this, so every state response has it.
+    expect(res.body.rail).toBe("no-charge");
     // The third argument is the bot handle, and it is not incidental: it is
     // what lets the state read settle a slot for a caller who bought Premium
     // after the gate opened (§3.5b). Asserted rather than loosened, so dropping
@@ -160,152 +158,82 @@ describe("GET /v1/matches/:id/ticket/state", () => {
   });
 });
 
-describe("POST /v1/matches/:id/ticket/intent", () => {
-  it("creates a mock intent on the happy path (self)", async () => {
+describe("POST /v1/matches/:id/ticket/settle-no-charge", () => {
+  const settle = (scope: unknown) =>
+    request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket/settle-no-charge`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
+      .send({ scope });
+
+  it("settles the gate without a charge on the demo / development rail", async () => {
     getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
-    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_x", amountCents: 849, mode: "mock" });
-    const res = await request(buildApp())
-      .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
-      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
-      .send({ scope: "self" });
-    expect(res.status).toBe(200);
-    expect(res.body.clientSecret).toBe("mock_pi_x");
-    expect(res.body.amountCents).toBe(849);
-    expect(createTicketIntent).toHaveBeenCalledWith({
-      payerId: "5986970093",
-      matchId: VALID_UUID,
-      scope: "self",
-      amountCents: 849,
-    });
-  });
-
-  it("charges double for scope 'both' (male)", async () => {
-    getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
-    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_y", amountCents: 1698, mode: "mock" });
-    const res = await request(buildApp())
-      .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
-      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
-      .send({ scope: "both" });
-    expect(res.status).toBe(200);
-    expect(createTicketIntent).toHaveBeenCalledWith({
-      payerId: "5986970093",
-      matchId: VALID_UUID,
-      scope: "both",
-      amountCents: 1698,
-    });
-  });
-
-  it("uses the discounted selfPriceCents for a 'self' intent when a famine discount is active", async () => {
-    getTicketState.mockResolvedValueOnce({
-      ok: true,
-      state: { ...baseState, selfDiscountPct: 77, selfPriceCents: 195 },
-    });
-    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_d", amountCents: 195, mode: "mock" });
-    const res = await request(buildApp())
-      .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
-      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
-      .send({ scope: "self" });
-    expect(res.status).toBe(200);
-    expect(createTicketIntent).toHaveBeenCalledWith({
-      payerId: "5986970093",
-      matchId: VALID_UUID,
-      scope: "self",
-      amountCents: 195,
-    });
-  });
-
-  it("keeps full 'both' price even when the actor has a famine discount", async () => {
-    getTicketState.mockResolvedValueOnce({
-      ok: true,
-      state: { ...baseState, selfDiscountPct: 77, selfPriceCents: 195 },
-    });
-    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_b", amountCents: 1698, mode: "mock" });
-    await request(buildApp())
-      .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
-      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
-      .send({ scope: "both" });
-    expect(createTicketIntent).toHaveBeenCalledWith(
-      expect.objectContaining({ scope: "both", amountCents: 1698 }),
-    );
-  });
-
-  it("rejects scope 'both' for a female user with 403", async () => {
-    getTicketState.mockResolvedValueOnce({ ok: true, state: { ...baseState, myGender: "female" } });
-    const res = await request(buildApp())
-      .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
-      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
-      .send({ scope: "both" });
-    expect(res.status).toBe(403);
-    expect(res.body.error).toBe("scope-not-allowed");
-    expect(createTicketIntent).not.toHaveBeenCalled();
-  });
-
-  it("rejects an invalid scope with 400", async () => {
-    const res = await request(buildApp())
-      .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
-      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
-      .send({ scope: "free" });
-    expect(res.status).toBe(400);
-  });
-});
-
-describe("POST /v1/matches/:id/ticket/confirm", () => {
-  it("confirms and returns the new state on the happy path", async () => {
-    getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
-    verifyTicketPayment.mockResolvedValueOnce({ ok: true });
     applyTicketPayment.mockResolvedValueOnce({
       ok: true,
       state: { ...baseState, iPaid: true, ticketStatus: "partial" },
     });
-    const res = await request(buildApp())
-      .post(`/v1/matches/${VALID_UUID}/ticket/confirm`)
-      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
-      .send({ scope: "self", clientSecret: "mock_pi_x" });
+    const res = await settle("self");
     expect(res.status).toBe(200);
     expect(res.body.iPaid).toBe(true);
     expect(res.body.ticketStatus).toBe("partial");
-    expect(verifyTicketPayment).toHaveBeenCalledWith({
-      clientSecret: "mock_pi_x",
-      payerId: "5986970093",
-      matchId: VALID_UUID,
-      scope: "self",
-      amountCents: 849,
-    });
+    expect(res.body.rail).toBe("no-charge");
     expect(applyTicketPayment).toHaveBeenCalledWith(fakeApi, 5986970093n, VALID_UUID, "self");
   });
 
-  it("returns 400 when the payment can't be verified", async () => {
-    getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
-    verifyTicketPayment.mockResolvedValueOnce({ ok: false });
+  it("does not exist wherever money can move", async () => {
+    // Decided by the runtime, not by a config default: neither a Stars
+    // deployment nor one that forgot to switch Stars on can reach it.
+    for (const blocked of ["stars", "none"] as const) {
+      rail = blocked;
+      const res = await settle("self");
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("no-charge-unavailable");
+    }
+    expect(getTicketState).not.toHaveBeenCalled();
+    expect(applyTicketPayment).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 without auth", async () => {
     const res = await request(buildApp())
-      .post(`/v1/matches/${VALID_UUID}/ticket/confirm`)
-      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
-      .send({ scope: "self", clientSecret: "bogus" });
+      .post(`/v1/matches/${VALID_UUID}/ticket/settle-no-charge`)
+      .send({ scope: "self" });
+    expect(res.status).toBe(401);
+    expect(applyTicketPayment).not.toHaveBeenCalled();
+  });
+
+  it("rejects scope 'both' for a female user with 403, like the Stars invoice", async () => {
+    getTicketState.mockResolvedValueOnce({ ok: true, state: { ...baseState, myGender: "female" } });
+    const res = await settle("both");
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("scope-not-allowed");
+    expect(applyTicketPayment).not.toHaveBeenCalled();
+  });
+
+  it("refuses to cover a partner who already settled her own slot", async () => {
+    getTicketState.mockResolvedValueOnce({ ok: true, state: { ...baseState, partnerPaid: true } });
+    const res = await settle("both");
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("partner-already-paid");
+    expect(applyTicketPayment).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid scope with 400", async () => {
+    const res = await settle("free");
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("payment-not-verified");
     expect(applyTicketPayment).not.toHaveBeenCalled();
   });
 
   it("maps a gate scope-not-allowed → 400", async () => {
     getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
-    verifyTicketPayment.mockResolvedValueOnce({ ok: true });
     applyTicketPayment.mockResolvedValueOnce({ ok: false, reason: "scope-not-allowed" });
-    const res = await request(buildApp())
-      .post(`/v1/matches/${VALID_UUID}/ticket/confirm`)
-      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
-      .send({ scope: "both", clientSecret: "mock_pi_x" });
+    const res = await settle("both");
     expect(res.status).toBe(400);
   });
 
-  it("maps not-participant → 403", async () => {
-    getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
-    verifyTicketPayment.mockResolvedValueOnce({ ok: true });
-    applyTicketPayment.mockResolvedValueOnce({ ok: false, reason: "not-participant" });
-    const res = await request(buildApp())
-      .post(`/v1/matches/${VALID_UUID}/ticket/confirm`)
-      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
-      .send({ scope: "self", clientSecret: "mock_pi_x" });
+  it("maps not-participant → 403 before touching the gate", async () => {
+    getTicketState.mockResolvedValueOnce({ ok: false, reason: "not-participant" });
+    const res = await settle("self");
     expect(res.status).toBe(403);
+    expect(applyTicketPayment).not.toHaveBeenCalled();
   });
 });
 

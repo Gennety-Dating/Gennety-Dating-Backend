@@ -135,9 +135,11 @@ describe("identity trust configuration", () => {
  * Платёжный контур — та же дисциплина, что и у контура личности.
  *
  * Аудит 2026-09-06 нашёл асимметрию: фейковый OTP не пускал процесс в прод, а
- * фейковые деньги пускали. Оба флага дефолтятся в небезопасную сторону
- * (`TICKET_PAYMENT_MODE ?? "mock"`, `TICKET_STARS_ENABLED === "true"`), то
- * есть опасное состояние — это ровно то, что даёт неполный `.env`.
+ * фейковые деньги пускали. `TICKET_STARS_ENABLED === "true"` дефолтится в
+ * небезопасную сторону, то есть опасное состояние — это ровно то, что даёт
+ * неполный `.env`. С 2026-09-11 mock-рельса нет вовсе, и прод без Stars — это
+ * уже не бесплатные билеты, а пейволл, который никто не может оплатить; ассерт
+ * остался, потому что такой деплой всё равно обязан отказать.
  */
 function paymentsProductionReady(
   overrides: Partial<PaymentTrustConfiguration> = {},
@@ -146,7 +148,6 @@ function paymentsProductionReady(
     DEMO_MODE_ENABLED: false,
     TICKET_FEATURE_ENABLED: true,
     TICKET_STARS_ENABLED: true,
-    TICKET_PAYMENT_MODE: "mock",
     ...overrides,
   };
 }
@@ -156,10 +157,9 @@ describe("payment trust configuration", () => {
     expect(paymentTrustConfigurationErrors(paymentsProductionReady(), "production")).toEqual([]);
   });
 
-  it("отказывается стартовать, когда mock-рельс открыт в проде", () => {
-    // Ровно то, что даёт потерянная при ротации строка: Stars выключены,
-    // значит PAY-1 не закрывает /intent + /confirm, а режим по умолчанию
-    // выдаёт clientSecret и принимает его же назад как доказательство оплаты.
+  it("отказывается стартовать, когда в проде нечем принять оплату", () => {
+    // Ровно то, что даёт потерянная при ротации строка: Stars выключены, а
+    // других денежных рельсов нет — гейт и магазин не могут взять оплату.
     const errors = paymentTrustConfigurationErrors(
       paymentsProductionReady({ TICKET_STARS_ENABLED: false }),
       "production",

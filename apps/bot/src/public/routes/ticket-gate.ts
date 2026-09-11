@@ -178,7 +178,7 @@ async function telegramIdOf(userId: string): Promise<bigint | null> {
 
 /**
  * Native projection of `TicketStateView`. Deliberately narrower than the Mini
- * App's: `paymentMode`, `starsEnabled`, `stars` and `selfDiscountPct` describe
+ * App's: `rail`, `starsEnabled`, `stars` and `selfDiscountPct` describe
  * rails iOS does not have, and shipping them would invite the client to branch
  * on a currency it can never charge in.
  *

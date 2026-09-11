@@ -136,7 +136,9 @@ export const VOICE_PROMPT_WAVEFORM_BUCKETS = 40;
 /**
  * Ticket store bundles for the pre-purchase Mini App. `priceCents` is the
  * TOTAL charged for the bundle; per-ticket price is `priceCents / count`.
- * Payment is mocked in v1 (`TICKET_PAYMENT_MODE=mock`).
+ * These are the USD reference prices: the Telegram product sells bundles for
+ * Stars (`TICKET_BUNDLE_STARS`) and iOS through StoreKit; the USD figures
+ * price the famine discount and the demo / development no-charge shelf.
  *
  * The bundle totals are the single price less a STATED discount, rounded to the
  * cent — not a round per-ticket price whose discount fell out of the division.

@@ -1,94 +1,56 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../config.js", () => ({
   env: {
-    TICKET_PAYMENT_MODE: "mock",
+    TICKET_STARS_ENABLED: false,
+    DEMO_MODE_ENABLED: false,
+    TICKET_BUNDLE_STARS: { 1: 425, 3: 1020, 6: 1650 },
   },
 }));
 
-const {
-  createStoreIntent,
-  createTicketIntent,
-  resetMockPaymentIntentsForTests,
-  verifyStorePayment,
-  verifyTicketPayment,
-} = await import("./ticket-payment.js");
+const { amountForScope, gateStarsForScope, ticketPurchaseRail, ticketsForScope } = await import(
+  "./ticket-payment.js"
+);
 
-beforeEach(() => {
-  resetMockPaymentIntentsForTests();
-});
+const STARS_ON = { TICKET_STARS_ENABLED: true, DEMO_MODE_ENABLED: false };
+const STARS_OFF = { TICKET_STARS_ENABLED: false, DEMO_MODE_ENABLED: false };
+const DEMO = { TICKET_STARS_ENABLED: false, DEMO_MODE_ENABLED: true };
 
-describe("mock ticket payment intents", () => {
-  it("binds a date intent to its payer, match, scope, and amount and consumes it once", async () => {
-    const intent = await createTicketIntent({
-      payerId: "user-1",
-      matchId: "match-1",
-      scope: "self",
-      amountCents: 849,
-    });
-
-    await expect(
-      verifyTicketPayment({
-        clientSecret: intent.clientSecret,
-        payerId: "user-2",
-        matchId: "match-1",
-        scope: "self",
-        amountCents: 849,
-      }),
-    ).resolves.toEqual({ ok: false });
-
-    await expect(
-      verifyTicketPayment({
-        clientSecret: intent.clientSecret,
-        payerId: "user-1",
-        matchId: "match-1",
-        scope: "self",
-        amountCents: 849,
-      }),
-    ).resolves.toEqual({ ok: true });
-
-    await expect(
-      verifyTicketPayment({
-        clientSecret: intent.clientSecret,
-        payerId: "user-1",
-        matchId: "match-1",
-        scope: "self",
-        amountCents: 849,
-      }),
-    ).resolves.toEqual({ ok: false });
+describe("ticketPurchaseRail", () => {
+  it("is Stars whenever Stars is on, in every runtime", () => {
+    for (const runtime of ["production", "development", "test", undefined]) {
+      expect(ticketPurchaseRail(STARS_ON, runtime)).toBe("stars");
+    }
   });
 
-  it("rejects forged and replayed store confirmations", async () => {
-    await expect(
-      verifyStorePayment({
-        clientSecret: "mock_store_pi_forged",
-        userId: "user-1",
-        count: 5,
-        amountCents: 2499,
-      }),
-    ).resolves.toEqual({ ok: false });
+  it("settles without a charge in the demo and in local development", () => {
+    expect(ticketPurchaseRail(DEMO, "production")).toBe("no-charge");
+    expect(ticketPurchaseRail(STARS_OFF, "development")).toBe("no-charge");
+    expect(ticketPurchaseRail(STARS_OFF, "test")).toBe("no-charge");
+  });
 
-    const intent = await createStoreIntent({
-      userId: "user-1",
-      count: 5,
-      amountCents: 2499,
-    });
+  it("never opens the no-charge settle in production, whatever the .env forgot", () => {
+    // The removed mock rail defaulted ON when a variable was missing. The
+    // runtime decides now, so a production process with Stars off can sell
+    // nothing at all — and `assertPaymentTrustConfiguration` refuses to boot it.
+    expect(ticketPurchaseRail(STARS_OFF, "production")).toBe("none");
+    // An empty NODE_ENV — `undefined` would hand the default parameter the
+    // test runner's own "test" and prove nothing.
+    expect(ticketPurchaseRail(STARS_OFF, "")).toBe("none");
+  });
+});
 
-    await expect(
-      verifyStorePayment({
-        clientSecret: intent.clientSecret,
-        userId: "user-1",
-        count: 5,
-        amountCents: 2499,
-      }),
-    ).resolves.toEqual({ ok: true });
-    await expect(
-      verifyStorePayment({
-        clientSecret: intent.clientSecret,
-        userId: "user-1",
-        count: 5,
-        amountCents: 2499,
-      }),
-    ).resolves.toEqual({ ok: false });
+describe("gate pricing", () => {
+  it("counts one ticket for self/partner and two for both", () => {
+    expect(ticketsForScope("self")).toBe(1);
+    expect(ticketsForScope("partner")).toBe(1);
+    expect(ticketsForScope("both")).toBe(2);
+    expect(amountForScope("both", 849)).toBe(1698);
+  });
+
+  it("prices the gate in Stars off the 1-ticket bundle, so gate and store agree", () => {
+    expect(gateStarsForScope("self")).toBe(425);
+    expect(gateStarsForScope("partner")).toBe(425);
+    expect(gateStarsForScope("both")).toBe(850);
   });
 });

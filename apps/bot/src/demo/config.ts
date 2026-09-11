@@ -121,7 +121,7 @@ export function demoIsolationErrors(
   if (config.TICKET_STARS_ENABLED) {
     errors.push(
       "TICKET_STARS_ENABLED must be false in demo mode " +
-        "(demo payments must never move real Telegram Stars — use TICKET_PAYMENT_MODE=mock)",
+        "(demo payments must never move real Telegram Stars — paid steps settle without a charge in the demo)",
     );
   }
   if (config.ADMIN_API_KEY) {

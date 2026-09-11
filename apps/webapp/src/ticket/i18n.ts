@@ -78,14 +78,6 @@ export interface TicketStrings {
    */
   balanceLabel: string;
   balanceNote: string;
-  mockBadge: string;
-  mockTitle: string;
-  mockSub: string;
-  mockCardLabel: string;
-  mockExpLabel: string;
-  mockCvcLabel: string;
-  mockPayNow: string;
-  processing: string;
   successTitle: string;
   successSub: string;
   /**
@@ -154,14 +146,6 @@ const en: TicketStrings = {
   coverReconsider: "Actually — cover their ticket",
   balanceLabel: "Balance",
   balanceNote: "Your wallet: {n}",
-  mockBadge: "Test mode — no real charge",
-  mockTitle: "Payment",
-  mockSub: "Pay {amount} to secure your Date Ticket.",
-  mockCardLabel: "Card number",
-  mockExpLabel: "MM / YY",
-  mockCvcLabel: "CVC",
-  mockPayNow: "Complete payment · {amount}",
-  processing: "Processing…",
   successTitle: "You're in",
   successSub: "Both tickets are secured. Time to pick your moment.",
   coveredHerTitle: "Nice one!",
@@ -207,14 +191,6 @@ const ru: TicketStrings = {
   coverReconsider: "Всё-таки оплатить за пару",
   balanceLabel: "Баланс",
   balanceNote: "Твой кошелёк: {n}",
-  mockBadge: "Тестовый режим — без реальной оплаты",
-  mockTitle: "Оплата",
-  mockSub: "Оплати {amount}, чтобы закрепить свой билет.",
-  mockCardLabel: "Номер карты",
-  mockExpLabel: "ММ / ГГ",
-  mockCvcLabel: "CVC",
-  mockPayNow: "Завершить оплату · {amount}",
-  processing: "Обработка…",
   successTitle: "Готово",
   successSub: "Оба билета у вас. Время выбрать момент.",
   coveredHerTitle: "Респект!",
@@ -263,14 +239,6 @@ const uk: TicketStrings = {
   coverReconsider: "Все-таки сплатити за пару",
   balanceLabel: "Баланс",
   balanceNote: "Твій гаманець: {n}",
-  mockBadge: "Тестовий режим — без реальної оплати",
-  mockTitle: "Оплата",
-  mockSub: "Сплати {amount}, щоб закріпити свій квиток.",
-  mockCardLabel: "Номер картки",
-  mockExpLabel: "ММ / РР",
-  mockCvcLabel: "CVC",
-  mockPayNow: "Завершити оплату · {amount}",
-  processing: "Обробка…",
   successTitle: "Готово",
   successSub: "Обидва квитки у вас. Час обрати момент.",
   coveredHerTitle: "Респект!",
@@ -316,14 +284,6 @@ const de: TicketStrings = {
   coverReconsider: "Doch für dein Date zahlen",
   balanceLabel: "Guthaben",
   balanceNote: "Dein Guthaben: {n}",
-  mockBadge: "Testmodus — keine echte Abbuchung",
-  mockTitle: "Zahlung",
-  mockSub: "Zahle {amount}, um dein Date Ticket zu sichern.",
-  mockCardLabel: "Kartennummer",
-  mockExpLabel: "MM / JJ",
-  mockCvcLabel: "CVC",
-  mockPayNow: "Zahlung abschließen · {amount}",
-  processing: "Verarbeitung...",
   successTitle: "Du bist dabei",
   successSub: "Beide Tickets sind gesichert. Jetzt wählt ihr euren Moment.",
   coveredHerTitle: "Respekt!",
@@ -369,14 +329,6 @@ const pl: TicketStrings = {
   coverReconsider: "Jednak zapłać za swoją randkę",
   balanceLabel: "Saldo",
   balanceNote: "Twój portfel: {n}",
-  mockBadge: "Tryb testowy — bez prawdziwej opłaty",
-  mockTitle: "Płatność",
-  mockSub: "Zapłać {amount}, aby zabezpieczyć Date Ticket.",
-  mockCardLabel: "Numer karty",
-  mockExpLabel: "MM / RR",
-  mockCvcLabel: "CVC",
-  mockPayNow: "Dokończ płatność · {amount}",
-  processing: "Przetwarzanie...",
   successTitle: "Gotowe",
   successSub: "Oba bilety są zabezpieczone. Czas wybrać termin.",
   coveredHerTitle: "Respekt!",

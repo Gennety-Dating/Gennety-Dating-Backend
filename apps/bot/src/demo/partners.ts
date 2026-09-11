@@ -427,9 +427,9 @@ export async function ensureFreshEmbeddings(userIds: readonly string[]): Promise
  *
  * Topped up on demand rather than seeded with a lump, so it is still right
  * after a process that has been up for weeks and many demos. The ledger row is
- * stage bookkeeping in a throwaway database: no money moves (demo runs
- * `TICKET_PAYMENT_MODE=mock` with Stars off), which is why `amountCents` is
- * left unset.
+ * stage bookkeeping in a throwaway database: no money moves (the demo runs
+ * with Stars off, and its paid steps settle without a charge), which is why
+ * `amountCents` is left unset.
  */
 export async function ensurePuppetTicket(userId: string): Promise<void> {
   if ((await getBalance(userId)) >= 1) return;

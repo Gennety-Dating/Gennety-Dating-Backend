@@ -1045,70 +1045,6 @@ body {
   color: var(--accent-bright);
 }
 
-/* ── Mock payment ─────────────────────────────────────────────────────── */
-.mock-pay {
-  width: 100%;
-  max-width: 420px;
-  margin: 0 auto;
-  padding: 24px 4px;
-  animation: rise 0.4s ease both;
-}
-.mock-badge {
-  display: inline-block;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 12px;
-  border-radius: 999px;
-  margin-bottom: 18px;
-}
-.mock-title {
-  font-family: "Space Grotesk", sans-serif;
-  font-size: 24px;
-  margin: 0 0 6px;
-}
-.mock-sub {
-  color: var(--text-dim);
-  margin: 0 0 22px;
-  font-size: 14px;
-}
-.mock-field {
-  display: block;
-  margin-bottom: 14px;
-}
-.mock-field-label {
-  display: block;
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-bottom: 6px;
-}
-.mock-field-row {
-  display: flex;
-  gap: 12px;
-}
-.mock-field-row .mock-field {
-  flex: 1;
-}
-.mock-input {
-  background: var(--glass);
-  border: none;
-  border-radius: 14px;
-  box-shadow: var(--glass-edge);
-  padding: 16px 15px;
-  font-size: 16px;
-  letter-spacing: 0.04em;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text);
-}
-.mock-card-brand {
-  font-weight: 700;
-  color: var(--accent);
-  font-size: 13px;
-  letter-spacing: 0.1em;
-}
 /* ── Confetti ─────────────────────────────────────────────────────────── */
 .confetti-canvas {
   position: fixed;
@@ -1222,8 +1158,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .ticket-float,
   .ticket-mark,
-  .ticket-header,
-  .mock-pay {
+  .ticket-header {
     animation: none;
   }
   .ticket-card {

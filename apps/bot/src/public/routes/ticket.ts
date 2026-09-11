@@ -15,10 +15,8 @@ import { downloadProfileImage } from "../../services/storage.js";
 import { toAvatarThumbnail } from "../../services/avatar-thumbnail.js";
 import { recordMiniAppAction } from "../../services/chat-events.js";
 import {
-  createTicketIntent,
-  verifyTicketPayment,
-  amountForScope,
   gateStarsForScope,
+  ticketPurchaseRail,
   type TicketScope,
 } from "../../services/ticket-payment.js";
 import type { TicketStateView } from "../../handlers/matching/ticket-gate.js";
@@ -28,7 +26,8 @@ import { allowCrossOriginImage } from "../cross-origin-image.js";
 /**
  * Per-scope Star (XTR) prices surfaced to the gate Mini App so it can render
  * "Pay … ⭐N" buttons (mirrors the wallet route's `starsEnabled`/`bundleStars`).
- * Null when Stars is off (the Mini App then falls back to the mock USD buttons).
+ * Null when Stars is off — only the demo and local development run that way,
+ * and their `no-charge` rail prices its buttons in USD instead.
  */
 function gateStarsView(): { self: number; both: number; partner: number } | null {
   if (!env.TICKET_STARS_ENABLED) return null;
@@ -41,13 +40,13 @@ function gateStarsView(): { self: number; both: number; partner: number } | null
 
 /**
  * The single shape every state-returning gate route answers with. `/use` and
- * `/confirm` MUST decorate their new state exactly like `GET /state` does: the
- * Mini App re-renders straight from those responses (it does not re-fetch), so
- * a response missing `starsEnabled`/`stars` reads as "Stars is off" and routes
- * the next tap into the mock `/intent` path — which 404s under the PAY-1 guard
- * while Stars is the live rail. That is exactly what broke the male
- * "cover both with my ticket + pay hers" combo: his wallet ticket was spent,
- * then the follow-up partner payment fell back to the mock rail and died with a
+ * `/settle-no-charge` MUST decorate their new state exactly like `GET /state`
+ * does: the Mini App re-renders straight from those responses (it does not
+ * re-fetch), so a response missing `starsEnabled`/`stars` reads as "Stars is
+ * off" and routes the next tap into `/settle-no-charge` — which 404s wherever
+ * money can move. That is exactly what once broke the male "cover both with my
+ * ticket + pay hers" combo: his wallet ticket was spent, then the follow-up
+ * partner payment fell onto the (since removed) mock rail and died with a
  * generic error.
  */
 function stateResponse(state: TicketStateView): Record<string, unknown> {
@@ -56,20 +55,11 @@ function stateResponse(state: TicketStateView): Record<string, unknown> {
     ...state,
     starsEnabled: env.TICKET_STARS_ENABLED,
     stars: gateStarsView(),
+    rail: ticketPurchaseRail(),
     // Drives the "invite a friend instead" referral cross-promo link, shown
     // client-side only on the offer screen when the wallet balance is 0.
     referralEnabled: env.REFERRAL_FEATURE_ENABLED,
   };
-}
-
-/**
- * Charged amount for a gate action. The `self` scope honours the famine
- * single-ticket discount (`selfPriceCents` is pre-discounted by the gate state
- * builder); `both`/`partner` always charge full per-ticket price × count.
- */
-function priceForScope(scope: TicketScope, state: TicketStateView): number {
-  if (scope === "self") return state.selfPriceCents;
-  return amountForScope(scope, state.priceCents);
 }
 
 /** See routes/calendar.ts for why we pre-validate the UUID shape here. */
@@ -82,10 +72,14 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * Telegram Mini App, which only shares the bot's secret. Mounted in server.ts
  * BEFORE the JWT-gated `matchesRouter` so the more-specific prefix wins.
  *
- *   GET  /v1/matches/:id/ticket/state    — screen state (status, price, gender,
- *                                           partner-paid-for-me, expiry, ...)
- *   POST /v1/matches/:id/ticket/intent   — create a (mock) payment intent
- *   POST /v1/matches/:id/ticket/confirm  — confirm "payment" → mark paid
+ *   GET  /v1/matches/:id/ticket/state             — screen state (status, price,
+ *                                                    gender, partner-paid-for-me,
+ *                                                    expiry, rail, ...)
+ *   POST /v1/matches/:id/ticket/stars-invoice     — Telegram Stars invoice link:
+ *                                                    the only rail that moves money
+ *   POST /v1/matches/:id/ticket/use               — spend wallet ticket(s)
+ *   POST /v1/matches/:id/ticket/settle-no-charge  — demo / development only:
+ *                                                    settle without a charge
  */
 export function createTicketRouter(api: Api<RawApi>): Router {
   // mergeParams so `:matchId` from the mount path is visible here.
@@ -122,8 +116,8 @@ export function createTicketRouter(api: Api<RawApi>): Router {
   // Native Telegram Stars (XTR) payment for the §3.5b date gate. Returns a
   // Telegram invoice link the Mini App opens with WebApp.openInvoice(); the gate
   // is settled by the bot's successful_payment handler (handlers/payments.ts),
-  // keyed on the `gate:<matchId>:<scope>` payload. The mock intent/confirm path
-  // stays for TICKET_STARS_ENABLED=false.
+  // keyed on the `gate:<matchId>:<scope>` payload. The only rail that moves
+  // money on the gate.
   router.post("/stars-invoice", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
@@ -247,20 +241,23 @@ export function createTicketRouter(api: Api<RawApi>): Router {
     sendAvatar(res, thumb);
   });
 
-  router.post("/intent", async (req: Request, res: Response): Promise<void> => {
+  // Settle the gate WITHOUT a charge — the demo and local development only
+  // (`ticketPurchaseRail()` → `no-charge`). It replaced the mock intent/confirm
+  // pair (decision 2026-09-11), which minted a "client secret" and then accepted
+  // that same secret back as proof of payment: a free ticket with extra steps.
+  // Here there is no pretence of a payment to verify, and what keeps it out of
+  // production is the RUNTIME, not a config default — wherever money can move
+  // this answers 404 and Stars is the only way in. The wallet /use path is a
+  // separate thing and stays open everywhere: spending an earned ticket is not
+  // a purchase.
+  router.post("/settle-no-charge", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
       return;
     }
-    // PAY-1: when Stars is the live rail, the simulated mock intent/confirm must
-    // NOT settle anything — Stars (/stars-invoice + successful_payment) is the
-    // sole purchase path. Otherwise any Mini App user could mint a free ticket
-    // via the mock flow. The mock survives only as the TICKET_STARS_ENABLED=false
-    // fallback. The wallet /use path stays open (spending earned tickets is not a
-    // purchase).
-    if (env.TICKET_STARS_ENABLED) {
-      res.status(404).json({ error: "stars-mode" });
+    if (ticketPurchaseRail() !== "no-charge") {
+      res.status(404).json({ error: "no-charge-unavailable" });
       return;
     }
     const matchId = matchIdOf(req);
@@ -270,11 +267,13 @@ export function createTicketRouter(api: Api<RawApi>): Router {
     }
     const scope = parseScope(req.body);
     if (!scope) {
-      res.status(400).json({ error: "scope must be 'self' or 'both'" });
+      res.status(400).json({ error: "scope must be 'self', 'both' or 'partner'" });
       return;
     }
 
-    // Read state to resolve price + gender + participation in one place.
+    // The same participation, male-only and nothing-left-to-cover checks the
+    // Stars invoice runs before it mints a link: a settle that costs nothing
+    // must not be able to do what a paid one would refuse.
     const stateRes = await getTicketState(BigInt(auth.user.id), matchId);
     if (!stateRes.ok) {
       res.status(stateRes.reason === "not-participant" ? 403 : 404).json({ error: stateRes.reason });
@@ -284,67 +283,8 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       res.status(403).json({ error: "scope-not-allowed" });
       return;
     }
-
-    const amountCents = priceForScope(scope, stateRes.state);
-    const intent = await createTicketIntent({
-      payerId: String(auth.user.id),
-      matchId,
-      scope,
-      amountCents,
-    });
-    emitTicketEvent("ticket_intent_created", { matchId, scope, amountCents });
-    res.status(200).json({
-      ok: true,
-      clientSecret: intent.clientSecret,
-      amountCents: intent.amountCents,
-      mode: intent.mode,
-    });
-  });
-
-  router.post("/confirm", async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
-    if (!auth.ok) {
-      res.status(401).json(auth.body);
-      return;
-    }
-    // PAY-1: Stars is the sole purchase rail when enabled — see /intent above.
-    if (env.TICKET_STARS_ENABLED) {
-      res.status(404).json({ error: "stars-mode" });
-      return;
-    }
-    const matchId = matchIdOf(req);
-    if (!matchId) {
-      res.status(404).json({ error: "match-not-found" });
-      return;
-    }
-    const scope = parseScope(req.body);
-    if (!scope) {
-      res.status(400).json({ error: "scope must be 'self' or 'both'" });
-      return;
-    }
-    const clientSecret =
-      typeof (req.body as { clientSecret?: unknown })?.clientSecret === "string"
-        ? (req.body as { clientSecret: string }).clientSecret
-        : "";
-
-    // TODO: Stripe Production Mode — in stripe mode this verify must defer to
-    // the HMAC-verified webhook, not the client. See services/ticket-payment.ts.
-    const stateRes = await getTicketState(BigInt(auth.user.id), matchId);
-    if (!stateRes.ok) {
-      const status = stateRes.reason === "not-participant" ? 403 : 404;
-      res.status(status).json({ error: stateRes.reason });
-      return;
-    }
-    const amountCents = priceForScope(scope, stateRes.state);
-    const verified = await verifyTicketPayment({
-      clientSecret,
-      payerId: String(auth.user.id),
-      matchId,
-      scope,
-      amountCents,
-    });
-    if (!verified.ok) {
-      res.status(400).json({ error: "payment-not-verified" });
+    if ((scope === "both" || scope === "partner") && stateRes.state.partnerPaid) {
+      res.status(409).json({ error: "partner-already-paid" });
       return;
     }
 

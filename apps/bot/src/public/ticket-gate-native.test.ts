@@ -65,7 +65,6 @@ const baseState = {
   iCoveredPartner: false,
   bothPaid: false,
   expiresAt: null,
-  paymentMode: "mock",
   myBalance: 2,
   selfDiscountPct: 0,
   selfPriceCents: 849,
@@ -99,7 +98,7 @@ describe("GET /v1/matches/:id/ticket-gate", () => {
     });
     // The Telegram-only rails must not leak: a client that branched on them
     // would be branching on a currency it can never charge in.
-    expect(res.body).not.toHaveProperty("paymentMode");
+    expect(res.body).not.toHaveProperty("rail");
     expect(res.body).not.toHaveProperty("starsEnabled");
     expect(res.body).not.toHaveProperty("selfDiscountPct");
     // The photo is re-signed as an absolute URL an image loader can take;

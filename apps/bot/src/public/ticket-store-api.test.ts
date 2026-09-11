@@ -1,9 +1,11 @@
 /**
  * Integration test for the `/v1/tickets/*` ticket store / wallet endpoints,
- * focused on the famine single-ticket discount: `/wallet` exposes the active
- * discount, the "1 ticket" bundle is charged the discounted price and consumes
- * the discount on confirm, and 3/6 bundles are unaffected. Mirrors
- * ticket-api.test.ts — HTTP boundary with the service modules mocked.
+ * focused on the famine single-ticket discount and on where the no-charge
+ * settle may exist: `/wallet` exposes the active discount and the rail, the
+ * "1 ticket" bundle is recorded at the discounted price and consumes the
+ * discount, 3/6 bundles are unaffected, and the settle answers 404 wherever
+ * money can move. Mirrors ticket-api.test.ts — HTTP boundary with the service
+ * modules mocked.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
@@ -17,12 +19,9 @@ vi.mock("../config.js", () => ({ env: { BOT_TOKEN, TICKET_PRICE_CENTS: 849 } }))
 const userFindUnique = vi.fn();
 vi.mock("@gennety/db", () => ({ prisma: { user: { findUnique: (...a: unknown[]) => userFindUnique(...a) } } }));
 
-const createStoreIntent = vi.fn();
-const verifyStorePayment = vi.fn();
-vi.mock("../services/ticket-payment.js", () => ({
-  createStoreIntent: (...a: unknown[]) => createStoreIntent(...a),
-  verifyStorePayment: (...a: unknown[]) => verifyStorePayment(...a),
-}));
+/** The rail the route sees; the real function reads the runtime, so it is stubbed. */
+let rail: "stars" | "no-charge" | "none" = "no-charge";
+vi.mock("../services/ticket-payment.js", () => ({ ticketPurchaseRail: () => rail }));
 
 const grantTickets = vi.fn();
 vi.mock("../services/ticket-wallet.js", () => ({ grantTickets: (...a: unknown[]) => grantTickets(...a) }));
@@ -32,9 +31,14 @@ const consumeActiveDiscount = vi.fn();
 vi.mock("../services/ticket-discount.js", () => ({
   getActiveDiscount: (...a: unknown[]) => getActiveDiscount(...a),
   consumeActiveDiscount: (...a: unknown[]) => consumeActiveDiscount(...a),
-  // Real math so the discounted amount the route charges is exercised end-to-end.
+  // Real math so the discounted amount the route records is exercised end-to-end.
   discountedCents: (price: number, pct: number) =>
     Math.round((price * (100 - Math.min(100, Math.max(0, pct)))) / 100),
+}));
+
+const notifyFounderPurchase = vi.fn();
+vi.mock("../services/founder-notify.js", () => ({
+  notifyFounderPurchase: (...a: unknown[]) => notifyFounderPurchase(...a),
 }));
 
 vi.mock("../services/ticket-analytics.js", () => ({ emitTicketEvent: vi.fn() }));
@@ -63,14 +67,13 @@ const auth = () => signInitData(BOT_TOKEN);
 const expiresAt = new Date("2026-07-19T00:00:00.000Z");
 
 beforeEach(() => {
+  rail = "no-charge";
   userFindUnique.mockReset();
-  createStoreIntent.mockReset();
-  verifyStorePayment.mockReset();
   grantTickets.mockReset();
   getActiveDiscount.mockReset();
   consumeActiveDiscount.mockReset();
+  notifyFounderPurchase.mockReset();
   userFindUnique.mockResolvedValue({ id: "u1", ticketBalance: 2 });
-  verifyStorePayment.mockResolvedValue({ ok: true });
   grantTickets.mockResolvedValue(3);
   consumeActiveDiscount.mockResolvedValue({ consumed: true });
 });
@@ -91,60 +94,62 @@ describe("GET /v1/tickets/wallet", () => {
     expect(res.body.discountPct).toBe(0);
     expect(res.body.discountExpiresAt).toBeNull();
   });
-});
 
-describe("POST /v1/tickets/store/intent", () => {
-  it("charges the discounted price for the single bundle", async () => {
-    getActiveDiscount.mockResolvedValueOnce({ pct: 77, expiresAt });
-    createStoreIntent.mockResolvedValueOnce({ clientSecret: "mock_store_pi_x", amountCents: 195, count: 1, mode: "mock" });
-    const res = await request(buildApp())
-      .post("/v1/tickets/store/intent")
-      .set("Authorization", `tma ${auth()}`)
-      .send({ count: 1 });
-    expect(res.status).toBe(200);
-    expect(createStoreIntent).toHaveBeenCalledWith({ userId: "u1", count: 1, amountCents: 195 });
-  });
-
-  it("ignores the discount for the 3-pack", async () => {
-    getActiveDiscount.mockResolvedValue({ pct: 77, expiresAt });
-    createStoreIntent.mockResolvedValueOnce({ clientSecret: "mock_store_pi_y", amountCents: 2037, count: 3, mode: "mock" });
-    await request(buildApp())
-      .post("/v1/tickets/store/intent")
-      .set("Authorization", `tma ${auth()}`)
-      .send({ count: 3 });
-    expect(createStoreIntent).toHaveBeenCalledWith({ userId: "u1", count: 3, amountCents: 2037 });
+  it("reports the rail a purchase settles on", async () => {
+    getActiveDiscount.mockResolvedValue(null);
+    rail = "stars";
+    const res = await request(buildApp()).get("/v1/tickets/wallet").set("Authorization", `tma ${auth()}`);
+    expect(res.body.rail).toBe("stars");
   });
 });
 
-describe("POST /v1/tickets/store/confirm", () => {
-  it("verifies the discounted amount and consumes the discount on a single buy", async () => {
-    // First call (intent path inside confirm) resolves the discount; second is
-    // the post-consume re-read returned in the response.
+describe("POST /v1/tickets/store/settle-no-charge", () => {
+  const settle = (count: unknown) =>
+    request(buildApp())
+      .post("/v1/tickets/store/settle-no-charge")
+      .set("Authorization", `tma ${auth()}`)
+      .send({ count });
+
+  it("credits the single bundle at the discounted shelf price and consumes the discount", async () => {
+    // First read prices the bundle; the second is the post-consume re-read
+    // returned in the response.
     getActiveDiscount.mockResolvedValueOnce({ pct: 77, expiresAt }).mockResolvedValueOnce(null);
-    const res = await request(buildApp())
-      .post("/v1/tickets/store/confirm")
-      .set("Authorization", `tma ${auth()}`)
-      .send({ count: 1, clientSecret: "mock_store_pi_x" });
+    const res = await settle(1);
     expect(res.status).toBe(200);
-    expect(verifyStorePayment).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "u1", count: 1, amountCents: 195 }),
-    );
     expect(grantTickets).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "u1", count: 1, reason: "store_purchase", amountCents: 195 }),
     );
     expect(consumeActiveDiscount).toHaveBeenCalledWith("u1");
+    expect(res.body.balance).toBe(3);
     expect(res.body.discountPct).toBe(0);
+    expect(res.body.rail).toBe("no-charge");
+    // The founder feed must never read this as a sale.
+    expect(notifyFounderPurchase).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "no_charge", amountCents: 195 }),
+    );
   });
 
-  it("does not consume the discount on a 3-pack buy", async () => {
+  it("does not consume the discount on a 3-pack", async () => {
     getActiveDiscount.mockResolvedValue({ pct: 77, expiresAt });
-    await request(buildApp())
-      .post("/v1/tickets/store/confirm")
-      .set("Authorization", `tma ${auth()}`)
-      .send({ count: 3, clientSecret: "mock_store_pi_y" });
-    expect(verifyStorePayment).toHaveBeenCalledWith(
-      expect.objectContaining({ count: 3, amountCents: 2037 }),
-    );
+    await settle(3);
+    expect(grantTickets).toHaveBeenCalledWith(expect.objectContaining({ count: 3, amountCents: 2037 }));
     expect(consumeActiveDiscount).not.toHaveBeenCalled();
+  });
+
+  it("does not exist wherever money can move", async () => {
+    for (const blocked of ["stars", "none"] as const) {
+      rail = blocked;
+      const res = await settle(1);
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("no-charge-unavailable");
+    }
+    expect(grantTickets).not.toHaveBeenCalled();
+  });
+
+  it("rejects a bundle the shelf does not sell", async () => {
+    const res = await settle(4);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("unknown-bundle");
+    expect(grantTickets).not.toHaveBeenCalled();
   });
 });

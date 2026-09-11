@@ -3,10 +3,7 @@ import { prisma } from "@gennety/db";
 import { ticketBundleFor, buildStoreInvoicePayload, t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
-import {
-  createStoreIntent,
-  verifyStorePayment,
-} from "../../services/ticket-payment.js";
+import { ticketPurchaseRail } from "../../services/ticket-payment.js";
 import { grantTickets } from "../../services/ticket-wallet.js";
 import { notifyFounderPurchase } from "../../services/founder-notify.js";
 import {
@@ -22,9 +19,11 @@ import { isPremiumActive } from "../../services/premium.js";
  * match). TMA-authed (`Authorization: tma <initData>`) like the date-gate
  * ticket routes. Mounted at `/v1/tickets`.
  *
- *   GET  /v1/tickets/wallet         — current balance + per-ticket price
- *   POST /v1/tickets/store/intent   — create a (mock) bundle payment intent
- *   POST /v1/tickets/store/confirm  — confirm "payment" → credit the balance
+ *   GET  /v1/tickets/wallet                  — balance + per-ticket price + rail
+ *   POST /v1/tickets/store/stars-invoice     — Telegram Stars invoice link: the
+ *                                             only rail that moves money
+ *   POST /v1/tickets/store/settle-no-charge  — demo / development only: credit
+ *                                             a bundle without a charge
  */
 export function createTicketStoreRouter(): Router {
   const router = Router();
@@ -54,6 +53,7 @@ export function createTicketStoreRouter(): Router {
       // famine discount is USD-only and never applies to a Stars purchase.
       starsEnabled: env.TICKET_STARS_ENABLED,
       bundleStars: env.TICKET_STARS_ENABLED ? env.TICKET_BUNDLE_STARS : null,
+      rail: ticketPurchaseRail(),
       // Drives the "invite a friend instead" referral cross-promo link, shown
       // client-side only when the wallet is actually empty.
       referralEnabled: env.REFERRAL_FEATURE_ENABLED,
@@ -71,7 +71,7 @@ export function createTicketStoreRouter(): Router {
   // a Telegram invoice link; the Mini App opens it with WebApp.openInvoice(). The
   // wallet is credited by the bot's successful_payment handler
   // (handlers/payments.ts), keyed on the `store:<count>` payload — the same path
-  // as any Stars invoice. No mock intent/confirm in this mode.
+  // as any Stars invoice, and the only rail that moves money.
   router.post("/store/stars-invoice", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
@@ -116,16 +116,18 @@ export function createTicketStoreRouter(): Router {
     }
   });
 
-  router.post("/store/intent", async (req: Request, res: Response): Promise<void> => {
+  // Credit a bundle WITHOUT a charge — the demo and local development only
+  // (`ticketPurchaseRail()` → `no-charge`). It replaced the mock intent/confirm
+  // pair (decision 2026-09-11); see the gate's `/settle-no-charge` for why the
+  // runtime, not a config default, is what keeps it out of production.
+  router.post("/store/settle-no-charge", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
       return;
     }
-    // PAY-1: Stars is the sole top-up rail when enabled — the mock intent/confirm
-    // must not mint free tickets. Mock survives only as the fallback.
-    if (env.TICKET_STARS_ENABLED) {
-      res.status(404).json({ error: "stars-mode" });
+    if (ticketPurchaseRail() !== "no-charge") {
+      res.status(404).json({ error: "no-charge-unavailable" });
       return;
     }
     const bundle = parseBundle(req.body);
@@ -138,66 +140,11 @@ export function createTicketStoreRouter(): Router {
       res.status(404).json({ error: "user-not-found" });
       return;
     }
-
-    const amountCents = await effectiveBundlePrice(user.id, bundle);
-    const intent = await createStoreIntent({
-      userId: user.id,
-      count: bundle.count,
-      amountCents,
-    });
-    emitTicketEvent("ticket_intent_created", { matchId: "store", scope: "self", amountCents });
-    res.status(200).json({
-      ok: true,
-      clientSecret: intent.clientSecret,
-      amountCents: intent.amountCents,
-      count: intent.count,
-      mode: intent.mode,
-    });
-  });
-
-  router.post("/store/confirm", async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
-    if (!auth.ok) {
-      res.status(401).json(auth.body);
-      return;
-    }
-    // PAY-1: Stars is the sole top-up rail when enabled — see /store/intent.
-    if (env.TICKET_STARS_ENABLED) {
-      res.status(404).json({ error: "stars-mode" });
-      return;
-    }
-    const bundle = parseBundle(req.body);
-    if (!bundle) {
-      res.status(400).json({ error: "unknown-bundle" });
-      return;
-    }
-    const clientSecret =
-      typeof (req.body as { clientSecret?: unknown })?.clientSecret === "string"
-        ? (req.body as { clientSecret: string }).clientSecret
-        : "";
-
-    const user = await resolveUser(auth.user.id);
-    if (!user) {
-      res.status(404).json({ error: "user-not-found" });
-      return;
-    }
-    // Re-derive the charged price server-side (never trust the client). For a
-    // discounted single this differs from the catalog price; the mock intent is
-    // amount-bound, so a stale discount auto-fails verify here.
+    // The price the shelf showed, famine discount included — recorded exactly
+    // as a real purchase of this bundle would be, so the demo's receipts read
+    // like the product's.
     const amountCents = await effectiveBundlePrice(user.id, bundle);
     const discountedSingle = amountCents !== bundle.priceCents;
-    // TODO: Stripe Production Mode — in stripe mode this must defer to the
-    // HMAC-verified webhook, not the client. See services/ticket-payment.ts.
-    const verified = await verifyStorePayment({
-      clientSecret,
-      userId: user.id,
-      count: bundle.count,
-      amountCents,
-    });
-    if (!verified.ok) {
-      res.status(400).json({ error: "payment-not-verified" });
-      return;
-    }
 
     const balance = await grantTickets({
       userId: user.id,
@@ -206,18 +153,16 @@ export function createTicketStoreRouter(): Router {
       amountCents,
       bundleSize: bundle.count,
     });
-    // Founder ops feed. The mock rail moves no real money and 404s while
-    // `TICKET_STARS_ENABLED` is on, so this only ever fires on a mock-config
-    // deployment — the DM says so explicitly rather than reading as a sale.
+    // Founder ops feed, labelled as moving no money so it never reads as a sale.
     void notifyFounderPurchase({
       userId: user.id,
       kind: "tickets",
-      provider: "mock",
+      provider: "no_charge",
       amountCents,
       currency: "USD",
       detail: `${bundle.count} ticket${bundle.count === 1 ? "" : "s"} · баланс ${balance}`,
     });
-    // Consume the one-time discount on the purchase that actually used it.
+    // The one-time discount is spent by the purchase that actually used it.
     if (discountedSingle) await consumeActiveDiscount(user.id);
     emitTicketEvent("ticket_paid", { matchId: "store", scope: "self", amountCents });
     // Return the FRESH discount so the Mini App drops the badge after a
@@ -229,6 +174,7 @@ export function createTicketStoreRouter(): Router {
       priceCents: env.TICKET_PRICE_CENTS,
       discountPct: discount?.pct ?? 0,
       discountExpiresAt: discount?.expiresAt.toISOString() ?? null,
+      rail: ticketPurchaseRail(),
     });
   });
 
@@ -245,8 +191,8 @@ function parseBundle(body: unknown): { count: number; priceCents: number } | nul
 /**
  * Charged price for a bundle, applying the famine single-ticket discount to the
  * "1 ticket" bundle only when the user has an active one. 3/6 bundles always
- * pay their catalog price. Used identically by intent + confirm so the
- * amount-bound mock intent stays consistent.
+ * pay their catalog price. The same number the shelf shows, so what a bundle
+ * is recorded at never disagrees with its label.
  */
 async function effectiveBundlePrice(
   userId: string,
