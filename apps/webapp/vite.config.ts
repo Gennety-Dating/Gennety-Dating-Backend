@@ -33,6 +33,7 @@ export default defineConfig({
         radar: resolve(__dirname, "radar.html"),
         referral: resolve(__dirname, "referral.html"),
         canvas: resolve(__dirname, "canvas.html"),
+        "date-terminal": resolve(__dirname, "date-terminal.html"),
         event: resolve(__dirname, "event.html"),
         gatekeeper: resolve(__dirname, "gatekeeper.html"),
       },

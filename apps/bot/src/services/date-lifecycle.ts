@@ -31,6 +31,7 @@ import {
   startDateDayActivities,
 } from "./date-day-activity.js";
 import { sweepExpiredVenueChanges } from "../handlers/matching/venue-change.js";
+import { sendDateTerminalBeats } from "./date-terminal-invite.js";
 import { buildAttendanceKeyboard } from "./post-date-keyboards.js";
 import { attendanceQuestionKey } from "./attendance.js";
 import {
@@ -166,6 +167,8 @@ export interface DateLifecycleResult {
   wingmen: number;
   /** Spotter / vibe-check / end pushes dispatched this tick. */
   dateDayBeats: number;
+  /** Date Terminal invites (T-45m) / reminders (T-15m) claimed this tick. */
+  terminalBeats: number;
 }
 
 /**
@@ -183,6 +186,7 @@ export async function runDateLifecycleTick(
     feedbacks: 0,
     wingmen: 0,
     dateDayBeats: 0,
+    terminalBeats: 0,
   };
 
   // 0. Venue change expiry — auto-cancel any stalled `proposed` swap whose
@@ -564,6 +568,19 @@ export async function runDateLifecycleTick(
     });
     result.dateDayBeats++;
   }
+
+  // 2d. The Date Terminal's two Telegram messages: the invite at T-45m and the
+  // reminder at T-15m, each with a web_app button into the terminal Mini App.
+  // Claimed per message inside the service (these are visible bubbles, unlike
+  // the silent Live Activity beats above), and isolated so a failure there can
+  // never cost the feedback prompt below its tick.
+  result.terminalBeats = await sendDateTerminalBeats(api, now).catch((err: unknown) => {
+    console.warn(
+      "[date-lifecycle] date terminal messages failed:",
+      err instanceof Error ? err.message : err,
+    );
+    return 0;
+  });
 
   // 3. Feedback prompt — 24h after agreed_time
   const feedbackThreshold = new Date(now.getTime() - FEEDBACK_DELAY_HOURS * 60 * 60 * 1000);

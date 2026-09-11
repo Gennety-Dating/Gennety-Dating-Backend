@@ -922,6 +922,13 @@ const translations = {
     profilerSkip: "Skip",
     wingmanHintIntro:
       "👋 Insider tip — your date's in 90 minutes:\n\n",
+    // The Date Terminal's two messages (T-45m / T-15m). "Date Terminal" and
+    // "Contact Sync" are product names and stay in English in every locale.
+    dateTerminalInvite:
+      "Your date is in {minutes} minutes.\n📍 {venue}\n\nThe Date Terminal is open — it shows how far you are from the place. At the table, shake your phones together: that's Contact Sync.",
+    dateTerminalReminder:
+      "Contact Sync is open.\n📍 {venue}\n\nOnce you're both at the table, open the terminal and shake your phones together.",
+    dateTerminalBtn: "🎟 Open the Date Terminal",
     dateDayActivityStartTitle: "Your date is today",
     emergencyPushTitle: "Your date is off",
     emergencyPushBody: "Open Gennety — they left a reason.",
@@ -2231,6 +2238,11 @@ const translations = {
     profilerSkip: "Пропустить",
     wingmanHintIntro:
       "👋 Маленькая подсказка — свидание через полтора часа:\n\n",
+    dateTerminalInvite:
+      "Свидание через {minutes} минут.\n📍 {venue}\n\nDate Terminal уже открыт — он покажет, сколько тебе осталось до места. За столиком тряхните телефоны вместе: это Contact Sync.",
+    dateTerminalReminder:
+      "Contact Sync открыт.\n📍 {venue}\n\nКогда вы оба за столиком — открой терминал и тряхните телефоны вместе.",
+    dateTerminalBtn: "🎟 Открыть Date Terminal",
     dateDayActivityStartTitle: "Сегодня свидание",
     emergencyPushTitle: "Свидание отменено",
     emergencyPushBody: "Откройте Gennety — там написана причина.",
@@ -3471,6 +3483,11 @@ const translations = {
     profilerSkip: "Пропустити",
     wingmanHintIntro:
       "👋 Маленька підказка — побачення через півтори години:\n\n",
+    dateTerminalInvite:
+      "Побачення за {minutes} хвилин.\n📍 {venue}\n\nDate Terminal уже відкритий — він покаже, скільки тобі лишилося до місця. За столиком струсіть телефони разом: це Contact Sync.",
+    dateTerminalReminder:
+      "Contact Sync відкрито.\n📍 {venue}\n\nКоли ви обоє за столиком — відкрий термінал і струсіть телефони разом.",
+    dateTerminalBtn: "🎟 Відкрити Date Terminal",
     dateDayActivityStartTitle: "Сьогодні побачення",
     emergencyPushTitle: "Побачення скасовано",
     emergencyPushBody: "Відкрийте Gennety — там написана причина.",
@@ -4680,6 +4697,11 @@ const deTranslations: TranslationTable = {
   icebreakerStreamStart: "✨ Ich stelle ein paar Gesprächsthemen für euch zusammen…",
   noMatchStreamStart: "💫 Ich gehe den Pool für dich durch…",
   wingmanHintIntro: "👋 Insider-Tipp - dein Date ist in 90 Minuten:\n\n",
+  dateTerminalInvite:
+    "Dein Date ist in {minutes} Minuten.\n📍 {venue}\n\nDas Date Terminal ist offen — es zeigt dir, wie weit du noch vom Ort entfernt bist. Am Tisch schüttelt ihr eure Handys gemeinsam: das ist Contact Sync.",
+  dateTerminalReminder:
+    "Contact Sync ist offen.\n📍 {venue}\n\nSobald ihr beide am Tisch seid, öffne das Terminal und schüttelt eure Handys gemeinsam.",
+  dateTerminalBtn: "🎟 Date Terminal öffnen",
   dateDayActivityStartTitle: "Heute ist dein Date",
   emergencyPushTitle: "Dein Date ist abgesagt",
   emergencyPushBody: "Öffne Gennety - dort steht der Grund.",
@@ -5889,6 +5911,11 @@ const plTranslations: TranslationTable = {
   icebreakerStreamStart: "✨ Dobieram kilka tematów do rozmowy dla was…",
   noMatchStreamStart: "💫 Przeglądam dopasowania dla Ciebie…",
   wingmanHintIntro: "👋 Wskazówka od środka - randka jest za 90 minut:\n\n",
+  dateTerminalInvite:
+    "Randka za {minutes} minut.\n📍 {venue}\n\nDate Terminal jest już otwarty — pokaże, ile ci zostało do miejsca. Przy stoliku potrząśnijcie razem telefonami: to Contact Sync.",
+  dateTerminalReminder:
+    "Contact Sync jest otwarty.\n📍 {venue}\n\nGdy oboje będziecie przy stoliku, otwórz terminal i potrząśnijcie razem telefonami.",
+  dateTerminalBtn: "🎟 Otwórz Date Terminal",
   dateDayActivityStartTitle: "Dziś masz randkę",
   emergencyPushTitle: "Randka odwołana",
   emergencyPushBody: "Otwórz Gennety - jest tam powód.",

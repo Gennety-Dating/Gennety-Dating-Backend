@@ -16,7 +16,12 @@ export type MiniAppPage =
   | "referral"
   /// Launch events (LAUNCH_EVENTS): the ticket, the live party screen and the
   /// T+18h recap are all one page, switched by `?view=`.
-  | "event";
+  | "event"
+  /// The Date Terminal (Contact Sync): the date-day ticket with the 100 m
+  /// geofence, the shake and the icebreaker deck. It is the bot's entry into
+  /// what used to live only on the unlinked `canvas.html` — the canvas hands
+  /// its shake to this page, and this page links back to the canvas map.
+  | "date-terminal";
 
 const PAGE_FILES: Record<Exclude<MiniAppPage, "calendar">, string> = {
   feedback: "feedback.html",
@@ -30,6 +35,7 @@ const PAGE_FILES: Record<Exclude<MiniAppPage, "calendar">, string> = {
   radar: "radar.html",
   referral: "referral.html",
   event: "event.html",
+  "date-terminal": "date-terminal.html",
 };
 
 export interface BuildMiniAppUrlOptions {

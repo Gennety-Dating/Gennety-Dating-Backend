@@ -50,11 +50,12 @@ export interface CanvasStrings {
   /** At the venue, waiting for the two shakes. */
   bumpTitle: string;
   bumpBody: string;
-  bumpAction: string;
+  /**
+   * The radar and bump states hand the user to the Date Terminal, which owns
+   * the shake and both of its permissions since 2026-09-11.
+   */
+  terminalAction: string;
   bumpWaiting: string;
-  bumpDenied: string;
-  /** The bump's OTHER permission. Same shape as `bumpDenied`, different cause. */
-  bumpNoLocation: string;
   /** Verified — the deck is open. */
   inProgressTitle: string;
   inProgressBody: string;
@@ -93,11 +94,8 @@ const en: CanvasStrings = {
   radarBothArrived: "You're both here ✨",
   bumpTitle: "You're at the table",
   bumpBody: "Shake your phones together to confirm you both made it.",
-  bumpAction: "Shake to confirm",
+  terminalAction: "Open the Date Terminal",
   bumpWaiting: "Got yours. Waiting for the other phone.",
-  bumpDenied: "I need motion access for this — allow it in your browser settings.",
-  bumpNoLocation:
-    "I got the shake, but I can't see where you are — allow location and shake again.",
   inProgressTitle: "You made it ✨",
   inProgressBody: "The date's on me — your next ticket is free. Something to talk about:",
   feedbackTitle: "How did it go?",
@@ -132,11 +130,8 @@ const ru: CanvasStrings = {
   radarBothArrived: "Вы оба на месте ✨",
   bumpTitle: "Ты за столиком",
   bumpBody: "Тряхните телефоны вместе — так я пойму, что вы оба дошли.",
-  bumpAction: "Тряхнуть",
+  terminalAction: "Открыть Date Terminal",
   bumpWaiting: "Твоё поймал. Жду второй телефон.",
-  bumpDenied: "Нужен доступ к движению — разреши его в настройках браузера.",
-  bumpNoLocation:
-    "Тряску поймал, но не вижу, где вы — разреши геолокацию и тряхни ещё раз.",
   inProgressTitle: "Вы дошли ✨",
   inProgressBody: "Свидание засчитано, билет на следующее — от меня. О чём поговорить:",
   feedbackTitle: "Как всё прошло?",
@@ -171,11 +166,8 @@ const uk: CanvasStrings = {
   radarBothArrived: "Ви обоє на місці ✨",
   bumpTitle: "Ти за столиком",
   bumpBody: "Струсіть телефони разом — так я зрозумію, що ви обоє дійшли.",
-  bumpAction: "Струснути",
+  terminalAction: "Відкрити Date Terminal",
   bumpWaiting: "Твоє впіймав. Чекаю на другий телефон.",
-  bumpDenied: "Потрібен доступ до руху — дозволь його в налаштуваннях браузера.",
-  bumpNoLocation:
-    "Струс упіймав, але не бачу, де ви — дозволь геолокацію і струсни ще раз.",
   inProgressTitle: "Ви дійшли ✨",
   inProgressBody: "Побачення зараховано, квиток на наступне — від мене. Про що поговорити:",
   feedbackTitle: "Як усе минуло?",
@@ -211,11 +203,8 @@ const de: CanvasStrings = {
   radarBothArrived: "Ihr seid beide da ✨",
   bumpTitle: "Du bist am Tisch",
   bumpBody: "Schüttelt eure Handys gemeinsam — so weiß ich, dass ihr beide da seid.",
-  bumpAction: "Schütteln",
+  terminalAction: "Date Terminal öffnen",
   bumpWaiting: "Deins habe ich. Warte auf das andere Handy.",
-  bumpDenied: "Dafür brauche ich Bewegungszugriff — erlaube ihn in den Browsereinstellungen.",
-  bumpNoLocation:
-    "Das Schütteln kam an, aber ich sehe nicht, wo ihr seid — erlaube den Standort und schüttel noch mal.",
   inProgressTitle: "Ihr habt es geschafft ✨",
   inProgressBody: "Das Date geht auf mich — dein nächstes Ticket ist frei. Worüber ihr reden könnt:",
   feedbackTitle: "Wie war es?",
@@ -251,11 +240,8 @@ const pl: CanvasStrings = {
   radarBothArrived: "Oboje jesteście na miejscu ✨",
   bumpTitle: "Jesteś przy stoliku",
   bumpBody: "Potrząśnijcie telefonami razem — tak się dowiem, że oboje dotarliście.",
-  bumpAction: "Potrząśnij",
+  terminalAction: "Otwórz Date Terminal",
   bumpWaiting: "Twoje mam. Czekam na drugi telefon.",
-  bumpDenied: "Potrzebuję dostępu do ruchu — zezwól na niego w ustawieniach przeglądarki.",
-  bumpNoLocation:
-    "Potrząśnięcie odebrane, ale nie widzę, gdzie jesteście — zezwól na lokalizację i potrząśnij jeszcze raz.",
   inProgressTitle: "Udało się ✨",
   inProgressBody: "Randka zaliczona, bilet na następną ode mnie. O czym pogadać:",
   feedbackTitle: "Jak poszło?",

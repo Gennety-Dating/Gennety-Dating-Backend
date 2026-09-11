@@ -60,8 +60,12 @@ export {
   DATE_DAY_BEAT_WINDOW_MINUTES,
   DATE_DAY_END_GRACE_MINUTES,
   dateDayBeatFor,
+  DATE_TERMINAL_INVITE_LEAD_MINUTES,
+  DATE_TERMINAL_REMINDER_LEAD_MINUTES,
+  DATE_TERMINAL_REMINDER_GRACE_MINUTES,
+  dateTerminalBeatFor,
 } from "./date-lifecycle.js";
-export type { DateLifecycleState, DateDayBeat } from "./date-lifecycle.js";
+export type { DateLifecycleState, DateDayBeat, DateTerminalBeat } from "./date-lifecycle.js";
 export { cityKeyToTimeZone, isValidTimeZone, DEFAULT_TIME_ZONE } from "./timezone.js";
 export {
   QUIET_START_HOUR,

@@ -92,14 +92,21 @@ describe("sheetFor", () => {
     expect(view.body).toBe("Kavarnya");
   });
 
-  it("offers the shake once, then stops offering it", () => {
+  it("hands the shake to the Date Terminal, before and after this side has shaken", () => {
+    const s = stringsFor("en");
     const before = sheetFor(input({ state: "DATE_BUMP_PENDING" }));
-    expect(before.action).toBe("shake");
-    // A second shake from the same phone can never verify a pair — the server
-    // reads the PEER's column — so re-arming would say otherwise.
+    expect(before.action).toBe("terminal");
+    expect(before.actionLabel).toBe(s.terminalAction);
+    // Still offered once this phone has shaken: the two shakes must land
+    // within seconds of each other, so shaking again together is the fix.
     const after = sheetFor(input({ state: "DATE_BUMP_PENDING", bumpMine: true }));
-    expect(after.action).toBeNull();
-    expect(after.actionLabel).toBeUndefined();
+    expect(after.action).toBe("terminal");
+    expect(after.body).toBe(s.bumpWaiting);
+  });
+
+  it("points the radar window at the terminal too", () => {
+    const view = sheetFor(input({ state: "DATE_RADAR_ACTIVE", venueName: "Kavarnya" }));
+    expect(view.action).toBe("terminal");
   });
 
   it("shows the deck only once there is one", () => {

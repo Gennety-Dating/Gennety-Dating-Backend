@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
-import type { ReactElement } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties, ReactElement } from "react";
 import { ButterflyMark, TicketMark } from "./marks.js";
 import type { TicketStrings } from "./i18n.js";
+import { tearPolygons, type TearPolygons } from "./tear.js";
 
 /**
  * The hero Date Ticket card. Pure CSS 3D — no WebGL, no new deps.
@@ -27,6 +28,15 @@ import type { TicketStrings } from "./i18n.js";
  *   card, and it bought nothing: it identifies no real record, and a user who
  *   reads it learns a hex string. Its space goes to the mark.
  *
+ * The Date Terminal (2026-09-11) uses the same card with three optional
+ * props, all inert by default so the gate and the store render exactly as
+ * before: `caption` prints the venue where the names go, `stub` prints the
+ * admission time where the wallet count goes, and `torn` tears the card along
+ * its perforation on a server-confirmed Contact Sync — the stub falls away,
+ * the main part lifts. The tear is a second copy of the card clipped below one
+ * shared jagged edge (`tear.ts`), so both pieces keep the real stock, the foil
+ * and the notch cutouts, and rotate together.
+ *
  * Interaction model:
  * - Drag (pointer) to grab and rotate the ticket freely, with inertia on
  *   release and a spring back to the ambient pose.
@@ -51,11 +61,19 @@ export function Ticket3D(props: {
    * the tear line never moves between screens.
    */
   balance?: number | null;
+  /** Printed under the mark INSTEAD of the names — the terminal prints the venue. */
+  caption?: string | null;
+  /** The stub's one field INSTEAD of the wallet count — the terminal's admission time. */
+  stub?: { label: string; value: string } | null;
+  /** Tear along the perforation. One-way: the terminal sets it on a confirmed sync. */
+  torn?: boolean;
   strings: TicketStrings;
 }): ReactElement {
   const stageRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const perfRef = useRef<HTMLDivElement>(null);
+  const stubPieceRef = useRef<HTMLDivElement>(null);
+  const [tear, setTear] = useState<TearPolygons | null>(null);
 
   // Expose the tear-line Y to CSS so the card can punch *real* notch holes
   // there (a mask that lets the page show through), rather than faking them
@@ -74,11 +92,27 @@ export function Ticket3D(props: {
     return () => ro.disconnect();
   }, []);
 
-  const holders = props.myName
-    ? props.partnerName
-      ? `${props.myName} & ${props.partnerName}`
-      : props.myName
-    : null;
+  // The tear is measured off the laid-out card, so it can only be cut once the
+  // card exists: the edge follows the perforation wherever the content put it.
+  const torn = props.torn === true;
+  useEffect(() => {
+    if (!torn) {
+      setTear(null);
+      return;
+    }
+    const card = cardRef.current;
+    const perf = perfRef.current;
+    if (!card || !perf) return;
+    setTear(tearPolygons(card.offsetWidth, perf.offsetTop));
+  }, [torn]);
+
+  const holders =
+    props.caption ??
+    (props.myName
+      ? props.partnerName
+        ? `${props.myName} & ${props.partnerName}`
+        : props.myName
+      : null);
 
   useEffect(() => {
     const card = cardRef.current;
@@ -104,13 +138,18 @@ export function Ticket3D(props: {
     let raf = 0;
 
     const apply = (): void => {
-      card.style.setProperty("--rx", `${rx.toFixed(2)}deg`);
-      card.style.setProperty("--ry", `${ry.toFixed(2)}deg`);
-      // Holographic film shifts its hue band as the card turns. This is the
-      // only surface effect left: the foil is a real property of the stock, so
-      // it can shift honestly with the angle, unlike a specular highlight,
-      // which needs a light source we would have to invent.
-      card.style.setProperty("--holo", `${(ry * 4).toFixed(1)}px`);
+      // The torn stub is a second card and has to turn with the first one, or
+      // the two halves of one ticket would visibly disagree about its angle.
+      for (const el of [card, stubPieceRef.current]) {
+        if (!el) continue;
+        el.style.setProperty("--rx", `${rx.toFixed(2)}deg`);
+        el.style.setProperty("--ry", `${ry.toFixed(2)}deg`);
+        // Holographic film shifts its hue band as the card turns. This is the
+        // only surface effect left: the foil is a real property of the stock,
+        // so it can shift honestly with the angle, unlike a specular highlight,
+        // which needs a light source we would have to invent.
+        el.style.setProperty("--holo", `${(ry * 4).toFixed(1)}px`);
+      }
       // Floor shadow drifts against the rotation for a grounded feel.
       stage.style.setProperty("--sx", `${(ry * -1.4).toFixed(1)}px`);
     };
@@ -182,54 +221,83 @@ export function Ticket3D(props: {
   const s = props.strings;
   const balance = props.balance && props.balance > 0 ? props.balance : null;
 
-  return (
-    <div className="ticket-stage" ref={stageRef}>
-      <div className="ticket-float">
-        <div className="ticket-card" ref={cardRef}>
-          <div className="ticket-holo" aria-hidden="true" />
-          <div className="ticket-main">
-            <div className="ticket-brand">
-              <span className="ticket-brand-mark">GENNETY</span>
-            </div>
-            {/* The mark (and, on the gate, the pair) sit centred in whatever
-                height is left over. That is what lets the card hold a fixed
-                portrait proportion while one screen prints a name row and the
-                other does not — the silhouette stops being a sum of its
-                contents. */}
-            <div className="ticket-body">
-              <div className="ticket-mark" aria-hidden="true">
-                <ButterflyMark />
-              </div>
-              {holders && (
-                <div className="ticket-names" title={holders}>
-                  {holders}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="ticket-perf" aria-hidden="true" ref={perfRef} />
-          <div className="ticket-stub">
-            {balance !== null && (
-              <>
-                {/* Field name, value. The label is what the barcode never was:
-                    a reason for the number in the corner to be there. */}
-                <span className="ticket-stub-label" aria-hidden="true">
-                  {s.balanceLabel}
-                </span>
-                {/* The count is the visible part; the localized sentence
-                    survives as the accessible name for the pair, since
-                    "Balance 🎟 × 2" read out as three fragments is not one. */}
-                <span
-                  className="ticket-stub-count"
-                  aria-label={s.balanceNote.replace("{n}", String(balance))}
-                >
-                  <TicketMark />
-                  <span aria-hidden="true">× {balance}</span>
-                </span>
-              </>
-            )}
-          </div>
+  // One face, drawn twice once the ticket is torn: the second copy is the stub
+  // piece, clipped below the same edge, so it is the same paper by construction.
+  const face = (primary: boolean): ReactElement => (
+    <>
+      <div className="ticket-holo" aria-hidden="true" />
+      <div className="ticket-main">
+        <div className="ticket-brand">
+          <span className="ticket-brand-mark">GENNETY</span>
         </div>
+        {/* The mark (and, on the gate, the pair) sit centred in whatever
+            height is left over. That is what lets the card hold a fixed
+            portrait proportion while one screen prints a name row and the
+            other does not — the silhouette stops being a sum of its
+            contents. */}
+        <div className="ticket-body">
+          <div className="ticket-mark" aria-hidden="true">
+            <ButterflyMark />
+          </div>
+          {holders && (
+            <div className="ticket-names" title={holders}>
+              {holders}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="ticket-perf" aria-hidden="true" ref={primary ? perfRef : undefined} />
+      <div className="ticket-stub">
+        {props.stub ? (
+          <>
+            <span className="ticket-stub-label" aria-hidden="true">
+              {props.stub.label}
+            </span>
+            <span className="ticket-stub-count">{props.stub.value}</span>
+          </>
+        ) : (
+          balance !== null && (
+            <>
+              {/* Field name, value. The label is what the barcode never was:
+                  a reason for the number in the corner to be there. */}
+              <span className="ticket-stub-label" aria-hidden="true">
+                {s.balanceLabel}
+              </span>
+              {/* The count is the visible part; the localized sentence
+                  survives as the accessible name for the pair, since
+                  "Balance 🎟 × 2" read out as three fragments is not one. */}
+              <span
+                className="ticket-stub-count"
+                aria-label={s.balanceNote.replace("{n}", String(balance))}
+              >
+                <TicketMark />
+                <span aria-hidden="true">× {balance}</span>
+              </span>
+            </>
+          )
+        )}
+      </div>
+    </>
+  );
+
+  const topStyle: CSSProperties | undefined = tear
+    ? { clipPath: tear.top, WebkitClipPath: tear.top }
+    : undefined;
+  const stubStyle = tear
+    ? ({ clipPath: tear.stub, WebkitClipPath: tear.stub, "--perf-y": `${tear.perfY}px` } as CSSProperties)
+    : undefined;
+
+  return (
+    <div className={tear ? "ticket-stage is-torn" : "ticket-stage"} ref={stageRef}>
+      <div className="ticket-float">
+        <div className={tear ? "ticket-card is-torn" : "ticket-card"} ref={cardRef} style={topStyle}>
+          {face(true)}
+        </div>
+        {tear && (
+          <div className="ticket-card ticket-stub-piece" ref={stubPieceRef} style={stubStyle} aria-hidden="true">
+            {face(false)}
+          </div>
+        )}
       </div>
       <div className="ticket-shadow" aria-hidden="true" />
     </div>

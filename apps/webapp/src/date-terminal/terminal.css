@@ -1,0 +1,328 @@
+/* Date Terminal — Contact Sync on dark glass (decision 2026-09-11).
+   Loaded after ticket.css, and only by date-terminal.html, so everything here
+   is scoped to this page even where it touches the shared ticket classes. */
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #030303;
+}
+
+/* ── The glass and the wave ─────────────────────────────────────────────── */
+/* NEGATIVE z-index, inside the page's own stacking context. At `z-index: 0`
+   a positioned canvas paints OVER every non-positioned block of the page — the
+   first build lost its whole header under the glass while the (positioned)
+   ticket and bar floated above it. */
+.terminal-glass {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.terminal-page {
+  position: relative;
+  z-index: 1;
+}
+
+/* The ticket and the deck are positioned with their own z-index (the deck has
+   to slide out from UNDER the torn edge), so the floating bar needs one too or
+   the dealt cards paint over its buttons. */
+.terminal-page .action-bar {
+  z-index: 5;
+}
+
+/* Over the page: one masked annulus of backdrop blur per travelling wave.
+   `--r`/`--w`/`--blur` are written every frame by Shockwave.tsx. */
+.shock-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  overflow: hidden;
+}
+.shock-ring {
+  --x: 50%;
+  --y: 50%;
+  --r: 0px;
+  --w: 30px;
+  --blur: 2px;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(1.8) brightness(1.25);
+  backdrop-filter: blur(var(--blur)) saturate(1.8) brightness(1.25);
+  -webkit-mask-image: radial-gradient(
+    circle at var(--x) var(--y),
+    transparent calc(var(--r) - var(--w)),
+    #000 var(--r),
+    transparent calc(var(--r) + var(--w))
+  );
+  mask-image: radial-gradient(
+    circle at var(--x) var(--y),
+    transparent calc(var(--r) - var(--w)),
+    #000 var(--r),
+    transparent calc(var(--r) + var(--w))
+  );
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.terminal-page .ticket-scroll {
+  gap: 18px;
+  padding-top: calc(18px + env(safe-area-inset-top) + var(--tg-content-top));
+}
+.terminal-page .ticket-header h1 {
+  font-size: 26px;
+}
+.terminal-kicker {
+  margin: 0 0 10px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.46);
+}
+
+/* ── The ticket and its tear ────────────────────────────────────────────── */
+/* Above the deck, so the cards slide out from UNDER the torn edge. */
+.terminal-ticket {
+  position: relative;
+  z-index: 3;
+}
+.terminal-page .ticket-float {
+  position: relative;
+}
+
+/* A phone-height screen holds the header, the arrival card, the ticket and the
+   action bar only with a smaller card — the gate's 268 × 392 is sized for a
+   screen with nothing else on it. Same ~1:1.46 portrait, so it is the same
+   object; the perforation (and with it the tear) follows the layout on its own. */
+.terminal-page .ticket-card {
+  width: 232px;
+  min-height: 338px;
+}
+.terminal-page .ticket-mark {
+  width: 112px;
+  height: 112px;
+}
+.terminal-page .ticket-mark::before {
+  width: 140px;
+  height: 140px;
+}
+/* The venue is printed where the gate prints names; two lines rather than an
+   ellipsis, because a venue's name is the one caption worth reading whole. */
+.terminal-page .ticket-names {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.3;
+  max-width: 100%;
+}
+.terminal-page .ticket-shadow {
+  width: 180px;
+  margin-top: 12px;
+}
+
+/* The individual `translate`/`rotate` properties compose with the card's own
+   `transform: rotateX() rotateY()`, so the tear never fights the drag. */
+.ticket-card.is-torn {
+  transform-origin: 12% var(--perf-y);
+  animation: ticket-tear-top 760ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.ticket-stub-piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  transform-origin: 88% var(--perf-y);
+  animation: ticket-tear-stub 1150ms cubic-bezier(0.45, 0, 0.75, 0.3) 60ms forwards;
+}
+.ticket-stage.is-torn .ticket-shadow {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+@keyframes ticket-tear-top {
+  0% {
+    translate: 0 0;
+    rotate: 0deg;
+  }
+  18% {
+    translate: 0 2px;
+    rotate: 0.4deg;
+  }
+  100% {
+    translate: 0 -10px;
+    rotate: -1.4deg;
+  }
+}
+@keyframes ticket-tear-stub {
+  0% {
+    translate: 0 0;
+    rotate: 0deg;
+    opacity: 1;
+  }
+  16% {
+    translate: 2px 6px;
+    rotate: 1.2deg;
+    opacity: 1;
+  }
+  100% {
+    translate: 26px 190px;
+    rotate: 11deg;
+    opacity: 0;
+  }
+}
+
+/* ── Arrival ────────────────────────────────────────────────────────────── */
+.terminal-radar {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: var(--sheen-neutral);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+}
+.terminal-radar[data-in-range="1"] {
+  box-shadow: var(--sheen-accent);
+}
+.terminal-radar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.terminal-radar-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.56);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.terminal-radar-value {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.terminal-radar-ok {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e27691;
+}
+.terminal-ring {
+  width: 46px;
+  height: 46px;
+  flex: none;
+}
+.terminal-ring-track {
+  stroke: rgba(255, 255, 255, 0.12);
+}
+.terminal-ring-arc {
+  stroke: #b6304f;
+  transition: stroke-dashoffset 0.6s ease;
+}
+.terminal-radar[data-in-range="1"] .terminal-ring-arc {
+  stroke: #e27691;
+}
+
+.terminal-notice {
+  max-width: 340px;
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #e2a0b0;
+}
+
+/* ── The deck, dealt out of the tear ────────────────────────────────────── */
+/* Pulled up into the space the stub (and the shadow under it) left behind:
+   stub 60 + shadow 40 + stage padding 8 + the scroll gap 18, less 10 px so the
+   first card starts just under the torn edge. */
+.terminal-deck {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 360px;
+  margin: -116px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.deck-card {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 15px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: var(--sheen-neutral);
+  -webkit-backdrop-filter: blur(16px) saturate(1.35);
+  backdrop-filter: blur(16px) saturate(1.35);
+  color: #f2ecf4;
+  font-size: 15px;
+  line-height: 1.45;
+  opacity: 0;
+  transform: translateY(-38px) scale(0.96);
+}
+.terminal-deck.is-dealt .deck-card {
+  animation: deck-deal 560ms cubic-bezier(0.2, 0.9, 0.25, 1.12) forwards;
+  animation-delay: calc(var(--i, 0) * 95ms);
+}
+.deck-card-n {
+  flex: none;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #e27691;
+}
+.deck-card-loading {
+  color: rgba(255, 255, 255, 0.55);
+}
+@keyframes deck-deal {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Actions ────────────────────────────────────────────────────────────── */
+.terminal-locked {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 0.72;
+}
+.terminal-locked svg {
+  width: 16px;
+  height: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket-card.is-torn {
+    animation: none;
+  }
+  .ticket-stub-piece {
+    display: none;
+  }
+  .terminal-deck.is-dealt .deck-card {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

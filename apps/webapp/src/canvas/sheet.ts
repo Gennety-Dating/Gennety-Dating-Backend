@@ -75,9 +75,10 @@ export interface CanvasInput {
  * What the sheet does when tapped. `chat` closes the Mini App, which is the
  * honest action for every state whose real flow lives in the bot: the canvas
  * is a map and a status surface in v1, not a second place to accept a pitch.
- * `shake` is the one action the canvas genuinely owns.
+ * `terminal` opens the Date Terminal, which owns the shake (Contact Sync) since
+ * 2026-09-11 — one bump surface in the Mini App instead of two that could drift.
  */
-export type SheetAction = "chat" | "shake" | null;
+export type SheetAction = "chat" | "terminal" | null;
 
 export interface SheetView {
   title: string;
@@ -188,20 +189,22 @@ export function sheetFor(input: CanvasInput): SheetView {
         title: s.radarTitle,
         body: input.venueName ?? s.planningBody,
         note: radarNote(input.radar, s),
-        action: null,
+        // The terminal is where the distance to the table is counted down.
+        action: "terminal",
+        actionLabel: s.terminalAction,
         tone: input.radar?.bothArrived ? "warm" : "quiet",
       };
 
     case "DATE_BUMP_PENDING":
       return {
         title: s.bumpTitle,
-        // Once this side has shaken there is nothing left to do but wait, so
-        // the action goes away rather than sitting there re-armable — a second
-        // shake from the same phone can never verify a pair (the server reads
-        // the PEER's column), and offering it would say otherwise.
+        // The terminal stays offered after this side has shaken. The two shakes
+        // have to land within `BUMP_SHAKE_WINDOW_MS` of each other, so a phone
+        // that shook alone may well have to shake again, together — which the
+        // old "shake once, then nothing" rule left no way to do.
         body: input.bumpMine ? s.bumpWaiting : s.bumpBody,
-        action: input.bumpMine ? null : "shake",
-        ...(input.bumpMine ? {} : { actionLabel: s.bumpAction }),
+        action: "terminal",
+        actionLabel: s.terminalAction,
         tone: "urgent",
       };
 

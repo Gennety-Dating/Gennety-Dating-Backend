@@ -3,10 +3,15 @@
  * (PRODUCT_SPEC §6.1).
  *
  * This file is the wiring and nothing else: the decisions live in
- * `canvas/sheet.ts` (what a state says), `canvas/poll.ts` (how often to ask)
- * and `canvas/shake.ts` (what a shake is), all pure and all tested without a
- * browser. What is left here is the DOM, MapLibre, and the two permission
- * dances the platform forces on us.
+ * `canvas/sheet.ts` (what a state says) and `canvas/poll.ts` (how often to
+ * ask), both pure and tested without a browser. What is left here is the DOM,
+ * MapLibre and the location permission.
+ *
+ * The shake is NOT here any more (decision 2026-09-11). The Date Terminal
+ * (`date-terminal.html`) owns Contact Sync, and the radar and bump states hand
+ * the user to it, so the Mini App has one bump surface rather than two that
+ * could drift; it reuses `canvas/shake.ts` and `canvas/api.ts` from here, and
+ * links back to this map.
  *
  * The Scratch Map's fog is here now that it has an endpoint to fill it
  * (§Scratch Map). It is drawn only once tiles have actually arrived: a
@@ -24,11 +29,9 @@ import { mapStyle } from "./map-style.js";
 import { isLang, stringsFor, type Lang } from "./canvas/i18n.js";
 import { isCanvasState, sheetFor, type CanvasState, type RadarReading } from "./canvas/sheet.js";
 import { backoffFor, pollIntervalFor } from "./canvas/poll.js";
-import { createShakeDetector, requestMotionPermission } from "./canvas/shake.js";
 import {
   fetchDateState,
   fetchScratchMap,
-  postBump,
   postProximity,
   postScratchPing,
   putScratchOptIn,
@@ -84,21 +87,10 @@ let pollTimer: number | null = null;
 let failures = 0;
 let latest: DateStateResponse | null = null;
 let radar: RadarReading | null = null;
-let motionBound = false;
-let motionDenied = false;
-/**
- * A bump needs TWO permissions, and only one of them used to be explained.
- * `currentPosition()` returning null just dropped the shake, so a user with
- * location denied shook the phone at the table and nothing happened at all —
- * no message, no haptic, no state change — under a sheet still telling them to
- * shake. Same treatment as `motionDenied`, one line up.
- */
-let geoDenied = false;
 let scratch: ScratchState | null = null;
 let scratchBusy = false;
 let scratchError: string | null = null;
 let fogLayer: SVGSVGElement | null = null;
-const detector = createShakeDetector();
 
 function dismissBoot(): void {
   if (bootDismissed || !el.boot) return;
@@ -314,14 +306,7 @@ function render(): void {
   });
 
   el.title.textContent = view.title;
-  el.body.textContent =
-    view.action === "shake"
-      ? motionDenied
-        ? s.bumpDenied
-        : geoDenied
-          ? s.bumpNoLocation
-          : view.body
-      : view.body;
+  el.body.textContent = view.body;
   el.sheet?.setAttribute("data-tone", view.tone);
 
   if (el.note) {
@@ -412,66 +397,27 @@ el.action?.addEventListener("click", () => {
     app?.close?.();
     return;
   }
-  if (action === "shake") void armShake();
+  if (action === "terminal") openTerminal();
 });
 
 el.scratchToggle?.addEventListener("click", () => void toggleScratch());
 
 // ---------------------------------------------------------------------------
-// Bump
+// Date Terminal
 // ---------------------------------------------------------------------------
 
-async function armShake(): Promise<void> {
-  const verdict = await requestMotionPermission(
-    (window as unknown as { DeviceMotionEvent?: { requestPermission?: () => Promise<"granted" | "denied"> } })
-      .DeviceMotionEvent,
-  );
-  if (verdict !== "granted") {
-    // "unsupported" and "denied" read the same to the user here — either way
-    // this phone will not produce a shake — but they are kept apart at the
-    // source so a later surface can tell them apart.
-    motionDenied = true;
-    render();
-    return;
-  }
-  motionDenied = false;
-  if (motionBound) return;
-  motionBound = true;
-  detector.reset();
-  window.addEventListener("devicemotion", onMotion);
-  haptic("light");
-}
-
-function onMotion(event: DeviceMotionEvent): void {
-  const a = event.accelerationIncludingGravity;
-  if (!a) return;
-  const shook = detector.feed({ x: a.x, y: a.y, z: a.z, at: Date.now() });
-  if (shook) void sendBump();
-}
-
-async function sendBump(): Promise<void> {
+/**
+ * Hand the user to the Date Terminal — the page that owns the shake since
+ * 2026-09-11. Same origin, so a plain navigation keeps the Mini App open, and
+ * the terminal carries a link back to this map.
+ */
+function openTerminal(): void {
   const matchId = latest?.match?.id;
   if (!matchId) return;
-  const here = await currentPosition();
-  if (!here) {
-    // Say so rather than swallowing the shake — see `geoDenied`.
-    geoDenied = true;
-    haptic("error");
-    render();
-    return;
-  }
-  geoDenied = false;
-  haptic("rigid");
-  try {
-    const res = await postBump(initData, matchId, { ...here, when: new Date() });
-    if (res.verified) haptic("success");
-    // Whatever the server says, re-reading the state is what updates the
-    // sheet — the response is about this call, the sheet is about the pair.
-    await tick();
-  } catch {
-    // A refused bump (too early, too far) is not worth an error screen: the
-    // sheet already describes the state, and the next poll re-reads it.
-  }
+  haptic("light");
+  const theme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  const query = new URLSearchParams({ match: matchId, lang, theme });
+  location.href = `date-terminal.html?${query.toString()}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -539,11 +485,6 @@ async function tick(): Promise<void> {
     // the user's attention and their battery.
     if (latest.state === "IDLE_EXPLORING") void pingScratch();
     if (latest.state === "DATE_RADAR_ACTIVE") void pingRadar();
-    if (latest.state === "DATE_BUMP_PENDING" && !latest.match?.bump?.mine) void armShake();
-    if (latest.state !== "DATE_BUMP_PENDING" && motionBound) {
-      window.removeEventListener("devicemotion", onMotion);
-      motionBound = false;
-    }
 
     schedule(pollIntervalFor(latest.state));
   } catch {

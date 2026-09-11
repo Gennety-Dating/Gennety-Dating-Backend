@@ -223,3 +223,66 @@ export function dateDayBeatFor(
   if (within(since(-DATE_DAY_SPOTTER_LEAD_MINUTES * MINUTE_MS), windowMinutes)) return "spotter";
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// The Date Terminal's two Telegram messages
+// ---------------------------------------------------------------------------
+
+/**
+ * When the invite into the Date Terminal goes out.
+ *
+ * The moment the radar starts, deliberately: the terminal's first job is the
+ * one the radar exists for — "how far am I from the place" — so opening it any
+ * earlier would hand the user a screen with nothing to measure yet.
+ */
+export const DATE_TERMINAL_INVITE_LEAD_MINUTES = DATE_RADAR_LEAD_MINUTES;
+
+/**
+ * When the reminder goes out: the moment Contact Sync (the Date Bump) starts
+ * being accepted. Tied to `DATE_BUMP_OPENS_MINUTES` for the reason that
+ * constant gives — a message saying "shake now" before the server would honour
+ * the shake is a prompt it then refuses.
+ */
+export const DATE_TERMINAL_REMINDER_LEAD_MINUTES = DATE_BUMP_OPENS_MINUTES;
+
+/**
+ * How long after `agreedTime` a late reminder is still worth sending.
+ *
+ * The sync is accepted for two hours (`DATE_BUMP_GRACE_HOURS`), but "Contact
+ * Sync is open" landing an hour into a date that is already going is noise.
+ * Half an hour covers a tick that ran late or a restart across the reminder,
+ * and nothing more.
+ */
+export const DATE_TERMINAL_REMINDER_GRACE_MINUTES = 30;
+
+export type DateTerminalBeat = "invite" | "reminder";
+
+/**
+ * Which Date Terminal message a match is owed at `now`, or `null`.
+ *
+ * The two windows are DISJOINT — the invite from T-45m up to T-15m, the
+ * reminder from T-15m to T+30m — so a process that was down across the invite
+ * and wakes at T-10m sends the reminder alone instead of two messages back to
+ * back. Unlike the date-day beats above, these are VISIBLE messages with a
+ * button, so the caller also claims an idempotency column per message: a
+ * duplicate here is a second bubble in the chat, not an invisible no-op.
+ */
+export function dateTerminalBeatFor(
+  agreedTime: Date,
+  now: Date,
+  sent: { invite: boolean; reminder: boolean },
+): DateTerminalBeat | null {
+  const at = agreedTime.getTime();
+  const current = now.getTime();
+  const reminderFrom = at - DATE_TERMINAL_REMINDER_LEAD_MINUTES * MINUTE_MS;
+  const reminderUntil = at + DATE_TERMINAL_REMINDER_GRACE_MINUTES * MINUTE_MS;
+  const inviteFrom = at - DATE_TERMINAL_INVITE_LEAD_MINUTES * MINUTE_MS;
+
+  if (current >= reminderFrom && current < reminderUntil) {
+    return sent.reminder ? null : "reminder";
+  }
+  if (current >= inviteFrom && current < reminderFrom) {
+    return sent.invite ? null : "invite";
+  }
+  return null;
+}

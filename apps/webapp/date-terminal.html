@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- The Date Terminal (Contact Sync). Dark glass in BOTH themes, on purpose:
+     the page is a lens the shockwave refracts, and the ticket on it is already
+     a dark object everywhere (ticket.css). No theme boot snippet — there is no
+     light variant to pick before first paint. -->
+<html class="dark" lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Gennety · Date Terminal</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #030303;
+      }
+    </style>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/date-terminal/main.tsx"></script>
+  </body>
+</html>
