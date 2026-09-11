@@ -14,6 +14,7 @@
 | `20260907120100_audit_indexes_and_bot_blocked` | Изменения самого аудита: `users.bot_blocked_at` и восемь индексов | `migrate diff` от схемы ствола к схеме ветки |
 | `20260908090000_proxy_chat_delivery` | Колонки прокси-чата, приехавшие со ствола | `migrate diff` |
 | `20260908120000_virality_tracking` | Виральность: `referral_events`, `hdyhau_responses`, `virality_days`, `virality_cohorts`. **Чисто аддитивная** — ни одной изменённой или удалённой колонки | Написана вручную и **сверена** с `migrate diff --from-empty --to-schema-datamodel`: колонки, индексы и внешние ключи совпадают дословно (теневая база недоступна — см. оговорку ниже) |
+| `20260911120000_date_terminal_and_hub_fallback` | `matches.terminal_invite_sent_at` / `terminal_reminder_sent_at` (два сообщения Date Terminal) и `curated_venues.is_hub_fallback` (опорное место Venue Intent V2). Аддитивная; плюс **одна строка данных** — `UPDATE`, помечающий киевский хаб по `place_id` (ноль строк на базе без каталога, это нормально) | Написана вручную; DDL сверен с `migrate diff --from-empty --to-schema-datamodel` |
 
 Разбиение по авторству намеренное. Слить всё в одну миграцию было бы проще, но
 тогда ветка аудита стала бы той, что выкатывает чужую невыкаченную работу, — а

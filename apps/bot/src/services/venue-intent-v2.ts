@@ -35,7 +35,13 @@ import {
 import { env } from "../config.js";
 import { PLACES_LIVE_SEARCH_ENABLED } from "../demo/config.js";
 import { fetchWeatherForecast } from "./weather.js";
-import { midpoint, haversineDistanceKm, venueSearchRadiusMeters, commuteBoundingBox } from "./geo.js";
+import {
+  midpoint,
+  haversineDistanceKm,
+  venueSearchRadiusMeters,
+  commuteBoundingBox,
+  type LatLng,
+} from "./geo.js";
 import { callOpenAIJson } from "./openai.js";
 import {
   isValidVenueCategory,
@@ -654,6 +660,152 @@ export function hoursEvidenceAdmits(
   );
 }
 
+/** What the hub fallback reads off a curated row. */
+export interface HubCandidateRow {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  googleMapsUri: string | null;
+  placeId: string | null;
+  category: string;
+  tier: string;
+  priority: number;
+  rating: number | null;
+  userRatingCount: number | null;
+  priceLevel: string | null;
+  facetTags: string[];
+  hardCapabilities: string[];
+  vibeTags: string[];
+  hoursConfidence: string | null;
+  openingHours: unknown;
+  utcOffsetMinutes: number | null;
+  photoRefs: string[];
+  isHubFallback: boolean;
+}
+
+/**
+ * Categories a DERIVED hub is preferred from. A hub is neutral ground two
+ * strangers can find and sit down in on any afternoon — a cafe, not a park
+ * bench or a bar.
+ */
+const HUB_PREFERRED_CATEGORIES: readonly string[] = ["cafe", "coffee_shop"];
+
+/**
+ * Pick the venue a pair is sent to when nothing in the ranked pool survived —
+ * the `no_candidates` dead end, or Places still down after the last retry
+ * (decision 2026-09-11).
+ *
+ * What it keeps from the ordinary path is exactly the part that makes a venue a
+ * safe bet for two strangers: a Maps link, a real category, hours evidence that
+ * it is OPEN at the slot, and the quality/price floor. What it drops is
+ * everything about the pair's taste — vibe, hard setting, commute fairness —
+ * because that is what just failed, and the product call is that a date at a
+ * good central cafe beats no date.
+ *
+ * Order: a row the operator pinned (`isHubFallback`) always wins, and among
+ * several pinned rows (a city may pin one per river bank) the one nearest the
+ * pair's midpoint. With no pin, the most central eligible cafe: cafes first,
+ * then distance to the market centre in whole kilometres, then the catalog's
+ * own priority and rating inside the same kilometre.
+ */
+export function chooseHubFallback(
+  rows: readonly HubCandidateRow[],
+  context: { agreedTime: Date; midpoint: LatLng; centre: LatLng },
+): HubCandidateRow | null {
+  const eligible = rows.filter((row) => {
+    if (!row.googleMapsUri) return false;
+    if (!isValidVenueCategory(row.category)) return false;
+    if (!hoursEvidenceAdmits(row, context.agreedTime)) return false;
+    return evaluateInitialVenuePolicy({
+      category: row.category,
+      tier: row.tier,
+      priceLevel: row.priceLevel,
+      priceTags: [...row.facetTags, ...row.hardCapabilities],
+      rating: row.rating,
+      reviews: row.userRatingCount,
+    }).eligible;
+  });
+  if (eligible.length === 0) return null;
+
+  const pinned = eligible.filter((row) => row.isHubFallback);
+  if (pinned.length > 0) {
+    return [...pinned].sort(
+      (left, right) =>
+        haversineDistanceKm(context.midpoint, left) - haversineDistanceKm(context.midpoint, right),
+    )[0]!;
+  }
+
+  const key = (row: HubCandidateRow): number[] => {
+    const fromCentreKm = haversineDistanceKm(context.centre, row);
+    return [
+      HUB_PREFERRED_CATEGORIES.includes(row.category) ? 0 : 1,
+      Math.floor(fromCentreKm),
+      row.priority,
+      -(row.rating ?? 0),
+      fromCentreKm,
+    ];
+  };
+  return [...eligible].sort((left, right) => compareKeys(key(left), key(right)))[0]!;
+}
+
+function compareKeys(left: readonly number[], right: readonly number[]): number {
+  for (let i = 0; i < left.length; i += 1) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+const HUB_ROW_SELECT = {
+  id: true,
+  name: true,
+  address: true,
+  lat: true,
+  lng: true,
+  googleMapsUri: true,
+  placeId: true,
+  category: true,
+  tier: true,
+  priority: true,
+  rating: true,
+  userRatingCount: true,
+  priceLevel: true,
+  facetTags: true,
+  hardCapabilities: true,
+  vibeTags: true,
+  hoursConfidence: true,
+  openingHours: true,
+  utcOffsetMinutes: true,
+  photoRefs: true,
+  isHubFallback: true,
+} as const;
+
+/**
+ * The hub pool: the city's whole active base-tier catalog, deliberately NOT the
+ * commute box the ranked path used — the hub is where a pair goes when the
+ * geometry and the vibe both came up empty, so neither may narrow it again.
+ * Scoped the same way the ranked query is (city, else university domain).
+ */
+async function loadHubCandidates(
+  cityKey: string | null,
+  universityDomain: string | null,
+): Promise<HubCandidateRow[]> {
+  if (!cityKey && !universityDomain) return [];
+  return prisma.curatedVenue.findMany({
+    where: {
+      active: true,
+      tier: "base",
+      category: { notIn: OFFERABLE_CATEGORY_FILTER },
+      ...(cityKey ? { cityKey } : { universityDomain }),
+    },
+    select: HUB_ROW_SELECT,
+    // Same sanity bound as the ranked query; no city catalog comes near it.
+    take: 2000,
+  });
+}
+
 interface SelectionRecord {
   rank: VenueRankCandidate;
   name: string;
@@ -826,7 +978,10 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   // date died over arithmetic. The widest rung is the market radius, which the
   // departure-point gate guarantees BOTH origins sit inside, so a pair inside a
   // launched city can always be served.
-  const cityRadiusKm = findMarketByCityKey(cityKey)?.radiusKm ?? DEFAULT_MARKET.radiusKm;
+  const market = findMarketByCityKey(cityKey) ?? DEFAULT_MARKET;
+  const cityRadiusKm = market.radiusKm;
+  // Where a DERIVED hub is measured from (`chooseHubFallback`).
+  const marketCentre: LatLng = { lat: market.latitude, lng: market.longitude };
   const geoLadder: VenueGeoTolerance[] = [
     defaultVenueGeoTolerance(a, b),
     { commuteLimitKm: WIDENED_COMMUTE_KM, fairnessDeltaKm: WIDENED_FAIRNESS_KM },
@@ -1105,6 +1260,113 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   // render inside `deliverScheduledConfirmation` opens its own).
   await endSearchStatus();
 
+  /**
+   * Lock a venue in and tell the pair — the tail every successful run shares,
+   * the ranked pick and the hub fallback alike, so the two can never disagree
+   * about what "scheduled" writes or who hears about it.
+   */
+  const lockVenue = async (record: SelectionRecord, confidence: number, reason: string): Promise<void> => {
+    const committed = await prisma.match.updateMany({
+      where: { id: matchId, status: "negotiating_venue" },
+      data: {
+        status: "scheduled", venueName: record.name, venueAddress: record.address,
+        venueLat: record.lat, venueLng: record.lng, venueMidpointLat: mid.lat, venueMidpointLng: mid.lng,
+        venueGoogleMapsUri: record.mapsUri, venuePlaceId: record.rank.placeId,
+        venueSource: record.source, venueSelectionVersion: VENUE_SELECTION_VERSION,
+        venueSelectionConfidence: confidence, venueSelectionReason: reason,
+        venuePhotoName: record.photoName,
+        venueSelectionError: null, venueSelectionNextRetryAt: null,
+      },
+    });
+    if (committed.count === 0) return;
+    generateAndSaveWingmanHints(matchId).catch((error) => {
+      console.warn(`[venue-intent-v2] wingman generation failed for ${matchId}:`, error);
+    });
+    // Deliver the rich scheduled confirmation — the SAME date-card PNG + tappable
+    // `date_time` entity + Maps/Change-venue keyboard + grounded venue blurb +
+    // founder feed as the legacy concierge path (services/scheduled-confirmation.ts),
+    // instead of a bare "venue ready + link" text. Telegram-only (the helper
+    // no-ops mobile targets); any render failure degrades to text inside it, so
+    // scheduling never wedges.
+    const api = (await import("../public/server.js")).getBotApi();
+    if (api) {
+      const venueForCard: Venue = {
+        name: record.name,
+        address: record.address,
+        googleMapsUri: record.mapsUri,
+        lat: record.lat,
+        lng: record.lng,
+        photoName: record.photoName,
+        rating: record.rank.rating ?? null,
+        userRatingCount: record.rank.reviews ?? null,
+        placeId: record.rank.placeId,
+        source: record.source,
+      };
+      const keywords = [...new Set<string>([...a.experiences, ...b.experiences])];
+      await deliverScheduledConfirmation(api, matchId, {
+        venue: venueForCard,
+        category: record.category,
+        keywords,
+      }).catch((error) => {
+        console.warn(`[venue-intent-v2] scheduled confirmation failed for ${matchId}:`, error);
+      });
+    }
+    // Mobile participants still get the lightweight push (the rich card is
+    // Telegram-only); skip the redundant Telegram plain-text for `scheduled`
+    // since deliverScheduledConfirmation already owns that surface.
+    await notifyVenueIntentParticipants(
+      match,
+      "scheduled",
+      { venueName: record.name, mapsUri: record.mapsUri },
+      { telegram: false },
+    );
+  };
+
+  /**
+   * The hub fallback's own write: a selection-log row that says it was a hub
+   * (`selectedSource: "hub_fallback"`, with the failure it replaced), then the
+   * ordinary lock. The venue is a curated row, so `venueSource` stays
+   * `curated` — everything downstream (the change board, the canvas, the Bump
+   * radius) treats it as the real venue it is.
+   */
+  const lockHubFallback = async (hub: HubCandidateRow, failure: string, attempts: number): Promise<void> => {
+    const facets = categoryFacets(hub.category, [...hub.facetTags, ...hub.hardCapabilities], hub.vibeTags);
+    const record: SelectionRecord = {
+      rank: {
+        id: hub.id, placeId: hub.placeId ?? `curated:${hub.id}`, priority: hub.priority,
+        rating: hub.rating, reviews: hub.userRatingCount,
+        evidenceConfidence: hub.hoursConfidence === "operator_confirmed" ? 1 : 0.9,
+        distanceA: haversineDistanceKm(originA, hub), distanceB: haversineDistanceKm(originB, hub),
+        facets,
+      },
+      name: hub.name, address: hub.address, lat: hub.lat, lng: hub.lng,
+      // `chooseHubFallback` never returns a row without a Maps link.
+      mapsUri: hub.googleMapsUri ?? "", source: "curated",
+      category: hub.category as VenueCategory,
+      placeId: hub.placeId, photoName: hub.photoRefs[0] ?? null,
+    };
+    if (!record.photoName) record.photoName = await fetchPlacePhotoName(apiKey, record.placeId);
+    console.warn(
+      `[venue-intent-v2] ${matchId}: ${failure} (attempt ${attempts}) — hub fallback to ${hub.name} (${hub.isHubFallback ? "pinned" : "derived"})`,
+    );
+    await prisma.venueSelectionLog.create({ data: {
+      matchId, mode, parserVersion: VENUE_INTENT_PARSER_VERSION, rankerVersion: VENUE_SELECTION_VERSION,
+      intentA: stripForLog(a), intentB: stripForLog(b),
+      topCandidates: asJson({
+        candidates: [],
+        poolSizes,
+        hubFallback: { after: failure, attempts, pinned: hub.isHubFallback },
+      }),
+      selectedSource: "hub_fallback", selectedPlaceId: record.rank.placeId, cityKey,
+      latencyMs: Date.now() - started, placesCallCount: placesCalls,
+      chipCorrections: chipCorrectionCount(a) + chipCorrectionCount(b),
+    } });
+    const reason = `Hub fallback: nothing in the pool survived (${failure}); locked ${
+      hub.isHubFallback ? "the city's pinned hub" : "the most central eligible cafe"
+    } ${hub.name}.`;
+    await lockVenue(record, record.rank.evidenceConfidence, reason);
+  };
+
   if (!chosen || !best) {
     const relaxation = minimalRelaxation(a, b);
     const failure = providerFailed && selections.length === 0
@@ -1112,6 +1374,28 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       : `no_candidates:${relaxation.key}:${relaxation.sides}`;
     const current = await prisma.match.findUnique({ where: { id: matchId }, select: { venueSelectionAttempts: true } });
     const attempts = (current?.venueSelectionAttempts ?? 0) + 1;
+
+    // The hub fallback (decision 2026-09-11), on exactly the outcomes that used
+    // to be DEAD ENDS: `no_candidates`, which schedules no retry at all, and the
+    // last `provider_unavailable` attempt. An earlier provider failure keeps its
+    // retry — in a few minutes Places may still find a venue that fits what the
+    // pair asked for, which the hub by construction does not try to do. Shadow
+    // runs assign nothing, so they never reach for it.
+    if (mode === "live" && (failure.startsWith("no_candidates") || attempts >= 3)) {
+      const hub = chooseHubFallback(await loadHubCandidates(cityKey, universityDomain), {
+        agreedTime: match.agreedTime,
+        midpoint: mid,
+        centre: marketCentre,
+      });
+      if (hub) {
+        await lockHubFallback(hub, failure, attempts);
+        return;
+      }
+      console.warn(
+        `[venue-intent-v2] ${matchId}: ${failure} and no hub venue is open at the slot — the pair gets the failure notice`,
+      );
+    }
+
     const delay = [1, 5, 15][Math.min(attempts - 1, 2)]!;
     await prisma.match.update({
       where: { id: matchId },
@@ -1138,7 +1422,9 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     // Both failure modes reach the founder now. `no_candidates` is terminal —
     // it schedules no retry — so a pair sits in `negotiating_venue` until the
     // §3.5c stall chain cancels them 48 h later. That is a live match about to
-    // be lost, and it used to be visible only in the database.
+    // be lost, and it used to be visible only in the database. Since the hub
+    // fallback it only gets here when not even the hub was open at the slot
+    // (or in shadow mode), which is exactly when the founder has to step in.
     if (failure.startsWith("no_candidates") || attempts >= 3) {
       await notifyFounderVenueSelectionFailure(matchId, failure, attempts);
     }
@@ -1168,60 +1454,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   const rungNote =
     geoRung === 1 ? "" : ` widened to ${geoLadder[geoRung - 1]!.commuteLimitKm} km (rung ${geoRung});`;
   const reason = `Pair intent: ${resolveVenueBridge(a, b).join(", ")}; verified fit ${(best.score.pairFit * 100).toFixed(0)}%; route imbalance ${Math.abs(chosen.rank.distanceA - chosen.rank.distanceB).toFixed(1)} km;${contextNote}${rungNote} pick ${diversityReason} of ${ranked.length}.`;
-  const committed = await prisma.match.updateMany({
-    where: { id: matchId, status: "negotiating_venue" },
-    data: {
-      status: "scheduled", venueName: chosen.name, venueAddress: chosen.address,
-      venueLat: chosen.lat, venueLng: chosen.lng, venueMidpointLat: mid.lat, venueMidpointLng: mid.lng,
-      venueGoogleMapsUri: chosen.mapsUri, venuePlaceId: chosen.rank.placeId,
-      venueSource: chosen.source, venueSelectionVersion: VENUE_SELECTION_VERSION,
-      venueSelectionConfidence: best.score.evidenceConfidence, venueSelectionReason: reason,
-      venuePhotoName: chosen.photoName,
-      venueSelectionError: null, venueSelectionNextRetryAt: null,
-    },
-  });
-  if (committed.count === 0) return;
-  generateAndSaveWingmanHints(matchId).catch((error) => {
-    console.warn(`[venue-intent-v2] wingman generation failed for ${matchId}:`, error);
-  });
-  // Deliver the rich scheduled confirmation — the SAME date-card PNG + tappable
-  // `date_time` entity + Maps/Change-venue keyboard + grounded venue blurb +
-  // founder feed as the legacy concierge path (services/scheduled-confirmation.ts),
-  // instead of a bare "venue ready + link" text. Telegram-only (the helper
-  // no-ops mobile targets); any render failure degrades to text inside it, so
-  // scheduling never wedges.
-  const api = (await import("../public/server.js")).getBotApi();
-  if (api) {
-    const venueForCard: Venue = {
-      name: chosen.name,
-      address: chosen.address,
-      googleMapsUri: chosen.mapsUri,
-      lat: chosen.lat,
-      lng: chosen.lng,
-      photoName: chosen.photoName,
-      rating: chosen.rank.rating ?? null,
-      userRatingCount: chosen.rank.reviews ?? null,
-      placeId: chosen.rank.placeId,
-      source: chosen.source,
-    };
-    const keywords = [...new Set<string>([...a.experiences, ...b.experiences])];
-    await deliverScheduledConfirmation(api, matchId, {
-      venue: venueForCard,
-      category: chosen.category,
-      keywords,
-    }).catch((error) => {
-      console.warn(`[venue-intent-v2] scheduled confirmation failed for ${matchId}:`, error);
-    });
-  }
-  // Mobile participants still get the lightweight push (the rich card is
-  // Telegram-only); skip the redundant Telegram plain-text for `scheduled`
-  // since deliverScheduledConfirmation already owns that surface.
-  await notifyVenueIntentParticipants(
-    match,
-    "scheduled",
-    { venueName: chosen.name, mapsUri: chosen.mapsUri },
-    { telegram: false },
-  );
+  await lockVenue(chosen, best.score.evidenceConfidence, reason);
 }
 
 type VenueIntentNotificationMatch = {

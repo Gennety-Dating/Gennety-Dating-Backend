@@ -36,9 +36,10 @@ vi.mock("./openai.js", () => ({
   callOpenAIJson: (...args: unknown[]) => callOpenAIJson(...args),
 }));
 
-const { interpretVenueIntent, hoursEvidenceAdmits, decidePlacesSweep } = await import(
+const { interpretVenueIntent, hoursEvidenceAdmits, decidePlacesSweep, chooseHubFallback } = await import(
   "./venue-intent-v2.js"
 );
+type HubCandidateRow = Parameters<typeof chooseHubFallback>[0][number];
 const { isVenueOriginRefusal } = await import("./venue-origin.js");
 
 /**
@@ -291,6 +292,97 @@ describe("hoursEvidenceAdmits (PRODUCT_SPEC §3.7 — hours evidence)", () => {
         SLOT,
       ),
     ).toBe(false);
+  });
+});
+
+/**
+ * The hub fallback (2026-09-11) — where a pair goes instead of the
+ * `no_candidates` dead end. It may drop the pair's taste, never the venue's
+ * fitness for two strangers: open at the slot, a Maps link, the quality floor.
+ */
+describe("chooseHubFallback — the no_candidates dead end", () => {
+  // A Tuesday, 18:00 Kyiv — the same slot the hours-evidence tests use.
+  const SLOT = new Date("2026-08-11T15:00:00Z");
+  const CENTRE = { lat: 50.4501, lng: 30.5234 };
+  const MIDPOINT = { lat: 50.45, lng: 30.52 };
+  const context = { agreedTime: SLOT, midpoint: MIDPOINT, centre: CENTRE };
+  const OPEN_09_TO_17 = {
+    periods: [{ open: { day: 2, hour: 9, minute: 0 }, close: { day: 2, hour: 17, minute: 0 } }],
+  };
+
+  function row(overrides: Partial<HubCandidateRow> = {}): HubCandidateRow {
+    return {
+      id: "central",
+      name: "Central cafe",
+      address: "Khreshchatyk 1",
+      // ~50 m from the market centre.
+      lat: 50.4505,
+      lng: 30.5238,
+      googleMapsUri: "https://maps.google.com/?cid=1",
+      placeId: "place-central",
+      category: "cafe",
+      tier: "base",
+      priority: 2,
+      rating: 4.6,
+      userRatingCount: 900,
+      priceLevel: "PRICE_LEVEL_MODERATE",
+      facetTags: [],
+      hardCapabilities: [],
+      vibeTags: [],
+      hoursConfidence: "always_open",
+      openingHours: null,
+      utcOffsetMinutes: 180,
+      photoRefs: [],
+      isHubFallback: false,
+      ...overrides,
+    };
+  }
+
+  it("returns null when the city has nothing eligible", () => {
+    expect(chooseHubFallback([], context)).toBeNull();
+    expect(chooseHubFallback([row({ googleMapsUri: null })], context)).toBeNull();
+  });
+
+  it("always prefers the pinned hub over a closer, better-rated unpinned cafe", () => {
+    const pinned = row({ id: "pinned", lat: 50.4486, lng: 30.5133, rating: 4.5, isHubFallback: true });
+    const better = row({ id: "better", rating: 4.9, priority: 1 });
+    expect(chooseHubFallback([better, pinned], context)?.id).toBe("pinned");
+  });
+
+  it("never sends a pair to a pinned hub that is closed at the slot", () => {
+    const closed = row({
+      id: "pinned-closed",
+      isHubFallback: true,
+      hoursConfidence: "provider",
+      openingHours: OPEN_09_TO_17,
+    });
+    const open = row({ id: "open" });
+    expect(chooseHubFallback([closed, open], context)?.id).toBe("open");
+  });
+
+  it("picks the pinned hub nearest the pair's midpoint when a city pins several", () => {
+    const rightBank = row({ id: "right-bank", lat: 50.4486, lng: 30.5133, isHubFallback: true });
+    const leftBank = row({ id: "left-bank", lat: 50.4613, lng: 30.6384, isHubFallback: true });
+    expect(chooseHubFallback([leftBank, rightBank], context)?.id).toBe("right-bank");
+    const leftMidpoint = { ...context, midpoint: { lat: 50.46, lng: 30.63 } };
+    expect(chooseHubFallback([leftBank, rightBank], leftMidpoint)?.id).toBe("left-bank");
+  });
+
+  it("without a pin, takes the most central eligible cafe over a better one across town", () => {
+    const acrossTown = row({ id: "across-town", lat: 50.51, lng: 30.6, rating: 4.9, priority: 1 });
+    const central = row({ id: "central" });
+    expect(chooseHubFallback([acrossTown, central], context)?.id).toBe("central");
+  });
+
+  it("prefers a cafe to a restaurant in the same spot", () => {
+    const restaurant = row({ id: "restaurant", category: "restaurant", priority: 1 });
+    const cafe = row({ id: "cafe" });
+    expect(chooseHubFallback([restaurant, cafe], context)?.id).toBe("cafe");
+  });
+
+  it("keeps the quality floor — a badly rated cafe is never the hub, pinned or not", () => {
+    const bad = row({ id: "bad", rating: 3.1, isHubFallback: true });
+    expect(chooseHubFallback([bad], context)).toBeNull();
   });
 });
 

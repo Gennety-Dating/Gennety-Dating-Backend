@@ -1845,11 +1845,22 @@ model Match {
   wingmanHintB  String?   @map("wingman_hint_b")
   wingmanSentAt DateTime? @map("wingman_sent_at")
 
+  /// Date Terminal (Contact Sync) — the two Telegram messages that open the
+  /// terminal Mini App: the invite at T-45m and the reminder at T-15m, when the
+  /// sync starts being accepted (`dateTerminalBeatFor` in `@gennety/shared`).
+  /// Claimed atomically before the send, like `icebreakersSentAt`: these are
+  /// visible messages with a button, so a duplicate is a second bubble in the
+  /// chat rather than an invisible no-op, and a time window alone cannot rule
+  /// one out.
+  terminalInviteSentAt   DateTime? @map("terminal_invite_sent_at")
+  terminalReminderSentAt DateTime? @map("terminal_reminder_sent_at")
+
   /// Date Ticket monetization gate. Sits between mutual accept and the
   /// Calendar Mini App when `TICKET_FEATURE_ENABLED=true`; entirely inert
   /// when the flag is off (no offer is ever sent, columns keep defaults).
-  /// Payment is MOCKED in v1 — see `services/ticket-payment.ts`; the
-  /// `mock`/`stripe` switch is the single production toggle.
+  /// Paid in Telegram Stars (the only rail that moves money) or from the
+  /// ticket wallet; iOS fills the wallet through StoreKit. See
+  /// `services/ticket-payment.ts` for the rails.
   ///
   /// `ticketStatus` lifecycle (string, validated in app code — not a Prisma
   /// enum, so adding states later needs no migration):
@@ -2593,6 +2604,14 @@ model CuratedVenue {
   /// a seeder path, not a silently-null field.
   photoUrl         String?   @map("photo_url")
   active           Boolean   @default(true)
+  /// The city's designated hub: where Venue Intent V2 sends a pair when nothing
+  /// in the ranked pool survives (`venue-intent-v2.ts` → hub fallback), instead
+  /// of leaving them in `negotiating_venue` until the stall chain cancels the
+  /// match. Still has to be open at the slot and pass the ordinary eligibility
+  /// gates — the flag outranks vibe and distance, never safety. With no flagged
+  /// row the fallback derives one (the most central eligible cafe), so this is
+  /// a pin, not a precondition.
+  isHubFallback    Boolean   @default(false) @map("is_hub_fallback")
   /// Set when the row was last confirmed live against Places (by the seeder
   /// import, or the re-validation cron). Oldest-first is the cron's scan order.
   lastVerifiedAt   DateTime? @map("last_verified_at")
