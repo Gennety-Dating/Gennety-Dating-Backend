@@ -36,7 +36,9 @@ export type IconName =
   | "chevron"
   | "lock"
   | "ticket"
-  | "close";
+  | "close"
+  | "walk"
+  | "car";
 
 /** The 4 candidate map icon variants for live in-app comparison. */
 export const MAP_VARIANTS = ["map-nav", "map-pin", "map-fold", "map-route"] as const;
@@ -235,6 +237,28 @@ const ICONS: Record<IconName, { d: string[]; solid?: boolean }> = {
   // its own tinted disc rather than floating bare on the photo.
   close: {
     d: ["M6.6 6.6 17.4 17.4", "M17.4 6.6 6.6 17.4"],
+  },
+  // The transit dock's two modes (decision 2026-09-11). Drawn, not 🚶 / 🚗,
+  // for the reason this whole set exists: an emoji is each platform's own
+  // cartoon, and the pair would change style from one phone to the next.
+  // A figure mid-stride: head, a leaning torso, one arm forward, one back.
+  walk: {
+    d: [
+      "M13.6 6.3a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z",
+      "M12.8 8 11.2 13.4",
+      "M9.2 11.4 12.8 8l2.6 2.6 2.4.6",
+      "m11.2 13.4 2.4 2.8.9 4.6",
+      "m11.2 13.4-1.4 3.2-2.6 4.2",
+    ],
+  },
+  // A car seen from the front: the cabin, the body, the wheels under it.
+  car: {
+    d: [
+      "M5.2 12.8 7 8a1.7 1.7 0 0 1 1.6-1.1h6.8A1.7 1.7 0 0 1 17 8l1.8 4.8",
+      "M4.4 12.8h15.2a1 1 0 0 1 1 1v3.2a1 1 0 0 1-1 1H4.4a1 1 0 0 1-1-1v-3.2a1 1 0 0 1 1-1Z",
+      "M6.6 18v1.7M17.4 18v1.7",
+      "M6.8 15.4h1.8M15.4 15.4h1.8",
+    ],
   },
 };
 

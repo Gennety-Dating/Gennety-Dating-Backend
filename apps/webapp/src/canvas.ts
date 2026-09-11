@@ -17,6 +17,11 @@
  * (§Scratch Map). It is drawn only once tiles have actually arrived: a
  * fully-fogged map with no data hides the city the canvas exists to show and
  * looks exactly like a bug.
+ *
+ * The transit dock is wired here as well (decision 2026-09-11): built once,
+ * fed from `tick`, summoned by the venue pin and put away by a tap on the map.
+ * When it shows and what it says live in `canvas/transit.ts`; what its links
+ * carry, in `deep-links.ts`.
  */
 
 // maplibre-gl v6 is ESM-only and has NO default export — named only. `Map`
@@ -39,6 +44,8 @@ import {
   type ScratchState,
 } from "./canvas/api.js";
 import { fogPath, formatExplored } from "./canvas/fog.js";
+import { createTransitDock } from "./canvas/transit-dock.js";
+import type { DockPresence } from "./canvas/transit.js";
 import { apiBase } from "./api.js";
 
 const KYIV: [number, number] = [50.4501, 30.5234];
@@ -91,6 +98,35 @@ let scratch: ScratchState | null = null;
 let scratchBusy = false;
 let scratchError: string | null = null;
 let fogLayer: SVGSVGElement | null = null;
+
+/**
+ * The transit dock (decision 2026-09-11): Uber and the phone's maps app on the
+ * sheet — up on its own from T-45m, and before that from the venue pin.
+ */
+const dock = createTransitDock({
+  sheet: el.sheet,
+  strings: s,
+  lang,
+  app,
+  // Uber's attribution id for our developer app. Unset, the link goes out
+  // without one rather than with an empty one (`deep-links.ts`).
+  uberClientId: import.meta.env.VITE_UBER_CLIENT_ID?.trim() || null,
+  onLayout: frameAbove,
+});
+
+/**
+ * Keep the venue in view above the dock. Until the user pans, the camera's
+ * centre IS the venue, and on a small phone the dock and the sheet together
+ * cover the bottom half of the screen — the pin would sit under the very dock
+ * it summons. So while the dock is up the camera is padded by what it covers
+ * and the pin centres in what is left; closed, the padding goes back to none,
+ * the framing every other state has always had.
+ */
+function frameAbove(coveredPx: number): void {
+  if (!map) return;
+  const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  map.easeTo({ padding: { top: 0, right: 0, bottom: coveredPx, left: 0 }, duration: still ? 0 : 320 });
+}
 
 function dismissBoot(): void {
   if (bootDismissed || !el.boot) return;
@@ -174,6 +210,14 @@ function initMap(): void {
   // finish would leave the holes visibly lagging the city under them.
   map.on?.("move", renderFog);
   map.on?.("zoom", renderFog);
+  // A tap on the map puts an on-demand dock away — except the tap that landed
+  // on the venue pin: MapLibre raises `click` for its markers' taps too, and
+  // that is the very tap that just brought the dock up.
+  map.on?.("click", (event) => {
+    const target = event.originalEvent?.target;
+    if (target instanceof Node && venueMarker?.getElement().contains(target)) return;
+    dock.dismiss();
+  });
   window.addEventListener("resize", kick);
   app?.onEvent?.("viewportChanged", kick);
   [120, 350, 800].forEach((ms) => window.setTimeout(kick, ms));
@@ -189,6 +233,14 @@ function showVenue(lat: number, lng: number): void {
     const pin = document.createElement("div");
     pin.className = "venue-pin";
     pin.innerHTML = '<span class="venue-pulse"></span><span class="venue-dot"></span>';
+    // The dock's switch while a date is on; `dressPin` makes it a button only
+    // then. Enter / Space for a keyboard, the click for everything else.
+    pin.addEventListener("click", () => dock.summon());
+    pin.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      dock.summon();
+    });
     venueMarker = new Marker({ element: pin, anchor: "center" })
       .setLngLat([lng, lat])
       .addTo(map);
@@ -196,6 +248,26 @@ function showVenue(lat: number, lng: number): void {
   } else {
     venueMarker.setLngLat([lng, lat]);
   }
+}
+
+/**
+ * The pin summons the dock whenever the dock exists, so in exactly those
+ * states it is announced as a button (its 44 px target is in canvas.css). In
+ * every other state it goes back to being a picture: a control that does
+ * nothing is worse than none.
+ */
+function dressPin(presence: DockPresence): void {
+  const pin = venueMarker?.getElement();
+  if (!pin) return;
+  if (presence === "off") {
+    pin.removeAttribute("role");
+    pin.removeAttribute("tabindex");
+    pin.removeAttribute("aria-label");
+    return;
+  }
+  pin.setAttribute("role", "button");
+  pin.setAttribute("aria-label", s.dockLabel);
+  pin.tabIndex = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -475,6 +547,14 @@ async function tick(): Promise<void> {
 
     const venue = latest.match?.venue;
     if (venue?.lat != null && venue.lng != null) showVenue(venue.lat, venue.lng);
+    dressPin(
+      dock.update(
+        latest.state,
+        venue?.lat != null && venue.lng != null
+          ? { lat: venue.lat, lng: venue.lng, name: venue.name, address: venue.address }
+          : null,
+      ),
+    );
 
     if (latest.state !== "DATE_RADAR_ACTIVE") radar = null;
     render();

@@ -302,6 +302,10 @@ The webapp production build bakes in:
 
 ```text
 VITE_API_BASE_URL=https://dating-api.gennety.com
+# Optional. Our Uber developer app's client id, sent as `client_id` on the
+# canvas transit dock's Uber link (ride attribution, what an affiliate deal
+# hangs on). Unset = the link goes out without it. See living-canvas.md §6.4b.
+# VITE_UBER_CLIENT_ID=
 ```
 
 ## Deploy Env-Only Changes

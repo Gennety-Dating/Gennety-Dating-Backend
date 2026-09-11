@@ -1,4 +1,4 @@
-<!-- WHEN_TO_READ: You are changing the Living Canvas or viral mechanics: the derived state machine, Date Bump, the Date Terminal (Contact Sync, §6.4a), Date Radar, the canvas screen, Scratch Map, or Campus Radar (Phase 6). -->
+<!-- WHEN_TO_READ: You are changing the Living Canvas or viral mechanics: the derived state machine, Date Bump, the Date Terminal (Contact Sync, §6.4a), the transit dock (Uber / maps hand-offs, §6.4b), Date Radar, the canvas screen, Scratch Map, or Campus Radar (Phase 6). -->
 <!-- SOURCE: PRODUCT_SPEC.md (lines 7001-7327) — migrated 2026-09-01 -->
 
 ## Phase 6 — Living Canvas & Viral Mechanics
@@ -319,6 +319,56 @@ vertical swipes while it is open.
 `DEMO_MODE_ENABLED` — the demo replays the lifecycle on a shifted clock while
 the terminal reads the real one, the same structural limit as the Bump
 (DEMO_MODE.md).
+
+### 6.4b Transit dock — from the map into a car or a route (2026-09-11)
+
+The Mini App canvas carries a transit dock: two glass islands sitting on the
+sheet — a control pill (on foot / by car, **Uber**, the phone's own maps app)
+over a status card ("10 min by car" / "You're 2.4 km away"). The DOM is
+`canvas/transit-dock.ts`; every rule is pure, in `canvas/transit.ts` and
+`src/deep-links.ts`.
+
+**When it is there.** Only while the date has a venue *point*: a legacy row
+whose column holds the route midpoint gets no dock, because a car sent to a
+crossroads a kilometre from the table is worse than no button.
+
+- `DATE_RADAR_ACTIVE`, `DATE_BUMP_PENDING` — up on its own, and a tap on the
+  map does not put it away. It steps aside within 100 m of the venue (the
+  Date Terminal's geofence), where the next thing to do is shake. The bump
+  window is included on purpose: running late is when a car matters most.
+- `DATE_SCHEDULED` — on demand. The venue pin brings it up (the pin is a
+  button, with a 44 px target, in exactly the states where the dock exists);
+  a tap on the map puts it away.
+- Every other state — none. The Mini App canvas has one pin, the date's own
+  venue (the standby showcase is iOS-only), so "tap any venue" has nothing to
+  attach to.
+
+**The numbers are arithmetic on the phone**, for the radar's reasons (§6.3).
+Walking mirrors the radar (1.35 detour / 4.8 km/h), so the dock and the radar
+line on the same screen never disagree about one walk; driving is 1.4 /
+25 km/h plus two fixed minutes. Rounded up, never below a minute; beyond 60 km
+the card gives the distance alone. The first mode is the radar's own cut (up
+to 2 km walks), guessed once per venue; the user's own pick holds. The
+position comes from `watchPosition` only while the dock can show and is
+dropped with the watch — no request carries it.
+
+**The links are https and carry the destination only.**
+`Telegram.WebApp.openLink` throws on any other scheme, so `uber://`, `maps://`
+and `bolt://` are unreachable from a Mini App. Uber: `m.uber.com/looking` with
+`pickup=my_location` and the venue as `drop[0]`, plus `client_id` from the
+build's `VITE_UBER_CLIENT_ID` when set — the attribution an affiliate deal
+hangs on. Maps: Apple Maps (`maps.apple.com/?daddr=`) where Telegram's
+`platform` is `ios`/`macos`, Google Maps (`/maps/dir/?api=1`) elsewhere, in the
+toggle's mode. No origin in any link: the user's position never leaves the
+phone, the guarantee §6.3 already makes. **Bolt is absent**: bolt.eu declares
+no iOS app links and publishes no destination link, so its button could only
+open a web page (decision journal, 2026-09-11).
+
+**Framing.** While the dock is up, the map camera is padded by what the dock
+and the sheet cover, so the venue pin stays in view above them on a small
+phone; the padding returns to none when the dock goes down.
+
+The iOS native canvas is unchanged.
 
 ### 6.5 Scratch Map — the city you have actually been in
 

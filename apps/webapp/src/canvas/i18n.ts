@@ -70,6 +70,33 @@ export interface CanvasStrings {
   minutes: string;
   soon: string;
   offline: string;
+  /**
+   * The transit dock (decision 2026-09-11, `canvas/transit-dock.ts`). `{time}`
+   * arrives formatted by `formatTravelTime`, `{n}` by the terminal's
+   * `formatDistance`, and `{app}` is a brand ("Apple Maps"). Brands appear here
+   * only inside sentences: the buttons print them bare (`deep-links.ts`), since
+   * a row that is the same word in every language would fail the uk ≠ ru rule.
+   */
+  dockLabel: string;
+  /** The on-foot / by-car pair, named as a group. */
+  dockModes: string;
+  dockWalking: string;
+  dockDriving: string;
+  dockEtaWalking: string;
+  dockEtaDriving: string;
+  /** A sentence per unit, so each language puts the number where it goes. */
+  dockAwayMetres: string;
+  dockAwayKilometres: string;
+  /** Before the first fix, and when there will not be one. */
+  dockLocating: string;
+  dockNoLocation: string;
+  /** Accessible names of the two hand-offs. */
+  dockUber: string;
+  dockMaps: string;
+  /** Travel time, spelled out — unlike the countdown's compact "9m". */
+  dockMinutes: string;
+  dockHours: string;
+  dockHoursMinutes: string;
 }
 
 const en: CanvasStrings = {
@@ -106,6 +133,21 @@ const en: CanvasStrings = {
   minutes: "{n}m",
   soon: "any moment",
   offline: "Can't reach me right now. Trying again.",
+  dockLabel: "Getting there",
+  dockModes: "On foot or by car",
+  dockWalking: "On foot",
+  dockDriving: "By car",
+  dockEtaWalking: "{time} on foot",
+  dockEtaDriving: "{time} by car",
+  dockAwayMetres: "You're {n} m away",
+  dockAwayKilometres: "You're {n} km away",
+  dockLocating: "Finding where you are…",
+  dockNoLocation: "Turn on location and I'll work out the trip.",
+  dockUber: "Get an Uber there",
+  dockMaps: "Directions in {app}",
+  dockMinutes: "{n} min",
+  dockHours: "{h} h",
+  dockHoursMinutes: "{h} h {m} min",
 };
 
 const ru: CanvasStrings = {
@@ -142,6 +184,21 @@ const ru: CanvasStrings = {
   minutes: "{n} мин",
   soon: "вот-вот",
   offline: "Не достучаться до меня. Пробую снова.",
+  dockLabel: "Как добраться",
+  dockModes: "Пешком или на машине",
+  dockWalking: "Пешком",
+  dockDriving: "На машине",
+  dockEtaWalking: "{time} пешком",
+  dockEtaDriving: "{time} на машине",
+  dockAwayMetres: "До места {n} м",
+  dockAwayKilometres: "До места {n} км",
+  dockLocating: "Смотрю, где ты…",
+  dockNoLocation: "Включи геолокацию — посчитаю дорогу.",
+  dockUber: "Вызвать Uber туда",
+  dockMaps: "Маршрут в {app}",
+  dockMinutes: "{n} мин",
+  dockHours: "{h} ч",
+  dockHoursMinutes: "{h} ч {m} мин",
 };
 
 const uk: CanvasStrings = {
@@ -178,6 +235,21 @@ const uk: CanvasStrings = {
   minutes: "{n} хв",
   soon: "ось-ось",
   offline: "Не достукатися до мене. Пробую знову.",
+  dockLabel: "Як дістатися",
+  dockModes: "Пішки чи автівкою",
+  dockWalking: "Пішки",
+  dockDriving: "Автівкою",
+  dockEtaWalking: "{time} пішки",
+  dockEtaDriving: "{time} автівкою",
+  dockAwayMetres: "До місця {n} м",
+  dockAwayKilometres: "До місця {n} км",
+  dockLocating: "Дивлюся, де ти…",
+  dockNoLocation: "Увімкни геолокацію — порахую дорогу.",
+  dockUber: "Викликати Uber туди",
+  dockMaps: "Маршрут у {app}",
+  dockMinutes: "{n} хв",
+  dockHours: "{h} год",
+  dockHoursMinutes: "{h} год {m} хв",
 };
 
 const de: CanvasStrings = {
@@ -215,6 +287,21 @@ const de: CanvasStrings = {
   minutes: "{n} Min",
   soon: "gleich",
   offline: "Ich bin gerade nicht erreichbar. Versuche es erneut.",
+  dockLabel: "Anfahrt",
+  dockModes: "Zu Fuß oder mit dem Auto",
+  dockWalking: "Zu Fuß",
+  dockDriving: "Mit dem Auto",
+  dockEtaWalking: "{time} zu Fuß",
+  dockEtaDriving: "{time} mit dem Auto",
+  dockAwayMetres: "Noch {n} m entfernt",
+  dockAwayKilometres: "Noch {n} km entfernt",
+  dockLocating: "Ich suche deinen Standort…",
+  dockNoLocation: "Gib deinen Standort frei, dann rechne ich den Weg aus.",
+  dockUber: "Mit Uber hinfahren",
+  dockMaps: "Route in {app}",
+  dockMinutes: "{n} Min",
+  dockHours: "{h} Std",
+  dockHoursMinutes: "{h} Std {m} Min",
 };
 
 const pl: CanvasStrings = {
@@ -252,6 +339,21 @@ const pl: CanvasStrings = {
   minutes: "{n} min",
   soon: "lada moment",
   offline: "Nie mogę się teraz połączyć. Próbuję ponownie.",
+  dockLabel: "Dojazd",
+  dockModes: "Pieszo czy autem",
+  dockWalking: "Pieszo",
+  dockDriving: "Autem",
+  dockEtaWalking: "{time} pieszo",
+  dockEtaDriving: "{time} autem",
+  dockAwayMetres: "Do miejsca {n} m",
+  dockAwayKilometres: "Do miejsca {n} km",
+  dockLocating: "Sprawdzam, gdzie jesteś…",
+  dockNoLocation: "Włącz lokalizację, a policzę drogę.",
+  dockUber: "Zamów tam Ubera",
+  dockMaps: "Trasa w {app}",
+  dockMinutes: "{n} min",
+  dockHours: "{h} godz",
+  dockHoursMinutes: "{h} godz {m} min",
 };
 
 const TABLES: Record<Lang, CanvasStrings> = { en, ru, uk, de, pl };

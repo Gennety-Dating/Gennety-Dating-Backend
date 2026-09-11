@@ -92,6 +92,19 @@ body {
   height: 22px;
 }
 
+/* The pin is the dock's switch while a date is on (canvas.ts `dressPin`), and
+   a 22 px dot is half a thumb: the target grows to 44 px, the dot does not. */
+.venue-pin[role="button"] {
+  cursor: pointer;
+}
+
+.venue-pin[role="button"]::after {
+  content: "";
+  position: absolute;
+  inset: -11px;
+  border-radius: 50%;
+}
+
 .venue-dot,
 .venue-pulse {
   position: absolute;
@@ -287,6 +300,205 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   The transit dock (decision 2026-09-11) — two glass islands sitting on the
+   sheet, Bump's transit HUD in the house glass: the controls on top, the trip
+   under them. Theme tokens only, so it follows the user's theme the way the
+   sheet does; the map under it is dark in both.
+   --------------------------------------------------------------------------- */
+
+#transit-dock {
+  position: fixed;
+  z-index: 2;
+  left: 12px;
+  right: 12px;
+  /* On the sheet, whatever its height: `--sheet-h` is the sheet's measured box
+     (transit-dock.ts), which already carries the home-indicator inset. The
+     env() is the floor for the one frame before the first measurement. */
+  bottom: calc(var(--sheet-h, env(safe-area-inset-bottom, 0px)) + 10px);
+  display: grid;
+  /* minmax(0, …), not the default auto: a long venue name on the card has
+     to ellipsize inside the dock, not widen the track past the screen. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  transition:
+    opacity 220ms ease,
+    transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s linear 0s;
+}
+
+#transit-dock[data-open="0"] {
+  opacity: 0;
+  transform: translateY(12px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 160ms ease,
+    transform 200ms ease,
+    visibility 0s linear 200ms;
+}
+
+.dock-island {
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    var(--glass-shadow),
+    inset 0 1px 0 var(--glass-highlight);
+}
+
+/* No backdrop-filter (an old WebView): a solid pane, rather than a see-through
+   one that would put the text straight onto the streets. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .dock-island {
+    background: var(--bg-elevated);
+  }
+}
+
+.dock-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px;
+  border-radius: 999px;
+}
+
+.dock-modes {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--fill);
+}
+
+.dock-mode {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+/* Chosen reads as a raised chip, not as a colour: colour on this canvas is
+   spent on the two people and the one action (theme.css, "Colour = meaning"). */
+.dock-mode[aria-pressed="true"] {
+  background: var(--self-fill-strong);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+}
+
+.dock-mode-icon {
+  width: 22px;
+  height: 22px;
+}
+
+/* The set's 1.6 stroke is drawn for 13–18 px glyphs beside type; at 22 px on
+   glass the walking figure thinned to a hairline. */
+.dock-mode-icon path {
+  stroke-width: 1.9;
+}
+
+.dock-partners {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 6px;
+}
+
+.dock-partner {
+  /* Sized by the name, then sharing what is left: equal halves cut
+     "Google Maps" at 360 px while "Uber" sat half empty. */
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease;
+}
+
+.dock-partner:active {
+  transform: scale(0.97);
+}
+
+/* Uber's own black, in both themes — the brand's colour rather than ours,
+   which is also what keeps it from out-shouting the sheet's burgundy action.
+   The hairline is what lifts it off dark glass. */
+.dock-uber {
+  border: 1px solid rgb(255 255 255 / 16%);
+  background: #000;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.dock-maps {
+  border: 1px solid var(--glass-border);
+  background: var(--fill-strong);
+  color: var(--text);
+}
+
+.dock-status {
+  padding: 12px 16px 13px;
+  border-radius: 18px;
+}
+
+.dock-eta,
+.dock-away {
+  margin: 0;
+}
+
+/* The headline stays one line and ellipsizes: when it is the venue's name, the
+   sheet under the dock prints it in full. The line beneath it is sometimes a
+   whole instruction ("turn on location…"), and a cut instruction is useless,
+   so that one wraps. */
+.dock-eta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dock-eta {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.dock-away {
+  margin-top: 2px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+/* A phone on its side has no room for the card over a sheet. The controls are
+   what the dock is for, so they are what stays. */
+@media (max-height: 520px) {
+  .dock-status {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Boot cover. Opaque and theme-correct, so the first frame is never a flash of
    the wrong background — the same reason every other Mini App here has one.
    --------------------------------------------------------------------------- */
@@ -313,5 +525,11 @@ body {
   }
   #boot {
     transition: none;
+  }
+  /* The dock still fades — a fade is not motion — but does not travel. */
+  #transit-dock,
+  #transit-dock[data-open="0"],
+  .dock-partner:active {
+    transform: none;
   }
 }
