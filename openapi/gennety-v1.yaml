@@ -4885,6 +4885,20 @@ components:
                 hide "Connect Spotify" and offer search only. Expected to stay
                 false: a development-mode Spotify app admits five allow-listed
                 accounts.
+            venueChange:
+              type: boolean
+              description: >-
+                The venue-change board. False → show no "change the place"
+                entry at all: every `/v1/venue-change/*` route answers
+                `feature-disabled`, and a button whose only outcome is a
+                refusal is not a button.
+        venueChangeProduct:
+          type: [string, "null"]
+          description: >-
+            The StoreKit consumable that buys one venue change, for the same
+            reason the ticket ladder above is served: the app must never offer
+            a product id this server will refuse to credit. Matches the full
+            App Store id or its last dot-segment. Null while the board is off.
         ticketProducts:
           type: array
           description: |
