@@ -125,6 +125,18 @@ describe("payload builders", () => {
     expect(payload.aps["mutable-content"]).toBe(1);
   });
 
+  // An announcement cover rides as `poster`, not `image`, so the extension can
+  // attach it without the blur — but it still has to wake the extension.
+  it("turns on mutable-content for an announcement poster", () => {
+    const payload = buildAlertPayload({
+      title: "T",
+      body: "B",
+      data: { type: "announcement", inboxItemId: "i1", poster: "https://x/poster.jpg" },
+    }) as { aps: Record<string, unknown> };
+    expect(payload.aps["mutable-content"]).toBe(1);
+    expect(payload).not.toHaveProperty("image");
+  });
+
   it("leaves mutable-content off when there is no image to rewrite", () => {
     const payload = buildAlertPayload({
       title: "T",

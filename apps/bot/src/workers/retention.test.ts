@@ -8,6 +8,7 @@ const chatEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
 const clientEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
 const eventFeedback = { findMany: vi.fn(), deleteMany: vi.fn() };
 const userPlaceVisit = { findMany: vi.fn(), deleteMany: vi.fn() };
+const inboxItem = { findMany: vi.fn(), deleteMany: vi.fn() };
 const $executeRaw = vi.fn();
 
 vi.mock("@gennety/db", () => ({
@@ -20,6 +21,7 @@ vi.mock("@gennety/db", () => ({
     clientEvent,
     eventFeedback,
     userPlaceVisit,
+    inboxItem,
     $executeRaw,
   },
 }));
@@ -46,6 +48,7 @@ const ALL_MODELS = [
   clientEvent,
   eventFeedback,
   userPlaceVisit,
+  inboxItem,
 ];
 
 beforeEach(() => {
@@ -111,6 +114,7 @@ describe("retentionTick", () => {
       clientEvents: 0,
       eventFeedback: 0,
       placeVisits: 0,
+      inboxItems: 0,
       orphanBotSessions: 0,
     });
     for (const model of ALL_MODELS) {
@@ -267,8 +271,23 @@ describe("retentionTick", () => {
       clientEvents: 0,
       eventFeedback: 0,
       placeVisits: 0,
+      inboxItems: 0,
       orphanBotSessions: 0,
     });
+  });
+
+  it("sweeps inbox rows past ninety days, oldest first", async () => {
+    inboxItem.findMany.mockResolvedValue([{ id: "i1" }]);
+    inboxItem.deleteMany.mockResolvedValue({ count: 1 });
+
+    const result = await retentionTick(NOW);
+
+    expect(inboxItem.findMany.mock.calls[0][0]).toMatchObject({
+      where: { createdAt: { lt: new Date(NOW.getTime() - 90 * 24 * 60 * 60 * 1000) } },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(inboxItem.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["i1"] } } });
+    expect(result.inboxItems).toBe(1);
   });
 
   describe("orphaned chat sessions", () => {

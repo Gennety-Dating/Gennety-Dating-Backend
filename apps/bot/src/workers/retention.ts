@@ -1,5 +1,5 @@
 import { prisma } from "@gennety/db";
-import { FREQUENT_PLACE_WINDOW_DAYS } from "@gennety/shared";
+import { FREQUENT_PLACE_WINDOW_DAYS, INBOX_RETENTION_DAYS } from "@gennety/shared";
 
 /**
  * Data-retention sweep (audit DATA-1).
@@ -161,6 +161,7 @@ export interface RetentionSweepResult {
   clientEvents: number;
   eventFeedback: number;
   placeVisits: number;
+  inboxItems: number;
   orphanBotSessions: number;
 }
 
@@ -325,6 +326,23 @@ export async function retentionTick(
     (ids) => prisma.userPlaceVisit.deleteMany({ where: { id: { in: ids } } }),
   );
 
+  // The bell's inbox (decision journal 2026-09-13). Ninety days is longer than
+  // anything on it stays relevant — a proposal expires in a day, a party is
+  // over in a week — and the chip in a chat transcript keeps its own title
+  // snapshot, so sweeping the row never blanks a conversation.
+  const inboxCutoff = new Date(now.getTime() - INBOX_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const inboxItems = await deleteOldest(
+    "inbox_items",
+    (take) =>
+      prisma.inboxItem.findMany({
+        where: { createdAt: { lt: inboxCutoff } },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+        take,
+      }),
+    (ids) => prisma.inboxItem.deleteMany({ where: { id: { in: ids } } }),
+  );
+
   // Raw, because there is no relation to traverse: the join is
   // `users.telegram_id::text = bot_sessions.key`, which is exactly the coupling
   // the schema does not express. Anti-join rather than "load all keys and diff
@@ -366,13 +384,14 @@ export async function retentionTick(
     clientEvents +
     eventFeedback +
     placeVisits +
+    inboxItems +
     orphanBotSessions;
   if (total > 0) {
     console.log(
       `[retention] emailOtps=${emailOtps} phoneOtps=${phoneOtps} ` +
         `sessions=${sessions} proxyMessages=${proxyMessages} chatEvents=${chatEvents} ` +
         `clientEvents=${clientEvents} eventFeedback=${eventFeedback} ` +
-        `placeVisits=${placeVisits} orphanBotSessions=${orphanBotSessions}`,
+        `placeVisits=${placeVisits} inboxItems=${inboxItems} orphanBotSessions=${orphanBotSessions}`,
     );
   }
   return {
@@ -384,6 +403,7 @@ export async function retentionTick(
     clientEvents,
     eventFeedback,
     placeVisits,
+    inboxItems,
     orphanBotSessions,
   };
 }

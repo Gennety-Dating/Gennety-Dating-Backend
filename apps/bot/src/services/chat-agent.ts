@@ -17,6 +17,11 @@ import {
   type MenuAgentAction,
 } from "./menu-agent.js";
 import { buildSystemPrompt } from "./prompt-builder.js";
+import {
+  activeChatContext,
+  buildChatContextBlock,
+  type ChatContextSnapshot,
+} from "./chat-context.js";
 
 /**
  * Gennety chat agent — the multimodal AI chat backing `/v1/chat/message`,
@@ -164,6 +169,12 @@ export interface ChatTurnInput {
   userId: string;
   text: string;
   imageUrl: string | null;
+  /**
+   * The inbox item the person opened the chat from, already checked to be
+   * theirs (`resolveChatContextSnapshot`). Stored on the user row; the prompt
+   * block is resolved from it in `buildChatMessages`.
+   */
+  context?: ChatContextSnapshot | null;
 }
 
 export interface ChatTurnResult {
@@ -216,6 +227,7 @@ async function runTurnInner(
   deps: ChatDeps,
 ): Promise<ChatTurnResult> {
   const { userId, text, imageUrl } = input;
+  const context = input.context ?? null;
   const fetchFn = deps.fetchFn ?? openaiFetch;
 
   // `telegramId` — ключ общих исполнителей, и это не привязка к Telegram:
@@ -230,7 +242,13 @@ async function runTurnInner(
   const language = (account.language ?? "en") as Language;
 
   await prisma.message.create({
-    data: { userId, role: "user", content: text, imageUrl },
+    data: {
+      userId,
+      role: "user",
+      content: text,
+      imageUrl,
+      ...(context ? { context: { kind: context.kind, id: context.id, title: context.title } } : {}),
+    },
   });
 
   const messages = await buildChatMessages(userId, telegramId);
@@ -355,9 +373,16 @@ async function buildChatMessages(
   // пользователя, лента и закрепление языка приходят оттуда же, откуда их
   // берёт Telegram, — второй персоны у продукта быть не должно.
   const base = await buildSystemPrompt(telegramId);
-  const out: OpenAIChatMessage[] = [
-    { role: "system", content: `${base}\n\n${CHAT_ADDENDUM}` },
-  ];
+  // The context block rides the system prompt, not a message of its own: it is
+  // data about the conversation, and a `user`-role copy would read as the person
+  // having said it. Resolved from live rows each turn, so an announcement edited
+  // after the chip was sent grounds on what it says now.
+  const context = activeChatContext(rows);
+  const contextBlock = context ? await buildChatContextBlock(userId, context) : null;
+  const system = contextBlock
+    ? `${base}\n\n${CHAT_ADDENDUM}\n\n${contextBlock}`
+    : `${base}\n\n${CHAT_ADDENDUM}`;
+  const out: OpenAIChatMessage[] = [{ role: "system", content: system }];
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;

@@ -11,6 +11,61 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — инбокс, объявления, пульс и контекст чата: `/v1/inbox*`, `/v1/pulse`, `context` в чате, `/admin/announcements*` (2026-09-13).**
+**Есть изменение схемы Prisma** — миграция `20260913090000_inbox_announcements`, аддитивная:
+`messages.context` (JSONB, nullable), таблицы `announcements` и `inbox_items`. Проверена на
+живом Postgres: база из схемы ствола + эта миграция = схема ветки (`migrate diff` пуст), и
+настоящий код рассылки, инбокса, пульса и блока контекста прогнан против таблиц (522
+получателя — больше одной пачки `createMany`).
+
+**Порядок выката — миграция СТРОГО ДО кода.** История чата теперь читает `messages.context`,
+а `sendPushToUser` пишет в `inbox_items` на каждом пуше из аллоулиста — без миграции это
+P2022/P2021 в главном экране iOS и в каждом матч-пуше.
+
+1. **Бакет Supabase `announcements`, ПРИВАТНЫЙ** — создать до первой загрузки медиа
+   (Storage → New bucket, public = off). Без него загрузка медиа отвечает 502, остальное
+   работает.
+2. Миграция: `pnpm --filter @gennety/db db:deploy`.
+3. Бот: обычный рестарт. Webapp не меняется.
+
+**Переменные окружения:** одна новая и необязательная — `SUPABASE_ANNOUNCEMENT_BUCKET`
+(по умолчанию `announcements`). **В `.env.demo` назвать явно**, как все бакеты: иначе демо
+унаследует продовый.
+
+**Проверка после выката:**
+
+```
+# таблицы на месте:
+psql "$DATABASE_URL" -c "select count(*) from inbox_items"
+psql "$DATABASE_URL" -c "select count(*) from announcements"
+# воркер поставлен (одна строка при старте):
+pm2 logs gennety-bot --lines 200 --nostream | grep "Announcement fan-out scheduled"
+# инбокс и пульс отвечают (JWT любого тестового аккаунта):
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/inbox | head -c 200
+curl -s -H "Authorization: Bearer $JWT" https://dating-api.gennety.com/v1/pulse | head -c 200
+# админка: черновик → превью на свой телефон (userId своего аккаунта в приложении):
+curl -s -X POST -H "Authorization: Bearer $ADMIN_API_KEY" -H "Content-Type: application/json" \
+  -d '{"title":"Проверка","teaser":"Тест инбокса","body":"Проверка выката.","audience":{"cityKeys":["kyiv"]},"sendPush":true}' \
+  https://api-admin.gennety.com/admin/announcements
+```
+
+Ожидается: `{"items":[],"unreadCount":0,"hasMore":false}` на пустом аккаунте, `{"rows":[…],"serverNow":…}`,
+`201` с `status: "draft"`. Превью — `POST …/:id/preview {"userId":"<свой>"}` → строка в
+инбоксе и пуш на телефон.
+
+**Откат:** `git revert` коммита «Инбокс, объявления, пульс и контекст чата» и рестарт бота.
+Миграцию откатывать не нужно: она аддитивная, старый код новых таблиц и колонки не читает.
+
+**Влияние на iOS:** в спеке четыре новые операции (`getInbox`, `markInboxRead`,
+`getInboxItem`, `getPulse`), необязательное `context` в `sendChatMessage` и `ChatMessage`,
+поля `contextKind`/`contextId` у `sendChatVoice`. Всё аддитивно: текущая сборка iOS
+продолжает работать. Колокольчик, капсула, лист, чип и пульс едут своей сборкой iOS и ждут
+этого выката; до него новые ручки отвечают 404.
+**Demo-mode:** воркер рассылки в демо не ставится; инбокс, пульс и контекст работают как в
+проде (`docs/product/domains/inbox-and-announcements.md` → Demo mode).
+
+---
+
 **PENDING — часто посещаемые места: `/v1/frequent-places/*` и блок партнёра в `/v1/matches/current` (2026-09-11).**
 **Есть изменение схемы Prisma** — миграция `20260911200000_frequent_places`, аддитивная:
 `users.frequent_places_opt_in` (`NOT NULL DEFAULT true`), таблицы `user_place_visits` и

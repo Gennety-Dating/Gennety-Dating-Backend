@@ -266,3 +266,26 @@ export {
   isHdyhauSurface,
 } from "./hdyhau.js";
 export type { HdyhauAnswer, HdyhauSurface } from "./hdyhau.js";
+
+export {
+  INBOX_PUSH_TYPES,
+  ANNOUNCEMENT_PUSH_TYPE,
+  INBOX_PAGE_DEFAULT,
+  INBOX_PAGE_MAX,
+  INBOX_READ_BATCH_MAX,
+  INBOX_RETENTION_DAYS,
+  ANNOUNCEMENT_LIMITS,
+  ANNOUNCEMENT_MEDIA,
+  ANNOUNCEMENT_STATUSES,
+  ANNOUNCEMENT_PUSH_INTERVAL_MS,
+  ANNOUNCEMENT_INBOX_BATCH,
+  CHAT_CONTEXT_WINDOW_HOURS,
+  CHAT_CONTEXT_KINDS,
+  PULSE_ROW_KINDS,
+  PULSE_ROWS_MAX,
+  PULSE_DROP_WINDOW_MINUTES,
+  PULSE_DATE_PAST_DAYS,
+  PULSE_CHAT_TOPICS_MAX,
+  PULSE_ANNOUNCEMENT_DAYS,
+} from "./inbox.js";
+export type { AnnouncementStatus, ChatContextKind, PulseRowKind, PulseRowState } from "./inbox.js";

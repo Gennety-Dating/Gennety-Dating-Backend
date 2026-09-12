@@ -389,6 +389,64 @@ export async function createVoicePromptSignedUrl(
   return createSignedUrl(env.SUPABASE_VOICE_BUCKET, path, expiresInSeconds);
 }
 
+export type AnnouncementAssetRole = "media" | "poster";
+
+const ANNOUNCEMENT_MIME_EXT: Readonly<Record<string, string>> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "video/mp4": "mp4",
+};
+
+/**
+ * Upload an announcement's image, video or poster (admin only).
+ *
+ * The key is `{announcementId}/{role}-{timestamp}.{ext}`: no user id, because
+ * nobody owns it but the product, and a re-upload gets a fresh name so a phone
+ * holding yesterday's signed URL never plays a half-replaced file. `mime` must
+ * already be sniffed by the caller — this function only refuses what it cannot
+ * name.
+ */
+export async function uploadAnnouncementAsset(
+  announcementId: string,
+  role: AnnouncementAssetRole,
+  buffer: Buffer,
+  mime: string,
+): Promise<UploadResult> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Supabase Storage not configured");
+  }
+  const ext = ANNOUNCEMENT_MIME_EXT[mime];
+  if (!ext) throw new Error(`Unsupported announcement media type: ${mime}`);
+  const path = `${announcementId}/${role}-${Date.now()}.${ext}`;
+  if (!isSafeStorageObjectPath(path)) throw new Error("Unsafe announcement media path");
+
+  const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_ANNOUNCEMENT_BUCKET}/${path}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": mime,
+      "x-upsert": "true",
+    },
+    body: new Uint8Array(buffer),
+    signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Supabase upload failed: ${res.status} ${body}`);
+  }
+  return { path };
+}
+
+/** Signed URL for an announcement asset, handed to the app and to APNs. */
+export async function createAnnouncementAssetSignedUrl(
+  path: string,
+  expiresInSeconds: number,
+): Promise<string | null> {
+  return createSignedUrl(env.SUPABASE_ANNOUNCEMENT_BUCKET, path, expiresInSeconds);
+}
+
 /** Download a stored voice prompt (validation, or minting a Telegram file_id). */
 export async function downloadVoicePrompt(path: string): Promise<Buffer | null> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;

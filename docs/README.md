@@ -42,6 +42,7 @@ docs/
 │       └── launch-events.md · voice-prompts.md · type-radar.md · rematch.md · prime-time.md · profile-music.md
 │           promo-codes.md · referral.md · venue-change.md · ad-spend-tracking.md
 │           frequent-places.md (catalog places a person keeps returning to — detection, thresholds, what the match sees)
+│           inbox-and-announcements.md (the iOS bell inbox, admin announcements + fan-out, Live Pulse, chat context)
 ├── operations/
 │   ├── deployment-runbook.md  ★ CANONICAL deploy/rollback/DB-ops/logs/Caddy procedure.
 │   ├── environments.md        Droplet, paths, PM2, Caddy, env + credential locations, endpoints, dev↔prod isolation.

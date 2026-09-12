@@ -36,6 +36,7 @@ tags:
   - name: me
   - name: onboarding
   - name: chat
+  - name: inbox
   - name: matches
   - name: countdown
   - name: music
@@ -1867,6 +1868,13 @@ paths:
                 imageUrl:
                   type: string
                   description: Path returned by /v1/chat/upload; must be owned by the caller
+                context:
+                  $ref: "#/components/schemas/ChatContextRef"
+                  description: >-
+                    The inbox item the person opened the chat from ("Обсудить с
+                    агентом"). A reference only — the server resolves the words
+                    and grounds this turn and the follow-ups of the next six
+                    hours on them. Omit for an ordinary message.
       responses:
         "200":
           description: Assistant reply
@@ -1905,6 +1913,13 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: >-
+            `context` names an inbox item that does not exist or is not the
+            caller's (the same answer for both)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "413":
           description: Text too long
           content:
@@ -1939,6 +1954,15 @@ paths:
                 file:
                   type: string
                   format: binary
+                contextKind:
+                  type: string
+                  description: >-
+                    With `contextId`, the chat context of this turn — multipart
+                    has no nested object, so `ChatContextRef` rides as two
+                    fields. Only `inbox_item` today.
+                contextId:
+                  type: string
+                  format: uuid
       responses:
         "200":
           description: Assistant reply plus what was heard
@@ -2057,6 +2081,132 @@ paths:
                   hasMore:
                     type: boolean
                     description: Older topics exist beyond the listed ones
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/inbox:
+    get:
+      tags: [inbox]
+      operationId: getInbox
+      summary: The bell's inbox, newest first, with the unread count
+      description: |
+        One row per thing that arrived for the person in the app: admin
+        announcements, and the transactional pushes that carry news (match
+        proposed, date scheduled, feedback due, …). Written whether or not the
+        device has notifications on. `unreadCount` is what the bell's dot
+        means and nothing else.
+
+        `type` is a string on purpose — a new kind of row must not make an
+        older build fail the whole page. Render unknown types generically.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+        - name: before
+          in: query
+          description: Row id to page backwards from, exclusive.
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: A page of the inbox
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, unreadCount, hasMore]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/InboxItem" }
+                  unreadCount: { type: integer, minimum: 0 }
+                  hasMore: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Unknown `before` cursor, or one belonging to another user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/inbox/read:
+    post:
+      tags: [inbox]
+      operationId: markInboxRead
+      summary: Mark inbox rows read
+      description: |
+        Idempotent. Ids that are not the caller's simply match nothing — no
+        per-id error, so the response cannot be used to probe for rows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The unread count after the write
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unreadCount]
+                properties:
+                  unreadCount: { type: integer, minimum: 0 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/inbox/{id}:
+    get:
+      tags: [inbox]
+      operationId: getInboxItem
+      summary: One inbox row with the announcement it carries
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The row, plus `announcement` when it is one
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InboxItemDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/pulse:
+    get:
+      tags: [inbox]
+      operationId: getPulse
+      summary: Live Pulse rows for the Today screen
+      description: |
+        Built from server state only. `processing` means a real job is running
+        for this person with a deadline it settles by (`deadlineAt`) — the only
+        state that may animate. `active` is something the person holds; `past`
+        is what already happened. The client decides which rows its current
+        scene shows and draws at most three.
+
+        `kind` and `target.kind` are strings on purpose: an older build skips
+        a row it does not know instead of failing the response.
+      responses:
+        "200":
+          description: Candidate rows, running work first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rows, serverNow]
+                properties:
+                  rows:
+                    type: array
+                    maxItems: 6
+                    items: { $ref: "#/components/schemas/PulseRow" }
+                  serverNow: { type: string, format: date-time }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/tickets/appstore/transaction:
@@ -5597,6 +5747,134 @@ components:
         content: { type: [string, "null"] }
         imageUrl: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
+        context:
+          $ref: "#/components/schemas/ChatContextSummary"
+          description: >-
+            The chip this user message was sent with. Absent (never null) on a
+            message without one.
+
+    ChatContextRef:
+      type: object
+      required: [kind, id]
+      properties:
+        kind:
+          type: string
+          description: "`inbox_item` — the only kind today; a string so a new one breaks no build"
+        id: { type: string, format: uuid }
+
+    ChatContextSummary:
+      type: object
+      required: [kind, id, title]
+      properties:
+        kind: { type: string }
+        id: { type: string, format: uuid }
+        title:
+          type: string
+          description: Frozen when the message was sent; survives the inbox row ageing out
+
+    InboxItem:
+      type: object
+      required: [id, type, title, body, createdAt, readAt, matchId, announcementId]
+      properties:
+        id: { type: string, format: uuid }
+        type:
+          type: string
+          description: "`announcement` or a push type such as `match.proposed`"
+        title: { type: string }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+        readAt: { type: [string, "null"], format: date-time }
+        matchId: { type: [string, "null"], format: uuid }
+        announcementId: { type: [string, "null"], format: uuid }
+
+    InboxItemDetail:
+      type: object
+      required: [item]
+      properties:
+        item: { $ref: "#/components/schemas/InboxItem" }
+        announcement:
+          $ref: "#/components/schemas/InboxAnnouncement"
+          description: Present only when the row is an announcement
+
+    InboxAnnouncement:
+      type: object
+      required: [body, suggestedQuestions]
+      properties:
+        body: { type: string }
+        suggestedQuestions:
+          type: array
+          maxItems: 3
+          items: { type: string }
+          description: Tappable questions under the chat chip
+        media: { $ref: "#/components/schemas/InboxMedia" }
+        event: { $ref: "#/components/schemas/InboxEvent" }
+
+    InboxMedia:
+      type: object
+      required: [kind, url]
+      properties:
+        kind:
+          type: string
+          description: "`image` or `video` (≤ 10 s, silent, played once)"
+        url:
+          type: string
+          description: Signed, valid for 24 hours
+        posterUrl:
+          type: string
+          description: Video only — shown before playback and under Reduce Motion
+
+    InboxEvent:
+      type: object
+      required: [id, title, status, venueName, venueAddress, startsAt, endsAt, timeZone]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        status: { type: string }
+        venueName: { type: string }
+        venueAddress: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        timeZone:
+          type: string
+          description: The event's own zone — draw times on its clock, not the device's
+
+    PulseRow:
+      type: object
+      required: [id, kind, state, title, subtitle, status, at, deadlineAt, target]
+      properties:
+        id:
+          type: string
+          description: Stable across polls
+        kind:
+          type: string
+          description: drop_batch | venue_search | event_application | announcement | date_past | chat_topic
+        state:
+          type: string
+          description: processing | active | past
+        title:
+          type: [string, "null"]
+          description: Server-owned content (an announcement or event title); null when the client writes the copy
+        subtitle: { type: [string, "null"] }
+        status:
+          type: [string, "null"]
+          description: "`event_application`: approved | pending | waitlisted"
+        at: { type: [string, "null"], format: date-time }
+        deadlineAt:
+          type: [string, "null"]
+          format: date-time
+          description: "`processing` only — when the job settles at the latest"
+        target: { $ref: "#/components/schemas/PulseTarget" }
+
+    PulseTarget:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          description: today | map | inbox_item | chat | chat_topic
+        id:
+          type: string
+          description: Inbox item id for `inbox_item`, topic anchor id for `chat_topic`
 
     ChatHistoryMessage:
       allOf:

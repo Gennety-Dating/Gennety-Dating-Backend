@@ -376,6 +376,48 @@ Mobile chat agent history — multimodal, one row per turn, with optional
 short-lived signed URLs). Distinct from `users.messageHistory` which the
 legacy onboarding/menu agents still use.
 
+`context` (JSONB, nullable, 2026-09-13) is set only on a `user` row sent from
+"Обсудить с агентом": a `{kind: "inbox_item", id, title}` SNAPSHOT for the
+transcript chip. The agent's grounding is resolved from the live inbox and
+announcement rows at turn time (`services/chat-context.ts`), so the snapshot
+outliving the inbox row only means the chip stays and the agent has less to add.
+
+### `announcements`
+
+Rich in-app announcements written in the admin dashboard
+(`docs/product/domains/inbox-and-announcements.md`). Content only — who got it
+lives on `inbox_items`.
+
+| Group | Fields |
+|---|---|
+| Lifecycle | `status` (string: `draft` / `scheduled` / `sending` / `sent` / `archived`; every move a CAS), `scheduledAt`, `sentAt`, `recipientCount` |
+| Words | `title` (≤80, push title), `teaser` (≤140, push body), `body` (≤2000), `agentBrief` (≤1500, agent-only facts), `suggestedQuestions` (`text[]`, ≤3) |
+| Links | `eventId` → `events` (`ON DELETE SET NULL`; venue and time are read from the event, never copied) |
+| Media | `mediaKind` (`image` / `video`), `mediaPath`, `posterPath` — opaque paths in `SUPABASE_ANNOUNCEMENT_BUCKET` |
+| Delivery | `audience` (JSONB `{cityKeys?, languages?}`), `sendPush` |
+
+Index `(status, scheduled_at)` for the fan-out's due scan.
+
+### `inbox_items`
+
+One row per person per thing that arrived for them in the app — the iOS bell.
+`read_at IS NULL` is the unread dot and nothing else.
+
+| Field | Notes |
+|---|---|
+| `userId` | → `users`, cascade |
+| `type` | `announcement` or a push type from `INBOX_PUSH_TYPES`; a string on the wire too |
+| `announcementId` | → `announcements`, cascade; null on transactional rows |
+| `matchId` | The match a transactional row is about; no FK |
+| `title`, `body` | Frozen at write — what the push said |
+| `readAt` | The dot |
+| `pushedAt` | Set when the push was attempted or none applies; the fan-out resumes from null |
+
+Unique `(user_id, announcement_id)` — the fan-out's restart guard (NULLs stay
+distinct, so transactional rows are unaffected). Indexes
+`(user_id, created_at)` for the list and `(announcement_id, pushed_at)` for the
+push resume. Swept after 90 days by `workers/retention.ts`.
+
 ### `proxy_messages`
 
 Append-only audit log of every text message relayed through a Variant C

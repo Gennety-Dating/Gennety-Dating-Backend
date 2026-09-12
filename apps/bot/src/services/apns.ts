@@ -166,7 +166,12 @@ export const TIME_SENSITIVE_PUSH_TYPES: ReadonlySet<string> = new Set([
  */
 export function buildAlertPayload(input: AlertPushInput): Record<string, unknown> {
   const category = typeof input.data?.type === "string" ? input.data.type : null;
-  const mutable = typeof input.data?.image === "string" && input.data.image.length > 0;
+  // `poster` is an announcement's cover frame (decision 2026-09-13). It wakes
+  // the same extension, which attaches it UNBLURRED: blur is the privacy
+  // language for a person's face, and a party poster has no face to hide.
+  const mutable =
+    (typeof input.data?.image === "string" && input.data.image.length > 0) ||
+    (typeof input.data?.poster === "string" && input.data.poster.length > 0);
   const timeSensitive = category !== null && TIME_SENSITIVE_PUSH_TYPES.has(category);
   return {
     aps: {

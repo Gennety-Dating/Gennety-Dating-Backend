@@ -8,6 +8,8 @@ import {
   type LiveActivityStartInput,
   type LiveActivityUpdateInput,
 } from "./apns.js";
+import { isInboxPushType, recordTransactionalInboxItem } from "./inbox.js";
+import { pushReachable } from "./telegram-reach.js";
 
 /**
  * Push dispatcher for native mobile users (`User.platform === "mobile"`).
@@ -38,6 +40,15 @@ export interface PushPayload {
   data?: Record<string, unknown>;
   /** Replaces an earlier notification with the same id — see `ApnsSendOptions`. */
   collapseId?: string;
+}
+
+export interface SendPushOptions {
+  /**
+   * Write the inbox row for an allowlisted type (default). The announcement
+   * fan-out passes `false`: it wrote its rows in bulk before pushing, and a
+   * second row per person would double every unread count.
+   */
+  recordInbox?: boolean;
 }
 
 const DEAD_TOKEN_REASONS = new Set([
@@ -77,18 +88,43 @@ function tokenIsDead(result: { ok: boolean; status?: number; reason?: string | n
 export async function sendPushToUser(
   userId: string,
   payload: PushPayload,
+  options: SendPushOptions = {},
 ): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { pushToken: true },
+    select: { pushToken: true, platform: true },
   });
-  if (!user?.pushToken) return false;
+  if (!user) return false;
+
+  // The inbox row is written BEFORE the token check (decision 2026-09-13): a
+  // person who declined notifications still opens the app and still deserves
+  // to find what was sent to them behind the bell. Only app users get one —
+  // a Telegram-only account has no bell to put it behind.
+  let outgoing = payload;
+  const type = payload.data?.type;
+  if (options.recordInbox !== false && pushReachable(user) && isInboxPushType(type)) {
+    try {
+      const inboxItemId = await recordTransactionalInboxItem({
+        userId,
+        type,
+        title: payload.title,
+        body: payload.body,
+        data: payload.data,
+      });
+      outgoing = { ...payload, data: { ...payload.data, inboxItemId } };
+    } catch (err) {
+      // The inbox is a record of the push, never a gate on it.
+      console.warn(`[push] inbox row failed for ${userId}:`, err);
+    }
+  }
+
+  if (!user.pushToken) return false;
   if (!apnsConfigured()) {
     console.warn("[push] APNs not configured — dropping push for", userId);
     return false;
   }
 
-  const result = await sendApnsNotification(user.pushToken, buildAlertPayload(payload), {
+  const result = await sendApnsNotification(user.pushToken, buildAlertPayload(outgoing), {
     pushType: "alert",
     ...(payload.collapseId ? { collapseId: payload.collapseId } : {}),
   });

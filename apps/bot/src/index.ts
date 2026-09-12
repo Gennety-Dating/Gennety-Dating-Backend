@@ -62,6 +62,7 @@ import { sweepPrimeTimeRefunds } from "./services/prime-time-purchase.js";
 import { primeTimeFeatureLive } from "./services/prime-time.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { retentionTick } from "./workers/retention.js";
+import { announcementFanoutTick } from "./services/announcements.js";
 import { verificationStuckSweep } from "./services/verification-stuck.js";
 import { activityRollupTick } from "./workers/activity-rollup.js";
 import { viralityRollupTick } from "./workers/virality-rollup.js";
@@ -937,6 +938,29 @@ bot.start({
     console.log(
       `[cron] Data retention scheduled: "${RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
     );
+
+    // Admin announcements → inboxes + paced pushes (decision journal
+    // 2026-09-13). Every minute: a scheduled announcement is picked up within
+    // one, and a run that quiet hours stopped resumes on the first tick after
+    // nine. Not in demo: the demo database has no founder composing anything,
+    // and a visitor must never be sent a real party announcement.
+    if (DEMO_MODE_ENABLED) {
+      console.log("[cron] Announcement fan-out NOT scheduled (demo mode)");
+    } else {
+      cron.schedule(
+        "* * * * *",
+        guardedTick("announcement-fanout", async () => {
+          const r = await announcementFanoutTick();
+          if (r.claimed > 0 || r.inboxRows > 0 || r.pushed > 0 || r.completed > 0) {
+            console.log(
+              `[announcement-fanout] claimed=${r.claimed} inboxRows=${r.inboxRows} pushed=${r.pushed} completed=${r.completed} heldForQuietHours=${r.heldForQuietHours}`,
+            );
+          }
+        }),
+        { timezone: CRON_TIMEZONE },
+      );
+      console.log("[cron] Announcement fan-out scheduled: every minute");
+    }
 
     // People parked in `pending_review` by an inconclusive face match. They are
     // outside matching entirely, they got there through our infrastructure

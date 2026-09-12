@@ -8,6 +8,12 @@ import { chatMessageLimiter, chatUploadLimiter, voiceLimiter } from "../rate-lim
 import { runChatTurn } from "../../services/chat-agent.js";
 import { listChatTopics } from "../../services/chat-topics.js";
 import {
+  parseChatContextRef,
+  readChatContextSnapshot,
+  resolveChatContextSnapshot,
+  type ChatContextSnapshot,
+} from "../../services/chat-context.js";
+import {
   uploadChatImage,
   createChatImageSignedUrl,
 } from "../../services/storage.js";
@@ -19,7 +25,7 @@ import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
  *
  * Four endpoints:
  *   POST /v1/chat/upload   multipart image → opaque storage path
- *   POST /v1/chat/message  { text?, imageUrl? } → assistant reply
+ *   POST /v1/chat/message  { text?, imageUrl?, context? } → assistant reply
  *   GET  /v1/chat/history  newest page, `before` pages backwards
  *   GET  /v1/chat/topics   read-only index of past conversations
  *
@@ -126,11 +132,14 @@ chatRouter.post(
       res.status(403).json({ error: "Image not owned by caller" });
       return;
     }
+    const context = await contextFromRequest(req.body?.context, req.userId!, res);
+    if (context === false) return;
 
     const turn = await runChatTurn({
       userId: req.userId!,
       text,
       imageUrl: imageUrl || null,
+      context,
     });
 
     res.json({
@@ -177,6 +186,17 @@ chatRouter.post(
       res.status(400).json({ error: "Missing file" });
       return;
     }
+    // Multipart carries no nested object, so the chip rides as two plain form
+    // fields. Checked BEFORE transcription: a refused context must not cost a
+    // Whisper call.
+    const rawKind: unknown = req.body?.contextKind;
+    const rawId: unknown = req.body?.contextId;
+    const context = await contextFromRequest(
+      rawKind === undefined && rawId === undefined ? undefined : { kind: rawKind, id: rawId },
+      req.userId!,
+      res,
+    );
+    if (context === false) return;
 
     const user = await prisma.user.findUnique({
       where: { id: req.userId! },
@@ -196,6 +216,7 @@ chatRouter.post(
       userId: req.userId!,
       text: transcript,
       imageUrl: null,
+      context,
     });
 
     res.json({
@@ -270,6 +291,9 @@ chatRouter.get("/history", async (req: Request, res: Response): Promise<void> =>
         ? (await createChatImageSignedUrl(row.imageUrl, SIGNED_URL_TTL_S)) ?? ""
         : null,
       createdAt: row.createdAt.toISOString(),
+      // The chip the message was sent with. Omitted — not null — when there is
+      // none: the generated Swift client drops a nullable object silently.
+      ...contextField(readChatContextSnapshot(row.context)),
     })),
   );
   res.json({ messages, hasMore });
@@ -288,6 +312,37 @@ chatRouter.get("/topics", async (req: Request, res: Response): Promise<void> => 
   const { topics, hasMore } = await listChatTopics(req.userId!, limit);
   res.json({ topics, hasMore });
 });
+
+/**
+ * Parse and ownership-check the chat context of a request. Writes the error
+ * response itself and answers `false` when the request must stop; otherwise the
+ * snapshot to store, or `null` for an ordinary message.
+ *
+ * Someone else's inbox id is a 404, the same answer as an id that never
+ * existed — the difference is exactly what a prober would want to learn.
+ */
+async function contextFromRequest(
+  raw: unknown,
+  userId: string,
+  res: Response,
+): Promise<ChatContextSnapshot | null | false> {
+  const ref = parseChatContextRef(raw);
+  if (ref === "invalid") {
+    res.status(400).json({ error: "Invalid context" });
+    return false;
+  }
+  if (!ref) return null;
+  const snapshot = await resolveChatContextSnapshot(userId, ref);
+  if (!snapshot) {
+    res.status(404).json({ error: "Unknown context" });
+    return false;
+  }
+  return snapshot;
+}
+
+function contextField(snapshot: ChatContextSnapshot | null): { context?: ChatContextSnapshot } {
+  return snapshot ? { context: snapshot } : {};
+}
 
 /**
  * Does this storage key belong to the caller?

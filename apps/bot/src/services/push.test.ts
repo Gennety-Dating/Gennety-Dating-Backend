@@ -23,6 +23,12 @@ vi.mock("./apns.js", async (importOriginal) => {
   };
 });
 
+const recordTransactionalInboxItem = vi.fn();
+vi.mock("./inbox.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./inbox.js")>();
+  return { ...original, recordTransactionalInboxItem };
+});
+
 const { sendPushToUser, sendLiveActivityStartToUser, sendLiveActivityUpdateToUser } =
   await import("./push.js");
 
@@ -33,6 +39,80 @@ beforeEach(() => {
   laDelete.mockReset().mockResolvedValue({});
   apnsConfigured.mockReset().mockReturnValue(true);
   sendApnsNotification.mockReset();
+  recordTransactionalInboxItem.mockReset().mockResolvedValue("inbox-1");
+});
+
+describe("sendPushToUser → inbox (decision 2026-09-13)", () => {
+  const proposal = { title: "T", body: "B", data: { type: "match.proposed", matchId: "m1" } };
+
+  it("writes the inbox row for an allowlisted type and rides its id on the push", async () => {
+    userFindUnique.mockResolvedValue({ pushToken: "device-token", platform: "mobile" });
+    sendApnsNotification.mockResolvedValue({ ok: true });
+
+    await expect(sendPushToUser("u1", proposal)).resolves.toBe(true);
+
+    expect(recordTransactionalInboxItem).toHaveBeenCalledWith({
+      userId: "u1",
+      type: "match.proposed",
+      title: "T",
+      body: "B",
+      data: proposal.data,
+    });
+    expect(sendApnsNotification.mock.calls[0][1]).toMatchObject({ inboxItemId: "inbox-1", type: "match.proposed" });
+  });
+
+  // The bell is an app surface. Someone who declined notifications still opens
+  // the app, so the row must not wait on a token.
+  it("writes the row even when the person has no push token", async () => {
+    userFindUnique.mockResolvedValue({ pushToken: null, platform: "both" });
+
+    await expect(sendPushToUser("u1", proposal)).resolves.toBe(false);
+
+    expect(recordTransactionalInboxItem).toHaveBeenCalledTimes(1);
+    expect(sendApnsNotification).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing for a Telegram-only account — it has no bell", async () => {
+    userFindUnique.mockResolvedValue({ pushToken: "device-token", platform: "telegram" });
+    sendApnsNotification.mockResolvedValue({ ok: true });
+
+    await sendPushToUser("u1", proposal);
+
+    expect(recordTransactionalInboxItem).not.toHaveBeenCalled();
+  });
+
+  it.each(["proxy.message", "match.nudge", "date.bump", "event.round"])(
+    "keeps %s out of the inbox",
+    async (type) => {
+      userFindUnique.mockResolvedValue({ pushToken: "device-token", platform: "mobile" });
+      sendApnsNotification.mockResolvedValue({ ok: true });
+
+      await sendPushToUser("u1", { title: "T", body: "B", data: { type } });
+
+      expect(recordTransactionalInboxItem).not.toHaveBeenCalled();
+    },
+  );
+
+  it("skips the row when the caller already wrote it (the announcement fan-out)", async () => {
+    userFindUnique.mockResolvedValue({ pushToken: "device-token", platform: "mobile" });
+    sendApnsNotification.mockResolvedValue({ ok: true });
+
+    await sendPushToUser("u1", proposal, { recordInbox: false });
+
+    expect(recordTransactionalInboxItem).not.toHaveBeenCalled();
+  });
+
+  it("still pushes when the inbox write fails", async () => {
+    userFindUnique.mockResolvedValue({ pushToken: "device-token", platform: "mobile" });
+    recordTransactionalInboxItem.mockRejectedValue(new Error("db down"));
+    sendApnsNotification.mockResolvedValue({ ok: true });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await expect(sendPushToUser("u1", proposal)).resolves.toBe(true);
+
+    expect(sendApnsNotification.mock.calls[0][1]).not.toHaveProperty("inboxItemId");
+    warn.mockRestore();
+  });
 });
 
 describe("sendPushToUser", () => {

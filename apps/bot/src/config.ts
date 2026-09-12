@@ -309,6 +309,12 @@ export const env = {
   /// INHERITED from production — which is exactly how the demo spent its first
   /// day writing into production storage (deploy.md, 2026-08-06).
   SUPABASE_VOICE_BUCKET: process.env.SUPABASE_VOICE_BUCKET ?? "voice-prompts",
+  /// Supabase Storage bucket for the media on admin announcements — the image
+  /// or short silent video over the detail sheet, and the poster frame
+  /// (decision journal 2026-09-13). Written only by the admin API. Expected to
+  /// be PRIVATE like every other bucket: the inbox detail hands the app a
+  /// 24-hour signed URL. Name it in `.env.demo` for the reason above.
+  SUPABASE_ANNOUNCEMENT_BUCKET: process.env.SUPABASE_ANNOUNCEMENT_BUCKET ?? "announcements",
 
   // ── AWS Rekognition Face Liveness (identity provider) ────────
   /// Master switch for the Face Liveness step — the provider that captures the

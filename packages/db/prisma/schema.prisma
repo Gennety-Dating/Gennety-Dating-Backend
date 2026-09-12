@@ -465,7 +465,8 @@ model User {
   blocksFiled   UserBlock[] @relation("UserBlockBlocker")
   blocksAgainst UserBlock[] @relation("UserBlockBlocked")
 
-  messages Message[]
+  messages   Message[]
+  inboxItems InboxItem[]
 
   noMatchNotices NoMatchNotice[]
 
@@ -2240,11 +2241,11 @@ model VenueSelectionLog {
 /// time-boxed carve-out to the "NO IN-APP CHAT" product invariant — relayed
 /// content is fully logged and reportable. Cascades on Match deletion (GDPR).
 model ProxyMessage {
-  id          String    @id @default(uuid()) @db.Uuid
-  matchId     String    @map("match_id") @db.Uuid
-  senderId    String    @map("sender_id") @db.Uuid
-  body        String
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id                  String    @id @default(uuid()) @db.Uuid
+  matchId             String    @map("match_id") @db.Uuid
+  senderId            String    @map("sender_id") @db.Uuid
+  body                String
+  createdAt           DateTime  @default(now()) @map("created_at")
   /// When the message actually reached the partner's OWN rail: the bot's
   /// `sendMessage` resolved, or APNs accepted the push. Null means it exists in
   /// the log and nowhere else yet.
@@ -2253,7 +2254,7 @@ model ProxyMessage {
   /// different question, with a different answer per rail, and it lives in
   /// `Match.proxyReadAtA/B` — not here, because "read" is not a property of one
   /// message but of how far someone got.
-  deliveredAt DateTime? @map("delivered_at")
+  deliveredAt         DateTime? @map("delivered_at")
   /// The emoji the RECIPIENT put on this message, or null.
   ///
   /// One column rather than a `proxy_message_reactions` table, and that is a
@@ -2266,7 +2267,7 @@ model ProxyMessage {
   /// Stored as the TELEGRAM-canonical string (`❤`, no variation selector) so
   /// it goes straight into `setMessageReaction` without normalising at the
   /// boundary. Clients that want the red glyph append U+FE0F for display.
-  reaction String?
+  reaction            String?
   /// Telegram id of this message IN ITS AUTHOR'S OWN CHAT — set only when the
   /// author sent it from Telegram.
   ///
@@ -2275,7 +2276,7 @@ model ProxyMessage {
   /// person who WROTE the line, and their copy is the message they sent the
   /// bot. Null for app-sent messages — their author has no Telegram copy of
   /// their own line, and reads the reaction in the app instead.
-  authorChatMessageId BigInt? @map("author_chat_message_id")
+  authorChatMessageId BigInt?   @map("author_chat_message_id")
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
 
@@ -2604,12 +2605,127 @@ model Message {
   role      MessageRole
   content   String      @db.Text
   imageUrl  String?     @map("image_url")
+  /// What the person was looking at when they wrote this turn — set only on a
+  /// `user` row sent from "Обсудить с агентом" (decision 2026-09-13).
+  /// `{ kind: "inbox_item", inboxItemId, title }`.
+  ///
+  /// A SNAPSHOT, not a live reference: the chip in the transcript must still
+  /// read the same title after the inbox row ages out of retention. The
+  /// agent's grounding is resolved from the live rows at turn time
+  /// (`services/chat-context.ts`); when those are gone the chip stays and the
+  /// agent simply has nothing more to add.
+  context   Json?
   createdAt DateTime    @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@map("messages")
+}
+
+/// A rich announcement written by the founder in the admin dashboard — a
+/// party, a city launch, a product note — delivered into the iOS inbox and,
+/// optionally, as an APNs push (decision 2026-09-13).
+///
+/// Content only. Who received it and whether they read it lives on
+/// `InboxItem`; this row is written once by a human and never per person.
+///
+/// Venue and time are NOT columns here: an announcement about a party points
+/// at the `Event`, which already owns a frozen venue snapshot and a zoned
+/// start. A copy would disagree with the event the first time the founder
+/// moved the start by an hour.
+model Announcement {
+  id     String @id @default(uuid()) @db.Uuid
+  /// draft | scheduled | sending | sent | archived. Plain string (the
+  /// `Event.status` reasoning). Every transition is a CAS on the current value
+  /// — `sending` is the fan-out worker's claim, so two ticks cannot both send.
+  status String @default("draft")
+
+  /// Capsule headline and push title. Limits live in `@gennety/shared`
+  /// (`ANNOUNCEMENT_LIMITS`), checked by the admin route.
+  title              String
+  /// Capsule subline and push body.
+  teaser             String
+  /// The detail sheet.
+  body               String   @db.Text
+  /// Facts for the agent only — dress code, entry rules, what to bring. Never
+  /// shown to the person verbatim; fenced as data in the chat prompt.
+  agentBrief         String?  @map("agent_brief") @db.Text
+  /// Up to three tappable questions under the chip (decision F8 — the chat
+  /// opens without a model call).
+  suggestedQuestions String[] @default([]) @map("suggested_questions")
+
+  eventId String? @map("event_id") @db.Uuid
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  /// image | video | null. Plain string.
+  mediaKind  String? @map("media_kind")
+  /// Opaque paths in `SUPABASE_ANNOUNCEMENT_BUCKET` (private; signed on read).
+  mediaPath  String? @map("media_path")
+  /// Required with a video: the frame shown before playback, under Reduce
+  /// Motion, as the push attachment, and the one the video rests on (F3).
+  posterPath String? @map("poster_path")
+
+  /// `{ cityKeys?: string[], languages?: string[] }` — both optional, an empty
+  /// object means every app user. Parsed by `parseAnnouncementAudience`.
+  audience Json    @default("{}")
+  sendPush Boolean @default(true) @map("send_push")
+
+  scheduledAt    DateTime? @map("scheduled_at")
+  sentAt         DateTime? @map("sent_at")
+  /// How many inbox rows the fan-out wrote — the send button's promise, kept.
+  recipientCount Int?      @map("recipient_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  inboxItems InboxItem[]
+
+  @@index([status, scheduledAt])
+  @@map("announcements")
+}
+
+/// One row per person per thing that arrived for them in the app — the bell's
+/// inbox (decision 2026-09-13). The dot on the bell is `readAt IS NULL`, and
+/// nothing else: "a number must mean unread" (iOS decision 2026-09-08).
+///
+/// Two writers: the announcement fan-out, and `sendPushToUser` for the
+/// allowlisted transactional types (`INBOX_PUSH_TYPES`). Written for app users
+/// only (`pushReachable`) and whether or not a push token exists — a person who
+/// declined notifications still gets the inbox.
+///
+/// `title` and `body` are frozen at write time, exactly as the push said them:
+/// the inbox is a record of what the person was told, not a re-render of state.
+model InboxItem {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The push type: `announcement`, `match.proposed`, `feedback.due`, … A
+  /// string on the wire too — the generated Swift client throws on an unknown
+  /// enum case, and a new type must not break every older build's inbox.
+  type String
+
+  announcementId String?       @map("announcement_id") @db.Uuid
+  announcement   Announcement? @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  /// The match a transactional row is about. No FK: a match row outlives
+  /// nothing here, and a cancelled match's notice must stay readable.
+  matchId        String?       @map("match_id") @db.Uuid
+
+  title String
+  body  String @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  readAt    DateTime? @map("read_at")
+  /// Set once APNs accepted the push, or when no push applies. The fan-out
+  /// resumes from `pushedAt IS NULL` after a restart.
+  pushedAt  DateTime? @map("pushed_at")
+
+  /// One announcement lands once per person — the fan-out's restart guard.
+  @@unique([userId, announcementId])
+  @@index([userId, createdAt])
+  @@index([announcementId, pushedAt])
+  @@map("inbox_items")
 }
 
 /// Audit row for the empathetic "no match this week" DM that fires ~15 min
@@ -3181,12 +3297,13 @@ model Event {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  applications WaitlistApplication[]
-  tiers        EventTicketTier[]
-  tickets      EventTicket[]
-  staffTokens  EventStaffToken[]
-  rounds       EventRound[]
-  feedback     EventFeedback[]
+  applications  WaitlistApplication[]
+  tiers         EventTicketTier[]
+  tickets       EventTicket[]
+  staffTokens   EventStaffToken[]
+  rounds        EventRound[]
+  feedback      EventFeedback[]
+  announcements Announcement[]
 
   @@index([cityKey, status, startsAt])
   @@map("events")

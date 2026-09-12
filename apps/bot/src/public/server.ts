@@ -16,6 +16,7 @@ import { meRouter } from "./routes/me.js";
 import { onboardingRouter } from "./routes/onboarding.js";
 import { assistantRouter } from "./routes/assistant.js";
 import { chatRouter } from "./routes/chat.js";
+import { createInboxRouter, createPulseRouter } from "./routes/inbox.js";
 import { matchesRouter } from "./routes/matches.js";
 import { matchMediaRouter } from "./routes/match-media.js";
 import { countdownRouter } from "./routes/countdown.js";
@@ -587,6 +588,9 @@ app.use("/v1/me", meRouter);
 app.use("/v1/onboarding", onboardingRouter);
 app.use("/v1/assistant", assistantRouter);
 app.use("/v1/chat", chatRouter);
+// The bell's inbox and the Today pulse (decision journal 2026-09-13).
+app.use("/v1/inbox", createInboxRouter());
+app.use("/v1/pulse", createPulseRouter());
 app.use("/v1/match-media", matchMediaRouter);
 app.use("/v1/matches", matchesRouter);
 app.use("/v1/countdown", countdownRouter);

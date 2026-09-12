@@ -30,6 +30,7 @@ import { opsRouter } from "./routes/ops.js";
 import { purchasesRouter } from "./routes/purchases.js";
 import { adSpendRouter } from "./routes/ad-spend.js";
 import { eventsRouter } from "./routes/events.js";
+import { announcementsRouter } from "./routes/announcements.js";
 import { userHealthRouter } from "./routes/user-health.js";
 import { activityRouter } from "./routes/activity.js";
 import { viralityRouter } from "./routes/virality.js";
@@ -205,6 +206,9 @@ app.use(adSpendRouter);
 // EVENTS_FEATURE_ENABLED is off, so mounting it changes no API surface until
 // the flag is flipped.
 app.use(eventsRouter);
+// Rich in-app announcements: compose, preview on one phone, schedule; the
+// `announcement-fanout` worker delivers (decision journal 2026-09-13).
+app.use(announcementsRouter);
 // Диагностика одного аккаунта: класс здоровья + какое правило сработало.
 // Путь длиннее, чем `/admin/users/:id`, поэтому затенить его не может.
 app.use(userHealthRouter);
