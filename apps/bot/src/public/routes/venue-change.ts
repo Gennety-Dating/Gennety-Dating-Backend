@@ -207,7 +207,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       ...result.state,
       original: {
         ...result.state.original,
-        ...boardPhotoLinks(result.state.original.photoRefs[0] ?? null, now),
+        ...boardPhotoLinks(result.state.original.photoRefs?.[0] ?? null, now),
       },
     });
   });
@@ -238,7 +238,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       ok: true,
       venues: result.venues.map((v) => ({
         ...v,
-        ...boardPhotoLinks(v.photoRefs[0] ?? null, now),
+        ...boardPhotoLinks(v.photoRefs?.[0] ?? null, now),
       })),
     });
   });

@@ -61,6 +61,11 @@ import {
 } from "../../services/venue-change.js";
 import { fetchPlacePhotoName } from "../../services/venue.js";
 import { isPremiumHeadActive } from "../../services/premium.js";
+import {
+  personalizeOrder,
+  readViewerAffinity,
+  type ViewerAffinity,
+} from "../../services/venue-change-personalization.js";
 import { refreshStatusBanners } from "../../services/status-banner-refresh.js";
 import { isUniqueViolation } from "../../services/ticket-wallet.js";
 import { notifyFounderPurchase } from "../../services/founder-notify.js";
@@ -800,6 +805,7 @@ export async function getVenueChangeCatalog(
   matchId: string,
   now: Date = new Date(),
   loadCatalog: LoadVenueChangeCatalog = buildVenueChangeCatalog,
+  loadAffinity: (userId: string) => Promise<ViewerAffinity> = readViewerAffinity,
 ): Promise<VenueChangeCatalogResult> {
   const match = await loadMatch(matchId);
   if (!match) return { ok: false, reason: "match-not-found" };
@@ -826,7 +832,15 @@ export async function getVenueChangeCatalog(
     // re-resolve a key and would gain nothing but latency.
     withPhotos: true,
   });
-  return { ok: true, venues };
+
+  // Personal ORDER, shared SET (2026-09-12). The selection above is the pair's
+  // — same cards for both sides, which is what keeps an intersection of hearts
+  // reachable at all — and this only permutes it for whoever is looking.
+  // `venue-change-personalization.ts` argues both halves of that. With nothing
+  // known about the viewer it is the identity function, so the opted-out and
+  // the never-located get exactly today's order.
+  const affinity = await loadAffinity(userOfSide(match, side).id);
+  return { ok: true, venues: personalizeOrder(venues, affinity) };
 }
 
 // ---------------------------------------------------------------------------
