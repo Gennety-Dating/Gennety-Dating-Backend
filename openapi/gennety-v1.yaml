@@ -4370,14 +4370,12 @@ components:
         - partnerName
         - myLikes
         - peerLikes
-        - agreed
         - myAction
         - priceStars
         - canOfferPartner
         - offerSent
         - express
         - expressAvailable
-        - settled
         - restartable
         - changesUsed
         - changesMax
@@ -4418,9 +4416,13 @@ components:
             learns about the other here.
           items: { type: string }
         agreed:
-          oneOf:
-            - { $ref: "#/components/schemas/VenueBoardAgreed" }
-            - { type: "null" }
+          # OPTIONAL rather than a nullable union, and that is load-bearing:
+          # `oneOf: [$ref, "null"]` is the shape swift-openapi-generator drops
+          # in silence (same trap as `pending` on /v1/me/feedback/pending). The
+          # server still sends an explicit `null` while nothing is agreed; an
+          # optional property decodes that to absent, so the wire is unchanged
+          # and the property actually exists in the generated client.
+          $ref: "#/components/schemas/VenueBoardAgreed"
         myAction:
           type: [string, "null"]
           description: >
@@ -4439,9 +4441,8 @@ components:
         express: { type: boolean }
         expressAvailable: { type: boolean }
         settled:
-          oneOf:
-            - { $ref: "#/components/schemas/VenueBoardSettled" }
-            - { type: "null" }
+          # Optional for the same reason as `agreed` above.
+          $ref: "#/components/schemas/VenueBoardSettled"
         restartable:
           type: boolean
           description: >
