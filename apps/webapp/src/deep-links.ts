@@ -136,6 +136,23 @@ export function mapsAppFor(platform: string | undefined, userAgent: string): Map
 }
 
 /**
+ * Both maps apps, the phone's own first.
+ *
+ * The dock offers the two of them side by side rather than the one this phone
+ * is likelier to have (change of 2026-09-12): the guess above is a guess, and
+ * when it misses, the single button hands the user to a web map they then have
+ * to escape. Two buttons cannot miss. The order still carries the guess,
+ * because on a row of equals the first is the one the thumb takes without
+ * reading — so being wrong costs a glance rather than a detour.
+ */
+export function mapsAppsFor(
+  platform: string | undefined,
+  userAgent: string,
+): readonly [MapsApp, MapsApp] {
+  return mapsAppFor(platform, userAgent) === "apple" ? ["apple", "google"] : ["google", "apple"];
+}
+
+/**
  * Hand a link to Telegram, which opens it outside the Mini App — in the
  * partner's app when the link is one it claims. Outside Telegram (the dev
  * harness, a plain browser) it is a new tab, and so is a client too old or too

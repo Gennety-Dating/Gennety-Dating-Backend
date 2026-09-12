@@ -2,26 +2,31 @@
  * The transit dock — how the canvas gets someone from "your date is at 19:00"
  * into a car or onto a route (decision 2026-09-11). Two glass islands sitting
  * on the sheet, the shape of Bump's transit HUD: a control pill (on foot / by
- * car, Uber, the phone's maps app) over a status card ("9 min by car" /
- * "You're 2.4 km away").
+ * car, a wide Uber, and both maps apps as their own tiles) over a status card
+ * ("9 min by car" / "You're 2.4 km away").
  *
  * This file is the DOM, the GPS watch and the taps. When the dock may show and
  * what its numbers are live in `transit.ts`; what its links carry lives in
  * `deep-links.ts` — both pure and tested without a browser.
  *
- * The position never leaves this closure. It is read while the dock can show,
- * turned into a distance and a number of minutes, and dropped with the watch —
- * no request carries it, and the links name the venue alone.
+ * The position never leaves this SCREEN. It is read while the dock can show,
+ * turned into a distance and a number of minutes, handed to the map beside it
+ * as `onFix` so the user can see where they are leaving from (change of
+ * 2026-09-12), and dropped with the watch. Nothing carries it off the phone:
+ * no request has it in a body or a query, and the partner links name the venue
+ * alone.
  */
 
+import { brandMark, type BrandMarkName } from "../brand-marks.js";
 import { distanceMeters, formatDistance } from "../date-terminal/terminal-state.js";
 import {
   MAPS_APP_NAME,
-  mapsAppFor,
+  mapsAppsFor,
   mapsLink,
   openExternal,
   uberLink,
   type Destination,
+  type MapsApp,
   type TravelMode,
 } from "../deep-links.js";
 import { icon } from "../icons.js";
@@ -69,11 +74,21 @@ export function createTransitDock(options: {
    * Called on a change only.
    */
   onLayout?: (coveredPx: number) => void;
+  /**
+   * The fix this dock is holding, or null when it has none (change of
+   * 2026-09-12, "show me where I'm leaving from"). The map draws the user's own
+   * point and the line to the venue from it.
+   *
+   * This is the ONE way a position leaves this closure, and it goes exactly as
+   * far as the map on the same screen: a marker and a `<canvas>`, both local.
+   * The file's promise is about the network, and it still holds — no request
+   * carries it, and the links name the venue alone.
+   */
+  onFix?: (fix: { lat: number; lng: number } | null) => void;
 }): TransitDock {
-  const { sheet, strings: s, lang, app, uberClientId, onLayout } = options;
+  const { sheet, strings: s, lang, app, uberClientId, onLayout, onFix } = options;
   // Decided once: a phone does not change its maps app while a page is open.
-  const mapsApp = mapsAppFor(app?.platform, navigator.userAgent);
-  const mapsName = MAPS_APP_NAME[mapsApp];
+  const [firstMaps, secondMaps] = mapsAppsFor(app?.platform, navigator.userAgent);
 
   let presence: DockPresence = "off";
   let venue: Destination | null = null;
@@ -104,6 +119,18 @@ export function createTransitDock(options: {
   modes.className = "dock-modes";
   modes.setAttribute("role", "group");
   modes.setAttribute("aria-label", s.dockModes);
+  /**
+   * The chip that slides between the two icons (change of 2026-09-12). It used
+   * to be a background colour on whichever button was pressed, so the selection
+   * teleported: the eye got a new state with no account of how it got there.
+   * One element that travels is the account. It is `aria-hidden` and the
+   * buttons keep their own `aria-pressed` — nothing about what is announced
+   * changes, only what is seen.
+   */
+  const thumb = document.createElement("span");
+  thumb.className = "dock-thumb";
+  thumb.setAttribute("aria-hidden", "true");
+  modes.appendChild(thumb);
   const modeButtons = (["walking", "driving"] as const).map((m) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -116,11 +143,22 @@ export function createTransitDock(options: {
     return button;
   });
 
+  /**
+   * The row's weights, changed 2026-09-12. Uber is the button that ENDS the
+   * question — a car is coming, nothing more to decide — so it takes the width
+   * left over and keeps its wordmark. The two maps apps are a hand-off to
+   * another screen, and their app tiles are recognised faster than their names
+   * are read, so they shrink to one thumb-sized square each. The name they lose
+   * from the face they keep in `aria-label`.
+   */
   const uber = partnerButton("dock-uber", "Uber", s.dockUber);
-  const maps = partnerButton("dock-maps", mapsName, s.dockMaps.replace("{app}", mapsName));
+  const mapsButtons = [firstMaps, secondMaps].map(mapsButton);
+  const mapsRow = document.createElement("div");
+  mapsRow.className = "dock-maps-apps";
+  mapsRow.append(...mapsButtons);
   const partners = document.createElement("div");
   partners.className = "dock-partners";
-  partners.append(uber, maps);
+  partners.append(uber, mapsRow);
 
   const controls = document.createElement("div");
   controls.className = "dock-island dock-controls";
@@ -144,11 +182,6 @@ export function createTransitDock(options: {
     if (!venue) return;
     haptic("light");
     openExternal(uberLink(venue, { clientId: uberClientId }), app);
-  });
-  maps.addEventListener("click", () => {
-    if (!venue) return;
-    haptic("light");
-    openExternal(mapsLink(mapsApp, venue, mode()), app);
   });
 
   // The dock sits on the sheet, whose height follows its content: measured on
@@ -181,6 +214,26 @@ export function createTransitDock(options: {
     return button;
   }
 
+  /** One maps app: its own tile for the eye, its name for everything else. */
+  function mapsButton(which: MapsApp): HTMLButtonElement {
+    const name = MAPS_APP_NAME[which];
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "dock-partner dock-maps";
+    button.dataset.app = which;
+    button.setAttribute("aria-label", s.dockMaps.replace("{app}", name));
+    // A tooltip for a pointer, and the one place the name still shows on a
+    // screen wide enough to hover.
+    button.title = name;
+    button.appendChild(brandMark(`${which}-maps` as BrandMarkName, "dock-maps-mark"));
+    button.addEventListener("click", () => {
+      if (!venue) return;
+      haptic("light");
+      openExternal(mapsLink(which, venue, mode()), app);
+    });
+    return button;
+  }
+
   function haptic(kind: "light" | "selection"): void {
     const h = app?.HapticFeedback;
     if (!h) return;
@@ -205,9 +258,12 @@ export function createTransitDock(options: {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
       watchId = null;
       // Dropped with the watch: a position is never older than the screen that
-      // could show it.
+      // could show it. The map is told in the same breath, so the user's own
+      // point and the line to the venue go with it rather than lingering at a
+      // place the dock has already forgotten.
       fix = null;
       geo = "idle";
+      onFix?.(null);
       return;
     }
     if (watchId !== null) return;
@@ -220,6 +276,7 @@ export function createTransitDock(options: {
       (pos) => {
         fix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         geo = "fixed";
+        onFix?.(fix);
         render();
       },
       (err) => {
@@ -229,6 +286,7 @@ export function createTransitDock(options: {
         if (err.code === 1) {
           fix = null;
           geo = "denied";
+          onFix?.(null);
         } else if (!fix) {
           geo = "unavailable";
         }
@@ -249,27 +307,59 @@ export function createTransitDock(options: {
     for (const button of modeButtons) {
       button.setAttribute("aria-pressed", String(button.dataset.mode === m));
     }
+    // What the sliding chip follows. CSS owns where it lands, so the travel
+    // stays one declaration rather than arithmetic in two places.
+    modes.dataset.mode = m;
 
     if (d === null) {
       // No distance yet, or none coming. The card names the place and the
-      // buttons still work — Uber and the maps app find the phone themselves.
-      eta.textContent = venue?.name ?? s.dockLabel;
+      // buttons still work — Uber and the maps apps find the phone themselves.
+      setEta(venue?.name ?? s.dockLabel);
       away.textContent = geo === "denied" || geo === "unavailable" ? s.dockNoLocation : s.dockLocating;
     } else {
       const minutes = etaMinutes(d, m);
-      eta.textContent =
+      setEta(
         minutes === null
           ? (venue?.name ?? s.dockLabel)
           : (m === "walking" ? s.dockEtaWalking : s.dockEtaDriving).replace(
               "{time}",
               formatTravelTime(minutes, s),
-            );
+            ),
+      );
       away.textContent = formatDistance(d, lang, {
         metres: s.dockAwayMetres,
         kilometres: s.dockAwayKilometres,
       });
     }
     syncLayout();
+  }
+
+  /**
+   * The headline, swapped with a beat of its own.
+   *
+   * Only when the words actually change: this runs on every GPS reading, and a
+   * line that flickers each time the metres tick would be a nervous tic rather
+   * than an answer. The travel is the same distance and curve the chip below it
+   * moves on, so tapping "on foot" reads as ONE gesture — the chip slides, the
+   * number follows it — instead of two things happening near each other.
+   */
+  function setEta(text: string): void {
+    if (eta.textContent === text) return;
+    const had = eta.textContent !== "";
+    eta.textContent = text;
+    if (!had || stillFrames() || typeof eta.animate !== "function") return;
+    eta.animate(
+      [
+        { opacity: 0, transform: "translateY(5px)" },
+        { opacity: 1, transform: "none" },
+      ],
+      { duration: 240, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+    );
+  }
+
+  /** The user asked the OS for less motion — honour it here as the CSS does. */
+  function stillFrames(): boolean {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   }
 
   return {

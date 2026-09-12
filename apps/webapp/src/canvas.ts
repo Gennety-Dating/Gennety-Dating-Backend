@@ -26,7 +26,7 @@
 
 // maplibre-gl v6 is ESM-only and has NO default export — named only. `Map`
 // would shadow the global, so the package's own `MapLibreMap` alias is used.
-import { AttributionControl, MapLibreMap, Marker } from "maplibre-gl";
+import { AttributionControl, MapLibreMap, Marker, type GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./theme.css";
 import "./canvas.css";
@@ -46,6 +46,7 @@ import {
 import { fogPath, formatExplored } from "./canvas/fog.js";
 import { createTransitDock } from "./canvas/transit-dock.js";
 import type { DockPresence } from "./canvas/transit.js";
+import { wireContentInsets } from "./telegram-insets.js";
 import { apiBase } from "./api.js";
 
 const KYIV: [number, number] = [50.4501, 30.5234];
@@ -66,6 +67,29 @@ const GEO_OPTIONS: PositionOptions = {
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
+
+/**
+ * Fullscreen, like every other Mini App here (change of 2026-09-12).
+ *
+ * The canvas was the one screen still opening as a half sheet, and it is the
+ * screen that can least afford it: the map IS the content, and Telegram's own
+ * chrome plus the collapsed sheet left it a strip. `expand()` above is not the
+ * same thing — it fills the sheet, not the phone — so both are called, and the
+ * older-client path is exactly what `expand()` already did.
+ *
+ * `wireContentInsets` is the other half: in fullscreen Telegram floats its
+ * close × and menu ⋯ OVER the page, and `env(safe-area-inset-*)` does not
+ * report them. The sheet pads by `--tg-content-bottom` for that reason.
+ */
+try {
+  if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
+    app.requestFullscreen?.();
+  }
+} catch {
+  // Best-effort: a client that refuses fullscreen still gets the expanded
+  // sheet, and a thrown call must never cost the user the whole screen.
+}
+wireContentInsets(app);
 
 const params = new URLSearchParams(location.search);
 const langParam = params.get("lang") ?? app?.initDataUnsafe?.user?.language_code ?? null;
@@ -89,6 +113,14 @@ const el = {
 
 let map: MapLibreMap | null = null;
 let venueMarker: Marker | null = null;
+/** The other end of the trip (change of 2026-09-12), and the line between. */
+let meMarker: Marker | null = null;
+let venuePoint: { lat: number; lng: number } | null = null;
+let fixPoint: { lat: number; lng: number } | null = null;
+/** Framed once per fix, not on every GPS reading — see `drawTrip`. */
+let tripFramed = false;
+/** What the dock and the sheet currently cover, for the camera's padding. */
+let coveredPx = 0;
 let bootDismissed = false;
 let pollTimer: number | null = null;
 let failures = 0;
@@ -112,6 +144,7 @@ const dock = createTransitDock({
   // without one rather than with an empty one (`deep-links.ts`).
   uberClientId: import.meta.env.VITE_UBER_CLIENT_ID?.trim() || null,
   onLayout: frameAbove,
+  onFix: showTrip,
 });
 
 /**
@@ -122,10 +155,14 @@ const dock = createTransitDock({
  * and the pin centres in what is left; closed, the padding goes back to none,
  * the framing every other state has always had.
  */
-function frameAbove(coveredPx: number): void {
+function frameAbove(covered: number): void {
+  coveredPx = covered;
   if (!map) return;
-  const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-  map.easeTo({ padding: { top: 0, right: 0, bottom: coveredPx, left: 0 }, duration: still ? 0 : 320 });
+  map.easeTo({ padding: { top: 0, right: 0, bottom: covered, left: 0 }, duration: stillFrames() ? 0 : 320 });
+}
+
+function stillFrames(): boolean {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
 function dismissBoot(): void {
@@ -210,6 +247,10 @@ function initMap(): void {
   // finish would leave the holes visibly lagging the city under them.
   map.on?.("move", renderFog);
   map.on?.("zoom", renderFog);
+  // A fix can land before the style has parsed, and a source cannot be added
+  // to a map that has none yet — so the trip is drawn again the moment it can
+  // be. Idempotent: with nothing to draw this is a no-op.
+  map.on?.("load", drawTrip);
   // A tap on the map puts an on-demand dock away — except the tap that landed
   // on the venue pin: MapLibre raises `click` for its markers' taps too, and
   // that is the very tap that just brought the dock up.
@@ -248,6 +289,137 @@ function showVenue(lat: number, lng: number): void {
   } else {
     venueMarker.setLngLat([lng, lat]);
   }
+  const moved = venuePoint?.lat !== lat || venuePoint.lng !== lng;
+  venuePoint = { lat, lng };
+  // A new venue is a new trip: the line has to be redrawn to it, and the
+  // camera has earned the right to frame the pair again.
+  if (moved) tripFramed = false;
+  drawTrip();
+}
+
+// ---------------------------------------------------------------------------
+// The trip: where the user is, and the line from there to the table
+// (change of 2026-09-12)
+// ---------------------------------------------------------------------------
+
+/**
+ * A STRAIGHT line, deliberately.
+ *
+ * The dock's minutes are arithmetic over a straight line times a city detour
+ * factor (`canvas/transit.ts`), and this is that same line made visible: it
+ * says "this far, that way", which is what someone deciding between a walk and
+ * a car actually needs. A road-accurate route would need a routing provider —
+ * a key, a quota, and the user's position leaving the phone on every recompute
+ * — which is the exact trade the 2026-09-11 decision refused. Drawn dotted
+ * rather than solid so it is never mistaken for a navigator's route.
+ */
+const TRIP_SOURCE = "trip";
+const TRIP_LAYER = "trip-line";
+
+function showTrip(fix: { lat: number; lng: number } | null): void {
+  // A fix that arrives after the dock has already dropped its watch would
+  // otherwise strand a dot at a place nobody is standing.
+  if (fix === null) tripFramed = false;
+  fixPoint = fix;
+  drawTrip();
+}
+
+function drawTrip(): void {
+  if (!map) return;
+  const from = fixPoint;
+  const to = venuePoint;
+
+  if (!from || !to) {
+    meMarker?.remove();
+    meMarker = null;
+    setTripLine(null);
+    return;
+  }
+
+  if (!meMarker) {
+    const dot = document.createElement("div");
+    dot.className = "me-pin";
+    dot.innerHTML = '<span class="me-dot"></span>';
+    // Not a control, and not a thing to announce: the venue pin is the only
+    // marker on this map anyone can act on.
+    dot.setAttribute("aria-hidden", "true");
+    meMarker = new Marker({ element: dot, anchor: "center" }).setLngLat([from.lng, from.lat]).addTo(map);
+  } else {
+    meMarker.setLngLat([from.lng, from.lat]);
+  }
+
+  setTripLine([
+    [from.lng, from.lat],
+    [to.lng, to.lat],
+  ]);
+
+  // Once. At the venue's own zoom a trip of two kilometres puts the user's end
+  // a screen and a half away — the line would leave the frame and the dot would
+  // never be seen at all, which is the whole point of drawing them. But doing
+  // it on every reading would yank the camera out from under someone walking,
+  // so it happens on the first fix of a trip and never again.
+  if (tripFramed) return;
+  tripFramed = true;
+  map.fitBounds(
+    [
+      [Math.min(from.lng, to.lng), Math.min(from.lat, to.lat)],
+      [Math.max(from.lng, to.lng), Math.max(from.lat, to.lat)],
+    ],
+    {
+      // Room for the pins themselves at the edges, and for whatever the dock
+      // and the sheet are covering at the bottom.
+      padding: { top: 72, right: 56, bottom: coveredPx + 56, left: 56 },
+      // Never further in than the venue's own framing: two points a hundred
+      // metres apart should not zoom to the pavement.
+      maxZoom: VENUE_ZOOM,
+      duration: stillFrames() ? 0 : 620,
+    },
+  );
+}
+
+/**
+ * The one-segment feature MapLibre's source takes. Written out here rather
+ * than imported from `geojson`: those types come in under maplibre's own
+ * `node_modules` and are not resolvable from this package, and one line of
+ * geometry is not worth a dependency to describe.
+ */
+interface TripFeature {
+  type: "Feature";
+  properties: Record<string, never>;
+  geometry: { type: "LineString"; coordinates: [number, number][] };
+}
+
+/** The line's geometry, or null to empty it without removing the layer. */
+function setTripLine(coordinates: [number, number][] | null): void {
+  if (!map?.isStyleLoaded?.()) return;
+  const data: TripFeature = {
+    type: "Feature",
+    properties: {},
+    geometry: { type: "LineString", coordinates: coordinates ?? [] },
+  };
+  const existing = map.getSource(TRIP_SOURCE) as GeoJSONSource | undefined;
+  if (existing) {
+    existing.setData(data);
+    return;
+  }
+  if (!coordinates) return;
+  map.addSource(TRIP_SOURCE, { type: "geojson", data });
+  map.addLayer({
+    id: TRIP_LAYER,
+    type: "line",
+    source: TRIP_SOURCE,
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      // White, like the user's own dot — the burgundy at the other end is the
+      // venue's, and a line in it would read as the venue reaching out.
+      "line-color": "#ffffff",
+      "line-opacity": 0.72,
+      "line-width": 3,
+      // Round caps turn these into dots: a trail of steps rather than a route
+      // anyone should follow turn by turn.
+      "line-dasharray": [0, 2],
+    },
+  });
 }
 
 /**

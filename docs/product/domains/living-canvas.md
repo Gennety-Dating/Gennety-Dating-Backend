@@ -323,10 +323,22 @@ the terminal reads the real one, the same structural limit as the Bump
 ### 6.4b Transit dock — from the map into a car or a route (2026-09-11)
 
 The Mini App canvas carries a transit dock: two glass islands sitting on the
-sheet — a control pill (on foot / by car, **Uber**, the phone's own maps app)
-over a status card ("10 min by car" / "You're 2.4 km away"). The DOM is
-`canvas/transit-dock.ts`; every rule is pure, in `canvas/transit.ts` and
-`src/deep-links.ts`.
+sheet — a control pill (on foot / by car, a wide **Uber**, and both maps apps
+as their own tiles) over a status card ("10 min by car" / "You're 2.4 km
+away"). The DOM is `canvas/transit-dock.ts`; every rule is pure, in
+`canvas/transit.ts` and `src/deep-links.ts`; the partners' tiles are
+`src/brand-marks.ts`.
+
+**The row's weights** (2026-09-12). Uber takes the width the row has left and
+keeps its wordmark: it is the button that ENDS the question — a car is coming,
+nothing further to decide. The two maps apps are a hand-off to another screen
+and their tiles are recognised faster than their names are read, so each is one
+44 px square with its own mark; the name they lose from the face they keep in
+`aria-label` and in the tooltip. The phone's own app is first (`mapsAppsFor`) —
+the order still carries the platform guess, so being wrong costs a glance
+rather than a detour. The on-foot / by-car chip travels between the two icons
+rather than being handed from one to the other; the headline above it swaps on
+the same curve, so one tap reads as one gesture.
 
 **When it is there.** Only while the date has a venue *point*: a legacy row
 whose column holds the route midpoint gets no dock, because a car sent to a
@@ -352,14 +364,28 @@ to 2 km walks), guessed once per venue; the user's own pick holds. The
 position comes from `watchPosition` only while the dock can show and is
 dropped with the watch — no request carries it.
 
+**Both ends of the trip are on the map** (2026-09-12). While the dock holds a
+fix, the canvas draws the user's own point — a small white dot, not a second
+burgundy pin; the colour on this screen belongs to the venue — and a dotted
+line from it to the table. The line is STRAIGHT: it is the same straight line
+the minutes are computed from, and drawing a road-accurate route would need a
+routing provider, a key, and the position leaving the phone on every recompute
+— the trade refused on 2026-09-11 and refused again here. Dotted so it is never
+read as a navigator's route. The camera frames both ends ONCE per trip (at the
+venue's own zoom a two-kilometre trip puts the user's end off screen, so the
+line and the dot would never be seen at all); it is not re-framed on later
+readings, which would yank the map out from under someone walking. The fix
+reaches the map and nothing else — `onFix` hands it to a marker and a canvas on
+the same screen, and the guarantee above is unchanged.
+
 **The links are https and carry the destination only.**
 `Telegram.WebApp.openLink` throws on any other scheme, so `uber://`, `maps://`
 and `bolt://` are unreachable from a Mini App. Uber: `m.uber.com/looking` with
 `pickup=my_location` and the venue as `drop[0]`, plus `client_id` from the
 build's `VITE_UBER_CLIENT_ID` when set — the attribution an affiliate deal
-hangs on. Maps: Apple Maps (`maps.apple.com/?daddr=`) where Telegram's
-`platform` is `ios`/`macos`, Google Maps (`/maps/dir/?api=1`) elsewhere, in the
-toggle's mode. No origin in any link: the user's position never leaves the
+hangs on. Maps: both are offered — Apple Maps (`maps.apple.com/?daddr=`) and
+Google Maps (`/maps/dir/?api=1`), each in the toggle's current mode, the
+phone's own app first. No origin in any link: the user's position never leaves the
 phone, the guarantee §6.3 already makes. **Bolt is absent**: bolt.eu declares
 no iOS app links and publishes no destination link, so its button could only
 open a web page (decision journal, 2026-09-11).
@@ -367,6 +393,16 @@ open a web page (decision journal, 2026-09-11).
 **Framing.** While the dock is up, the map camera is padded by what the dock
 and the sheet cover, so the venue pin stays in view above them on a small
 phone; the padding returns to none when the dock goes down.
+
+**The canvas opens fullscreen** (2026-09-12, `requestFullscreen` on Bot API
+8.0+). It was the last Mini App here still opening as a half sheet, and the one
+that could least afford it: the map IS the content, and Telegram's chrome plus
+the collapsed sheet left it a strip. `expand()` stays for older clients — it
+fills the sheet, not the phone. The sheet pads by `--tg-content-bottom`
+(`telegram-insets.ts`), because in fullscreen Telegram floats its close × and
+menu ⋯ over the page and `env(safe-area-inset-*)` does not report them. The
+sheet itself is the dock's own glass rather than the opaque page colour, so the
+map keeps showing through the thing describing it.
 
 The iOS native canvas is unchanged.
 

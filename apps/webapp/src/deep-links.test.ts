@@ -5,6 +5,7 @@ import {
   appleMapsLink,
   googleMapsLink,
   mapsAppFor,
+  mapsAppsFor,
   mapsLink,
   openExternal,
   uberLink,
@@ -128,6 +129,23 @@ describe("mapsAppFor", () => {
 
   it("names the apps the way their makers do", () => {
     expect(MAPS_APP_NAME).toEqual({ apple: "Apple Maps", google: "Google Maps" });
+  });
+});
+
+describe("mapsAppsFor", () => {
+  const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15";
+  const ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/128.0";
+
+  it("offers both apps, whatever the phone is", () => {
+    expect([...mapsAppsFor("ios", IPHONE)].sort()).toEqual(["apple", "google"]);
+    expect([...mapsAppsFor("android", ANDROID)].sort()).toEqual(["apple", "google"]);
+    expect([...mapsAppsFor(undefined, "")].sort()).toEqual(["apple", "google"]);
+  });
+
+  it("puts the phone's own app first — the guess costs a glance, not a detour", () => {
+    expect(mapsAppsFor("ios", ANDROID)[0]).toBe("apple");
+    expect(mapsAppsFor("android", IPHONE)[0]).toBe("google");
+    expect(mapsAppsFor(undefined, IPHONE)[0]).toBe("apple");
   });
 });
 

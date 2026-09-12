@@ -140,6 +140,33 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   The user's own point (change of 2026-09-12) — where the trip STARTS, drawn
+   only while the dock is holding a fix.
+
+   Deliberately not a second venue pin. The venue is the burgundy the whole
+   product spends its colour on (theme.css, "Colour = meaning"), and the two
+   ends of one line must not compete: this end is white, smaller, and does not
+   pulse, because it is the end the user already knows the location of.
+   --------------------------------------------------------------------------- */
+
+.me-pin {
+  /* Same reason as `.venue-pin`: a MapLibre marker element has no size of its
+     own, and the dot inside is positioned against this box. */
+  position: relative;
+  width: 16px;
+  height: 16px;
+}
+
+.me-dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgb(0 0 0 / 55%);
+  box-shadow: 0 1px 6px rgb(0 0 0 / 45%);
+}
+
+/* ---------------------------------------------------------------------------
    The sheet.
    --------------------------------------------------------------------------- */
 
@@ -149,16 +176,35 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 20px 20px calc(22px + env(safe-area-inset-bottom, 0px));
-  background: var(--bg);
-  border-radius: 22px 22px 0 0;
+  /* Trimmed on every side (change of 2026-09-12): the sheet is the caption to
+     the map, and it had grown into the half of the screen the map is for.
+     `--tg-content-bottom` is Telegram's own reserve in fullscreen, which
+     `env(safe-area-inset-bottom)` does not include — without it the last line
+     sits under the home indicator on a fullscreen Mini App. */
+  padding: 16px 18px calc(16px + var(--tg-content-bottom, 0px) + env(safe-area-inset-bottom, 0px));
+  /* The same glass as the dock's islands rather than the opaque page colour:
+     the two are one surface family, and the map keeps showing through the
+     thing that is describing it. */
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border-top: 1px solid var(--glass-border);
+  border-radius: 28px 28px 0 0;
   box-shadow: 0 -12px 40px rgb(0 0 0 / 34%);
-  max-height: 62vh;
+  max-height: 58vh;
   overflow-y: auto;
   /* The sheet's height follows its content, so a state that gains a line must
      not make the whole thing jump — the transition is on the box, not on a
      hardcoded height. */
   transition: box-shadow 240ms ease;
+}
+
+/* No backdrop-filter (an old WebView): an opaque pane, for the dock's reason —
+   text straight onto the streets is worse than no glass at all. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  #sheet {
+    background: var(--bg);
+  }
 }
 
 #sheet[data-tone="urgent"] {
@@ -211,12 +257,26 @@ body {
 }
 
 #sheet-action {
-  margin-top: 18px;
+  margin-top: 14px;
   width: 100%;
-  min-height: 52px;
+  min-height: 50px;
   border: 0;
-  border-radius: 14px;
-  background: var(--accent);
+  /* Rounder, to sit inside a 28 px sheet without reading as a squarer thing
+     pasted into a softer one (change of 2026-09-12). */
+  border-radius: 20px;
+  /* Glass OVER the accent, not instead of it: the burgundy is the one colour
+     on this screen that means something, so the light is added as white and
+     black over it and the hue is untouched. Top-lit, like every other pane
+     here — a highlight that runs down the face would be a different light
+     source from the islands above it. */
+  background:
+    linear-gradient(
+      180deg,
+      rgb(255 255 255 / 20%) 0%,
+      rgb(255 255 255 / 5%) 48%,
+      rgb(0 0 0 / 10%) 100%
+    ),
+    var(--accent);
   color: #fff;
   font-size: 16px;
   font-weight: 600;
@@ -225,9 +285,9 @@ body {
   /* The house inner-edge sheen: light held just inside the button's own
      border rather than a travelling highlight (PRODUCT_SPEC §3.5b). */
   box-shadow:
-    inset 0 1px 0 -0.5px rgb(255 255 255 / 34%),
-    inset 0 -1px 0 -0.5px rgb(255 255 255 / 14%),
-    0 6px 18px rgb(0 0 0 / 26%);
+    inset 0 1px 0 -0.5px rgb(255 255 255 / 46%),
+    inset 0 -1px 0 -0.5px rgb(255 255 255 / 16%),
+    0 8px 22px rgb(0 0 0 / 30%);
 }
 
 #sheet-action[hidden] {
@@ -364,6 +424,11 @@ body {
 }
 
 .dock-modes {
+  /* One number for the chip and the two buttons it travels between; they are
+     neighbours here so they cannot drift apart unnoticed. 44 px is the target
+     floor, and the chip is exactly one button wide. */
+  --dock-mode-size: 44px;
+  position: relative;
   display: flex;
   flex: none;
   gap: 2px;
@@ -372,11 +437,43 @@ body {
   background: var(--fill);
 }
 
+/* Chosen reads as a raised chip, not as a colour: colour on this canvas is
+   spent on the two people and the one action (theme.css, "Colour = meaning").
+
+   It is ONE element that travels rather than a background handed from button
+   to button (change of 2026-09-12). The old switch had no middle — the state
+   simply appeared somewhere else — and a switch with no middle reads as a
+   redraw rather than as an answer to the thumb. Absolute, so the scenery can
+   never push the buttons it sits behind. */
+.dock-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 2px;
+  left: 2px;
+  width: var(--dock-mode-size);
+  height: var(--dock-mode-size);
+  border-radius: 999px;
+  background: var(--self-fill-strong);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+  /* The slight overshoot is the point: a chip that settles reads as a thing
+     with weight. Same curve and duration as the headline's swap above it, so
+     the two are one gesture instead of two events near each other. */
+  transition: transform 340ms cubic-bezier(0.34, 1.35, 0.5, 1);
+}
+
+.dock-modes[data-mode="driving"] .dock-thumb {
+  /* One button plus the gap between them. */
+  transform: translateX(calc(var(--dock-mode-size) + 2px));
+}
+
 .dock-mode {
+  position: relative;
+  /* Over the chip, which is the only reason either has a z-index. */
+  z-index: 1;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: var(--dock-mode-size);
+  height: var(--dock-mode-size);
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -384,17 +481,11 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition:
-    background-color 180ms ease,
-    color 180ms ease;
+  transition: color 180ms ease;
 }
 
-/* Chosen reads as a raised chip, not as a colour: colour on this canvas is
-   spent on the two people and the one action (theme.css, "Colour = meaning"). */
 .dock-mode[aria-pressed="true"] {
-  background: var(--self-fill-strong);
   color: var(--text);
-  box-shadow: inset 0 1px 0 var(--glass-highlight);
 }
 
 .dock-mode-icon {
@@ -416,12 +507,8 @@ body {
 }
 
 .dock-partner {
-  /* Sized by the name, then sharing what is left: equal halves cut
-     "Google Maps" at 360 px while "Uber" sat half empty. */
-  flex: 1 1 auto;
   min-width: 0;
   min-height: 44px;
-  padding: 0 10px;
   border-radius: 999px;
   font-family: inherit;
   font-size: 15px;
@@ -440,18 +527,53 @@ body {
 
 /* Uber's own black, in both themes — the brand's colour rather than ours,
    which is also what keeps it from out-shouting the sheet's burgundy action.
-   The hairline is what lifts it off dark glass. */
+   The hairline is what lifts it off dark glass.
+
+   It takes every pixel the row has left (change of 2026-09-12). The three
+   buttons are not three choices of equal weight: this one ends the question —
+   a car is coming, there is nothing further to decide — while the other two
+   hand the trip to another app. Width is how a row says that. */
 .dock-uber {
+  flex: 1 1 auto;
+  padding: 0 14px;
   border: 1px solid rgb(255 255 255 / 16%);
   background: #000;
   color: #fff;
-  letter-spacing: -0.01em;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
+/* The two maps apps, kept together so the gap inside the pair is smaller than
+   the gap to Uber — one group of two, not three loose buttons. */
+.dock-maps-apps {
+  display: flex;
+  flex: none;
+  gap: 5px;
+}
+
+/* Square, and the tile is the whole label: an app tile is recognised before a
+   name is read, and at this size a name could not be read anyway ("Google
+   Maps" was already ellipsizing at 360 px). The name lives on in `aria-label`
+   and in the tooltip, so nothing is lost to a screen reader. */
 .dock-maps {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  padding: 0;
   border: 1px solid var(--glass-border);
   background: var(--fill-strong);
   color: var(--text);
+}
+
+.dock-maps-mark {
+  display: block;
+  width: 27px;
+  height: 27px;
+  /* The mark is a picture with its own rounded corners; this is the shadow
+     under a tile rather than a glow on a glyph. */
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 35%));
 }
 
 .dock-status {
@@ -531,5 +653,11 @@ body {
   #transit-dock[data-open="0"],
   .dock-partner:active {
     transform: none;
+  }
+  /* The chip still MOVES — it has to, it is the answer to the tap — but it
+     arrives rather than travels. Removing the transform instead would put both
+     modes' chip in one place and leave the switch showing the wrong one. */
+  .dock-thumb {
+    transition: none;
   }
 }
