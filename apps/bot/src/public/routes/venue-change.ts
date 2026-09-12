@@ -21,6 +21,7 @@ import {
   declineVenuePay,
   keepOriginalVenue,
   mintExpressChange,
+  venueKeyOf,
   settleFreeVenueChange,
   createVenueInvoiceLink,
 } from "../../handlers/matching/venue-change.js";
@@ -238,6 +239,13 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       ok: true,
       venues: result.venues.map((v) => ({
         ...v,
+        // The key the like/confirm calls take, derived HERE rather than by each
+        // client. It is `placeId ?? name|address`, and a client re-deriving it
+        // would be a second implementation of the one string this whole
+        // mechanic turns on — a board whose keys disagree with the server's
+        // cannot record a single mark. The Mini App keeps deriving its own for
+        // now; that copy is the one to delete next, not to duplicate again.
+        key: venueKeyOf(v),
         ...boardPhotoLinks(v.photoRefs?.[0] ?? null, now),
       })),
     });

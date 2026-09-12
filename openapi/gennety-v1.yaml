@@ -4525,6 +4525,7 @@ components:
     VenueChangeVenue:
       type: object
       required:
+        - key
         - source
         - placeId
         - name
@@ -4542,6 +4543,13 @@ components:
         - userRatingCount
         - editorialSummary
       properties:
+        key:
+          type: string
+          description: >
+            What `/like` and `/confirm` take for this venue. The server derives
+            it (`placeId`, or `name|address` for a row without one) precisely so
+            no client has to: a board whose keys disagree with the server's
+            cannot record a single mark. Treat it as opaque.
         source:
           type: string
           description: >
