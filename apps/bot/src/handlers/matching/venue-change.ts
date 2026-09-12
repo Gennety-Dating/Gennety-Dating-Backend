@@ -58,6 +58,7 @@ import {
   type CatalogVenue,
   type VenueChangeIneligibleReason,
   type VenueChangeRestartReason,
+  venueKeyOf,
 } from "../../services/venue-change.js";
 import { fetchPlacePhotoName } from "../../services/venue.js";
 import { isPremiumHeadActive } from "../../services/premium.js";
@@ -82,6 +83,9 @@ import {
 
 /** How long an abandoned express mint holds the board before quietly reverting. */
 const EXPRESS_HOLD_MINUTES = 30;
+
+/** Re-exported: the rule lives with the catalog (`services/venue-change.ts`). */
+export { venueKeyOf };
 
 // ---------------------------------------------------------------------------
 // Match loading
@@ -389,13 +393,7 @@ async function withCoverPhoto(v: VenueLikeSnapshot): Promise<VenueLikeSnapshot> 
   return { ...v, photoRef: await fetchPlacePhotoName(process.env.PLACES_API_KEY, v.placeId) };
 }
 
-export function venueKeyOf(v: {
-  placeId: string | null;
-  name: string;
-  address: string;
-}): string {
-  return v.placeId ?? `${v.name}|${v.address}`;
-}
+
 
 /**
  * Sentinel like-key for "keep the originally assigned venue". The pinned

@@ -5,6 +5,9 @@ import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import { verifyAccessToken } from "../jwt.js";
 import { buildPlacesPhotoUrl } from "../../services/venue.js";
+// From the service, not the handler: the key rule belongs with the catalog,
+// and this route must keep working in tests that mock the handler wholesale.
+import { venueKeyOf } from "../../services/venue-change.js";
 import { prisma } from "@gennety/db";
 import { fetchPlacesPhoto, snapWidth } from "../places-photo.js";
 import {
@@ -21,7 +24,6 @@ import {
   declineVenuePay,
   keepOriginalVenue,
   mintExpressChange,
-  venueKeyOf,
   settleFreeVenueChange,
   createVenueInvoiceLink,
 } from "../../handlers/matching/venue-change.js";

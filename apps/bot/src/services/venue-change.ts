@@ -77,6 +77,27 @@ export interface CatalogVenue {
 }
 
 /**
+ * The key a venue is marked, agreed and paid for under.
+ *
+ * Lives beside the catalog rather than in the handler because it is a fact
+ * ABOUT a catalog row, and because every surface needs it: the routes
+ * serialise it, the handler resolves marks by it, and the clients send it back.
+ * `placeId` when the row has one — that is the identity every other reader
+ * already dedupes on — and `name|address` for a hand-entered row that has none.
+ *
+ * Treated as opaque by clients on purpose. It used to be derived separately by
+ * each of them, which made the one string this mechanic turns on a thing two
+ * codebases had to agree about by hand.
+ */
+export function venueKeyOf(v: {
+  placeId: string | null;
+  name: string;
+  address: string;
+}): string {
+  return v.placeId ?? `${v.name}|${v.address}`;
+}
+
+/**
  * Max alternatives returned to the Mini App.
  *
  * Raised 12 → 21 (founder decision 2026-08-18) for a more varied choice. The
