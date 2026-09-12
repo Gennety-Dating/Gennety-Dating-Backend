@@ -11,8 +11,18 @@ info:
     (`swift-openapi-generator` in the Gennety-iOS repo).
 
     Endpoints authed with Telegram `initData` HMAC (calendar, tickets,
-    venue-change, feedback, telegram-onboarding) are intentionally NOT here —
-    they are Mini App-only. Mobile variants will be added as they are built.
+    feedback, telegram-onboarding) are intentionally NOT here — they are Mini
+    App-only. Mobile variants will be added as they are built.
+
+    `/v1/venue-change/*` used to be in that list. Since 2026-09-12 the board
+    takes EITHER rail — `tma <initData>` or a JWT bearer — so the seven
+    endpoints the native client needs are specified here. The three that stay
+    out are Telegram-shaped rather than unbuilt: `stars-invoice` mints a
+    Telegram Stars invoice link (iOS pays through StoreKit instead, see
+    `/v1/venue-change/appstore/transaction`), `pay-decline` is the twin of an
+    inline chat button, and `photo` takes initData in its query because an
+    `<img>` sends no headers — the native client is served signed `photoUrl` /
+    `thumbnailUrl` links on the board payloads instead.
   contact:
     name: Gennety Dating
 
@@ -3858,6 +3868,318 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/venue-change/state:
+    get:
+      tags: [date]
+      operationId: getVenueBoardState
+      summary: Venue-change board snapshot
+      description: >
+        Everything the board draws for the caller: what the pair was given,
+        what each side has hearted, whether they have agreed, and what the
+        caller may do about paying. Polled while the board is open (~4 s in the
+        Mini App), so it is small and cheap by design.
+
+
+        **This endpoint answers for the CALLER.** `myLikes` is theirs and
+        `peerLikes` is the partner's, and neither side is ever told anything
+        about the other beyond which venue keys they marked — the board is a
+        coordination surface, not a window into someone's taste.
+
+
+        A board that cannot be opened answers `open: false` with
+        `closedReason`, rather than an error: "the venue is settled" and "we
+        are past the cutoff" are states of a real board, not failures.
+      parameters:
+        - name: match
+          in: query
+          required: true
+          description: The scheduled match whose venue is up for change.
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The board as the caller sees it
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenueBoardState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant of this match
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/venue-change/catalog:
+    get:
+      tags: [date]
+      operationId: getVenueChangeCatalog
+      summary: Alternatives the pair may move to
+      description: >
+        Up to 21 places within 3 km of the venue the pair was given (5 km for
+        premium-tier venues), curated first and filled out from Google Places,
+        each open at the agreed time. The assigned venue itself is NOT in this
+        list — it is the board's pinned card, hearted under the reserved key
+        `__keep__`.
+
+
+        **The SET is the pair's; the ORDER is the caller's.** Both participants
+        are served exactly the same venues — a change happens when their hearts
+        intersect, so a card one side could not see would make agreement
+        unreachable — but each sees them ordered by what is known about where
+        they actually go (the opt-in frequent-places block and the places a
+        Date Bump has verified them at). With nothing known, the order is the
+        server's ordinary ranking, which is also what a caller who has opted
+        out or never granted location gets.
+
+
+        Premium-tier venues are included whenever the Premium feature is on,
+        and are shown LOCKED unless `pairPremiumActive` on the board state is
+        true. Selecting one without that is refused server-side with 402 — the
+        tier is re-resolved from the catalog and never taken from the client.
+      parameters:
+        - name: match
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The alternatives, in this caller's display order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenueChangeCatalog" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant, or the feature is off
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >
+            The board is closed for this date — already changed as often as it
+            may be, or past the T−5h cutoff.
+
+  /v1/venue-change/like:
+    post:
+      tags: [date]
+      operationId: submitVenueLikes
+      summary: Submit the caller's whole set of hearted venues
+      description: >
+        Full-set submission, like the calendar's slot picking: send every key
+        the caller currently has hearted, not a delta. Un-hearting is the same
+        call with that key absent, which makes a lost request unable to leave
+        the two sides disagreeing about what was marked.
+
+
+        When this submission intersects the partner's marks, the pair has
+        agreed: `agreed` is true and the board moves to the paying step. An
+        intersection of MORE than one venue is not resolved here — the keys
+        come back in `overlapCandidates` and the caller picks one with
+        `/confirm`. Hearting the reserved `__keep__` key proposes keeping the
+        original venue; agreeing on it settles nothing and costs nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [matchId, keys]
+              properties:
+                matchId: { type: string, format: uuid }
+                keys:
+                  type: array
+                  maxItems: 30
+                  description: >
+                    Every venue key currently hearted. A key is the venue's
+                    Google place id, or `name|address` for a row without one,
+                    or the reserved `__keep__`.
+                  items: { type: string }
+      responses:
+        "200":
+          description: Accepted; says whether this closed an agreement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenueLikeResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402":
+          description: >
+            A premium-tier venue was hearted while neither participant has an
+            active subscription. The client opens the paywall.
+        "403":
+          description: Not a participant, or the feature is off
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/venue-change/confirm:
+    post:
+      tags: [date]
+      operationId: confirmVenueAgreement
+      summary: Resolve an agreement when more than one venue overlapped
+      description: >
+        Both sides hearted several of the same places; this picks which one the
+        change is for. Only a key from `overlapCandidates` is accepted — the
+        server re-derives the overlap rather than trusting the client to have
+        sent a venue both sides actually marked.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [matchId, key]
+              properties:
+                matchId: { type: string, format: uuid }
+                key: { type: string }
+      responses:
+        "200":
+          description: Done
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402":
+          description: The chosen venue is premium and the pair is not.
+        "403":
+          description: Not a participant, or the feature is off
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Those two did not both mark this venue, or the board moved on.
+
+  /v1/venue-change/keep-original:
+    post:
+      tags: [date]
+      operationId: keepOriginalVenue
+      summary: "\"Actually, let's keep the place we were given\""
+      description: >
+        The explicit way back, at any point before a change is paid for. It is
+        deliberately not a veto: what it does depends on where the board is.
+        After an agreement it calls that agreement off. While the partner is
+        still suggesting places it withdraws the caller's own marks and tells
+        the partner, once, that the caller would rather keep the venue — their
+        suggestions stay live, because this is voicing a preference, not
+        overruling one (`toldPartner` is then true). With nobody suggesting
+        anything it quietly closes the session.
+
+
+        The original venue is never mutated by a change that has not settled,
+        so dropping the change IS the restore.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [matchId]
+              properties:
+                matchId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Done; says whether the partner was told
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenueKeepResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not a participant, or the feature is off
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/venue-change/offer-pay:
+    post:
+      tags: [date]
+      operationId: offerPartnerPay
+      summary: Ask the partner to lock in the agreed venue
+      description: >
+        Available only when the board state says `canOfferPartner`. Sends the
+        partner a single card asking them to settle the change, and hands them
+        the decision — the caller is then waiting on someone else, which is
+        what `offerSent` on the board state reflects. One shot per agreement:
+        a second call answers 409 rather than sending a second card.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [matchId]
+              properties:
+                matchId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Done
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ok" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not the caller's to offer, or the feature is off
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Already offered, or the board is no longer agreed.
+        "502":
+          description: >
+            The card never reached the partner. The one-shot stamp is released,
+            so the client may honestly say "not sent — try again" rather than
+            claiming it landed.
+
+  /v1/venue-change/appstore/transaction:
+    post:
+      tags: [date]
+      operationId: reportVenueChangePurchase
+      summary: Settle an agreed change from a StoreKit purchase
+      description: >
+        The native app's till. The Telegram product pays for a change in Stars;
+        an iOS app may not offer that rail for a digital good (App Store
+        guideline 3.1.1), so the same change is sold as a StoreKit consumable
+        and reported here. The product id to buy is `venueChangeProduct` from
+        `GET /v1/app/config` — never hard-code it, or the app can take money
+        for a product this server will refuse.
+
+
+        Send `transaction.jwsRepresentation`; the server verifies it against
+        the App Store Server API and settles the match's agreed change. Call
+        `transaction.finish()` only after a 2xx, so a purchase that was never
+        reported is re-sent on the next launch — reporting is idempotent, so
+        that costs nothing.
+
+
+        **409 means the money was taken and the change could not be applied** —
+        the partner settled or the session lapsed in the moment between. Finish
+        the transaction anyway (retrying returns the same 409 forever) and say
+        plainly that it could not be applied and will be refunded. It is parked
+        for a manual refund and the founder is alerted; never present it as a
+        refund that has already happened.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jws, matchId]
+              properties:
+                jws:
+                  type: string
+                  maxLength: 20000
+                  description: StoreKit 2 `Transaction.jwsRepresentation`.
+                matchId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Settled, or already settled by an earlier report of the same purchase
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenueChangePurchaseAck" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: The venue-change feature is off on this server.
+        "409":
+          description: >
+            Verified and charged, but the change was no longer there to claim.
+            Parked for a manual refund.
+        "422":
+          description: >
+            Apple rejected the transaction — unknown, revoked, another
+            account's, or not the venue-change product.
+        "503":
+          description: App Store verification is unavailable or unconfigured; retry later.
+
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4036,6 +4358,266 @@ components:
         radiusM:
           type: number
           description: The server's own radius for the place's category, in metres.
+
+    VenueBoardState:
+      type: object
+      required:
+        - ok
+        - status
+        - open
+        - closedReason
+        - original
+        - partnerName
+        - myLikes
+        - peerLikes
+        - agreed
+        - myAction
+        - priceStars
+        - canOfferPartner
+        - offerSent
+        - express
+        - expressAvailable
+        - settled
+        - restartable
+        - changesUsed
+        - changesMax
+        - pairPremiumActive
+        - premiumWouldWaive
+        - referralEnabled
+      properties:
+        ok: { type: boolean }
+        status:
+          type: string
+          description: >
+            `none` | `liking` | `agreed` | `settled` | `lapsed`. A documented
+            string rather than an `enum`, for the same reason as the canvas
+            state: a value added on the server must not fail decoding in an App
+            Store build that cannot be rolled back.
+        open:
+          type: boolean
+          description: Whether hearting and confirming are allowed right now.
+        closedReason:
+          type: [string, "null"]
+          description: >
+            Why the board is shut, when it is: `feature-disabled`,
+            `not-participant`, `wrong-state`, `past-cutoff`, `already-changed`,
+            `no-venue`. Each deserves its own sentence on screen — "past the
+            cutoff" and "you have used both changes" are different news.
+        original: { $ref: "#/components/schemas/VenueBoardOriginal" }
+        partnerName:
+          type: string
+          description: The partner's first name; the board captions who marked what.
+        myLikes:
+          type: array
+          description: Venue keys the caller has hearted.
+          items: { type: string }
+        peerLikes:
+          type: array
+          description: >
+            Venue keys the partner has hearted — the only thing either side
+            learns about the other here.
+          items: { type: string }
+        agreed:
+          oneOf:
+            - { $ref: "#/components/schemas/VenueBoardAgreed" }
+            - { type: "null" }
+        myAction:
+          type: [string, "null"]
+          description: >
+            What the caller may do about payment: `pay`, `pay_or_decline`,
+            `pay_or_offer`, `wait`, or null when there is nothing to do. This
+            is the payer matrix resolved server-side — never re-derive it from
+            gender on the client.
+        priceStars:
+          type: [integer, "null"]
+          description: >
+            Stars price, set ONLY when the caller has a paying action. The
+            native client does not charge Stars and shows StoreKit's price
+            instead; this stays useful as "is this step a paid one".
+        canOfferPartner: { type: boolean }
+        offerSent: { type: boolean }
+        express: { type: boolean }
+        expressAvailable: { type: boolean }
+        settled:
+          oneOf:
+            - { $ref: "#/components/schemas/VenueBoardSettled" }
+            - { type: "null" }
+        restartable:
+          type: boolean
+          description: >
+            A finished session can be started over, so the client offers
+            "change again" instead of a dead end. Deliberately not the same as
+            `open`: the board must not reappear underneath a success screen the
+            person is still reading, so a restart takes an explicit tap.
+        changesUsed: { type: integer }
+        changesMax: { type: integer }
+        pairPremiumActive:
+          type: boolean
+          description: >
+            Either participant has an active subscription, which unlocks
+            premium-tier venues for the pair.
+        premiumWouldWaive:
+          type: boolean
+          description: >
+            The caller is at a paying step and is not premium — the moment to
+            show "with Premium this change is free".
+        referralEnabled: { type: boolean }
+
+    VenueBoardOriginal:
+      type: object
+      required: [name, address, mapsUri, photoRefs, photoUrl, thumbnailUrl]
+      properties:
+        name: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+        mapsUri: { type: [string, "null"] }
+        photoRefs:
+          type: array
+          description: >
+            Google Places photo resource names. The Mini App resolves these
+            itself; a native client should use the signed links below instead.
+          items: { type: string }
+        photoUrl:
+          type: [string, "null"]
+          description: >
+            Card photo, 1200 px: an absolute signed link, valid for at least a
+            day and byte-identical for every poll within that UTC day, so the
+            board's four-second polling cannot defeat an image cache. The photo
+            reference is in the PATH, so a cache keyed by host + path keeps one
+            entry per venue across re-signing.
+        thumbnailUrl:
+          type: [string, "null"]
+          description: Map-pin photo, 240 px; same signing as `photoUrl`.
+
+    VenueBoardAgreed:
+      type: object
+      required: [key, name, address, mapsUri, expiresAt]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        address: { type: string }
+        mapsUri: { type: [string, "null"] }
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: When the unpaid agreement lapses back to the original venue.
+
+    VenueBoardSettled:
+      type: object
+      required: [name, address, mapsUri, peerPaid]
+      properties:
+        name: { type: string }
+        address: { type: string }
+        mapsUri: { type: [string, "null"] }
+        peerPaid:
+          type: boolean
+          description: The partner covered it — the "he/she got this ❤️" reveal.
+
+    VenueChangeCatalog:
+      type: object
+      required: [ok, venues]
+      properties:
+        ok: { type: boolean }
+        venues:
+          type: array
+          items: { $ref: "#/components/schemas/VenueChangeVenue" }
+
+    VenueChangeVenue:
+      type: object
+      required:
+        - source
+        - placeId
+        - name
+        - address
+        - lat
+        - lng
+        - mapsUri
+        - category
+        - tier
+        - distanceKm
+        - photoRefs
+        - photoUrl
+        - thumbnailUrl
+        - rating
+        - userRatingCount
+        - editorialSummary
+      properties:
+        source:
+          type: string
+          description: >
+            `curated` (our own catalog) or `places` (the Google fallback, used
+            when the curated pool in range is thin). Decides which display
+            fields can be present at all.
+        placeId: { type: [string, "null"] }
+        name: { type: string }
+        address: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+        mapsUri: { type: [string, "null"] }
+        category:
+          type: string
+          description: >
+            A catalog category — `cafe`, `coffee_shop`, `restaurant`, `park`,
+            `lounge` today. A documented string, not an `enum`: a category
+            added on the server must not fail decoding in a shipped build.
+        tier:
+          type: string
+          description: >
+            `base` or `premium`. A premium venue is shown to everyone and
+            selectable only while `pairPremiumActive` — the lock is what the
+            subscription sells, so hiding it would remove the reason to buy.
+            Enforced server-side regardless of what the client renders.
+        distanceKm:
+          type: number
+          description: Great-circle distance from the venue the pair was given, to 0.1 km.
+        photoRefs:
+          type: array
+          description: Places photo resource names; the Mini App's route to imagery.
+          items: { type: string }
+        photoUrl:
+          type: [string, "null"]
+          description: Card photo, 1200 px, signed — see `VenueBoardOriginal.photoUrl`.
+        thumbnailUrl:
+          type: [string, "null"]
+          description: Map-pin photo, 240 px, signed.
+        rating: { type: [number, "null"] }
+        userRatingCount: { type: [integer, "null"] }
+        editorialSummary:
+          type: [string, "null"]
+          description: Google's short blurb, when the row has one.
+
+    VenueLikeResult:
+      type: object
+      required: [ok, agreed, overlapCandidates]
+      properties:
+        ok: { type: boolean }
+        agreed:
+          type: boolean
+          description: This submission closed an agreement — the board moves to paying.
+        overlapCandidates:
+          type: array
+          description: >
+            Both sides marked more than one of the same venues, so nothing is
+            agreed yet: the caller picks one of these with `/confirm`. Empty in
+            every other case.
+          items: { type: string }
+
+    VenueKeepResult:
+      type: object
+      required: [ok, toldPartner]
+      properties:
+        ok: { type: boolean }
+        toldPartner:
+          type: boolean
+          description: >
+            The partner was actively suggesting places and has been told, once,
+            that the caller would rather keep the venue. False when there was
+            nobody to tell.
+
+    VenueChangePurchaseAck:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
 
     VenueShowcase:
       type: object

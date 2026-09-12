@@ -778,7 +778,11 @@ movement, so it follows `rematch_purchases` rather than the date gate.
 
 Columns: `userId`, `matchId` (free-form, no FK, so deleting a match never breaks
 the payment trail), `status` (`processing` → `settled` | `refunded_race` |
-`refunded_stale` | `refund_failed` — string, not a Prisma enum), unique
+`refunded_stale` | `refund_failed` | `refund_manual` — string, not a Prisma enum;
+`refund_manual` is the App Store rail's dead end, where a verified purchase whose
+change could not be claimed waits for a human, because Apple has no refund a
+server may call — the hourly sweep skips every row whose `externalPaymentId`
+starts `appstore:` so it never retries a Stars refund against one), unique
 `externalPaymentId` (the Telegram Stars `telegram_payment_charge_id`),
 `amountStars` (frozen at purchase — `VENUE_CHANGE_STARS` is env-tunable),
 `resolvedAt`/`refundError`, `createdAt`. Indexed `(userId, createdAt)` and

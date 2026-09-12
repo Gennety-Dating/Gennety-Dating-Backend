@@ -1054,13 +1054,37 @@ carries the field (§3.6).
 An optional post-schedule step lets the pair swap the auto-assigned venue via
 a **shared likes board** — the couple's first joint activity before the date.
 Gated by `VENUE_CHANGE_FEATURE_ENABLED` (default **off** → the scheduled-date
-DM carries no venue-change button and nothing below fires). Telegram-only.
+DM carries no venue-change button and nothing below fires). Served to **both
+clients since 2026-09-12** — it was Telegram-only until then.
 Implemented as a string sub-state (`Match.venueChangeStatus`: null → `liking` →
 `agreed` → `settled` | `lapsed`) layered on a `scheduled` match — like the Date
 Ticket and Coordination gates, it adds no `MatchStatus` enum value. The v1
 propose/veto flow (female-exclusive, mandatory comment, decline-cancels-match)
 was replaced wholesale in 2026-07 before ever launching; design doc:
 `VENUE_CHANGE_PRODUCT_SPEC.md`.
+
+**The native client (iOS), since 2026-09-12.** The same board, presented as a
+map: curated pins over the city, a card carousel under them, a list behind a
+toggle. It is the same mechanic and the same server state — hearts, intersection,
+`__keep__` — because two mechanics on one `Match` row would need a reconciliation
+rule nobody wants to own. Three things differ, and only three:
+
+- **Auth.** `/v1/venue-change/*` takes either rail now: `tma <initData>` or a JWT
+  bearer (`routes/venue-change.ts` → `authenticate`). The bridge is one lookup at
+  the route, not a second identity threaded through the handlers — a mobile-first
+  account has a synthetic negative `telegramId` and matches like any other.
+- **Money.** Apple forbids a second payment rail for a digital good inside the
+  app (3.1.1), so iOS buys a StoreKit consumable and reports it to
+  `/v1/venue-change/appstore/transaction`. Price and the per-date cap are the
+  same; the *figure* is Apple's, shown by StoreKit. The one thing this rail
+  cannot do is hand money back — see `refund_manual` in
+  [data-model.md](../../architecture/data-model.md).
+- **Order.** The catalog is re-ranked per viewer from the opt-in frequent-places
+  block and the venues a Date Bump has verified them at. **The SET is identical
+  for both sides** — a card only one of them can see would make the intersection
+  unreachable — so only the order is personal, and it is a nudge: affinity moves
+  a venue a few places, never to the top. Nothing known (opted out, no visits, no
+  location) means the ordinary order, which is also the fallback on any error.
 
 - **Entry — no disclaimers.** BOTH sides' scheduled cards carry a passive
   "📍 Change venue" `web_app` button (no proactive "does the venue suit you?"
