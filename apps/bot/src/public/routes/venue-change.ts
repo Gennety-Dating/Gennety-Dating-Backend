@@ -3,9 +3,15 @@ import type { Api, RawApi } from "grammy";
 import { type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
+import { verifyAccessToken } from "../jwt.js";
 import { buildPlacesPhotoUrl } from "../../services/venue.js";
 import { prisma } from "@gennety/db";
 import { fetchPlacesPhoto, snapWidth } from "../places-photo.js";
+import {
+  boardPhotoLinks,
+  boardPhotoSignatureValid,
+  decodePhotoRef,
+} from "../venue-change-photos.js";
 import {
   getVenueBoardState,
   getVenueChangeCatalog,
@@ -29,9 +35,15 @@ function noteBoardAction(telegramId: number, matchId: string, what: string): voi
 }
 
 /**
- * Venue change v2 Mini App endpoints (PRODUCT_SPEC §3.7b — paid multiplayer
- * board). Authenticated with `Authorization: tma <initData>` (Telegram HMAC,
- * NOT JWT) — same boundary as /v1/calendar, /v1/location, /v1/feedback.
+ * Venue change v2 board endpoints (PRODUCT_SPEC §3.7b — paid multiplayer
+ * board), serving BOTH clients since 2026-09-12.
+ *
+ * Authenticated with `Authorization: tma <initData>` (Telegram HMAC) OR
+ * `Authorization: Bearer <jwt>` (the native client) — see `authenticate` at
+ * the foot of this file for why the second rail lands here instead of in a
+ * parallel family of routes. Before that date this was Telegram-only and
+ * deliberately outside the OpenAPI contract, which is what put the iOS venue
+ * board out of reach (decision 2026-08-20).
  *
  *   GET  /v1/venue-change/state?match=<id>    — board snapshot (polled ~4s)
  *   GET  /v1/venue-change/catalog?match=<id>  — alternatives within 3 km
@@ -42,6 +54,11 @@ function noteBoardAction(telegramId: number, matchId: string, what: string): voi
  *   POST /v1/venue-change/pay-decline         — his in-app "not this time"
  *   POST /v1/venue-change/stars-invoice       — mint the 150⭐ invoice link
  *                                               (mode: agreed | express)
+ *   POST /v1/venue-change/appstore/transaction — settle from a StoreKit
+ *                                               consumable (native rail only)
+ *   GET  /v1/venue-change/photo/:token         — Places photo by signed link
+ *                                               (native rail; no header to
+ *                                                send from an image loader)
  *
  * All state transitions, payer-matrix checks, and CAS guards live in the
  * handler module — the routes are a thin HTTP boundary.
@@ -113,8 +130,63 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
     res.status(200).send(result.body);
   });
 
+  // GET /photo/:token?w=<px>&e=<expiry>&sig=<hmac>
+  //
+  // The same picture as `/photo` above, for a client that cannot send a header
+  // OR an initData. The link itself is the permission (`venue-change-photos.ts`
+  // says why, and why the ref is a path segment rather than a query value).
+  // Minted only by the catalog and state responses, so this is no more an open
+  // Places proxy than the `tma` path is.
+  router.get(
+    "/photo/:token",
+    photoProxyLimiter,
+    async (req: Request, res: Response): Promise<void> => {
+      const token = typeof req.params.token === "string" ? req.params.token : "";
+      const ref = decodePhotoRef(token);
+      if (!ref || !PHOTO_REF_REGEX.test(ref)) {
+        res.status(400).json({ error: "bad-ref" });
+        return;
+      }
+
+      // Snap BEFORE verifying: the signature is over the width actually used,
+      // so a request that snapped to a different width must fail rather than
+      // silently serve a size nobody signed for.
+      const width = snapWidth(req.query.w);
+      const expiresAt = Number(req.query.e);
+      const sig = typeof req.query.sig === "string" ? req.query.sig : "";
+      if (!boardPhotoSignatureValid(token, width, expiresAt, sig)) {
+        res.status(403).json({ error: "bad-signature" });
+        return;
+      }
+
+      const apiKey = process.env.PLACES_API_KEY;
+      if (!apiKey) {
+        res.status(404).json({ error: "photos-unavailable" });
+        return;
+      }
+      const url = buildPlacesPhotoUrl(ref, apiKey, width);
+      if (!url) {
+        res.status(404).json({ error: "photos-unavailable" });
+        return;
+      }
+
+      const result = await fetchPlacesPhoto(url, "[venue-change]");
+      if (!result.ok) {
+        res.status(502).json({ error: "upstream" });
+        return;
+      }
+      res.setHeader("Content-Type", result.contentType);
+      allowCrossOriginImage(res);
+      // Public rather than private: unlike the `tma` path this link is bound to
+      // no viewer at all (a cafe's photograph is nobody's personal data), and
+      // the day-rounded expiry is what bounds it. Same trade as the canvas.
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.status(200).send(result.body);
+    },
+  );
+
   router.get("/state", async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
+    const auth = await authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
       return;
@@ -129,11 +201,19 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       res.status(result.reason === "not-participant" ? 403 : 404).json({ error: result.reason });
       return;
     }
-    res.status(200).json({ ok: true, ...result.state });
+    const now = Date.now();
+    res.status(200).json({
+      ok: true,
+      ...result.state,
+      original: {
+        ...result.state.original,
+        ...boardPhotoLinks(result.state.original.photoRefs[0] ?? null, now),
+      },
+    });
   });
 
   router.get("/catalog", async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
+    const auth = await authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
       return;
@@ -148,14 +228,26 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       res.status(statusForReason(result.reason)).json({ error: result.reason });
       return;
     }
-    res.status(200).json({ ok: true, venues: result.venues });
+    // Signed photo links, minted alongside the refs rather than instead of
+    // them: the deployed Mini App builds its own `?tma=` URLs from `photoRefs`
+    // and must keep working untouched, while the native client — which has no
+    // initData to put in a query — reads `photoUrl`/`thumbnailUrl`. Additive,
+    // so neither client is on the other's schedule.
+    const now = Date.now();
+    res.status(200).json({
+      ok: true,
+      venues: result.venues.map((v) => ({
+        ...v,
+        ...boardPhotoLinks(v.photoRefs[0] ?? null, now),
+      })),
+    });
   });
 
   // Full like-set submission (calendar `pick` semantics). Body: { matchId,
   // keys: string[] }. Response: { agreed, overlapCandidates } — the client
   // re-fetches /state after.
   router.post("/like", async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
+    const auth = await authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
       return;
@@ -196,7 +288,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
 
   // Resolve a multi-overlap: the actor picks one venue both sides liked.
   router.post("/confirm", async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
+    const auth = await authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
       return;
@@ -224,7 +316,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
 
   // Her one-shot "offer him to pay" — sends the wish card to his chat.
   router.post("/offer-pay", async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
+    const auth = await authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
       return;
@@ -253,7 +345,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
   // "Stay where we were" — withdraw my marks, and call off an agreement if one
   // was reached. The explicit way back to the originally assigned venue.
   router.post("/keep-original", async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
+    const auth = await authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
       return;
@@ -278,7 +370,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
 
   // His in-app "not this time" (the Mini App fork twin of the wish-card button).
   router.post("/pay-decline", async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
+    const auth = await authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
       return;
@@ -306,7 +398,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
   // parallel pay-self path); or { matchId, mode: "express", key } — her
   // unilateral instant swap (stamps the express mint first).
   router.post("/stars-invoice", async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
+    const auth = await authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
       return;
@@ -445,13 +537,54 @@ function statusForReason(reason: string): number {
   }
 }
 
-type AuthOk = { ok: true; user: { id: number } };
+/** Which client proved who it was. Only the photo links care. */
+export type AuthRail = "tma" | "jwt";
+
+type AuthOk = { ok: true; user: { id: number }; rail: AuthRail };
 type AuthErr = { ok: false; body: { error: string; reason?: string } };
 
-function authenticate(req: Request): AuthOk | AuthErr {
+/**
+ * Both client rails, resolved to the one identifier this module speaks.
+ *
+ * The board was Telegram-only until 2026-09-12, and every handler behind it
+ * takes a `telegramId` — a 2000-line state machine keyed on it. The native
+ * client carries a JWT whose subject is the account uuid, so the bridge is one
+ * indexed lookup HERE rather than a second identity threaded through the
+ * handlers: two ways to prove who you are, one notion of who that is.
+ * `canvas-auth.ts` makes the same trade for the Living Canvas and argues it at
+ * length; this is that argument applied to a surface whose handlers were
+ * already written.
+ *
+ * **The lookup is safe for an account that has no Telegram.** A mobile-first
+ * user still has a `telegramId` — a negative synthetic one, minted inside JS
+ * safe-integer range precisely so `Number()` on it loses nothing
+ * (`mobile-user.ts`) — and `sideOfUser` matches on it exactly like a real one.
+ *
+ * A valid signature over an account that no longer exists is 401, not 404: the
+ * routes behind this deliberately refuse to distinguish "no such user" from
+ * "not your match", and answering 404 here would hand back that distinction.
+ */
+async function authenticate(req: Request): Promise<AuthOk | AuthErr> {
   const authHeader = req.header("authorization") ?? req.header("Authorization");
+
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (!token) return { ok: false, body: { error: "Empty token" } };
+    let userId: string;
+    try {
+      userId = verifyAccessToken(token).sub;
+    } catch {
+      return { ok: false, body: { error: "Invalid or expired token" } };
+    }
+    const user = await prisma.user
+      .findUnique({ where: { id: userId }, select: { telegramId: true } })
+      .catch(() => null);
+    if (!user) return { ok: false, body: { error: "Invalid or expired token" } };
+    return { ok: true, user: { id: Number(user.telegramId) }, rail: "jwt" };
+  }
+
   if (!authHeader?.startsWith("tma ")) {
-    return { ok: false, body: { error: "Missing tma initData" } };
+    return { ok: false, body: { error: "Missing credentials" } };
   }
   const initData = authHeader.slice(4).trim();
   if (!initData) return { ok: false, body: { error: "Empty initData" } };
@@ -459,5 +592,5 @@ function authenticate(req: Request): AuthOk | AuthErr {
   if (!validation.valid) {
     return { ok: false, body: { error: "Invalid initData", reason: validation.reason } };
   }
-  return { ok: true, user: { id: validation.user.id } };
+  return { ok: true, user: { id: validation.user.id }, rail: "tma" };
 }
