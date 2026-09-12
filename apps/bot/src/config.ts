@@ -550,6 +550,17 @@ export const env = {
   /// Telegram Stars (XTR) price of one settled venue change — one flat price
   /// for every path (agreed board pick, express). Env-tunable at launch.
   VENUE_CHANGE_STARS: Number(process.env.VENUE_CHANGE_STARS ?? "150"),
+  /// StoreKit 2 CONSUMABLE product id that buys one venue change in the native
+  /// app. Matched by full id or last dot-segment (mirrors
+  /// APPSTORE_TICKET_PRODUCTS / PREMIUM_APPSTORE_PRODUCT_ID).
+  ///
+  /// The native client cannot pay in Stars — Apple does not permit another
+  /// payment rail for a digital good inside the app (guideline 3.1.1) — so the
+  /// two clients buy the same change through different tills. The PRICE is
+  /// Apple's, shown by StoreKit from App Store Connect, exactly as it is for
+  /// tickets and Premium: the server never quotes a figure it does not charge.
+  VENUE_CHANGE_APPSTORE_PRODUCT_ID:
+    process.env.VENUE_CHANGE_APPSTORE_PRODUCT_ID ?? "venue_change_1",
   /// How thin the curated pool has to be before a selection run is allowed to
   /// buy Google Places candidates. `0` disables the live search outright.
   ///

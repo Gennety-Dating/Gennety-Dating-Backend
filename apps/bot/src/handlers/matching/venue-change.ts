@@ -70,8 +70,10 @@ import { refreshStatusBanners } from "../../services/status-banner-refresh.js";
 import { isUniqueViolation } from "../../services/ticket-wallet.js";
 import { notifyFounderPurchase } from "../../services/founder-notify.js";
 import {
+  APPSTORE_PAYMENT_PREFIX,
   refundVenueChangePurchase,
   VENUE_PURCHASE_PROCESSING,
+  VENUE_PURCHASE_REFUND_MANUAL,
   VENUE_PURCHASE_REFUNDED_RACE,
   VENUE_PURCHASE_SELECT,
   VENUE_PURCHASE_SETTLED,
@@ -1398,6 +1400,112 @@ export async function settleFreeVenueChange(
   return finalizeVenueChangeFree(api, matchId, userOfSide(match, side).id);
 }
 
+/**
+ * Settle a change bought through StoreKit (native client, 2026-09-12).
+ *
+ * The Telegram half of this product pays in Stars; the native app cannot —
+ * Apple does not allow a second payment rail for a digital good inside the app
+ * (guideline 3.1.1) — so one change is sold at two tills. Everything after the
+ * money is the same claim, which is why this shares `finalizeVenueChangeFree`'s
+ * compare-and-set instead of copying it.
+ *
+ * The caller has ALREADY verified the transaction against Apple; this function
+ * is handed a transaction id it may trust. Exactly-once is the unique
+ * `externalPaymentId` (`appstore:<transactionId>`), exactly as a redelivered
+ * Stars `successful_payment` is made idempotent by its charge id — a purchase
+ * re-reported at next launch (which the client does whenever `finish()` did not
+ * run) lands here again and changes nothing.
+ *
+ * ── The one thing this rail cannot do ──────────────────────────────────
+ *
+ * Give the money back. `refundStarPayment` has no App Store twin: a consumable
+ * is refunded by Apple, to the buyer, at their request. So an unclaimable
+ * purchase cannot be auto-refunded the way a lost Stars race is. It parks in
+ * `refund_manual` — out of the Stars sweep's reach by prefix — and raises a
+ * founder alert carrying the transaction id, which is what a human needs to
+ * settle it. It is reported to the client as a failure, never as a refund we
+ * have not made.
+ */
+export async function settleVenueChangeFromAppStore(
+  api: Api<RawApi>,
+  payerUserId: string,
+  matchId: string,
+  transactionId: string,
+  priceCents: number | null,
+): Promise<{ ok: boolean; reason?: string }> {
+  const match = await loadMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideOfUserId(match, payerUserId);
+  if (!side) return { ok: false, reason: "not-participant" };
+
+  // (1) Durable pre-settle record. Unique payment id ⇒ exactly-once.
+  let purchase: VenueChangePurchaseRecord;
+  try {
+    purchase = await prisma.venueChangePurchase.create({
+      data: {
+        userId: payerUserId,
+        matchId,
+        status: VENUE_PURCHASE_PROCESSING,
+        externalPaymentId: `${APPSTORE_PAYMENT_PREFIX}${transactionId}`,
+        // Not a Stars purchase, so there is no Star price to freeze. Zero is
+        // the honest reading of "this rail charged no Stars" — what Apple
+        // charged is Apple's record and rides the founder notification below
+        // as cents. Giving this rail its own money column would be a schema
+        // change, which is the founder's call to make, not a side effect of
+        // adding a till.
+        amountStars: 0,
+      },
+      select: VENUE_PURCHASE_SELECT,
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      console.info(
+        `[venue-change] duplicate App Store report ignored match=${matchId} tx=${transactionId}`,
+      );
+      return { ok: true };
+    }
+    throw err;
+  }
+
+  // Founder ops feed. After the exactly-once row, so a re-reported purchase
+  // (the client retries every launch until it gets a 2xx) never re-announces.
+  void notifyFounderPurchase({
+    userId: payerUserId,
+    kind: "venue_change",
+    provider: "app_store",
+    ...(priceCents != null ? { amountCents: priceCents } : {}),
+    detail: match.venueChangeName ? `новое место: ${match.venueChangeName}` : "смена места",
+    matchId,
+    externalPaymentId: `${APPSTORE_PAYMENT_PREFIX}${transactionId}`,
+  });
+
+  const claimed = await finalizeVenueChangeFree(api, matchId, payerUserId, true);
+  if (!claimed.ok) {
+    await prisma.venueChangePurchase.update({
+      where: { id: purchase.id },
+      data: {
+        status: VENUE_PURCHASE_REFUND_MANUAL,
+        resolvedAt: new Date(),
+        refundError: `unclaimable (${claimed.reason ?? "unknown"}) — Apple refunds are not server-initiated`,
+      },
+    });
+    console.error(
+      `[venue-change] App Store purchase bought nothing match=${matchId} ` +
+        `tx=${transactionId} reason=${claimed.reason} — needs a manual refund`,
+    );
+    return { ok: false, reason: claimed.reason ?? "not-agreed" };
+  }
+
+  await prisma.venueChangePurchase.update({
+    where: { id: purchase.id },
+    data: { status: VENUE_PURCHASE_SETTLED, resolvedAt: new Date() },
+  });
+  console.info(
+    `[venue-change] settled via App Store match=${matchId} payer=${payerUserId} tx=${transactionId}`,
+  );
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Keep the original venue (the way back)
 // ---------------------------------------------------------------------------
@@ -1983,6 +2091,15 @@ async function finalizeVenueChangeFree(
   api: Api<RawApi>,
   matchId: string,
   settlerUserId: string,
+  /**
+   * Someone actually paid — reveal who, the way the Stars settle does.
+   *
+   * The claim itself is identical whoever paid and however, which is why the
+   * App Store rail reuses this function rather than growing a third copy of a
+   * compare-and-set that has to stay in step with two others. What differs is
+   * only the card: a free settle has no payer to name, a bought one does.
+   */
+  announceAsPaid = false,
 ): Promise<{ ok: boolean; reason?: string }> {
   const match = await loadMatch(matchId);
   if (!match) return { ok: false, reason: "match-not-found" };
@@ -2030,18 +2147,39 @@ async function finalizeVenueChangeFree(
   const venueAddress = match.venueChangeAddress ?? "";
   const label = venueLabel(venueName, venueAddress);
   const agreedTime = match.agreedTime ?? new Date();
-  for (const user of [match.userA, match.userB]) {
-    await sendUpdatedVenueCard(
-      api,
-      user,
-      "venueSettledCard",
-      { venue: label },
-      agreedTime,
-      venueName,
-      venueAddress,
-      match.venueChangeMapsUri,
-    );
-  }
+  const peer = userOfSide(match, otherSide(side));
+
+  // Settler: the plain updated card, paid or not — they know what they did.
+  await sendUpdatedVenueCard(
+    api,
+    settler,
+    "venueSettledCard",
+    { venue: label },
+    agreedTime,
+    venueName,
+    venueAddress,
+    match.venueChangeMapsUri,
+  );
+
+  // Peer: "he/she covered it" when money changed hands, otherwise the neutral
+  // card — nobody paid, so there is no reveal to make.
+  const peerKey: SettleCardKey = announceAsPaid
+    ? settler.gender === "male"
+      ? "venueSettledPaidByM"
+      : "venueSettledPaidByF"
+    : "venueSettledCard";
+  await sendUpdatedVenueCard(
+    api,
+    peer,
+    peerKey,
+    announceAsPaid
+      ? { name: settler.firstName ?? "", venue: label }
+      : { venue: label },
+    agreedTime,
+    venueName,
+    venueAddress,
+    match.venueChangeMapsUri,
+  );
 
   // Same push as the paid settle — and this is the path a Premium pair and
   // every demo visitor takes, so it is the one most often actually seen.

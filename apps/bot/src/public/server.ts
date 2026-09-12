@@ -58,6 +58,7 @@ import { createNativeFeedbackRouter } from "./routes/feedback-native.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createRadarRouter } from "./routes/radar.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
+import { createVenueChangeAppStoreRouter } from "./routes/venue-change-appstore.js";
 import { createPremiumRouter } from "./routes/premium.js";
 import { createReferralRouter } from "./routes/referral.js";
 import { createPromoRouter } from "./routes/promo.js";
@@ -134,6 +135,7 @@ let nativeFeedbackRouter: ReturnType<typeof createNativeFeedbackRouter> | null =
 let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
+let venueChangeAppStoreRouter: ReturnType<typeof createVenueChangeAppStoreRouter> | null = null;
 let premiumRouter: ReturnType<typeof createPremiumRouter> | null = null;
 let referralRouter: ReturnType<typeof createReferralRouter> | null = null;
 // Public map-tile proxy for the two map Mini App screens (the departure-point
@@ -319,8 +321,23 @@ app.use("/v1/location", (req, res, next) => {
   locationRouter(req, res, next);
 });
 
-// Venue change Mini App — female-exclusive one-shot venue swap. Same
-// initData-HMAC auth as /v1/calendar & /v1/location. Inert behaviour when
+// StoreKit purchase reporting for a venue change (native app, JWT auth).
+// MUST be mounted before /v1/venue-change below, which would otherwise take
+// this path and answer 401 for want of an initData the native app never has.
+app.use("/v1/venue-change/appstore", (req, res, next) => {
+  if (!injectedBotApi) {
+    res.status(503).json({ error: "Venue change endpoint not ready" });
+    return;
+  }
+  if (!venueChangeAppStoreRouter) {
+    venueChangeAppStoreRouter = createVenueChangeAppStoreRouter(injectedBotApi);
+  }
+  venueChangeAppStoreRouter(req, res, next);
+});
+
+// Venue change board — the paid multiplayer venue swap, served to BOTH clients
+// since 2026-09-12: `tma` initData (Mini App) or a JWT bearer (native app), see
+// `routes/venue-change.ts` → `authenticate`. Inert behaviour when
 // VENUE_CHANGE_FEATURE_ENABLED is off (endpoints return ineligible).
 app.use("/v1/venue-change", (req, res, next) => {
   if (!injectedBotApi) {

@@ -31,6 +31,32 @@ export const VENUE_PURCHASE_REFUNDED_STALE = "refunded_stale";
 export const VENUE_PURCHASE_REFUND_FAILED = "refund_failed";
 
 /**
+ * An App Store purchase whose change could not be claimed.
+ *
+ * Its own status because it is the one unrefundable row in the table: Telegram
+ * hands Stars back through `refundStarPayment`, and Apple has no equivalent a
+ * server may call — a consumable is refunded by Apple, to the buyer, on their
+ * own request. So the sweep must never adopt this row (it would retry a refund
+ * that cannot exist, forever), and it must never be reported as refunded. What
+ * it is instead is a founder alert with everything needed to settle it by hand.
+ *
+ * It should be vanishingly rare: reaching it needs Apple to verify a purchase
+ * in the same instant the partner settles or the session lapses.
+ */
+export const VENUE_PURCHASE_REFUND_MANUAL = "refund_manual";
+
+/**
+ * `external_payment_id` prefix that marks the App Store rail.
+ *
+ * The Stars sweep selects by status, and an App Store row can legitimately sit
+ * in `processing` for the same reasons a Stars row can — so status alone would
+ * hand it to `refundStarPayment`, which would fail against a Telegram charge id
+ * that was never a Telegram charge, forever. Filtering on the prefix keeps the
+ * sweep to the rail it can actually act on.
+ */
+export const APPSTORE_PAYMENT_PREFIX = "appstore:";
+
+/**
  * Rows stuck in `processing` for longer than this are treated as abandoned —
  * the process died between "Stars moved" and the terminal write — and refunded.
  * Comfortably longer than a real settle (a few hundred ms plus two DMs) so a
@@ -155,7 +181,12 @@ export async function sweepVenueChangeRefunds(
   // never resolved, so it is the one the user is actually owed right now.
   const [stale, retries] = await Promise.all([
     prisma.venueChangePurchase.findMany({
-      where: { status: VENUE_PURCHASE_PROCESSING, createdAt: { lt: staleBefore } },
+      where: {
+        status: VENUE_PURCHASE_PROCESSING,
+        createdAt: { lt: staleBefore },
+        // Stars only: see APPSTORE_PAYMENT_PREFIX.
+        NOT: { externalPaymentId: { startsWith: APPSTORE_PAYMENT_PREFIX } },
+      },
       select: {
       id: true,
       userId: true,
@@ -168,7 +199,10 @@ export async function sweepVenueChangeRefunds(
       take: SWEEP_STALE_BUDGET,
     }),
     prisma.venueChangePurchase.findMany({
-      where: { status: VENUE_PURCHASE_REFUND_FAILED },
+      where: {
+        status: VENUE_PURCHASE_REFUND_FAILED,
+        NOT: { externalPaymentId: { startsWith: APPSTORE_PAYMENT_PREFIX } },
+      },
       select: {
       id: true,
       userId: true,

@@ -57,6 +57,10 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       coordination: env.COORDINATION_FEATURE_ENABLED,
       premium: env.PREMIUM_FEATURE_ENABLED,
       referral: env.REFERRAL_FEATURE_ENABLED,
+      // The venue-change board. Off, the native client shows no "change the
+      // place" entry at all — every board route answers `feature-disabled`,
+      // and a button whose only outcome is a refusal is not a button.
+      venueChange: env.VENUE_CHANGE_FEATURE_ENABLED,
       promo: env.PROMO_FEATURE_ENABLED,
       // Music on the profile. The client hides the section while this is off,
       // and hides "Connect Spotify" unless the top-tracks import is on too.
@@ -69,6 +73,12 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
     // the app knows and the server doesn't is a purchase that takes money and
     // then fails to report. Empty while tickets are off.
     ticketProducts: env.TICKET_FEATURE_ENABLED ? ticketProducts() : [],
+    // The consumable that buys one venue change, for the same reason the
+    // ladder above is sent: the app must never offer a product id this server
+    // will refuse to credit. Null while the board is off.
+    venueChangeProduct: env.VENUE_CHANGE_FEATURE_ENABLED
+      ? env.VENUE_CHANGE_APPSTORE_PRODUCT_ID
+      : null,
     serverNow: new Date().toISOString(),
   });
 });

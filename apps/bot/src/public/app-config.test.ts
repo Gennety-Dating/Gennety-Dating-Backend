@@ -51,6 +51,7 @@ describe("GET /v1/app/config", () => {
       "serverNow",
       "supportedCities",
       "ticketProducts",
+      "venueChangeProduct",
     ]);
   });
 
