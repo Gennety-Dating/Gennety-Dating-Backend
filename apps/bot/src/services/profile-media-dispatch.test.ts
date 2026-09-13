@@ -1,10 +1,48 @@
 import { describe, it, expect, vi } from "vitest";
+import { InputFile } from "grammy";
 import type { ProfileMedia } from "@gennety/shared";
+
+const storage = vi.hoisted(() => ({ downloadProfileVideo: vi.fn() }));
+vi.mock("./storage.js", () => storage);
+
 import {
   motionOnlyProfileMedia,
+  prepareProfileMediaForTelegram,
   sendMotionProfileMedia,
   sendProfileMediaCard,
 } from "./profile-media-dispatch.js";
+
+// A video recorded in the app is a storage path, and Telegram rejects a whole
+// album over one unknown file_id — so it must leave as bytes or not at all.
+describe("prepareProfileMediaForTelegram", () => {
+  it("turns a stored video into a file body and leaves file_ids alone", async () => {
+    storage.downloadProfileVideo.mockResolvedValue(Buffer.from("mp4-bytes"));
+    const prepared = await prepareProfileMediaForTelegram([
+      { type: "photo", photo: "u/p0.jpg" },
+      { type: "video", video: "u/video-1.mp4", duration: 12 },
+      { type: "video", video: "BAACAgIAAxkBFileId" },
+    ]);
+    expect(prepared).toHaveLength(3);
+    expect(prepared[0]).toEqual({ type: "photo", photo: "u/p0.jpg" });
+    const stored = prepared[1] as { video: unknown; duration?: number };
+    expect(stored.video).toBeInstanceOf(InputFile);
+    expect(stored.duration).toBe(12);
+    expect(prepared[2]).toEqual({ type: "video", video: "BAACAgIAAxkBFileId" });
+    expect(storage.downloadProfileVideo).toHaveBeenCalledTimes(1);
+    expect(storage.downloadProfileVideo).toHaveBeenCalledWith("u/video-1.mp4");
+  });
+
+  it("drops a stored video whose bytes are gone, keeping the photos", async () => {
+    storage.downloadProfileVideo.mockResolvedValue(null);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const prepared = await prepareProfileMediaForTelegram([
+      { type: "photo", photo: "u/p0.jpg" },
+      { type: "video", video: "u/video-1.mp4" },
+    ]);
+    expect(prepared).toEqual([{ type: "photo", photo: "u/p0.jpg" }]);
+    warn.mockRestore();
+  });
+});
 
 function mockApi() {
   return {

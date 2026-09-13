@@ -16,6 +16,7 @@ import {
   incomingVideoMedia,
 } from "../../services/telegram-profile-media.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
+import { deleteProfileVideoObjects } from "../../services/storage.js";
 import { prepareProfileVideo, videoSavedAck } from "../../services/profile-video.js";
 import { grantVideoBonusIfEligible } from "../../services/ticket-wallet.js";
 import { sendTicketRewardDM } from "../../services/ticket-reward.js";
@@ -150,6 +151,11 @@ export async function handleEditVideoUpload(ctx: BotContext): Promise<void> {
     where: { userId: user.id },
     data: { profileMedia: profileMediaToJson(normalizeProfileMedia(nextMedia, photos)) },
   });
+  // A video previously recorded in the app lives in storage — replacing it
+  // here must not orphan the bytes. No-op for a Telegram file_id.
+  if (existingVideo?.type === "video") {
+    await deleteProfileVideoObjects([existingVideo.video, existingVideo.thumb]);
+  }
 
   const res = await grantVideoBonusIfEligible(user.id);
   if (res.granted) {
@@ -185,6 +191,9 @@ export async function handleEditVideoRemove(ctx: BotContext): Promise<void> {
       where: { userId: user.id },
       data: { profileMedia: profileMediaToJson(normalizeProfileMedia(nextMedia, photos)) },
     });
+    await deleteProfileVideoObjects(
+      existingMedia.flatMap((item) => (item.type === "video" ? [item.video, item.thumb] : [])),
+    );
   }
 
   ctx.session.menuState = "idle";

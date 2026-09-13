@@ -1,7 +1,55 @@
-import type { Api, RawApi } from "grammy";
+import { InputFile, type Api, type RawApi } from "grammy";
 import type { InputMediaPhoto, InputMediaVideo, MessageEntity } from "grammy/types";
-import type { ProfileMedia } from "@gennety/shared";
+import {
+  isStorageMediaRef,
+  type ProfileMedia,
+  type ProfileVideoMedia,
+} from "@gennety/shared";
+import { downloadProfileVideo } from "./storage.js";
 import { sendLivePhoto } from "./telegram-live-photo.js";
+
+/**
+ * A profile video as Telegram can take it: a `file_id`, or the bytes of a
+ * native upload (`POST /v1/me/video`), which has no `file_id` at all.
+ */
+export type DeliverableVideoMedia = Omit<ProfileVideoMedia, "video"> & {
+  video: string | InputFile;
+};
+
+/** Profile media ready for a Telegram send — see `prepareProfileMediaForTelegram`. */
+export type DeliverableProfileMedia =
+  | Exclude<ProfileMedia, ProfileVideoMedia>
+  | DeliverableVideoMedia;
+
+/**
+ * Make profile media sendable to Telegram.
+ *
+ * A native video is stored as a Supabase path, and handing that string to
+ * Telegram as a `file_id` does not fail quietly: one unknown id rejects the
+ * whole `sendMediaGroup`, which would cost the partner their photos as well.
+ * So a stored video is sent as a file body instead (≤50 MB, the native upload
+ * cap, is also the Bot API's). A video whose bytes cannot be fetched is dropped
+ * from this send, never the album.
+ *
+ * Call it once per recipient and reuse the result across the card-set attempt
+ * and its fallback: a buffer-backed `InputFile` can be sent more than once.
+ */
+export async function prepareProfileMediaForTelegram(
+  media: readonly ProfileMedia[],
+): Promise<DeliverableProfileMedia[]> {
+  const prepared = await Promise.all(
+    media.map(async (item): Promise<DeliverableProfileMedia | null> => {
+      if (item.type !== "video" || !isStorageMediaRef(item.video)) return item;
+      const bytes = await downloadProfileVideo(item.video);
+      if (!bytes) {
+        console.warn("[profile-media] stored profile video unavailable, skipping it in Telegram");
+        return null;
+      }
+      return { ...item, video: new InputFile(bytes, "profile-video.mp4") };
+    }),
+  );
+  return prepared.filter((item): item is DeliverableProfileMedia => item !== null);
+}
 
 export interface MediaCaption {
   caption?: string;
@@ -32,7 +80,7 @@ function captionOptions(caption: MediaCaption): {
   };
 }
 
-function toInputMedia(item: ProfileMedia, caption: MediaCaption): InputProfileMedia {
+function toInputMedia(item: DeliverableProfileMedia, caption: MediaCaption): InputProfileMedia {
   const captionFields = captionOptions(caption);
   if (item.type === "live_photo") {
     return {
@@ -64,7 +112,7 @@ function toInputMedia(item: ProfileMedia, caption: MediaCaption): InputProfileMe
  * mix photos and videos).
  */
 function toStaticInputMedia(
-  item: ProfileMedia,
+  item: DeliverableProfileMedia,
   caption: MediaCaption,
 ): InputMediaPhoto | InputMediaVideo {
   if (item.type === "video") {
@@ -92,7 +140,7 @@ function sendExtra(
 async function sendStaticFallback(
   api: Api<RawApi>,
   chatId: number,
-  media: readonly ProfileMedia[],
+  media: readonly DeliverableProfileMedia[],
   caption: MediaCaption,
   protect: boolean,
 ): Promise<void> {
@@ -120,7 +168,7 @@ async function sendStaticFallback(
 async function sendProfileMediaChunk(
   api: Api<RawApi>,
   chatId: number,
-  media: readonly ProfileMedia[],
+  media: readonly DeliverableProfileMedia[],
   caption: MediaCaption,
   protect: boolean,
 ): Promise<void> {
@@ -180,7 +228,7 @@ async function sendProfileMediaChunk(
 export async function sendProfileMediaCard(
   api: Api<RawApi>,
   chatId: number,
-  media: readonly ProfileMedia[],
+  media: readonly DeliverableProfileMedia[],
   caption: MediaCaption = {},
   options: { protect?: boolean } = {},
 ): Promise<void> {
@@ -198,8 +246,8 @@ export async function sendProfileMediaCard(
  * Live Photo motion parts are represented as Telegram videos here.
  */
 export function motionOnlyProfileMedia(
-  media: readonly ProfileMedia[],
-): ProfileMedia[] {
+  media: readonly DeliverableProfileMedia[],
+): DeliverableProfileMedia[] {
   return media.flatMap((item) => {
     if (item.type === "photo") return [];
     if (item.type === "video") return [item];
@@ -225,7 +273,7 @@ export function motionOnlyProfileMedia(
 export async function sendMotionProfileMedia(
   api: Api<RawApi>,
   chatId: number,
-  media: readonly ProfileMedia[],
+  media: readonly DeliverableProfileMedia[],
   options: { protect?: boolean } = {},
 ): Promise<void> {
   const motion = motionOnlyProfileMedia(media);

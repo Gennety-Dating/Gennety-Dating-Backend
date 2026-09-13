@@ -2,7 +2,10 @@ import { InlineKeyboard, InputMediaBuilder } from "grammy";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import { normalizeProfileMedia, profileMediaHasVideo, t, escapeMd } from "@gennety/shared";
-import { sendProfileMediaCard } from "../../services/profile-media-dispatch.js";
+import {
+  prepareProfileMediaForTelegram,
+  sendProfileMediaCard,
+} from "../../services/profile-media-dispatch.js";
 import { env } from "../../config.js";
 import { intentProfileLine } from "../../services/intent-copy.js";
 
@@ -68,7 +71,8 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
 
   if ((hasLivePhoto || hasVideo) && ctx.chat) {
     try {
-      await sendProfileMediaCard(ctx.api, ctx.chat.id, media);
+      // A video recorded in the app has no Telegram file_id — send its bytes.
+      await sendProfileMediaCard(ctx.api, ctx.chat.id, await prepareProfileMediaForTelegram(media));
     } catch {
       // Stale file_ids — skip media and continue with text body.
     }

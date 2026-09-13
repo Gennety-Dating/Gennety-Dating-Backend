@@ -63,6 +63,7 @@ import {
   removeAlignedPhotoHash,
 } from "../../services/profile-media-validation/photo-state.js";
 import { sniffImageMime } from "../../utils/image-sniff.js";
+import { serializeOwnProfileVideo } from "../../services/native-profile-video.js";
 import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
 import { buildReferralStateView, claimReferralCode } from "../../services/referral.js";
 import { claimPromoCodeForUser, grantPromoRewardsForUser } from "../../services/promo.js";
@@ -683,10 +684,21 @@ function photoConsensusApiMessage(
 meRouter.get("/photos", async (req: Request, res: Response): Promise<void> => {
   const profile = await prisma.profile.findUnique({
     where: { userId: req.userId! },
-    select: { photos: true },
+    select: { photos: true, profileMedia: true },
   });
   const photos = profile?.photos ?? [];
-  res.json(await buildPhotosResponse(photos));
+  // The profile video rides on this read because this is where the photo
+  // editor already asks and where URLs are minted (decision journal
+  // 2026-09-13). `videoEnabled` is the app's capability signal: an older
+  // server omits it, and the section stays hidden instead of 404-ing on save.
+  const video = env.PROFILE_VIDEO_API_ENABLED
+    ? await serializeOwnProfileVideo(photos, profile?.profileMedia ?? [])
+    : null;
+  res.json({
+    ...(await buildPhotosResponse(photos)),
+    videoEnabled: env.PROFILE_VIDEO_API_ENABLED,
+    ...(video ? { video } : {}),
+  });
 });
 
 /**
@@ -965,7 +977,18 @@ meRouter.delete(
         return { kind: "minimum" as const };
       }
 
-      const nextMedia = [...media.slice(0, index), ...media.slice(index + 1)];
+      // `index` addresses `photos[]`, and `profileMedia` is NOT aligned with it:
+      // a video item has no static frame yet sits among the photos (new photos
+      // are appended after it). Slicing `media` by the photo index removed the
+      // video instead of the photo — and the photos-only fallback in
+      // `normalizeProfileMedia` then hid the damage. Remove the index-th STATIC
+      // item instead.
+      let staticSeen = -1;
+      const nextMedia = media.filter((item) => {
+        if (item.type === "video") return true;
+        staticSeen += 1;
+        return staticSeen !== index;
+      });
       const scores = user.profile?.photoFaceScores ?? [];
       const nextScores =
         scores.length === photos.length

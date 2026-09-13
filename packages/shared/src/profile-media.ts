@@ -18,9 +18,13 @@ export interface ProfileLivePhotoMedia {
 
 export interface ProfileVideoMedia {
   type: "video";
-  /** Telegram file_id of the validated video part. */
+  /**
+   * The validated video: a Telegram `file_id` (bot upload) or a Supabase
+   * Storage path `{userId}/video-{ts}.mp4` (native upload, `POST /v1/me/video`).
+   * Tell them apart with `isStorageMediaRef` — the same discriminator photos use.
+   */
   video: string;
-  /** Optional poster/thumbnail file_id for the card. */
+  /** Optional poster/thumbnail: `file_id` (bot) or storage path (native). */
   thumb?: string;
   duration?: number;
   width?: number;
@@ -201,6 +205,15 @@ export function staticPhotosFromProfileMedia(media: readonly ProfileMedia[]): st
   return media
     .filter((item): item is ProfilePhotoMedia | ProfileLivePhotoMedia => item.type !== "video")
     .map((item) => item.photo);
+}
+
+/**
+ * True when a media ref is a Supabase Storage path rather than a Telegram
+ * `file_id`. Unambiguous: storage paths are always `{ownerId}/{name}`, and
+ * `file_id`s are base64url tokens, which never contain a slash.
+ */
+export function isStorageMediaRef(ref: string): boolean {
+  return ref.includes("/");
 }
 
 /** True if the structured media array contains at least one video item. */

@@ -11,6 +11,38 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — видео профиля из приложения: `POST/DELETE /v1/me/video`, `video` в `GET /v1/me/photos` и в `partner-photos`, отправка нативного видео в Telegram-питч (2026-09-13).**
+**Изменения схемы Prisma нет** — видео ложится в существующий `profiles.profile_media`.
+Журнал решений — запись 2026-09-13 «видео профиля из приложения».
+
+1. Бот: обычный рестарт. Webapp не меняется. Бакет — существующий
+   `SUPABASE_PHOTO_BUCKET`, новых бакетов нет.
+2. На хосте уже обязаны стоять `ffmpeg`/`ffprobe` (валидация видео бота) — ручка ими же
+   меряет длительность; без них загрузка отвечает 503 `processing_unavailable`.
+
+**Переменные окружения:** одна новая и необязательная — `PROFILE_VIDEO_API_ENABLED`
+(по умолчанию ВКЛ; `"false"` — рубильник: ручки 404, секция в приложении скрыта).
+
+**Проверка после выката:**
+
+```
+# ручка жива (без токена — 401, а не 404):
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE https://dating-api.gennety.com/v1/me/video
+# приложение увидит секцию:
+curl -s -H "Authorization: Bearer $TOKEN" https://dating-api.gennety.com/v1/me/photos | jq '.videoEnabled'
+```
+
+**Откат:** `PROFILE_VIDEO_API_ENABLED=false` + рестарт — ручки гаснут, уже загруженные
+видео остаются в профиле и уходят партнёрам в Telegram. Полный откат — `git revert`
+коммита; нативные видео тогда останутся в `profile_media` путями, и старый код отправит их
+в Telegram как `file_id` (альбом партнёра упадёт) — перед полным откатом удалить их:
+`DELETE /v1/me/video` за владельцев или вычистить элементы `video` со слэшем.
+
+**Демо-режим:** не затронут. **iOS:** клиентская половина в Gennety-iOS (журнал 2026-09-13);
+сборка без выката сервера секцию не показывает (`videoEnabled` отсутствует).
+
+---
+
 **PENDING — инбокс, объявления, пульс и контекст чата: `/v1/inbox*`, `/v1/pulse`, `context` в чате, `/admin/announcements*` (2026-09-13).**
 **Есть изменение схемы Prisma** — миграция `20260913090000_inbox_announcements`, аддитивная:
 `messages.context` (JSONB, nullable), таблицы `announcements` и `inbox_items`. Проверена на

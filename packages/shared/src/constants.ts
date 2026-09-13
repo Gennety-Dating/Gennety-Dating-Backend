@@ -86,6 +86,17 @@ export const LIVE_PHOTO_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 export const PROFILE_VIDEO_MAX_DURATION_SECONDS = 60;
 export const PROFILE_VIDEO_MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 export const PROFILE_MEDIA_VALIDATION_VERSION = 1;
+/**
+ * Native-rail profile video (`POST /v1/me/video`, iOS). Tighter than the
+ * Telegram ceiling above on purpose:
+ * - 50 MB is the Bot API's upload cap for `sendVideo`/`sendMediaGroup` with a
+ *   file body. A native video has no Telegram `file_id`, so the pitch sends its
+ *   bytes; anything larger could never reach a Telegram partner.
+ * - 3 s is a floor the bot never had: in the app the video is recorded with a
+ *   button, and a sub-3-second clip is a mis-tap, not a pitch.
+ */
+export const PROFILE_VIDEO_NATIVE_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+export const PROFILE_VIDEO_NATIVE_MIN_DURATION_SECONDS = 3;
 
 /** Profile media validation thresholds (upload-time gates). */
 export const FACE_SIMILARITY_THRESHOLD = 0.6;

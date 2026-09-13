@@ -27,13 +27,14 @@
 import { InputFile } from "grammy";
 import type { Api, RawApi } from "grammy";
 import type { InputMediaPhoto, InputMediaVideo, MessageEntity } from "grammy/types";
-import { MAX_PHOTOS, type Language, type ProfileMedia } from "@gennety/shared";
+import { MAX_PHOTOS, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { PROTECT_PARTNER_MEDIA } from "../../demo/config.js";
 import { downloadProfileImage } from "../storage.js";
 import {
   MAX_TELEGRAM_MEDIA_GROUP_SIZE,
   motionOnlyProfileMedia,
+  type DeliverableProfileMedia,
 } from "../profile-media-dispatch.js";
 import { generateMatchCardTexts } from "./copy.js";
 import { renderMatchCardSet, type MatchCardTheme } from "./index.js";
@@ -42,7 +43,7 @@ import { renderMatchCardSet, type MatchCardTheme } from "./index.js";
 const MAX_CARD_PHOTOS = MAX_PHOTOS;
 
 /** A motion item as `motionOnlyProfileMedia` emits it — always a video. */
-type MotionMedia = Extract<ProfileMedia, { type: "video" }>;
+type MotionMedia = Extract<DeliverableProfileMedia, { type: "video" }>;
 
 export type PartnerMatchCardsResult =
   /** Caller must fall back to the classic photo media group. */
@@ -53,7 +54,7 @@ export type PartnerMatchCardsResult =
    * case (5 cards max, and a profile carries one video), non-empty only for a
    * profile made almost entirely of Live Photos.
    */
-  | { sent: true; motionOverflow: readonly ProfileMedia[] };
+  | { sent: true; motionOverflow: readonly DeliverableProfileMedia[] };
 
 export interface PartnerMatchCardsInput {
   matchId: string;
@@ -65,10 +66,11 @@ export interface PartnerMatchCardsInput {
   /** Partner's static profile photos (Telegram file_id / Supabase path). */
   photos: readonly string[];
   /**
-   * Partner's normalized profile media. Only its motion is used — the static
+   * Partner's normalized profile media, prepared for Telegram
+   * (`prepareProfileMediaForTelegram`). Only its motion is used — the static
    * frames are already rendered into the cards.
    */
-  profileMedia: readonly ProfileMedia[];
+  profileMedia: readonly DeliverableProfileMedia[];
   language: Language;
   /** Recipient's chosen theme — renders the paper set light or dark. */
   theme: MatchCardTheme;

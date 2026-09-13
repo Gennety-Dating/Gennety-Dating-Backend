@@ -68,6 +68,27 @@ async function resolvePartnerPhotos(
   viewerId: string,
   matchId: string,
 ): Promise<string[] | null> {
+  return (await resolvePartnerMedia(viewerId, matchId))?.photos ?? null;
+}
+
+/**
+ * The partner's photos and structured media under the entitlement above, or
+ * null when the viewer may not see them. The profile video is read from here
+ * so it can never be handed out on a looser rule than the face.
+ *
+ * **The video leaves as a Supabase signed URL, not through the byte proxy** —
+ * a deliberate exception to the header of this file (decision journal
+ * 2026-09-13). `AVPlayer` streams with HTTP Range requests, which the proxy
+ * does not serve, and a 50 MB clip per view through our droplet is not the
+ * "handful of images" that trade was priced for. Only a native-rail video has
+ * a storage path to sign; a Telegram `file_id` video is simply not offered.
+ * The cost: a URL minted before a cancellation keeps working for the rest of
+ * its ten minutes, instead of dying with the match.
+ */
+export async function resolvePartnerMedia(
+  viewerId: string,
+  matchId: string,
+): Promise<{ photos: string[]; profileMedia: unknown } | null> {
   const match = await prisma.match.findFirst({
     where: {
       id: matchId,
@@ -76,13 +97,16 @@ async function resolvePartnerPhotos(
     },
     select: {
       userAId: true,
-      userA: { select: { profile: { select: { photos: true } } } },
-      userB: { select: { profile: { select: { photos: true } } } },
+      userA: { select: { profile: { select: { photos: true, profileMedia: true } } } },
+      userB: { select: { profile: { select: { photos: true, profileMedia: true } } } },
     },
   });
   if (!match) return null;
   const partner = match.userAId === viewerId ? match.userB : match.userA;
-  return partner.profile?.photos ?? [];
+  return {
+    photos: partner.profile?.photos ?? [],
+    profileMedia: partner.profile?.profileMedia ?? [],
+  };
 }
 
 /**

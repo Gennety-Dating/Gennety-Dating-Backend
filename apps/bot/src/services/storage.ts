@@ -290,6 +290,98 @@ export async function createProfilePhotoSignedUrl(
 }
 
 /**
+ * A 50 MB video over a 20 s budget needs 2.5 MB/s sustained, which a slow
+ * Supabase region round-trip does not always give. Photos keep the short one.
+ */
+const PROFILE_VIDEO_STORAGE_TIMEOUT_MS = 120_000;
+
+export type ProfileVideoAssetRole = "video" | "thumb";
+
+/**
+ * Upload a native profile video or its poster (`POST /v1/me/video`).
+ *
+ * Same bucket and `{userId}/…` prefix as profile photos, for two reasons: the
+ * partner-visibility rules are the same, and account deletion already sweeps
+ * every `{userId}/…` string out of `profileMedia` from that bucket. A fresh name
+ * per upload, so a phone holding the previous signed URL never plays a
+ * half-replaced file.
+ */
+export async function uploadProfileVideoAsset(
+  userId: string,
+  role: ProfileVideoAssetRole,
+  buffer: Buffer,
+  mime: string,
+): Promise<UploadResult> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Supabase Storage not configured");
+  }
+  const contentType = role === "video" ? "video/mp4" : normalizeImageMime(mime);
+  const ext = role === "video" ? "mp4" : contentType === "image/png" ? "png" : "jpg";
+  const path = `${userId}/${role === "video" ? "video" : "video-thumb"}-${Date.now()}.${ext}`;
+  if (!isSafeStorageObjectPath(path)) throw new Error("Unsafe profile video path");
+
+  const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_PHOTO_BUCKET}/${path}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": contentType,
+      "x-upsert": "true",
+    },
+    body: new Uint8Array(buffer),
+    signal: AbortSignal.timeout(PROFILE_VIDEO_STORAGE_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Supabase upload failed: ${res.status} ${body}`);
+  }
+  return { path };
+}
+
+/**
+ * Best-effort removal of a replaced or removed profile video's stored objects.
+ *
+ * Refs without a slash are Telegram `file_id`s (same discriminator as
+ * `downloadProfileImage`) — Telegram owns those, nothing to delete here. A
+ * failed delete leaves an orphan in the bucket rather than failing the edit:
+ * the profile row is the source of truth, as with photo deletes.
+ */
+export async function deleteProfileVideoObjects(
+  refs: readonly (string | undefined)[],
+): Promise<void> {
+  const stored = refs.filter((ref): ref is string => typeof ref === "string" && ref.includes("/"));
+  await Promise.all(
+    stored.map((ref) =>
+      deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, ref).catch((err) => {
+        console.warn("[storage] profile video object delete failed", { ref, err });
+        return false;
+      }),
+    ),
+  );
+}
+
+/**
+ * Download a native profile video's bytes — the Telegram pitch sends them as a
+ * file body, because such a video has no Telegram `file_id`. `null` on any
+ * failure; the caller drops the video from that send rather than the album.
+ */
+export async function downloadProfileVideo(path: string): Promise<Buffer | null> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  if (!isSafeStorageObjectPath(path)) return null;
+  const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_PHOTO_BUCKET}/${path}`;
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+      signal: AbortSignal.timeout(PROFILE_VIDEO_STORAGE_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Upload a chat attachment (mobile chat agent multimodal input) to Supabase
  * Storage. Path format `{userId}/{timestamp}.{ext}` mirrors the photo/selfie
  * helpers so the same ownership-by-prefix check works across all buckets.

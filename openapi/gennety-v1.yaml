@@ -1693,6 +1693,101 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/video:
+    post:
+      tags: [me]
+      operationId: uploadProfileVideo
+      summary: Upload the profile video (replaces any previous one)
+      description: |
+        Multipart with two parts, in this order: `video` (ISO-BMFF `.mp4`,
+        H.264 or HEVC, 3–60 s, ≤ 50 MB) and `thumb` (the client-made
+        first-frame poster, JPEG/PNG ≤ 5 MB).
+
+        Checked server-side exactly like a video sent to the bot: every
+        sampled frame and the audio transcript are moderated; there is no
+        face or identity gate (the video is display-only). Duration is
+        measured here, not trusted from the client. Errors use the
+        `{ error, code, retryable }` body — switch on `code`.
+
+        The one-time `video_bonus` ticket is granted on the first accepted
+        video (`bonusGranted`). Returns 404 before auth while the server's
+        kill switch is off (see `PhotosResponse.videoEnabled`).
+        Rate limit: 6 uploads per hour.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [video, thumb]
+              properties:
+                video: { type: string, format: binary }
+                thumb: { type: string, format: binary }
+      responses:
+        "201":
+          description: Accepted, stored and attached to the profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfileVideoUploadResponse" }
+        "400":
+          description: "`invalid_media` — a part is missing, or not a video / not an image"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotoRejection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: No profile yet, or the feature is switched off
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: "`video_too_large` (> 50 MB) or `video_too_long` (> 60 s)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotoRejection" }
+        "422":
+          description: "`unsafe_content`, `video_too_short` (< 3 s), or another validation refusal"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotoRejection" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502":
+          description: "`storage_unavailable` — retry"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotoRejection" }
+        "503":
+          description: "`processing_unavailable` — validation temporarily unavailable, retry"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotoRejection" }
+    delete:
+      tags: [me]
+      operationId: deleteProfileVideo
+      summary: Remove the profile video (idempotent)
+      description: |
+        Removes the video whichever surface recorded it; the profile falls
+        back to photos only. Not an error when there is no video. The
+        one-time ticket bonus is not reversed.
+      responses:
+        "200":
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [removed]
+                properties:
+                  removed:
+                    type: boolean
+                    description: False when there was no video to remove
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: The feature is switched off
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/onboarding/consent:
     post:
       tags: [onboarding]
@@ -2480,6 +2575,16 @@ paths:
                   urls:
                     type: array
                     items: { type: string, format: uri }
+                  video:
+                    $ref: "#/components/schemas/ProfileVideo"
+                    description: |
+                      The partner's profile video — present only when there is
+                      something to play (`url` is never null here). Same
+                      entitlement as the photos, but a Supabase signed URL
+                      rather than the byte proxy: AVPlayer needs Range
+                      requests. So, unlike the photos, a URL minted before a
+                      cancellation keeps working for the rest of its 10
+                      minutes.
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404":
           description: No live match with this id for this caller
@@ -5927,6 +6032,51 @@ components:
           type: array
           items: { type: string }
           description: 1:1 with `photos`; empty string when signing unavailable
+        videoEnabled:
+          type: boolean
+          description: |
+            `GET /v1/me/photos` only. True while the server accepts
+            `POST /v1/me/video`. Absent on servers that predate the endpoint —
+            the client hides the video section rather than offering a save
+            that would 404. False is the server's kill switch.
+        video:
+          $ref: "#/components/schemas/ProfileVideo"
+          description: |
+            `GET /v1/me/photos` only. The profile video; absent when there is
+            none. Upload and delete responses do not carry it — re-read.
+
+    ProfileVideo:
+      type: object
+      description: |
+        One profile video per profile, whichever surface recorded it.
+        `url: null` means a video exists but cannot be played in the app — it
+        was recorded in Telegram, which keeps it as a `file_id`. The owner can
+        still replace or delete it. Signed URLs live 10 minutes and serve
+        HTTP Range requests (AVPlayer streams them).
+      required: [url, thumbUrl, duration]
+      properties:
+        url: { type: [string, "null"] }
+        thumbUrl:
+          type: [string, "null"]
+          description: First-frame poster to show before the video buffers
+        duration:
+          type: [number, "null"]
+          description: Seconds, one decimal
+
+    ProfileVideoUploadResponse:
+      type: object
+      required: [videoUrl, thumbUrl, duration, bonusGranted]
+      properties:
+        videoUrl:
+          type: [string, "null"]
+          description: Signed, 10 minutes. Null only when storage signing is unavailable
+        thumbUrl: { type: [string, "null"] }
+        duration: { type: number, description: Measured server-side, seconds }
+        bonusGranted:
+          type: boolean
+          description: |
+            True when this upload earned the one-time profile-video ticket
+            (ledger reason `video_bonus`). Never reversed by a later delete.
 
     PhotoConsensus:
       type: object

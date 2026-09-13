@@ -18,7 +18,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const applyMatchDecision = vi.fn();
 const getCurrentMatchForUser = vi.fn();
-const countPartnerPhotos = vi.fn();
+const resolvePartnerMedia = vi.fn();
 const getVenueIntentState = vi.fn();
 
 vi.mock("../public/matches-service.js", () => ({
@@ -36,7 +36,7 @@ vi.mock("./matches-service.js", () => ({
   submitMatchReport: vi.fn(),
 }));
 vi.mock("./partner-photos.js", () => ({
-  countPartnerPhotos,
+  resolvePartnerMedia,
   partnerPhotoUrls: vi.fn(() => []),
 }));
 vi.mock("../services/venue-intent-v2.js", () => ({
@@ -81,7 +81,7 @@ const MALFORMED = ["not-a-uuid", "1", "..", "%2e%2e", "00000000-0000-0000-0000-0
 
 beforeEach(() => {
   applyMatchDecision.mockReset().mockResolvedValue(null);
-  countPartnerPhotos.mockReset().mockResolvedValue(null);
+  resolvePartnerMedia.mockReset().mockResolvedValue(null);
   getVenueIntentState.mockReset().mockResolvedValue(null);
   getCurrentMatchForUser.mockReset().mockResolvedValue(null);
 });
@@ -101,7 +101,7 @@ describe("/v1/matches/:id — UUID shape guard", () => {
     const app = buildApp();
     await request(app).get("/v1/matches/nope/partner-photos").expect(404);
     await request(app).get("/v1/matches/nope/venue-intent").expect(404);
-    expect(countPartnerPhotos).not.toHaveBeenCalled();
+    expect(resolvePartnerMedia).not.toHaveBeenCalled();
     expect(getVenueIntentState).not.toHaveBeenCalled();
   });
 

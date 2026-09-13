@@ -53,6 +53,7 @@ import { createProxyChatRouter } from "./routes/proxy-chat.js";
 import { createUserBlocksRouter } from "./routes/user-blocks.js";
 import { ticketsHistoryRouter } from "./routes/tickets-history.js";
 import { createVoicePromptRouter } from "./routes/voice-prompt.js";
+import { createProfileVideoRouter } from "./routes/profile-video.js";
 import { createMusicSearchRouter, createProfileMusicRouter } from "./routes/music.js";
 import { createSpotifyImportRouter } from "./routes/spotify-import.js";
 import { createNativeFeedbackRouter } from "./routes/feedback-native.js";
@@ -129,6 +130,7 @@ let nativeTicketGateRouter: ReturnType<typeof createNativeTicketGateRouter> | nu
 let nativeCalendarRouter: ReturnType<typeof createNativeCalendarRouter> | null = null;
 let proxyChatRouter: ReturnType<typeof createProxyChatRouter> | null = null;
 let voicePromptRouter: ReturnType<typeof createVoicePromptRouter> | null = null;
+let profileVideoRouter: ReturnType<typeof createProfileVideoRouter> | null = null;
 let profileMusicRouter: ReturnType<typeof createProfileMusicRouter> | null = null;
 let musicSearchRouter: ReturnType<typeof createMusicSearchRouter> | null = null;
 let spotifyImportRouter: ReturnType<typeof createSpotifyImportRouter> | null = null;
@@ -581,6 +583,16 @@ app.use("/v1/me/live-activity-token", liveActivityRouter);
 app.use("/v1/me/blocks", createUserBlocksRouter());
 // Wallet movements for the native Tickets tab (TH1). Same rule again.
 app.use("/v1/me/tickets/history", ticketsHistoryRouter);
+// Profile video from the native app (decision journal 2026-09-13). Same rule;
+// 404s before auth while the kill switch is off.
+app.use("/v1/me/video", (req, res, next) => {
+  if (!env.PROFILE_VIDEO_API_ENABLED) {
+    res.status(404).json({ error: "profile-video-disabled" });
+    return;
+  }
+  if (!profileVideoRouter) profileVideoRouter = createProfileVideoRouter();
+  profileVideoRouter(req, res, next);
+});
 // Pause/resume + freeze (native app). Same mount as meRouter, tried first;
 // unmatched /v1/me/* paths fall through to the main router below.
 app.use("/v1/me", accountStatusRouter);

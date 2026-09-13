@@ -381,6 +381,12 @@ export const env = {
   /// product default; set explicitly to "false" only for local emergency tests.
   PROFILE_MEDIA_VALIDATION_ENABLED:
     process.env.PROFILE_MEDIA_VALIDATION_ENABLED !== "false",
+  /// Profile video from the native app (`POST/DELETE /v1/me/video`, decision
+  /// journal 2026-09-13). Default ON — the bot has taken profile videos for
+  /// months and this only opens a second door to the same slot. `"false"` is
+  /// the kill switch: the routes 404 and `GET /v1/me/photos` reports
+  /// `videoEnabled: false`, which is what hides the section in the app.
+  PROFILE_VIDEO_API_ENABLED: process.env.PROFILE_VIDEO_API_ENABLED !== "false",
 
   /// Voice prompts (VOICE_PROMPT_PRODUCT_SPEC.md). Default OFF: this adds a
   /// step to a live onboarding funnel and a message to every pitch, so it ships

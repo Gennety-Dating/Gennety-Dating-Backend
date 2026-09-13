@@ -83,6 +83,7 @@ vi.mock("../config.js", () => ({
     AWS_ACCESS_KEY_ID: "",
     AWS_SECRET_ACCESS_KEY: "",
     PROFILE_MEDIA_VALIDATION_ENABLED: false,
+    PROFILE_VIDEO_API_ENABLED: true,
     PROFILE_MEDIA_VALIDATION_FAIL_OPEN: false,
     PROFILE_VIDEO_MAX_ANALYSIS_FRAMES: 24,
     PROFILE_VIDEO_VALIDATION_TIMEOUT_MS: 60_000,
@@ -1930,6 +1931,48 @@ describe("GET /v1/me/photos", () => {
     expect(res.status).toBe(200);
     expect(res.body.photos).toEqual([]);
     expect(res.body.signedUrls).toEqual([]);
+    expect(res.body.videoEnabled).toBe(true);
+    expect(res.body).not.toHaveProperty("video");
+  });
+
+  // The app's photo editor reads the profile video from this same call
+  // (decision journal 2026-09-13).
+  it("reports a stored video with signed URLs, and a Telegram one without", async () => {
+    const user = await seedUser();
+    const u = db.users.get(user.id)!;
+    u.profile = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      hobbies: [],
+      partnerPreferences: null,
+      psychologicalSummary: null,
+      ageRangeMin: null,
+      ageRangeMax: null,
+      photos: ["p/a.jpg"],
+      profileMedia: [
+        { type: "photo", photo: "p/a.jpg" },
+        { type: "video", video: "p/video-1.mp4", thumb: "p/video-thumb-1.jpg", duration: 21 },
+      ],
+      matchRadius: "campus_only",
+    };
+    const res = await request(app)
+      .get("/v1/me/photos")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+    expect(res.status).toBe(200);
+    expect(res.body.video).toEqual({
+      url: "https://signed.test/photo/p/video-1.mp4",
+      thumbUrl: "https://signed.test/photo/p/video-thumb-1.jpg",
+      duration: 21,
+    });
+
+    u.profile.profileMedia = [
+      { type: "photo", photo: "p/a.jpg" },
+      { type: "video", video: "BAACAgIAAxkBTelegramFileId", duration: 9 },
+    ];
+    const telegram = await request(app)
+      .get("/v1/me/photos")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+    expect(telegram.body.video).toEqual({ url: null, thumbUrl: null, duration: 9 });
   });
 });
 
@@ -2262,6 +2305,32 @@ describe("DELETE /v1/me/photos/:index", () => {
 
     expect(res.status).toBe(200);
     expect(userById(user.id)?.profile?.uploadedPhotoHashes).toEqual(["", ""]);
+  });
+
+  // `profileMedia` is not aligned with `photos[]`: a video sits among the
+  // photos. Slicing media by the photo index used to delete the video instead.
+  it("removes the photo, not the video sitting at the same media index", async () => {
+    const user = await seedWithPhotos(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]);
+    userById(user.id)!.profile!.profileMedia = [
+      { type: "photo", photo: "a.jpg" },
+      { type: "photo", photo: "b.jpg" },
+      { type: "photo", photo: "c.jpg" },
+      { type: "photo", photo: "d.jpg" },
+      { type: "video", video: "u/video-1.mp4" },
+      { type: "photo", photo: "e.jpg" },
+    ];
+    const res = await request(app)
+      .delete("/v1/me/photos/4")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+    expect(res.status).toBe(200);
+    expect(res.body.photos).toEqual(["a.jpg", "b.jpg", "c.jpg", "d.jpg"]);
+    expect(userById(user.id)?.profile?.profileMedia).toEqual([
+      { type: "photo", photo: "a.jpg" },
+      { type: "photo", photo: "b.jpg" },
+      { type: "photo", photo: "c.jpg" },
+      { type: "photo", photo: "d.jpg" },
+      { type: "video", video: "u/video-1.mp4" },
+    ]);
   });
 
   it("404 on out-of-range index", async () => {
@@ -2688,6 +2757,36 @@ describe("/v1/matches/*", () => {
       expect(res.body.urls[0]).toContain(`m=${match.id}`);
       expect(res.body.urls[0]).toContain(`v=${alice.id}`);
       expect(res.body.urls[0]).not.toContain("b/1.jpg");
+    });
+
+    it("adds the partner's app-recorded video, and never a Telegram one", async () => {
+      const alice = await seedUser({ firstName: "Alice" });
+      const bob = await seedUser({ firstName: "Bob", ...withPhotos(["b/1.jpg"]) });
+      db.users.get(bob.id)!.profile!.profileMedia = [
+        { type: "photo", photo: "b/1.jpg" },
+        { type: "video", video: "b/video-1.mp4", thumb: "b/video-thumb-1.jpg", duration: 30 },
+      ];
+      const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
+
+      const res = await request(app)
+        .get(`/v1/matches/${match.id}/partner-photos`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.urls).toHaveLength(1);
+      expect(res.body.video).toEqual({
+        url: "https://signed.test/photo/b/video-1.mp4",
+        thumbUrl: "https://signed.test/photo/b/video-thumb-1.jpg",
+        duration: 30,
+      });
+
+      db.users.get(bob.id)!.profile!.profileMedia = [
+        { type: "photo", photo: "b/1.jpg" },
+        { type: "video", video: "BAACAgIAAxkBTelegramFileId", duration: 30 },
+      ];
+      const telegram = await request(app)
+        .get(`/v1/matches/${match.id}/partner-photos`)
+        .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+      expect(telegram.body).not.toHaveProperty("video");
     });
 
     it("404s for a user who is not in the match", async () => {

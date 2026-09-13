@@ -5,7 +5,9 @@ import { getBotApi } from "../server.js";
 import { blockMatchPartner } from "../../services/user-block.js";
 import { agentTextLimiter } from "../rate-limit.js";
 import { classifyMatchDecisionForUser } from "../../services/decision-intent.js";
-import { countPartnerPhotos, partnerPhotoUrls } from "../partner-photos.js";
+import { partnerPhotoUrls, resolvePartnerMedia } from "../partner-photos.js";
+import { serializePartnerProfileVideo } from "../../services/native-profile-video.js";
+import { env } from "../../config.js";
 import {
   getCurrentMatchForUser,
   applyMatchDecision,
@@ -89,12 +91,20 @@ const REPORT_CATEGORIES = new Set<ReportCategory>([
  * a live match, and nobody else.
  */
 matchesRouter.get("/:id/partner-photos", async (req: Request, res: Response): Promise<void> => {
-  const count = await countPartnerPhotos(req.userId!, paramId(req));
-  if (count === null) {
+  const partner = await resolvePartnerMedia(req.userId!, paramId(req));
+  if (partner === null) {
     res.status(404).json({ error: "Match not found" });
     return;
   }
-  res.json({ urls: partnerPhotoUrls(req.userId!, paramId(req), count) });
+  // The partner's profile video, when one recorded in the app exists — same
+  // entitlement, signed-URL transport (reason in `partner-photos.ts`).
+  const video = env.PROFILE_VIDEO_API_ENABLED
+    ? await serializePartnerProfileVideo(partner.photos, partner.profileMedia)
+    : null;
+  res.json({
+    urls: partnerPhotoUrls(req.userId!, paramId(req), partner.photos.length),
+    ...(video ? { video } : {}),
+  });
 });
 
 matchesRouter.get("/current", async (req: Request, res: Response): Promise<void> => {

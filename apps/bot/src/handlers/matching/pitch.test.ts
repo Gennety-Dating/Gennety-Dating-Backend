@@ -41,6 +41,7 @@ vi.mock("../../services/match-card/send.js", () => ({
 vi.mock("../../services/profile-media-dispatch.js", () => ({
   sendProfileMediaCard: mMedia,
   sendMotionProfileMedia: mMotion,
+  prepareProfileMediaForTelegram: vi.fn(async (media: unknown) => media),
 }));
 
 const { sendMatchProposal, sendMatchWelcomeGiftPreroll } = await import("./pitch.js");

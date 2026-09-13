@@ -377,6 +377,18 @@ export const photoUploadLimiter = make({
   message: { error: "Too many photo uploads, try again later." },
 });
 
+/**
+ * Profile video upload — 6/hour per user (falls back to IP). Each attempt runs
+ * ffprobe + frame moderation + a transcript, so the ceiling is lower than
+ * photos'; six still leaves room for a few re-takes.
+ */
+export const videoUploadLimiter = make({
+  windowMs: 3_600_000,
+  limit: 6,
+  keyGenerator: (req): string => `video-up:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many video uploads, try again later." },
+});
+
 /** Mobile chat turn — 60/hour per user (falls back to IP). */
 export const chatMessageLimiter = make({
   windowMs: 3_600_000,

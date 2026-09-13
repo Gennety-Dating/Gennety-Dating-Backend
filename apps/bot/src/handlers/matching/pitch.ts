@@ -18,8 +18,10 @@ import { telegramReachable } from "../../services/telegram-reach.js";
 import { renderCountdownButtonLabel } from "../../utils/countdown-plate.js";
 import { minutesLeftUntilDeadline } from "../../services/proposal-deadline.js";
 import {
+  prepareProfileMediaForTelegram,
   sendMotionProfileMedia,
   sendProfileMediaCard,
+  type DeliverableProfileMedia,
 } from "../../services/profile-media-dispatch.js";
 import { sendPartnerMatchCards } from "../../services/match-card/send.js";
 import { sendMatchDropPush } from "../../services/match-drop-push.js";
@@ -251,11 +253,10 @@ export function composeFinalPitchMessage(input: {
 async function sendPartnerMedia(
   api: Api<RawApi>,
   chatId: number,
-  photos: readonly string[],
-  profileMedia: unknown,
+  profileMedia: readonly DeliverableProfileMedia[],
   caption: PhotoCaption,
 ): Promise<void> {
-  const media = normalizeProfileMedia(profileMedia, photos).slice(0, MAX_MEDIA_GROUP_SIZE);
+  const media = profileMedia.slice(0, MAX_MEDIA_GROUP_SIZE);
   if (media.length === 0) return;
   const { caption: text, entities } = caption;
   try {
@@ -802,6 +803,11 @@ export async function sendMatchProposal(
     // Collage card set first (feature-flagged); `{ sent: false }` → classic
     // photo album. On success the partner's motion rides INSIDE that album, so
     // only what did not fit Telegram's 10-item cap still needs its own send.
+    // Prepared once: a native-rail video is fetched from storage here and the
+    // same bytes serve the card set and its fallback.
+    const deliverableForA = await prepareProfileMediaForTelegram(
+      normalizeProfileMedia(mediaForA, photosForA),
+    );
     const cardsA = await sendPartnerMatchCards(api, chatA, {
       matchId,
       side: "A",
@@ -809,13 +815,13 @@ export async function sendMatchProposal(
       partnerAge: match.userB.age,
       partnerSummary: match.userB.profile?.psychologicalSummary ?? null,
       photos: photosForA,
-      profileMedia: normalizeProfileMedia(mediaForA, photosForA),
+      profileMedia: deliverableForA,
       language: langA,
       theme: themeA,
       caption: captionForA,
     });
     if (!cardsA.sent) {
-      await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
+      await sendPartnerMedia(api, chatA, deliverableForA, captionForA);
     } else if (cardsA.motionOverflow.length > 0) {
       await sendMotionProfileMedia(api, chatA, cardsA.motionOverflow, {
         protect: PROTECT_PARTNER_MEDIA,
@@ -855,6 +861,9 @@ export async function sendMatchProposal(
     if (!shouldSkipWelcomeGiftPreroll(options, "B")) {
       await deliverWelcomeGiftPreroll(api, match.userB.id, chatB, langB, match.userB.gender);
     }
+    const deliverableForB = await prepareProfileMediaForTelegram(
+      normalizeProfileMedia(mediaForB, photosForB),
+    );
     const cardsB = await sendPartnerMatchCards(api, chatB, {
       matchId,
       side: "B",
@@ -862,13 +871,13 @@ export async function sendMatchProposal(
       partnerAge: match.userA.age,
       partnerSummary: match.userA.profile?.psychologicalSummary ?? null,
       photos: photosForB,
-      profileMedia: normalizeProfileMedia(mediaForB, photosForB),
+      profileMedia: deliverableForB,
       language: langB,
       theme: themeB,
       caption: captionForB,
     });
     if (!cardsB.sent) {
-      await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
+      await sendPartnerMedia(api, chatB, deliverableForB, captionForB);
     } else if (cardsB.motionOverflow.length > 0) {
       await sendMotionProfileMedia(api, chatB, cardsB.motionOverflow, {
         protect: PROTECT_PARTNER_MEDIA,
