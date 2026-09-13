@@ -1,5 +1,6 @@
 import jsQR from "jsqr";
 import { apiBase, apiFetch } from "./api.js";
+import { doorBootFor } from "./gatekeeper-boot.js";
 import "./gatekeeper.css";
 
 /**
@@ -119,6 +120,12 @@ interface Guest {
 
 let token = "";
 let manifest: Guest[] = [];
+/**
+ * Whether the list has ever arrived. A door that booted with no signal keeps
+ * its key and opens anyway (`gatekeeper-boot.ts`), so its first manifest pull
+ * fails — the stats poll retries it the moment the server answers again.
+ */
+let manifestLoaded = false;
 let statsTimer: ReturnType<typeof setInterval> | null = null;
 let scanning = false;
 let lastCode = "";
@@ -217,6 +224,8 @@ async function refreshStats(): Promise<void> {
     if (el) {
       el.textContent = `${t.inside}: ${body.insideNow} ${t.of} ${body.capacityTotal}`;
     }
+    // The signal is back; fetch the list this door never got at boot.
+    if (!manifestLoaded) void loadManifest();
   } catch {
     // The headcount is a nicety; the door works without it.
   }
@@ -232,6 +241,7 @@ async function loadManifest(): Promise<void> {
     if (!res.ok) return;
     const body = (await res.json()) as { guests: Guest[] };
     manifest = body.guests;
+    manifestLoaded = true;
   } catch {
     // Offline already; the door falls back to refusing politely.
   }
@@ -464,7 +474,7 @@ async function boot(): Promise<void> {
   }
   token = saved;
   const res = await gk("/auth", { method: "POST", body: "{}" }).catch(() => null);
-  if (!res?.ok) {
+  if (doorBootFor(res ? res.status : null) === "forget-key") {
     // A revoked token must not leave a door phone in a half-authenticated
     // state that fails on every scan instead of on the way in.
     token = "";
@@ -473,9 +483,13 @@ async function boot(): Promise<void> {
     } catch {
       /* nothing to clear */
     }
-    renderTokenScreen(res ? t.badToken : undefined);
+    renderTokenScreen(t.badToken);
     return;
   }
+  // A valid key, or no verdict on it at all (no signal, 429, 5xx). The latter
+  // keeps the key and opens the door anyway: each scan then says "offline" and
+  // falls back to the guest list, and the stats poll pulls that list in as
+  // soon as the server answers — see `gatekeeper-boot.ts`.
   await startDoor();
 }
 

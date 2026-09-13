@@ -13,7 +13,7 @@ import { createHmac } from "node:crypto";
 const BOT_TOKEN = "123456:test-bot-token-for-ticket-suite";
 const VALID_UUID = "22222222-2222-4222-8222-222222222222";
 
-const env = { BOT_TOKEN, TICKET_STARS_ENABLED: false };
+const env = { BOT_TOKEN, TICKET_STARS_ENABLED: false, PUBLIC_BASE_URL: "https://api.example.test" };
 vi.mock("../config.js", () => ({ env }));
 
 const getTicketState = vi.fn();
@@ -362,5 +362,78 @@ describe("GET /v1/matches/:id/ticket/photo/:side", () => {
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toBe("image/jpeg");
     expect(res.headers["cross-origin-resource-policy"]).toBe("cross-origin");
+  });
+});
+
+// A13-L16: the avatar `<img>` used to carry initData in `?a=`. The state
+// response now mints signed links, and the photo route accepts them.
+describe("signed avatar links", () => {
+  it("are minted into the state for each side that has a photo", async () => {
+    getTicketState.mockResolvedValueOnce({
+      ok: true,
+      state: {
+        ...baseState,
+        myPhotoUrl: `/v1/matches/${VALID_UUID}/ticket/photo/self`,
+        partnerPhotoUrl: null,
+      },
+    });
+    const res = await request(buildApp())
+      .get(`/v1/matches/${VALID_UUID}/ticket/state`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`);
+    expect(res.status).toBe(200);
+    // The relative paths stay for older bundles; the signed links are added.
+    expect(res.body.myPhotoUrl).toBe(`/v1/matches/${VALID_UUID}/ticket/photo/self`);
+    const signed = new URL(String(res.body.myPhotoSignedUrl));
+    expect(signed.origin).toBe("https://api.example.test");
+    expect(signed.pathname).toBe(`/v1/matches/${VALID_UUID}/ticket/photo/self`);
+    expect([...signed.searchParams.keys()]).toEqual(["v", "e", "sig"]);
+    expect(signed.searchParams.get("v")).toBe("5986970093");
+    expect(signed.searchParams.get("sig")).toMatch(/^[0-9a-f]{24}$/);
+    expect(res.body.myPhotoSignedUrl).not.toContain("hash");
+    expect(res.body.partnerPhotoSignedUrl).toBeNull();
+  });
+
+  it("open the photo route with no header and no initData", async () => {
+    getTicketState.mockResolvedValueOnce({
+      ok: true,
+      state: { ...baseState, partnerPhotoUrl: `/v1/matches/${VALID_UUID}/ticket/photo/partner` },
+    });
+    const stateRes = await request(buildApp())
+      .get(`/v1/matches/${VALID_UUID}/ticket/state`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`);
+    const signed = new URL(String(stateRes.body.partnerPhotoSignedUrl));
+
+    getTicketPhoto.mockResolvedValueOnce({ ok: true, ref: "file_456" });
+    downloadProfileImage.mockResolvedValueOnce(Buffer.from("original"));
+    toAvatarThumbnail.mockResolvedValueOnce(Buffer.from("thumb"));
+    const res = await request(buildApp()).get(`${signed.pathname}${signed.search}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toBe("image/jpeg");
+    // Resolved for the viewer the link was minted for — participation is
+    // re-checked there, the signature does not replace it.
+    expect(getTicketPhoto).toHaveBeenCalledWith(5986970093n, VALID_UUID, "partner");
+  });
+
+  it("do not open the other side's photo, or survive tampering", async () => {
+    getTicketState.mockResolvedValueOnce({
+      ok: true,
+      state: { ...baseState, myPhotoUrl: `/v1/matches/${VALID_UUID}/ticket/photo/self` },
+    });
+    const stateRes = await request(buildApp())
+      .get(`/v1/matches/${VALID_UUID}/ticket/state`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`);
+    const signed = new URL(String(stateRes.body.myPhotoSignedUrl));
+
+    const otherSide = await request(buildApp()).get(
+      `${signed.pathname.replace("/self", "/partner")}${signed.search}`,
+    );
+    expect(otherSide.status).toBe(401);
+
+    const otherViewer = await request(buildApp()).get(
+      `${signed.pathname}${signed.search.replace("v=5986970093", "v=1")}`,
+    );
+    expect(otherViewer.status).toBe(401);
+    expect(getTicketPhoto).not.toHaveBeenCalled();
   });
 });

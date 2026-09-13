@@ -47,6 +47,12 @@ export interface TerminalStrings {
   tooFar: string;
   tooEarly: string;
   offline: string;
+  /**
+   * A 401: the Mini App's session (its initData) has expired, which no retry
+   * can fix — only opening it again from the chat does. Kept apart from
+   * `offline`, which promises that retrying will get through (A13-M31).
+   */
+  reopenFromChat: string;
   activate: string;
   locked: string;
   retryLocation: string;
@@ -88,6 +94,7 @@ const en: TerminalStrings = {
   tooFar: "The server sees you more than {radius} m from the place. Get a little closer and shake again.",
   tooEarly: "Not yet — Contact Sync opens at {time}.",
   offline: "Can't reach me right now. Trying again.",
+  reopenFromChat: "This session has expired. Open the Date Terminal again from the chat.",
   activate: "Turn on Contact Sync",
   locked: "Contact Sync locked",
   retryLocation: "Allow location",
@@ -128,6 +135,7 @@ const ru: TerminalStrings = {
   tooFar: "Сервер видит тебя дальше {radius} м от места. Подойди чуть ближе и тряхни ещё раз.",
   tooEarly: "Ещё рано — Contact Sync откроется в {time}.",
   offline: "Не достучаться до меня. Пробую снова.",
+  reopenFromChat: "Сессия устарела. Открой Date Terminal заново из чата.",
   activate: "Включить Contact Sync",
   locked: "Contact Sync заблокирован",
   retryLocation: "Разрешить геолокацию",
@@ -168,6 +176,7 @@ const uk: TerminalStrings = {
   tooFar: "Сервер бачить тебе далі ніж за {radius} м від місця. Підійди трохи ближче і струсни ще раз.",
   tooEarly: "Ще зарано — Contact Sync відкриється о {time}.",
   offline: "Не достукатися до мене. Пробую знову.",
+  reopenFromChat: "Сесія застаріла. Відкрий Date Terminal знову з чату.",
   activate: "Увімкнути Contact Sync",
   locked: "Contact Sync заблоковано",
   retryLocation: "Дозволити геолокацію",
@@ -208,6 +217,7 @@ const de: TerminalStrings = {
   tooFar: "Der Server sieht dich weiter als {radius} m vom Ort entfernt. Geh ein Stück näher und schüttel noch mal.",
   tooEarly: "Noch nicht — Contact Sync öffnet um {time}.",
   offline: "Ich bin gerade nicht erreichbar. Versuche es erneut.",
+  reopenFromChat: "Diese Sitzung ist abgelaufen. Öffne das Date Terminal erneut aus dem Chat.",
   activate: "Contact Sync einschalten",
   locked: "Contact Sync gesperrt",
   retryLocation: "Standort erlauben",
@@ -248,6 +258,7 @@ const pl: TerminalStrings = {
   tooFar: "Serwer widzi cię dalej niż {radius} m od miejsca. Podejdź trochę bliżej i potrząśnij jeszcze raz.",
   tooEarly: "Jeszcze nie — Contact Sync otworzy się o {time}.",
   offline: "Nie mogę się teraz połączyć. Próbuję ponownie.",
+  reopenFromChat: "Sesja wygasła. Otwórz Date Terminal ponownie z czatu.",
   activate: "Włącz Contact Sync",
   locked: "Contact Sync zablokowany",
   retryLocation: "Zezwól na lokalizację",

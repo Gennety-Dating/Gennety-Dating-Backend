@@ -44,3 +44,42 @@ export function backoffFor(failures: number): number {
   if (failures <= 0) return POLL_ERROR_BASE_MS;
   return Math.min(POLL_ERROR_BASE_MS * 2 ** (failures - 1), POLL_ERROR_MAX_MS);
 }
+
+/**
+ * What a failed call means for the words on screen (A13-M31).
+ *
+ * The canvas and the terminal used to go quiet on every failure once they had
+ * drawn something, so a lost connection left "arriving 18:55" on screen as if
+ * it were live. Two failures deserve a sentence, and they are different ones:
+ *
+ *   - `reopen` — 401. The Mini App's initData has expired (it lives two hours),
+ *     and no amount of retrying fixes that; only opening it again from the
+ *     chat does.
+ *   - `offline` — no answer at all, 429, or a 5xx: the server is unreachable
+ *     or asking for room, and the poll's own backoff will get through.
+ *
+ * Every other refusal (outside the radar window, a stale match) is a state of
+ * the date, not of the connection, and stays silent as before.
+ *
+ * `status` is the HTTP status, or null when no response arrived.
+ */
+export type ConnectionTrouble = "reopen" | "offline";
+
+export function connectionTroubleFor(status: number | null): ConnectionTrouble | null {
+  if (status === 401) return "reopen";
+  if (status === null || status === 429 || status >= 500) return "offline";
+  return null;
+}
+
+/**
+ * Consecutive failed radar pings after which the last reading stops speaking
+ * for the partner. Living Canvas spec: "a phone that goes quiet becomes
+ * `unknown`, not a stale ETA". At the radar's 5 s cadence this is ~15 s — long
+ * enough to ride out one dropped request, short enough that an ETA is never
+ * shown well after the line went dead.
+ */
+export const RADAR_STALE_AFTER_FAILURES = 3;
+
+export function radarReadingStale(consecutiveFailures: number): boolean {
+  return consecutiveFailures >= RADAR_STALE_AFTER_FAILURES;
+}

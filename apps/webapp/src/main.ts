@@ -21,6 +21,7 @@ import {
 } from "./api.js";
 import { butterflySuccessMarkup, onSuccessSettle } from "./butterfly-success.js";
 import { hasNewSlot, pruneSlotsToProposedTimes } from "./calendar-selection.js";
+import { createResponseEpoch } from "./request-epoch.js";
 import { planDayRows } from "./prime-band.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { classifyDaySlots, classifySlot, type DayClass, type SlotClass } from "./state-render.js";
@@ -164,6 +165,13 @@ let primeSlots = new Set<string>();
 let primeStars = 0;
 let primeBusy = false;
 let saving = false;
+/**
+ * The poll checks `saving` before it leaves, which cannot see a save that
+ * starts while it is out: its answer — the picks as they were before the save —
+ * then landed after the save and rolled the grid back (A13-L23). Saves
+ * invalidate every read issued before them; `poll` paints only one it can claim.
+ */
+const pollEpoch = createResponseEpoch();
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let sheetHideTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -526,6 +534,8 @@ async function onPrimePay(): Promise<void> {
 async function refreshAfterUnlock(attempt = 0): Promise<void> {
   try {
     const state = await fetchCalendarState(app!.initData, matchId);
+    // A poll that left before the purchase would re-lock the band it opened.
+    pollEpoch.invalidate();
     applyState(state, false);
     if (!primeLocked) {
       setPrimeBusy(false);
@@ -1296,12 +1306,14 @@ async function handleSave(): Promise<void> {
   }
   void savePickedSet(matchId, Array.from(selected));
   saving = true;
+  pollEpoch.invalidate();
   const loadingLabel = tr(lang, "btnSaving");
   if (sheetDayKey !== null) setSheetCtaLoading(loadingLabel);
   else setCtaLoading(loadingLabel);
 
   try {
     const res = await postCalendarPicks(app.initData, matchId, Array.from(selected));
+    pollEpoch.invalidate();
     confirmedMine = new Set(res.mySlots);
     peerSlots = new Set(res.peerSlots);
     agreedTime = res.agreedTime;
@@ -1350,10 +1362,12 @@ async function handleSave(): Promise<void> {
 async function handleConfirmOverlap(): Promise<void> {
   if (!app || saving || !multiOverlapChoice) return;
   saving = true;
+  pollEpoch.invalidate();
   setCtaLoading(tr(lang, "btnSaving"));
 
   try {
     const res = await postCalendarPicks(app.initData, matchId, [multiOverlapChoice]);
+    pollEpoch.invalidate();
     confirmedMine = new Set(res.mySlots);
     peerSlots = new Set(res.peerSlots);
     agreedTime = res.agreedTime;
@@ -1402,8 +1416,15 @@ async function poll(): Promise<void> {
     schedulePoll();
     return;
   }
+  const ticket = pollEpoch.begin();
   try {
     const state = await fetchCalendarState(app!.initData, matchId);
+    // A save (or a newer read) happened while this one was out — its answer
+    // predates it. Drop it; the next tick reads the world after the save.
+    if (!pollEpoch.claim(ticket)) {
+      schedulePoll();
+      return;
+    }
     // Skip render unless server-side state actually changed — otherwise
     // the waiting/agreed screens re-mount every 4s and their pop/check
     // animations flash.

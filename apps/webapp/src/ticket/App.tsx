@@ -18,10 +18,13 @@ import {
   deriveCoverPartnerButtons,
   formatUsd,
   formatStars,
+  settledForScope,
   starsForButton,
   type TicketScreen,
   type OfferButton,
 } from "./ticket-state.js";
+import { createInFlightGuard, pollUntil } from "../pay-flow.js";
+import { createResponseEpoch } from "../request-epoch.js";
 import { Ticket3D } from "./Ticket3D.js";
 import { useActionBarSpace } from "./action-bar.js";
 import { Confetti } from "./Confetti.js";
@@ -38,6 +41,21 @@ const matchId = params.get("match") ?? "";
 const lang = pickLang(params.get("lang") ?? app?.initDataUnsafe?.user?.language_code ?? null);
 const initData = app?.initData ?? "";
 document.documentElement?.setAttribute("lang", lang);
+
+/**
+ * One tap, one purchase (A13-M28). Module-level rather than React state: the
+ * check and the set must happen in the same synchronous step as the tap, and a
+ * state flag only changes on the next render — see `pay-flow.ts`.
+ */
+const payGuard = createInFlightGuard();
+/**
+ * The 4 s poll and a purchase used to race: a read that left before `/use`
+ * landed after it and painted the unpaid screen back, and two overlapping reads
+ * could land out of order (A13-L23). Every write invalidates the reads issued
+ * before it, and a read older than one already painted is dropped — see
+ * `request-epoch.ts`.
+ */
+const loadEpoch = createResponseEpoch();
 
 type Phase =
   | { kind: "loading" }
@@ -72,8 +90,8 @@ function preloadImage(url: string): Promise<void> {
 }
 
 function screenPhotoSrcs(state: TicketState): string[] {
-  const mine = ticketPhotoSrc(state.myPhotoUrl, initData);
-  const partner = ticketPhotoSrc(state.partnerPhotoUrl, initData);
+  const mine = ticketPhotoSrc(state, "self");
+  const partner = ticketPhotoSrc(state, "partner");
   const sc = deriveScreen(state);
   const urls: Array<string | null> = [];
   if (sc === "partner-paid") urls.push(partner); // his photo on her reveal card
@@ -112,17 +130,32 @@ export function App(): ReactElement {
   // reserves exactly its height at the end (see action-bar.ts).
   const barRef = useActionBarSpace();
 
+  // The in-flight flag the buttons render from; `payGuard` is what actually
+  // refuses the second tap, before this state has had a chance to re-render.
+  const [paying, setPaying] = useState(false);
+
   const load = useCallback(async (): Promise<void> => {
+    const ticket = loadEpoch.begin();
     try {
       const state = await fetchTicketState(initData, matchId);
       // Wait for the screen's photos before leaving the spinner (cached on
       // subsequent polls, so this is instant after the first load).
       await preloadScreenPhotos(state);
+      // A purchase started, or a newer read already painted, while this one
+      // was out — its answer is older than what is on screen.
+      if (!loadEpoch.claim(ticket)) return;
       setPhase({ kind: "view", state });
     } catch (err) {
+      if (!loadEpoch.claim(ticket)) return;
       setPhase({ kind: "error", message: errorText(err, s) });
     }
   }, [s]);
+
+  /** Paint a state a write just returned, retiring every read that predates it. */
+  const applyWrite = useCallback((next: TicketState): void => {
+    loadEpoch.invalidate();
+    setPhase({ kind: "view", state: next });
+  }, []);
 
   // Initial load.
   useEffect(() => {
@@ -161,10 +194,11 @@ export function App(): ReactElement {
   const settleWithoutCharge = useCallback(
     async (scope: TicketScope): Promise<void> => {
       haptic("light");
+      loadEpoch.invalidate();
       try {
         const next = await settleTicketNoCharge(initData, matchId, scope);
         haptic("success");
-        setPhase({ kind: "view", state: next });
+        applyWrite(next);
       } catch (err) {
         haptic("error");
         app?.showAlert(errorText(err, s));
@@ -173,11 +207,13 @@ export function App(): ReactElement {
         void load();
       }
     },
-    [s, load],
+    [s, load, applyWrite],
   );
 
   // Native Telegram Stars payment for the gate. Opens the invoice; the bot
-  // settles the gate on successful_payment, so we just re-fetch state on "paid".
+  // settles the gate on successful_payment. Resolves only once the whole flow
+  // is over — sheet closed, and on "paid" the settle seen — because the caller
+  // holds the pay guard until then.
   const startStarsPayment = useCallback(
     async (scope: TicketScope): Promise<void> => {
       haptic("light");
@@ -186,36 +222,56 @@ export function App(): ReactElement {
         app?.showAlert(s.errGeneric);
         return;
       }
+      let link: string;
       try {
-        const { link } = await createTicketStarsInvoice(initData, matchId, scope);
-        open.call(app, link, (status) => {
-          if (status === "paid") {
-            haptic("success");
-            void load();
-          } else if (status === "failed") {
-            haptic("error");
-            app?.showAlert(s.errGeneric);
-          }
-          // "cancelled" / "pending" → leave the screen as-is.
-        });
+        ({ link } = await createTicketStarsInvoice(initData, matchId, scope));
       } catch (err) {
-        app?.showAlert(errorText(err, s));
+        app.showAlert(errorText(err, s));
         // Refused invoice = stale screen (partner already paid, gate closed).
         // Re-read rather than leave a button that will keep failing.
         void load();
+        return;
       }
+      const status = await new Promise<"paid" | "cancelled" | "failed" | "pending">((resolve) =>
+        open.call(app, link, resolve),
+      );
+      if (status === "failed") {
+        haptic("error");
+        app.showAlert(s.errGeneric);
+        return;
+      }
+      // "cancelled" / "pending" → leave the screen as-is.
+      if (status !== "paid") return;
+
+      haptic("success");
+      // Hold a spinner until the server agrees, like Premium does: a single
+      // re-read here usually beat the bot's successful_payment and drew the
+      // pay button again under a user who had just paid (A13-M28).
+      loadEpoch.invalidate();
+      setPhase({ kind: "loading" });
+      const { value } = await pollUntil(
+        () => fetchTicketState(initData, matchId),
+        (state) => settledForScope(state, scope),
+      );
+      if (!value) {
+        void load();
+        return;
+      }
+      await preloadScreenPhotos(value);
+      applyWrite(value);
     },
-    [s, load],
+    [s, load, applyWrite],
   );
 
   // Spend a wallet ticket (no payment screen) — settles the gate immediately.
   const spendTicket = useCallback(
     async (scope: TicketScope): Promise<void> => {
       haptic("light");
+      loadEpoch.invalidate();
       try {
         const next = await useTicketFromWallet(initData, matchId, scope);
         haptic("success");
-        setPhase({ kind: "view", state: next });
+        applyWrite(next);
       } catch (err) {
         haptic("error");
         app?.showAlert(errorText(err, s));
@@ -225,7 +281,7 @@ export function App(): ReactElement {
         void load();
       }
     },
-    [s, load],
+    [s, load, applyWrite],
   );
 
   // Male "cover both" holding exactly one wallet ticket: spend it on his own
@@ -235,36 +291,51 @@ export function App(): ReactElement {
   // screen instead of a redundant charge.
   const useSelfThenPayPartner = useCallback(async (): Promise<void> => {
     haptic("light");
+    loadEpoch.invalidate();
     try {
       const next = await useTicketFromWallet(initData, matchId, "self");
       if (!next.bothPaid && next.iPaid && !next.partnerPaid) {
         // Self covered with a wallet ticket; now pay one ticket's price for the
         // partner — natively in Stars, or (demo / development) without a charge.
         if (next.starsEnabled) {
-          setPhase({ kind: "view", state: next });
-          void startStarsPayment("partner");
+          applyWrite(next);
+          // Awaited, not fired off: the pay guard is held until the invoice
+          // flow is over, so the partner's button cannot open a second sheet.
+          await startStarsPayment("partner");
         } else {
           const settled = await settleTicketNoCharge(initData, matchId, "partner");
           haptic("success");
-          setPhase({ kind: "view", state: settled });
+          applyWrite(settled);
         }
       } else {
         haptic("success");
-        setPhase({ kind: "view", state: next });
+        applyWrite(next);
       }
     } catch (err) {
       haptic("error");
       app?.showAlert(errorText(err, s));
       void load();
     }
-  }, [s, load, startStarsPayment]);
+  }, [s, load, applyWrite, startStarsPayment]);
 
   const onOfferButton = useCallback(
     (state: TicketState, b: OfferButton): void => {
-      if (b.action === "use") void spendTicket(b.scope);
-      else if (b.action === "use-self-pay-partner") void useSelfThenPayPartner();
-      else if (state.starsEnabled) void startStarsPayment(b.scope);
-      else void settleWithoutCharge(b.scope);
+      // Claimed before anything awaits: a second tap in the gap before the
+      // invoice sheet opens used to mint a second invoice (A13-M28).
+      if (!payGuard.tryEnter()) return;
+      setPaying(true);
+      const flight =
+        b.action === "use"
+          ? spendTicket(b.scope)
+          : b.action === "use-self-pay-partner"
+            ? useSelfThenPayPartner()
+            : state.starsEnabled
+              ? startStarsPayment(b.scope)
+              : settleWithoutCharge(b.scope);
+      void flight.finally(() => {
+        payGuard.leave();
+        setPaying(false);
+      });
     },
     [spendTicket, settleWithoutCharge, startStarsPayment, useSelfThenPayPartner],
   );
@@ -285,8 +356,8 @@ export function App(): ReactElement {
   }
   const state = phase.state;
   const sc = deriveScreen(state, { coverDeferred });
-  const myPhotoSrc = ticketPhotoSrc(state.myPhotoUrl, initData);
-  const partnerPhotoSrc = ticketPhotoSrc(state.partnerPhotoUrl, initData);
+  const myPhotoSrc = ticketPhotoSrc(state, "self");
+  const partnerPhotoSrc = ticketPhotoSrc(state, "partner");
   // He deferred the cover offer but nothing is settled on her side yet — keep a
   // quiet way back so "let them grab it" is a choice, not a one-way door.
   const canReconsiderCover =
@@ -440,6 +511,7 @@ export function App(): ReactElement {
                 key={`${b.action}:${b.scope}`}
                 type="button"
                 className={`${b.primary ? "btn-hero" : "btn-secondary"}${discounted ? " btn-famine" : ""}${b.scope === "both" ? " btn-with-avatars" : ""}`}
+                disabled={paying}
                 onClick={() => onOfferButton(state, b)}
               >
                 {b.scope === "both" && (
@@ -470,6 +542,7 @@ export function App(): ReactElement {
                 key={`${b.action}:${b.scope}`}
                 type="button"
                 className={b.primary ? "btn-hero btn-with-avatars" : "btn-secondary"}
+                disabled={paying}
                 onClick={() => onOfferButton(state, b)}
               >
                 {b.primary && (

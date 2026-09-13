@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   backoffFor,
+  connectionTroubleFor,
+  radarReadingStale,
+  RADAR_STALE_AFTER_FAILURES,
   POLL_ERROR_BASE_MS,
   POLL_ERROR_MAX_MS,
   POLL_FAST_MS,
@@ -49,5 +52,38 @@ describe("backoffFor", () => {
 
   it("never returns a value that would busy-loop", () => {
     for (let i = -5; i < 40; i++) expect(backoffFor(i)).toBeGreaterThanOrEqual(1000);
+  });
+});
+
+// A13-M31: a failure the user can act on is said out loud, and a stale ETA is
+// never left standing as if it were live.
+describe("connectionTroubleFor", () => {
+  it("asks for a reopen from the chat when the Mini App's session expired", () => {
+    expect(connectionTroubleFor(401)).toBe("reopen");
+  });
+
+  it("calls no answer, throttling and server faults offline", () => {
+    expect(connectionTroubleFor(null)).toBe("offline");
+    expect(connectionTroubleFor(429)).toBe("offline");
+    expect(connectionTroubleFor(500)).toBe("offline");
+    expect(connectionTroubleFor(503)).toBe("offline");
+  });
+
+  it("stays silent on refusals that are states of the date, not the line", () => {
+    expect(connectionTroubleFor(409)).toBeNull();
+    expect(connectionTroubleFor(404)).toBeNull();
+    expect(connectionTroubleFor(403)).toBeNull();
+  });
+});
+
+describe("radarReadingStale", () => {
+  it("keeps the reading through a single dropped ping", () => {
+    expect(radarReadingStale(0)).toBe(false);
+    expect(radarReadingStale(RADAR_STALE_AFTER_FAILURES - 1)).toBe(false);
+  });
+
+  it("drops it to unknown after the constant's worth of failures", () => {
+    expect(radarReadingStale(RADAR_STALE_AFTER_FAILURES)).toBe(true);
+    expect(radarReadingStale(RADAR_STALE_AFTER_FAILURES + 5)).toBe(true);
   });
 });

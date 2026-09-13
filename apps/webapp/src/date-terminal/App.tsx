@@ -7,7 +7,12 @@ import { useActionBarSpace } from "../ticket/action-bar.js";
 import { pickLang as pickTicketLang, strings as ticketStrings } from "../ticket/i18n.js";
 import { CanvasApiError, fetchDateState, postBump, type DateStateResponse } from "../canvas/api.js";
 import { isCanvasState } from "../canvas/sheet.js";
-import { backoffFor, pollIntervalFor } from "../canvas/poll.js";
+import {
+  backoffFor,
+  connectionTroubleFor,
+  pollIntervalFor,
+  type ConnectionTrouble,
+} from "../canvas/poll.js";
 import { createShakeDetector, requestMotionPermission } from "../canvas/shake.js";
 import { createImpulseGate } from "./kinetics.js";
 import { Shockwave, type ShockwaveHandle } from "./Shockwave.js";
@@ -113,6 +118,8 @@ export function DateTerminal(): ReactElement {
 
   const [dateState, setDateState] = useState<DateStateResponse | null>(null);
   const [failures, setFailures] = useState(0);
+  /** Why the last state read failed, when it is something to tell the user. */
+  const [trouble, setTrouble] = useState<ConnectionTrouble | null>(null);
   const [geo, setGeo] = useState<GeoStatus>("idle");
   const [geoAttempt, setGeoAttempt] = useState(0);
   const [fix, setFix] = useState<Fix | null>(null);
@@ -138,11 +145,15 @@ export function DateTerminal(): ReactElement {
     try {
       const next = await fetchDateState(initData);
       setFailures(0);
+      setTrouble(null);
       // An unknown state from a newer server reads as "nothing on", like the
       // canvas does — the contract declares states as open strings.
       setDateState(isCanvasState(next.state) ? next : { ...next, state: "IDLE_EXPLORING" });
-    } catch {
+    } catch (err) {
       setFailures((n) => n + 1);
+      // A13-M31: once the ticket is drawn a failed poll used to change nothing
+      // on screen, so a dead connection kept presenting the last state as live.
+      setTrouble(connectionTroubleFor(err instanceof CanvasApiError ? err.status : null));
     }
   }, []);
 
@@ -159,8 +170,10 @@ export function DateTerminal(): ReactElement {
   const deck = match?.deck ?? [];
   const distanceM = fix && venue ? distanceMeters(fix, venue) : null;
   const agreedTime = match?.agreedTime ? new Date(match.agreedTime) : null;
-  const timeLabel = agreedTime ? formatClock(agreedTime, lang) : "";
-  const opensLabel = agreedTime ? formatClock(syncOpensAt(agreedTime), lang) : "";
+  // The venue's clock, not the phone's (A13-L25).
+  const venueZone = dateState?.timeZone ?? null;
+  const timeLabel = agreedTime ? formatClock(agreedTime, lang, venueZone) : "";
+  const opensLabel = agreedTime ? formatClock(syncOpensAt(agreedTime), lang, venueZone) : "";
   opensLabelRef.current = opensLabel;
 
   const phase: TerminalPhase = dateState
@@ -264,16 +277,20 @@ export function DateTerminal(): ReactElement {
       await load();
     } catch (err) {
       haptic("error");
+      const shakeTrouble = connectionTroubleFor(err instanceof CanvasApiError ? err.status : null);
       if (err instanceof CanvasApiError && err.code === "too-far") {
         setNotice(fill(s.tooFar, { radius: GEOFENCE_RADIUS_M }));
       } else if (err instanceof CanvasApiError && err.code === "too-early") {
         setNotice(fill(s.tooEarly, { time: opensLabelRef.current }));
-      } else if (err instanceof CanvasApiError) {
+      } else if (shakeTrouble) {
+        // No answer at all, and also 401 / 429 / 5xx — which used to fall into
+        // the silent branch below and look like a shake that simply did not
+        // count (A13-M31).
+        setNotice(troubleText(shakeTrouble, s));
+      } else {
         // wrong-state / too-late / not-participant: the screen is stale.
         setNotice(null);
         void load();
-      } else {
-        setNotice(s.offline);
       }
     } finally {
       postingRef.current = false;
@@ -363,7 +380,7 @@ export function DateTerminal(): ReactElement {
     return (
       <div className="ticket-page ticket-center terminal-page">
         <Shockwave handleRef={shockRef} />
-        <p className="terminal-notice">{s.offline}</p>
+        <p className="terminal-notice">{troubleText(trouble ?? "offline", s)}</p>
       </div>
     );
   }
@@ -371,7 +388,10 @@ export function DateTerminal(): ReactElement {
   const inRange = withinGeofence(distanceM);
   const waiting = shookAlone || Boolean(match?.bump?.mine);
   const geoLine = geoNotice(geo, s);
-  const shownNotice = notice ?? (wantsLocation(phase) ? geoLine : null);
+  // A failing poll outranks the GPS line: the distance may still be live, but
+  // every other word on the ticket is now as old as the last good read.
+  const pollNotice = failures > 0 && trouble ? troubleText(trouble, s) : null;
+  const shownNotice = notice ?? pollNotice ?? (wantsLocation(phase) ? geoLine : null);
   const openMap = (): void => {
     haptic("light");
     location.href = `canvas.html?${new URLSearchParams({ lang, theme: "dark" }).toString()}`;
@@ -507,6 +527,10 @@ function subFor(phase: TerminalPhase, s: TerminalStrings, opens: string, waiting
     case "closed":
       return s.subClosed;
   }
+}
+
+function troubleText(trouble: ConnectionTrouble, s: TerminalStrings): string {
+  return trouble === "reopen" ? s.reopenFromChat : s.offline;
 }
 
 function geoNotice(geo: GeoStatus, s: TerminalStrings): string | null {

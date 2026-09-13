@@ -156,6 +156,22 @@ export function starsForButton(
   return stars[b.scope];
 }
 
+/**
+ * Whether the server now shows a just-paid scope as settled — the condition the
+ * gate polls on after Telegram reports `paid` (A13-M28). Telegram answers the
+ * invoice sheet before the bot's `successful_payment` lands, so a single re-read
+ * usually still shows the pay button, which is how a second payment happens.
+ *
+ * A closed gate (refunded / expired) ends the wait too: the payment that raced
+ * the expiry is refunded, and the closed screen is the true one to show.
+ */
+export function settledForScope(state: TicketState, scope: TicketScope): boolean {
+  if (deriveScreen(state) === "closed") return true;
+  if (scope === "both") return state.bothPaid;
+  if (scope === "partner") return state.partnerPaid;
+  return state.iPaid;
+}
+
 /** Whole milliseconds remaining until `expiresAt`, clamped at 0. */
 export function msUntil(expiresAt: string | null, now: number = Date.now()): number {
   if (!expiresAt) return 0;

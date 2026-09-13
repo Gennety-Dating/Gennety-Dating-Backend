@@ -8,6 +8,7 @@ import {
   formatUsd,
   formatCountdown,
   msUntil,
+  settledForScope,
 } from "./ticket-state.js";
 
 function state(overrides: Partial<TicketState> = {}): TicketState {
@@ -272,5 +273,44 @@ describe("the pay-step Premium counterfactual belongs to the offer screen only",
     });
     expect(deriveScreen(s)).toBe("cover-partner");
     expect(s.premiumWouldCoverMe).toBe(true);
+  });
+});
+
+describe("settledForScope — what the gate waits for after `paid` (A13-M28)", () => {
+  it("waits for the scope that was actually bought", () => {
+    expect(settledForScope(state({ iPaid: false }), "self")).toBe(false);
+    expect(settledForScope(state({ iPaid: true, ticketStatus: "partial" }), "self")).toBe(true);
+
+    expect(settledForScope(state({ iPaid: true, ticketStatus: "partial" }), "partner")).toBe(false);
+    expect(settledForScope(state({ partnerPaid: true, ticketStatus: "partial" }), "partner")).toBe(true);
+
+    // His own slot alone does not settle a pay-for-both.
+    expect(settledForScope(state({ iPaid: true, ticketStatus: "partial" }), "both")).toBe(false);
+    expect(
+      settledForScope(state({ iPaid: true, partnerPaid: true, bothPaid: true, ticketStatus: "completed" }), "both"),
+    ).toBe(true);
+  });
+
+  it("stops waiting once the gate has closed under the payment", () => {
+    expect(settledForScope(state({ ticketStatus: "expired" }), "self")).toBe(true);
+    expect(settledForScope(state({ ticketStatus: "refund_pending" }), "both")).toBe(true);
+  });
+});
+
+describe("the gate's pay buttons (A13-M28)", () => {
+  // Asserted on the source for the same reason as the Premium plate above: the
+  // guard lives in a React component this suite does not render.
+  it("claims the in-flight guard before any purchase starts", () => {
+    const at = appSource.indexOf("const onOfferButton");
+    expect(at).toBeGreaterThan(-1);
+    const body = appSource.slice(at, at + 900);
+    expect(body).toMatch(/if \(!payGuard\.tryEnter\(\)\) return;/);
+    // …and the guard comes before the first action it protects.
+    expect(body.indexOf("payGuard.tryEnter()")).toBeLessThan(body.indexOf("spendTicket("));
+  });
+
+  it("waits for the server to settle after `paid` instead of one re-read", () => {
+    expect(appSource).toContain("pollUntil(");
+    expect(appSource).toContain("settledForScope(");
   });
 });

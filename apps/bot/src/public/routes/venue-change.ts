@@ -11,6 +11,7 @@ import { venueKeyOf } from "../../services/venue-change.js";
 import { prisma } from "@gennety/db";
 import { fetchPlacesPhoto, snapWidth } from "../places-photo.js";
 import {
+  boardGalleryUrls,
   boardPhotoLinks,
   boardPhotoSignatureValid,
   decodePhotoRef,
@@ -81,6 +82,13 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
 
   // GET /photo?ref=<places photo resource name>&w=<px>&tma=<initData>
   //
+  // TRANSITION PATH — kept only for Mini App bundles cached before 2026-09-14.
+  // It puts initData, a two-hour bearer credential, into an image URL, where it
+  // lands in access logs, the WebView cache and `Referer` headers (A13-L16).
+  // The current bundle loads the signed `photoUrl`/`thumbnailUrl`/`photoUrls`
+  // links that `/state` and `/catalog` mint (served by `/photo/:token` below),
+  // and nothing new may call this. Remove it once cached bundles have aged out.
+  //
   // Server-side image proxy for the board/detail galleries. `<img>` tags can't
   // send an Authorization header, so initData rides the `tma` query param and
   // is HMAC-verified exactly like the header path — only an authenticated
@@ -135,9 +143,11 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
 
   // GET /photo/:token?w=<px>&e=<expiry>&sig=<hmac>
   //
-  // The same picture as `/photo` above, for a client that cannot send a header
-  // OR an initData. The link itself is the permission (`venue-change-photos.ts`
-  // says why, and why the ref is a path segment rather than a query value).
+  // The same picture as `/photo` above, for any client — the native one, which
+  // has no initData to send, and since 2026-09-14 the Mini App too, which must
+  // not put its initData into a URL. The link itself is the permission
+  // (`venue-change-photos.ts` says why, and why the ref is a path segment
+  // rather than a query value).
   // Minted only by the catalog and state responses, so this is no more an open
   // Places proxy than the `tma` path is.
   router.get(
@@ -211,6 +221,8 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       original: {
         ...result.state.original,
         ...boardPhotoLinks(result.state.original.photoRefs?.[0] ?? null, now),
+        // Every photo, signed, for the Mini App's pinned-card gallery (A13-L16).
+        photoUrls: boardGalleryUrls(result.state.original.photoRefs, now),
       },
     });
   });
@@ -232,10 +244,11 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       return;
     }
     // Signed photo links, minted alongside the refs rather than instead of
-    // them: the deployed Mini App builds its own `?tma=` URLs from `photoRefs`
-    // and must keep working untouched, while the native client — which has no
-    // initData to put in a query — reads `photoUrl`/`thumbnailUrl`. Additive,
-    // so neither client is on the other's schedule.
+    // them: a Mini App bundle cached before 2026-09-14 still builds its own
+    // `?tma=` URLs from `photoRefs` and must keep working untouched, while the
+    // native client reads `photoUrl`/`thumbnailUrl` and the current Mini App
+    // reads `thumbnailUrl`/`photoUrls` — the gallery needs every photo, not
+    // only the first (A13-L16). Additive, so no client is on another's schedule.
     const now = Date.now();
     res.status(200).json({
       ok: true,
@@ -249,12 +262,13 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
         // now; that copy is the one to delete next, not to duplicate again.
         key: venueKeyOf(v),
         ...boardPhotoLinks(v.photoRefs?.[0] ?? null, now),
+        photoUrls: boardGalleryUrls(v.photoRefs, now),
       })),
     });
   });
 
   // Full like-set submission (calendar `pick` semantics). Body: { matchId,
-  // keys: string[] }. Response: { agreed, overlapCandidates } — the client
+  // keys: string[] }. Response: { agreed, kept, overlapCandidates } — the client
   // re-fetches /state after.
   router.post("/like", async (req: Request, res: Response): Promise<void> => {
     const auth = await authenticate(req);
@@ -291,9 +305,16 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
     // to say nothing at all. Started here so it is already on screen behind the
     // Mini App; `workers/peer-wait-shimmer.ts` re-derives and holds it.
     startPeerWaitShimmer(api, matchId, { telegramId: BigInt(auth.user.id) });
-    res
-      .status(200)
-      .json({ ok: true, agreed: result.agreed, overlapCandidates: result.overlapCandidates });
+    // `kept` is how the Mini App tells an agreement to KEEP the original venue
+    // (free, nothing to pay) from an agreement to change it. It used to be
+    // dropped here, so keeping the venue showed the "one more step — payment"
+    // success screen (A13-M33). Additive: the native client ignores it.
+    res.status(200).json({
+      ok: true,
+      agreed: result.agreed,
+      kept: result.kept,
+      overlapCandidates: result.overlapCandidates,
+    });
   });
 
   // Resolve a multi-overlap: the actor picks one venue both sides liked.
@@ -321,7 +342,8 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       "in the Change venue Mini App, picked which of the mutually-liked places the pair agreed on",
     );
     startPeerWaitShimmer(api, matchId, { telegramId: BigInt(auth.user.id) });
-    res.status(200).json({ ok: true });
+    // `kept` for the same reason as `/like` (A13-M33).
+    res.status(200).json({ ok: true, kept: result.kept });
   });
 
   // Her one-shot "offer him to pay" — sends the wish card to his chat.

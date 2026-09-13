@@ -138,7 +138,23 @@ export function formatDistance(
   return s.kilometres.replace("{n}", km);
 }
 
-/** A wall-clock time in 24h, the way every other surface in the product prints one. */
-export function formatClock(at: Date, lang: string): string {
-  return new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(at);
+/**
+ * A wall-clock time in 24h, the way every other surface in the product prints one.
+ *
+ * In the VENUE's zone (`/v1/date/state` → `timeZone`), not the phone's: a date
+ * at 19:00 in Kyiv is 19:00 on the ticket even on a phone still set to the zone
+ * it flew in from (A13-L25). Without a zone — an older server, or no market —
+ * it falls back to the device, as before. An unknown zone name throws in
+ * `Intl`; that falls back too rather than taking the whole terminal down.
+ */
+export function formatClock(at: Date, lang: string, timeZone?: string | null): string {
+  const base: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+  if (timeZone) {
+    try {
+      return new Intl.DateTimeFormat(lang, { ...base, timeZone }).format(at);
+    } catch {
+      // RangeError: not a zone this runtime knows. Device zone below.
+    }
+  }
+  return new Intl.DateTimeFormat(lang, base).format(at);
 }

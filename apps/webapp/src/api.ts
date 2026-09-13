@@ -946,11 +946,18 @@ export interface TicketState {
   selfDiscountPct: number;
   /** Charged price for the actor's OWN ticket after `selfDiscountPct`. */
   selfPriceCents: number;
-  /** Relative proxy path to my first profile photo (null if none). Load via
-   *  `ticketPhotoSrc()`, which appends auth + the API base. */
+  /** Relative proxy path to my first profile photo (null if none). Kept for
+   *  bundles that predate the signed links below; this client reads those. */
   myPhotoUrl: string | null;
   /** Relative proxy path to the partner's first profile photo (null if none). */
   partnerPhotoUrl: string | null;
+  /**
+   * The same photos as short-lived signed links the server mints — what an
+   * `<img>` loads now. Optional: a server that predates them sends nothing, and
+   * the avatar falls back to its monogram. See `ticketPhotoSrc`.
+   */
+  myPhotoSignedUrl?: string | null;
+  partnerPhotoSignedUrl?: string | null;
   /** When true, the gate pay buttons are priced + paid in Telegram Stars via
    *  `openInvoice` — the only rail that moves money. */
   starsEnabled?: boolean;
@@ -986,14 +993,18 @@ export interface TicketState {
 }
 
 /**
- * Build a loadable `<img>` src from a ticket photo proxy path. Appends the
- * Mini App `initData` as `?a=` (the photo endpoint can't read an Authorization
- * header from an image request) and prefixes the API base. Returns null when
- * there is no photo so callers can fall back to a monogram.
+ * The `<img>` src for a ticket avatar: the server's signed link, or null (the
+ * caller then draws a monogram).
+ *
+ * It used to be the proxy path with the Mini App's initData appended as `?a=`,
+ * because an image request cannot carry an Authorization header. initData is a
+ * two-hour bearer credential, and a URL is the one place it must not go: it
+ * lands in proxy access logs, the WebView's history and cache, and `Referer`
+ * headers (A13-L16). The state response — fetched WITH the header — now hands
+ * out links that carry a short-lived signature instead.
  */
-export function ticketPhotoSrc(relPath: string | null, initData: string): string | null {
-  if (!relPath) return null;
-  return `${apiBase}${relPath}?a=${encodeURIComponent(initData)}`;
+export function ticketPhotoSrc(state: TicketState, side: "self" | "partner"): string | null {
+  return (side === "self" ? state.myPhotoSignedUrl : state.partnerPhotoSignedUrl) ?? null;
 }
 
 /** Mirrors `TicketPurchaseRail` in the bot's `services/ticket-payment.ts`. */
@@ -1170,6 +1181,10 @@ export interface VenueBoardState {
      * Optional: a bundle can outlive the server that fed it.
      */
     photoRefs?: string[];
+    /** Signed 240 px link to the first photo — see `VenueChangeCatalogItem`. */
+    thumbnailUrl?: string | null;
+    /** Signed 1200 px links, one per `photoRefs` entry, in the same order. */
+    photoUrls?: string[];
   };
   /** Partner's first name — board captions name who picked what. */
   partnerName: string;
@@ -1224,31 +1239,34 @@ export interface VenueChangeCatalogItem {
   tier?: string;
   distanceKm: number;
   /**
-   * Google Places photo resource names → resolved via `venueChangePhotoUrl`.
-   * The single source of venue imagery; empty for curated rows, which show the
-   * category placeholder instead.
+   * Google Places photo resource names. No longer turned into URLs here (see
+   * `thumbnailUrl` / `photoUrls`); kept because it is what the dev preview
+   * synthesises its placeholder pictures from. Empty for curated rows, which
+   * show the category placeholder instead.
    */
   photoRefs: string[];
+  /**
+   * Signed links to the same photos, minted by the server alongside the refs.
+   *
+   * The board used to build `/photo?ref=…&tma=<initData>` itself, because an
+   * `<img>` cannot send the Authorization header — which put a two-hour bearer
+   * credential into every image URL, and from there into access logs, the
+   * WebView cache and `Referer` headers (A13-L16). A signed link carries only a
+   * signature over the photo, the width and a day-rounded expiry.
+   *
+   * `thumbnailUrl` is the 240 px card tile; `photoUrls` is every photo at the
+   * ONE width the gallery and the fullscreen viewer share (1200 px), in
+   * `photoRefs` order. Optional: a server that predates them sends neither, and
+   * the tiles fall back to the category glyph.
+   */
+  thumbnailUrl?: string | null;
+  photoUrls?: string[];
   rating: number | null;
   userRatingCount: number | null;
   editorialSummary: string | null;
 }
 
 const venueChangeBase = `${apiBase}/v1/venue-change`;
-
-/**
- * Build a server-proxied URL for a Google Places photo resource name. The proxy
- * keeps `PLACES_API_KEY` server-side; `<img>` can't send headers, so initData
- * rides the query string (HMAC-verified server-side, same as the tma header).
- */
-export function venueChangePhotoUrl(
-  initData: string,
-  ref: string,
-  width = 1000,
-): string {
-  const p = new URLSearchParams({ ref, w: String(width), tma: initData });
-  return `${venueChangeBase}/photo?${p.toString()}`;
-}
 
 export async function fetchVenueBoardState(
   initData: string,
@@ -1334,15 +1352,39 @@ export async function declineVenuePayApi(initData: string, matchId: string): Pro
   await venuePost(initData, "pay-decline", { matchId });
 }
 
+/**
+ * What minting a venue-change invoice came back with.
+ *
+ * `settled` is the Premium express swap: it costs nothing, so the server
+ * settles it on the spot and sends no link at all. The old return type had no
+ * room for that, and `String(body.link)` turned the missing link into the
+ * string "undefined" — which the board then opened as an invoice, showing a
+ * network error over a change that had already happened (A13-H16).
+ */
+export type VenueInvoiceResult =
+  | { settled: true }
+  | { settled: false; link: string; stars: number };
+
+export function parseVenueInvoice(body: Record<string, unknown>): VenueInvoiceResult {
+  if (body.settled === true) return { settled: true };
+  const link = body.link;
+  if (typeof link !== "string" || !link) {
+    // Neither settled nor payable: refuse loudly rather than open a sheet for
+    // a link that does not exist.
+    throw new CalendarApiError(502, "invoice-failed", "HTTP 200: invoice response without a link");
+  }
+  return { settled: false, link, stars: Number(body.stars) };
+}
+
 /** Mint the Stars invoice link (agreed payment or her express swap). */
 export async function venueStarsInvoice(
   initData: string,
   matchId: string,
   mode: "agreed" | "express",
   key?: string,
-): Promise<{ link: string; stars: number }> {
+): Promise<VenueInvoiceResult> {
   const body = await venuePost(initData, "stars-invoice", { matchId, mode, key });
-  return { link: String(body.link), stars: Number(body.stars) };
+  return parseVenueInvoice(body);
 }
 
 // §Premium: there is deliberately no subscription-invoice helper here. The

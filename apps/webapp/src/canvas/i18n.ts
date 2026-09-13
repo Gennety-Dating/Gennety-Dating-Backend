@@ -71,6 +71,12 @@ export interface CanvasStrings {
   soon: string;
   offline: string;
   /**
+   * A 401: the Mini App's session (its initData) has expired, which no retry
+   * can fix — only opening it again from the chat does. Kept apart from
+   * `offline`, which promises that retrying will get through (A13-M31).
+   */
+  reopenFromChat: string;
+  /**
    * The transit dock (decision 2026-09-11, `canvas/transit-dock.ts`). `{time}`
    * arrives formatted by `formatTravelTime`, `{n}` by the terminal's
    * `formatDistance`, and `{app}` is a brand ("Apple Maps"). Brands appear here
@@ -133,6 +139,7 @@ const en: CanvasStrings = {
   minutes: "{n}m",
   soon: "any moment",
   offline: "Can't reach me right now. Trying again.",
+  reopenFromChat: "This session has expired. Open the map again from the chat.",
   dockLabel: "Getting there",
   dockModes: "On foot or by car",
   dockWalking: "On foot",
@@ -184,6 +191,7 @@ const ru: CanvasStrings = {
   minutes: "{n} мин",
   soon: "вот-вот",
   offline: "Не достучаться до меня. Пробую снова.",
+  reopenFromChat: "Сессия устарела. Открой карту заново из чата.",
   dockLabel: "Как добраться",
   dockModes: "Пешком или на машине",
   dockWalking: "Пешком",
@@ -235,6 +243,7 @@ const uk: CanvasStrings = {
   minutes: "{n} хв",
   soon: "ось-ось",
   offline: "Не достукатися до мене. Пробую знову.",
+  reopenFromChat: "Сесія застаріла. Відкрий мапу знову з чату.",
   dockLabel: "Як дістатися",
   dockModes: "Пішки чи автівкою",
   dockWalking: "Пішки",
@@ -287,6 +296,7 @@ const de: CanvasStrings = {
   minutes: "{n} Min",
   soon: "gleich",
   offline: "Ich bin gerade nicht erreichbar. Versuche es erneut.",
+  reopenFromChat: "Diese Sitzung ist abgelaufen. Öffne die Karte erneut aus dem Chat.",
   dockLabel: "Anfahrt",
   dockModes: "Zu Fuß oder mit dem Auto",
   dockWalking: "Zu Fuß",
@@ -339,6 +349,7 @@ const pl: CanvasStrings = {
   minutes: "{n} min",
   soon: "lada moment",
   offline: "Nie mogę się teraz połączyć. Próbuję ponownie.",
+  reopenFromChat: "Sesja wygasła. Otwórz mapę ponownie z czatu.",
   dockLabel: "Dojazd",
   dockModes: "Pieszo czy autem",
   dockWalking: "Pieszo",

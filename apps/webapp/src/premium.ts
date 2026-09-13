@@ -7,6 +7,7 @@ import { butterflyLoader } from "./butterfly-loader";
 import { wireContentInsets } from "./telegram-insets";
 import { wireReturnBackButton, returnParams } from "./return-to.js";
 import { referralChip } from "./referral-hint.js";
+import { invoiceOutcomeFor, premiumScreenFor, type InvoiceOutcome } from "./premium-load.js";
 
 /**
  * Gennety Premium Mini App (PRODUCT_SPEC §Premium). A small vanilla-TS page that
@@ -99,6 +100,12 @@ interface Copy {
   activePlateUntil: (d: string) => string;
   manage: string;
   payFailed: string;
+  /**
+   * The state request failed, so this page does not know whether the reader
+   * already subscribes. Deliberately not the offer: see `premium-load.ts`.
+   */
+  loadFailed: string;
+  retry: string;
 }
 
 const COPY: Record<Lang, Copy> = {
@@ -133,6 +140,8 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `until ${d}`,
     manage: "Manage or cancel anytime in Telegram → Settings → Subscriptions.",
     payFailed: "That didn't go through. Try again in a moment.",
+    loadFailed: "Couldn't load your Premium status.",
+    retry: "Try again",
   },
   ru: {
     crest: "✨",
@@ -165,6 +174,8 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `до ${d}`,
     manage: "Управлять и отменить — в Telegram → Настройки → Подписки.",
     payFailed: "Не прошло. Попробуй ещё раз через минуту.",
+    loadFailed: "Не удалось загрузить статус Premium.",
+    retry: "Повторить",
   },
   uk: {
     crest: "✨",
@@ -197,6 +208,8 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `до ${d}`,
     manage: "Керувати та скасувати — у Telegram → Налаштування → Підписки.",
     payFailed: "Не вдалося. Спробуй ще раз за хвилину.",
+    loadFailed: "Не вдалося завантажити статус Premium.",
+    retry: "Спробувати ще",
   },
   de: {
     crest: "✨",
@@ -231,6 +244,8 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `bis ${d}`,
     manage: "Verwalten oder kündigen in Telegram → Einstellungen → Abos.",
     payFailed: "Das hat nicht geklappt. Bitte gleich nochmal.",
+    loadFailed: "Dein Premium-Status konnte nicht geladen werden.",
+    retry: "Erneut versuchen",
   },
   pl: {
     crest: "✨",
@@ -263,6 +278,8 @@ const COPY: Record<Lang, Copy> = {
     activePlateUntil: (d) => `do ${d}`,
     manage: "Zarządzaj lub anuluj w Telegram → Ustawienia → Subskrypcje.",
     payFailed: "Nie udało się. Spróbuj ponownie za chwilę.",
+    loadFailed: "Nie udało się wczytać statusu Premium.",
+    retry: "Spróbuj ponownie",
   },
 };
 
@@ -381,7 +398,7 @@ async function fetchState(): Promise<PremiumState> {
   return (await res.json()) as PremiumState;
 }
 
-async function mintInvoice(plan: string): Promise<string> {
+async function mintInvoice(plan: string): Promise<InvoiceOutcome> {
   const res = await apiFetch(`${apiBase}/v1/premium/stars-invoice`, {
     method: "POST",
     headers: {
@@ -390,9 +407,13 @@ async function mintInvoice(plan: string): Promise<string> {
     },
     body: JSON.stringify({ plan }),
   });
-  if (!res.ok) throw new Error(`invoice ${res.status}`);
-  const body = (await res.json()) as { link: string };
-  return body.link;
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    // No JSON — the status alone decides (`invoiceOutcomeFor`).
+  }
+  return invoiceOutcomeFor(res.status, body);
 }
 
 function el(tag: string, className?: string, text?: string): HTMLElement {
@@ -509,6 +530,37 @@ function renderLoading(): void {
   const page = el("div", "pm-page");
   const center = el("div", "pm-center");
   center.append(butterflyLoader());
+  page.append(center);
+  root.replaceChildren(page);
+}
+
+/**
+ * The state request failed. Not the offer (`premium-load.ts` says why): the
+ * crest and a plain line on the same centred stage the loader and the active
+ * plate use, and the page's own glass CTA as the retry — nothing on it can
+ * charge anyone.
+ */
+function renderError(): void {
+  const page = el("div", "pm-page");
+  const center = el("div", "pm-center");
+
+  const hero = el("div", "pm-hero");
+  hero.append(crest());
+  hero.append(el("h1", "pm-title pm-shimmer", s.title));
+  center.append(hero);
+  center.append(el("p", "pm-price", s.loadFailed));
+
+  const retry = document.createElement("button");
+  retry.className = "pm-cta";
+  retry.type = "button";
+  retry.append(el("span", undefined, s.retry));
+  // No notification haptic: nothing has succeeded yet, and the glass press
+  // below already answers the finger. `load` swaps the loader in at once, so
+  // a second tap has no button left to land on.
+  retry.addEventListener("click", () => void load());
+  wireGlassPress(retry);
+  center.append(retry);
+
   page.append(center);
   root.replaceChildren(page);
 }
@@ -698,15 +750,26 @@ async function subscribe(btn: HTMLButtonElement, plan: string): Promise<void> {
   if (busy) return;
   busy = true;
   btn.disabled = true;
-  let link: string;
+  let outcome: InvoiceOutcome;
   try {
-    link = await mintInvoice(plan);
+    outcome = await mintInvoice(plan);
   } catch {
+    outcome = { kind: "failed" };
+  }
+  if (outcome.kind === "already-active") {
+    // The server refused a second recurring subscription: this screen is
+    // stale, not broken. Re-read the state, which lands on the active plate.
+    busy = false;
+    void load();
+    return;
+  }
+  if (outcome.kind === "failed") {
     busy = false;
     btn.disabled = false;
     app?.showAlert(s.payFailed);
     return;
   }
+  const link = outcome.link;
   const open = app?.openInvoice;
   if (!open) {
     busy = false;
@@ -751,8 +814,13 @@ async function pollUntilActive(attempt = 0): Promise<void> {
 
 async function load(): Promise<void> {
   // Standalone visual preview (no Telegram/initData): `?preview=active` shows the
-  // subscribed status plate, `?preview=offer` the sales screen. Harmless in prod.
+  // subscribed status plate, `?preview=offer` the sales screen, `?preview=error`
+  // the could-not-load screen. Harmless in prod.
   const preview = params.get("preview");
+  if (preview === "error") {
+    renderError();
+    return;
+  }
   if (preview === "active" || preview === "offer") {
     const mock: PremiumState = {
       ok: true,
@@ -798,21 +866,16 @@ async function load(): Promise<void> {
     return;
   }
   renderLoading();
+  let state: PremiumState | null = null;
   try {
-    const state = await fetchState();
-    if (state.active) renderActive(state);
-    else renderOffer(state);
+    state = await fetchState();
   } catch {
-    renderOffer({
-      ok: false,
-      featureEnabled: true,
-      active: false,
-      premiumUntil: null,
-      autoRenew: false,
-      priceStars: 0,
-      priceDisplay: "$17.99",
-    });
+    state = null;
   }
+  const screen = premiumScreenFor(state ? { ok: true, active: state.active } : { ok: false });
+  if (screen === "error" || !state) renderError();
+  else if (screen === "active") renderActive(state);
+  else renderOffer(state);
 }
 
 app?.ready?.();

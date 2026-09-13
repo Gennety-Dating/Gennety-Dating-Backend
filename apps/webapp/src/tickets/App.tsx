@@ -30,6 +30,7 @@ import { useActionBarSpace } from "../ticket/action-bar.js";
 import { Confetti } from "../ticket/Confetti.js";
 import { returnParams } from "../return-to.js";
 import { ReferralChip } from "../referral-hint-react.js";
+import { createInFlightGuard } from "../pay-flow.js";
 
 const app = window.Telegram?.WebApp;
 const params = new URLSearchParams(location.search);
@@ -38,6 +39,14 @@ const lang = pickStoreLang(rawLang);
 const ticketS = ticketStrings(pickTicketLang(rawLang));
 const initData = app?.initData ?? "";
 document.documentElement?.setAttribute("lang", lang);
+
+/**
+ * One tap, one bundle (A13-M28). A double tap on a bundle used to mint two
+ * invoices, and unlike the date gate nothing refunds the second one: two paid
+ * bundles are two purchases. Module-level so the check-and-set happens in the
+ * tap itself, not a render later — see `pay-flow.ts`.
+ */
+const buyGuard = createInFlightGuard();
 
 type Phase =
   | { kind: "loading" }
@@ -74,6 +83,8 @@ export function App(): ReactElement {
   // this screen the bar only exists after a purchase, and the hook clears the
   // reservation when it unmounts, so the bundle list reserves nothing.
   const barRef = useActionBarSpace();
+  // What the bundle buttons render from; `buyGuard` is what refuses the tap.
+  const [buying, setBuying] = useState(false);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -144,31 +155,46 @@ export function App(): ReactElement {
         app?.showAlert(s.errGeneric);
         return;
       }
+      let link: string;
       try {
-        const { link } = await createStoreStarsInvoice(initData, bundle.count);
-        open.call(app, link, (status) => {
-          if (status === "paid") {
-            haptic("success");
-            setPhase({
-              kind: "view",
-              balance: balance + bundle.count,
-              justBought: bundle.count,
-              discountPct: 0,
-              starsEnabled: true,
-              bundleStars,
-            });
-          } else if (status === "failed") {
-            haptic("error");
-            app?.showAlert(s.errGeneric);
-          }
-          // "cancelled" / "pending" → leave the store screen as-is.
-        });
+        ({ link } = await createStoreStarsInvoice(initData, bundle.count));
       } catch (err) {
-        app?.showAlert(errorText(err, s));
+        app.showAlert(errorText(err, s));
+        return;
       }
+      // Awaited rather than handed a callback, so the buy guard stays held
+      // until the sheet has closed — not merely until the link came back.
+      const status = await new Promise<"paid" | "cancelled" | "failed" | "pending">((resolve) =>
+        open.call(app, link, resolve),
+      );
+      if (status === "paid") {
+        haptic("success");
+        setPhase({
+          kind: "view",
+          balance: balance + bundle.count,
+          justBought: bundle.count,
+          discountPct: 0,
+          starsEnabled: true,
+          bundleStars,
+        });
+      } else if (status === "failed") {
+        haptic("error");
+        app.showAlert(s.errGeneric);
+      }
+      // "cancelled" / "pending" → leave the store screen as-is.
     },
     [s],
   );
+
+  /** Run one purchase flow, refusing any tap while another is in flight. */
+  const buyOnce = useCallback((flight: () => Promise<void>): void => {
+    if (!buyGuard.tryEnter()) return;
+    setBuying(true);
+    void flight().finally(() => {
+      buyGuard.leave();
+      setBuying(false);
+    });
+  }, []);
 
   if (phase.kind === "loading") {
     return (
@@ -214,7 +240,10 @@ export function App(): ReactElement {
                   key={b.count}
                   type="button"
                   className={`store-bundle${b.bestValue ? " store-bundle-best" : ""}`}
-                  onClick={() => void startStarsPurchase(phase.balance, phase.bundleStars, b)}
+                  disabled={buying}
+                  onClick={() =>
+                    buyOnce(() => startStarsPurchase(phase.balance, phase.bundleStars, b))
+                  }
                 >
                   {b.discountPct > 0 && (
                     <span className={`store-badge${b.bestValue ? " store-badge-best" : ""}`}>
@@ -241,7 +270,8 @@ export function App(): ReactElement {
               key={b.count}
               type="button"
               className={`store-bundle${b.bestValue ? " store-bundle-best" : ""}${b.famineDiscountPct > 0 ? " store-bundle-famine" : ""}`}
-              onClick={() => void startPurchase(b)}
+              disabled={buying}
+              onClick={() => buyOnce(() => startPurchase(b))}
             >
               {b.famineDiscountPct > 0 ? (
                 <span className="store-badge store-badge-famine">

@@ -22,6 +22,11 @@ import {
 import type { TicketStateView } from "../../handlers/matching/ticket-gate.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
 import { allowCrossOriginImage } from "../cross-origin-image.js";
+import {
+  ticketPhotoSignatureValid,
+  ticketPhotoUrl,
+  type TicketPhotoSide,
+} from "../ticket-photos.js";
 
 /**
  * Per-scope Star (XTR) prices surfaced to the gate Mini App so it can render
@@ -49,10 +54,23 @@ function gateStarsView(): { self: number; both: number; partner: number } | null
  * partner payment fell onto the (since removed) mock rail and died with a
  * generic error.
  */
-function stateResponse(state: TicketStateView): Record<string, unknown> {
+function stateResponse(
+  state: TicketStateView,
+  viewer: { telegramId: number; matchId: string },
+): Record<string, unknown> {
+  const now = Date.now();
   return {
     ok: true,
     ...state,
+    // Signed avatar links the Mini App's `<img>` loads, so its initData never
+    // rides an image URL again (A13-L16; `ticket-photos.ts`). Additive: the
+    // relative `myPhotoUrl`/`partnerPhotoUrl` stay for bundles cached earlier.
+    myPhotoSignedUrl: state.myPhotoUrl
+      ? ticketPhotoUrl(viewer.telegramId, viewer.matchId, "self", now)
+      : null,
+    partnerPhotoSignedUrl: state.partnerPhotoUrl
+      ? ticketPhotoUrl(viewer.telegramId, viewer.matchId, "partner", now)
+      : null,
     starsEnabled: env.TICKET_STARS_ENABLED,
     stars: gateStarsView(),
     rail: ticketPurchaseRail(),
@@ -110,7 +128,7 @@ export function createTicketRouter(api: Api<RawApi>): Router {
     }
     // When Stars is on, the gate Mini App renders Star-priced pay buttons and
     // pays natively via WebApp.openInvoice (see POST /stars-invoice).
-    res.status(200).json(stateResponse(result.state));
+    res.status(200).json(stateResponse(result.state, { telegramId: auth.user.id, matchId }));
   });
 
   // Native Telegram Stars (XTR) payment for the §3.5b date gate. Returns a
@@ -199,9 +217,10 @@ export function createTicketRouter(api: Api<RawApi>): Router {
   });
 
   // Stream a participant's first profile photo for the Mini App avatars. Auth
-  // via `?a=<initData>` (see authenticatePhotoRequest — this is the ONLY route
-  // that accepts the query-param form). `side` = self | partner, resolved
-  // relative to the authenticated caller so no one can enumerate others' photos.
+  // via the signed link the state response mints, or the transitional
+  // `?a=<initData>` (see authenticatePhotoRequest — this is the ONLY route that
+  // accepts either query form). `side` = self | partner, resolved relative to
+  // the authenticated caller so no one can enumerate others' photos.
   router.get("/photo/:side", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticatePhotoRequest(req);
     if (!auth.ok) {
@@ -299,7 +318,7 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       res.status(status).json({ error: result.reason });
       return;
     }
-    res.status(200).json(stateResponse(result.state));
+    res.status(200).json(stateResponse(result.state, { telegramId: auth.user.id, matchId }));
   });
 
   // Spend a ticket from the wallet instead of paying. No payment intent — the
@@ -343,7 +362,7 @@ export function createTicketRouter(api: Api<RawApi>): Router {
           : "in the Date Ticket Mini App, used a ticket for their own slot",
       { surface: "ticket", matchId },
     );
-    res.status(200).json(stateResponse(result.state));
+    res.status(200).json(stateResponse(result.state, { telegramId: auth.user.id, matchId }));
   });
 
   return router;
@@ -391,14 +410,38 @@ function authenticate(req: Request): AuthOk | AuthErr {
 
 /**
  * `GET /photo/:side` only. An `<img src>` cannot carry an Authorization header,
- * so initData rides `?a=` there and is HMAC-verified exactly like the header
- * path. Accepts the header too, so a non-`<img>` caller needn't downgrade.
+ * so the permission travels in the URL — as a signed link (`?v&e&sig`, minted
+ * by the state response; `ticket-photos.ts`) or, on the transition path, as
+ * initData in `?a=`. Accepts the header too, so a non-`<img>` caller needn't
+ * downgrade.
  */
 function authenticatePhotoRequest(req: Request): AuthOk | AuthErr {
   const header = req.header("authorization") ?? req.header("Authorization");
   if (header?.startsWith("tma ")) return authenticate(req);
 
-  const q = (req.query as { a?: unknown }).a;
+  const query = req.query as { v?: unknown; e?: unknown; sig?: unknown; a?: unknown };
+  if (typeof query.sig === "string") {
+    const matchId = matchIdOf(req);
+    const rawSide = (req.params as { side?: string }).side;
+    const side: TicketPhotoSide | null =
+      rawSide === "self" || rawSide === "partner" ? rawSide : null;
+    const viewer = typeof query.v === "string" ? query.v : "";
+    const expiresAt = Number(query.e);
+    if (
+      !matchId ||
+      !side ||
+      !ticketPhotoSignatureValid(viewer, matchId, side, expiresAt, query.sig)
+    ) {
+      return { ok: false, body: { error: "Invalid or expired photo link" } };
+    }
+    return { ok: true, user: { id: Number(viewer) } };
+  }
+
+  // TRANSITION PATH — only for Mini App bundles cached before 2026-09-14,
+  // which still append initData (a two-hour bearer credential) to the avatar
+  // URL, where it lands in access logs, caches and `Referer` headers (A13-L16).
+  // Remove once those bundles have aged out.
+  const q = query.a;
   if (typeof q !== "string" || q.length === 0) {
     return { ok: false, body: { error: "Missing tma initData" } };
   }

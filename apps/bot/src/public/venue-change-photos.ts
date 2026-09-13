@@ -107,3 +107,20 @@ export function boardPhotoLinks(
     thumbnailUrl: boardPhotoUrl(ref, BOARD_PIN_WIDTH, now),
   };
 }
+
+/**
+ * Every photo of a venue at the card width, in `photoRefs` order — the gallery
+ * and the fullscreen viewer of the Mini App's board (A13-L16).
+ *
+ * The Mini App used to build these URLs itself as `/photo?ref=…&tma=<initData>`,
+ * which put a two-hour bearer credential into every image request, and so into
+ * access logs, the WebView cache and `Referer` headers. It reads these instead.
+ * One width for the whole gallery is deliberate: the viewer paints the bitmaps
+ * the gallery already decoded, so an enlarged photo is never billed twice.
+ */
+export function boardGalleryUrls(
+  refs: readonly string[] | undefined,
+  now: number = Date.now(),
+): string[] {
+  return (refs ?? []).map((ref) => boardPhotoUrl(ref, BOARD_CARD_WIDTH, now));
+}

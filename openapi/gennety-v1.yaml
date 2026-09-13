@@ -610,12 +610,14 @@ paths:
       summary: Attribute this new user to a promo code (iOS deferred deep link)
       description: >-
         Feature-flagged (`PROMO_FEATURE_ENABLED`; 404 when off). First-launch
-        resolves the effective promo code from either the clipboard-carried
-        value (`code`, optional `GENNETY:` prefix) or a coarse device-fingerprint
-        match against a recent promo landing-page touch, then first-touch
-        attributes this user (never overwrites an existing attribution). The
-        welcome gift itself is granted later at the wow screen via
-        `/v1/me/promo/claim`. New users only.
+        resolves the effective promo code from a coarse device-fingerprint
+        match against a recent promo landing-page touch, or — only while the
+        `PROMO_MANUAL_ENTRY_ENABLED` seam is on — from a typed `code` (optional
+        `GENNETY:` prefix), then first-touch attributes this user (never
+        overwrites an existing attribution). The welcome gift itself is granted
+        later at the wow screen via `/v1/me/promo/claim`. New accounts only:
+        created within the last 24 hours and not yet through onboarding,
+        otherwise 409 `promo-not-eligible`.
       requestBody:
         required: false
         content:
@@ -627,8 +629,9 @@ paths:
                   type: string
                   maxLength: 64
                   description: >-
-                    Promo code read from the clipboard (with or without the
-                    `GENNETY:` prefix). Omit to rely on fingerprint matching.
+                    Typed promo code (with or without the `GENNETY:` prefix).
+                    Ignored unless `PROMO_MANUAL_ENTRY_ENABLED`; omit to rely on
+                    fingerprint matching.
       responses:
         "200":
           description: Attribution result (attributed=false when no code resolved)
@@ -645,6 +648,11 @@ paths:
                   months: { type: integer }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: Promo feature disabled }
+        "409":
+          description: >-
+            Not a new account (older than 24 hours or past onboarding) — promo
+            codes are for new users only. Body `{ error: "promo-not-eligible",
+            attributed: false, reason: "not-eligible" }`.
 
   /v1/me/promo/claim:
     post:
@@ -4282,7 +4290,10 @@ paths:
                 key: { type: string }
       responses:
         "200":
-          description: Done
+          description: >
+            Done. Since 2026-09-14 the body also carries `kept` (boolean, as in
+            `VenueLikeResult`): true when the venue picked was `__keep__`, so
+            the original venue stays and nothing is paid.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Ok" }
@@ -4776,6 +4787,14 @@ components:
         thumbnailUrl:
           type: [string, "null"]
           description: Map-pin photo, 240 px; same signing as `photoUrl`.
+        photoUrls:
+          type: array
+          description: >
+            Every photo in `photoRefs` order, 1200 px, signed like `photoUrl`
+            (whose link is the first entry). The Mini App's gallery reads this
+            rather than putting its initData into an image URL. Optional — added
+            2026-09-14.
+          items: { type: string }
 
     VenueBoardAgreed:
       type: object
@@ -4876,6 +4895,12 @@ components:
         thumbnailUrl:
           type: [string, "null"]
           description: Map-pin photo, 240 px, signed.
+        photoUrls:
+          type: array
+          description: >
+            Every photo in `photoRefs` order, 1200 px, signed — see
+            `VenueBoardOriginal.photoUrls`. Optional — added 2026-09-14.
+          items: { type: string }
         rating: { type: [number, "null"] }
         userRatingCount: { type: [integer, "null"] }
         editorialSummary:
@@ -4890,6 +4915,13 @@ components:
         agreed:
           type: boolean
           description: This submission closed an agreement — the board moves to paying.
+        kept:
+          type: boolean
+          description: >
+            The agreement is to KEEP the original venue (both sides hearted
+            `__keep__`): nothing to pay, and the board closes. False for an
+            agreement to change, and whenever `agreed` is false. Optional —
+            added 2026-09-14.
         overlapCandidates:
           type: array
           description: >

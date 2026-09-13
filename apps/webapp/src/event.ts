@@ -300,6 +300,12 @@ function renderList(): void {
 async function renderTicket(eventId: string): Promise<void> {
   const event = events.find((e) => e.id === eventId);
   openTicketFor = eventId;
+  // The live screen's "show ticket" button lands here while its 5 s poll is
+  // still armed — left running, it repainted the party screen over the entry
+  // QR before the door could scan it. Stand both other screens down first.
+  openLiveFor = null;
+  openRecapFor = null;
+  if (liveTimer) clearTimeout(liveTimer);
   root.innerHTML = h(`
     <section class="ev-ticket">
       <button class="ev-back" data-back="1">← ${esc(t.back)}</button>

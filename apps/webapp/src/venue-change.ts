@@ -40,7 +40,6 @@ import {
   declineVenuePayApi,
   keepOriginalVenue,
   venueStarsInvoice,
-  venueChangePhotoUrl,
   CalendarApiError,
   type VenueBoardState,
   type VenueChangeCatalogItem,
@@ -765,46 +764,49 @@ function previewPhotoUrl(ref: string): string {
     `font-size='${Math.round(w / 7)}' text-anchor='middle'>${w}×${h}</text></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
-function photoUrl(ref: string, width: number): string {
-  return previewMode ? previewPhotoUrl(ref) : venueChangePhotoUrl(getInitData(), ref, width);
-}
 /**
- * Everything the photo helpers below actually need: the refs, and the glyph to
- * draw when there are none. Deliberately narrower than `VenueChangeCatalogItem`
- * (which every catalog row satisfies) so the pinned CURRENT venue — which is
- * not a catalog row and has no distance, rating or summary — can be shown with
- * the same tiles, gallery and fullscreen viewer as every alternative, without
- * inventing the fields it doesn't have.
+ * Everything the photo helpers below actually need: the photos, and the glyph
+ * to draw when there are none. Deliberately narrower than
+ * `VenueChangeCatalogItem` (which every catalog row satisfies) so the pinned
+ * CURRENT venue — which is not a catalog row and has no distance, rating or
+ * summary — can be shown with the same tiles, gallery and fullscreen viewer as
+ * every alternative, without inventing the fields it doesn't have.
  */
 interface VenuePhotoSet {
+  /** Only the dev preview reads these — it synthesises a picture per ref. */
   photoRefs: string[];
+  /** Server-signed 240 px card tile (`api.ts` says why the server mints it). */
+  thumbnailUrl?: string | null;
+  /** Server-signed gallery links, one per ref. */
+  photoUrls?: string[];
   /** Falls back to the pin glyph for anything unmapped — see `categoryIcon`. */
   category: string;
 }
+/**
+ * The board no longer builds a photo URL of its own. It used to append the
+ * Mini App's initData to every one (`?tma=`), because an `<img>` cannot send
+ * the Authorization header — a two-hour bearer credential in logs, cache and
+ * `Referer` (A13-L16). The server mints signed links in the payloads this page
+ * already fetches with the header, and these two only pick them up.
+ */
 function thumbUrl(v: VenuePhotoSet): string | null {
-  if (v.photoRefs[0]) return photoUrl(v.photoRefs[0], 240);
-  return null;
+  if (previewMode) return v.photoRefs[0] ? previewPhotoUrl(v.photoRefs[0]) : null;
+  return v.thumbnailUrl ?? null;
 }
 /**
- * The ONE width the gallery and the fullscreen viewer share.
+ * The gallery and the fullscreen viewer paint from these SAME links.
  *
  * They used to differ — 1000 in the rail, 1600 fullscreen — and the width is
- * part of the proxy URL, so the same photograph was two different cache entries
- * and two separately billed Place Photo requests: every enlarged photo was
- * bought twice. Place Photo is billed per REQUEST, not per byte, so serving the
- * rail a slightly larger file costs nothing and lets the viewer paint from
- * cache instead of buying the picture again.
- *
- * 1200 rather than 1000 because this now has to satisfy the fullscreen case:
- * a 390pt phone at DPR 3 is 1170 physical pixels, and dropping the viewer to
- * the old rail width would have made "fullscreen" visibly softer than what it
- * replaced. Anything above ~1200 is spent on a screen that cannot resolve it.
- * The proxy's own ceiling is 1600 (`clampWidth`, routes/venue-change.ts), so
- * this stays well inside it.
+ * part of the URL, so the same photograph was two different cache entries and
+ * two separately billed Place Photo requests: every enlarged photo was bought
+ * twice. The server now signs every gallery photo at one width (1200 px,
+ * `BOARD_CARD_WIDTH` in the bot's `venue-change-photos.ts` — enough for a 390pt
+ * phone at DPR 3), and the viewer takes this list rather than asking for its
+ * own, so opening a photo still costs nothing.
  */
-const VENUE_PHOTO_WIDTH = 1200;
 function galleryUrls(v: VenuePhotoSet): string[] {
-  return v.photoRefs.map((ref) => photoUrl(ref, VENUE_PHOTO_WIDTH));
+  if (previewMode) return v.photoRefs.map(previewPhotoUrl);
+  return v.photoUrls ?? [];
 }
 /**
  * A photo tile that says "loading" instead of looking empty.
@@ -1596,7 +1598,7 @@ function railIndex(rail: HTMLElement, gap: number): number {
  * Three things are deliberate:
  *
  *  - **It opens instantly, from cache, and buys nothing.** It renders the exact
- *    same URLs the gallery behind it already decoded (`VENUE_PHOTO_WIDTH`), so
+ *    same URLs the gallery behind it already decoded (`galleryUrls`), so
  *    opening a photo costs zero Place Photo requests. It used to paint the
  *    1000px copy and then swap in a 1600px one per slide viewed — correct about
  *    latency, and it meant every enlarged photograph was billed a second time.
@@ -1626,7 +1628,7 @@ function openPhotoViewer(v: VenuePhotoSet, start: number): void {
   const slides = low.map((u) =>
     // Eager, and it costs nothing: these are the SAME URLs the gallery rail
     // just loaded, so the browser paints them from its own cache
-    // (`Cache-Control: private, max-age=86400` on the proxy) — which is the
+    // (`Cache-Control: max-age=86400` on the signed photo route) — which is the
     // whole reason the rail and the viewer share one width. Deferring them
     // would add a wait to a tap that already said "show me this photo".
     photoTile(u, "vc-viewer-shot", () => categoryIcon(v.category, "icon vc-viewer-glyph"), {}, false),
@@ -1808,7 +1810,12 @@ function renderCurrentCard(st: VenueBoardState): HTMLElement {
  * kept screens already draw for this venue.
  */
 function currentPhotoSet(st: VenueBoardState): VenuePhotoSet {
-  return { photoRefs: st.original.photoRefs ?? [], category: "" };
+  return {
+    photoRefs: st.original.photoRefs ?? [],
+    thumbnailUrl: st.original.thumbnailUrl ?? null,
+    photoUrls: st.original.photoUrls ?? [],
+    category: "",
+  };
 }
 
 /**
@@ -1851,9 +1858,16 @@ async function submitSelection(): Promise<void> {
   saving = true;
   busy = true;
   syncBoardChrome();
+  // What is being SENT, frozen before the await. Hearts stay tappable while
+  // the request is out (marks are local and free), and `confirmed` used to be
+  // copied from the live set after it landed — so a heart added mid-submit was
+  // recorded as sent: the partner never saw it and the CTA that would send it
+  // hid itself (A13-M30). Snapshotting keeps the board usable; blocking taps
+  // for the length of a network call would not.
+  const sent = [...selection];
   try {
-    const res = await submitVenueLikes(getInitData(), matchId, [...selection]);
-    confirmed = new Set(selection);
+    const res = await submitVenueLikes(getInitData(), matchId, sent);
+    confirmed = new Set(sent);
     if (res.agreed) {
       boardState = await fetchVenueBoardState(getInitData(), matchId);
       haptic("success");
@@ -1879,7 +1893,7 @@ async function submitSelection(): Promise<void> {
     // If all I submitted was "keep the current venue", this is a proposal to
     // STAY, not a suggestion to change — land on the keep-asked screen (the
     // partner got the matching "would like to keep" note), never generic copy.
-    const onlyKeep = selection.size === 1 && selection.has(KEEP_KEY);
+    const onlyKeep = sent.length === 1 && sent[0] === KEEP_KEY;
     renderSuccess(onlyKeep ? "keep-asked" : "suggested");
   } catch (err) {
     saving = false;
@@ -1975,12 +1989,11 @@ function renderDetail(v: VenueChangeCatalogItem): void {
   bar.push(markBtn);
   if (boardState?.expressAvailable && boardState.priceStars != null) {
     const price = boardState.priceStars;
-    bar.push(
-      iconBtn("btn-express", "bolt", s.expressBtn(price), () => {
-        haptic("light");
-        void startExpress(v);
-      }, true),
-    );
+    const expressBtn = iconBtn("btn-express", "bolt", s.expressBtn(price), () => {
+      haptic("light");
+      void startExpress(v, expressBtn);
+    }, true);
+    bar.push(expressBtn);
     bar.push(el("p", { class: "vc-note", text: s.expressHint }));
   }
 
@@ -2378,9 +2391,14 @@ function renderAgreed(st: VenueBoardState): void {
           : el("p", { class: "vc-note vc-note-agree", text: s.agreedBothChose(partner) }),
       );
       if (price != null) {
-        bar.push(
-          iconBtn("btn-primary", "check", s.payBtn(price), () => void payAgreed(), true),
+        const payBtn = iconBtn(
+          "btn-primary",
+          "check",
+          s.payBtn(price),
+          () => void payAgreed(payBtn),
+          true,
         );
+        bar.push(payBtn);
       }
       if (st.myAction === "pay_or_decline") {
         bar.push(
@@ -2395,9 +2413,14 @@ function renderAgreed(st: VenueBoardState): void {
       break;
     case "pay_or_offer":
       if (price != null) {
-        bar.push(
-          iconBtn("btn-primary", "check", s.paySelfBtn(price), () => void payAgreed(), true),
+        const payBtn = iconBtn(
+          "btn-primary",
+          "check",
+          s.paySelfBtn(price),
+          () => void payAgreed(payBtn),
+          true,
         );
+        bar.push(payBtn);
       }
       if (st.canOfferPartner) {
         bar.push(iconBtn("btn-glass", "letter", s.offerBtn, () => void offerPay()));
@@ -2463,50 +2486,77 @@ async function hydrateAgreedPhoto(st: VenueBoardState): Promise<void> {
   if (screen === "agreed" && key && catalogByKey(key)) renderAgreed(st);
 }
 
-async function payAgreed(): Promise<void> {
-  if (previewMode) return;
-  haptic("light");
+/**
+ * `busy` was set here but never CHECKED, so a double tap minted two invoices
+ * (A13-M28). Both pay entries now check-and-set it before their first await —
+ * which also refuses a pay tap while any other board request is in flight —
+ * and disable the button that was tapped until the flow hands back.
+ */
+async function payAgreed(button: HTMLElement): Promise<void> {
+  if (previewMode || busy) return;
   busy = true;
+  button.toggleAttribute("disabled", true);
+  haptic("light");
   try {
-    const { link } = await venueStarsInvoice(getInitData(), matchId, "agreed");
-    openInvoiceAndFinalize(link);
+    const invoice = await venueStarsInvoice(getInitData(), matchId, "agreed");
+    // An agreed change is never free (only her Premium express is), but the
+    // type allows it and the honest handling is the same as below.
+    if (invoice.settled) finalizeSettled();
+    else openInvoiceAndFinalize(invoice.link, button);
   } catch (err) {
     busy = false;
+    button.toggleAttribute("disabled", false);
     haptic("error");
     app?.showAlert(errorMessage(err));
   }
 }
 
-async function startExpress(v: VenueChangeCatalogItem): Promise<void> {
-  if (previewMode) return;
+async function startExpress(v: VenueChangeCatalogItem, button: HTMLElement): Promise<void> {
+  if (previewMode || busy) return;
   busy = true;
+  button.toggleAttribute("disabled", true);
   try {
-    const { link } = await venueStarsInvoice(getInitData(), matchId, "express", keyOf(v));
-    openInvoiceAndFinalize(link);
+    const invoice = await venueStarsInvoice(getInitData(), matchId, "express", keyOf(v));
+    // Premium: the server settled the swap on the spot and sent no link. It
+    // used to open an invoice for the string "undefined" and report a network
+    // error over a change that had already happened (A13-H16).
+    if (invoice.settled) finalizeSettled();
+    else openInvoiceAndFinalize(invoice.link, button);
   } catch (err) {
     busy = false;
+    button.toggleAttribute("disabled", false);
     haptic("error");
     app?.showAlert(errorMessage(err));
   }
 }
 
 /**
+ * The change is paid for (or was free): hold the "locking in…" spinner while
+ * the settle lands, then route to the settled screen. Exactly what the paid
+ * path does once Telegram reports `paid`.
+ */
+function finalizeSettled(): void {
+  haptic("success");
+  showLoading(s.finalizing);
+  void pollUntilSettled();
+}
+
+/**
  * Open the native Stars sheet; on `paid`, hold a "locking in…" spinner while
  * the bot's successful_payment settle lands, then show the settled screen.
  */
-function openInvoiceAndFinalize(link: string): void {
+function openInvoiceAndFinalize(link: string, button: HTMLElement): void {
   const open = app?.openInvoice;
   if (!open) {
     busy = false;
+    button.toggleAttribute("disabled", false);
     // Ancient client without openInvoice — the link still works as a URL.
     if (!openExternal(link)) window.open(link, "_blank");
     return;
   }
   open.call(app, link, (status) => {
     if (status === "paid") {
-      haptic("success");
-      showLoading(s.finalizing);
-      void pollUntilSettled();
+      finalizeSettled();
     } else {
       busy = false;
       if (status === "failed") {

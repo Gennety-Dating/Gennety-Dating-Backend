@@ -14,7 +14,7 @@ const VALID_UUID = "33333333-3333-4333-8333-333333333333";
 const originalPlacesKey = process.env.PLACES_API_KEY;
 
 vi.mock("../config.js", () => ({
-  env: { BOT_TOKEN, VENUE_CHANGE_STARS: 150 },
+  env: { BOT_TOKEN, VENUE_CHANGE_STARS: 150, PUBLIC_BASE_URL: "https://api.example.test" },
 }));
 
 vi.mock("@gennety/db", () => ({
@@ -28,6 +28,7 @@ const confirmVenueAgreement = vi.fn();
 const offerPartnerPay = vi.fn();
 const declineVenuePay = vi.fn();
 const mintExpressChange = vi.fn();
+const settleFreeVenueChange = vi.fn();
 const createVenueInvoiceLink = vi.fn();
 vi.mock("../handlers/matching/venue-change.js", () => ({
   getVenueBoardState: (...a: unknown[]) => getVenueBoardState(...a),
@@ -37,6 +38,7 @@ vi.mock("../handlers/matching/venue-change.js", () => ({
   offerPartnerPay: (...a: unknown[]) => offerPartnerPay(...a),
   declineVenuePay: (...a: unknown[]) => declineVenuePay(...a),
   mintExpressChange: (...a: unknown[]) => mintExpressChange(...a),
+  settleFreeVenueChange: (...a: unknown[]) => settleFreeVenueChange(...a),
   createVenueInvoiceLink: (...a: unknown[]) => createVenueInvoiceLink(...a),
 }));
 
@@ -102,6 +104,7 @@ beforeEach(() => {
   offerPartnerPay.mockReset();
   declineVenuePay.mockReset();
   mintExpressChange.mockReset();
+  settleFreeVenueChange.mockReset();
   createVenueInvoiceLink.mockReset();
 });
 
@@ -548,5 +551,122 @@ describe("POST /v1/venue-change/stars-invoice", () => {
       .send({ matchId: VALID_UUID, mode: "express", key: "p1" });
     expect(res.status).toBe(200);
     expect(res.body.link).toBe("https://t.me/invoice/y");
+  });
+});
+
+// A13-M33: agreeing to KEEP the original venue is free, and the Mini App can
+// only tell it from an agreement to change (which leads to payment) by `kept`.
+// The routes used to strip it, so "keep" showed the "one more step" screen.
+describe("`kept` reaches the Mini App", () => {
+  it("/like relays kept", async () => {
+    submitVenueLikes.mockResolvedValue({ ok: true, agreed: true, kept: true, overlapCandidates: [] });
+    const res = await request(buildApp())
+      .post(`/v1/venue-change/like`)
+      .set("Authorization", tmaHeader())
+      .send({ matchId: VALID_UUID, keys: ["__keep__"] });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, agreed: true, kept: true, overlapCandidates: [] });
+  });
+
+  it("/confirm relays kept, and false for a real change", async () => {
+    confirmVenueAgreement.mockResolvedValue({ ok: true, kept: true });
+    let res = await request(buildApp())
+      .post(`/v1/venue-change/confirm`)
+      .set("Authorization", tmaHeader())
+      .send({ matchId: VALID_UUID, key: "__keep__" });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, kept: true });
+
+    confirmVenueAgreement.mockResolvedValue({ ok: true, kept: false });
+    res = await request(buildApp())
+      .post(`/v1/venue-change/confirm`)
+      .set("Authorization", tmaHeader())
+      .send({ matchId: VALID_UUID, key: "p1" });
+    expect(res.body).toEqual({ ok: true, kept: false });
+  });
+});
+
+// A13-L16: the Mini App used to build `/photo?ref=…&tma=<initData>` itself.
+describe("signed gallery links for the Mini App", () => {
+  const REFS = ["places/A1/photos/p1", "places/A1/photos/p2"];
+
+  function expectSignedGallery(urls: string[]): void {
+    expect(urls).toHaveLength(REFS.length);
+    urls.forEach((url, i) => {
+      const parsed = new URL(url);
+      expect(parsed.origin).toBe("https://api.example.test");
+      // One opaque segment per ref, in `photoRefs` order, at the ONE gallery width.
+      expect(Buffer.from(parsed.pathname.split("/").pop() ?? "", "base64url").toString()).toBe(REFS[i]);
+      expect(parsed.searchParams.get("w")).toBe("1200");
+      expect(parsed.searchParams.get("sig")).toMatch(/^[0-9a-f]{24}$/);
+      expect(url).not.toContain("tma");
+    });
+  }
+
+  it("/state signs every photo of the assigned venue", async () => {
+    getVenueBoardState.mockResolvedValue(
+      agreedState({ original: { name: "Old", address: "Old St", mapsUri: null, photoRefs: REFS } }),
+    );
+    const res = await request(buildApp())
+      .get(`/v1/venue-change/state?match=${VALID_UUID}`)
+      .set("Authorization", tmaHeader());
+    expect(res.status).toBe(200);
+    expectSignedGallery(res.body.original.photoUrls);
+    // The first-photo links the native client reads are still there.
+    expect(res.body.original.thumbnailUrl).toContain("w=240");
+  });
+
+  it("/catalog signs every photo of every row, and an empty list for none", async () => {
+    getVenueChangeCatalog.mockResolvedValue({
+      ok: true,
+      venues: [
+        { name: "Cafe", address: "1 St", placeId: "A1", photoRefs: REFS },
+        { name: "Park", address: "2 St", placeId: null, photoRefs: [] },
+      ],
+    });
+    const res = await request(buildApp())
+      .get(`/v1/venue-change/catalog?match=${VALID_UUID}`)
+      .set("Authorization", tmaHeader());
+    expect(res.status).toBe(200);
+    expectSignedGallery(res.body.venues[0].photoUrls);
+    expect(res.body.venues[1].photoUrls).toEqual([]);
+  });
+
+  it("a minted link opens the signed photo route with no initData", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    getVenueChangeCatalog.mockResolvedValue({
+      ok: true,
+      venues: [{ name: "Cafe", address: "1 St", placeId: "A1", photoRefs: REFS }],
+    });
+    const catalog = await request(buildApp())
+      .get(`/v1/venue-change/catalog?match=${VALID_UUID}`)
+      .set("Authorization", tmaHeader());
+    const link = new URL(String(catalog.body.venues[0].photoUrls[1]));
+
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(bytes, { status: 200, headers: { "content-type": "image/jpeg" } }),
+      ),
+    );
+    const res = await request(buildApp()).get(`${link.pathname}${link.search}`);
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toBe("image/jpeg");
+  });
+});
+
+// A13-H16: a free (Premium) express swap settles on the spot and has no invoice.
+describe("POST /v1/venue-change/stars-invoice — free express", () => {
+  it("answers settled with no link, and mints no invoice", async () => {
+    mintExpressChange.mockResolvedValue({ ok: true, free: true, venueName: "New Cafe" });
+    settleFreeVenueChange.mockResolvedValue({ ok: true });
+    const res = await request(buildApp())
+      .post(`/v1/venue-change/stars-invoice`)
+      .set("Authorization", tmaHeader())
+      .send({ matchId: VALID_UUID, mode: "express", key: "p1" });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, settled: true, free: true });
+    expect(createVenueInvoiceLink).not.toHaveBeenCalled();
   });
 });

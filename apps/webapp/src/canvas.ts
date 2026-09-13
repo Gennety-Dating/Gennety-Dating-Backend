@@ -33,8 +33,15 @@ import "./canvas.css";
 import { mapStyle } from "./map-style.js";
 import { isLang, stringsFor, type Lang } from "./canvas/i18n.js";
 import { isCanvasState, sheetFor, type CanvasState, type RadarReading } from "./canvas/sheet.js";
-import { backoffFor, pollIntervalFor } from "./canvas/poll.js";
 import {
+  backoffFor,
+  connectionTroubleFor,
+  pollIntervalFor,
+  radarReadingStale,
+  type ConnectionTrouble,
+} from "./canvas/poll.js";
+import {
+  CanvasApiError,
   fetchDateState,
   fetchScratchMap,
   postProximity,
@@ -135,6 +142,14 @@ let pollTimer: number | null = null;
 let failures = 0;
 let latest: DateStateResponse | null = null;
 let radar: RadarReading | null = null;
+/** Radar pings that have failed in a row — see `radarReadingStale`. */
+let radarFailures = 0;
+/**
+ * Why the canvas cannot currently reach the server, when that is something to
+ * say (A13-M31). It takes the sheet's note line while it holds: every other
+ * word on the sheet is only as fresh as the last good read.
+ */
+let connectionTrouble: ConnectionTrouble | null = null;
 let scratch: ScratchState | null = null;
 let scratchBusy = false;
 let scratchError: string | null = null;
@@ -316,10 +331,38 @@ function showVenue(lat: number, lng: number): void {
     venueMarker.setLngLat([lng, lat]);
   }
   const moved = venuePoint?.lat !== lat || venuePoint.lng !== lng;
+  const wasShown = venuePoint !== null;
   venuePoint = { lat, lng };
   // A new venue is a new trip: the line has to be redrawn to it, and the
   // camera has earned the right to frame the pair again.
   if (moved) tripFramed = false;
+  drawTrip();
+  // The venue changed under an open canvas (a paid venue change settled). With
+  // the user's own end on the map, `drawTrip` has just re-framed both ends; with
+  // none, the camera would otherwise stay on the old place while the pin sat
+  // off screen (A13-L24). Not on the first show — that one `jumpTo`s above.
+  if (moved && wasShown && !cameraOnTrip) {
+    map.easeTo({
+      center: [lng, lat],
+      zoom: VENUE_ZOOM,
+      padding: { top: 0, right: 0, bottom: coveredPx, left: 0 },
+      duration: stillFrames() ? 0 : 620,
+    });
+  }
+}
+
+/**
+ * The state stopped naming a venue (the date was cancelled, or it is over).
+ * The pin used to stay where it was for the rest of the session, still
+ * summoning a dock for a place nobody is going to (A13-L24). Dropping the
+ * point also takes the trip line and the user's dot with it (`drawTrip`).
+ */
+function hideVenue(): void {
+  if (!venueMarker && !venuePoint) return;
+  venueMarker?.remove();
+  venueMarker = null;
+  venuePoint = null;
+  tripFramed = false;
   drawTrip();
 }
 
@@ -610,8 +653,9 @@ function render(): void {
   el.sheet?.setAttribute("data-tone", view.tone);
 
   if (el.note) {
-    el.note.textContent = view.note ?? "";
-    el.note.hidden = !view.note;
+    const note = connectionTrouble ? troubleText(connectionTrouble) : view.note;
+    el.note.textContent = note ?? "";
+    el.note.hidden = !note;
   }
   if (el.list) {
     el.list.replaceChildren(
@@ -629,6 +673,11 @@ function render(): void {
   el.action.dataset.action = view.action ?? "";
 
   renderScratchToggle();
+}
+
+/** The note-line sentence for a connection failure — see `connectionTroubleFor`. */
+function troubleText(trouble: ConnectionTrouble): string {
+  return trouble === "reopen" ? s.reopenFromChat : s.offline;
 }
 
 /**
@@ -742,6 +791,8 @@ async function pingRadar(): Promise<void> {
   if (!here) return;
   try {
     const res = await postProximity(initData, matchId, here);
+    radarFailures = 0;
+    connectionTrouble = null;
     const wasBoth = radar?.bothArrived ?? false;
     radar = {
       peer: res.peer,
@@ -752,9 +803,16 @@ async function pingRadar(): Promise<void> {
     // every poll while both stand at the venue would be a buzzing phone.
     if (radar.bothArrived && !wasBoth) haptic("success");
     render();
-  } catch {
-    // Outside the window, or the network. The sheet keeps its last reading
-    // until the presence TTL makes the server answer `unknown` anyway.
+  } catch (err) {
+    // Outside the window, or the network. A single miss keeps the last
+    // reading; a run of them drops it to `unknown` — the spec's "a phone that
+    // goes quiet becomes unknown", which the server's presence TTL cannot
+    // deliver to a client that can no longer reach it (A13-M31).
+    radarFailures += 1;
+    const trouble = connectionTroubleFor(err instanceof CanvasApiError ? err.status : null);
+    if (trouble) connectionTrouble = trouble;
+    if (radarReadingStale(radarFailures)) radar = null;
+    render();
   }
 }
 
@@ -771,10 +829,12 @@ async function tick(): Promise<void> {
   try {
     const next = await fetchDateState(initData);
     failures = 0;
+    connectionTrouble = null;
     latest = isCanvasState(next.state) ? next : { ...next, state: "IDLE_EXPLORING" as CanvasState };
 
     const venue = latest.match?.venue;
     if (venue?.lat != null && venue.lng != null) showVenue(venue.lat, venue.lng);
+    else hideVenue();
     dressPin(
       dock.update(
         latest.state,
@@ -784,7 +844,10 @@ async function tick(): Promise<void> {
       ),
     );
 
-    if (latest.state !== "DATE_RADAR_ACTIVE") radar = null;
+    if (latest.state !== "DATE_RADAR_ACTIVE") {
+      radar = null;
+      radarFailures = 0;
+    }
     render();
     dismissBoot();
 
@@ -795,9 +858,15 @@ async function tick(): Promise<void> {
     if (latest.state === "DATE_RADAR_ACTIVE") void pingRadar();
 
     schedule(pollIntervalFor(latest.state));
-  } catch {
+  } catch (err) {
     failures += 1;
-    if (!latest && el.body) el.body.textContent = s.offline;
+    // A13-M31: a canvas that had already drawn a state used to say nothing
+    // here, leaving the last sheet — ETA included — on screen as if it were
+    // live. The line now says why, and a run of failures clears the radar.
+    connectionTrouble = connectionTroubleFor(err instanceof CanvasApiError ? err.status : null);
+    if (radarReadingStale(failures)) radar = null;
+    if (!latest && el.body) el.body.textContent = troubleText(connectionTrouble ?? "offline");
+    else render();
     dismissBoot();
     schedule(backoffFor(failures));
   }

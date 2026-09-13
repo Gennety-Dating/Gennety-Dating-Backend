@@ -118,4 +118,18 @@ describe("formatting", () => {
     expect(formatClock(at, "en")).toBe("18:45");
     expect(formatClock(at, "de")).toBe("18:45");
   });
+
+  // A13-L25: the ticket states the venue's time, whatever zone the phone is in.
+  it("prints the time in the venue's zone, not the device's", () => {
+    const at = new Date("2026-09-11T16:00:00Z");
+    expect(formatClock(at, "en", "Europe/Kyiv")).toBe("19:00");
+    expect(formatClock(at, "en", "Europe/Warsaw")).toBe("18:00");
+    expect(formatClock(at, "en", "America/New_York")).toBe("12:00");
+  });
+
+  it("falls back to the device zone rather than throwing on a bad or missing zone", () => {
+    const at = new Date(2026, 8, 11, 18, 45);
+    expect(formatClock(at, "en", null)).toBe("18:45");
+    expect(formatClock(at, "en", "Not/AZone")).toBe("18:45");
+  });
 });
