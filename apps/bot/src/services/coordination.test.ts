@@ -312,18 +312,20 @@ describe("runCoordinationTick — offer (T-3h)", () => {
 });
 
 describe("runCoordinationTick — open proxy (T-1h, unconditional)", () => {
+  const agreedTime = new Date(NOW.getTime() + 20 * 60 * 1000); // 20 min out
+  const openRow = (over: Record<string, unknown> = {}) => ({
+    id: "m1",
+    agreedTime,
+    coordMethod: "proxy",
+    userA: { id: "A", telegramId: 1001n, language: "en" },
+    userB: { id: "B", telegramId: 1002n, language: "en" },
+    ...over,
+  });
+
   it("opens for both with no consent gate and sets proxyClosesAt = agreed + 2h", async () => {
-    const agreedTime = new Date(NOW.getTime() + 20 * 60 * 1000); // 20 min out
     mMatch.findMany
       .mockResolvedValueOnce([]) // offer phase
-      .mockResolvedValueOnce([
-        {
-          id: "m1",
-          agreedTime,
-          userA: { telegramId: 1001n, language: "en" },
-          userB: { telegramId: 1002n, language: "en" },
-        },
-      ])
+      .mockResolvedValueOnce([openRow()])
       .mockResolvedValueOnce([]); // close phase
 
     const api = makeApi();
@@ -339,28 +341,103 @@ describe("runCoordinationTick — open proxy (T-1h, unconditional)", () => {
       expect.anything(),
     );
     expect(mockRenderCard.mock.calls[0]![0]).not.toHaveProperty("personPhotoRef");
-    expect(mMatch.update).toHaveBeenCalledWith({
-      where: { id: "m1" },
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "m1", status: "scheduled", coordMethod: "proxy", proxyOpenedAt: null },
       data: {
         proxyOpenedAt: NOW,
         proxyClosesAt: new Date(agreedTime.getTime() + 2 * 60 * 60 * 1000),
       },
     });
   });
+
+  /**
+   * The stamp used to be written AFTER the cards went out, so two overlapping
+   * ticks both read `proxyOpenedAt: null` and both announced the chat. The claim
+   * now comes first, and a tick that loses it — or finds the date cancelled in
+   * between — tells nobody anything.
+   */
+  it("announces nothing when another tick has already claimed the open", async () => {
+    mMatch.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([openRow()])
+      .mockResolvedValueOnce([]);
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const api = makeApi();
+    const res = await runCoordinationTick(api, NOW);
+
+    expect(res.opened).toBe(0);
+    expect(api.sendPhoto).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A Variant B request that ended without a yes. The decline card promises the
+   * anonymous chat, and an unanswered ask leaves the pair with no way to find
+   * each other either — so both open as the chat, the method rewritten under a
+   * guard that an approve landing in between wins.
+   */
+  it("opens the chat for a contact request nobody said yes to", async () => {
+    mMatch.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([openRow({ coordMethod: "request_partner" })])
+      .mockResolvedValueOnce([]);
+
+    const api = makeApi();
+    const res = await runCoordinationTick(api, NOW);
+
+    const openQuery = mMatch.findMany.mock.calls[1]![0];
+    expect(openQuery.where.OR).toEqual([
+      { coordMethod: "proxy" },
+      {
+        coordMethod: "request_partner",
+        OR: [{ coordPartnerConsent: null }, { coordPartnerConsent: false }],
+      },
+    ]);
+    expect(mMatch.updateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        id: "m1",
+        status: "scheduled",
+        proxyOpenedAt: null,
+        coordMethod: "request_partner",
+        OR: [{ coordPartnerConsent: null }, { coordPartnerConsent: false }],
+      },
+      data: { coordMethod: "proxy" },
+    });
+    expect(res.opened).toBe(1);
+    expect(api.sendPhoto).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves a request alone when the partner approved just before the tick", async () => {
+    mMatch.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([openRow({ coordMethod: "request_partner" })])
+      .mockResolvedValueOnce([]);
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 }); // the move loses to the approve
+
+    const api = makeApi();
+    const res = await runCoordinationTick(api, NOW);
+
+    expect(res.opened).toBe(0);
+    expect(mMatch.updateMany).toHaveBeenCalledTimes(1); // no open claim after it
+    expect(api.sendPhoto).not.toHaveBeenCalled();
+  });
 });
 
 describe("runCoordinationTick — close proxy (T+2h)", () => {
+  const closeRow = (over: Record<string, unknown> = {}) => ({
+    id: "m1",
+    status: "scheduled",
+    userA: { telegramId: 1001n, platform: "telegram", language: "en" },
+    userB: { telegramId: 1002n, platform: "telegram", language: "en" },
+    ...over,
+  });
+
   it("stamps proxyClosedAt and DMs both", async () => {
     mMatch.findMany
       .mockResolvedValueOnce([]) // offer
       .mockResolvedValueOnce([]) // open
-      .mockResolvedValueOnce([
-        {
-          id: "m1",
-          userA: { telegramId: 1001n, language: "en" },
-          userB: { telegramId: 1002n, language: "en" },
-        },
-      ]);
+      .mockResolvedValueOnce([closeRow()]);
 
     const api = makeApi();
     const res = await runCoordinationTick(api, NOW);
@@ -373,5 +450,55 @@ describe("runCoordinationTick — close proxy (T+2h)", () => {
       where: { id: "m1" },
       data: { proxyClosedAt: NOW },
     });
+  });
+
+  /**
+   * "Hope the date went well — I'll check in tomorrow" to someone whose date was
+   * cancelled, or who was blocked, contradicts the notice they already got. The
+   * window is still stamped shut.
+   */
+  it("closes a called-off date's chat silently", async () => {
+    mMatch.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([closeRow({ status: "cancelled" })]);
+
+    const api = makeApi();
+    const res = await runCoordinationTick(api, NOW);
+
+    expect(res.closed).toBe(1);
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "m1" },
+      data: { proxyClosedAt: NOW },
+    });
+  });
+
+  it("still tells a pair whose date has already been marked completed", async () => {
+    mMatch.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([closeRow({ status: "completed" })]);
+
+    const api = makeApi();
+    await runCoordinationTick(api, NOW);
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  /** A Telegram-login app account has a real id and no bot chat. */
+  it("does not DM an app-only account through its real Telegram id", async () => {
+    mMatch.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        closeRow({ userB: { telegramId: 1002n, platform: "mobile", language: "en" } }),
+      ]);
+
+    const api = makeApi();
+    await runCoordinationTick(api, NOW);
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0][0]).toBe(1001);
   });
 });

@@ -3,7 +3,8 @@ import { t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import {
   memeRevealFeatureLive,
-  partnerMemeForViewer,
+  resolveMemeSubject,
+  memeAnswerFor,
   deliverMemeReveal,
 } from "../../services/meme-reveal.js";
 import { DEMO_MODE_ENABLED } from "../../demo/config.js";
@@ -43,9 +44,19 @@ export async function handleMemeShow(ctx: BotContext): Promise<void> {
     return;
   }
 
-  // `partnerMemeForViewer` is also the trust boundary: a match id from someone
-  // who is not on that match resolves to nothing.
-  const meme = await partnerMemeForViewer(matchId, user.id);
+  // `resolveMemeSubject` is the trust boundary: a stranger's match id, a match
+  // that ended without a date, and a pair with a block between them all resolve
+  // to nothing. Kept apart from the answer lookup below so each dead card says
+  // the true thing — and this one says nothing about WHY, because the reason
+  // may be a block the viewer must not learn about.
+  const subject = await resolveMemeSubject(matchId, user.id);
+  if (!subject) {
+    await ctx.answerCallbackQuery({ text: t(lang, "memeRevealUnavailable") }).catch(() => {});
+    await ctx.editMessageReplyMarkup({}).catch(() => {});
+    return;
+  }
+
+  const meme = await memeAnswerFor(subject);
   if (!meme) {
     // The partner re-answered the humour question in words, which clears the
     // pointer and with it the consent that pointer represented. Strip the dead

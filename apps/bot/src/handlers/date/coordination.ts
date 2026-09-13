@@ -1,16 +1,26 @@
 import { prisma } from "@gennety/db";
 import { t, type Language, PROXY_MAX_MESSAGE_LEN } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
-import { withRedactedSummary } from "../../services/outbound-recorder.js";
 import {
   resolveCoordRecipients,
   buildChatControlsKeyboard,
-  isProxyOpen,
   type CoordMethod,
 } from "../../services/coordination.js";
+import {
+  proxyChatSendRefusal,
+  relayProxyMessage,
+  type ProxyChatRefusal,
+} from "../../services/proxy-chat.js";
+import { telegramReachable } from "../../services/telegram-reach.js";
 import { InlineKeyboard } from "grammy";
-import { sendCoordCard } from "../../services/coordination-card/send.js";
-import type { CoordCardTheme } from "../../services/coordination-card/index.js";
+import {
+  sendCoordCard,
+  type SendCoordCardOptions,
+} from "../../services/coordination-card/send.js";
+import type {
+  CoordCardInput,
+  CoordCardTheme,
+} from "../../services/coordination-card/index.js";
 
 /**
  * Pre-date coordination handlers (PRODUCT_SPEC.md §Phase 4, feature-flagged).
@@ -22,7 +32,9 @@ import type { CoordCardTheme } from "../../services/coordination-card/index.js";
  *   - `coord:enter:{matchId}` — join the anonymous proxy chat (Variant C)
  *   - `coord:exit` — leave the proxy chat
  * Plus the free-text relay leg for users in the `coordination_chat` session
- * state.
+ * state. Whether that chat is open, what gets logged and how the partner is
+ * reached all belong to `services/proxy-chat.ts`, shared with the app; this
+ * file keeps only Telegram's idiom of entering and leaving a chat session.
  *
  * The contact reveal (A/B) is a plain `t.me/<username>` link — Telegram
  * auto-linkifies it. We deliberately avoid `text_mention` (`tg://user?id=`):
@@ -36,9 +48,6 @@ interface CoordMatch {
   coordInitiatorId: string | null;
   coordMethod: string | null;
   coordPartnerConsent: boolean | null;
-  proxyOpenedAt: Date | null;
-  proxyClosesAt: Date | null;
-  proxyClosedAt: Date | null;
   userAId: string;
   userBId: string;
   userA: CoordUser;
@@ -92,9 +101,6 @@ function loadCoordMatch(matchId: string): Promise<CoordMatch | null> {
       coordInitiatorId: true,
       coordMethod: true,
       coordPartnerConsent: true,
-      proxyOpenedAt: true,
-      proxyClosesAt: true,
-      proxyClosedAt: true,
       userAId: true,
       userBId: true,
       userA: { select: coordUserSelect },
@@ -128,21 +134,55 @@ function photoOf(u: CoordUser): string | null {
   return u.profile?.photos?.[0] ?? null;
 }
 
-async function dmCatch(
+/**
+ * A coordination card, sent only to someone the bot can actually message.
+ *
+ * `sendCoordCard` filters on `telegramId > 0n`, and a Telegram-login app
+ * account passes that with a REAL id and no bot chat. What comes back is a 403,
+ * and a 403 is not merely a lost card: it is how "this person blocked the bot"
+ * is detected, and that verdict takes someone out of matching.
+ *
+ * No push leg, on purpose. The cards sent from this file carry the two
+ * contact-exchange variants, which only ever run for a pair whose BOTH sides
+ * are Telegram-reachable and neither is on the app: `resolveCoordRecipients`
+ * refuses any other pair at tap time, and `sendOffers` moves a pair with the
+ * app in it straight onto the anonymous chat. Nothing turns a Telegram account
+ * into an app-only one (linking only ever widens it to `both`), so this guards
+ * an invariant rather than a branch that runs.
+ */
+async function sendCardIfReachable(
   ctx: BotContext,
-  telegramId: bigint,
+  to: CoordUser,
+  card: CoordCardInput,
   text: string,
-  extra?: Parameters<typeof ctx.api.sendMessage>[2],
+  opts?: SendCoordCardOptions,
 ): Promise<void> {
-  if (telegramId <= 0n) return;
-  await ctx.api
-    .sendMessage(Number(telegramId), text, extra)
-    .catch((err: unknown) =>
-      console.warn(
-        `[coordination] dm failed for ${telegramId}:`,
-        err instanceof Error ? err.message : err,
-      ),
-    );
+  if (!telegramReachable(to)) return;
+  await sendCoordCard(ctx.api, to.telegramId, card, text, opts);
+}
+
+/**
+ * Take a refused user out of the chat state and say why — one exit for the
+ * Enter button and the relay, so a refusal reads the same from either.
+ *
+ * The session is reset only when it IS the chat: a stale Enter button tapped
+ * mid-way through some other flow must not knock that flow over.
+ *
+ * A date that is no longer `scheduled` gets its own line rather than the
+ * window-close one. "Hope the date went well" is the wrong thing to tell
+ * someone whose date was just cancelled, and the line has to stay neutral
+ * enough that it never tells a blocked person they were blocked.
+ */
+async function refuseProxyChat(ctx: BotContext, refusal: ProxyChatRefusal): Promise<void> {
+  if (ctx.session.matchFlow === "coordination_chat") {
+    ctx.session.matchFlow = "idle";
+    ctx.session.activeMatchId = null;
+  }
+  // A stranger's tap, or a match that no longer exists, is answered with
+  // nothing — as it always was.
+  if (refusal === "not-found" || refusal === "forbidden") return;
+  const key = refusal === "closed" ? "coordProxyClosed" : "coordProxyUnavailable";
+  await ctx.reply(t(ctx.session.language, key));
 }
 
 /** `coord:m:{matchId}:{method}` — initiator picks a coordination option. */
@@ -168,30 +208,41 @@ export async function handleCoordMethod(ctx: BotContext): Promise<void> {
   if (!recipients.some((r) => r.id === callerId)) return;
 
   const lang = ctx.session.language;
-  if (match.coordMethod !== null) {
-    await ctx.reply(t(lang, "coordAlreadyChosen"));
-    return;
-  }
-
   const initiator = callerId === match.userA.id ? match.userA : match.userB;
   const partner = callerId === match.userA.id ? match.userB : match.userA;
   const now = new Date();
 
-  if (method === "share_self") {
-    if (!initiator.telegramUsername) return; // button shouldn't have shown
-    await prisma.match.update({
-      where: { id: matchId },
-      data: {
-        coordInitiatorId: callerId,
-        coordMethod: method,
-        coordChosenAt: now,
-        coordResolvedAt: now,
-      },
-    });
+  // A contact variant whose link cannot exist is refused BEFORE anything is
+  // written, so an impossible tap never locks the method (the button shouldn't
+  // have shown).
+  if (method === "share_self" && !initiator.telegramUsername) return;
+  if (method === "request_partner" && !partner.telegramUsername) return;
+
+  // First tap wins, and the WRITE decides it, not the read above. A same-sex
+  // pair both hold the offer, so two taps can land together having both read
+  // `coordMethod: null`; with a plain update the second overwrote the first's
+  // choice after the first's card had already gone out, leaving the row saying
+  // one thing and the partner's chat another. A and C are settled by the tap;
+  // B stays open until the partner answers.
+  const claim = await prisma.match.updateMany({
+    where: { id: matchId, status: "scheduled", coordMethod: null },
+    data: {
+      coordInitiatorId: callerId,
+      coordMethod: method,
+      coordChosenAt: now,
+      ...(method === "request_partner" ? { coordPartnerConsent: null } : { coordResolvedAt: now }),
+    },
+  });
+  if (claim.count === 0) {
+    await ctx.reply(t(lang, "coordAlreadyChosen"));
+    return;
+  }
+
+  if (method === "share_self" && initiator.telegramUsername) {
     const partnerLang = langOf(partner);
-    await sendCoordCard(
-      ctx.api,
-      partner.telegramId,
+    await sendCardIfReachable(
+      ctx,
+      partner,
       {
         variant: "shared",
         personName: initiator.firstName ?? "",
@@ -209,25 +260,15 @@ export async function handleCoordMethod(ctx: BotContext): Promise<void> {
   }
 
   if (method === "request_partner") {
-    if (!partner.telegramUsername) return; // button shouldn't have shown
-    await prisma.match.update({
-      where: { id: matchId },
-      data: {
-        coordInitiatorId: callerId,
-        coordMethod: method,
-        coordChosenAt: now,
-        coordPartnerConsent: null,
-      },
-    });
     const partnerLang = langOf(partner);
     const kb = new InlineKeyboard()
       .text(t(partnerLang, "coordPartnerBtnApprove"), `coord:approve:${matchId}`)
       .success()
       .text(t(partnerLang, "coordPartnerBtnDecline"), `coord:decline:${matchId}`)
       .danger();
-    await sendCoordCard(
-      ctx.api,
-      partner.telegramId,
+    await sendCardIfReachable(
+      ctx,
+      partner,
       {
         variant: "ask",
         // The face in the frame is whoever is ASKING, so the partner sees who
@@ -244,17 +285,8 @@ export async function handleCoordMethod(ctx: BotContext): Promise<void> {
     return;
   }
 
-  // method === "proxy" (Variant C) — locked in; the cron opens it at T-1h
-  // unconditionally (no partner consent).
-  await prisma.match.update({
-    where: { id: matchId },
-    data: {
-      coordInitiatorId: callerId,
-      coordMethod: method,
-      coordChosenAt: now,
-      coordResolvedAt: now,
-    },
-  });
+  // method === "proxy" (Variant C) — locked in by the claim; the cron opens it
+  // at T-1h unconditionally (no partner consent).
   await ctx.reply(t(lang, "coordProxyChosenAck"));
 }
 
@@ -289,14 +321,37 @@ export async function handleCoordConsent(ctx: BotContext): Promise<void> {
   const initiator = callerId === match.userA.id ? match.userB : match.userA;
   const lang = ctx.session.language;
 
+  // The answer is taken once, by the write: an approve and a decline tapped in
+  // quick succession both read `coordPartnerConsent: null` above, and the
+  // second used to overwrite the first after its card had gone out. The
+  // method is in the guard too, because `openProxies` may have moved an
+  // unanswered request onto the anonymous chat in between.
+  const unanswered = {
+    id: matchId,
+    status: "scheduled",
+    coordMethod: "request_partner",
+    coordPartnerConsent: null,
+  } as const;
+
   if (!approve) {
-    await prisma.match.update({
-      where: { id: matchId },
-      data: { coordPartnerConsent: false, coordResolvedAt: new Date() },
+    // Declining to share a contact is not declining to meet: the pair still
+    // has to find each other at the venue, and the card below tells the
+    // initiator the anonymous chat opens about an hour before. So the decline
+    // IS the switch to it. It used to record the refusal and leave the method
+    // on `request_partner` — and `openProxies` opens a window only for
+    // `proxy`, so the chat the card promised never came.
+    const declined = await prisma.match.updateMany({
+      where: unanswered,
+      data: { coordPartnerConsent: false, coordMethod: "proxy", coordResolvedAt: new Date() },
     });
-    await sendCoordCard(
-      ctx.api,
-      initiator.telegramId,
+    await ctx.editMessageReplyMarkup().catch(() => {});
+    if (declined.count === 0) {
+      await ctx.reply(t(lang, "coordAlreadyChosen"));
+      return;
+    }
+    await sendCardIfReachable(
+      ctx,
+      initiator,
       {
         // No face here on purpose: the card is about the decision, not the
         // person who made it. The clock points at the anonymous chat instead,
@@ -308,19 +363,23 @@ export async function handleCoordConsent(ctx: BotContext): Promise<void> {
       },
       t(langOf(initiator), "coordPartnerDeclined"),
     );
-    await ctx.editMessageReplyMarkup().catch(() => {});
     return;
   }
 
   if (!partner.telegramUsername) return; // can't reveal without a handle
 
-  await prisma.match.update({
-    where: { id: matchId },
+  const approved = await prisma.match.updateMany({
+    where: unanswered,
     data: { coordPartnerConsent: true, coordResolvedAt: new Date() },
   });
-  await sendCoordCard(
-    ctx.api,
-    initiator.telegramId,
+  await ctx.editMessageReplyMarkup().catch(() => {});
+  if (approved.count === 0) {
+    await ctx.reply(t(lang, "coordAlreadyChosen"));
+    return;
+  }
+  await sendCardIfReachable(
+    ctx,
+    initiator,
     {
       variant: "shared",
       personName: partner.firstName ?? "",
@@ -333,7 +392,6 @@ export async function handleCoordConsent(ctx: BotContext): Promise<void> {
       link: telegramLink(partner.telegramUsername),
     }),
   );
-  await ctx.editMessageReplyMarkup().catch(() => {});
   await ctx.reply(t(lang, "coordSharedAck"));
 }
 
@@ -349,17 +407,16 @@ export async function handleCoordEnter(ctx: BotContext): Promise<void> {
   const callerId = await callerUserId(ctx);
   if (!callerId) return;
 
-  const match = await loadCoordMatch(matchId);
-  if (!match) return;
-  const isParticipant = callerId === match.userAId || callerId === match.userBId;
-  if (!isParticipant) return;
-
-  const lang = ctx.session.language;
-  if (!isProxyOpen(match, new Date())) {
-    await ctx.reply(t(lang, "coordProxyClosed"));
+  // The gate the relay itself will ask, so the button cannot let someone into
+  // a chat whose first message would be refused — nor into a cancelled or
+  // blocked date's chat, which the window alone used to allow.
+  const refusal = await proxyChatSendRefusal({ matchId, userId: callerId });
+  if (refusal) {
+    await refuseProxyChat(ctx, refusal);
     return;
   }
 
+  const lang = ctx.session.language;
   ctx.session.matchFlow = "coordination_chat";
   ctx.session.activeMatchId = matchId;
   await ctx.reply(t(lang, "coordChatEntered"), {
@@ -378,13 +435,21 @@ export async function handleCoordExit(ctx: BotContext): Promise<void> {
 
 /**
  * Free-text relay leg: forward a `coordination_chat` user's message to their
- * match through the bot. Text-only — media is rejected to close the
- * face/metadata-leak bypass. Re-checks the T+2h window per message so a stale
- * session self-heals (the close cron can't reset another user's session).
+ * match. Text-only — media is rejected to close the face/metadata-leak bypass.
+ *
+ * The gate, the log and the delivery are `relayProxyMessage`'s, the same call
+ * the app's `POST /v1/matches/{id}/chat` makes. This leg used to carry its own
+ * copy of all three, and each copy had drifted: its gate looked only at the
+ * window, so a date cancelled, frozen or blocked inside the last hour kept
+ * relaying; its delivery DM'd whatever carried a positive Telegram id, so an
+ * app-only partner got a 403 instead of the push the app path sends; and its
+ * rows never earned a delivery stamp.
+ *
+ * Re-asked per message, which is what lets a stale session self-heal: the
+ * close tick cannot reset another user's session.
  */
 export async function handleProxyRelay(ctx: BotContext): Promise<void> {
   const matchId = ctx.session.activeMatchId;
-  const lang = ctx.session.language;
 
   if (!matchId) {
     ctx.session.matchFlow = "idle";
@@ -392,77 +457,41 @@ export async function handleProxyRelay(ctx: BotContext): Promise<void> {
   }
 
   const callerId = await callerUserId(ctx);
-  const match = callerId ? await loadCoordMatch(matchId) : null;
-  if (!callerId || !match) {
+  if (!callerId) {
     ctx.session.matchFlow = "idle";
     ctx.session.activeMatchId = null;
     return;
   }
 
-  const isParticipant = callerId === match.userAId || callerId === match.userBId;
-  if (!isParticipant) {
-    ctx.session.matchFlow = "idle";
-    ctx.session.activeMatchId = null;
+  const message = ctx.message;
+  const body = message?.text;
+  if (!message || !body) {
+    // Nothing to relay, but the chat is still asked whether it is open: a photo
+    // sent into a closed or cancelled chat must end the session just as text
+    // would, rather than earn a "text only" hint for a chat that is gone.
+    const refusal = await proxyChatSendRefusal({ matchId, userId: callerId });
+    if (refusal) {
+      await refuseProxyChat(ctx, refusal);
+      return;
+    }
+    await ctx.reply(t(ctx.session.language, "coordProxyTextOnly"));
     return;
   }
 
-  // Window closed (or never a proxy) → drop out of the chat state and inform.
-  if (match.coordMethod !== "proxy" || !isProxyOpen(match, new Date())) {
-    ctx.session.matchFlow = "idle";
-    ctx.session.activeMatchId = null;
-    await ctx.reply(t(lang, "coordProxyClosed"));
-    return;
-  }
-
-  // Text-only: reject media without leaving the chat.
-  const body = ctx.message?.text;
-  if (!body) {
-    await ctx.reply(t(lang, "coordProxyTextOnly"));
-    return;
-  }
-
-  const sender = callerId === match.userA.id ? match.userA : match.userB;
-  const partner = callerId === match.userA.id ? match.userB : match.userA;
-  const clamped = body.slice(0, PROXY_MAX_MESSAGE_LEN);
-
-  // `ctx.message.message_id` is this line AS ITS AUTHOR SEES IT, in their own
-  // chat with the bot — which is exactly where a reaction from the partner has
-  // to land for the author to notice it. The relayed copy sitting in the
-  // recipient's chat is a different message and the wrong address: reacting
-  // there would show people marks they made themselves. Captured at write time
-  // because there is no second chance — nothing later carries this id back.
-  await prisma.proxyMessage.create({
-    data: {
-      matchId,
-      senderId: callerId,
-      body: clamped,
-      ...(ctx.message?.message_id === undefined
-        ? {}
-        : { authorChatMessageId: BigInt(ctx.message.message_id) }),
-    },
+  const relayed = await relayProxyMessage({
+    matchId,
+    senderUserId: callerId,
+    // Clamped, as this rail always has, rather than refused like the app's
+    // composer: Telegram shows the writer no counter to keep under.
+    body: body.slice(0, PROXY_MAX_MESSAGE_LEN),
+    // This line AS ITS AUTHOR SEES IT, in their own chat with the bot — where a
+    // partner's reaction has to land (see `relayProxyMessage`).
+    authorChatMessageId: BigInt(message.message_id),
   });
+  if (relayed.ok) return;
 
-  const partnerLang = langOf(partner);
-  // By this point the recipient already knows this person by name + photo from
-  // the pitch and scheduling, so attribute the relayed line to the sender's
-  // first name ("💬 Alena: hi") rather than the impersonal "💬 Your date:". Fall
-  // back to the generic prefix only if a name is somehow missing (firstName is a
-  // required onboarding field, so this is defensive). The message is sent as
-  // plain text (no parse_mode), so the name needs no Markdown escaping.
-  const senderName = sender.firstName?.trim();
-  const prefix = senderName
-    ? t(partnerLang, "coordProxyRelayNamedPrefix", { name: senderName })
-    : t(partnerLang, "coordProxyRelayPrefix");
-  // Relayed text is written by the OTHER user. The recipient's chat timeline
-  // feeds their menu agent's system prompt, which holds profile-writing tools,
-  // so the timeline records only that a relayed message arrived — never its
-  // body. `proxy_messages` remains the full moderation log (PRODUCT_SPEC §4).
-  await withRedactedSummary(
-    "(relayed message from the date partner in the anonymous coordination chat)",
-    async () => {
-      await dmCatch(ctx, partner.telegramId, `${prefix}${clamped}`, {
-        reply_markup: buildChatControlsKeyboard(matchId, partnerLang),
-      });
-    },
-  );
+  // Whitespace only (the clamp rules out too-long): nothing to pass on, and
+  // nothing wrong with the chat, so the session stays where it is.
+  if (relayed.error === "empty" || relayed.error === "too-long") return;
+  await refuseProxyChat(ctx, relayed.error);
 }

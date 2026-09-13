@@ -10,6 +10,8 @@ vi.mock("../demo/config.js", () => ({
   DEMO_MODE_ENABLED: false,
   PROTECT_PARTNER_MEDIA: true,
 }));
+const isPairBlocked = vi.fn();
+vi.mock("./user-block.js", () => ({ isPairBlocked }));
 
 const {
   buildMemeCard,
@@ -48,7 +50,9 @@ const asApi = (api: ReturnType<typeof fakeApi>) => api as unknown as Parameters<
 
 beforeEach(() => {
   vi.clearAllMocks();
+  isPairBlocked.mockResolvedValue(false);
   prisma.match.findUnique.mockResolvedValue({
+    status: "scheduled",
     userAId: "u-a",
     userBId: "u-b",
     userA: { id: "u-a", firstName: "Sam" },
@@ -75,6 +79,44 @@ describe("resolveMemeSubject — the trust boundary", () => {
     // to resolve to null here or it resolves to somebody's private answer.
     await expect(resolveMemeSubject("m1", "u-stranger")).resolves.toBeNull();
     await expect(partnerMemeForViewer("m1", "u-stranger")).resolves.toBeNull();
+  });
+
+  it("still resolves after the date took place — the card stays tappable", async () => {
+    prisma.match.findUnique.mockResolvedValueOnce({
+      status: "completed",
+      userAId: "u-a",
+      userBId: "u-b",
+      userA: { id: "u-a", firstName: "Sam" },
+      userB: { id: "u-b", firstName: "Kate" },
+    });
+    await expect(resolveMemeSubject("m1", "u-a")).resolves.not.toBeNull();
+  });
+
+  /**
+   * The card is an old message that outlives the match. A cancelled or expired
+   * match is no longer an introduction, and the humour question's consent was
+   * to be shown to a match before a date.
+   */
+  it("finds nothing on a match that ended without a date", async () => {
+    for (const status of ["cancelled", "expired"]) {
+      prisma.match.findUnique.mockResolvedValueOnce({
+        status,
+        userAId: "u-a",
+        userBId: "u-b",
+        userA: { id: "u-a", firstName: "Sam" },
+        userB: { id: "u-b", firstName: "Kate" },
+      });
+      await expect(partnerMemeForViewer("m1", "u-a")).resolves.toBeNull();
+    }
+    expect(prisma.profilerAnswer.findFirst).not.toHaveBeenCalled();
+  });
+
+  /** A block is honoured in both directions — the check itself is symmetric. */
+  it("finds nothing across a block between the pair", async () => {
+    isPairBlocked.mockResolvedValue(true);
+    await expect(partnerMemeForViewer("m1", "u-a")).resolves.toBeNull();
+    expect(isPairBlocked).toHaveBeenCalledWith("u-a", "u-b");
+    expect(prisma.profilerAnswer.findFirst).not.toHaveBeenCalled();
   });
 });
 

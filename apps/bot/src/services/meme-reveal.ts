@@ -4,6 +4,7 @@ import { prisma } from "@gennety/db";
 import { profilerImageQuestionIds, t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { DEMO_MODE_ENABLED, PROTECT_PARTNER_MEDIA } from "../demo/config.js";
+import { isPairBlocked } from "./user-block.js";
 
 /**
  * The pre-date meme reveal (§Phase 4) — one card before the date showing what
@@ -72,10 +73,24 @@ export function memeRevealFeatureLive(): boolean {
 }
 
 /**
- * The partner on this match, or null when the viewer is not on it.
+ * Match states in which the card's promise still holds: a date that is on, or
+ * one that happened. The card stays tappable after the date on purpose (see
+ * `handleMemeShow`), so `completed` belongs here — but a cancelled or expired
+ * match is no longer an introduction, and the consent in the humour question
+ * was to be shown to a MATCH before a date, not to whoever once held a card.
+ */
+const MEME_REVEAL_STATUSES: readonly string[] = ["scheduled", "completed"];
+
+/**
+ * The partner on this match, or null when there is no one this viewer may be
+ * shown a meme about.
  *
  * Resolving the participant is the trust boundary: a callback carries a match
- * id and nothing else, so a stranger's tap has to find nothing here.
+ * id and nothing else, so a stranger's tap has to find nothing here. So does
+ * a tap from inside a match that has ended without a date, and a tap across a
+ * block in EITHER direction. The card is an old message that outlives both, and
+ * before these clauses it kept working: a blocked person could still pull the
+ * blocker's meme, and the TikTok or Reel link it came from, on demand.
  */
 export async function resolveMemeSubject(
   matchId: string,
@@ -84,6 +99,7 @@ export async function resolveMemeSubject(
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     select: {
+      status: true,
       userAId: true,
       userBId: true,
       userA: { select: { id: true, firstName: true } },
@@ -99,6 +115,8 @@ export async function resolveMemeSubject(
         ? match.userA
         : null;
   if (!subject) return null;
+  if (!MEME_REVEAL_STATUSES.includes(match.status)) return null;
+  if (await isPairBlocked(viewerUserId, subject.id)) return null;
   return { subjectUserId: subject.id, subjectFirstName: subject.firstName ?? "" };
 }
 
@@ -145,9 +163,10 @@ export async function memeAnswerFor(
  * nothing to show.
  *
  * Null covers every "no card" case on purpose, so the card path has one check
- * instead of three: the viewer is not on this match, the partner answered the
- * humour question in words (or not at all), or the answer has no pointer
- * because only its caption survived.
+ * instead of several: the viewer is not on this match, the match is no longer
+ * on, one of the two has blocked the other, the partner answered the humour
+ * question in words (or not at all), or the answer has no pointer because only
+ * its caption survived.
  */
 export async function partnerMemeForViewer(
   matchId: string,

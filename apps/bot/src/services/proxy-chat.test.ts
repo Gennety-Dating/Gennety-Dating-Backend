@@ -39,6 +39,8 @@ import {
   reactToProxyMessage,
   proxyChatWindow,
   proxyChatIsOpen,
+  proxyChatAcceptsMessages,
+  proxyChatSendRefusal,
   PROXY_REACTIONS,
 } from "./proxy-chat.js";
 
@@ -63,6 +65,8 @@ function match(over: Record<string, unknown> = {}): any {
     userBId: "uid-B",
     agreedTime: DATE,
     coordMethod: "proxy",
+    proxyOpenedAt: null,
+    proxyClosesAt: null,
     proxyClosedAt: null,
     proxyReadAtA: null,
     proxyReadAtB: null,
@@ -128,6 +132,76 @@ describe("proxyChatWindow", () => {
   it("an explicit close still wins inside the window", () => {
     const m = { agreedTime: DATE, coordMethod: "proxy", proxyClosedAt: new Date() };
     expect(proxyChatIsOpen(m, DATE)).toBe(false);
+  });
+});
+
+describe("proxyChatAcceptsMessages — the one gate both rails ask", () => {
+  const scheduled = {
+    status: "scheduled",
+    agreedTime: DATE,
+    coordMethod: "proxy",
+    proxyOpenedAt: null,
+    proxyClosesAt: null,
+    proxyClosedAt: null,
+  };
+
+  it("accepts inside the scheduled window", () => {
+    expect(proxyChatAcceptsMessages(scheduled, DATE)).toBe(true);
+  });
+
+  /**
+   * The window's own edges know nothing about the date being called off: only
+   * the T+2h tick closes it. Block, cancellation and freeze all move the match
+   * off `scheduled`, and that is the only thing that shuts the chat before then.
+   */
+  it("refuses a match that is no longer scheduled, however open the window", () => {
+    for (const status of ["cancelled", "completed", "expired"]) {
+      expect(
+        proxyChatAcceptsMessages(
+          { ...scheduled, status, proxyOpenedAt: OPENS, proxyClosesAt: CLOSES },
+          DATE,
+        ),
+      ).toBe(false);
+    }
+  });
+
+  /**
+   * Once the tick has handed both sides an Enter button, the announced window
+   * holds until its stamped close even when the schedule alone would say shut —
+   * which is what demo relies on, its date sitting days out while the replay
+   * stamps the window on a shifted clock.
+   */
+  it("accepts an announced window whose schedule has not come round", () => {
+    const early = new Date(OPENS.getTime() - 24 * 60 * 60 * 1000);
+    expect(proxyChatAcceptsMessages(scheduled, early)).toBe(false);
+    expect(
+      proxyChatAcceptsMessages({ ...scheduled, proxyOpenedAt: early, proxyClosesAt: CLOSES }, early),
+    ).toBe(true);
+  });
+
+  it("lets neither source override a force-close or a pair that exchanged contacts", () => {
+    const announced = { ...scheduled, proxyOpenedAt: OPENS, proxyClosesAt: CLOSES };
+    expect(proxyChatAcceptsMessages({ ...announced, proxyClosedAt: OPENS }, DATE)).toBe(false);
+    expect(proxyChatAcceptsMessages({ ...announced, coordMethod: "share_self" }, DATE)).toBe(false);
+  });
+});
+
+describe("proxyChatSendRefusal", () => {
+  it("is null exactly when a relay would be accepted", async () => {
+    await expect(proxyChatSendRefusal({ matchId: "m-1", userId: "uid-A", now: DATE })).resolves.toBeNull();
+  });
+
+  it("gives the relay's own refusals", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(match({ status: "cancelled" }));
+    await expect(
+      proxyChatSendRefusal({ matchId: "m-1", userId: "uid-A", now: DATE }),
+    ).resolves.toBe("wrong-state");
+    await expect(
+      proxyChatSendRefusal({ matchId: "m-1", userId: "uid-C", now: DATE }),
+    ).resolves.toBe("forbidden");
+    await expect(
+      proxyChatSendRefusal({ matchId: "m-1", userId: "uid-A", now: new Date(CLOSES.getTime() + 1) }),
+    ).resolves.toBe("closed");
   });
 });
 
@@ -281,6 +355,42 @@ describe("relayProxyMessage", () => {
     });
     expect(res).toEqual({ ok: false, error: "closed" });
     expect(mMsg.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses a date that is no longer on without writing anything", async () => {
+    mMatch.findUnique.mockResolvedValue(match({ status: "cancelled" }));
+    const res = await relayProxyMessage({ matchId: "m-1", senderUserId: "uid-A", body: "hi", now: DATE });
+    expect(res).toEqual({ ok: false, error: "wrong-state" });
+    expect(mMsg.create).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(mockSendPush).not.toHaveBeenCalled();
+  });
+
+  it("records where a Telegram author's own copy of the line sits", async () => {
+    await relayProxyMessage({
+      matchId: "m-1",
+      senderUserId: "uid-A",
+      body: "hi",
+      authorChatMessageId: 42n,
+      now: DATE,
+    });
+    expect(mMsg.create).toHaveBeenCalledWith({
+      data: { matchId: "m-1", senderId: "uid-A", body: "hi", authorChatMessageId: 42n },
+      select: { id: true },
+    });
+  });
+
+  /**
+   * The Telegram relay now delivers through here, and it always reached a row
+   * written before `platform` existed. The local copy of the reachability test
+   * that used to sit in this module would have dropped them.
+   */
+  it("still DMs a Telegram partner whose row predates the platform column", async () => {
+    mMatch.findUnique.mockResolvedValue(
+      match({ userA: { id: "uid-A", telegramId: 1001n, platform: null, language: "en", firstName: "Alice" } }),
+    );
+    await relayProxyMessage({ matchId: "m-1", senderUserId: "uid-B", body: "hi", now: DATE });
+    expect(mockSendMessage).toHaveBeenCalledWith(1001, expect.stringContaining("hi"), expect.any(Object));
   });
 
   it("refuses whitespace as empty", async () => {

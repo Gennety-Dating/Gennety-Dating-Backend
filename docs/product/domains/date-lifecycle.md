@@ -21,7 +21,7 @@ columns on `matches`.
 | T − 3 h | **Pre-date coordination offer** (feature-flagged) — DM the initiator the contact-exchange / anonymous-chat menu (see below). Moved out from T−1h on 2026-09-04: Variant B needs the *partner* to notice a card and tap it, and an hour was not enough runway for a two-sided exchange. | `coordOfferSentAt` |
 | T − 1.5 h | **Pre-date safety brief** to the female user, on whichever rails reach her — Telegram DM and/or APNs push (`safety.brief`, **time-sensitive**, §Phase 4 → Pre-date safety brief). Gender selects the recipient; `platform` selects the rail. | `safetyNoteSentAt` |
 | T − 1.5 h | **Wingman hint reveal push** — the asymmetric tip is unmasked at this gate (the mobile serializer enforces it independently) | `wingmanSentAt` |
-| T − 1 h | **Anonymous proxy chat opens** (feature-flagged, Variant C only) — DM both the "Enter chat" button, and advance the Live Activity to `chat_open`. Moved out from T−30m on 2026-09-04 alongside the offer, which also lifted it clear of the spotter beat — the two used to push the same card from two different sweeps in the same tick. | `proxyOpenedAt` |
+| T − 1 h | **Anonymous proxy chat opens** (feature-flagged, Variant C — including a Variant B request declined or left unanswered) — DM both the "Enter chat" button, and advance the Live Activity to `chat_open`. Moved out from T−30m on 2026-09-04 alongside the offer, which also lifted it clear of the spotter beat — the two used to push the same card from two different sweeps in the same tick. | `proxyOpenedAt` |
 | T − 45 min | **Date Terminal invite** (Telegram-only) — one DM per side with a single `web_app` button, "🎟 Open the Date Terminal" (Contact Sync, §6.4a). Step 2d of the tick, `sendDateTerminalBeats` (`services/date-terminal-invite.ts`); anchored on `DATE_RADAR_LEAD_MINUTES`. See below. | `terminalInviteSentAt` |
 | T − 15 min (until T + 30 min) | **Date Terminal reminder** — the same button, anchored on `DATE_BUMP_OPENS_MINUTES`, still sent up to `DATE_TERMINAL_REMINDER_GRACE_MINUTES` (30) after the date time. See below. | `terminalReminderSentAt` |
 | Date moment | (no automated action — users meet in person) | — |
@@ -321,8 +321,12 @@ see it, then read the silence as a choice.
   partner is DM'd her `t.me/` link. Single consent (her tap).
 - **Variant B — request partner's contact.** Bot asks the partner's consent
   (`coordPartnerConsent`); on **approve** the initiator is DM'd the partner's
-  `t.me/` link, on **decline** she's told (and pointed at C). Only B asks for
-  partner consent.
+  `t.me/` link, on **decline** she's told and the pair is moved onto C. A
+  request still unanswered when the chat would open (T-1h) is moved onto C the
+  same way — no contact changed hands, and they still have to find each other
+  (2026-09-14, audit A13-M13). Both moves are compare-and-set on the request
+  still being unconsented, so an approve that lands first keeps its exchange.
+  Only B asks for partner consent.
 - **Variant C — anonymous proxy chat.** Opens **unconditionally** at T-1h
   (no partner consent — an offline partner must never strand the initiator),
   auto-closes at agreed time **+ 2h**. The cron DMs both an **Enter chat**
@@ -331,8 +335,15 @@ see it, then read the silence as a choice.
   into the relay). While in the chat, plain text is relayed bot→partner; every
   relayed message carries **Leave chat** + **Report** controls and is logged to
   `ProxyMessage`. Media is rejected (text-only, closes the face/metadata-leak
-  bypass). The relay re-checks the window per message, so a stale session
-  self-heals after close. See the "NO IN-APP CHAT" carve-out in Core Principles.
+  bypass). The relay re-checks per message, so a stale session self-heals
+  after close. **One gate for both rails** (`proxyChatAcceptsMessages`,
+  `services/proxy-chat.ts`): the match must still be `scheduled` — a date
+  cancelled, frozen or blocked inside the window stops relaying at once, not at
+  T+2h — and the window is open by the schedule (`agreedTime`) or by the tick's
+  stamps. The Telegram relay delivers through the same `relayProxyMessage` as
+  the app. The close notice goes only to dates that are on or happened; a
+  called-off date's window is stamped closed silently. See the "NO IN-APP CHAT"
+  carve-out in Core Principles.
 
 **Every step of this flow is a rendered PNG card, not a bare text DM
 (2026-08-01, `services/coordination-card`).** The hours before the date were the

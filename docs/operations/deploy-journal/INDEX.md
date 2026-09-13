@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for 'has this been deployed?' / 'how was X verified?'. Grep this file, then open only the file named in the last column. -->
 <!-- SOURCE: deploy.md journal (lines 1-11500) — generated 2026-09-01 -->
 
-# Deploy journal index — 174 entries
+# Deploy journal index — 175 entries
 
 `PENDING` = queued, NOT on production. Everything else has shipped.
 
 | Status | Date | Entry | In file |
 |---|---|---|---|
+| PENDING |  | ремедиация аудита 2026-09-13 (`A13-*`): захват по email, прокси-чат после отмены, платежи, стагнация, удаление аккаунта | [pending](./pending.md) |
 | PENDING |  | миниатюры мест в блоке партнёра: `thumbnailUrl` в `partnerFrequentPlaces` | [pending](./pending.md) |
 | PENDING |  | инбокс, объявления, пульс и контекст чата: `/v1/inbox*`, `/v1/pulse`, `/admin/announcements*` | [pending](./pending.md) |
 | PENDING |  | часто посещаемые места: `/v1/frequent-places/*` и блок партнёра в `/v1/matches/current` | [pending](./pending.md) |

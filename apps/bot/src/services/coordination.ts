@@ -1,6 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
-import { prisma } from "@gennety/db";
+import { prisma, type Prisma } from "@gennety/db";
 import {
   t,
   type Language,
@@ -31,10 +31,11 @@ import type { CoordCardTheme } from "./coordination-card/index.js";
  *      Three hours out rather than one: Variant B needs the PARTNER to notice
  *      a card and tap it, and an hour was not enough runway for that.
  *   2. **Open proxy (T-1h)** — for matches whose initiator chose Variant C,
- *      open the anonymous window UNCONDITIONALLY (no partner consent — an
- *      offline partner must never strand the initiator) and DM both an
- *      "Enter chat" button.
- *   3. **Close proxy (T+2h)** — stamp the window closed and DM both.
+ *      or whose Variant B request ended without a yes, open the anonymous
+ *      window UNCONDITIONALLY (no partner consent — an offline partner must
+ *      never strand the initiator) and DM both an "Enter chat" button.
+ *   3. **Close proxy (T+2h)** — stamp the window closed and DM both, unless
+ *      the date was called off in the meantime.
  *
  * Telegram-only in v1: every gate requires `telegramId > 0n` on both sides
  * (mobile-only synthetic ids are skipped).
@@ -111,7 +112,14 @@ export function buildChatControlsKeyboard(matchId: string, lang: Language): Inli
     .text(t(lang, "coordReportBtn"), `report:open:${matchId}`);
 }
 
-/** Whether a match's anonymous proxy window is currently open. */
+/**
+ * Whether the tick has announced a proxy window that has not yet reached its
+ * stamped close. Window stamps only: it knows nothing about the match's status
+ * or its coordination method, so it is NOT a gate on who may send — that is
+ * `proxyChatAcceptsMessages` in `proxy-chat.ts`, which folds this in. Alone it
+ * is fit only for deciding whether to show an Enter button, whose tap the gate
+ * re-checks.
+ */
 export function isProxyOpen(
   match: { proxyOpenedAt: Date | null; proxyClosedAt: Date | null; proxyClosesAt: Date | null },
   now: Date,
@@ -253,6 +261,23 @@ async function sendOffers(api: Api<RawApi>, now: Date, result: CoordinationResul
 }
 
 // 2. Open proxy at T-1h (unconditional once Variant C is chosen) --------------
+
+/**
+ * A Variant B request nobody said yes to. Declined, or never answered by the
+ * time the chat would open: either way no contact was exchanged, and the pair
+ * still has to find each other at the venue in an hour. The decline card
+ * promises the anonymous chat, and an unanswered ask is the same situation
+ * with less said — so both are opened as the chat.
+ *
+ * `coordPartnerConsent` is spelled out as `null` OR `false` rather than
+ * `{ not: true }`: that filter is SQL `<>`, which never matches NULL, and the
+ * unanswered request is exactly the NULL row.
+ */
+const REQUEST_WITHOUT_CONSENT: Prisma.MatchWhereInput = {
+  coordMethod: "request_partner",
+  OR: [{ coordPartnerConsent: null }, { coordPartnerConsent: false }],
+};
+
 async function openProxies(
   api: Api<RawApi>,
   now: Date,
@@ -263,22 +288,47 @@ async function openProxies(
   const matches = await prisma.match.findMany({
     where: {
       status: "scheduled",
-      coordMethod: "proxy",
       proxyOpenedAt: null,
       agreedTime: { gt: now, lte: openWindowEnd },
+      OR: [{ coordMethod: "proxy" }, REQUEST_WITHOUT_CONSENT],
     },
     select: {
       id: true,
       agreedTime: true,
+      coordMethod: true,
       userA: { select: { id: true, telegramId: true, platform: true, language: true, theme: true } },
       userB: { select: { id: true, telegramId: true, platform: true, language: true, theme: true } },
     },
   });
 
   for (const match of matches) {
+    if (match.coordMethod === "request_partner") {
+      // Moved onto the chat by a write that re-checks the request is still
+      // unconsented — an approve landing between the read and here keeps the
+      // contact exchange it just made. Writing the method, not special-casing
+      // it downstream, is what lets both relays and the app's window read this
+      // pair like any other proxy pair.
+      const moved = await prisma.match.updateMany({
+        where: { id: match.id, status: "scheduled", proxyOpenedAt: null, ...REQUEST_WITHOUT_CONSENT },
+        data: { coordMethod: "proxy" },
+      });
+      if (moved.count === 0) continue;
+    }
+
     const closesAt = new Date(
       match.agreedTime!.getTime() + PROXY_CLOSE_AFTER_HOURS * 60 * 60 * 1000,
     );
+
+    // Claimed BEFORE anyone is told, by a write that only one tick can win.
+    // Stamping after the sends let two overlapping ticks both read
+    // `proxyOpenedAt: null` and both announce the chat — two cards, two pushes,
+    // two Live Activity advances. It also re-checks the date is still on: a
+    // cancellation between the read and here must not open a chat.
+    const claim = await prisma.match.updateMany({
+      where: { id: match.id, status: "scheduled", coordMethod: "proxy", proxyOpenedAt: null },
+      data: { proxyOpenedAt: now, proxyClosesAt: closesAt },
+    });
+    if (claim.count === 0) continue;
 
     for (const u of [match.userA, match.userB]) {
       // A mobile participant is told on their own rail. Before this the open
@@ -316,11 +366,6 @@ async function openProxies(
       );
     }
 
-    await prisma.match.update({
-      where: { id: match.id },
-      data: { proxyOpenedAt: now, proxyClosesAt: closesAt },
-    });
-
     // The `chat_open` stage of the date-day Live Activity (§4.2) was declared
     // on both sides and deliberately never sent, because announcing an open
     // chat on a lock screen the app could not enter is a button into nowhere.
@@ -332,6 +377,17 @@ async function openProxies(
 }
 
 // 3. Close proxy at T+2h ------------------------------------------------------
+
+/**
+ * Whose chat closing is worth a message. "Hope the date went well — I'll check
+ * in tomorrow" is right for a date that is on or has happened (`completed` is
+ * set by the feedback prompt, which demo's replay runs in the same beat as
+ * this close) and wrong for one that was cancelled, blocked or frozen: those
+ * people were already told their date is off, and the second message would
+ * contradict the first. Their window is still stamped closed, silently.
+ */
+const CLOSE_NOTICE_STATUSES: readonly string[] = ["scheduled", "completed"];
+
 async function closeProxies(
   api: Api<RawApi>,
   now: Date,
@@ -346,14 +402,19 @@ async function closeProxies(
     },
     select: {
       id: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
+      status: true,
+      userA: { select: { telegramId: true, platform: true, language: true } },
+      userB: { select: { telegramId: true, platform: true, language: true } },
     },
   });
 
   for (const match of matches) {
+    const notify = CLOSE_NOTICE_STATUSES.includes(match.status);
     for (const u of [match.userA, match.userB]) {
-      if (u.telegramId <= 0n) continue;
+      // `telegramReachable`, not `telegramId > 0n`: a Telegram-login app account
+      // carries a real id and no bot chat, and the 403 it returns is read as
+      // that person blocking the bot.
+      if (!notify || !telegramReachable(u)) continue;
       const lang = (u.language ?? "en") as Language;
       await api
         .sendMessage(Number(u.telegramId), t(lang, "coordProxyClosed"))

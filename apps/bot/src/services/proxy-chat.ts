@@ -10,8 +10,9 @@ import { env } from "../config.js";
 import { getMainBotApi } from "./main-bot-api.js";
 import { sendPushToUser } from "./push.js";
 import { withRedactedSummary } from "./outbound-recorder.js";
-import { buildChatControlsKeyboard } from "./coordination.js";
+import { buildChatControlsKeyboard, isProxyOpen } from "./coordination.js";
 import { reactToMessage, type EmojiReaction } from "./message-reactions.js";
+import { telegramReachable } from "./telegram-reach.js";
 
 /**
  * Anonymous pre-date proxy chat — the mechanics, shared by both surfaces
@@ -124,6 +125,8 @@ const matchSelect = {
   userBId: true,
   agreedTime: true,
   coordMethod: true,
+  proxyOpenedAt: true,
+  proxyClosesAt: true,
   proxyClosedAt: true,
   proxyReadAtA: true,
   proxyReadAtB: true,
@@ -173,6 +176,50 @@ export function proxyChatIsOpen(
   const window = proxyChatWindow(match);
   if (!window) return false;
   return now >= window.opensAt && now < window.closesAt;
+}
+
+/**
+ * THE gate on a line crossing the proxy chat, asked by both rails — the
+ * Telegram relay, its Enter button, and `POST /v1/matches/{id}/chat` — so they
+ * cannot disagree about it again.
+ *
+ * They did. The Telegram leg kept its own copy that looked only at the window
+ * stamps, so a date cancelled, frozen or BLOCKED inside the last hour kept
+ * relaying the other person's messages until the T+2h tick closed the window.
+ * `user-block.ts` promises the blocker that the block closes this chat, and
+ * the promise rests entirely on the status clause below.
+ *
+ * A window is open when EITHER source says so:
+ *  - the schedule (`proxyChatIsOpen`, derived from `agreedTime`), which is what
+ *    opens it on the minute rather than on the next tick;
+ *  - the tick's announcement (`proxyOpenedAt` stamped, `proxyClosesAt` still
+ *    ahead). Once both sides have been handed an Enter button, the chat they
+ *    were told is open accepts the line that button invites until the close
+ *    the tick itself stamped.
+ *
+ * In production the two agree to within a tick. They part only when
+ * `agreedTime` moves after the announcement — and in demo, whose date sits
+ * days out while its replay stamps the window on a shifted clock
+ * (`docs/product/demo-mode.md`), so a visitor typing on the real clock is
+ * inside the announced window and outside the scheduled one.
+ *
+ * Neither overrides a match that is no longer `scheduled`, a force-close, or a
+ * pair whose coordination is not the anonymous chat.
+ */
+export function proxyChatAcceptsMessages(
+  match: {
+    status: string;
+    agreedTime: Date | null;
+    coordMethod: string | null;
+    proxyOpenedAt: Date | null;
+    proxyClosesAt: Date | null;
+    proxyClosedAt: Date | null;
+  },
+  now: Date,
+): boolean {
+  if (match.status !== "scheduled") return false;
+  if (proxyChatIsOpen(match, now)) return true;
+  return match.coordMethod === "proxy" && isProxyOpen(match, now);
 }
 
 function sidesOf(match: ProxyMatch, callerId: string) {
@@ -327,14 +374,61 @@ async function markRead(match: ProxyMatch, callerId: string, now: Date): Promise
 }
 
 /**
+ * The match, if `userId` may send into its chat at `now`; otherwise why not.
+ * One body for `relayProxyMessage` and `proxyChatSendRefusal`, so a surface
+ * asking before it has a line cannot get a different verdict from the one the
+ * line itself would get.
+ */
+async function loadSendableMatch(
+  matchId: string,
+  userId: string,
+  now: Date,
+): Promise<{ ok: true; match: ProxyMatch } | { ok: false; error: ProxyChatRefusal }> {
+  const match = await loadMatch(matchId);
+  if (!match) return { ok: false, error: "not-found" };
+  if (userId !== match.userAId && userId !== match.userBId) {
+    return { ok: false, error: "forbidden" };
+  }
+  if (match.status !== "scheduled") return { ok: false, error: "wrong-state" };
+  if (!proxyChatAcceptsMessages(match, now)) return { ok: false, error: "closed" };
+  return { ok: true, match };
+}
+
+/**
+ * Whether `userId` could send into this chat right now: null when they could,
+ * otherwise the refusal `relayProxyMessage` would return.
+ *
+ * For the Telegram rail's two moments that have no line to relay — tapping
+ * Enter, and dropping a photo into a chat that only carries text. Both used to
+ * decide from their own copy of the window, which is how that rail came to
+ * keep a cancelled or blocked date's chat open.
+ */
+export async function proxyChatSendRefusal(input: {
+  matchId: string;
+  userId: string;
+  now?: Date;
+}): Promise<ProxyChatRefusal | null> {
+  if (!env.COORDINATION_FEATURE_ENABLED) return "disabled";
+  const sendable = await loadSendableMatch(input.matchId, input.userId, input.now ?? new Date());
+  return sendable.ok ? null : sendable.error;
+}
+
+/**
  * Log and relay one message. The write happens BEFORE delivery: the moderation
  * log is what justifies this feature existing at all, so a delivery failure
  * must not be able to produce an unlogged message.
+ *
+ * `authorChatMessageId` is Telegram-only: the id of this line in the AUTHOR's
+ * own chat with the bot, which is where a reaction from the partner has to land
+ * for the author to notice it (`deliverReactionToAuthor`). The relayed copy in
+ * the recipient's chat is a different message and the wrong address. It can
+ * only be captured at write time — nothing later carries it back.
  */
 export async function relayProxyMessage(input: {
   matchId: string;
   senderUserId: string;
   body: string;
+  authorChatMessageId?: bigint;
   now?: Date;
 }): Promise<ProxyChatResult> {
   if (!env.COORDINATION_FEATURE_ENABLED) return { ok: false, error: "disabled" };
@@ -343,18 +437,20 @@ export async function relayProxyMessage(input: {
   if (!body) return { ok: false, error: "empty" };
   if (body.length > PROXY_MAX_MESSAGE_LEN) return { ok: false, error: "too-long" };
 
-  const match = await loadMatch(input.matchId);
-  if (!match) return { ok: false, error: "not-found" };
-  if (input.senderUserId !== match.userAId && input.senderUserId !== match.userBId) {
-    return { ok: false, error: "forbidden" };
-  }
-  if (match.status !== "scheduled") return { ok: false, error: "wrong-state" };
-
   const now = input.now ?? new Date();
-  if (!proxyChatIsOpen(match, now)) return { ok: false, error: "closed" };
+  const sendable = await loadSendableMatch(input.matchId, input.senderUserId, now);
+  if (!sendable.ok) return sendable;
+  const { match } = sendable;
 
   const message = await prisma.proxyMessage.create({
-    data: { matchId: match.id, senderId: input.senderUserId, body },
+    data: {
+      matchId: match.id,
+      senderId: input.senderUserId,
+      body,
+      ...(input.authorChatMessageId === undefined
+        ? {}
+        : { authorChatMessageId: input.authorChatMessageId }),
+    },
     select: { id: true },
   });
 
@@ -511,9 +607,10 @@ async function deliverToPartner(
   const jobs: Promise<boolean>[] = [];
 
   const api = getMainBotApi();
-  const telegramReachable =
-    partner.telegramId > 0n && (partner.platform === "telegram" || partner.platform === "both");
-  if (api && telegramReachable) {
+  // The shared predicate, not a local copy: the Telegram relay now delivers
+  // through here too, and it always reached a row predating `platform` — which
+  // the copy that used to sit here would have silently dropped.
+  if (api && telegramReachable(partner)) {
     // Relayed text is written by the OTHER user, and the recipient's chat
     // timeline feeds their menu agent's prompt, which holds profile-writing
     // tools. The timeline records only THAT a message arrived; `proxy_messages`

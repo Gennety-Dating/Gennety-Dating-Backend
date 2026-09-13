@@ -881,6 +881,9 @@ const translations = {
     memeRevealFallback:
       "🎭 I couldn't re-send the picture itself, so here it is in words — what {name} sent when asked what makes them laugh:\n\n_{description}_",
     memeRevealGone: "That question got answered again in words, so there's no meme here any more.",
+    // A meme card from a match that is no longer on, or across a block. Neutral
+    // for the same reason as `coordProxyUnavailable`.
+    memeRevealUnavailable: "This card isn't active any more.",
     venuePayPromptDm: "You two picked a new place for your date.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 See it and decide",
     // Caption under the wish-card PNG, which already shows the venue name and
@@ -1223,6 +1226,9 @@ const translations = {
     coordProxyPushTitle: "Your date",
     coordProxyTextOnly: "Only text messages work in this chat — photos and voice notes aren't passed on.",
     coordProxyClosed: "The anonymous chat has closed. Hope the date went well — I'll check in tomorrow ✨",
+    // The chat of a date that is no longer on. Deliberately says nothing about
+    // why: the reason can be a block, and the blocked side must not learn it.
+    coordProxyUnavailable: "This anonymous chat isn't available any more.",
     coordAlreadyChosen: "You've already picked a coordination option for this date.",
     coordSharedAck: "Done — they can find you now 💬 Have a great date!",
     coordProxyChosenAck:
@@ -2204,6 +2210,7 @@ const translations = {
     memeRevealFallback:
       "🎭 Саму картинку переслать не вышло, поэтому словами — вот что прислал(а) {name} на вопрос, что смешит:\n\n_{description}_",
     memeRevealGone: "На этот вопрос ответили заново словами — мема здесь больше нет.",
+    memeRevealUnavailable: "Эта карточка уже неактивна.",
     venuePayPromptDm: "Вы вместе выбрали новое место для свидания.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 Посмотреть и решить",
     venueWishText:
@@ -2487,6 +2494,7 @@ const translations = {
     coordProxyPushTitle: "Твоё свидание",
     coordProxyTextOnly: "В этом чате работают только текстовые сообщения — фото и голосовые не передаются.",
     coordProxyClosed: "Анонимный чат закрылся. Надеюсь, свидание прошло отлично — загляну завтра ✨",
+    coordProxyUnavailable: "Этот анонимный чат больше недоступен.",
     coordAlreadyChosen: "Ты уже выбрал способ координации для этого свидания.",
     coordSharedAck: "Готово — теперь тебя смогут найти 💬 Хорошего свидания!",
     coordProxyChosenAck:
@@ -3449,6 +3457,7 @@ const translations = {
     memeRevealFallback:
       "🎭 Саму картинку переслати не вийшло, тому словами — ось що надіслав(ла) {name} на питання, що смішить:\n\n_{description}_",
     memeRevealGone: "На це питання відповіли наново словами — мема тут більше немає.",
+    memeRevealUnavailable: "Ця картка вже неактивна.",
     venuePayPromptDm: "Ви разом обрали нове місце для побачення.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 Подивитися й вирішити",
     venueWishText:
@@ -3732,6 +3741,7 @@ const translations = {
     coordProxyPushTitle: "Твоє побачення",
     coordProxyTextOnly: "У цьому чаті працюють лише текстові повідомлення — фото й голосові не передаються.",
     coordProxyClosed: "Анонімний чат закрився. Сподіваюсь, побачення пройшло чудово — зазирну завтра ✨",
+    coordProxyUnavailable: "Цей анонімний чат більше недоступний.",
     coordAlreadyChosen: "Ти вже обрав спосіб координації для цього побачення.",
     coordSharedAck: "Готово — тепер тебе зможуть знайти 💬 Гарного побачення!",
     coordProxyChosenAck:
@@ -4668,6 +4678,7 @@ const deTranslations: TranslationTable = {
   memeRevealFallback:
     "🎭 Das Bild selbst konnte ich nicht weiterschicken, also in Worten — das hat {name} auf die Frage geschickt, worüber sie lachen:\n\n_{description}_",
   memeRevealGone: "Diese Frage wurde noch einmal in Worten beantwortet — hier gibt es kein Meme mehr.",
+  memeRevealUnavailable: "Diese Karte ist nicht mehr aktiv.",
   venuePayPromptDm: "Ihr habt zusammen einen neuen Ort für euer Date gewählt.\n\n📍 {venue}",
   venuePayOpenBtn: "📍 Ansehen und entscheiden",
   venueWishText:
@@ -4954,6 +4965,7 @@ const deTranslations: TranslationTable = {
     "Hier gehen nur Textnachrichten durch — Fotos und Sprachnachrichten leite ich nicht weiter.",
   coordProxyClosed:
     "Der anonyme Chat ist zu. Ich hoffe, das Date war gut — morgen melde ich mich ✨",
+  coordProxyUnavailable: "Dieser anonyme Chat ist nicht mehr verfügbar.",
   coordAlreadyChosen: "Du hast für dieses Date schon eine Option gewählt.",
   coordSharedAck: "Erledigt — jetzt findet dich dein Date 💬 Viel Spaß!",
   coordProxyChosenAck:
@@ -5882,6 +5894,7 @@ const plTranslations: TranslationTable = {
   memeRevealFallback:
     "🎭 Samego obrazka nie udało się przesłać, więc słowami — oto co wysłał(a) {name} na pytanie, co go/ją śmieszy:\n\n_{description}_",
   memeRevealGone: "Na to pytanie odpowiedziano ponownie słowami — nie ma tu już mema.",
+  memeRevealUnavailable: "Ta karta nie jest już aktywna.",
   venuePayPromptDm: "Razem wybraliście nowe miejsce na randkę.\n\n📍 {venue}",
   venuePayOpenBtn: "📍 Zobacz i zdecyduj",
   venueWishText:
@@ -6172,6 +6185,7 @@ const plTranslations: TranslationTable = {
     "Tu przechodzą tylko wiadomości tekstowe — zdjęć i głosówek nie przekazuję.",
   coordProxyClosed:
     "Anonimowy czat zamknięty. Mam nadzieję, że randka wyszła — odezwę się jutro ✨",
+  coordProxyUnavailable: "Ten anonimowy czat nie jest już dostępny.",
   coordAlreadyChosen: "Opcja dla tej randki jest już wybrana.",
   coordSharedAck: "Gotowe — teraz można Cię znaleźć 💬 Udanej randki!",
   coordProxyChosenAck:
