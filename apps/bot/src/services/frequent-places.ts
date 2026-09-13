@@ -34,6 +34,8 @@ import {
   type FrequentPlaceCategory,
 } from "@gennety/shared";
 
+import { ALLOWED_PHOTO_WIDTHS } from "../public/places-photo.js";
+import { venuePhotoUrl } from "../public/showcase-photos.js";
 import {
   fencesFor,
   localDay,
@@ -79,6 +81,9 @@ const CATALOG_SELECT = {
   priority: true,
   lat: true,
   lng: true,
+  // Read only to know whether a photo exists. The resource names are dropped
+  // in `toCatalogPlaces` and never leave the server.
+  photoRefs: true,
 } as const;
 
 /** The catalog columns this feature reads. */
@@ -90,6 +95,19 @@ export interface CatalogRow {
   priority: number;
   lat: number;
   lng: number;
+  photoRefs: string[];
+}
+
+/**
+ * One catalog place plus the copy its photo is served from. The pure rules see
+ * only the {@link CatalogPlace} half; `venueId` and `hasPhoto` exist for the
+ * match's thumbnail (`partnerFrequentPlaces`) and nothing else.
+ */
+export interface CatalogEntry extends CatalogPlace {
+  /** Catalog row id the thumbnail link is signed for. */
+  venueId: string;
+  /** Whether that row has a photo — the photo route's own test (`showcasePhotoRef`). */
+  hasPhoto: boolean;
 }
 
 /**
@@ -101,25 +119,41 @@ export interface CatalogRow {
  * the identity every other reader dedupes on, two copies of one café would be
  * two places and a visit could land on either.
  *
+ * The photo may come from another copy than the name. The catalog holds a row
+ * per university domain and the nightly re-validation fills `photoRefs` row by
+ * row, so the naming copy can still lack a photo that another copy of the same
+ * place already has. The best copy WITH a photo lends it; a later copy never
+ * renames the place.
+ *
  * The product's "never offer" rules (`museum`, blocked names) are NOT applied:
  * they say what we propose for a first date, and this block says where a
  * person goes on their own.
  */
-export function toCatalogPlaces(rows: readonly CatalogRow[]): CatalogPlace[] {
+export function toCatalogPlaces(rows: readonly CatalogRow[]): CatalogEntry[] {
   const ordered = [...rows].sort(
     (a, b) => a.priority - b.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
   );
-  const byPlace = new Map<string, CatalogPlace>();
+  const byPlace = new Map<string, CatalogEntry>();
   for (const row of ordered) {
-    if (!row.placeId || byPlace.has(row.placeId)) continue;
+    if (!row.placeId) continue;
     if (!isFrequentPlaceCategory(row.category)) continue;
     if (!Number.isFinite(row.lat) || !Number.isFinite(row.lng)) continue;
+    const hasPhoto = row.photoRefs.length > 0;
+    const named = byPlace.get(row.placeId);
+    if (named) {
+      if (hasPhoto && !named.hasPhoto) {
+        byPlace.set(row.placeId, { ...named, venueId: row.id, hasPhoto: true });
+      }
+      continue;
+    }
     byPlace.set(row.placeId, {
       placeId: row.placeId,
       name: row.name,
       category: row.category,
       lat: row.lat,
       lng: row.lng,
+      venueId: row.id,
+      hasPhoto,
     });
   }
   return [...byPlace.values()];
@@ -167,7 +201,7 @@ export async function catalogForCity(
  * The active catalog places behind a set of place ids, in any city: a visit
  * from before a move, or a date in another city, still names its place.
  */
-async function catalogByPlaceIds(placeIds: readonly string[]): Promise<Map<string, CatalogPlace>> {
+async function catalogByPlaceIds(placeIds: readonly string[]): Promise<Map<string, CatalogEntry>> {
   if (placeIds.length === 0) return new Map();
   const rows = await prisma.curatedVenue.findMany({
     where: { placeId: { in: [...placeIds] }, active: true, category: { in: CATEGORY_FILTER } },
@@ -312,6 +346,11 @@ export interface FrequentPlacesView {
   ranking: FrequentPlaceRanking;
 }
 
+/** The view plus the catalog it was ranked against — this file's own business. */
+interface LoadedFrequentPlaces extends FrequentPlacesView {
+  catalog: ReadonlyMap<string, CatalogEntry>;
+}
+
 /**
  * The person's ranked places. Switched off, there is nothing to show — to the
  * owner as much as to the match — and nothing is read.
@@ -320,8 +359,15 @@ export async function readFrequentPlaces(
   userId: string,
   now: number = Date.now(),
 ): Promise<FrequentPlacesView> {
+  const { optIn, ranking } = await loadFrequentPlaces(userId, now);
+  return { optIn, ranking };
+}
+
+async function loadFrequentPlaces(userId: string, now: number): Promise<LoadedFrequentPlaces> {
   const subject = await subjectFor(userId);
-  if (!subject?.optIn) return { optIn: false, ranking: { shown: [], hidden: [] } };
+  if (!subject?.optIn) {
+    return { optIn: false, ranking: { shown: [], hidden: [] }, catalog: new Map() };
+  }
 
   const today = localDay(now, subject.timeZone);
   const firstDay = shiftDay(today, -(FREQUENT_PLACE_WINDOW_DAYS - 1));
@@ -359,47 +405,87 @@ export async function readFrequentPlaces(
     });
   }
 
-  const places = await catalogByPlaceIds([...new Set(visits.map((v) => v.placeId))]);
+  const catalog = await catalogByPlaceIds([...new Set(visits.map((v) => v.placeId))]);
   return {
     optIn: true,
     ranking: rankFrequentPlaces({
       visits,
-      places,
+      places: catalog,
       hidden: new Set(hiddenRows.map((row) => row.placeId)),
       today,
     }),
+    catalog,
   };
 }
+
+/**
+ * The thumbnail width: the canvas pin's, one of the two `ALLOWED_PHOTO_WIDTHS`.
+ * A third width would be a separately billed Place Photo for the same picture.
+ */
+const PARTNER_THUMBNAIL_WIDTH = ALLOWED_PHOTO_WIDTHS[0];
 
 /** One place as the match sees it. */
 export interface PartnerPlace {
   placeId: string;
   name: string;
   category: FrequentPlaceCategory;
+  /**
+   * Signed link to the place's catalog photo at the pin width
+   * (`GET /v1/venues/:id/photo`, `public/showcase-photos.ts`). Present only
+   * when the catalog has a photo for the place; absent, never null, otherwise.
+   */
+  thumbnailUrl?: string;
 }
 
-const partnerCache = new Map<string, { at: number; places: PartnerPlace[] }>();
+/** What the cache keeps: the list before its photo links are signed. */
+interface PartnerPlaceSource {
+  placeId: string;
+  name: string;
+  category: FrequentPlaceCategory;
+  /** Catalog row the thumbnail is signed for; null when no copy has a photo. */
+  photoVenueId: string | null;
+}
+
+const partnerCache = new Map<string, { at: number; places: PartnerPlaceSource[] }>();
 
 /**
  * What a match sees of this person's places: the shown ranking, reduced to a
- * name and a category. No visit count, no day, no position — the Date Radar's
- * rule that the shape of the answer IS the privacy. This is the one function
- * that decides what crosses to the other person, so nothing else may build
- * that list.
+ * name, a category and — when the catalog has one — a thumbnail of the venue.
+ * No visit count, no day, no position — the Date Radar's rule that the shape
+ * of the answer IS the privacy. A photo of a public venue says none of those
+ * (founder decision 2026-09-13). This is the one function that decides what
+ * crosses to the other person, so nothing else may build that list.
+ *
+ * The thumbnail costs nothing here: the link is only signed. Google is asked
+ * when the image loader follows it and the photo route's byte cache misses —
+ * the canvas showcase's bill, not a new one. Links are signed on every call,
+ * cached or not, so a list served late in the ten-minute cache never hands out
+ * a link older than the call, and every call within one UTC day mints the
+ * same bytes for the client's URL cache (`venuePhotoExpiry`).
  */
 export async function partnerFrequentPlaces(
   userId: string,
   now: number = Date.now(),
 ): Promise<PartnerPlace[]> {
   const cached = partnerCache.get(userId);
-  if (cached && now - cached.at < PARTNER_PLACES_TTL_MS) return cached.places;
-
-  const { optIn, ranking } = await readFrequentPlaces(userId, now);
-  const places: PartnerPlace[] = optIn
-    ? ranking.shown.map(({ placeId, name, category }) => ({ placeId, name, category }))
-    : [];
-  remember(partnerCache, userId, { at: now, places }, PARTNER_CACHE_MAX_USERS);
-  return places;
+  let sources: PartnerPlaceSource[];
+  if (cached && now - cached.at < PARTNER_PLACES_TTL_MS) {
+    sources = cached.places;
+  } else {
+    const { optIn, ranking, catalog } = await loadFrequentPlaces(userId, now);
+    sources = optIn
+      ? ranking.shown.map(({ placeId, name, category }) => {
+          const entry = catalog.get(placeId);
+          return { placeId, name, category, photoVenueId: entry?.hasPhoto ? entry.venueId : null };
+        })
+      : [];
+    remember(partnerCache, userId, { at: now, places: sources }, PARTNER_CACHE_MAX_USERS);
+  }
+  return sources.map(({ photoVenueId, ...place }) =>
+    photoVenueId
+      ? { ...place, thumbnailUrl: venuePhotoUrl(photoVenueId, PARTNER_THUMBNAIL_WIDTH, now) }
+      : place,
+  );
 }
 
 // ---------------------------------------------------------------------------

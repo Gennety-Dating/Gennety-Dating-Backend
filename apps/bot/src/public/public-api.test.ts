@@ -1004,6 +1004,18 @@ vi.mock("../services/moderation.js", () => ({
   notifyReportedUser: vi.fn(async () => undefined),
 }));
 
+// `partnerFrequentPlaces` decides what of the partner's places crosses to the
+// match, and is tested where it lives (`frequent-places-api.test.ts`). Here only
+// the serializer's hand-through is under test; the rest of the module stays real.
+const frequentPlacesMocks = vi.hoisted(() => ({
+  partnerFrequentPlaces: vi.fn(async (_userId: string): Promise<unknown[]> => []),
+}));
+
+vi.mock("../services/frequent-places.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../services/frequent-places.js")>()),
+  partnerFrequentPlaces: frequentPlacesMocks.partnerFrequentPlaces,
+}));
+
 // next-batch is used by /v1/countdown — don't mock, it's pure.
 
 // ---------------------------------------------------------------------------
@@ -2723,6 +2735,33 @@ describe("/v1/matches/*", () => {
       .set("Authorization", `Bearer ${signAccess(alice.id)}`);
 
     expect(res.body.match).toHaveProperty("timeZone", null);
+  });
+
+  // Decision 2026-09-13: a place's thumbnail rides on the partner's block as
+  // `partnerFrequentPlaces` builds it — a link when the catalog has a photo, and
+  // no key at all when it has none (optional in the contract, never null).
+  it("GET /current hands the partner's place thumbnails through, and omits the key without a photo", async () => {
+    const alice = await seedUser({ firstName: "Alice" });
+    const bob = await seedUser({ firstName: "Bob" });
+    await seedMatch(alice.id, bob.id, { status: "proposed" });
+    const thumbnailUrl =
+      "https://dating-api.gennety.com/v1/venues/11111111-1111-4111-8111-111111111111/photo?w=240&e=1757721600000&sig=0123456789abcdef01234567";
+    frequentPlacesMocks.partnerFrequentPlaces.mockResolvedValueOnce([
+      { placeId: "ChIJ-sens", name: "Sens", category: "cafe", thumbnailUrl },
+      { placeId: "ChIJ-milk", name: "Milk Bar", category: "coffee_shop" },
+    ]);
+
+    const res = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+    expect(res.status).toBe(200);
+    expect(frequentPlacesMocks.partnerFrequentPlaces).toHaveBeenCalledWith(bob.id);
+    expect(res.body.match.partnerFrequentPlaces).toEqual([
+      { placeId: "ChIJ-sens", name: "Sens", category: "cafe", thumbnailUrl },
+      { placeId: "ChIJ-milk", name: "Milk Bar", category: "coffee_shop" },
+    ]);
+    expect(res.body.match.partnerFrequentPlaces[1]).not.toHaveProperty("thumbnailUrl");
   });
 
   // The partner's face is the one piece of another user's data this API hands

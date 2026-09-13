@@ -194,10 +194,13 @@ export interface SerializedMatch {
   partnerMusicTracks?: MusicTrack[];
   /**
    * The partner's frequently visited places (docs/product/domains/
-   * frequent-places.md): at most three catalog places, each a name and a
-   * category and nothing else — no visit count, no day, no position. Empty when
-   * the partner switched the feature off, hid them, or has none that qualify.
-   * Shown to the match by founder decision (2026-09-11).
+   * frequent-places.md): at most three catalog places, each a name, a category
+   * and — only when the catalog has a photo — a signed `thumbnailUrl` of the
+   * venue; nothing else — no visit count, no day, no position. Empty when the
+   * partner switched the feature off, hid them, or has none that qualify.
+   * Shown to the match by founder decision (2026-09-11); thumbnails by founder
+   * decision (2026-09-13). Passed through as built: the one function that
+   * decides what crosses is `partnerFrequentPlaces`.
    */
   partnerFrequentPlaces: PartnerPlace[];
   timeZone: string | null;

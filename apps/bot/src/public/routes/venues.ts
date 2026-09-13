@@ -28,7 +28,8 @@ import {
  * canvas talking, so it takes either rail like every other canvas call. The
  * photo is fetched by an image loader, which sends no Authorization header — so,
  * as with the partner photos, the link carries the permission itself
- * (`showcase-photos.ts`), and only the list above mints links.
+ * (`showcase-photos.ts`), and only the list above mints links — it and the
+ * thumbnails of a match's frequently visited places (`partnerFrequentPlaces`).
  *
  * Why not the existing `/v1/venue-change/photo`: it authenticates with Telegram
  * initData in the query, which the native client does not have, and it takes a

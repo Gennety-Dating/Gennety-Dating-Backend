@@ -4568,14 +4568,27 @@ components:
       type: object
       required: [placeId, name, category]
       description: >
-        One of the partner's frequently visited places — a name and a category,
-        and nothing else: no visit count, no day, no position.
+        One of the partner's frequently visited places — a name, a category and,
+        when the catalog has one, a thumbnail of the venue; nothing else: no
+        visit count, no day, no position.
       properties:
         placeId: { type: string }
         name: { type: string }
         category:
           type: string
           description: Same vocabulary as `FrequentPlace.category`.
+        thumbnailUrl:
+          type: string
+          format: uri
+          description: >
+            The place's catalog photo at 240 px (founder decision 2026-09-13):
+            an absolute signed link to `/v1/venues/{id}/photo`, the same device
+            and width as `ShowcaseVenue.thumbnailUrl` — valid for at least a
+            day, identical for every response served that UTC day, the venue id
+            in the PATH so a cache keyed by host + path keeps one entry per
+            place. Needs no Authorization header. ABSENT (never null) when the
+            catalog has no photo for the place; not in `required`, so a build
+            that reads it keeps decoding a server that predates it.
 
     FrequentPlaceFences:
       type: object
@@ -6446,10 +6459,11 @@ components:
           type: array
           description: |
             The partner's frequently visited places (founder decision
-            2026-09-11): at most three active catalog places, each a name and a
-            category and nothing else — no visit count, no day, no position.
-            Empty when the partner switched the feature off, hid them, or has
-            none that qualify.
+            2026-09-11): at most three active catalog places, each a name, a
+            category and — when the catalog has a photo — a `thumbnailUrl`
+            (decision 2026-09-13); nothing else — no visit count, no day, no
+            position. Empty when the partner switched the feature off, hid
+            them, or has none that qualify.
 
             Not in `required` on purpose: a build that reads it has to keep
             decoding a server that predates it.

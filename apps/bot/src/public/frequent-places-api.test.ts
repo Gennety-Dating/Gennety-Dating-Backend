@@ -3,7 +3,8 @@
  * what a match sees. Prisma is mocked (no SQL here — the live-database pass is
  * a separate check); the canvas rail is mocked the way `scratch-map-api.test.ts`
  * mocks it. Only `Date` is faked, so a stay can last fifteen minutes in a test
- * that takes milliseconds.
+ * that takes milliseconds. Google is never called: the one test that follows a
+ * thumbnail link into the photo route stubs `fetch`.
  */
 import express from "express";
 import request from "supertest";
@@ -12,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const userFindUnique = vi.fn();
 const userUpdate = vi.fn();
 const venueFindMany = vi.fn();
+const venueFindUnique = vi.fn();
 const visitFindMany = vi.fn();
 const visitCreateMany = vi.fn();
 const matchFindMany = vi.fn();
@@ -25,7 +27,10 @@ vi.mock("@gennety/db", () => ({
       findUnique: (...a: unknown[]) => userFindUnique(...a),
       update: (...a: unknown[]) => userUpdate(...a),
     },
-    curatedVenue: { findMany: (...a: unknown[]) => venueFindMany(...a) },
+    curatedVenue: {
+      findMany: (...a: unknown[]) => venueFindMany(...a),
+      findUnique: (...a: unknown[]) => venueFindUnique(...a),
+    },
     userPlaceVisit: {
       findMany: (...a: unknown[]) => visitFindMany(...a),
       createMany: (...a: unknown[]) => visitCreateMany(...a),
@@ -47,22 +52,30 @@ vi.mock("./canvas-auth.js", () => ({
 }));
 
 const { frequentPlacesRouter } = await import("./routes/frequent-places.js");
-const { partnerFrequentPlaces, resetFrequentPlacesState } = await import(
+const { venuesRouter } = await import("./routes/venues.js");
+const { partnerFrequentPlaces, resetFrequentPlacesState, PARTNER_PLACES_TTL_MS } = await import(
   "../services/frequent-places.js"
 );
+const { venuePhotoSignatureValid, venuePhotoUrl } = await import("./showcase-photos.js");
 
 function buildApp() {
   const app = express();
   app.use(express.json());
   app.use("/v1/frequent-places", frequentPlacesRouter);
+  app.use("/v1/venues", venuesRouter);
   return app;
 }
 
 /** Kyiv, 15:00 local. */
 const NOW = Date.parse("2026-09-11T12:00:00.000Z");
 const MINUTE = 60_000;
+const DAY = 86_400_000;
 const SENS = { lat: 50.4401, lng: 30.5486 };
 const PLACE = "ChIJ-sens";
+/** Catalog row ids are UUIDs; the photo route refuses anything else. */
+const ROW_A = "11111111-1111-4111-8111-111111111111";
+const ROW_B = "22222222-2222-4222-8222-222222222222";
+const PHOTO_REF = "places/ChIJ-sens/photos/abc";
 
 function catalogRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -73,6 +86,7 @@ function catalogRow(overrides: Record<string, unknown> = {}) {
     priority: 1,
     lat: SENS.lat,
     lng: SENS.lng,
+    photoRefs: [],
     ...overrides,
   };
 }
@@ -109,6 +123,7 @@ beforeEach(() => {
     .mockResolvedValue({ frequentPlacesOptIn: true, profile: { homeCityKey: "ua:kyiv" } });
   userUpdate.mockReset().mockResolvedValue({});
   venueFindMany.mockReset().mockResolvedValue([catalogRow()]);
+  venueFindUnique.mockReset();
   visitFindMany.mockReset().mockResolvedValue([]);
   visitCreateMany.mockReset().mockResolvedValue({ count: 1 });
   matchFindMany.mockReset().mockResolvedValue([]);
@@ -119,6 +134,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 describe("GET /v1/frequent-places", () => {
@@ -350,9 +366,115 @@ describe("partnerFrequentPlaces — what crosses to the match", () => {
   it("is a name and a category per place, and nothing else", async () => {
     visitFindMany.mockResolvedValue(storedVisits(7));
 
-    expect(await partnerFrequentPlaces("me")).toEqual([
-      { placeId: PLACE, name: "Sens", category: "cafe" },
+    const places = await partnerFrequentPlaces("me");
+
+    expect(places).toEqual([{ placeId: PLACE, name: "Sens", category: "cafe" }]);
+    // No photo in the catalog: the key is absent, not null (the contract's
+    // optional field), so `toEqual`'s blindness to undefined is not enough.
+    expect(Object.keys(places[0]).sort()).toEqual(["category", "name", "placeId"]);
+  });
+
+  it("adds a signed pin-width thumbnail on the venue photo route when the catalog has a photo", async () => {
+    venueFindMany.mockResolvedValue([catalogRow({ id: ROW_A, photoRefs: [PHOTO_REF] })]);
+    visitFindMany.mockResolvedValue(storedVisits(7));
+
+    const places = await partnerFrequentPlaces("me");
+
+    expect(places).toEqual([
+      {
+        placeId: PLACE,
+        name: "Sens",
+        category: "cafe",
+        thumbnailUrl: venuePhotoUrl(ROW_A, 240, NOW),
+      },
     ]);
+    const url = new URL(places[0].thumbnailUrl!);
+    expect(url.pathname).toBe(`/v1/venues/${ROW_A}/photo`);
+    expect(url.searchParams.get("w")).toBe("240");
+    // Still nothing about the person: no count, no day, no position, and not
+    // the Places resource name either.
+    expect(Object.keys(places[0]).sort()).toEqual(["category", "name", "placeId", "thumbnailUrl"]);
+    expect(places[0].thumbnailUrl).not.toContain(PHOTO_REF);
+  });
+
+  it("hands out a link the photo route accepts, at that width", async () => {
+    const originalKey = process.env.PLACES_API_KEY;
+    process.env.PLACES_API_KEY = "test-key";
+    try {
+      venueFindMany.mockResolvedValue([catalogRow({ id: ROW_A, photoRefs: [PHOTO_REF] })]);
+      visitFindMany.mockResolvedValue(storedVisits(7));
+      venueFindUnique.mockResolvedValue({ active: true, photoRefs: [PHOTO_REF] });
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(new Response("image", { headers: { "content-type": "image/jpeg" } }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      const [place] = await partnerFrequentPlaces("me");
+      const url = new URL(place.thumbnailUrl!);
+      const res = await request(buildApp()).get(url.pathname + url.search);
+
+      expect(res.status).toBe(200);
+      expect(venueFindUnique.mock.calls[0][0].where).toEqual({ id: ROW_A });
+      expect(String(fetchMock.mock.calls[0][0])).toContain(`${PHOTO_REF}/media?maxWidthPx=240`);
+    } finally {
+      process.env.PLACES_API_KEY = originalKey;
+    }
+  });
+
+  it("takes the photo from another copy of the place when the naming copy has none", async () => {
+    venueFindMany.mockResolvedValue([
+      catalogRow({ id: ROW_B, name: "Sens (KPI)", priority: 2, photoRefs: [PHOTO_REF] }),
+      catalogRow({ id: ROW_A }),
+    ]);
+    visitFindMany.mockResolvedValue(storedVisits(7));
+
+    const [place] = await partnerFrequentPlaces("me");
+
+    // The name is still the operator's best copy; only the photo is lent.
+    expect(place.name).toBe("Sens");
+    expect(new URL(place.thumbnailUrl!).pathname).toBe(`/v1/venues/${ROW_B}/photo`);
+  });
+
+  it("keeps the naming copy's own photo when it has one", async () => {
+    venueFindMany.mockResolvedValue([
+      catalogRow({ id: ROW_B, name: "Sens (KPI)", priority: 2, photoRefs: ["places/b/photos/b"] }),
+      catalogRow({ id: ROW_A, photoRefs: [PHOTO_REF] }),
+    ]);
+    visitFindMany.mockResolvedValue(storedVisits(7));
+
+    const [place] = await partnerFrequentPlaces("me");
+
+    expect(new URL(place.thumbnailUrl!).pathname).toBe(`/v1/venues/${ROW_A}/photo`);
+  });
+
+  it("signs the link on every call, so a list served from the cache never hands out a stale one", async () => {
+    venueFindMany.mockResolvedValue([catalogRow({ id: ROW_A, photoRefs: [PHOTO_REF] })]);
+    visitFindMany.mockResolvedValue(storedVisits(7));
+    await partnerFrequentPlaces("me");
+
+    const later = NOW + PARTNER_PLACES_TTL_MS - MINUTE;
+    vi.setSystemTime(later);
+    const [place] = await partnerFrequentPlaces("me");
+
+    expect(visitFindMany).toHaveBeenCalledOnce(); // served from the cache
+    const url = new URL(place.thumbnailUrl!);
+    const expiresAt = Number(url.searchParams.get("e"));
+    expect(expiresAt).toBeGreaterThanOrEqual(later + DAY);
+    expect(
+      venuePhotoSignatureValid(ROW_A, 240, expiresAt, url.searchParams.get("sig")!, later + DAY - 1),
+    ).toBe(true);
+  });
+
+  it("puts no photo fields on the owner's own list", async () => {
+    venueFindMany.mockResolvedValue([catalogRow({ id: ROW_A, photoRefs: [PHOTO_REF] })]);
+    visitFindMany.mockResolvedValue(storedVisits(5));
+
+    const res = await request(buildApp()).get("/v1/frequent-places");
+
+    expect(res.body).toEqual({
+      optIn: true,
+      places: [{ placeId: PLACE, name: "Sens", category: "cafe", visits: 5, hidden: false }],
+    });
   });
 
   it("is empty while the person has the feature off", async () => {

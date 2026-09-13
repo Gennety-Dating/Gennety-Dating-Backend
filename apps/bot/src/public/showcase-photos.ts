@@ -2,14 +2,16 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { env } from "../config.js";
 
 /**
- * Signed links to curated-venue photos for the iOS standby canvas.
+ * Signed links to curated-venue photos for the iOS standby canvas, and — at
+ * the pin width only — for the thumbnails of a match's frequently visited
+ * places (`partnerFrequentPlaces`, founder decision 2026-09-13).
  *
  * Same device as the partner photos (`partner-photos.ts`): an image loader
  * sends no Authorization header, so the link itself carries the permission —
- * an HMAC over the venue, the width and an expiry. Only the showcase list
- * mints them, which is what keeps the route from being a free Places photo
- * proxy for anyone who can guess a row id: without a signature it answers
- * nothing, and the signature cannot be moved to another venue or width.
+ * an HMAC over the venue, the width and an expiry. Only those two lists mint
+ * them, which is what keeps the route from being a free Places photo proxy
+ * for anyone who can guess a row id: without a signature it answers nothing,
+ * and the signature cannot be moved to another venue or width.
  *
  * **Weaker than the partner photos on purpose.** A partner's face is bound to
  * one viewer and lives ten minutes; a café's photo is the same picture for the

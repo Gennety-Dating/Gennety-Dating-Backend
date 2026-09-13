@@ -12,7 +12,14 @@ in the decision journal (2026-09-11 — «часто посещаемые мес
 
 1. **Zero per-call cost.** A position is only ever compared with our own
    catalog (`curated_venues`, one place per Google place id). No geocoder, no
-   Places call, no LLM — on any path of this feature.
+   Places call, no LLM — on any path of this feature. **One exception, founder
+   decision 2026-09-13:** the match's block carries place thumbnails. Building
+   the block still calls nothing — it only signs a link to the canvas
+   showcase's photo route (`GET /v1/venues/:id/photo`, 240 px); Google Place
+   Photo is billed when an image loader follows that link and the route's
+   in-process byte cache misses, exactly as for the showcase. No other path of
+   the feature — detection, fences, ranking, the owner's list — may call
+   Places.
 2. **Foreground only.** No background-location entitlement, no `Always`
    permission, no region or visit monitoring. The iOS app takes one fix when it
    becomes active and one every 10 minutes while it stays open.
@@ -25,7 +32,9 @@ in the decision journal (2026-09-11 — «часто посещаемые мес
    place id and a local calendar day. Coordinates are read and dropped; no time
    of day or duration exists anywhere. Swept after 180 days.
 5. **The match sees a name and a category.** Never a count, a day or a
-   position, and only through `partnerFrequentPlaces`.
+   position, and only through `partnerFrequentPlaces`. The thumbnail (when the
+   catalog has a photo) is a picture of a public venue and reveals none of
+   those; it is the only addition this rule allows.
 
 ### Detection
 
@@ -81,6 +90,13 @@ most two of one category.
   minutes and dropped by every write that could change it (a visit, a hide, the
   toggle), so a hide reaches the match at once. It is shown for the whole of
   the current match; no stage gate was decided.
+- **Thumbnails** (decision 2026-09-13). A place carries `thumbnailUrl` only when
+  some active catalog copy of it has a photo (`photoRefs`); otherwise the key
+  is absent. The name still comes from the operator's best copy; the photo is
+  taken from the best copy that has one. The link is the showcase's signed
+  device (`public/showcase-photos.ts`: HMAC over row id + width + expiry, the
+  id in the path, valid at least a day) and is signed on every call, cached
+  list or not. The owner's list and the fences carry no photo fields.
 
 ### Demo mode
 
@@ -91,8 +107,8 @@ Date Bump cannot fire there; and one attended date is below every threshold.
 ### Not built
 
 The Mini App tracker (the server is ready, on both rails); a manual check-in;
-the block in the bot's Telegram pitch; place photos in the block (a paid Place
-Photo request per cache miss); extending the catalog.
+the block in the bot's Telegram pitch; photos on the owner's own list;
+extending the catalog.
 
 ### Code
 
@@ -102,4 +118,6 @@ ranking) · `apps/bot/src/services/frequent-places.ts` (catalog cache, open
 stays, reads, writes, the match's copy) ·
 `apps/bot/src/public/routes/frequent-places.ts` ·
 `apps/bot/src/public/matches-service.ts` (`partnerFrequentPlaces`) ·
+`apps/bot/src/public/showcase-photos.ts` + `public/routes/venues.ts` (the
+thumbnail's signed link and photo route, shared with the canvas showcase) ·
 `apps/bot/src/workers/retention.ts` (180-day sweep).
