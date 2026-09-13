@@ -3,6 +3,7 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
 import { sendPushToUser } from "./push.js";
+import { revokeAllSessions } from "../public/jwt.js";
 
 /**
  * Post-match moderation engine. Invoked after the LLM has classified a
@@ -17,6 +18,14 @@ import { sendPushToUser } from "./push.js";
  *       strikes >= 3 → status = banned; cancel in-flight matches
  *   - Tier 3 → status = pending_investigation immediately; cancel in-flight
  *     matches. Report row stays adminReviewed=false for the manual queue.
+ *
+ * Every transition into a locked status (suspended, banned,
+ * pending_investigation) also revokes the account's API refresh sessions, in
+ * the same client — callers run tiers 2 and 3 inside the report transaction,
+ * so a rolled-back report never logs anybody out. Before this a ban left the
+ * native app signed in for the refresh token's full 30 days (audit A13-L13);
+ * the refresh endpoint now refuses a locked account as well
+ * (`rotateRefreshToken`), which also covers sessions minted after the ban.
  */
 
 export const SUSPENSION_DAYS = 14;
@@ -31,7 +40,7 @@ export interface ApplyReportActionInput {
   language: Language;
 }
 
-type ModerationDb = Pick<typeof prisma, "user" | "match">;
+type ModerationDb = Pick<typeof prisma, "user" | "match" | "userSession">;
 
 export type ModerationOutcome =
   | { kind: "tier1" }
@@ -56,6 +65,7 @@ export async function applyReportAction(
       where: { id: reportedUserId },
       data: { status: "pending_investigation" },
     });
+    await revokeAllSessions(reportedUserId, db);
     return { kind: "tier3_frozen" };
   }
 
@@ -73,6 +83,7 @@ export async function applyReportAction(
       where: { id: reportedUserId },
       data: { status: "banned" },
     });
+    await revokeAllSessions(reportedUserId, db);
     return { kind: "tier2_banned", strikes };
   }
   if (strikes === 2) {
@@ -81,6 +92,7 @@ export async function applyReportAction(
       where: { id: reportedUserId },
       data: { status: "suspended", suspendedUntil: until },
     });
+    await revokeAllSessions(reportedUserId, db);
     return { kind: "tier2_suspended", strikes: 2, until };
   }
   return { kind: "tier2_warning", strikes: 1 };

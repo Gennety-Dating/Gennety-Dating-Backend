@@ -44,6 +44,14 @@ function ensureInterviewAllowed(
   user: Awaited<ReturnType<typeof loadUser>>,
   res: Response,
 ): boolean {
+  // A finished onboarding has no interview left to answer, and running one
+  // anyway handed a completed account the legacy agent and its email tools —
+  // the path that let a verified user swap in an unproven address (audit
+  // A13-C1). Reads (`GET /interview`) stay open; only turns are refused.
+  if (user.onboardingStep === "completed") {
+    res.status(409).json({ error: "Onboarding is already complete" });
+    return false;
+  }
   if (!user.termsAccepted) {
     res.status(409).json({ error: "Terms must be accepted before the interview" });
     return false;

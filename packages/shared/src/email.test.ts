@@ -1,5 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { isUniversityEmail, generateOtp } from "./email.js";
+import { isUniversityEmail, hasPlusAddressTag, generateOtp } from "./email.js";
+
+describe("hasPlusAddressTag", () => {
+  it("flags a sub-address tag in the local part", () => {
+    expect(hasPlusAddressTag("alice+1@stanford.edu")).toBe(true);
+    expect(hasPlusAddressTag("alice+@knu.ua")).toBe(true);
+  });
+
+  it("leaves plain addresses alone", () => {
+    expect(hasPlusAddressTag("alice@stanford.edu")).toBe(false);
+    expect(hasPlusAddressTag("alice.smith@knu.ua")).toBe(false);
+  });
+
+  it("only reads the part a mail server routes on", () => {
+    // A `+` after the last `@` is not a tag, and a string with no local part
+    // is not an address at all.
+    expect(hasPlusAddressTag("alice@st+anford.edu")).toBe(false);
+    expect(hasPlusAddressTag("@stanford.edu")).toBe(false);
+    expect(hasPlusAddressTag("no-at-sign")).toBe(false);
+  });
+});
 
 describe("isUniversityEmail", () => {
   it("accepts valid .edu emails", () => {

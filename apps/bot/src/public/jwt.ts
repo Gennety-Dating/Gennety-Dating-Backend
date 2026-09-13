@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
+import { isModerationLockedStatus } from "../services/user-status.js";
 
 export interface AccessTokenPayload {
   sub: string; // userId (uuid)
@@ -143,6 +144,20 @@ export async function rotateRefreshToken(
 
     if (session.expiresAt < new Date()) return null;
 
+    // Moderation lock (audit A13-L13). Moderation revokes sessions when it
+    // suspends or bans, but a refresh token is valid for 30 days and a rotation
+    // is the one moment the server sees it, so the lock is checked here too —
+    // inside the same transaction, before anything is minted. The whole session
+    // set goes with it: a locked account has no device that should stay in.
+    const owner = await tx.user.findUnique({
+      where: { id: session.userId },
+      select: { status: true },
+    });
+    if (!owner || isModerationLockedStatus(owner.status)) {
+      await revokeAllSessions(session.userId, tx);
+      return null;
+    }
+
     const ttlMs = parseDurationToMs(env.JWT_REFRESH_TTL);
     const newRaw = crypto.randomBytes(48).toString("base64url");
     const newHash = hashRefreshToken(newRaw);
@@ -176,8 +191,16 @@ export async function rotateRefreshToken(
   });
 }
 
-export async function revokeAllSessions(userId: string): Promise<void> {
-  await prisma.userSession.updateMany({
+/**
+ * Revoke every live refresh session of `userId`. Takes a client so a caller
+ * already inside a transaction (moderation, the rotation above) revokes
+ * atomically with the change that warranted it.
+ */
+export async function revokeAllSessions(
+  userId: string,
+  db: Pick<typeof prisma, "userSession"> = prisma,
+): Promise<void> {
+  await db.userSession.updateMany({
     where: { userId, revokedAt: null },
     data: { revokedAt: new Date() },
   });

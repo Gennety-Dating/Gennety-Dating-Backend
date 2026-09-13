@@ -287,3 +287,32 @@ describe("POST /v1/verification/mini-app/event", () => {
     expect(completeLivenessCheck).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Regression, audit A13-L15. The limiter was keyed on the first 96 characters
+ * of the raw `initData`, which start with `auth_date` — so a Mini App reopened a
+ * second later (or the same parameters in another order) was a fresh bucket,
+ * and every `/init` mints a paid AWS Face Liveness session.
+ */
+describe("liveness session rate limit", () => {
+  it("counts one Telegram user as one bucket, however the initData is re-issued", async () => {
+    // A user id no other test in this file uses, so the shared limiter store
+    // starts empty for it.
+    const user = { id: 424242, first_name: "Limit" };
+    const nowSec = Math.floor(Date.now() / 1000);
+    const app = buildApp();
+
+    for (let i = 0; i < 10; i++) {
+      const res = await request(app)
+        .get("/v1/verification/mini-app/init")
+        .set("Authorization", `tma ${signInitData(BOT_TOKEN, { user, authDate: nowSec })}`);
+      expect(res.status).toBe(200);
+    }
+
+    // Same person, freshly issued initData (a different auth_date and hash).
+    const reopened = await request(app)
+      .get("/v1/verification/mini-app/init")
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN, { user, authDate: nowSec - 7 })}`);
+    expect(reopened.status).toBe(429);
+  });
+});

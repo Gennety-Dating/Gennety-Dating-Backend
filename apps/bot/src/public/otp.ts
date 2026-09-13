@@ -1,6 +1,14 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@gennety/db";
-import { generateOtp, OTP_LENGTH, OTP_TTL_MS } from "@gennety/shared";
+import {
+  EMAIL_OTP_BUDGET_WINDOW_MS,
+  EMAIL_OTP_DAILY_CAP,
+  EMAIL_OTP_DAILY_FAILED_ATTEMPTS_CAP,
+  generateOtp,
+  hasPlusAddressTag,
+  OTP_LENGTH,
+  OTP_TTL_MS,
+} from "@gennety/shared";
 import { sendOtpEmail } from "../services/email.js";
 
 export const OTP_MAX_ATTEMPTS = 5;
@@ -14,15 +22,81 @@ export type OtpChallengeState = {
 };
 
 /**
+ * What to do with a `name+tag@` address (see `hasPlusAddressTag`).
+ *
+ * - `existing_verified_only` — the LOGIN rail (`POST /v1/auth/otp/request`).
+ *   An account that was verified on such an address before this rule existed
+ *   must still be able to sign in, so the tag is accepted only when a verified
+ *   account already holds exactly that string.
+ * - `refuse` — the rails that ATTACH an address to the account asking
+ *   (Telegram Mini App, onboarding agent). There the exception could only ever
+ *   end in "linked to another account", and granting it would turn the refusal
+ *   into a membership probe for tagged addresses.
+ */
+export type PlusAliasPolicy = "existing_verified_only" | "refuse";
+
+export type OtpRequestResult =
+  | {
+      ok: true;
+      /**
+       * False when a live code for this address was issued less than the resend
+       * cooldown ago: nothing was sent and `state` describes that earlier code.
+       * The Mini App answers this with 429 `otp-cooldown`; the login rail keeps
+       * answering 200 exactly as it always has.
+       */
+      sent: boolean;
+      state: OtpChallengeState;
+    }
+  | {
+      ok: false;
+      /**
+       * `plus_alias` — a tagged address the policy refuses.
+       * `daily_cap`  — this address spent its durable 24h budget: too many codes
+       *                issued, or too many wrong guesses across them.
+       */
+      reason: "plus_alias" | "daily_cap";
+    };
+
+export interface CreateAndSendOtpOptions {
+  plusAlias: PlusAliasPolicy;
+  /** Delivery. Defaults to the real email sender; tests and callers inject. */
+  send?: (email: string, code: string) => Promise<void>;
+}
+
+/**
+ * Deliberately delivers nothing.
+ *
+ * The Telegram claim rails answer a request for an address that already
+ * belongs to ANOTHER verified account exactly as they answer any other request
+ * — same shape, same cooldown, same daily budget — because a distinct answer
+ * told whoever asked that the address has a dating account (audit A13-M10).
+ * The row is still written, so the state machine behind those answers is the
+ * real one, but the code goes nowhere: nobody is mailed a code they did not ask
+ * for, and the verify step can only fail.
+ */
+export const discardOtpDelivery = async (): Promise<void> => {};
+
+/**
  * Create a one-time code, persist its bcrypt hash, and email the raw code
  * to the user. Older unconsumed codes for the same email are left in place
  * but will be ignored once a newer row exists (we always look up the latest).
  */
 export async function createAndSendOtp(
   email: string,
-  send: (email: string, code: string) => Promise<void> = sendOtpEmail,
-): Promise<OtpChallengeState> {
+  options: CreateAndSendOtpOptions,
+): Promise<OtpRequestResult> {
   const normalisedEmail = email.toLowerCase();
+  const send = options.send ?? sendOtpEmail;
+
+  if (hasPlusAddressTag(normalisedEmail)) {
+    const allowed =
+      options.plusAlias === "existing_verified_only" &&
+      (await prisma.user.findUnique({
+        where: { email: normalisedEmail },
+        select: { isEmailVerified: true },
+      }))?.isEmailVerified === true;
+    if (!allowed) return { ok: false, reason: "plus_alias" };
+  }
 
   // The cooldown check and challenge creation must be serialized per email.
   // A plain find-then-create lets simultaneous requests all send a code. A
@@ -55,17 +129,22 @@ export async function createAndSendOtp(
         orderBy: { createdAt: "desc" },
         select: { createdAt: true, expiresAt: true, attempts: true },
       });
+      // The cooldown holds for an EXHAUSTED code too. It used to be skipped
+      // there (`attempts < OTP_MAX_ATTEMPTS` was part of this test), so five
+      // wrong guesses bought a fresh code on the very next request — the
+      // per-code attempt cap bounded nothing but the pace of one loop.
       if (
         existing &&
         existing.expiresAt > now &&
-        existing.attempts < OTP_MAX_ATTEMPTS &&
         now.getTime() - existing.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS
       ) {
-        // Still inside the cooldown — an earlier code is live, nothing to send.
         return {
-          pending: null,
+          kind: "cooldown" as const,
           state: {
-            status: "pending" as const,
+            status:
+              existing.attempts >= OTP_MAX_ATTEMPTS
+                ? ("exhausted" as const)
+                : ("pending" as const),
             expiresAt: existing.expiresAt,
             resendAvailableAt: new Date(
               existing.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS,
@@ -75,6 +154,27 @@ export async function createAndSendOtp(
         };
       }
 
+      // Durable per-address budget (audit A13-M9). The limiters in front of
+      // this function live in memory and are keyed on address + IP, so a pool
+      // of addresses — or one restart — reset them. These counts come from the
+      // rows themselves, under the same lock, so concurrent requests cannot
+      // race past them either. One aggregate answers both questions and rides
+      // the existing `(email, createdAt)` index.
+      const budget = await tx.emailOtp.aggregate({
+        where: {
+          email: normalisedEmail,
+          createdAt: { gt: new Date(now.getTime() - EMAIL_OTP_BUDGET_WINDOW_MS) },
+        },
+        _count: { _all: true },
+        _sum: { attempts: true },
+      });
+      if (
+        budget._count._all >= EMAIL_OTP_DAILY_CAP ||
+        (budget._sum.attempts ?? 0) >= EMAIL_OTP_DAILY_FAILED_ATTEMPTS_CAP
+      ) {
+        return { kind: "daily_cap" as const };
+      }
+
       const code = generateOtp(OTP_LENGTH);
       const codeHash = await bcrypt.hash(code, 10);
       const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
@@ -82,6 +182,7 @@ export async function createAndSendOtp(
         data: { email: normalisedEmail, codeHash, expiresAt },
       });
       return {
+        kind: "created" as const,
         pending: { id: challenge.id, code },
         state: {
           status: "pending" as const,
@@ -96,7 +197,8 @@ export async function createAndSendOtp(
     { timeout: 20_000 },
   );
 
-  if (!created.pending) return created.state;
+  if (created.kind === "daily_cap") return { ok: false, reason: "daily_cap" };
+  if (created.kind === "cooldown") return { ok: true, sent: false, state: created.state };
 
   // Send after the commit. On failure, delete the row we just wrote so the
   // caller's retry is not blocked by its own un-delivered challenge — the same
@@ -111,7 +213,7 @@ export async function createAndSendOtp(
     throw err;
   }
 
-  return created.state;
+  return { ok: true, sent: true, state: created.state };
 }
 
 export async function getOtpChallengeState(

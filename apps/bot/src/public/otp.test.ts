@@ -4,6 +4,8 @@ const emailOtpCreate = vi.fn();
 const emailOtpDelete = vi.fn();
 const emailOtpFindFirst = vi.fn();
 const emailOtpUpdateMany = vi.fn();
+const emailOtpAggregate = vi.fn();
+const userFindUnique = vi.fn();
 const queryRawUnsafe = vi.fn();
 
 const prismaMock = {
@@ -12,6 +14,10 @@ const prismaMock = {
     delete: emailOtpDelete,
     findFirst: emailOtpFindFirst,
     updateMany: emailOtpUpdateMany,
+    aggregate: emailOtpAggregate,
+  },
+  user: {
+    findUnique: userFindUnique,
   },
   $executeRawUnsafe: queryRawUnsafe,
   $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prismaMock)),
@@ -32,13 +38,21 @@ const {
   OTP_MAX_ATTEMPTS,
   OTP_RESEND_COOLDOWN_MS,
 } = await import("./otp.js");
+const { EMAIL_OTP_DAILY_CAP, EMAIL_OTP_DAILY_FAILED_ATTEMPTS_CAP } = await import(
+  "@gennety/shared"
+);
 
 beforeEach(() => {
   emailOtpCreate.mockReset();
   emailOtpDelete.mockReset();
   emailOtpFindFirst.mockReset();
   emailOtpUpdateMany.mockReset();
+  emailOtpAggregate.mockReset();
+  userFindUnique.mockReset();
   queryRawUnsafe.mockReset();
+  // A fresh address: nothing issued, nothing guessed in the last 24 hours.
+  emailOtpAggregate.mockResolvedValue({ _count: { _all: 0 }, _sum: { attempts: null } });
+  userFindUnique.mockResolvedValue(null);
 });
 
 describe("OTP challenge state", () => {
@@ -92,7 +106,9 @@ describe("OTP challenge state", () => {
     emailOtpDelete.mockResolvedValue({});
     const send = vi.fn().mockRejectedValue(new Error("provider unavailable"));
 
-    await expect(createAndSendOtp("alice@stanford.edu", send)).rejects.toThrow(
+    await expect(
+      createAndSendOtp("alice@stanford.edu", { plusAlias: "refuse", send }),
+    ).rejects.toThrow(
       "provider unavailable",
     );
     expect(queryRawUnsafe).toHaveBeenCalledWith(
@@ -120,7 +136,7 @@ describe("OTP challenge state", () => {
       order.push("send");
     });
 
-    await createAndSendOtp("alice@stanford.edu", send);
+    await createAndSendOtp("alice@stanford.edu", { plusAlias: "refuse", send });
 
     expect(order).toEqual(["commit", "send"]);
   });
@@ -131,13 +147,30 @@ describe("OTP challenge state", () => {
     emailOtpFindFirst.mockResolvedValue({ createdAt, expiresAt, attempts: 1 });
     const send = vi.fn();
 
-    await expect(createAndSendOtp("Alice@Stanford.edu", send)).resolves.toMatchObject({
-      status: "pending",
-      expiresAt,
-      attemptsRemaining: OTP_MAX_ATTEMPTS - 1,
+    await expect(
+      createAndSendOtp("Alice@Stanford.edu", { plusAlias: "refuse", send }),
+    ).resolves.toMatchObject({
+      ok: true,
+      sent: false,
+      state: {
+        status: "pending",
+        expiresAt,
+        attemptsRemaining: OTP_MAX_ATTEMPTS - 1,
+      },
     });
     expect(send).not.toHaveBeenCalled();
     expect(emailOtpCreate).not.toHaveBeenCalled();
+  });
+
+  it("reports a delivered code as sent", async () => {
+    emailOtpFindFirst.mockResolvedValue(null);
+    emailOtpCreate.mockResolvedValue({ id: "otp-3", createdAt: new Date() });
+    const send = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      createAndSendOtp("alice@stanford.edu", { plusAlias: "refuse", send }),
+    ).resolves.toMatchObject({ ok: true, sent: true, state: { status: "pending" } });
+    expect(send).toHaveBeenCalledWith("alice@stanford.edu", expect.stringMatching(/^\d{6}$/));
   });
 
   it("allows only one concurrent verifier to consume a valid challenge", async () => {
@@ -184,6 +217,112 @@ describe("OTP challenge state", () => {
         attempts: { lt: OTP_MAX_ATTEMPTS },
       }),
       data: { attempts: { increment: 1 } },
+    });
+  });
+});
+
+/**
+ * Audit A13-M9. Before this the only per-address limits were in-memory and keyed
+ * on address + IP, so a pool of IPs (or a restart) reset them, and an exhausted
+ * code was replaced by a fresh one on the very next request.
+ */
+describe("durable per-address budget", () => {
+  it("keeps the cooldown after an exhausted code instead of issuing a new one", async () => {
+    const createdAt = new Date();
+    emailOtpFindFirst.mockResolvedValue({
+      createdAt,
+      expiresAt: new Date(Date.now() + 60_000),
+      attempts: OTP_MAX_ATTEMPTS,
+    });
+    const send = vi.fn();
+
+    await expect(
+      createAndSendOtp("alice@stanford.edu", { plusAlias: "refuse", send }),
+    ).resolves.toEqual({
+      ok: true,
+      sent: false,
+      state: {
+        status: "exhausted",
+        expiresAt: expect.any(Date),
+        resendAvailableAt: new Date(createdAt.getTime() + OTP_RESEND_COOLDOWN_MS),
+        attemptsRemaining: 0,
+      },
+    });
+    expect(emailOtpCreate).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("refuses once the address has been issued the daily cap of codes", async () => {
+    emailOtpFindFirst.mockResolvedValue(null);
+    emailOtpAggregate.mockResolvedValue({
+      _count: { _all: EMAIL_OTP_DAILY_CAP },
+      _sum: { attempts: 0 },
+    });
+    const send = vi.fn();
+
+    await expect(
+      createAndSendOtp("alice@stanford.edu", { plusAlias: "refuse", send }),
+    ).resolves.toEqual({ ok: false, reason: "daily_cap" });
+    expect(emailOtpCreate).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    // Counted over the rolling window, for this address only.
+    expect(emailOtpAggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { email: "alice@stanford.edu", createdAt: { gt: expect.any(Date) } },
+      }),
+    );
+  });
+
+  it("refuses once the address has absorbed the daily cap of wrong guesses", async () => {
+    emailOtpFindFirst.mockResolvedValue(null);
+    emailOtpAggregate.mockResolvedValue({
+      _count: { _all: 4 },
+      _sum: { attempts: EMAIL_OTP_DAILY_FAILED_ATTEMPTS_CAP },
+    });
+    const send = vi.fn();
+
+    await expect(
+      createAndSendOtp("alice@stanford.edu", { plusAlias: "refuse", send }),
+    ).resolves.toEqual({ ok: false, reason: "daily_cap" });
+    expect(emailOtpCreate).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe("plus-addressed emails", () => {
+  it("refuses a tagged address on a claim rail before touching the challenge table", async () => {
+    const send = vi.fn();
+    await expect(
+      createAndSendOtp("alice+2@stanford.edu", { plusAlias: "refuse", send }),
+    ).resolves.toEqual({ ok: false, reason: "plus_alias" });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    // `refuse` never asks who holds the address — no membership probe.
+    expect(userFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("refuses a tagged address on the login rail when no verified account holds it", async () => {
+    userFindUnique.mockResolvedValue({ isEmailVerified: false });
+    await expect(
+      createAndSendOtp("alice+2@stanford.edu", {
+        plusAlias: "existing_verified_only",
+        send: vi.fn(),
+      }),
+    ).resolves.toEqual({ ok: false, reason: "plus_alias" });
+  });
+
+  it("still lets an account verified on a tagged address log in", async () => {
+    userFindUnique.mockResolvedValue({ isEmailVerified: true });
+    emailOtpFindFirst.mockResolvedValue(null);
+    emailOtpCreate.mockResolvedValue({ id: "otp-9", createdAt: new Date() });
+    const send = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      createAndSendOtp("Alice+2@Stanford.edu", { plusAlias: "existing_verified_only", send }),
+    ).resolves.toMatchObject({ ok: true, sent: true });
+    expect(userFindUnique).toHaveBeenCalledWith({
+      where: { email: "alice+2@stanford.edu" },
+      select: { isEmailVerified: true },
     });
   });
 });

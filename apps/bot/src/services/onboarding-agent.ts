@@ -38,7 +38,8 @@ import {
 } from "./profile-analysis.js";
 import { extractVibeAxes, saveVibeAxes } from "./vibe-axes.js";
 import { invalidateChatTarget } from "./chat-events.js";
-import { createAndSendOtp, verifyOtp as verifyStoredOtp } from "../public/otp.js";
+import { verifyOtp as verifyStoredOtp } from "../public/otp.js";
+import { claimVerifiedEmail, requestEmailClaimCode } from "./verified-email.js";
 import {
   onboardingActivityPatch,
   reEngagementStopPatch,
@@ -575,7 +576,7 @@ If you catch yourself drafting one of these forbidden questions, STOP, re-read t
 ## Onboarding Flow
 You MUST collect ALL of the following before finalizing:
 
-1. **Email verification**: Ask for university email → call send_otp_email → ask for OTP code → call verify_otp. If the user says the code didn't arrive, call resend_otp to re-send it (no need to ask for the email again).
+1. **Email verification**: Ask for university email → call send_otp_email → ask for OTP code → call verify_otp with that same email and the code. If the user says the code didn't arrive, call resend_otp with that same email (no need to ask for the email again).
 2. **Profile basics**: First name, age, gender, gender preference (who they are interested in — men, women, or both). ALWAYS ask these questions in the user's chosen language using native words ONLY — never use English terms like "male/female" or "men/women/both" in your message to the user. Map their natural-language answer internally to the tool enum values.
 3. **Extended profile**: Height in cm, hobbies/interests (whatever the user shares — one, several, or "no hobbies" are ALL valid; never push for more), partner preferences (one short sentence is plenty)
 4. **Deep context extraction**: ${aiMemoryExportDeclined ? "SKIP this entire step because the user declined AI memory export. Never mention or request the Magic Prompt." : "After collecting extended profile, call request_context_dump. The system will AUTOMATICALLY send the Magic Prompt to the user in a separate copyable block — you do NOT need to include or display the prompt yourself."}
@@ -692,12 +693,16 @@ const TOOLS = [
       parameters: {
         type: "object",
         properties: {
+          email: {
+            type: "string",
+            description: "The university email the code was sent to — the same one you passed to send_otp_email",
+          },
           code: {
             type: "string",
             description: "The 6-digit OTP code",
           },
         },
-        required: ["code"],
+        required: ["email", "code"],
       },
     },
   },
@@ -706,11 +711,16 @@ const TOOLS = [
     function: {
       name: "resend_otp",
       description:
-        "Re-send the OTP verification code to the user's previously provided email. Call this when the user says they didn't receive the code. No parameters needed — uses the email already on file.",
+        "Re-send the OTP verification code to the email the user already gave. Call this when the user says they didn't receive the code. Pass that same email; do not ask the user for it again if it is in the conversation.",
       parameters: {
         type: "object",
-        properties: {},
-        required: [],
+        properties: {
+          email: {
+            type: "string",
+            description: "The university email the previous code was sent to",
+          },
+        },
+        required: ["email"],
       },
     },
   },
@@ -1071,12 +1081,60 @@ function withCurrentSavedStateSnapshot(
 // Tool Executors
 // ---------------------------------------------------------------------------
 
+/**
+ * The agent's email rail follows the same ownership rule as the Mini App
+ * (`services/verified-email.ts`, audit A13-C1): nothing reaches `User.email`
+ * until the code for it checks out. `send_otp_email` used to write the address
+ * straight onto the row while leaving `isEmailVerified` as it was, so an
+ * account that had verified ONE mailbox could swap in any other address and
+ * stay "verified" — and the old address was free for the next account. The
+ * address now travels in the tool arguments of all three tools; the model has
+ * it in the conversation, and a wrong one simply fails the code check.
+ *
+ * A user whose track contact is already verified is refused outright: this
+ * interview is not an email-change surface, and `/v1/onboarding/interview/*`
+ * reaches it for any signed-in account.
+ */
+const CONTACT_ALREADY_VERIFIED_RESULT = JSON.stringify({
+  success: false,
+  error:
+    "This user's contact is already verified. Do not ask for, send a code to, or change their email. Continue with the next onboarding step.",
+});
+
+function emailToolArg(args: { email?: unknown }): string {
+  return typeof args.email === "string" ? args.email.trim().toLowerCase() : "";
+}
+
+async function loadEmailToolUser(telegramId: bigint) {
+  return prisma.user.findUnique({
+    where: { telegramId },
+    select: {
+      id: true,
+      email: true,
+      isEmailVerified: true,
+      phoneVerifiedAt: true,
+      registrationTrack: true,
+    },
+  });
+}
+
+/** Map a refused code request onto a tool result the model can act on. */
+function refusedOtpRequestResult(reason: "plus_alias" | "daily_cap"): string {
+  return JSON.stringify({
+    success: false,
+    error:
+      reason === "plus_alias"
+        ? "Addresses with a '+' tag are not accepted. Ask the user for their plain university address, without the '+' part."
+        : "Too many codes were requested for this email today. Tell the user to try again tomorrow; do not call send_otp_email or resend_otp again in this conversation.",
+  });
+}
+
 async function execSendOtpEmail(
   telegramId: bigint,
-  args: { email: string },
+  args: { email?: unknown },
   deps: AgentDeps,
 ): Promise<string> {
-  const email = args.email.trim().toLowerCase();
+  const email = emailToolArg(args);
 
   if (!isUniversityEmail(email)) {
     return JSON.stringify({
@@ -1085,20 +1143,15 @@ async function execSendOtpEmail(
     });
   }
 
-  const domain = email.slice(email.indexOf("@") + 1);
-
-  await prisma.user.update({
-    where: { telegramId },
-    data: {
-      email,
-      universityDomain: domain,
-      emailOtp: null,
-      emailOtpExpiresAt: null,
-    },
-  });
+  const user = await loadEmailToolUser(telegramId);
+  if (!user) {
+    return JSON.stringify({ success: false, error: "User not found." });
+  }
+  if (hasTrackVerifiedContact(user)) return CONTACT_ALREADY_VERIFIED_RESULT;
 
   try {
-    await createAndSendOtp(email, deps.sendOtp);
+    const result = await requestEmailClaimCode(user.id, email, deps.sendOtp);
+    if (!result.ok) return refusedOtpRequestResult(result.reason);
   } catch (err) {
     console.error(`Failed to send OTP email to ${email}`, err);
     return JSON.stringify({
@@ -1109,63 +1162,66 @@ async function execSendOtpEmail(
 
   return JSON.stringify({
     success: true,
-    message: `OTP sent to ${email}. Code expires in 10 minutes.`,
+    message: `OTP sent to ${email}. Code expires in 10 minutes. Pass this same email to verify_otp and resend_otp.`,
   });
 }
 
 async function execResendOtp(
   telegramId: bigint,
+  args: { email?: unknown },
   deps: AgentDeps,
 ): Promise<string> {
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { email: true },
-  });
-
-  if (!user?.email) {
+  const email = emailToolArg(args);
+  if (!isUniversityEmail(email)) {
     return JSON.stringify({
       success: false,
-      error: "No email on file. Ask the user for their email first.",
+      error: "No email given. Pass the email you sent the code to; ask the user for it if it is not in the conversation.",
     });
   }
 
+  const user = await loadEmailToolUser(telegramId);
+  if (!user) {
+    return JSON.stringify({ success: false, error: "User not found." });
+  }
+  if (hasTrackVerifiedContact(user)) return CONTACT_ALREADY_VERIFIED_RESULT;
+
   try {
-    await prisma.user.update({
-      where: { telegramId },
-      data: { emailOtp: null, emailOtpExpiresAt: null },
-    });
-    await createAndSendOtp(user.email, deps.sendOtp);
+    const result = await requestEmailClaimCode(user.id, email, deps.sendOtp);
+    if (!result.ok) return refusedOtpRequestResult(result.reason);
   } catch (err) {
-    console.error(`Failed to resend OTP email to ${user.email}`, err);
+    console.error(`Failed to resend OTP email to ${email}`, err);
     return JSON.stringify({
       success: false,
-      error: `Failed to resend email to ${user.email}. Please try again in a moment.`,
+      error: `Failed to resend email to ${email}. Please try again in a moment.`,
     });
   }
 
   return JSON.stringify({
     success: true,
-    message: `New OTP sent to ${user.email}. Code expires in 10 minutes.`,
+    message: `New OTP sent to ${email}. Code expires in 10 minutes.`,
   });
 }
 
 async function execVerifyOtp(
   telegramId: bigint,
-  args: { code: string },
+  args: { code?: unknown; email?: unknown },
 ): Promise<string> {
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { email: true },
-  });
-
-  if (!user?.email) {
+  const email = emailToolArg(args);
+  if (!isUniversityEmail(email)) {
     return JSON.stringify({
       success: false,
       error: "No pending OTP. Please provide your email first.",
     });
   }
 
-  const result = await verifyStoredOtp(user.email, args.code.trim());
+  const user = await loadEmailToolUser(telegramId);
+  if (!user) {
+    return JSON.stringify({ success: false, error: "User not found." });
+  }
+  if (hasTrackVerifiedContact(user)) return CONTACT_ALREADY_VERIFIED_RESULT;
+
+  const code = typeof args.code === "string" ? args.code.trim() : "";
+  const result = await verifyStoredOtp(email, code);
   if (!result.ok) {
     if (result.reason === "expired") {
       return JSON.stringify({
@@ -1188,26 +1244,32 @@ async function execVerifyOtp(
     });
   }
 
-  const verified = await prisma.user.update({
-    where: { telegramId },
-    // Registration v2: a verified university email IS the student track.
-    data: {
-      emailOtp: null,
-      emailOtpExpiresAt: null,
-      isEmailVerified: true,
-      registrationTrack: "student",
-    },
-    select: { id: true },
-  });
+  const claim = await claimVerifiedEmail(user.id, email, (patch) =>
+    prisma.user.update({
+      where: { telegramId },
+      data: {
+        ...patch,
+        emailOtp: null,
+        emailOtpExpiresAt: null,
+      },
+      select: { id: true },
+    }),
+  );
+  if (!claim.ok) {
+    // The code was right, so the person owns the mailbox — they may be told.
+    return JSON.stringify({
+      success: false,
+      error:
+        "This email is already linked to another Gennety account. Ask the user for a different university email.",
+    });
+  }
 
   // Registration v2 student loyalty: +2 tickets, exactly once (idempotent
   // ledger claim; no-op while tickets are off). Silent here — the agent's own
   // reply acknowledges the verification; the wallet reflects the bonus.
-  if (verified?.id) {
-    void grantStudentBonusIfEligible(verified.id).catch((err) => {
-      console.warn("[student-bonus] agent grant failed:", (err as Error).message);
-    });
-  }
+  void grantStudentBonusIfEligible(claim.value.id).catch((err) => {
+    console.warn("[student-bonus] agent grant failed:", (err as Error).message);
+  });
 
   return JSON.stringify({
     success: true,
@@ -2194,17 +2256,13 @@ export async function runAgentTurn(
       try {
         switch (fnName) {
           case "send_otp_email":
-            result = await execSendOtpEmail(
-              telegramId,
-              args as { email: string },
-              deps,
-            );
+            result = await execSendOtpEmail(telegramId, args, deps);
             break;
           case "verify_otp":
-            result = await execVerifyOtp(telegramId, args as { code: string });
+            result = await execVerifyOtp(telegramId, args);
             break;
           case "resend_otp":
-            result = await execResendOtp(telegramId, deps);
+            result = await execResendOtp(telegramId, args, deps);
             break;
           case "request_context_dump":
             if (isAiMemoryExportDeclined(user?.aiMemoryExportPreference)) {

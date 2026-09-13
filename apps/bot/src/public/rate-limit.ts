@@ -1,6 +1,6 @@
 import rateLimit, { ipKeyGenerator, MemoryStore, type Options } from "express-rate-limit";
 import type { Request } from "express";
-import { normalizePhoneE164 } from "@gennety/shared";
+import { normalizePhoneE164, PHONE_OTP_IP_HOURLY_LIMIT } from "@gennety/shared";
 import { env } from "../config.js";
 import { validateInitData } from "./init-data.js";
 
@@ -126,6 +126,23 @@ export const phoneOtpRequestLimiter = make({
   message: { error: "Too many code requests, try again later." },
 });
 
+/**
+ * Phone code send — per ADDRESS, across every number (audit A13-M8).
+ *
+ * The limiter above is keyed on phone + IP, so a script walking through
+ * numbers gets a fresh bucket for each one, and the durable backstop in
+ * `services/phone-verification.ts` is per number too. That is exactly the shape
+ * of SMS pumping: many premium-rate numbers, one sender, every send billed.
+ * Mounted alongside the per-number limiter; the product-wide hourly ceiling in
+ * the service is what bounds a rotating IP pool.
+ */
+export const phoneOtpIpLimiter = make({
+  windowMs: 3_600_000,
+  limit: PHONE_OTP_IP_HOURLY_LIMIT,
+  keyGenerator: (req): string => `phone-otp-ip:${ipKey(req)}`,
+  message: { error: "Too many code requests, try again later." },
+});
+
 /** Phone code verify — 10/hour per (phone + IP), same rationale as email. */
 export const phoneOtpVerifyLimiter = make({
   windowMs: 3_600_000,
@@ -185,6 +202,23 @@ function miniAppKey(req: Request, scope: string, initData?: string): string {
   }
   return `${scope}:${ipKey(req)}`;
 }
+
+/**
+ * Liveness session mint (`/v1/verification/mini-app/init` and `/consent`) —
+ * 10/min per Telegram user.
+ *
+ * It lived in the route file keyed on the first 96 characters of the raw
+ * `initData` — which begin with `auth_date`, so reopening the Mini App (or just
+ * reordering the query parameters) was a new bucket, and each mint is a paid AWS
+ * Face Liveness session (audit A13-L15). Same fix as the limiters below: the
+ * validated `user.id`, falling back to the IP when the signature does not hold.
+ */
+export const verificationInitLimiter = make({
+  windowMs: 60_000,
+  limit: 10,
+  keyGenerator: (req): string => miniAppKey(req, "verify-init"),
+  message: { error: "Too many init requests, slow down." },
+});
 
 /** Places autocomplete — 60/hour per Telegram Mini App session. */
 export const locationSearchLimiter = make({

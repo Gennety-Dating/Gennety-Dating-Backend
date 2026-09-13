@@ -1,6 +1,12 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@gennety/db";
-import { generateOtp, OTP_LENGTH, OTP_TTL_MS } from "@gennety/shared";
+import {
+  generateOtp,
+  OTP_LENGTH,
+  OTP_TTL_MS,
+  PHONE_OTP_GLOBAL_HOURLY_CAP,
+  PHONE_OTP_GLOBAL_WINDOW_MS,
+} from "@gennety/shared";
 import { env } from "../config.js";
 
 /**
@@ -21,10 +27,11 @@ import { env } from "../config.js";
  * to Twilio. The client never sees the fork — `/v1/auth/phone/*` responds
  * with `deliveredVia: "telegram" | "sms"` for the status line.
  *
- * Anti-SMS-pumping layers: per-phone+IP express rate limit (middleware),
- * per-phone resend cooldown + daily cap here (advisory-lock serialized, same
- * pattern as `public/otp.ts`), and Gateway's own number screening before any
- * Twilio spend.
+ * Anti-SMS-pumping layers: per-phone+IP and per-IP express rate limits
+ * (middleware), per-phone resend cooldown + daily cap and a product-wide hourly
+ * ceiling here (advisory-lock serialized, same pattern as `public/otp.ts`), and
+ * Gateway's own number screening before any Twilio spend. Country restrictions
+ * and Twilio Fraud Guard are console settings, not code.
  */
 
 /**
@@ -73,6 +80,8 @@ export type PhoneCodeRequestResult =
   | { ok: false; reason: "invalid_phone" }
   | { ok: false; reason: "cooldown"; resendAvailableAt: Date }
   | { ok: false; reason: "daily_cap" }
+  /** Product-wide hourly ceiling reached (`PHONE_OTP_GLOBAL_HOURLY_CAP`). */
+  | { ok: false; reason: "global_cap" }
   | { ok: false; reason: "unavailable" };
 
 export type PhoneCodeVerifyResult =
@@ -299,6 +308,21 @@ export async function requestPhoneCode(
         return { kind: "daily_cap" as const };
       }
 
+      // Product-wide hourly ceiling (audit A13-M8). Every limit above is per
+      // number or per address, and SMS pumping is precisely many numbers from
+      // many addresses — each send billed to us. Counted from the durable rows
+      // (reservations included, released ones already deleted), so a restart
+      // resets nothing. It is read under the per-number lock only, so requests
+      // for different numbers racing at the edge can overshoot by at most their
+      // concurrency; for a ceiling that is the right trade against a global
+      // lock serializing every sign-up.
+      const sentLastHour = await tx.phoneOtp.count({
+        where: { createdAt: { gt: new Date(now.getTime() - PHONE_OTP_GLOBAL_WINDOW_MS) } },
+      });
+      if (sentLastHour >= PHONE_OTP_GLOBAL_HOURLY_CAP) {
+        return { kind: "global_cap" as const, sentLastHour };
+      }
+
       // Бронь. Она и держит кулдаун с суточным капом честными, пока доставка
       // в полёте: параллельный запрос увидит её и получит `cooldown`, а не
       // второй код. Именно эта строка заменяет собой удержание транзакции.
@@ -323,6 +347,10 @@ export async function requestPhoneCode(
     };
   }
   if (reservation.kind === "daily_cap") return { ok: false, reason: "daily_cap" };
+  if (reservation.kind === "global_cap") {
+    alertFounderGlobalCeiling(reservation.sentLastHour);
+    return { ok: false, reason: "global_cap" };
+  }
 
   const { id, expiresAt } = reservation;
   const resendAvailableAt = new Date(
@@ -429,6 +457,33 @@ export async function requestPhoneCode(
 
   await releaseReservation(id);
   return { ok: false, reason: "unavailable" };
+}
+
+/**
+ * Page the founder when the product-wide ceiling trips — once per window.
+ *
+ * A pumping run hammers the endpoint, so without the window this would be one
+ * Telegram message per refused request. Module state, like the APNs provider
+ * alert (`services/apns.ts`): per process, which on this single-process deploy
+ * is the whole product. The import is dynamic for the same reason as there —
+ * `founder-notify` pulls in Prisma consumers and the bot Api, and this rail is
+ * tested without either. Fire-and-forget: the refusal never waits on the page.
+ */
+let globalCeilingAlertedAt = 0;
+
+function alertFounderGlobalCeiling(sentLastHour: number, nowMs: number = Date.now()): void {
+  if (nowMs - globalCeilingAlertedAt < PHONE_OTP_GLOBAL_WINDOW_MS) return;
+  globalCeilingAlertedAt = nowMs;
+  void import("./founder-notify.js")
+    .then((mod) =>
+      mod.notifyFounderPhoneOtpCeiling(sentLastHour, PHONE_OTP_GLOBAL_HOURLY_CAP),
+    )
+    .catch(() => {});
+}
+
+/** Test seam: the alert window is module state and must not leak between tests. */
+export function __resetPhoneOtpCeilingAlertForTests(): void {
+  globalCeilingAlertedAt = 0;
 }
 
 /**

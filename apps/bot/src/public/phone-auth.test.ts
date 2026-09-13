@@ -29,6 +29,7 @@ vi.mock("./routes/serializers.js", () => ({
 }));
 
 const { phoneAuthRouter } = await import("./routes/phone-auth.js");
+const { PHONE_OTP_IP_HOURLY_LIMIT } = await import("@gennety/shared");
 
 function buildApp() {
   const app = express();
@@ -91,6 +92,50 @@ describe("/v1/auth/phone", () => {
       .send({ phone: "+380631234567" });
     expect(res.status).toBe(429);
     expect(res.body.resendAvailableAt).toBe(at.toISOString());
+  });
+
+  it("maps the product-wide ceiling to 429", async () => {
+    requestPhoneCode.mockResolvedValue({ ok: false, reason: "global_cap" });
+    const res = await request(buildApp())
+      .post("/v1/auth/phone/request")
+      .send({ phone: "+380631234567" });
+    expect(res.status).toBe(429);
+    expect(res.headers["content-type"]).toMatch(/application\/json/);
+  });
+
+  /**
+   * Regression, audit A13-M8 (SMS pumping). The only request limiter was keyed
+   * on phone + IP, so one address walking through numbers got a fresh bucket
+   * for every number and every send was billed.
+   */
+  it("caps code requests per address across different numbers", async () => {
+    // A dedicated app behind one trusted proxy hop, so this test owns an
+    // address of its own instead of sharing the loopback bucket with the rest
+    // of the file.
+    const app = express();
+    app.set("trust proxy", 1);
+    app.use(express.json());
+    app.use("/v1/auth/phone", phoneAuthRouter);
+    const now = new Date();
+    requestPhoneCode.mockResolvedValue({
+      ok: true,
+      deliveredVia: "sms",
+      expiresAt: now,
+      resendAvailableAt: now,
+    });
+
+    const statuses: number[] = [];
+    for (let i = 0; i <= PHONE_OTP_IP_HOURLY_LIMIT; i++) {
+      const res = await request(app)
+        .post("/v1/auth/phone/request")
+        .set("X-Forwarded-For", "203.0.113.77")
+        .send({ phone: `+38063${String(1_000_000 + i)}` });
+      statuses.push(res.status);
+    }
+
+    expect(statuses.slice(0, PHONE_OTP_IP_HOURLY_LIMIT).every((s) => s === 200)).toBe(true);
+    expect(statuses[PHONE_OTP_IP_HOURLY_LIMIT]).toBe(429);
+    expect(requestPhoneCode).toHaveBeenCalledTimes(PHONE_OTP_IP_HOURLY_LIMIT);
   });
 
   it("mints tokens for a verified code", async () => {

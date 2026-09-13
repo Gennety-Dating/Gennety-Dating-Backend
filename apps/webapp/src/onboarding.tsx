@@ -13,6 +13,7 @@ import {
   setTelegramOnboardingAiMemoryPreference,
   claimTelegramOnboardingReferralGift,
   claimTelegramOnboardingPromoGift,
+  CalendarApiError,
   saveTelegramOnboardingProfile,
   setTelegramOnboardingLanguage,
   setTelegramOnboardingTheme,
@@ -1690,6 +1691,15 @@ function EmailGate(props: {
       }
       props.onOtp(email.trim().toLowerCase(), result.emailVerification);
     } catch (err) {
+      // A code for this address was sent moments ago. The server no longer
+      // remembers an unconfirmed address across a reopened Mini App, so this is
+      // how someone who left for their mail app gets back to the code screen:
+      // they retype the address and land where they were, instead of on an
+      // error that only tells them to wait.
+      if (err instanceof CalendarApiError && err.reason === "otp-cooldown") {
+        props.onOtp(email.trim().toLowerCase());
+        return;
+      }
       setError(errorCopy(err, s));
       app.HapticFeedback?.notificationOccurred("error");
     } finally {
@@ -1781,7 +1791,7 @@ function OtpGate(props: {
     setBusy(true);
     setError(null);
     try {
-      const state = await verifyTelegramOnboardingOtp(app.initData, code);
+      const state = await verifyTelegramOnboardingOtp(app.initData, props.email, code);
       app.HapticFeedback?.notificationOccurred("success");
       props.onState(state);
     } catch (err) {

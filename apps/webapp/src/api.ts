@@ -686,8 +686,14 @@ export async function requestTelegramOnboardingOtp(
   };
 }
 
+/**
+ * The address travels with the code. The server no longer keeps an unconfirmed
+ * address on the account (it reaches the account only once this call succeeds),
+ * so the one place that knows which mailbox the code belongs to is this client.
+ */
 export async function verifyTelegramOnboardingOtp(
   initData: string,
+  email: string,
   code: string,
 ): Promise<TelegramOnboardingState> {
   const res = await apiFetch(`${apiBase}/v1/telegram-onboarding/email/verify`, {
@@ -696,7 +702,7 @@ export async function verifyTelegramOnboardingOtp(
       "Content-Type": "application/json",
       Authorization: `tma ${initData}`,
     },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ email, code }),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TelegramOnboardingState;

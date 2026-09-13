@@ -27,6 +27,43 @@ export const OTP_TTL_MS = 10 * 60 * 1000;
 export const OTP_LENGTH = 6;
 
 /**
+ * Durable per-address budget for email codes over a rolling 24 hours.
+ *
+ * The in-memory limiters in front of the email rail are keyed on address + IP
+ * and forget everything on restart, so on their own they bound one address
+ * from one network, not one address. These two are counted from `EmailOtp`
+ * rows inside the per-address advisory lock (`public/otp.ts`), which makes them
+ * the ceiling that survives a restart and an IP pool.
+ *
+ * - `EMAIL_OTP_DAILY_CAP` — codes issued to one address. An honest person asks
+ *   for one, occasionally two or three when mail is slow; ten is far above that
+ *   and still stops a mailbox being bombed.
+ * - `EMAIL_OTP_DAILY_FAILED_ATTEMPTS_CAP` — wrong guesses against one address,
+ *   summed across its codes. Each code already dies after five, but a fresh code
+ *   used to be one request away, so the per-code cap bounded nothing per day.
+ *   Twenty typos a day is generous; twenty guesses at a six-digit code is a
+ *   1-in-50,000 shot.
+ */
+export const EMAIL_OTP_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const EMAIL_OTP_DAILY_CAP = 10;
+export const EMAIL_OTP_DAILY_FAILED_ATTEMPTS_CAP = 20;
+
+/**
+ * Anti-SMS-pumping ceilings for the phone rail (`services/phone-verification.ts`,
+ * `public/rate-limit.ts`). Every send costs money, and the per-number limits
+ * the rail already had do nothing against a script that walks through numbers.
+ *
+ * - `PHONE_OTP_IP_HOURLY_LIMIT` — code requests from one address across ALL
+ *   numbers. A household or a carrier NAT legitimately shares one, hence not 3.
+ * - `PHONE_OTP_GLOBAL_HOURLY_CAP` — codes sent product-wide in the last hour,
+ *   counted durably from `PhoneOtp` rows. Sized well above launch-scale signup
+ *   bursts; reaching it means pumping, not popularity, and it pages the founder.
+ */
+export const PHONE_OTP_IP_HOURLY_LIMIT = 10;
+export const PHONE_OTP_GLOBAL_HOURLY_CAP = 100;
+export const PHONE_OTP_GLOBAL_WINDOW_MS = 60 * 60 * 1000;
+
+/**
  * Min/max photos allowed during onboarding.
  *
  * `MIN_PHOTOS` is a hard floor, and the ONE place it is written: the collector,

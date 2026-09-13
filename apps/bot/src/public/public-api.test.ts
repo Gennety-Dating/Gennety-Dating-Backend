@@ -12,7 +12,7 @@ import request from "supertest";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
-import { MAX_PHOTOS, MIN_PHOTOS } from "@gennety/shared";
+import { EMAIL_OTP_DAILY_CAP, MAX_PHOTOS, MIN_PHOTOS } from "@gennety/shared";
 import { resetGlobalRateLimit } from "./rate-limit.js";
 
 const embeddingRefreshMocks = vi.hoisted(() => ({
@@ -118,6 +118,8 @@ type UserRow = {
   verifiedSelfiePath: string | null;
   messageHistory: unknown[];
   profile?: ProfileRow | null;
+  isEmailVerified?: boolean;
+  registrationTrack?: string | null;
 };
 
 type ProfileRow = {
@@ -379,6 +381,8 @@ vi.mock("@gennety/db", async () => {
             verifiedSelfiePath: null,
             messageHistory: [],
             profile: null,
+            isEmailVerified: data.isEmailVerified ?? false,
+            registrationTrack: data.registrationTrack ?? null,
           };
           db.users.set(id, row);
           return row;
@@ -388,6 +392,24 @@ vi.mock("@gennety/db", async () => {
           if (!u) throw new Error("User not found");
           Object.assign(u, applyData(data));
           return u;
+        }),
+        // Detaching an unproven email (`services/verified-email.ts`): the
+        // compare-and-set filters are the part under test, so honour them.
+        updateMany: vi.fn(async ({ where, data }: any) => {
+          let count = 0;
+          for (const u of db.users.values()) {
+            if (where.email !== undefined && u.email !== where.email) continue;
+            if (
+              where.isEmailVerified !== undefined &&
+              (u.isEmailVerified ?? false) !== where.isEmailVerified
+            ) {
+              continue;
+            }
+            if (where.id?.not !== undefined && u.id === where.id.not) continue;
+            Object.assign(u, applyData(data));
+            count++;
+          }
+          return { count };
         }),
         delete: vi.fn(async ({ where }: any) => {
           const u = findUser(where);
@@ -420,6 +442,20 @@ vi.mock("@gennety/db", async () => {
           };
           db.otps.push(row);
           return row;
+        }),
+        // Durable per-address budget (`public/otp.ts`).
+        aggregate: vi.fn(async ({ where }: any) => {
+          const rows = db.otps.filter(
+            (o) =>
+              o.email === where.email &&
+              (where.createdAt?.gt === undefined || o.createdAt > where.createdAt.gt),
+          );
+          return {
+            _count: { _all: rows.length },
+            _sum: {
+              attempts: rows.length ? rows.reduce((sum, o) => sum + o.attempts, 0) : null,
+            },
+          };
         }),
         findFirst: vi.fn(async ({ where }: any) => {
           const matches = db.otps.filter(
@@ -1159,6 +1195,42 @@ describe("POST /v1/auth/otp/request", () => {
     expect(res.body).not.toHaveProperty("otp");
   });
 
+  it("refuses a plus-tagged address nobody has verified (audit A13-M9)", async () => {
+    const res = await request(app)
+      .post("/v1/auth/otp/request")
+      .send({ email: "alice+second@stanford.edu" });
+    expect(res.status).toBe(400);
+    expect(db.otps).toHaveLength(0);
+  });
+
+  it("still sends a code to a plus-tagged address an existing account verified", async () => {
+    await seedUser({ email: "legacy+tag@stanford.edu", isEmailVerified: true });
+    const res = await request(app)
+      .post("/v1/auth/otp/request")
+      .send({ email: "legacy+tag@stanford.edu" });
+    expect(res.status).toBe(200);
+    expect(db.otps).toHaveLength(1);
+  });
+
+  it("refuses with 429 once the address spent its durable daily budget (audit A13-M9)", async () => {
+    const email = "budget-spent@stanford.edu";
+    for (let i = 0; i < EMAIL_OTP_DAILY_CAP; i++) {
+      db.otps.push({
+        id: crypto.randomUUID(),
+        email,
+        codeHash: "$2a$04$unused",
+        expiresAt: new Date(Date.now() - 60_000),
+        attempts: 0,
+        consumedAt: null,
+        createdAt: new Date(Date.now() - (i + 1) * 60 * 60_000),
+      });
+    }
+    const res = await request(app).post("/v1/auth/otp/request").send({ email });
+    expect(res.status).toBe(429);
+    expect(res.headers["content-type"]).toMatch(/application\/json/);
+    expect(db.otps).toHaveLength(EMAIL_OTP_DAILY_CAP);
+  });
+
   it("accepts .ac.uk (backend is more permissive than the mobile regex)", async () => {
     // HYPOTHESIS: `gennety-mobile/app/(auth)/email.tsx` uses
     // `/@[^@]+\.edu$/i` which REJECTS valid .ac.uk addresses the backend
@@ -1230,6 +1302,59 @@ describe("POST /v1/auth/otp/verify", () => {
     expect(db.sessions.has(hash)).toBe(true);
     // OTP consumed
     expect(db.otps[0].consumedAt).toBeTruthy();
+  });
+
+  /**
+   * Regression, audit A13-C1 (Critical). The Telegram Mini App used to write a
+   * typed address onto the caller's row before any code was checked, and this
+   * login then REUSED that row — flipping it to verified and signing the real
+   * mailbox owner into an account the squatter controls through Telegram.
+   */
+  it("never signs the mailbox owner into a row that only squatted their address", async () => {
+    const email = "victim@stanford.edu";
+    const squatter = await seedUser({
+      email,
+      isEmailVerified: false,
+      telegramId: 777_000_111n,
+      platform: "telegram",
+      onboardingStep: "language",
+    });
+    await seedOtp(email, "112233");
+
+    const res = await request(app)
+      .post("/v1/auth/otp/verify")
+      .send({ email, otp: "112233" });
+
+    expect(res.status).toBe(200);
+    const decoded = jwt.verify(
+      res.body.accessToken,
+      "test-jwt-secret-not-for-production",
+    ) as { sub: string };
+    expect(decoded.sub).not.toBe(squatter.id);
+    // The squatter's row loses the address; the owner gets their own account.
+    expect(db.users.get(squatter.id)?.email).toBeNull();
+    expect(db.users.get(squatter.id)?.isEmailVerified).toBe(false);
+    const owner = db.users.get(decoded.sub);
+    expect(owner?.email).toBe(email);
+    expect(owner?.isEmailVerified).toBe(true);
+    expect(owner?.platform).toBe("mobile");
+  });
+
+  it("signs into an account that verified the address itself", async () => {
+    const email = "returning@stanford.edu";
+    const existing = await seedUser({ email, isEmailVerified: true });
+    await seedOtp(email, "445566");
+
+    const res = await request(app)
+      .post("/v1/auth/otp/verify")
+      .send({ email, otp: "445566" });
+
+    expect(res.status).toBe(200);
+    const decoded = jwt.verify(
+      res.body.accessToken,
+      "test-jwt-secret-not-for-production",
+    ) as { sub: string };
+    expect(decoded.sub).toBe(existing.id);
   });
 
   it("rejects malformed OTPs with 400 (not 401)", async () => {
@@ -1317,6 +1442,40 @@ describe("POST /v1/auth/refresh", () => {
       expect(db.sessions.get(h)?.revokedAt).toBeInstanceOf(Date);
     }
   });
+
+  it.each(["banned", "suspended", "pending_investigation"])(
+    "refuses to rotate for a %s account and revokes every session (audit A13-L13)",
+    async (status) => {
+      const user = await seedUser({ status });
+      const hashes: string[] = [];
+      let presented = "";
+      for (let i = 0; i < 2; i++) {
+        const raw = crypto.randomBytes(48).toString("base64url");
+        const hash = crypto.createHash("sha256").update(raw).digest("hex");
+        if (i === 0) presented = raw;
+        hashes.push(hash);
+        db.sessions.set(hash, {
+          id: crypto.randomUUID(),
+          userId: user.id,
+          refreshTokenHash: hash,
+          userAgent: null,
+          expiresAt: new Date(Date.now() + 86_400_000),
+          revokedAt: null,
+          createdAt: new Date(),
+        });
+      }
+
+      const res = await request(app)
+        .post("/v1/auth/refresh")
+        .send({ refreshToken: presented });
+
+      expect(res.status).toBe(401);
+      expect(db.sessions.size).toBe(2); // nothing minted
+      for (const h of hashes) {
+        expect(db.sessions.get(h)?.revokedAt).toBeInstanceOf(Date);
+      }
+    },
+  );
 
   it("rejects missing refreshToken with 400", async () => {
     const res = await request(app).post("/v1/auth/refresh").send({});
@@ -2553,6 +2712,24 @@ describe("/v1/onboarding/interview", () => {
       .get("/v1/onboarding/interview")
       .set("Authorization", `Bearer ${signAccess(user.id)}`);
     expect("reaction" in state.body).toBe(false);
+  });
+
+  it("POST /answer refuses a completed onboarding and never reaches the agent (audit A13-C1)", async () => {
+    const user = await seedUser({ onboardingStep: "completed" });
+    const res = await request(app)
+      .post("/v1/onboarding/interview/answer")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ text: "my email is someone-else@stanford.edu" });
+    expect(res.status).toBe(409);
+    expect(runAgentTurnMock).not.toHaveBeenCalled();
+  });
+
+  it("GET still answers for a completed onboarding", async () => {
+    const user = await seedUser({ onboardingStep: "completed" });
+    const res = await request(app)
+      .get("/v1/onboarding/interview")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+    expect(res.status).toBe(200);
   });
 
   it("POST /answer refuses to start before terms are accepted", async () => {

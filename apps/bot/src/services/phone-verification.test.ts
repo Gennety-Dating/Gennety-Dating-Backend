@@ -37,13 +37,18 @@ const envMock = {
 
 vi.mock("../config.js", () => ({ env: envMock }));
 
+const notifyFounderPhoneOtpCeiling = vi.fn(async () => {});
+vi.mock("./founder-notify.js", () => ({ notifyFounderPhoneOtpCeiling }));
+
 const {
   normalizePhone,
   requestPhoneCode,
   verifyPhoneCode,
   PHONE_OTP_DAILY_CAP,
   PHONE_OTP_MAX_ATTEMPTS,
+  __resetPhoneOtpCeilingAlertForTests,
 } = await import("./phone-verification.js");
+const { PHONE_OTP_GLOBAL_HOURLY_CAP } = await import("@gennety/shared");
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
@@ -100,6 +105,8 @@ beforeEach(() => {
   phoneOtpUpdateMany.mockResolvedValue({ count: 1 });
   phoneOtpUpdate.mockResolvedValue({});
   phoneOtpDeleteMany.mockResolvedValue({ count: 1 });
+  notifyFounderPhoneOtpCeiling.mockClear();
+  __resetPhoneOtpCeilingAlertForTests();
 });
 
 /**
@@ -285,6 +292,45 @@ describe("requestPhoneCode", () => {
     const result = await requestPhoneCode("+380631234567");
     expect(result).toMatchObject({ ok: false, reason: "cooldown" });
     expect(phoneOtpCreate).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Regression, audit A13-M8 (SMS pumping). Every existing limit was per
+   * number, so a script walking through numbers was bounded by nothing durable.
+   */
+  it("refuses once the product-wide hourly ceiling is reached, and pages the founder once", async () => {
+    // The per-number daily count stays low; only the global hourly one is full.
+    phoneOtpCount.mockImplementation(async ({ where }: { where: { phone?: string } }) =>
+      where.phone ? 0 : PHONE_OTP_GLOBAL_HOURLY_CAP,
+    );
+    const fetchMock = stubProviders({ twilioStart: () => jsonResponse({ sid: "VE1" }, 201) });
+
+    const first = await requestPhoneCode("+380631234567");
+    const second = await requestPhoneCode("+380631234568");
+
+    expect(first).toEqual({ ok: false, reason: "global_cap" });
+    expect(second).toEqual({ ok: false, reason: "global_cap" });
+    expect(phoneOtpCreate).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    // Counted across ALL numbers over the last hour.
+    expect(phoneOtpCount).toHaveBeenCalledWith({
+      where: { createdAt: { gt: expect.any(Date) } },
+    });
+    await vi.waitFor(() => expect(notifyFounderPhoneOtpCeiling).toHaveBeenCalledTimes(1));
+    expect(notifyFounderPhoneOtpCeiling).toHaveBeenCalledWith(
+      PHONE_OTP_GLOBAL_HOURLY_CAP,
+      PHONE_OTP_GLOBAL_HOURLY_CAP,
+    );
+  });
+
+  it("sends normally just under the product-wide ceiling", async () => {
+    phoneOtpCount.mockImplementation(async ({ where }: { where: { phone?: string } }) =>
+      where.phone ? 0 : PHONE_OTP_GLOBAL_HOURLY_CAP - 1,
+    );
+    stubProviders({ twilioStart: () => jsonResponse({ sid: "VE2" }, 201) });
+
+    await expect(requestPhoneCode("+380631234567")).resolves.toMatchObject({ ok: true });
+    expect(notifyFounderPhoneOtpCeiling).not.toHaveBeenCalled();
   });
 
   it("enforces the durable per-phone daily cap", async () => {

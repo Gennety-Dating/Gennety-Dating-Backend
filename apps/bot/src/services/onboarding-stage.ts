@@ -188,11 +188,14 @@ function contactStage(
       "They chose the phone track and stopped there — the number hasn't been shared/confirmed yet.",
     );
   }
+  // One description, not a branch on `user.email`. An address the user typed
+  // but never confirmed is no longer stored on the user row (audit A13-C1), so
+  // "entered an email but not the code" is invisible from here — and a legacy
+  // row's unverified address is not evidence of anything either. Both cases
+  // owe the same next step: confirm a university email.
   return reg(
     "email_otp",
-    user.email
-      ? "They chose the student track, entered a university email, and never entered the code that was sent to it."
-      : "They chose the student track and stopped there — no university email entered yet.",
+    "They chose the student track and haven't confirmed a university email yet — either never entered one, or never entered the code sent to it.",
   );
 }
 

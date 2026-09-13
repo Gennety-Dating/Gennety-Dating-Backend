@@ -10,7 +10,11 @@ import {
   createRefreshToken,
   signAccessToken,
 } from "../jwt.js";
-import { phoneOtpRequestLimiter, phoneOtpVerifyLimiter } from "../rate-limit.js";
+import {
+  phoneOtpIpLimiter,
+  phoneOtpRequestLimiter,
+  phoneOtpVerifyLimiter,
+} from "../rate-limit.js";
 import { serializeUser } from "./serializers.js";
 
 /**
@@ -33,7 +37,11 @@ phoneAuthRouter.use((_req: Request, res: Response, next): void => {
 
 phoneAuthRouter.post(
   "/request",
+  // Per number first, then per address across numbers (audit A13-M8): a
+  // request the per-number bucket already refuses does not also spend the
+  // address's budget.
   phoneOtpRequestLimiter,
+  phoneOtpIpLimiter,
   async (req: Request, res: Response): Promise<void> => {
     const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
     const channel = typeof req.body?.channel === "string" ? req.body.channel : "";
@@ -60,6 +68,12 @@ phoneAuthRouter.post(
           return;
         case "daily_cap":
           res.status(429).json({ error: "Daily code limit reached for this number" });
+          return;
+        case "global_cap":
+          // Product-wide ceiling (SMS pumping guard). Nothing about this caller
+          // is wrong, and nothing they can change fixes it — hence the vague
+          // "later" rather than a per-number message.
+          res.status(429).json({ error: "Code requests are paused, try again later" });
           return;
         case "unavailable":
           res.status(503).json({ error: "Code delivery unavailable, try again later" });

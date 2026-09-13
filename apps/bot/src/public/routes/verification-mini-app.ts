@@ -1,10 +1,15 @@
 import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { prisma } from "@gennety/db";
 import { LEGAL_DOCS_VERSION, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
+// 10/min per validated Telegram user — defensive against a Mini App that
+// hot-retries /init in a loop. Built at module import in `rate-limit.ts` (NOT
+// inside the factory): express-rate-limit rejects limiters constructed inside
+// request handlers (ERR_ERL_CREATED_IN_REQUEST_HANDLER), and server.ts
+// lazy-instantiates this router on first request.
+import { verificationInitLimiter } from "../rate-limit.js";
 import {
   beginLivenessCheck,
   completeLivenessCheck,
@@ -43,35 +48,12 @@ import { createOutcomeGate } from "../../services/outcome-gate.js";
  * /v1/calendar/* /v1/location/* /v1/feedback/*. Telegram-side HMAC, no JWT.
  */
 
-// 10/min/user — cheap but defensive against a Mini App that hot-retries
-// /init in a loop. Created at module-import time (NOT inside the factory) —
-// express-rate-limit's runtime validator (ERR_ERL_CREATED_IN_REQUEST_HANDLER)
-// rejects limiters constructed inside request handlers, and server.ts
-// lazy-instantiates this router on first request.
-const initLimiter = rateLimit({
-  windowMs: 60_000,
-  limit: 10,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  keyGenerator: (req): string => {
-    const auth = req.header("authorization") ?? req.header("Authorization");
-    if (auth?.startsWith("tma ")) {
-      const init = auth.slice(4).trim();
-      // Hash-y enough to bucket per-user without parsing initData here
-      // (auth header is already capped at Telegram's initData size).
-      return `verify-init:${init.slice(0, 96)}`;
-    }
-    return `verify-init:${ipKeyGenerator(req.ip ?? "") ?? "anon"}`;
-  },
-  message: { error: "Too many init requests, slow down." },
-});
-
 export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
   const router = Router();
 
   router.get(
     "/init",
-    initLimiter,
+    verificationInitLimiter,
     async (req: Request, res: Response): Promise<void> => {
       const auth = authenticate(req);
       if (!auth.ok) {
@@ -116,7 +98,7 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
    */
   router.post(
     "/consent",
-    initLimiter,
+    verificationInitLimiter,
     async (req: Request, res: Response): Promise<void> => {
       const auth = authenticate(req);
       if (!auth.ok) {

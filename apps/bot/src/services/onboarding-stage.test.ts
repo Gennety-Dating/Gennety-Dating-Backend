@@ -133,16 +133,22 @@ describe("resolveOnboardingStage — Mini App order", () => {
     ).toBe("email_otp");
   });
 
-  it("names the entered email only when there is one to name", () => {
+  it("does not read an unverified email on the row as progress", () => {
+    // An unconfirmed address is no longer stored on the user (audit A13-C1),
+    // and a legacy row's leftover one proves nothing, so both describe the
+    // same outstanding step.
     const student = fresh({
       language: "ru",
       termsAccepted: true,
       registrationTrack: "student",
     });
-    expect(resolveOnboardingStage(student, FLAGS).description).toMatch(/no university email/i);
-    expect(
-      resolveOnboardingStage({ ...student, email: "a@uni.edu" }, FLAGS).description,
-    ).toMatch(/never entered the code/i);
+    const withLegacyEmail = { ...student, email: "a@uni.edu" };
+    expect(resolveOnboardingStage(student, FLAGS).description).toMatch(
+      /haven't confirmed a university email/i,
+    );
+    expect(resolveOnboardingStage(withLegacyEmail, FLAGS)).toEqual(
+      resolveOnboardingStage(student, FLAGS),
+    );
   });
 
   it("accepts either verified rail as satisfying the contact gate", () => {

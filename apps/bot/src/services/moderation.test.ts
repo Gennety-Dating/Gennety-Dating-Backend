@@ -12,6 +12,9 @@ vi.mock("@gennety/db", () => ({
       update: vi.fn(),
       findUnique: vi.fn(),
     },
+    userSession: {
+      updateMany: vi.fn(),
+    },
   },
 }));
 
@@ -35,6 +38,7 @@ import {
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mUser = prisma.user as unknown as { update: MockFn; findUnique: MockFn };
+const mSessions = prisma.userSession as unknown as { updateMany: MockFn };
 const mAppend = appendNegativeConstraint as unknown as MockFn;
 const mPush = sendPushToUser as unknown as MockFn;
 
@@ -279,5 +283,63 @@ describe("escalation integration — two Tier 2 reports in sequence", () => {
       language: "en",
     });
     expect(second.kind).toBe("tier2_suspended");
+  });
+});
+
+/**
+ * Regression, audit A13-L13: a locked account kept its API refresh sessions —
+ * the native app stayed signed in for the token's full 30 days after a ban.
+ */
+describe("applyReportAction — API sessions", () => {
+  const input = {
+    reporterUserId: REPORTER_ID,
+    reportedUserId: REPORTED_ID,
+    reasonSummary: "x",
+    language: "en" as const,
+  };
+
+  function expectSessionsRevoked(): void {
+    expect(mSessions.updateMany).toHaveBeenCalledWith({
+      where: { userId: REPORTED_ID, revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  }
+
+  it("revokes them on suspension", async () => {
+    mUser.update.mockResolvedValueOnce({ strikes: 2 }).mockResolvedValueOnce({});
+    await applyReportAction({ tier: 2, ...input });
+    expectSessionsRevoked();
+  });
+
+  it("revokes them on a ban", async () => {
+    mUser.update.mockResolvedValueOnce({ strikes: 3 }).mockResolvedValueOnce({});
+    await applyReportAction({ tier: 2, ...input });
+    expectSessionsRevoked();
+  });
+
+  it("revokes them on a Tier 3 freeze", async () => {
+    mUser.update.mockResolvedValueOnce({});
+    await applyReportAction({ tier: 3, ...input });
+    expectSessionsRevoked();
+  });
+
+  it("revokes them through the caller's transaction client", async () => {
+    const tx = {
+      user: { update: vi.fn().mockResolvedValue({}) },
+      match: {},
+      userSession: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    };
+    await applyReportAction(
+      { tier: 3, ...input },
+      tx as unknown as Parameters<typeof applyReportAction>[1],
+    );
+    expect(tx.userSession.updateMany).toHaveBeenCalledTimes(1);
+    expect(mSessions.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("leaves them alone for a warning", async () => {
+    mUser.update.mockResolvedValueOnce({ strikes: 1 });
+    await applyReportAction({ tier: 2, ...input });
+    expect(mSessions.updateMany).not.toHaveBeenCalled();
   });
 });

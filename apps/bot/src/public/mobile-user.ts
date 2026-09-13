@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { Prisma, prisma, type User } from "@gennety/db";
-import { grantStudentBonusIfEligible } from "../services/ticket-wallet.js";
+import { detachUnverifiedEmail, isUniqueViolation } from "../services/verified-email.js";
 
 /**
  * Extract the domain portion of an email (everything after `@`, lowercased).
@@ -30,34 +30,44 @@ function syntheticTelegramId(): bigint {
 }
 
 /**
- * Find or create a user keyed by university email. Collisions on the
- * synthetic `telegramId` are retried up to 3 times — the space is 2^53 so
- * the practical collision rate is zero.
+ * Find or create a user keyed by university email — the native login rail.
+ * The caller has just verified the code, so the address is proven HERE.
+ *
+ * Only a row that proved the address itself is signed into. A row that merely
+ * carries it unverified is a leftover of the old request-time write (or an
+ * attempt to squat it, audit A13-C1): adopting it handed the real owner's
+ * first sign-in to whoever controls that row through Telegram. Such a row
+ * loses the address, and the person who just proved the mailbox gets a fresh
+ * account of their own.
+ *
+ * Collisions on the synthetic `telegramId` are retried up to 3 times — the
+ * space is 2^48 so the practical collision rate is zero.
  */
 export async function findOrCreateMobileUser(email: string): Promise<User> {
   const normalisedEmail = email.toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email: normalisedEmail } });
-  if (existing) {
-    if (existing.isEmailVerified) return existing;
-    const updated = await prisma.user.update({
-      where: { id: existing.id },
-      // Registration v2: a verified university email IS the student track.
-      data: { isEmailVerified: true, registrationTrack: "student" },
+  if (existing?.isEmailVerified) return existing;
+  if (existing) await detachUnverifiedEmail(normalisedEmail, null);
+
+  try {
+    return await createMobileUserWithRetry({
+      email: normalisedEmail,
+      universityDomain: extractDomain(normalisedEmail),
+      isEmailVerified: true,
+      registrationTrack: "student",
     });
-    // Student loyalty: +2 tickets, exactly once (idempotent; no-op while
-    // tickets are off). Silent — mobile has no Telegram DM surface.
-    void grantStudentBonusIfEligible(updated.id).catch(() => {});
-    return updated;
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    // The address was taken between our read and the insert. The only rows
+    // that can hold it now are ones that proved it a moment ago — a double-tap
+    // on verify, or the same person finishing on the Telegram rail — and this
+    // request proved the same mailbox, so that account is theirs. An
+    // unverified holder is never adopted, whatever the timing — that is the
+    // whole fix — so it surfaces as the error it is.
+    const winner = await prisma.user.findUnique({ where: { email: normalisedEmail } });
+    if (winner?.isEmailVerified) return winner;
+    throw err;
   }
-
-  const universityDomain = extractDomain(normalisedEmail);
-
-  return createMobileUserWithRetry({
-    email: normalisedEmail,
-    universityDomain,
-    isEmailVerified: true,
-    registrationTrack: "student",
-  });
 }
 
 /**

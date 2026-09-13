@@ -19,12 +19,14 @@ const userFindUnique = vi.fn();
 const userFindUniqueOrThrow = vi.fn();
 const userCreate = vi.fn();
 const userUpdate = vi.fn();
+const userUpdateMany = vi.fn();
 const profileUpsert = vi.fn();
 const cityWaitlistUpsert = vi.fn();
 const cityWaitlistDeleteMany = vi.fn();
 const createAndSendOtp = vi.fn();
 const getOtpChallengeState = vi.fn();
 const verifyOtp = vi.fn();
+const discardOtpDelivery = vi.fn(async () => {});
 
 vi.mock("@gennety/db", () => ({
   prisma: {
@@ -33,6 +35,7 @@ vi.mock("@gennety/db", () => ({
       findUniqueOrThrow: userFindUniqueOrThrow,
       create: userCreate,
       update: userUpdate,
+      updateMany: userUpdateMany,
     },
     profile: {
       upsert: profileUpsert,
@@ -48,6 +51,7 @@ vi.mock("./otp.js", () => ({
   createAndSendOtp,
   getOtpChallengeState,
   verifyOtp,
+  discardOtpDelivery,
 }));
 
 vi.mock("../../services/onboarding-agent.js", () => ({
@@ -110,6 +114,23 @@ function miniUser(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * `user.findUnique` answers two different questions in the email routes: the
+ * caller's own row (by `telegramId`) and whoever holds an address (by `email`).
+ */
+function routeUserLookups(
+  current: ReturnType<typeof miniUser>,
+  holders: Record<string, { id: string; isEmailVerified: boolean }> = {},
+) {
+  userFindUnique.mockImplementation(
+    async ({ where }: { where: { telegramId?: bigint; email?: string } }) => {
+      if (where.telegramId !== undefined) return current;
+      if (where.email !== undefined) return holders[where.email] ?? null;
+      return null;
+    },
+  );
+}
+
 /** A user who has cleared every gate the profile screens sit behind. */
 function profileReadyUser(overrides: Record<string, unknown> = {}) {
   return miniUser({
@@ -163,6 +184,8 @@ beforeEach(() => {
   userFindUniqueOrThrow.mockReset();
   userCreate.mockReset();
   userUpdate.mockReset();
+  userUpdateMany.mockReset();
+  userUpdateMany.mockResolvedValue({ count: 0 });
   profileUpsert.mockReset();
   cityWaitlistUpsert.mockReset();
   cityWaitlistDeleteMany.mockReset();
@@ -249,7 +272,10 @@ describe("Telegram onboarding city gate", () => {
     expect(res.body.user.aiMemoryExportPreferenceAt).toBe("2026-06-06T10:00:00.000Z");
   });
 
-  it("returns an active email challenge so the Mini App can restore the OTP screen", async () => {
+  it("never echoes an unverified email or its challenge state", async () => {
+    // A legacy row written by the old request step still carries an address it
+    // never proved. Echoing it (with the live code timing of that mailbox) is
+    // what the fix stopped trusting — audit A13-C1.
     userFindUnique.mockResolvedValue(miniUser({ isEmailVerified: false }));
     getOtpChallengeState.mockResolvedValue({
       status: "pending",
@@ -263,24 +289,36 @@ describe("Telegram onboarding city gate", () => {
       .set("Authorization", `tma ${signInitData()}`);
 
     expect(res.status).toBe(200);
-    expect(getOtpChallengeState).toHaveBeenCalledWith("alice@stanford.edu");
-    expect(res.body.user.emailVerification).toEqual({
-      status: "pending",
-      expiresAt: "2026-06-07T10:10:00.000Z",
-      resendAvailableAt: "2026-06-07T10:00:30.000Z",
-      attemptsRemaining: 4,
-    });
+    expect(getOtpChallengeState).not.toHaveBeenCalled();
+    expect(res.body.user.email).toBeNull();
+    expect(res.body.user.emailVerification.status).toBe("none");
   });
 
-  it("returns challenge timing after sending an OTP", async () => {
+  it("echoes a verified email", async () => {
+    userFindUnique.mockResolvedValue(miniUser({ isEmailVerified: true }));
+
+    const res = await request(buildApp())
+      .get("/v1/telegram-onboarding/state")
+      .set("Authorization", `tma ${signInitData()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.email).toBe("alice@stanford.edu");
+    expect(res.body.user.isEmailVerified).toBe(true);
+  });
+
+  it("returns challenge timing after sending an OTP, without writing the address to the user", async () => {
     const current = miniUser({ isEmailVerified: false, email: null });
-    userFindUnique.mockResolvedValueOnce(current).mockResolvedValueOnce(null);
+    routeUserLookups(current);
     userUpdate.mockResolvedValue(current);
     createAndSendOtp.mockResolvedValue({
-      status: "pending",
-      expiresAt: new Date("2026-06-07T10:10:00.000Z"),
-      resendAvailableAt: new Date("2026-06-07T10:00:30.000Z"),
-      attemptsRemaining: 5,
+      ok: true,
+      sent: true,
+      state: {
+        status: "pending",
+        expiresAt: new Date("2026-06-07T10:10:00.000Z"),
+        resendAvailableAt: new Date("2026-06-07T10:00:30.000Z"),
+        attemptsRemaining: 5,
+      },
     });
 
     const res = await request(buildApp())
@@ -289,23 +327,35 @@ describe("Telegram onboarding city gate", () => {
       .send({ email: "alice@stanford.edu" });
 
     expect(res.status).toBe(200);
-    expect(createAndSendOtp).toHaveBeenCalledWith("alice@stanford.edu");
+    expect(createAndSendOtp).toHaveBeenCalledWith("alice@stanford.edu", { plusAlias: "refuse" });
     expect(res.body.emailVerification).toEqual({
       status: "pending",
       expiresAt: "2026-06-07T10:10:00.000Z",
       resendAvailableAt: "2026-06-07T10:00:30.000Z",
       attemptsRemaining: 5,
     });
+    // Regression, audit A13-C1: the request step used to write `email`,
+    // `universityDomain` and `isEmailVerified: false` here — which is how an
+    // unproven address squatted a row. Only activity bookkeeping remains.
+    for (const [call] of userUpdate.mock.calls) {
+      expect(call.data).not.toHaveProperty("email");
+      expect(call.data).not.toHaveProperty("universityDomain");
+      expect(call.data).not.toHaveProperty("isEmailVerified");
+    }
   });
 
   it("enforces the resend cooldown without creating another challenge", async () => {
     const current = miniUser({ isEmailVerified: false });
-    userFindUnique.mockResolvedValueOnce(current).mockResolvedValueOnce(null);
-    getOtpChallengeState.mockResolvedValue({
-      status: "pending",
-      expiresAt: new Date(Date.now() + 10 * 60_000),
-      resendAvailableAt: new Date(Date.now() + 30_000),
-      attemptsRemaining: 5,
+    routeUserLookups(current);
+    createAndSendOtp.mockResolvedValue({
+      ok: true,
+      sent: false,
+      state: {
+        status: "pending",
+        expiresAt: new Date(Date.now() + 10 * 60_000),
+        resendAvailableAt: new Date(Date.now() + 30_000),
+        attemptsRemaining: 5,
+      },
     });
 
     const res = await request(buildApp())
@@ -315,7 +365,7 @@ describe("Telegram onboarding city gate", () => {
 
     expect(res.status).toBe(429);
     expect(res.body.error).toBe("otp-cooldown");
-    expect(createAndSendOtp).not.toHaveBeenCalled();
+    expect(res.body.emailVerification.status).toBe("pending");
     expect(userUpdate).not.toHaveBeenCalled();
   });
 
@@ -995,5 +1045,222 @@ describe("Telegram onboarding profile screens", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.botTookOver).toBe(true);
+  });
+});
+
+describe("Telegram onboarding email ownership (audit A13)", () => {
+  const OTHER_ACCOUNT_ID = "22222222-2222-4222-8222-222222222222";
+  const sentState = {
+    ok: true,
+    sent: true,
+    state: {
+      status: "pending",
+      expiresAt: new Date("2026-06-07T10:10:00.000Z"),
+      resendAvailableAt: new Date("2026-06-07T10:00:30.000Z"),
+      attemptsRemaining: 5,
+    },
+  };
+
+  it("answers a request for an address linked to another account exactly like a normal send — and delivers nothing", async () => {
+    const current = miniUser({ isEmailVerified: false, email: null });
+    routeUserLookups(current, {
+      "victim@stanford.edu": { id: OTHER_ACCOUNT_ID, isEmailVerified: true },
+    });
+    userUpdate.mockResolvedValue(current);
+    createAndSendOtp.mockResolvedValue(sentState);
+
+    const linked = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/request")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "victim@stanford.edu" });
+
+    // Regression, A13-M10: this used to be 409 `email-linked-to-other-account`,
+    // telling any Telegram account that the student has a dating profile.
+    expect(linked.status).toBe(200);
+    expect(linked.body).toEqual({
+      ok: true,
+      alreadyVerified: false,
+      emailVerification: {
+        status: "pending",
+        expiresAt: "2026-06-07T10:10:00.000Z",
+        resendAvailableAt: "2026-06-07T10:00:30.000Z",
+        attemptsRemaining: 5,
+      },
+    });
+    // The same state machine runs, but no code reaches the owner's mailbox.
+    expect(createAndSendOtp).toHaveBeenCalledWith("victim@stanford.edu", {
+      plusAlias: "refuse",
+      send: discardOtpDelivery,
+    });
+  });
+
+  it("treats an UNVERIFIED holder elsewhere as no owner and sends a real code", async () => {
+    const current = miniUser({ isEmailVerified: false, email: null });
+    routeUserLookups(current, {
+      "alice@stanford.edu": { id: OTHER_ACCOUNT_ID, isEmailVerified: false },
+    });
+    userUpdate.mockResolvedValue(current);
+    createAndSendOtp.mockResolvedValue(sentState);
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/request")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "alice@stanford.edu" });
+
+    expect(res.status).toBe(200);
+    expect(createAndSendOtp).toHaveBeenCalledWith("alice@stanford.edu", { plusAlias: "refuse" });
+  });
+
+  it("maps a spent daily budget to 429 otp-daily-limit", async () => {
+    routeUserLookups(miniUser({ isEmailVerified: false, email: null }));
+    createAndSendOtp.mockResolvedValue({ ok: false, reason: "daily_cap" });
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/request")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "alice@stanford.edu" });
+
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBe("otp-daily-limit");
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a plus-tagged address with 400 email-plus-alias", async () => {
+    routeUserLookups(miniUser({ isEmailVerified: false, email: null }));
+    createAndSendOtp.mockResolvedValue({ ok: false, reason: "plus_alias" });
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/request")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "alice+2@stanford.edu" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("email-plus-alias");
+  });
+
+  it("verifies the address from the request body, not a stale one on the row", async () => {
+    // The row carries an address written by the OLD request step and never
+    // proven. It must play no part: the code is checked against — and the
+    // account receives — the address the client is verifying.
+    const current = miniUser({
+      isEmailVerified: false,
+      email: "squatted@stanford.edu",
+      onboardingStep: "language",
+    });
+    routeUserLookups(current);
+    verifyOtp.mockResolvedValue({ ok: true });
+    userUpdate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) =>
+      miniUser({ ...data, isEmailVerified: true }),
+    );
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/verify")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "Alice@Stanford.edu", code: "123456" });
+
+    expect(res.status).toBe(200);
+    expect(verifyOtp).toHaveBeenCalledWith("alice@stanford.edu", "123456");
+    expect(userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: current.id },
+        data: expect.objectContaining({
+          email: "alice@stanford.edu",
+          universityDomain: "stanford.edu",
+          isEmailVerified: true,
+          registrationTrack: "student",
+        }),
+      }),
+    );
+    expect(res.body.user.email).toBe("alice@stanford.edu");
+  });
+
+  it("refuses verify without an address in the body", async () => {
+    routeUserLookups(miniUser({ isEmailVerified: false }));
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/verify")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ code: "123456" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid-email");
+    expect(verifyOtp).not.toHaveBeenCalled();
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("fails like any wrong code for an address whose code was never delivered", async () => {
+    routeUserLookups(miniUser({ isEmailVerified: false, email: null }), {
+      "victim@stanford.edu": { id: OTHER_ACCOUNT_ID, isEmailVerified: true },
+    });
+    verifyOtp.mockResolvedValue({ ok: false, reason: "mismatch" });
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/verify")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "victim@stanford.edu", code: "000000" });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("mismatch");
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses to attach a proven address that another account verified first", async () => {
+    routeUserLookups(miniUser({ isEmailVerified: false, email: null }), {
+      "alice@stanford.edu": { id: OTHER_ACCOUNT_ID, isEmailVerified: true },
+    });
+    verifyOtp.mockResolvedValue({ ok: true });
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/verify")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "alice@stanford.edu", code: "123456" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("email-linked-to-other-account");
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("maps a unique collision from a concurrent verification to linked-elsewhere, not a 500", async () => {
+    routeUserLookups(miniUser({ isEmailVerified: false, email: null }));
+    verifyOtp.mockResolvedValue({ ok: true });
+    userUpdate.mockRejectedValue(
+      Object.assign(new Error("Unique constraint failed on the fields: (`email`)"), {
+        code: "P2002",
+      }),
+    );
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/verify")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "alice@stanford.edu", code: "123456" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("email-linked-to-other-account");
+  });
+
+  it("takes a proven address off a row that only squatted it", async () => {
+    const current = miniUser({ isEmailVerified: false, email: null });
+    routeUserLookups(current, {
+      "alice@stanford.edu": { id: OTHER_ACCOUNT_ID, isEmailVerified: false },
+    });
+    verifyOtp.mockResolvedValue({ ok: true });
+    userUpdate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) =>
+      miniUser({ ...data, isEmailVerified: true }),
+    );
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/verify")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "alice@stanford.edu", code: "123456" });
+
+    expect(res.status).toBe(200);
+    expect(userUpdateMany).toHaveBeenCalledWith({
+      where: {
+        email: "alice@stanford.edu",
+        isEmailVerified: false,
+        id: { not: current.id },
+      },
+      data: { email: null, universityDomain: null },
+    });
   });
 });

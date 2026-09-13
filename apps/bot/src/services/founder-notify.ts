@@ -182,6 +182,33 @@ export function __resetHandlerAlertsForTests(): void {
   handlerErrorsSinceAlert = 0;
 }
 
+/**
+ * The product-wide hourly ceiling on phone codes tripped (audit A13-M8).
+ *
+ * Deduplicated by the caller (`services/phone-verification.ts`, once per
+ * window). Anonymous on purpose — the numbers being pumped are not users. Names
+ * the consequence (real sign-ups are refused too) and the two levers that live
+ * outside the code, because those are what the founder acts on.
+ */
+export async function notifyFounderPhoneOtpCeiling(
+  sentLastHour: number,
+  cap: number,
+): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+  const text =
+    `🚨 Коды по телефону на паузе: за последний час отправлено ${sentLastHour} ` +
+    `(потолок ${cap}).\n` +
+    `Похоже на SMS-накачку. Пока окно не освободится, новых кодов не получит никто — ` +
+    `в том числе настоящие регистрации.\n` +
+    `Проверь Twilio: Fraud Guard, разрешённые страны, журнал отправок.`;
+  try {
+    await api.sendMessage(founderChatId(), text);
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} phone OTP ceiling notify failed`, err);
+  }
+}
+
 /** Anonymous ops alert for the pinned status-timer worker. */
 export async function notifyFounderStatusTimerHealth(
   state: "degraded" | "recovered",

@@ -24,7 +24,20 @@ authRouter.post(
     }
 
     try {
-      await createAndSendOtp(email);
+      // The login rail: a `+tag` address is honoured only for an account that
+      // already verified exactly that string, so nobody who signed up that way
+      // is locked out, and nobody new can mint a second identity per tag.
+      const result = await createAndSendOtp(email, { plusAlias: "existing_verified_only" });
+      if (!result.ok) {
+        if (result.reason === "plus_alias") {
+          res.status(400).json({ error: "Email addresses with a '+' tag are not accepted" });
+        } else {
+          res.status(429).json({ error: "Too many codes requested for this email today" });
+        }
+        return;
+      }
+      // A cooldown hit (`sent: false`) still answers 200, as it always has: a
+      // live code exists, and this rail never told the caller the difference.
       res.json({ ok: true });
     } catch (err) {
       console.error("[auth] otp/request failed:", err);
@@ -77,6 +90,9 @@ authRouter.post(
       return;
     }
 
+    // A token whose account moderation has locked (suspended, under
+    // investigation, banned) is refused inside the rotation itself, and every
+    // session of that account is revoked with it — see `rotateRefreshToken`.
     const rotated = await rotateRefreshToken(rawToken, req.headers["user-agent"] ?? null);
     if (!rotated) {
       res.status(401).json({ error: "Invalid or expired refresh token" });

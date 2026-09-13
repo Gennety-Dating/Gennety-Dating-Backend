@@ -25,12 +25,11 @@ import { env } from "../../config.js";
 import { DEMO_MODE_ENABLED } from "../../demo/config.js";
 import { effectiveAiMemoryPreference } from "../../services/ai-memory-export.js";
 import { validateInitData, type TelegramInitDataUser } from "../init-data.js";
+import { verifyOtp, type OtpChallengeState, type OtpRequestResult } from "../otp.js";
 import {
-  createAndSendOtp,
-  getOtpChallengeState,
-  verifyOtp,
-  type OtpChallengeState,
-} from "../otp.js";
+  claimVerifiedEmail,
+  requestEmailClaimCode,
+} from "../../services/verified-email.js";
 import { otpRequestLimiter, otpVerifyLimiter } from "../rate-limit.js";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
 import {
@@ -288,53 +287,55 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
         return;
       }
 
-      const linked = await prisma.user.findUnique({
-        where: { email },
-        select: { id: true, telegramId: true },
-      });
-      if (linked && linked.id !== user.id) {
-        res.status(409).json({ error: "email-linked-to-other-account" });
-        return;
-      }
-
-      const existingChallenge = await getOtpChallengeState(email);
-      if (
-        existingChallenge.status === "pending" &&
-        existingChallenge.resendAvailableAt &&
-        existingChallenge.resendAvailableAt > new Date()
-      ) {
-        res.status(429).json({
-          error: "otp-cooldown",
-          emailVerification: serializeOtpChallenge(existingChallenge),
-        });
-        return;
-      }
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          email,
-          universityDomain: domainFromEmail(email),
-          emailOtp: null,
-          emailOtpExpiresAt: null,
-          isEmailVerified: false,
-          ...onboardingActivityPatch(),
-        },
-      });
-
-      let challenge: OtpChallengeState;
+      // Nothing about the address is written to the user row here — not the
+      // address, not a reset of `isEmailVerified` (audit A13-C1). It reaches
+      // `User.email` in `/email/verify`, in the same write that marks it
+      // proven. The challenge row, keyed by the address, is the only record of
+      // the request.
+      //
+      // And the answer does not depend on who else holds the address (A13-M10):
+      // it used to be a 409 `email-linked-to-other-account` right here, which
+      // told any Telegram account whether a given student has a dating
+      // profile. `requestEmailClaimCode` runs the same cooldown and daily
+      // budget for a linked address but delivers nothing, so the linked case
+      // is indistinguishable until someone presents a valid code — which only
+      // the mailbox owner can.
+      let result: OtpRequestResult;
       try {
-        challenge = await createAndSendOtp(email);
+        result = await requestEmailClaimCode(user.id, email);
       } catch (err) {
         console.error("[telegram-onboarding] failed to send OTP:", err);
         res.status(502).json({ error: "otp-send-failed" });
         return;
       }
 
+      if (!result.ok) {
+        if (result.reason === "plus_alias") {
+          res.status(400).json({ error: "email-plus-alias" });
+        } else {
+          res.status(429).json({ error: "otp-daily-limit" });
+        }
+        return;
+      }
+      if (!result.sent) {
+        res.status(429).json({
+          error: "otp-cooldown",
+          emailVerification: serializeOtpChallenge(result.state),
+        });
+        return;
+      }
+
+      // Asking for a code is onboarding activity (re-engagement timing), and
+      // that is all this write records.
+      await prisma.user.update({
+        where: { id: user.id },
+        data: onboardingActivityPatch(),
+      });
+
       res.json({
         ok: true,
         alreadyVerified: false,
-        emailVerification: serializeOtpChallenge(challenge),
+        emailVerification: serializeOtpChallenge(result.state),
       });
     },
   );
@@ -355,8 +356,13 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
         res.status(409).json({ error: gate });
         return;
       }
-      if (!user.email) {
-        res.status(409).json({ error: "email-required" });
+
+      // The address comes from the request — the client already holds what it
+      // typed — and never from `user.email`, which no longer carries unproven
+      // addresses and whose legacy unverified values prove nothing (A13-C1).
+      const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+      if (!email || !isUniversityEmail(email)) {
+        res.status(400).json({ error: "invalid-email", allowedDomains: ALLOWED_EMAIL_DOMAINS });
         return;
       }
 
@@ -383,7 +389,7 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       // production.
       const demoBypassAllowed = DEMO_MODE_ENABLED && process.env.NODE_ENV !== "production";
       if (!demoBypassAllowed) {
-        const result = await verifyOtp(user.email, code);
+        const result = await verifyOtp(email, code);
         if (!result.ok) {
           const status = result.reason === "mismatch" ? 401 : 400;
           res.status(status).json({ error: result.reason });
@@ -391,19 +397,29 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
         }
       }
 
-      const updated = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          isEmailVerified: true,
-          emailOtp: null,
-          emailOtpExpiresAt: null,
-          // Registration v2: a verified university email IS the student track.
-          registrationTrack: "student",
-          onboardingStep: nextPreHandoffStep(user),
-          ...onboardingActivityPatch(),
-        },
-        select: miniUserSelect,
-      });
+      // The code checked out, so the caller has proven the mailbox and may be
+      // told that it already belongs to another account — this is not the
+      // membership probe the request step closed. Checked again here, not only
+      // at request time, and a unique collision from two accounts verifying
+      // the same mailbox at once lands on the same answer instead of a 500.
+      const claim = await claimVerifiedEmail(user.id, email, (patch) =>
+        prisma.user.update({
+          where: { id: user.id },
+          data: {
+            ...patch,
+            emailOtp: null,
+            emailOtpExpiresAt: null,
+            onboardingStep: nextPreHandoffStep(user),
+            ...onboardingActivityPatch(),
+          },
+          select: miniUserSelect,
+        }),
+      );
+      if (!claim.ok) {
+        res.status(409).json({ error: "email-linked-to-other-account" });
+        return;
+      }
+      const updated = claim.value;
 
       // Registration v2 student loyalty: +2 free Date Tickets, exactly once
       // (idempotent ledger claim; no-op while TICKET_FEATURE_ENABLED is off).
@@ -993,9 +1009,6 @@ async function findOrCreateTelegramUser(
 }
 
 async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDto> {
-  const emailVerification = user.isEmailVerified
-    ? serializeOtpChallenge(null)
-    : serializeOtpChallenge(await getOtpChallengeState(user.email));
 
   // Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md): resolve the promo code
   // (only for promo-attributed users, so no extra DB read on the common path).
@@ -1043,9 +1056,16 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       language: user.language,
       theme: user.theme,
       themeChosen: user.themeChosenAt != null,
-      email: user.email,
+      // Only a PROVEN address is echoed back (audit A13-C1). A pending address
+      // is no longer stored on the user row, and a legacy row's unverified
+      // value is exactly what the fix stopped trusting — echoing it, with its
+      // challenge state, would show one account the live code timing of
+      // somebody else's mailbox. The client resumes an interrupted code entry
+      // from the address it typed (a request inside the cooldown answers
+      // `otp-cooldown`, which it treats as "a code is already on its way").
+      email: user.isEmailVerified ? user.email : null,
       isEmailVerified: user.isEmailVerified,
-      emailVerification,
+      emailVerification: serializeOtpChallenge(null),
       isPhoneVerified: user.phoneVerifiedAt != null,
       phone: user.phone,
       registrationTrack: user.registrationTrack,
@@ -1312,10 +1332,6 @@ function hasHomeLocation(user: MiniUser): boolean {
       user.profile.latitude !== null &&
       user.profile.longitude !== null,
   );
-}
-
-function domainFromEmail(email: string): string {
-  return email.slice(email.lastIndexOf("@") + 1).toLowerCase();
 }
 
 function alreadyCompleteCopy(language: Language | null): string {

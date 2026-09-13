@@ -30,6 +30,8 @@ interface SessionRow {
 }
 
 const sessions = new Map<string, SessionRow>();
+/** Account status per user id; anything unlisted is an ordinary active account. */
+const userStatuses = new Map<string, string>();
 
 function findByHash(hash: string): SessionRow | null {
   for (const s of sessions.values()) if (s.refreshTokenHash === hash) return s;
@@ -38,6 +40,11 @@ function findByHash(hash: string): SessionRow | null {
 
 vi.mock("@gennety/db", () => {
   const prismaMock = {
+    user: {
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({
+        status: userStatuses.get(where.id) ?? "active",
+      })),
+    },
     userSession: {
       findUnique: vi.fn(async ({ where }: { where: { refreshTokenHash: string } }) =>
         findByHash(where.refreshTokenHash),
@@ -100,6 +107,7 @@ const { prisma } = await import("@gennety/db");
 
 beforeEach(() => {
   sessions.clear();
+  userStatuses.clear();
   vi.clearAllMocks();
 });
 afterEach(() => {
@@ -125,6 +133,33 @@ describe("rotateRefreshToken (C-5)", () => {
     expect(revoked).toBeDefined();
     expect(fresh).toBeDefined();
     expect(fresh!.userId).toBe("u-1");
+  });
+
+  /**
+   * Regression, audit A13-L13: a ban or suspension left the native app's
+   * refresh token rotating for its full 30 days.
+   */
+  it.each(["banned", "suspended", "pending_investigation"])(
+    "refuses a %s account, mints nothing, and revokes every session",
+    async (status) => {
+      const raw = await createRefreshToken("u-9", "iPhone");
+      await createRefreshToken("u-9", "iPad");
+      userStatuses.set("u-9", status);
+
+      const result = await rotateRefreshToken(raw, "iPhone");
+
+      expect(result).toBeNull();
+      const rows = [...sessions.values()].filter((s) => s.userId === "u-9");
+      expect(rows).toHaveLength(2);
+      expect(rows.every((s) => s.revokedAt !== null)).toBe(true);
+    },
+  );
+
+  it("keeps rotating for a frozen account — the app needs its session to reactivate", async () => {
+    const raw = await createRefreshToken("u-10", null);
+    userStatuses.set("u-10", "frozen");
+
+    await expect(rotateRefreshToken(raw, null)).resolves.not.toBeNull();
   });
 
   it("returns null for an unknown token", async () => {

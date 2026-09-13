@@ -58,8 +58,13 @@ vi.mock("./vibe-axes.js", () => ({
 }));
 
 vi.mock("../public/otp.js", () => ({
-  createAndSendOtp: vi.fn().mockResolvedValue(undefined),
+  createAndSendOtp: vi.fn().mockResolvedValue({
+    ok: true,
+    sent: true,
+    state: { status: "pending", expiresAt: null, resendAvailableAt: null, attemptsRemaining: 5 },
+  }),
   verifyOtp: vi.fn().mockResolvedValue({ ok: true }),
+  discardOtpDelivery: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { prisma } from "@gennety/db";
@@ -217,21 +222,54 @@ describe("onboarding-agent", () => {
       sendOtp: vi.fn().mockResolvedValue(undefined),
     });
 
-    expect(createAndSendOtp).toHaveBeenCalledWith(
-      "alice@stanford.edu",
-      expect.any(Function),
-    );
+    expect(createAndSendOtp).toHaveBeenCalledWith("alice@stanford.edu", {
+      plusAlias: "refuse",
+      send: expect.any(Function),
+    });
     expect(result.reply).toBe("I've sent you a verification code! Check your email.");
 
-    // User email was stored in DB; raw OTP is no longer persisted on the user row.
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          email: "alice@stanford.edu",
-          universityDomain: "stanford.edu",
-        }),
-      }),
+    // Regression, audit A13-C1: the address used to be written onto the user
+    // row here, before any code was checked and without touching
+    // `isEmailVerified`. Nothing about it may reach the row until verify_otp.
+    for (const [call] of (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls) {
+      expect(call.data).not.toHaveProperty("email");
+      expect(call.data).not.toHaveProperty("universityDomain");
+    }
+  });
+
+  it("refuses send_otp_email for a user whose contact is already verified", async () => {
+    // The second door of A13-C1: a verified account swapping in another
+    // address through the interview while staying "verified".
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "en",
+      email: "alice@stanford.edu",
+      isEmailVerified: true,
+      registrationTrack: "student",
+    });
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          { id: "call-1", name: "send_otp_email", args: { email: "other@stanford.edu" } },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("Your email is already verified."));
+
+    await runAgentTurn(telegramId, "use other@stanford.edu", {
+      fetchFn: mockFetch,
+      sendOtp: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(createAndSendOtp).not.toHaveBeenCalled();
+    const toolMessage = JSON.parse(mockFetch.mock.calls[1][1].body).messages.find(
+      (m: { role: string }) => m.role === "tool",
     );
+    expect(JSON.parse(toolMessage.content)).toMatchObject({ success: false });
+    for (const [call] of (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls) {
+      expect(call.data).not.toHaveProperty("email");
+    }
   });
 
   it("rejects non-university email via tool result", async () => {
@@ -1050,7 +1088,7 @@ describe("onboarding-agent", () => {
     expect(saveVibeAxes).not.toHaveBeenCalled();
   });
 
-  it("handles verify_otp with correct code", async () => {
+  it("handles verify_otp with correct code and records the address as proven", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         id: "uuid-1",
@@ -1058,15 +1096,24 @@ describe("onboarding-agent", () => {
         language: "en",
       })
       .mockResolvedValueOnce({
-        email: "alice@stanford.edu",
-      });
+        id: "uuid-1",
+        email: null,
+        isEmailVerified: false,
+      })
+      // Nobody else holds the address.
+      .mockResolvedValueOnce(null);
     (verifyOtp as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "uuid-1" });
 
     const mockFetch = vi
       .fn()
       .mockResolvedValueOnce(
         toolCallResponse([
-          { id: "call-1", name: "verify_otp", args: { code: "123456" } },
+          {
+            id: "call-1",
+            name: "verify_otp",
+            args: { email: "Alice@Stanford.edu", code: "123456" },
+          },
         ]),
       )
       .mockResolvedValueOnce(
@@ -1079,6 +1126,47 @@ describe("onboarding-agent", () => {
 
     expect(result.reply).toContain("verified");
     expect(verifyOtp).toHaveBeenCalledWith("alice@stanford.edu", "123456");
+    // The address reaches the row only here, together with the proof.
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { telegramId },
+        data: expect.objectContaining({
+          email: "alice@stanford.edu",
+          universityDomain: "stanford.edu",
+          isEmailVerified: true,
+          registrationTrack: "student",
+        }),
+      }),
+    );
+  });
+
+  it("verify_otp checks the address from its arguments, never the one on the row", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ id: "uuid-1", messageHistory: [], language: "en" })
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        // Left by the old send step, never proven.
+        email: "squatted@stanford.edu",
+        isEmailVerified: false,
+      });
+    (verifyOtp as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      reason: "mismatch",
+    });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "call-1", name: "verify_otp", args: { code: "123456" } }]),
+      )
+      .mockResolvedValueOnce(textResponse("Which email did you use?"));
+
+    await runAgentTurn(telegramId, "123456", { fetchFn: mockFetch });
+
+    expect(verifyOtp).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isEmailVerified: true }) }),
+    );
   });
 
   it("handles verify_otp with wrong code", async () => {
@@ -1089,7 +1177,8 @@ describe("onboarding-agent", () => {
         language: "en",
       })
       .mockResolvedValueOnce({
-        email: "alice@stanford.edu",
+        id: "uuid-1",
+        email: null,
       });
     (verifyOtp as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: false,
@@ -1100,7 +1189,11 @@ describe("onboarding-agent", () => {
       .fn()
       .mockResolvedValueOnce(
         toolCallResponse([
-          { id: "call-1", name: "verify_otp", args: { code: "000000" } },
+          {
+            id: "call-1",
+            name: "verify_otp",
+            args: { email: "alice@stanford.edu", code: "000000" },
+          },
         ]),
       )
       .mockResolvedValueOnce(
@@ -1116,7 +1209,7 @@ describe("onboarding-agent", () => {
 
   it("executes resend_otp tool and sends a new code", async () => {
     // First findUnique: history lookup in runAgentTurn
-    // Second findUnique: email lookup in execResendOtp
+    // Second findUnique: the tool's own user lookup
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         id: "uuid-1",
@@ -1124,14 +1217,15 @@ describe("onboarding-agent", () => {
         language: "en",
       })
       .mockResolvedValueOnce({
-        email: "alice@stanford.edu",
+        id: "uuid-1",
+        email: null,
       });
 
     const mockFetch = vi
       .fn()
       .mockResolvedValueOnce(
         toolCallResponse([
-          { id: "call-1", name: "resend_otp", args: {} },
+          { id: "call-1", name: "resend_otp", args: { email: "alice@stanford.edu" } },
         ]),
       )
       .mockResolvedValueOnce(
@@ -1143,14 +1237,11 @@ describe("onboarding-agent", () => {
       sendOtp: vi.fn().mockResolvedValue(undefined),
     });
 
-    expect(createAndSendOtp).toHaveBeenCalledWith(
-      "alice@stanford.edu",
-      expect.any(Function),
-    );
+    expect(createAndSendOtp).toHaveBeenCalledWith("alice@stanford.edu", {
+      plusAlias: "refuse",
+      send: expect.any(Function),
+    });
     expect(result.reply).toContain("resent");
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { emailOtp: null, emailOtpExpiresAt: null } }),
-    );
   });
 
   it("resend_otp returns error when email sending fails", async () => {
@@ -1161,7 +1252,8 @@ describe("onboarding-agent", () => {
         language: "en",
       })
       .mockResolvedValueOnce({
-        email: "alice@stanford.edu",
+        id: "uuid-1",
+        email: null,
       });
     (createAndSendOtp as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("SMTP failed"));
 
@@ -1169,7 +1261,7 @@ describe("onboarding-agent", () => {
       .fn()
       .mockResolvedValueOnce(
         toolCallResponse([
-          { id: "call-1", name: "resend_otp", args: {} },
+          { id: "call-1", name: "resend_otp", args: { email: "alice@stanford.edu" } },
         ]),
       )
       .mockResolvedValueOnce(
@@ -1192,15 +1284,12 @@ describe("onboarding-agent", () => {
     expect(toolContent.error).toContain("Failed to resend");
   });
 
-  it("resend_otp returns error when no email on file", async () => {
+  it("resend_otp returns error when no email is given", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         id: "uuid-1",
         messageHistory: [],
         language: "en",
-      })
-      .mockResolvedValueOnce({
-        email: null,
       });
 
     const mockFetch = vi
@@ -1219,6 +1308,7 @@ describe("onboarding-agent", () => {
     });
 
     expect(result.reply).toContain("email");
+    expect(createAndSendOtp).not.toHaveBeenCalled();
   });
 
   it("persists conversation history across turns", async () => {
