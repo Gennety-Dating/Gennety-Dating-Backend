@@ -334,7 +334,9 @@ keeps its wordmark: it is the button that ENDS the question — a car is coming,
 nothing further to decide. The two maps apps are a hand-off to another screen
 and their tiles are recognised faster than their names are read, so each is one
 44 px square with its own mark; the name they lose from the face they keep in
-`aria-label` and in the tooltip. The phone's own app is first (`mapsAppsFor`) —
+`aria-label` and in the tooltip. The marks are the apps' own logos — Apple's
+tile, Google's pin — not redrawings (2026-09-13: a pared-down drawn tile
+shipped first and was replaced at the founder's request). The phone's own app is first (`mapsAppsFor`) —
 the order still carries the platform guess, so being wrong costs a glance
 rather than a detour. The on-foot / by-car chip travels between the two icons
 rather than being handed from one to the other; the headline above it swaps on

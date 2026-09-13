@@ -571,9 +571,16 @@ body {
   display: block;
   width: 27px;
   height: 27px;
-  /* The mark is a picture with its own rounded corners; this is the shadow
-     under a tile rather than a glow on a glyph. */
+  object-fit: contain;
+  /* The mark is a picture with its own silhouette — Apple's rounded tile,
+     Google's pin; drop-shadow follows that outline, so this is the shadow under
+     an object rather than a glow on a box. */
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 35%));
+  /* An <img> now: a long press must not open WebKit's "Save image" sheet over
+     the button, and the tap belongs to the button, not the picture. */
+  pointer-events: none;
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 .dock-status {
