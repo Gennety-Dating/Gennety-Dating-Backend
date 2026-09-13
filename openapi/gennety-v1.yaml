@@ -4568,15 +4568,35 @@ components:
       type: object
       required: [placeId, name, category]
       description: >
-        One of the partner's frequently visited places — a name, a category and,
-        when the catalog has one, a thumbnail of the venue; nothing else: no
-        visit count, no day, no position.
+        One of the partner's frequently visited places — a name, a category, the
+        venue's catalog coordinates and, when the catalog has one, a thumbnail
+        of the venue; nothing else: no visit count, no day, no position of the
+        partner.
       properties:
         placeId: { type: string }
         name: { type: string }
         category:
           type: string
           description: Same vocabulary as `FrequentPlace.category`.
+        latitude:
+          type: number
+          format: double
+          description: >
+            Latitude of the VENUE's catalog point, WGS84 degrees (founder
+            decision 2026-09-14): the public place that `name` and `placeId`
+            already identify, taken from the same catalog row as `name` — never
+            the partner's position, a fix or any other coordinate. Present
+            together with `longitude` or not at all: both are ABSENT (never
+            null) when that catalog row has no usable point. Not in `required`,
+            so a build that reads it keeps decoding a server that predates it.
+        longitude:
+          type: number
+          format: double
+          description: >
+            Longitude of the VENUE's catalog point, WGS84 degrees (founder
+            decision 2026-09-14); the pair of `latitude`, with the same source
+            and the same rule — both present or both ABSENT (never null), never
+            the partner's position.
         thumbnailUrl:
           type: string
           format: uri
@@ -6460,10 +6480,11 @@ components:
           description: |
             The partner's frequently visited places (founder decision
             2026-09-11): at most three active catalog places, each a name, a
-            category and — when the catalog has a photo — a `thumbnailUrl`
-            (decision 2026-09-13); nothing else — no visit count, no day, no
-            position. Empty when the partner switched the feature off, hid
-            them, or has none that qualify.
+            category, the venue's catalog `latitude`/`longitude` — both or
+            neither (decision 2026-09-14) — and, when the catalog has a photo,
+            a `thumbnailUrl` (decision 2026-09-13); nothing else — no visit
+            count, no day, no position of the partner. Empty when the partner
+            switched the feature off, hid them, or has none that qualify.
 
             Not in `required` on purpose: a build that reads it has to keep
             decoding a server that predates it.

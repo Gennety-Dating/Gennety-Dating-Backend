@@ -123,7 +123,8 @@ export interface CatalogEntry extends CatalogPlace {
  * per university domain and the nightly re-validation fills `photoRefs` row by
  * row, so the naming copy can still lack a photo that another copy of the same
  * place already has. The best copy WITH a photo lends it; a later copy never
- * renames the place.
+ * renames the place, and never moves it: `lat`/`lng` stay the naming copy's,
+ * which is the point the match is shown (`partnerFrequentPlaces`).
  *
  * The product's "never offer" rules (`museum`, blocked names) are NOT applied:
  * they say what we propose for a first date, and this block says where a
@@ -424,11 +425,40 @@ async function loadFrequentPlaces(userId: string, now: number): Promise<LoadedFr
  */
 const PARTNER_THUMBNAIL_WIDTH = ALLOWED_PHOTO_WIDTHS[0];
 
+/** A venue's catalog point as the match receives it, WGS84 degrees. */
+export interface VenuePoint {
+  latitude: number;
+  longitude: number;
+}
+
+/**
+ * A catalog row's point, or null when it has none worth drawing: a missing or
+ * non-finite value, one out of range, or exactly 0,0 — what a lost coordinate
+ * turns into, and nowhere near any city the catalog covers. The two come back
+ * together or not at all; a map pin cannot use half of one.
+ */
+export function venuePoint(lat: number | null, lng: number | null): VenuePoint | null {
+  if (lat === null || lng === null) return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { latitude: lat, longitude: lng };
+}
+
 /** One place as the match sees it. */
 export interface PartnerPlace {
   placeId: string;
   name: string;
   category: FrequentPlaceCategory;
+  /**
+   * The venue's catalog point (founder decision 2026-09-14), taken from the
+   * row that names the place — the public venue its name and place id already
+   * identify, never where the person was. `latitude` and `longitude` are both
+   * present or both absent (never null): absent when that row has no usable
+   * point ({@link venuePoint}).
+   */
+  latitude?: number;
+  longitude?: number;
   /**
    * Signed link to the place's catalog photo at the pin width
    * (`GET /v1/venues/:id/photo`, `public/showcase-photos.ts`). Present only
@@ -442,6 +472,8 @@ interface PartnerPlaceSource {
   placeId: string;
   name: string;
   category: FrequentPlaceCategory;
+  /** The naming row's point; null when it has none to draw. */
+  point: VenuePoint | null;
   /** Catalog row the thumbnail is signed for; null when no copy has a photo. */
   photoVenueId: string | null;
 }
@@ -450,11 +482,16 @@ const partnerCache = new Map<string, { at: number; places: PartnerPlaceSource[] 
 
 /**
  * What a match sees of this person's places: the shown ranking, reduced to a
- * name, a category and — when the catalog has one — a thumbnail of the venue.
- * No visit count, no day, no position — the Date Radar's rule that the shape
- * of the answer IS the privacy. A photo of a public venue says none of those
- * (founder decision 2026-09-13). This is the one function that decides what
- * crosses to the other person, so nothing else may build that list.
+ * name, a category, the venue's catalog point and — when the catalog has one —
+ * a thumbnail of the venue. No visit count, no day, no position of the person
+ * — the Date Radar's rule that the shape of the answer IS the privacy. A photo
+ * of a public venue says none of those (founder decision 2026-09-13), and
+ * neither does the catalog point the venue's name already stands for (founder
+ * decision 2026-09-14). This is the one function that decides what crosses to
+ * the other person, so nothing else may build that list.
+ *
+ * The point is the naming row's, like the name: a place is drawn where the copy
+ * that names it says it is, and a copy lending its photo lends nothing else.
  *
  * The thumbnail costs nothing here: the link is only signed. Google is asked
  * when the image loader follows it and the photo route's byte cache misses —
@@ -476,16 +513,24 @@ export async function partnerFrequentPlaces(
     sources = optIn
       ? ranking.shown.map(({ placeId, name, category }) => {
           const entry = catalog.get(placeId);
-          return { placeId, name, category, photoVenueId: entry?.hasPhoto ? entry.venueId : null };
+          return {
+            placeId,
+            name,
+            category,
+            point: entry ? venuePoint(entry.lat, entry.lng) : null,
+            photoVenueId: entry?.hasPhoto ? entry.venueId : null,
+          };
         })
       : [];
     remember(partnerCache, userId, { at: now, places: sources }, PARTNER_CACHE_MAX_USERS);
   }
-  return sources.map(({ photoVenueId, ...place }) =>
-    photoVenueId
-      ? { ...place, thumbnailUrl: venuePhotoUrl(photoVenueId, PARTNER_THUMBNAIL_WIDTH, now) }
-      : place,
-  );
+  return sources.map(({ point, photoVenueId, ...place }) => ({
+    ...place,
+    ...point,
+    ...(photoVenueId
+      ? { thumbnailUrl: venuePhotoUrl(photoVenueId, PARTNER_THUMBNAIL_WIDTH, now) }
+      : {}),
+  }));
 }
 
 // ---------------------------------------------------------------------------

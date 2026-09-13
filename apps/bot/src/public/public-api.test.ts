@@ -2941,6 +2941,37 @@ describe("/v1/matches/*", () => {
     expect(res.body.match.partnerFrequentPlaces[1]).not.toHaveProperty("thumbnailUrl");
   });
 
+  // Decision 2026-09-14: the venue's catalog point rides the same way — both
+  // coordinates when the naming catalog row has a point, neither key otherwise.
+  it("GET /current hands the partner's venue coordinates through, both or neither", async () => {
+    const alice = await seedUser({ firstName: "Alice" });
+    const bob = await seedUser({ firstName: "Bob" });
+    await seedMatch(alice.id, bob.id, { status: "proposed" });
+    const thumbnailUrl =
+      "https://dating-api.gennety.com/v1/venues/11111111-1111-4111-8111-111111111111/photo?w=240&e=1757721600000&sig=0123456789abcdef01234567";
+    const sens = {
+      placeId: "ChIJ-sens",
+      name: "Sens",
+      category: "cafe",
+      latitude: 50.4401,
+      longitude: 30.5486,
+      thumbnailUrl,
+    };
+    const milk = { placeId: "ChIJ-milk", name: "Milk Bar", category: "coffee_shop" };
+    frequentPlacesMocks.partnerFrequentPlaces.mockResolvedValueOnce([sens, milk]);
+
+    const res = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.match.partnerFrequentPlaces).toEqual([sens, milk]);
+    expect(res.body.match.partnerFrequentPlaces[0].latitude).toBe(50.4401);
+    expect(res.body.match.partnerFrequentPlaces[0].longitude).toBe(30.5486);
+    expect(res.body.match.partnerFrequentPlaces[1]).not.toHaveProperty("latitude");
+    expect(res.body.match.partnerFrequentPlaces[1]).not.toHaveProperty("longitude");
+  });
+
   // The partner's face is the one piece of another user's data this API hands
   // out. Everything here is about who may load it, and for how long.
   describe("GET /:id/partner-photos", () => {

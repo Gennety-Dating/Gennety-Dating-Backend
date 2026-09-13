@@ -53,9 +53,8 @@ vi.mock("./canvas-auth.js", () => ({
 
 const { frequentPlacesRouter } = await import("./routes/frequent-places.js");
 const { venuesRouter } = await import("./routes/venues.js");
-const { partnerFrequentPlaces, resetFrequentPlacesState, PARTNER_PLACES_TTL_MS } = await import(
-  "../services/frequent-places.js"
-);
+const { partnerFrequentPlaces, resetFrequentPlacesState, PARTNER_PLACES_TTL_MS, venuePoint } =
+  await import("../services/frequent-places.js");
 const { venuePhotoSignatureValid, venuePhotoUrl } = await import("./showcase-photos.js");
 
 function buildApp() {
@@ -363,15 +362,107 @@ describe("POST /v1/frequent-places/presence", () => {
 });
 
 describe("partnerFrequentPlaces — what crosses to the match", () => {
-  it("is a name and a category per place, and nothing else", async () => {
+  it("is a name, a category and the venue's catalog point per place, and nothing else", async () => {
     visitFindMany.mockResolvedValue(storedVisits(7));
 
     const places = await partnerFrequentPlaces("me");
 
-    expect(places).toEqual([{ placeId: PLACE, name: "Sens", category: "cafe" }]);
+    expect(places).toEqual([
+      { placeId: PLACE, name: "Sens", category: "cafe", latitude: SENS.lat, longitude: SENS.lng },
+    ]);
     // No photo in the catalog: the key is absent, not null (the contract's
     // optional field), so `toEqual`'s blindness to undefined is not enough.
-    expect(Object.keys(places[0]).sort()).toEqual(["category", "name", "placeId"]);
+    expect(Object.keys(places[0]).sort()).toEqual([
+      "category",
+      "latitude",
+      "longitude",
+      "name",
+      "placeId",
+    ]);
+  });
+
+  it("takes the point from the row that names the place, not from the copy lending its photo", async () => {
+    venueFindMany.mockResolvedValue([
+      catalogRow({
+        id: ROW_B,
+        name: "Sens (KPI)",
+        priority: 2,
+        lat: 50.4501,
+        lng: 30.5234,
+        photoRefs: [PHOTO_REF],
+      }),
+      catalogRow({ id: ROW_A }),
+    ]);
+    visitFindMany.mockResolvedValue(storedVisits(7));
+
+    const [place] = await partnerFrequentPlaces("me");
+
+    expect(place).toMatchObject({ name: "Sens", latitude: SENS.lat, longitude: SENS.lng });
+    expect(new URL(place.thumbnailUrl!).pathname).toBe(`/v1/venues/${ROW_B}/photo`);
+  });
+
+  it("leaves both coordinates off when the naming row's point is 0,0, rather than borrowing another copy's", async () => {
+    venueFindMany.mockResolvedValue([
+      catalogRow({ id: ROW_B, name: "Sens (KPI)", priority: 2, photoRefs: [PHOTO_REF] }),
+      catalogRow({ id: ROW_A, lat: 0, lng: 0 }),
+    ]);
+    visitFindMany.mockResolvedValue(storedVisits(7));
+
+    const [place] = await partnerFrequentPlaces("me");
+
+    expect(place.name).toBe("Sens");
+    // Both keys absent — not null, and never one without the other.
+    expect(Object.keys(place).sort()).toEqual(["category", "name", "placeId", "thumbnailUrl"]);
+  });
+
+  it("never pairs a name with another row's point: a row with no point at all names nothing", async () => {
+    venueFindMany.mockResolvedValue([
+      catalogRow({ id: ROW_B, name: "Sens (KPI)", priority: 2, lat: 50.4501, lng: 30.5234 }),
+      catalogRow({ id: ROW_A, lat: null, lng: null }),
+    ]);
+    visitFindMany.mockResolvedValue(storedVisits(7));
+
+    const [place] = await partnerFrequentPlaces("me");
+
+    // The column is NOT NULL, and a row without a point was never a place
+    // (no fence, no fix can land on it); the next copy names it, with its own.
+    expect(place).toEqual({
+      placeId: PLACE,
+      name: "Sens (KPI)",
+      category: "cafe",
+      latitude: 50.4501,
+      longitude: 30.5234,
+    });
+  });
+
+  it("reads a missing, non-finite, out-of-range or 0,0 point as none, and keeps the equator and the meridian", () => {
+    for (const [lat, lng] of [
+      [null, null],
+      [null, SENS.lng],
+      [SENS.lat, null],
+      [Number.NaN, SENS.lng],
+      [SENS.lat, Number.POSITIVE_INFINITY],
+      [90.5, SENS.lng],
+      [SENS.lat, -180.5],
+      [0, 0],
+    ] as const) {
+      expect(venuePoint(lat, lng)).toBeNull();
+    }
+    expect(venuePoint(0, 30.5)).toEqual({ latitude: 0, longitude: 30.5 });
+    expect(venuePoint(51.5, 0)).toEqual({ latitude: 51.5, longitude: 0 });
+    expect(venuePoint(-33.86, 151.21)).toEqual({ latitude: -33.86, longitude: 151.21 });
+  });
+
+  it("keeps the point on a list served from the cache", async () => {
+    visitFindMany.mockResolvedValue(storedVisits(7));
+    await partnerFrequentPlaces("me");
+
+    venueFindMany.mockResolvedValue([catalogRow({ lat: 0, lng: 0 })]);
+    vi.setSystemTime(NOW + PARTNER_PLACES_TTL_MS - MINUTE);
+    const [place] = await partnerFrequentPlaces("me");
+
+    expect(visitFindMany).toHaveBeenCalledOnce(); // served from the cache
+    expect(place).toMatchObject({ latitude: SENS.lat, longitude: SENS.lng });
   });
 
   it("adds a signed pin-width thumbnail on the venue photo route when the catalog has a photo", async () => {
@@ -385,15 +476,24 @@ describe("partnerFrequentPlaces — what crosses to the match", () => {
         placeId: PLACE,
         name: "Sens",
         category: "cafe",
+        latitude: SENS.lat,
+        longitude: SENS.lng,
         thumbnailUrl: venuePhotoUrl(ROW_A, 240, NOW),
       },
     ]);
     const url = new URL(places[0].thumbnailUrl!);
     expect(url.pathname).toBe(`/v1/venues/${ROW_A}/photo`);
     expect(url.searchParams.get("w")).toBe("240");
-    // Still nothing about the person: no count, no day, no position, and not
-    // the Places resource name either.
-    expect(Object.keys(places[0]).sort()).toEqual(["category", "name", "placeId", "thumbnailUrl"]);
+    // Still nothing about the person: no count, no day, no position of theirs,
+    // and not the Places resource name either.
+    expect(Object.keys(places[0]).sort()).toEqual([
+      "category",
+      "latitude",
+      "longitude",
+      "name",
+      "placeId",
+      "thumbnailUrl",
+    ]);
     expect(places[0].thumbnailUrl).not.toContain(PHOTO_REF);
   });
 
@@ -465,7 +565,7 @@ describe("partnerFrequentPlaces — what crosses to the match", () => {
     ).toBe(true);
   });
 
-  it("puts no photo fields on the owner's own list", async () => {
+  it("puts no photo or coordinate fields on the owner's own list", async () => {
     venueFindMany.mockResolvedValue([catalogRow({ id: ROW_A, photoRefs: [PHOTO_REF] })]);
     visitFindMany.mockResolvedValue(storedVisits(5));
 
@@ -475,6 +575,13 @@ describe("partnerFrequentPlaces — what crosses to the match", () => {
       optIn: true,
       places: [{ placeId: PLACE, name: "Sens", category: "cafe", visits: 5, hidden: false }],
     });
+    expect(Object.keys(res.body.places[0]).sort()).toEqual([
+      "category",
+      "hidden",
+      "name",
+      "placeId",
+      "visits",
+    ]);
   });
 
   it("is empty while the person has the feature off", async () => {

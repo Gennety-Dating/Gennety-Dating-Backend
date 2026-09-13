@@ -32,9 +32,15 @@ in the decision journal (2026-09-11 — «часто посещаемые мес
    place id and a local calendar day. Coordinates are read and dropped; no time
    of day or duration exists anywhere. Swept after 180 days.
 5. **The match sees a name and a category.** Never a count, a day or a
-   position, and only through `partnerFrequentPlaces`. The thumbnail (when the
-   catalog has a photo) is a picture of a public venue and reveals none of
-   those; it is the only addition this rule allows.
+   position, and only through `partnerFrequentPlaces`. **"Position" means the
+   person's own** — where they were: a fix, a visit, a stay (clarified by
+   founder decision 2026-09-14; the rule is sharpened, not dropped). Two
+   additions reveal none of those and are the only ones this rule allows: the
+   thumbnail (when the catalog has a photo), a picture of a public venue
+   (decision 2026-09-13); and the venue's catalog coordinates, the same public
+   point its name and Google place id already identify (decision 2026-09-14).
+   Still forbidden: visit counts, days, the person's fixes, and any coordinate
+   that is not the catalog venue's.
 
 ### Detection
 
@@ -97,6 +103,14 @@ most two of one category.
   device (`public/showcase-photos.ts`: HMAC over row id + width + expiry, the
   id in the path, valid at least a day) and is signed on every call, cached
   list or not. The owner's list and the fences carry no photo fields.
+- **Venue coordinates** (decision 2026-09-14). A place carries `latitude` and
+  `longitude` — both or neither — so the iOS app can open it on its own map
+  (the venue pin, the viewer's own location, the transit dock). They are the
+  catalog point of the SAME row that names the place, never the copy that lends
+  the photo; absent when that row has no usable point (non-finite, out of
+  range, or exactly 0,0 — `venuePoint`). They ride in the 10-minute cached list.
+  The owner's list carries no coordinate fields (the fences carry circles, as
+  before).
 
 ### Demo mode
 
