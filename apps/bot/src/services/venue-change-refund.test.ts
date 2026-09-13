@@ -4,7 +4,7 @@ vi.mock("@gennety/db", () => ({
   prisma: {
     venueChangePurchase: {
       findMany: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -17,7 +17,7 @@ import {
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mPurchase = (prisma as unknown as {
-  venueChangePurchase: { findMany: MockFn; update: MockFn };
+  venueChangePurchase: { findMany: MockFn; updateMany: MockFn };
 }).venueChangePurchase;
 
 function fakeApi() {
@@ -42,8 +42,8 @@ function row(over: Partial<Record<string, unknown>> = {}) {
 
 beforeEach(() => {
   mPurchase.findMany.mockReset();
-  mPurchase.update.mockReset();
-  mPurchase.update.mockResolvedValue({});
+  mPurchase.updateMany.mockReset();
+  mPurchase.updateMany.mockResolvedValue({ count: 1 });
 });
 
 
@@ -68,7 +68,7 @@ describe("sweepVenueChangeRefunds", () => {
 
     expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-1");
     expect(res).toMatchObject({ scanned: 1, refunded: 1, stillFailing: 0 });
-    expect(mPurchase.update).toHaveBeenCalledWith(
+    expect(mPurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "refunded_race", refundError: null }),
       }),
@@ -82,7 +82,7 @@ describe("sweepVenueChangeRefunds", () => {
 
     await sweepVenueChangeRefunds(api);
 
-    expect(mPurchase.update).toHaveBeenCalledWith(
+    expect(mPurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "refunded_stale" }),
       }),
@@ -109,6 +109,23 @@ describe("sweepVenueChangeRefunds", () => {
     );
   });
 
+  // A13-L2: a second refund of one charge answers CHARGE_ALREADY_REFUNDED —
+  // the Stars are back. Read as a failure, the row sat in `refund_failed`
+  // forever, re-tried hourly against the same answer.
+  it("settles a row whose charge Telegram reports as already refunded", async () => {
+    const api = fakeApi();
+    api.refundStarPayment.mockRejectedValue(new Error("Bad Request: CHARGE_ALREADY_REFUNDED"));
+    mPurchase.findMany.mockImplementation(serveByStatus([row()]));
+
+    const res = await sweepVenueChangeRefunds(api);
+
+    expect(res).toMatchObject({ refunded: 1, stillFailing: 0 });
+    expect(mPurchase.updateMany).toHaveBeenCalledWith({
+      where: { id: "vp1", status: "refund_failed" },
+      data: expect.objectContaining({ status: "refunded_race" }),
+    });
+  });
+
   it("keeps a still-failing refund in refund_failed and sends no DM", async () => {
     const api = fakeApi();
     api.refundStarPayment.mockRejectedValue(new Error("still down"));
@@ -117,7 +134,7 @@ describe("sweepVenueChangeRefunds", () => {
     const res = await sweepVenueChangeRefunds(api);
 
     expect(res).toMatchObject({ refunded: 0, stillFailing: 1 });
-    expect(mPurchase.update).toHaveBeenCalledWith(
+    expect(mPurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "refund_failed" }),
       }),

@@ -1430,6 +1430,8 @@ export async function settleVenueChangeFromAppStore(
   matchId: string,
   transactionId: string,
   priceCents: number | null,
+  /** Apple sandbox (App Review / TestFlight): settled the same, labelled as no revenue. */
+  sandbox = false,
 ): Promise<{ ok: boolean; reason?: string }> {
   const match = await loadMatch(matchId);
   if (!match) return { ok: false, reason: "match-not-found" };
@@ -1475,6 +1477,7 @@ export async function settleVenueChangeFromAppStore(
     detail: match.venueChangeName ? `новое место: ${match.venueChangeName}` : "смена места",
     matchId,
     externalPaymentId: `${APPSTORE_PAYMENT_PREFIX}${transactionId}`,
+    sandbox,
   });
 
   const claimed = await finalizeVenueChangeFree(api, matchId, payerUserId, true);
@@ -1880,6 +1883,9 @@ export async function handleVenuePayDecline(ctx: BotContext): Promise<void> {
 // Settle (successful_payment trust boundary)
 // ---------------------------------------------------------------------------
 
+/** Rolls the settle transaction back: the refund sweep took the row first. */
+class VenuePurchaseTakenBySweep extends Error {}
+
 /**
  * Telegram confirmed the Stars moved — settle the venue change: copy the
  * agreed venue onto the canonical venue* fields and notify both sides.
@@ -1973,41 +1979,65 @@ export async function settleVenuePayment(
   });
 
   const wasExpress = match.venueChangeExpressAt != null;
-  const claim = await prisma.match.updateMany({
-    where: { id: matchId, status: "scheduled", venueChangeStatus: "agreed" },
-    data: {
-      venueChangeStatus: "settled",
-      venueChangeResolvedAt: new Date(),
-      venueChangeExpiresAt: null,
-      venueChangePaidById: payer.id,
-      venueChangePaidAt: new Date(),
-      // Spends one of this date's VENUE_CHANGE_MAX_PER_DATE changes. Inside the
-      // same CAS as the settle, so it can only ever be counted for a change
-      // that actually landed — a refunded race claims nothing and costs nothing.
-      venueChangeCount: { increment: 1 },
-      venueName: match.venueChangeName,
-      venueAddress: match.venueChangeAddress,
-      venueLat: match.venueChangeLat,
-      venueLng: match.venueChangeLng,
-      venueGoogleMapsUri: match.venueChangeMapsUri,
-      // `venuePlaceId` MUST move with the rest of the snapshot. It used to be
-      // left pointing at the originally-assigned venue, so the row ended up
-      // self-contradictory — name/address/coords of the new place, place id of
-      // the old one — and anything keyed on the id (the diversity layer's
-      // "where has this person already been", any Places re-fetch) read the
-      // wrong venue. The originally-assigned one is still recoverable from
-      // `venue_selection_logs.selectedPlaceId`.
-      venuePlaceId: match.venueChangePlaceId,
-      venuePhotoName: match.venueChangePhotoName,
-      // The cached date-card PNG has the OLD venue baked into its pixels
-      // (services/scheduled-confirmation.ts renders it once at initial
-      // scheduling); without clearing it, "My Date" keeps re-sending the
-      // stale image even though its caption text is freshly correct.
-      dateCardFileIdA: null,
-      dateCardFileIdB: null,
-    },
-  });
-  if (claim.count === 0) {
+  // Claim and `settled` commit together. They used to be two writes, so a
+  // failure or a crash between them left a delivered swap on a `processing`
+  // row, which the five-minute sweep then refunded — the new venue stood and
+  // the Stars came back. The purchase CAS on `processing` closes the other
+  // direction: a row the sweep already took for a refund rolls the swap back.
+  let claimCount: number;
+  try {
+    claimCount = await prisma.$transaction(async (tx) => {
+      const claim = await tx.match.updateMany({
+        where: { id: matchId, status: "scheduled", venueChangeStatus: "agreed" },
+        data: {
+          venueChangeStatus: "settled",
+          venueChangeResolvedAt: new Date(),
+          venueChangeExpiresAt: null,
+          venueChangePaidById: payer.id,
+          venueChangePaidAt: new Date(),
+          // Spends one of this date's VENUE_CHANGE_MAX_PER_DATE changes. Inside the
+          // same CAS as the settle, so it can only ever be counted for a change
+          // that actually landed — a refunded race claims nothing and costs nothing.
+          venueChangeCount: { increment: 1 },
+          venueName: match.venueChangeName,
+          venueAddress: match.venueChangeAddress,
+          venueLat: match.venueChangeLat,
+          venueLng: match.venueChangeLng,
+          venueGoogleMapsUri: match.venueChangeMapsUri,
+          // `venuePlaceId` MUST move with the rest of the snapshot. It used to be
+          // left pointing at the originally-assigned venue, so the row ended up
+          // self-contradictory — name/address/coords of the new place, place id of
+          // the old one — and anything keyed on the id (the diversity layer's
+          // "where has this person already been", any Places re-fetch) read the
+          // wrong venue. The originally-assigned one is still recoverable from
+          // `venue_selection_logs.selectedPlaceId`.
+          venuePlaceId: match.venueChangePlaceId,
+          venuePhotoName: match.venueChangePhotoName,
+          // The cached date-card PNG has the OLD venue baked into its pixels
+          // (services/scheduled-confirmation.ts renders it once at initial
+          // scheduling); without clearing it, "My Date" keeps re-sending the
+          // stale image even though its caption text is freshly correct.
+          dateCardFileIdA: null,
+          dateCardFileIdB: null,
+        },
+      });
+      if (claim.count === 0) return 0;
+      const settled = await tx.venueChangePurchase.updateMany({
+        where: { id: purchase.id, status: VENUE_PURCHASE_PROCESSING },
+        data: { status: VENUE_PURCHASE_SETTLED, resolvedAt: new Date() },
+      });
+      if (settled.count === 0) throw new VenuePurchaseTakenBySweep();
+      return claim.count;
+    });
+  } catch (err) {
+    if (!(err instanceof VenuePurchaseTakenBySweep)) throw err;
+    console.warn(
+      `[venue-change] purchase left processing before its claim match=${matchId} ` +
+        `charge=${telegramChargeId} — the refund rail owns it`,
+    );
+    return { ok: false, reason: "refund-in-progress", refunded: true };
+  }
+  if (claimCount === 0) {
     // The insert above already proved this is a NEW charge (a redelivery would
     // have thrown P2002), so the swap being unclaimable means these Stars
     // bought nothing — always give them back. A failed refund parks the row in
@@ -2025,11 +2055,6 @@ export async function settleVenuePayment(
     // the charge is owned either way.
     return { ok: false, reason: "not-agreed", refunded: true };
   }
-
-  await prisma.venueChangePurchase.update({
-    where: { id: purchase.id },
-    data: { status: VENUE_PURCHASE_SETTLED, resolvedAt: new Date() },
-  });
 
   console.info(
     `[venue-change] settled match=${matchId} payer=${payer.id} express=${wasExpress} ` +

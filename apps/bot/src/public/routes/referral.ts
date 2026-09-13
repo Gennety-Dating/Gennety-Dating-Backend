@@ -4,7 +4,11 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
-import { buildReferralLink, buildReferralStateView } from "../../services/referral.js";
+import {
+  buildReferralLink,
+  buildReferralStateView,
+  releaseHeldReferralRewards,
+} from "../../services/referral.js";
 import { recordInviteSent, recordShareSheetOpened } from "../../services/referral-events.js";
 import { referralCardImage } from "../../services/referral-card/index.js";
 
@@ -78,6 +82,14 @@ export function createReferralRouter(): Router {
       res.status(404).json({ error: "user-not-found" });
       return;
     }
+
+    // The screen says what was earned, so this is the moment to make it true:
+    // rewards the daily velocity cap held back are released here once the
+    // referrer is back under the cap (the hourly sweep covers referrers who
+    // never open it). A failed release must never cost the referrer the screen.
+    await releaseHeldReferralRewards(user.id).catch((err: unknown) => {
+      console.warn("[referral] held-reward release on state failed", { userId: user.id, err });
+    });
 
     res.status(200).json({
       ok: true,

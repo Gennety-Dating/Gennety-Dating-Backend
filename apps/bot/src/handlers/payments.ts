@@ -23,6 +23,7 @@ import {
   activateOrExtendPremium,
   activatePremiumPackage,
   formatPremiumUntil,
+  shouldDeclineRecurringCheckout,
 } from "../services/premium.js";
 import {
   notifyFounderPurchase,
@@ -63,6 +64,10 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
   if (!query) return;
 
   let ok = false;
+  // The decline copy. Generic unless a branch knows the precise reason, which
+  // it names so the payer is told why rather than invited to "try again".
+  let declineKey: "ticketStoreCheckoutError" | "premiumCheckoutAlreadySubscribed" =
+    "ticketStoreCheckoutError";
   // Store top-up — payload `store:<count>`.
   const count = parseStoreInvoicePayload(query.invoice_payload);
   const venue = count == null ? parseVenueInvoicePayload(query.invoice_payload) : null;
@@ -109,10 +114,8 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
       query.total_amount === expectedStars;
   } else if (sub != null) {
     // Premium — payload `sub:premium` (recurring monthly) or `sub:premium3` /
-    // `sub:premium6` (one-time packages). The amount is the only thing to
-    // re-validate here: there is no per-user state to check, since a package
-    // stacks onto whatever the user already has and the recurring charge is
-    // anchored by the subscription itself.
+    // `sub:premium6` (one-time packages). A package stacks onto whatever the
+    // user already has, so for it the amount is the only thing to re-validate.
     //
     // The expected amount is DERIVED from the plan rather than compared against
     // a stored price, so a link minted before a repricing is declined here
@@ -123,6 +126,21 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
       plan != null &&
       query.currency === "XTR" &&
       query.total_amount === premiumPlanStars(plan, env.PREMIUM_STARS);
+    // The recurring plan is the exception (A13-H15): a second subscription on
+    // top of a live one charges every month and buys nothing, because each
+    // charge only moves `premiumUntil` as far as its own period. The invoice
+    // route already refuses to mint one; invoice links are reusable, so a link
+    // minted before the user subscribed is stopped here, before Stars move.
+    const payerId = ctx.from?.id;
+    if (ok && plan?.recurring === true && payerId != null) {
+      // A lookup failure approves: the 10-second window is not the place to
+      // turn a database blip into a refused purchase.
+      const declined = await shouldDeclineRecurringCheckout(BigInt(payerId)).catch(() => false);
+      if (declined) {
+        ok = false;
+        declineKey = "premiumCheckoutAlreadySubscribed";
+      }
+    }
   } else if (prime != null) {
     // Prime Time — payload `prime:<matchId>`. Invoice links are reusable, so
     // beyond the amount we confirm the band is still LOCKED: a stale link (the
@@ -174,6 +192,11 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
     // already `completed`) must be declined BEFORE any Stars move. Without this
     // the settle CAS claims nothing and the Stars are consumed with no ticket
     // and no refund. Mirrors the venue branch above.
+    //
+    // "Open" is the two statuses that still take money, not "anything but
+    // completed": an `expired`, `refund_pending` or `refunded` gate used to pass
+    // here, so the payer was charged and then auto-refunded for a gate that had
+    // already closed.
     const gate = parseGateInvoicePayload(query.invoice_payload);
     if (gate != null) {
       const expectedStars = gateStarsForScope(gate.scope);
@@ -188,7 +211,9 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
             select: { status: true, ticketStatus: true },
           })
           .catch(() => null);
-        ok = match?.status === "negotiating" && match.ticketStatus !== "completed";
+        ok =
+          match?.status === "negotiating" &&
+          (match.ticketStatus === "pending" || match.ticketStatus === "partial");
       }
     }
   }
@@ -204,7 +229,7 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
       // the payer's stored language, best-effort.
       const lang = await langForTelegramId(ctx.from?.id);
       await ctx.answerPreCheckoutQuery(false, {
-        error_message: t(lang, "ticketStoreCheckoutError"),
+        error_message: t(lang, declineKey),
       });
     }
   } catch {
@@ -775,8 +800,16 @@ async function handleRematchSuccessfulPayment(
 
   // (3b) Delivered. Mark settled BEFORE dispatching: the match already exists,
   // so if dispatch throws we must not let the sweep refund a live pair.
-  await prisma.rematchPurchase.update({
-    where: { id: purchase.id },
+  //
+  // Guarded on the row still being `processing` (A13-L2). The engine run cannot
+  // share a transaction with this write, so a run that outlived the sweep's
+  // five-minute stale window may find the row already taken for a refund;
+  // writing `settled` over that would record a sale whose Stars went back. The
+  // match exists and holds both people's live slot, so it is still delivered —
+  // stranding two real people is the worse outcome — and the money anomaly is
+  // left in the log for a person, with the row's refund status intact.
+  const settledRow = await prisma.rematchPurchase.updateMany({
+    where: { id: purchase.id, status: REMATCH_PROCESSING },
     data: {
       status: REMATCH_SETTLED,
       resolvedAt: new Date(),
@@ -784,6 +817,13 @@ async function handleRematchSuccessfulPayment(
       framing: run.framing ?? null,
     },
   });
+  if (settledRow.count === 0) {
+    console.error(
+      `[rematch] purchase=${purchase.id} left processing before its match was delivered ` +
+        `match=${run.matchId} charge=${payment.telegram_payment_charge_id} — the refund sweep ` +
+        "took it; delivering anyway",
+    );
+  }
 
   // The payoff at the end of the search animation, and the only celebratory
   // beat this flow has. The effect ships inert (empty env) — see config.ts for

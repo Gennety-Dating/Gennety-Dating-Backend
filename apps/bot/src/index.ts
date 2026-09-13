@@ -59,6 +59,7 @@ import { campusDropTick } from "./workers/campus-drop.js";
 import { sweepRematchRefunds } from "./services/rematch-refund.js";
 import { sweepVenueChangeRefunds } from "./services/venue-change-refund.js";
 import { sweepPrimeTimeRefunds } from "./services/prime-time-purchase.js";
+import { sweepHeldReferralRewards } from "./services/referral.js";
 import { primeTimeFeatureLive } from "./services/prime-time.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { retentionTick } from "./workers/retention.js";
@@ -383,6 +384,15 @@ const VENUE_CHANGE_REFUND_CRON_SCHEDULE =
  */
 const PRIME_TIME_REFUND_CRON_SCHEDULE =
   process.env.PRIME_TIME_REFUND_CRON_SCHEDULE ?? "0 * * * *";
+
+/**
+ * Referral held-reward release (§Referral). Hourly: pays ladder rungs the daily
+ * velocity cap held back once the referrer is under the cap again — the cap
+ * window is 24h, so an hourly pass releases a reward within an hour of it
+ * becoming payable. Registered only when REFERRAL_FEATURE_ENABLED.
+ */
+const REFERRAL_RELEASE_CRON_SCHEDULE =
+  process.env.REFERRAL_RELEASE_CRON_SCHEDULE ?? "0 * * * *";
 
 /**
  * Profiler scheduler (Phase 1b). Every 15 min: lazy-seed never-armed users and
@@ -835,6 +845,25 @@ bot.start({
       console.log(
         `[cron] Prime Time refund retry scheduled: "${PRIME_TIME_REFUND_CRON_SCHEDULE}"`,
       );
+    }
+
+    // Referral rewards held back by the velocity cap: without this pass they
+    // were released only by another friend verifying, which for a referrer
+    // whose burst was their last invites meant never.
+    if (env.REFERRAL_FEATURE_ENABLED) {
+      cron.schedule(
+        REFERRAL_RELEASE_CRON_SCHEDULE,
+        guardedTick("referral-release", () =>
+          sweepHeldReferralRewards().then((r) => {
+            if (r.released + r.stillHeld > 0) {
+              console.log(
+                `[referral-release] scanned=${r.scanned} released=${r.released} stillHeld=${r.stillHeld}`,
+              );
+            }
+          }),
+        ),
+      );
+      console.log(`[cron] Referral held-reward release scheduled: "${REFERRAL_RELEASE_CRON_SCHEDULE}"`);
     }
 
     // Synthetic test partners (PRODUCT_SPEC §3.1c): decline once the human

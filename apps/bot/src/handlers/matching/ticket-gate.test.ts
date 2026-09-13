@@ -934,8 +934,11 @@ describe("ticket expiry — durable provider and wallet refunds", () => {
     mMatch.findUnique.mockResolvedValueOnce(
       matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
     );
-    mLedger.findMany.mockResolvedValueOnce([]); // no Stars payment
-    mLedger.findFirst.mockResolvedValueOnce({ id: "wallet-spend" });
+    mLedger.findMany
+      .mockResolvedValueOnce([]) // no Stars payment
+      .mockResolvedValueOnce([
+        { reason: "spend_match", delta: -1, amountStars: null, externalPaymentId: null },
+      ]);
     const api = createApi();
 
     await refundAndFallbackToScheduling(api, "match-1");
@@ -948,6 +951,58 @@ describe("ticket expiry — durable provider and wallet refunds", () => {
       externalPaymentId: "wallet-expiry-refund:match-1:uid-A",
     });
     expect(api.refundStarPayment).not.toHaveBeenCalled();
+    expect(mStartScheduling).toHaveBeenCalledTimes(1);
+  });
+
+  // A13-M3. Her Stars invoice lost the race to his wallet ticket and was
+  // refunded; the slot is held by the SPENT ticket. Any Stars row used to end
+  // the refund before the wallet was looked at, so the ticket never came back.
+  it("returns the wallet ticket that held the slot even when a lost Stars charge exists", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+    );
+    mLedger.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "losing-ledger",
+          userId: "uid-A",
+          matchId: "match-1",
+          reason: "gate_refunded",
+          externalPaymentId: "charge_lost_race",
+          bundleSize: 1,
+        },
+      ])
+      .mockResolvedValueOnce([
+        { reason: "spend_match", delta: -1, amountStars: null, externalPaymentId: null },
+      ]);
+    const api = createApi();
+
+    await refundAndFallbackToScheduling(api, "match-1");
+
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    expect(mGrant).toHaveBeenCalledWith(
+      expect.objectContaining({ externalPaymentId: "wallet-expiry-refund:match-1:uid-A" }),
+    );
+    expect(mStartScheduling).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives no wallet ticket for a spend that was already handed back", async () => {
+    // A spend that lost the race is refunded on the spot; "a spend row exists"
+    // is not the same fact as "a ticket is still owed".
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+    );
+    mLedger.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { reason: "spend_match", delta: -1, amountStars: null, externalPaymentId: null },
+        { reason: "refund", delta: 1, amountStars: null, externalPaymentId: null },
+      ]);
+    const api = createApi();
+
+    await refundAndFallbackToScheduling(api, "match-1");
+
+    expect(mGrant).not.toHaveBeenCalled();
     expect(mStartScheduling).toHaveBeenCalledTimes(1);
   });
 

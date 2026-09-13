@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@gennety/db", () => ({
   prisma: {
-    rematchPurchase: { findMany: vi.fn(), update: vi.fn() },
+    rematchPurchase: { findMany: vi.fn(), updateMany: vi.fn(), findUnique: vi.fn() },
   },
 }));
 vi.mock("./founder-notify.js", () => ({
@@ -28,7 +28,7 @@ import {
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mPurchase = (prisma as unknown as {
-  rematchPurchase: { findMany: MockFn; update: MockFn };
+  rematchPurchase: { findMany: MockFn; updateMany: MockFn; findUnique: MockFn };
 }).rematchPurchase;
 
 function fakeApi() {
@@ -67,8 +67,10 @@ function serveByStatus(rows: Array<{ status: string }>): (args: unknown) => Prom
 
 beforeEach(() => {
   mPurchase.findMany.mockReset();
-  mPurchase.update.mockReset();
-  mPurchase.update.mockResolvedValue({
+  mPurchase.updateMany.mockReset();
+  mPurchase.findUnique.mockReset();
+  mPurchase.updateMany.mockResolvedValue({ count: 1 });
+  mPurchase.findUnique.mockResolvedValue({
     userId: "u1",
     amountStars: 150,
     externalPaymentId: "charge-1",
@@ -117,7 +119,7 @@ describe("refundRematchPurchase", () => {
 
     expect(ok).toBe(true);
     expect(api.refundStarPayment).toHaveBeenCalledWith(300, "charge-1");
-    expect(mPurchase.update).toHaveBeenCalledWith(
+    expect(mPurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           status: "refunded_ineligible",
@@ -140,11 +142,51 @@ describe("refundRematchPurchase", () => {
     );
 
     expect(ok).toBe(false);
-    expect(mPurchase.update).toHaveBeenCalledWith(
+    expect(mPurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "refund_failed" }),
       }),
     );
+  });
+
+  // A13-L2: a second refund of one charge answers CHARGE_ALREADY_REFUNDED. The
+  // Stars are back; reading that as a failure parked the row in
+  // `refund_failed` forever, re-tried hourly against the same answer.
+  it("records CHARGE_ALREADY_REFUNDED as the refund it is", async () => {
+    const api = fakeApi();
+    api.refundStarPayment.mockRejectedValue(new Error("Bad Request: CHARGE_ALREADY_REFUNDED"));
+
+    const ok = await refundRematchPurchase(
+      api,
+      { id: "rp1", externalPaymentId: "charge-1", status: "refund_failed" },
+      300n,
+      "refunded_no_candidate",
+    );
+
+    expect(ok).toBe(true);
+    expect(mPurchase.updateMany).toHaveBeenCalledTimes(1);
+    expect(mPurchase.updateMany).toHaveBeenCalledWith({
+      where: { id: "rp1", status: "refund_failed" },
+      data: expect.objectContaining({ status: "refunded_no_candidate" }),
+    });
+  });
+
+  it("never overwrites a status the row left meanwhile, and announces nothing then", async () => {
+    const api = fakeApi();
+    mPurchase.updateMany.mockResolvedValueOnce({ count: 0 });
+    const { notifyFounderPurchaseRefunded } = await import("./founder-notify.js");
+
+    await refundRematchPurchase(
+      api,
+      { id: "rp1", externalPaymentId: "charge-1", status: "processing" },
+      300n,
+      "refunded_ineligible",
+    );
+
+    expect(mPurchase.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "rp1", status: "processing" } }),
+    );
+    expect(notifyFounderPurchaseRefunded).not.toHaveBeenCalled();
   });
 
   // Half of the head-of-line fix: without a "last attempted" stamp the retry
@@ -160,7 +202,7 @@ describe("refundRematchPurchase", () => {
       "refunded_ineligible",
     );
 
-    const data = (mPurchase.update.mock.calls[0]![0] as { data: { resolvedAt?: Date } }).data;
+    const data = (mPurchase.updateMany.mock.calls[0]![0] as { data: { resolvedAt?: Date } }).data;
     expect(data.resolvedAt).toBeInstanceOf(Date);
   });
 });
@@ -185,7 +227,7 @@ describe("sweepRematchRefunds", () => {
 
     await sweepRematchRefunds(api);
 
-    expect(mPurchase.update).toHaveBeenCalledWith(
+    expect(mPurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "refunded_ineligible" }),
       }),

@@ -2,6 +2,7 @@ import type { Api, RawApi } from "grammy";
 import { prisma, type Prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { notifyFounderPurchaseRefunded } from "./founder-notify.js";
+import { isAlreadyRefundedError } from "./stars-refund-error.js";
 
 /**
  * Venue-change (§3.7b) Stars refunds and their durable retry.
@@ -82,7 +83,14 @@ export type VenueChangePurchaseRecord = Prisma.VenueChangePurchaseGetPayload<{
  *
  * Returns true only when Telegram actually returned the Stars. On failure the
  * row is parked in `refund_failed` with the error text, and the caller must NOT
- * tell the user they were refunded.
+ * tell the user they were refunded. `CHARGE_ALREADY_REFUNDED` is the success
+ * case, not a failure — read as one, it parked a done refund where the sweep
+ * could never move it.
+ *
+ * Both status writes are conditional on the row still being in the status the
+ * caller read, so a refund never overwrites a state reached meanwhile (a
+ * concurrent settle, another pass that already recorded this refund) — which
+ * is also what keeps the founder announcement to one.
  */
 export async function refundVenueChangePurchase(
   api: Api<RawApi>,
@@ -93,43 +101,47 @@ export async function refundVenueChangePurchase(
   try {
     await api.refundStarPayment(Number(telegramId), purchase.externalPaymentId);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      `[venue-change-refund] refund failed purchase=${purchase.id} ` +
-        `charge=${purchase.externalPaymentId}: ${message}`,
-    );
-    await prisma.venueChangePurchase
-      .update({
-        where: { id: purchase.id },
-        data: {
-          status: VENUE_PURCHASE_REFUND_FAILED,
-          refundError: message.slice(0, 500),
-          // Stamped on a FAILED attempt too, not only on a terminal one:
-          // nothing reads this column for meaning, and it is what lets the
-          // sweep's retry tier order by "least recently attempted" instead of
-          // re-trying one permanently stuck row every hour forever.
-          resolvedAt: new Date(),
-        },
-      })
-      .catch(() => {});
-    return false;
+    if (!isAlreadyRefundedError(err)) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[venue-change-refund] refund failed purchase=${purchase.id} ` +
+          `charge=${purchase.externalPaymentId}: ${message}`,
+      );
+      await prisma.venueChangePurchase
+        .updateMany({
+          where: { id: purchase.id, status: purchase.status },
+          data: {
+            status: VENUE_PURCHASE_REFUND_FAILED,
+            refundError: message.slice(0, 500),
+            // Stamped on a FAILED attempt too, not only on a terminal one:
+            // nothing reads this column for meaning, and it is what lets the
+            // sweep's retry tier order by "least recently attempted" instead of
+            // re-trying one permanently stuck row every hour forever.
+            resolvedAt: new Date(),
+          },
+        })
+        .catch(() => {});
+      return false;
+    }
   }
 
-  await prisma.venueChangePurchase
-    .update({
-      where: { id: purchase.id },
+  const recorded = await prisma.venueChangePurchase
+    .updateMany({
+      where: { id: purchase.id, status: purchase.status },
       data: { status: targetStatus, resolvedAt: new Date(), refundError: null },
     })
-    .catch(() => {});
+    .catch(() => ({ count: 0 }));
   // Founder ops feed — keeps the DM honest: the purchase was announced when
-  // the Stars moved, so the reversal has to be announced too.
-  void notifyFounderPurchaseRefunded({
-    userId: purchase.userId,
-    kind: "venue_change",
-    amountStars: purchase.amountStars,
-    reason: targetStatus,
-    externalPaymentId: purchase.externalPaymentId,
-  });
+  // the Stars moved, so the reversal has to be announced too, once.
+  if (recorded.count > 0) {
+    void notifyFounderPurchaseRefunded({
+      userId: purchase.userId,
+      kind: "venue_change",
+      amountStars: purchase.amountStars,
+      reason: targetStatus,
+      externalPaymentId: purchase.externalPaymentId,
+    });
+  }
   return true;
 }
 

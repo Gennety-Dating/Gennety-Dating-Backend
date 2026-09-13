@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AppStoreTransaction } from "./appstore.js";
 
 const ledgerFindUnique = vi.fn();
 const ledgerCreate = vi.fn();
@@ -41,7 +42,7 @@ const { creditAppStoreTransaction, refundAppStoreTransaction } = await import(
   "./appstore-tickets.js"
 );
 
-const okTx = {
+const okTx: AppStoreTransaction = {
   transactionId: "tx-1",
   originalTransactionId: null,
   bundleId: "com.gennety.ios",
@@ -49,6 +50,8 @@ const okTx = {
   quantity: 1,
   revocationDate: null,
   expiresDate: null,
+  purchaseDate: null,
+  environment: "Production",
   priceCents: 1647,
   currency: "USD",
   appAccountToken: null,

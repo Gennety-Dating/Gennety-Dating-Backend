@@ -20,6 +20,7 @@ vi.mock("../services/premium.js", () => ({
   activateOrExtendPremium: vi.fn(),
   activatePremiumPackage: vi.fn(),
   formatPremiumUntil: () => "19 August 2026",
+  shouldDeclineRecurringCheckout: vi.fn(),
 }));
 // Settled via dynamic import in handleSuccessfulPayment's gate branch.
 vi.mock("./matching/ticket-gate.js", () => ({ applyStarsTicketPayment: vi.fn() }));
@@ -30,7 +31,11 @@ vi.mock("../services/founder-notify.js", () => ({
 
 import { prisma } from "@gennety/db";
 import { grantTickets } from "../services/ticket-wallet.js";
-import { activateOrExtendPremium, activatePremiumPackage } from "../services/premium.js";
+import {
+  activateOrExtendPremium,
+  activatePremiumPackage,
+  shouldDeclineRecurringCheckout,
+} from "../services/premium.js";
 import { applyStarsTicketPayment } from "./matching/ticket-gate.js";
 import { notifyFounderPaymentStuck } from "../services/founder-notify.js";
 import { handlePreCheckout, handleSuccessfulPayment } from "./payments.js";
@@ -40,6 +45,7 @@ const matchFindUnique = prisma.match.findUnique as unknown as ReturnType<typeof 
 const grant = grantTickets as unknown as ReturnType<typeof vi.fn>;
 const activatePremium = activateOrExtendPremium as unknown as ReturnType<typeof vi.fn>;
 const activatePackage = activatePremiumPackage as unknown as ReturnType<typeof vi.fn>;
+const declineRecurring = shouldDeclineRecurringCheckout as unknown as ReturnType<typeof vi.fn>;
 const settleStars = applyStarsTicketPayment as unknown as ReturnType<typeof vi.fn>;
 const stuck = notifyFounderPaymentStuck as unknown as ReturnType<typeof vi.fn>;
 
@@ -50,6 +56,7 @@ beforeEach(() => {
   // The settlement shell looks the payer up again when it has to report an
   // unsettled charge, so the user lookup must always answer with a promise.
   findUnique.mockResolvedValue(null);
+  declineRecurring.mockResolvedValue(false);
 });
 
 function preCheckoutCtx(q: {
@@ -177,6 +184,23 @@ describe("handlePreCheckout", () => {
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
   });
+
+  // A13-L5: "open" used to mean "anything but completed", so a gate that had
+  // already expired or been refunded still approved — the payer was charged
+  // and then auto-refunded for a gate that no longer took money.
+  it.each(["expired", "refund_pending", "refunded"])(
+    "declines a gate payment when the gate is %s",
+    async (ticketStatus) => {
+      matchFindUnique.mockResolvedValueOnce({ status: "negotiating", ticketStatus });
+      const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+        invoice_payload: `gate:${GATE_UUID}:both`,
+        currency: "XTR",
+        total_amount: 850,
+      });
+      await handlePreCheckout(ctx);
+      expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
+    },
+  );
 
   it("declines a gate payment when the gate is already completed", async () => {
     matchFindUnique.mockResolvedValue({ status: "negotiating", ticketStatus: "completed" });
@@ -386,6 +410,36 @@ describe("premium subscription (sub:premium)", () => {
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
+  });
+
+  // A13-H15: a reusable invoice link minted before the user subscribed must
+  // not open a second recurring subscription that charges monthly for nothing.
+  it("declines a second recurring subscription for a live subscriber, and says why", async () => {
+    declineRecurring.mockResolvedValueOnce(true);
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: "sub:premium",
+      currency: "XTR",
+      total_amount: 500,
+    });
+    (ctx as unknown as { from: { id: number } }).from = { id: 4242 };
+    await handlePreCheckout(ctx);
+    expect(declineRecurring).toHaveBeenCalledWith(4242n);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, {
+      error_message: expect.stringContaining("already have an active Premium subscription"),
+    });
+  });
+
+  it("still approves a package for a live subscriber — packages stack", async () => {
+    declineRecurring.mockResolvedValue(true);
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: "sub:premium6",
+      currency: "XTR",
+      total_amount: Math.floor(500 * 6 * 0.7),
+    });
+    (ctx as unknown as { from: { id: number } }).from = { id: 4242 };
+    await handlePreCheckout(ctx);
+    expect(declineRecurring).not.toHaveBeenCalled();
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(true, undefined);
   });
 
   it("grants premium and DMs the welcome on the first charge", async () => {

@@ -116,6 +116,9 @@ export async function creditAppStoreTransaction(
       currency: tx.currency,
       detail: `${credited} ticket${credited === 1 ? "" : "s"} · ${tx.productId ?? "?"} · баланс ${balance}`,
       externalPaymentId: `appstore:${tx.transactionId}`,
+      // Honoured either way (App Review buys in the sandbox), but a sandbox
+      // credit moved no money and the feed must not read as revenue.
+      sandbox: tx.environment === "Sandbox",
     });
     return { status: "credited", balance, credited };
   } catch (err) {

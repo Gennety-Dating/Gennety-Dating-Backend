@@ -297,7 +297,16 @@ describe("cancelInFlightMatchesForUser — Date Ticket refunds", () => {
    */
   function paidBy(...userIds: string[]): void {
     mLedger.findMany.mockResolvedValue(
-      userIds.map((userId) => ({ userId, matchId: "m1", delta: -1, amountStars: null, amountCents: null })),
+      // A real wallet spend: `spend_match`, the reason the refund planner now
+      // reads (a debit alone, e.g. one refunded on the spot, is not a purchase).
+      userIds.map((userId) => ({
+        userId,
+        matchId: "m1",
+        reason: "spend_match",
+        delta: -1,
+        amountStars: null,
+        externalPaymentId: null,
+      })),
     );
   }
 

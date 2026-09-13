@@ -1,4 +1,5 @@
-import { prisma } from "@gennety/db";
+import { prisma, type OnboardingStep } from "@gennety/db";
+import { PROMO_DEFERRED_CLAIM_WINDOW_MS } from "@gennety/shared";
 import { env } from "../config.js";
 import { grantComplimentaryPremiumMonths } from "./premium.js";
 import { grantTickets, isUniqueViolation } from "./ticket-wallet.js";
@@ -90,29 +91,102 @@ export async function resolvePromoCode(code: string | null): Promise<ResolvedPro
 }
 
 /**
+ * Promo codes are for NEW accounts (PROMO_CODES_PRODUCT_SPEC: "never existing
+ * users"). The Telegram rail gets that for free — the code is recorded on the
+ * creating touch — but the iOS deferred claim writes attribution onto an account
+ * that already exists, and every native account starts with
+ * `referralSource = null`, so "no attribution yet" alone let any account of any
+ * age redeem a public code for a ticket and months of Premium. New means both:
+ * created within `PROMO_DEFERRED_CLAIM_WINDOW_MS`, and not through onboarding.
+ */
+export function isNewPromoAccount(
+  account: { createdAt: Date; onboardingStep: OnboardingStep },
+  now: Date = new Date(),
+): boolean {
+  return (
+    account.onboardingStep !== "completed" &&
+    account.createdAt.getTime() >= now.getTime() - PROMO_DEFERRED_CLAIM_WINDOW_MS
+  );
+}
+
+/**
  * First-touch attribution for a native-app user (iOS deferred-deep-link claim).
- * Sets `referralSource = promo:<CODE>` only when the code is currently redeemable
- * AND the user has no prior attribution (never overwrites first touch). The
- * Telegram path attributes at user creation instead; this is the mobile twin.
+ * Sets `referralSource = promo:<CODE>` only when the code is currently redeemable,
+ * the user has no prior attribution (never overwrites first touch), AND the
+ * account is new (`isNewPromoAccount`) — the last two inside one compare-and-set,
+ * so no caller can attribute an existing account whatever it checked first.
+ * The Telegram path attributes at user creation instead; this is the mobile twin.
  * The reward itself is granted later at the wow screen via
  * `grantPromoRewardsForUser`.
  */
 export async function claimPromoCodeForUser(
   userId: string,
   code: string,
+  now: Date = new Date(),
 ): Promise<{ applied: boolean; reason?: string; resolved?: ResolvedPromoCode }> {
   if (!env.PROMO_FEATURE_ENABLED) return { applied: false, reason: "disabled" };
   const resolved = await resolvePromoCode(code);
   if (!resolved) return { applied: false, reason: "invalid" };
 
-  // First-touch only: never overwrite an existing attribution (referral or promo).
   const cas = await prisma.user.updateMany({
-    where: { id: userId, referralSource: null },
+    where: {
+      id: userId,
+      // First-touch only: never overwrite an existing attribution (referral or promo).
+      referralSource: null,
+      onboardingStep: { not: "completed" },
+      createdAt: { gte: new Date(now.getTime() - PROMO_DEFERRED_CLAIM_WINDOW_MS) },
+    },
     data: { referralSource: `promo:${resolved.code}` },
   });
-  return cas.count > 0
-    ? { applied: true, resolved }
+  if (cas.count > 0) return { applied: true, resolved };
+
+  // Tell the two refusals apart for the caller: an attribution that already
+  // exists is not the same answer as an account too old to take one.
+  const current = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { referralSource: true },
+  });
+  return current && current.referralSource === null
+    ? { applied: false, reason: "not-eligible" }
     : { applied: false, reason: "already-attributed", resolved };
+}
+
+export type DeferredPromoClaim =
+  | { status: "not-eligible" }
+  | { status: "no-code" }
+  | { status: "claimed"; result: Awaited<ReturnType<typeof claimPromoCodeForUser>> };
+
+/**
+ * The iOS first-launch claim (`POST /v1/me/promo/claim-deferred`), decided here
+ * rather than in the route so every rule sits next to the one it depends on:
+ *
+ *  1. **New accounts only**, checked BEFORE the fingerprint is looked up —
+ *     a fingerprint match is one-shot, so an ineligible account must not burn
+ *     the code a real newcomer on the same network is about to claim.
+ *  2. **An explicit code is honoured only behind `PROMO_MANUAL_ENTRY_ENABLED`.**
+ *     The spec ships auto attribution only (the native client sends no code);
+ *     a code in the body is manual entry, which is the emergency seam.
+ *  3. The fingerprint path stays as it is.
+ */
+export async function claimDeferredPromoForUser(input: {
+  userId: string;
+  explicitCode: string | null;
+  matchFingerprint: () => string | null;
+  now?: Date;
+}): Promise<DeferredPromoClaim> {
+  const now = input.now ?? new Date();
+  const account = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { createdAt: true, onboardingStep: true },
+  });
+  if (!account || !isNewPromoAccount(account, now)) return { status: "not-eligible" };
+
+  const manual = env.PROMO_MANUAL_ENTRY_ENABLED ? (input.explicitCode ?? "").trim() : "";
+  const code = manual || input.matchFingerprint();
+  if (!code) return { status: "no-code" };
+
+  const result = await claimPromoCodeForUser(input.userId, code, now);
+  return result.reason === "not-eligible" ? { status: "not-eligible" } : { status: "claimed", result };
 }
 
 export interface PromoRewardResult {
@@ -130,14 +204,22 @@ export interface PromoRewardResult {
  * (Telegram `/promo-gift`, iOS `/v1/me/promo/claim`).
  *
  * Returns the applied deltas, or null when there is nothing to do (feature off,
- * not a valid promo attribution, code no longer redeemable, or the user was
- * already redeemed).
+ * not a valid promo attribution, code no longer redeemable, the account already
+ * finished onboarding, or the user was already redeemed).
  *
  * Exactly-once + cap-safe: the `PromoRedemption` insert (unique `userId`) and
  * the `redeemedCount++` (guarded on capacity) commit in ONE transaction, so a
  * replayed tap is a no-op and two concurrent redemptions can never overrun the
  * cap. The ticket / Premium grants are each additionally idempotent via a unique
  * ledger `externalPaymentId`.
+ *
+ * The grants cannot join that transaction (the Premium grant runs its own, under
+ * the user row lock), so a failure between the claim and the grants used to
+ * strand the claim: the retry resolved the code again, hit the redemption row's
+ * unique index and returned null — the slot was spent and the gift never came.
+ * A redemption row with `promoRedeemedAt` still unset is therefore RESUMED: its
+ * frozen amounts are granted again through the same idempotent keys, which
+ * credits exactly what is missing and nothing twice.
  */
 export async function grantPromoRewardsForUser(
   userId: string,
@@ -146,12 +228,94 @@ export async function grantPromoRewardsForUser(
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, referralSource: true, promoRedeemedAt: true },
+    select: { id: true, referralSource: true, promoRedeemedAt: true, onboardingStep: true },
   });
   if (!user) return null;
   if (user.promoRedeemedAt) return null; // already redeemed → idempotent no-op
+  // The gift belongs to the onboarding wow screen, which both clients show
+  // before completion. An account past onboarding is an existing account, and
+  // the spec keeps promo codes away from those whatever attribution it carries.
+  if (user.onboardingStep === "completed") return null;
 
-  const resolved = await resolvePromoCode(parsePromoCode(user.referralSource));
+  const claim = await claimRedemption(user.id, user.referralSource);
+  if (!claim) return null;
+
+  const idBase = `promo:${claim.promoCodeId}:${user.id}`;
+
+  let ticketsApplied = 0;
+  if (claim.tickets > 0) {
+    try {
+      await grantTickets({
+        userId: user.id,
+        count: claim.tickets,
+        reason: "promo",
+        externalPaymentId: `${idBase}:tickets`,
+      });
+      ticketsApplied = claim.tickets;
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err; // already granted → no-op
+    }
+  }
+
+  let monthsApplied = 0;
+  if (claim.months > 0) {
+    const res = await grantComplimentaryPremiumMonths({
+      userId: user.id,
+      months: claim.months,
+      externalPaymentId: `${idBase}:premium`,
+      note: `promo code ${claim.code}`,
+      provider: "promo",
+    });
+    if (res.applied) monthsApplied = claim.months;
+  }
+
+  // Stamp the once-marker only after both grants went through, so a failure
+  // above leaves the claim resumable (the ledger ids already guarantee
+  // exactly-once rewards; this drives the "show the wow screen once" flag).
+  await prisma.user.updateMany({
+    where: { id: user.id, promoRedeemedAt: null },
+    data: { promoRedeemedAt: new Date() },
+  });
+
+  return { code: claim.code, ticketsApplied, monthsApplied };
+}
+
+interface PromoClaim {
+  promoCodeId: string;
+  code: string;
+  tickets: number;
+  months: number;
+}
+
+/**
+ * The redemption this call should honour: an earlier claim whose grants never
+ * finished, or a fresh one taken now. Null when there is none to take.
+ */
+async function claimRedemption(
+  userId: string,
+  referralSource: string | null,
+): Promise<PromoClaim | null> {
+  const unfinished = await prisma.promoRedemption.findUnique({
+    where: { userId },
+    select: {
+      promoCodeId: true,
+      ticketsApplied: true,
+      monthsApplied: true,
+      promoCode: { select: { code: true } },
+    },
+  });
+  if (unfinished) {
+    // Honoured from the row, not re-resolved: the slot was taken when the code
+    // was valid, and the code may since have filled up with this very claim.
+    return {
+      promoCodeId: unfinished.promoCodeId,
+      code: unfinished.promoCode.code,
+      tickets: unfinished.ticketsApplied,
+      months: unfinished.monthsApplied,
+    };
+  }
+
+  const resolved = await resolvePromoCode(parsePromoCode(referralSource));
   if (!resolved) return null;
 
   // Claim the redemption slot exactly-once and cap-safely: create the unique
@@ -177,7 +341,7 @@ export async function grantPromoRewardsForUser(
       await tx.promoRedemption.create({
         data: {
           promoCodeId: resolved.id,
-          userId: user.id,
+          userId,
           ticketsApplied: resolved.ticketReward,
           monthsApplied: resolved.premiumMonths,
         },
@@ -185,46 +349,16 @@ export async function grantPromoRewardsForUser(
       return true;
     });
   } catch (err) {
-    if (isUniqueViolation(err)) return null; // already redeemed by a racing call
+    // A racing call took the slot first and is granting it now; a later retry
+    // resumes it if that call fails.
+    if (isUniqueViolation(err)) return null;
     throw err;
   }
   if (!claimed) return null;
-
-  const idBase = `promo:${resolved.id}:${user.id}`;
-
-  let ticketsApplied = 0;
-  if (resolved.ticketReward > 0) {
-    try {
-      await grantTickets({
-        userId: user.id,
-        count: resolved.ticketReward,
-        reason: "promo",
-        externalPaymentId: `${idBase}:tickets`,
-      });
-      ticketsApplied = resolved.ticketReward;
-    } catch (err) {
-      if (!isUniqueViolation(err)) throw err; // already granted → no-op
-    }
-  }
-
-  let monthsApplied = 0;
-  if (resolved.premiumMonths > 0) {
-    const res = await grantComplimentaryPremiumMonths({
-      userId: user.id,
-      months: resolved.premiumMonths,
-      externalPaymentId: `${idBase}:premium`,
-      note: `promo code ${resolved.code}`,
-      provider: "promo",
-    });
-    if (res.applied) monthsApplied = resolved.premiumMonths;
-  }
-
-  // Stamp the once-marker (the ledger ids already guarantee exactly-once
-  // rewards; this only drives the "show the wow screen once" flag + fast guard).
-  await prisma.user.updateMany({
-    where: { id: user.id, promoRedeemedAt: null },
-    data: { promoRedeemedAt: new Date() },
-  });
-
-  return { code: resolved.code, ticketsApplied, monthsApplied };
+  return {
+    promoCodeId: resolved.id,
+    code: resolved.code,
+    tickets: resolved.ticketReward,
+    months: resolved.premiumMonths,
+  };
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { prisma } from "@gennety/db";
-import type { Language } from "@gennety/shared";
+import { prisma, type Prisma } from "@gennety/db";
+import { PREMIUM_RENEWAL_CHECKOUT_GRACE_MS, type Language } from "@gennety/shared";
 import { isUniqueViolation } from "./ticket-wallet.js";
 import { notifyFounderPurchase } from "./founder-notify.js";
 
@@ -77,6 +77,63 @@ export function isPremiumHeadActive(
 }
 
 /**
+ * Whether the user is inside a period of a subscription that RENEWS ITSELF —
+ * the one state in which selling another recurring subscription buys nothing.
+ * A second Stars subscription would charge every month on top of the first
+ * while `premiumUntil` only moves as far as the charge that renewed it.
+ * Fixed-length packages stack and stay purchasable; this is only about the
+ * recurring plan.
+ */
+export function hasLiveRecurringPremium(
+  head: { premiumUntil: Date | null; premiumAutoRenew: boolean } | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  return head?.premiumAutoRenew === true && isPremiumHeadActive(head, now);
+}
+
+/**
+ * Whether a Telegram Stars pre-checkout for the RECURRING plan must be declined
+ * because the payer already holds a live recurring subscription — the
+ * last-line twin of the invoice route's 409, for an invoice link minted before
+ * the user subscribed.
+ *
+ * One exception, and it is about safety rather than policy: for a Stars
+ * subscriber, the refusal lifts inside `PREMIUM_RENEWAL_CHECKOUT_GRACE_MS` of
+ * their current period's end (and when that period cannot be found at all).
+ * Auto-renewals are not expected to pass through pre-checkout at all, but that
+ * is Telegram's behaviour, not ours to guarantee — and declining the renewal of
+ * the very subscription being protected would end it, a far worse failure than
+ * a duplicate bought in the last hours of a period.
+ */
+export async function shouldDeclineRecurringCheckout(
+  telegramId: bigint,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: {
+      premiumUntil: true,
+      premiumAutoRenew: true,
+      premiumProvider: true,
+      premiumExternalId: true,
+    },
+  });
+  if (!user || !hasLiveRecurringPremium(user, now)) return false;
+  // An App Store subscriber has no Stars subscription to renew; a Stars
+  // recurring purchase is a second subscription outright.
+  if (user.premiumProvider !== "telegram_stars") return true;
+
+  const current = user.premiumExternalId
+    ? await prisma.subscriptionLedger.findUnique({
+        where: { externalPaymentId: user.premiumExternalId },
+        select: { periodEnd: true },
+      })
+    : null;
+  const periodEnd = current?.periodEnd;
+  return periodEnd != null && periodEnd.getTime() > now.getTime() + PREMIUM_RENEWAL_CHECKOUT_GRACE_MS;
+}
+
+/**
  * Whether the user currently has an active Premium subscription. Accepts either
  * a loaded head (no query) or a userId (one query). Returns false for unknown
  * users.
@@ -147,6 +204,13 @@ export interface ActivatePremiumInput {
   event?: Extract<SubscriptionEvent, "started" | "renewed">;
   amount?: number;
   currency?: string;
+  /**
+   * Free-text audit note for the ledger row. The App Store rail stamps sandbox
+   * purchases here (`APPSTORE_SANDBOX_NOTE`) so revenue can leave them out.
+   */
+  note?: string;
+  /** An App Store sandbox purchase — announced to the founder as no revenue. */
+  sandbox?: boolean;
 }
 
 export interface ActivatePremiumResult {
@@ -155,10 +219,123 @@ export interface ActivatePremiumResult {
 }
 
 /**
+ * Serialise every write to the premium head on one user.
+ *
+ * Each grant computes the next `premiumUntil` from the value it read, so two
+ * grants racing on the same row (a referral rung landing while a renewal
+ * settles, a promo claim replayed from two devices) would both read the same
+ * head and the later write would erase the earlier one's months. The row lock is
+ * taken first, inside the transaction, and everything below reads through it —
+ * the same discipline `native-profile-video.ts` uses for its media list.
+ */
+async function lockPremiumHead(tx: Prisma.TransactionClient, userId: string) {
+  await tx.$queryRawUnsafe("SELECT id FROM users WHERE id = $1::uuid FOR UPDATE", userId);
+  return tx.user.findUnique({
+    where: { id: userId },
+    select: { premiumSince: true, premiumUntil: true, premiumExternalId: true },
+  });
+}
+
+/** How many recent App Store periods to scan past refunded ones. */
+const RECURRING_PERIOD_LOOKBACK = 5;
+
+/**
+ * How far THIS subscription had already paid before the charge being applied.
+ *
+ * Telegram and Apple hand us an absolute "paid through" instant per charge, so
+ * the time a renewal adds is `periodEnd − previousPeriodEnd`; everything the
+ * head holds beyond `previousPeriodEnd` was bought some other way (a package,
+ * a referral or promo comp) and must survive the renewal.
+ *
+ * The two rails identify "this subscription" differently:
+ *  - **Telegram Stars**: `premiumExternalId` is rewritten to each recurring
+ *    charge id and nothing else touches it, so it names the last charge of the
+ *    running subscription, and that ledger row carries its period end.
+ *  - **App Store**: the anchor is the `originalTransactionId`, which no ledger
+ *    row is keyed by, but Premium is one product in one subscription group —
+ *    the latest un-refunded `app_store` period is the one being renewed.
+ *
+ * Null means there is no earlier period to continue (a first subscription).
+ */
+async function previousRecurringPeriodEnd(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  provider: PremiumProvider,
+  storedAnchor: string | null,
+): Promise<Date | null> {
+  if (provider === "app_store") {
+    const rows = await tx.subscriptionLedger.findMany({
+      where: {
+        userId,
+        provider: "app_store",
+        event: { in: ["started", "renewed"] },
+        periodEnd: { not: null },
+      },
+      orderBy: { periodEnd: "desc" },
+      take: RECURRING_PERIOD_LOOKBACK,
+      select: { externalPaymentId: true, periodEnd: true },
+    });
+    const keys = rows.flatMap((row) =>
+      row.externalPaymentId ? [`${row.externalPaymentId}:refund`] : [],
+    );
+    // A refunded period stopped covering anything the moment it was refunded
+    // (`revokePremium` took its unused days back), so it is not a period the
+    // next charge continues.
+    const refunded = keys.length
+      ? await tx.subscriptionLedger.findMany({
+          where: { externalPaymentId: { in: keys } },
+          select: { externalPaymentId: true },
+        })
+      : [];
+    const refundedKeys = new Set(refunded.map((row) => row.externalPaymentId));
+    const live = rows.find(
+      (row) => !row.externalPaymentId || !refundedKeys.has(`${row.externalPaymentId}:refund`),
+    );
+    return live?.periodEnd ?? null;
+  }
+  if (!storedAnchor) return null;
+  const row = await tx.subscriptionLedger.findUnique({
+    where: { externalPaymentId: storedAnchor },
+    select: { userId: true, provider: true, periodEnd: true },
+  });
+  return row && row.userId === userId && row.provider === provider ? row.periodEnd : null;
+}
+
+/**
+ * The next `premiumUntil` after a recurring charge that pays through
+ * `periodEnd`.
+ *
+ * `extra` is what the head holds that this subscription did not buy: anything
+ * beyond where the subscription had paid (`previousPeriodEnd`), or beyond now
+ * when that is later — time already lived through was used, not banked. The
+ * charge then pays its own period and the extra rides on top, so a subscriber
+ * with a referral month who renews keeps the month instead of having the
+ * renewal swallow it (the old `max(stored, periodEnd)` did exactly that).
+ *
+ * For a pure subscription `extra` is 0 and the result is `periodEnd`, the value
+ * the old rule produced. The outer `max` keeps the one property the old rule
+ * existed for: a paid grant never shortens access — a stale or out-of-order
+ * charge whose period is already covered lands as a no-op, not a cut.
+ */
+export function recurringPremiumUntil(input: {
+  storedUntil: Date | null;
+  periodEnd: Date;
+  previousPeriodEnd: Date | null;
+  now: Date;
+}): Date {
+  const { storedUntil, periodEnd, previousPeriodEnd, now } = input;
+  if (!storedUntil) return periodEnd;
+  const coveredThrough = Math.max(now.getTime(), previousPeriodEnd?.getTime() ?? 0);
+  const extra = Math.max(0, storedUntil.getTime() - coveredThrough);
+  return new Date(Math.max(storedUntil.getTime(), periodEnd.getTime() + extra));
+}
+
+/**
  * Grant or extend Premium and append the matching ledger row atomically.
  * Idempotent: a duplicate `externalPaymentId` (P2002) is a no-op and returns
  * the current head. `premiumSince` is preserved across renewals; `premiumUntil`
- * advances to the provider's authoritative `periodEnd`.
+ * advances to the provider's authoritative `periodEnd` plus any time the head
+ * already held that this subscription did not buy (`recurringPremiumUntil`).
  */
 export async function activateOrExtendPremium(
   input: ActivatePremiumInput,
@@ -173,43 +350,33 @@ export async function activateOrExtendPremium(
     event = "started",
     amount,
     currency,
+    note,
+    sandbox,
   } = input;
 
-  const existing = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { premiumSince: true, premiumUntil: true },
-  });
-  if (!existing) return { applied: false, premiumUntil: null };
-
-  const now = new Date();
-  // A paid grant may only ever EXTEND. Telegram/Apple hand us an absolute
-  // "paid through" instant, and for a pure subscription each one is later than
-  // the last, so this max() is a no-op there — it exists for the mixed case
-  // that long packages introduce: a monthly subscriber who buys 6 months has a
-  // `premiumUntil` half a year out, and their next ordinary 30-day renewal
-  // carries a `subscription_expiration_date` ~30 days out. Writing that
-  // through would silently delete five months of paid access on a charge the
-  // user just made. `revokePremium` remains the one path that may shorten it.
-  const nextUntil =
-    existing.premiumUntil && existing.premiumUntil.getTime() > periodEnd.getTime()
-      ? existing.premiumUntil
-      : periodEnd;
+  let applied: { premiumUntil: Date | null } | null;
   try {
-    const [updated] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id: userId },
-        data: {
-          premiumUntil: nextUntil,
-          premiumSince: existing.premiumSince ?? now,
-          premiumProvider: provider,
-          premiumAutoRenew: true,
-          premiumExternalId: recurringAnchor ?? externalPaymentId,
-          // A fresh paid period earns a fresh pair of expiry reminders.
-          ...RESET_EXPIRY_REMINDERS,
-        },
-        select: { premiumUntil: true },
-      }),
-      prisma.subscriptionLedger.create({
+    applied = await prisma.$transaction(async (tx) => {
+      const head = await lockPremiumHead(tx, userId);
+      if (!head) return null;
+
+      const now = new Date();
+      const previousPeriodEnd = await previousRecurringPeriodEnd(
+        tx,
+        userId,
+        provider,
+        head.premiumExternalId,
+      );
+      const nextUntil = recurringPremiumUntil({
+        storedUntil: head.premiumUntil,
+        periodEnd,
+        previousPeriodEnd,
+        now,
+      });
+
+      // Ledger first: it is the exactly-once gate, and a duplicate charge id
+      // throws P2002 here and rolls back before the head moves.
+      await tx.subscriptionLedger.create({
         data: {
           userId,
           provider,
@@ -219,25 +386,23 @@ export async function activateOrExtendPremium(
           periodEnd,
           amount: amount ?? null,
           currency: currency ?? null,
+          note: note ?? null,
         },
-      }),
-    ]);
-    // Founder ops feed. Placed on the PAID path only — the complimentary
-    // referral/promo grant below has its own function and moves no money — and
-    // after the ledger insert, so the duplicate-charge branch (a provider
-    // redelivery) never announces the same charge twice. Covers both rails:
-    // Telegram Stars settles here, and so does the App Store transaction route.
-    void notifyFounderPurchase({
-      userId,
-      kind: "premium",
-      provider: provider === "app_store" ? "app_store" : "telegram_stars",
-      amountStars: (currency ?? "").toUpperCase() === "XTR" ? (amount ?? null) : null,
-      amountCents: (currency ?? "").toUpperCase() === "XTR" ? null : (amount ?? null),
-      currency: currency ?? null,
-      detail: event === "renewed" ? "продление подписки" : "первый месяц",
-      externalPaymentId,
+      });
+      return tx.user.update({
+        where: { id: userId },
+        data: {
+          premiumUntil: nextUntil,
+          premiumSince: head.premiumSince ?? now,
+          premiumProvider: provider,
+          premiumAutoRenew: true,
+          premiumExternalId: recurringAnchor ?? externalPaymentId,
+          // A fresh paid period earns a fresh pair of expiry reminders.
+          ...RESET_EXPIRY_REMINDERS,
+        },
+        select: { premiumUntil: true },
+      });
     });
-    return { applied: true, premiumUntil: updated.premiumUntil };
   } catch (err) {
     if (isUniqueViolation(err)) {
       const head = await prisma.user.findUnique({
@@ -248,13 +413,42 @@ export async function activateOrExtendPremium(
     }
     throw err;
   }
+  if (!applied) return { applied: false, premiumUntil: null };
+
+  // Founder ops feed. Placed on the PAID path only — the complimentary
+  // referral/promo grant below has its own function and moves no money — and
+  // after the ledger insert committed, so the duplicate-charge branch (a
+  // provider redelivery) never announces the same charge twice. Covers both
+  // rails: Telegram Stars settles here, and so does the App Store transaction
+  // route.
+  void notifyFounderPurchase({
+    userId,
+    kind: "premium",
+    provider: provider === "app_store" ? "app_store" : "telegram_stars",
+    amountStars: (currency ?? "").toUpperCase() === "XTR" ? (amount ?? null) : null,
+    amountCents: (currency ?? "").toUpperCase() === "XTR" ? null : (amount ?? null),
+    currency: currency ?? null,
+    detail: event === "renewed" ? "продление подписки" : "первый месяц",
+    externalPaymentId,
+    ...(sandbox === true ? { sandbox: true } : {}),
+  });
+  return { applied: true, premiumUntil: applied.premiumUntil };
 }
 
-/** Advance `date` by `months` calendar months (clamps end-of-month overflow). */
-function addMonths(date: Date, months: number): Date {
+/**
+ * Advance `date` by `months` calendar months, clamping to the last day of the
+ * target month: Jan 31 + 1 month is Feb 28 (29 in a leap year), never Mar 3.
+ * `setMonth` alone overflows into the following month, which silently hands a
+ * month-end buyer extra days and a mid-month one a different anniversary.
+ */
+export function addMonths(date: Date, months: number): Date {
   const d = new Date(date);
-  const targetMonth = d.getMonth() + months;
-  d.setMonth(targetMonth);
+  const day = d.getDate();
+  // Park on the 1st so the month change itself cannot overflow.
+  d.setDate(1);
+  d.setMonth(d.getMonth() + months);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
   return d;
 }
 
@@ -290,32 +484,22 @@ async function extendPremiumAdditive(input: {
     input;
   if (months <= 0) return { applied: false, premiumUntil: null, periodStart: null };
 
-  const existing = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { premiumSince: true, premiumUntil: true },
-  });
-  if (!existing) return { applied: false, premiumUntil: null, periodStart: null };
-
-  const now = new Date();
-  const base =
-    existing.premiumUntil && existing.premiumUntil.getTime() > now.getTime()
-      ? existing.premiumUntil
-      : now;
-  const periodEnd = addMonths(base, months);
-
   try {
-    const [updated] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id: userId },
-        data: {
-          premiumUntil: periodEnd,
-          premiumSince: existing.premiumSince ?? now,
-          // NOTE: autoRenew / provider / externalId intentionally NOT set.
-          ...RESET_EXPIRY_REMINDERS,
-        },
-        select: { premiumUntil: true },
-      }),
-      prisma.subscriptionLedger.create({
+    const granted = await prisma.$transaction(async (tx) => {
+      // Read-modify-write on `premiumUntil` under the row lock: two grants that
+      // both read the old head would otherwise both stack onto it, and the
+      // second write would erase the first one's months.
+      const existing = await lockPremiumHead(tx, userId);
+      if (!existing) return null;
+
+      const now = new Date();
+      const base =
+        existing.premiumUntil && existing.premiumUntil.getTime() > now.getTime()
+          ? existing.premiumUntil
+          : now;
+      const periodEnd = addMonths(base, months);
+
+      await tx.subscriptionLedger.create({
         data: {
           userId,
           provider,
@@ -327,9 +511,22 @@ async function extendPremiumAdditive(input: {
           currency: currency ?? null,
           note: note ?? null,
         },
-      }),
-    ]);
-    return { applied: true, premiumUntil: updated.premiumUntil, periodStart: base };
+      });
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: {
+          premiumUntil: periodEnd,
+          premiumSince: existing.premiumSince ?? now,
+          // NOTE: autoRenew / provider / externalId intentionally NOT set.
+          ...RESET_EXPIRY_REMINDERS,
+        },
+        select: { premiumUntil: true },
+      });
+      return { premiumUntil: updated.premiumUntil, periodStart: base };
+    });
+    return granted
+      ? { applied: true, premiumUntil: granted.premiumUntil, periodStart: granted.periodStart }
+      : { applied: false, premiumUntil: null, periodStart: null };
   } catch (err) {
     if (isUniqueViolation(err)) {
       const head = await prisma.user.findUnique({
@@ -463,25 +660,113 @@ export async function cancelAutoRenew(
 }
 
 /**
- * Immediately end Premium (a refund/revoke, e.g. an App Store REFUND/REVOKE or a
- * Stars refund): clear the paid period so the entitlement is gone now. Records a
- * `refunded` (or `expired`) audit row. Idempotent via `externalPaymentId`.
+ * A subscription period ran out without renewing (App Store `EXPIRED`).
+ *
+ * Deliberately does NOT touch `premiumUntil`. Entitlement is date-based, so an
+ * expired subscription period has already stopped counting on its own; and
+ * `premiumUntil` is not the subscription's alone — it also carries stacked
+ * Stars packages and referral / promo months, which never touch the recurring
+ * anchor. Clearing it here used to wipe all of those on an ordinary lapse.
+ * What the lapse does change is the recurring head: nothing renews any more.
+ *
+ * Idempotent via `externalPaymentId`; records an `expired` audit row.
  */
-export async function revokePremium(
+export async function recordPremiumLapse(
   userId: string,
   externalPaymentId: string,
-  event: Extract<SubscriptionEvent, "refunded" | "expired"> = "refunded",
+  provider: PremiumProvider,
 ): Promise<void> {
   try {
     await prisma.$transaction([
+      prisma.subscriptionLedger.create({
+        data: { userId, provider, event: "expired", externalPaymentId },
+      }),
       prisma.user.update({
         where: { id: userId },
-        data: { premiumUntil: null, premiumAutoRenew: false },
-      }),
-      prisma.subscriptionLedger.create({
-        data: { userId, provider: "unknown", event, externalPaymentId },
+        data: { premiumAutoRenew: false },
       }),
     ]);
+  } catch (err) {
+    if (isUniqueViolation(err)) return;
+    throw err;
+  }
+}
+
+/** The coverage a refunded charge had bought. */
+export interface RefundedPremiumPeriod {
+  /** When the refunded charge's period began (Apple `purchaseDate`). */
+  start: Date | null;
+  /** When it would have ended (Apple `expiresDate`). */
+  end: Date | null;
+}
+
+/**
+ * `premiumUntil` after taking back ONLY what a refund returned: the part of the
+ * refunded period that had not been lived through yet. Days already used were
+ * used; months from a package, a referral or a promo were never refunded and
+ * stay. Null when nothing is left.
+ */
+export function premiumUntilAfterRefund(
+  storedUntil: Date | null,
+  refunded: RefundedPremiumPeriod,
+  now: Date,
+): Date | null {
+  if (!storedUntil || !refunded.end) return storedUntil;
+  const unusedFrom = Math.max(now.getTime(), refunded.start?.getTime() ?? now.getTime());
+  const unused = Math.max(0, refunded.end.getTime() - unusedFrom);
+  if (unused === 0) return storedUntil;
+  const next = storedUntil.getTime() - unused;
+  return next > now.getTime() ? new Date(next) : null;
+}
+
+/**
+ * A charge was refunded or revoked (App Store REFUND/REVOKE): take back the
+ * refunded period's unused coverage, stop the renewal, and record a `refunded`
+ * audit row. Idempotent via `externalPaymentId` — a redelivered refund throws
+ * P2002 inside the transaction and subtracts nothing a second time.
+ *
+ * It used to write `premiumUntil: null`, which also confiscated every month
+ * the user had from somewhere else.
+ */
+export async function revokePremium(input: {
+  userId: string;
+  externalPaymentId: string;
+  provider: PremiumProvider;
+  refunded: RefundedPremiumPeriod;
+}): Promise<void> {
+  const { userId, externalPaymentId, provider, refunded } = input;
+  if (!refunded.end) {
+    // Every auto-renewable transaction carries an expiry, so this is a payload
+    // we cannot price. Nothing is subtracted rather than guessed at; the line
+    // is what lets a person settle it.
+    console.warn(
+      `[premium] refund without a period end user=${userId} charge=${externalPaymentId} — ` +
+        "no coverage removed",
+    );
+  }
+  try {
+    await prisma.$transaction(async (tx) => {
+      const head = await lockPremiumHead(tx, userId);
+      if (!head) return;
+      const now = new Date();
+      await tx.subscriptionLedger.create({
+        data: {
+          userId,
+          provider,
+          event: "refunded",
+          externalPaymentId,
+          periodStart: refunded.start,
+          periodEnd: refunded.end,
+        },
+      });
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          premiumUntil: premiumUntilAfterRefund(head.premiumUntil, refunded, now),
+          premiumAutoRenew: false,
+        },
+      });
+    });
   } catch (err) {
     if (isUniqueViolation(err)) return;
     throw err;

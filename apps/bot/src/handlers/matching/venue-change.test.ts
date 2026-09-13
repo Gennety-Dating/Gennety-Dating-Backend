@@ -15,8 +15,13 @@ vi.mock("@gennety/db", () => ({
     venueChangePurchase: {
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       findMany: vi.fn(),
     },
+    // Interactive form, run against this same mock.
+    $transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
+      callback((await import("@gennety/db")).prisma),
+    ),
   },
 }));
 
@@ -67,7 +72,7 @@ const mMatch = prisma.match as unknown as {
 };
 const mUpdate = mMatch.update;
 const mPurchase = (prisma as unknown as {
-  venueChangePurchase: { create: MockFn; update: MockFn; findMany: MockFn };
+  venueChangePurchase: { create: MockFn; update: MockFn; updateMany: MockFn; findMany: MockFn };
 }).venueChangePurchase;
 
 /** Prisma unique-constraint violation — a redelivered `successful_payment`. */
@@ -219,6 +224,7 @@ beforeEach(() => {
   mMatch.update.mockResolvedValue({});
   mPurchase.create.mockReset();
   mPurchase.update.mockReset();
+  mPurchase.updateMany.mockReset();
   mPurchase.findMany.mockReset();
   // Default: this charge id is new (no redelivery).
   mPurchase.create.mockResolvedValue({
@@ -227,6 +233,7 @@ beforeEach(() => {
     externalPaymentId: "charge-1",
   });
   mPurchase.update.mockResolvedValue({});
+  mPurchase.updateMany.mockResolvedValue({ count: 1 });
 });
 
 // ---------------------------------------------------------------------------
@@ -882,12 +889,29 @@ describe("settleVenuePayment", () => {
       externalPaymentId: "charge-1",
       amountStars: 150,
     });
-    expect(mPurchase.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "vp1" },
-        data: expect.objectContaining({ status: "settled" }),
-      }),
-    );
+    // A13-L2: `settled` commits in the same transaction as the swap, guarded
+    // on the row still being `processing` — a separate write could fail after
+    // the swap and hand a delivered change to the refund sweep.
+    expect(mPurchase.updateMany).toHaveBeenCalledWith({
+      where: { id: "vp1", status: "processing" },
+      data: expect.objectContaining({ status: "settled" }),
+    });
+    expect(mPurchase.update).not.toHaveBeenCalled();
+  });
+
+  it("rolls the swap back when the refund sweep already took the purchase", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    mPurchase.updateMany.mockResolvedValueOnce({ count: 0 });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-1");
+
+    expect(res).toMatchObject({ ok: false, reason: "refund-in-progress", refunded: true });
+    // No cards: the change the partner would be told about was rolled back.
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("treats a redelivered payment (duplicate charge id) as an idempotent no-op", async () => {
@@ -938,8 +962,9 @@ describe("settleVenuePayment", () => {
     const res = await settleVenuePayment(api, 200n, "m1", "charge-3");
     expect(res.ok).toBe(false);
     expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-3");
-    expect(mPurchase.update).toHaveBeenCalledWith(
+    expect(mPurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: "vp3", status: "processing" },
         data: expect.objectContaining({ status: "refunded_race" }),
       }),
     );
@@ -976,7 +1001,7 @@ describe("settleVenuePayment", () => {
 
     const res = await settleVenuePayment(api, 200n, "m1", "charge-6");
     expect(res.ok).toBe(false);
-    expect(mPurchase.update).toHaveBeenCalledWith(
+    expect(mPurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "refund_failed" }),
       }),

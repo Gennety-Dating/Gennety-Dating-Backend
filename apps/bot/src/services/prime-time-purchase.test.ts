@@ -3,7 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@gennety/db", () => ({
   prisma: {
     match: { findUnique: vi.fn(), updateMany: vi.fn() },
-    primeTimePurchase: { create: vi.fn(), update: vi.fn(), findMany: vi.fn() },
+    primeTimePurchase: { create: vi.fn(), updateMany: vi.fn(), findMany: vi.fn() },
+    // Interactive form, run against this same mock.
+    $transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
+      callback((await import("@gennety/db")).prisma),
+    ),
   },
 }));
 
@@ -31,7 +35,8 @@ import {
 type MockFn = ReturnType<typeof vi.fn>;
 const db = prisma as unknown as {
   match: { findUnique: MockFn; updateMany: MockFn };
-  primeTimePurchase: { create: MockFn; update: MockFn; findMany: MockFn };
+  primeTimePurchase: { create: MockFn; updateMany: MockFn; findMany: MockFn };
+  $transaction: MockFn;
 };
 
 function fakeApi() {
@@ -66,12 +71,12 @@ beforeEach(() => {
     db.match.findUnique,
     db.match.updateMany,
     db.primeTimePurchase.create,
-    db.primeTimePurchase.update,
+    db.primeTimePurchase.updateMany,
     db.primeTimePurchase.findMany,
   ]) {
     fn.mockReset();
   }
-  db.primeTimePurchase.update.mockResolvedValue({});
+  db.primeTimePurchase.updateMany.mockResolvedValue({ count: 1 });
   db.primeTimePurchase.create.mockResolvedValue({
     id: "p1",
     userId: PAYER.id,
@@ -112,13 +117,47 @@ describe("settlePrimeTimePayment", () => {
         where: { id: "m1", status: "negotiating", primeTimeUnlockedAt: null },
       }),
     );
-    expect(db.primeTimePurchase.update).toHaveBeenCalledWith(
+    expect(db.primeTimePurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "settled" }) }),
     );
     expect(api.refundStarPayment).not.toHaveBeenCalled();
     // The peer, never the buyer — his receipt is the grid redrawing.
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage.mock.calls[0]?.[0]).toBe(200);
+  });
+
+  // A13-L2: the claim and the `settled` write were separate statements, the
+  // second one `.catch`-swallowed — a failure between them left a delivered
+  // band on a `processing` row that the five-minute sweep then refunded.
+  it("commits the claim and `settled` in ONE transaction, the settle guarded on processing", async () => {
+    const api = fakeApi();
+    db.match.findUnique.mockResolvedValue(matchRow());
+    db.match.updateMany.mockResolvedValue({ count: 1 });
+
+    await settlePrimeTimePayment(api, 100n, "m1", "charge-1");
+
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
+    expect(db.$transaction.mock.calls[0]![0]).toBeTypeOf("function");
+    expect(db.primeTimePurchase.updateMany).toHaveBeenCalledWith({
+      where: { id: "p1", status: "processing" },
+      data: expect.objectContaining({ status: "settled" }),
+    });
+  });
+
+  it("opens no band for a row the refund sweep already took, and tells no one", async () => {
+    const api = fakeApi();
+    db.match.findUnique.mockResolvedValue(matchRow());
+    db.match.updateMany.mockResolvedValue({ count: 1 });
+    db.primeTimePurchase.updateMany.mockResolvedValueOnce({ count: 0 });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const res = await settlePrimeTimePayment(api, 100n, "m1", "charge-1");
+
+    // The throw inside the transaction is what rolls the claim back.
+    expect(res).toMatchObject({ ok: false, reason: "refund-in-progress", refunded: true });
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("treats a redelivered charge as an idempotent no-op — no second claim, no refund", async () => {
@@ -144,7 +183,7 @@ describe("settlePrimeTimePayment", () => {
 
     expect(res).toMatchObject({ ok: false, reason: "already-unlocked" });
     expect(api.refundStarPayment).toHaveBeenCalledWith(100, "charge-1");
-    expect(db.primeTimePurchase.update).toHaveBeenCalledWith(
+    expect(db.primeTimePurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "refunded_race" }),
       }),
@@ -207,7 +246,7 @@ describe("refundPrimeTimeForDeadMatch", () => {
 
     expect(refunded).toBe(1);
     expect(api.refundStarPayment).toHaveBeenCalledWith(100, "charge-1");
-    expect(db.primeTimePurchase.update).toHaveBeenCalledWith(
+    expect(db.primeTimePurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "refunded_match_died" }),
       }),
@@ -230,7 +269,7 @@ describe("refundPrimeTimeForDeadMatch", () => {
 
     expect(await refundPrimeTimeForDeadMatch("m1", api)).toBe(0);
     expect(api.sendMessage).not.toHaveBeenCalled();
-    expect(db.primeTimePurchase.update).toHaveBeenCalledWith(
+    expect(db.primeTimePurchase.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "refund_failed" }),
       }),
@@ -255,12 +294,47 @@ describe("sweepPrimeTimeRefunds", () => {
     const res = await sweepPrimeTimeRefunds(api);
 
     expect(res).toMatchObject({ scanned: 2, refunded: 2, stillFailing: 0 });
-    const statuses = db.primeTimePurchase.update.mock.calls.map(
+    const statuses = db.primeTimePurchase.updateMany.mock.calls.map(
       (c) => (c[0] as { data: { status: string } }).data.status,
     );
     // Stale first: a `processing` row is a charge taken and never resolved, so
     // it outranks a retry of one that has already failed at least once.
     expect(statuses).toEqual(["refunded_stale", "refunded_race"]);
+  });
+
+  // A13-L2: Telegram answers a second refund with CHARGE_ALREADY_REFUNDED. That
+  // is the outcome the refund wanted; reading it as a failure left the row in
+  // `refund_failed` for a sweep that could never move it.
+  it("treats CHARGE_ALREADY_REFUNDED as a refund that landed", async () => {
+    const api = fakeApi();
+    api.refundStarPayment.mockRejectedValue(new Error("Bad Request: CHARGE_ALREADY_REFUNDED"));
+    db.primeTimePurchase.findMany.mockImplementation(
+      serveByStatus([purchaseRow({ status: "refund_failed" })]),
+    );
+
+    const res = await sweepPrimeTimeRefunds(api);
+
+    expect(res).toMatchObject({ refunded: 1, stillFailing: 0 });
+    expect(db.primeTimePurchase.updateMany).toHaveBeenCalledWith({
+      where: { id: "p1", status: "refund_failed" },
+      data: expect.objectContaining({ status: "refunded_race" }),
+    });
+  });
+
+  it("writes a refund outcome only over the status it read", async () => {
+    // A row that moved on meanwhile (another pass recorded the refund first)
+    // is not overwritten, and the refund is not announced a second time.
+    const api = fakeApi();
+    db.primeTimePurchase.findMany.mockImplementation(serveByStatus([purchaseRow()]));
+    db.primeTimePurchase.updateMany.mockResolvedValueOnce({ count: 0 });
+    const { notifyFounderPurchaseRefunded } = await import("./founder-notify.js");
+
+    await refundPrimeTimeForDeadMatch("m1", api);
+
+    expect(db.primeTimePurchase.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "p1", status: "settled" } }),
+    );
+    expect(notifyFounderPurchaseRefunded).not.toHaveBeenCalled();
   });
 
   it("counts a still-failing refund instead of announcing it", async () => {

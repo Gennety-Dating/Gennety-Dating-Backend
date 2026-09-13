@@ -117,11 +117,42 @@ describe("getVerifiedTransaction", () => {
         quantity: 1,
         revocationDate: null,
         expiresDate: null,
+        purchaseDate: null,
+        // No `environment` in the payload → the store that answered decides.
+        environment: "Sandbox",
         priceCents: null,
         currency: null,
         appAccountToken: null,
       },
     });
+  });
+
+  /**
+   * Sandbox purchases are honoured (App Review buys in the sandbox against the
+   * production server) but must be recognisable, so revenue can leave them out.
+   * Apple's own field wins over the host that happened to answer.
+   */
+  it("labels the environment from Apple's field, falling back to the answering store", async () => {
+    envMock.APPSTORE_ENVIRONMENT = "production";
+    const fromField = fakeJws({
+      transactionId: "tx-review",
+      environment: "Sandbox",
+      purchaseDate: 1_700_000_000_000,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ signedTransactionInfo: fromField })));
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    await expect(getVerifiedTransaction("tx-review")).resolves.toMatchObject({
+      status: "ok",
+      transaction: { environment: "Sandbox", purchaseDate: 1_700_000_000_000 },
+    });
+    expect(info).toHaveBeenCalledWith(expect.stringContaining("sandbox transaction tx-review"));
+
+    const bare = fakeJws({ transactionId: "tx-prod" });
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ signedTransactionInfo: bare })));
+    await expect(getVerifiedTransaction("tx-prod")).resolves.toMatchObject({
+      transaction: { environment: "Production" },
+    });
+    info.mockRestore();
   });
 
   it("maps 404 to not_found and 5xx to unavailable", async () => {

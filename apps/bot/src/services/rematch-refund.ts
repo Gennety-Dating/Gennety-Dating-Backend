@@ -17,6 +17,7 @@ import {
   type RematchRunResult,
 } from "./rematch.js";
 import { notifyFounderPurchaseRefunded } from "./founder-notify.js";
+import { isAlreadyRefundedError } from "./stars-refund-error.js";
 
 /**
  * Rows stuck in `processing` for longer than this are treated as abandoned —
@@ -48,7 +49,13 @@ export function refundStatusForReason(reason: RematchRunResult["reason"]): strin
  *
  * Returns true only when the provider actually returned the Stars. On failure
  * the row is parked in `refund_failed` with the error text and the caller must
- * NOT tell the user they were refunded.
+ * NOT tell the user they were refunded. `CHARGE_ALREADY_REFUNDED` means the
+ * Stars are back, so it is recorded as the refund it is rather than parked
+ * where the sweep could never move it.
+ *
+ * Both status writes are conditional on the row still being in the status the
+ * caller read, so a refund never overwrites a state reached meanwhile — and
+ * only the pass whose write lands announces the refund.
  */
 export async function refundRematchPurchase(
   api: Api<RawApi>,
@@ -59,34 +66,44 @@ export async function refundRematchPurchase(
   try {
     await api.refundStarPayment(Number(telegramId), purchase.externalPaymentId);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      `[rematch] refund failed purchase=${purchase.id} charge=${purchase.externalPaymentId}: ${message}`,
-    );
-    await prisma.rematchPurchase
-      .update({
-        where: { id: purchase.id },
-        data: {
-          status: REMATCH_REFUND_FAILED,
-          refundError: message.slice(0, 500),
-          // Stamped on a FAILED attempt too, not only on a terminal one:
-          // nothing reads this column for meaning, and it is what lets the
-          // sweep's retry tier order by "least recently attempted" instead of
-          // re-trying one permanently stuck row every hour forever.
-          resolvedAt: new Date(),
-        },
-      })
-      .catch(() => {});
-    return false;
+    if (!isAlreadyRefundedError(err)) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[rematch] refund failed purchase=${purchase.id} charge=${purchase.externalPaymentId}: ${message}`,
+      );
+      await prisma.rematchPurchase
+        .updateMany({
+          where: { id: purchase.id, status: purchase.status },
+          data: {
+            status: REMATCH_REFUND_FAILED,
+            refundError: message.slice(0, 500),
+            // Stamped on a FAILED attempt too, not only on a terminal one:
+            // nothing reads this column for meaning, and it is what lets the
+            // sweep's retry tier order by "least recently attempted" instead of
+            // re-trying one permanently stuck row every hour forever.
+            resolvedAt: new Date(),
+          },
+        })
+        .catch(() => {});
+      return false;
+    }
   }
 
-  const settled = await prisma.rematchPurchase
-    .update({
-      where: { id: purchase.id },
+  const recorded = await prisma.rematchPurchase
+    .updateMany({
+      where: { id: purchase.id, status: purchase.status },
       data: { status: targetStatus, resolvedAt: new Date(), refundError: null },
-      select: { userId: true, amountStars: true, externalPaymentId: true },
     })
-    .catch(() => null);
+    .catch(() => ({ count: 0 }));
+  const settled =
+    recorded.count > 0
+      ? await prisma.rematchPurchase
+          .findUnique({
+            where: { id: purchase.id },
+            select: { userId: true, amountStars: true, externalPaymentId: true },
+          })
+          .catch(() => null)
+      : null;
   // Founder ops feed — the purchase was announced the instant the Stars moved
   // (a Rematch refund can follow seconds later), so the reversal is announced
   // too rather than leaving a sale in the feed that no longer exists.

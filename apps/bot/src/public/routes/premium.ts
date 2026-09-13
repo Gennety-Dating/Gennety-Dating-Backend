@@ -18,7 +18,7 @@ import {
 import { env } from "../../config.js";
 import { DEMO_MODE_ENABLED } from "../../demo/config.js";
 import { validateInitData } from "../init-data.js";
-import { getPremiumState } from "../../services/premium.js";
+import { getPremiumState, hasLiveRecurringPremium } from "../../services/premium.js";
 
 /**
  * Gennety Premium Mini App endpoints (PRODUCT_SPEC §Premium). TMA-authed
@@ -99,7 +99,7 @@ export function createPremiumRouter(): Router {
     }
     const user = await prisma.user.findUnique({
       where: { telegramId: BigInt(auth.user.id) },
-      select: { id: true, language: true },
+      select: { id: true, language: true, premiumUntil: true, premiumAutoRenew: true },
     });
     if (!user) {
       res.status(404).json({ error: "user-not-found" });
@@ -127,6 +127,15 @@ export function createPremiumRouter(): Router {
       resolved && offeredPlans().some((p) => p.id === resolved.id) ? resolved : null;
     if (!plan) {
       res.status(400).json({ error: "unknown-plan" });
+      return;
+    }
+    // A second recurring subscription on top of a live one buys nothing: each
+    // charge only moves `premiumUntil` as far as its own period, while both keep
+    // billing every month (A13-H15). Refused at the door rather than minted; the
+    // pre-checkout refuses the same for a link minted before the user
+    // subscribed. Packages are not refused — they stack onto a live period.
+    if (plan.recurring && hasLiveRecurringPremium(user)) {
+      res.status(409).json({ error: "premium-already-active" });
       return;
     }
 

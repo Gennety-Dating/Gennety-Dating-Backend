@@ -1,4 +1,5 @@
-import { prisma } from "@gennety/db";
+import { prisma, type UserStatus } from "@gennety/db";
+import { REFERRAL_RELEASE_SWEEP_BATCH } from "@gennety/shared";
 import { env } from "../config.js";
 import type { ReferralLadderRung } from "../config.js";
 import { grantComplimentaryPremiumMonths } from "./premium.js";
@@ -22,7 +23,7 @@ import { grantTickets, isUniqueViolation } from "./ticket-wallet.js";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Referrer statuses that forfeit referral rewards (moderation / bad actor). */
-const REWARD_BLOCKED_STATUSES = new Set(["banned", "pending_investigation", "suspended"]);
+const REWARD_BLOCKED_STATUSES = new Set<UserStatus>(["banned", "pending_investigation", "suspended"]);
 
 /**
  * Extract the referrer's `User.id` from an invitee's `referralSource`, or null
@@ -309,26 +310,15 @@ export async function grantReferralRewardsForVerifiedInvitee(
   // Velocity guard: hold rewards (not the honest tally) when this referrer has
   // had more than the cap of invitees counted in the last 24h — a fraud-burst
   // throttle that matters most while Persona is sandbox. Held rungs are
-  // self-healing: the next under-cap event (or a Mini-App reconcile) settles
-  // them, so a legit power-referrer is delayed, never denied.
-  if (env.REFERRAL_DAILY_REWARD_CAP > 0) {
-    const since = new Date(Date.now() - ONE_DAY_MS);
-    const recent = await prisma.user.count({
-      where: {
-        referralCountedAt: { gte: since },
-        OR: [
-          { referralSource: `referral:${referrerId}` },
-          { referralSource: `tg:referral_${referrerId}` },
-          { referralSource: `tg-mini:referral_${referrerId}` },
-        ],
-      },
-    });
-    if (recent > env.REFERRAL_DAILY_REWARD_CAP) {
-      console.warn(
-        `[referral] velocity cap hit: referrer=${referrerId} counted=${recent} in 24h — holding rewards`,
-      );
-      return { referrerId, verifiedCount, ticketsApplied: 0, monthsApplied: 0, heldByVelocity: true };
-    }
+  // self-healing: `releaseHeldReferralRewards` settles them once the burst is
+  // out of the window — from the referrer's own referral screen and from the
+  // hourly sweep — so a legit power-referrer is delayed, never denied.
+  const recent = await countedInVelocityWindow(referrerId);
+  if (recent !== null) {
+    console.warn(
+      `[referral] velocity cap hit: referrer=${referrerId} counted=${recent} in 24h — holding rewards`,
+    );
+    return { referrerId, verifiedCount, ticketsApplied: 0, monthsApplied: 0, heldByVelocity: true };
   }
 
   const { ticketsApplied, monthsApplied } = await reconcileReferrerRungs(
@@ -336,6 +326,188 @@ export async function grantReferralRewardsForVerifiedInvitee(
     verifiedCount,
   );
   return { referrerId, verifiedCount, ticketsApplied, monthsApplied, heldByVelocity: false };
+}
+
+/**
+ * How many of `referrerId`'s invitees were counted inside the velocity window
+ * — or null when the referrer is NOT over the cap (including when the cap is
+ * off). One definition for the hold and for the release, so a reward is never
+ * released under a looser rule than the one that held it.
+ */
+async function countedInVelocityWindow(referrerId: string): Promise<number | null> {
+  if (env.REFERRAL_DAILY_REWARD_CAP <= 0) return null;
+  const since = new Date(Date.now() - ONE_DAY_MS);
+  const recent = await prisma.user.count({
+    where: {
+      referralCountedAt: { gte: since },
+      OR: [
+        { referralSource: `referral:${referrerId}` },
+        { referralSource: `tg:referral_${referrerId}` },
+        { referralSource: `tg-mini:referral_${referrerId}` },
+      ],
+    },
+  });
+  return recent > env.REFERRAL_DAILY_REWARD_CAP ? recent : null;
+}
+
+/** The unique ledger ids every rung `verifiedCount` has reached must carry. */
+function reachedRungKeys(
+  referrerId: string,
+  verifiedCount: number,
+): { tickets: string[]; premium: string[] } {
+  const tickets: string[] = [];
+  const premium: string[] = [];
+  for (const rung of env.REFERRAL_LADDER) {
+    if (rung.atCount > verifiedCount) continue;
+    const idBase = `referral-rung:${referrerId}:${rung.atCount}`;
+    if (rung.tickets > 0) tickets.push(`${idBase}:tickets`);
+    if (rung.months > 0) premium.push(`${idBase}:premium`);
+  }
+  return { tickets, premium };
+}
+
+/**
+ * Which of these referrers have a reached rung with no ledger row yet — the
+ * rewards the velocity cap held back. Two lookups for the whole batch, so the
+ * sweep and the state screen ask "is anything owed" without replaying
+ * `reconcileReferrerRungs`' inserts (each already-paid rung is a failed unique
+ * insert) for referrers who are fully paid.
+ */
+async function referrersOwedRungs(
+  referrers: ReadonlyArray<{ id: string; referralVerifiedCount: number }>,
+): Promise<Set<string>> {
+  const expected = referrers.map((r) => ({
+    id: r.id,
+    ...reachedRungKeys(r.id, r.referralVerifiedCount),
+  }));
+  const ticketKeys = expected.flatMap((e) => e.tickets);
+  const premiumKeys = expected.flatMap((e) => e.premium);
+  const [ticketRows, premiumRows] = await Promise.all([
+    ticketKeys.length > 0
+      ? prisma.ticketLedger.findMany({
+          where: { externalPaymentId: { in: ticketKeys } },
+          select: { externalPaymentId: true },
+        })
+      : Promise.resolve([]),
+    premiumKeys.length > 0
+      ? prisma.subscriptionLedger.findMany({
+          where: { externalPaymentId: { in: premiumKeys } },
+          select: { externalPaymentId: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const paid = new Set(
+    [...ticketRows, ...premiumRows].flatMap((row) =>
+      row.externalPaymentId ? [row.externalPaymentId] : [],
+    ),
+  );
+  return new Set(
+    expected
+      .filter((e) => [...e.tickets, ...e.premium].some((key) => !paid.has(key)))
+      .map((e) => e.id),
+  );
+}
+
+export interface ReferralReleaseResult {
+  ticketsApplied: number;
+  monthsApplied: number;
+  /** True while the referrer is still over the cap — nothing released yet. */
+  stillHeld: boolean;
+}
+
+/**
+ * Release ladder rewards the velocity cap held back (§Referral).
+ *
+ * The cap holds a reward; nothing used to give it back. The comment promised
+ * "the next under-cap event settles them", but that event is another friend
+ * verifying — a referrer whose burst was their last invites simply never got
+ * what the screen told them they had earned. This is the release: once the
+ * referrer is back under the cap, every reached-but-unpaid rung is paid through
+ * the same exactly-once keys. Blocked referrers stay unpaid, as at the hold.
+ */
+export async function releaseHeldReferralRewards(
+  referrerId: string,
+): Promise<ReferralReleaseResult> {
+  const nothing: ReferralReleaseResult = { ticketsApplied: 0, monthsApplied: 0, stillHeld: false };
+  if (!env.REFERRAL_FEATURE_ENABLED) return nothing;
+
+  const referrer = await prisma.user.findUnique({
+    where: { id: referrerId },
+    select: { id: true, status: true, referralVerifiedCount: true },
+  });
+  if (!referrer || referrer.referralVerifiedCount <= 0) return nothing;
+  if (REWARD_BLOCKED_STATUSES.has(referrer.status)) return nothing;
+
+  const owed = await referrersOwedRungs([referrer]);
+  if (!owed.has(referrer.id)) return nothing;
+  if ((await countedInVelocityWindow(referrer.id)) !== null) {
+    return { ...nothing, stillHeld: true };
+  }
+
+  const applied = await reconcileReferrerRungs(referrer.id, referrer.referralVerifiedCount);
+  if (applied.ticketsApplied > 0 || applied.monthsApplied > 0) {
+    console.info(
+      `[referral] released held rewards referrer=${referrer.id} ` +
+        `tickets=${applied.ticketsApplied} months=${applied.monthsApplied}`,
+    );
+  }
+  return { ...applied, stillHeld: false };
+}
+
+/**
+ * Where the hourly sweep resumes. In memory on purpose: a restart only means
+ * the next tick starts from the first referrer again, and every release is
+ * exactly-once, so re-examining a referrer costs a read, never a double grant.
+ */
+let releaseSweepCursor: string | null = null;
+
+/**
+ * Hourly sweep: release held rewards for referrers who never open their
+ * referral screen. Walks every referrer who reached at least one rung, one
+ * bounded page (`REFERRAL_RELEASE_SWEEP_BATCH`) per tick, wrapping around.
+ * Safe to run at any cadence — each release re-checks the cap itself.
+ */
+export async function sweepHeldReferralRewards(): Promise<{
+  scanned: number;
+  released: number;
+  stillHeld: number;
+}> {
+  const result = { scanned: 0, released: 0, stillHeld: 0 };
+  if (!env.REFERRAL_FEATURE_ENABLED) return result;
+  const firstRung = Math.min(...env.REFERRAL_LADDER.map((rung) => rung.atCount));
+  if (!Number.isFinite(firstRung)) return result;
+
+  const page = await prisma.user.findMany({
+    where: {
+      referralVerifiedCount: { gte: firstRung },
+      status: { notIn: [...REWARD_BLOCKED_STATUSES] },
+      ...(releaseSweepCursor ? { id: { gt: releaseSweepCursor } } : {}),
+    },
+    orderBy: { id: "asc" },
+    take: REFERRAL_RELEASE_SWEEP_BATCH,
+    select: { id: true, referralVerifiedCount: true },
+  });
+  // A short page is the end of the list: start over next tick.
+  releaseSweepCursor = page.length < REFERRAL_RELEASE_SWEEP_BATCH ? null : (page.at(-1)?.id ?? null);
+  result.scanned = page.length;
+  if (page.length === 0) return result;
+
+  const owed = await referrersOwedRungs(page);
+  for (const referrerId of owed) {
+    try {
+      const released = await releaseHeldReferralRewards(referrerId);
+      if (released.stillHeld) result.stillHeld += 1;
+      else if (released.ticketsApplied > 0 || released.monthsApplied > 0) result.released += 1;
+    } catch (err) {
+      console.error(`[referral] held-reward release failed referrer=${referrerId}:`, err);
+    }
+  }
+  return result;
+}
+
+/** Test hook — the sweep's page cursor is module state. */
+export function resetReferralReleaseSweepForTests(): void {
+  releaseSweepCursor = null;
 }
 
 /**

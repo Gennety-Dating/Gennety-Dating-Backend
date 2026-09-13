@@ -18,6 +18,8 @@ import {
   notifyFounderPurchaseRefunded,
 } from "../../services/founder-notify.js";
 import { spendTickets, grantTickets, isUniqueViolation } from "../../services/ticket-wallet.js";
+import { netWalletSpend } from "../../services/ticket-refund.js";
+import { isAlreadyRefundedError } from "../../services/stars-refund-error.js";
 import {
   activeDiscountFromColumns,
   consumeActiveDiscount,
@@ -1114,16 +1116,6 @@ async function recordStarsGatePayment(input: {
   }
 }
 
-function isAlreadyRefundedError(error: unknown): boolean {
-  const text =
-    error instanceof Error
-      ? error.message
-      : typeof error === "object" && error !== null && "description" in error
-        ? String((error as { description?: unknown }).description ?? "")
-        : String(error);
-  return /already[^\n]*refund|refund[^\n]*already/i.test(text);
-}
-
 async function refundStarsLedgerRecord(
   api: Api<RawApi>,
   telegramId: bigint,
@@ -1706,22 +1698,36 @@ async function refundPaidTicketSide(
       amountStars: true,
     },
   });
-  if (stars.length > 0) {
-    let allRefunded = true;
-    for (const record of stars) {
-      const refunded = await refundStarsLedgerRecord(api, payer.telegramId, record, {
-        allowSettled: true,
-      });
-      if (!refunded) allRefunded = false;
-    }
-    return allRefunded;
+  // Every Stars charge on this gate that is not yet back with the payer is
+  // returned, whichever rail holds the slot — a lost-race charge is owed back
+  // too, and the call is idempotent for one already refunded.
+  let allRefunded = true;
+  for (const record of stars) {
+    const refunded = await refundStarsLedgerRecord(api, payer.telegramId, record, {
+      allowSettled: true,
+    });
+    if (!refunded) allRefunded = false;
   }
 
-  const walletSpend = await prisma.ticketLedger.findFirst({
-    where: { userId: payer.id, matchId: match.id, reason: "spend_match", delta: { lt: 0 } },
-    select: { id: true },
+  // Which rail claimed the slot decides whether the wallet is owed a ticket as
+  // well (A13-M3). Only a charge in `gate_settled` / `gate_payment` can be the
+  // claim; one already `gate_refunded` or `gate_refund_pending` lost the race
+  // (or was returned by an earlier pass) and bought nothing. The mere presence
+  // of such a row used to end this function before the wallet was looked at,
+  // so a payer whose SPENT ticket held the slot lost it: the Stars came back,
+  // the ticket did not.
+  const starsClaimedSlot = stars.some(
+    (record) => record.reason === GATE_SETTLED_REASON || record.reason === GATE_PAYMENT_REASON,
+  );
+  if (starsClaimedSlot) return allRefunded;
+
+  // Net of refunds, not "a spend row exists": a spend that lost the race was
+  // already handed back, and a second ticket for it would be free.
+  const walletRows = await prisma.ticketLedger.findMany({
+    where: { userId: payer.id, matchId: match.id, reason: { in: ["spend_match", "refund"] } },
+    select: { reason: true, delta: true, amountStars: true, externalPaymentId: true },
   });
-  if (walletSpend) {
+  if (netWalletSpend(walletRows) > 0) {
     try {
       await grantTickets({
         userId: payer.id,
@@ -1733,8 +1739,9 @@ async function refundPaidTicketSide(
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
     }
-    return true;
+    return allRefunded;
   }
+  if (stars.length > 0) return allRefunded;
 
   // No Stars charge and no wallet spend: the slot was settled without money —
   // a Premium-covered slot, or the demo / development `no-charge` rail — so

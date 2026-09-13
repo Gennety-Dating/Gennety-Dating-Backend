@@ -105,8 +105,12 @@ export async function listTicketHistory(args: {
   // writes two rows inside one transaction. Ordering by the timestamp alone
   // would let a page boundary fall between them and either repeat a row or
   // drop one.
+  // `delta: 0` rows are bookkeeping, not movements: an App Store clawback that
+  // found nothing to take still writes its idempotency marker (A13-L3), so a
+  // replayed refund cannot claw back tickets bought later. Listed, it would read
+  // as a wallet event that moved nothing.
   const rows = await prisma.ticketLedger.findMany({
-    where: { userId },
+    where: { userId, delta: { not: 0 } },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: { id: true, delta: true, reason: true, bundleSize: true, createdAt: true },
     take: limit + 1,
@@ -253,6 +257,13 @@ export async function spendTickets(args: {
  *
  * The ledger stays honest either way: the row records what was ACTUALLY taken,
  * so `sum(delta)` still equals the balance.
+ *
+ * The row is written EVEN WHEN NOTHING WAS TAKEN (`delta: 0`), because it is
+ * also the refund's exactly-once marker: its unique `externalPaymentId` is the
+ * only thing that makes a redelivered refund notification a no-op. Writing it
+ * only when `taken > 0` meant a refund that found an empty wallet left no
+ * marker, so Apple's retry of the same refund took the tickets the user had
+ * bought SINCE — a second clawback for one refund.
  */
 export async function clawbackTickets(args: {
   userId: string;
@@ -263,6 +274,11 @@ export async function clawbackTickets(args: {
   if (count <= 0) return { taken: 0, shortfall: 0, balance: await getBalance(userId) };
 
   return prisma.$transaction(async (tx) => {
+    // Hold the wallet row for the read-then-decrement below: a concurrent spend
+    // waits instead of landing between them. Without the lock the only way to
+    // lose that race was to give up and take nothing — and a clawback that
+    // gives up after writing its marker would forgive the refund for good.
+    await tx.$queryRawUnsafe("SELECT id FROM users WHERE id = $1::uuid FOR UPDATE", userId);
     const before = await tx.user.findUnique({
       where: { id: userId },
       select: { ticketBalance: true },
@@ -271,23 +287,22 @@ export async function clawbackTickets(args: {
     const taken = Math.min(available, count);
 
     if (taken > 0) {
-      // Same CAS discipline as `spendTickets`: a concurrent spend between the
-      // read and the write must lose, not underflow.
+      // Same CAS discipline as `spendTickets`, kept as a belt under the lock:
+      // it can only miss if something wrote the balance without taking the row
+      // lock, and then the whole clawback rolls back rather than half-apply.
       const res = await tx.user.updateMany({
         where: { id: userId, ticketBalance: { gte: taken } },
         data: { ticketBalance: { decrement: taken } },
       });
       if (res.count === 0) {
-        const now = await tx.user.findUnique({
-          where: { id: userId },
-          select: { ticketBalance: true },
-        });
-        return { taken: 0, shortfall: count, balance: now?.ticketBalance ?? 0 };
+        throw new Error(`clawback: wallet of ${userId} changed under its row lock`);
       }
-      await tx.ticketLedger.create({
-        data: { userId, delta: -taken, reason: "refund", externalPaymentId },
-      });
     }
+    // Marker + audit row in one: a duplicate refund throws P2002 here and rolls
+    // the decrement above back with it.
+    await tx.ticketLedger.create({
+      data: { userId, delta: taken > 0 ? -taken : 0, reason: "refund", externalPaymentId },
+    });
 
     const after = await tx.user.findUnique({
       where: { id: userId },

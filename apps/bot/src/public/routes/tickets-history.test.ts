@@ -85,6 +85,19 @@ describe("GET /v1/me/tickets/history", () => {
     });
   });
 
+  it("leaves out zero-delta bookkeeping rows such as an empty clawback's marker", async () => {
+    findMany.mockResolvedValue([]);
+
+    await request(buildApp()).get("/v1/me/tickets/history");
+
+    // A13-L3 writes the App Store clawback's idempotency row even when nothing
+    // was taken; the history answers "where did my tickets go", and that row
+    // moved none.
+    expect(findMany.mock.calls[0]![0]).toMatchObject({
+      where: { userId: USER_ID, delta: { not: 0 } },
+    });
+  });
+
   it("asks for one row more than the limit and reports hasMore without leaking it", async () => {
     findMany.mockResolvedValue([row("r1"), row("r2"), row("r3")]);
 

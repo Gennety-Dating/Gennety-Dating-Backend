@@ -2,21 +2,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppStoreTransaction } from "./appstore.js";
 
 const userFindFirst = vi.fn();
+const ledgerFindFirst = vi.fn();
 vi.mock("@gennety/db", () => ({
-  prisma: { user: { findFirst: userFindFirst } },
+  prisma: {
+    user: { findFirst: userFindFirst },
+    subscriptionLedger: { findFirst: ledgerFindFirst },
+  },
 }));
 vi.mock("../config.js", () => ({
   env: { APPSTORE_BUNDLE_ID: "com.gennety.ios", PREMIUM_APPSTORE_PRODUCT_ID: "premium_monthly" },
 }));
 const activateOrExtendPremium = vi.fn();
 const revokePremium = vi.fn(async () => {});
-vi.mock("./premium.js", () => ({ activateOrExtendPremium, revokePremium }));
+const recordPremiumLapse = vi.fn(async () => {});
+vi.mock("./premium.js", () => ({ activateOrExtendPremium, revokePremium, recordPremiumLapse }));
 
 const { applyAppStorePremium, handleAppStorePremiumNotification } = await import(
   "./appstore-premium.js"
 );
 
 const EXPIRES = Date.now() + 30 * 24 * 3600_000;
+const PURCHASED = Date.now() - 24 * 3600_000;
 
 function tx(over: Partial<AppStoreTransaction> = {}): AppStoreTransaction {
   return {
@@ -27,6 +33,8 @@ function tx(over: Partial<AppStoreTransaction> = {}): AppStoreTransaction {
     quantity: 1,
     revocationDate: null,
     expiresDate: EXPIRES,
+    purchaseDate: PURCHASED,
+    environment: "Production",
     priceCents: 999,
     currency: "USD",
     appAccountToken: null,
@@ -37,6 +45,7 @@ function tx(over: Partial<AppStoreTransaction> = {}): AppStoreTransaction {
 beforeEach(() => {
   vi.clearAllMocks();
   activateOrExtendPremium.mockResolvedValue({ applied: true, premiumUntil: new Date(EXPIRES) });
+  ledgerFindFirst.mockResolvedValue(null);
 });
 
 describe("applyAppStorePremium", () => {
@@ -63,10 +72,32 @@ describe("applyAppStorePremium", () => {
     expect(res).toEqual({ status: "invalid", reason: "not_premium" });
   });
 
-  it("revokes a refunded transaction", async () => {
+  it("revokes a refunded transaction — only that transaction's period", async () => {
     const res = await applyAppStorePremium("u1", tx({ revocationDate: Date.now() }));
     expect(res.status).toBe("revoked");
-    expect(revokePremium).toHaveBeenCalledWith("u1", "appstore:tx-1:refund", "refunded");
+    expect(revokePremium).toHaveBeenCalledWith({
+      userId: "u1",
+      externalPaymentId: "appstore:tx-1:refund",
+      provider: "app_store",
+      refunded: { start: new Date(PURCHASED), end: new Date(EXPIRES) },
+    });
+  });
+
+  // A13-M2: App Review buys in the sandbox against the production server, so
+  // the purchase is honoured — and labelled, so it is never counted as revenue.
+  it("honours a sandbox purchase and labels it", async () => {
+    const res = await applyAppStorePremium("u1", tx({ environment: "Sandbox" }));
+    expect(res.status).toBe("activated");
+    expect(activateOrExtendPremium).toHaveBeenCalledWith(
+      expect.objectContaining({ note: "appstore-sandbox", sandbox: true }),
+    );
+  });
+
+  it("carries no sandbox label on a production purchase", async () => {
+    await applyAppStorePremium("u1", tx());
+    const arg = activateOrExtendPremium.mock.calls[0]![0] as Record<string, unknown>;
+    expect(arg).not.toHaveProperty("note");
+    expect(arg).not.toHaveProperty("sandbox");
   });
 
   it("rejects a subscription with no expiry", async () => {
@@ -93,15 +124,34 @@ describe("handleAppStorePremiumNotification", () => {
 
   // Apple sends EXPIRED once the paid-through instant has passed, so the
   // fixture carries a lapsed `expiresDate` — the authoritative fact the verdict
-  // is now read from. The assertions are unchanged.
-  it("revokes on EXPIRED", async () => {
+  // is read from.
+  //
+  // A13-H2: a lapse used to call `revokePremium`, which wrote
+  // `premiumUntil: null` and wiped every stacked Stars package and referral /
+  // promo month along with the lapsed subscription. It now only records the
+  // lapse (auto-renew off); the dates are left alone.
+  it("records a lapse on EXPIRED without revoking anything", async () => {
     userFindFirst.mockResolvedValueOnce({ id: "u1" });
     const res = await handleAppStorePremiumNotification(
       tx({ expiresDate: Date.now() - 1000 }),
       "EXPIRED",
     );
-    expect(res.status).toBe("revoked");
-    expect(revokePremium).toHaveBeenCalledWith("u1", "appstore:tx-1:expired", "expired");
+    expect(res.status).toBe("lapsed");
+    expect(revokePremium).not.toHaveBeenCalled();
+    expect(recordPremiumLapse).toHaveBeenCalledWith("u1", "appstore:tx-1:expired", "app_store");
+  });
+
+  it("ignores a lapse of a period Apple has already renewed past", async () => {
+    // A redelivered notification for an older transaction of a live
+    // subscription must not switch its renewal off.
+    userFindFirst.mockResolvedValueOnce({ id: "u1" });
+    ledgerFindFirst.mockResolvedValueOnce({ id: "newer-period" });
+    const res = await handleAppStorePremiumNotification(
+      tx({ expiresDate: Date.now() - 1000 }),
+      "EXPIRED",
+    );
+    expect(res.status).toBe("already_processed");
+    expect(recordPremiumLapse).not.toHaveBeenCalled();
   });
 
   it("returns unknown_owner when no user holds the anchor", async () => {
@@ -133,6 +183,8 @@ describe("handleAppStorePremiumNotification", () => {
       "REFUND",
     );
     expect(res.status).toBe("revoked");
-    expect(revokePremium).toHaveBeenCalledWith("u1", "appstore:tx-1:refund", "refunded");
+    expect(revokePremium).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u1", externalPaymentId: "appstore:tx-1:refund" }),
+    );
   });
 });

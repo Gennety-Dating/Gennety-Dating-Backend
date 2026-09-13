@@ -415,6 +415,32 @@ export const VENUE_CHANGE_MAX_PER_DATE = 2;
 export const PREMIUM_SUBSCRIPTION_PERIOD_SECONDS = 2_592_000;
 
 /**
+ * How close to the end of a live Telegram Stars subscription period the
+ * pre-checkout stops refusing a second recurring purchase. A duplicate
+ * subscription is refused because it would charge every month and buy nothing;
+ * the refusal is lifted for this last stretch of the period so that, were
+ * Telegram ever to route an auto-renewal of the SAME subscription through
+ * pre-checkout, the renewal could never be the thing declined.
+ */
+export const PREMIUM_RENEWAL_CHECKOUT_GRACE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Promo codes are for NEW accounts (PROMO_CODES_PRODUCT_SPEC): the iOS deferred
+ * claim attributes a code only within this long after the account was created
+ * (and only before onboarding is completed). Wide enough for the landing page →
+ * App Store → install → first launch trip, narrow enough that an existing
+ * account cannot pick up a public code.
+ */
+export const PROMO_DEFERRED_CLAIM_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Referrers the hourly held-reward sweep examines per tick. Rewards held back
+ * by the daily velocity cap are released by this sweep (and by the referrer
+ * opening their referral screen); the budget keeps one tick bounded.
+ */
+export const REFERRAL_RELEASE_SWEEP_BATCH = 200;
+
+/**
  * Phase 1b: Profiler (PRODUCT_SPEC §Phase 1b). Timed batches of gender-specific
  * Q&A harvested after onboarding to fuel icebreakers and date-planning hints.
  * NOT an input to the matching algorithm. All values are deliberately exported

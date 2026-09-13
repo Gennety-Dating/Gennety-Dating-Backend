@@ -73,6 +73,7 @@ import {
   notifyFounderWeeklyMatches,
   notifyFounderAccountClosed,
   notifyFounderAdSpendReminder,
+  notifyFounderPurchase,
   isFounderFeedSuppressedRuntime,
   __resetFounderApiForTests,
   __resetHandlerAlertsForTests,
@@ -302,6 +303,53 @@ describe("notifyFounderAccountClosed", () => {
     const [, text] = sendMessage.mock.calls[0]!;
     expect(text).toContain("ЗАМОРОЖЕН");
     expect(text).toContain("+380991234567");
+  });
+});
+
+describe("notifyFounderPurchase", () => {
+  const payer = {
+    id: "u1",
+    firstName: "Bob",
+    age: 24,
+    telegramId: -5n,
+    telegramUsername: null,
+    phone: "+380990000000",
+    email: null,
+    platform: "mobile",
+    ticketBalance: 3,
+  };
+
+  // Founder decision 2026-09-14 (A13-M2): App Review buys in the SANDBOX
+  // against the production server, so those purchases are honoured — and the
+  // feed has to say they moved no money, or it reads as revenue.
+  it("marks an App Store sandbox purchase as not revenue", async () => {
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    findUnique.mockResolvedValue(payer);
+    await notifyFounderPurchase({
+      userId: "u1",
+      kind: "tickets",
+      provider: "app_store",
+      amountCents: 499,
+      currency: "USD",
+      sandbox: true,
+    });
+    const [, text] = sendMessage.mock.calls[0]!;
+    expect(text).toContain("Sandbox");
+    expect(text).toContain("не выручка");
+  });
+
+  it("carries no sandbox line for a real purchase", async () => {
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    findUnique.mockResolvedValue(payer);
+    await notifyFounderPurchase({
+      userId: "u1",
+      kind: "tickets",
+      provider: "app_store",
+      amountCents: 499,
+      currency: "USD",
+    });
+    const [, text] = sendMessage.mock.calls[0]!;
+    expect(text).not.toContain("Sandbox");
   });
 });
 

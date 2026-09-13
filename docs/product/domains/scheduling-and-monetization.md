@@ -1534,14 +1534,30 @@ implementation is wrong:
   package buyer with no subscription ends up Premium-active with
   `premiumAutoRenew = false`, which is correct (nothing renews) and is exactly
   what makes the reminder fire for them.
-- **A paid grant may only ever EXTEND `premiumUntil`.** Telegram and Apple hand
-  us an absolute "paid through" instant, and for a pure subscription each one is
-  later than the last — so this guard is a no-op there and exists for the mixed
-  case packages introduce: a monthly subscriber who buys 6 months has
-  `premiumUntil` half a year out, and their next ordinary 30-day renewal carries
-  an expiry ~30 days out. Writing that through would **silently delete five
-  months of paid access on a charge the user had just made.** `revokePremium`
-  (a refund) remains the one path allowed to shorten it.
+- **A recurring charge ADDS its period on top of time it did not buy.** Telegram
+  and Apple hand us an absolute "paid through" instant. Time the head holds
+  beyond the previous period of THIS subscription (a package, a promo or
+  referral month) is kept and the new period lands on top of it:
+  `premiumUntil = max(stored, periodEnd + max(0, stored − max(now, previousPeriodEnd)))`
+  (`recurringPremiumUntil`, `services/premium.ts`). For a pure subscription the
+  extra is zero and the value is exactly the provider's expiry. Until 2026-09-14
+  (audit A13-M26) it was `max(stored, periodEnd)`, which protected a package from
+  a renewal but made the renewal itself buy nothing for anyone holding a comp
+  month. Both grant writers lock the user row (`FOR UPDATE`) and compute from the
+  locked value, so two grants landing together cannot overwrite each other.
+- **Only a refund shortens `premiumUntil`, and only by what it refunded.** An App
+  Store lapse (`EXPIRED`, auto-renew off) turns `premiumAutoRenew` off and writes
+  the `expired` ledger row — it never touches `premiumUntil`, which is already
+  date-based (A13-H2: a lapse used to null it, wiping stacked package and promo
+  months that no ledger key would let us grant back). A refund/revocation
+  subtracts the refunded transaction's unused coverage,
+  `max(0, expiresDate − max(now, purchaseDate))`. A lapse for a period older than
+  one already on the ledger is ignored (a redelivered or forged `EXPIRED`).
+- **A second recurring subscription is refused.** `POST /v1/premium/stars-invoice`
+  answers 409 `premium-already-active` for the monthly plan while a live
+  auto-renewing period exists, and the pre-checkout declines it too (outside a
+  24h renewal grace, in case Telegram routes a renewal through pre-checkout).
+  Packages stay purchasable — they stack.
 - **Every package charge is a first period.** There are no silent renewals to
   suppress, so unlike the monthly rail it always DMs: the whole point of buying
   a fixed block is knowing how long you bought.
@@ -1819,8 +1835,16 @@ a richer welcome gift. Full spec:
   Store; first launch resolves the code via clipboard and/or a fingerprint match
   (`POST /v1/me/promo/claim-deferred`), and the native wow screen grants via
   `POST /v1/me/promo/claim`. Best-effort by product decision — **no manual-entry
-  fallback** (a `PROMO_MANUAL_ENTRY_ENABLED` server seam exists if the miss rate
-  proves painful). Telegram's start-param path is fully reliable.
+  fallback**: a `code` in the `claim-deferred` body is honoured only when
+  `PROMO_MANUAL_ENTRY_ENABLED` is on (the iOS client sends `code: nil` — it stopped
+  reading the clipboard on 2026-08-02; turning clipboard reading back on needs this
+  flag too). Telegram's start-param path is fully reliable.
+- **New accounts only (A13-M1, 2026-09-14).** `claim-deferred` answers 409
+  `promo-not-eligible` unless the account is younger than
+  `PROMO_DEFERRED_CLAIM_WINDOW_MS` (24h) AND has not completed onboarding; the
+  grant itself refuses an account that completed onboarding. Before this, any
+  existing iOS account (their `referralSource` is always null) could redeem a
+  public code.
 - **Management.** Reusable codes are created/managed out-of-band via
   `scripts/promo-codes.mjs` (`pnpm promo:create|disable|stats|list`). Rewards
   reuse the wallet/entitlement ledgers (`ticket_ledger` `promo`,

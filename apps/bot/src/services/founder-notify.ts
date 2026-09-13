@@ -677,6 +677,12 @@ export interface FounderPurchaseNotice {
   detail?: string | null;
   matchId?: string | null;
   externalPaymentId?: string | null;
+  /**
+   * An App Store SANDBOX purchase (App Review, TestFlight). Honoured like a
+   * real one, but no money moved — the line says so, so the feed is never
+   * read as revenue it is not.
+   */
+  sandbox?: boolean;
 }
 
 /**
@@ -720,6 +726,9 @@ export async function notifyFounderPurchase(notice: FounderPurchaseNotice): Prom
       ...payerLines(user),
       `💵 ${amount}`,
     ];
+    if (notice.sandbox === true) {
+      lines.push("🧪 Sandbox App Store — тестовая покупка, деньги не двигались, не выручка");
+    }
     if (notice.detail) lines.push(`🧾 ${notice.detail}`);
     lines.push(`🏦 ${providerLabel(notice.provider)}`);
     if (notice.matchId) lines.push(`Матч: ${notice.matchId}`);

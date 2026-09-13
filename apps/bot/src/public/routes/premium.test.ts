@@ -34,9 +34,15 @@ vi.mock("../../demo/config.js", () => ({
   },
 }));
 
-vi.mock("../../services/premium.js", () => ({
-  getPremiumState: (...a: unknown[]) => getPremiumState(...a),
-}));
+vi.mock("../../services/premium.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../services/premium.js")>();
+  return {
+    getPremiumState: (...a: unknown[]) => getPremiumState(...a),
+    // The real predicate: the refusal must follow the same definition of "a
+    // live recurring subscription" the rest of the product uses.
+    hasLiveRecurringPremium: actual.hasLiveRecurringPremium,
+  };
+});
 
 const { createPremiumRouter } = await import("./premium.js");
 
@@ -155,6 +161,55 @@ describe("POST /v1/premium/stars-invoice", () => {
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: "unknown-plan" });
     expect(createInvoiceLink).not.toHaveBeenCalled();
+  });
+
+  // A13-H15: a second recurring subscription on top of a live one charges every
+  // month and buys nothing.
+  it("refuses a recurring invoice while a recurring subscription is live", async () => {
+    userFindUnique.mockResolvedValue({
+      id: USER_ID,
+      language: "en",
+      premiumUntil: new Date(Date.now() + 10 * 24 * 3600_000),
+      premiumAutoRenew: true,
+    });
+    const res = await request(buildApp())
+      .post("/v1/premium/stars-invoice")
+      .set(...AUTH)
+      .send({ plan: "monthly" });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: "premium-already-active" });
+    expect(createInvoiceLink).not.toHaveBeenCalled();
+  });
+
+  it("still sells a package to a live subscriber — it stacks", async () => {
+    userFindUnique.mockResolvedValue({
+      id: USER_ID,
+      language: "en",
+      premiumUntil: new Date(Date.now() + 10 * 24 * 3600_000),
+      premiumAutoRenew: true,
+    });
+    const res = await request(buildApp())
+      .post("/v1/premium/stars-invoice")
+      .set(...AUTH)
+      .send({ plan: "months3" });
+    expect(res.status).toBe(200);
+  });
+
+  it("sells the subscription again once the old one no longer renews", async () => {
+    // Cancelled (auto-renew off) but still inside the paid period: nothing
+    // would bill twice, so the purchase stands.
+    userFindUnique.mockResolvedValue({
+      id: USER_ID,
+      language: "en",
+      premiumUntil: new Date(Date.now() + 10 * 24 * 3600_000),
+      premiumAutoRenew: false,
+    });
+    const res = await request(buildApp())
+      .post("/v1/premium/stars-invoice")
+      .set(...AUTH)
+      .send({ plan: "monthly" });
+    expect(res.status).toBe(200);
   });
 
   it("still 401s without initData", async () => {

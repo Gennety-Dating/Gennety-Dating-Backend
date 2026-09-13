@@ -16,9 +16,12 @@ const h = vi.hoisted(() => ({
     BOT_USERNAME: "gennetybot",
   },
   findUnique: vi.fn(),
+  findMany: vi.fn(),
   updateMany: vi.fn(),
   update: vi.fn(),
   count: vi.fn(),
+  ticketLedgerFindMany: vi.fn(),
+  subscriptionLedgerFindMany: vi.fn(),
   $transaction: vi.fn(),
   grantTickets: vi.fn(),
   isUniqueViolation: vi.fn((e: unknown) => (e as { code?: string })?.code === "P2002"),
@@ -29,10 +32,13 @@ vi.mock("@gennety/db", () => ({
   prisma: {
     user: {
       findUnique: h.findUnique,
+      findMany: h.findMany,
       updateMany: h.updateMany,
       update: h.update,
       count: h.count,
     },
+    ticketLedger: { findMany: h.ticketLedgerFindMany },
+    subscriptionLedger: { findMany: h.subscriptionLedgerFindMany },
     $transaction: h.$transaction,
   },
 }));
@@ -57,10 +63,19 @@ const {
   buildReferralStateView,
   referralUsdValue,
   claimReferralCode,
+  releaseHeldReferralRewards,
+  sweepHeldReferralRewards,
+  resetReferralReleaseSweepForTests,
 } = await import("./referral.js");
 
 beforeEach(() => {
   vi.clearAllMocks();
+  for (const fn of [h.findUnique, h.findMany, h.count, h.ticketLedgerFindMany, h.subscriptionLedgerFindMany]) {
+    fn.mockReset();
+  }
+  h.ticketLedgerFindMany.mockResolvedValue([]);
+  h.subscriptionLedgerFindMany.mockResolvedValue([]);
+  resetReferralReleaseSweepForTests();
   h.env.REFERRAL_FEATURE_ENABLED = true;
   h.env.REFERRAL_INVITEE_PREMIUM_MONTHS = 1;
   h.env.REFERRAL_DAILY_REWARD_CAP = 3;
@@ -265,6 +280,112 @@ describe("grantReferralRewardsForVerifiedInvitee", () => {
       heldByVelocity: true,
     });
     expect(h.grantTickets).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A13-M4. The velocity cap held rewards and nothing released them: the promise
+ * was "the next under-cap event settles them", and that event is another friend
+ * verifying — a referrer whose burst was their last invites never got paid.
+ */
+describe("releaseHeldReferralRewards", () => {
+  /** Rung 1 paid; rung 3 (reached at count 4) held back. */
+  function paidRungOneOnly() {
+    h.ticketLedgerFindMany.mockResolvedValueOnce([
+      { externalPaymentId: "referral-rung:ref:1:tickets" },
+    ]);
+    h.subscriptionLedgerFindMany.mockResolvedValueOnce([
+      { externalPaymentId: "referral-rung:ref:1:premium" },
+    ]);
+  }
+
+  it("pays a held rung once the referrer is back under the cap", async () => {
+    h.findUnique.mockResolvedValueOnce({ id: "ref", status: "active", referralVerifiedCount: 4 });
+    paidRungOneOnly();
+    h.count.mockResolvedValueOnce(1); // burst is out of the 24h window
+    h.grantTickets
+      .mockRejectedValueOnce({ code: "P2002" }) // rung 1 already paid
+      .mockResolvedValueOnce(2);
+    h.grantComplimentaryPremiumMonths
+      .mockResolvedValueOnce({ applied: false, premiumUntil: null })
+      .mockResolvedValueOnce({ applied: true, premiumUntil: new Date() });
+
+    const res = await releaseHeldReferralRewards("ref");
+
+    expect(res).toEqual({ ticketsApplied: 1, monthsApplied: 1, stillHeld: false });
+    expect(h.grantTickets).toHaveBeenCalledWith(
+      expect.objectContaining({ externalPaymentId: "referral-rung:ref:3:tickets" }),
+    );
+  });
+
+  it("keeps holding while the referrer is still over the cap", async () => {
+    h.findUnique.mockResolvedValueOnce({ id: "ref", status: "active", referralVerifiedCount: 4 });
+    paidRungOneOnly();
+    h.count.mockResolvedValueOnce(4); // > cap of 3
+
+    const res = await releaseHeldReferralRewards("ref");
+
+    expect(res).toEqual({ ticketsApplied: 0, monthsApplied: 0, stillHeld: true });
+    expect(h.grantTickets).not.toHaveBeenCalled();
+  });
+
+  it("does not replay the ladder for a fully paid referrer", async () => {
+    h.findUnique.mockResolvedValueOnce({ id: "ref", status: "active", referralVerifiedCount: 1 });
+    h.ticketLedgerFindMany.mockResolvedValueOnce([
+      { externalPaymentId: "referral-rung:ref:1:tickets" },
+    ]);
+    h.subscriptionLedgerFindMany.mockResolvedValueOnce([
+      { externalPaymentId: "referral-rung:ref:1:premium" },
+    ]);
+
+    await releaseHeldReferralRewards("ref");
+
+    expect(h.count).not.toHaveBeenCalled();
+    expect(h.grantTickets).not.toHaveBeenCalled();
+  });
+
+  it("never releases to a blocked referrer", async () => {
+    h.findUnique.mockResolvedValueOnce({ id: "ref", status: "banned", referralVerifiedCount: 4 });
+    await releaseHeldReferralRewards("ref");
+    expect(h.ticketLedgerFindMany).not.toHaveBeenCalled();
+    expect(h.grantTickets).not.toHaveBeenCalled();
+  });
+});
+
+describe("sweepHeldReferralRewards", () => {
+  it("releases only the referrers who are owed a rung, and wraps its page cursor", async () => {
+    h.findMany.mockResolvedValueOnce([
+      { id: "paid", referralVerifiedCount: 1 },
+      { id: "owed", referralVerifiedCount: 1 },
+    ]);
+    // Batch lookup: `paid` has both rung-1 rows, `owed` has none.
+    h.ticketLedgerFindMany.mockResolvedValueOnce([
+      { externalPaymentId: "referral-rung:paid:1:tickets" },
+    ]);
+    h.subscriptionLedgerFindMany.mockResolvedValueOnce([
+      { externalPaymentId: "referral-rung:paid:1:premium" },
+    ]);
+    // The release for `owed` re-reads and re-checks on its own.
+    h.findUnique.mockResolvedValueOnce({ id: "owed", status: "active", referralVerifiedCount: 1 });
+    h.count.mockResolvedValueOnce(1);
+
+    const res = await sweepHeldReferralRewards();
+
+    expect(res).toEqual({ scanned: 2, released: 1, stillHeld: 0 });
+    expect(h.findUnique).toHaveBeenCalledTimes(1);
+    expect(h.grantTickets).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "owed", externalPaymentId: "referral-rung:owed:1:tickets" }),
+    );
+    // A short page ends the walk: the next tick starts from the beginning.
+    h.findMany.mockResolvedValueOnce([]);
+    await sweepHeldReferralRewards();
+    expect(h.findMany.mock.calls[1]![0].where).not.toHaveProperty("id");
+  });
+
+  it("is inert when the program is off", async () => {
+    h.env.REFERRAL_FEATURE_ENABLED = false;
+    expect(await sweepHeldReferralRewards()).toEqual({ scanned: 0, released: 0, stillHeld: 0 });
+    expect(h.findMany).not.toHaveBeenCalled();
   });
 });
 

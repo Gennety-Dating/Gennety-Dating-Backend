@@ -21,7 +21,7 @@ vi.mock("@gennety/db", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
     match: { findUnique: vi.fn() },
-    rematchPurchase: { create: vi.fn(), update: vi.fn() },
+    rematchPurchase: { create: vi.fn(), updateMany: vi.fn() },
   },
 }));
 vi.mock("../config.js", () => ({
@@ -73,7 +73,7 @@ import { handleSuccessfulPayment } from "./payments.js";
 
 const findUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>;
 const createPurchase = prisma.rematchPurchase.create as unknown as ReturnType<typeof vi.fn>;
-const updatePurchase = prisma.rematchPurchase.update as unknown as ReturnType<typeof vi.fn>;
+const updatePurchase = prisma.rematchPurchase.updateMany as unknown as ReturnType<typeof vi.fn>;
 const status = runStatusSequence as unknown as ReturnType<typeof vi.fn>;
 const engine = runRematch as unknown as ReturnType<typeof vi.fn>;
 const refund = refundRematchPurchase as unknown as ReturnType<typeof vi.fn>;
@@ -91,7 +91,7 @@ beforeEach(() => {
     externalPaymentId: "charge-1",
     status: "processing",
   });
-  updatePurchase.mockResolvedValue({});
+  updatePurchase.mockResolvedValue({ count: 1 });
   engine.mockResolvedValue({ ok: true, matchId: MATCH_ID, partnerId: "her-1", framing: "neutral" });
   refund.mockResolvedValue(true);
   dispatch.mockResolvedValue({ dispatched: 1, failed: 0, errors: [], undelivered: [] });
@@ -301,5 +301,30 @@ describe("a pitch that reached nobody", () => {
     const { ctx } = payCtx();
     await handleSuccessfulPayment(ctx);
     expect(refund).not.toHaveBeenCalled();
+  });
+
+  // A13-L2: `settled` is written only over `processing`, so a run that outlived
+  // the stale window never records a sale over the sweep's refund.
+  it("marks the purchase settled only while it is still processing", async () => {
+    const { ctx } = payCtx();
+    await handleSuccessfulPayment(ctx);
+    expect(updatePurchase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "purchase-1", status: "processing" },
+        data: expect.objectContaining({ status: "settled", resultMatchId: MATCH_ID }),
+      }),
+    );
+  });
+
+  it("still delivers a match whose purchase the sweep already took, and says so in the log", async () => {
+    updatePurchase.mockResolvedValueOnce({ count: 0 });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { ctx } = payCtx();
+
+    await handleSuccessfulPayment(ctx);
+
+    expect(dispatch).toHaveBeenCalledWith(ctx.api, [MATCH_ID]);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("left processing"));
+    error.mockRestore();
   });
 });

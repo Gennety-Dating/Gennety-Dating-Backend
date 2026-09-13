@@ -87,6 +87,7 @@ export async function purchaseVenueChange(
     matchId,
     tx.transactionId,
     tx.priceCents,
+    tx.environment === "Sandbox",
   );
   if (settled.ok) return { status: "settled" };
 

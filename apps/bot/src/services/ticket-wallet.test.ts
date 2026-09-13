@@ -72,6 +72,8 @@ const prismaMock = {
       return { count: 0 };
     },
   },
+  // The row lock the clawback takes; the in-memory wallet has nothing to lock.
+  $queryRawUnsafe: async () => [],
   // Array form runs the already-issued promises; callback form passes the mock.
   $transaction: async (arg: unknown) =>
     typeof arg === "function"
@@ -265,12 +267,24 @@ describe("clawbackTickets", () => {
     expect(db.ledger.at(-1)).toMatchObject({ delta: -2 });
   });
 
-  it("writes no ledger row when there was nothing to take", async () => {
+  /**
+   * A13-L3. The row is the refund's exactly-once marker as well as its audit
+   * line. It used to be written only when something was taken, so a refund that
+   * met an empty wallet left no marker — and Apple's redelivery of that refund
+   * clawed back the tickets bought since.
+   */
+  it("writes a zero-delta marker when there was nothing to take", async () => {
     db.user.ticketBalance = 0;
-    const before = db.ledger.length;
 
-    await clawbackTickets({ userId: "u1", count: 4, externalPaymentId: "x" });
+    await clawbackTickets({ userId: "u1", count: 4, externalPaymentId: "appstore:tx:refund" });
 
-    expect(db.ledger).toHaveLength(before);
+    expect(db.ledger).toHaveLength(1);
+    expect(db.ledger[0]).toMatchObject({
+      delta: 0,
+      reason: "refund",
+      externalPaymentId: "appstore:tx:refund",
+    });
+    // `sum(delta)` still equals the balance.
+    expect(db.user.ticketBalance).toBe(0);
   });
 });

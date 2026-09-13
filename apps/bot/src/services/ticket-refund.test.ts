@@ -231,13 +231,62 @@ describe("planMatchTicketRefunds", () => {
     // Stars-гейт не трогает кошелёк — он пишет нулевую строку с `amountStars`.
     // Признак оплаты обязан её узнавать, иначе честный плательщик потерял бы
     // возврат ровно так же тихо, как подписчик его получал.
+    // Строка в расчётном статусе `gate_settled`: именно она держит слот.
     seedMatch({}, { coveredByPremium: ["A", "B"] });
-    db.ledger.push({ userId: A, matchId: "m1", delta: 0, reason: "gate_payment", amountStars: 150 });
+    db.ledger.push({ userId: A, matchId: "m1", delta: 0, reason: "gate_settled", amountStars: 150 });
 
     const plan = await planMatchTicketRefunds("m1");
 
     expect(plan).toHaveLength(1);
     expect(plan[0]!.userId).toBe(A);
+  });
+
+  /**
+   * A13-L1. Any debit or any money on a row used to count as "paid", so a
+   * payment that bought nothing — already given back — still earned a free
+   * ticket when the date was cancelled.
+   */
+  it("does not count a wallet spend that lost the race and was refunded on the spot", async () => {
+    // A's slot was closed by Premium; A also tapped "use a ticket", lost the
+    // race, and `useTicketFromBalance` refunded the spend immediately.
+    seedMatch({}, { coveredByPremium: ["A"] });
+    db.ledger.push({ userId: A, matchId: "m1", delta: -1, reason: "spend_match" });
+    db.ledger.push({ userId: A, matchId: "m1", delta: 1, reason: "refund", externalPaymentId: null });
+
+    const plan = await planMatchTicketRefunds("m1");
+
+    expect(plan.map((c) => c.userId)).toEqual([B]);
+  });
+
+  it("does not count a Stars charge that was already returned to the payer", async () => {
+    seedMatch({}, { coveredByPremium: ["A", "B"] });
+    db.ledger.push({ userId: A, matchId: "m1", delta: 0, reason: "gate_refunded", amountStars: 150 });
+    db.ledger.push({
+      userId: B,
+      matchId: "m1",
+      delta: 0,
+      reason: "gate_refund_pending",
+      amountStars: 150,
+    });
+
+    expect(await planMatchTicketRefunds("m1")).toEqual([]);
+  });
+
+  it("still counts a spend when the only refund on the row was a Stars surplus credit", async () => {
+    // `gate-surplus:` returns an overpaid Stars slot as a ticket — money, not a
+    // spend coming back — so it must not cancel out a real wallet spend.
+    seedMatch({}, { coveredByPremium: ["B"] });
+    db.ledger.push({
+      userId: A,
+      matchId: "m1",
+      delta: 1,
+      reason: "refund",
+      externalPaymentId: "gate-surplus:charge-1",
+    });
+
+    const plan = await planMatchTicketRefunds("m1");
+
+    expect(plan.map((c) => c.userId)).toEqual([A]);
   });
 
   it("credits BOTH slots to the payer who covered their partner", async () => {

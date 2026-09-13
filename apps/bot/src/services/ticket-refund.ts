@@ -70,6 +70,62 @@ export interface TicketRefundOutcome {
 
 type RefundDb = Pick<typeof prisma, "match" | "ticketLedger">;
 
+/** The slice of a `ticket_ledger` row that says whether a slot was paid for. */
+export interface MatchPaymentLedgerRow {
+  reason: string;
+  delta: number;
+  amountStars: number | null;
+  externalPaymentId: string | null;
+}
+
+/**
+ * `externalPaymentId` prefixes of `refund` rows that did NOT give a wallet
+ * spend back: a Stars overpayment returned as tickets (`gate-surplus:`), and
+ * this rail's own cancellation refund (`refund:match:`), which must not erase
+ * the very evidence it is paid on.
+ */
+const NON_SPEND_REFUND_PREFIXES = ["gate-surplus:", "refund:match:"] as const;
+
+/**
+ * Wallet tickets a payer still has committed to one match: their `spend_match`
+ * debits minus the refunds that handed those spends back — the lost-race refund
+ * `useTicketFromBalance` writes, and the expiry / orphan refunds.
+ *
+ * A spend alone is not a purchase. A wallet spend that lost the slot race is
+ * refunded on the spot, and counting its debit as "paid" is what turned a
+ * cancelled date into a free ticket for someone who had already got theirs back.
+ */
+export function netWalletSpend(rows: readonly MatchPaymentLedgerRow[]): number {
+  let net = 0;
+  for (const row of rows) {
+    if (row.reason === "spend_match" && row.delta < 0) net += -row.delta;
+    if (
+      row.reason === "refund" &&
+      row.delta > 0 &&
+      !NON_SPEND_REFUND_PREFIXES.some((prefix) => row.externalPaymentId?.startsWith(prefix))
+    ) {
+      net -= row.delta;
+    }
+  }
+  return Math.max(0, net);
+}
+
+/**
+ * Stars gate statuses in which the charge actually holds a slot. A charge that
+ * lost the race sits in `gate_refund_pending` / `gate_refunded` and bought
+ * nothing; one still in `gate_payment` has not claimed anything yet.
+ */
+export const STARS_GATE_CLAIMED_REASONS = ["gate_settled", "gate_surplus_pending"] as const;
+
+/** Whether these rows show a Stars charge that holds a slot on the match. */
+export function hasSettledStarsPayment(rows: readonly MatchPaymentLedgerRow[]): boolean {
+  return rows.some(
+    (row) =>
+      (STARS_GATE_CLAIMED_REASONS as readonly string[]).includes(row.reason) &&
+      (row.amountStars ?? 0) > 0,
+  );
+}
+
 const MATCH_REFUND_SELECT = {
   id: true,
   ticketStatus: true,
@@ -129,21 +185,33 @@ export async function planMatchTicketRefunds(
    * быстрее, чем чаще отменяются свидания.
    *
    * Признак берём из реестра, а не из нового поля в схеме: настоящая оплата
-   * ВСЕГДА оставляет там след — списание из кошелька (`delta < 0`, одна
-   * транзакция с уменьшением баланса) либо деньги на строке (`amountStars`
-   * для Stars-гейта, `amountCents` для App Store). Premium-ветка пишет
-   * нулевую строку `premium_gate` без денег — и она нам даже не нужна:
-   * правило «нет следа оплаты — нет возврата» верно и тогда, когда та
-   * best-effort запись не удалась.
+   * ВСЕГДА оставляет там след. Premium-ветка пишет нулевую строку
+   * `premium_gate` без денег — и она нам даже не нужна: правило «нет следа
+   * оплаты — нет возврата» верно и тогда, когда та best-effort запись не
+   * удалась.
+   *
+   * След — это только то, что ДЕРЖИТ слот (A13-L1): чистое списание из
+   * кошелька (`netWalletSpend` — списания за вычетом возвратов этих списаний)
+   * и Stars-строка в расчётном статусе (`hasSettledStarsPayment`). Раньше
+   * хватало любого списания или любых денег на строке — и списание,
+   * проигравшее гонку и тут же возвращённое, или Stars-оплата, уже
+   * возвращённая плательщику, при отмене давали ему ещё и бесплатный билет.
    */
   const ledger = await db.ticketLedger.findMany({
     where: { matchId: match.id, userId: { in: [match.userAId, match.userBId] } },
-    select: { userId: true, delta: true, amountStars: true, amountCents: true },
+    select: {
+      userId: true,
+      reason: true,
+      delta: true,
+      amountStars: true,
+      externalPaymentId: true,
+    },
   });
   const actuallyPaid = new Set(
-    ledger
-      .filter((row) => row.delta < 0 || (row.amountStars ?? 0) > 0 || (row.amountCents ?? 0) > 0)
-      .map((row) => row.userId),
+    [match.userAId, match.userBId].filter((userId) => {
+      const rows = ledger.filter((row) => row.userId === userId);
+      return netWalletSpend(rows) > 0 || hasSettledStarsPayment(rows);
+    }),
   );
   const paidSlots = bySlot.filter(({ payerId }) => actuallyPaid.has(payerId));
   if (paidSlots.length === 0) return [];

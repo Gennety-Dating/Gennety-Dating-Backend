@@ -103,6 +103,20 @@ export function decodeJwsPayload(jws: string): Record<string, unknown> | null {
   }
 }
 
+/**
+ * Which Apple store minted a transaction. `Sandbox` covers TestFlight, App
+ * Review and every other purchase where no money moved.
+ */
+export type AppStoreEnvironment = "Production" | "Sandbox";
+
+/**
+ * `SubscriptionLedger.note` stamped on a sandbox Premium row. Sandbox purchases
+ * are still honoured — App Review buys in the sandbox against the production
+ * server, and refusing them fails the review — but they are not revenue, so
+ * the row says so for anyone summing money off the ledger.
+ */
+export const APPSTORE_SANDBOX_NOTE = "appstore-sandbox";
+
 /** The slice of Apple's JWSTransactionDecodedPayload the ticket flow reads. */
 export interface AppStoreTransaction {
   transactionId: string;
@@ -115,6 +129,19 @@ export interface AppStoreTransaction {
   /** Auto-renewable subscription paid-through instant (ms epoch); null for
    * consumables. Used as the Premium `periodEnd`. */
   expiresDate: number | null;
+  /**
+   * When this transaction's period began (ms epoch). For a subscription
+   * renewal that is the start of the renewed period, which is what a refund
+   * needs: only the part of `purchaseDate..expiresDate` still ahead of now was
+   * handed back.
+   */
+  purchaseDate: number | null;
+  /**
+   * The store that minted it. Read from Apple's own `environment` field, and
+   * from the host that answered when an older payload omits it — a transaction
+   * only exists in the store that created it.
+   */
+  environment: AppStoreEnvironment;
   /**
    * What Apple actually charged, in cents of {@link currency}. Apple reports
    * `price` in MILLIUNITS (9990 = $9.99) and only on reasonably recent
@@ -143,7 +170,22 @@ export type TransactionLookup =
   | { status: "not_found" }
   | { status: "unavailable" };
 
-function toTransaction(payload: Record<string, unknown>): AppStoreTransaction | null {
+/**
+ * Apple's `environment` is `Production` or `Sandbox`; anything else it might
+ * grow (Xcode's local store) moves no money either, so only an explicit
+ * `Production` counts as one. An absent field falls back to the store that
+ * answered.
+ */
+function environmentOf(payload: Record<string, unknown>, host: string): AppStoreEnvironment {
+  if (payload.environment === "Production") return "Production";
+  if (typeof payload.environment === "string") return "Sandbox";
+  return host === APPSTORE_PRODUCTION_HOST ? "Production" : "Sandbox";
+}
+
+function toTransaction(
+  payload: Record<string, unknown>,
+  host: string,
+): AppStoreTransaction | null {
   const transactionId = payload.transactionId;
   if (typeof transactionId !== "string" || !transactionId) return null;
   return {
@@ -159,6 +201,8 @@ function toTransaction(payload: Record<string, unknown>): AppStoreTransaction | 
         ? payload.appAccountToken.toLowerCase()
         : null,
     expiresDate: typeof payload.expiresDate === "number" ? payload.expiresDate : null,
+    purchaseDate: typeof payload.purchaseDate === "number" ? payload.purchaseDate : null,
+    environment: environmentOf(payload, host),
     // Apple reports `price` in milliunits of the currency (9990 = $9.99), so
     // cents = price / 10.
     priceCents:
@@ -221,8 +265,18 @@ async function lookupOnHost(host: string, transactionId: string): Promise<Transa
     if (!body.signedTransactionInfo) return { status: "not_found" };
     // The JWS came from Apple over TLS — its payload is trusted here.
     const payload = decodeJwsPayload(body.signedTransactionInfo);
-    const transaction = payload ? toTransaction(payload) : null;
-    return transaction ? { status: "ok", transaction } : { status: "not_found" };
+    const transaction = payload ? toTransaction(payload, host) : null;
+    if (!transaction) return { status: "not_found" };
+    // Logged once here rather than at each rail, so every sandbox purchase the
+    // production server honours (App Review, TestFlight) leaves a line whichever
+    // product it bought.
+    if (transaction.environment === "Sandbox") {
+      console.info(
+        `[appstore] sandbox transaction ${transactionId} product=${transaction.productId ?? "?"} ` +
+          "— honoured, not revenue",
+      );
+    }
+    return { status: "ok", transaction };
   } catch (err) {
     console.warn(`[appstore] transaction lookup on ${host} failed:`, err);
     return { status: "unavailable" };

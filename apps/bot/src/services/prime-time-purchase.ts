@@ -5,6 +5,7 @@ import { env } from "../config.js";
 import { notifyFounderPurchase, notifyFounderPurchaseRefunded } from "./founder-notify.js";
 import { telegramReachable } from "./telegram-reach.js";
 import { getMainBotApi } from "./main-bot-api.js";
+import { isAlreadyRefundedError } from "./stars-refund-error.js";
 
 /**
  * The paid Prime Time pass (PRIME_TIME_PRODUCT_SPEC.md §9) — settle, refund,
@@ -45,6 +46,9 @@ export type PrimeTimePurchaseRecord = Prisma.PrimeTimePurchaseGetPayload<{
   select: typeof PRIME_PURCHASE_SELECT;
 }>;
 
+/** Rolls the settle transaction back: the sweep took the row first. */
+class PurchaseTakenBySweep extends Error {}
+
 function isUniqueViolation(err: unknown): boolean {
   return (
     typeof err === "object" &&
@@ -57,7 +61,14 @@ function isUniqueViolation(err: unknown): boolean {
  * Refund one purchase and record what actually happened.
  *
  * Returns true only when Telegram really returned the Stars — the caller must
- * not tell the user otherwise on a false.
+ * not tell the user otherwise on a false. `CHARGE_ALREADY_REFUNDED` is that
+ * outcome too, not a failure: reading it as one parked the row in
+ * `refund_failed` for a sweep that could never move it.
+ *
+ * Both status writes are conditional on the row still being in the status the
+ * caller read, so a refund can never overwrite a state someone else reached in
+ * the meantime — a concurrent settle, or another pass that already recorded
+ * this refund (which is also what keeps the founder announcement to one).
  */
 export async function refundPrimeTimePurchase(
   api: Api<RawApi>,
@@ -68,44 +79,48 @@ export async function refundPrimeTimePurchase(
   try {
     await api.refundStarPayment(Number(telegramId), purchase.externalPaymentId);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      `[prime-time-refund] refund failed purchase=${purchase.id} ` +
-        `charge=${purchase.externalPaymentId}: ${message}`,
-    );
-    await prisma.primeTimePurchase
-      .update({
-        where: { id: purchase.id },
-        data: {
-          status: PRIME_PURCHASE_REFUND_FAILED,
-          refundError: message.slice(0, 500),
-          // Stamped on a FAILED attempt too, not only on a terminal one:
-          // nothing reads this column for meaning, and it is what lets the
-          // sweep's retry tier order by "least recently attempted" instead of
-          // re-trying one permanently stuck row every hour forever.
-          resolvedAt: new Date(),
-        },
-      })
-      .catch(() => {});
-    return false;
+    if (!isAlreadyRefundedError(err)) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[prime-time-refund] refund failed purchase=${purchase.id} ` +
+          `charge=${purchase.externalPaymentId}: ${message}`,
+      );
+      await prisma.primeTimePurchase
+        .updateMany({
+          where: { id: purchase.id, status: purchase.status },
+          data: {
+            status: PRIME_PURCHASE_REFUND_FAILED,
+            refundError: message.slice(0, 500),
+            // Stamped on a FAILED attempt too, not only on a terminal one:
+            // nothing reads this column for meaning, and it is what lets the
+            // sweep's retry tier order by "least recently attempted" instead of
+            // re-trying one permanently stuck row every hour forever.
+            resolvedAt: new Date(),
+          },
+        })
+        .catch(() => {});
+      return false;
+    }
   }
 
-  await prisma.primeTimePurchase
-    .update({
-      where: { id: purchase.id },
+  const recorded = await prisma.primeTimePurchase
+    .updateMany({
+      where: { id: purchase.id, status: purchase.status },
       data: { status: targetStatus, resolvedAt: new Date(), refundError: null },
     })
-    .catch(() => {});
+    .catch(() => ({ count: 0 }));
   // The sale was announced in the founder feed when the Stars moved, so the
   // reversal has to be announced too — otherwise the DM carries revenue that
-  // no longer exists.
-  void notifyFounderPurchaseRefunded({
-    userId: purchase.userId,
-    kind: "prime_time",
-    amountStars: purchase.amountStars,
-    reason: targetStatus,
-    externalPaymentId: purchase.externalPaymentId,
-  });
+  // no longer exists. Once: only the pass whose write landed announces it.
+  if (recorded.count > 0) {
+    void notifyFounderPurchaseRefunded({
+      userId: purchase.userId,
+      kind: "prime_time",
+      amountStars: purchase.amountStars,
+      reason: targetStatus,
+      externalPaymentId: purchase.externalPaymentId,
+    });
+  }
   return true;
 }
 
@@ -236,12 +251,42 @@ export async function settlePrimeTimePayment(
     externalPaymentId: telegramChargeId,
   });
 
-  const claim = await prisma.match.updateMany({
-    where: { id: matchId, status: "negotiating", primeTimeUnlockedAt: null },
-    data: { primeTimeUnlockedAt: new Date(), primeTimePaidById: payer.id },
-  });
+  // Claim and `settled` commit together. They used to be two writes, the
+  // second one `.catch`-swallowed: a failure (or a crash) between them left a
+  // delivered band on a `processing` row, which the five-minute sweep then
+  // refunded — the pair kept the evening and the money came back. The purchase
+  // CAS on `processing` is what closes the other direction: a row the sweep
+  // already took for a refund rolls the claim back instead of opening a band
+  // that is being paid back.
+  let outcome: "settled" | "unclaimed" | "taken";
+  try {
+    outcome = await prisma.$transaction(async (tx): Promise<"settled" | "unclaimed"> => {
+      const claim = await tx.match.updateMany({
+        where: { id: matchId, status: "negotiating", primeTimeUnlockedAt: null },
+        data: { primeTimeUnlockedAt: new Date(), primeTimePaidById: payer.id },
+      });
+      if (claim.count === 0) return "unclaimed";
+      const settled = await tx.primeTimePurchase.updateMany({
+        where: { id: purchase.id, status: PRIME_PURCHASE_PROCESSING },
+        data: { status: PRIME_PURCHASE_SETTLED, resolvedAt: new Date() },
+      });
+      if (settled.count === 0) throw new PurchaseTakenBySweep();
+      return "settled";
+    });
+  } catch (err) {
+    if (!(err instanceof PurchaseTakenBySweep)) throw err;
+    outcome = "taken";
+  }
 
-  if (claim.count === 0) {
+  if (outcome === "taken") {
+    console.warn(
+      `[prime-time] purchase left processing before its claim match=${matchId} ` +
+        `charge=${telegramChargeId} — the refund rail owns it`,
+    );
+    return { ok: false, reason: "refund-in-progress", refunded: true };
+  }
+
+  if (outcome === "unclaimed") {
     // The insert proved this is a NEW charge, so an unclaimable band means
     // these Stars bought nothing. Always give them back.
     console.warn(
@@ -257,13 +302,6 @@ export async function settlePrimeTimePayment(
     // either way.
     return { ok: false, reason: "already-unlocked", refunded: true };
   }
-
-  await prisma.primeTimePurchase
-    .update({
-      where: { id: purchase.id },
-      data: { status: PRIME_PURCHASE_SETTLED, resolvedAt: new Date() },
-    })
-    .catch(() => {});
 
   // The partner's grid changes under them within one poll, so tell them why.
   // Quiet and one line — the buyer's own confirmation is the Mini App redrawing

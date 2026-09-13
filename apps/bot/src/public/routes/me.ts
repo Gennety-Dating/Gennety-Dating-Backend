@@ -65,8 +65,12 @@ import {
 import { sniffImageMime } from "../../utils/image-sniff.js";
 import { serializeOwnProfileVideo } from "../../services/native-profile-video.js";
 import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
-import { buildReferralStateView, claimReferralCode } from "../../services/referral.js";
-import { claimPromoCodeForUser, grantPromoRewardsForUser } from "../../services/promo.js";
+import {
+  buildReferralStateView,
+  claimReferralCode,
+  releaseHeldReferralRewards,
+} from "../../services/referral.js";
+import { claimDeferredPromoForUser, grantPromoRewardsForUser } from "../../services/promo.js";
 import { fingerprint, matchAttribution } from "../../services/promo-attribution.js";
 
 export const meRouter: Router = Router();
@@ -111,6 +115,11 @@ meRouter.get("/referral", async (req: Request, res: Response): Promise<void> => 
     res.status(404).json({ error: "User not found" });
     return;
   }
+  // Same release as the Mini App's referral state: rewards the velocity cap
+  // held back are paid once the referrer is under the cap again.
+  await releaseHeldReferralRewards(user.id).catch((err: unknown) => {
+    console.warn("[referral] held-reward release on state failed", { userId: user.id, err });
+  });
   res.json(buildReferralStateView(user.id, user.referralVerifiedCount, env.BOT_USERNAME));
 });
 
@@ -137,9 +146,12 @@ meRouter.post("/referral/claim", async (req: Request, res: Response): Promise<vo
 /**
  * POST /v1/me/promo/claim-deferred — iOS deferred-deep-link attribution
  * (PROMO_CODES_PRODUCT_SPEC.md). First-launch resolves the effective promo code
- * from either the clipboard-carried value (`code`, with an optional `GENNETY:`
- * prefix) or a coarse-fingerprint match against a recent landing-page touch,
- * then first-touch attributes this new user (`referralSource = promo:<CODE>`).
+ * from a coarse-fingerprint match against a recent landing-page touch — or, only
+ * while the `PROMO_MANUAL_ENTRY_ENABLED` seam is on, from a typed `code` (with an
+ * optional `GENNETY:` prefix) — then first-touch attributes this user
+ * (`referralSource = promo:<CODE>`). New accounts only: an account older than
+ * `PROMO_DEFERRED_CLAIM_WINDOW_MS` or past onboarding gets 409
+ * `promo-not-eligible` (see `claimDeferredPromoForUser`).
  * The reward is granted later at the wow screen via `/v1/me/promo/claim`.
  * 404 when the feature is off. Body: `{ code?: string }`.
  */
@@ -150,17 +162,28 @@ meRouter.post("/promo/claim-deferred", async (req: Request, res: Response): Prom
   }
   const rawCode =
     typeof req.body?.code === "string" ? req.body.code.replace(/^GENNETY:/i, "").trim() : "";
-  const fp = fingerprint({
-    ip: req.ip,
-    userAgent: req.header("user-agent") ?? undefined,
-    acceptLanguage: req.header("accept-language") ?? undefined,
+  const claim = await claimDeferredPromoForUser({
+    userId: req.userId!,
+    explicitCode: rawCode || null,
+    // Deferred so an ineligible account never consumes the one-shot match.
+    matchFingerprint: () =>
+      matchAttribution(
+        fingerprint({
+          ip: req.ip,
+          userAgent: req.header("user-agent") ?? undefined,
+          acceptLanguage: req.header("accept-language") ?? undefined,
+        }),
+      ),
   });
-  const code = rawCode || matchAttribution(fp);
-  if (!code) {
+  if (claim.status === "not-eligible") {
+    res.status(409).json({ error: "promo-not-eligible", attributed: false, reason: "not-eligible" });
+    return;
+  }
+  if (claim.status === "no-code") {
     res.json({ attributed: false, reason: "no-code" });
     return;
   }
-  const result = await claimPromoCodeForUser(req.userId!, code);
+  const result = claim.result;
   res.json({
     attributed: result.applied,
     reason: result.reason,

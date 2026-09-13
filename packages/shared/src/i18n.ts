@@ -144,6 +144,8 @@ const translations = {
     ticketStorePurchased:
       "✨ Payment received — *{count}* ticket(s) added!\n\nBalance: *{balance}*",
     ticketStoreCheckoutError: "Couldn't confirm that payment. Try again in a moment.",
+    premiumCheckoutAlreadySubscribed:
+      "You already have an active Premium subscription, so this payment was stopped — nothing was charged.",
     paymentStuckDm:
       "Your payment went through, but we couldn't hand over what you bought — something broke on our side.\n\nDon't pay again. We've already been alerted and will either deliver it or return your Stars.",
     ticketStoreInvoiceTitle: "Gennety Date Tickets",
@@ -1533,6 +1535,8 @@ const translations = {
     ticketStorePurchased:
       "✨ Оплата прошла — добавлено *{count}* билет(ов)!\n\nБаланс: *{balance}*",
     ticketStoreCheckoutError: "Не удалось подтвердить оплату. Попробуй ещё раз.",
+    premiumCheckoutAlreadySubscribed:
+      "У тебя уже есть активная подписка Premium, поэтому оплата остановлена — ничего не списано.",
     paymentStuckDm:
       "Оплата прошла, но выдать покупку не получилось — сломалось на нашей стороне.\n\nНе плати второй раз. Мы уже знаем и либо выдадим, либо вернём звёзды.",
     ticketStoreInvoiceTitle: "Билеты Gennety",
@@ -2782,6 +2786,8 @@ const translations = {
     ticketStorePurchased:
       "✨ Оплату отримано — додано *{count}* квиток(ів)!\n\nБаланс: *{balance}*",
     ticketStoreCheckoutError: "Не вдалося підтвердити оплату. Спробуй ще раз.",
+    premiumCheckoutAlreadySubscribed:
+      "У тебе вже є активна підписка Premium, тож оплату зупинено — нічого не списано.",
     paymentStuckDm:
       "Оплата пройшла, але видати покупку не вдалося — зламалося на нашому боці.\n\nНе плати вдруге. Ми вже знаємо і або видамо, або повернемо зірки.",
     ticketStoreInvoiceTitle: "Квитки Gennety",
@@ -4167,6 +4173,8 @@ const deTranslations: TranslationTable = {
   ticketStorePurchased:
     "✨ Zahlung erhalten — *{count}* Ticket(s) hinzugefügt!\n\nGuthaben: *{balance}*",
   ticketStoreCheckoutError: "Zahlung konnte nicht bestätigt werden. Versuch es gleich noch mal.",
+  premiumCheckoutAlreadySubscribed:
+    "Du hast schon ein aktives Premium-Abo, deshalb wurde die Zahlung gestoppt — es wurde nichts abgebucht.",
   paymentStuckDm:
     "Deine Zahlung ist durchgegangen, aber wir konnten dir das Gekaufte nicht aushändigen — bei uns ist etwas kaputtgegangen.\n\nZahl nicht noch einmal. Wir sind bereits informiert und liefern es entweder nach oder erstatten deine Stars.",
   ticketStoreInvoiceTitle: "Gennety Date-Tickets",
@@ -5381,6 +5389,8 @@ const plTranslations: TranslationTable = {
   ticketStorePurchased:
     "✨ Płatność otrzymana — dodano *{count}* bilet(ów)!\n\nSaldo: *{balance}*",
   ticketStoreCheckoutError: "Nie udało się potwierdzić płatności. Spróbuj ponownie.",
+  premiumCheckoutAlreadySubscribed:
+    "Masz już aktywną subskrypcję Premium, więc płatność została zatrzymana — nic nie pobrano.",
   paymentStuckDm:
     "Płatność przeszła, ale nie udało się wydać zakupu — coś zepsuło się po naszej stronie.\n\nNie płać drugi raz. Już o tym wiemy i albo wydamy zakup, albo zwrócimy gwiazdki.",
   ticketStoreInvoiceTitle: "Bilety Gennety",
