@@ -83,11 +83,17 @@ body {
    --------------------------------------------------------------------------- */
 
 .venue-pin {
-  position: relative;
   /* The pin carries its own size. MapLibre gives a marker element none (this
      used to come from Leaflet's `iconSize`), and the dot and the pulse are
      both absolutely positioned against it — so without this they collapse to
-     0x0 and the pin vanishes with nothing failing anywhere. */
+     0x0 and the pin vanishes with nothing failing anywhere.
+     NO `position` here, on purpose (2026-09-13): `.maplibregl-marker` already
+     makes the element `position: absolute` at the container's corner, which is
+     both what the dot positions against and what MapLibre's transform assumes.
+     A `position: relative` from this sheet wins over it (same specificity,
+     loaded later) and drops the marker into normal flow — harmless while the
+     pin was the only marker, but the second one then stacks BELOW it and sits
+     22 px off its own coordinate. That was the user's dot, beside the line. */
   width: 22px;
   height: 22px;
 }
@@ -150,9 +156,9 @@ body {
    --------------------------------------------------------------------------- */
 
 .me-pin {
-  /* Same reason as `.venue-pin`: a MapLibre marker element has no size of its
-     own, and the dot inside is positioned against this box. */
-  position: relative;
+  /* Same reasons as `.venue-pin`: a MapLibre marker element has no size of its
+     own, the dot inside is positioned against this box — and the box must stay
+     the absolute one MapLibre made it, or it leaves its coordinate. */
   width: 16px;
   height: 16px;
 }

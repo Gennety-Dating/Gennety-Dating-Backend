@@ -45,6 +45,7 @@ import {
 } from "./canvas/api.js";
 import { fogPath, formatExplored } from "./canvas/fog.js";
 import { createTransitDock } from "./canvas/transit-dock.js";
+import { tripCamera } from "./canvas/trip-camera.js";
 import type { DockPresence } from "./canvas/transit.js";
 import { wireContentInsets } from "./telegram-insets.js";
 import { apiBase } from "./api.js";
@@ -112,6 +113,8 @@ const el = {
 };
 
 let map: MapLibreMap | null = null;
+/** The style has parsed (`load`), so sources can be added — tiles or not. */
+let styleReady = false;
 let venueMarker: Marker | null = null;
 /** The other end of the trip (change of 2026-09-12), and the line between. */
 let meMarker: Marker | null = null;
@@ -119,6 +122,12 @@ let venuePoint: { lat: number; lng: number } | null = null;
 let fixPoint: { lat: number; lng: number } | null = null;
 /** Framed once per fix, not on every GPS reading — see `drawTrip`. */
 let tripFramed = false;
+/**
+ * The camera is still the trip's: set when the trip is framed, dropped by the
+ * user's own first pan or pinch. While it holds, a change in what the dock
+ * covers re-aims the whole framing, not just the padding — see `frameAbove`.
+ */
+let cameraOnTrip = false;
 /** What the dock and the sheet currently cover, for the camera's padding. */
 let coveredPx = 0;
 let bootDismissed = false;
@@ -154,10 +163,17 @@ const dock = createTransitDock({
  * it summons. So while the dock is up the camera is padded by what it covers
  * and the pin centres in what is left; closed, the padding goes back to none,
  * the framing every other state has always had.
+ *
+ * With the trip on screen and the camera still its own, the framing is re-aimed
+ * whole instead (2026-09-13). Easing the padding alone STOPS a framing still in
+ * flight wherever it has got to — and the first fix, which starts that flight,
+ * is exactly what fills the dock in and changes its height a frame later — so
+ * the camera stayed at the venue with the user's end of the line off screen.
  */
 function frameAbove(covered: number): void {
   coveredPx = covered;
   if (!map) return;
+  if (cameraOnTrip && frameTrip(320)) return;
   map.easeTo({ padding: { top: 0, right: 0, bottom: covered, left: 0 }, duration: stillFrames() ? 0 : 320 });
 }
 
@@ -247,10 +263,20 @@ function initMap(): void {
   // finish would leave the holes visibly lagging the city under them.
   map.on?.("move", renderFog);
   map.on?.("zoom", renderFog);
+  // The user's own pan or pinch takes the camera back from the trip: from then
+  // on a change in the dock's height moves the padding only, never the view
+  // they chose. Only gestures carry `originalEvent`; the camera's own eases
+  // do not.
+  map.on?.("move", (event) => {
+    if (event.originalEvent) cameraOnTrip = false;
+  });
   // A fix can land before the style has parsed, and a source cannot be added
   // to a map that has none yet — so the trip is drawn again the moment it can
   // be. Idempotent: with nothing to draw this is a no-op.
-  map.on?.("load", drawTrip);
+  map.on?.("load", () => {
+    styleReady = true;
+    drawTrip();
+  });
   // A tap on the map puts an on-demand dock away — except the tap that landed
   // on the venue pin: MapLibre raises `click` for its markers' taps too, and
   // that is the very tap that just brought the dock up.
@@ -282,7 +308,7 @@ function showVenue(lat: number, lng: number): void {
       event.preventDefault();
       dock.summon();
     });
-    venueMarker = new Marker({ element: pin, anchor: "center" })
+    venueMarker = new Marker({ element: pin, anchor: "center", subpixelPositioning: true })
       .setLngLat([lng, lat])
       .addTo(map);
     map.jumpTo({ center: [lng, lat], zoom: VENUE_ZOOM });
@@ -333,6 +359,7 @@ function drawTrip(): void {
     meMarker?.remove();
     meMarker = null;
     setTripLine(null);
+    cameraOnTrip = false;
     return;
   }
 
@@ -343,7 +370,14 @@ function drawTrip(): void {
     // Not a control, and not a thing to announce: the venue pin is the only
     // marker on this map anyone can act on.
     dot.setAttribute("aria-hidden", "true");
-    meMarker = new Marker({ element: dot, anchor: "center" }).setLngLat([from.lng, from.lat]).addTo(map);
+    // Both pins are placed to the fraction of a pixel (2026-09-13). MapLibre
+    // otherwise snaps a marker to whole pixels whenever the camera stops, while
+    // the line between them is drawn to the exact coordinate — so each end sat
+    // up to half a pixel (a device pixel and a half on a phone) off the pin it
+    // runs into. The snap is there for text markers; two round dots don't blur.
+    meMarker = new Marker({ element: dot, anchor: "center", subpixelPositioning: true })
+      .setLngLat([from.lng, from.lat])
+      .addTo(map);
   } else {
     meMarker.setLngLat([from.lng, from.lat]);
   }
@@ -360,21 +394,37 @@ function drawTrip(): void {
   // so it happens on the first fix of a trip and never again.
   if (tripFramed) return;
   tripFramed = true;
-  map.fitBounds(
-    [
-      [Math.min(from.lng, to.lng), Math.min(from.lat, to.lat)],
-      [Math.max(from.lng, to.lng), Math.max(from.lat, to.lat)],
-    ],
-    {
-      // Room for the pins themselves at the edges, and for whatever the dock
-      // and the sheet are covering at the bottom.
-      padding: { top: 72, right: 56, bottom: coveredPx + 56, left: 56 },
-      // Never further in than the venue's own framing: two points a hundred
-      // metres apart should not zoom to the pavement.
-      maxZoom: VENUE_ZOOM,
-      duration: stillFrames() ? 0 : 620,
-    },
-  );
+  cameraOnTrip = frameTrip(620);
+}
+
+/**
+ * One camera move to both ends of the trip, carrying what the dock covers as
+ * its padding — `canvas/trip-camera.ts` has why this is not `fitBounds`.
+ * False when there is nothing to frame, or no room left to frame it in.
+ */
+function frameTrip(duration: number): boolean {
+  if (!map || !el.map || !fixPoint || !venuePoint) return false;
+  const cover = { top: 0, right: 0, bottom: coveredPx, left: 0 };
+  const camera = tripCamera({
+    from: fixPoint,
+    to: venuePoint,
+    width: el.map.clientWidth,
+    height: el.map.clientHeight,
+    cover,
+    // Room for the pins themselves at the edges.
+    margin: { top: 72, right: 56, bottom: 56, left: 56 },
+    // Never further in than the venue's own framing: two points a hundred
+    // metres apart should not zoom to the pavement.
+    maxZoom: VENUE_ZOOM,
+  });
+  if (!camera) return false;
+  map.easeTo({
+    center: [camera.lng, camera.lat],
+    zoom: camera.zoom,
+    padding: cover,
+    duration: stillFrames() ? 0 : duration,
+  });
+  return true;
 }
 
 /**
@@ -391,18 +441,24 @@ interface TripFeature {
 
 /** The line's geometry, or null to empty it without removing the layer. */
 function setTripLine(coordinates: [number, number][] | null): void {
-  if (!map?.isStyleLoaded?.()) return;
+  if (!map) return;
   const data: TripFeature = {
     type: "Feature",
     properties: {},
     geometry: { type: "LineString", coordinates: coordinates ?? [] },
   };
+  // An existing line is ALWAYS moved with its pin. This used to sit behind
+  // `isStyleLoaded()`, which in MapLibre also means "every tile in view has
+  // arrived" — so a reading that landed while tiles were still coming in (the
+  // camera has just reframed; the phone is on mobile data) moved the dot and
+  // silently left the line where the previous reading was.
   const existing = map.getSource(TRIP_SOURCE) as GeoJSONSource | undefined;
   if (existing) {
     existing.setData(data);
     return;
   }
-  if (!coordinates) return;
+  // Adding one needs only the style itself parsed; `load` draws it otherwise.
+  if (!coordinates || !styleReady) return;
   map.addSource(TRIP_SOURCE, { type: "geojson", data });
   map.addLayer({
     id: TRIP_LAYER,

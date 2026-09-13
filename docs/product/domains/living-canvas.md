@@ -376,7 +376,15 @@ routing provider, a key, and the position leaving the phone on every recompute
 read as a navigator's route. The camera frames both ends ONCE per trip (at the
 venue's own zoom a two-kilometre trip puts the user's end off screen, so the
 line and the dot would never be seen at all); it is not re-framed on later
-readings, which would yank the map out from under someone walking. The fix
+readings, which would yank the map out from under someone walking. The line
+runs from centre to centre, to the fraction of a pixel (2026-09-13): the pins
+are MapLibre markers placed without whole-pixel snapping, their elements never
+set a CSS `position` of their own (it drops a marker into normal flow — the
+second one then sat 22 px off its point), and the line moves with every
+reading, loaded tiles or not. The framing is ONE camera move carrying the
+dock's cover as its padding (`canvas/trip-camera.ts`), re-aimed when the dock
+changes height until the user pans; `fitBounds` plus a separate padding ease cut
+each other short and could leave the user's end off screen. The fix
 reaches the map and nothing else — `onFix` hands it to a marker and a canvas on
 the same screen, and the guarantee above is unchanged.
 
