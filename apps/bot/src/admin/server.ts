@@ -276,12 +276,18 @@ const REPORT_USER_SELECT = {
   },
 } as const;
 
+/**
+ * `null` in, `null` out: a report keeps its row when either account is deleted
+ * (A13-H14), so the dashboard receives `reporter: null` / `reported: null` for
+ * the side that no longer exists rather than a fabricated placeholder.
+ */
 function serializeReportUser<
   T extends {
     telegramId: bigint;
     profile: AdminProfileSnapshot | null;
   },
->(user: T) {
+>(user: T | null) {
+  if (!user) return null;
   return {
     ...user,
     telegramId: user.telegramId.toString(),

@@ -167,7 +167,7 @@ export async function sweepRematchRefunds(
   // never resolved, so it is the one the user is actually owed right now.
   const [stale, retries] = await Promise.all([
     prisma.rematchPurchase.findMany({
-      where: { status: REMATCH_PROCESSING, createdAt: { lt: staleBefore } },
+      where: { status: REMATCH_PROCESSING, createdAt: { lt: staleBefore }, userId: { not: null } },
       select: {
       id: true,
       status: true,
@@ -179,7 +179,12 @@ export async function sweepRematchRefunds(
       take: SWEEP_STALE_BUDGET,
     }),
     prisma.rematchPurchase.findMany({
-      where: { status: REMATCH_REFUND_FAILED },
+      // A purchase whose buyer deleted their account keeps its row for
+      // accounting but has no Telegram id left to refund to (A13-H14), so it
+      // must not take a slot of this tick's budget. Account deletion refuses to
+      // run while one of these is still young; an older one reached the founder
+      // with its id when the account went.
+      where: { status: REMATCH_REFUND_FAILED, userId: { not: null } },
       select: {
       id: true,
       status: true,
@@ -206,6 +211,12 @@ export async function sweepRematchRefunds(
   };
 
   for (const row of rows) {
+    // Excluded by the query; re-checked because the relation is nullable. An
+    // ownerless row cannot be refunded — the Telegram id went with the account.
+    if (!row.user) {
+      result.skipped++;
+      continue;
+    }
     // A mobile-only user carries a synthetic negative telegramId and cannot hold
     // a Stars charge, so there is nothing to refund through this rail.
     if (row.user.telegramId <= 0n) {

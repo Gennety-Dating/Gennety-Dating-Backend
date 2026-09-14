@@ -352,7 +352,9 @@ export async function refundPrimeTimeForDeadMatch(
 
   let refunded = 0;
   for (const row of rows) {
-    if (!telegramReachable(row.user)) continue;
+    // A payer who deleted their account left no Telegram id to refund to
+    // (A13-H14); the match dying cannot change that.
+    if (!row.user || !telegramReachable(row.user)) continue;
     const ok = await refundPrimeTimePurchase(
       api,
       {
@@ -419,7 +421,7 @@ export async function sweepPrimeTimeRefunds(
   // never resolved, so it is the one the user is actually owed right now.
   const [stale, retries] = await Promise.all([
     prisma.primeTimePurchase.findMany({
-      where: { status: PRIME_PURCHASE_PROCESSING, createdAt: { lt: staleBefore } },
+      where: { status: PRIME_PURCHASE_PROCESSING, createdAt: { lt: staleBefore }, userId: { not: null } },
       select: {
       ...PRIME_PURCHASE_SELECT,
       user: { select: { telegramId: true, platform: true, language: true } },
@@ -428,7 +430,12 @@ export async function sweepPrimeTimeRefunds(
       take: SWEEP_STALE_BUDGET,
     }),
     prisma.primeTimePurchase.findMany({
-      where: { status: PRIME_PURCHASE_REFUND_FAILED },
+      // A purchase whose buyer deleted their account keeps its row for
+      // accounting but has no Telegram id left to refund to (A13-H14), so it
+      // must not take a slot of this tick's budget. Account deletion refuses to
+      // run while one of these is still young; an older one reached the founder
+      // with its id when the account went.
+      where: { status: PRIME_PURCHASE_REFUND_FAILED, userId: { not: null } },
       select: {
       ...PRIME_PURCHASE_SELECT,
       user: { select: { telegramId: true, platform: true, language: true } },
@@ -452,9 +459,11 @@ export async function sweepPrimeTimeRefunds(
   };
 
   for (const row of rows) {
+    // Excluded by the query; re-checked because the relation is nullable. An
+    // ownerless row cannot be refunded — the Telegram id went with the account.
     // A mobile-only user carries a synthetic negative id and cannot hold a
-    // Stars charge, so there is nothing to reverse through this rail.
-    if (!telegramReachable(row.user)) {
+    // Stars charge, so there is nothing to reverse through this rail either.
+    if (!row.user || !telegramReachable(row.user)) {
       result.skipped++;
       continue;
     }

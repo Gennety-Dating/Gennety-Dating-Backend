@@ -195,6 +195,14 @@ export async function recordScratchPing(input: {
  *
  * Same shape, and for the same stated reason, as `services/activity.ts`: doing
  * it in one statement is what makes it atomic.
+ *
+ * The merge lives INSIDE `SET`, reading the incoming arrays through `EXCLUDED`
+ * (A13-H13). The first version put a `FROM (…) AS merged` after `DO UPDATE
+ * SET`, which Postgres's grammar does not have — every write of a new tile
+ * failed with `syntax error at or near "FROM"`, the ping answered 500 and a
+ * verified Date Bump's venue was silently lost. Every `SET` expression reads
+ * the row as it was before the update, so the percentage is computed from the
+ * same union the tiles column receives.
  */
 async function mergeScratchMap(input: {
   userId: string;
@@ -217,21 +225,21 @@ async function mergeScratchMap(input: {
       NOW()
     )
     ON CONFLICT (user_id) DO UPDATE SET
-      explored_tiles = merged.tiles,
-      discovered_venues = merged.venues,
-      explored_percent = LEAST(1, cardinality(merged.tiles)::float / ${input.tilesInMarket}),
+      explored_tiles = ARRAY(
+        SELECT DISTINCT unnest(user_scratch_maps.explored_tiles || EXCLUDED.explored_tiles)
+        ORDER BY 1
+      ),
+      discovered_venues = ARRAY(
+        SELECT DISTINCT unnest(user_scratch_maps.discovered_venues || EXCLUDED.discovered_venues)
+        ORDER BY 1
+      ),
+      explored_percent = LEAST(
+        1,
+        cardinality(ARRAY(
+          SELECT DISTINCT unnest(user_scratch_maps.explored_tiles || EXCLUDED.explored_tiles)
+        ))::float / ${input.tilesInMarket}
+      ),
       updated_at = NOW()
-    FROM (
-      SELECT
-        ARRAY(
-          SELECT DISTINCT unnest(user_scratch_maps.explored_tiles || ${[...input.tiles]}::text[])
-          ORDER BY 1
-        ) AS tiles,
-        ARRAY(
-          SELECT DISTINCT unnest(user_scratch_maps.discovered_venues || ${[...input.venues]}::text[])
-          ORDER BY 1
-        ) AS venues
-    ) AS merged
     RETURNING
       explored_tiles   AS "exploredTiles",
       explored_percent AS "exploredPercent",

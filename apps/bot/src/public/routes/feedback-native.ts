@@ -98,13 +98,15 @@ function serialize(view: PendingFeedbackView): Record<string, unknown> {
 /**
  * `wrong-state` is 409, not 404: the match exists and the caller is on it —
  * the date simply has not been closed out yet. A 404 would send the client
- * looking for a routing bug that isn't there.
+ * looking for a routing bug that isn't there. `already-submitted` is 409 for
+ * the mirror reason: the caller's answer exists and is kept, because the first
+ * one already fed matching (`recordPostDateFeedback`).
  */
 function answerFailure(res: Response, error: FeedbackRefusal): void {
   const status =
     error === "not-participant"
       ? 403
-      : error === "wrong-state"
+      : error === "wrong-state" || error === "already-submitted"
         ? 409
         : error === "match-not-found" || error === "no-pending-feedback"
           ? 404

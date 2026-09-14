@@ -76,6 +76,10 @@ describe("handleCitySwitchOpen", () => {
 });
 
 describe("handleCitySwitchConfirm", () => {
+  beforeEach(() => {
+    mProfileFindUnique.mockResolvedValue({ homeCityKey: "de:berlin" });
+  });
+
   it("moves the dating city to the launched market and drops the keyboard", async () => {
     const ctx = createCtx();
 
@@ -97,5 +101,19 @@ describe("handleCitySwitchConfirm", () => {
 
     expect(ctx.reply.mock.calls[0]![0]).toMatch(/Couldn't switch/);
     expect(ctx.editMessageReplyMarkup).not.toHaveBeenCalled();
+  });
+
+  // A13-L11: the confirm button outlives the pending state it was offered for,
+  // and the save resets coordinates and time zone to the market's defaults.
+  it("does not touch the location when the city is no longer pending", async () => {
+    mProfileFindUnique.mockResolvedValue({ homeCityKey: "ua:kyiv" });
+    const ctx = createCtx();
+
+    await handleCitySwitchConfirm(ctx as never);
+
+    expect(mSave).not.toHaveBeenCalled();
+    expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+    expect(ctx.editMessageReplyMarkup).toHaveBeenCalled();
+    expect(ctx.reply.mock.calls[0]![0]).toMatch(/Kyiv/);
   });
 });

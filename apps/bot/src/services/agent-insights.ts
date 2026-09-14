@@ -154,14 +154,27 @@ export interface MatchExplanation {
   synergyScore: number | null;
   /** This side's own rationale sentence, in this side's language. */
   synergyReason: string | null;
-  /** Qualitative labels, never the raw multipliers — see `describeFactor`. */
+  /**
+   * Qualitative labels, never the raw multipliers — see `describeFactor`.
+   *
+   * Only factors that say nothing about the PARTNER's private inputs survive
+   * here. `match_score_logs` stores one symmetric breakdown, not one per
+   * direction (`scorePair` averages both sides, and takes the MAX of the two
+   * starvation bonuses), so three columns the tool used to return were partly
+   * the partner's secret: `scorePenalty > 0` includes the partner's own
+   * dealbreakers firing against the viewer; `starvationBonus > 0` may be the
+   * partner's standby streak, i.e. that they had been going unmatched; and the
+   * age-preference fit blends in how well the viewer fits the PARTNER's stated
+   * age range. None of them can be reduced to the viewer's own direction from
+   * the log, so they are withheld rather than approximated. The kept three
+   * carry no stated preference of either side: embedding similarity and the
+   * league multiplier are order-independent, and the sociological heuristic
+   * compares the two people's attributes, not what either one asked for.
+   */
   factors: {
     psychologicalFit: string;
     lifestyleFit: string;
     attractivenessBalance: string;
-    agePreferenceFit: string;
-    priorityBoost: boolean;
-    hadNegativeSignal: boolean;
   } | null;
 }
 
@@ -211,9 +224,6 @@ export async function explainMatch(telegramId: bigint): Promise<MatchExplanation
           scoreExplicit: true,
           scoreResearch: true,
           scoreLeague: true,
-          scoreAgePref: true,
-          scorePenalty: true,
-          starvationBonus: true,
         },
       },
     },
@@ -235,9 +245,6 @@ export async function explainMatch(telegramId: bigint): Promise<MatchExplanation
           psychologicalFit: describeFactor(log.scoreExplicit),
           lifestyleFit: describeFactor(log.scoreResearch),
           attractivenessBalance: describeFactor(log.scoreLeague),
-          agePreferenceFit: describeFactor(log.scoreAgePref),
-          priorityBoost: log.starvationBonus > 0,
-          hadNegativeSignal: log.scorePenalty > 0,
         }
       : null,
   };

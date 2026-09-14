@@ -69,7 +69,8 @@ if (!apply) {
 
 const userIds = users.map((u) => u.id);
 
-// 1. Delete matches involving either account (cascades score logs / events / reports).
+// 1. Delete matches involving either account (cascades score logs / events;
+// reports keep their row with match_id NULL since A13-H14).
 const delMatches = await prisma.match.deleteMany({
   where: { OR: [{ userAId: { in: userIds } }, { userBId: { in: userIds } }] },
 });

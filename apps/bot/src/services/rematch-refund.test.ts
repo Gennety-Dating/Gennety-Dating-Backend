@@ -259,6 +259,26 @@ describe("sweepRematchRefunds", () => {
     expect(res).toMatchObject({ scanned: 1, refunded: 0, stillFailing: 0, skipped: 1 });
   });
 
+  // A13-H14: a purchase outlives its buyer's deleted account for accounting,
+  // but the Telegram id its refund would go to is gone. The query leaves such
+  // rows out of the budget, and a row that still arrives is never attempted.
+  it("keeps ownerless purchases out of both tiers and never tries to refund one", async () => {
+    const api = fakeApi();
+    mPurchase.findMany.mockImplementation(
+      serveByStatus([row({ userId: null, user: null })]),
+    );
+
+    const res = await sweepRematchRefunds(api);
+
+    for (const call of mPurchase.findMany.mock.calls) {
+      expect((call[0] as { where: Record<string, unknown> }).where).toMatchObject({
+        userId: { not: null },
+      });
+    }
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    expect(res).toMatchObject({ scanned: 1, refunded: 0, skipped: 1 });
+  });
+
   it("only treats processing rows older than the stale window as abandoned", async () => {
     const api = fakeApi();
     mPurchase.findMany.mockImplementation(serveByStatus([]));

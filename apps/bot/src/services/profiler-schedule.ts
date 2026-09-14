@@ -126,7 +126,7 @@ export function batchSizeFor(rush: boolean): number {
 /**
  * The next morning (09:00) or evening (18:00) batch window strictly after
  * `after`, in the user's local time. Both modes rotate through both windows;
- * the natural 9h/15h spacing satisfies PROFILER_INTER_BATCH_GAP_HOURS.
+ * the natural 9h/15h spacing keeps consecutive batches well apart.
  */
 export function nextWindowAt(after: Date, timeZone: string | null | undefined): Date {
   const tz = resolveZone(timeZone);

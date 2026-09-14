@@ -64,6 +64,25 @@ export function isSafeStorageObjectPath(path: string): boolean {
 }
 
 /**
+ * When an object keyed `{owner}/{Date.now()}.{ext}` was written — the shape
+ * `uploadSelfie`, `uploadProfilePhoto`, `uploadChatImage` and
+ * `uploadVoicePrompt` all mint. `null` for any other shape (a Telegram
+ * `file_id`, a legacy or role-prefixed key).
+ *
+ * Read by the two places that must know which of two stored selfies is the
+ * newer one without a column that says so: the retention scrub (A13-M12) and
+ * the verification persist, which must never put an older reference back over
+ * a newer one whose predecessor it has already deleted.
+ */
+export function storageKeyWrittenAt(path: string): Date | null {
+  const file = path.slice(path.lastIndexOf("/") + 1);
+  const match = /^(\d{13})\.[A-Za-z0-9]+$/.exec(file);
+  if (!match) return null;
+  const writtenAt = new Date(Number(match[1]));
+  return Number.isNaN(writtenAt.getTime()) ? null : writtenAt;
+}
+
+/**
  * Normalize a caller/upstream-supplied MIME into a known, ASCII-safe image
  * content-type. Strips parameters (`image/jpeg; charset=binary` → `image/jpeg`),
  * lower-cases, maps the `image/jpg` alias to `image/jpeg`, and falls back to
@@ -622,6 +641,113 @@ export async function deleteStorageObject(
   }
 }
 
+/** Page size for `listStorageObjects` — Supabase's own default for `list`. */
+const STORAGE_LIST_PAGE_SIZE = 100;
+/**
+ * Upper bound on pages one listing may walk (100 000 objects). Reaching it
+ * answers `null` rather than a truncated list: the caller is account deletion,
+ * and a partial list it treated as complete would leave objects behind while
+ * reporting the account erased.
+ */
+const STORAGE_LIST_MAX_PAGES = 1_000;
+/** Folder nesting a listing follows. Every key this module mints is one level. */
+const STORAGE_LIST_MAX_DEPTH = 4;
+
+/**
+ * Every object key under `prefix/` in `bucket`, as full keys
+ * (`{prefix}/{name}`), or `null` when the listing could not be completed —
+ * storage not configured, a refused prefix, a non-OK answer (including a
+ * missing bucket), a malformed body, or the page cap.
+ *
+ * Exists for account deletion (A13-M12). Erasing only the paths a row still
+ * points at missed everything no row points at any more: a replaced liveness
+ * selfie, a re-recorded voice prompt, a chat image uploaded and never sent. The
+ * bucket itself is the only complete record of what we hold for someone, so the
+ * erasure asks the bucket.
+ *
+ * Same REST transport and service-role auth as `deleteStorageObject`
+ * (`POST /storage/v1/object/list/{bucket}`). Supabase answers names relative to
+ * the prefix and reports a sub-folder as an entry with `id: null`; those are
+ * walked too, so a future nested key under the user's prefix cannot hide.
+ */
+export async function listStorageObjects(
+  bucket: string,
+  prefix: string,
+): Promise<string[] | null> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  if (!isSafeStorageObjectPath(prefix)) return null;
+
+  const keys: string[] = [];
+  const folders: Array<{ path: string; depth: number }> = [{ path: prefix, depth: 0 }];
+  let pages = 0;
+
+  for (let folder = folders.shift(); folder; folder = folders.shift()) {
+    for (let offset = 0; ; offset += STORAGE_LIST_PAGE_SIZE) {
+      pages += 1;
+      if (pages > STORAGE_LIST_MAX_PAGES) {
+        console.error("[storage] listing exceeded the page cap", { bucket, prefix });
+        return null;
+      }
+      const entries = await fetchStorageListPage(bucket, folder.path, offset);
+      if (!entries) return null;
+      for (const entry of entries) {
+        const key = `${folder.path}/${entry.name}`;
+        if (entry.isFolder) {
+          if (folder.depth + 1 > STORAGE_LIST_MAX_DEPTH) {
+            console.error("[storage] listing exceeded the folder depth cap", { bucket, key });
+            return null;
+          }
+          folders.push({ path: key, depth: folder.depth + 1 });
+        } else {
+          keys.push(key);
+        }
+      }
+      if (entries.length < STORAGE_LIST_PAGE_SIZE) break;
+    }
+  }
+  return keys;
+}
+
+/** One page of a folder listing; `null` on any failure. */
+async function fetchStorageListPage(
+  bucket: string,
+  folder: string,
+  offset: number,
+): Promise<Array<{ name: string; isFolder: boolean }> | null> {
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/storage/v1/object/list/${bucket}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prefix: folder,
+        limit: STORAGE_LIST_PAGE_SIZE,
+        offset,
+        sortBy: { column: "name", order: "asc" },
+      }),
+      signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    if (!Array.isArray(body)) return null;
+    const entries: Array<{ name: string; isFolder: boolean }> = [];
+    for (const item of body) {
+      if (typeof item !== "object" || item === null || !("name" in item)) return null;
+      const name = item.name;
+      const id = "id" in item ? item.id : undefined;
+      // A name we would refuse to address is not skipped: skipping it would
+      // report an object as erased that nothing ever deleted.
+      if (typeof name !== "string" || !isSafeStorageObjectPath(name)) return null;
+      entries.push({ name, isFolder: id === null });
+    }
+    return entries;
+  } catch {
+    return null;
+  }
+}
+
 /** Minimal shape of the error responses this module inspects. */
 interface InspectableResponse {
   status: number;
@@ -652,16 +778,40 @@ async function isAbsentObjectResponse(res: InspectableResponse): Promise<boolean
  * Unreachable counts as "no" — fail closed.
  */
 async function storageBucketExists(bucket: string): Promise<boolean> {
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return false;
+  return (await storageBucketState(bucket)) === "present";
+}
+
+/**
+ * Whether a bucket exists, as a three-way answer: `missing` only when Supabase
+ * says so outright (`Bucket not found`); an outage, a refusal or unconfigured
+ * storage is `unreachable`, never `missing`.
+ *
+ * Account deletion needs the distinction (A13-M12). It lists every bucket, and a
+ * bucket that was never created — the voice bucket on an install where voice
+ * prompts were never switched on — has nothing in it to erase; treating that as
+ * a failure would make every account on that install undeletable. An unreachable
+ * bucket, on the other hand, might hold the very selfie the request is about.
+ */
+export async function storageBucketState(
+  bucket: string,
+): Promise<"present" | "missing" | "unreachable"> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return "unreachable";
 
   try {
     const res = await fetch(`${env.SUPABASE_URL}/storage/v1/bucket/${bucket}`, {
       headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
       signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
     });
-    return res.ok;
+    if (res.ok) return "present";
+    if (res.status !== 400 && res.status !== 404) return "unreachable";
+    const body = (await res.json().catch(() => null)) as
+      | { statusCode?: unknown; error?: unknown }
+      | null;
+    return body?.error === "Bucket not found" || String(body?.statusCode) === "404"
+      ? "missing"
+      : "unreachable";
   } catch {
-    return false;
+    return "unreachable";
   }
 }
 

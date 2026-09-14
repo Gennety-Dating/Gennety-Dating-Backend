@@ -1,7 +1,10 @@
 /**
  * Dev-only: wipe specific Telegram accounts from the DEV database so /start
  * starts onboarding from scratch. Deletes the `User` row (Prisma `onDelete:
- * Cascade` clears profile, matches, tickets, reports, etc.) AND the grammY
+ * Cascade` clears profile, matches, etc.; payment rows and the reports/blocks
+ * filed against the account keep their row with a null owner since A13-H14 —
+ * this script bypasses `deleteUserAccount`, so no tombstone is written and the
+ * retention sweep clears those orphans) AND the grammY
  * `bot_sessions` row keyed by chat id (= telegram id for private chats), so no
  * stale FSM state survives.
  *

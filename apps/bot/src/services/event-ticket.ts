@@ -46,6 +46,34 @@ export async function claimEventTicket(
   eventId: string,
   tierId: string,
 ): Promise<ClaimResult> {
+  try {
+    return await claimInTransaction(userId, eventId, tierId);
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    // Two taps in the same instant both passed the `existing` check and the
+    // second hit the unique `(eventId, userId)` index — the index doing its
+    // job, and not a reason to answer 500 for a ticket the person holds.
+    //
+    // Caught HERE, outside the transaction (A13-L7). A failed statement aborts
+    // a Postgres transaction: inside it, the seat give-back and the re-read
+    // that used to follow were refused with "current transaction is aborted",
+    // so the double tap still surfaced as a 500. The rollback has already
+    // returned this attempt's seat on its own, so all that is left is to read
+    // the ticket the winning tap created.
+    const existingNow = await prisma.eventTicket.findUnique({
+      where: { eventId_userId: { eventId, userId } },
+      select: { id: true },
+    });
+    if (!existingNow) throw err;
+    return { ok: true, ticketId: existingNow.id, created: false };
+  }
+}
+
+async function claimInTransaction(
+  userId: string,
+  eventId: string,
+  tierId: string,
+): Promise<ClaimResult> {
   return prisma.$transaction(async (tx) => {
     const event = await tx.event.findUnique({
       where: { id: eventId },
@@ -91,33 +119,15 @@ export async function claimEventTicket(
       WHERE id = ${tierId}::uuid AND claimed < capacity`;
     if (claimed === 0) return { ok: false as const, reason: "tier_full" as const };
 
-    // The `findUnique` above makes a SEQUENTIAL double-tap free; this makes a
-    // SIMULTANEOUS one free too. Two taps in the same instant both pass that
-    // check, and the second then hits the unique index — which is the index
-    // doing its job, but it arrived at the person as a 500 for a ticket they
-    // already hold. The seat was never at risk (the capacity CAS above is
-    // correct); only the answer was.
-    let ticket: { id: string };
-    try {
-      ticket = await tx.eventTicket.create({
-        data: { eventId, tierId, userId, qrNonce: newQrNonce() },
-        select: { id: true },
-      });
-    } catch (err) {
-      if (!isUniqueViolation(err)) throw err;
-      // Someone else's transaction created it between the check and here. Give
-      // back the seat this one claimed and answer the way the sequential path
-      // does — the ticket exists, and that is what was asked for.
-      await tx.$executeRaw`
-        UPDATE event_ticket_tiers SET claimed = claimed - 1, updated_at = NOW()
-        WHERE id = ${tierId}::uuid AND claimed > 0`;
-      const existingNow = await tx.eventTicket.findUnique({
-        where: { eventId_userId: { eventId, userId } },
-        select: { id: true },
-      });
-      if (!existingNow) throw err;
-      return { ok: true as const, ticketId: existingNow.id, created: false };
-    }
+    // The `findUnique` above makes a SEQUENTIAL double-tap free; a
+    // SIMULTANEOUS one hits the unique index here, which rolls this whole
+    // transaction back — the seat claimed above included — and is answered by
+    // `claimEventTicket` once the transaction is over. The seat was never at
+    // risk (the capacity CAS above is correct); only the answer was.
+    const ticket = await tx.eventTicket.create({
+      data: { eventId, tierId, userId, qrNonce: newQrNonce() },
+      select: { id: true },
+    });
     return { ok: true as const, ticketId: ticket.id, created: true };
   });
 }

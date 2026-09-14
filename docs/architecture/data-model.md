@@ -162,7 +162,7 @@ never by PostgreSQL enum declaration order.
 | Date lifecycle | `icebreakersSentAt`, `iceBreakersA`/`B` (`String[]`), `safetyNoteSentAt`, `safetyAckA`/`B`, `wingmanHintA`/`B`, `wingmanSentAt`, **`terminalInviteSentAt`** / **`terminalReminderSentAt`** (nullable; `terminal_invite_sent_at` / `terminal_reminder_sent_at`, 2026-09-11 — exactly-once markers for the Telegram Date Terminal invite at T-45m and reminder at T-15m, each claimed BEFORE the DM is sent; PRODUCT_SPEC §Phase 4 / §6.4a), `emergencyCancelledBy`, `emergencyReason`, `feedbackByA`/`B`, `feedbackPromptedAt`, **`dateAttendedA`/`B`** + **`attendanceOutcomeA`/`B`** (did the date actually happen, answered at T+24h — PRODUCT_SPEC §Phase 4. Written ONLY by a human answer, never by the evidence classifier, which picks the question's wording and nothing else. `null` means "not answered" and is NOT `false`: `Match.status = 'completed'` is stamped by the feedback prompt whether or not anyone showed up, so it cannot answer this. Attendance is a property of the PAIR — one credible `true` settles the match — and the two columns exist because the sides can disagree, which is a real `disputed` state rather than something to collapse. The outcome is a plain string like every other match sub-state here; whitelist in `services/attendance.ts`, deliberately separate from `feedbackBy*` because that blob is LLM-distilled into the answerer's `negativeConstraints` and "she never turned up" is not a trait to penalise future candidates on), `dateCardFileIdA`/`B` (Telegram `file_id` cached per side for My Date; that side is cleared transactionally on language/theme change, and cache writes compare the rendering language/theme against the current participant so a concurrent stale render cannot repopulate it) |
 | Nudges | `nudge1SentAt`, `nudge2SentAt` (legacy), `proposalNudge1SentAt`, `proposalNudge2SentAt`, `schedNudge1SentAt`, `schedNudge2SentAt`, `proposalDeadlineNudgeSentAt` (idempotency for the single deadline-anchored "window closing" DM ~2h before the 24h TTL — see [PRODUCT_SPEC.md](../product/product-spec.md) §3.5), `venueNudge1SentAt`/`venueNudge2SentAt` (the same 6h/12h pair for the venue step, which had no reminder at all) |
 | Planning stall (§3.5c) | `schedulingOpenedAt` — when `startScheduling` actually opened the Calendar, and the anchor every scheduling-phase reminder counts from (it replaced `dispatchedAt`, which also covers the up-to-24h decision window, so a late-accepting pair could get "pick a time" seconds after the Calendar card; null rows fall back to `dispatchedAt`). `stallCheckInSentAtA/B` + `stallConfirmedAtA/B` — the "still in?" question and its 🟢 answer, **per side** unlike every nudge column above, because both participants can independently go quiet and each needs their own question and answer. A confirmation is only eligible when it predates the question it answers, which is what makes each sent question confirmable exactly once (a stale green tap can't keep pushing the 48h deadline). Owned by `services/match-stall.ts`; driven by the existing hourly `match-nudge` cron. |
-| Date Ticket (feature-flagged) | `ticketPriceCents`, `ticketPaidA/B`, `paidForPartnerByA/B`, `partnerPaidSeenAt` / `partnerPaidNudgedAt` (goodwill-cover read-receipt: first-seen stamp gating the payer's "she saw it ❤️" DM, and the completion-nudge guard — §3.5b), `ticketStatus` (`pending`/`partial`/`completed`/`refund_pending`/`refunded`/`expired` — string, not a Prisma enum), `ticketExpiresAt`. `refund_pending` is the durable retry boundary: scheduling opens only after the provider/wallet reversal succeeds. Monetization sub-state machine that runs while `status = negotiating`; inert when `TICKET_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](../product/product-spec.md) §3.5b. |
+| Date Ticket (feature-flagged) | `ticketPriceCents` (default 849, the single-ticket row of `TICKET_BUNDLES`; the offer path always writes `TICKET_PRICE_CENTS` explicitly), `ticketPaidA/B`, `paidForPartnerByA/B`, `partnerPaidSeenAt` / `partnerPaidNudgedAt` (goodwill-cover read-receipt: first-seen stamp gating the payer's "she saw it ❤️" DM, and the completion-nudge guard — §3.5b), `ticketStatus` (`pending`/`partial`/`completed`/`refund_pending`/`refunded`/`expired` — string, not a Prisma enum), `ticketExpiresAt`. `refund_pending` is the durable retry boundary: scheduling opens only after the provider/wallet reversal succeeds. Monetization sub-state machine that runs while `status = negotiating`; inert when `TICKET_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](../product/product-spec.md) §3.5b. |
 | Pre-date coordination (feature-flagged) | `coordOfferSentAt`, `coordInitiatorId`, `coordMethod` (`share_self`/`request_partner`/`proxy` — string, not a Prisma enum), `coordChosenAt`, `coordPartnerConsent` (Variant B only), `coordResolvedAt`, `proxyOpenedAt`, `proxyClosesAt`, `proxyClosedAt`. Sub-state machine running on a `scheduled` match; inert when `COORDINATION_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](../product/product-spec.md) §Phase 4. |
 | Allocation source (feature-flagged) | `source` (`weekly`/`rematch`/`synthetic`/`campus`/`event` — string, not a Prisma enum, so a new value costs no migration; default `weekly`, stamped INSIDE the creating transaction by `createProposedMatch`), `rematchPaidById` (the buyer of a paid on-demand run; null for weekly pairs). Weekly-optimizer analytics filter to `source = 'weekly'` so neither on-demand runs nor test fill bias the scoring A/B — and a `synthetic` pair additionally writes NO `MatchScoreLog` at all, because a partner who declines by construction says nothing about scoring quality. An `event` pair (LAUNCH_EVENTS §11) is the one source born **pre-accepted**: `createProposedMatch` takes `preAccepted` and writes `status: "negotiating"` with both `acceptedBy*` true, because two people who both said yes at the party have already answered the question a `proposed` row exists to ask — and it arms `ticketExpiresAt` in the same CAS, so the row can never reach `negotiating` invisible to both the ticket sweep and the stall chain (§3.5b's own rule, one stage earlier). See [PRODUCT_SPEC.md](../product/product-spec.md) §3.11 / §3.1c / `REMATCH_PRODUCT_SPEC.md` / `LAUNCH_EVENTS_PRODUCT_SPEC.md` §11. |
 | Venue change v2 (feature-flagged) | `venueChangeStatus` (null/`liking`/`agreed`/`settled`/`lapsed` — string, not a Prisma enum), `venueChangeProposerId`/`ProposedAt` (session initiator — first like / express mint), `venueLikesA/B` (`Json[]` server-resolved like snapshots), `venueChangeName`/`Address`/`Lat`/`Lng`/`MapsUri`/`PlaceId`/`PhotoUrl`/`PhotoName` (agreed venue snapshot), `venueChangeExpiresAt` (payment deadline)/`ResolvedAt`, `venueChangePaidById`/`PaidAt` (settle stamp), `venueChangePayDeclinedAt` (vestigial v2 — his decline now ENDS the change/closes the session rather than stamping a lingering `agreed` state, so this is no longer written or read for a decision), `venueChangeOfferPaySentAt` (wish-card guard), `venueChangePingSentToA/BAt` (board-invite guards), `venueChangeExpressAt` (her hidden unilateral mint), `venueChangeTier` (`base`/`premium` of the agreed venue, stamped at agreement — drives the §Premium fee waiver: a premium venue, or a base venue settled by a premium user, is free), `venueChangeCount` (`Int @default(0)` — settled changes so far, capped by `VENUE_CHANGE_MAX_PER_DATE` (2); incremented inside BOTH settle CASes, the paid one and the Premium free one, which is why the cap cannot be derived from `venue_change_purchases`: a free settle writes no purchase row, so a subscribing pair and every demo visitor would be uncapped), `venueChangeComment` (legacy v1, no longer written). Paid multiplayer venue-board sub-state on a `scheduled` match — a lapse never cancels the match; inert when `VENUE_CHANGE_FEATURE_ENABLED` is off. **`settled` and `lapsed` end the SESSION, not the date**: either can be restarted into a fresh `liking` round while `venueChangeCount` is under the cap, and the restart wipes every `venueChange*` field above (both `venueLikes*` included) in the same compare-and-set that writes the new round's first like — these columns are one slot, not a history, so a partial reset would let round one's hearts agree round two and would keep the peer-wait shimmer dead via a stale `venueChangePaidAt`. Only the four entry points that perform that reset (board state, catalog, like submission, express mint) consult `evaluateVenueChangeRestart`; every other action keeps reading `evaluateVenueBoardEligibility`, which still refuses a finished session outright. See [PRODUCT_SPEC.md](../product/product-spec.md) §3.7b / §3.8. |
@@ -227,11 +227,27 @@ behavioural gain; treat them as reserved, not as data.
 
 Post-match user-vs-user reports. LLM-triaged into `tier` 1/2/3
 (`reasonSummary` is the distilled rationale). `adminReviewed` flips on the
-manual-queue clear. Unique `(reporterId, matchId)` blocks duplicates. See
+manual-queue clear. Unique `(reporterId, matchId)` blocks duplicates (NULLs are
+distinct in Postgres, so rows orphaned by a deletion never collide). See
 [PRODUCT_SPEC.md](../product/product-spec.md) §5 for tier policy. Tier 2/3 status changes
 and cancellation of every in-flight match are committed in the same database
 transaction; partner compensation and Telegram/Expo notifications run only
 after commit and never weaken the cancellation safety gate.
+
+**A report outlives both accounts and the match (A13-H14, 2026-09-14).**
+`reporterId`, `reportedId` and `matchId` are nullable with `onDelete: SetNull`.
+When the REPORTED account is deleted, `deleteUserAccount` first stamps
+`reportedFormerId` (uuid, no FK) with its id in the same transaction and writes
+`safety_tombstones` for its identities; re-registering with the same Telegram
+id / verified phone / verified email relinks the row (`reportedId` = the new
+account, `reportedFormerId` cleared — `services/safety-tombstone.ts`). When the
+REPORTER is deleted the row stays with `reporterId` null — it is moderation
+history about the other person. An account with no provable identity to key a
+tombstone on loses its reports-against with it, as the cascade used to. Rows
+with a null `reportedId` and no tombstone left for `reportedFormerId` are
+deleted by `workers/retention.ts` (so at most `SAFETY_TOMBSTONE_RETENTION_MONTHS`
+after the deletion). Index `(reported_former_id)` backs the relink. The admin
+report list returns `reporter: null` / `reported: null` for a deleted side.
 
 ### `user_blocks`
 
@@ -240,8 +256,18 @@ deliberately unlike it: no text, no tier, no moderation queue, no consequence
 for the blocked account. Unique `(blockerId, blockedId)` makes a retry the same
 row rather than a second one or an error. `matchId` is the surface the block was
 filed from, kept for moderation context, nullable with `SetNull` — a block must
-outlive the match that produced it. `onDelete: Cascade` from `users` on both
-sides.
+outlive the match that produced it.
+
+**Account deletion is asymmetric (A13-H14, 2026-09-14).** `blockerId` cascades:
+a block the deleted person drew is their own data and protects nobody once they
+are gone. `blockedId` is nullable with `onDelete: SetNull`: the deletion stamps
+`blockedFormerId` (uuid, no FK) first, and re-registration with a tombstoned
+identity relinks the row to the new account — deleting colliding rows first,
+since `(blocker_id, blocked_id)` is unique. Until relinked, a row with a null
+`blockedId` excludes nobody: the candidate SQL compares `blocked_id = u.id`
+(never true for NULL), `loadBlockedPairKeys` and `listBlockedUsers` skip it
+explicitly. Unrelinkable rows are swept with the tombstones. Index
+`(blocked_former_id)`.
 
 **Directional in storage, symmetric in every consumer.** The row records who
 blocked whom because the blocker's own list has to show and undo it; the
@@ -254,6 +280,41 @@ transaction (`services/user-block.ts` → `claimMatchCancellation`); ticket
 refunds and the partner's cancellation notice run only after commit, on the same
 rail freeze and moderation use. See [PRODUCT_SPEC.md](../product/product-spec.md)
 §Blocking.
+
+### `safety_tombstones`
+
+What account deletion keeps so a restricted or blocked person cannot reset it
+by re-registering (A13-H14, decision journal 2026-09-14). Written by
+`writeSafetyTombstones` inside the `deleteUserAccount` transaction, **only**
+when the account carries something: a moderation `status` (`banned` /
+`suspended` / `pending_investigation`), `strikes > 0`, or a report or block
+filed against it. One row per identity the account had PROVEN: a positive
+Telegram id, a phone with `phoneVerifiedAt`, an email with `isEmailVerified`.
+
+| Field | Notes |
+|---|---|
+| `identityHash` | HMAC-SHA256 hex of `"<kind>:<normalised value>"` under a key derived from `JWT_SECRET` with the label `safety-tombstone/v1`. No identifier in the clear. Rotating `JWT_SECRET` orphans every row (lookups stop matching — the pre-fix behaviour, never a false match). No `JWT_SECRET` → nothing written or looked up |
+| `kind` | `telegram` / `phone` / `email` (plain string) |
+| `formerUserId` | The deleted account's id, no FK; joins `reports.reported_former_id` / `user_blocks.blocked_former_id` |
+| `status`, `suspendedUntil`, `strikes` | The moderation state at deletion (`status` null when only strikes/reports/blocks were carried) |
+| `restoredToUserId`, `restoredAt` | The account the row was last applied to. Re-applying to that account is skipped (a moderator lifting a restored ban is not overruled later); a different account reaching the identity gets the status again. When that account is itself deleted, its applied rows are superseded by the tombstones written from its current state |
+
+`restoreSafetyHistory` (`services/safety-tombstone.ts`) runs wherever an
+identity attaches to an account: bot `/start` and Mini App first-open account
+creation, the native email / phone / Telegram logins (`public/mobile-user.ts`),
+the Telegram contact share and phone adoption, and `claimVerifiedEmail`. Under a
+row lock it relinks reports and blocks, restores the strictest status (`banned`
+> `pending_investigation` > a still-running `suspended`) and the maximum
+strikes, and for a restored lock revokes refresh sessions and cancels in-flight
+matches as moderation does. Failures after the attach are logged and alerted to
+the founder, never thrown into the login. Onboarding completion
+(`finalize_onboarding` with liveness off, the verification skip) no longer
+overwrites a moderation lock with `active`.
+
+Indexes `(identity_hash)`, `(former_user_id)`, `(created_at)`. Deleted
+`SAFETY_TOMBSTONE_RETENTION_MONTHS` (24) after `created_at` by
+`workers/retention.ts`, which then removes the reports and blocks no tombstone
+can relink. Disclosed in `legal/privacy-policy.md` §16.
 
 ### `email_otps`
 
@@ -415,8 +476,9 @@ One row per person per thing that arrived for them in the app — the iOS bell.
 
 Unique `(user_id, announcement_id)` — the fan-out's restart guard (NULLs stay
 distinct, so transactional rows are unaffected). Indexes
-`(user_id, created_at)` for the list and `(announcement_id, pushed_at)` for the
-push resume. Swept after 90 days by `workers/retention.ts`.
+`(user_id, created_at)` for the list, `(announcement_id, pushed_at)` for the
+push resume, and `(created_at)` for the retention sweep (A13-L29). Swept after
+90 days by `workers/retention.ts`.
 
 ### `proxy_messages`
 
@@ -693,7 +755,13 @@ Append-only audit of every ticket-wallet movement or payment/refund transition
 anymore, optional
 `matchId`/`amountCents`/**`amountStars`**/`bundleSize`/`externalPaymentId`,
 `createdAt`;
-`onDelete: Cascade` from `users`). The running sum of `delta` equals
+`userId` nullable with `onDelete: SetNull` from `users` — a payment record is
+kept for accounting after account deletion, as the privacy policy states
+(A13-H14, 2026-09-14). An ownerless row cannot be refunded (the Telegram id went
+with the account), so the gate refund sweep selects `userId IS NOT NULL`, and
+`deleteUserAccount` defers while this account has a `gate_payment` /
+`gate_processing` / `gate_refund_pending` Stars row younger than
+`ACCOUNT_DELETION_REFUND_DEFER_DAYS` (`services/refund-in-flight.ts`). The running sum of `delta` equals
 `User.ticketBalance`, which is materialized for fast reads; both are written in
 the same transaction by `services/ticket-wallet.ts`. Photo/video onboarding
 bonuses are idempotent via `Profile.photoBonusTicketAt` / `videoBonusTicketAt`;
@@ -749,8 +817,8 @@ Append-only audit of every Gennety Premium subscription movement (`userId`,
 complimentary comp grants — referral / promo-code rewards, no auto-renew anchor), `event` ∈
 `started`/`renewed`/`cancelled`/`expired`/`refunded`, unique `externalPaymentId`,
 `periodStart`/`periodEnd`, `amount`/`currency`, optional `note`, `createdAt`;
-`onDelete: Cascade`
-from `users`). Mirrors `ticket_ledger`: the unique `externalPaymentId` (the
+`userId` nullable with `onDelete: SetNull` from `users` — kept for accounting
+after account deletion, A13-H14). Mirrors `ticket_ledger`: the unique `externalPaymentId` (the
 Telegram Stars recurring charge id, or `appstore:<transactionId>`) makes provider
 redelivery exactly-once, so a renewal is applied at most once. `User.premiumUntil`
 / `premiumSince` are the materialized head, written in the same transaction by
@@ -782,7 +850,10 @@ guarded `redeemedCount++`. Reward deltas live in the ledgers (`ticket_ledger`
 the wow-screen once-marker. iOS deferred-deep-link attribution uses an in-memory
 TTL fingerprint→code store (`services/promo-attribution.ts`, coarse IP+UA+lang
 hash, one-shot match), matching the single-process `usage-limiter` pattern.
-`onDelete: Cascade` from `promo_codes` / `users`. Inert unless
+`onDelete: Cascade` from `promo_codes` / `users` — deliberately unchanged by
+A13-H14: a redemption moves no money (the rewards it granted are ledger rows,
+which survive), and the row's only job is a one-per-person guard that has
+nobody left to guard once the account is gone. Inert unless
 `PROMO_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](../product/product-spec.md) §3.10.
 
 ### `rematch_purchases` (feature-flagged)
@@ -808,7 +879,11 @@ crash mid-run still leaves a durable record that money moved; the hourly
 materialized head on `User`** — the rate limits are derived from these rows, so
 there is no counter that can drift out of sync with the money. Indexed
 `(userId, createdAt)` (limit lookup) and `(status, createdAt)` (sweep).
-`onDelete: Cascade` from `users`. Inert unless `REMATCH_FEATURE_ENABLED`.
+`userId` nullable with `onDelete: SetNull` from `users` (A13-H14): the row
+outlives a deleted buyer for accounting; the sweep selects `userId IS NOT NULL`
+because an ownerless row has no Telegram id to refund to, and account deletion
+defers while a `processing` / `refund_failed` row of the account is younger than
+`ACCOUNT_DELETION_REFUND_DEFER_DAYS`. Inert unless `REMATCH_FEATURE_ENABLED`.
 
 ### `venue_change_purchases` (feature-flagged)
 
@@ -828,7 +903,10 @@ starts `appstore:` so it never retries a Stars refund against one), unique
 `externalPaymentId` (the Telegram Stars `telegram_payment_charge_id`),
 `amountStars` (frozen at purchase — `VENUE_CHANGE_STARS` is env-tunable),
 `resolvedAt`/`refundError`, `createdAt`. Indexed `(userId, createdAt)` and
-`(status, createdAt)` (sweep). `onDelete: Cascade` from `users`.
+`(status, createdAt)` (sweep). `userId` nullable with `onDelete: SetNull` from
+`users` (A13-H14) — same rules as `rematch_purchases`: kept after account
+deletion, skipped by the sweep when ownerless, and a young `processing` /
+`refund_failed` row defers deletion.
 
 The row is written from the `successful_payment` trust boundary **before** the
 `agreed → settled` CAS, so a crash mid-settle still leaves a durable record that
@@ -855,8 +933,9 @@ the payment trail), `status` (`processing` → `settled` | `refunded_race` |
 a Prisma enum), unique `externalPaymentId` (the Telegram Stars
 `telegram_payment_charge_id`), `amountStars` (frozen at purchase —
 `PRIME_TIME_STARS` is env-tunable), `resolvedAt`/`refundError`, `createdAt`.
-Indexed `(userId, createdAt)` and `(status, createdAt)`. `onDelete: Cascade`
-from `users`.
+Indexed `(userId, createdAt)` and `(status, createdAt)`. `userId` nullable with
+`onDelete: SetNull` from `users` (A13-H14) — same rules as `rematch_purchases`;
+the §9.1 dead-match refund also skips a payer whose account is gone.
 
 The row is written from the `successful_payment` trust boundary **before** the
 `primeTimeUnlockedAt` CAS, so a crash mid-settle still leaves durable proof that
@@ -875,37 +954,13 @@ sibling tables: a live match that dies before the date returns the pass in
 nothing and has nothing to return — the row is the only thing that knows the
 difference.
 
-### `meme_unlock_purchases` (feature-flagged)
+### No `meme_unlock_purchases` table
 
-One paid reveal of a partner's meme (§3.12, gated by `MEME_UNLOCK_ENABLED`;
-owned by `services/meme-unlock.ts`). Columns: `userId` (the buyer), `matchId`
-(free-form, no FK — same rule as the two siblings above), `subjectUserId` (whose
-meme was shown, recorded so a later moderation report can be traced to what was
-actually revealed), `status`, unique `externalPaymentId`, `amountStars` (frozen
-at purchase), `resolvedAt`/`refundError`, `createdAt`. Indexed
-`(userId, createdAt)` and `(status, createdAt)`; `onDelete: Cascade` from
-`users`.
-
-**`@@unique([userId, matchId])` is the entitlement itself**, and this is the
-design. Unlike Prime Time — which opens a band for the PAIR and is therefore
-keyed by match alone — this reveal is bought by one person and changes nothing
-on the partner's side, so the row is keyed by buyer AND match. That index is what
-makes "already unlocked" a database fact rather than a query over payment
-history, and what stops a reused invoice link from charging twice. The two unique
-constraints also separate the two ways an insert can fail: a `P2002` where the
-existing row carries the SAME charge id is a redelivered `successful_payment`
-(idempotent no-op), while a DIFFERENT charge id is a second purchase of an
-entitlement already held (always refunded).
-
-**A refunded row is DELETED, not flagged** — the one place this rail departs from
-every other purchase table, and it follows directly from the row being the
-entitlement: a `refunded_*` row left in place would permanently block that buyer
-from ever purchasing the reveal again. The trade is that reversals reach the
-founder feed but not `services/purchases.ts`, so the only `refunded` status that
-read model will ever surface here is a refund that FAILED — which is exactly the
-row ops needs to find. Statuses: `processing` → `settled` | `refunded_gone` |
-`refunded_undelivered` | `refunded_stale` | `refund_failed` (a plain string, not
-a Prisma enum, matching the siblings).
+An earlier revision of this document described a paid meme-reveal purchase
+table. It was never created: the reveal became free and consent-based before it
+shipped (decision journal 2026-09-06, "`meme_unlock` не станет видом
+покупки"), and `schema.prisma` has no such model. Removed here 2026-09-14
+(A13-L30) so nobody writes against a table that does not exist.
 
 ### `short_video_analyses` (feature-flagged)
 

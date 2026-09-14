@@ -72,7 +72,12 @@ export interface PurchaseRow {
   id: string;
   source: PurchaseSource;
   kind: PurchaseKind;
-  userId: string;
+  /**
+   * The payer, or null once they deleted their account: payment rows outlive
+   * the account for accounting (A13-H14), so revenue stays whole while the
+   * row no longer points at anybody.
+   */
+  userId: string | null;
   provider: PurchaseProvider;
   status: PurchaseStatus;
   /** The source's own status/reason string, unmapped. */
@@ -201,7 +206,7 @@ const GATE_STATUS: Record<string, PurchaseStatus> = {
 
 export interface RawTicketLedgerRow {
   id: string;
-  userId: string;
+  userId: string | null;
   reason: string;
   delta: number;
   matchId: string | null;
@@ -277,7 +282,7 @@ export function normalizeTicketLedgerRow(
 
 export interface RawSubscriptionLedgerRow {
   id: string;
-  userId: string;
+  userId: string | null;
   provider: string;
   event: string;
   amount: number | null;
@@ -326,7 +331,7 @@ export function normalizeSubscriptionRow(
 
 export interface RawRematchPurchaseRow {
   id: string;
-  userId: string;
+  userId: string | null;
   status: string;
   amountStars: number;
   amountCents: number | null;
@@ -337,7 +342,7 @@ export interface RawRematchPurchaseRow {
 
 export interface RawVenueChangePurchaseRow {
   id: string;
-  userId: string;
+  userId: string | null;
   matchId: string;
   status: string;
   amountStars: number;
@@ -398,7 +403,7 @@ export function normalizeVenueChangeRow(row: RawVenueChangePurchaseRow): Purchas
 
 export interface RawPrimeTimePurchaseRow {
   id: string;
-  userId: string;
+  userId: string | null;
   matchId: string;
   status: string;
   amountStars: number;
@@ -849,6 +854,9 @@ export async function loadPayerIndex(
 
   const byUser = new Map<string, PayerIndexEntry>();
   for (const row of rows) {
+    // A deleted payer is nobody to convert or look up; their money still counts
+    // in the ledger totals, just not in a per-person index (A13-H14).
+    if (!row.userId) continue;
     let entry = byUser.get(row.userId);
     if (!entry) {
       entry = {

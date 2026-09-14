@@ -103,8 +103,12 @@ verificationRouter.get(
             const days = (Date.now() - r.createdAt.getTime()) / 86_400_000;
             if (Number.isFinite(days)) processingDaysByTier[r.tier]?.push(days);
             // False-positive proxy: reviewed AND reported user is still
-            // active (not suspended/banned). Imperfect but informative.
+            // active (not suspended/banned). Imperfect but informative. A
+            // report whose reported account was deleted (`reported` null, the
+            // row kept for re-registration — A13-H14) says nothing either way,
+            // so it is left out of the proxy rather than counted as one.
             if (
+              r.reported &&
               r.reported.status !== "suspended" &&
               r.reported.status !== "banned"
             ) {

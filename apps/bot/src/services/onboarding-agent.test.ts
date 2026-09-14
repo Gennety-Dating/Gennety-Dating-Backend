@@ -854,6 +854,55 @@ describe("onboarding-agent", () => {
     );
   });
 
+  // A13-H14: a re-registered person's ban is restored onto the fresh account
+  // at its first touch, while onboarding. Finishing onboarding must not lift it.
+  it("does not activate a user whose status is a restored moderation lock", async () => {
+    const saveFallbackProfile = vi.fn().mockResolvedValue({
+      summary: "fallback",
+      embeddingSaved: true,
+    });
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        messageHistory: contextDumpSavedHistory(),
+        language: "en",
+        aiMemoryExportPreference: "accepted",
+      })
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        status: "banned",
+        firstName: "Alice",
+        age: 21,
+        gender: "female",
+        preference: "men",
+        email: "alice@stanford.edu",
+        isEmailVerified: true,
+        termsAccepted: true,
+        aiMemoryExportPreference: "accepted",
+        profile: {
+          height: 165,
+          hobbies: ["tennis"],
+          partnerPreferences: "someone kind and funny",
+          psychologicalSummary: "",
+          photos: ["photo1", "photo2", "photo3", "photo4"],
+          homeCityKey: "ua:kyiv",
+        },
+      });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(toolCallResponse([{ id: "call-1", name: "finalize_onboarding", args: {} }]))
+      .mockResolvedValueOnce(textResponse("Saved."));
+
+    await runAgentTurn(telegramId, "finish up", { fetchFn: mockFetch, saveFallbackProfile });
+
+    const finalize = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[0])
+      .find((args: { data: Record<string, unknown> }) => args.data.onboardingStep === "completed");
+    expect(finalize).toBeDefined();
+    expect(finalize.data).not.toHaveProperty("status");
+  });
+
   it("finalizes the optional media stage directly without calling OpenAI", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({

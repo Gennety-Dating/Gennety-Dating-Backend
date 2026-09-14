@@ -46,7 +46,8 @@ export async function cleanDatabase(): Promise<void> {
       matches,
       profiles,
       users,
-      system_knowledge
+      system_knowledge,
+      safety_tombstones
     CASCADE
   `);
 }

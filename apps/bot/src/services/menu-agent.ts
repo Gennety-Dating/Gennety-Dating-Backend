@@ -19,6 +19,7 @@ import {
   MIN_AGE,
   MAX_AGE,
   MAX_HISTORY_FOR_API,
+  AGENT_STORED_HISTORY_MAX_MESSAGES,
   SUPPORTED_LANGUAGES,
   t,
   type Language,
@@ -40,6 +41,7 @@ import {
   shouldOfferVenueChange,
 } from "../handlers/matching/venue-change.js";
 import { pendingFeedbackFor } from "./post-date-feedback.js";
+import { emergencyCancelOpen } from "./emergency-cancel.js";
 import { STALL_ASK_CANCEL_PREFIX } from "./match-stall.js";
 import { setUserLanguage, setUserTheme } from "./user-preferences.js";
 
@@ -1386,7 +1388,7 @@ async function execProposeCancelDate(
       ],
     },
     orderBy: { createdAt: "desc" },
-    select: { id: true, status: true, proposedTimes: true },
+    select: { id: true, status: true, proposedTimes: true, agreedTime: true },
   });
   // The single-live-match invariant means there should be exactly one, but
   // legacy/corrupt data can carry several — so pick by PRODUCT PROGRESSION, in
@@ -1406,6 +1408,24 @@ async function execProposeCancelDate(
           "There is no date to cancel — they have nothing booked and nothing being planned. " +
           "If a proposal is still awaiting their decision, that is a decline rather than a cancellation: " +
           "explain that and show no button.",
+      }),
+      action: null,
+    };
+  }
+
+  // A booked date whose start time has come is no longer cancellable: the row
+  // stays `scheduled` until the T+24h prompt, but the emergency rail refuses
+  // from the agreed time on (A13-M20). Offering its card would walk the user
+  // into a confirmation that can only answer "too late" — so the same
+  // predicate the service enforces decides here, and no button is attached.
+  if (match.status === "scheduled" && !emergencyCancelOpen(match.agreedTime, new Date())) {
+    return {
+      toolResult: JSON.stringify({
+        success: false,
+        error: "date_already_started",
+        instruction:
+          "Their date's start time has already passed, so it can no longer be cancelled — show no button and do not suggest another way to cancel it. " +
+          "If they are saying it did not happen, tell them in one line that they will be asked the next day whether they met.",
       }),
       action: null,
     };
@@ -1578,6 +1598,13 @@ async function execRecordDateFeedback(
         "There is no finished date waiting for feedback. Keep talking about it normally — just do not record anything.",
     });
   }
+  // A story is recorded only onto an empty side: once per date, and never after
+  // the form — the form already carries what the evening taught matching, so a
+  // story on top adds nothing but a second paid analysis. Refused here rather
+  // than left to the pipeline so the model gets an instruction it can act on
+  // instead of a bare refusal code; the race where something lands between
+  // this read and the write ends in the same refusal below.
+  if (pending.answered) return dateFeedbackAlreadyRecorded(pending.submitted);
 
   const lang = user.language ?? (await userLanguage(telegramId));
   const recorded = await recordPostDateFeedback({
@@ -1586,6 +1613,9 @@ async function execRecordDateFeedback(
     text,
     language: lang,
   });
+  if (!recorded.ok && recorded.reason === "already-submitted") {
+    return dateFeedbackAlreadyRecorded(null);
+  }
   if (!recorded.ok) {
     return JSON.stringify({ success: false, error: `Not recorded: ${recorded.reason}` });
   }
@@ -1593,6 +1623,30 @@ async function execRecordDateFeedback(
     success: true,
     instruction:
       "Saved. Thank them in one line and move on — do not read it back to them, and do not ask for a rating.",
+  });
+}
+
+/**
+ * The refusal for a story that has something to land on already.
+ *
+ * `formAnswered` decides the one sentence that differs: after the form there is
+ * nothing left to offer, while after an earlier story or voice note the form is
+ * still theirs to fill in (decision 2026-09-08) and the model may say so. `null`
+ * is the race, where it is not known which one won — so it promises neither.
+ */
+function dateFeedbackAlreadyRecorded(formAnswered: boolean | null): string {
+  const tail =
+    formAnswered === true
+      ? "They already answered the feedback form for this date, so there is nothing more to record."
+      : formAnswered === false
+        ? "If they have not filled in the feedback form yet, it is still open to them for the rating and the second-date answer."
+        : "";
+  return JSON.stringify({
+    success: false,
+    error: "already_submitted",
+    instruction:
+      `Something about this date is already on record for them, so this was NOT recorded. Do not say it was saved or updated, and do not call this tool again for it. ${tail}`.trim() +
+      " Keep talking about the date normally if they want to.",
   });
 }
 
@@ -1867,6 +1921,10 @@ export async function runMenuAgentTurn(
     history.push(msg);
   }
 
+  // Everything from here on is THIS turn. Remembered because both the reply
+  // fallback and the history write below must look at this turn alone: the
+  // replayed window before it belongs to earlier turns.
+  const turnStart = history.length;
   history.push({ role: "user", content: userMessage });
 
   // A tool may request a post-reply UI action (e.g. the Premium cancel card).
@@ -1975,13 +2033,20 @@ export async function runMenuAgentTurn(
     llmFailed = true;
   }
 
-  // Persist history (only non-system messages to keep it lean; system prompt is
-  // rebuilt). Each turn is stamped so the next call can replay only this
-  // agent's own recent conversation — see `recentAgentHistory`.
+  // Persist history: this turn is APPENDED to the stored transcript, stamped so
+  // the next call can replay only this agent's own recent conversation (see
+  // `recentAgentHistory`), and the oldest entries are trimmed past a storage
+  // cap. It used to write back `history` itself — the 24 h / 12-message replay
+  // window plus this turn — so the first agent turn erased the onboarding
+  // transcript and every later one erased whatever had aged out of the window,
+  // although the admin dialogs viewer reads this column as the conversation.
   const stamp = Date.now();
-  const toStore: StoredChatMessage[] = history
-    .filter((m) => m.role !== "system")
-    .map((m) => ({ ...m, ts: (m as StoredChatMessage).ts ?? stamp }));
+  const thisTurn: StoredChatMessage[] = history
+    .slice(turnStart)
+    .map((m) => ({ ...m, ts: stamp }));
+  const toStore: StoredChatMessage[] = [...stored, ...thisTurn].slice(
+    -AGENT_STORED_HISTORY_MAX_MESSAGES,
+  );
   await prisma.user.update({
     where: { telegramId },
     data: {
@@ -1990,7 +2055,11 @@ export async function runMenuAgentTurn(
     },
   });
 
-  const lastAssistant = [...history]
+  // Only this turn's messages: a turn that produced no content must fall back
+  // to the error line below, not re-send the previous turn's answer from the
+  // replayed window as if it were this one.
+  const lastAssistant = history
+    .slice(turnStart)
     .reverse()
     .find((m) => m.role === "assistant" && m.content);
   // Localized, because this is reachable on an ordinary turn — an empty

@@ -9,6 +9,7 @@ import {
   classifyPhoneConflict,
 } from "../../services/account-linking.js";
 import { sendCompletedUserEntry } from "../start.js";
+import { restoreSafetyHistoryAfterAttach } from "../../services/safety-tombstone.js";
 
 /**
  * Registration v2 — phone verification for the GENERAL track: one branch of the
@@ -43,6 +44,7 @@ export async function handlePhoneContact(ctx: BotContext): Promise<void> {
   }
 
   const telegramId = BigInt(fromId);
+  let userId: string;
   try {
     // Stamp the general track only when no track is chosen yet (covers the
     // reply-keyboard fallback that bypasses the Mini App fork). A student-track
@@ -52,7 +54,7 @@ export async function handlePhoneContact(ctx: BotContext): Promise<void> {
       where: { telegramId },
       select: { registrationTrack: true },
     });
-    await prisma.user.update({
+    const updated = await prisma.user.update({
       where: { telegramId },
       data: {
         phone,
@@ -60,7 +62,9 @@ export async function handlePhoneContact(ctx: BotContext): Promise<void> {
         ...(existing?.registrationTrack ? {} : { registrationTrack: "general" }),
         ...onboardingActivityPatch(),
       },
+      select: { id: true },
     });
+    userId = updated.id;
   } catch (err) {
     // `User.phone` is @unique — P2002 means another row already holds this
     // number. Telegram vouched that the number belongs to THIS account, and
@@ -73,6 +77,9 @@ export async function handlePhoneContact(ctx: BotContext): Promise<void> {
     throw err;
   }
 
+  // A verified number that belonged to a deleted account brings its safety
+  // history back onto this one (A13-H14).
+  await restoreSafetyHistoryAfterAttach(userId, "bot:contact");
   await ctx.reply(phoneCopy(lang, "ok"));
 }
 
@@ -122,6 +129,11 @@ async function resolvePhoneConflict(
   }
 
   const user = adopted.user;
+  // The adopted account just gained this Telegram id (A13-H14): a deleted
+  // account's history keyed on it applies here. The entry below must see the
+  // status that restore leaves, not the one read before it.
+  const restored = await restoreSafetyHistoryAfterAttach(user.id, "bot:contact-adopt");
+  const status = restored?.statusRestored ?? user.status;
   // The session still carries the deleted row's onboarding position. Without
   // this sync the router would keep walking a fully onboarded user through
   // registration.
@@ -134,7 +146,7 @@ async function resolvePhoneConflict(
   if (user.onboardingStep === "completed") {
     await sendCompletedUserEntry(ctx, {
       telegramId: user.telegramId,
-      status: user.status,
+      status,
     });
   }
 }

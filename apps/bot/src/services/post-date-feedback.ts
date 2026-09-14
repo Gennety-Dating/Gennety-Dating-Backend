@@ -44,7 +44,8 @@ export type FeedbackRefusal =
   | "empty-text"
   | "bad-chemistry"
   | "bad-second-date"
-  | "no-pending-feedback";
+  | "no-pending-feedback"
+  | "already-submitted";
 
 export interface FeedbackSubmission {
   chemistry: number;
@@ -208,8 +209,33 @@ const FEEDBACK_LABELS: Record<Language, FeedbackLabels> = {
 };
 
 /**
+ * Is this stored feedback a FORM answer?
+ *
+ * The only thing on the row that tells a form answer from the other sources
+ * without a schema change: `composeFeedbackText` always opens with the
+ * chemistry line, in one of the five label languages, and nothing else writes
+ * that line — the menu agent's story and the Telegram voice note both store
+ * the person's words as they are. The chemistry score is required by
+ * `normaliseFeedback`, so every form answer carries it.
+ *
+ * What it cannot do is tell a voice note from a story: those two are plain
+ * text alike, which is why both are accepted only onto an empty side.
+ */
+export function isFormFeedbackAnswer(stored: string | null): boolean {
+  if (!stored) return false;
+  return Object.values(FEEDBACK_LABELS).some((labels) =>
+    stored.startsWith(`${labels.chem}: `),
+  );
+}
+
+/**
  * Persist one submission: the feedback blob through the shared analysis
  * pipeline, then the venue-fit answer on the actor's own side.
+ *
+ * The form is accepted once per side, and a story or a voice note recorded
+ * before it does not close it (decision 2026-09-08): the rating and the
+ * second-date answer come only from here. Hence `mayFollow` — land on plain
+ * text, refuse on an earlier form answer.
  *
  * Venue fit is written AFTER the pipeline succeeds, not before: it is the
  * lesser half of the answer, and writing it against a submission the pipeline
@@ -233,6 +259,7 @@ export async function submitPostDateFeedback(input: {
     matchId: input.matchId,
     text: composed,
     language: input.language,
+    mayFollow: (existing) => !isFormFeedbackAnswer(existing),
   });
   if (!recorded.ok) return { ok: false, error: recorded.reason };
 
@@ -266,8 +293,18 @@ export interface PendingFeedbackView {
   partnerFirstName: string | null;
   venueName: string | null;
   agreedTime: Date;
-  /** Already answered — the form opens read-only rather than 404ing. */
+  /**
+   * The FORM has been answered — it opens read-only rather than 404ing. A story
+   * told to the concierge or a voice note does not count: the form stays open
+   * after either (decision 2026-09-08).
+   */
   submitted: boolean;
+  /**
+   * Anything at all is recorded on this side — the form, a voice note or a
+   * story. Internal (not serialized): the menu agent records a story only onto
+   * an empty side.
+   */
+  answered: boolean;
   maxTextLength: number;
   serverNow: Date;
 }
@@ -311,12 +348,14 @@ export async function pendingFeedbackFor(
   if (!match || !match.agreedTime) return null;
 
   const isA = match.userAId === userId;
+  const own = isA ? match.feedbackByA : match.feedbackByB;
   return {
     matchId: match.id,
     partnerFirstName: (isA ? match.userB.firstName : match.userA.firstName) ?? null,
     venueName: match.venueName,
     agreedTime: match.agreedTime,
-    submitted: Boolean(isA ? match.feedbackByA : match.feedbackByB),
+    submitted: isFormFeedbackAnswer(own),
+    answered: Boolean(own),
     maxTextLength: FEEDBACK_MAX_TEXT_LEN,
     serverNow: now,
   };

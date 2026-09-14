@@ -18,6 +18,7 @@ import {
   VERIFY_PHOTOS_CALLBACK,
 } from "../../services/verification-keyboard.js";
 import type { BotContext } from "../../session.js";
+import { isModerationLockedStatus } from "../../services/user-status.js";
 
 /**
  * Callback data for the "Skip verification" button on the CTA card. This is now
@@ -476,7 +477,7 @@ export async function handleVerificationSkipConfirm(
 
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { id: true, verificationSkippedAt: true },
+    select: { id: true, verificationSkippedAt: true, status: true },
   });
   if (!user) return;
 
@@ -501,7 +502,9 @@ export async function handleVerificationSkipConfirm(
     data: {
       verificationStatus: "unverified",
       verificationSkippedAt: new Date(),
-      status: "active",
+      // A restored moderation status (A13-H14 — a re-registered person's ban
+      // lands on the fresh account) is never lifted by skipping verification.
+      ...(isModerationLockedStatus(user.status) ? {} : { status: "active" as const }),
       onboardingStep: "completed",
     },
   });

@@ -606,14 +606,21 @@ We keep personal data only as long as necessary for the purposes above.
 | Match records, score breakdowns, venue selection logs | While your account exists; erased on account deletion |
 | Onboarding funnel telemetry | While your account exists; erased on account deletion (it contains no answer text) |
 | Payment and subscription ledger entries | As required by accounting and tax law, typically several years, even after account deletion — kept minimal and separated from your profile |
+| Safety records after account deletion (moderation status, strikes, and reports and blocks made against the account) | Kept only if the deleted account had them, linked solely to keyed hashes of its Telegram ID, verified phone number and verified email — never the identifiers themselves — and used only to stop a restricted or blocked person from resetting them by registering again; **24 months** after deletion, then deleted |
 | Internal weekly-report snapshots | Deleted for your account when you delete your account |
 | Website cookie-consent records | Kept as proof of consent for as long as required to demonstrate compliance (append-only; see the Cookie Policy) |
 | Diagnostic / technical logs | Short-term, then rotated |
 
 **On account deletion** we erase the storage objects we hold for you
-(verification selfie, profile media, chat attachments), remove any internal
-report snapshot containing your account, and then perform a cascading deletion
-across our database. If storage erasure is temporarily unavailable, the deletion
+(verification selfies, profile media, chat attachments, voice recordings —
+everything stored under your account, not only what your profile currently
+shows), remove any internal report snapshot containing your account, and then
+delete your account and the data tied to it across our database. Two kinds of
+record remain afterwards: payment and subscription ledger entries, detached from
+your profile, and — only if your account had them — the safety records described
+in the retention table above. If a refund connected to your account is still
+being processed, deletion waits until it has gone through, so the money has
+somewhere to go; you can retry then. If storage erasure is temporarily unavailable, the deletion
 does **not** report success and you can retry — we never leave a half-deleted
 account. Some records may be retained where required by law (for example,
 financial records), where a processor keeps them under its own disclosed legal

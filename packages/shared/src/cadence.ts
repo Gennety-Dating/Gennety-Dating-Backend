@@ -76,7 +76,7 @@ export interface DropCadence {
    */
   famineDiscountMinTier: number;
 
-  /** Profiler rush-window threshold before a drop (`PROFILER_RUSH_WINDOW_HOURS`). */
+  /** Profiler rush-window threshold before a drop. */
   profilerRushWindowMs: number;
 
   /** Proposal-phase nudge offsets from dispatch: [nudge1, nudge2]. */

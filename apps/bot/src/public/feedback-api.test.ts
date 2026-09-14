@@ -261,6 +261,8 @@ describe("POST /v1/feedback/post-date", () => {
       { reason: "not-participant", expected: 403 },
       { reason: "wrong-state", expected: 400 },
       { reason: "empty-text", expected: 400 },
+      // A13-M27: the first answer is kept, a repeat is a conflict, not a 400.
+      { reason: "already-submitted", expected: 409 },
     ];
     for (const { reason, expected } of cases) {
       recordFn.mockResolvedValueOnce({ ok: false, reason });

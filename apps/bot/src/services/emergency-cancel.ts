@@ -43,6 +43,18 @@ export type EmergencyCancelResult =
 export const EMERGENCY_REASON_MAX_LENGTH = 1000;
 
 /**
+ * Is a date at `agreedTime` still ahead, i.e. may the emergency rail still
+ * cancel it? The cut-off `cancelScheduledDate` enforces (A13-M20), exported so
+ * the surfaces that OFFER the rail — the My Date hub's button, the menu
+ * agent's cancel card — hide it on the same instant the service starts
+ * refusing, instead of handing over a button that can only be turned down. A
+ * row with no time is not a date this rail can reason about, so it is closed.
+ */
+export function emergencyCancelOpen(agreedTime: Date | null, now: Date): boolean {
+  return agreedTime !== null && agreedTime.getTime() > now.getTime();
+}
+
+/**
  * Cancel the date and settle every consequence: the peer's priority boost and
  * the ticket refunds.
  *
@@ -90,7 +102,7 @@ export async function cancelScheduledDate(input: {
   if (match.status !== "scheduled" || match.emergencyCancelledBy || !match.agreedTime) {
     return { ok: false, error: "wrong-state" };
   }
-  if (match.agreedTime.getTime() <= now.getTime()) {
+  if (!emergencyCancelOpen(match.agreedTime, now)) {
     return { ok: false, error: "date-started" };
   }
 

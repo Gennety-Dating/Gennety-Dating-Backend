@@ -30,6 +30,18 @@ export function normalizeReason(raw: string): string {
     .slice(0, MAX_REASON_LEN);
 }
 
+/** Case- and whitespace-insensitive form of one constraint line, list dash removed. */
+function constraintLineKey(line: string): string {
+  return line.replace(/^\s*-\s*/, "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** Does the stored list already hold this exact constraint? Exported for tests. */
+export function hasConstraintLine(stored: string | null | undefined, constraint: string): boolean {
+  if (!stored) return false;
+  const key = constraintLineKey(constraint);
+  return stored.split("\n").some((line) => constraintLineKey(line) === key);
+}
+
 /**
  * Parse the rejection reason through the LLM to extract structured
  * constraints. Returns null if the API is unavailable (caller falls
@@ -84,6 +96,22 @@ export async function appendNegativeConstraint(
     where: { userId },
     select: { negativeConstraints: true },
   });
+
+  // An identical line is not a second dealbreaker. Two sources can yield the
+  // same trait about one evening — a story told to the concierge and the form
+  // answered afterwards both run the feedback analysis — and each line weighs on
+  // the penalty score, so a repeat would count the same trait twice. Skipped,
+  // not rewritten: nothing changes, so the profile is not marked dirty. The
+  // refresh still runs when asked, because it is how a batch caller closes the
+  // dirty window its earlier lines opened (a no-op on a clean profile).
+  if (hasConstraintLine(existing?.negativeConstraints, constraintText)) {
+    if (options.refreshEmbedding ?? true) {
+      await refreshUserEmbedding(userId).catch((err: unknown) => {
+        console.warn("[negative-constraints] immediate embedding refresh failed:", err);
+      });
+    }
+    return;
+  }
 
   const prefix = existing?.negativeConstraints?.trim();
   const merged = prefix

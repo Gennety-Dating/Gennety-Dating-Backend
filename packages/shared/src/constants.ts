@@ -236,15 +236,15 @@ export function ticketBundleFor(
 /**
  * "Famine" single-ticket discount (Date Ticket monetization, gated by
  * `TICKET_FEATURE_ENABLED`). A one-time loyalty perk granted when a user is
- * eligible-but-unpaired for a 2nd consecutive weekly batch (no-match tier >=
- * `FAMINE_DISCOUNT_MIN_TIER`). It discounts a SINGLE ticket purchase — the date
- * gate's `self` scope and the store's "1 ticket" bundle — by
- * `FAMINE_DISCOUNT_PCT`%, valid `FAMINE_DISCOUNT_TTL_DAYS` days, consumed on the
- * first such purchase. See PRODUCT_SPEC.md §3.5b.
+ * eligible-but-unpaired for a second consecutive famine notice (no-match tier >=
+ * `CADENCE.famineDiscountMinTier`, the only threshold the code reads). It
+ * discounts a SINGLE ticket purchase — the date gate's `self` scope and the
+ * store's "1 ticket" bundle — by `FAMINE_DISCOUNT_PCT`%, valid
+ * `FAMINE_DISCOUNT_TTL_DAYS` days, consumed on the first such purchase. See
+ * PRODUCT_SPEC.md §3.5b.
  */
 export const FAMINE_DISCOUNT_PCT = 77;
 export const FAMINE_DISCOUNT_TTL_DAYS = 30;
-export const FAMINE_DISCOUNT_MIN_TIER = 2;
 
 /**
  * D10 — pool exhaustion. Days without a dispatched match after which the
@@ -256,15 +256,15 @@ export const FAMINE_DISCOUNT_MIN_TIER = 2;
  * pause, not an indefinite escalating famine tier with no way out).
  *
  * 28, not the "e.g. 14" originally floated in planning, because `computeTier`
- * is denominated in CADENCE.intervalMs — under `weekly` that's whole WEEKS,
- * so tier 2 (the discount threshold) already sits at day 14 and tier 3 at
- * day 21. A pause threshold at 14 would fire at the exact same instant as
+ * is denominated in `CADENCE.famineNoticeIntervalMs` — 7 days under BOTH the
+ * `weekly` and the `daily` profile (match daily, apologise weekly) — so tier 2
+ * (the discount threshold) sits at day 14 and tier 3 at day 21 whatever the
+ * drop cadence. A pause threshold at 14 would fire at the exact same instant as
  * the discount and make tier 3 structurally unreachable (the pause would
- * always win the race, since it's checked first). 28 days lets weekly users
+ * always win the race, since it's checked first). 28 days lets every user
  * see the full existing ladder — tier 1 (day 7) -> tier 2 + discount (day
  * 14) -> tier 3 (day 21) — before the pause takes over where an unbounded
- * tier-3-forever loop used to be. Under `daily`, tier IS days, so this reads
- * as a plain 4-week pause threshold with no such collision.
+ * tier-3-forever loop used to be.
  */
 export const FAMINE_PAUSE_AFTER_DAYS = 28;
 
@@ -512,19 +512,12 @@ export const REFERRAL_RELEASE_SWEEP_BATCH = 200;
 export const PROFILER_ENTRY_DELAY_MS = 10 * 60 * 1000;
 /** Normal-mode batch size (spec allows 3–4; we send up to this many per window). */
 export const PROFILER_BATCH_SIZE_NORMAL = 3;
-/** Rush-mode batch size when a drop is < PROFILER_RUSH_WINDOW_HOURS away (spec 1–2). */
+/** Rush-mode batch size when a drop is inside `CADENCE.profilerRushWindowMs` (spec 1–2). */
 export const PROFILER_BATCH_SIZE_RUSH = 2;
-/** Quiet gap between batches; a new batch can only start in a daily window. */
-export const PROFILER_INTER_BATCH_GAP_HOURS = 8;
 /** Local wall-clock hour of the morning batch window. */
 export const PROFILER_MORNING_HOUR = 9;
 /** Local wall-clock hour of the evening batch window. */
 export const PROFILER_EVENING_HOUR = 18;
-/**
- * When the next drop is within this many hours, the Profiler switches to rush
- * mode: smaller batches but both daily windows used without skips.
- */
-export const PROFILER_RUSH_WINDOW_HOURS = 48;
 /** Max characters stored for a single free-text Profiler answer. */
 export const PROFILER_MAX_ANSWER_LEN = 1000;
 /**
@@ -603,6 +596,37 @@ export const MAX_HISTORY_FOR_API = 80;
 export const SUMMARIZE_THRESHOLD = 50;
 /** Number of recent messages always preserved during summarization/truncation */
 export const KEEP_RECENT_MESSAGES = 30;
+/**
+ * Max messages the menu agent keeps in `User.messageHistory` (A13-L9).
+ *
+ * The agent APPENDS each turn to the stored transcript and trims the oldest
+ * past this cap. It is a storage bound, not a memory window: what is replayed
+ * to the model is the far smaller 24 h / 12-message window in `menu-agent.ts`.
+ * The column used to be overwritten with that window every turn, which erased
+ * the onboarding transcript and every older agent turn the admin dialogs viewer
+ * reads. Unbounded growth is not the answer either — the column rides every
+ * agent turn's read and every row of the admin dialogs list — so it is capped.
+ */
+export const AGENT_STORED_HISTORY_MAX_MESSAGES = 200;
+
+/**
+ * How long a refund still owned by a sweep defers account deletion (A13-H14).
+ *
+ * Payment rows outlive the account, but the Telegram id a Stars refund is sent
+ * to does not — so deleting while a refund is in flight would strand the money.
+ * A younger refund makes deletion answer "try again later". One older than this
+ * has failed for a week; that is an ops problem, and a person's erasure is not
+ * held hostage to it: deletion proceeds and the founder gets the row ids.
+ */
+export const ACCOUNT_DELETION_REFUND_DEFER_DAYS = 7;
+
+/**
+ * How long a deleted account's safety tombstones (keyed hashes of its Telegram
+ * id / phone / email, with its moderation status, strikes, and the link to
+ * reports and blocks filed against it) are kept (A13-H14). Stated in the
+ * privacy policy's retention table — change both together.
+ */
+export const SAFETY_TOMBSTONE_RETENTION_MONTHS = 24;
 
 /**
  * How many chats' Telegram updates (and out-of-band chat work) may run at once

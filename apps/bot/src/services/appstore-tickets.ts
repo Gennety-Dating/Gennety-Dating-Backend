@@ -154,6 +154,21 @@ export async function refundAppStoreTransaction(
     select: { userId: true, delta: true, amountCents: true },
   });
   if (!credit) return { status: "no_credit" };
+  // The buyer deleted their account after the purchase. The ledger row outlives
+  // the account for accounting (A13-H14), but the wallet it credited is gone
+  // with the user — there is nothing left to take the tickets back from, so the
+  // refund is announced and ends here.
+  if (!credit.userId) {
+    void notifyFounderPurchaseRefunded({
+      userId: null,
+      kind: "tickets",
+      amountCents: credit.amountCents,
+      currency: tx.currency,
+      reason: "Apple вернул покупку (refund/revoke); аккаунт покупателя уже удалён",
+      externalPaymentId: `appstore:${tx.transactionId}`,
+    });
+    return { status: "no_credit" };
+  }
 
   try {
     // Through the wallet's guarded writer, not around it. This used to be an

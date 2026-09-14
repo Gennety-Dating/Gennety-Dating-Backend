@@ -9,6 +9,7 @@ const clientEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
 const eventFeedback = { findMany: vi.fn(), deleteMany: vi.fn() };
 const userPlaceVisit = { findMany: vi.fn(), deleteMany: vi.fn() };
 const inboxItem = { findMany: vi.fn(), deleteMany: vi.fn() };
+const safetyTombstone = { findMany: vi.fn(), deleteMany: vi.fn() };
 const $executeRaw = vi.fn();
 
 vi.mock("@gennety/db", () => ({
@@ -22,6 +23,7 @@ vi.mock("@gennety/db", () => ({
     eventFeedback,
     userPlaceVisit,
     inboxItem,
+    safetyTombstone,
     $executeRaw,
   },
 }));
@@ -36,6 +38,7 @@ const {
   EVENT_FEEDBACK_RETENTION_MS,
   ORPHAN_SESSION_RETENTION_MS,
   PLACE_VISIT_RETENTION_DAYS,
+  safetyTombstoneCutoff,
 } = await import("./retention.js");
 
 const NOW = new Date("2026-08-01T03:45:00.000Z");
@@ -49,6 +52,7 @@ const ALL_MODELS = [
   eventFeedback,
   userPlaceVisit,
   inboxItem,
+  safetyTombstone,
 ];
 
 beforeEach(() => {
@@ -116,6 +120,9 @@ describe("retentionTick", () => {
       placeVisits: 0,
       inboxItems: 0,
       orphanBotSessions: 0,
+      safetyTombstones: 0,
+      orphanReports: 0,
+      orphanBlocks: 0,
     });
     for (const model of ALL_MODELS) {
       expect(model.deleteMany).not.toHaveBeenCalled();
@@ -273,6 +280,9 @@ describe("retentionTick", () => {
       placeVisits: 0,
       inboxItems: 0,
       orphanBotSessions: 0,
+      safetyTombstones: 0,
+      orphanReports: 0,
+      orphanBlocks: 0,
     });
   });
 
@@ -325,6 +335,56 @@ describe("retentionTick", () => {
       $executeRaw.mockResolvedValue(5);
       const result = await retentionTick(NOW);
       expect(result.orphanBotSessions).toBe(5);
+    });
+  });
+
+  // A13-H14: the safety tombstones a deleted account leaves behind, and the
+  // reports/blocks that exist only to be relinked through them.
+  describe("safety tombstones", () => {
+    function rawSql(index: number): string {
+      const call = $executeRaw.mock.calls[index];
+      return (call?.[0] as string[] | undefined)?.join("?") ?? "";
+    }
+
+    it("sweeps tombstones older than the retention the privacy policy states, oldest first", async () => {
+      safetyTombstone.findMany.mockResolvedValue([{ id: "t1" }]);
+      safetyTombstone.deleteMany.mockResolvedValue({ count: 1 });
+
+      const result = await retentionTick(NOW);
+
+      expect(safetyTombstoneCutoff(NOW)).toEqual(new Date("2024-08-01T03:45:00.000Z"));
+      expect(safetyTombstone.findMany.mock.calls[0][0]).toMatchObject({
+        where: { createdAt: { lt: new Date("2024-08-01T03:45:00.000Z") } },
+        orderBy: { createdAt: "asc" },
+      });
+      expect(safetyTombstone.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["t1"] } } });
+      expect(result.safetyTombstones).toBe(1);
+    });
+
+    it("then clears reports and blocks no tombstone can ever relink", async () => {
+      await retentionTick(NOW);
+
+      // After the bot_sessions sweep, in this order.
+      const reports = rawSql(1);
+      const blocks = rawSql(2);
+      expect(reports).toContain("DELETE FROM reports");
+      expect(reports).toContain("r.reported_id IS NULL");
+      expect(reports).toContain("NOT EXISTS");
+      expect(reports).toContain("t.former_user_id = r.reported_former_id");
+      expect(blocks).toContain("DELETE FROM user_blocks");
+      expect(blocks).toContain("b.blocked_id IS NULL");
+      expect(blocks).toContain("t.former_user_id = b.blocked_former_id");
+      expect(safetyTombstone.findMany.mock.invocationCallOrder[0]).toBeLessThan(
+        $executeRaw.mock.invocationCallOrder[1]!,
+      );
+    });
+
+    it("never touches a report or block that still points at a live account", async () => {
+      await retentionTick(NOW);
+      // The predicate is on the nulled link; a live `reported_id` / `blocked_id`
+      // can never satisfy it.
+      expect(rawSql(1)).not.toMatch(/reported_id IS NOT NULL/);
+      expect(rawSql(2)).not.toMatch(/blocked_id IS NOT NULL/);
     });
   });
 });

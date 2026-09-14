@@ -99,12 +99,16 @@ export function createFeedbackRouter(api: Api<RawApi>): Router {
       submission,
     });
     if (!result.ok) {
+      // `already-submitted` is 409: the answer exists and stays — the first
+      // submission already fed matching, and a repeat must not overwrite it.
       const status =
         result.error === "match-not-found"
           ? 404
           : result.error === "not-participant"
             ? 403
-            : 400;
+            : result.error === "already-submitted"
+              ? 409
+              : 400;
       res.status(status).json({ error: result.error });
       return;
     }

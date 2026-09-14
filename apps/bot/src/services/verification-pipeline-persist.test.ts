@@ -135,6 +135,16 @@ vi.mock("@gennety/db", () => {
 });
 
 vi.mock("./push.js", () => ({ sendPushToUser: vi.fn(async () => true) }));
+const storageMocks = vi.hoisted(() => ({
+  deleteStorageObject: vi.fn(async (_bucket: string, path: string) => {
+    state.events.push(`storage.delete:${path}`);
+    return true;
+  }),
+}));
+vi.mock("./storage.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./storage.js")>()),
+  deleteStorageObject: storageMocks.deleteStorageObject,
+}));
 vi.mock("./founder-notify.js", () => ({ notifyFounderNewUser: vi.fn(async () => undefined) }));
 
 const { runFaceMatchVerificationDefault } = await import("./verification-pipeline.js");
@@ -315,5 +325,88 @@ describe("runFaceMatchVerificationDefault — stored reference (A13-H11)", () =>
     expect(outcome).toMatchObject({ kind: "retry_required", reason: "no_profile_photos" });
     expect(row.verificationStatus).toBe("pending");
     expect(row.verifiedSelfiePath).toBe(`${USER_ID}/selfie-old.jpg`);
+  });
+});
+
+// A13-M12: a liveness selfie a newer one replaced is biometric data no row
+// points at any more. It used to stay in the bucket until account deletion —
+// and survive even that, since deletion erased only the referenced path.
+describe("runFaceMatchVerificationDefault — replaced selfie (A13-M12)", () => {
+  const OLDER = `${USER_ID}/1715000000000.jpg`;
+  const NEWER = `${USER_ID}/1716000000000.jpg`;
+
+  beforeEach(() => {
+    storageMocks.deleteStorageObject.mockClear();
+  });
+
+  it("deletes the previous selfie once a new one is committed, and only after commit", async () => {
+    const row = seed({ verifiedSelfiePath: OLDER });
+    const outcome = await runFaceMatchVerificationDefault(USER_ID, SESSION_ID, api, {
+      depsOverride: { ...evidence({}), uploadSelfie: async () => ({ path: NEWER }) },
+    });
+
+    expect(outcome.kind).toBe("verified");
+    expect(row.verifiedSelfiePath).toBe(NEWER);
+    expect(storageMocks.deleteStorageObject).toHaveBeenCalledTimes(1);
+    expect(storageMocks.deleteStorageObject).toHaveBeenCalledWith("selfies", OLDER);
+    // The verdict transaction ran (and committed) before the object went.
+    const txIndex = state.events.indexOf("tx");
+    const deleteIndex = state.events.indexOf(`storage.delete:${OLDER}`);
+    expect(txIndex).toBeGreaterThanOrEqual(0);
+    expect(deleteIndex).toBeGreaterThan(txIndex);
+  });
+
+  it("keeps the stored selfie when this run reuses it (a rerun), deleting nothing", async () => {
+    const row = seed({ verificationStatus: "verified", verifiedSelfiePath: NEWER });
+    await runFaceMatchVerificationDefault(USER_ID, SESSION_ID, api, {
+      depsOverride: {
+        ...evidence({}),
+        fetchReferenceSelfie: async () => ({
+          ok: true as const,
+          selfie: { buffer: SELFIE, mime: "image/jpeg", storedPath: NEWER },
+        }),
+      },
+    });
+
+    expect(row.verifiedSelfiePath).toBe(NEWER);
+    expect(storageMocks.deleteStorageObject).not.toHaveBeenCalled();
+  });
+
+  it("never writes an older selfie back over a newer one — the older object may already be gone", async () => {
+    // A rerun started from the OLDER selfie finishes after a fresh liveness
+    // pass stored the NEWER one (and deleted the older object).
+    const row = seed({ verificationStatus: "verified", verifiedSelfiePath: NEWER });
+    await runFaceMatchVerificationDefault(USER_ID, SESSION_ID, api, {
+      depsOverride: {
+        ...evidence({}),
+        fetchReferenceSelfie: async () => ({
+          ok: true as const,
+          selfie: { buffer: SELFIE, mime: "image/jpeg", storedPath: OLDER },
+        }),
+      },
+    });
+
+    expect(row.verifiedSelfiePath).toBe(NEWER);
+    expect(storageMocks.deleteStorageObject).not.toHaveBeenCalled();
+  });
+
+  it("deletes the previous selfie when a retryable run records its new one as the reference", async () => {
+    const row = seed({ verifiedSelfiePath: OLDER });
+    let uploads = 0;
+    const outcome = await runFaceMatchVerificationDefault(USER_ID, SESSION_ID, api, {
+      depsOverride: {
+        ...evidence({
+          onPassStart: () => {
+            uploads += 1;
+            row.profile.photos.push(`upload-${uploads}`);
+          },
+        }),
+        uploadSelfie: async () => ({ path: NEWER }),
+      },
+    });
+
+    expect(outcome).toMatchObject({ kind: "retry_required" });
+    expect(row.verifiedSelfiePath).toBe(NEWER);
+    expect(storageMocks.deleteStorageObject).toHaveBeenCalledWith("selfies", OLDER);
   });
 });

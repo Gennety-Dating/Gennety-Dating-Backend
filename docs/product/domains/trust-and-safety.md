@@ -110,3 +110,27 @@ not restored, and the two stay apart under the lifetime ban regardless.
 applies to both surfaces, but the Telegram bot has no Block button yet. Explicit
 decision, not an accident of where the code was written (DECISIONS.md
 2026-08-23) — Telegram gets it in its own slice.
+
+### Deleting an account does not reset safety history (2026-09-14, A13-H14)
+
+A ban, a suspension, an open investigation, strikes, and the reports and blocks
+filed **against** an account used to be erased with it — so a banned person
+could delete, press `/start` with the same Telegram account (or sign in with the
+same phone or email) and come back with a clean record, straight into the pool
+of the person who reported or blocked them. Now:
+
+- **At deletion**, if the account carries any of that, a `safety_tombstone` is
+  written per identity it proved (positive Telegram id, verified phone, verified
+  email) — as a keyed hash, never the identifier — and the reports/blocks against
+  it are kept, stamped with the old account id. Blocks the deleted person drew
+  and a clean record leave nothing behind.
+- **When an identity attaches to an account** (bot or Mini App first touch,
+  native email / phone / Telegram login, contact share, email verification), a
+  matching tombstone restores the strictest status and the highest strike count,
+  relinks the reports and blocks to the new account (so the blocker is not
+  offered this person again), and — for a restored lock — revokes sessions and
+  cancels live matches as moderation does. It applies once per account: a
+  moderator lifting a restored ban is not overruled later. Finishing onboarding
+  no longer turns a restored lock into `active`.
+- **24 months** after deletion the tombstones, and the reports and blocks that
+  only they could relink, are deleted (privacy policy §16).

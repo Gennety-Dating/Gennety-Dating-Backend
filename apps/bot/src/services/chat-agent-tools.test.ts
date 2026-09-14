@@ -53,10 +53,14 @@ vi.mock("./prompt-builder.js", () => ({
   buildSystemPrompt: (id: bigint) => buildSystemPrompt(id),
 }));
 
-const applyChatProfilePatch = vi.fn(async () => ({ ok: true }));
+type ChatToolResult = import("./chat-profile-tools.js").ChatToolResult;
+const applyChatProfilePatch = vi.fn(async (): Promise<ChatToolResult> => ({ ok: true }));
+const attachChatProfilePhoto = vi.fn(
+  async (): Promise<ChatToolResult> => ({ ok: true, photo: { consensus: "accepted", total: 2 } }),
+);
 vi.mock("./chat-profile-tools.js", () => ({
   applyChatProfilePatch: () => applyChatProfilePatch(),
-  attachChatProfilePhoto: async () => ({ ok: true }),
+  attachChatProfilePhoto: () => attachChatProfilePhoto(),
 }));
 vi.mock("./storage.js", () => ({ createChatImageSignedUrl: async () => null }));
 
@@ -97,6 +101,7 @@ beforeEach(() => {
   executeAgentTool.mockClear();
   buildSystemPrompt.mockClear();
   applyChatProfilePatch.mockClear();
+  attachChatProfilePhoto.mockClear();
   queue = [];
 });
 
@@ -168,5 +173,100 @@ describe("чат приложения ходит в общий набор инс
     const turn = await runChatTurn({ userId: "u1", text: "отмени премиум", imageUrl: null }, { fetchFn });
 
     expect(turn.action).toEqual({ kind: "premium_cancel_confirm" });
+  });
+});
+
+/**
+ * Бюджет хода и чатовые записи (аудит A13-M5).
+ *
+ * `update_profile` и `attach_profile_photo` отвечают `{ ok }`, а бюджет и чеки
+ * решает `toolReportedSuccess`, читающий `success`. Пока цикл отдавал ему сырой
+ * `{ ok: true }`, ни одна чатовая запись не считалась: за один ход проходили и
+ * `preference`, и фото, и запись из общего набора — и ни одного чека.
+ */
+describe("чатовые записи под бюджетом хода", () => {
+  /** Что модель увидела результатом инструмента `callId` в последнем запросе. */
+  function toolResultSeen(callId: string): Record<string, unknown> {
+    const calls = (fetchFn as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls;
+    const body = JSON.parse(String(calls.at(-1)![1].body)) as {
+      messages: Array<{ role: string; tool_call_id?: string; content: string }>;
+    };
+    const msg = body.messages.find((m) => m.role === "tool" && m.tool_call_id === callId);
+    return JSON.parse(msg!.content) as Record<string, unknown>;
+  }
+
+  it("update_profile тратит бюджет: следующая запись за ход не исполняется", async () => {
+    queue = [
+      completion([
+        { name: "update_profile", args: '{"preference":"both"}' },
+        { name: "update_bio", args: '{"bio":"и ещё"}' },
+      ]),
+      plain,
+    ];
+
+    const turn = await runChatTurn({ userId: "u1", text: "мне все нравятся", imageUrl: null }, { fetchFn });
+
+    expect(applyChatProfilePatch).toHaveBeenCalledOnce();
+    expect(executeAgentTool).not.toHaveBeenCalled();
+    expect(turn.receipts).toEqual(["Профиль обновлён"]);
+    expect(toolResultSeen("c0")).toMatchObject({ success: true });
+    expect(toolResultSeen("c1")).toMatchObject({ success: false, error: "write_budget_exhausted" });
+  });
+
+  it("две чатовые записи подряд: вторая отвергается", async () => {
+    queue = [
+      completion([
+        { name: "attach_profile_photo", args: '{"imageUrl":"u1/a.jpg"}' },
+        { name: "update_profile", args: '{"height":180}' },
+      ]),
+      plain,
+    ];
+
+    const turn = await runChatTurn({ userId: "u1", text: "вот я", imageUrl: null }, { fetchFn });
+
+    expect(attachChatProfilePhoto).toHaveBeenCalledOnce();
+    expect(applyChatProfilePatch).not.toHaveBeenCalled();
+    expect(turn.receipts).toEqual(["Фото обновлены"]);
+  });
+
+  it("фото без закреплённой личности тратит бюджет, но чека не даёт", async () => {
+    attachChatProfilePhoto.mockResolvedValueOnce({
+      ok: true,
+      detail: "Photo passed checks, but identity is not fixed yet.",
+      photo: { consensus: "pending", total: 1 },
+    });
+    queue = [
+      completion([
+        { name: "attach_profile_photo", args: '{"imageUrl":"u1/a.jpg"}' },
+        { name: "update_profile", args: '{"height":180}' },
+      ]),
+      plain,
+    ];
+
+    const turn = await runChatTurn({ userId: "u1", text: "вот я", imageUrl: null }, { fetchFn });
+
+    expect(applyChatProfilePatch).not.toHaveBeenCalled();
+    expect(turn.receipts).toBeUndefined();
+    expect(toolResultSeen("c0")).toMatchObject({
+      success: true,
+      photo: { consensus: "pending", total: 1 },
+    });
+  });
+
+  it("отклонённая чатовая запись бюджет не тратит и чека не даёт", async () => {
+    applyChatProfilePatch.mockResolvedValueOnce({ ok: false, detail: "Height out of range" });
+    queue = [
+      completion([
+        { name: "update_profile", args: '{"height":300}' },
+        { name: "update_bio", args: '{"bio":"новое"}' },
+      ]),
+      plain,
+    ];
+
+    const turn = await runChatTurn({ userId: "u1", text: "рост 300", imageUrl: null }, { fetchFn });
+
+    expect(executeAgentTool).toHaveBeenCalledOnce();
+    expect(turn.receipts).toEqual(["«О себе» обновлено"]);
+    expect(toolResultSeen("c0")).toMatchObject({ success: false, detail: "Height out of range" });
   });
 });

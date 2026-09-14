@@ -7,6 +7,7 @@ import { createChatImageSignedUrl } from "./storage.js";
 import {
   applyChatProfilePatch,
   attachChatProfilePhoto,
+  type ChatToolResult,
 } from "./chat-profile-tools.js";
 import {
   AGENT_TOOLS,
@@ -457,7 +458,7 @@ async function executeTool(
   try {
     parsed = JSON.parse(call.function.arguments || "{}");
   } catch {
-    return { result: JSON.stringify({ ok: false, detail: "Invalid JSON arguments" }), receiptKey: null, action: null };
+    return { result: JSON.stringify({ success: false, detail: "Invalid JSON arguments" }), receiptKey: null, action: null };
   }
 
   // Сначала чатовые: они работают с `userId` и с картинками, которых у общего
@@ -465,12 +466,50 @@ async function executeTool(
   // Telegram, поэтому расхождению поведения взяться неоткуда.
   if (call.function.name === "update_profile") {
     const outcome = await applyChatProfilePatch(userId, parsed);
-    return { result: JSON.stringify(outcome), receiptKey: outcome.ok ? "editProfileSaved" : null, action: null };
+    return {
+      result: chatToolResultJson(outcome),
+      receiptKey: outcome.ok ? "editProfileSaved" : null,
+      action: null,
+    };
   }
   if (call.function.name === "attach_profile_photo") {
     const outcome = await attachChatProfilePhoto(userId, parsed);
-    return { result: JSON.stringify(outcome), receiptKey: outcome.ok ? "editProfilePhotosSaved" : null, action: null };
+    return {
+      result: chatToolResultJson(outcome),
+      receiptKey: photoLandedInAlbum(outcome) ? "editProfilePhotosSaved" : null,
+      action: null,
+    };
   }
 
   return executeAgentTool(telegramId, call.function.name, parsed as Record<string, unknown>);
+}
+
+/**
+ * Результат чатового инструмента в том же словаре, что у общих: `success`.
+ *
+ * Чатовые исполнители отвечают `ok` — у них есть второй потребитель без модели
+ * (телеграм-хендлер фотографий), и переименовывать поле ради цикла незачем. Но
+ * бюджет хода и чеки решает `toolReportedSuccess`, а он читает только
+ * `success`: пока сюда уходил сырой `{ ok: true }`, ни одна чатовая запись не
+ * считалась, и модель за один ход могла сменить и `preference`, и рост, и фото —
+ * ровно ту серию записей, от которой бюджет защищает, — без единого чека.
+ */
+function chatToolResultJson(outcome: ChatToolResult): string {
+  const { ok, ...rest } = outcome;
+  return JSON.stringify({ success: ok, ...rest });
+}
+
+/**
+ * Попала ли фотография в альбом.
+ *
+ * Запись при `pending` и `capped` всё равно была — кандидат сохранён, поэтому
+ * бюджет хода она тратит. А чек «Фото обновлены» — нет: альбом не изменился,
+ * пока личность не закреплена второй карточкой. Та же развилка, что в
+ * `attachOutcomeMessage` телеграм-хендлера, включая умолчание для ветки без
+ * консенсуса.
+ */
+function photoLandedInAlbum(outcome: ChatToolResult): boolean {
+  if (!outcome.ok) return false;
+  const consensus = outcome.photo?.consensus ?? "accepted";
+  return consensus === "accepted" || consensus === "confirmed";
 }

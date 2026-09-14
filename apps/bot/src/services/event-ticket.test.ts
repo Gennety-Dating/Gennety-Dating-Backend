@@ -30,13 +30,19 @@ const tx = {
   $executeRaw: executeRaw,
 };
 
+/** Swappable per test: the aborted-transaction case needs its own client. */
+const runTransaction = vi.hoisted(() => ({
+  impl: null as null | ((fn: (t: unknown) => unknown) => unknown),
+}));
+
 vi.mock("@gennety/db", () => ({
   prisma: {
     eventTicket: { findUnique: ticketFindUnique, updateMany: ticketUpdateMany },
     // The INTERACTIVE form — it hands the callback a `tx` and lets it return
     // early. Mocking it as the array form would make every CAS below look like
     // it passes while the real one could not short-circuit at all.
-    $transaction: (fn: (t: typeof tx) => unknown) => fn(tx),
+    $transaction: (fn: (t: typeof tx) => unknown) =>
+      runTransaction.impl ? runTransaction.impl(fn as (t: unknown) => unknown) : fn(tx),
   },
 }));
 
@@ -92,6 +98,7 @@ function ticketRow(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  runTransaction.impl = null;
   eventFindUnique.mockResolvedValue({ id: EVENT_ID, status: "upcoming" });
   tierFindUnique.mockResolvedValue({ id: TIER_ID, eventId: EVENT_ID, requiresAdmission: false });
   ticketFindUnique.mockResolvedValue(null);
@@ -154,6 +161,55 @@ describe("claimEventTicket", () => {
     tierFindUnique.mockResolvedValue({ id: TIER_ID, eventId: "other", requiresAdmission: false });
     const result = await claimEventTicket(USER_ID, EVENT_ID, TIER_ID);
     expect(result).toEqual({ ok: false, reason: "tier_not_found" });
+  });
+
+  // A13-L7. Two taps in the same instant both pass the `existing` check; the
+  // second insert hits the unique index. In Postgres that error ABORTS the
+  // transaction, so every later statement in it is refused — the seat give-back
+  // and the re-read used to run in there and turned the double tap into a 500.
+  // The client below behaves like Postgres: after the failure, the transaction
+  // refuses everything and rolls back.
+  it("answers a simultaneous double tap with the existing ticket, outside the aborted transaction", async () => {
+    const uniqueViolation = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    let aborted = false;
+    const guard = <T extends (...args: never[]) => unknown>(fn: T) =>
+      (...args: Parameters<T>) => {
+        if (aborted) {
+          return Promise.reject(new Error("current transaction is aborted, commands ignored until end of transaction block"));
+        }
+        return fn(...args);
+      };
+    const abortingTx = {
+      event: { findUnique: guard(eventFindUnique) },
+      eventTicketTier: { findUnique: guard(tierFindUnique) },
+      eventTicket: {
+        findUnique: guard(async () => null),
+        create: guard(async () => {
+          aborted = true;
+          throw uniqueViolation;
+        }),
+        updateMany: guard(ticketUpdateMany),
+      },
+      waitlistApplication: { findUnique: guard(applicationFindUnique) },
+      $executeRaw: guard(executeRaw),
+    };
+    runTransaction.impl = async (fn) => fn(abortingTx);
+    // Outside the transaction, the winning tap's ticket is there to read.
+    ticketFindUnique.mockResolvedValue({ id: TICKET_ID });
+
+    const result = await claimEventTicket(USER_ID, EVENT_ID, TIER_ID);
+
+    expect(result).toEqual({ ok: true, ticketId: TICKET_ID, created: false });
+    // Only the capacity CAS ran inside; the rollback returns that seat, so no
+    // give-back is attempted.
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("still surfaces a unique violation when no ticket turns out to exist", async () => {
+    const uniqueViolation = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    ticketCreate.mockRejectedValueOnce(uniqueViolation);
+
+    await expect(claimEventTicket(USER_ID, EVENT_ID, TIER_ID)).rejects.toBe(uniqueViolation);
   });
 });
 

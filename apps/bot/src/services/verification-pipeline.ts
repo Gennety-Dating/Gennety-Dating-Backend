@@ -19,7 +19,12 @@ import {
   type ReferenceSelfieResult,
 } from "./identity-selfie.js";
 import { pinStatusBanner } from "./status-banner.js";
-import { downloadProfileImage, uploadSelfie } from "./storage.js";
+import {
+  deleteStorageObject,
+  downloadProfileImage,
+  storageKeyWrittenAt,
+  uploadSelfie,
+} from "./storage.js";
 import type { OutcomeGate } from "./outcome-gate.js";
 import { notifyFounderNewUser } from "./founder-notify.js";
 import { settleReferralOnVerified } from "./referral-notify.js";
@@ -1403,6 +1408,45 @@ async function lockUserRow(tx: Prisma.TransactionClient, userId: string): Promis
   await tx.$queryRawUnsafe("SELECT id FROM users WHERE id = $1::uuid FOR UPDATE", userId);
 }
 
+/**
+ * Whether a run's selfie path may be written over the row's current one.
+ *
+ * No path this run: nothing to write (A13-H11 — never null a reference). An
+ * older key over a newer one: no. That happens when a rerun started from the
+ * previous selfie finishes after a fresh liveness pass stored a new one; the
+ * rerun's verdict still lands, but the reference stays the newer selfie — and
+ * it has to, because the fresh pass has already deleted the older object
+ * (A13-M12), so writing it back would point the row at nothing. Keys without a
+ * readable timestamp keep the old always-write behaviour.
+ */
+function writesSelfieReference(candidate: string | null, current: string | null): boolean {
+  if (!candidate) return false;
+  if (!current || candidate === current) return true;
+  const candidateAt = storageKeyWrittenAt(candidate);
+  const currentAt = storageKeyWrittenAt(current);
+  return !(candidateAt && currentAt && candidateAt < currentAt);
+}
+
+/** The stored selfie a write of `candidate` leaves unreferenced, if any. */
+function replacedSelfiePath(candidate: string, current: string | null): string | null {
+  return current && current !== candidate ? current : null;
+}
+
+/**
+ * Delete a liveness selfie a newer one just replaced (A13-M12). The only
+ * reference to it was the column the committed write moved on from, so keeping
+ * the object would be biometric data held for nobody — until now it stayed in
+ * the bucket until the account was deleted, and survived even that. Best-effort
+ * and logged: the verdict is already persisted, and account deletion's
+ * `${userId}/` sweep removes anything left behind.
+ */
+async function removeReplacedSelfie(userId: string, path: string): Promise<void> {
+  const removed = await deleteStorageObject(env.SUPABASE_SELFIE_BUCKET, path).catch(() => false);
+  if (!removed) {
+    console.warn(`${LOG_PREFIX} replaced selfie not removed`, { userId, path });
+  }
+}
+
 /** Same refs in the same order — the order is what `photoFaceScores` is keyed by. */
 function samePhotoSet(current: readonly string[], snapshot: readonly string[]): boolean {
   return (
@@ -1601,19 +1645,40 @@ export async function runFaceMatchVerificationDefault(
           // the pipeline keys on (personaInquiryId, faceMatchedAt), so leaving
           // it stamped would make the next attempt on the same session a
           // silent no-op.
-          await prisma.user.update({
-            where: { id: input.userId },
-            data: {
-              verificationStatus: input.verificationStatus,
-              faceMatchedAt: null,
-              ...(input.reference
-                ? {
-                    personaInquiryId: input.reference.sessionId,
-                    verifiedSelfiePath: input.reference.verifiedSelfiePath,
-                  }
-                : {}),
-            },
+          const data = {
+            verificationStatus: input.verificationStatus,
+            faceMatchedAt: null,
+          } satisfies Prisma.UserUpdateInput;
+          const reference = input.reference;
+          if (!reference) {
+            await prisma.user.update({ where: { id: input.userId }, data });
+            return;
+          }
+          // A recorded reference REPLACES the stored selfie, so the read of
+          // what it replaces shares the lock every selfie writer takes.
+          const replaced = await prisma.$transaction(async (tx) => {
+            await lockUserRow(tx, input.userId);
+            const row = await tx.user.findUnique({
+              where: { id: input.userId },
+              select: { verifiedSelfiePath: true },
+            });
+            const current = row?.verifiedSelfiePath ?? null;
+            const writes = writesSelfieReference(reference.verifiedSelfiePath, current);
+            await tx.user.update({
+              where: { id: input.userId },
+              data: {
+                ...data,
+                ...(writes
+                  ? {
+                      personaInquiryId: reference.sessionId,
+                      verifiedSelfiePath: reference.verifiedSelfiePath,
+                    }
+                  : {}),
+              },
+            });
+            return writes ? replacedSelfiePath(reference.verifiedSelfiePath, current) : null;
           });
+          if (replaced) await removeReplacedSelfie(input.userId, replaced);
         },
         dropMismatchedPhotos: async ({ userId, photosSnapshot, dropIndexes }) => {
           const drop = new Set(dropIndexes);
@@ -1686,7 +1751,8 @@ export async function runFaceMatchVerificationDefault(
           });
         },
         persistOutcome: async (input) => {
-          return await prisma.$transaction(async (tx): Promise<PersistOutcomeResult> => {
+          let replacedReference: string | null = null;
+          const persisted = await prisma.$transaction(async (tx): Promise<PersistOutcomeResult> => {
             // Same lock as every photo upload and delete, then a fresh read of
             // the photos (audit A13-H12). The verdict — and above all the
             // activation — is only valid for the set that was scored; checking
@@ -1702,6 +1768,7 @@ export async function runFaceMatchVerificationDefault(
                 email: true,
                 isEmailVerified: true,
                 phoneVerifiedAt: true,
+                verifiedSelfiePath: true,
                 profile: { select: { photos: true } },
               },
             });
@@ -1711,6 +1778,10 @@ export async function runFaceMatchVerificationDefault(
             }
 
             const now = new Date();
+            const writesReference = writesSelfieReference(
+              input.verifiedSelfiePath,
+              row.verifiedSelfiePath,
+            );
             // Status flips only `onboarding` → `active`, so admin-moderated
             // states (paused, suspended, banned) survive a verified outcome, and
             // only for an account that finished onboarding with a verified track
@@ -1730,13 +1801,18 @@ export async function runFaceMatchVerificationDefault(
                 faceMatchedAt: now,
                 // Never null out a stored reference: a failed upload this run
                 // must not turn the user's next photo edit into
-                // `reference_expired` (audit A13-H11).
-                ...(input.verifiedSelfiePath
+                // `reference_expired` (audit A13-H11). Nor put an OLDER one
+                // back over a newer one — see `writesSelfieReference`.
+                ...(writesReference
                   ? { verifiedSelfiePath: input.verifiedSelfiePath }
                   : {}),
                 personaInquiryId: input.sessionId,
               },
             });
+            replacedReference =
+              writesReference && input.verifiedSelfiePath
+                ? replacedSelfiePath(input.verifiedSelfiePath, row.verifiedSelfiePath)
+                : null;
 
             // The score array is keyed 1:1 to the photos array, which the check
             // above just proved is the one that was scored.
@@ -1748,6 +1824,9 @@ export async function runFaceMatchVerificationDefault(
             }
             return { kind: "persisted" };
           });
+          // After commit only: until then the row still points at it.
+          if (replacedReference) await removeReplacedSelfie(input.userId, replacedReference);
+          return persisted;
         },
       },
       // Last, so a caller-supplied dep wins over the default built above.

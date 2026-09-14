@@ -1,5 +1,9 @@
 import { prisma } from "@gennety/db";
-import { FREQUENT_PLACE_WINDOW_DAYS, INBOX_RETENTION_DAYS } from "@gennety/shared";
+import {
+  FREQUENT_PLACE_WINDOW_DAYS,
+  INBOX_RETENTION_DAYS,
+  SAFETY_TOMBSTONE_RETENTION_MONTHS,
+} from "@gennety/shared";
 
 /**
  * Data-retention sweep (audit DATA-1).
@@ -130,6 +134,26 @@ export const EVENT_FEEDBACK_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
  */
 export const PLACE_VISIT_RETENTION_DAYS = FREQUENT_PLACE_WINDOW_DAYS;
 
+/**
+ * Safety tombstones (`safety_tombstones`, A13-H14) and the records that exist
+ * only because of them.
+ *
+ * A tombstone lets a deleted account's ban, strikes, and the reports and blocks
+ * filed against it follow the same person back if they re-register. The
+ * privacy policy promises it for `SAFETY_TOMBSTONE_RETENTION_MONTHS`, counted
+ * from the deletion. When the last tombstone of a former account goes, the
+ * report and block rows that were waiting to be relinked to it can never be
+ * relinked — and they carry another person's account of that account — so they
+ * go in the same sweep. A report or block whose subject was removed without a
+ * tombstone at all (a path that bypassed `deleteUserAccount`) is the same dead
+ * end and is cleared the same way.
+ */
+export function safetyTombstoneCutoff(now: Date): Date {
+  const cutoff = new Date(now.getTime());
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - SAFETY_TOMBSTONE_RETENTION_MONTHS);
+  return cutoff;
+}
+
 /** Rows removed per query. Small enough that one `IN (…)` delete stays cheap. */
 const BATCH_LIMIT = 1_000;
 
@@ -163,6 +187,9 @@ export interface RetentionSweepResult {
   placeVisits: number;
   inboxItems: number;
   orphanBotSessions: number;
+  safetyTombstones: number;
+  orphanReports: number;
+  orphanBlocks: number;
 }
 
 /**
@@ -375,6 +402,51 @@ export async function retentionTick(
     }
   }
 
+  const tombstoneCutoff = safetyTombstoneCutoff(now);
+  const safetyTombstones = await deleteOldest(
+    "safety_tombstones",
+    (take) =>
+      prisma.safetyTombstone.findMany({
+        where: { createdAt: { lt: tombstoneCutoff } },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+        take,
+      }),
+    (ids) => prisma.safetyTombstone.deleteMany({ where: { id: { in: ids } } }),
+  );
+
+  // Raw for the anti-join: "no tombstone left for this former id" is not a
+  // relation Prisma can express. After the tombstone sweep above, so a former
+  // account whose last tombstone just expired is cleared in the same night.
+  const orphanReports = await deleteInRawBatches("reports", () =>
+    prisma.$executeRaw`
+      DELETE FROM reports
+      WHERE id IN (
+        SELECT r.id
+        FROM reports r
+        WHERE r.reported_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM safety_tombstones t WHERE t.former_user_id = r.reported_former_id
+          )
+        LIMIT ${BATCH_LIMIT}
+      )
+    `,
+  );
+  const orphanBlocks = await deleteInRawBatches("user_blocks", () =>
+    prisma.$executeRaw`
+      DELETE FROM user_blocks
+      WHERE id IN (
+        SELECT b.id
+        FROM user_blocks b
+        WHERE b.blocked_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM safety_tombstones t WHERE t.former_user_id = b.blocked_former_id
+          )
+        LIMIT ${BATCH_LIMIT}
+      )
+    `,
+  );
+
   const total =
     emailOtps +
     phoneOtps +
@@ -385,13 +457,17 @@ export async function retentionTick(
     eventFeedback +
     placeVisits +
     inboxItems +
-    orphanBotSessions;
+    orphanBotSessions +
+    safetyTombstones +
+    orphanReports +
+    orphanBlocks;
   if (total > 0) {
     console.log(
       `[retention] emailOtps=${emailOtps} phoneOtps=${phoneOtps} ` +
         `sessions=${sessions} proxyMessages=${proxyMessages} chatEvents=${chatEvents} ` +
         `clientEvents=${clientEvents} eventFeedback=${eventFeedback} ` +
-        `placeVisits=${placeVisits} inboxItems=${inboxItems} orphanBotSessions=${orphanBotSessions}`,
+        `placeVisits=${placeVisits} inboxItems=${inboxItems} orphanBotSessions=${orphanBotSessions} ` +
+        `safetyTombstones=${safetyTombstones} orphanReports=${orphanReports} orphanBlocks=${orphanBlocks}`,
     );
   }
   return {
@@ -405,5 +481,29 @@ export async function retentionTick(
     placeVisits,
     inboxItems,
     orphanBotSessions,
+    safetyTombstones,
+    orphanReports,
+    orphanBlocks,
   };
+}
+
+/**
+ * Run a raw `DELETE … WHERE id IN (SELECT … LIMIT BATCH_LIMIT)` until a batch
+ * comes back short, capped like `deleteOldest`.
+ */
+async function deleteInRawBatches(
+  label: string,
+  deleteBatch: () => Promise<number>,
+): Promise<number> {
+  let removed = 0;
+  for (let batch = 0; batch < MAX_BATCHES_PER_TABLE; batch += 1) {
+    const count = await deleteBatch();
+    removed += count;
+    if (count < BATCH_LIMIT) return removed;
+  }
+  console.warn(
+    `[retention] ${label}: stopped at the ${MAX_BATCHES_PER_TABLE}-batch cap after ${removed} rows — ` +
+      "orphans remain and the next sweep will continue",
+  );
+  return removed;
 }

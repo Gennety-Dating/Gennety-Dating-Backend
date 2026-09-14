@@ -196,7 +196,16 @@ excluding an otherwise-complete user from matching.
 ### GDPR
 
 - Account deletion (`/v1/me` `DELETE`, or admin) cascades through Prisma
-  (`onDelete: Cascade` on every relation), **plus one store no cascade can
+  (`onDelete: Cascade`) — **except what law and safety require (A13-H14,
+  2026-09-14):** payment ledgers and purchases keep their rows with a null
+  owner (`SetNull`); the reports and blocks filed AGAINST the account, its
+  moderation status and strikes survive as `safety_tombstones` (keyed hashes of
+  its Telegram id / verified phone / verified email, 24 months) and come back
+  if the same person registers again; and deletion is refused with "try again
+  later" (`DELETE /v1/me` → 409 `refund-in-progress`) while a refund on the
+  account is younger than 7 days. Storage erasure lists every object under
+  `${userId}/` in each bucket rather than trusting the row's paths (A13-M12).
+  See `docs/architecture/data-model.md` → `safety_tombstones`. Also **one store no cascade can
   reach: the grammY chat session** (`bot_sessions`, keyed by Telegram chat id
   with no relation to `users`; erased explicitly since 2026-08-08). It holds
   `pendingPhotos` — Telegram `file_id`s of the profile being erased — plus a
@@ -207,9 +216,12 @@ excluding an otherwise-complete user from matching.
   and that nothing has touched for 7 days — the rows left by every deletion
   before the fix, and by any future path that removes a user without going
   through `deleteUserAccount`.
-- Liveness-captured reference selfies are auto-deleted 90 days after `verifiedAt`
-  (`selfie-retention` cron); the user stays `verified`, only the reference
-  image is scrubbed.
+- Liveness-captured reference selfies are auto-deleted 90 days after they were
+  captured, whatever the verification outcome (`selfie-retention` cron; before
+  2026-09-14 only `verifiedAt` rows were scrubbed, A13-M12); a verified user
+  stays `verified`, only the reference image is scrubbed. A selfie a later
+  liveness run replaces, and a re-recorded or deleted native voice prompt, are
+  deleted from storage right after the replacing write commits.
 - **Retention windows (added 2026-07-26, `retention` cron).** Four tables used
   to accumulate rows forever — nothing deleted from them and no cron touched
   them. Now: OTP challenges (`email_otps`, `phone_otps`) are deleted after

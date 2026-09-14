@@ -1,6 +1,6 @@
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
-import { deleteStorageObject } from "./storage.js";
+import { deleteStorageObject, storageKeyWrittenAt } from "./storage.js";
 
 /**
  * Verified-selfie retention worker.
@@ -14,9 +14,16 @@ import { deleteStorageObject } from "./storage.js";
  *
  * Beyond ~90 days the photo set is stable, the user's appearance has been
  * vetted, and we no longer need a stored selfie. This worker:
- *   • finds users whose `verifiedAt` is older than the cutoff
+ *   • finds every stored selfie older than the cutoff — by the SELFIE's own
+ *     age (`selfieStoredAt`), whatever the verification outcome
  *   • deletes the selfie object from Supabase storage
  *   • clears `verifiedSelfiePath` on the row (the field becomes null)
+ *
+ * It used to select `verifiedAt < cutoff`, so a selfie stored by a run that
+ * ended retryable, in manual review or rejected — `verifiedAt` null — was never
+ * scrubbed at all, and a re-verification restarted the clock of an older one
+ * (A13-M12). Biometric data of the people who did NOT pass was the data kept
+ * longest.
  *
  * `verificationStatus` and `verifiedAt` are intentionally NOT cleared —
  * the user remains verified, just without the stored reference image.
@@ -41,7 +48,8 @@ export interface RetentionResult {
 export interface RetentionDeps {
   db: {
     findExpired: (cutoff: Date) => Promise<Array<{ id: string; verifiedSelfiePath: string }>>;
-    clearSelfiePath: (userId: string) => Promise<void>;
+    /** Clears the pointer only while it still names `path`. */
+    clearSelfiePath: (userId: string, path: string) => Promise<void>;
   };
   deleteStorageObject: typeof deleteStorageObject;
 }
@@ -74,7 +82,7 @@ export async function runSelfieRetention(
       // file. If the storage delete fails (already gone, transient), the
       // worker re-tries indirectly: there's nothing left to find unless
       // the path is restored.
-      await deps.db.clearSelfiePath(row.id);
+      await deps.db.clearSelfiePath(row.id, row.verifiedSelfiePath);
       result.deletedFromDb++;
     } catch (err) {
       console.error(`${LOG_PREFIX} failed to scrub`, { userId: row.id, err });
@@ -85,27 +93,51 @@ export async function runSelfieRetention(
   return result;
 }
 
+/**
+ * When a stored selfie was written. Every key `uploadSelfie` mints is
+ * `{userId}/{Date.now()}.{ext}`, so the key itself carries its upload time —
+ * the one timestamp that belongs to the selfie rather than to the account (a
+ * later photo edit moves `faceMatchedAt`; a later passing run moves
+ * `verifiedAt`). `fallback` answers for a key without that shape; `null` when
+ * neither says anything.
+ */
+export function selfieStoredAt(path: string, fallback: Date | null): Date | null {
+  return storageKeyWrittenAt(path) ?? fallback;
+}
+
 function defaultDeps(): RetentionDeps {
   return {
     db: {
       findExpired: async (cutoff) => {
+        // Every stored selfie, whatever the verification outcome; the age test
+        // is on the key, which SQL cannot read without parsing it, and the set
+        // is bounded by the number of people who ever ran liveness.
         const rows = await prisma.user.findMany({
-          where: {
-            verifiedSelfiePath: { not: null },
-            verifiedAt: { not: null, lt: cutoff },
-          },
-          select: { id: true, verifiedSelfiePath: true },
+          where: { verifiedSelfiePath: { not: null } },
+          select: { id: true, verifiedSelfiePath: true, verifiedAt: true, faceMatchedAt: true },
         });
-        // Type narrowing: we filtered on `verifiedSelfiePath: { not: null }`
-        // but Prisma's types don't propagate that, so the field is still
-        // `string | null`. Filter again to satisfy the consumer signature.
-        return rows.flatMap((r) =>
-          r.verifiedSelfiePath ? [{ id: r.id, verifiedSelfiePath: r.verifiedSelfiePath }] : [],
-        );
+        let undatable = 0;
+        const expired = rows.flatMap((r) => {
+          if (!r.verifiedSelfiePath) return [];
+          // `verifiedAt` before `faceMatchedAt` for an old-format key: both
+          // are at or after the upload, and the earlier one is the closer.
+          const storedAt = selfieStoredAt(r.verifiedSelfiePath, r.verifiedAt ?? r.faceMatchedAt);
+          if (!storedAt) {
+            undatable += 1;
+            return [];
+          }
+          return storedAt < cutoff ? [{ id: r.id, verifiedSelfiePath: r.verifiedSelfiePath }] : [];
+        });
+        if (undatable > 0) {
+          console.warn(`${LOG_PREFIX} ${undatable} stored selfie(s) carry no datable key or timestamp`);
+        }
+        return expired;
       },
-      clearSelfiePath: async (userId) => {
-        await prisma.user.update({
-          where: { id: userId },
+      clearSelfiePath: async (userId, path) => {
+        // Conditional: a liveness run that stored a NEW selfie between the scan
+        // and this write must keep its reference.
+        await prisma.user.updateMany({
+          where: { id: userId, verifiedSelfiePath: path },
           data: { verifiedSelfiePath: null },
         });
       },

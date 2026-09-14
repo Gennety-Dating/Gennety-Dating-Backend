@@ -1,4 +1,5 @@
 import { prisma } from "@gennety/db";
+import { restoreSafetyHistoryAfterAttach } from "./safety-tombstone.js";
 import {
   createAndSendOtp,
   discardOtpDelivery,
@@ -101,12 +102,18 @@ export async function claimVerifiedEmail<T>(
     await detachUnverifiedEmail(patch.email, userId);
   }
 
+  let value: T;
   try {
-    return { ok: true, value: await write(patch) };
+    value = await write(patch);
   } catch (err) {
     if (isUniqueViolation(err)) return { ok: false, reason: "linked_elsewhere" };
     throw err;
   }
+  // The address is now proven on this row. If it belonged to a deleted account
+  // with a safety history, that history comes back here (A13-H14) — after the
+  // write, never instead of it; a failed restore is alerted, not thrown.
+  await restoreSafetyHistoryAfterAttach(userId, "email:claim");
+  return { ok: true, value };
 }
 
 /**

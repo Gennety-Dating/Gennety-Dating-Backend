@@ -123,7 +123,11 @@ purchasesRouter.get("/admin/purchases", async (req: Request, res: Response) => {
 export async function withPayers(
   rows: readonly PurchaseRow[],
 ): Promise<Array<Record<string, unknown>>> {
-  const userIds = [...new Set(rows.map((row) => row.userId))];
+  // A row whose payer deleted their account carries a null owner (A13-H14)
+  // and is shown with `user: null`, like a payer the lookup cannot find.
+  const userIds = [
+    ...new Set(rows.map((row) => row.userId).filter((id): id is string => id !== null)),
+  ];
   const users =
     userIds.length > 0
       ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: PAYER_SELECT })
@@ -131,7 +135,7 @@ export async function withPayers(
   const byId = new Map(users.map((user) => [user.id, user]));
 
   return rows.map((row) => {
-    const user = byId.get(row.userId);
+    const user = row.userId ? byId.get(row.userId) : undefined;
     return {
       ...row,
       createdAt: row.createdAt.toISOString(),

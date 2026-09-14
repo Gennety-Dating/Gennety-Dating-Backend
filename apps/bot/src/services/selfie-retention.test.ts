@@ -1,5 +1,43 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runSelfieRetention, type RetentionDeps } from "./selfie-retention.js";
+
+const dbMocks = vi.hoisted(() => ({
+  rows: [] as Array<{
+    id: string;
+    verifiedSelfiePath: string | null;
+    verifiedAt: Date | null;
+    faceMatchedAt: Date | null;
+  }>,
+  updateMany: vi.fn(async () => ({ count: 1 })),
+  deleteStorageObject: vi.fn(async () => true),
+}));
+
+// Only the default wiring (`runSelfieRetention()` with no deps) reaches these.
+// `findMany` honours the filters it is given the way Postgres would, so a
+// query that narrows to verified users visibly returns fewer rows.
+vi.mock("@gennety/db", () => ({
+  prisma: {
+    user: {
+      findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
+        dbMocks.rows.filter((row) => {
+          if (row.verifiedSelfiePath === null) return false;
+          const verifiedAt = where.verifiedAt as { not?: null; lt?: Date } | undefined;
+          if (verifiedAt) {
+            if (row.verifiedAt === null) return false;
+            if (verifiedAt.lt && !(row.verifiedAt < verifiedAt.lt)) return false;
+          }
+          return true;
+        }),
+      ),
+      updateMany: dbMocks.updateMany,
+    },
+  },
+}));
+vi.mock("./storage.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./storage.js")>()),
+  deleteStorageObject: dbMocks.deleteStorageObject,
+}));
+
+import { runSelfieRetention, selfieStoredAt, type RetentionDeps } from "./selfie-retention.js";
 
 const NOW = new Date("2026-04-30T00:00:00Z");
 const RETENTION_DAYS = 90;
@@ -105,5 +143,55 @@ describe("runSelfieRetention", () => {
     const passedCutoff = findExpired.mock.calls[0]![0] as Date;
     const expected = new Date(NOW.getTime() - 90 * 24 * 60 * 60 * 1000);
     expect(passedCutoff.toISOString()).toBe(expected.toISOString());
+  });
+});
+
+// A13-M12: the scrub is about the SELFIE's age, not the account's verification.
+describe("selfieStoredAt", () => {
+  it("reads the upload time out of the key uploadSelfie mints", () => {
+    expect(selfieStoredAt("u1/1715000000000.jpg", null)).toEqual(new Date(1715000000000));
+  });
+
+  it("falls back for a key without that shape, and says nothing when neither helps", () => {
+    const fallback = new Date("2026-01-01T00:00:00Z");
+    expect(selfieStoredAt("u1/persona-selfie.jpg", fallback)).toBe(fallback);
+    expect(selfieStoredAt("u1/persona-selfie.jpg", null)).toBeNull();
+  });
+});
+
+describe("runSelfieRetention — default wiring (A13-M12)", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const key = (id: string, daysAgo: number) => `${id}/${NOW.getTime() - daysAgo * DAY}.jpg`;
+
+  it("scrubs an old selfie whatever the verification outcome, and only an old one", async () => {
+    dbMocks.rows = [
+      // Verified long ago: scrubbed, as before.
+      { id: "verified", verifiedSelfiePath: key("verified", 100), verifiedAt: new Date(NOW.getTime() - 100 * DAY), faceMatchedAt: null },
+      // Never verified (retryable / manual review / rejected): used to be kept forever.
+      { id: "unverified", verifiedSelfiePath: key("unverified", 100), verifiedAt: null, faceMatchedAt: new Date(NOW.getTime() - 100 * DAY) },
+      // Verified long ago, but THIS selfie is ten days old (a later retry stored it).
+      { id: "fresh-selfie", verifiedSelfiePath: key("fresh-selfie", 10), verifiedAt: new Date(NOW.getTime() - 100 * DAY), faceMatchedAt: null },
+    ];
+
+    const result = await runSelfieRetention(undefined, RETENTION_DAYS, NOW);
+
+    expect(result.scanned).toBe(2);
+    expect(dbMocks.deleteStorageObject).toHaveBeenCalledWith("selfies", key("verified", 100));
+    expect(dbMocks.deleteStorageObject).toHaveBeenCalledWith("selfies", key("unverified", 100));
+    expect(dbMocks.deleteStorageObject).not.toHaveBeenCalledWith("selfies", key("fresh-selfie", 10));
+  });
+
+  it("clears the pointer only while it still names the scrubbed selfie", async () => {
+    dbMocks.rows = [
+      { id: "u1", verifiedSelfiePath: key("u1", 120), verifiedAt: null, faceMatchedAt: null },
+    ];
+
+    await runSelfieRetention(undefined, RETENTION_DAYS, NOW);
+
+    // A liveness run that stored a new selfie meanwhile keeps its reference.
+    expect(dbMocks.updateMany).toHaveBeenCalledWith({
+      where: { id: "u1", verifiedSelfiePath: key("u1", 120) },
+      data: { verifiedSelfiePath: null },
+    });
   });
 });

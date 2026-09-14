@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { CADENCES, dropOutpacesNotices, resolveCadence } from "./cadence.js";
-import {
-  FAMINE_DISCOUNT_MIN_TIER,
-  PROFILER_RUSH_WINDOW_HOURS,
-} from "./constants.js";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -22,8 +18,11 @@ const DAY = 24 * HOUR;
  *                                           apps/bot/src/utils/countdown-plate.ts
  *   - MATCH_COOLDOWN_MS                    apps/bot/src/services/match-engine.ts
  *   - STARVATION_ALPHA                     apps/bot/src/services/match-engine.ts
- *   - FAMINE_DISCOUNT_MIN_TIER             packages/shared/src/constants.ts
- *   - PROFILER_RUSH_WINDOW_HOURS           packages/shared/src/constants.ts
+ *   - FAMINE_DISCOUNT_MIN_TIER (2)         packages/shared/src/constants.ts
+ *   - PROFILER_RUSH_WINDOW_HOURS (48)      packages/shared/src/constants.ts
+ *     (both constants were deleted 2026-09-14, A13-L30: nothing read them but
+ *     this test — the profile fields are the only source — so their values are
+ *     pinned below as literals)
  *   - PROPOSAL_NUDGE1/2_MS, deadline lead  apps/bot/src/workers/match-nudge.ts
  *   - SCHED_NUDGE1/2_MS                    apps/bot/src/workers/match-nudge.ts
  *   - VENUE_NUDGE1/2_MS, STALL_*_MS        apps/bot/src/services/match-stall.ts
@@ -52,11 +51,11 @@ describe("CADENCES.weekly reproduces today's hardcoded constants", () => {
   it("famine cadence matches today's constants", () => {
     expect(weekly.noMatchNoticeCron).toBe("15 18 * * 4");
     expect(weekly.famineNoticeIntervalMs).toBe(7 * DAY);
-    expect(weekly.famineDiscountMinTier).toBe(FAMINE_DISCOUNT_MIN_TIER);
+    expect(weekly.famineDiscountMinTier).toBe(2);
   });
 
   it("profiler rush window", () => {
-    expect(weekly.profilerRushWindowMs).toBe(PROFILER_RUSH_WINDOW_HOURS * HOUR);
+    expect(weekly.profilerRushWindowMs).toBe(48 * HOUR);
   });
 
   it("nudge + stall offsets", () => {

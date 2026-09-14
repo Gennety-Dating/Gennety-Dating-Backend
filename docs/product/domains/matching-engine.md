@@ -1103,7 +1103,7 @@ unaffected, and iOS never touched any of this (StoreKit →
   mock/Stripe abstraction on 2026-09-11).
 - **Famine discount (single ticket).** A one-time loyalty perk for a user the
   weekly batch left unpaired for a **2nd consecutive week or more** (no-match
-  `tier ≥ FAMINE_DISCOUNT_MIN_TIER`). The §3.1 no-match DM grants and announces
+  `tier ≥ CADENCE.famineDiscountMinTier`, 2). The §3.1 no-match DM grants and announces
   a **`FAMINE_DISCOUNT_PCT` (77%) discount on one ticket**, valid
   `FAMINE_DISCOUNT_TTL_DAYS` (30) days. It applies to a **single** ticket
   purchase only — the date gate's `self` scope and the store's "1 ticket"

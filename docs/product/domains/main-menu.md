@@ -55,8 +55,11 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
     live from a hub keyboard): 📍 Open in Maps, **Change venue** (while the paid
     board is open), **Share** (blurred off-platform copy), **Enter chat** (while
     the coordination proxy window is open), **Cancel date** (native `danger`;
-    available for the whole `scheduled` window — the emergency handler keeps its
-    own two-step red confirmation), **Report**, **Back**.
+    available from the moment the date is `scheduled` until its `agreedTime` —
+    hidden once the date has started, when the service would refuse anyway (the
+    emergency window closes at `agreedTime` since 2026-09-14, A13-M20; the agent's
+    `propose_cancel_date` answers `date_already_started` the same way) — the
+    emergency handler keeps its own two-step red confirmation), **Report**, **Back**.
 
   The hub deliberately does **not** surface ice-breakers or the wingman hint:
   those are time-gated *pre-date* content the lifecycle drops shortly before the
@@ -282,7 +285,10 @@ rows are subject to the same untrusted-data fence as everything else in the
 timeline. The same change stops the agent replaying onboarding-era
 turns from `messageHistory` at all: only its own turns from the last 24 h are
 replayed, while the full column is retained for the admin conversation viewer
-and the re-engagement worker. The **timeline** is Telegram-only; the mobile
+and the re-engagement worker — each turn is APPENDED to it, capped at
+`AGENT_STORED_HISTORY_MAX_MESSAGES` (200). Until 2026-09-14 (A13-L9) the column was
+silently overwritten with the replay window on every turn, so this retention was
+not actually true. The **timeline** is Telegram-only; the mobile
 The mobile chat agent keeps its own `Message`-row history unchanged. The menu agent
 itself is *not* Telegram-only, despite what this paragraph used to claim: the
 same `runMenuAgentTurn`, with the same tools, also backs the JWT

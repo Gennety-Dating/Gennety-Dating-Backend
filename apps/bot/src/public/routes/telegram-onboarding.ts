@@ -58,6 +58,7 @@ import {
 import { unresolvedTrackContactGate } from "../../services/contact-verification.js";
 import { grantInviteePremium, parseReferrer, referralSourceFromParam } from "../../services/referral.js";
 import { recordInviteClickFromStartPayload } from "../../services/referral-events.js";
+import { restoreSafetyHistoryAfterAttach } from "../../services/safety-tombstone.js";
 import {
   grantPromoRewardsForUser,
   parsePromoCode,
@@ -997,7 +998,7 @@ async function findOrCreateTelegramUser(
       : referralSourceFromParam(rawParam, "tg-mini")
     : null;
 
-  return prisma.user.create({
+  const created = await prisma.user.create({
     data: {
       telegramId,
       firstName: null,
@@ -1006,6 +1007,11 @@ async function findOrCreateTelegramUser(
     },
     select: miniUserSelect,
   });
+  // The Mini App can be the first surface a returning Telegram id touches; a
+  // deleted account's safety history comes back here as on /start (A13-H14).
+  const restored = await restoreSafetyHistoryAfterAttach(created.id, "mini-app:first-open");
+  if (!restored?.applied) return created;
+  return (await prisma.user.findUnique({ where: { id: created.id }, select: miniUserSelect })) ?? created;
 }
 
 async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDto> {

@@ -2174,6 +2174,24 @@ describe("handleVerificationSkipConfirm — idempotency", () => {
     expect(pinStatusBanner).toHaveBeenCalledTimes(1);
   });
 
+  // A13-H14: a re-registered person's ban is restored onto the fresh account
+  // while it is still onboarding. Skipping verification must not lift it.
+  it("never lifts a restored moderation status when the user skips", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uid-1",
+      verificationSkippedAt: null,
+      status: "banned",
+    });
+    (prisma.profile.updateMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ count: 1 });
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
+
+    await handleVerificationSkipConfirm(createSkipCtx());
+
+    const data = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls[0]![0].data;
+    expect(data).toMatchObject({ verificationStatus: "unverified", onboardingStep: "completed" });
+    expect(data).not.toHaveProperty("status");
+  });
+
   it("second call (already skipped): early-returns after callback ack — no re-render of menu/banner", async () => {
     // Regression: pre-fix, a second tap on the Skip button (or a Telegram
     // callback retry) re-ran ctx.reply + showMainMenu + pinStatusBanner, which

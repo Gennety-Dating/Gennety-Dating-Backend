@@ -1055,7 +1055,9 @@ async function recordStarsGatePayment(input: {
     if (existing.userId !== payer.id || existing.matchId !== input.matchId) {
       throw new Error("Telegram charge id is already attached to another ticket payment");
     }
-    return existing;
+    // The column is nullable only because a ledger row outlives a deleted
+    // account (A13-H14); the check above just proved this one is the payer's.
+    return { ...existing, userId: payer.id };
   }
 
   try {
@@ -1096,7 +1098,7 @@ async function recordStarsGatePayment(input: {
       matchId: input.matchId,
       externalPaymentId: input.chargeId,
     });
-    return record;
+    return { ...record, userId: payer.id };
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
     const raced = await prisma.ticketLedger.findUnique({
@@ -1112,7 +1114,7 @@ async function recordStarsGatePayment(input: {
       },
     });
     if (!raced || raced.userId !== payer.id || raced.matchId !== input.matchId) throw error;
-    return raced;
+    return { ...raced, userId: payer.id };
   }
 }
 
@@ -1209,6 +1211,12 @@ export async function retryPendingStarsGateRefunds(api: Api<RawApi>): Promise<nu
   const pending = await prisma.ticketLedger.findMany({
     where: {
       externalPaymentId: { not: null },
+      // A row whose payer deleted their account keeps its charge id but has no
+      // Telegram id left to refund to or wallet to credit (A13-H14). Selecting
+      // it would spend this tick's budget on a row nothing can ever settle, so
+      // it is left out here and skipped again below for the type's sake.
+      // `deleteUserAccount` refuses to run while such a refund is still young.
+      userId: { not: null },
       OR: [
         { reason: { in: [GATE_REFUND_PENDING_REASON, GATE_SURPLUS_PENDING_REASON] } },
         { reason: GATE_PAYMENT_REASON, createdAt: { lt: abandonedBefore } },
@@ -1228,11 +1236,13 @@ export async function retryPendingStarsGateRefunds(api: Api<RawApi>): Promise<nu
   });
 
   let adjusted = 0;
-  for (const record of pending) {
+  for (const { user, userId, ...rest } of pending) {
+    if (!user || !userId) continue;
+    const record: StarsGateLedgerRecord = { ...rest, userId };
     try {
       if (record.reason === GATE_SURPLUS_PENDING_REASON) {
         if (await creditStarsSurplus(record, record.bundleSize ?? 0)) adjusted += 1;
-      } else if (await refundStarsLedgerRecord(api, record.user.telegramId, record)) {
+      } else if (await refundStarsLedgerRecord(api, user.telegramId, record)) {
         adjusted += 1;
       }
     } catch (error) {
@@ -1708,7 +1718,8 @@ async function refundPaidTicketSide(
   // too, and the call is idempotent for one already refunded.
   let allRefunded = true;
   for (const record of stars) {
-    const refunded = await refundStarsLedgerRecord(api, payer.telegramId, record, {
+    // Selected by `userId: payer.id`, so the nullable column is the payer here.
+    const refunded = await refundStarsLedgerRecord(api, payer.telegramId, { ...record, userId: payer.id }, {
       allowSettled: true,
     });
     if (!refunded) allRefunded = false;

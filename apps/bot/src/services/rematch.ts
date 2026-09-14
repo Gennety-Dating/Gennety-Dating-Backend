@@ -303,6 +303,9 @@ export async function filterRematchEligible(
   });
   const byUser = new Map<string, Date[]>();
   for (const p of purchases) {
+    // Selected by `userId: { in: eligible }`, so it is never null here; the
+    // column is nullable only because a purchase outlives a deleted account.
+    if (!p.userId) continue;
     const list = byUser.get(p.userId);
     if (list) list.push(p.createdAt);
     else byUser.set(p.userId, [p.createdAt]);

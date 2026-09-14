@@ -751,7 +751,12 @@ export async function notifyFounderPurchase(notice: FounderPurchaseNotice): Prom
  * admin list shows the same fact as a status; this keeps the DM honest.
  */
 export async function notifyFounderPurchaseRefunded(notice: {
-  userId: string;
+  /**
+   * Null when the payer's account has since been deleted: payment rows outlive
+   * the account (A13-H14). The refund is still announced — a reversal the feed
+   * silently drops would leave a sale in it that no longer exists.
+   */
+  userId: string | null;
   kind: PurchaseKind;
   amountStars?: number | null;
   amountCents?: number | null;
@@ -765,11 +770,12 @@ export async function notifyFounderPurchaseRefunded(notice: {
   if (!api) return;
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: notice.userId },
-      select: FOUNDER_PAYER_SELECT,
-    });
-    if (!user) return;
+    const user = notice.userId
+      ? await prisma.user.findUnique({
+          where: { id: notice.userId },
+          select: FOUNDER_PAYER_SELECT,
+        })
+      : null;
 
     const amount = formatPurchaseAmount({
       amountStars: notice.amountStars ?? null,
@@ -783,7 +789,7 @@ export async function notifyFounderPurchaseRefunded(notice: {
 
     const lines = [
       `↩️ Возврат — ${purchaseKindLabel(notice.kind)}`,
-      ...payerLines(user),
+      ...(user ? payerLines(user) : ["👤 аккаунт удалён"]),
       `💵 ${amount}`,
     ];
     if (notice.reason) lines.push(`Причина: ${notice.reason}`);
@@ -870,6 +876,71 @@ export async function notifyFounderPaymentStuck(
       reason: notice.reason,
       err,
     });
+  }
+}
+
+/**
+ * Account deletion went ahead although this account still had refunds the
+ * sweeps own that are older than `ACCOUNT_DELETION_REFUND_DEFER_DAYS`
+ * (A13-H14).
+ *
+ * A younger refund defers the deletion instead — the user is told to retry.
+ * An older one no longer does: a refund that has failed for a week is an ops
+ * problem, and holding a person's erasure hostage to it is not an answer. But
+ * once the account is gone the rows carry no Telegram id and the sweeps skip
+ * them, so this message — with every row id — is the only place left to settle
+ * them from by hand. Anonymous beyond the user id, like the other ops alerts.
+ */
+export async function notifyFounderDeletionStuckRefunds(input: {
+  userId: string;
+  telegramId: bigint;
+  rows: readonly { table: string; id: string; status: string; createdAt: Date }[];
+}): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+  const lines = [
+    `🧾 Аккаунт удалён, но у него висели возвраты старше недели — кроны их больше не увидят.`,
+    `User: ${input.userId}`,
+    `Telegram ID: ${input.telegramId.toString()}`,
+    ...input.rows
+      .slice(0, 20)
+      .map((row) => `• ${row.table} ${row.id} — ${row.status}, ${row.createdAt.toISOString().slice(0, 10)}`),
+  ];
+  if (input.rows.length > 20) lines.push(`…и ещё ${input.rows.length - 20}.`);
+  lines.push("Звёзды возвращаются вручную по charge id этих строк.");
+  try {
+    await api.sendMessage(founderChatId(), lines.join("\n"));
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} deletion stuck refunds notify failed`, { userId: input.userId, err });
+  }
+}
+
+/**
+ * Restoring a returning person's safety history failed after their identity
+ * was already attached (A13-H14).
+ *
+ * The attach itself has committed — a login or a verification the person just
+ * completed — so it is not undone; but a failed restore means a banned or
+ * blocked person may be walking around with a clean record, which nobody would
+ * otherwise learn. The founder gets the user id to re-run it
+ * (`restoreSafetyHistory`, idempotent).
+ */
+export async function notifyFounderSafetyRestoreFailed(input: {
+  userId: string;
+  source: string;
+  error: string;
+}): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+  const text =
+    `🛡️ Не удалось восстановить историю безопасности вернувшегося аккаунта.\n` +
+    `User: ${input.userId}\n` +
+    `Где: ${input.source}\n` +
+    `Ошибка: ${input.error.slice(0, 300)}`;
+  try {
+    await api.sendMessage(founderChatId(), text);
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} safety restore failure notify failed`, { userId: input.userId, err });
   }
 }
 

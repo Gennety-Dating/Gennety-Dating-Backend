@@ -121,10 +121,17 @@ export async function recordRejectionFeedback(
 
   const declined = side === "A" ? match.acceptedByA === false : match.acceptedByB === false;
   if (!declined) {
+    // Neutral on purpose (A13-L10). This text goes to the model, which may
+    // repeat it. The old "the peer did" asserted the partner's decision — on a
+    // still-`proposed` match (accepted above) that is exactly what the blind-
+    // decision invariant withholds, and an expired or cancelled match reaches
+    // this branch without anyone declining, so it was not even always true.
+    // Say only what is known about THIS user.
     return {
       success: false,
       code: "user_did_not_decline",
-      error: "The user did not decline this match; the peer did. Do not record a reason on their behalf.",
+      error:
+        "No decline by this user is recorded for that match. Do not record a reason on their behalf, and do not guess why the match ended.",
     };
   }
 

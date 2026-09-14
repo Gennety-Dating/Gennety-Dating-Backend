@@ -465,10 +465,25 @@ paths:
       tags: [me]
       operationId: deleteAccount
       summary: GDPR account deletion (storage erasure + relational cascade)
+      description: |
+        Payment records and the safety history filed against the account are
+        kept (payment rows with a null owner; moderation state as keyed
+        hashes) — see the privacy policy. While a refund connected to the
+        account is still being processed, deletion is refused with 409
+        `refund-in-progress` and nothing is erased; the same request succeeds
+        once the refund has gone through.
       responses:
         "204": { description: Account deleted }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            `error: "refund-in-progress"` — a refund on this account is still
+            in flight. Nothing was deleted; retry later. `message` carries an
+            English explanation for logs, not for display.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "503":
           description: Storage cleanup unavailable — account preserved, retry
           content:
@@ -1277,8 +1292,15 @@ paths:
         worked, and two implementations would quietly build two datasets.
 
         The structured answers are composed into the single text blob the LLM
-        analyst reads; no new columns are written for them. Answering twice
-        overwrites the caller's own previous answer.
+        analyst reads; no new columns are written for them.
+
+        **The form is answered once per side.** A second submission is refused
+        with 409 `already-submitted` and the first answer stays: it has already
+        been analysed into matching, and re-running that analysis would count
+        its dealbreakers twice. A story the person told the concierge, or a
+        Telegram voice note, recorded before the form does NOT close it — the
+        chemistry score and the second-date answer come only from here — so the
+        form is accepted on top of either and the earlier text is kept.
 
         Unlike the Mini App twin this sends **no thank-you DM**: that surface
         can assume a bot chat exists because the request was signed by one,
@@ -1377,6 +1399,10 @@ paths:
             `wrong-state` — the date has not been closed out yet. Deliberately
             not a 404: the match exists and the caller is on it, and a 404
             would send the client looking for a routing bug that is not there.
+
+            `already-submitted` — this side has already answered the form. The
+            first answer is kept; there is nothing to retry. `GET
+            /v1/me/feedback/pending` reports it as `submitted: true`.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -5683,9 +5709,11 @@ components:
         submitted:
           type: boolean
           description: |
-            Already answered. The endpoint still returns the date rather than
-            404ing, so a client opening a day-old push lands on "thank you"
-            instead of an error.
+            The form is already answered. The endpoint still returns the date
+            rather than 404ing, so a client opening a day-old push lands on
+            "thank you" instead of an error. A story told to the concierge or a
+            Telegram voice note does not set it: the form stays open after
+            either.
 
             It CANNOT show what was said, and no client should try: the
             structured answers are composed into one prose blob for the

@@ -267,6 +267,8 @@ const db = {
   messages: [] as MessageRow[],
   founderReports: [] as FounderReportRow[],
   botSessions: [] as { key: string }[],
+  /** Rematch purchases a refund sweep still owns (A13-H14 deferral). */
+  rematchPurchases: [] as { id: string; userId: string; status: string; createdAt: Date }[],
 };
 
 function resetDb(): void {
@@ -284,6 +286,7 @@ function resetDb(): void {
   db.messages.length = 0;
   db.founderReports.length = 0;
   db.botSessions.length = 0;
+  db.rematchPurchases.length = 0;
 }
 
 function userById(id: string): UserRow | undefined {
@@ -574,6 +577,10 @@ vi.mock("@gennety/db", async () => {
           const hits = [...db.matches.values()].filter(
             (m) =>
               (!statusFilter || statusFilter.includes(m.status)) &&
+              // Seeded matches carry no ticket state, so a `ticketStatus`
+              // filter (the deletion's refund-in-flight probe) matches none.
+              (where.ticketStatus === undefined ||
+                (m as { ticketStatus?: string }).ticketStatus === where.ticketStatus) &&
               (m.userAId === uid || m.userBId === uid),
           );
           if (orderBy?.createdAt === "desc") {
@@ -674,6 +681,21 @@ vi.mock("@gennety/db", async () => {
           db.reports.push(row);
           return row;
         }),
+        // Account deletion's safety capture (A13-H14): counts and stamps the
+        // reports filed against the departing account.
+        count: vi.fn(async ({ where }: any) =>
+          db.reports.filter((r) => r.reportedId === where.reportedId).length,
+        ),
+        updateMany: vi.fn(async ({ where, data }: any) => {
+          const rows = db.reports.filter((r) => r.reportedId === where.reportedId);
+          for (const row of rows) Object.assign(row, data);
+          return { count: rows.length };
+        }),
+        deleteMany: vi.fn(async ({ where }: any) => {
+          const before = db.reports.length;
+          db.reports = db.reports.filter((r) => r.reportedId !== where.reportedId);
+          return { count: before - db.reports.length };
+        }),
       },
 
       // ----- userBlock -----
@@ -715,6 +737,14 @@ vi.mock("@gennety/db", async () => {
             blocked: { firstName: userById(row.blockedId)?.firstName ?? null },
           }));
         }),
+        count: vi.fn(async ({ where }: any) =>
+          db.userBlocks.filter((row) => row.blockedId === where.blockedId).length,
+        ),
+        updateMany: vi.fn(async ({ where, data }: any) => {
+          const rows = db.userBlocks.filter((row) => row.blockedId === where.blockedId);
+          for (const row of rows) Object.assign(row, data);
+          return { count: rows.length };
+        }),
         findFirst: vi.fn(async ({ where }: any) => {
           const pairs: { blockerId: string; blockedId: string }[] = where.OR ?? [where];
           return (
@@ -738,6 +768,27 @@ vi.mock("@gennety/db", async () => {
           if (!select) return rows;
           return rows.map((row) => pickSelect(row, select));
         }),
+      },
+
+      // ----- payment rows (A13-H14 refund-in-flight probe) -----
+      ticketLedger: { findMany: vi.fn(async () => []) },
+      venueChangePurchase: { findMany: vi.fn(async () => []) },
+      primeTimePurchase: { findMany: vi.fn(async () => []) },
+      rematchPurchase: {
+        findMany: vi.fn(async ({ where, select }: any) => {
+          const statuses: string[] = where.status?.in ?? [];
+          const rows = db.rematchPurchases.filter(
+            (row) => row.userId === where.userId && statuses.includes(row.status),
+          );
+          return select ? rows.map((row) => pickSelect(row, select)) : rows;
+        }),
+      },
+
+      // ----- safety tombstones (A13-H14) -----
+      safetyTombstone: {
+        findFirst: vi.fn(async () => null),
+        deleteMany: vi.fn(async () => ({ count: 0 })),
+        createMany: vi.fn(async ({ data }: any) => ({ count: data.length })),
       },
 
       founderReport: {
@@ -1005,6 +1056,8 @@ vi.mock("../services/storage.js", () => ({
     async (path: string) => `https://signed.test/photo/${path}`,
   ),
   deleteStorageObject: vi.fn(async () => true),
+  // Account deletion lists each bucket under the user's prefix (A13-M12).
+  listStorageObjects: vi.fn(async () => []),
   // Step 4 face-match gate fetches the verified selfie before comparing.
   // Tests that don't seed `verifiedSelfiePath` short-circuit the gate
   // before this is called; we still need it to exist on the mock so the
@@ -2059,6 +2112,59 @@ describe("DELETE /v1/me", () => {
 
     expect(res.status).toBe(204);
     expect(db.founderReports.map((row) => row.id)).toEqual(["keep"]);
+  });
+
+  // A13-H14: payment rows outlive the account, but the Telegram id a Stars
+  // refund is sent to does not — so a refund still in flight defers deletion.
+  it("answers 409 refund-in-progress and deletes nothing while a refund is in flight", async () => {
+    const { deleteStorageObject } = await import("../services/storage.js");
+    const user = await seedUser();
+    user.verifiedSelfiePath = `${user.id}/persona-selfie.jpg`;
+    db.rematchPurchases.push({
+      id: crypto.randomUUID(),
+      userId: user.id,
+      status: "refund_failed",
+      createdAt: new Date(),
+    });
+
+    const res = await request(app)
+      .delete("/v1/me")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("refund-in-progress");
+    expect(db.users.get(user.id)).toBeDefined();
+    expect(deleteStorageObject).not.toHaveBeenCalled();
+  });
+
+  it("keeps the reports filed against a banned user, stamped for re-registration", async () => {
+    const reporter = await seedUser();
+    // A real (positive) Telegram id is an identity a tombstone can key on; the
+    // seeded default is an app-only synthetic id, which is not.
+    const leaving = await seedUser({ telegramId: 777001n, status: "banned" });
+    const match = await seedMatch(reporter.id, leaving.id, { status: "completed" });
+    db.reports.push({
+      id: crypto.randomUUID(),
+      reporterId: reporter.id,
+      reportedId: leaving.id,
+      matchId: match.id,
+      rawText: "unsafe behaviour",
+      tier: 3,
+      reasonSummary: null,
+      adminReviewed: false,
+      createdAt: new Date(),
+    });
+
+    const res = await request(app)
+      .delete("/v1/me")
+      .set("Authorization", `Bearer ${signAccess(leaving.id)}`);
+
+    expect(res.status).toBe(204);
+    const { prisma } = await import("@gennety/db");
+    expect(prisma.safetyTombstone.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ kind: "telegram", formerUserId: leaving.id, status: "banned" })],
+    });
+    expect(db.reports[0]).toMatchObject({ reportedFormerId: leaving.id });
   });
 
   it("returns 404 if called a second time (user already gone)", async () => {

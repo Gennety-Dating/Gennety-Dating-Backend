@@ -19,6 +19,9 @@ const {
   uploadSelfie,
   normalizeImageMime,
   deleteStorageObject,
+  listStorageObjects,
+  storageBucketState,
+  storageKeyWrittenAt,
 } = await import("./storage.js");
 
 const TG_TOKEN = "999:fake-bot-token";
@@ -307,5 +310,109 @@ describe("uploadSelfie — Content-Type is always ByteString-safe", () => {
     expect(
       [...headers["Content-Type"]!].every((ch) => ch.charCodeAt(0) <= 255),
     ).toBe(true);
+  });
+});
+
+// A13-M12: account deletion asks the bucket what it holds under `${userId}/`,
+// because a replaced selfie or a never-sent chat image has no row pointing at it.
+describe("storageBucketState", () => {
+  const reply = (status: number, body: unknown) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  });
+
+  it("is present when the bucket endpoint answers", async () => {
+    fetchMock.mockResolvedValueOnce(reply(200, { id: "voice-prompts" }));
+    await expect(storageBucketState("voice-prompts")).resolves.toBe("present");
+  });
+
+  it("is missing only when Supabase says the bucket was not found", async () => {
+    fetchMock.mockResolvedValueOnce(
+      reply(400, { statusCode: "404", error: "Bucket not found", message: "Bucket not found" }),
+    );
+    await expect(storageBucketState("voice-prompts")).resolves.toBe("missing");
+  });
+
+  it("is unreachable — never missing — on an outage, a refusal or a network error", async () => {
+    fetchMock.mockResolvedValueOnce(reply(503, { error: "unavailable" }));
+    await expect(storageBucketState("voice-prompts")).resolves.toBe("unreachable");
+    fetchMock.mockResolvedValueOnce(reply(400, { statusCode: "403", error: "Unauthorized" }));
+    await expect(storageBucketState("voice-prompts")).resolves.toBe("unreachable");
+    fetchMock.mockRejectedValueOnce(new Error("socket hang up"));
+    await expect(storageBucketState("voice-prompts")).resolves.toBe("unreachable");
+  });
+});
+
+describe("listStorageObjects", () => {
+  const page = (entries: Array<{ name: string; id: string | null }>) => ({
+    ok: true,
+    status: 200,
+    json: async () => entries,
+  });
+
+  it("lists every key under the prefix as a full key, via the list endpoint", async () => {
+    fetchMock.mockResolvedValueOnce(
+      page([
+        { name: "1715000000000.jpg", id: "obj-1" },
+        { name: "1716000000000.m4a", id: "obj-2" },
+      ]),
+    );
+
+    await expect(listStorageObjects("selfies", "user-uuid-123")).resolves.toEqual([
+      "user-uuid-123/1715000000000.jpg",
+      "user-uuid-123/1716000000000.m4a",
+    ]);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("https://supabase.test/storage/v1/object/list/selfies");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toMatchObject({ prefix: "user-uuid-123", limit: 100, offset: 0 });
+  });
+
+  it("pages until a short page and walks sub-folders", async () => {
+    const full = Array.from({ length: 100 }, (_, i) => ({ name: `f${i}.jpg`, id: `o${i}` }));
+    fetchMock
+      .mockResolvedValueOnce(page([...full.slice(0, 99), { name: "nested", id: null }]))
+      .mockResolvedValueOnce(page([{ name: "last.jpg", id: "o-last" }]))
+      .mockResolvedValueOnce(page([{ name: "deep.jpg", id: "o-deep" }]));
+
+    const keys = await listStorageObjects("chat", "u1");
+
+    expect(keys).toHaveLength(101);
+    expect(keys).toContain("u1/last.jpg");
+    expect(keys).toContain("u1/nested/deep.jpg");
+    expect(keys).not.toContain("u1/nested");
+    expect(JSON.parse(fetchMock.mock.calls[1]![1].body)).toMatchObject({ prefix: "u1", offset: 100 });
+    expect(JSON.parse(fetchMock.mock.calls[2]![1].body)).toMatchObject({ prefix: "u1/nested", offset: 0 });
+  });
+
+  it("fails closed — null, never a partial list — on a refused answer, a bad body or a network error", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ error: "Bucket not found" }) });
+    await expect(listStorageObjects("typo", "u1")).resolves.toBeNull();
+
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ not: "an array" }) });
+    await expect(listStorageObjects("selfies", "u1")).resolves.toBeNull();
+
+    fetchMock.mockResolvedValueOnce(page([{ name: "../escape.jpg", id: "x" }]));
+    await expect(listStorageObjects("selfies", "u1")).resolves.toBeNull();
+
+    fetchMock.mockRejectedValueOnce(new Error("socket hang up"));
+    await expect(listStorageObjects("selfies", "u1")).resolves.toBeNull();
+  });
+
+  it("refuses an unsafe prefix without a request", async () => {
+    await expect(listStorageObjects("selfies", "../other-user")).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("storageKeyWrittenAt", () => {
+  it("reads the Date.now() stamp the upload helpers put in the key", () => {
+    expect(storageKeyWrittenAt("u1/1715000000000.jpg")).toEqual(new Date(1715000000000));
+  });
+
+  it("answers null for keys without that shape", () => {
+    expect(storageKeyWrittenAt("u1/video-1715000000000.mp4")).toBeNull();
+    expect(storageKeyWrittenAt("AgACAgIAAxkBAAIC")).toBeNull();
   });
 });

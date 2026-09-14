@@ -184,10 +184,20 @@ describe("listBlockedUsers", () => {
     ]);
     expect(mBlock.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { blockerId: BLOCKER },
+        where: { blockerId: BLOCKER, blockedId: { not: null } },
         orderBy: { createdAt: "desc" },
       }),
     );
+  });
+
+  // A13-H14: a block against a deleted account stays in the table (so it can
+  // follow the person back) but names nobody — no one to show, no id to unblock.
+  it("leaves out a block whose blocked account was deleted", async () => {
+    mBlock.findMany.mockResolvedValue([
+      { blockedId: null, createdAt: new Date("2026-08-20T04:00:00Z"), blocked: null },
+    ]);
+
+    expect(await listBlockedUsers(BLOCKER)).toEqual([]);
   });
 });
 
@@ -206,6 +216,22 @@ describe("loadBlockedPairKeys", () => {
   it("does not query at all for an empty pool", async () => {
     expect((await loadBlockedPairKeys([])).size).toBe(0);
     expect(mBlock.findMany).not.toHaveBeenCalled();
+  });
+
+  // A13-H14. Before relinking, the row points at nobody and must exclude
+  // nobody; once the blocked person re-registers and `restoreSafetyHistory`
+  // relinks it to the NEW account, the batch must keep the pair apart again.
+  it("ignores a block not yet relinked, and excludes the returning account once it is", async () => {
+    const RETURNING = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+    mBlock.findMany.mockResolvedValueOnce([{ blockerId: BLOCKER, blockedId: null }]);
+    const before = await loadBlockedPairKeys([BLOCKER, RETURNING]);
+    expect(before.size).toBe(0);
+    expect([...before].some((key) => key.includes("null"))).toBe(false);
+
+    mBlock.findMany.mockResolvedValueOnce([{ blockerId: BLOCKER, blockedId: RETURNING }]);
+    const after = await loadBlockedPairKeys([BLOCKER, RETURNING]);
+    expect(after.has(`${BLOCKER}:${RETURNING}`)).toBe(true);
+    expect(after.has(`${RETURNING}:${BLOCKER}`)).toBe(true);
   });
 });
 

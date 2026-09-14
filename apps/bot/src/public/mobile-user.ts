@@ -1,5 +1,6 @@
 import { randomInt } from "node:crypto";
 import { Prisma, prisma, type User } from "@gennety/db";
+import { restoreSafetyHistoryAfterAttach } from "../services/safety-tombstone.js";
 import { detachUnverifiedEmail, isUniqueViolation } from "../services/verified-email.js";
 
 /**
@@ -49,8 +50,9 @@ export async function findOrCreateMobileUser(email: string): Promise<User> {
   if (existing?.isEmailVerified) return existing;
   if (existing) await detachUnverifiedEmail(normalisedEmail, null);
 
+  let created: User;
   try {
-    return await createMobileUserWithRetry({
+    created = await createMobileUserWithRetry({
       email: normalisedEmail,
       universityDomain: extractDomain(normalisedEmail),
       isEmailVerified: true,
@@ -68,6 +70,9 @@ export async function findOrCreateMobileUser(email: string): Promise<User> {
     if (winner?.isEmailVerified) return winner;
     throw err;
   }
+  // The request that created the row restores; a race winner above was
+  // restored by its own request.
+  return withSafetyHistory(created, "mobile:email-login");
 }
 
 /**
@@ -94,7 +99,7 @@ export async function findOrCreateMobileUserByPhone(phone: string): Promise<User
         data: platformPatch,
       });
     }
-    return prisma.user.update({
+    const verified = await prisma.user.update({
       where: { id: existing.id },
       data: {
         phoneVerifiedAt: new Date(),
@@ -104,13 +109,15 @@ export async function findOrCreateMobileUserByPhone(phone: string): Promise<User
         ...(existing.registrationTrack ? {} : { registrationTrack: "general" }),
       },
     });
+    return withSafetyHistory(verified, "mobile:phone-login");
   }
 
-  return createMobileUserWithRetry({
+  const created = await createMobileUserWithRetry({
     phone,
     phoneVerifiedAt: new Date(),
     registrationTrack: "general",
   });
+  return withSafetyHistory(created, "mobile:phone-login");
 }
 
 export type TelegramLoginResolution =
@@ -158,6 +165,7 @@ export async function findOrCreateUserByTelegramLogin(params: {
       const phoneOwner = await prisma.user.findUnique({ where: { phone } });
       if (phoneOwner && phoneOwner.id !== byTelegram.id) return { kind: "conflict" };
     }
+    const attachesPhone = Boolean(phone && !byTelegram.phone);
     const user = await prisma.user.update({
       where: { id: byTelegram.id },
       data: {
@@ -178,7 +186,10 @@ export async function findOrCreateUserByTelegramLogin(params: {
           : {}),
       },
     });
-    return { kind: "resolved", user };
+    return {
+      kind: "resolved",
+      user: attachesPhone ? await withSafetyHistory(user, "mobile:telegram-login") : user,
+    };
   }
 
   if (phone) {
@@ -197,7 +208,7 @@ export async function findOrCreateUserByTelegramLogin(params: {
           ...(byPhone.registrationTrack ? {} : { registrationTrack: "general" as const }),
         },
       });
-      return { kind: "resolved", user };
+      return { kind: "resolved", user: await withSafetyHistory(user, "mobile:telegram-login") };
     }
   }
 
@@ -217,7 +228,20 @@ export async function findOrCreateUserByTelegramLogin(params: {
         : {}),
     },
   });
-  return { kind: "resolved", user };
+  return { kind: "resolved", user: await withSafetyHistory(user, "mobile:telegram-login") };
+}
+
+/**
+ * Restore a deleted account's safety history onto `user` after an identity was
+ * attached to it (A13-H14), and hand back the row as it now stands — the login
+ * response serializes it, so a restored ban must be in what the app is told.
+ * A failed restore is alerted inside `restoreSafetyHistoryAfterAttach` and the
+ * login continues with the row as it was.
+ */
+async function withSafetyHistory(user: User, source: string): Promise<User> {
+  const restored = await restoreSafetyHistoryAfterAttach(user.id, source);
+  if (!restored?.applied) return user;
+  return (await prisma.user.findUnique({ where: { id: user.id } })) ?? user;
 }
 
 /**

@@ -26,6 +26,7 @@ import { recordInviteClickFromStartPayload } from "../services/referral-events.j
 import { promoSourceFromParam } from "../services/promo.js";
 import { shouldUseOnboardingMiniApp } from "./onboarding-mini-app-gate.js";
 import { transitionAccountStatus } from "../services/account-status-transitions.js";
+import { restoreSafetyHistoryAfterAttach } from "../services/safety-tombstone.js";
 
 const start = new Composer<BotContext>();
 
@@ -191,6 +192,13 @@ start.command("start", async (ctx) => {
       data: { telegramId, firstName: null, referralSource, ...(devBypassFields ?? {}) },
     });
     createdNewUser = true;
+    // A Telegram id that belonged to a deleted account brings its ban, strikes,
+    // and the reports and blocks against it back (A13-H14). Re-read only when
+    // something applied, so the rest of this handler sees the restored status.
+    const restored = await restoreSafetyHistoryAfterAttach(user.id, "bot:/start");
+    if (restored?.applied) {
+      user = (await prisma.user.findUnique({ where: { id: user.id } })) ?? user;
+    }
   } else if (devBypassFields && (!user.isEmailVerified || !user.email)) {
     console.warn(
       `[dev-bypass] Updating existing user ${telegramId} with synthetic verified email ` +

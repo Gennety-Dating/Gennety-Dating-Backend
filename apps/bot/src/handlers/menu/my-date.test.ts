@@ -146,6 +146,22 @@ describe("handleMyDate", () => {
     expect(cancel.style).toBe("danger");
   });
 
+  // A13-M20 follow-up: the row stays `scheduled` until the T+24h prompt, so the
+  // hub is reachable after the date — where the service refuses to cancel.
+  it("hides the cancel button once the date's start time has come", async () => {
+    mActive.mockResolvedValue(
+      scheduledActive({
+        match: { dateCardFileIdA: "cached-file-id", agreedTime: new Date(Date.now() - 60_000) },
+      }),
+    );
+    const ctx = createCtx();
+    await handleMyDate(ctx);
+    const kb = JSON.stringify(ctx.replyWithPhoto.mock.calls[0][1].reply_markup.inline_keyboard);
+    expect(kb).not.toContain("emerg:start:");
+    // Reporting is not a cancellation and stays reachable after the date.
+    expect(kb).toContain("report:open:match-1");
+  });
+
   it("renders fresh and caches the file_id when none is stored", async () => {
     mActive.mockResolvedValue(scheduledActive());
     mRender.mockResolvedValue(Buffer.from("png-bytes"));

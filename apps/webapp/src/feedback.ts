@@ -79,6 +79,7 @@ interface I18nStrings {
   alertNotFound: string;
   alertWrongState: string;
   alertNotParticipant: string;
+  alertAlreadySubmitted: string;
   alertGeneric: string;
   alertNetwork: string;
 }
@@ -109,6 +110,7 @@ const T: Record<Lang, I18nStrings> = {
     alertNotFound: "Couldn't find this match anymore. Reopen the form from the bot.",
     alertWrongState: "This match isn't waiting for feedback yet.",
     alertNotParticipant: "You're not part of this match.",
+    alertAlreadySubmitted: "You've already sent feedback for this date — thanks, it's saved.",
     alertGeneric: "Couldn't send your feedback. Try again.",
     alertNetwork: "Network error. Check your connection and try again.",
   },
@@ -137,6 +139,7 @@ const T: Record<Lang, I18nStrings> = {
     alertNotFound: "Не нашли этот мэтч. Открой форму заново.",
     alertWrongState: "Этот мэтч пока не ждёт фидбэка.",
     alertNotParticipant: "Ты не участник этого мэтча.",
+    alertAlreadySubmitted: "Ты уже отправил(а) фидбэк об этом свидании — спасибо, он сохранён.",
     alertGeneric: "Не получилось отправить. Попробуй ещё раз.",
     alertNetwork: "Сеть барахлит. Проверь подключение и попробуй снова.",
   },
@@ -165,6 +168,7 @@ const T: Record<Lang, I18nStrings> = {
     alertNotFound: "Не знайшли цей метч. Відкрий форму заново.",
     alertWrongState: "Цей метч поки не чекає на фідбек.",
     alertNotParticipant: "Ти не учасник цього метчу.",
+    alertAlreadySubmitted: "Ти вже надіслав(ла) фідбек про це побачення — дякую, його збережено.",
     alertGeneric: "Не вийшло надіслати. Спробуй ще раз.",
     alertNetwork: "Мережа барахлить. Перевір з'єднання і спробуй ще раз.",
   },
@@ -193,6 +197,7 @@ const T: Record<Lang, I18nStrings> = {
     alertNotFound: "Wir finden dieses Match nicht mehr. Öffne das Formular bitte erneut.",
     alertWrongState: "Dieses Match wartet noch nicht auf Feedback.",
     alertNotParticipant: "Du bist nicht Teil dieses Matches.",
+    alertAlreadySubmitted: "Du hast schon Feedback zu diesem Date gesendet - danke, es ist gespeichert.",
     alertGeneric: "Feedback konnte nicht gesendet werden. Versuch es erneut.",
     alertNetwork: "Netzwerkfehler. Prüfe deine Verbindung und versuch es erneut.",
   },
@@ -221,6 +226,7 @@ const T: Record<Lang, I18nStrings> = {
     alertNotFound: "Nie możemy już znaleźć tego dopasowania. Otwórz formularz ponownie.",
     alertWrongState: "To dopasowanie nie czeka jeszcze na feedback.",
     alertNotParticipant: "Nie jesteś częścią tego dopasowania.",
+    alertAlreadySubmitted: "Już wysłałeś(-aś) feedback o tej randce - dzięki, jest zapisany.",
     alertGeneric: "Nie udało się wysłać feedbacku. Spróbuj ponownie.",
     alertNetwork: "Błąd sieci. Sprawdź połączenie i spróbuj ponownie.",
   },
@@ -437,6 +443,10 @@ function alertFor(err: PostError): string {
       return strings.alertWrongState;
     case "not-participant":
       return strings.alertNotParticipant;
+    // One answer per side: the first submission already fed matching, so a
+    // repeat is refused rather than overwriting it (`recordPostDateFeedback`).
+    case "already-submitted":
+      return strings.alertAlreadySubmitted;
     default:
       return strings.alertGeneric;
   }

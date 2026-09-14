@@ -127,7 +127,11 @@ export async function listBlockedUsers(
   blockerUserId: string,
 ): Promise<BlockedPerson[]> {
   const rows = await prisma.userBlock.findMany({
-    where: { blockerId: blockerUserId },
+    // A block against an account that has since been deleted names nobody:
+    // there is no person to show and no id to unblock by. It stays in the table
+    // only so the person is excluded again if they re-register (A13-H14), and
+    // reappears here, under their new account, once that relinks it.
+    where: { blockerId: blockerUserId, blockedId: { not: null } },
     orderBy: { createdAt: "desc" },
     select: {
       blockedId: true,
@@ -135,11 +139,11 @@ export async function listBlockedUsers(
       blocked: { select: { firstName: true } },
     },
   });
-  return rows.map((row) => ({
-    userId: row.blockedId,
-    firstName: row.blocked.firstName,
-    blockedAt: row.createdAt,
-  }));
+  return rows.flatMap((row) =>
+    row.blockedId && row.blocked
+      ? [{ userId: row.blockedId, firstName: row.blocked.firstName, blockedAt: row.createdAt }]
+      : [],
+  );
 }
 
 /**
@@ -162,6 +166,9 @@ export async function loadBlockedPairKeys(
 
   const keys = new Set<string>();
   for (const b of blocks) {
+    // Not yet relinked to a returning account (A13-H14): the row excludes
+    // nobody, and a `"<id>:null"` key would only be noise in the pair set.
+    if (!b.blockedId) continue;
     keys.add(`${b.blockerId}:${b.blockedId}`);
     keys.add(`${b.blockedId}:${b.blockerId}`);
   }

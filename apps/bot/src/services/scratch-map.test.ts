@@ -212,3 +212,44 @@ describe("recordVerifiedVisit", () => {
     expect(written).not.toMatch(/"u[0-9a-z]{5}"/);
   });
 });
+
+// A13-H13. The merge used to put `FROM (…) AS merged` after `ON CONFLICT … DO
+// UPDATE SET`, a clause Postgres's grammar does not have: every new tile
+// answered `syntax error at or near "FROM"` (checked against a real server), so
+// the ping 500'd and a verified Date Bump's venue was lost. The double above
+// models the union, so only the statement text can catch that — and it is
+// asserted on the clause that broke, not on formatting.
+describe("mergeScratchMap — statement shape", () => {
+  async function writtenSql(): Promise<string> {
+    await recordScratchPing({ userId: "u1", ...CENTRE });
+    const strings = scratchMerge.mock.calls[0]?.[0] as readonly string[] | undefined;
+    if (!strings) throw new Error("no statement was issued");
+    return strings.join("$param");
+  }
+
+  it("keeps the whole merge inside SET, with no FROM clause on the update", async () => {
+    const sql = await writtenSql();
+    const update = sql.slice(sql.indexOf("DO UPDATE SET"), sql.indexOf("RETURNING"));
+
+    expect(update.length).toBeGreaterThan(0);
+    // Every FROM-less `ARRAY(SELECT … unnest(…))` is fine; a statement-level
+    // `FROM (` or a derived table alias is the shape Postgres rejects.
+    expect(update).not.toMatch(/\bFROM\s*\(/i);
+    expect(update).not.toMatch(/\)\s+AS\s+merged/i);
+  });
+
+  it("merges with the incoming row through EXCLUDED and derives the percentage from the same union", async () => {
+    const sql = await writtenSql();
+    const update = sql.slice(sql.indexOf("DO UPDATE SET"), sql.indexOf("RETURNING"));
+
+    expect(update).toMatch(
+      /explored_tiles = ARRAY\(\s*SELECT DISTINCT unnest\(user_scratch_maps\.explored_tiles \|\| EXCLUDED\.explored_tiles\)/,
+    );
+    expect(update).toMatch(
+      /discovered_venues = ARRAY\(\s*SELECT DISTINCT unnest\(user_scratch_maps\.discovered_venues \|\| EXCLUDED\.discovered_venues\)/,
+    );
+    expect(update).toMatch(
+      /explored_percent = LEAST\(\s*1,\s*cardinality\(ARRAY\(\s*SELECT DISTINCT unnest\(user_scratch_maps\.explored_tiles \|\| EXCLUDED\.explored_tiles\)/,
+    );
+  });
+});

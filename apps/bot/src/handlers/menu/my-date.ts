@@ -17,6 +17,7 @@ import {
 import { dateCardSteps } from "../../services/analysis-status.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { isProxyOpen } from "../../services/coordination.js";
+import { emergencyCancelOpen } from "../../services/emergency-cancel.js";
 import {
   evaluateVenueBoardEligibility,
   evaluateVenueChangeRestart,
@@ -269,9 +270,15 @@ function buildDateHubKeyboard(
     kb.text(t(lang, "coordEnterBtn"), `coord:enter:${match.id}`).row();
   }
 
-  // Cancel is available for the whole scheduled window (the emergency handler
-  // guards the actual state change behind its own two-step red confirmation).
-  kb.text(t(lang, "emergencyBtn"), `emerg:start:${match.id}`).danger().row();
+  // Cancel only while the date is still ahead (the emergency handler guards the
+  // actual state change behind its own two-step red confirmation). The row
+  // stays `scheduled` until the T+24h prompt completes it, so this hub is
+  // reachable for a day after the date; past its start the service refuses
+  // (A13-M20), and a red button that can only answer "too late" is not an
+  // action. "It didn't happen" goes to the did-you-meet question instead.
+  if (emergencyCancelOpen(match.agreedTime, now)) {
+    kb.text(t(lang, "emergencyBtn"), `emerg:start:${match.id}`).danger().row();
+  }
   kb.text(t(lang, "reportBtn"), `report:open:${match.id}`).row();
   kb.text(t(lang, "menuBack"), "menu:back");
 

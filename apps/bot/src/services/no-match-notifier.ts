@@ -215,7 +215,7 @@ function computeTier(sinceDate: Date, dropDate: Date): number {
 /**
  * D10: raw elapsed CALENDAR DAYS without a match — deliberately NOT the same
  * unit as `computeTier` (which is cadence-relative: weeks under `weekly`).
- * `FAMINE_PAUSE_AFTER_DAYS` means 14 actual days regardless of how often the
+ * `FAMINE_PAUSE_AFTER_DAYS` means 28 actual days regardless of how often the
  * batch runs, so the pause decision needs its own, cadence-independent
  * day-count rather than reusing `tier`.
  */

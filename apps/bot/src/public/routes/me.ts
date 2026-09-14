@@ -33,6 +33,7 @@ import { gateProfilePhoto } from "../../services/face-match-gate.js";
 import { triggerVerificationRerun } from "../../services/verification-pipeline.js";
 import {
   AccountDeletionCleanupError,
+  AccountDeletionDeferredError,
   deleteUserAccount,
 } from "../../services/account-deletion.js";
 import {
@@ -425,6 +426,10 @@ function isValidAgeBound(v: unknown): v is number | null | undefined {
  * storage erasure, founder-report cleanup, relational cascade, then a
  * founder-ops notification (full profile + phone + photos, snapshotted
  * before the cascade — see `services/founder-notify.ts`).
+ *
+ * 409 `refund-in-progress` while a refund on the account is still being
+ * processed (A13-H14): nothing was deleted, and the same request succeeds once
+ * the refund lands. Distinct from the 503, which is an erasure that failed.
  */
 meRouter.delete(
   "/",
@@ -437,6 +442,13 @@ meRouter.delete(
         return;
       }
     } catch (err) {
+      if (err instanceof AccountDeletionDeferredError) {
+        res.status(409).json({
+          error: "refund-in-progress",
+          message: "A refund on this account is still being processed. Nothing was deleted; retry once it completes.",
+        });
+        return;
+      }
       if (err instanceof AccountDeletionCleanupError) {
         res.status(503).json({ error: "Account cleanup unavailable, please retry" });
         return;

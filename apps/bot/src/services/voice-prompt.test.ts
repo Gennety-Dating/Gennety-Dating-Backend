@@ -1,14 +1,19 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
-  voicePrompt: { upsert: vi.fn(), deleteMany: vi.fn() },
+  voicePrompt: { upsert: vi.fn(), deleteMany: vi.fn(), findUnique: vi.fn() },
   profile: { updateMany: vi.fn() },
   $transaction: vi.fn(async (ops: unknown[]) => ops),
 }));
 const refreshMock = vi.hoisted(() => vi.fn(async () => ({})));
+const deleteStorageObjectMock = vi.hoisted(() => vi.fn(async () => true));
 
 vi.mock("@gennety/db", () => ({ prisma: prismaMock }));
 vi.mock("../workers/embedding-refresh.js", () => ({ refreshUserEmbedding: refreshMock }));
+vi.mock("./storage.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./storage.js")>()),
+  deleteStorageObject: deleteStorageObjectMock,
+}));
 
 const { saveVoicePrompt, deleteVoicePrompt } = await import("./voice-prompt.js");
 
@@ -17,6 +22,74 @@ describe("saveVoicePrompt", () => {
     vi.clearAllMocks();
     prismaMock.$transaction.mockImplementation(async (ops: unknown[]) => ops);
     prismaMock.voicePrompt.deleteMany.mockResolvedValue({ count: 1 });
+    prismaMock.voicePrompt.findUnique.mockResolvedValue(null);
+  });
+
+  // A13-M12. A re-record used to leave the previous upload in the bucket for
+  // good — voice data with no row pointing at it, surviving even the account.
+  it("removes the replaced upload, after the new row is written", async () => {
+    prismaMock.voicePrompt.findUnique.mockResolvedValue({ storagePath: "u1/1715000000000.m4a" });
+
+    await saveVoicePrompt({
+      userId: "u1",
+      storagePath: "u1/1716000000000.m4a",
+      durationSec: 12,
+      waveform: [],
+      transcript: "second take",
+    });
+
+    expect(deleteStorageObjectMock).toHaveBeenCalledWith("voice-prompts", "u1/1715000000000.m4a");
+    expect(deleteStorageObjectMock.mock.invocationCallOrder[0]).toBeGreaterThan(
+      prismaMock.$transaction.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("clears the other surface's pointer, so a Telegram re-record cannot keep playing the old upload", async () => {
+    prismaMock.voicePrompt.findUnique.mockResolvedValue({ storagePath: "u1/1715000000000.m4a" });
+
+    await saveVoicePrompt({
+      userId: "u1",
+      telegramFileId: "tg-new",
+      durationSec: 12,
+      waveform: [],
+      transcript: "recorded in Telegram",
+    });
+
+    const args = prismaMock.voicePrompt.upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
+    expect(args.update).toMatchObject({ telegramFileId: "tg-new", storagePath: null });
+    expect(deleteStorageObjectMock).toHaveBeenCalledWith("voice-prompts", "u1/1715000000000.m4a");
+  });
+
+  it("does not delete the object the row still points at", async () => {
+    prismaMock.voicePrompt.findUnique.mockResolvedValue({ storagePath: "u1/1715000000000.m4a" });
+
+    await saveVoicePrompt({
+      userId: "u1",
+      storagePath: "u1/1715000000000.m4a",
+      durationSec: 12,
+      waveform: [],
+      transcript: "same file",
+    });
+
+    expect(deleteStorageObjectMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the saved recording when the old object cannot be removed", async () => {
+    prismaMock.voicePrompt.findUnique.mockResolvedValue({ storagePath: "u1/1715000000000.m4a" });
+    deleteStorageObjectMock.mockResolvedValueOnce(false);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await expect(
+      saveVoicePrompt({
+        userId: "u1",
+        storagePath: "u1/1716000000000.m4a",
+        durationSec: 12,
+        waveform: [],
+        transcript: "t",
+      }),
+    ).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("replaced audio not removed"));
+    warn.mockRestore();
   });
 
   it("marks the profile dirty AND refreshes immediately", async () => {
@@ -83,7 +156,22 @@ describe("saveVoicePrompt", () => {
 });
 
 describe("deleteVoicePrompt", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.voicePrompt.findUnique.mockResolvedValue(null);
+  });
+
+  it("removes the stored audio once the row is gone (A13-M12)", async () => {
+    prismaMock.voicePrompt.findUnique.mockResolvedValue({ storagePath: "u1/1715000000000.m4a" });
+    prismaMock.voicePrompt.deleteMany.mockResolvedValue({ count: 1 });
+
+    await deleteVoicePrompt("u1");
+
+    expect(deleteStorageObjectMock).toHaveBeenCalledWith("voice-prompts", "u1/1715000000000.m4a");
+    expect(deleteStorageObjectMock.mock.invocationCallOrder[0]).toBeGreaterThan(
+      prismaMock.voicePrompt.deleteMany.mock.invocationCallOrder[0]!,
+    );
+  });
 
   it("re-dirties and refreshes, so a deleted clip stops influencing matching", async () => {
     prismaMock.voicePrompt.deleteMany.mockResolvedValue({ count: 1 });

@@ -57,6 +57,7 @@ import {
   validateFactValue,
 } from "./onboarding-collector.js";
 import { hasTrackVerifiedContact } from "./contact-verification.js";
+import { isModerationLockedStatus } from "./user-status.js";
 
 const AI_MEMORY_RECEIVED_MARKER =
   "[AI memory response received; raw content intentionally not retained]";
@@ -1658,6 +1659,7 @@ async function execFinalizeOnboarding(
     where: { telegramId },
     select: {
       id: true,
+      status: true,
       firstName: true,
       age: true,
       gender: true,
@@ -1788,11 +1790,15 @@ async function execFinalizeOnboarding(
       env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY && env.LIVENESS_STS_ROLE_ARN,
     );
 
+  // A moderation status is never overwritten by finishing onboarding. Before
+  // A13-H14 no onboarding account could hold one; now a re-registered person's
+  // ban or suspension is restored onto the fresh account at its first touch.
+  const activate = !livenessEnabled && !isModerationLockedStatus(user?.status);
   const finalized = await prisma.user.update({
     where: { telegramId },
     data: {
       onboardingStep: "completed",
-      ...(livenessEnabled ? {} : { status: "active" }),
+      ...(activate ? { status: "active" } : {}),
       ...reEngagementStopPatch,
     },
     select: { id: true, profile: { select: { profilerStartedAt: true } } },

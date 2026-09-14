@@ -500,6 +500,10 @@ const translations = {
       "Want to come back? Just send /start.",
     deleteAccountFailed:
       "We couldn't safely erase everything right now. Nothing was deleted — please try again.",
+    // A13-H14: a refund a sweep still owns defers deletion — payment rows
+    // outlive the account, the Telegram id the Stars go back to does not.
+    deleteAccountRefundInProgress:
+      "A refund connected to your account is still being processed, and deleting now would leave it with nowhere to go. Nothing was deleted — please try again once the refund has gone through.",
     accountActionExpired: "This confirmation expired. Open the action again.",
     statusActionUnavailable: "This action isn't available for the current account status.",
     deleteFreezeIntro:
@@ -1032,6 +1036,8 @@ const translations = {
       "Tell us how the date went — was there chemistry? What did you like? " +
       "Anything that didn't work? A minute is plenty.",
     feedbackThanks: "Thanks for the feedback ✨ We'll use it to improve your future matches.",
+    // A second answer is refused, not merged: the first one already fed matching.
+    feedbackAlreadySubmitted: "You've already told us how this date went — thanks, it's saved ✨",
     feedbackPushTitle: "How was your date?",
     feedbackPushBody: "A minute of your time helps us find you a better match next time.",
     // The drop notification on the app rail (iOS §5.3). Word for word the
@@ -1896,6 +1902,8 @@ const translations = {
       "Захочешь вернуться — отправь /start.",
     deleteAccountFailed:
       "Сейчас не удалось безопасно удалить все данные. Аккаунт сохранён — попробуй ещё раз.",
+    deleteAccountRefundInProgress:
+      "По твоему аккаунту ещё идёт возврат, и если удалить аккаунт сейчас, деньгам некуда будет вернуться. Ничего не удалено — попробуй ещё раз, когда возврат пройдёт.",
     accountActionExpired: "Подтверждение устарело. Открой действие заново.",
     statusActionUnavailable: "Это действие недоступно для текущего статуса аккаунта.",
     deleteFreezeIntro:
@@ -2363,6 +2371,7 @@ const translations = {
       "Расскажи, как прошло — была ли химия, что зашло, что не очень. " +
       "Минуты вполне хватит.",
     feedbackThanks: "Спасибо за фидбэк ✨ Используем для улучшения.",
+    feedbackAlreadySubmitted: "Ты уже рассказал(а), как прошло это свидание, — спасибо, всё сохранено ✨",
     feedbackPushTitle: "Как прошло свидание?",
     feedbackPushBody: "Минута твоего времени — и в следующий раз мы подберём точнее.",
     matchDropPushTitle: "Твоя пара найдена",
@@ -3167,6 +3176,8 @@ const translations = {
       "Захочеш повернутись — надішли /start.",
     deleteAccountFailed:
       "Зараз не вдалося безпечно видалити всі дані. Акаунт збережено — спробуй ще раз.",
+    deleteAccountRefundInProgress:
+      "За твоїм акаунтом ще триває повернення коштів, і якщо видалити акаунт зараз, їм не буде куди повернутися. Нічого не видалено — спробуй ще раз, коли повернення пройде.",
     accountActionExpired: "Підтвердження застаріло. Відкрий дію знову.",
     statusActionUnavailable: "Ця дія недоступна для поточного статусу акаунта.",
     deleteFreezeIntro:
@@ -3632,6 +3643,7 @@ const translations = {
       "Розкажи, як пройшло — чи була хімія, що сподобалось, що не дуже. " +
       "Хвилини цілком вистачить.",
     feedbackThanks: "Дякую за фідбек ✨ Використаємо для покращення.",
+    feedbackAlreadySubmitted: "Ти вже розповів(ла), як пройшло це побачення, — дякую, усе збережено ✨",
     feedbackPushTitle: "Як пройшло побачення?",
     feedbackPushBody: "Хвилина твого часу — і наступного разу ми підберемо точніше.",
     matchDropPushTitle: "Твою пару знайдено",
@@ -4427,6 +4439,8 @@ const deTranslations: TranslationTable = {
     "Wenn du zurückkommen willst, sende einfach /start.",
   deleteAccountFailed:
     "Wir konnten gerade nicht alle Daten sicher löschen. Dein Account bleibt bestehen — bitte versuche es erneut.",
+  deleteAccountRefundInProgress:
+    "Für deinen Account läuft noch eine Rückerstattung, und würden wir ihn jetzt löschen, wüsste sie nicht mehr, wohin. Es wurde nichts gelöscht — bitte versuche es erneut, sobald die Rückerstattung durch ist.",
   accountActionExpired: "Diese Bestätigung ist abgelaufen. Öffne die Aktion erneut.",
   statusActionUnavailable: "Diese Aktion ist für den aktuellen Accountstatus nicht verfügbar.",
   deleteFreezeIntro:
@@ -4866,6 +4880,7 @@ const deTranslations: TranslationTable = {
     "Erzähl, wie das Date lief - gab es Chemie? Was mochtest du? " +
     "Was hat nicht funktioniert? Eine Minute reicht.",
   feedbackThanks: "Danke für dein Feedback ✨ Wir nutzen es, um deine zukünftigen Matches zu verbessern.",
+  feedbackAlreadySubmitted: "Du hast uns schon erzählt, wie dieses Date war — danke, es ist gespeichert ✨",
   feedbackPushTitle: "Wie war dein Date?",
   feedbackPushBody: "Eine Minute von dir, und das nächste Match passt besser.",
   matchDropPushTitle: "Dein Match ist da",
@@ -5663,6 +5678,8 @@ const plTranslations: TranslationTable = {
     "Chcesz wrócić? Po prostu wyślij /start.",
   deleteAccountFailed:
     "Nie udało się teraz bezpiecznie usunąć wszystkich danych. Konto pozostało — spróbuj ponownie.",
+  deleteAccountRefundInProgress:
+    "Na Twoim koncie wciąż trwa zwrot środków i gdybyśmy usunęli konto teraz, nie byłoby go dokąd zwrócić. Nic nie zostało usunięte — spróbuj ponownie, gdy zwrot dotrze.",
   accountActionExpired: "To potwierdzenie wygasło. Otwórz działanie ponownie.",
   statusActionUnavailable: "Ta czynność jest niedostępna dla bieżącego statusu konta.",
   deleteFreezeIntro:
@@ -6104,6 +6121,7 @@ const plTranslations: TranslationTable = {
     "Opowiedz, jak poszła randka - była chemia? Co Ci się podobało? " +
     "Co nie zadziałało? Minuta wystarczy.",
   feedbackThanks: "Dzięki za feedback ✨ Użyjemy go, żeby ulepszyć przyszłe dopasowania.",
+  feedbackAlreadySubmitted: "Już opowiedziałeś(-aś), jak poszła ta randka — dzięki, zapisane ✨",
   feedbackPushTitle: "Jak poszła randka?",
   feedbackPushBody: "Minuta twojego czasu, a następne dopasowanie będzie trafniejsze.",
   matchDropPushTitle: "Twój match już jest",

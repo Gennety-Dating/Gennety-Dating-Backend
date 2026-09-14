@@ -62,6 +62,8 @@ import {
   handleEmergencyReason,
 } from "./emergency.js";
 import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.js";
+import { callOpenAIJson } from "../../services/openai.js";
+import { appendNegativeConstraint } from "../matching/negative-constraints.js";
 import { refundMatchTickets } from "../../services/ticket-refund.js";
 import {
   handleFeedbackVoiceStart,
@@ -605,7 +607,7 @@ describe("post-date feedback (voice path)", () => {
       userAId: "uid-A",
       userBId: "uid-B",
     });
-    mMatch.update.mockResolvedValueOnce({});
+    mMatch.updateMany.mockResolvedValueOnce({ count: 1 });
 
     const ctx = createCtx({
       session: { matchFlow: "awaiting_feedback", activeMatchId: "match-1" },
@@ -617,13 +619,13 @@ describe("post-date feedback (voice path)", () => {
 
     expect(ctx.session.matchFlow).toBe("idle");
     expect(ctx.session.activeMatchId).toBeNull();
-    expect(mMatch.update).toHaveBeenCalledWith(
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "match-1" },
+        where: { id: "match-1", feedbackByA: null },
         data: { feedbackByA: "Great date, we clicked!" },
       }),
     );
-    expect(ctx.reply).toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "feedbackThanks"));
   });
 
   it("handleFeedbackVoiceText persists feedback for userB", async () => {
@@ -634,7 +636,7 @@ describe("post-date feedback (voice path)", () => {
       userAId: "uid-A",
       userBId: "uid-B",
     });
-    mMatch.update.mockResolvedValueOnce({});
+    mMatch.updateMany.mockResolvedValueOnce({ count: 1 });
 
     const ctx = createCtx({
       session: { matchFlow: "awaiting_feedback", activeMatchId: "match-1" },
@@ -644,12 +646,49 @@ describe("post-date feedback (voice path)", () => {
 
     await handleFeedbackVoiceText(ctx);
 
-    expect(mMatch.update).toHaveBeenCalledWith(
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "match-1" },
+        where: { id: "match-1", feedbackByB: null },
         data: { feedbackByB: "Not bad, a bit awkward at first." },
       }),
     );
+  });
+
+  // A13-M27: one answer per side. Recording a voice note the pipeline would
+  // refuse to keep is a minute of the user's time thrown away.
+  it("handleFeedbackVoiceStart says it's already saved instead of asking again", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ status: "completed", feedbackByA: "Chemistry (1–10): 8" }),
+    );
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+
+    const ctx = createCtx({ callbackData: "feedback:voice:match-1", fromId: 1001 });
+    await handleFeedbackVoiceStart(ctx);
+
+    expect(ctx.session.matchFlow).toBe("idle");
+    expect(ctx.replyWithChatAction).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "feedbackAlreadySubmitted"));
+  });
+
+  it("handleFeedbackVoiceText does not thank for an answer it refused to keep", async () => {
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      status: "completed",
+      userAId: "uid-A",
+      userBId: "uid-B",
+      feedbackByA: "We talked for hours, I'd see her again",
+    });
+
+    const ctx = createCtx({
+      session: { matchFlow: "awaiting_feedback", activeMatchId: "match-1" },
+      messageText: "Actually, it was great",
+      fromId: 1001,
+    });
+    await handleFeedbackVoiceText(ctx);
+
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "feedbackAlreadySubmitted"));
   });
 });
 
@@ -711,6 +750,117 @@ describe("recordPostDateFeedback (shared pipeline)", () => {
     });
     expect(result).toEqual({ ok: false, reason: "not-participant" });
     expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A13-M27. The analysis APPENDS negative constraints, so a repeat submission
+   * used to add the same complaint to the profile once per submission — and
+   * overwrite the first answer. The column write is a compare-and-set on the
+   * value the call read, and only the call that won it runs the analysis.
+   */
+  it("refuses a submission onto an answered side unless its source may follow", async () => {
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      status: "completed",
+      userAId: "uid-A",
+      userBId: "uid-B",
+      feedbackByA: "first answer",
+    });
+
+    const result = await recordPostDateFeedback({
+      userId: "uid-A",
+      matchId: "match-1",
+      text: "no smokers please",
+      language: "en",
+    });
+
+    expect(result).toEqual({ ok: false, reason: "already-submitted" });
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(callOpenAIJson).not.toHaveBeenCalled();
+    expect(appendNegativeConstraint).not.toHaveBeenCalled();
+  });
+
+  it("a concurrent repeat that loses the CAS re-reads, refuses and runs no analysis", async () => {
+    const row = { id: "match-1", status: "completed", userAId: "uid-A", userBId: "uid-B" };
+    mMatch.findUnique
+      .mockResolvedValueOnce({ ...row, feedbackByA: null })
+      .mockResolvedValueOnce({ ...row, feedbackByA: "the other request won" });
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const result = await recordPostDateFeedback({
+      userId: "uid-A",
+      matchId: "match-1",
+      text: "no smokers please",
+      language: "en",
+    });
+
+    expect(result).toEqual({ ok: false, reason: "already-submitted" });
+    expect(mMatch.updateMany).toHaveBeenCalledTimes(1);
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", feedbackByA: null },
+      data: { feedbackByA: "no smokers please" },
+    });
+    expect(callOpenAIJson).not.toHaveBeenCalled();
+    expect(appendNegativeConstraint).not.toHaveBeenCalled();
+  });
+
+  // Decision 2026-09-08: a story told first must not close the form. The earlier
+  // text is kept below, and only the new text is analysed — the story already was.
+  it("lands a permitted follow-up on the earlier text and analyses only its own", async () => {
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      status: "completed",
+      userAId: "uid-A",
+      userBId: "uid-B",
+      feedbackByA: "the story",
+    });
+    mMatch.updateMany.mockResolvedValueOnce({ count: 1 });
+
+    const result = await recordPostDateFeedback({
+      userId: "uid-A",
+      matchId: "match-1",
+      text: "Chemistry (1–10): 8",
+      language: "en",
+      mayFollow: (existing) => existing === "the story",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", feedbackByA: "the story" },
+      data: { feedbackByA: "Chemistry (1–10): 8\n\nthe story" },
+    });
+    expect((callOpenAIJson as unknown as MockFn).mock.calls[0]![1]).toBe("Chemistry (1–10): 8");
+  });
+
+  it("runs the analysis for the call that won the CAS", async () => {
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      status: "completed",
+      userAId: "uid-A",
+      userBId: "uid-B",
+    });
+    mMatch.updateMany.mockResolvedValueOnce({ count: 1 });
+    (callOpenAIJson as unknown as MockFn).mockResolvedValueOnce({
+      new_negative_constraints: ["smoking"],
+    });
+
+    const result = await recordPostDateFeedback({
+      userId: "uid-B",
+      matchId: "match-1",
+      text: "no smokers please",
+      language: "en",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", feedbackByB: null },
+      data: { feedbackByB: "no smokers please" },
+    });
+    expect(appendNegativeConstraint).toHaveBeenCalledOnce();
+    expect(appendNegativeConstraint).toHaveBeenCalledWith("uid-B", "smoking", "en", {
+      refreshEmbedding: true,
+    });
   });
 });
 

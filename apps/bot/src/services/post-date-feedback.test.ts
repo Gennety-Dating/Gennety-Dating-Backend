@@ -18,6 +18,7 @@ vi.mock("../handlers/date/feedback.js", () => ({ recordPostDateFeedback: mockRec
 import { prisma } from "@gennety/db";
 import {
   composeFeedbackText,
+  isFormFeedbackAnswer,
   normaliseFeedback,
   pendingFeedbackFor,
   resolveLanguage,
@@ -180,6 +181,15 @@ describe("submitPostDateFeedback", () => {
     expect(mockRecord.mock.calls[0]![0].text).toContain("Chemistry (1–10): 8");
   });
 
+  // Decision 2026-09-08 + A13-M27: the form lands on a story or a voice note
+  // (plain text), never on an earlier form answer.
+  it("may follow plain text but not an earlier form answer", async () => {
+    await submitPostDateFeedback({ userId: "uid-A", matchId: "m-1", language: "ru", submission });
+    const mayFollow = mockRecord.mock.calls[0]![0].mayFollow as (existing: string) => boolean;
+    expect(mayFollow("Было легко, проговорили три часа")).toBe(true);
+    expect(mayFollow("Химия (1–10): 7\nГотов(а) на вторую встречу?: да")).toBe(false);
+  });
+
   it("writes the venue verdict on the actor's own side", async () => {
     await submitPostDateFeedback({ userId: "uid-B", matchId: "m-1", language: "en", submission });
     expect(mMatch.update).toHaveBeenCalledWith({
@@ -202,6 +212,19 @@ describe("submitPostDateFeedback", () => {
       submission,
     });
     expect(result).toEqual({ ok: false, error: "wrong-state" });
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  // A13-M27: a repeat submission must not rewrite the first answer's venue half either.
+  it("writes no venue verdict over an answer that already exists", async () => {
+    mockRecord.mockResolvedValue({ ok: false, reason: "already-submitted" });
+    const result = await submitPostDateFeedback({
+      userId: "uid-A",
+      matchId: "m-1",
+      language: "en",
+      submission: { ...submission, venueFit: "no" },
+    });
+    expect(result).toEqual({ ok: false, error: "already-submitted" });
     expect(mMatch.update).not.toHaveBeenCalled();
   });
 
@@ -228,7 +251,7 @@ describe("pendingFeedbackFor", () => {
     userAId: "uid-A",
     userBId: "uid-B",
     feedbackByA: null,
-    feedbackByB: "already said",
+    feedbackByB: "Chemistry (1–10): 6\nSecond date?: maybe",
     userA: { firstName: "Ada" },
     userB: { firstName: "Boris" },
   };
@@ -238,10 +261,21 @@ describe("pendingFeedbackFor", () => {
     const forA = await pendingFeedbackFor("uid-A");
     expect(forA?.partnerFirstName).toBe("Boris");
     expect(forA?.submitted).toBe(false);
+    expect(forA?.answered).toBe(false);
 
     const forB = await pendingFeedbackFor("uid-B");
     expect(forB?.partnerFirstName).toBe("Ada");
     expect(forB?.submitted).toBe(true);
+    expect(forB?.answered).toBe(true);
+  });
+
+  // Decision 2026-09-08: a story told to the concierge must not turn the native
+  // form read-only — only a form answer does.
+  it("keeps the form open after a story", async () => {
+    mMatch.findFirst.mockResolvedValue({ ...row, feedbackByA: "we talked for three hours" });
+    const forA = await pendingFeedbackFor("uid-A");
+    expect(forA?.submitted).toBe(false);
+    expect(forA?.answered).toBe(true);
   });
 
   /**
@@ -270,5 +304,20 @@ describe("pendingFeedbackFor", () => {
   it("is null for a row with no agreed time rather than inventing one", async () => {
     mMatch.findFirst.mockResolvedValue({ ...row, agreedTime: null });
     expect(await pendingFeedbackFor("uid-A")).toBeNull();
+  });
+});
+
+describe("isFormFeedbackAnswer", () => {
+  it("recognises the composed form header in every label language", () => {
+    for (const language of ["en", "ru", "uk", "de", "pl"] as const) {
+      const composed = composeFeedbackText({ text: "", chemistry: 5, wantsSecondDate: "no", language });
+      expect(isFormFeedbackAnswer(composed), language).toBe(true);
+    }
+  });
+
+  it("does not take a story, a voice note or nothing for a form answer", () => {
+    expect(isFormFeedbackAnswer("Chemistry was great, honestly")).toBe(false);
+    expect(isFormFeedbackAnswer("")).toBe(false);
+    expect(isFormFeedbackAnswer(null)).toBe(false);
   });
 });

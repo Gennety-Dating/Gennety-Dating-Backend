@@ -93,6 +93,7 @@ import {
   type StoredChatMessage,
 } from "./menu-agent.js";
 import { clearKnowledgeCache } from "./prompt-builder.js";
+import { AGENT_STORED_HISTORY_MAX_MESSAGES, t } from "@gennety/shared";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
 
 // ---------------------------------------------------------------------------
@@ -1003,6 +1004,9 @@ describe("menu-agent update_bio destructive-replacement guard", () => {
 
 describe("menu-agent propose_cancel_date", () => {
   const telegramId = BigInt(4004);
+  // A booked date always carries its time; the emergency rail is open only
+  // while that time is still ahead (A13-M20).
+  const TOMORROW = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -1031,7 +1035,7 @@ describe("menu-agent propose_cancel_date", () => {
 
   it("hands over the existing emergency button and cancels nothing itself", async () => {
     (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: "match-9", status: "scheduled", proposedTimes: [] },
+      { id: "match-9", status: "scheduled", proposedTimes: [], agreedTime: TOMORROW },
     ]);
     const fetchFn = vi
       .fn()
@@ -1075,7 +1079,7 @@ describe("menu-agent propose_cancel_date", () => {
     // someone whose date is already booked.
     (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "match-plan", status: "negotiating_venue", proposedTimes: [] },
-      { id: "match-booked", status: "scheduled", proposedTimes: [] },
+      { id: "match-booked", status: "scheduled", proposedTimes: [], agreedTime: TOMORROW },
     ]);
     const fetchFn = vi
       .fn()
@@ -1116,6 +1120,39 @@ describe("menu-agent propose_cancel_date", () => {
     expect(result.action).toMatchObject({
       kind: "entry_point",
       entry: { callbackData: "stall:no:match-7" },
+    });
+  });
+
+  it("offers no emergency card once the date's start time has come", async () => {
+    // The row stays `scheduled` until the T+24h prompt, but the emergency
+    // service refuses from `agreedTime` on — a card here could only say "too late".
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: "match-past",
+        status: "scheduled",
+        proposedTimes: [],
+        agreedTime: new Date(Date.now() - 60_000),
+      },
+    ]);
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "propose_cancel_date", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("too late to cancel"));
+
+    const result = await runMenuAgentTurn(telegramId, "cancel, they didn't come", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(result.action).toBeUndefined();
+    const secondCall = JSON.parse(fetchFn.mock.calls[1]![1].body as string) as {
+      messages: Array<{ role: string; content: string | null }>;
+    };
+    const toolMsg = secondCall.messages.find((m) => m.role === "tool");
+    expect(JSON.parse(toolMsg!.content!)).toMatchObject({
+      success: false,
+      error: "date_already_started",
     });
   });
 });
@@ -1427,5 +1464,119 @@ describe("toolReportedSuccess", () => {
   it("treats unparseable output as a failure", () => {
     expect(toolReportedSuccess("not json at all")).toBe(false);
     expect(toolReportedSuccess("")).toBe(false);
+  });
+});
+
+describe("menu-agent stored transcript and reply fallback", () => {
+  const telegramId = BigInt(7007);
+  let storedHistory: StoredChatMessage[] = [];
+
+  /** The array the turn wrote back to `User.messageHistory`. */
+  function writtenHistory(): StoredChatMessage[] {
+    const call = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => (c[0] as { data?: { messageHistory?: unknown } }).data?.messageHistory !== undefined,
+    );
+    return (call![0] as { data: { messageHistory: StoredChatMessage[] } }).data.messageHistory;
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearKnowledgeCache();
+    storedHistory = [];
+    (prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.chatEvent.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { select?: Record<string, unknown> }) => {
+        if (args.select && "matchesAsA" in args.select) {
+          return {
+            id: "uid-A",
+            firstName: "Alice",
+            universityDomain: "stanford.edu",
+            status: "active",
+            language: "en",
+            matchesAsA: [],
+            matchesAsB: [],
+          };
+        }
+        if (args.select && "messageHistory" in args.select) return { messageHistory: storedHistory };
+        return { id: "uid-A", language: "en" };
+      },
+    );
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+  });
+
+  /**
+   * A13-L9. The column used to be overwritten with the replay window plus this
+   * turn, so the onboarding transcript and every agent turn older than 24 h
+   * vanished from the admin dialogs viewer on the next message.
+   */
+  it("appends this turn to the stored transcript instead of replacing it with the replay window", async () => {
+    const dayAndMore = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    storedHistory = [
+      { role: "assistant", content: "Onboarding: your profile is ready." },
+      { role: "user", content: "an old agent question", ts: dayAndMore },
+      { role: "assistant", content: "an old agent answer", ts: dayAndMore },
+    ];
+    const fetchFn = vi.fn().mockResolvedValue(textResponse("fresh answer"));
+
+    await runMenuAgentTurn(telegramId, "hi again", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    const written = writtenHistory();
+    expect(written.slice(0, 3)).toEqual(storedHistory);
+    expect(written.slice(3).map((m) => [m.role, m.content])).toEqual([
+      ["user", "hi again"],
+      ["assistant", "fresh answer"],
+    ]);
+    expect(written.slice(3).every((m) => typeof m.ts === "number")).toBe(true);
+    // The replay itself is unchanged: none of the old entries reached the model.
+    const request = JSON.parse((fetchFn.mock.calls[0]![1] as { body: string }).body) as {
+      messages: Array<{ content: string | null }>;
+    };
+    expect(request.messages.some((m) => m.content === "an old agent answer")).toBe(false);
+  });
+
+  it("trims the oldest entries past the storage cap", async () => {
+    storedHistory = Array.from({ length: AGENT_STORED_HISTORY_MAX_MESSAGES }, (_, i) => ({
+      role: "user" as const,
+      content: `m${i}`,
+    }));
+    const fetchFn = vi.fn().mockResolvedValue(textResponse("answer"));
+
+    await runMenuAgentTurn(telegramId, "one more", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    const written = writtenHistory();
+    expect(written).toHaveLength(AGENT_STORED_HISTORY_MAX_MESSAGES);
+    expect(written[0]!.content).toBe("m2");
+    expect(written.at(-1)!.content).toBe("answer");
+  });
+
+  /**
+   * A13-L8. With the replay window in `history`, a turn whose completion came
+   * back empty found the PREVIOUS turn's answer and sent it again as if the
+   * model had just said it.
+   */
+  it("falls back to the error line, not the previous turn's answer, when this turn has no content", async () => {
+    const fresh = Date.now() - 60_000;
+    storedHistory = [
+      { role: "user", content: "what's my standing?", ts: fresh },
+      { role: "assistant", content: "the previous answer", ts: fresh },
+    ];
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { role: "assistant", content: null }, finish_reason: "length" }],
+      }),
+      text: async () => "",
+    });
+
+    const result = await runMenuAgentTurn(telegramId, "and now?", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(result.reply).toBe(t("en", "agentFallbackError"));
   });
 });

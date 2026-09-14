@@ -159,6 +159,10 @@ const SPECIAL = {
     `match_id IN (SELECT id FROM matches WHERE user_a_id = $1::uuid OR user_b_id = $1::uuid)`,
     [userId],
   ],
+  // A deleted account's safety tombstones (A13-H14) name no live user — except
+  // the ones applied to this subject when they registered again, which are
+  // theirs to see. The hashes carry no identifier in the clear.
+  safety_tombstones: () => ["restored_to_user_id = $1::uuid", [userId]],
   // grammY's session store, keyed by Telegram chat id as a bare string.
   bot_sessions: () =>
     subject.telegram_id ? ["key = $1", [String(subject.telegram_id)]] : null,

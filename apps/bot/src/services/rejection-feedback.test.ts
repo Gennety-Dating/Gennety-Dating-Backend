@@ -101,4 +101,30 @@ describe("recordRejectionFeedback", () => {
 
     expect(result).not.toMatchObject({ code: "reason_too_vague" });
   });
+
+  // A13-L10: the refusal is read by the model, which may repeat it. On a still
+  // `proposed` match "the peer did" would be the partner's decision.
+  it("refuses a user who did not decline without asserting what the partner did", async () => {
+    userFindUnique.mockResolvedValue({ id: "u1", language: "en" });
+    matchFindUnique.mockResolvedValue({
+      userAId: "u1",
+      userBId: "u2",
+      status: "proposed",
+      acceptedByA: null,
+      acceptedByB: false,
+      rejectionReasonA: null,
+      rejectionReasonB: null,
+    });
+
+    const result = await recordRejectionFeedback({
+      userId: "u1",
+      matchId: "m1",
+      reason: "not my type at all, too much partying",
+    });
+
+    expect(result).toMatchObject({ success: false, code: "user_did_not_decline" });
+    const error = (result as { error: string }).error.toLowerCase();
+    expect(error).not.toMatch(/peer|partner|other person/);
+    expect(error).toContain("no decline by this user");
+  });
 });

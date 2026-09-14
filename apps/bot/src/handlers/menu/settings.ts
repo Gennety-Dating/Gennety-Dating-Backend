@@ -4,7 +4,10 @@ import { prisma, type Theme } from "@gennety/db";
 import { t, type Language, DEFAULT_SESSION, SUPPORTED_LANGUAGES } from "@gennety/shared";
 import { showMainMenu } from "./main.js";
 import { buildLanguageKeyboard } from "../language-keyboard.js";
-import { deleteUserAccount } from "../../services/account-deletion.js";
+import {
+  AccountDeletionDeferredError,
+  deleteUserAccount,
+} from "../../services/account-deletion.js";
 import { freezeAccount } from "../../services/account-status-transitions.js";
 import { setUserLanguage, setUserTheme } from "../../services/user-preferences.js";
 import {
@@ -240,9 +243,11 @@ export async function handleDeleteAccountConfirm(ctx: BotContext): Promise<void>
 /**
  * GDPR "Right to be Forgotten" handler.
  *
- * Deletes the User row — Prisma cascading deletes automatically remove:
+ * Delegates to `deleteUserAccount` — Prisma cascading deletes remove:
  *   - Profile (including pgvector embedding)
  *   - All Match rows where this user is userA or userB
+ * while payment records, and the safety history filed against the account
+ * (as keyed hashes), are kept — see `services/account-deletion.ts`.
  *
  * Then resets the grammY session to defaults so no stale data lingers in memory.
  */
@@ -273,6 +278,16 @@ export async function handleDeleteAccountExecute(ctx: BotContext): Promise<void>
       return;
     }
   } catch (err) {
+    if (err instanceof AccountDeletionDeferredError) {
+      // Not a failure: a refund still owns rows on this account, and deleting
+      // would leave it nowhere to go (A13-H14). Nothing was erased, so the
+      // session stays as it is and the same flow works again later.
+      console.info(
+        `[settings] account deletion deferred user=${leaving.id} reason=${err.reason} rows=${err.rows.length}`,
+      );
+      await ctx.reply(t(lang, "deleteAccountRefundInProgress"));
+      return;
+    }
     console.error("[settings] account deletion failed:", err);
     await ctx.reply(t(lang, "deleteAccountFailed"));
     return;

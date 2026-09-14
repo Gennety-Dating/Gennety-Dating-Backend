@@ -104,6 +104,14 @@ vi.mock("../../services/ticket-reward.js", () => ({
 
 const accountDeletionMocks = vi.hoisted(() => ({
   deleteUserAccount: vi.fn(),
+  AccountDeletionDeferredError: class AccountDeletionDeferredError extends Error {
+    constructor(
+      readonly reason: "refund_in_progress",
+      readonly rows: readonly unknown[],
+    ) {
+      super(`Account deletion deferred: ${reason}`);
+    }
+  },
 }));
 vi.mock("../../services/account-deletion.js", () => accountDeletionMocks);
 
@@ -1755,6 +1763,25 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
     const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(body).toContain("deleted");
     expect(body).toContain("/start");
+  });
+
+  // A13-H14: a refund still in flight defers the deletion. Nothing was erased,
+  // so the session stays, and the person is told why rather than "try again".
+  it("explains a deferral caused by a refund in flight and keeps the session", async () => {
+    accountDeletionMocks.deleteUserAccount.mockRejectedValueOnce(
+      new accountDeletionMocks.AccountDeletionDeferredError("refund_in_progress", []),
+    );
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const ctx = pendingCtx("delete_final", "menu:settings:delete:yes:nonce", {
+      onboardingStep: "completed",
+      language: "en",
+    });
+    await handleDeleteAccountExecute(ctx);
+
+    expect(ctx.session.onboardingStep).toBe("completed");
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("refund"));
+    expect(ctx.reply).not.toHaveBeenCalledWith(expect.stringContaining("couldn't safely erase"));
+    info.mockRestore();
   });
 
   it("preserves the session and shows a retry message if safe cleanup fails", async () => {

@@ -156,7 +156,11 @@ import {
 } from "./decision.js";
 import { buildDeclineReasonKeyboard, handleDeclineReasonCallback } from "./decline-feedback.js";
 import { buildMatchKeyboard, sendMatchProposal } from "./pitch.js";
-import { appendNegativeConstraint, normalizeReason } from "./negative-constraints.js";
+import {
+  appendNegativeConstraint,
+  hasConstraintLine,
+  normalizeReason,
+} from "./negative-constraints.js";
 import { startScheduling } from "./scheduler.js";
 import { sendTicketOffer } from "./ticket-gate.js";
 import { env } from "../../config.js";
@@ -2632,6 +2636,31 @@ describe("negative-constraints", () => {
     await expect(appendNegativeConstraint("uid-A", "too arrogant for me")).resolves.toBeUndefined();
     // The constraint still landed; the row stays dirty for the cron to retry.
     expect(mProfile.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  // A13-M27: a story and the form about the same evening both run the feedback
+  // analysis, and each line weighs on the penalty score — the same trait twice
+  // would count twice.
+  it("appendNegativeConstraint skips a line that is already on the list", async () => {
+    mProfile.findUnique.mockResolvedValueOnce({
+      negativeConstraints: "- prior item\n-   Loud   chewing",
+    });
+    await appendNegativeConstraint("uid-A", "loud chewing", "en", { refreshEmbedding: false });
+    expect(mProfile.upsert).not.toHaveBeenCalled();
+    expect(mRefreshUserEmbedding).not.toHaveBeenCalled();
+  });
+
+  it("a skipped duplicate still closes a batch's dirty window when asked to", async () => {
+    mProfile.findUnique.mockResolvedValueOnce({ negativeConstraints: "- loud chewing" });
+    await appendNegativeConstraint("uid-A", "loud chewing", "en", { refreshEmbedding: true });
+    expect(mProfile.upsert).not.toHaveBeenCalled();
+    expect(mRefreshUserEmbedding).toHaveBeenCalledWith("uid-A");
+  });
+
+  it("hasConstraintLine matches whole lines only, ignoring case, spacing and the dash", () => {
+    expect(hasConstraintLine("- [lifestyle] smoking\n- loud", "[Lifestyle]  smoking")).toBe(true);
+    expect(hasConstraintLine("- [lifestyle] smoking a lot", "[lifestyle] smoking")).toBe(false);
+    expect(hasConstraintLine(null, "anything")).toBe(false);
   });
 
   it("a batch of constraints costs one refresh, not one per line", async () => {

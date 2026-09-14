@@ -198,6 +198,8 @@ export async function sweepVenueChangeRefunds(
         createdAt: { lt: staleBefore },
         // Stars only: see APPSTORE_PAYMENT_PREFIX.
         NOT: { externalPaymentId: { startsWith: APPSTORE_PAYMENT_PREFIX } },
+        // No owner, no Telegram id to refund to — see the retry tier below.
+        userId: { not: null },
       },
       select: {
       id: true,
@@ -214,6 +216,12 @@ export async function sweepVenueChangeRefunds(
       where: {
         status: VENUE_PURCHASE_REFUND_FAILED,
         NOT: { externalPaymentId: { startsWith: APPSTORE_PAYMENT_PREFIX } },
+        // A purchase whose buyer deleted their account keeps its row for
+        // accounting but has no Telegram id left to refund to (A13-H14), so it
+        // must not take a slot of this tick's budget. Account deletion refuses to
+        // run while one of these is still young; an older one reached the founder
+        // with its id when the account went.
+        userId: { not: null },
       },
       select: {
       id: true,
@@ -242,6 +250,12 @@ export async function sweepVenueChangeRefunds(
   };
 
   for (const row of rows) {
+    // Excluded by the query; re-checked because the relation is nullable. An
+    // ownerless row cannot be refunded — the Telegram id went with the account.
+    if (!row.user) {
+      result.skipped++;
+      continue;
+    }
     // A mobile-only user carries a synthetic negative telegramId and cannot hold
     // a Stars charge, so there is nothing to refund through this rail.
     if (row.user.telegramId <= 0n) {

@@ -570,6 +570,9 @@ export function buildCandidateSql(): string {
       -- directly above for as long as a block can only be filed from a match —
       -- and deliberately not left to it: the ban is a product decision under
       -- periodic review (REMATCH_PRODUCT_SPEC.md), a block is a promise.
+      -- A block against a deleted account has blocked_id NULL until the person
+      -- re-registers and it is relinked (A13-H14); NULL never equals u.id, so
+      -- such a row excludes nobody here without a separate predicate.
       AND NOT EXISTS (
         SELECT 1 FROM user_blocks b
          WHERE (b.blocker_id = $1::uuid AND b.blocked_id = u.id)

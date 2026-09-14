@@ -3,7 +3,8 @@ import { prisma } from "@gennety/db";
 import { PROFILE_MEDIA_VALIDATION_VERSION, type Language } from "@gennety/shared";
 import type { MediaValidationReason } from "./profile-media-validation/types.js";
 import { validateVoicePrompt } from "./profile-media-validation/voice-prompt-validation.js";
-import { downloadTelegramFile } from "./storage.js";
+import { env } from "../config.js";
+import { deleteStorageObject, downloadTelegramFile } from "./storage.js";
 import { logMediaValidationRejection } from "./profile-media-validation/rejection-log.js";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 
@@ -93,9 +94,22 @@ export async function saveVoicePrompt(input: {
   const { userId, ...rest } = input;
   const data = {
     ...rest,
+    // Both pointers are written every time, null when absent. A re-record
+    // REPLACES — and an omitted key in an upsert's `update` keeps the old
+    // value, so a Telegram re-record used to leave the previous upload's
+    // `storagePath` (and a native one the previous minted `file_id`) on the
+    // row: each surface kept playing the old recording, and the old object
+    // could not be removed without leaving the row pointing at nothing.
+    telegramFileId: input.telegramFileId ?? null,
+    storagePath: input.storagePath ?? null,
     validationVersion: PROFILE_MEDIA_VALIDATION_VERSION,
     validatedAt: new Date(),
   };
+
+  const previous = await prisma.voicePrompt.findUnique({
+    where: { userId },
+    select: { storagePath: true },
+  });
 
   await prisma.$transaction([
     prisma.voicePrompt.upsert({
@@ -113,6 +127,10 @@ export async function saveVoicePrompt(input: {
     }),
   ]);
 
+  if (previous?.storagePath && previous.storagePath !== data.storagePath) {
+    await removeReplacedVoiceObject(userId, previous.storagePath);
+  }
+
   await refreshUserEmbedding(userId).catch((err: unknown) => {
     console.warn("[voice-prompt] immediate embedding refresh failed:", err);
   });
@@ -120,8 +138,13 @@ export async function saveVoicePrompt(input: {
 
 /** Remove the prompt and re-embed, so a deleted recording stops influencing matching. */
 export async function deleteVoicePrompt(userId: string): Promise<void> {
+  const previous = await prisma.voicePrompt.findUnique({
+    where: { userId },
+    select: { storagePath: true },
+  });
   const deleted = await prisma.voicePrompt.deleteMany({ where: { userId } });
   if (deleted.count === 0) return;
+  if (previous?.storagePath) await removeReplacedVoiceObject(userId, previous.storagePath);
 
   await prisma.profile.updateMany({
     where: { userId },
@@ -130,4 +153,24 @@ export async function deleteVoicePrompt(userId: string): Promise<void> {
   await refreshUserEmbedding(userId).catch((err: unknown) => {
     console.warn("[voice-prompt] immediate embedding refresh failed:", err);
   });
+}
+
+/**
+ * Delete the stored audio a re-record or a deletion just orphaned (A13-M12).
+ *
+ * After the row write, never before: until it commits, the row still points at
+ * this object, and a failed write must not leave a prompt with no audio behind
+ * it. Best-effort — a voice recording is special-category-adjacent personal
+ * data, so a failure is logged rather than silently dropped, and account
+ * deletion's `${userId}/` sweep removes anything still left. The previous path
+ * is read just before the write, so two re-records racing can each remove only
+ * the object they saw; the loser's own upload is then the orphan.
+ */
+async function removeReplacedVoiceObject(userId: string, path: string): Promise<void> {
+  const removed = await deleteStorageObject(env.SUPABASE_VOICE_BUCKET, path).catch(
+    () => false,
+  );
+  if (!removed) {
+    console.warn(`[voice-prompt] replaced audio not removed user=${userId} path=${path}`);
+  }
 }

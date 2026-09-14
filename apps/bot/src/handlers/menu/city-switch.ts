@@ -85,6 +85,24 @@ export async function handleCitySwitchConfirm(ctx: BotContext): Promise<void> {
     return;
   }
 
+  // Same gate as the open card, re-checked at the tap (A13-L11). The confirm
+  // button outlives the state it was offered for — the menu card and the
+  // no-match DM both stay in the chat after a switch — and the save below
+  // overwrites coordinates and time zone with the market's defaults, so a stale
+  // tap from someone already in a launched market would quietly reset where
+  // they actually set their location. Nothing to switch: say what the open
+  // handler says and retire the keyboard.
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: { homeCityKey: true },
+  });
+  if (!isMarketPending(profile?.homeCityKey)) {
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageReplyMarkup().catch(() => {});
+    await ctx.reply(t(lang, "citySwitchDone", { date: nextDropDateFor(lang) }));
+    return;
+  }
+
   try {
     await saveHomeLocationForUser(userId, homeLocationForMarket(DEFAULT_MARKET));
   } catch (err) {
