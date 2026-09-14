@@ -2,15 +2,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 import { createHmac } from "node:crypto";
+import jwt from "jsonwebtoken";
 import { FEMALE_PHOTOS, MALE_PHOTOS } from "@gennety/shared";
 
 const BOT_TOKEN = "123456:test-bot-token-for-radar";
 const TELEGRAM_ID = 5986970093;
+const JWT_SECRET = "test-jwt-secret-value-long-enough-for-radar";
+const USER_ID = "11111111-1111-4111-8111-111111111111";
+const WEBAPP_URL = "https://app.example.test/calendar/";
 
 type DeckCard = {
   photoId: string;
   set: string;
   image: string;
+  imageUrl: string;
   chips: { like: { id: string }[]; dislike: { id: string }[] };
 };
 
@@ -19,6 +24,8 @@ vi.mock("../config.js", () => ({
     BOT_TOKEN,
     DATABASE_URL: "postgresql://test",
     TYPE_RADAR_ENABLED: true,
+    JWT_SECRET,
+    WEBAPP_URL,
   },
 }));
 
@@ -41,8 +48,18 @@ const radarHandler = vi.hoisted(() => ({
 }));
 vi.mock("../handlers/onboarding/type-radar.js", () => radarHandler);
 
-const { createRadarRouter } = await import("./routes/radar.js");
+const { createRadarRouter, radarImageUrl } = await import("./routes/radar.js");
 const { dispatchToChat, waitForChatQueueIdle } = await import("../chat-queue.js");
+const { JWT_ISSUER, JWT_AUDIENCE } = await import("./jwt.js");
+
+function bearer(sub: string = USER_ID): string {
+  const token = jwt.sign({ sub, typ: "access" }, JWT_SECRET, {
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
+    expiresIn: "15m",
+  });
+  return `Bearer ${token}`;
+}
 const mutableEnv = (await import("../config.js")).env as unknown as {
   TYPE_RADAR_ENABLED: boolean;
 };
@@ -388,5 +405,176 @@ describe("POST /v1/radar/submit — chat continuation", () => {
     await vi.waitFor(() => expect(warn).toHaveBeenCalled());
     expect(warn.mock.calls[0]![0]).toContain("[radar] onboarding resume after submit failed");
     warn.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The native rail. The iOS client has no initData — it signs in with a JWT —
+// and has no Mini App page to resolve a relative image path against.
+// ---------------------------------------------------------------------------
+describe("native client rail (JWT bearer)", () => {
+  const api = {} as never;
+
+  function appWithBot() {
+    const app = express();
+    app.use(express.json());
+    app.use("/v1/radar", createRadarRouter(api));
+    return app;
+  }
+
+  it("serves the deck to a bearer, looked up by user id, with absolute image URLs", async () => {
+    userFindUnique.mockResolvedValue({
+      telegramId: BigInt(TELEGRAM_ID), age: 24, preference: "women", language: "ru",
+    });
+    const res = await request(buildApp()).get("/v1/radar/deck").set("Authorization", bearer());
+
+    expect(res.status).toBe(200);
+    expect(userFindUnique.mock.calls[0]![0].where).toEqual({ id: USER_ID });
+    const cards = res.body.cards as DeckCard[];
+    expect(cards).toHaveLength(FEMALE_PHOTOS.length);
+    for (const card of cards) {
+      // The same file the Mini App resolves relatively, next to radar.html.
+      expect(card.imageUrl).toBe(`https://app.example.test/calendar/${card.image}`);
+    }
+  });
+
+  it("shows the same card order on both rails — the seed is the account, not the client", async () => {
+    const row = { telegramId: BigInt(TELEGRAM_ID), age: 24, preference: "women", language: "ru" };
+    userFindUnique.mockResolvedValue(row);
+    const viaApp = await request(buildApp()).get("/v1/radar/deck").set("Authorization", bearer());
+    const viaMiniApp = await request(buildApp())
+      .get("/v1/radar/deck")
+      .set("Authorization", `tma ${signInitData()}`);
+
+    const order = (body: { cards: DeckCard[] }) => body.cards.map((c) => c.photoId);
+    expect(order(viaApp.body)).toEqual(order(viaMiniApp.body));
+    expect(userFindUnique.mock.calls[1]![0].where).toEqual({ telegramId: BigInt(TELEGRAM_ID) });
+  });
+
+  it("401s a bad bearer without reading the database or trying the other rail", async () => {
+    const res = await request(buildApp())
+      .get("/v1/radar/deck")
+      .set("Authorization", "Bearer not-a-token");
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("Invalid or expired token");
+    expect(userFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("401s a request with neither credential", async () => {
+    const res = await request(buildApp()).post("/v1/radar/submit").send({ answers: [] });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("Missing bearer token or initData");
+  });
+
+  it("saves a bearer's submit but never starts the Telegram chat continuation", async () => {
+    // Mid-onboarding and a first completion: on the tma rail exactly this row
+    // plays the ~10s sequence. From the app it must save and stay silent — the
+    // person is not in that chat, and a mobile-first account has no chat at all.
+    userFindUnique.mockResolvedValue({
+      id: USER_ID, age: 24, preference: "women", onboardingStep: "conversational",
+      profile: { typePrefTags: null, typeRadarCompletedAt: null },
+    });
+    profileUpsert.mockResolvedValue(undefined);
+    const answers = FEMALE_PHOTOS.map((p, i) => ({
+      photoId: p.id,
+      verdict: i % 2 === 0 ? "like" : "dislike",
+      ...(i === 0 ? { chipId: "hair" } : {}),
+    }));
+
+    const res = await request(appWithBot())
+      .post("/v1/radar/submit")
+      .set("Authorization", bearer())
+      .send({ answers });
+
+    expect(res.status).toBe(200);
+    expect(res.body.counted).toBe(FEMALE_PHOTOS.length);
+    expect(Number.isNaN(Date.parse(res.body.completedAt))).toBe(false);
+    expect(userFindUnique.mock.calls[0]![0].where).toEqual({ id: USER_ID });
+    const arg = profileUpsert.mock.calls[0]![0];
+    expect(arg.where).toEqual({ userId: USER_ID });
+    expect(arg.update.typeRadarCompletedAt.toISOString()).toBe(res.body.completedAt);
+    // An omitted chip is stored as "no reason", exactly like the Mini App's null.
+    expect(arg.update.typeRadarAnswers[1]).toEqual({
+      photoId: FEMALE_PHOTOS[1]!.id, verdict: "dislike", chipId: null,
+    });
+
+    await new Promise((r) => setTimeout(r, 20));
+    await waitForChatQueueIdle(2_000);
+    expect(radarHandler.runRadarThinkingThenResume).not.toHaveBeenCalled();
+    expect(radarHandler.resumeOnboardingAfterRadar).not.toHaveBeenCalled();
+    expect(radarHandler.patchOnboardingSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /v1/radar/state", () => {
+  it("404s when the feature is off — the client hides the entry", async () => {
+    mutableEnv.TYPE_RADAR_ENABLED = false;
+    const res = await request(buildApp()).get("/v1/radar/state").set("Authorization", bearer());
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("type-radar-disabled");
+  });
+
+  it("says a viewer in a live band may take it and has not yet", async () => {
+    userFindUnique.mockResolvedValue({ age: 22, preference: "men", profile: null });
+    const res = await request(buildApp()).get("/v1/radar/state").set("Authorization", bearer());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, available: true, calibrated: false });
+  });
+
+  it("carries the completion stamp and whether a vector was compiled", async () => {
+    const stamp = new Date("2026-09-01T12:00:00.000Z");
+    userFindUnique.mockResolvedValue({
+      age: 22, preference: "men",
+      profile: { typePrefTags: { male: {} }, typeRadarCompletedAt: stamp },
+    });
+    const res = await request(buildApp())
+      .get("/v1/radar/state")
+      .set("Authorization", `tma ${signInitData()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      ok: true, available: true, completedAt: stamp.toISOString(), calibrated: true,
+    });
+  });
+
+  it("tells a Telegram skip apart from a calibration", async () => {
+    // The skip button stamps completion and compiles nothing.
+    userFindUnique.mockResolvedValue({
+      age: 22, preference: "men",
+      profile: { typePrefTags: null, typeRadarCompletedAt: new Date("2026-09-01T12:00:00Z") },
+    });
+    const res = await request(buildApp()).get("/v1/radar/state").set("Authorization", bearer());
+    expect(res.body.completedAt).toBeDefined();
+    expect(res.body.calibrated).toBe(false);
+  });
+
+  it("is unavailable, with the deck's own reasons, before age/preference and outside a live band", async () => {
+    userFindUnique.mockResolvedValue({ age: null, preference: null, profile: null });
+    const notReady = await request(buildApp()).get("/v1/radar/state").set("Authorization", bearer());
+    expect(notReady.body).toMatchObject({ available: false, unavailableReason: "profile-not-ready" });
+
+    userFindUnique.mockResolvedValue({ age: 41, preference: "women", profile: null });
+    const notLive = await request(buildApp()).get("/v1/radar/state").set("Authorization", bearer());
+    expect(notLive.body).toMatchObject({ available: false, unavailableReason: "band-not-live" });
+  });
+
+  it("404s an unknown account", async () => {
+    userFindUnique.mockResolvedValue(null);
+    const res = await request(buildApp()).get("/v1/radar/state").set("Authorization", bearer());
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("user-not-found");
+  });
+});
+
+describe("radarImageUrl", () => {
+  it("puts the file next to radar.html whatever the base's trailing slash", () => {
+    expect(radarImageUrl("radar/a/fp1.jpg", "https://dating-calendar.gennety.com")).toBe(
+      "https://dating-calendar.gennety.com/radar/a/fp1.jpg",
+    );
+    expect(radarImageUrl("radar/a/fp1.jpg", "https://host.test/calendar//")).toBe(
+      "https://host.test/calendar/radar/a/fp1.jpg",
+    );
+    expect(radarImageUrl("radar/a/fp1.jpg", "https://host.test/calendar?x=1#y")).toBe(
+      "https://host.test/calendar/radar/a/fp1.jpg",
+    );
   });
 });

@@ -19,6 +19,7 @@ import {
 import { env } from "../../config.js";
 import { dispatchToChat } from "../../chat-queue.js";
 import { validateInitData } from "../init-data.js";
+import { verifyAccessToken } from "../jwt.js";
 import {
   runRadarThinkingThenResume,
   resumeOnboardingAfterRadar,
@@ -26,36 +27,70 @@ import {
 } from "../../handlers/onboarding/type-radar.js";
 
 /**
- * Type Radar Mini App API (PRODUCT_SPEC §Type Radar). A fast visual
- * appearance-preference calibration opened mid-onboarding (conversational
- * phase, right before the Magic Prompt) via a `web_app` button. The viewer
+ * Type Radar API (PRODUCT_SPEC §Type Radar). A fast visual
+ * appearance-preference calibration. In Telegram it opens mid-onboarding
+ * (conversational phase, right before the Magic Prompt) via a `web_app`
+ * button; the native iOS client opens it from the profile. The viewer
  * reacts "My Type" / "Not My Type" to a deck of contrasting portraits — the
  * age band is derived from the viewer's OWN age, the set(s) from their
  * gender preference — optionally tapping one reason chip. The server compiles
  * the verdicts into a per-set preference vector (`Profile.typePrefTags`) that
  * the match engine reads as the soft `V_type` multiplier.
  *
- * Auth: Telegram `initData` HMAC (same boundary as calendar/verification).
+ * Auth: EITHER rail — Telegram `initData` HMAC (`tma <initData>`, the Mini
+ * App) or a JWT bearer (the native client). Both resolve to the same `users`
+ * row; the rail only decides whether the chat-side continuation after a
+ * submit runs (it talks to the Telegram chat, so it is a `tma` concern).
  * Feature-flagged: every route 404s when `TYPE_RADAR_ENABLED` is off.
  */
 
-type AuthOk = { ok: true; telegramId: bigint };
+type Caller = { rail: "tma"; telegramId: bigint } | { rail: "jwt"; userId: string };
+type AuthOk = { ok: true; caller: Caller };
 type AuthErr = { ok: false; status: number; body: { error: string } };
 
 function authenticate(req: Request): AuthOk | AuthErr {
-  const authHeader = req.header("authorization") ?? req.header("Authorization");
-  if (!authHeader?.startsWith("tma ")) {
-    return { ok: false, status: 401, body: { error: "Missing tma initData" } };
+  const authHeader = req.header("authorization") ?? req.header("Authorization") ?? "";
+  if (authHeader.startsWith("tma ")) {
+    const initData = authHeader.slice(4).trim();
+    if (!initData) {
+      return { ok: false, status: 401, body: { error: "Empty initData" } };
+    }
+    const validation = validateInitData(initData, env.BOT_TOKEN);
+    if (!validation.valid) {
+      return { ok: false, status: 401, body: { error: "Invalid initData" } };
+    }
+    return { ok: true, caller: { rail: "tma", telegramId: BigInt(validation.user.id) } };
   }
-  const initData = authHeader.slice(4).trim();
-  if (!initData) {
-    return { ok: false, status: 401, body: { error: "Empty initData" } };
+  if (authHeader.startsWith("Bearer ")) {
+    // A bad bearer is a 401 and never falls through to the other rail: the
+    // native client's auth middleware refreshes on exactly this status.
+    try {
+      const userId = verifyAccessToken(authHeader.slice(7)).sub;
+      return { ok: true, caller: { rail: "jwt", userId } };
+    } catch {
+      return { ok: false, status: 401, body: { error: "Invalid or expired token" } };
+    }
   }
-  const validation = validateInitData(initData, env.BOT_TOKEN);
-  if (!validation.valid) {
-    return { ok: false, status: 401, body: { error: "Invalid initData" } };
-  }
-  return { ok: true, telegramId: BigInt(validation.user.id) };
+  return { ok: false, status: 401, body: { error: "Missing bearer token or initData" } };
+}
+
+/** The `users` row a caller names — by Telegram id on one rail, by id on the other. */
+function whereFor(caller: Caller): { telegramId: bigint } | { id: string } {
+  return caller.rail === "tma" ? { telegramId: caller.telegramId } : { id: caller.userId };
+}
+
+/**
+ * Absolute address of a deck portrait. The files ship inside the Mini App
+ * bundle (`apps/webapp/public/radar/`), so they sit next to `radar.html` on the
+ * `WEBAPP_URL` host — NOT on this API host. The Mini App resolves the relative
+ * `image` against its own page; a native client has no page to resolve against.
+ */
+export function radarImageUrl(image: string, base: string = env.WEBAPP_URL): string {
+  const url = new URL(base);
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/${image}`;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }
 
 /** Deterministic 32-bit hash of a string → seed for a stable per-user shuffle. */
@@ -89,13 +124,15 @@ interface DeckCard {
   set: RadarSet;
   /** Path relative to the Mini App origin: `radar/<band>/<id>.jpg`. */
   image: string;
+  /** The same file as an absolute URL, for a client with no Mini App origin. */
+  imageUrl: string;
   /** Reason chips for THIS photo (presence-only chips like beard/tattoo are
    *  dropped when the person on the card doesn't have them). */
   chips: { like: { id: string }[]; dislike: { id: string }[] };
 }
 
-// Chip ids only — the Mini App owns the localized label per id in the viewer's
-// language (chips carry no copy in the shared dataset). Per-photo so a
+// Chip ids only — each client (Mini App, iOS) owns the localized label per id
+// in the viewer's language (chips carry no copy in the shared dataset). Per-photo so a
 // clean-shaven card is never offered a "beard" reason.
 function chipsForPhoto(photo: RadarPhoto): DeckCard["chips"] {
   const ids = (verdict: Verdict) => reasonChipsForPhoto(photo, verdict).map((c) => ({ id: c.id }));
@@ -114,6 +151,50 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
     next();
   });
 
+  // GET /v1/radar/state — whether THIS viewer can take the radar and whether
+  // they already have. The native client reads it to decide if the profile
+  // shows the entry at all: the deck's 409s are the same facts, but opening a
+  // screen only to learn it cannot be filled is the wrong way to find out.
+  router.get("/state", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(auth.status).json(auth.body);
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: whereFor(auth.caller),
+      select: {
+        age: true,
+        preference: true,
+        profile: { select: { typePrefTags: true, typeRadarCompletedAt: true } },
+      },
+    });
+    if (!user) {
+      res.status(404).json({ error: "user-not-found" });
+      return;
+    }
+
+    // The same two gates the deck applies, in the same order.
+    const unavailableReason =
+      user.age == null || !user.preference
+        ? "profile-not-ready"
+        : !radarBandLive(ageBandFor(user.age))
+          ? "band-not-live"
+          : null;
+    const completedAt = user.profile?.typeRadarCompletedAt ?? null;
+
+    res.json({
+      ok: true,
+      available: unavailableReason === null,
+      ...(unavailableReason ? { unavailableReason } : {}),
+      // Stamped by a submit AND by the Telegram skip button, so it says "the
+      // step is behind them", not "we know their type" — that is `calibrated`.
+      ...(completedAt ? { completedAt: completedAt.toISOString() } : {}),
+      calibrated: user.profile?.typePrefTags != null,
+    });
+  });
+
   // GET /v1/radar/deck — the cards to rate for THIS viewer (band from their own
   // age, set(s) from their preference) + the reason chips.
   router.get("/deck", async (req: Request, res: Response): Promise<void> => {
@@ -124,8 +205,8 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
     }
 
     const user = await prisma.user.findUnique({
-      where: { telegramId: auth.telegramId },
-      select: { age: true, preference: true, language: true },
+      where: whereFor(auth.caller),
+      select: { telegramId: true, age: true, preference: true, language: true },
     });
     if (!user) {
       res.status(404).json({ error: "user-not-found" });
@@ -151,10 +232,14 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
         photoId: p.id,
         set,
         image: `radar/${band}/${p.id}.jpg`,
+        imageUrl: radarImageUrl(`radar/${band}/${p.id}.jpg`),
         chips: chipsForPhoto(p),
       })),
     );
-    const ordered = seededShuffle(cards, seedFrom(`${auth.telegramId}:${band}`));
+    // Seeded on the Telegram id from the ROW, not from the rail: a person who
+    // opens the radar in the Mini App and later in the app sees one order.
+    // Every account has one (mobile-first accounts carry a synthetic id).
+    const ordered = seededShuffle(cards, seedFrom(`${user.telegramId}:${band}`));
 
     res.json({ ok: true, band, cards: ordered });
   });
@@ -168,7 +253,7 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
     }
 
     const user = await prisma.user.findUnique({
-      where: { telegramId: auth.telegramId },
+      where: whereFor(auth.caller),
       select: {
         id: true,
         age: true,
@@ -255,19 +340,20 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
     // Json[] / Json input types don't accept our named interfaces directly.
     const answersJson = answers as unknown as Prisma.InputJsonValue[];
     const prefTagsJson = mergedTags as unknown as Prisma.InputJsonValue;
+    const completedAt = new Date();
     await prisma.profile.upsert({
       where: { userId: user.id },
       create: {
         userId: user.id,
         typeRadarAnswers: answersJson,
         typePrefTags: prefTagsJson,
-        typeRadarCompletedAt: new Date(),
+        typeRadarCompletedAt: completedAt,
         typeRadarAgeBand: band,
       },
       update: {
         typeRadarAnswers: answersJson,
         typePrefTags: prefTagsJson,
-        typeRadarCompletedAt: new Date(),
+        typeRadarCompletedAt: completedAt,
         typeRadarAgeBand: band,
       },
     });
@@ -277,13 +363,20 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
     // on this response to show its ✓ screen and close — blocking it here would
     // strand the user on a spinner and then play the sequence to a chat they
     // only reach once it is over.
-    res.json({ ok: true, counted: answers.length });
+    res.json({ ok: true, counted: answers.length, completedAt: completedAt.toISOString() });
 
     // Resume the onboarding conversation past the radar gate (accepted → Magic
     // Prompt, declined → photos) and persist the resulting session state. Only
     // while the user is still onboarding; a post-onboarding retake just saves.
     // Best-effort: a resume hiccup never fails the save the Mini App relies on.
-    if (api && user.onboardingStep !== "completed") {
+    //
+    // Telegram rail only. The gate that waits for this lives in the Telegram
+    // onboarding chat; the native onboarding never raises it
+    // (`canPresentTypeRadar: false`), and a submit from the app must not start
+    // a ~10s status sequence in a chat the person is not looking at — or, for
+    // a mobile-first account, in a chat that does not exist.
+    if (api && auth.caller.rail === "tma" && user.onboardingStep !== "completed") {
+      const telegramId = auth.caller.telegramId;
       // The thinking sequence decorates the FIRST completion only. A re-submit
       // (retry, replay) still resumes exactly as before, but must not replay a
       // ~10s animation the user already sat through.
@@ -298,15 +391,15 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
       // update's session middleware read the row before the patch and wrote its
       // stale copy back after it, rolling the onboarding step back. Queued, the
       // resume and its patch run as one step between that chat's updates.
-      const chatId = Number(auth.telegramId);
+      const chatId = Number(telegramId);
       dispatchToChat(chatId, async () => {
         const { sessionPatch } = firstCompletion
-          ? await runRadarThinkingThenResume(api, auth.telegramId, chatId)
-          : await resumeOnboardingAfterRadar(api, auth.telegramId, chatId);
-        await patchOnboardingSession(auth.telegramId, sessionPatch);
+          ? await runRadarThinkingThenResume(api, telegramId, chatId)
+          : await resumeOnboardingAfterRadar(api, telegramId, chatId);
+        await patchOnboardingSession(telegramId, sessionPatch);
       }).catch((err: unknown) => {
         console.warn("[radar] onboarding resume after submit failed", {
-          telegramId: String(auth.telegramId),
+          telegramId: String(telegramId),
           err,
         });
       });

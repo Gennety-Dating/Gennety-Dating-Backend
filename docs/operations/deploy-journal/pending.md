@@ -11,6 +11,40 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — Type Radar на iOS: JWT на `/v1/radar/*`, `GET /v1/radar/state`, `imageUrl` в колоде (2026-09-14).**
+**Схема Prisma не меняется, миграций нет, новых переменных окружения нет** (`WEBAPP_URL` уже
+задан — по нему бот строит ссылки мини-аппа). Только код: `routes/radar.ts` принимает оба рельса,
+отдаёт абсолютный `imageUrl` и новую ручку состояния; продолжение онбординг-чата после сабмита —
+только для `tma`. Спека: три пути + схемы `Radar*`. Журнал решений — запись 2026-09-14 «Type Radar
+поехал на iOS».
+
+**Порядок выката:** обычный рестарт бота; мини-апп пересобирать не нужно (его провод не менялся).
+
+**Проверка после выката** (`$JWT` — аккаунт с возрастом ≤ 28 и заданным предпочтением; `$TMA` —
+initData того же человека из мини-аппа):
+
+```
+curl -s -H "Authorization: Bearer $JWT" "$API/v1/radar/state" | jq
+curl -s -H "Authorization: Bearer $JWT" "$API/v1/radar/deck" | jq '{band, n: (.cards|length), first: .cards[0].imageUrl}'
+curl -sI "$(curl -s -H "Authorization: Bearer $JWT" "$API/v1/radar/deck" | jq -r '.cards[0].imageUrl')" | grep -i '^content-type'
+curl -s -H "Authorization: tma $TMA" "$API/v1/radar/deck" | jq '[.cards[].photoId]' > tma.json
+curl -s -H "Authorization: Bearer $JWT" "$API/v1/radar/deck" | jq '[.cards[].photoId]' | diff - tma.json
+```
+
+Ожидается: `state` — `available: true` (или `false` с `band-not-live` у 29+); колода из 12 (24
+при `both`); `imageUrl` отвечает `content-type: image/jpeg` — **не `text/html`**: Caddy
+`try_files` отдаёт `index.html` со статусом 200 на отсутствующий файл, так что 200 сам по себе
+ничего не доказывает; `diff` пуст (один порядок на обоих рельсах). Сабмит из мини-аппа во время
+онбординга по-прежнему проигрывает последовательность «думаю» — проверять одним прогоном
+dev-бота, как раньше.
+
+**Откат:** свободный, только код — `git revert` и рестарт. Мини-апп рельс `tma` не терял ни в
+одной точке. **Влияние на iOS:** клиент перегенерирует спеку и открывает радар из профиля
+(Gennety-iOS, своя запись); до выката у клиента `GET /v1/radar/state` → 401/404, и вход не
+показывается. **Demo-mode:** не затронут — демо ходит в мини-апп по `tma`, путь прежний.
+
+---
+
 **PENDING — координаты места в блоке партнёра: `latitude`/`longitude` в `partnerFrequentPlaces` (2026-09-14).**
 **Схема Prisma не меняется, миграций нет.** Только код: `services/frequent-places.ts` отдаёт месту
 точку заведения из каталога (`curated_venues.lat/lng` той строки, что называет место) — оба ключа

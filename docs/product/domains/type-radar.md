@@ -21,8 +21,10 @@
 >   (`services/vision/tag-appearance.ts`, cheap `visionFast` model) on the
 >   verified branch — deliberately NOT piggybacked on the production Elo
 >   attractiveness call, so a tagging regression can't perturb the live Elo seed.
-> - **Routes:** `GET /v1/radar/deck` + `POST /v1/radar/submit` (Telegram
->   `initData` HMAC, feature-flag-gated 404). The onboarding gate lives in the
+> - **Routes:** `GET /v1/radar/state` + `GET /v1/radar/deck` + `POST
+>   /v1/radar/submit` (feature-flag-gated 404). Telegram `initData` HMAC OR a
+>   JWT bearer since 2026-09-14 — see "Mobile parity" below; `/state` was added
+>   the same day for the native client. The onboarding gate lives in the
 >   conversational agent (`typeRadarGatePending` at the request_context_dump /
 >   request_photos boundary); the invite (web_app + Skip) and resume are in
 >   `handlers/onboarding/type-radar.ts`. 24 band-A portraits ship at
@@ -217,15 +219,21 @@ into a server concern.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/v1/radar/deck` | The cards for this user's set — gender-of-interest × age band, both read from the `User` row — with each card's reason chips. 404 while `TYPE_RADAR_ENABLED` off |
-| POST | `/v1/radar/submit` | `{answers: [{photoId, verdict, chipId}]}` for the WHOLE deck → compiles `typePrefTags`, stamps `typeRadarCompletedAt`, resumes the chat. Rejects an empty array and caps the count at two full sets plus slack |
+| GET | `/v1/radar/state` | (2026-09-14, for the native client) `{available, unavailableReason?, completedAt?, calibrated}` — whether the caller could be served a deck (`profile-not-ready` / `band-not-live` otherwise, the deck's own gates) and whether the step is behind them. `completedAt` is stamped by a submit AND by the Telegram skip; `calibrated` says a vector exists |
+| GET | `/v1/radar/deck` | The cards for this user's set — gender-of-interest × age band, both read from the `User` row — with each card's reason chips. Each card carries the relative `image` (Mini App) and the absolute `imageUrl` on the `WEBAPP_URL` host (native client). Order is seeded on the account's `telegramId`, so both clients show one order. 404 while `TYPE_RADAR_ENABLED` off |
+| POST | `/v1/radar/submit` | `{answers: [{photoId, verdict, chipId}]}` for the WHOLE deck → compiles `typePrefTags`, stamps `typeRadarCompletedAt` (echoed as `completedAt`), resumes the chat — **`tma` rail only**. Rejects an empty array and caps the count at two full sets plus slack |
+
+All three take either rail: `tma <initData>` (Mini App) or `Bearer <JWT>`
+(native client). Both resolve to the same `users` row.
 
 The contrast-pair fallback (`clarify`) is likewise unbuilt, exactly as
 "the pairs may not ship in v1 at all" anticipated.
 
-`/state` mirrors `typeRadarEnabled` + `typeRadarDone` (pattern:
-`phoneAuthEnabled`). The phase machine gates on both, so the flag off ⇒ the
-phase never renders and legacy flow is byte-identical.
+~~`/state` mirrors `typeRadarEnabled` + `typeRadarDone` (pattern:
+`phoneAuthEnabled`).~~ **Never built (found 2026-09-14):** no `/state`
+serializer carries either field. The phase machine gates on
+`typeRadarGatePending` server-side instead. The radar's own
+`GET /v1/radar/state` above is a different, later endpoint.
 
 The Mini App never sends tag data — photo ids only; the server resolves
 attributes from the shared dataset (client data is never trusted — same rule as
@@ -454,7 +462,23 @@ re-scanned legacy profiles) are neutral on the candidate side.
 
 ## Mobile parity (Two Clients, One Backend)
 
-**Telegram-only in v1 — explicit decision.** The radar lives in the Telegram
+**Superseded 2026-09-14 — the radar is on iOS.** Decision journal 2026-09-14
+«Type Radar поехал на iOS». What changed and what did not:
+- The three `/v1/radar/*` routes take a JWT bearer as well as `tma <initData>`
+  (one `authenticate` in `public/routes/radar.ts`), and are in
+  `openapi/gennety-v1.yaml`. Same deck, same chips, same merge, same stamp.
+- **No native onboarding gate.** `canPresentTypeRadar: false` stays on the
+  public interview routes; the iOS app offers the radar from the profile
+  (client-side decision, Gennety-iOS journal). A native submit therefore never
+  resumes an onboarding chat — the continuation is `tma`-only, which also
+  keeps a mobile-first account (synthetic `telegramId`) from being "messaged".
+- Portraits stay Mini App static files; the deck adds an absolute `imageUrl`
+  (`radarImageUrl`, `WEBAPP_URL` + the relative path). No new host, no auth on
+  the images — they are prepared assets, not user photos.
+- Skip on iOS sends nothing (like closing the Mini App mid-deck); there is
+  still no HTTP skip route, and none is needed without a native gate.
+
+**Telegram-only in v1 — explicit decision (history, superseded above).** The radar lives in the Telegram
 onboarding Mini App; native iOS users simply have `typePrefTags = null` ⇒
 neutral `V_type` on their direction (the symmetric average still uses the
 Telegram side's data). No `/v1` JWT route changes ⇒ no OpenAPI change. When

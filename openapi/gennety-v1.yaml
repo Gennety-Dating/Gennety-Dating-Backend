@@ -23,6 +23,11 @@ info:
     inline chat button, and `photo` takes initData in its query because an
     `<img>` sends no headers — the native client is served signed `photoUrl` /
     `thumbnailUrl` links on the board payloads instead.
+
+    `/v1/radar/*` (Type Radar) joined them on 2026-09-14: the same routes the
+    Mini App calls take either rail, so one deck, one chip set and one
+    preference vector serve both clients. The only rail-dependent behaviour is
+    the Telegram chat continuation after a submit, which runs for `tma` only.
   contact:
     name: Gennety Dating
 
@@ -43,6 +48,11 @@ tags:
     description: >-
       Spotify tracks pinned to a profile, catalogue search, and the one-time
       top-tracks import. Display-only — never a matching or AI input.
+  - name: radar
+    description: >-
+      Type Radar: a short visual calibration of appearance preference over a
+      deck of prepared portraits (never real users). Feeds the soft `V_type`
+      matching multiplier; nobody else ever sees the answers.
 
 security:
   - bearerAuth: []
@@ -4544,6 +4554,128 @@ paths:
         "503":
           description: App Store verification is unavailable or unconfigured; retry later.
 
+  /v1/radar/state:
+    get:
+      tags: [radar]
+      operationId: getRadarState
+      summary: Whether the caller can take Type Radar, and whether they have
+      description: >
+        Read this before offering the radar. `available: false` carries the
+        same reason the deck would refuse with, so the client can hide the
+        entry instead of opening a screen that cannot be filled.
+
+
+        `completedAt` is stamped by a submit AND by the Telegram onboarding
+        skip button, so it means "the step is behind them". Whether a
+        preference vector actually exists is `calibrated`.
+      responses:
+        "200":
+          description: The caller's radar state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RadarState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: >
+            `type-radar-disabled` — the feature is off on this server; hide the
+            entry. `user-not-found` — no account behind the token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/radar/deck:
+    get:
+      tags: [radar]
+      operationId: getRadarDeck
+      summary: The portraits this caller rates
+      description: >
+        The deck is derived, never asked: the age band from the caller's OWN
+        age, the set(s) from their gender preference — `men` → the male set,
+        `women` → the female set, `both` → both sets. Twelve cards per set.
+
+
+        The order is a stable shuffle keyed on the account, so reopening the
+        radar — in the app or in the Mini App — shows the same order.
+
+
+        Cards carry photo ids and reason-chip ids only. The attributes behind a
+        photo are resolved server-side and never sent to a client, and chips
+        carry no copy: each client owns the localized label per chip id.
+      responses:
+        "200":
+          description: The deck
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RadarDeckResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: >
+            `type-radar-disabled` (feature off) or `user-not-found`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >
+            `profile-not-ready` — age or gender preference not collected yet;
+            `band-not-live` — no portrait set is deployed for the caller's age
+            band (only band `a`, age ≤ 28, is live).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/radar/submit:
+    post:
+      tags: [radar]
+      operationId: submitRadar
+      summary: Save the caller's verdicts for the whole deck
+      description: >
+        **Once, at the end, with every answer.** The client owns the deck —
+        taking a card back is a local edit, which is only possible because
+        nothing is written per tap. A partial array is accepted (any non-empty
+        valid subset), but a client that closes the deck early should send
+        nothing rather than a fragment.
+
+
+        The server compiles one preference vector per rated set and MERGES it
+        over what is stored (a retake that rates only one set of a `both` deck
+        keeps the other set's vector); the verdict log itself is replaced.
+        Photos outside the caller's set(s) and unknown ids are skipped silently;
+        for a repeated photo the first answer wins.
+
+
+        Always allowed again — a retake re-stamps `completedAt`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RadarSubmitPayload" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RadarSubmitResult" }
+        "400":
+          description: >
+            `no-answers`, `too-many-answers` (over 40), `invalid-answer`,
+            `invalid-verdict`, or `no-valid-answers` (nothing survived the
+            set filter).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: >
+            `type-radar-disabled` (feature off) or `user-not-found`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`profile-not-ready` — age or gender preference not collected yet."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
 
 components:
   securitySchemes:
@@ -4605,6 +4737,124 @@ components:
       properties:
         error: { type: string }
       additionalProperties: true
+
+    RadarState:
+      type: object
+      required: [ok, available, calibrated]
+      properties:
+        ok: { type: boolean, const: true }
+        available:
+          type: boolean
+          description: The caller can take the radar now (`GET /v1/radar/deck` would serve a deck).
+        unavailableReason:
+          type: string
+          description: >
+            Present only when `available` is false: `profile-not-ready` or
+            `band-not-live`. A documented string rather than an enum, so a
+            reason added later does not break decoding.
+        completedAt:
+          type: string
+          format: date-time
+          description: >
+            When the step was last put behind the caller — by a submit or by
+            the Telegram skip button. Absent if never.
+        calibrated:
+          type: boolean
+          description: A preference vector exists — the radar was submitted at least once, not only skipped.
+
+    RadarDeckResponse:
+      type: object
+      required: [ok, band, cards]
+      properties:
+        ok: { type: boolean, const: true }
+        band:
+          type: string
+          description: The caller's age band — `a` (≤ 28), `b` (29–37) or `c` (≥ 38).
+        cards:
+          type: array
+          description: In display order.
+          items: { $ref: "#/components/schemas/RadarPortrait" }
+
+    RadarPortrait:
+      type: object
+      required: [photoId, set, image, imageUrl, chips]
+      properties:
+        photoId:
+          type: string
+          description: Stable portrait id (e.g. `fp1`). The only thing a client sends back.
+        set:
+          type: string
+          description: "`female` or `male` — which set the portrait belongs to."
+        image:
+          type: string
+          description: Path relative to the Mini App origin (`radar/<band>/<photoId>.jpg`).
+        imageUrl:
+          type: string
+          format: uri
+          description: >
+            The same file as an absolute URL. Portraits are static files served
+            with the Mini App bundle, not by this API host, and need no
+            authorization.
+        chips: { $ref: "#/components/schemas/RadarReasonChips" }
+
+    RadarReasonChips:
+      type: object
+      description: >
+        Reason chips offered for THIS portrait after each verdict. Scoped per
+        photo: `beard` only on a bearded man, `tattoo` only on a tattooed
+        person. Ids today — like: `face`, `hair`, `style`, `tattoo`, `beard`,
+        `wholeVibe`; dislike: `face`, `hair`, `style`, `tattoo`, `beard`,
+        `tooFlashy`, `badPhoto`. Show an unknown id's raw value rather than
+        dropping it.
+      required: [like, dislike]
+      properties:
+        like:
+          type: array
+          items: { $ref: "#/components/schemas/RadarChip" }
+        dislike:
+          type: array
+          items: { $ref: "#/components/schemas/RadarChip" }
+
+    RadarChip:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+
+    RadarSubmitPayload:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: array
+          minItems: 1
+          maxItems: 40
+          items: { $ref: "#/components/schemas/RadarFeedbackItem" }
+
+    RadarFeedbackItem:
+      type: object
+      required: [photoId, verdict]
+      properties:
+        photoId: { type: string }
+        verdict:
+          type: string
+          description: "`like` (\"my type\") or `dislike` (\"not my type\")."
+        chipId:
+          type: string
+          maxLength: 40
+          description: >
+            At most ONE reason, from that portrait's chips for this verdict.
+            Omit (or null) for no reason.
+
+    RadarSubmitResult:
+      type: object
+      required: [ok, counted, completedAt]
+      properties:
+        ok: { type: boolean, const: true }
+        counted:
+          type: integer
+          description: Answers kept after filtering.
+        completedAt: { type: string, format: date-time }
 
     ScratchMap:
       type: object
