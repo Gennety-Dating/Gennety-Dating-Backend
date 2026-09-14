@@ -880,6 +880,73 @@ export async function notifyFounderPaymentStuck(
 }
 
 /**
+ * DM the founder that an App Store purchase was charged and delivered nothing —
+ * the App Store twin of {@link notifyFounderPaymentStuck}, which cannot carry
+ * it: that one addresses a Telegram id and ends in "refund the Stars by this
+ * charge id", and neither half is true here.
+ *
+ * Apple has no refund a server may call, so this message IS the refund rail:
+ * the row is parked as `refund_manual`, and a person settles it with the
+ * transaction id below (App Store Connect, or the buyer's own request to
+ * Apple). Awaited by the caller for the same reason as the Stars alert.
+ */
+export async function notifyFounderAppStoreUnclaimed(notice: {
+  /** Null once the buyer deleted their account — still announced (A13-H14). */
+  userId: string | null;
+  kind: PurchaseKind;
+  /** `appstore:<transactionId>`. */
+  externalPaymentId: string;
+  /** Machine reason in the rail's own words (`already_unlocked`, `match_died`). */
+  reason: string;
+  matchId?: string | null;
+  amountCents?: number | null;
+  currency?: string | null;
+  sandbox?: boolean;
+}): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+
+  try {
+    const user = notice.userId
+      ? await prisma.user
+          .findUnique({ where: { id: notice.userId }, select: FOUNDER_PAYER_SELECT })
+          .catch(() => null)
+      : null;
+
+    const amount = formatPurchaseAmount({
+      amountStars: null,
+      amountCents: notice.amountCents ?? null,
+      currency: notice.currency ?? null,
+      usdCents: notice.amountCents ?? null,
+      amountIsEstimate: false,
+    });
+
+    const lines = [
+      `🚨 App Store: оплата прошла, товар НЕ выдан — ${purchaseKindLabel(notice.kind)}`,
+      ...(user
+        ? payerLines(user)
+        : [notice.userId ? `👤 user ${notice.userId}` : "👤 аккаунт удалён"]),
+      `💵 ${amount}`,
+      `❗️ Причина: ${notice.reason}`,
+    ];
+    if (notice.sandbox === true) {
+      lines.push("🧪 Sandbox App Store — тестовая покупка, деньги не двигались");
+    }
+    if (notice.matchId) lines.push(`Матч: ${notice.matchId}`);
+    lines.push(`Transaction: ${notice.externalPaymentId}`);
+    lines.push("Сервер не может вернуть покупку Apple сам — решить вручную (строка: refund_manual).");
+
+    await api.sendMessage(founderChatId(), lines.join("\n"));
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} notifyFounderAppStoreUnclaimed failed`, {
+      userId: notice.userId,
+      reason: notice.reason,
+      err,
+    });
+  }
+}
+
+/**
  * Account deletion went ahead although this account still had refunds the
  * sweeps own that are older than `ACCOUNT_DELETION_REFUND_DEFER_DAYS`
  * (A13-H14).

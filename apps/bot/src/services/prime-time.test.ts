@@ -6,12 +6,20 @@ vi.mock("../config.js", () => ({
     PREMIUM_FEATURE_ENABLED: true,
     PRIME_TIME_SLOT_COUNT: 3,
     PRIME_TIME_STARS: 50,
+    PRIME_TIME_APPSTORE_ENABLED: false,
+    PRIME_TIME_APPSTORE_PRODUCT_ID: "prime_time_pass",
+    APPSTORE_KEY_PATH: "/keys/SubscriptionKey.p8",
+    APPSTORE_KEY_ID: "AKEY",
+    APPSTORE_ISSUER_ID: "issuer",
+    APPSTORE_BUNDLE_ID: "com.gennety.ios",
   },
 }));
 
 const { env } = await import("../config.js");
 const {
+  isPrimeTimeProduct,
   isPrimeTimeSlot,
+  primeTimeAppleRailLive,
   primeTimeSlots,
   primeTimeUnlockReason,
   primeTimeUnlocked,
@@ -22,17 +30,22 @@ const { CALENDAR_TIME_SLOTS, CALENDAR_TIME_ZONE } = await import(
   "../handlers/matching/scheduler.js"
 );
 const { wallToUtc } = await import("./profiler-schedule.js");
+const { telegramReachable } = await import("./telegram-reach.js");
 
 const mutableEnv = env as unknown as {
   PRIME_TIME_ENABLED: boolean;
   PREMIUM_FEATURE_ENABLED: boolean;
   PRIME_TIME_SLOT_COUNT: number;
+  PRIME_TIME_APPSTORE_ENABLED: boolean;
+  APPSTORE_KEY_ID: string;
 };
 
 beforeEach(() => {
   mutableEnv.PRIME_TIME_ENABLED = true;
   mutableEnv.PREMIUM_FEATURE_ENABLED = true;
   mutableEnv.PRIME_TIME_SLOT_COUNT = 3;
+  mutableEnv.PRIME_TIME_APPSTORE_ENABLED = false;
+  mutableEnv.APPSTORE_KEY_ID = "AKEY";
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -159,6 +172,88 @@ describe("who is open", () => {
     mutableEnv.PRIME_TIME_ENABLED = true;
     mutableEnv.PREMIUM_FEATURE_ENABLED = false;
     expect(primeTimeUnlockReason(match())).toBe("feature-off");
+  });
+});
+
+describe("the App Store pass rail (M7) and who it locks — R1", () => {
+  const telegramOnly = { telegramId: 42n, platform: "telegram", premiumUntil: null };
+  const both = { telegramId: 44n, platform: "both", premiumUntil: null };
+  const legacy = { telegramId: 45n, platform: null, premiumUntil: null };
+  const appOnly = { telegramId: -9n, platform: "mobile", premiumUntil: null };
+  const telegramIdOnApp = { telegramId: 46n, platform: "mobile", premiumUntil: null };
+  const participants = { telegramOnly, both, legacy, appOnly, telegramIdOnApp };
+
+  /** The rule exactly as it stood before the rail existed — the reference. */
+  function reasonBeforeTheRail(m: ReturnType<typeof match>) {
+    if (!telegramReachable(m.userA) && !telegramReachable(m.userB)) return "no-purchase-path";
+    return primeTimeUnlockReason({ ...m, userA: { ...telegramOnly }, userB: { ...telegramOnly } });
+  }
+
+  it("with the flag OFF answers exactly as before for every pair of platforms", () => {
+    mutableEnv.PRIME_TIME_APPSTORE_ENABLED = false;
+    for (const [nameA, a] of Object.entries(participants)) {
+      for (const [nameB, b] of Object.entries(participants)) {
+        const m = match({ userA: { ...a }, userB: { ...b } });
+        expect(primeTimeUnlockReason(m), `${nameA} × ${nameB}`).toBe(reasonBeforeTheRail(m));
+      }
+    }
+  });
+
+  it("with the rail live locks an app-only pair — they can buy the pass now", () => {
+    mutableEnv.PRIME_TIME_APPSTORE_ENABLED = true;
+    const m = match({ userA: { ...appOnly }, userB: { ...appOnly, telegramId: -10n } });
+    expect(primeTimeUnlockReason(m)).toBeNull();
+    // An app user whose account carries a real Telegram id but never pressed
+    // Start is still app-only — the bot cannot reach them.
+    expect(
+      primeTimeUnlockReason(match({ userA: { ...telegramIdOnApp }, userB: { ...appOnly } })),
+    ).toBeNull();
+  });
+
+  it("changes nothing for a pair a Telegram side can already reach", () => {
+    mutableEnv.PRIME_TIME_APPSTORE_ENABLED = true;
+    for (const a of [telegramOnly, both, legacy]) {
+      for (const b of Object.values(participants)) {
+        const m = match({ userA: { ...a }, userB: { ...b } });
+        mutableEnv.PRIME_TIME_APPSTORE_ENABLED = false;
+        const before = primeTimeUnlockReason(m);
+        mutableEnv.PRIME_TIME_APPSTORE_ENABLED = true;
+        expect(primeTimeUnlockReason(m)).toBe(before);
+      }
+    }
+  });
+
+  it("keeps a pair with neither Telegram nor the app open even with the rail live", () => {
+    mutableEnv.PRIME_TIME_APPSTORE_ENABLED = true;
+    // A pre-column row with a synthetic id: no bot chat, no app platform.
+    const nowhere = { telegramId: -11n, platform: "telegram", premiumUntil: null };
+    expect(
+      primeTimeUnlockReason(match({ userA: { ...nowhere }, userB: { ...nowhere, telegramId: -12n } })),
+    ).toBe("no-purchase-path");
+  });
+
+  it("does not count as live without the keys or without the feature", () => {
+    mutableEnv.PRIME_TIME_APPSTORE_ENABLED = true;
+    expect(primeTimeAppleRailLive()).toBe(true);
+
+    mutableEnv.APPSTORE_KEY_ID = "";
+    expect(primeTimeAppleRailLive()).toBe(false);
+    // …and an app-only pair falls back to fail-open instead of a band nobody can buy.
+    expect(
+      primeTimeUnlockReason(match({ userA: { ...appOnly }, userB: { ...appOnly, telegramId: -10n } })),
+    ).toBe("no-purchase-path");
+
+    mutableEnv.APPSTORE_KEY_ID = "AKEY";
+    mutableEnv.PRIME_TIME_ENABLED = false;
+    expect(primeTimeAppleRailLive()).toBe(false);
+  });
+
+  it("recognises the product by full id or last dot-segment only", () => {
+    expect(isPrimeTimeProduct("prime_time_pass")).toBe(true);
+    expect(isPrimeTimeProduct("com.gennety.ios.prime_time_pass")).toBe(true);
+    expect(isPrimeTimeProduct("prime_time_pass_2")).toBe(false);
+    expect(isPrimeTimeProduct("venue_change_1")).toBe(false);
+    expect(isPrimeTimeProduct(null)).toBe(false);
   });
 });
 

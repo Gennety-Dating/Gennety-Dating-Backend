@@ -412,6 +412,35 @@ export interface RawPrimeTimePurchaseRow {
 }
 
 export function normalizePrimeTimeRow(row: RawPrimeTimePurchaseRow): PurchaseRow {
+  // The native till (M7) writes `appstore:<transactionId>` and `amountStars: 0`.
+  // Read as Stars it would be a free sale; the row carries no money figure of
+  // its own (Apple's price rides the founder notice), so it is shown as an
+  // App Store purchase of unknown amount rather than as 0⭐.
+  if (row.externalPaymentId.startsWith("appstore:")) {
+    return {
+      id: `prime_time_purchase:${row.id}`,
+      source: "prime_time_purchase",
+      kind: "prime_time",
+      userId: row.userId,
+      provider: "app_store",
+      // `refund_manual` is money still with us that a person must return —
+      // exactly what `refund_failed` means on the Stars rail.
+      status:
+        row.status === "refund_manual"
+          ? "refund_failed"
+          : normalizePurchaseTableStatus(row.status),
+      rawStatus: row.status,
+      amountStars: null,
+      amountCents: null,
+      currency: null,
+      usdCents: null,
+      amountIsEstimate: false,
+      detail: "evening calendar band",
+      matchId: row.matchId,
+      externalPaymentId: row.externalPaymentId,
+      createdAt: row.createdAt,
+    };
+  }
   return {
     id: `prime_time_purchase:${row.id}`,
     source: "prime_time_purchase",

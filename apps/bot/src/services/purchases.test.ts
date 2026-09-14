@@ -32,6 +32,7 @@ import {
   normalizeSubscriptionRow,
   normalizeTicketLedgerRow,
   normalizeVenueChangeRow,
+  normalizePrimeTimeRow,
   isPaidSubscriptionRow,
   sortPurchases,
   starsToUsdCents,
@@ -229,6 +230,56 @@ describe("purchase-table statuses", () => {
         createdAt: AT,
       }),
     ).toMatchObject({ kind: "venue_change", status: "refunded", usdCents: 300 });
+  });
+
+  describe("a Prime Time pass", () => {
+    const base = {
+      id: "pt1",
+      userId: "u1",
+      matchId: "m9",
+      status: "settled",
+      amountStars: 50,
+      externalPaymentId: "tg-pt1",
+      createdAt: AT,
+    };
+
+    it("reads the Stars rail as before", () => {
+      expect(normalizePrimeTimeRow(base)).toMatchObject({
+        kind: "prime_time",
+        provider: "telegram_stars",
+        amountStars: 50,
+        usdCents: 100,
+        currency: "XTR",
+      });
+    });
+
+    it("reads an appstore: row as an App Store sale of unknown amount, never as 0⭐", () => {
+      const row = normalizePrimeTimeRow({
+        ...base,
+        amountStars: 0,
+        externalPaymentId: "appstore:2000000999",
+      });
+      expect(row).toMatchObject({
+        provider: "app_store",
+        status: "settled",
+        amountStars: null,
+        amountCents: null,
+        currency: null,
+        usdCents: null,
+        amountIsEstimate: false,
+      });
+      expect(formatPurchaseAmount(row)).toBe("amount unknown");
+    });
+
+    it("shows a pass parked for a manual refund as money still owed back, and Apple's refund as refunded", () => {
+      const appstore = { ...base, amountStars: 0, externalPaymentId: "appstore:1" };
+      expect(normalizePrimeTimeRow({ ...appstore, status: "refund_manual" }).status).toBe(
+        "refund_failed",
+      );
+      expect(normalizePrimeTimeRow({ ...appstore, status: "refunded_appstore" }).status).toBe(
+        "refunded",
+      );
+    });
   });
 });
 

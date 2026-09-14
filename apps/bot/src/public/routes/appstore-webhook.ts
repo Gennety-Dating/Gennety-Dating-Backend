@@ -6,6 +6,8 @@ import {
   isPremiumProduct,
 } from "../../services/appstore.js";
 import { refundAppStoreTransaction } from "../../services/appstore-tickets.js";
+import { refundPrimeTimeAppStoreTransaction } from "../../services/appstore-prime-time.js";
+import { isPrimeTimeProduct } from "../../services/prime-time.js";
 import {
   handleAppStorePremiumNotification,
   PREMIUM_RENEW_NOTIFICATIONS,
@@ -99,6 +101,20 @@ appStoreWebhookRouter.post("/", async (req: Request, res: Response): Promise<voi
       `[appstore-webhook] premium ${notificationType} tx=${transactionId} -> ${premium.status}`,
     );
     res.json({ ok: true, result: premium.status });
+    return;
+  }
+
+  // A Prime Time pass has no wallet to claw back from — it opened a band for a
+  // pair — so its refund is recorded and announced, and the band stays open
+  // (R6, `appstore-prime-time.ts`). Routed on Apple's own product id, not the
+  // untrusted one above. Before this branch such a refund fell through to the
+  // ticket ledger, found nothing and was acknowledged without a trace.
+  if (isPrimeTimeProduct(lookup.transaction.productId)) {
+    const prime = await refundPrimeTimeAppStoreTransaction(lookup.transaction);
+    console.log(
+      `[appstore-webhook] prime-time ${notificationType} tx=${transactionId} -> ${prime.status}`,
+    );
+    res.json({ ok: true, result: prime.status });
     return;
   }
 

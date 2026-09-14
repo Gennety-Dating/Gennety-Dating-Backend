@@ -2,10 +2,15 @@ import type { Api, RawApi } from "grammy";
 import { prisma, type Prisma } from "@gennety/db";
 import { buildPrimeInvoicePayload, t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
-import { notifyFounderPurchase, notifyFounderPurchaseRefunded } from "./founder-notify.js";
+import {
+  notifyFounderAppStoreUnclaimed,
+  notifyFounderPurchase,
+  notifyFounderPurchaseRefunded,
+} from "./founder-notify.js";
 import { telegramReachable } from "./telegram-reach.js";
 import { getMainBotApi } from "./main-bot-api.js";
 import { isAlreadyRefundedError } from "./stars-refund-error.js";
+import { APPSTORE_PAYMENT_PREFIX } from "./venue-change-refund.js";
 
 /**
  * The paid Prime Time pass (PRIME_TIME_PRODUCT_SPEC.md §9) — settle, refund,
@@ -27,6 +32,35 @@ export const PRIME_PURCHASE_REFUNDED_STALE = "refunded_stale";
 /** The date never happened (§9.1). */
 export const PRIME_PURCHASE_REFUNDED_MATCH_DIED = "refunded_match_died";
 export const PRIME_PURCHASE_REFUND_FAILED = "refund_failed";
+
+/**
+ * An App Store pass that owes money back and cannot be refunded by the server.
+ *
+ * Apple has no `refundStarPayment`: a consumable is refunded by Apple, to the
+ * buyer, on their own request. So the Stars outcomes above — a lost race, a
+ * dead match — land here instead, with a founder alert carrying the
+ * transaction id. The sweep must never adopt it and it is never reported as
+ * refunded. Same status string, and the same reasoning, as the venue change's
+ * `refund_manual`.
+ *
+ * `refundError` starts with the machine reason (`already_unlocked: …`,
+ * `match_died: …`), because a re-reported purchase must be answered exactly as
+ * the first report was, and there is no other column to keep that in without a
+ * schema change.
+ */
+export const PRIME_PURCHASE_REFUND_MANUAL = "refund_manual";
+/**
+ * Apple refunded or revoked a settled App Store pass (Server Notification).
+ * The band stays open: the partner may already have picked an evening on it,
+ * and re-locking a chosen slot is the one move this feature never makes
+ * (§13.2).
+ */
+export const PRIME_PURCHASE_REFUNDED_APPSTORE = "refunded_appstore";
+
+/** Whether a purchase row came through the App Store rather than Stars. */
+export function isAppStorePrimePurchase(row: { externalPaymentId: string }): boolean {
+  return row.externalPaymentId.startsWith(APPSTORE_PAYMENT_PREFIX);
+}
 
 /**
  * Comfortably longer than a real settle (a CAS plus one DM), so a slow-but-live
@@ -76,6 +110,18 @@ export async function refundPrimeTimePurchase(
   telegramId: bigint,
   targetStatus: string,
 ): Promise<boolean> {
+  // The queries that feed this already exclude the App Store rail; this is the
+  // last line. An `appstore:` id is not a Telegram charge, so the call would
+  // fail forever and park the row in `refund_failed` for a sweep that can never
+  // move it — while claiming, to anyone reading the status, that a Stars refund
+  // was owed.
+  if (isAppStorePrimePurchase(purchase)) {
+    console.error(
+      `[prime-time-refund] refused a Stars refund on App Store purchase=${purchase.id} ` +
+        `charge=${purchase.externalPaymentId}`,
+    );
+    return false;
+  }
   try {
     await api.refundStarPayment(Number(telegramId), purchase.externalPaymentId);
   } catch (err) {
@@ -320,6 +366,72 @@ export async function settlePrimeTimePayment(
 }
 
 /**
+ * §9.1 for the App Store rail: the date never happened, and the server cannot
+ * return the money. Each settled App Store pass on the match is parked as
+ * `refund_manual` and the founder is told, with the transaction id.
+ *
+ * Deliberately not silent and not "refunded": the rule "the pass comes back if
+ * the date did not happen" holds for both tills, and on this one keeping it
+ * takes a person. The CAS on `settled` makes the six death paths (and their
+ * retries) park and announce a pass exactly once. The buyer gets no message
+ * here — "your money is back" would be false, and the band is not a thing they
+ * are left waiting on.
+ */
+async function parkAppStorePassesForDeadMatch(matchId: string): Promise<number> {
+  const rows = await prisma.primeTimePurchase.findMany({
+    where: {
+      matchId,
+      status: PRIME_PURCHASE_SETTLED,
+      externalPaymentId: { startsWith: APPSTORE_PAYMENT_PREFIX },
+    },
+    select: PRIME_PURCHASE_SELECT,
+  });
+
+  let parked = 0;
+  for (const row of rows) {
+    if (!isAppStorePrimePurchase(row)) continue;
+    const moved = await prisma.primeTimePurchase.updateMany({
+      where: { id: row.id, status: PRIME_PURCHASE_SETTLED },
+      data: {
+        status: PRIME_PURCHASE_REFUND_MANUAL,
+        resolvedAt: new Date(),
+        refundError: appStoreManualRefundNote("match_died", row.externalPaymentId),
+      },
+    });
+    if (moved.count === 0) continue;
+    parked++;
+    console.error(
+      `[prime-time-refund] App Store pass on a dead match needs a manual refund ` +
+        `purchase=${row.id} match=${matchId} charge=${row.externalPaymentId}`,
+    );
+    await notifyFounderAppStoreUnclaimed({
+      userId: row.userId,
+      kind: "prime_time",
+      externalPaymentId: row.externalPaymentId,
+      reason: "match_died — свидание не состоялось, пропуск возвращается (§9.1)",
+      matchId,
+    });
+  }
+  return parked;
+}
+
+/**
+ * The `refundError` of an App Store pass parked for a manual refund. Starts
+ * with the machine reason so a re-reported purchase can be answered with the
+ * same code as the first report (`appstore-prime-time.ts`).
+ */
+export function appStoreManualRefundNote(reason: string, externalPaymentId: string): string {
+  return `${reason}: Apple refunds are not server-initiated — settle by hand, ${externalPaymentId}`;
+}
+
+/** The machine reason back out of {@link appStoreManualRefundNote}. */
+export function appStoreManualRefundReason(refundError: string | null): string | null {
+  if (!refundError) return null;
+  const head = refundError.split(":", 1)[0]?.trim();
+  return head ? head : null;
+}
+
+/**
  * §9.1 — the date never happened, so the pass comes back.
  *
  * Called from the same six paths that already return a Date Ticket
@@ -336,6 +448,11 @@ export async function refundPrimeTimeForDeadMatch(
   // and a pass already paid for must come back even if the feature was switched
   // off in between. The query costs nothing when no row exists, which is every
   // dead match today.
+  //
+  // The App Store rail first, and without a bot handle: it needs none, because
+  // there is no refund to send — only a row to park and a person to tell.
+  await parkAppStorePassesForDeadMatch(matchId);
+
   const api = apiOverride ?? getMainBotApi();
   // Two of the call sites (the stall sweep, the shared cancellation rail) have
   // no handler context, so the process-wide handle is the same idiom
@@ -343,7 +460,12 @@ export async function refundPrimeTimeForDeadMatch(
   // nobody to refund through — leave the row for the hourly sweep.
   if (!api) return 0;
   const rows = await prisma.primeTimePurchase.findMany({
-    where: { matchId, status: PRIME_PURCHASE_SETTLED },
+    where: {
+      matchId,
+      status: PRIME_PURCHASE_SETTLED,
+      // Stars only: an App Store pass was parked above.
+      NOT: { externalPaymentId: { startsWith: APPSTORE_PAYMENT_PREFIX } },
+    },
     select: {
       ...PRIME_PURCHASE_SELECT,
       user: { select: { telegramId: true, platform: true, language: true } },
@@ -421,7 +543,16 @@ export async function sweepPrimeTimeRefunds(
   // never resolved, so it is the one the user is actually owed right now.
   const [stale, retries] = await Promise.all([
     prisma.primeTimePurchase.findMany({
-      where: { status: PRIME_PURCHASE_PROCESSING, createdAt: { lt: staleBefore }, userId: { not: null } },
+      where: {
+        status: PRIME_PURCHASE_PROCESSING,
+        createdAt: { lt: staleBefore },
+        userId: { not: null },
+        // Stars only: an App Store row can sit in `processing` for the same
+        // reasons (a crash mid-settle), and its next report resumes it — see
+        // `appstore-prime-time.ts`. Handing it to `refundStarPayment` would
+        // fail forever against an id that was never a Telegram charge.
+        NOT: { externalPaymentId: { startsWith: APPSTORE_PAYMENT_PREFIX } },
+      },
       select: {
       ...PRIME_PURCHASE_SELECT,
       user: { select: { telegramId: true, platform: true, language: true } },
@@ -435,7 +566,11 @@ export async function sweepPrimeTimeRefunds(
       // must not take a slot of this tick's budget. Account deletion refuses to
       // run while one of these is still young; an older one reached the founder
       // with its id when the account went.
-      where: { status: PRIME_PURCHASE_REFUND_FAILED, userId: { not: null } },
+      where: {
+        status: PRIME_PURCHASE_REFUND_FAILED,
+        userId: { not: null },
+        NOT: { externalPaymentId: { startsWith: APPSTORE_PAYMENT_PREFIX } },
+      },
       select: {
       ...PRIME_PURCHASE_SELECT,
       user: { select: { telegramId: true, platform: true, language: true } },

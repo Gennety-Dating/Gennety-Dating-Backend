@@ -62,6 +62,7 @@ import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createRadarRouter } from "./routes/radar.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
 import { createVenueChangeAppStoreRouter } from "./routes/venue-change-appstore.js";
+import { createPrimeTimeAppStoreRouter } from "./routes/prime-time-appstore.js";
 import { createPremiumRouter } from "./routes/premium.js";
 import { createReferralRouter } from "./routes/referral.js";
 import { createPromoRouter } from "./routes/promo.js";
@@ -140,6 +141,7 @@ let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
 let venueChangeAppStoreRouter: ReturnType<typeof createVenueChangeAppStoreRouter> | null = null;
+let primeTimeAppStoreRouter: ReturnType<typeof createPrimeTimeAppStoreRouter> | null = null;
 let premiumRouter: ReturnType<typeof createPremiumRouter> | null = null;
 let referralRouter: ReturnType<typeof createReferralRouter> | null = null;
 // Public map-tile proxy for the two map Mini App screens (the departure-point
@@ -337,6 +339,22 @@ app.use("/v1/venue-change/appstore", (req, res, next) => {
     venueChangeAppStoreRouter = createVenueChangeAppStoreRouter(injectedBotApi);
   }
   venueChangeAppStoreRouter(req, res, next);
+});
+
+// StoreKit purchase reporting for the Prime Time pass (native app, JWT auth,
+// M7). Its own prefix rather than `/v1/calendar/...`: that one is the Mini App's
+// initData router and would answer 401 to a bearer token. The bot Api is only
+// for the partner's one-line DM, but a settle without it would skip that line
+// silently, so the route waits for it like its neighbours.
+app.use("/v1/prime-time/appstore", (req, res, next) => {
+  if (!injectedBotApi) {
+    res.status(503).json({ error: "Prime Time endpoint not ready" });
+    return;
+  }
+  if (!primeTimeAppStoreRouter) {
+    primeTimeAppStoreRouter = createPrimeTimeAppStoreRouter(injectedBotApi);
+  }
+  primeTimeAppStoreRouter(req, res, next);
 });
 
 // Venue change board — the paid multiplayer venue swap, served to BOTH clients

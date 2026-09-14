@@ -18,6 +18,7 @@ vi.mock("../config.js", () => ({
 vi.mock("./founder-notify.js", () => ({
   notifyFounderPurchase: vi.fn(),
   notifyFounderPurchaseRefunded: vi.fn(),
+  notifyFounderAppStoreUnclaimed: vi.fn(),
 }));
 
 const mainBotApi = { current: null as unknown };
@@ -29,8 +30,11 @@ import { prisma } from "@gennety/db";
 import {
   settlePrimeTimePayment,
   refundPrimeTimeForDeadMatch,
+  refundPrimeTimePurchase,
   sweepPrimeTimeRefunds,
+  appStoreManualRefundReason,
 } from "./prime-time-purchase.js";
+import { notifyFounderAppStoreUnclaimed } from "./founder-notify.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const db = prisma as unknown as {
@@ -278,8 +282,70 @@ describe("refundPrimeTimeForDeadMatch", () => {
 
   it("leaves the row for the sweep rather than dropping it when the bot has not booted", async () => {
     mainBotApi.current = null;
+    db.primeTimePurchase.findMany.mockResolvedValue([]);
     expect(await refundPrimeTimeForDeadMatch("m1")).toBe(0);
-    expect(db.primeTimePurchase.findMany).not.toHaveBeenCalled();
+    // Only the App Store rail was looked at — it needs no bot. The Stars rows
+    // are not even read without a handle to refund them through.
+    for (const call of db.primeTimePurchase.findMany.mock.calls) {
+      expect(
+        (call[0] as { where: { externalPaymentId?: { startsWith: string } } }).where
+          .externalPaymentId,
+      ).toEqual({ startsWith: "appstore:" });
+    }
+  });
+
+  it("parks a settled App Store pass for a manual refund — never a Stars refund", async () => {
+    const api = fakeApi();
+    const appStoreRow = purchaseRow({ id: "p9", amountStars: 0, externalPaymentId: "appstore:2000000111" });
+    db.primeTimePurchase.findMany.mockImplementation(async (args: unknown) => {
+      const where = (args as { where: { externalPaymentId?: unknown; NOT?: unknown } }).where;
+      // The App Store query asks for the prefix; the Stars one excludes it.
+      return where.externalPaymentId ? [appStoreRow] : [];
+    });
+
+    expect(await refundPrimeTimeForDeadMatch("m1", api)).toBe(0);
+
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    const write = db.primeTimePurchase.updateMany.mock.calls[0]?.[0] as {
+      where: unknown;
+      data: { status: string; refundError: string };
+    };
+    expect(write.where).toEqual({ id: "p9", status: "settled" });
+    expect(write.data.status).toBe("refund_manual");
+    expect(appStoreManualRefundReason(write.data.refundError)).toBe("match_died");
+    expect(notifyFounderAppStoreUnclaimed).toHaveBeenCalledWith(
+      expect.objectContaining({ externalPaymentId: "appstore:2000000111", matchId: "m1" }),
+    );
+  });
+
+  it("announces a parked App Store pass once — a second death path finds it gone", async () => {
+    const api = fakeApi();
+    vi.mocked(notifyFounderAppStoreUnclaimed).mockClear();
+    const appStoreRow = purchaseRow({ id: "p9", externalPaymentId: "appstore:2000000111" });
+    db.primeTimePurchase.findMany.mockImplementation(async (args: unknown) =>
+      (args as { where: { externalPaymentId?: unknown } }).where.externalPaymentId ? [appStoreRow] : [],
+    );
+    db.primeTimePurchase.updateMany.mockResolvedValue({ count: 0 });
+
+    await refundPrimeTimeForDeadMatch("m1", api);
+
+    expect(notifyFounderAppStoreUnclaimed).not.toHaveBeenCalled();
+  });
+});
+
+describe("refundPrimeTimePurchase on the App Store rail", () => {
+  it("refuses to send an appstore: id to refundStarPayment", async () => {
+    const api = fakeApi();
+    const ok = await refundPrimeTimePurchase(
+      api,
+      { id: "p9", userId: PAYER.id, status: "settled", amountStars: 0, externalPaymentId: "appstore:1" },
+      100n,
+      "refunded_race",
+    );
+    expect(ok).toBe(false);
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    expect(db.primeTimePurchase.updateMany).not.toHaveBeenCalled();
   });
 });
 
@@ -365,5 +431,19 @@ describe("sweepPrimeTimeRefunds", () => {
     // reads as "nothing was wrong" when nothing was attempted.
     expect(res).toMatchObject({ scanned: 1, refunded: 0, stillFailing: 0, skipped: 1 });
     expect(api.refundStarPayment).not.toHaveBeenCalled();
+  });
+
+  it("never selects an App Store row — neither a stuck processing one nor refund_failed", async () => {
+    const api = fakeApi();
+    db.primeTimePurchase.findMany.mockResolvedValue([]);
+
+    await sweepPrimeTimeRefunds(api);
+
+    expect(db.primeTimePurchase.findMany).toHaveBeenCalledTimes(2);
+    for (const call of db.primeTimePurchase.findMany.mock.calls) {
+      expect((call[0] as { where: { NOT: unknown } }).where.NOT).toEqual({
+        externalPaymentId: { startsWith: "appstore:" },
+      });
+    }
   });
 });

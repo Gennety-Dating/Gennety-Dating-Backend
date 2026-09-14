@@ -1,6 +1,7 @@
 import { env } from "../config.js";
+import { appStoreConfigured } from "./appstore.js";
 import { isPremiumHeadActive, type PremiumHead } from "./premium.js";
-import { telegramReachable } from "./telegram-reach.js";
+import { pushReachable, telegramReachable } from "./telegram-reach.js";
 import { zonedParts } from "./profiler-schedule.js";
 import {
   CALENDAR_TIME_SLOTS,
@@ -102,10 +103,15 @@ export function primeTimeUnlockReason(
   if (!primeTimeFeatureLive()) return "feature-off";
 
   // A pair with no path to either half of the offer is not "gated equally", it
-  // is gated permanently. Reachable today only in theory — the native client
-  // has not shipped — and the predicate exists so it cannot become reachable
-  // silently (§12).
-  if (!telegramReachable(match.userA) && !telegramReachable(match.userB)) {
+  // is gated permanently (§12). Two paths exist: the Stars invoice, which needs
+  // a side the bot can reach in Telegram, and — once its rail is live — the
+  // App Store pass, which needs a side that has the app. Before that rail
+  // (2026-09-14) an app-only pair had neither and stayed open; with the flag
+  // off it still does, bit for bit.
+  const starsPath = telegramReachable(match.userA) || telegramReachable(match.userB);
+  const appStorePath =
+    primeTimeAppleRailLive() && (pushReachable(match.userA) || pushReachable(match.userB));
+  if (!starsPath && !appStorePath) {
     return "no-purchase-path";
   }
 
@@ -141,6 +147,30 @@ export function primeTimeFeatureLive(): boolean {
     env.PREMIUM_FEATURE_ENABLED &&
     env.PRIME_TIME_SLOT_COUNT > 0
   );
+}
+
+/**
+ * Whether the native app can buy the pass (StoreKit consumable, M7).
+ *
+ * All three are needed, and each for its own reason: the feature itself (a
+ * pass for a band that is not locked buys nothing), the rail's own flag (kept
+ * off until the product is approved and a build that sells it is out), and the
+ * App Store Server API keys (the server re-fetches every transaction from
+ * Apple — without them a report can only 503).
+ */
+export function primeTimeAppleRailLive(): boolean {
+  return primeTimeFeatureLive() && env.PRIME_TIME_APPSTORE_ENABLED && appStoreConfigured();
+}
+
+/**
+ * Whether a StoreKit product id is the pass. Full id or its last dot-segment,
+ * so `com.gennety.ios.prime_time_pass` and a bare `prime_time_pass` both
+ * resolve — the same rule as tickets, Premium and the venue change.
+ */
+export function isPrimeTimeProduct(productId: string | null): boolean {
+  if (!productId) return false;
+  const target = env.PRIME_TIME_APPSTORE_PRODUCT_ID;
+  return productId === target || productId.split(".").pop() === target;
 }
 
 /**

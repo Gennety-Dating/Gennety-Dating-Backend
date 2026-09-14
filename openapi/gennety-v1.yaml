@@ -4669,6 +4669,94 @@ paths:
         "503":
           description: App Store verification is unavailable or unconfigured; retry later.
 
+  /v1/prime-time/appstore/transaction:
+    post:
+      tags: [date]
+      operationId: reportPrimeTimePurchase
+      summary: Open the evening band for one date from a StoreKit purchase
+      description: >
+        The native app's till for the Prime Time pass. The Telegram product
+        sells it in Stars; an iOS app may not offer that rail for a digital good
+        (App Store guideline 3.1.1), so the same pass is sold as a StoreKit
+        consumable and reported here. The product id to buy is
+        `primeTimeProduct` from `GET /v1/app/config` — never hard-code it — and
+        the purchase exists only while `features.primeTimePass` is true.
+
+
+        Before buying, re-read `GET /v1/matches/{id}/calendar` and buy only
+        while `primeTime.locked` is still true: the partner may have opened the
+        band in the meantime, and a purchase that finds it open is money taken
+        for nothing (see 409). The unlock is per MATCH — one pass opens the band
+        for both people.
+
+
+        Send `transaction.jwsRepresentation`; the server verifies it against the
+        App Store Server API and opens the band exactly once. Reporting is
+        idempotent: a re-report of the same transaction gets the same answer the
+        first report got. Call `transaction.finish()` on 200, 409, and a 400/422
+        other than `unknown_product`; leave it unfinished on everything else so
+        it is re-sent on the next launch.
+
+
+        **409 means the money was taken and the pass was not applied** — the
+        partner opened the band, the pair locked a date, or the caller is not in
+        this match, in the moment between. The client MUST finish the
+        transaction and promise a manual refund, never claim the band was
+        bought. It is parked for a manual refund and the founder is alerted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jws, matchId]
+              properties:
+                jws:
+                  type: string
+                  maxLength: 20000
+                  description: StoreKit 2 `Transaction.jwsRepresentation`.
+                matchId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The band is open for the pair — now, or by an earlier report of the same purchase.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PrimeTimePurchaseAck" }
+        "400":
+          description: >
+            `Missing jws`, `Invalid transaction payload` or `Missing matchId` —
+            a malformed request; retrying it cannot help.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: The pass rail is off on this server (or Prime Time itself is).
+        "409":
+          description: >
+            Money taken, pass not applied — client MUST finish the transaction
+            and promise a manual refund, never claim the band was bought.
+            `code`: `already_unlocked` (Premium on either side, the partner's
+            pass, or an evening already held), `match_closed` (the pair locked a
+            date or the match ended), `not_participant`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppStoreRefusal" }
+        "422":
+          description: >
+            Apple rejected the transaction. `code`: `unknown_transaction`,
+            `wrong_bundle`, `unknown_product`, `revoked`, `wrong_owner`.
+            `unknown_product` means this server does not know the product id
+            (a configuration mismatch, not the buyer's fault) — keep the
+            transaction unfinished; every other code is final.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppStoreRefusal" }
+        "503":
+          description: >
+            `App Store verification not configured`, or Apple (or an earlier
+            report of the same purchase) is still in flight — retry later.
+
   /v1/radar/state:
     get:
       tags: [radar]
@@ -5412,6 +5500,23 @@ components:
       properties:
         ok: { type: boolean }
 
+    PrimeTimePurchaseAck:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
+    AppStoreRefusal:
+      type: object
+      required: [error, code]
+      description: >
+        A StoreKit report the server refused. `code` is machine-readable and
+        its values are listed on each response; unknown values must be handled
+        as the response status says, not by string.
+      properties:
+        error: { type: string }
+        code: { type: string }
+
     VenueShowcase:
       type: object
       required: [cityKey, venues]
@@ -5676,6 +5781,13 @@ components:
                 entry at all: every `/v1/venue-change/*` route answers
                 `feature-disabled`, and a button whose only outcome is a
                 refusal is not a button.
+            primeTimePass:
+              type: boolean
+              description: >-
+                The Prime Time pass can be bought in the app
+                (`POST /v1/prime-time/appstore/transaction`). False → the
+                locked-slot sheet offers Premium only; the report route answers
+                404. Absent on an older server — treat as false.
         venueChangeProduct:
           type: [string, "null"]
           description: >-
@@ -5683,6 +5795,13 @@ components:
             reason the ticket ladder above is served: the app must never offer
             a product id this server will refuse to credit. Matches the full
             App Store id or its last dot-segment. Null while the board is off.
+        primeTimeProduct:
+          type: [string, "null"]
+          description: >-
+            The StoreKit consumable that opens the evening band for one date,
+            served for the same reason as `venueChangeProduct`. Matches the full
+            App Store id or its last dot-segment. Null whenever
+            `features.primeTimePass` is false.
         ticketProducts:
           type: array
           description: |
@@ -5956,6 +6075,9 @@ components:
           description: |
             The whole gate. False for a premium pair, a pair that already paid,
             and a pair with no purchase path — draw the grid as you always have.
+            An app-only pair has a purchase path only while the App Store pass
+            rail is live (`features.primeTimePass`); until then it is never
+            locked.
         slots:
           type: array
           items: { type: string, format: date-time }
@@ -5982,10 +6104,11 @@ components:
             The Telegram Stars price of opening the band for this date. Quoted
             in Stars and never in currency: it is env-tunable, so a figure baked
             into a client goes stale silently on the one screen that asks for
-            money. iOS has no purchase path for it yet — the band is opened
-            there by a subscription, or by the Telegram side of the pair
-            (the unlock is per MATCH, so either side opening it opens it for
-            both). A StoreKit consumable is the follow-up.
+            money. **The Telegram price only — iOS must not show it.** The app
+            sells the same pass as a StoreKit consumable (`primeTimeProduct`),
+            priced by Apple and shown from `Product.displayPrice`; or the band
+            is opened by a subscription, or by the other side of the pair (the
+            unlock is per MATCH, so either side opening it opens it for both).
 
     ProxyChatMessage:
       type: object
@@ -6610,7 +6733,7 @@ components:
           type: [string, "null"]
           description: Signed, 10 minutes. Null only when storage signing is unavailable
         thumbUrl: { type: [string, "null"] }
-        duration: { type: number, description: Measured server-side, seconds }
+        duration: { type: number, description: "Measured server-side, seconds" }
         bonusGranted:
           type: boolean
           description: |

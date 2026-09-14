@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { CITY_CATALOG, SUPPORTED_MARKETS } from "@gennety/shared";
 import { env } from "../../config.js";
 import { ticketProducts } from "../../services/appstore.js";
+import { primeTimeAppleRailLive } from "../../services/prime-time.js";
 
 /**
  * GET /v1/app/config — pre-auth bootstrap for the native mobile client.
@@ -31,6 +32,7 @@ import { ticketProducts } from "../../services/appstore.js";
 export const appConfigRouter: Router = Router();
 
 appConfigRouter.get("/config", (_req: Request, res: Response) => {
+  const primeTimePass = primeTimeAppleRailLive();
   res.json({
     minSupportedIosVersion: env.IOS_MIN_SUPPORTED_APP_VERSION || null,
     supportedCities: SUPPORTED_MARKETS.map((market) => ({
@@ -66,6 +68,10 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       // and hides "Connect Spotify" unless the top-tracks import is on too.
       profileMusic: env.PROFILE_MUSIC_ENABLED,
       spotifyTopTracks: env.PROFILE_MUSIC_ENABLED && env.SPOTIFY_TOP_TRACKS_ENABLED,
+      // The Prime Time pass can be bought in the app. False → the locked-slot
+      // sheet offers Premium only, exactly as before the pass existed; the
+      // report route answers 404 anyway.
+      primeTimePass,
     },
     // The StoreKit consumable ladder, in ladder order. Sent from here rather
     // than hard-coded in the app because the server is the side that decides
@@ -79,6 +85,10 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
     venueChangeProduct: env.VENUE_CHANGE_FEATURE_ENABLED
       ? env.VENUE_CHANGE_APPSTORE_PRODUCT_ID
       : null,
+    // The consumable that opens the evening band for one date. Same reason as
+    // the two above; null whenever the rail is not live, so an app can never
+    // sell a pass this server would refuse.
+    primeTimeProduct: primeTimePass ? env.PRIME_TIME_APPSTORE_PRODUCT_ID : null,
     serverNow: new Date().toISOString(),
   });
 });

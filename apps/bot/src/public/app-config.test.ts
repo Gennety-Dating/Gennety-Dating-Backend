@@ -3,6 +3,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { appConfigRouter } from "./routes/app-config.js";
 import { ticketProducts } from "../services/appstore.js";
+import { env } from "../config.js";
 
 function buildApp() {
   const app = express();
@@ -48,11 +49,48 @@ describe("GET /v1/app/config", () => {
       "cityCatalog",
       "features",
       "minSupportedIosVersion",
+      "primeTimeProduct",
       "serverNow",
       "supportedCities",
       "ticketProducts",
       "venueChangeProduct",
     ]);
+  });
+
+  // With the rail off (the default) an app must see no pass to sell — the same
+  // Premium-only sheet it showed before the pass existed.
+  it("offers no Prime Time pass while its rail is off", async () => {
+    const res = await request(buildApp()).get("/v1/app/config");
+    expect(res.body.features.primeTimePass).toBe(false);
+    expect(res.body.primeTimeProduct).toBeNull();
+  });
+
+  it("serves the pass product only once the whole rail is live", async () => {
+    const mutable = env as unknown as Record<string, unknown>;
+    const saved = { ...mutable };
+    try {
+      Object.assign(mutable, {
+        PRIME_TIME_ENABLED: true,
+        PREMIUM_FEATURE_ENABLED: true,
+        PRIME_TIME_SLOT_COUNT: 3,
+        PRIME_TIME_APPSTORE_ENABLED: true,
+        APPSTORE_KEY_PATH: "/keys/SubscriptionKey.p8",
+        APPSTORE_KEY_ID: "AKEY",
+        APPSTORE_ISSUER_ID: "issuer",
+        APPSTORE_BUNDLE_ID: "com.gennety.ios",
+      });
+      const live = await request(buildApp()).get("/v1/app/config");
+      expect(live.body.features.primeTimePass).toBe(true);
+      expect(live.body.primeTimeProduct).toBe(env.PRIME_TIME_APPSTORE_PRODUCT_ID);
+
+      // The flag alone is not enough: without the keys every report would 503.
+      mutable.APPSTORE_KEY_ID = "";
+      const noKeys = await request(buildApp()).get("/v1/app/config");
+      expect(noKeys.body.features.primeTimePass).toBe(false);
+      expect(noKeys.body.primeTimeProduct).toBeNull();
+    } finally {
+      Object.assign(mutable, saved);
+    }
   });
 
   it("publishes the waitlist tier separately from the launched one", async () => {

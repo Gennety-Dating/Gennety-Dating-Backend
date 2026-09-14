@@ -213,6 +213,7 @@ describe("runtime configuration", () => {
       APPSTORE_KEY_PATH: "/keys/SubscriptionKey.p8",
       APPSTORE_KEY_ID: "AKEY",
       APPSTORE_ISSUER_ID: "issuer",
+      PRIME_TIME_APPSTORE_ENABLED: false,
       PROFILE_MUSIC_ENABLED: true,
       SPOTIFY_CLIENT_ID: "spotify-id",
       SPOTIFY_CLIENT_SECRET: "spotify-secret",
@@ -271,6 +272,17 @@ describe("runtime configuration", () => {
         "production",
       ),
     ).toEqual([]);
+  });
+
+  it("requires the App Store keys for the Prime Time pass rail even with tickets off", () => {
+    const noKeys = { TICKET_FEATURE_ENABLED: false, APPSTORE_KEY_ID: "" };
+    expect(runtimeConfigurationErrors(complete(noKeys), "production")).toEqual([]);
+    expect(
+      runtimeConfigurationErrors(
+        complete({ ...noKeys, PRIME_TIME_APPSTORE_ENABLED: true }),
+        "production",
+      ),
+    ).toEqual([expect.stringContaining("PRIME_TIME_APPSTORE_ENABLED")]);
   });
 
   it("refuses a half-configured APNs, and accepts none at all", () => {

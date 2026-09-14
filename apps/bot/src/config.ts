@@ -623,6 +623,22 @@ export const env = {
   /// deploy.md forbids. The Mini App shows Stars, and Telegram names the real
   /// sum in its own payment sheet.
   PRIME_TIME_STARS: Number(process.env.PRIME_TIME_STARS ?? "50"),
+  /// The native app's till for the pass (M7, 2026-09-14): a StoreKit consumable
+  /// reported to `POST /v1/prime-time/appstore/transaction`. Off by default and
+  /// meant to stay off until the product is approved in App Store Connect AND a
+  /// build carrying the purchase sheet is out — flipping it earlier locks the
+  /// band for app-only pairs whose app cannot yet buy it.
+  ///
+  /// It is also the switch that changes WHO is locked: with the rail live, a pair
+  /// that no Telegram side can reach is locked too, as long as one side has the
+  /// app (`primeTimeUnlockReason`). Off, that pair stays fail-open exactly as
+  /// before.
+  PRIME_TIME_APPSTORE_ENABLED: process.env.PRIME_TIME_APPSTORE_ENABLED === "true",
+  /// StoreKit CONSUMABLE product id of the pass. Matched by full id or last
+  /// dot-segment, like every other App Store product id here. The price is
+  /// Apple's, shown by StoreKit — the server never quotes it.
+  PRIME_TIME_APPSTORE_PRODUCT_ID:
+    process.env.PRIME_TIME_APPSTORE_PRODUCT_ID ?? "prime_time_pass",
 
   // ── Short-video links (TikTok / Instagram Reels as a Profiler answer) ──
   /// Master switch. Off by default because this is the first and only path in
@@ -1226,6 +1242,7 @@ export interface RuntimeConfiguration {
   APPSTORE_KEY_PATH: string;
   APPSTORE_KEY_ID: string;
   APPSTORE_ISSUER_ID: string;
+  PRIME_TIME_APPSTORE_ENABLED: boolean;
   PROFILE_MUSIC_ENABLED: boolean;
   SPOTIFY_CLIENT_ID: string;
   SPOTIFY_CLIENT_SECRET: string;
@@ -1259,14 +1276,22 @@ export function runtimeConfigurationErrors(
       if (!value) errors.push(`${name} must be set while PHONE_AUTH_ENABLED is true`);
     }
   }
+  const appstore = [
+    ["APPSTORE_KEY_PATH", config.APPSTORE_KEY_PATH],
+    ["APPSTORE_KEY_ID", config.APPSTORE_KEY_ID],
+    ["APPSTORE_ISSUER_ID", config.APPSTORE_ISSUER_ID],
+  ] as const;
   if (config.TICKET_FEATURE_ENABLED) {
-    const appstore = [
-      ["APPSTORE_KEY_PATH", config.APPSTORE_KEY_PATH],
-      ["APPSTORE_KEY_ID", config.APPSTORE_KEY_ID],
-      ["APPSTORE_ISSUER_ID", config.APPSTORE_ISSUER_ID],
-    ] as const;
     for (const [name, value] of appstore) {
       if (!value) errors.push(`${name} must be set while TICKET_FEATURE_ENABLED is true`);
+    }
+  }
+  // The pass's App Store till needs the keys to be live at all
+  // (`primeTimeAppleRailLive` requires `appStoreConfigured()`), so a flag
+  // without them is a rail that reads "on" in the env and silently stays dead.
+  if (config.PRIME_TIME_APPSTORE_ENABLED) {
+    for (const [name, value] of appstore) {
+      if (!value) errors.push(`${name} must be set while PRIME_TIME_APPSTORE_ENABLED is true`);
     }
   }
   if (config.PROFILE_MUSIC_ENABLED) {

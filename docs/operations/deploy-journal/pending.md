@@ -11,6 +11,47 @@ Index of every entry: [INDEX.md](./INDEX.md). Order is preserved from the origin
 
 # Gennety Dating Deploy
 
+**PENDING — Prime Time на iOS: App Store-пропуск `prime_time_pass`, `POST /v1/prime-time/appstore/transaction` (2026-09-14).**
+**Схема Prisma не меняется, миграций нет.** Новые переменные окружения, обе необязательные:
+`PRIME_TIME_APPSTORE_ENABLED` (по умолчанию `false` — выкатывается ВЫКЛЮЧЕННЫМ) и
+`PRIME_TIME_APPSTORE_PRODUCT_ID` (по умолчанию `prime_time_pass`). Код: новый маршрут и сервис
+(`services/appstore-prime-time.ts`), ветка Prime Time в вебхуке App Store, фильтр `appstore:` в
+Stars-свипе и возврате при смерти матча, `features.primeTimePass` + `primeTimeProduct` в
+`/v1/app/config`, правило «нет пути покупки» учитывает приложение (только при включённом флаге).
+Спека: `reportPrimeTimePurchase`, `PrimeTimePurchaseAck`, `AppStoreRefusal`. Журнал решений —
+запись 2026-09-14 «Prime Time на iOS».
+
+**Порядок выката:** обычный рестарт бота с флагом `false` — поведение прода побитово прежнее (есть
+тест). **Включение — отдельным шагом и только в таком порядке:** (1) consumable `prime_time_pass`
+одобрен в App Store Connect; (2) вышла iOS-сборка со шторкой пропуска; (3)
+`PRIME_TIME_APPSTORE_ENABLED=true` + рестарт. Включить раньше (2) — пары из двух
+приложенческих аккаунтов увидят замок, а старая сборка предложит им только Premium. На старте с
+флагом `true` без `APPSTORE_KEY_PATH`/`APPSTORE_KEY_ID`/`APPSTORE_ISSUER_ID` бот откажется
+запускаться (`runtimeConfigurationErrors`).
+
+**Проверка после выката** (флаг выключен):
+
+```
+curl -s "$API/v1/app/config" | jq '{pass: .features.primeTimePass, product: .primeTimeProduct}'
+curl -s -o /dev/null -w '%{http_code}\n' -X POST -H "Authorization: Bearer $JWT" \
+  -H 'content-type: application/json' -d '{}' "$API/v1/prime-time/appstore/transaction"
+```
+
+Ожидается: `{pass: false, product: null}`; маршрут — `404`. **После включения:** тот же `config`
+отдаёт `{pass: true, product: "prime_time_pass"}`, пустое тело — `400 Missing jws`; настоящая
+покупка из TestFlight-песочницы → `200`, в `prime_time_purchases` строка `settled` с
+`external_payment_id = 'appstore:<id>'`, у матча `prime_time_unlocked_at` не null, основателю пришло
+«💰 Покупка — …» с пометкой Sandbox.
+
+**Откат:** `PRIME_TIME_APPSTORE_ENABLED=false` + рестарт. Уже открытые полосы остаются открытыми
+(это свойство матча); строки `refund_manual` разбираются руками по алертам.
+
+**Demo-mode:** без изменений — демо-бот телеграмный, JWT-маршрута не видит, флаг там не
+включается. **iOS:** клиент в Gennety-iOS той же датой; до включения флага он показывает только
+путь в Premium.
+
+---
+
 **PENDING — голосовые визитки, нативная половина: signed PUT, потолок 30 с, выход из шага онбординга, свежая ссылка партнёра (2026-09-14).**
 **Схема Prisma не меняется, миграций нет, новых переменных окружения нет.** Только код:
 `/v1/me/voice-prompt/upload-url` чеканит signed PUT Supabase, коммит принимает `uploadPath`
