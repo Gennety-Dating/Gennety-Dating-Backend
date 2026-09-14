@@ -105,7 +105,8 @@ admin analytics API with its 15-min `getOrCompute` cache.
   learns the other's verdict before committing (§11), byte-for-byte the same
   rule as PRODUCT_SPEC §3.4.
 - **Verified only.** An application is only ever tiered for
-  `verificationStatus = 'verified'` accounts (plus the grandfathered
+  `verificationStatus = 'verified'` accounts with completed onboarding and a
+  verified track contact (since 2026-09-14, A13-M18) (plus the grandfathered
   pre-flip skip cohort, same predicate as `buildCandidateSql` filter 1/4).
   An unverified applicant sits in a pre-tier `screening` state and is tiered
   automatically the moment the verification pipeline activates them.

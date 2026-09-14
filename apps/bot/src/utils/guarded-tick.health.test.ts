@@ -44,6 +44,22 @@ describe("guardedTick health", () => {
     expect(notifyHealth).toHaveBeenCalledWith("payments", "degraded", 3);
   });
 
+  // A13-M24: the weekly drop runs once a week, so the default threshold of three
+  // meant three missed drops — three weeks — before anyone was told.
+  it("announces a once-a-week job on its first failure when told to", async () => {
+    const notifyHealth = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const tick = guardedTick("drop-matching", async () => {
+      throw new Error("batch exploded");
+    }, { notifyHealth, failureAlertThreshold: 1 });
+
+    tick();
+    await settle();
+
+    expect(notifyHealth).toHaveBeenCalledTimes(1);
+    expect(notifyHealth).toHaveBeenCalledWith("drop-matching", "degraded", 1);
+  });
+
   it("says when it comes back", async () => {
     const notifyHealth = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(console, "error").mockImplementation(() => {});

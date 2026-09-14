@@ -232,6 +232,12 @@ const translations = {
     // --- Photo re-upload path (a way back before/after verification) ---
     verifyBtnRedoPhotos: "📷 Upload different photos",
     verifyBtnRedoPhotosSecondary: "📷 It's my photos instead",
+    verifyBtnAddPhotos: "📷 Add photos",
+    // `beginLivenessCheck` refuses a check while the profile has no photos
+    // (audit A13-H11): a pass would have nothing to be compared against.
+    verifyPhotosRequired:
+      "Verification compares your selfie with the photos on your profile — and there aren't any yet. " +
+      "Add at least {min} photos of yourself first, then run the check:",
     verifyBtnClearPhotos: "🗑 Delete all and start over",
     verifyGateLocked:
       "The menu and matching open the moment verification is done. That's the only step left:",
@@ -1651,6 +1657,10 @@ const translations = {
     // --- Photo re-upload path (a way back before/after verification) ---
     verifyBtnRedoPhotos: "📷 Загрузить другие фото",
     verifyBtnRedoPhotosSecondary: "📷 На самом деле дело в фото",
+    verifyBtnAddPhotos: "📷 Добавить фото",
+    verifyPhotosRequired:
+      "Верификация сравнивает селфи с фото в твоём профиле — а их пока нет. " +
+      "Сначала добавь хотя бы {min} своих фото, потом запусти проверку:",
     verifyBtnClearPhotos: "🗑 Удалить все и загрузить заново",
     verifyGateLocked:
       "Меню и подбор пар откроются сразу после верификации. Остался только этот шаг:",
@@ -2918,6 +2928,10 @@ const translations = {
     // --- Photo re-upload path (a way back before/after verification) ---
     verifyBtnRedoPhotos: "📷 Завантажити інші фото",
     verifyBtnRedoPhotosSecondary: "📷 Насправді річ у фото",
+    verifyBtnAddPhotos: "📷 Додати фото",
+    verifyPhotosRequired:
+      "Верифікація порівнює селфі з фото у твоєму профілі — а їх поки немає. " +
+      "Спершу додай щонайменше {min} своїх фото, потім запусти перевірку:",
     verifyBtnClearPhotos: "🗑 Видалити всі та завантажити заново",
     verifyGateLocked:
       "Меню й підбір пар відкриються одразу після верифікації. Залишився тільки цей крок:",
@@ -4108,6 +4122,10 @@ const deTranslations: TranslationTable = {
   // --- Photo re-upload path (a way back before/after verification) ---
   verifyBtnRedoPhotos: "📷 Andere Fotos hochladen",
   verifyBtnRedoPhotosSecondary: "📷 Eigentlich meine Fotos",
+  verifyBtnAddPhotos: "📷 Fotos hinzufügen",
+  verifyPhotosRequired:
+    "Die Verifizierung vergleicht dein Selfie mit den Fotos in deinem Profil — und dort sind noch keine. " +
+    "Füge zuerst mindestens {min} Fotos von dir hinzu und starte dann die Prüfung:",
   verifyBtnClearPhotos: "🗑 Alle löschen und neu hochladen",
   verifyGateLocked:
     "Menü und Matching öffnen sich direkt nach der Verifizierung. Nur dieser Schritt fehlt noch:",
@@ -5341,6 +5359,10 @@ const plTranslations: TranslationTable = {
   // --- Photo re-upload path (a way back before/after verification) ---
   verifyBtnRedoPhotos: "📷 Wgraj inne zdjęcia",
   verifyBtnRedoPhotosSecondary: "📷 Właściwie problem ze zdjęciami",
+  verifyBtnAddPhotos: "📷 Dodaj zdjęcia",
+  verifyPhotosRequired:
+    "Weryfikacja porównuje selfie ze zdjęciami w twoim profilu — a na razie ich nie ma. " +
+    "Najpierw dodaj swoje zdjęcia (minimum: {min}), potem uruchom kontrolę:",
   verifyBtnClearPhotos: "🗑 Usuń wszystkie i wgraj od nowa",
   verifyGateLocked:
     "Menu i dobieranie par otworzą się zaraz po weryfikacji. Został tylko ten krok:",

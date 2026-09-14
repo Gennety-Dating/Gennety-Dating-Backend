@@ -769,7 +769,7 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
   // verification gate is up.
   const video = getMessageVideo(ctx.message);
   if (video) {
-    await flushPhotoBatchInline(ctx.chat?.id);
+    await flushPhotoBatchInline(ctx);
     await handlePhotoStageVideo(ctx, video);
     return;
   }
@@ -1087,31 +1087,46 @@ function discardPhotoBatch(chatId: number | undefined): void {
  * Flush an open burst from INSIDE an update (so `dispatchToChat` would
  * deadlock on the chat queue this update already holds). Used before the video
  * path so the two status shimmers never overlap.
+ *
+ * Renders into `ctx.session` rather than the `bot_sessions` row (A13-M25).
+ * grammY's session middleware writes `ctx.session` back when this update ends,
+ * so a row written from in here was overwritten a moment later by the update's
+ * own, older copy — losing the card and panel message ids the render had just
+ * recorded, which is what left the manager's 🗑 and ✅ buttons pointing at
+ * messages the session no longer knew about.
  */
-async function flushPhotoBatchInline(chatId: number | undefined): Promise<void> {
+async function flushPhotoBatchInline(ctx: BotContext): Promise<void> {
+  const chatId = ctx.chat?.id;
   if (chatId === undefined) return;
   const batch = photoUploadBatches.get(chatId);
   if (!batch) return;
   if (batch.timer) clearTimeout(batch.timer);
   photoUploadBatches.delete(chatId);
-  await flushPhotoBatch(batch);
+  await flushPhotoBatch(batch, ctx.session);
 }
 
 /**
  * Report a finished burst: tear the shimmer down, explain each rejected frame
  * on the frame itself, then re-render the manager ONCE with a summary lead and
  * the ✅ Done button.
+ *
+ * `liveSession` is the in-update session (see `flushPhotoBatchInline`): it is
+ * mutated in place and grammY persists it. Without one — the debounce timer,
+ * outside any update but serialized on the chat queue — the row is read and
+ * written here, because nothing else will write it.
  */
-async function flushPhotoBatch(batch: PhotoUploadBatch): Promise<void> {
+async function flushPhotoBatch(batch: PhotoUploadBatch, liveSession?: SessionData): Promise<void> {
   batch.finish();
   await batch.status;
 
   const key = batch.chatId.toString();
-  const row = await prisma.botSession.findUnique({ where: { key } });
-  const session: SessionData = {
-    ...DEFAULT_SESSION,
-    ...((row?.data ?? {}) as Partial<SessionData>),
-  };
+  let session: SessionData;
+  if (liveSession) {
+    session = liveSession;
+  } else {
+    const row = await prisma.botSession.findUnique({ where: { key } });
+    session = { ...DEFAULT_SESSION, ...((row?.data ?? {}) as Partial<SessionData>) };
+  }
   const lang = session.language ?? batch.language;
 
   // `reference_expired` is the one rejection that isn't about the photo it
@@ -1157,6 +1172,7 @@ async function flushPhotoBatch(batch: PhotoUploadBatch): Promise<void> {
     ...(leadLines.length > 0 ? { lead: leadLines.join("\n") } : {}),
   });
 
+  if (liveSession) return;
   await prisma.botSession.upsert({
     where: { key },
     create: { key, data: session as unknown as object },

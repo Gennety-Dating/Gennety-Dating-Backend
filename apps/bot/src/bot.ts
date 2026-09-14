@@ -3,7 +3,7 @@ import type { BotContext } from "./session.js";
 import { sessionMiddleware } from "./session.js";
 import { installApiLimits } from "./api-limits.js";
 import { installBotBlockedObserver, clearBotBlocked } from "./services/bot-blocked.js";
-import { notifyFounderHandlerError } from "./services/founder-notify.js";
+import { handleBotError } from "./bot-error.js";
 import { installStaleCallbackAnswers } from "./services/callback-answers.js";
 import { sequentializeByChat } from "./chat-queue.js";
 import { botRateLimit } from "./bot-rate-limit.js";
@@ -67,8 +67,10 @@ export function createBot(token: string): Bot<BotContext> {
     await next();
   });
 
-  // Middleware chain
-  bot.use(sequentializeByChat());
+  // Middleware chain. Everything below runs on the update's chat queue, which
+  // no longer holds the polling loop (A13-H9) — so a detached update's error
+  // is handed to the same handler `bot.catch` uses instead of vanishing.
+  bot.use(sequentializeByChat({ onDetachedError: handleBotError }));
 
   // Telegram Stars (XTR) payments — registered BEFORE session + rate-limit so
   // the chat-less `pre_checkout_query` never hits the session middleware (which
@@ -169,21 +171,8 @@ export function createBot(token: string): Bot<BotContext> {
   // FSM router — dispatches to onboarding step handlers + menu
   bot.use(router);
 
-  // Error handler
-  bot.catch(async (err) => {
-    console.error("Bot error:", err);
-    // Not only the log. One bad update is noise; the same exception firing for
-    // everybody after a deploy is an outage, and the two are indistinguishable
-    // from inside a `console.error` on a droplet nobody is watching. The
-    // notifier folds a storm into one message per quarter hour.
-    const detail = err.error instanceof Error ? err.error.message : String(err.error);
-    void notifyFounderHandlerError(`${err.ctx.update.update_id}: ${detail}`);
-    try {
-      await err.ctx.reply("Something went wrong. Please try again or type /menu.");
-    } catch {
-      // Reply itself failed — nothing more we can do.
-    }
-  });
+  // Error handler — shared with the chat queue's detached work (bot-error.ts).
+  bot.catch(handleBotError);
 
   return bot;
 }

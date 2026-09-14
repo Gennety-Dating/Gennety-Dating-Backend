@@ -20,7 +20,46 @@ describe("validateVoicePrompt", () => {
     );
     expect(result).toEqual({
       ok: true,
-      value: { transcript: "мне нравится варить кофе по утрам", waveform: [10, 20, 30] },
+      // No measurement from the stub, so the (already in-range) claim stands.
+      value: {
+        transcript: "мне нравится варить кофе по утрам",
+        waveform: [10, 20, 30],
+        durationSeconds: 14,
+      },
+    });
+  });
+
+  // Audit A13-L14: on the native rail `durationSec` is a client field.
+  describe("duration is the server's, not the client's", () => {
+    const measuredAs = (seconds: number) =>
+      vi.fn(async () => ({
+        ok: true as const,
+        text: "мне нравится варить кофе по утрам",
+        durationSeconds: seconds,
+      }));
+
+    it("asks the transcription for a measurement and stores that", async () => {
+      const d = deps({ transcribe: measuredAs(22.4) });
+      const result = await validateVoicePrompt({ audio: AUDIO, durationSeconds: 15 }, d);
+
+      expect(d.transcribe).toHaveBeenCalledWith(AUDIO, { withDuration: true });
+      expect(result).toMatchObject({ ok: true, value: { durationSeconds: 22 } });
+    });
+
+    it("refuses a long clip that claimed to be short", async () => {
+      const result = await validateVoicePrompt(
+        { audio: AUDIO, durationSeconds: 15 },
+        deps({ transcribe: measuredAs(184.2) }),
+      );
+      expect(result).toMatchObject({ ok: false, reason: "voice_too_long", retryable: true });
+    });
+
+    it("refuses a misfire that claimed to be long enough", async () => {
+      const d = deps({ transcribe: measuredAs(1.1) });
+      const result = await validateVoicePrompt({ audio: AUDIO, durationSeconds: 10 }, d);
+
+      expect(result).toMatchObject({ ok: false, reason: "voice_too_short" });
+      expect(d.moderateText).not.toHaveBeenCalled();
     });
   });
 

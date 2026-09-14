@@ -226,7 +226,7 @@ derived from these rows, so there is no counter to drift.
 >   run (`rematchSearchSteps`, `NEVER_CUT_SHORT`), including before a refund.
 >   Full reasoning in PRODUCT_SPEC §3.11.
 
-1. **No-match DM** (Thursday 18:15, `no-match-notifier.ts`) — the offer follows
+1. **No-match DM** (after the drop's dispatch finishes; Thursday 18:15 is the fallback — `no-match-notifier.ts`) — the offer follows
    as its **own** short DM rather than being folded into the no-match message.
    That message is a deliberately short, empathetic rich stream (§3.1); bolting a
    price onto it would undercut the empathy and complicate a carefully-tuned

@@ -1,5 +1,5 @@
 import type { Api, RawApi } from "grammy";
-import { prisma } from "@gennety/db";
+import { prisma, type Prisma } from "@gennety/db";
 import {
   CADENCE,
   FAMINE_PAUSE_AFTER_DAYS,
@@ -15,6 +15,9 @@ import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
 import { transitionAccountStatus } from "./account-status-transitions.js";
 import { sendPushToUser } from "./push.js";
 import { pushReachable, telegramReachable } from "./telegram-reach.js";
+import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
+import { getPreviousBatchDate } from "./next-batch.js";
+import { isQuietHours } from "../workers/quiet-hours.js";
 import {
   buildCitySwitchKeyboard,
   isMarketPending,
@@ -52,9 +55,13 @@ import {
  * for why counting batches instead breaks the tier copy outright.
  *
  * The query intentionally re-derives "who has no match this drop" from
- * the DB (active users without a `Match.dispatchedAt` in the last hour)
- * instead of being handed a list from `runDropBatch` — this keeps the
- * cron safe to re-run / fire late without state coupling.
+ * the DB instead of being handed a list from `runDropBatch` — this keeps the
+ * run safe to repeat / fire late without state coupling. "Has a match" means
+ * ANY match still holding a live slot (A13-H10) — `proposed` whether or not
+ * its pitch has gone out yet, `negotiating`, `negotiating_venue`, `scheduled` —
+ * plus anything dispatched in this drop. It used to be only "dispatched in the
+ * last hour", so a person mid-negotiation, on a scheduled date, or whose drop
+ * pitch was still queued behind a slow dispatch was told nobody was found.
  */
 
 /** Matches the client's `PushPayload` type strings. No `matchId` rides with
@@ -91,9 +98,10 @@ const NOTICE_BATCH = 500;
 const MAX_NOTICE_BATCHES = 40;
 
 /**
- * Window (ms) used to decide whether a user "got matched in this drop".
- * Cron fires 15 min after the batch; dispatch takes a few minutes — a
- * 1-hour window comfortably covers both while excluding any stale matches.
+ * Window (ms) used to decide whether a user "got matched in this drop" when the
+ * run is close to the batch. The exclusion reaches back to whichever is
+ * earlier, this window or the drop itself — so a run resumed the next morning
+ * after quiet hours stopped it still recognises last evening's pitches.
  */
 const RECENT_MATCH_WINDOW_MS = 60 * 60 * 1000;
 
@@ -108,7 +116,32 @@ export interface NoMatchNotifyResult {
    *  FAMINE_PAUSE_AFTER_DAYS days running. Counted separately from the tier
    *  buckets — a paused user gets a distinct message, not another tier DM. */
   paused: number;
+  /** A13-M22: the run reached quiet hours and stopped with people left to tell.
+   *  Nobody it stopped before was claimed, so the next run picks them up. */
+  heldForQuietHours: boolean;
   errors: Array<{ userId: string; error: string }>;
+}
+
+/**
+ * True when the user holds a match that still occupies their live slot.
+ *
+ * Checked again per person, right before the notice, because the candidate
+ * page was read up to minutes earlier: a Rematch purchase, an event mutual or a
+ * resumed dispatch can hand someone a match in between, and "we couldn't find
+ * anyone" landing next to their pitch is precisely the contradiction this
+ * exists to prevent. `db` is the transaction client inside the pause.
+ */
+async function holdsLiveMatch(
+  db: Pick<Prisma.TransactionClient, "match">,
+  userId: string,
+): Promise<boolean> {
+  const live = await db.match.count({
+    where: {
+      status: { in: [...ACTIVE_MATCH_STATUSES] },
+      OR: [{ userAId: userId }, { userBId: userId }],
+    },
+  });
+  return live > 0;
 }
 
 function delay(ms: number): Promise<void> {
@@ -197,9 +230,17 @@ function templateKeyForTier(tier: number): TranslationKey {
 }
 
 /**
- * Find all `active` users with no dispatched match in the last
- * `RECENT_MATCH_WINDOW_MS`, tell each of them on whichever rail(s) they own,
- * and record a `NoMatchNotice` row for analytics + idempotency.
+ * Find all `active` users without a live match or a pitch from this drop, tell
+ * each of them on whichever rail(s) they own, and record a `NoMatchNotice` row
+ * for analytics + idempotency.
+ *
+ * **Stops at quiet hours (A13-M22).** A large base paced out can run past
+ * 23:00 Kyiv, and a consolation DM at midnight is worse than one at nine. The
+ * check runs before each person, ahead of the claim, so whoever is left is
+ * simply not claimed yet: `heldForQuietHours` tells the caller to run again
+ * after the window (see `no-match-notice-job.ts`). The clock is the run's own
+ * `now` advanced by elapsed wall time, so a caller that pins `now` gets a
+ * deterministic answer.
  *
  * **The rail is `platform`, not the sign of `telegramId`.** This loop used to
  * drop every account with a synthetic negative id under a comment saying push
@@ -229,7 +270,23 @@ export async function sendNoMatchNotices(
   streamImpl: typeof streamDraftsToChat = streamDraftsToChat,
 ): Promise<NoMatchNotifyResult> {
   const dropDate = getDropDate(now);
-  const recentSince = new Date(now.getTime() - RECENT_MATCH_WINDOW_MS);
+  // The drop this notice is about. A run can now finish the next morning (quiet
+  // hours) or resume after a restart, so "this drop" is anchored to the batch
+  // itself rather than to when the run happens to execute.
+  const dropAt = getPreviousBatchDate(now);
+  const recentSince = new Date(Math.min(now.getTime() - RECENT_MATCH_WINDOW_MS, dropAt.getTime()));
+  const startedAtMs = Date.now();
+  const inQuietHours = () => isQuietHours(new Date(now.getTime() + (Date.now() - startedAtMs)));
+  // One clause per relation: a live slot of any kind, or a pitch from this drop
+  // (which may already have been declined or expired — still not "nobody").
+  const noLiveOrRecentMatch: Prisma.MatchListRelationFilter = {
+    none: {
+      OR: [
+        { status: { in: [...ACTIVE_MATCH_STATUSES] } },
+        { dispatchedAt: { gte: recentSince } },
+      ],
+    },
+  };
   // D4: the throttle that decouples notice cadence from batch cadence. Under
   // `weekly` this equals the notice cron's own firing interval, so it's a
   // no-op beyond the exact-dropDate check it replaces. Under `daily` it's
@@ -247,18 +304,13 @@ export async function sendNoMatchNotices(
       where: {
         status: "active",
         onboardingStep: "completed",
-        // Exclude users who got a match dispatched in this drop window
+        // An account created after the drop was not in it, and must not be told
+        // it found nobody — which a resumed run hours later would otherwise do.
+        createdAt: { lt: dropAt },
+        // Exclude users who hold a live match or got a pitch in this drop.
         AND: [
-          {
-            matchesAsA: {
-              none: { dispatchedAt: { gte: recentSince } },
-            },
-          },
-          {
-            matchesAsB: {
-              none: { dispatchedAt: { gte: recentSince } },
-            },
-          },
+          { matchesAsA: noLiveOrRecentMatch },
+          { matchesAsB: noLiveOrRecentMatch },
           // Throttle: skip anyone notified within the last famineNoticeIntervalMs.
           {
             noMatchNotices: {
@@ -289,6 +341,7 @@ export async function sendNoMatchNotices(
     tier2: 0,
     tier3plus: 0,
     paused: 0,
+    heldForQuietHours: false,
     errors: [],
   };
 
@@ -305,6 +358,10 @@ export async function sendNoMatchNotices(
   async function* candidateStream() {
     const seen = new Set<string>();
     for (let batch = 0; batch < MAX_NOTICE_BATCHES; batch += 1) {
+      if (inQuietHours()) {
+        result.heldForQuietHours = true;
+        return;
+      }
       const page = await readCandidates();
       // Filtered and recorded in the same pass, so a page that somehow repeats
       // a row cannot process the same person twice either.
@@ -325,10 +382,14 @@ export async function sendNoMatchNotices(
 
   let processed = 0;
   for await (const u of candidateStream()) {
-    processed += 1;
     // Paced between notices rather than after the last one, so the run does not
     // end on a pointless sleep.
-    if (processed > 1) await delay(delayMs);
+    if (processed > 0) await delay(delayMs);
+    if (inQuietHours()) {
+      result.heldForQuietHours = true;
+      break;
+    }
+    processed += 1;
 
     const viaTelegram = telegramReachable(u);
     const viaPush = pushReachable(u);
@@ -345,6 +406,13 @@ export async function sendNoMatchNotices(
     // and could hand them tier 2 (and its discount line) as the first thing
     // they ever hear from us if they later join a rail.
     if (!viaTelegram && !viaPush) {
+      result.skipped++;
+      continue;
+    }
+
+    // The page is minutes old by now; someone may have been handed a match
+    // since (see `holdsLiveMatch`). Not claimed, so nothing to undo.
+    if (await holdsLiveMatch(prisma, u.id)) {
       result.skipped++;
       continue;
     }
@@ -433,7 +501,12 @@ export async function sendNoMatchNotices(
       // therefore invisible to both sweeps: silently, permanently out of the
       // pool with nothing in the product able to bring them back.
       if (isPoolExhaustionPause) {
+        // A13-H10: "the pool has had nothing for you for two weeks" is only
+        // true of someone who holds no match. Re-checked inside the same
+        // transaction as the status flip, so a match that landed after the
+        // check above cannot be paused out from under its holder.
         const transition = await prisma.$transaction(async (tx) => {
+          if (await holdsLiveMatch(tx, u.id)) return { kind: "live-match" as const };
           const result = await transitionAccountStatus({ id: u.id }, "pause", tx);
           if (result.kind === "changed") {
             await tx.profile.updateMany({
@@ -443,6 +516,12 @@ export async function sendNoMatchNotices(
           }
           return result;
         });
+        if (transition.kind === "live-match") {
+          // Neither the pause nor any famine notice is true of them any more.
+          await prisma.noMatchNotice.deleteMany({ where: { userId: u.id, dropDate } });
+          result.skipped++;
+          continue;
+        }
         if (transition.kind === "changed") {
           pausedNow = true;
         } else {
@@ -596,7 +675,7 @@ export async function sendNoMatchNotices(
   }
 
   console.log(
-    `[no-match-notify] done: notified=${result.notified} tier1=${result.tier1} tier2=${result.tier2} tier3plus=${result.tier3plus} skipped=${result.skipped} failed=${result.failed}`,
+    `[no-match-notify] ${result.heldForQuietHours ? "held for quiet hours" : "done"}: notified=${result.notified} tier1=${result.tier1} tier2=${result.tier2} tier3plus=${result.tier3plus} skipped=${result.skipped} failed=${result.failed}`,
   );
 
   return result;

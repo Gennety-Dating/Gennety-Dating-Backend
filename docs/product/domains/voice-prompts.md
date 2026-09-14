@@ -460,7 +460,7 @@ All additive. Same commit updates `openapi/gennety-v1.yaml`.
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/v1/me/voice-prompt/upload-url` | Presigned Supabase PUT (iOS only) |
-| `POST` | `/v1/me/voice-prompt` | Commit `{storagePath, durationSec}` → validate → persist |
+| `POST` | `/v1/me/voice-prompt` | Commit `{storagePath, durationSec}` → validate → persist. The stored duration is Whisper's measured one (the client value is only a fallback, clamped); 10 uploads per user per hour, then 429 (2026-09-14, A13-L14) |
 | `DELETE` | `/v1/me/voice-prompt` | Remove the active prompt |
 | `GET` | `/v1/matches/{id}/partner-voice-prompt` | Signed, short-TTL audio URL + peaks |
 

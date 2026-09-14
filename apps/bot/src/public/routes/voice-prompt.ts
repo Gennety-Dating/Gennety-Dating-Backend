@@ -6,6 +6,7 @@ import {
   VOICE_PROMPT_MIN_DURATION_SECONDS,
 } from "@gennety/shared";
 import { requireAuth } from "../auth-middleware.js";
+import { voicePromptUploadLimiter } from "../rate-limit.js";
 import { validateVoicePrompt } from "../../services/profile-media-validation/voice-prompt-validation.js";
 import { logMediaValidationRejection } from "../../services/profile-media-validation/rejection-log.js";
 import { deleteVoicePrompt, saveVoicePrompt } from "../../services/voice-prompt.js";
@@ -81,8 +82,10 @@ export function createVoicePromptRouter(): Router {
     });
   });
 
-  router.post("/", async (req: Request, res: Response): Promise<void> => {
+  router.post("/", voicePromptUploadLimiter, async (req: Request, res: Response): Promise<void> => {
     const userId = req.userId as string;
+    // A claim, used only to refuse an obvious misfire before any provider is
+    // paid. What is stored comes back from validation (audit A13-L14).
     const durationSec = Number(req.body?.durationSec);
     const audioBase64 = typeof req.body?.audio === "string" ? req.body.audio : "";
     const mimeType = typeof req.body?.mimeType === "string" ? req.body.mimeType : "audio/mp4";
@@ -129,7 +132,7 @@ export function createVoicePromptRouter(): Router {
     await saveVoicePrompt({
       userId,
       storagePath,
-      durationSec: Math.round(durationSec),
+      durationSec: validation.value.durationSeconds,
       mimeType,
       fileSize: audio.byteLength,
       waveform: validation.value.waveform,
@@ -138,7 +141,7 @@ export function createVoicePromptRouter(): Router {
 
     res.json({
       voicePrompt: {
-        durationSec: Math.round(durationSec),
+        durationSec: validation.value.durationSeconds,
         waveform: validation.value.waveform,
         audioUrl: await createVoicePromptSignedUrl(storagePath),
       },

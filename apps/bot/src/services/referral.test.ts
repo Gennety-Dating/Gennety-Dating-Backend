@@ -181,6 +181,16 @@ describe("reconcileReferrerRungs", () => {
 });
 
 describe("grantReferralRewardsForVerifiedInvitee", () => {
+  /** A member matching could serve: verified, registered, contact proven. */
+  const REGISTERED = {
+    verificationStatus: "verified",
+    onboardingStep: "completed",
+    registrationTrack: "general",
+    email: null,
+    isEmailVerified: false,
+    phoneVerifiedAt: new Date("2026-08-01T00:00:00Z"),
+  };
+
   function mockInviteeAndReferrer(
     invitee: Record<string, unknown>,
     referrer: Record<string, unknown> | null,
@@ -197,6 +207,7 @@ describe("grantReferralRewardsForVerifiedInvitee", () => {
 
   it("no-ops when there is no referral source", async () => {
     h.findUnique.mockResolvedValueOnce({
+      ...REGISTERED,
       id: "inv",
       referralSource: "tg:ig_story",
       referralCountedAt: null,
@@ -207,6 +218,7 @@ describe("grantReferralRewardsForVerifiedInvitee", () => {
 
   it("blocks self-referral (source points at the invitee itself)", async () => {
     h.findUnique.mockResolvedValueOnce({
+      ...REGISTERED,
       id: "inv",
       referralSource: "referral:inv",
       referralCountedAt: null,
@@ -219,7 +231,7 @@ describe("grantReferralRewardsForVerifiedInvitee", () => {
 
   it("blocks a shared-phone self-referral", async () => {
     mockInviteeAndReferrer(
-      { id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: "+15551234" },
+      { ...REGISTERED, id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: "+15551234" },
       { id: "ref", status: "active", phone: "+15551234" },
     );
     expect(await grantReferralRewardsForVerifiedInvitee("inv")).toBeNull();
@@ -227,7 +239,7 @@ describe("grantReferralRewardsForVerifiedInvitee", () => {
 
   it("skips a banned referrer", async () => {
     mockInviteeAndReferrer(
-      { id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: null },
+      { ...REGISTERED, id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: null },
       { id: "ref", status: "banned", phone: null },
     );
     expect(await grantReferralRewardsForVerifiedInvitee("inv")).toBeNull();
@@ -235,7 +247,7 @@ describe("grantReferralRewardsForVerifiedInvitee", () => {
 
   it("counts once and grants rung 1 on the happy path", async () => {
     mockInviteeAndReferrer(
-      { id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: null },
+      { ...REGISTERED, id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: null },
       { id: "ref", status: "active", phone: null },
     );
     h.updateMany.mockResolvedValueOnce({ count: 1 });
@@ -254,7 +266,7 @@ describe("grantReferralRewardsForVerifiedInvitee", () => {
 
   it("is idempotent — an already-counted invitee grants nothing", async () => {
     mockInviteeAndReferrer(
-      { id: "inv", referralSource: "referral:ref", referralCountedAt: new Date(), phone: null },
+      { ...REGISTERED, id: "inv", referralSource: "referral:ref", referralCountedAt: new Date(), phone: null },
       { id: "ref", status: "active", phone: null },
     );
     h.updateMany.mockResolvedValueOnce({ count: 0 }); // CAS loses → already counted
@@ -262,9 +274,33 @@ describe("grantReferralRewardsForVerifiedInvitee", () => {
     expect(h.grantTickets).not.toHaveBeenCalled();
   });
 
+  // Audit A13-M18: liveness alone used to settle the referral, so an account
+  // that never finished registering still paid its referrer.
+  it.each([
+    ["onboarding is unfinished", { onboardingStep: "conversational" }],
+    ["the track contact is unverified", { phoneVerifiedAt: null }],
+    ["the invitee is not verified", { verificationStatus: "pending" }],
+  ])("counts nothing and pays nothing while %s", async (_label, gap) => {
+    h.findUnique.mockResolvedValueOnce({
+      ...REGISTERED,
+      ...gap,
+      id: "inv",
+      referralSource: "referral:ref",
+      referralCountedAt: null,
+      phone: null,
+    });
+
+    expect(await grantReferralRewardsForVerifiedInvitee("inv")).toBeNull();
+    // Not even the referrer lookup, and above all not the count CAS: the
+    // invitee stays uncounted for a run that finds them registered.
+    expect(h.findUnique).toHaveBeenCalledTimes(1);
+    expect(h.updateMany).not.toHaveBeenCalled();
+    expect(h.grantTickets).not.toHaveBeenCalled();
+  });
+
   it("holds rewards when the 24h velocity cap is exceeded", async () => {
     mockInviteeAndReferrer(
-      { id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: null },
+      { ...REGISTERED, id: "inv", referralSource: "referral:ref", referralCountedAt: null, phone: null },
       { id: "ref", status: "active", phone: null },
     );
     h.updateMany.mockResolvedValueOnce({ count: 1 });

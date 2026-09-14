@@ -5,9 +5,10 @@
 // override). Reordering this line breaks local dev — bot then hits prod.
 import "./config.js";
 
+import type { Server } from "node:http";
 import cron from "node-cron";
-import { ensureMatchPairIndex } from "@gennety/db";
-import { CADENCE } from "@gennety/shared";
+import { ensureMatchPairIndex, prisma } from "@gennety/db";
+import { CADENCE, SHUTDOWN_DRAIN_TIMEOUT_MS } from "@gennety/shared";
 import {
   assertIdentityTrustConfiguration,
   assertPaymentTrustConfiguration,
@@ -21,6 +22,11 @@ import {
 } from "./demo/config.js";
 import { demoDriverTick } from "./demo/driver.js";
 import { createBot } from "./bot.js";
+import {
+  chatQueueDepth,
+  closeUpdateIntake,
+  waitForChatQueueIdle,
+} from "./chat-queue.js";
 import { setMainBotApi } from "./services/main-bot-api.js";
 import {
   notifyFounderStatusTimerHealth,
@@ -28,9 +34,8 @@ import {
   notifyFounderAdSpendReminder,
 } from "./services/founder-notify.js";
 import { autoUnsuspendElapsed, runDropBatch } from "./services/match-engine.js";
-import { dispatchMatches } from "./services/dispatch-queue.js";
-import { sendNoMatchNotices } from "./services/no-match-notifier.js";
-import { autoResumeStarvedUsers } from "./services/pool-exhaustion.js";
+import { dispatchMatches, resumeStrandedDispatches } from "./services/dispatch-queue.js";
+import { createNoMatchNoticeJob } from "./services/no-match-notice-job.js";
 import { expireStaleMatches } from "./services/match-expiry.js";
 import { sendExpiryNotifications } from "./services/expiry-notify.js";
 import { runDateLifecycleTick } from "./services/date-lifecycle.js";
@@ -73,7 +78,12 @@ import { prunePlaceCache } from "./services/place-cache.js";
 import { refreshStaleMusicTracks } from "./services/music/profile-music.js";
 import { retryDueVenueSelections } from "./services/venue-intent-v2.js";
 import { sweepLapsedVenueNegotiations } from "./services/venue-time-lapse.js";
-import { guardedTick } from "./utils/guarded-tick.js";
+import {
+  guardedTick,
+  runningGuardedTicks,
+  waitForGuardedTicksIdle,
+} from "./utils/guarded-tick.js";
+import { assertValidCronSchedules } from "./utils/cron-schedules.js";
 
 /* ── Process-level crash guard ─────────────────────────────── */
 process.on("uncaughtException", (err) => {
@@ -85,9 +95,12 @@ process.on("uncaughtException", (err) => {
 // fire-and-forget path (a `void foo().catch()` whose catch itself threw, an
 // unawaited side effect) must NOT take the whole bot down for everyone and
 // trigger a PM2 crash-loop that re-delivers the same Telegram update on restart.
-// grammY handler errors are already contained by `bot.catch`, and every cron
-// tick is wrapped in try/catch, so a surviving unhandledRejection is logged
-// loudly and we keep serving. `uncaughtException` (above) stays fatal — a
+// grammY handler errors are already contained by `bot.catch` (and detached chat
+// work by the same handler — see chat-queue.ts), and every cron tick runs
+// through `guardedTick`, so a surviving unhandledRejection is logged loudly and
+// we keep serving. Telegram polling dying is NOT one of these: it is handled
+// explicitly at `bot.start` below, because a process that stays up without it
+// is a silent outage (A13-H8). `uncaughtException` (above) stays fatal — a
 // synchronous throw that escaped every frame is a genuinely unknown state.
 process.on("unhandledRejection", (reason) => {
   console.error("[bot] unhandledRejection (non-fatal, continuing):", reason);
@@ -206,17 +219,37 @@ const PEER_WAIT_TICK_MS = resolvePeerWaitTickMs(process.env.PEER_WAIT_TICK_MS);
 const EXPIRY_CRON_SCHEDULE = process.env.EXPIRY_CRON_SCHEDULE ?? "*/15 * * * *";
 
 /**
- * "No match" empathetic DM. Default: `CADENCE.noMatchNoticeCron` (Thursday
- * 18:15 Kyiv under `weekly` — 15 minutes after the matching batch so
- * dispatched users get a moment with their pitch before unmatched users
- * receive the consolation note; daily under `daily`, though the actual send
- * frequency per user is throttled well below daily by
- * `CADENCE.famineNoticeIntervalMs` inside `sendNoMatchNotices` — see that
- * function's header for why the cron firing daily doesn't mean daily DMs).
+ * "No match" empathetic DM — the FALLBACK schedule. Default:
+ * `CADENCE.noMatchNoticeCron` (Thursday 18:15 Kyiv under `weekly`, daily under
+ * `daily`, though the actual send frequency per user is throttled well below
+ * daily by `CADENCE.famineNoticeIntervalMs` inside `sendNoMatchNotices` — see
+ * that function's header for why the cron firing daily doesn't mean daily DMs).
+ *
+ * Since A13-H10 the drop job runs the notice itself once its dispatch has
+ * finished, so the pitches always land first however long they take; this
+ * schedule covers a drop that did not run in this process, and defers rather
+ * than racing one that is still dispatching (`services/no-match-notice-job.ts`).
  * Re-runs are safe (`@@unique([userId, dropDate])` on `NoMatchNotice`).
  */
 const NO_MATCH_NOTICE_CRON_SCHEDULE =
   process.env.NO_MATCH_NOTICE_CRON_SCHEDULE ?? CADENCE.noMatchNoticeCron;
+
+/**
+ * Re-run of a no-match notice that is pending: deferred behind a dispatch,
+ * stopped by quiet hours (A13-M22), or failed. A no-op tick when nothing is
+ * pending. Every 15 minutes, so a run held at 23:00 resumes within a quarter
+ * hour of nine.
+ */
+const NO_MATCH_NOTICE_RETRY_CRON_SCHEDULE =
+  process.env.NO_MATCH_NOTICE_RETRY_CRON_SCHEDULE ?? "*/15 * * * *";
+
+/**
+ * Stranded-proposal sweep (A13-H7): resumes `proposed` rows a crashed or
+ * redeployed dispatch left with no pitch sent. Also run once at boot, which is
+ * exactly when a dispatch has just died.
+ */
+const STRANDED_DISPATCH_CRON_SCHEDULE =
+  process.env.STRANDED_DISPATCH_CRON_SCHEDULE ?? "*/15 * * * *";
 
 /**
  * Proposal-countdown cron: every minute (2026-07-25; was every five). The button
@@ -404,11 +437,24 @@ const PROFILER_CRON_SCHEDULE =
   process.env.PROFILER_CRON_SCHEDULE ?? "*/15 * * * *";
 
 /**
+ * True while `dropMatchingJob` is running — creating pairs, notifying expiries,
+ * or pacing out the pitches. Read by the stranded-proposal sweep (a row this
+ * job created but has not dispatched yet looks stranded from the database) and
+ * by the no-match notice fallback (which must not run ahead of the pitches).
+ */
+let dropJobRunning = false;
+
+const noMatchNoticeJob = createNoMatchNoticeJob(bot.api, {
+  dropInProgress: () => dropJobRunning,
+});
+
+/**
  * Drop batch: run the global greedy matching algorithm, then dispatch
  * all pitches via the rate-limited queue. Cadence (weekly/daily) is
  * whatever MATCH_CRON_SCHEDULE resolves to — see next-batch.ts / cadence.ts.
  */
 async function dropMatchingJob(): Promise<void> {
+  dropJobRunning = true;
   try {
     console.log("[cron] Drop matching batch started");
     const result = await runDropBatch();
@@ -457,17 +503,26 @@ async function dropMatchingJob(): Promise<void> {
     }
 
     if (result.missedUserIds.length > 0) {
-      // The empathetic "no match this week" DM goes out via the
-      // `NO_MATCH_NOTICE_CRON_SCHEDULE` cron (default 18:15 Kyiv) — kept
-      // separate so users get a brief breather between the dispatch
-      // wave and the consolation message instead of both at once.
       console.log(
-        `[cron] ${result.missedUserIds.length} user(s) unmatched — handled by no-match-notice cron`,
+        `[cron] ${result.missedUserIds.length} user(s) unmatched — the no-match notice follows this dispatch`,
       );
     }
   } catch (err) {
     console.error("[cron] Weekly matching job failed:", err);
+    // Rethrown (A13-M24): swallowed here, `guardedTick` saw a failed drop as a
+    // success and its alert could never fire.
+    throw err;
+  } finally {
+    dropJobRunning = false;
   }
+
+  // The empathetic "no match this drop" DM, now that every pitch of this drop
+  // has gone out (A13-H10) — however long the dispatch took. Outside the try:
+  // a notice failure is not a failed drop. The job stays pending on failure
+  // and its retry tick (with its own alert) runs it again.
+  await noMatchNoticeJob.run("after-drop").catch((err: unknown) => {
+    console.error("[no-match-notice] after-drop run failed — left pending for the retry:", err);
+  });
 }
 
 /**
@@ -488,6 +543,8 @@ async function expiryJob(): Promise<void> {
     }
   } catch (err) {
     console.error("[cron] Expiry job failed:", err);
+    // Rethrown so `guardedTick` can count it (A13-M24).
+    throw err;
   }
 }
 
@@ -522,18 +579,118 @@ async function dateLifecycleTick(): Promise<void> {
     if (venueLapsed > 0) console.log(`[venue-time-lapse] returned-to-calendar=${venueLapsed}`);
   } catch (err) {
     console.error("date lifecycle tick failed:", err);
+    // Rethrown so `guardedTick` can count it (A13-M24).
+    throw err;
   }
 }
 
-bot.start({
-  onStart: async (info) => {
-    console.log(`Bot @${info.username} started`);
+/**
+ * The stranded-proposal sweep (A13-H7). Skips while this process's drop is
+ * still running: until that job hands its rows to `dispatchMatches`, they are
+ * indistinguishable from rows a dead dispatch left behind.
+ */
+const strandedDispatchTick = guardedTick("stranded-dispatch", async () => {
+  if (dropJobRunning) return;
+  const r = await resumeStrandedDispatches(bot.api, new Date(), DISPATCH_DELAY_MS);
+  if (r.dispatch) {
+    console.log(
+      `[stranded-dispatch] found=${r.found} resumed=${r.dispatch.dispatched} ` +
+        `failed=${r.dispatch.failed} undelivered=${r.dispatch.undelivered.length}`,
+    );
+  }
+});
 
-    if (DEMO_MODE_ENABLED) {
-      // The two things no automated check can verify — which bot and which
-      // database — printed where they cannot be missed.
-      logDemoBanner(info.username);
-      if (env.DEMO_TICK_MS > 0) {
+/**
+ * node-cron v4 treats a timer that fires more than a second late — a busy event
+ * loop, a slow GC — as a missed execution: it logs a warning and SKIPS the run
+ * (A13-L26). For a job that runs once a week that is a whole lost drop. The
+ * task emits `execution:missed` instead; for the jobs that must not be lost it
+ * runs the tick then. `guardedTick` keeps it single-flight either way.
+ */
+function runOnMissedExecution(
+  name: string,
+  task: ReturnType<typeof cron.schedule>,
+  tick: () => void,
+): void {
+  task.on("execution:missed", () => {
+    console.warn(`[cron] "${name}" fired late and was marked missed — running it now`);
+    tick();
+  });
+}
+
+/* ── Boot ──────────────────────────────────────────────────── */
+
+/** Listening HTTP servers and repeating timers, for the graceful shutdown. */
+const servers: Server[] = [];
+const intervals: NodeJS.Timeout[] = [];
+let shuttingDown = false;
+
+/**
+ * Every schedule string, checked before anything starts (A13-H8). A malformed
+ * override used to throw from `cron.schedule` inside the polling `onStart` —
+ * taking every later schedule and both HTTP servers with it.
+ */
+function validateSchedules(): void {
+  assertValidCronSchedules(
+    {
+      MATCH_CRON_SCHEDULE,
+      EXPIRY_CRON_SCHEDULE,
+      NO_MATCH_NOTICE_CRON_SCHEDULE,
+      NO_MATCH_NOTICE_RETRY_CRON_SCHEDULE,
+      STRANDED_DISPATCH_CRON_SCHEDULE,
+      PROPOSAL_COUNTDOWN_CRON_SCHEDULE,
+      RE_ENGAGEMENT_CRON_SCHEDULE,
+      MATCH_NUDGE_CRON_SCHEDULE,
+      STATUS_TIMER_CRON_SCHEDULE,
+      AUTO_UNSUSPEND_CRON_SCHEDULE,
+      EMBEDDING_REFRESH_CRON_SCHEDULE,
+      SELFIE_RETENTION_CRON_SCHEDULE,
+      RETENTION_CRON_SCHEDULE,
+      EVENT_RECAP_CRON_SCHEDULE,
+      ACTIVITY_ROLLUP_CRON_SCHEDULE,
+      VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE,
+      AD_SPEND_REMINDER_CRON_SCHEDULE,
+      VENUE_REVALIDATION_CRON_SCHEDULE,
+      TICKET_EXPIRY_CRON_SCHEDULE,
+      PREMIUM_REMINDER_CRON_SCHEDULE,
+      REMATCH_REFUND_CRON_SCHEDULE,
+      VENUE_CHANGE_REFUND_CRON_SCHEDULE,
+      PRIME_TIME_REFUND_CRON_SCHEDULE,
+      REFERRAL_RELEASE_CRON_SCHEDULE,
+      PROFILER_CRON_SCHEDULE,
+      MUSIC_TRACK_REFRESH_CRON_SCHEDULE: env.MUSIC_TRACK_REFRESH_CRON_SCHEDULE,
+      SYNTHETIC_PARTNER_CRON_SCHEDULE: env.SYNTHETIC_PARTNER_CRON_SCHEDULE,
+      CAMPUS_DROP_CRON_SCHEDULE: env.CAMPUS_DROP_CRON_SCHEDULE,
+      VIRALITY_ROLLUP_CRON_SCHEDULE: env.VIRALITY_ROLLUP_CRON_SCHEDULE,
+    },
+    cron.validate,
+  );
+}
+
+/**
+ * Both HTTP servers, started before and independently of Telegram polling
+ * (A13-H8). They used to start inside `onStart`, so a Telegram outage at boot
+ * — or any exception before them in that callback — also took down the whole
+ * native iOS API, which does not need Telegram to answer at all.
+ */
+function startHttpServers(): void {
+  if (env.ADMIN_API_KEY) {
+    servers.push(startAdminServer(bot.api));
+  }
+  const publicServer = startPublicServer(bot.api);
+  if (publicServer) servers.push(publicServer);
+}
+
+/**
+ * Every cron and interval. Registered at boot rather than in `onStart`, for the
+ * same reason as the servers: none of them needs polling to be up, and polling
+ * failing to come up must not silently switch off matching, refunds and the
+ * date lifecycle.
+ */
+function registerSchedules(): void {
+  if (DEMO_MODE_ENABLED) {
+    if (env.DEMO_TICK_MS > 0) {
+      intervals.push(
         setInterval(
           guardedTick("demo-driver", () =>
             demoDriverTick(bot.api).then((r) => {
@@ -543,127 +700,114 @@ bot.start({
             }),
           ),
           env.DEMO_TICK_MS,
-        );
-        console.log(`[worker] Demo driver every ${env.DEMO_TICK_MS}ms`);
-      } else {
-        console.log("[worker] Demo driver disabled (DEMO_TICK_MS=0)");
-      }
-    }
-
-    if (env.DEV_OTP_BYPASS_TELEGRAM_IDS.size > 0) {
-      const ids = [...env.DEV_OTP_BYPASS_TELEGRAM_IDS].map((id) => id.toString()).join(", ");
-      console.warn(
-        `[dev-bypass] DEV_OTP_BYPASS_TELEGRAM_IDS active for: ${ids}. ` +
-          `These accounts skip corporate-email verification at /start. ` +
-          `MUST be empty in production .env.`,
+        ),
       );
-    }
-
-    // Idempotent DB indexes that Prisma's `db push` workflow can't express
-    // (functional index on canonical pair ordering for the lifetime-ban
-    // anti-join in `buildCandidateSql`).
-    try {
-      await ensureMatchPairIndex();
-    } catch (err) {
-      console.error("[startup] ensureMatchPairIndex failed:", err);
-    }
-
-    // Register native menu commands (Telegram Menu Button).
-    await bot.api.setMyCommands([
-      { command: "start", description: "Start / restart the bot" },
-      { command: "menu", description: "Open main menu" },
-      { command: "edit", description: "Edit your profile" },
-      { command: "profile", description: "View your profile" },
-      { command: "settings", description: "Settings" },
-      // Demo mode's escape hatch. Listed here or it is undiscoverable: a
-      // visitor who wants to see the flow again as the other gender has no
-      // other way to know it exists (DEMO_MODE.md → Recovery).
-      ...(DEMO_MODE_ENABLED
-        ? [{ command: "restart", description: "Start the demo over from scratch" }]
-        : []),
-    ]);
-    if (env.ADMIN_API_KEY) {
-      startAdminServer(bot.api);
-    }
-    startPublicServer(bot.api);
-
-    // Weekly matching cron (global greedy + automated dispatch).
-    // Every scheduled job below is wrapped in `guardedTick` (single-flight):
-    // node-cron / setInterval fire on a fixed cadence and do NOT wait for the
-    // previous run, so a tick that runs longer than its interval would
-    // otherwise overlap the next one and re-process the same rows (duplicate
-    // DMs / pushes — audit H2/M4). `guardedTick` skips a tick while the prior
-    // run is still in flight and centralises error logging.
-    // Demo mode owns match creation itself (`demo/driver.ts`). The global
-    // matchmaker must NOT run there: every demo visitor is an active, verified
-    // Kyiv account, so the real engine would cheerfully pair two investors with
-    // each other. Code-owned rather than an env schedule, because "the demo
-    // must never pair two visitors" is an invariant, not a setting.
-    if (DEMO_MODE_ENABLED) {
-      console.log("[cron] Drop matching NOT scheduled (demo mode owns matching)");
+      console.log(`[worker] Demo driver every ${env.DEMO_TICK_MS}ms`);
     } else {
-      cron.schedule(MATCH_CRON_SCHEDULE, guardedTick("drop-matching", dropMatchingJob), {
-        timezone: CRON_TIMEZONE,
-      });
-      console.log(`[cron] Drop matching scheduled: "${MATCH_CRON_SCHEDULE}" (${CRON_TIMEZONE})`);
+      console.log("[worker] Demo driver disabled (DEMO_TICK_MS=0)");
     }
+  }
 
-    // 24h TTL expiry cron.
-    cron.schedule(EXPIRY_CRON_SCHEDULE, guardedTick("match-expiry", expiryJob));
-    console.log(`[cron] Match expiry scheduled: "${EXPIRY_CRON_SCHEDULE}"`);
+  // Weekly matching cron (global greedy + automated dispatch).
+  // Every scheduled job below is wrapped in `guardedTick` (single-flight):
+  // node-cron / setInterval fire on a fixed cadence and do NOT wait for the
+  // previous run, so a tick that runs longer than its interval would
+  // otherwise overlap the next one and re-process the same rows (duplicate
+  // DMs / pushes — audit H2/M4). `guardedTick` skips a tick while the prior
+  // run is still in flight and centralises error logging.
+  // Demo mode owns match creation itself (`demo/driver.ts`). The global
+  // matchmaker must NOT run there: every demo visitor is an active, verified
+  // Kyiv account, so the real engine would cheerfully pair two investors with
+  // each other. Code-owned rather than an env schedule, because "the demo
+  // must never pair two visitors" is an invariant, not a setting.
+  if (DEMO_MODE_ENABLED) {
+    console.log("[cron] Drop matching NOT scheduled (demo mode owns matching)");
+  } else {
+    // Threshold 1 (A13-M24): this runs once a week, so the default three
+    // failures in a row would be three missed drops before anyone was told.
+    const dropTick = guardedTick("drop-matching", dropMatchingJob, { failureAlertThreshold: 1 });
+    runOnMissedExecution(
+      "drop-matching",
+      cron.schedule(MATCH_CRON_SCHEDULE, dropTick, { timezone: CRON_TIMEZONE }),
+      dropTick,
+    );
+    console.log(`[cron] Drop matching scheduled: "${MATCH_CRON_SCHEDULE}" (${CRON_TIMEZONE})`);
+  }
 
-    // Empathetic "no match" DM, plus the D10 pool-exhaustion auto-resume
-    // sweep in the same tick (mirrors autoUnsuspendElapsed's shape: a
-    // periodic scan reversing a status this same subsystem set — no
-    // dedicated cron registration needed).
-    // Skipped in demo for the same reason: a visitor who is about to be handed
-    // a match must never receive "we couldn't find anyone this week", and the
-    // pool-exhaustion sweep would eventually pause their account mid-demo.
-    if (DEMO_MODE_ENABLED) {
-      console.log("[cron] No-match notice NOT scheduled (demo mode)");
-    } else {
+  // 24h TTL expiry cron.
+  cron.schedule(EXPIRY_CRON_SCHEDULE, guardedTick("match-expiry", expiryJob));
+  console.log(`[cron] Match expiry scheduled: "${EXPIRY_CRON_SCHEDULE}"`);
+
+  // Empathetic "no match" DM, plus the D10 pool-exhaustion auto-resume
+  // sweep in the same run (mirrors autoUnsuspendElapsed's shape: a
+  // periodic scan reversing a status this same subsystem set — no
+  // dedicated cron registration needed). The drop job runs it after its
+  // dispatch; this is the fallback schedule and the pending-run retry.
+  // Skipped in demo for the same reason: a visitor who is about to be handed
+  // a match must never receive "we couldn't find anyone this week", and the
+  // pool-exhaustion sweep would eventually pause their account mid-demo.
+  if (DEMO_MODE_ENABLED) {
+    console.log("[cron] No-match notice NOT scheduled (demo mode)");
+  } else {
+    // Threshold 1, like the drop it follows (A13-M24).
+    const noticeTick = guardedTick(
+      "no-match-notice",
+      () => noMatchNoticeJob.run("schedule"),
+      { failureAlertThreshold: 1 },
+    );
+    runOnMissedExecution(
+      "no-match-notice",
+      cron.schedule(NO_MATCH_NOTICE_CRON_SCHEDULE, noticeTick, { timezone: CRON_TIMEZONE }),
+      noticeTick,
+    );
     cron.schedule(
-      NO_MATCH_NOTICE_CRON_SCHEDULE,
-      guardedTick("no-match-notice", async () => {
-        const r = await sendNoMatchNotices(bot.api, new Date(), DISPATCH_DELAY_MS);
-        if (r.notified > 0 || r.failed > 0) {
+      NO_MATCH_NOTICE_RETRY_CRON_SCHEDULE,
+      guardedTick("no-match-notice-retry", () => noMatchNoticeJob.run("retry"), {
+        failureAlertThreshold: 1,
+      }),
+    );
+    // A restart forgets a pending notice — and a deploy mid-dispatch or
+    // overnight is exactly when one is pending.
+    noMatchNoticeJob.armAfterRestart();
+    console.log(
+      `[cron] No-match notice scheduled: "${NO_MATCH_NOTICE_CRON_SCHEDULE}" (${CRON_TIMEZONE}), ` +
+        `retry "${NO_MATCH_NOTICE_RETRY_CRON_SCHEDULE}"`,
+    );
+  }
+
+  // Stranded proposals (A13-H7). Scheduled in demo too: the demo driver
+  // dispatches through the same queue, and a visitor stranded by a restart
+  // is exactly as stuck as a real user.
+  cron.schedule(STRANDED_DISPATCH_CRON_SCHEDULE, strandedDispatchTick);
+  console.log(`[cron] Stranded-proposal sweep scheduled: "${STRANDED_DISPATCH_CRON_SCHEDULE}"`);
+
+  // Live "⏳ Xh left" countdown plate on proposal pitches.
+  cron.schedule(
+    PROPOSAL_COUNTDOWN_CRON_SCHEDULE,
+    guardedTick("proposal-countdown", () =>
+      proposalCountdownTick(bot.api).then((r) => {
+        if (r.edited > 0 || r.cleared > 0 || r.errors > 0) {
           console.log(
-            `[no-match-notice] notified=${r.notified} tier1=${r.tier1} tier2=${r.tier2} tier3plus=${r.tier3plus} paused=${r.paused} skipped=${r.skipped} failed=${r.failed}`,
+            `[proposal-countdown] scanned=${r.scanned} edited=${r.edited} skipped=${r.skippedSameText} cleared=${r.cleared} errors=${r.errors}`,
           );
         }
-        await autoResumeStarvedUsers(bot.api);
       }),
-      { timezone: CRON_TIMEZONE },
-    );
-    console.log(
-      `[cron] No-match notice scheduled: "${NO_MATCH_NOTICE_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
-    );
-    }
+    ),
+  );
+  console.log(`[cron] Proposal countdown scheduled: "${PROPOSAL_COUNTDOWN_CRON_SCHEDULE}"`);
 
-    // Live "⏳ Xh left" countdown plate on proposal pitches.
-    cron.schedule(
-      PROPOSAL_COUNTDOWN_CRON_SCHEDULE,
-      guardedTick("proposal-countdown", () =>
-        proposalCountdownTick(bot.api).then((r) => {
-          if (r.edited > 0 || r.cleared > 0 || r.errors > 0) {
-            console.log(
-              `[proposal-countdown] scanned=${r.scanned} edited=${r.edited} skipped=${r.skippedSameText} cleared=${r.cleared} errors=${r.errors}`,
-            );
-          }
-        }),
-      ),
+  // Date lifecycle (icebreakers, emergencies, feedback) — kept on setInterval.
+  if (DATE_LIFECYCLE_TICK_MS > 0) {
+    intervals.push(
+      setInterval(guardedTick("date-lifecycle", dateLifecycleTick), DATE_LIFECYCLE_TICK_MS),
     );
-    console.log(`[cron] Proposal countdown scheduled: "${PROPOSAL_COUNTDOWN_CRON_SCHEDULE}"`);
+  }
 
-    // Date lifecycle (icebreakers, emergencies, feedback) — kept on setInterval.
-    if (DATE_LIFECYCLE_TICK_MS > 0) {
-      setInterval(guardedTick("date-lifecycle", dateLifecycleTick), DATE_LIFECYCLE_TICK_MS);
-    }
-
-    // Party Mode rounds. Gated on the feature flag rather than only on the
-    // interval, so with events off the worker does not exist at all — the same
-    // "off is inert, not merely quiet" property the rest of the feature has.
-    if (env.EVENTS_FEATURE_ENABLED && EVENT_ROUND_TICK_MS > 0) {
+  // Party Mode rounds. Gated on the feature flag rather than only on the
+  // interval, so with events off the worker does not exist at all — the same
+  // "off is inert, not merely quiet" property the rest of the feature has.
+  if (env.EVENTS_FEATURE_ENABLED && EVENT_ROUND_TICK_MS > 0) {
+    intervals.push(
       setInterval(
         guardedTick("event-rounds", async () => {
           const result = await runEventRoundTick();
@@ -676,14 +820,16 @@ bot.start({
           }
         }),
         EVENT_ROUND_TICK_MS,
-      );
-      console.log(`[worker] Party Mode rounds every ${EVENT_ROUND_TICK_MS}ms`);
-    }
+      ),
+    );
+    console.log(`[worker] Party Mode rounds every ${EVENT_ROUND_TICK_MS}ms`);
+  }
 
-    // "Waiting on your partner" shimmer — re-issues the ephemeral rich draft so
-    // it survives the whole wait. setInterval, not cron: the draft's ~30s TTL is
-    // shorter than cron's one-minute floor.
-    if (PEER_WAIT_TICK_MS > 0) {
+  // "Waiting on your partner" shimmer — re-issues the ephemeral rich draft so
+  // it survives the whole wait. setInterval, not cron: the draft's ~30s TTL is
+  // shorter than cron's one-minute floor.
+  if (PEER_WAIT_TICK_MS > 0) {
+    intervals.push(
       setInterval(
         guardedTick("peer-wait", () =>
           peerWaitShimmerTick(bot.api).then((r) => {
@@ -697,485 +843,645 @@ bot.start({
           }),
         ),
         PEER_WAIT_TICK_MS,
-      );
-      console.log(`[worker] Peer-wait shimmer every ${PEER_WAIT_TICK_MS}ms`);
-    }
-
-    // Re-engagement: remind users who dropped off onboarding (all steps).
-    cron.schedule(
-      RE_ENGAGEMENT_CRON_SCHEDULE,
-      guardedTick("re-engagement", () =>
-        reEngagementTick(bot.api).then((n) => {
-          if (n > 0) console.log(`[re-engagement] ${n} user(s) re-engaged`);
-        }),
       ),
     );
-    console.log(`[cron] Re-engagement scheduled: "${RE_ENGAGEMENT_CRON_SCHEDULE}"`);
+    console.log(`[worker] Peer-wait shimmer every ${PEER_WAIT_TICK_MS}ms`);
+  }
 
-    // Profiler: post-onboarding Q&A batches that fuel icebreakers + hints.
-    cron.schedule(
-      PROFILER_CRON_SCHEDULE,
-      guardedTick("profiler", () =>
-        profilerTick(bot.api).then((r) => {
-          if (r.seeded > 0 || r.dispatched > 0 || r.deferred > 0 || r.blocked > 0 || r.expired > 0) {
-            console.log(
-              `[profiler] seeded=${r.seeded} dispatched=${r.dispatched} deferred=${r.deferred} blocked=${r.blocked} expired=${r.expired}`,
-            );
-          }
-        }),
-      ),
-    );
-    console.log(`[cron] Profiler scheduled: "${PROFILER_CRON_SCHEDULE}"`);
+  // Re-engagement: remind users who dropped off onboarding (all steps).
+  cron.schedule(
+    RE_ENGAGEMENT_CRON_SCHEDULE,
+    guardedTick("re-engagement", () =>
+      reEngagementTick(bot.api).then((n) => {
+        if (n > 0) console.log(`[re-engagement] ${n} user(s) re-engaged`);
+      }),
+    ),
+  );
+  console.log(`[cron] Re-engagement scheduled: "${RE_ENGAGEMENT_CRON_SCHEDULE}"`);
 
-    // Music on the profile: re-read pinned tracks' metadata nightly. The
-    // Spotify Terms allow only temporary caching and require what is shown to
-    // be current; a track Spotify dropped is deleted rather than kept stale.
-    if (env.PROFILE_MUSIC_ENABLED) {
-      cron.schedule(
-        env.MUSIC_TRACK_REFRESH_CRON_SCHEDULE,
-        guardedTick("music-track-refresh", () =>
-          refreshStaleMusicTracks().then((r) => {
-            if (r.refreshed > 0 || r.removed > 0 || r.failed > 0) {
-              console.log(
-                `[music-track-refresh] refreshed=${r.refreshed} removed=${r.removed} failed=${r.failed}`,
-              );
-            }
-          }),
-        ),
-      );
-      console.log(
-        `[cron] Music track refresh scheduled: "${env.MUSIC_TRACK_REFRESH_CRON_SCHEDULE}"`,
-      );
-    }
-
-    // Match nudge: proposal (3h/10h), scheduling and venue (6h/12h) reminders,
-    // plus the planning-stage stall chain — "still in?" at 24h, cancellation at
-    // 48h (PRODUCT_SPEC §3.5c).
-    cron.schedule(
-      MATCH_NUDGE_CRON_SCHEDULE,
-      guardedTick("match-nudge", () =>
-        matchNudgeTick(bot.api).then((r) => {
-          const total =
-            r.proposalNudges +
-            r.schedNudges +
-            r.deadlineNudges +
-            r.venueNudges +
-            r.stallCheckIns +
-            r.stallTimeouts;
-          if (total > 0) {
-            console.log(
-              `[match-nudge] proposal=${r.proposalNudges} sched=${r.schedNudges} ` +
-                `deadline=${r.deadlineNudges} venue=${r.venueNudges} ` +
-                `stallCheckIns=${r.stallCheckIns} stallTimeouts=${r.stallTimeouts}`,
-            );
-          }
-        }),
-      ),
-    );
-    console.log(`[cron] Match nudge scheduled: "${MATCH_NUDGE_CRON_SCHEDULE}"`);
-
-    // Date Ticket expiry: refund stalled partial payments, open Calendar free.
-    if (env.TICKET_FEATURE_ENABLED) {
-      cron.schedule(
-        TICKET_EXPIRY_CRON_SCHEDULE,
-        guardedTick("ticket-expiry", () =>
-          ticketExpiryTick(bot.api).then((r) => {
-            if (r.swept > 0) console.log(`[ticket-expiry] swept ${r.swept} stalled ticket gate(s)`);
-          }),
-        ),
-      );
-      console.log(`[cron] Ticket expiry scheduled: "${TICKET_EXPIRY_CRON_SCHEDULE}"`);
-    }
-
-    // Premium expiry reminders (§3.8): 3 days and 24 hours before a NON-renewing
-    // paid period ends. Gated on the same flag as the purchase surfaces — this
-    // message exists to sell the next period, so with sales paused there is
-    // nowhere to send anyone. An entitlement already paid for is unaffected
-    // either way; it simply runs out as it does today.
-    if (env.PREMIUM_FEATURE_ENABLED) {
-      cron.schedule(
-        PREMIUM_REMINDER_CRON_SCHEDULE,
-        guardedTick("premium-reminder", () =>
-          premiumExpiryReminderTick(bot.api).then((r) => {
-            if (r.sent3d + r.sent1d + r.failed > 0) {
-              console.log(
-                `[premium-reminder] 3d=${r.sent3d} 1d=${r.sent1d} failed=${r.failed}`,
-              );
-            }
-          }),
-        ),
-      );
-      console.log(
-        `[cron] Premium expiry reminder scheduled: "${PREMIUM_REMINDER_CRON_SCHEDULE}"`,
-      );
-    }
-
-    // Rematch refunds: retry failed refunds + reverse abandoned purchases.
-    if (env.REMATCH_FEATURE_ENABLED) {
-      cron.schedule(
-        REMATCH_REFUND_CRON_SCHEDULE,
-        guardedTick("rematch-refund", () =>
-          sweepRematchRefunds(bot.api).then(() => undefined),
-        ),
-      );
-      console.log(`[cron] Rematch refund retry scheduled: "${REMATCH_REFUND_CRON_SCHEDULE}"`);
-    }
-
-    // Venue-change refunds: retry failed refunds + reverse purchases abandoned
-    // mid-settle. Same discipline as the rematch sweep above — this is what
-    // makes "a venue-change payment either changes the venue or comes back"
-    // durable rather than best-effort.
-    if (env.VENUE_CHANGE_FEATURE_ENABLED) {
-      cron.schedule(
-        VENUE_CHANGE_REFUND_CRON_SCHEDULE,
-        guardedTick("venue-change-refund", () =>
-          sweepVenueChangeRefunds(bot.api).then(() => undefined),
-        ),
-      );
-      console.log(
-        `[cron] Venue-change refund retry scheduled: "${VENUE_CHANGE_REFUND_CRON_SCHEDULE}"`,
-      );
-    }
-
-    // Prime Time refunds: retry failed refunds + reverse passes abandoned
-    // mid-settle. Registered through `primeTimeFeatureLive()` rather than the
-    // raw flag so the two conditions that make the feature real stay in one
-    // place — a cron whose purchases cannot exist is a scheduled no-op.
-    if (primeTimeFeatureLive()) {
-      cron.schedule(
-        PRIME_TIME_REFUND_CRON_SCHEDULE,
-        guardedTick("prime-time-refund", () =>
-          sweepPrimeTimeRefunds(bot.api).then(() => undefined),
-        ),
-      );
-      console.log(
-        `[cron] Prime Time refund retry scheduled: "${PRIME_TIME_REFUND_CRON_SCHEDULE}"`,
-      );
-    }
-
-    // Referral rewards held back by the velocity cap: without this pass they
-    // were released only by another friend verifying, which for a referrer
-    // whose burst was their last invites meant never.
-    if (env.REFERRAL_FEATURE_ENABLED) {
-      cron.schedule(
-        REFERRAL_RELEASE_CRON_SCHEDULE,
-        guardedTick("referral-release", () =>
-          sweepHeldReferralRewards().then((r) => {
-            if (r.released + r.stillHeld > 0) {
-              console.log(
-                `[referral-release] scanned=${r.scanned} released=${r.released} stillHeld=${r.stillHeld}`,
-              );
-            }
-          }),
-        ),
-      );
-      console.log(`[cron] Referral held-reward release scheduled: "${REFERRAL_RELEASE_CRON_SCHEDULE}"`);
-    }
-
-    // Synthetic test partners (PRODUCT_SPEC §3.1c): decline once the human
-    // has committed. Registered only when SYNTHETIC_FILL_ENABLED, so a
-    // production without the flag schedules nothing at all — and the tick
-    // itself re-reads the flag, so flipping it off mid-run stops the sweep
-    // rather than leaving a scheduled no-op with teeth.
-    if (env.SYNTHETIC_FILL_ENABLED) {
-      cron.schedule(
-        env.SYNTHETIC_PARTNER_CRON_SCHEDULE,
-        guardedTick("synthetic-partner", () =>
-          syntheticPartnerTick().then(() => undefined),
-        ),
-      );
-      console.log(
-        `[cron] Synthetic test partner scheduled: "${env.SYNTHETIC_PARTNER_CRON_SCHEDULE}"`,
-      );
-    }
-
-    // Bonus Campus Drop (PRODUCT_SPEC §Campus Radar): an out-of-cycle drop for
-    // a university whose verified cohort just grew. Registered only when
-    // CAMPUS_DROP_ENABLED — it is a SECOND entry point into the allocator, and
-    // the reason Rematch carries a pre-batch blackout is that a single-cohort
-    // run can take a candidate the globally-optimal Thursday batch needed.
-    //
-    // Not scheduled in demo mode, for the same reason drop matching is not:
-    // the demo must never pair two visitors with each other, and a campus drop
-    // is matching.
-    if (env.CAMPUS_DROP_ENABLED && !DEMO_MODE_ENABLED) {
-      cron.schedule(
-        env.CAMPUS_DROP_CRON_SCHEDULE,
-        guardedTick("campus-drop", () => campusDropTick()),
-      );
-      console.log(`[cron] Campus drop scheduled: "${env.CAMPUS_DROP_CRON_SCHEDULE}"`);
-    } else if (env.CAMPUS_DROP_ENABLED) {
-      console.log("[cron] Campus drop NOT scheduled (demo mode owns matching)");
-    }
-
-    // M-6: hourly auto-unsuspend. Lifts Tier 2 suspensions whose
-    // `suspendedUntil` has elapsed without waiting for the weekly batch.
-    cron.schedule(
-      AUTO_UNSUSPEND_CRON_SCHEDULE,
-      guardedTick("auto-unsuspend", () =>
-        autoUnsuspendElapsed().then((n) => {
-          if (n > 0) console.log(`[auto-unsuspend] reactivated ${n} user(s)`);
-        }),
-      ),
-    );
-    console.log(`[cron] Auto-unsuspend scheduled: "${AUTO_UNSUSPEND_CRON_SCHEDULE}"`);
-
-    // M-2: embedding refresh — picks up dirty profiles and recomputes.
-    cron.schedule(
-      EMBEDDING_REFRESH_CRON_SCHEDULE,
-      guardedTick("embedding-refresh", () =>
-        embeddingRefreshTick().then((r) => {
-          if (r.scanned > 0) {
-            console.log(
-              `[embedding-refresh] scanned=${r.scanned} refreshed=${r.refreshed} failed=${r.failed}`,
-            );
-          }
-        }),
-      ),
-    );
-    console.log(`[cron] Embedding refresh scheduled: "${EMBEDDING_REFRESH_CRON_SCHEDULE}"`);
-
-    // Pinned status banner — discrete countdown to next match dispatch.
-    cron.schedule(
-      STATUS_TIMER_CRON_SCHEDULE,
-      guardedTick("status-timer", runStatusTimer),
-    );
-    console.log(`[cron] Status timer scheduled: "${STATUS_TIMER_CRON_SCHEDULE}"`);
-
-    // GDPR Article 9: scrub Persona-captured selfies once they pass the
-    // 90-day retention window. The user stays `verified`; only the stored
-    // reference image is deleted.
-    cron.schedule(
-      SELFIE_RETENTION_CRON_SCHEDULE,
-      guardedTick("selfie-retention", () =>
-        runSelfieRetention().then((r) => {
-          if (r.scanned > 0 || r.errors > 0) {
-            console.log(
-              `[selfie-retention] scanned=${r.scanned} storage=${r.deletedFromStorage} db=${r.deletedFromDb} errors=${r.errors}`,
-            );
-          }
-        }),
-      ),
-      { timezone: CRON_TIMEZONE },
-    );
-    console.log(
-      `[cron] Selfie retention scheduled: "${SELFIE_RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
-    );
-
-    // General data retention: expired OTP challenges (including phone numbers
-    // of people who never finished signing up, which no user cascade reaches),
-    // dead refresh sessions, and aged proxy-chat messages.
-    cron.schedule(
-      RETENTION_CRON_SCHEDULE,
-      guardedTick("retention", () => retentionTick().then(() => undefined)),
-      { timezone: CRON_TIMEZONE },
-    );
-    console.log(
-      `[cron] Data retention scheduled: "${RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
-    );
-
-    // Admin announcements → inboxes + paced pushes (decision journal
-    // 2026-09-13). Every minute: a scheduled announcement is picked up within
-    // one, and a run that quiet hours stopped resumes on the first tick after
-    // nine. Not in demo: the demo database has no founder composing anything,
-    // and a visitor must never be sent a real party announcement.
-    if (DEMO_MODE_ENABLED) {
-      console.log("[cron] Announcement fan-out NOT scheduled (demo mode)");
-    } else {
-      cron.schedule(
-        "* * * * *",
-        guardedTick("announcement-fanout", async () => {
-          const r = await announcementFanoutTick();
-          if (r.claimed > 0 || r.inboxRows > 0 || r.pushed > 0 || r.completed > 0) {
-            console.log(
-              `[announcement-fanout] claimed=${r.claimed} inboxRows=${r.inboxRows} pushed=${r.pushed} completed=${r.completed} heldForQuietHours=${r.heldForQuietHours}`,
-            );
-          }
-        }),
-        { timezone: CRON_TIMEZONE },
-      );
-      console.log("[cron] Announcement fan-out scheduled: every minute");
-    }
-
-    // People parked in `pending_review` by an inconclusive face match. They are
-    // outside matching entirely, they got there through our infrastructure
-    // rather than anything they did, and the admin view that lists them is a
-    // pull endpoint nobody polls. Shares the nightly schedule because a stuck
-    // review is measured in days, not minutes.
-    cron.schedule(
-      RETENTION_CRON_SCHEDULE,
-      guardedTick("verification-stuck", () => verificationStuckSweep().then(() => undefined)),
-      { timezone: CRON_TIMEZONE },
-    );
-
-    // Post-event recap + mutual sweep. Logs only when something happened, so a
-    // quiet tick is the healthy case; `deferred` staying high across many
-    // ticks means mutuals are piling up behind live matches (or behind the
-    // lifetime pair ban, which the sweep cannot tell apart — see the service).
-    if (env.EVENTS_FEATURE_ENABLED) {
-      cron.schedule(
-        EVENT_RECAP_CRON_SCHEDULE,
-        guardedTick("event-recap", async () => {
-          const r = await runEventRecapTick();
-          if (r.recapsSent > 0 || r.recapsFailed > 0 || r.matchesCreated > 0) {
-            console.log(
-              `[event-recap] events=${r.eventsScanned} recaps=${r.recapsSent} ` +
-                `failed=${r.recapsFailed} matches=${r.matchesCreated} ` +
-                `deferred=${r.matchesDeferred} blocked=${r.matchesBlocked}`,
-            );
-          }
-        }),
-        { timezone: CRON_TIMEZONE },
-      );
-      console.log(
-        `[cron] Event recap scheduled: "${EVENT_RECAP_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
-      );
-    }
-
-    // DAU/MAU self-heal. Logs only when it actually repaired something, so a
-    // silent night is the healthy case and a `repaired=` line is the signal
-    // that the live mark is dropping writes.
-    cron.schedule(
-      ACTIVITY_ROLLUP_CRON_SCHEDULE,
-      guardedTick("activity-rollup", async () => {
-        const r = await activityRollupTick();
-        if (r.repaired > 0 || r.failed > 0) {
+  // Profiler: post-onboarding Q&A batches that fuel icebreakers + hints.
+  cron.schedule(
+    PROFILER_CRON_SCHEDULE,
+    guardedTick("profiler", () =>
+      profilerTick(bot.api).then((r) => {
+        if (r.seeded > 0 || r.dispatched > 0 || r.deferred > 0 || r.blocked > 0 || r.expired > 0) {
           console.log(
-            `[activity-rollup] scanned=${r.scanned} repaired=${r.repaired} failed=${r.failed}`,
+            `[profiler] seeded=${r.seeded} dispatched=${r.dispatched} deferred=${r.deferred} blocked=${r.blocked} expired=${r.expired}`,
           );
         }
       }),
-      { timezone: "UTC" },
-    );
-    console.log(
-      `[cron] Activity rollup scheduled: "${ACTIVITY_ROLLUP_CRON_SCHEDULE}" (UTC)`,
-    );
+    ),
+  );
+  console.log(`[cron] Profiler scheduled: "${PROFILER_CRON_SCHEDULE}"`);
 
-    // Пересчёт виральности в `virality_days` / `virality_cohorts`.
-    //
-    // UTC, как и rollup активности, и по той же причине: бакет — календарный
-    // день UTC, поэтому пересчёт обязан идти после его закрытия, а не когда
-    // проснулся Киев. Прогон идемпотентен и переписывает окно целиком, так что
-    // пропущенная ночь не оставляет дыры — следующая закроет тот же диапазон.
+  // Music on the profile: re-read pinned tracks' metadata nightly. The
+  // Spotify Terms allow only temporary caching and require what is shown to
+  // be current; a track Spotify dropped is deleted rather than kept stale.
+  if (env.PROFILE_MUSIC_ENABLED) {
     cron.schedule(
-      env.VIRALITY_ROLLUP_CRON_SCHEDULE,
-      guardedTick("virality-rollup", async () => {
-        const r = await viralityRollupTick();
-        console.log(
-          `[virality-rollup] ${r.from}..${r.to} scopes=${r.scopes} ` +
-            `days=${r.dayRows} cohorts=${r.cohortRows}`,
-        );
-      }),
-      { timezone: "UTC" },
+      env.MUSIC_TRACK_REFRESH_CRON_SCHEDULE,
+      guardedTick("music-track-refresh", () =>
+        refreshStaleMusicTracks().then((r) => {
+          if (r.refreshed > 0 || r.removed > 0 || r.failed > 0) {
+            console.log(
+              `[music-track-refresh] refreshed=${r.refreshed} removed=${r.removed} failed=${r.failed}`,
+            );
+          }
+        }),
+      ),
     );
     console.log(
-      `[cron] Virality rollup scheduled: "${env.VIRALITY_ROLLUP_CRON_SCHEDULE}" (UTC)`,
+      `[cron] Music track refresh scheduled: "${env.MUSIC_TRACK_REFRESH_CRON_SCHEDULE}"`,
     );
+  }
 
-    // Weekly venue-concentration alarm. Registered only when the alert is on:
-    // the engine's failure mode is silent (dates keep being scheduled), so
-    // without this nobody learns that one venue took the city until a human
-    // queries the database by hand.
-    if (env.VENUE_CONCENTRATION_ALERT_ENABLED) {
-      cron.schedule(
-        VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE,
-        guardedTick("venue-concentration-alert", () =>
-          venueConcentrationAlertTick().then((r) => {
-            if (!r.skipped) {
-              console.log(
-                `[venue-concentration] cities=${r.citiesScanned} alerts=${r.alerts}`,
-              );
-            }
-          }),
-        ),
-        { timezone: CRON_TIMEZONE },
-      );
-      console.log(
-        `[cron] Venue concentration alert scheduled: "${VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
-      );
-    }
+  // Match nudge: proposal (3h/10h), scheduling and venue (6h/12h) reminders,
+  // plus the planning-stage stall chain — "still in?" at 24h, cancellation at
+  // 48h (PRODUCT_SPEC §3.5c).
+  cron.schedule(
+    MATCH_NUDGE_CRON_SCHEDULE,
+    guardedTick("match-nudge", () =>
+      matchNudgeTick(bot.api).then((r) => {
+        const total =
+          r.proposalNudges +
+          r.schedNudges +
+          r.deadlineNudges +
+          r.venueNudges +
+          r.stallCheckIns +
+          r.stallTimeouts;
+        if (total > 0) {
+          console.log(
+            `[match-nudge] proposal=${r.proposalNudges} sched=${r.schedNudges} ` +
+              `deadline=${r.deadlineNudges} venue=${r.venueNudges} ` +
+              `stallCheckIns=${r.stallCheckIns} stallTimeouts=${r.stallTimeouts}`,
+          );
+        }
+      }),
+    ),
+  );
+  console.log(`[cron] Match nudge scheduled: "${MATCH_NUDGE_CRON_SCHEDULE}"`);
 
-    // Weekly ad-spend reminder (AD_SPEND_TRACKING_DESIGN.md). No feature flag
-    // of its own — it rides FOUNDER_NOTIFY_ENABLED alone, same as the other
-    // founder-feed crons: a reminder to log spend into a feed that is itself
-    // off has nothing to deliver.
-    if (env.FOUNDER_NOTIFY_ENABLED) {
-      cron.schedule(
-        AD_SPEND_REMINDER_CRON_SCHEDULE,
-        // No argument: the notifier derives the closed Mon–Sun week from the
-        // calendar itself. Passing `now - 7d` (what this used to do) only
-        // produced a Monday because the schedule happens to be 09:00 Kyiv —
-        // move the hour before 03:00 and the same subtraction lands on Sunday
-        // in UTC, silently naming a week no dashboard entry matches.
-        guardedTick("ad-spend-reminder", () => notifyFounderAdSpendReminder()),
-        { timezone: CRON_TIMEZONE },
-      );
-      console.log(
-        `[cron] Ad-spend reminder scheduled: "${AD_SPEND_REMINDER_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
-      );
-    }
+  // Date Ticket expiry: refund stalled partial payments, open Calendar free.
+  if (env.TICKET_FEATURE_ENABLED) {
+    cron.schedule(
+      TICKET_EXPIRY_CRON_SCHEDULE,
+      guardedTick("ticket-expiry", () =>
+        ticketExpiryTick(bot.api).then((r) => {
+          if (r.swept > 0) console.log(`[ticket-expiry] swept ${r.swept} stalled ticket gate(s)`);
+        }),
+      ),
+    );
+    console.log(`[cron] Ticket expiry scheduled: "${TICKET_EXPIRY_CRON_SCHEDULE}"`);
+  }
 
-    // Curated venue re-validation — deactivate closed/degraded venues and
-    // refresh opening hours against Google Places.
-    //
-    // Third demo-only cron suppression, alongside drop matching and the
-    // no-match notice above, and the reasoning is cost rather than correctness:
-    // the demo carries its own full catalog (~1200 active rows) and was paying a
-    // second, identical Google bill every night to keep it fresh — for a
-    // deployment that has had one match in its entire life, already completed,
-    // and no date traffic at all. Code-owned rather than an env schedule so it
-    // cannot be silently re-inherited: the demo `.env` is generated as
-    // production's plus `.env.demo`, and anything that file does not name comes
-    // across on its own, which is exactly how this was running unnoticed.
-    // Accepted tradeoff (founder decision 2026-08-23, DECISIONS.md): the demo
-    // catalog slowly rots and may show a venue that has since closed — invisible
-    // in a walkthrough, and cheaper than the bill.
-    if (DEMO_MODE_ENABLED) {
-      // The scan is suppressed, but the Places cache still has to expire: its
-      // 30-day ceiling is Google's terms, not our housekeeping, and the demo
-      // fills the table through the same picker and photo paths production
-      // does. So the demo keeps the one half of this tick that costs nothing
-      // and is not optional.
-      console.log("[cron] Venue re-validation NOT scheduled (demo mode) — place-cache prune only");
-      cron.schedule(
-        VENUE_REVALIDATION_CRON_SCHEDULE,
-        guardedTick("place-cache-prune", () =>
-          prunePlaceCache().then((pruned) => {
-            if (pruned > 0) console.log(`[place-cache] pruned ${pruned} expired place(s)`);
-          }),
-        ),
-        { timezone: CRON_TIMEZONE },
-      );
-    } else {
-      cron.schedule(
-        VENUE_REVALIDATION_CRON_SCHEDULE,
-        guardedTick("venue-revalidation", () =>
-          venueRevalidationTick().then((r) => {
-            if (r.scanned > 0) {
-              // `scanned` counts distinct PLACES (= Places requests), not rows:
-              // one request settles all ~5 per-domain copies of a venue.
-              console.log(
-                `[venue-revalidation] scanned=${r.scanned} deactivated=${r.deactivated} refreshed=${r.refreshed} failed=${r.failed}`,
-              );
-            }
-          }),
-        ),
-        { timezone: CRON_TIMEZONE },
-      );
+  // Premium expiry reminders (§3.8): 3 days and 24 hours before a NON-renewing
+  // paid period ends. Gated on the same flag as the purchase surfaces — this
+  // message exists to sell the next period, so with sales paused there is
+  // nowhere to send anyone. An entitlement already paid for is unaffected
+  // either way; it simply runs out as it does today.
+  if (env.PREMIUM_FEATURE_ENABLED) {
+    cron.schedule(
+      PREMIUM_REMINDER_CRON_SCHEDULE,
+      guardedTick("premium-reminder", () =>
+        premiumExpiryReminderTick(bot.api).then((r) => {
+          if (r.sent3d + r.sent1d + r.failed > 0) {
+            console.log(
+              `[premium-reminder] 3d=${r.sent3d} 1d=${r.sent1d} failed=${r.failed}`,
+            );
+          }
+        }),
+      ),
+    );
+    console.log(
+      `[cron] Premium expiry reminder scheduled: "${PREMIUM_REMINDER_CRON_SCHEDULE}"`,
+    );
+  }
+
+  // Rematch refunds: retry failed refunds + reverse abandoned purchases.
+  if (env.REMATCH_FEATURE_ENABLED) {
+    cron.schedule(
+      REMATCH_REFUND_CRON_SCHEDULE,
+      guardedTick("rematch-refund", () =>
+        sweepRematchRefunds(bot.api).then(() => undefined),
+      ),
+    );
+    console.log(`[cron] Rematch refund retry scheduled: "${REMATCH_REFUND_CRON_SCHEDULE}"`);
+  }
+
+  // Venue-change refunds: retry failed refunds + reverse purchases abandoned
+  // mid-settle. Same discipline as the rematch sweep above — this is what
+  // makes "a venue-change payment either changes the venue or comes back"
+  // durable rather than best-effort.
+  if (env.VENUE_CHANGE_FEATURE_ENABLED) {
+    cron.schedule(
+      VENUE_CHANGE_REFUND_CRON_SCHEDULE,
+      guardedTick("venue-change-refund", () =>
+        sweepVenueChangeRefunds(bot.api).then(() => undefined),
+      ),
+    );
+    console.log(
+      `[cron] Venue-change refund retry scheduled: "${VENUE_CHANGE_REFUND_CRON_SCHEDULE}"`,
+    );
+  }
+
+  // Prime Time refunds: retry failed refunds + reverse passes abandoned
+  // mid-settle. Registered through `primeTimeFeatureLive()` rather than the
+  // raw flag so the two conditions that make the feature real stay in one
+  // place — a cron whose purchases cannot exist is a scheduled no-op.
+  if (primeTimeFeatureLive()) {
+    cron.schedule(
+      PRIME_TIME_REFUND_CRON_SCHEDULE,
+      guardedTick("prime-time-refund", () =>
+        sweepPrimeTimeRefunds(bot.api).then(() => undefined),
+      ),
+    );
+    console.log(
+      `[cron] Prime Time refund retry scheduled: "${PRIME_TIME_REFUND_CRON_SCHEDULE}"`,
+    );
+  }
+
+  // Referral rewards held back by the velocity cap: without this pass they
+  // were released only by another friend verifying, which for a referrer
+  // whose burst was their last invites meant never.
+  if (env.REFERRAL_FEATURE_ENABLED) {
+    cron.schedule(
+      REFERRAL_RELEASE_CRON_SCHEDULE,
+      guardedTick("referral-release", () =>
+        sweepHeldReferralRewards().then((r) => {
+          if (r.released + r.stillHeld > 0) {
+            console.log(
+              `[referral-release] scanned=${r.scanned} released=${r.released} stillHeld=${r.stillHeld}`,
+            );
+          }
+        }),
+      ),
+    );
+    console.log(`[cron] Referral held-reward release scheduled: "${REFERRAL_RELEASE_CRON_SCHEDULE}"`);
+  }
+
+  // Synthetic test partners (PRODUCT_SPEC §3.1c): decline once the human
+  // has committed. Registered only when SYNTHETIC_FILL_ENABLED, so a
+  // production without the flag schedules nothing at all — and the tick
+  // itself re-reads the flag, so flipping it off mid-run stops the sweep
+  // rather than leaving a scheduled no-op with teeth.
+  if (env.SYNTHETIC_FILL_ENABLED) {
+    cron.schedule(
+      env.SYNTHETIC_PARTNER_CRON_SCHEDULE,
+      guardedTick("synthetic-partner", () =>
+        syntheticPartnerTick().then(() => undefined),
+      ),
+    );
+    console.log(
+      `[cron] Synthetic test partner scheduled: "${env.SYNTHETIC_PARTNER_CRON_SCHEDULE}"`,
+    );
+  }
+
+  // Bonus Campus Drop (PRODUCT_SPEC §Campus Radar): an out-of-cycle drop for
+  // a university whose verified cohort just grew. Registered only when
+  // CAMPUS_DROP_ENABLED — it is a SECOND entry point into the allocator, and
+  // the reason Rematch carries a pre-batch blackout is that a single-cohort
+  // run can take a candidate the globally-optimal Thursday batch needed.
+  //
+  // Not scheduled in demo mode, for the same reason drop matching is not:
+  // the demo must never pair two visitors with each other, and a campus drop
+  // is matching.
+  if (env.CAMPUS_DROP_ENABLED && !DEMO_MODE_ENABLED) {
+    cron.schedule(
+      env.CAMPUS_DROP_CRON_SCHEDULE,
+      guardedTick("campus-drop", () => campusDropTick()),
+    );
+    console.log(`[cron] Campus drop scheduled: "${env.CAMPUS_DROP_CRON_SCHEDULE}"`);
+  } else if (env.CAMPUS_DROP_ENABLED) {
+    console.log("[cron] Campus drop NOT scheduled (demo mode owns matching)");
+  }
+
+  // M-6: hourly auto-unsuspend. Lifts Tier 2 suspensions whose
+  // `suspendedUntil` has elapsed without waiting for the weekly batch.
+  cron.schedule(
+    AUTO_UNSUSPEND_CRON_SCHEDULE,
+    guardedTick("auto-unsuspend", () =>
+      autoUnsuspendElapsed().then((n) => {
+        if (n > 0) console.log(`[auto-unsuspend] reactivated ${n} user(s)`);
+      }),
+    ),
+  );
+  console.log(`[cron] Auto-unsuspend scheduled: "${AUTO_UNSUSPEND_CRON_SCHEDULE}"`);
+
+  // M-2: embedding refresh — picks up dirty profiles and recomputes.
+  cron.schedule(
+    EMBEDDING_REFRESH_CRON_SCHEDULE,
+    guardedTick("embedding-refresh", () =>
+      embeddingRefreshTick().then((r) => {
+        if (r.scanned > 0) {
+          console.log(
+            `[embedding-refresh] scanned=${r.scanned} refreshed=${r.refreshed} failed=${r.failed}`,
+          );
+        }
+      }),
+    ),
+  );
+  console.log(`[cron] Embedding refresh scheduled: "${EMBEDDING_REFRESH_CRON_SCHEDULE}"`);
+
+  // Pinned status banner — discrete countdown to next match dispatch.
+  cron.schedule(
+    STATUS_TIMER_CRON_SCHEDULE,
+    guardedTick("status-timer", runStatusTimer),
+  );
+  console.log(`[cron] Status timer scheduled: "${STATUS_TIMER_CRON_SCHEDULE}"`);
+
+  // GDPR Article 9: scrub Persona-captured selfies once they pass the
+  // 90-day retention window. The user stays `verified`; only the stored
+  // reference image is deleted.
+  cron.schedule(
+    SELFIE_RETENTION_CRON_SCHEDULE,
+    guardedTick("selfie-retention", () =>
+      runSelfieRetention().then((r) => {
+        if (r.scanned > 0 || r.errors > 0) {
+          console.log(
+            `[selfie-retention] scanned=${r.scanned} storage=${r.deletedFromStorage} db=${r.deletedFromDb} errors=${r.errors}`,
+          );
+        }
+      }),
+    ),
+    { timezone: CRON_TIMEZONE },
+  );
+  console.log(
+    `[cron] Selfie retention scheduled: "${SELFIE_RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+  );
+
+  // General data retention: expired OTP challenges (including phone numbers
+  // of people who never finished signing up, which no user cascade reaches),
+  // dead refresh sessions, and aged proxy-chat messages.
+  cron.schedule(
+    RETENTION_CRON_SCHEDULE,
+    guardedTick("retention", () => retentionTick().then(() => undefined)),
+    { timezone: CRON_TIMEZONE },
+  );
+  console.log(
+    `[cron] Data retention scheduled: "${RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+  );
+
+  // Admin announcements → inboxes + paced pushes (decision journal
+  // 2026-09-13). Every minute: a scheduled announcement is picked up within
+  // one, and a run that quiet hours stopped resumes on the first tick after
+  // nine. Not in demo: the demo database has no founder composing anything,
+  // and a visitor must never be sent a real party announcement.
+  if (DEMO_MODE_ENABLED) {
+    console.log("[cron] Announcement fan-out NOT scheduled (demo mode)");
+  } else {
+    cron.schedule(
+      "* * * * *",
+      guardedTick("announcement-fanout", async () => {
+        const r = await announcementFanoutTick();
+        if (r.claimed > 0 || r.inboxRows > 0 || r.pushed > 0 || r.completed > 0) {
+          console.log(
+            `[announcement-fanout] claimed=${r.claimed} inboxRows=${r.inboxRows} pushed=${r.pushed} completed=${r.completed} heldForQuietHours=${r.heldForQuietHours}`,
+          );
+        }
+      }),
+      { timezone: CRON_TIMEZONE },
+    );
+    console.log("[cron] Announcement fan-out scheduled: every minute");
+  }
+
+  // People parked in `pending_review` by an inconclusive face match. They are
+  // outside matching entirely, they got there through our infrastructure
+  // rather than anything they did, and the admin view that lists them is a
+  // pull endpoint nobody polls. Shares the nightly schedule because a stuck
+  // review is measured in days, not minutes.
+  cron.schedule(
+    RETENTION_CRON_SCHEDULE,
+    guardedTick("verification-stuck", () => verificationStuckSweep().then(() => undefined)),
+    { timezone: CRON_TIMEZONE },
+  );
+
+  // Post-event recap + mutual sweep. Logs only when something happened, so a
+  // quiet tick is the healthy case; `deferred` staying high across many
+  // ticks means mutuals are piling up behind live matches (or behind the
+  // lifetime pair ban, which the sweep cannot tell apart — see the service).
+  if (env.EVENTS_FEATURE_ENABLED) {
+    cron.schedule(
+      EVENT_RECAP_CRON_SCHEDULE,
+      guardedTick("event-recap", async () => {
+        const r = await runEventRecapTick();
+        if (r.recapsSent > 0 || r.recapsFailed > 0 || r.matchesCreated > 0) {
+          console.log(
+            `[event-recap] events=${r.eventsScanned} recaps=${r.recapsSent} ` +
+              `failed=${r.recapsFailed} matches=${r.matchesCreated} ` +
+              `deferred=${r.matchesDeferred} blocked=${r.matchesBlocked}`,
+          );
+        }
+      }),
+      { timezone: CRON_TIMEZONE },
+    );
+    console.log(
+      `[cron] Event recap scheduled: "${EVENT_RECAP_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+    );
+  }
+
+  // DAU/MAU self-heal. Logs only when it actually repaired something, so a
+  // silent night is the healthy case and a `repaired=` line is the signal
+  // that the live mark is dropping writes.
+  cron.schedule(
+    ACTIVITY_ROLLUP_CRON_SCHEDULE,
+    guardedTick("activity-rollup", async () => {
+      const r = await activityRollupTick();
+      if (r.repaired > 0 || r.failed > 0) {
+        console.log(
+          `[activity-rollup] scanned=${r.scanned} repaired=${r.repaired} failed=${r.failed}`,
+        );
+      }
+    }),
+    { timezone: "UTC" },
+  );
+  console.log(
+    `[cron] Activity rollup scheduled: "${ACTIVITY_ROLLUP_CRON_SCHEDULE}" (UTC)`,
+  );
+
+  // Пересчёт виральности в `virality_days` / `virality_cohorts`.
+  //
+  // UTC, как и rollup активности, и по той же причине: бакет — календарный
+  // день UTC, поэтому пересчёт обязан идти после его закрытия, а не когда
+  // проснулся Киев. Прогон идемпотентен и переписывает окно целиком, так что
+  // пропущенная ночь не оставляет дыры — следующая закроет тот же диапазон.
+  cron.schedule(
+    env.VIRALITY_ROLLUP_CRON_SCHEDULE,
+    guardedTick("virality-rollup", async () => {
+      const r = await viralityRollupTick();
       console.log(
-        `[cron] Venue re-validation scheduled: "${VENUE_REVALIDATION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+        `[virality-rollup] ${r.from}..${r.to} scopes=${r.scopes} ` +
+          `days=${r.dayRows} cohorts=${r.cohortRows}`,
       );
-    }
-  },
-});
+    }),
+    { timezone: "UTC" },
+  );
+  console.log(
+    `[cron] Virality rollup scheduled: "${env.VIRALITY_ROLLUP_CRON_SCHEDULE}" (UTC)`,
+  );
+
+  // Weekly venue-concentration alarm. Registered only when the alert is on:
+  // the engine's failure mode is silent (dates keep being scheduled), so
+  // without this nobody learns that one venue took the city until a human
+  // queries the database by hand.
+  if (env.VENUE_CONCENTRATION_ALERT_ENABLED) {
+    cron.schedule(
+      VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE,
+      guardedTick("venue-concentration-alert", () =>
+        venueConcentrationAlertTick().then((r) => {
+          if (!r.skipped) {
+            console.log(
+              `[venue-concentration] cities=${r.citiesScanned} alerts=${r.alerts}`,
+            );
+          }
+        }),
+      ),
+      { timezone: CRON_TIMEZONE },
+    );
+    console.log(
+      `[cron] Venue concentration alert scheduled: "${VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+    );
+  }
+
+  // Weekly ad-spend reminder (AD_SPEND_TRACKING_DESIGN.md). No feature flag
+  // of its own — it rides FOUNDER_NOTIFY_ENABLED alone, same as the other
+  // founder-feed crons: a reminder to log spend into a feed that is itself
+  // off has nothing to deliver.
+  if (env.FOUNDER_NOTIFY_ENABLED) {
+    cron.schedule(
+      AD_SPEND_REMINDER_CRON_SCHEDULE,
+      // No argument: the notifier derives the closed Mon–Sun week from the
+      // calendar itself. Passing `now - 7d` (what this used to do) only
+      // produced a Monday because the schedule happens to be 09:00 Kyiv —
+      // move the hour before 03:00 and the same subtraction lands on Sunday
+      // in UTC, silently naming a week no dashboard entry matches.
+      guardedTick("ad-spend-reminder", () => notifyFounderAdSpendReminder()),
+      { timezone: CRON_TIMEZONE },
+    );
+    console.log(
+      `[cron] Ad-spend reminder scheduled: "${AD_SPEND_REMINDER_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+    );
+  }
+
+  // Curated venue re-validation — deactivate closed/degraded venues and
+  // refresh opening hours against Google Places.
+  //
+  // Third demo-only cron suppression, alongside drop matching and the
+  // no-match notice above, and the reasoning is cost rather than correctness:
+  // the demo carries its own full catalog (~1200 active rows) and was paying a
+  // second, identical Google bill every night to keep it fresh — for a
+  // deployment that has had one match in its entire life, already completed,
+  // and no date traffic at all. Code-owned rather than an env schedule so it
+  // cannot be silently re-inherited: the demo `.env` is generated as
+  // production's plus `.env.demo`, and anything that file does not name comes
+  // across on its own, which is exactly how this was running unnoticed.
+  // Accepted tradeoff (founder decision 2026-08-23, DECISIONS.md): the demo
+  // catalog slowly rots and may show a venue that has since closed — invisible
+  // in a walkthrough, and cheaper than the bill.
+  if (DEMO_MODE_ENABLED) {
+    // The scan is suppressed, but the Places cache still has to expire: its
+    // 30-day ceiling is Google's terms, not our housekeeping, and the demo
+    // fills the table through the same picker and photo paths production
+    // does. So the demo keeps the one half of this tick that costs nothing
+    // and is not optional.
+    console.log("[cron] Venue re-validation NOT scheduled (demo mode) — place-cache prune only");
+    cron.schedule(
+      VENUE_REVALIDATION_CRON_SCHEDULE,
+      guardedTick("place-cache-prune", () =>
+        prunePlaceCache().then((pruned) => {
+          if (pruned > 0) console.log(`[place-cache] pruned ${pruned} expired place(s)`);
+        }),
+      ),
+      { timezone: CRON_TIMEZONE },
+    );
+  } else {
+    cron.schedule(
+      VENUE_REVALIDATION_CRON_SCHEDULE,
+      guardedTick("venue-revalidation", () =>
+        venueRevalidationTick().then((r) => {
+          if (r.scanned > 0) {
+            // `scanned` counts distinct PLACES (= Places requests), not rows:
+            // one request settles all ~5 per-domain copies of a venue.
+            console.log(
+              `[venue-revalidation] scanned=${r.scanned} deactivated=${r.deactivated} refreshed=${r.refreshed} failed=${r.failed}`,
+            );
+          }
+        }),
+      ),
+      { timezone: CRON_TIMEZONE },
+    );
+    console.log(
+      `[cron] Venue re-validation scheduled: "${VENUE_REVALIDATION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+    );
+  }
+}
+
+/** Native menu commands (Telegram Menu Button). */
+async function registerBotCommands(): Promise<void> {
+  try {
+    await bot.api.setMyCommands([
+      { command: "start", description: "Start / restart the bot" },
+      { command: "menu", description: "Open main menu" },
+      { command: "edit", description: "Edit your profile" },
+      { command: "profile", description: "View your profile" },
+      { command: "settings", description: "Settings" },
+      // Demo mode's escape hatch. Listed here or it is undiscoverable: a
+      // visitor who wants to see the flow again as the other gender has no
+      // other way to know it exists (DEMO_MODE.md → Recovery).
+      ...(DEMO_MODE_ENABLED
+        ? [{ command: "restart", description: "Start the demo over from scratch" }]
+        : []),
+    ]);
+  } catch (err) {
+    // Cosmetic, and Telegram keeps the previous list. A 5xx here used to reject
+    // `onStart`, which ended polling before it began (A13-H8).
+    console.error("[startup] setMyCommands failed — the menu button keeps its previous commands:", err);
+  }
+}
+
+async function main(): Promise<void> {
+  try {
+    validateSchedules();
+  } catch (err) {
+    console.error("[FATAL]", err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
+
+  if (env.DEV_OTP_BYPASS_TELEGRAM_IDS.size > 0) {
+    const ids = [...env.DEV_OTP_BYPASS_TELEGRAM_IDS].map((id) => id.toString()).join(", ");
+    console.warn(
+      `[dev-bypass] DEV_OTP_BYPASS_TELEGRAM_IDS active for: ${ids}. ` +
+        `These accounts skip corporate-email verification at /start. ` +
+        `MUST be empty in production .env.`,
+    );
+  }
+
+  startHttpServers();
+
+  // Idempotent DB indexes that Prisma's `db push` workflow can't express
+  // (functional index on canonical pair ordering for the lifetime-ban
+  // anti-join in `buildCandidateSql`). Before the schedules, as it always was:
+  // the drop query is the thing that needs it.
+  try {
+    await ensureMatchPairIndex();
+  } catch (err) {
+    console.error("[startup] ensureMatchPairIndex failed:", err);
+  }
+
+  registerSchedules();
+
+  // Boot is exactly when a dispatch has just died — resume its rows now rather
+  // than at the next quarter hour.
+  strandedDispatchTick();
+
+  // Not awaited and not in `onStart`: it needs no bot info, catches its own
+  // failure, and a slow Telegram must not hold polling back behind a menu list.
+  void registerBotCommands();
+
+  bot
+    .start({
+      // Only what genuinely needs the bot's own identity stays here.
+      onStart: (info) => {
+        console.log(`Bot @${info.username} started`);
+        if (DEMO_MODE_ENABLED) {
+          // The two things no automated check can verify — which bot and which
+          // database — printed where they cannot be missed.
+          logDemoBanner(info.username);
+        }
+      },
+    })
+    .then(
+      () => {
+        if (shuttingDown) return;
+        console.error("[FATAL] Telegram polling ended without a shutdown — exiting so PM2 restarts");
+        void shutdown("polling ended", 1);
+      },
+      (err: unknown) => {
+        if (shuttingDown) {
+          console.warn("[shutdown] polling ended with an error:", err);
+          return;
+        }
+        // grammY ends polling for good on 401 (token revoked) and 409 (another
+        // process polls this token), and `bot.start` rejects on a setup failure.
+        // Staying up after that is a process PM2 shows green that answers
+        // nobody (A13-H8) — exit and let PM2 restart it.
+        console.error("[FATAL] Telegram polling stopped — exiting so PM2 restarts:", err);
+        void shutdown("polling failed", 1);
+      },
+    );
+}
 
 /* ── Graceful shutdown ─────────────────────────────────────── */
-function shutdown(signal: string): void {
-  console.log(`[shutdown] ${signal} received, stopping bot…`);
-  bot.stop();
-  cron.getTasks().forEach((task) => task.stop());
-  // Give grammY time to close the polling connection
-  setTimeout(() => process.exit(0), 1500);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+/**
+ * Stop taking work, let the work in hand finish, then exit (A13-M21).
+ *
+ * It used to call `bot.stop()` — which confirms the update being handled to
+ * Telegram — and `process.exit` 1.5 seconds later: whatever that update was
+ * doing (a payment settle, an onboarding write) was cut off and would never be
+ * redelivered, open HTTP requests were dropped, and Prisma never disconnected.
+ *
+ * Bounded by `SHUTDOWN_DRAIN_TIMEOUT_MS`, which must stay below PM2's
+ * `kill_timeout` for the process or PM2 SIGKILLs the drain half-way.
+ */
+async function shutdown(reason: string, exitCode: number): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const deadline = Date.now() + SHUTDOWN_DRAIN_TIMEOUT_MS;
+  const remaining = () => Math.max(0, deadline - Date.now());
+  console.log(`[shutdown] ${reason} — draining for up to ${SHUTDOWN_DRAIN_TIMEOUT_MS}ms`);
+
+  // 1. No new work. The intake gate and `bot.stop()` MUST stay in this one
+  //    synchronous step: `stop()` confirms every update grammY has handed to
+  //    middleware so far, and the gate makes sure nothing after that point is
+  //    started — so an update is either run here or redelivered to the next
+  //    process. Only one still queued when the deadline passes is lost.
+  closeUpdateIntake();
+  const pollingStopped = bot.isRunning()
+    ? bot.stop().catch((err: unknown) => console.warn("[shutdown] bot.stop failed:", err))
+    : Promise.resolve();
+  for (const task of cron.getTasks().values()) void task.stop();
+  for (const handle of intervals) clearInterval(handle);
+  const serversClosed = Promise.all(
+    servers.map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
+  );
+
+  // 2. The work in hand: queued chat updates, running cron ticks, open requests.
+  await Promise.race([
+    Promise.all([
+      pollingStopped,
+      serversClosed,
+      waitForChatQueueIdle(remaining()),
+      waitForGuardedTicksIdle(remaining()),
+    ]),
+    sleep(remaining()),
+  ]);
+  // A request that finished late may have queued chat work of its own.
+  if (remaining() > 0 && (chatQueueDepth() > 0 || runningGuardedTicks().length > 0)) {
+    await Promise.all([waitForChatQueueIdle(remaining()), waitForGuardedTicksIdle(remaining())]);
+  }
+  if (chatQueueDepth() > 0) {
+    console.warn(`[shutdown] ${chatQueueDepth()} chat task(s) still running at the deadline — abandoned`);
+  }
+  if (runningGuardedTicks().length > 0) {
+    console.warn(`[shutdown] tick(s) still running at the deadline: ${runningGuardedTicks().join(", ")}`);
+  }
+  for (const server of servers) server.closeAllConnections();
+
+  // 3. Release the database.
+  await prisma.$disconnect().catch((err: unknown) => {
+    console.warn("[shutdown] prisma.$disconnect failed:", err);
+  });
+  console.log("[shutdown] done");
+  process.exit(exitCode);
+}
+process.on("SIGINT", () => void shutdown("SIGINT", 0));
+process.on("SIGTERM", () => void shutdown("SIGTERM", 0));
+
+void main().catch((err: unknown) => {
+  console.error("[FATAL] boot failed:", err);
+  process.exit(1);
+});

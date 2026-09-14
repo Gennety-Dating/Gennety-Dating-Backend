@@ -1,4 +1,4 @@
-import type { Api, RawApi } from "grammy";
+import type { Api, RawApi, Transformer } from "grammy";
 import { apiThrottler } from "@grammyjs/transformer-throttler";
 import { autoRetry } from "@grammyjs/auto-retry";
 
@@ -31,14 +31,29 @@ import { autoRetry } from "@grammyjs/auto-retry";
  *
  * Internal server errors are rethrown rather than retried: a 500 from Telegram
  * is not a rate problem, and hammering it three more times helps nobody.
+ *
+ * **Network errors are rethrown too (A13-M23).** The plugin retries an
+ * `HttpError` in a loop of its own that `maxRetryAttempts` does not bound, with
+ * a backoff doubling up to an HOUR. A thirty-minute network outage therefore
+ * left every send — and the long-poll itself — asleep for a further ~twenty
+ * minutes after the network came back, and a message the caller had already
+ * given up on could land late as a duplicate. A failed send now fails where it
+ * was made, as it did before this plugin was installed.
+ *
+ * **`getUpdates` bypasses the retry entirely.** grammY's polling loop already
+ * owns its backoff (3 s, or Telegram's `retry_after`) and it must stay the one
+ * deciding when to poll again: a retry layered under it both stacks a second
+ * backoff on top and hides 401/409 behind a sleep, which is precisely the
+ * signal `index.ts` exits on.
  */
 export function installApiLimits(api: Api<RawApi>): void {
-  api.config.use(
-    apiThrottler(),
-    autoRetry({
-      maxRetryAttempts: 3,
-      maxDelaySeconds: 15,
-      rethrowInternalServerErrors: true,
-    }),
-  );
+  const retry = autoRetry({
+    maxRetryAttempts: 3,
+    maxDelaySeconds: 15,
+    rethrowInternalServerErrors: true,
+    rethrowHttpErrors: true,
+  });
+  const retryExceptPolling: Transformer = (prev, method, payload, signal) =>
+    method === "getUpdates" ? prev(method, payload, signal) : retry(prev, method, payload, signal);
+  api.config.use(apiThrottler(), retryExceptPolling);
 }

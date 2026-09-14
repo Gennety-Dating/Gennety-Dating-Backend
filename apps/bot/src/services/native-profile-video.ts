@@ -19,6 +19,8 @@ import {
 } from "./storage.js";
 import { profileMediaToJson } from "./profile-media-json.js";
 import { validateUserProfileVideo } from "./profile-media-validation/profile-video-validation.js";
+import { checkProfileImageSafety } from "./profile-media-validation/photo-validation.js";
+import { logMediaValidationRejection } from "./profile-media-validation/rejection-log.js";
 import { probeVideo } from "./profile-media-validation/video-probe.js";
 import {
   withTempMediaDirectory,
@@ -39,8 +41,9 @@ import { grantVideoBonusIfEligible } from "./ticket-wallet.js";
  *
  * What is checked is what the bot checks — safety only (frames + audio
  * transcript); the identity gate was removed on purpose (see
- * `video-validation.ts`). The native rail adds only a 3-second floor and a 50 MB
- * ceiling (`PROFILE_VIDEO_NATIVE_*`, reasons in `constants.ts`).
+ * `video-validation.ts`). The native rail adds a 3-second floor, a 50 MB
+ * ceiling (`PROFILE_VIDEO_NATIVE_*`, reasons in `constants.ts`), and a safety
+ * check on the client-made poster, which the bot rail has no equivalent of.
  */
 
 /** Same lifetime as photo URLs — the screen that asks re-reads on open. */
@@ -152,6 +155,32 @@ export async function saveNativeProfileVideo(
 
   const exists = await prisma.profile.findUnique({ where: { userId }, select: { userId: true } });
   if (!exists) return fail("profile_missing", false);
+
+  // The poster is the first thing a partner sees — `thumbUrl` on the pitch,
+  // shown before a single frame of the video plays — and the client makes it,
+  // so nothing ties it to the video at all. It used to be checked for being an
+  // image and nothing else (audit A13-M11). It now passes the same safety
+  // check as a profile photo, before the far costlier video validation runs.
+  //
+  // Not replaced by a frame the video validator already moderated, although
+  // one exists: those frames are sampled from inside the clip (the first sits
+  // ~4% in), so a server-made poster would jump the moment playback starts —
+  // the contract promises the FIRST frame — and HEVC/HDR decoded by ffmpeg
+  // comes out washed-out where the device's own render does not. Moderating
+  // the client's poster costs the same two provider calls and keeps both.
+  if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
+    const poster = await checkProfileImageSafety(thumb);
+    if (!poster.ok) {
+      if (poster.reason === "unsafe_content") {
+        await logMediaValidationRejection({
+          userId,
+          mediaType: "video",
+          reason: poster.reason,
+        }).catch(() => {});
+      }
+      return fail(poster.reason, poster.retryable);
+    }
+  }
 
   const measured = await measure(userId, video);
   if (!measured.ok) return fail(measured.error, measured.retryable);

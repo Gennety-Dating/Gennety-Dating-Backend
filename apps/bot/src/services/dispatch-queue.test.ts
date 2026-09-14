@@ -6,6 +6,7 @@ vi.mock("@gennety/db", () => ({
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       findFirst: vi.fn().mockResolvedValue({ id: "m1" }),
       findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
     },
   },
 }));
@@ -24,7 +25,12 @@ import {
   sendMatchProposal,
   sendMatchWelcomeGiftPreroll,
 } from "../handlers/matching/pitch.js";
-import { dispatchMatches } from "./dispatch-queue.js";
+import {
+  dispatchMatches,
+  isDispatchInProgress,
+  resumeStrandedDispatches,
+} from "./dispatch-queue.js";
+import { STRANDED_PROPOSAL_AFTER_MS } from "@gennety/shared";
 import { GrammyError } from "grammy";
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -34,6 +40,7 @@ const mMatch = prisma.match as unknown as {
   updateMany: MockFn;
   findUnique: MockFn;
   findFirst: MockFn;
+  findMany: MockFn;
 };
 const mMatchUpdateMany = mMatch.updateMany;
 const mMatchFindUnique = mMatch.findUnique;
@@ -284,5 +291,73 @@ describe("dispatchMatches", () => {
     // A lost race is NOT an undelivered pair. Reporting it would refund a
     // buyer whose match is alive and being acted on.
     expect(result.undelivered).toEqual([]);
+  });
+});
+
+/**
+ * A13-H7: a crash or deploy mid-drop left the remaining `proposed` rows with
+ * `dispatchedAt = null` — invisible to expiry, countdown and nudges, and holding
+ * both people's live-match slot — and nothing ever picked them up again.
+ */
+describe("resumeStrandedDispatches", () => {
+  const NOW = new Date("2026-09-14T15:00:00Z");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mSendPitch.mockResolvedValue(undefined);
+    mMatchUpdateMany.mockResolvedValue({ count: 1 });
+    mMatch.findFirst.mockImplementation(async (arg: { where: { id: string } }) => ({ id: arg.where.id }));
+  });
+
+  it("resumes proposals a dead dispatch left undispatched, through the normal dispatch path", async () => {
+    mMatch.findMany.mockResolvedValueOnce([{ id: "stranded-1" }, { id: "stranded-2" }]);
+
+    const result = await resumeStrandedDispatches({} as any, NOW, 0);
+
+    const query = mMatch.findMany.mock.calls[0]![0] as {
+      where: { status: string; dispatchedAt: null; createdAt: { lt: Date } };
+    };
+    expect(query.where.status).toBe("proposed");
+    expect(query.where.dispatchedAt).toBeNull();
+    expect(query.where.createdAt.lt.getTime()).toBe(NOW.getTime() - STRANDED_PROPOSAL_AFTER_MS);
+    expect(mSendPitch.mock.calls.map((c) => c[1])).toEqual(["stranded-1", "stranded-2"]);
+    expect(result.dispatch?.dispatched).toBe(2);
+    // Stamped, so expiry, the countdown and the nudges can see the rows again.
+    for (const call of mMatchUpdateMany.mock.calls) {
+      expect((call[0] as { data: { dispatchedAt?: Date } }).data.dispatchedAt).toBeInstanceOf(Date);
+    }
+  });
+
+  it("leaves alone a row a live dispatch in this process has not reached yet", async () => {
+    let releaseFirstPitch: () => void = () => {};
+    mSendPitch.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseFirstPitch = resolve;
+        }),
+    );
+    // A long drop still working through its list: m-live-2 has not been reached.
+    const liveDrop = dispatchMatches({} as any, ["m-live-1", "m-live-2"], 0);
+    await vi.waitFor(() => expect(mSendPitch).toHaveBeenCalledTimes(1));
+    expect(isDispatchInProgress()).toBe(true);
+
+    mMatch.findMany.mockResolvedValueOnce([{ id: "m-live-2" }, { id: "m-dead" }]);
+    const result = await resumeStrandedDispatches({} as any, NOW, 0);
+
+    expect(result.ownedByLiveDispatch).toBe(1);
+    expect(mSendPitch.mock.calls.map((c) => c[1])).toEqual(["m-live-1", "m-dead"]);
+
+    releaseFirstPitch();
+    await liveDrop;
+    expect(isDispatchInProgress()).toBe(false);
+  });
+
+  it("does nothing when nothing is stranded", async () => {
+    mMatch.findMany.mockResolvedValueOnce([]);
+
+    const result = await resumeStrandedDispatches({} as any, NOW, 0);
+
+    expect(result).toEqual({ found: 0, ownedByLiveDispatch: 0, dispatch: null });
+    expect(mSendPitch).not.toHaveBeenCalled();
   });
 });

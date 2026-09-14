@@ -14,6 +14,7 @@ import {
   beginLivenessCheck,
   completeLivenessCheck,
   recordBiometricConsent,
+  sendPhotosRequiredPrompt,
 } from "../../services/liveness-flow.js";
 import { runStatusSequence, NEVER_CUT_SHORT } from "../../services/ai-stream.js";
 import { verifyAnalysisSteps } from "../../services/analysis-status.js";
@@ -72,6 +73,13 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
 
       const begun = await beginLivenessCheck(user.id);
       if (!begun.ok) {
+        // The Mini App can only explain and close; the way forward — the photo
+        // manager — is a chat button, so it goes out before the page answers
+        // (audit A13-H11). Awaited so the button is already in the chat the
+        // user lands back in.
+        if (begun.error === "photos_required") {
+          await sendPhotosRequiredPrompt(api, BigInt(auth.user.id), begun.language);
+        }
         res.status(statusForBeginError(begun.error)).json({
           error: begun.error.replace(/_/g, "-"),
         });
@@ -255,20 +263,19 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
 /**
  * `already_verified` is a 409 so the Mini App can render its "you're verified"
  * screen; a half-configured deploy is a 503 rather than a silent empty session.
+ * Every 409 is a state the page tells apart by its `error` code, never by
+ * status alone.
  */
 function statusForBeginError(
-  error:
-    | "not_configured"
-    | "user_not_found"
-    | "already_verified"
-    | "consent_required"
-    | "provider",
+  error: Extract<Awaited<ReturnType<typeof beginLivenessCheck>>, { ok: false }>["error"],
 ): number {
   switch (error) {
     case "user_not_found":
       return 404;
     case "already_verified":
     case "consent_required":
+    case "photos_required":
+    case "onboarding_incomplete":
       return 409;
     default:
       return 503;

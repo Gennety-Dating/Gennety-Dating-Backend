@@ -4,6 +4,7 @@ import {
   runFaceMatchVerification,
   VERIFICATION_PUSH_TYPE,
   type PersistOutcomeInput,
+  type PersistOutcomeResult,
   type PersistRetryableInput,
   type PipelineConfig,
   type PipelineDeps,
@@ -52,6 +53,11 @@ function makeHarness(
     photoBuffers?: Record<string, Buffer | null>;
     compareScores?: FaceMatchResult[];
     uploadFails?: boolean;
+    /**
+     * What successive `persistOutcome` calls answer; `persisted` once the list
+     * runs out. Lets a test play the photo set moving under the run.
+     */
+    persistResults?: PersistOutcomeResult[];
   } = {},
 ): Harness {
   const user: PipelineUserRow = {
@@ -63,6 +69,13 @@ function makeHarness(
     // this column exists to catch.
     platform: "telegram",
     status: "onboarding",
+    // A finished registration with a verified general-track phone: the state
+    // every account reaches verification in, and what activation requires.
+    onboardingStep: "completed",
+    registrationTrack: "general",
+    email: null,
+    isEmailVerified: false,
+    phoneVerifiedAt: new Date("2026-08-01T00:00:00Z"),
     gender: "male",
     language: "en",
     verificationStatus: "pending",
@@ -138,8 +151,9 @@ function makeHarness(
     }),
     db: {
       findUser: vi.fn(async () => user),
-      persistOutcome: vi.fn(async (input: PersistOutcomeInput) => {
+      persistOutcome: vi.fn(async (input: PersistOutcomeInput): Promise<PersistOutcomeResult> => {
         persisted.push(input);
+        return overrides.persistResults?.shift() ?? { kind: "persisted" };
       }),
       persistRetryable: vi.fn(async (input: PersistRetryableInput) => {
         retryPersisted.push(input);
@@ -610,20 +624,32 @@ describe("runFaceMatchVerification — infrastructure failures", () => {
     expect(h.persisted).toHaveLength(0);
   });
 
-  it("pending_review when the reference selfie has no source face (pipeline bug)", async () => {
+  it("retryable when the reference selfie has no source face, and keeps that frame off the row", async () => {
+    // Audit A13-H11: this used to be `pending_review`, a card with no button —
+    // yet an admin rerun reads the very same faceless frame. Only a new
+    // liveness check produces a usable one.
     const h = makeHarness({
       compareScores: [{ ok: false, error: "no_source_face" }],
     });
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome).toEqual({
-      kind: "pending_review",
+      kind: "retry_required",
       userId: USER_ID,
       reason: "no_source_face",
+      keptVerified: false,
     });
+    expect(h.persisted).toHaveLength(0);
+    // Recording a faceless frame as the reference would repeat this outcome
+    // on every later photo edit.
+    expect(h.retryPersisted).toEqual([
+      { userId: USER_ID, verificationStatus: "pending", clearFaceMatchedAt: true },
+    ]);
+    expect(h.notifications).toHaveLength(1);
+    expect(h.notifications[0]!.kind).toBe("retry");
   });
 
-  it("pending_review when a photo fails to download (preserves partial scores)", async () => {
+  it("retryable (never pending_review) when a photo fails to download", async () => {
     const h = makeHarness({
       photoBuffers: {
         [PHOTO_PATH_A]: PHOTO_BUFFER_A,
@@ -635,13 +661,29 @@ describe("runFaceMatchVerification — infrastructure failures", () => {
     });
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
-    expect(outcome.kind).toBe("pending_review");
-    if (outcome.kind !== "pending_review") return;
-    expect(outcome.reason).toBe("photo_download_failed");
-    expect(outcome.scores).toEqual([0.9, 0, 0.9, 0.9]);
+    expect(outcome).toEqual({
+      kind: "retry_required",
+      userId: USER_ID,
+      reason: "photo_download_failed",
+      keptVerified: false,
+    });
+    // Partial scores with a zero for the photo we could not read are not a
+    // verdict: nothing is persisted as one, and nobody is parked for review.
+    expect(h.persisted).toHaveLength(0);
+    // The selfie this run stored IS recorded, so the user's next photo edit
+    // reruns against it rather than answering `no_inquiry`.
+    expect(h.retryPersisted).toEqual([
+      {
+        userId: USER_ID,
+        verificationStatus: "pending",
+        clearFaceMatchedAt: true,
+        reference: { sessionId: SESSION_ID, verifiedSelfiePath: `${USER_ID}/selfie-stored.jpg` },
+      },
+    ]);
+    expect(h.notifications.map((n) => n.kind)).toEqual(["retry"]);
   });
 
-  it("pending_review when Rekognition errors mid-flight", async () => {
+  it("retryable (never pending_review) when Rekognition errors mid-flight", async () => {
     const h = makeHarness({
       compareScores: [
         { ok: true, similarity: 0.9, faceFound: true },
@@ -650,9 +692,29 @@ describe("runFaceMatchVerification — infrastructure failures", () => {
     });
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
-    expect(outcome.kind).toBe("pending_review");
-    if (outcome.kind !== "pending_review") return;
-    expect(outcome.reason).toBe("comparison_error");
+    expect(outcome).toMatchObject({ kind: "retry_required", reason: "comparison_error" });
+    expect(h.persisted).toHaveLength(0);
+    expect(h.retryPersisted[0]!.verificationStatus).toBe("pending");
+  });
+
+  it("restores a verified user silently when Rekognition errors on a rerun", async () => {
+    const h = makeHarness({
+      user: { verificationStatus: "pending" }, // the rerun already flipped it
+      selfie: {
+        ok: true,
+        selfie: { buffer: SELFIE_BUFFER, mime: "image/jpeg", storedPath: "user-1/selfie-original.jpg" },
+      },
+      compareScores: [{ ok: false, error: "timeout" }],
+    });
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG, {
+      previousVerificationStatus: "verified",
+    });
+
+    expect(outcome).toMatchObject({ kind: "retry_required", keptVerified: true });
+    expect(h.retryPersisted).toEqual([
+      { userId: USER_ID, verificationStatus: "verified", clearFaceMatchedAt: true },
+    ]);
+    expect(h.notifications).toHaveLength(0);
   });
 
   it("non-fatal: continues when uploading selfie to storage fails", async () => {
@@ -660,32 +722,40 @@ describe("runFaceMatchVerification — infrastructure failures", () => {
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
+    // Null means "nothing new to store" — the production persist never writes
+    // it over a path already on the row.
     expect(h.persisted[0]!.verifiedSelfiePath).toBeNull();
   });
 });
 
 describe("runFaceMatchVerification — preconditions", () => {
-  it("pending_review when user has zero profile photos", async () => {
+  it("retryable (never pending_review) when user has zero profile photos", async () => {
+    // Audit A13-H11: this wrote `pending_review` with the stored selfie nulled
+    // — no button on that card, and every later photo upload then answered
+    // `reference_expired`.
     const h = makeHarness({ user: { profile: { photos: [], eloSeededAt: null } } });
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome).toEqual({
-      kind: "pending_review",
+      kind: "retry_required",
       userId: USER_ID,
       reason: "no_profile_photos",
+      keptVerified: false,
     });
     expect(h.deps.fetchReferenceSelfie).not.toHaveBeenCalled();
-    // Snapshot is empty array; persistOutcome receives it.
-    expect(h.persisted[0]!.photosSnapshot).toEqual([]);
+    // Nothing that could touch `verifiedSelfiePath` ran.
+    expect(h.persisted).toHaveLength(0);
+    expect(h.retryPersisted).toEqual([
+      { userId: USER_ID, verificationStatus: "pending", clearFaceMatchedAt: true },
+    ]);
+    expect(h.notifications.map((n) => n.kind)).toEqual(["retry"]);
   });
 
-  it("pending_review when user has no profile at all", async () => {
+  it("retryable when user has no profile at all", async () => {
     const h = makeHarness({ user: { profile: null } });
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
-    expect(outcome.kind).toBe("pending_review");
-    if (outcome.kind !== "pending_review") return;
-    expect(outcome.reason).toBe("no_profile_photos");
+    expect(outcome).toMatchObject({ kind: "retry_required", reason: "no_profile_photos" });
   });
 
   it("skipped_user_missing when the userId isn't in the DB", async () => {
@@ -694,6 +764,164 @@ describe("runFaceMatchVerification — preconditions", () => {
 
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
     expect(outcome).toEqual({ kind: "skipped_user_missing", userId: USER_ID });
+  });
+});
+
+describe("runFaceMatchVerification — photo set changed during the run (A13-H12)", () => {
+  const PHOTO_PATH_E = "user-1/photo-e.jpg";
+
+  it("announces nothing for the stale set, parks the reference, and re-scores the new set", async () => {
+    const h = makeHarness({
+      persistResults: [{ kind: "photos_changed" }],
+      photoBuffers: {
+        [PHOTO_PATH_A]: PHOTO_BUFFER_A,
+        [PHOTO_PATH_B]: PHOTO_BUFFER_B,
+        [PHOTO_PATH_C]: PHOTO_BUFFER_C,
+        [PHOTO_PATH_D]: PHOTO_BUFFER_D,
+        [PHOTO_PATH_E]: Buffer.from("photo-e-bytes"),
+      },
+      compareScores: [
+        // First pass over the four photos the run started with.
+        { ok: true, similarity: 0.92, faceFound: true },
+        { ok: true, similarity: 0.9, faceFound: true },
+        { ok: true, similarity: 0.91, faceFound: true },
+        { ok: true, similarity: 0.93, faceFound: true },
+        // Second pass: the same four, plus a different person's face uploaded
+        // while the first pass was scoring.
+        { ok: true, similarity: 0.92, faceFound: true },
+        { ok: true, similarity: 0.9, faceFound: true },
+        { ok: true, similarity: 0.91, faceFound: true },
+        { ok: true, similarity: 0.93, faceFound: true },
+        { ok: true, similarity: 0.2, faceFound: true },
+      ],
+    });
+    const withUpload: PipelineUserRow = {
+      ...h.user,
+      profile: {
+        photos: [PHOTO_PATH_A, PHOTO_PATH_B, PHOTO_PATH_C, PHOTO_PATH_D, PHOTO_PATH_E],
+        eloSeededAt: null,
+      },
+    };
+    h.deps.db.findUser = vi
+      .fn<PipelineDeps["db"]["findUser"]>()
+      .mockResolvedValueOnce(h.user)
+      .mockResolvedValue(withUpload);
+
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(outcome.kind).toBe("verified");
+    // Two verdicts computed; only the second described the real photo set.
+    expect(h.persisted.map((p) => p.photosSnapshot.length)).toEqual([4, 5]);
+    // The first write asked to activate and the persist refused it wholesale
+    // (`photos_changed`), so no activation ever rode on the unscored upload;
+    // only the verdict over all five photos was allowed to activate.
+    expect(h.persisted.map((p) => p.shouldActivate)).toEqual([true, true]);
+    expect(h.persisted[1]!.photoFaceScores).toHaveLength(5);
+    // Before re-scoring, the row was parked retryable WITH the selfie just
+    // stored, so an edit landing during the re-score can rerun against it.
+    expect(h.retryPersisted).toEqual([
+      {
+        userId: USER_ID,
+        verificationStatus: "pending",
+        clearFaceMatchedAt: true,
+        reference: { sessionId: SESSION_ID, verifiedSelfiePath: `${USER_ID}/selfie-stored.jpg` },
+      },
+    ]);
+    // One liveness capture, one upload — a changed set never costs a new check.
+    expect(h.deps.fetchReferenceSelfie).toHaveBeenCalledTimes(1);
+    expect(h.deps.uploadSelfie).toHaveBeenCalledTimes(1);
+    // The planted photo is the one that comes off.
+    expect(h.drops).toEqual([
+      {
+        userId: USER_ID,
+        photosSnapshot: [PHOTO_PATH_A, PHOTO_PATH_B, PHOTO_PATH_C, PHOTO_PATH_D, PHOTO_PATH_E],
+        dropIndexes: [4],
+      },
+    ]);
+    // Nothing was announced for the discarded first verdict.
+    expect(h.notifications.filter((n) => n.message.includes("Verified"))).toHaveLength(1);
+    expect(h.activationSurfaces).toHaveLength(1);
+  });
+
+  it("gives up retryable after the attempt bound instead of looping on a moving set", async () => {
+    const h = makeHarness({
+      persistResults: [
+        { kind: "photos_changed" },
+        { kind: "photos_changed" },
+        { kind: "photos_changed" },
+      ],
+    });
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(outcome).toMatchObject({
+      kind: "retry_required",
+      reason: "photos_changed_during_run",
+      keptVerified: false,
+    });
+    expect(h.persisted).toHaveLength(3);
+    expect(h.activationSurfaces).toHaveLength(0);
+    expect(h.referralSettles).toHaveLength(0);
+    // Every park carries the reference; the last one is the final state.
+    expect(h.retryPersisted.at(-1)).toMatchObject({
+      verificationStatus: "pending",
+      reference: { sessionId: SESSION_ID },
+    });
+    expect(h.notifications.map((n) => n.kind)).toEqual(["retry"]);
+  });
+
+  it("stands down when a photo-edit rerun already decided this session", async () => {
+    const h = makeHarness({ persistResults: [{ kind: "photos_changed" }] });
+    h.deps.db.findUser = vi
+      .fn<PipelineDeps["db"]["findUser"]>()
+      .mockResolvedValueOnce(h.user)
+      .mockResolvedValue({
+        ...h.user,
+        personaInquiryId: SESSION_ID,
+        faceMatchedAt: new Date("2026-09-14T10:00:00Z"),
+      });
+
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(outcome).toEqual({ kind: "skipped_idempotent", userId: USER_ID });
+    expect(h.persisted).toHaveLength(1);
+    expect(h.notifications).toHaveLength(0);
+  });
+});
+
+describe("runFaceMatchVerification — activation prerequisites (A13-M18)", () => {
+  it("verifies but does not activate an account whose onboarding is unfinished", async () => {
+    const h = makeHarness({ user: { onboardingStep: "conversational" } });
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(outcome.kind).toBe("verified");
+    expect(h.persisted[0]!.verificationStatus).toBe("verified");
+    expect(h.persisted[0]!.shouldActivate).toBe(false);
+    // Nothing activation pays out, and no "your profile is live" copy.
+    expect(h.referralSettles).toHaveLength(0);
+    expect(h.activationSurfaces).toHaveLength(0);
+    expect(h.notifications).toHaveLength(0);
+  });
+
+  it("does not activate or pay the referrer without a verified track contact", async () => {
+    const h = makeHarness({ user: { registrationTrack: "general", phoneVerifiedAt: null } });
+    const admission = vi.fn(async () => {});
+    h.deps.settleEventAdmission = admission;
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(h.persisted[0]!.shouldActivate).toBe(false);
+    expect(h.referralSettles).toHaveLength(0);
+    expect(admission).not.toHaveBeenCalled();
+  });
+
+  it("leaves an already-active account's rerun untouched by the prerequisites", async () => {
+    // Activated before the gate existed: a photo-edit rerun must keep treating
+    // them as the active user they are.
+    const h = makeHarness({ user: { status: "active", onboardingStep: "conversational" } });
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG, {
+      previousVerificationStatus: "verified",
+    });
+
+    expect(h.referralSettles).toEqual([USER_ID]);
   });
 });
 

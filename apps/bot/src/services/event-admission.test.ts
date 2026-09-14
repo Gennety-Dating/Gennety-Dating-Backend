@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   RATIO_GATE_MIN_COHORT,
+  isAdmissibleApplicant,
   passesRatioGate,
   readAttractivenessScore,
   tierApplication,
@@ -39,6 +40,49 @@ const verified = (over: Partial<AdmissionApplicant> = {}): AdmissionApplicant =>
   score: 80,
   gender: "male",
   ...over,
+});
+
+describe("isAdmissibleApplicant — the match-pool predicate (A13-M18)", () => {
+  const member = {
+    verificationStatus: "verified",
+    verificationSkippedAt: null,
+    onboardingStep: "completed",
+    registrationTrack: "general",
+    email: null,
+    isEmailVerified: false,
+    phoneVerifiedAt: new Date("2026-08-01T00:00:00Z"),
+  };
+
+  it("admits a verified, registered member with a proven contact", () => {
+    expect(isAdmissibleApplicant(member)).toBe(true);
+  });
+
+  it("keeps the grandfathered skip cohort admissible", () => {
+    expect(
+      isAdmissibleApplicant({
+        ...member,
+        verificationStatus: "unverified",
+        verificationSkippedAt: new Date("2026-05-01T00:00:00Z"),
+      }),
+    ).toBe(true);
+  });
+
+  // Liveness alone used to be enough, so an account that never finished
+  // registering was tiered like any member.
+  it("refuses a verified account that never finished onboarding", () => {
+    expect(isAdmissibleApplicant({ ...member, onboardingStep: "conversational" })).toBe(false);
+  });
+
+  it("refuses a verified account without a verified track contact", () => {
+    expect(isAdmissibleApplicant({ ...member, phoneVerifiedAt: null })).toBe(false);
+    expect(
+      isAdmissibleApplicant({ ...member, registrationTrack: "student", isEmailVerified: false }),
+    ).toBe(false);
+  });
+
+  it("refuses anyone not verified", () => {
+    expect(isAdmissibleApplicant({ ...member, verificationStatus: "pending_review" })).toBe(false);
+  });
 });
 
 describe("tierApplication — verification is the floor", () => {

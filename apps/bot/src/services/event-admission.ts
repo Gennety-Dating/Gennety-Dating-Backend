@@ -1,5 +1,9 @@
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
+import {
+  hasTrackVerifiedContact,
+  type ContactVerificationState,
+} from "./contact-verification.js";
 import { isSupportedCityKey } from "@gennety/shared";
 
 /**
@@ -77,6 +81,30 @@ export interface AdmissionEventRules {
 export interface AdmissionCohort {
   admittedTotal: number;
   admittedMale: number;
+}
+
+/**
+ * Whether an account may be admitted to a room full of strangers at all: the
+ * match-pool predicate, verbatim — `verified` (or the explicit grandfathered
+ * pre-flip skip cohort, PRODUCT_SPEC §1.4), a finished onboarding, and a
+ * verified track contact.
+ *
+ * The last two were missing, so liveness alone was enough (audit A13-M18): an
+ * account that passed a check without ever finishing registration was tiered —
+ * and auto-applied — like any member. Matching has always refused it; the door
+ * should not be the one place that doesn't.
+ */
+export function isAdmissibleApplicant(
+  user: ContactVerificationState & {
+    verificationStatus: string;
+    verificationSkippedAt: Date | null;
+    onboardingStep: string;
+  },
+): boolean {
+  const verified =
+    user.verificationStatus === "verified" ||
+    (user.verificationStatus === "unverified" && user.verificationSkippedAt !== null);
+  return verified && user.onboardingStep === "completed" && hasTrackVerifiedContact(user);
 }
 
 export interface AdmissionApplicant {
@@ -297,6 +325,11 @@ export async function tierOneApplication(
             gender: true,
             verificationStatus: true,
             verificationSkippedAt: true,
+            onboardingStep: true,
+            registrationTrack: true,
+            email: true,
+            isEmailVerified: true,
+            phoneVerifiedAt: true,
             profile: { select: { eloScore: true, eloSeededAt: true, eloSeedDetails: true } },
           },
         },
@@ -314,12 +347,9 @@ export async function tierOneApplication(
     });
     if (!app || app.tier !== expectedTier) return null;
 
-    // The match-pool predicate, verbatim: `verified`, or the explicit
-    // grandfathered pre-flip skip cohort (PRODUCT_SPEC §1.4). Anything else is
-    // not admissible to a room full of strangers.
-    const verified =
-      app.user.verificationStatus === "verified" ||
-      (app.user.verificationStatus === "unverified" && app.user.verificationSkippedAt !== null);
+    // The match-pool predicate, verbatim — see `isAdmissibleApplicant`.
+    // Anything else is not admissible to a room full of strangers.
+    const verified = isAdmissibleApplicant(app.user);
 
     const gender = app.user.gender === "male" || app.user.gender === "female" ? app.user.gender : null;
     const score = app.user.profile ? readAttractivenessScore(app.user.profile) : null;
@@ -378,9 +408,22 @@ export async function settleEventApplicationsOnVerified(userId: string): Promise
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, profile: { select: { homeCityKey: true } } },
+    select: {
+      id: true,
+      verificationStatus: true,
+      verificationSkippedAt: true,
+      onboardingStep: true,
+      registrationTrack: true,
+      email: true,
+      isEmailVerified: true,
+      phoneVerifiedAt: true,
+      profile: { select: { homeCityKey: true } },
+    },
   });
   if (!user) return;
+  // Not a member the door would admit (audit A13-M18): creating applications
+  // for them would only park rows in a founder's screening queue.
+  if (!isAdmissibleApplicant(user)) return;
 
   const cityKey = user.profile?.homeCityKey ?? null;
   const now = new Date();

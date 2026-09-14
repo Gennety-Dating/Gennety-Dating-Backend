@@ -65,6 +65,7 @@ import {
 import { sniffImageMime } from "../../utils/image-sniff.js";
 import { serializeOwnProfileVideo } from "../../services/native-profile-video.js";
 import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
+import { registerPushToken } from "../../services/device-tokens.js";
 import {
   buildReferralStateView,
   claimReferralCode,
@@ -578,10 +579,14 @@ meRouter.patch("/language", async (req: Request, res: Response): Promise<void> =
 });
 
 /**
- * POST /v1/me/push-token — register the Expo push token so the push
- * dispatcher (Phase 5 worker) can send OS-level notifications on match /
- * schedule events. A user row can hold only one token at a time; we
- * overwrite silently on re-registration (common when Expo rotates tokens).
+ * POST /v1/me/push-token — register the device push token so the push
+ * dispatcher can send OS-level notifications on match / schedule events. A
+ * user row can hold only one token at a time; we overwrite silently on
+ * re-registration (common when the OS rotates tokens).
+ *
+ * The token is MOVED, not copied: any other account still holding it loses it
+ * (audit A13-L12). A token names a device, so two accounts signed in on one
+ * phone in turn must not both keep pushing to its lock screen.
  */
 meRouter.post("/push-token", async (req: Request, res: Response): Promise<void> => {
   const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
@@ -592,10 +597,7 @@ meRouter.post("/push-token", async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  await prisma.user.update({
-    where: { id: req.userId! },
-    data: { pushToken: token, pushPlatform: platform },
-  });
+  await registerPushToken(req.userId!, token, platform);
 
   res.json({ ok: true });
 });

@@ -111,6 +111,56 @@ const defaultDeps: PhotoValidationDeps = {
   compareFaces,
 };
 
+/** The deps the safety check alone needs — a subset of the photo validator's. */
+export type ImageSafetyDeps = Pick<
+  PhotoValidationDeps,
+  "normalizeImage" | "moderateWithOpenAI" | "moderateWithAws"
+>;
+
+/**
+ * The profile photo's content-safety check on its own: the same normalization,
+ * the same two providers and the same combined policy `validateProfilePhoto`
+ * applies, with none of the face, identity or duplicate rules.
+ *
+ * For images that are shown to other people without being profile photos —
+ * the profile video's poster frame (audit A13-M11), which the client chooses
+ * and a partner sees before a frame of the video plays. One function rather
+ * than a copy, so a policy change to what counts as unsafe reaches both.
+ * Fails closed: a provider that cannot answer is `processing_unavailable`.
+ */
+export async function checkProfileImageSafety(
+  candidate: Buffer,
+  deps: ImageSafetyDeps = defaultDeps,
+): Promise<MediaValidationResult> {
+  let normalized: Buffer;
+  try {
+    normalized = await deps.normalizeImage(candidate);
+  } catch {
+    return { ok: false, reason: "processing_unavailable", retryable: true };
+  }
+  const moderation = await moderateNormalizedImage(normalized, deps);
+  if (moderation === "unsafe") return { ok: false, reason: "unsafe_content", retryable: false };
+  if (moderation === "unavailable") {
+    return { ok: false, reason: "processing_unavailable", retryable: true };
+  }
+  return { ok: true, value: undefined };
+}
+
+async function moderateNormalizedImage(
+  normalized: Buffer,
+  deps: ImageSafetyDeps,
+): Promise<"safe" | "unsafe" | "unavailable"> {
+  const moderation = combineModerationResults(
+    await Promise.all([
+      deps.moderateWithOpenAI(normalized, "image/jpeg"),
+      deps.moderateWithAws(normalized),
+    ]),
+  );
+  if (moderation.kind === "blocked" || moderation.kind === "review") return "unsafe";
+  if (moderation.kind === "unavailable") return "unavailable";
+  return "safe";
+}
+
 export async function validateProfilePhoto(
   input: PhotoValidationInput,
   options: PhotoValidationOptions = {},
@@ -171,16 +221,9 @@ export async function validateProfilePhoto(
     }
   }
 
-  const moderation = combineModerationResults(
-    await Promise.all([
-      deps.moderateWithOpenAI(normalizedCandidate, "image/jpeg"),
-      deps.moderateWithAws(normalizedCandidate),
-    ]),
-  );
-  if (moderation.kind === "blocked" || moderation.kind === "review") {
-    return reject("unsafe_content");
-  }
-  if (moderation.kind === "unavailable") return unavailable();
+  const moderation = await moderateNormalizedImage(normalizedCandidate, deps);
+  if (moderation === "unsafe") return reject("unsafe_content");
+  if (moderation === "unavailable") return unavailable();
 
   const faceDetection: FaceDetectionResult = await deps.detectFaces(
     normalizedCandidate,

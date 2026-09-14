@@ -542,7 +542,28 @@ export interface FanoutDeps {
   sleep?: (ms: number) => Promise<void>;
   quietHours?: (at: Date) => boolean;
   send?: typeof sendPushToUser;
+  /** Injected in tests; defaults to the process-wide `inboxWrittenAt`. */
+  inboxMarks?: Map<string, Date>;
 }
+
+/**
+ * When each `sending` announcement's audience was last written IN FULL, keyed
+ * by announcement id (A13-L27).
+ *
+ * The fan-out tick runs every minute, and an announcement held by quiet hours
+ * stays `sending` all night — so the full audience was re-paged through
+ * `createMany … skipDuplicates` every minute for ten hours, rewriting nothing.
+ * After one complete pass only people who could have JOINED the audience since
+ * need a row: anyone whose `User` row changed after the pass began (a new
+ * account, a platform, status or language change) or whose profile did (a city
+ * change). The mark is the moment the pass STARTED, so someone who joined while
+ * it was paging is picked up by the next tick rather than missed.
+ *
+ * In memory rather than on the announcement row, to keep this a code-only
+ * change: a restart simply forgets the marks, and the first tick after it
+ * re-pages the whole audience once — exactly what every tick did before.
+ */
+const inboxWrittenAt = new Map<string, Date>();
 
 export interface FanoutResult {
   claimed: number;
@@ -564,6 +585,7 @@ export async function announcementFanoutTick(deps: FanoutDeps = {}): Promise<Fan
   const sleep = deps.sleep ?? sleepMs;
   const quiet = deps.quietHours ?? isQuietHours;
   const send = deps.send ?? sendPushToUser;
+  const marks = deps.inboxMarks ?? inboxWrittenAt;
   const result: FanoutResult = { claimed: 0, inboxRows: 0, pushed: 0, heldForQuietHours: false, completed: 0 };
 
   const due = await prisma.announcement.findMany({
@@ -594,8 +616,14 @@ export async function announcementFanoutTick(deps: FanoutDeps = {}): Promise<Fan
     orderBy: { scheduledAt: "asc" },
   });
 
+  // A mark whose announcement is no longer `sending` (sent, archived) is dead.
+  const stillSending = new Set(sending.map((a) => a.id));
+  for (const id of marks.keys()) if (!stillSending.has(id)) marks.delete(id);
+
   for (const a of sending) {
-    result.inboxRows += await writeInboxRows(a);
+    const passStartedAt = now();
+    result.inboxRows += await writeInboxRows(a, marks.get(a.id) ?? null);
+    marks.set(a.id, passStartedAt);
 
     if (!a.sendPush) {
       await prisma.inboxItem.updateMany({
@@ -620,6 +648,7 @@ export async function announcementFanoutTick(deps: FanoutDeps = {}): Promise<Fan
         where: { id: a.id, status: "sending" },
         data: { status: "sent", sentAt: now(), recipientCount: recipients },
       });
+      marks.delete(a.id);
       result.completed += count;
       if (count === 1) console.log(`${LOG} sent ${a.id} to ${recipients} inboxes`);
     }
@@ -631,15 +660,34 @@ export async function announcementFanoutTick(deps: FanoutDeps = {}): Promise<Fan
  * Write every inbox row for an announcement, paging the audience by id. Rows
  * the preview already wrote are refreshed to the scheduled wording first, so a
  * preview of an earlier draft does not outlive the edit.
+ *
+ * With `changedSince` (a previous full pass's start — see `inboxWrittenAt`)
+ * only people whose account or profile changed after it are paged.
  */
-async function writeInboxRows(a: Deliverable & { audience: Prisma.JsonValue }): Promise<number> {
+async function writeInboxRows(
+  a: Deliverable & { audience: Prisma.JsonValue },
+  changedSince: Date | null,
+): Promise<number> {
   await prisma.inboxItem.updateMany({
     where: { announcementId: a.id, OR: [{ title: { not: a.title } }, { body: { not: a.teaser } }] },
     data: { title: a.title, body: a.teaser },
   });
 
   const audience = parseAnnouncementAudience(a.audience) ?? {};
-  const where = audienceWhere(audience);
+  const fullAudience = audienceWhere(audience);
+  const where: Prisma.UserWhereInput = changedSince
+    ? {
+        AND: [
+          fullAudience,
+          {
+            OR: [
+              { updatedAt: { gte: changedSince } },
+              { profile: { updatedAt: { gte: changedSince } } },
+            ],
+          },
+        ],
+      }
+    : fullAudience;
   let cursor: string | null = null;
   let written = 0;
   for (;;) {

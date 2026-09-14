@@ -53,8 +53,10 @@ date."*
   `referral:<referrerUserId>` (`referralSourceFromParam`, in `handlers/start.ts`
   and the Mini-App `startapp` source, and `POST /v1/me/referral/claim` on iOS).
   First-touch only — never overwritten.
-- **Settlement** (`services/referral.ts`). On `verified`, the verification
-  pipeline calls `grantReferralRewardsForVerifiedInvitee` (best-effort, wired
+- **Settlement** (`services/referral.ts`). On `verified` — for an invitee who has
+  also completed onboarding and holds a verified track contact, checked before
+  anything is counted (2026-09-14, A13-M18: a face-match alone used to pay the
+  referrer) — the verification pipeline calls `grantReferralRewardsForVerifiedInvitee` (best-effort, wired
   through `PipelineDeps.settleReferralReward` + the pull/rerun short-circuit, so
   it is exactly-once across every path and covers mobile invitees). It:
   1. resolves the referrer (`parseReferrer`), bails on self-referral (by id or

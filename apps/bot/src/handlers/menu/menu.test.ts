@@ -2253,6 +2253,55 @@ describe("Menu — photo upload burst coalescing", () => {
     }
   });
 
+  // A13-M25: a video that arrives while a photo burst is still open flushes the
+  // burst from INSIDE its own update. That flush used to write the session row
+  // itself — and grammY then wrote this update's older `ctx.session` over it,
+  // dropping the panel/card message ids the render had just recorded.
+  it("flushes an open burst into the update's own session, not the row, when a video arrives", async () => {
+    vi.useFakeTimers();
+    try {
+      const session: Partial<SessionData> = {
+        pendingPhotos: ["p0", "p1", "p2", "p3"],
+        pendingProfileMedia: ["p0", "p1", "p2", "p3"].map((photo) => ({ type: "photo" as const, photo })),
+        pendingPhotoUniqueIds: ["u0", "u1", "u2", "u3"],
+        pendingPhotoHashes: [],
+        pendingPhotoScores: [0.9, 0.9, 0.9, 0.9],
+      };
+      const frame = photoCtx(session, "file_new", 300);
+      await handleEditPhotosUpload(frame);
+      Object.assign(session, frame.session);
+
+      const videoUpdate = createMockCtx({
+        session: { menuState: "edit_photos", ...session },
+        message: {
+          video: {
+            file_id: "vid_2",
+            file_unique_id: "vid_2_u",
+            duration: 12,
+            width: 720,
+            height: 1280,
+            file_size: 2_000_000,
+          },
+        },
+      });
+      // The flush waits for the burst's shimmer to wind down, which runs on timers.
+      const handled = handleEditPhotosUpload(videoUpdate);
+      await vi.advanceTimersByTimeAsync(5000);
+      await handled;
+
+      expect(prisma.botSession.findUnique).not.toHaveBeenCalled();
+      expect(prisma.botSession.upsert).not.toHaveBeenCalled();
+      // The burst's panel was rendered into the session grammY will persist.
+      expect(videoUpdate.session.photoManagerMsgId).not.toBeNull();
+
+      // …and the debounce timer that burst had armed no longer fires a second report.
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(prisma.botSession.upsert).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("routes a video sent into the photo manager to the shared video validator", async () => {
     const ctx = createMockCtx({
       session: { menuState: "edit_photos", pendingPhotos: ["p0", "p1", "p2", "p3"] },

@@ -55,6 +55,22 @@ describe("/v1/me/live-activity-token", () => {
     });
   });
 
+  // Audit A13-L12: the token names this install. An account that signed in on
+  // the same phone before must stop driving Live Activities on its lock screen.
+  it("takes the token away from any other account before registering it", async () => {
+    const res = await request(buildApp())
+      .post("/v1/me/live-activity-token")
+      .send({ activityType: "match_decision", kind: "start", token: "tok-shared" });
+
+    expect(res.status).toBe(200);
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { token: "tok-shared", userId: { not: "user-1" } },
+    });
+    expect(deleteMany.mock.invocationCallOrder[0]!).toBeLessThan(
+      upsert.mock.invocationCallOrder[0]!,
+    );
+  });
+
   it("rejects unknown activity types and kinds", async () => {
     const res = await request(buildApp())
       .post("/v1/me/live-activity-token")

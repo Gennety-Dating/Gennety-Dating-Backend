@@ -206,6 +206,25 @@ export async function revokeAllSessions(
   });
 }
 
+/**
+ * Revoke the one live session a refresh token belongs to — and only if it
+ * belongs to `userId`, so a sign-out can never end somebody else's session by
+ * presenting their token. A malformed token matches nothing. Returns how many
+ * sessions were revoked (0 or 1).
+ */
+export async function revokeRefreshSession(
+  userId: string,
+  rawToken: string,
+  db: Pick<typeof prisma, "userSession"> = prisma,
+): Promise<number> {
+  if (!REFRESH_TOKEN_REGEX.test(rawToken)) return 0;
+  const revoked = await db.userSession.updateMany({
+    where: { userId, refreshTokenHash: hashRefreshToken(rawToken), revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  return revoked.count;
+}
+
 function hashRefreshToken(raw: string): string {
   return crypto.createHash("sha256").update(raw).digest("hex");
 }

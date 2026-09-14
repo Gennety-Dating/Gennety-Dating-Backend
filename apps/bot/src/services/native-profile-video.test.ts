@@ -7,6 +7,8 @@ const h = vi.hoisted(() => ({
   /** The one profile row the service reads and writes. */
   row: null as { photos: string[]; profileMedia: unknown[] } | null,
   validate: vi.fn(),
+  posterSafety: vi.fn(),
+  logRejection: vi.fn(),
   probe: vi.fn(),
   upload: vi.fn(),
   deleteObjects: vi.fn(),
@@ -52,6 +54,12 @@ vi.mock("./storage.js", () => ({
 vi.mock("./profile-media-validation/profile-video-validation.js", () => ({
   validateUserProfileVideo: h.validate,
 }));
+vi.mock("./profile-media-validation/photo-validation.js", () => ({
+  checkProfileImageSafety: h.posterSafety,
+}));
+vi.mock("./profile-media-validation/rejection-log.js", () => ({
+  logMediaValidationRejection: h.logRejection,
+}));
 vi.mock("./profile-media-validation/video-probe.js", () => ({ probeVideo: h.probe }));
 vi.mock("./profile-media-validation/temp-media.js", () => ({
   withTempMediaDirectory: async (op: (dir: string) => Promise<unknown>) => op("/tmp/test"),
@@ -86,6 +94,8 @@ beforeEach(() => {
     ok: true,
     value: { durationSeconds: 24.46, sampledFrameCount: 12 },
   });
+  h.posterSafety.mockReset().mockResolvedValue({ ok: true, value: undefined });
+  h.logRejection.mockReset().mockResolvedValue(undefined);
   h.probe.mockReset();
   let n = 0;
   h.upload.mockReset().mockImplementation(async (userId: string, role: string) => ({
@@ -102,6 +112,51 @@ describe("looksLikeIsoMedia", () => {
     expect(looksLikeIsoMedia(MP4)).toBe(true);
     expect(looksLikeIsoMedia(JPEG)).toBe(false);
     expect(looksLikeIsoMedia(Buffer.alloc(4))).toBe(false);
+  });
+});
+
+describe("saveNativeProfileVideo — the poster (A13-M11)", () => {
+  // The poster reaches partners as `thumbUrl` and the client chooses it, so it
+  // is not "a frame of a moderated video" — it has to be moderated itself.
+  it("refuses an unsafe poster with the photo error shape, before the video is validated or stored", async () => {
+    h.posterSafety.mockResolvedValueOnce({ ok: false, reason: "unsafe_content", retryable: false });
+
+    const result = await saveNativeProfileVideo({ userId: USER, video: MP4, thumb: JPEG });
+
+    expect(result).toEqual({ ok: false, error: "unsafe_content", retryable: false });
+    expect(h.posterSafety).toHaveBeenCalledWith(JPEG);
+    expect(h.validate).not.toHaveBeenCalled();
+    expect(h.upload).not.toHaveBeenCalled();
+    expect(h.row!.profileMedia).toEqual(photoItems);
+    expect(h.logRejection).toHaveBeenCalledWith({
+      userId: USER,
+      mediaType: "video",
+      reason: "unsafe_content",
+    });
+  });
+
+  it("fails closed and retryable when moderation cannot answer", async () => {
+    h.posterSafety.mockResolvedValueOnce({
+      ok: false,
+      reason: "processing_unavailable",
+      retryable: true,
+    });
+
+    const result = await saveNativeProfileVideo({ userId: USER, video: MP4, thumb: JPEG });
+
+    expect(result).toEqual({ ok: false, error: "processing_unavailable", retryable: true });
+    expect(h.upload).not.toHaveBeenCalled();
+    expect(h.logRejection).not.toHaveBeenCalled();
+  });
+
+  it("moderates nothing while validation is switched off (local dev)", async () => {
+    h.env.PROFILE_MEDIA_VALIDATION_ENABLED = false;
+    h.probe.mockResolvedValueOnce({ durationSeconds: 12, hasAudio: false });
+
+    const result = await saveNativeProfileVideo({ userId: USER, video: MP4, thumb: JPEG });
+
+    expect(result.ok).toBe(true);
+    expect(h.posterSafety).not.toHaveBeenCalled();
   });
 });
 

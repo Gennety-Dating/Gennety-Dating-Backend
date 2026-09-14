@@ -134,7 +134,7 @@ Registration v2 (не через email-обход). Placeholder существу
    в `scripts/dev-bot.mjs`, но запустить `tsx src/index.ts` без `watch`
    (например, минимальный лаунчер, спавнящий
    `pnpm --filter @gennety/bot exec tsx src/index.ts`). Дождаться строк
-   `/v1/* API listening on :3101` и `Bot @gennetytestbot started`.
+   `/v1/* API listening on 127.0.0.1:3101` и `Bot @gennetytestbot started`.
 4. Webapp: `pnpm dev:webapp` (`:5173`).
 5. HTTPS-туннель (ngrok на зарезервированном домене или cloudflared quick-tunnel)
    → `:5173`, проверить, что Mini App страницы отдаются `200` через `WEBAPP_URL`.
@@ -444,7 +444,7 @@ Registration v2 (не через email-обход). Placeholder существу
 ### Pass 12 — Edge cases
 - [ ] Re-engagement: бросить онбординг → проверить decay-шаги
 - [ ] Quiet hours: нудж в 23:00–09:00 Kyiv откладывается до 13:00
-- [ ] No-match notice (Чт 18:15) для непарного eligible; famine-discount на
+- [ ] No-match notice (после рассылки батча; Чт 18:15 — запасной) для непарного eligible; famine-discount на
       2-й подряд неделе
 - [ ] Embedding refresh: правка профиля → `embeddingDirty` → cron сбрасывает
 - [ ] GDPR delete: `DELETE /v1/me` (или `reset-accounts.ts`) → cascade;

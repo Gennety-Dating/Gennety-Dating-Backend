@@ -206,6 +206,13 @@ export const env = {
     `${process.env.WEBAPP_URL?.trim() || "https://example.invalid/calendar"}/feedback.html`,
   ADMIN_API_KEY: process.env.ADMIN_API_KEY ?? "",
   ADMIN_PORT: Number(process.env.ADMIN_PORT ?? "3100"),
+  /// Interface the admin AND public Express servers listen on (A13-L17).
+  /// Loopback by default: Caddy reaches both on `localhost`, and both trust
+  /// exactly one proxy hop (`trust proxy` = 1) — so a port reachable from
+  /// outside let anyone set `X-Forwarded-For` and pick the IP every rate limit
+  /// keys on. Set `0.0.0.0` only for a setup that genuinely connects from
+  /// another host (e.g. a phone on the LAN hitting a dev machine).
+  HTTP_BIND_HOST: process.env.HTTP_BIND_HOST?.trim() || "127.0.0.1",
   /// Allowed browser origin(s) for the admin analytics dashboard
   /// (comma-separated). Defaults to empty — an unset/`*` value makes
   /// `admin/server.ts` deny cross-origin requests rather than echo a

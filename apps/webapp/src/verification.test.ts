@@ -282,3 +282,31 @@ describe("consent screen (GDPR Art. 9(2)(a))", () => {
     }
   });
 });
+
+describe("screenForInitError", () => {
+  // Audit A13-H11: every 409 used to render "you're already verified", so a
+  // profile with no photos would have been congratulated instead of asked.
+  it("asks for photos on 409 photos-required, in every product language", async () => {
+    const mod = await importModule();
+    expect(mod.screenForInitError(409, "photos-required")).toBe("photos-required");
+
+    const rendered = new Set<string>();
+    for (const lang of ["en", "ru", "uk", "de", "pl"] as const) {
+      const root = { innerHTML: "" } as unknown as HTMLElement;
+      mod.renderScreen(root, "photos-required", lang);
+      expect(root.innerHTML).toContain("📷");
+      rendered.add(root.innerHTML);
+    }
+    expect(rendered.size).toBe(5);
+  });
+
+  it("keeps every other refusal on its existing screen", async () => {
+    const mod = await importModule();
+    expect(mod.screenForInitError(409, "already-verified")).toBe("already-verified");
+    // Older servers sent no readable code on their only 409.
+    expect(mod.screenForInitError(409, undefined)).toBe("already-verified");
+    expect(mod.screenForInitError(409, "onboarding-incomplete")).toBe("error");
+    expect(mod.screenForInitError(503, "not-configured")).toBe("unavailable");
+    expect(mod.screenForInitError(500, undefined)).toBe("error");
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { Api, type RawApi } from "grammy";
+import { Api, HttpError, type RawApi } from "grammy";
 import type { ApiResponse } from "grammy/types";
 import { installApiLimits } from "./api-limits.js";
 
@@ -86,5 +86,42 @@ describe("installApiLimits", () => {
 
     await expect(api.answerPreCheckoutQuery("q1", true)).rejects.toThrow(/Too Many Requests/);
     expect(calls).toEqual(["answerPreCheckoutQuery"]);
+  });
+
+  // A13-M23: the plugin's own network-error loop ignores `maxRetryAttempts` and
+  // backs off up to an hour. On the old options this test never finished — the
+  // first retry alone sleeps three seconds, the next six, and so on forever.
+  it("fails a send on a network error instead of retrying it without bound", async () => {
+    const api = new Api(TOKEN);
+    const calls: string[] = [];
+    const transformer = vi.fn(async (_prev, method: string) => {
+      calls.push(method);
+      throw new HttpError("Network request for 'sendMessage' failed!", new Error("ECONNRESET"));
+    });
+    api.config.use(transformer as unknown as Parameters<Api<RawApi>["config"]["use"]>[0]);
+    installApiLimits(api);
+
+    await expect(api.sendMessage(1, "hello")).rejects.toBeInstanceOf(HttpError);
+    expect(calls).toEqual(["sendMessage"]);
+  });
+
+  // grammY's polling loop owns `getUpdates` backoff — including honouring a
+  // 429's `retry_after` — so the retry layer must hand the answer straight back.
+  it("leaves getUpdates to grammY's own polling backoff", async () => {
+    const api = new Api(TOKEN);
+    const { transformer, calls } = stubTransport([
+      {
+        ok: false,
+        error_code: 429,
+        description: "Too Many Requests: retry after 0",
+        parameters: { retry_after: 0 },
+      },
+      { ok: true, result: [] },
+    ]);
+    api.config.use(transformer);
+    installApiLimits(api);
+
+    await expect(api.getUpdates({ offset: 1, timeout: 0 })).rejects.toThrow(/Too Many Requests/);
+    expect(calls).toEqual(["getUpdates"]);
   });
 });

@@ -84,6 +84,19 @@ export const MIN_PHOTOS = 4;
 export const MAX_PHOTOS = 10;
 
 /**
+ * How many times one face-match run re-scores when the profile photos changed
+ * between its snapshot and its locked persist (audit A13-H12).
+ *
+ * A verdict is only ever written for the photo set it actually scored, so a
+ * photo edit landing mid-run makes the run score the new set again with the
+ * reference selfie it already holds. The bound exists for someone editing
+ * photos continuously: past it the run parks the user in the retryable
+ * `pending` state (reference recorded, so their next edit reruns normally)
+ * instead of spending Rekognition calls in a loop.
+ */
+export const VERIFICATION_PHOTO_RACE_MAX_ATTEMPTS = 3;
+
+/**
  * Profile-photo count that earns the one-time onboarding ticket bonus
  * (Date Ticket monetization, gated by `TICKET_FEATURE_ENABLED`). Reaching this
  * many face-validated photos grants +1 free ticket. This deliberately stays
@@ -170,6 +183,15 @@ export const VOICE_PROMPT_MIN_DURATION_SECONDS = 3;
 export const VOICE_PROMPT_MAX_DURATION_SECONDS = 60;
 export const VOICE_PROMPT_TARGET_DURATION_SECONDS = 15;
 export const VOICE_PROMPT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Native voice-prompt commits (`POST /v1/me/voice-prompt`) per user per hour
+ * (audit A13-L14). Every commit runs a Whisper transcription, text moderation,
+ * a storage upload and an embedding refresh, so it is metered like the profile
+ * video. Higher than the video's six because re-recording a 15-second answer a
+ * few times until it sounds right is the ordinary way people use this screen.
+ */
+export const VOICE_PROMPT_UPLOADS_PER_HOUR = 10;
 
 /**
  * Peaks in the precomputed waveform.
@@ -581,3 +603,41 @@ export const MAX_HISTORY_FOR_API = 80;
 export const SUMMARIZE_THRESHOLD = 50;
 /** Number of recent messages always preserved during summarization/truncation */
 export const KEEP_RECENT_MESSAGES = 30;
+
+/**
+ * How many chats' Telegram updates (and out-of-band chat work) may run at once
+ * (A13-H9). Per-chat order is kept by the chat queue; this is the ceiling ACROSS
+ * chats, so a burst queues for a slot instead of starting hundreds of agent
+ * turns, Whisper calls and Prisma queries in one process at the same moment.
+ * Sixteen is a deliberate middle: one slot was the outage (every chat waited
+ * for the slowest), and the process shares one small database pool with the
+ * public API and every cron.
+ */
+export const BOT_CONCURRENT_CHAT_TASKS = 16;
+
+/**
+ * How long a graceful shutdown waits for in-flight chat work, running cron
+ * ticks and open HTTP requests before it exits anyway (A13-M21). Must stay below
+ * PM2's `kill_timeout` for the process, or PM2 SIGKILLs the drain half-way.
+ */
+export const SHUTDOWN_DRAIN_TIMEOUT_MS = 20_000;
+
+/**
+ * A `proposed` match still carrying `dispatchedAt = null` this long after it was
+ * created is treated as stranded by a dead dispatch (a crash or deploy mid-run)
+ * and resumed (A13-H7). Half an hour clears every live path that creates a row
+ * and dispatches it moments later (drop batch, Rematch), with room to spare.
+ */
+export const STRANDED_PROPOSAL_AFTER_MS = 30 * 60 * 1000;
+
+/** Stranded proposals resumed per sweep — bounds one tick to minutes of pacing. */
+export const STRANDED_PROPOSAL_SWEEP_BATCH = 100;
+
+/**
+ * How long after a drop its "no match" notice may still be sent (A13-H10,
+ * A13-M22). The notice waits for the drop's dispatch and stops at quiet hours,
+ * so it can legitimately finish the next morning; past a day it is no longer
+ * news about THIS drop, and a pending run is dropped instead of retried. Also
+ * the window in which a restarted process re-arms a notice it may have lost.
+ */
+export const NO_MATCH_NOTICE_RESUME_WINDOW_MS = 24 * 60 * 60 * 1000;

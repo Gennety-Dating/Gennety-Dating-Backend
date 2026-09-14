@@ -1,0 +1,753 @@
+/**
+ * The Living Canvas — a dark map of the city with one sheet on it
+ * (PRODUCT_SPEC §6.1).
+ *
+ * This file is the wiring and nothing else: the decisions live in
+ * `canvas/sheet.ts` (what a state says) and `canvas/poll.ts` (how often to
+ * ask), both pure and tested without a browser. What is left here is the DOM,
+ * MapLibre and the location permission.
+ *
+ * The shake is NOT here any more (decision 2026-09-11). The Date Terminal
+ * (`date-terminal.html`) owns Contact Sync, and the radar and bump states hand
+ * the user to it, so the Mini App has one bump surface rather than two that
+ * could drift; it reuses `canvas/shake.ts` and `canvas/api.ts` from here, and
+ * links back to this map.
+ *
+ * The Scratch Map's fog is here now that it has an endpoint to fill it
+ * (§Scratch Map). It is drawn only once tiles have actually arrived: a
+ * fully-fogged map with no data hides the city the canvas exists to show and
+ * looks exactly like a bug.
+ *
+ * The transit dock is wired here as well (decision 2026-09-11): built once,
+ * fed from `tick`, summoned by the venue pin and put away by a tap on the map.
+ * When it shows and what it says live in `canvas/transit.ts`; what its links
+ * carry, in `deep-links.ts`.
+ */
+
+// maplibre-gl v6 is ESM-only and has NO default export — named only. `Map`
+// would shadow the global, so the package's own `MapLibreMap` alias is used.
+import { AttributionControl, MapLibreMap, Marker, type GeoJSONSource } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import "./theme.css";
+import "./canvas.css";
+import { mapStyle } from "./map-style.js";
+import { isLang, stringsFor, type Lang } from "./canvas/i18n.js";
+import { isCanvasState, sheetFor, type CanvasState, type RadarReading } from "./canvas/sheet.js";
+import { backoffFor, pollIntervalFor } from "./canvas/poll.js";
+import {
+  fetchDateState,
+  fetchScratchMap,
+  postProximity,
+  postScratchPing,
+  putScratchOptIn,
+  type DateStateResponse,
+  type ScratchState,
+} from "./canvas/api.js";
+import { fogPath, formatExplored } from "./canvas/fog.js";
+import { createTransitDock } from "./canvas/transit-dock.js";
+import type { DockPresence } from "./canvas/transit.js";
+import { wireContentInsets } from "./telegram-insets.js";
+import { apiBase } from "./api.js";
+
+const KYIV: [number, number] = [50.4501, 30.5234];
+const MAP_ZOOM = 13;
+const VENUE_ZOOM = 16;
+/**
+ * Floor under the boot cover. It normally lifts on the first painted tile;
+ * this is what stops a tile-proxy outage trapping the user behind a loader
+ * that will never finish — the same rule the Location Mini App follows.
+ */
+const BOOT_REVEAL_MAX_MS = 2500;
+const GEO_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 10_000,
+  maximumAge: 30_000,
+};
+
+const app = window.Telegram?.WebApp;
+app?.ready();
+app?.expand();
+
+/**
+ * Fullscreen, like every other Mini App here (change of 2026-09-12).
+ *
+ * The canvas was the one screen still opening as a half sheet, and it is the
+ * screen that can least afford it: the map IS the content, and Telegram's own
+ * chrome plus the collapsed sheet left it a strip. `expand()` above is not the
+ * same thing — it fills the sheet, not the phone — so both are called, and the
+ * older-client path is exactly what `expand()` already did.
+ *
+ * `wireContentInsets` is the other half: in fullscreen Telegram floats its
+ * close × and menu ⋯ OVER the page, and `env(safe-area-inset-*)` does not
+ * report them. The sheet pads by `--tg-content-bottom` for that reason.
+ */
+try {
+  if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
+    app.requestFullscreen?.();
+  }
+} catch {
+  // Best-effort: a client that refuses fullscreen still gets the expanded
+  // sheet, and a thrown call must never cost the user the whole screen.
+}
+wireContentInsets(app);
+
+const params = new URLSearchParams(location.search);
+const langParam = params.get("lang") ?? app?.initDataUnsafe?.user?.language_code ?? null;
+const lang: Lang = isLang(langParam) ? langParam : "en";
+const s = stringsFor(lang);
+const initData = app?.initData ?? "";
+
+const el = {
+  boot: document.getElementById("boot"),
+  map: document.getElementById("map"),
+  title: document.getElementById("sheet-title"),
+  body: document.getElementById("sheet-body"),
+  note: document.getElementById("sheet-note"),
+  list: document.getElementById("sheet-list"),
+  action: document.getElementById("sheet-action") as HTMLButtonElement | null,
+  sheet: document.getElementById("sheet"),
+  scratch: document.getElementById("scratch"),
+  scratchCopy: document.getElementById("scratch-copy"),
+  scratchToggle: document.getElementById("scratch-toggle") as HTMLButtonElement | null,
+};
+
+let map: MapLibreMap | null = null;
+let venueMarker: Marker | null = null;
+/** The other end of the trip (change of 2026-09-12), and the line between. */
+let meMarker: Marker | null = null;
+let venuePoint: { lat: number; lng: number } | null = null;
+let fixPoint: { lat: number; lng: number } | null = null;
+/** Framed once per fix, not on every GPS reading — see `drawTrip`. */
+let tripFramed = false;
+/** What the dock and the sheet currently cover, for the camera's padding. */
+let coveredPx = 0;
+let bootDismissed = false;
+let pollTimer: number | null = null;
+let failures = 0;
+let latest: DateStateResponse | null = null;
+let radar: RadarReading | null = null;
+let scratch: ScratchState | null = null;
+let scratchBusy = false;
+let scratchError: string | null = null;
+let fogLayer: SVGSVGElement | null = null;
+
+/**
+ * The transit dock (decision 2026-09-11): Uber and the phone's maps app on the
+ * sheet — up on its own from T-45m, and before that from the venue pin.
+ */
+const dock = createTransitDock({
+  sheet: el.sheet,
+  strings: s,
+  lang,
+  app,
+  // Uber's attribution id for our developer app. Unset, the link goes out
+  // without one rather than with an empty one (`deep-links.ts`).
+  uberClientId: import.meta.env.VITE_UBER_CLIENT_ID?.trim() || null,
+  onLayout: frameAbove,
+  onFix: showTrip,
+});
+
+/**
+ * Keep the venue in view above the dock. Until the user pans, the camera's
+ * centre IS the venue, and on a small phone the dock and the sheet together
+ * cover the bottom half of the screen — the pin would sit under the very dock
+ * it summons. So while the dock is up the camera is padded by what it covers
+ * and the pin centres in what is left; closed, the padding goes back to none,
+ * the framing every other state has always had.
+ */
+function frameAbove(covered: number): void {
+  coveredPx = covered;
+  if (!map) return;
+  map.easeTo({ padding: { top: 0, right: 0, bottom: covered, left: 0 }, duration: stillFrames() ? 0 : 320 });
+}
+
+function stillFrames(): boolean {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
+
+function dismissBoot(): void {
+  if (bootDismissed || !el.boot) return;
+  bootDismissed = true;
+  el.boot.classList.add("gone");
+  window.setTimeout(() => el.boot?.remove(), 400);
+}
+
+function haptic(style: "light" | "rigid" | "success" | "error"): void {
+  const h = app?.HapticFeedback;
+  if (!h) return;
+  try {
+    if (style === "success" || style === "error") h.notificationOccurred?.(style);
+    else h.impactOccurred?.(style);
+  } catch {
+    // Older clients expose a partial HapticFeedback object. A missing buzz is
+    // never worth an exception on a screen that is otherwise fine.
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Map
+// ---------------------------------------------------------------------------
+
+function initMap(): void {
+  if (!el.map) {
+    dismissBoot();
+    return;
+  }
+
+  const sizeMap = (): void => {
+    if (!el.map) return;
+    el.map.style.width = `${window.innerWidth}px`;
+    el.map.style.height = `${window.innerHeight}px`;
+  };
+  sizeMap();
+
+  // No WebGL (an ancient client, or a browser with it switched off) is not a
+  // dead screen: the sheet is the product here and the map is its backdrop, so
+  // the constructor's throw drops the cover and lets the sheet render over the
+  // page's own background.
+  try {
+    map = new MapLibreMap({
+      container: el.map,
+      style: mapStyle(apiBase),
+      // MapLibre takes [lng, lat]. `KYIV` is stored the other way round, as
+      // every other coordinate in this product is.
+      center: [KYIV[1], KYIV[0]],
+      zoom: MAP_ZOOM,
+      maxZoom: 20,
+      // The fog is drawn in container pixels against a north-up projection, so
+      // a rotated or pitched map would slide the holes off the streets they
+      // belong to. Both gestures are disabled rather than compensated for.
+      dragRotate: false,
+      pitchWithRotate: false,
+      attributionControl: false,
+    });
+  } catch {
+    map = null;
+    dismissBoot();
+    return;
+  }
+  map.touchZoomRotate?.disableRotation?.();
+  map.addControl(new AttributionControl({ compact: false }), "bottom-right");
+
+// `idle` — the map has painted everything it was asked to paint — rather
+  // than `load`, which resolves as soon as the style parses and one frame
+  // goes out. Neither is proof on its own: in this WebView the container can
+  // still measure 0x0 at init, and a map asked for no tiles reaches both
+  // events instantly. That is what the size-kick below and the
+  // BOOT_REVEAL_MAX_MS floor are for; `idle` is simply the closer of the two.
+  map.once("idle", dismissBoot);
+
+  const kick = (): void => {
+    sizeMap();
+    map?.resize();
+    renderFog();
+  };
+  // The veil is drawn in container pixels, so every pan and zoom moves it.
+  // `move`/`zoom` rather than their `*end` twins: waiting for the gesture to
+  // finish would leave the holes visibly lagging the city under them.
+  map.on?.("move", renderFog);
+  map.on?.("zoom", renderFog);
+  // A fix can land before the style has parsed, and a source cannot be added
+  // to a map that has none yet — so the trip is drawn again the moment it can
+  // be. Idempotent: with nothing to draw this is a no-op.
+  map.on?.("load", drawTrip);
+  // A tap on the map puts an on-demand dock away — except the tap that landed
+  // on the venue pin: MapLibre raises `click` for its markers' taps too, and
+  // that is the very tap that just brought the dock up.
+  map.on?.("click", (event) => {
+    const target = event.originalEvent?.target;
+    if (target instanceof Node && venueMarker?.getElement().contains(target)) return;
+    dock.dismiss();
+  });
+  window.addEventListener("resize", kick);
+  app?.onEvent?.("viewportChanged", kick);
+  [120, 350, 800].forEach((ms) => window.setTimeout(kick, ms));
+}
+
+function showVenue(lat: number, lng: number): void {
+  if (!map) return;
+  if (!venueMarker) {
+    // The element carries its own 22×22 in `canvas.css`. MapLibre gives a
+    // marker element no size of its own (Leaflet's `iconSize` did), and the
+    // pulse and the dot are absolutely positioned against it — so without that
+    // rule they collapse to nothing and the pin silently disappears.
+    const pin = document.createElement("div");
+    pin.className = "venue-pin";
+    pin.innerHTML = '<span class="venue-pulse"></span><span class="venue-dot"></span>';
+    // The dock's switch while a date is on; `dressPin` makes it a button only
+    // then. Enter / Space for a keyboard, the click for everything else.
+    pin.addEventListener("click", () => dock.summon());
+    pin.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      dock.summon();
+    });
+    venueMarker = new Marker({ element: pin, anchor: "center" })
+      .setLngLat([lng, lat])
+      .addTo(map);
+    map.jumpTo({ center: [lng, lat], zoom: VENUE_ZOOM });
+  } else {
+    venueMarker.setLngLat([lng, lat]);
+  }
+  const moved = venuePoint?.lat !== lat || venuePoint.lng !== lng;
+  venuePoint = { lat, lng };
+  // A new venue is a new trip: the line has to be redrawn to it, and the
+  // camera has earned the right to frame the pair again.
+  if (moved) tripFramed = false;
+  drawTrip();
+}
+
+// ---------------------------------------------------------------------------
+// The trip: where the user is, and the line from there to the table
+// (change of 2026-09-12)
+// ---------------------------------------------------------------------------
+
+/**
+ * A STRAIGHT line, deliberately.
+ *
+ * The dock's minutes are arithmetic over a straight line times a city detour
+ * factor (`canvas/transit.ts`), and this is that same line made visible: it
+ * says "this far, that way", which is what someone deciding between a walk and
+ * a car actually needs. A road-accurate route would need a routing provider —
+ * a key, a quota, and the user's position leaving the phone on every recompute
+ * — which is the exact trade the 2026-09-11 decision refused. Drawn dotted
+ * rather than solid so it is never mistaken for a navigator's route.
+ */
+const TRIP_SOURCE = "trip";
+const TRIP_LAYER = "trip-line";
+
+function showTrip(fix: { lat: number; lng: number } | null): void {
+  // A fix that arrives after the dock has already dropped its watch would
+  // otherwise strand a dot at a place nobody is standing.
+  if (fix === null) tripFramed = false;
+  fixPoint = fix;
+  drawTrip();
+}
+
+function drawTrip(): void {
+  if (!map) return;
+  const from = fixPoint;
+  const to = venuePoint;
+
+  if (!from || !to) {
+    meMarker?.remove();
+    meMarker = null;
+    setTripLine(null);
+    return;
+  }
+
+  if (!meMarker) {
+    const dot = document.createElement("div");
+    dot.className = "me-pin";
+    dot.innerHTML = '<span class="me-dot"></span>';
+    // Not a control, and not a thing to announce: the venue pin is the only
+    // marker on this map anyone can act on.
+    dot.setAttribute("aria-hidden", "true");
+    meMarker = new Marker({ element: dot, anchor: "center" }).setLngLat([from.lng, from.lat]).addTo(map);
+  } else {
+    meMarker.setLngLat([from.lng, from.lat]);
+  }
+
+  setTripLine([
+    [from.lng, from.lat],
+    [to.lng, to.lat],
+  ]);
+
+  // Once. At the venue's own zoom a trip of two kilometres puts the user's end
+  // a screen and a half away — the line would leave the frame and the dot would
+  // never be seen at all, which is the whole point of drawing them. But doing
+  // it on every reading would yank the camera out from under someone walking,
+  // so it happens on the first fix of a trip and never again.
+  if (tripFramed) return;
+  tripFramed = true;
+  map.fitBounds(
+    [
+      [Math.min(from.lng, to.lng), Math.min(from.lat, to.lat)],
+      [Math.max(from.lng, to.lng), Math.max(from.lat, to.lat)],
+    ],
+    {
+      // Room for the pins themselves at the edges, and for whatever the dock
+      // and the sheet are covering at the bottom.
+      padding: { top: 72, right: 56, bottom: coveredPx + 56, left: 56 },
+      // Never further in than the venue's own framing: two points a hundred
+      // metres apart should not zoom to the pavement.
+      maxZoom: VENUE_ZOOM,
+      duration: stillFrames() ? 0 : 620,
+    },
+  );
+}
+
+/**
+ * The one-segment feature MapLibre's source takes. Written out here rather
+ * than imported from `geojson`: those types come in under maplibre's own
+ * `node_modules` and are not resolvable from this package, and one line of
+ * geometry is not worth a dependency to describe.
+ */
+interface TripFeature {
+  type: "Feature";
+  properties: Record<string, never>;
+  geometry: { type: "LineString"; coordinates: [number, number][] };
+}
+
+/** The line's geometry, or null to empty it without removing the layer. */
+function setTripLine(coordinates: [number, number][] | null): void {
+  if (!map?.isStyleLoaded?.()) return;
+  const data: TripFeature = {
+    type: "Feature",
+    properties: {},
+    geometry: { type: "LineString", coordinates: coordinates ?? [] },
+  };
+  const existing = map.getSource(TRIP_SOURCE) as GeoJSONSource | undefined;
+  if (existing) {
+    existing.setData(data);
+    return;
+  }
+  if (!coordinates) return;
+  map.addSource(TRIP_SOURCE, { type: "geojson", data });
+  map.addLayer({
+    id: TRIP_LAYER,
+    type: "line",
+    source: TRIP_SOURCE,
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: {
+      // White, like the user's own dot — the burgundy at the other end is the
+      // venue's, and a line in it would read as the venue reaching out.
+      "line-color": "#ffffff",
+      "line-opacity": 0.72,
+      "line-width": 3,
+      // Round caps turn these into dots: a trail of steps rather than a route
+      // anyone should follow turn by turn.
+      "line-dasharray": [0, 2],
+    },
+  });
+}
+
+/**
+ * The pin summons the dock whenever the dock exists, so in exactly those
+ * states it is announced as a button (its 44 px target is in canvas.css). In
+ * every other state it goes back to being a picture: a control that does
+ * nothing is worse than none.
+ */
+function dressPin(presence: DockPresence): void {
+  const pin = venueMarker?.getElement();
+  if (!pin) return;
+  if (presence === "off") {
+    pin.removeAttribute("role");
+    pin.removeAttribute("tabindex");
+    pin.removeAttribute("aria-label");
+    return;
+  }
+  pin.setAttribute("role", "button");
+  pin.setAttribute("aria-label", s.dockLabel);
+  pin.tabIndex = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Fog of war
+// ---------------------------------------------------------------------------
+
+/**
+ * Redraw the veil.
+ *
+ * An SVG overlay rather than a map layer: the whole thing is ONE path with
+ * one hole per tile, and even-odd fill cuts them out in a single composite.
+ * A layer of N rectangles would seam visibly where two uncovered tiles touch,
+ * which is the common case — people walk through adjacent tiles.
+ */
+function renderFog(): void {
+  if (!map || !el.map) return;
+  const tiles = scratch?.exploredTiles ?? [];
+
+  // Container pixels, which is what `map.project` returns and what the veil is
+  // positioned in. Deliberately not the WebGL canvas's own width/height —
+  // those are device pixels and would be 2–3x too large on a phone.
+  const width = el.map.clientWidth;
+  const height = el.map.clientHeight;
+  const path = fogPath(tiles, {
+    width,
+    height,
+    project: (lat, lng) => map!.project([lng, lat]),
+  });
+
+  if (!path) {
+    fogLayer?.remove();
+    fogLayer = null;
+    return;
+  }
+
+  if (!fogLayer) {
+    fogLayer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    fogLayer.setAttribute("class", "fog");
+    fogLayer.setAttribute("aria-hidden", "true");
+    el.map.appendChild(fogLayer);
+  }
+  fogLayer.setAttribute("width", String(width));
+  fogLayer.setAttribute("height", String(height));
+  fogLayer.innerHTML =
+    `<path d="${path}" fill-rule="evenodd" class="fog-veil" />`;
+}
+
+async function loadScratchMap(): Promise<void> {
+  try {
+    scratch = await fetchScratchMap(initData);
+    renderFog();
+  } catch {
+    // No fog beats wrong fog: without the tiles the map is simply the map.
+  }
+}
+
+async function pingScratch(): Promise<void> {
+  if (!scratch?.optIn) return;
+  const here = await currentPosition();
+  if (!here) return;
+  try {
+    const res = await postScratchPing(initData, here);
+    scratch = res;
+    // Only a ping that actually uncovered ground is worth redrawing for, and
+    // only that one is worth a haptic: the map does not celebrate standing
+    // still.
+    if (res.uncovered) {
+      haptic("light");
+      renderFog();
+      render();
+    }
+  } catch {
+    // Opted out mid-session, or outside the market. Neither is an error the
+    // screen should shout about.
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sheet
+// ---------------------------------------------------------------------------
+
+function render(): void {
+  if (!latest || !el.title || !el.body || !el.action) return;
+
+  const match = latest.match;
+  const view = sheetFor({
+    state: latest.state,
+    lang,
+    serverNow: new Date(latest.serverNow),
+    nextDropAt: latest.nextDropAt ? new Date(latest.nextDropAt) : null,
+    agreedTime: match?.agreedTime ? new Date(match.agreedTime) : null,
+    // Its own clock: a `proposed` match has no agreed time yet, and this is
+    // the one state whose deadline is running.
+    deadlineAt: match?.deadlineAt ? new Date(match.deadlineAt) : null,
+    venueName: match?.venue?.name ?? null,
+    bumpMine: match?.bump?.mine ?? false,
+    bumpVerified: match?.bump?.verified ?? false,
+    // Read from the state, never from the bump response: that one carries BOTH
+    // sides' halves and the client is not told which side it is, so it could
+    // only guess. `/v1/date/state` resolves the side on the server.
+    deck: match?.deck ?? [],
+    // Only once something has actually been uncovered: "0%" on a fresh
+    // account is a feature announcing that it has nothing to show.
+    ...(scratch?.optIn && scratch.exploredPercent > 0
+      ? { exploredLabel: formatExplored(scratch.exploredPercent) }
+      : {}),
+    radar,
+  });
+
+  el.title.textContent = view.title;
+  el.body.textContent = view.body;
+  el.sheet?.setAttribute("data-tone", view.tone);
+
+  if (el.note) {
+    el.note.textContent = view.note ?? "";
+    el.note.hidden = !view.note;
+  }
+  if (el.list) {
+    el.list.replaceChildren(
+      ...(view.list ?? []).map((line) => {
+        const li = document.createElement("li");
+        li.textContent = line;
+        return li;
+      }),
+    );
+    el.list.hidden = !view.list?.length;
+  }
+
+  el.action.hidden = view.action === null;
+  el.action.textContent = view.actionLabel ?? "";
+  el.action.dataset.action = view.action ?? "";
+
+  renderScratchToggle();
+}
+
+/**
+ * The Scratch Map's on/off control.
+ *
+ * It exists because for a while everything behind it did and this did not:
+ * the endpoint, the client call, the fog layer, the percentage and the copy
+ * were all built while `putScratchOptIn` had no caller anywhere, so the
+ * feature could not be switched on by any user on any surface.
+ *
+ * Only in IDLE_EXPLORING, which is exactly where `pingScratch` runs — a
+ * consent control belongs in the state where the collection it authorises
+ * actually happens, not on a screen that is about a date. The "N% of Kyiv"
+ * readout is the sheet's own note and is not repeated here.
+ */
+function renderScratchToggle(): void {
+  const { scratch: box, scratchCopy: copy, scratchToggle: toggle } = el;
+  if (!box || !copy || !toggle) return;
+
+  // `null` means the state has not loaded yet — offering a consent before
+  // knowing whether it was already given would flash the wrong control.
+  const show = latest?.state === "IDLE_EXPLORING" && scratch !== null;
+  box.hidden = !show;
+  if (!show || !scratch) return;
+
+  const on = scratch.optIn;
+  // The copy is the ask, so it belongs to the off state. Once it is on, the
+  // sheet's own note already says what it bought.
+  copy.textContent = scratchError ?? (on ? "" : s.scratchOffer);
+  copy.hidden = !copy.textContent;
+  toggle.textContent = on ? s.scratchDisable : s.scratchEnable;
+  toggle.dataset.on = on ? "1" : "0";
+  toggle.disabled = scratchBusy;
+}
+
+async function toggleScratch(): Promise<void> {
+  if (!scratch || scratchBusy) return;
+  scratchBusy = true;
+  scratchError = null;
+  renderScratchToggle();
+  const next = !scratch.optIn;
+  try {
+    scratch = await putScratchOptIn(initData, next);
+    haptic(next ? "success" : "light");
+    // Turning it ON should show something immediately rather than waiting out
+    // the idle poll, which is a minute away.
+    if (next) await pingScratch();
+    render();
+  } catch {
+    // The write IS the consent, so a failure must not leave a control that
+    // reads as switched.
+    scratchError = s.scratchFailed;
+    haptic("error");
+  } finally {
+    scratchBusy = false;
+    renderScratchToggle();
+  }
+}
+
+el.action?.addEventListener("click", () => {
+  const action = el.action?.dataset.action;
+  if (action === "chat") {
+    haptic("light");
+    // The flows this points at live in the bot, so the honest action is to
+    // hand the user back to it rather than rebuild an accept button here.
+    app?.close?.();
+    return;
+  }
+  if (action === "terminal") openTerminal();
+});
+
+el.scratchToggle?.addEventListener("click", () => void toggleScratch());
+
+// ---------------------------------------------------------------------------
+// Date Terminal
+// ---------------------------------------------------------------------------
+
+/**
+ * Hand the user to the Date Terminal — the page that owns the shake since
+ * 2026-09-11. Same origin, so a plain navigation keeps the Mini App open, and
+ * the terminal carries a link back to this map.
+ */
+function openTerminal(): void {
+  const matchId = latest?.match?.id;
+  if (!matchId) return;
+  haptic("light");
+  const theme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  const query = new URLSearchParams({ match: matchId, lang, theme });
+  location.href = `date-terminal.html?${query.toString()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Radar
+// ---------------------------------------------------------------------------
+
+async function currentPosition(): Promise<{ lat: number; lng: number } | null> {
+  if (!navigator.geolocation) return null;
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      GEO_OPTIONS,
+    );
+  });
+}
+
+async function pingRadar(): Promise<void> {
+  const matchId = latest?.match?.id;
+  if (!matchId) return;
+  const here = await currentPosition();
+  if (!here) return;
+  try {
+    const res = await postProximity(initData, matchId, here);
+    const wasBoth = radar?.bothArrived ?? false;
+    radar = {
+      peer: res.peer,
+      ...(res.peerEtaLocal ? { peerEtaLocal: res.peerEtaLocal } : {}),
+      bothArrived: res.bothArrived,
+    };
+    // The one celebratory beat, and only on the edge into it — a haptic on
+    // every poll while both stand at the venue would be a buzzing phone.
+    if (radar.bothArrived && !wasBoth) haptic("success");
+    render();
+  } catch {
+    // Outside the window, or the network. The sheet keeps its last reading
+    // until the presence TTL makes the server answer `unknown` anyway.
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Poll loop
+// ---------------------------------------------------------------------------
+
+function schedule(ms: number): void {
+  if (pollTimer !== null) window.clearTimeout(pollTimer);
+  pollTimer = window.setTimeout(() => void tick(), ms);
+}
+
+async function tick(): Promise<void> {
+  try {
+    const next = await fetchDateState(initData);
+    failures = 0;
+    latest = isCanvasState(next.state) ? next : { ...next, state: "IDLE_EXPLORING" as CanvasState };
+
+    const venue = latest.match?.venue;
+    if (venue?.lat != null && venue.lng != null) showVenue(venue.lat, venue.lng);
+    dressPin(
+      dock.update(
+        latest.state,
+        venue?.lat != null && venue.lng != null
+          ? { lat: venue.lat, lng: venue.lng, name: venue.name, address: venue.address }
+          : null,
+      ),
+    );
+
+    if (latest.state !== "DATE_RADAR_ACTIVE") radar = null;
+    render();
+    dismissBoot();
+
+    // The scratch map fills while the canvas is being used AS a map — the
+    // states where the screen is about a date have something better to do with
+    // the user's attention and their battery.
+    if (latest.state === "IDLE_EXPLORING") void pingScratch();
+    if (latest.state === "DATE_RADAR_ACTIVE") void pingRadar();
+
+    schedule(pollIntervalFor(latest.state));
+  } catch {
+    failures += 1;
+    if (!latest && el.body) el.body.textContent = s.offline;
+    dismissBoot();
+    schedule(backoffFor(failures));
+  }
+}
+
+window.setTimeout(dismissBoot, BOOT_REVEAL_MAX_MS);
+initMap();
+void loadScratchMap();
+void tick();

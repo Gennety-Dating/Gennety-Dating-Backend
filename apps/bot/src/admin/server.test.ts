@@ -171,6 +171,23 @@ describe("Admin API auth", () => {
 
 const AUTH = { Authorization: "Bearer test-secret-key" };
 
+// A13-L17: an error that escaped a route fell through to Express's default
+// handler — an HTML page, with the stack trace in it outside production.
+describe("Admin API final error handler", () => {
+  it("answers a malformed JSON body with JSON and no stack trace", async () => {
+    const res = await request(app)
+      .patch(`/admin/reports/${MOCK_USER.id}/review`)
+      .set(AUTH)
+      .set("Content-Type", "application/json")
+      .send('{"adminReviewed": tru');
+
+    expect(res.status).toBe(400);
+    expect(res.headers["content-type"]).toMatch(/application\/json/);
+    expect(typeof res.body.error).toBe("string");
+    expect(res.text).not.toMatch(/\bat .*\.(ts|js):\d+/);
+  });
+});
+
 describe("GET /admin/analytics/no-match-notices", () => {
   it("returns empty drops when no notices exist", async () => {
     const res = await request(app).get("/admin/analytics/no-match-notices").set(AUTH);

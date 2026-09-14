@@ -7,7 +7,7 @@ import {
   completeLivenessCheck,
 } from "../../services/liveness-flow.js";
 import { getBotApi } from "../server.js";
-import { LEGAL_DOCS_VERSION } from "@gennety/shared";
+import { LEGAL_DOCS_VERSION, MIN_PHOTOS, t } from "@gennety/shared";
 
 /**
  * Native-client identity verification (AWS Rekognition Face Liveness).
@@ -81,6 +81,25 @@ verificationRouter.get(
           res
             .status(409)
             .json({ error: "Biometric consent required", code: "consent_required" });
+          return;
+        // Two more steps the user can complete, on the same 409 + `code`
+        // contract (audit A13-H11, A13-M18). `photos_required` carries the
+        // user-language ask so a client that does not know the code yet still
+        // has a sentence worth showing; the action — adding photos — is the
+        // client's own photo screen.
+        case "photos_required":
+          res.status(409).json({
+            error: "Add profile photos before verifying",
+            code: "photos_required",
+            message: t(begun.language, "verifyPhotosRequired", { min: MIN_PHOTOS }),
+            minPhotos: MIN_PHOTOS,
+          });
+          return;
+        case "onboarding_incomplete":
+          res.status(409).json({
+            error: "Finish registration before verifying",
+            code: "onboarding_incomplete",
+          });
           return;
         case "not_configured":
           res.status(503).json({ error: "Verification feature not configured" });

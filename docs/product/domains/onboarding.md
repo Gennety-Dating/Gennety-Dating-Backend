@@ -1713,7 +1713,11 @@ another try) survives intact; the unfounded verdict does not.
    can spot the offending photo):
    - `verified` — pass count ≥ `FACE_MATCH_MIN_VERIFIED_PHOTOS` (default 1).
      The account holder is provably in the photo set. Auto-activate if still
-     onboarding; seed `eloScore` via one cold-start AI vision request
+     onboarding AND onboarding is completed AND the track contact is verified
+     (2026-09-14, A13-M18 — otherwise the verdict is stored without activation,
+     and nothing is announced, paid or admitted); the verdict and the activation
+     are written under the same per-user `FOR UPDATE` lock the photo upload and
+     delete paths take, and only for the exact photo set that was scored (A13-H12); seed `eloScore` via one cold-start AI vision request
      containing every profile photo. The model returns an independent score for
      each photo; the server uses their arithmetic mean for the 0..100
      attractiveness score and stores both the aggregate and per-photo audit
@@ -1760,10 +1764,18 @@ another try) survives intact; the unfounded verdict does not.
    - `pending_review` — anything else: all-borderline, mixed pass +
      borderline under quorum, or zero detected-face photos
      (`no_detected_faces` reason).
-4. Any *infrastructure* failure routes the user to `pending_review`, never
-   `rejected` — we don't penalise users for our outages — **except when the
-   failure was getting the reference selfie at all**, which is retryable
-   instead (corrected 2026-07-26). The distinction is whether a verdict was
+4. Any *infrastructure* failure is **retryable** — `pending` with the retry
+   message and the Verify button — never `rejected` and, since 2026-09-14
+   (A13-H11), never `pending_review` either: a Rekognition error, a photo that
+   would not download, a faceless reference frame (not kept as the reference) and
+   a profile with no photos at all all go down the retry path, and a stored
+   `verifiedSelfiePath` is never overwritten with null. A liveness check refuses
+   to start without photos (`photos_required`) or before onboarding completes
+   with a verified track contact (`onboarding_incomplete`). Only genuine
+   borderline evidence (`borderline_score`, `no_detected_faces`) still goes to
+   `pending_review` for a human. History below: until 2026-07-26 only a failed
+   reference fetch was retryable
+   (corrected 2026-07-26). The distinction is whether a verdict was
    even possible: a Rekognition error or a photo that wouldn't download still
    leaves per-photo evidence for an admin to look at, but with no reference
    selfie nothing was compared, so there is nothing to adjudicate.
@@ -1817,11 +1829,15 @@ handlers and the chat agent's `attach_profile_photo` tool fire
 which clears the `(personaInquiryId, faceMatchedAt)` idempotency marker (the
 column keeps its historical name and now holds the liveness session id),
 flips `verificationStatus` back to `pending`, and re-launches the
-pipeline against the new photo array. Persistence of `photoFaceScores`
-is gated on the photo array still matching the snapshot taken at
-pipeline start — if the user edits photos again mid-run the stale scores
-are discarded rather than corrupting the `photos[i] ↔ photoFaceScores[i]`
-alignment. The admin "rerun verification" endpoint shares the same code
+pipeline against the new photo array. The WHOLE verdict (scores, status,
+activation) is written only if the photo array still matches the snapshot
+taken at pipeline start, checked under the per-user lock — if the user edits
+photos mid-run nothing is persisted, the user is parked in `pending` with the
+reference recorded (so an upload during the re-score triggers a real rerun),
+and the run re-scores against the selfie it already holds, up to
+`VERIFICATION_PHOTO_RACE_MAX_ATTEMPTS` (2026-09-14, A13-H12; before this only
+`photoFaceScores` were discarded, and a photo uploaded mid-run survived on an
+activated profile without ever being compared). The admin "rerun verification" endpoint shares the same code
 path.
 
 **Outcome DM.** Every terminal outcome is DM'd in the user's own

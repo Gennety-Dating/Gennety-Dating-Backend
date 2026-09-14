@@ -6,7 +6,7 @@ vi.mock("@gennety/db", () => {
   // the top-level client. That keeps every existing `mProfileUpdateMany`
   // assertion working whether the call came from `prisma` or from `tx`.
   const user = { findMany: vi.fn() };
-  const match = { findFirst: vi.fn() };
+  const match = { findFirst: vi.fn(), count: vi.fn() };
   const noMatchNotice = { findFirst: vi.fn(), create: vi.fn(), deleteMany: vi.fn() };
   const profile = { updateMany: vi.fn() };
   return {
@@ -60,6 +60,7 @@ import { CADENCE, FAMINE_PAUSE_AFTER_DAYS } from "@gennety/shared";
 type MockFn = ReturnType<typeof vi.fn>;
 const mUserFindMany = (prisma.user as unknown as { findMany: MockFn }).findMany;
 const mMatchFindFirst = (prisma.match as unknown as { findFirst: MockFn }).findFirst;
+const mMatchCount = (prisma.match as unknown as { count: MockFn }).count;
 const mNoticeFindFirst = (prisma.noMatchNotice as unknown as { findFirst: MockFn }).findFirst;
 const mNoticeCreate = (prisma.noMatchNotice as unknown as { create: MockFn }).create;
 const mNoticeDeleteMany = (prisma.noMatchNotice as unknown as { deleteMany: MockFn }).deleteMany;
@@ -142,6 +143,125 @@ describe("sendNoMatchNotices", () => {
     // pre-column Telegram row, so the push leg isn't reached at all there.
     mPush.mockResolvedValue(true);
     mRematch.mockResolvedValue(false);
+    // A13-H10 default: nobody holds a live match at send time.
+    mMatchCount.mockResolvedValue(0);
+  });
+
+  // ── A13-H10: "we couldn't find anyone" only for people who have nobody ─────
+  //
+  // The exclusion used to be "a match dispatched in the last hour", so anyone
+  // mid-negotiation, on a scheduled date, or whose drop pitch was still queued
+  // behind a slow dispatch was told nobody had been found.
+
+  it("(A13-H10) excludes anyone holding a live match — including an undispatched proposal — on both sides", async () => {
+    mUserFindMany.mockResolvedValueOnce([]);
+
+    await sendNoMatchNotices(makeApi() as never, NOW, 0, makeStream() as never);
+
+    const arg = mUserFindMany.mock.calls[0]![0] as {
+      where: { AND: Array<Record<string, unknown>> };
+    };
+    for (const relation of ["matchesAsA", "matchesAsB"]) {
+      const clause = arg.where.AND.find((c) => relation in c) as Record<
+        string,
+        { none: { OR: Array<Record<string, unknown>> } }
+      >;
+      expect(clause).toBeDefined();
+      const branches = clause[relation]!.none.OR;
+      expect(branches).toContainEqual({
+        status: { in: ["proposed", "negotiating", "negotiating_venue", "scheduled"] },
+      });
+      // The status branch carries no `dispatchedAt` condition: a `proposed`
+      // row still waiting for its pitch counts as a match.
+      expect(branches.some((b) => "status" in b && "dispatchedAt" in b)).toBe(false);
+    }
+  });
+
+  it("(A13-H10) only considers accounts that existed when the drop ran", async () => {
+    mUserFindMany.mockResolvedValueOnce([]);
+
+    await sendNoMatchNotices(makeApi() as never, NOW, 0, makeStream() as never);
+
+    const arg = mUserFindMany.mock.calls[0]![0] as { where: { createdAt: { lt: Date } } };
+    // NOW is Thursday 18:15 Kyiv; the drop it is about ran at 18:00.
+    expect(arg.where.createdAt.lt.toISOString()).toBe("2026-05-07T15:00:00.000Z");
+  });
+
+  it("(A13-H10) skips a candidate who was handed a match after the page was read, without claiming", async () => {
+    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, language: "en" }]);
+    mMatchCount.mockResolvedValueOnce(1);
+    const api = makeApi();
+    const stream = makeStream();
+
+    const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+    expect(result.notified).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(mNoticeCreate).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("(A13-H10) never pauses someone whose match landed between the check and the pause", async () => {
+    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, language: "en" }]);
+    mMatchFindFirst.mockResolvedValueOnce({
+      dispatchedAt: new Date(getDropDate(NOW).getTime() - (FAMINE_PAUSE_AFTER_DAYS + 3) * DAY_MS),
+    });
+    // Free at the pre-claim check, holding a match inside the pause transaction.
+    mMatchCount.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+    const api = makeApi();
+
+    const result = await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
+
+    expect(mTransition).not.toHaveBeenCalled();
+    expect(result.paused).toBe(0);
+    expect(result.notified).toBe(0);
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    // The claim is released: nothing about a famine is true of them now.
+    expect(mNoticeDeleteMany).toHaveBeenCalledWith({
+      where: { userId: "u1", dropDate: getDropDate(NOW) },
+    });
+  });
+
+  // ── A13-M22: quiet hours ────────────────────────────────────────────────
+
+  it("(A13-M22) does not start sending inside quiet hours, and says it was held", async () => {
+    const lateEvening = new Date("2026-05-07T20:30:00Z"); // 23:30 Kyiv
+
+    const result = await sendNoMatchNotices(makeApi() as never, lateEvening, 0, makeStream() as never);
+
+    expect(result.heldForQuietHours).toBe(true);
+    expect(mUserFindMany).not.toHaveBeenCalled();
+    expect(mNoticeCreate).not.toHaveBeenCalled();
+  });
+
+  it("(A13-M22) stops at 23:00 mid-run and leaves the rest unclaimed for the next run", async () => {
+    mUserFindMany.mockResolvedValueOnce([
+      { id: "u1", telegramId: 111n, language: "en" },
+      { id: "u2", telegramId: 222n, language: "en" },
+    ]);
+    mMatchFindFirst.mockResolvedValue(null);
+    // The run starts at 18:15 Kyiv; the first notice takes it past 23:00.
+    const realNow = Date.now();
+    let elapsedMs = 0;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow + elapsedMs);
+    const api = makeApi();
+    const inner = makeStream();
+    const stream = vi.fn(async (...args: Parameters<typeof inner>) => {
+      await inner(...args);
+      elapsedMs = 5 * 60 * 60 * 1000;
+    });
+
+    try {
+      const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+      expect(result.notified).toBe(1);
+      expect(result.heldForQuietHours).toBe(true);
+      expect(mNoticeCreate).toHaveBeenCalledTimes(1);
+      expect(mNoticeCreate.mock.calls[0]![0]).toMatchObject({ data: { userId: "u1" } });
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("(D4) throttles candidate selection to famineNoticeIntervalMs, not the exact drop day", async () => {

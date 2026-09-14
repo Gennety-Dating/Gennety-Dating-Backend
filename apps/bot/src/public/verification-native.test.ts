@@ -106,6 +106,33 @@ describe("GET /v1/me/verification/native-init", () => {
   });
 });
 
+describe("GET /v1/me/verification/native-init — steps before a check can run", () => {
+  // Audit A13-H11: a check on a photo-less profile used to run and strand the
+  // user in `pending_review`. The refusal is a step, so it is a 409 + `code`,
+  // and it carries the ask in the user's own language.
+  it("answers photos_required with a localized ask and the photo floor", async () => {
+    beginLivenessCheck.mockResolvedValueOnce({
+      ok: false,
+      error: "photos_required",
+      language: "ru",
+    });
+    const res = await request(buildApp()).get("/v1/me/verification/native-init");
+
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: "photos_required", minPhotos: 4 });
+    expect(res.body.message).toContain("фото");
+  });
+
+  // Audit A13-M18: a first check before registration is finished.
+  it("answers onboarding_incomplete as its own 409 code", async () => {
+    beginLivenessCheck.mockResolvedValueOnce({ ok: false, error: "onboarding_incomplete" });
+    const res = await request(buildApp()).get("/v1/me/verification/native-init");
+
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: "onboarding_incomplete" });
+  });
+});
+
 describe("POST /v1/me/verification/native-event", () => {
   it("complete settles the check in-request and returns the outcome", async () => {
     const res = await request(buildApp())

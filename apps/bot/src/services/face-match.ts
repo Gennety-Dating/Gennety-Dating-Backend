@@ -56,8 +56,8 @@ import type {
  *   reject (a profile photo without a face can't be compared and isn't a
  *   valid profile photo anyway).
  * - `{ ok: false, error }` — infrastructure failure. Callers should
- *   move the user to `pending_review` rather than reject; we don't
- *   penalise users for our own outages.
+ *   leave the user retryable rather than reject; we don't penalise users
+ *   for our own outages (the pipeline's `RetryReason`).
  */
 export type FaceMatchResult =
   | {

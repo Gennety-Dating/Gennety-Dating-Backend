@@ -398,6 +398,9 @@ vi.mock("@gennety/db", async () => {
         updateMany: vi.fn(async ({ where, data }: any) => {
           let count = 0;
           for (const u of db.users.values()) {
+            if (typeof where.id === "string" && u.id !== where.id) continue;
+            // Moving a device push token between accounts (audit A13-L12).
+            if (where.pushToken !== undefined && u.pushToken !== where.pushToken) continue;
             if (where.email !== undefined && u.email !== where.email) continue;
             if (
               where.isEmailVerified !== undefined &&
@@ -426,6 +429,11 @@ vi.mock("@gennety/db", async () => {
 
       onboardingProgress: {
         findUnique: vi.fn().mockResolvedValue(null),
+      },
+
+      // ----- liveActivityToken ----- (released on sign-out, audit A13-L12)
+      liveActivityToken: {
+        deleteMany: vi.fn(async () => ({ count: 0 })),
       },
 
       // ----- emailOtp -----
@@ -520,7 +528,10 @@ vi.mock("@gennety/db", async () => {
             const matchesId = where.id === undefined || s.id === where.id;
             const matchesRevokedAt =
               where.revokedAt === undefined || s.revokedAt === where.revokedAt;
-            if (!matchesUserId || !matchesId || !matchesRevokedAt) continue;
+            const matchesHash =
+              where.refreshTokenHash === undefined ||
+              s.refreshTokenHash === where.refreshTokenHash;
+            if (!matchesUserId || !matchesId || !matchesRevokedAt || !matchesHash) continue;
             if (data.revokedAt !== undefined) s.revokedAt = data.revokedAt;
             count++;
           }
@@ -2633,6 +2644,98 @@ describe("POST /v1/me/push-token", () => {
     const stored = userById(user.id)!;
     expect(stored.pushToken).toBe("ExponentPushToken[abc]");
     expect(stored.pushPlatform).toBe("ios");
+  });
+
+  // Audit A13-L12: the token names a device. The account that signed in on
+  // this phone before must stop receiving pushes on it.
+  it("moves the token away from another account on the same device", async () => {
+    const previous = await seedUser({ pushToken: "apns-device-1", pushPlatform: "apns" });
+    const bystander = await seedUser({ pushToken: "apns-device-2", pushPlatform: "apns" });
+    const current = await seedUser();
+
+    const res = await request(app)
+      .post("/v1/me/push-token")
+      .set("Authorization", `Bearer ${signAccess(current.id)}`)
+      .send({ token: "apns-device-1", platform: "apns" });
+
+    expect(res.status).toBe(200);
+    expect(userById(current.id)!.pushToken).toBe("apns-device-1");
+    expect(userById(previous.id)!.pushToken).toBeNull();
+    expect(userById(previous.id)!.pushPlatform).toBeNull();
+    expect(userById(bystander.id)!.pushToken).toBe("apns-device-2");
+  });
+});
+
+describe("POST /v1/auth/logout", () => {
+  beforeEach(resetDb);
+
+  function seedSession(userId: string): { raw: string; hash: string } {
+    const raw = crypto.randomBytes(48).toString("base64url");
+    const hash = crypto.createHash("sha256").update(raw).digest("hex");
+    db.sessions.set(hash, {
+      id: crypto.randomUUID(),
+      userId,
+      refreshTokenHash: hash,
+      userAgent: "supertest",
+      expiresAt: new Date(Date.now() + 30 * 86_400_000),
+      revokedAt: null,
+      createdAt: new Date(),
+    });
+    return { raw, hash };
+  }
+
+  it("requires auth", async () => {
+    expect((await request(app).post("/v1/auth/logout").send({})).status).toBe(401);
+  });
+
+  it("stops pushes to the device and revokes only the session it presents", async () => {
+    const user = await seedUser({ pushToken: "apns-device-1", pushPlatform: "apns" });
+    const thisDevice = seedSession(user.id);
+    const otherDevice = seedSession(user.id);
+
+    const res = await request(app)
+      .post("/v1/auth/logout")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ refreshToken: thisDevice.raw });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(userById(user.id)!.pushToken).toBeNull();
+    expect(userById(user.id)!.pushPlatform).toBeNull();
+    expect(db.sessions.get(thisDevice.hash)!.revokedAt).toBeInstanceOf(Date);
+    expect(db.sessions.get(otherDevice.hash)!.revokedAt).toBeNull();
+    // The signed-out refresh token can no longer mint anything.
+    const refresh = await request(app).post("/v1/auth/refresh").send({ refreshToken: thisDevice.raw });
+    expect(refresh.status).toBe(401);
+  });
+
+  it("revokes every session when the client cannot name its own", async () => {
+    const user = await seedUser();
+    const first = seedSession(user.id);
+    const second = seedSession(user.id);
+
+    const res = await request(app)
+      .post("/v1/auth/logout")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(db.sessions.get(first.hash)!.revokedAt).toBeInstanceOf(Date);
+    expect(db.sessions.get(second.hash)!.revokedAt).toBeInstanceOf(Date);
+  });
+
+  it("never revokes another account's session by presenting its token", async () => {
+    const caller = await seedUser();
+    const victim = await seedUser();
+    const victimSession = seedSession(victim.id);
+
+    const res = await request(app)
+      .post("/v1/auth/logout")
+      .set("Authorization", `Bearer ${signAccess(caller.id)}`)
+      .send({ refreshToken: victimSession.raw });
+
+    expect(res.status).toBe(200);
+    expect(db.sessions.get(victimSession.hash)!.revokedAt).toBeNull();
   });
 });
 

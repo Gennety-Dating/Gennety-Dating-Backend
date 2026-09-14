@@ -70,8 +70,12 @@ change, not a migration.
   The agent's product playbook must not describe a teaser
   (`services/product-playbook.ts`).
 - **Weekly batch** — Thursday 18:00 Europe/Kyiv (`MATCH_CRON_SCHEDULE = "0 18 * * 4"`).
-- **No-match notice** — Thursday 18:15 Kyiv (`NO_MATCH_NOTICE_CRON_SCHEDULE = "15 18 * * 4"`).
-  An empathetic DM goes to every eligible-but-unpaired user. Tier escalates
+- **No-match notice** — right after the drop's dispatch finishes (the drop job runs it);
+  Thursday 18:15 Kyiv (`NO_MATCH_NOTICE_CRON_SCHEDULE = "15 18 * * 4"`) is only the
+  fallback, and it defers while the drop is still dispatching (2026-09-14, A13-H10: a
+  large drop used to still be sending pitches at 18:15, so matched users were told
+  they had no match). An empathetic DM goes to every eligible-but-unpaired user —
+  never to anyone holding a live match, including an undispatched `proposed` one. Tier escalates
   with consecutive famine count (1 / 2 / 3+); idempotent via
   `NoMatchNotice@@unique([userId, dropDate])`. **The cron is not the throttle**
   — `CADENCE.famineNoticeIntervalMs` (7 days, both profiles) is a query-level

@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
+import { releaseLiveActivityTokenFromOtherUsers } from "../../services/device-tokens.js";
 
 /**
  * Live Activity push-token registration for the native iOS client
@@ -37,6 +38,9 @@ liveActivityRouter.post("/", async (req: Request, res: Response): Promise<void> 
     return;
   }
 
+  // The token names this install, not an account: a previous account signed in
+  // on the same phone must stop driving Live Activities on it (audit A13-L12).
+  await releaseLiveActivityTokenFromOtherUsers(req.userId!, token);
   await prisma.liveActivityToken.upsert({
     where: {
       userId_activityType_kind: { userId: req.userId!, activityType, kind },

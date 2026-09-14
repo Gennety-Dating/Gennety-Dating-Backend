@@ -148,6 +148,27 @@ export async function handleError(
   showCloseButton(deps);
 }
 
+/**
+ * Which screen a refused `/init` shows. Exported for verification.test.ts.
+ *
+ * A 409 is several different states told apart by the server's `error` code.
+ * Reading every 409 as "already verified" was safe while that was the only
+ * one, and wrong the moment it wasn't: a profile with no photos would have
+ * been congratulated instead of asked for them (audit A13-H11). A 409 with no
+ * readable code keeps the old reading, since older servers sent only that one.
+ */
+export function screenForInitError(status: number, reason: string | undefined): Screen {
+  if (status === 409) {
+    if (reason === "photos-required") return "photos-required";
+    // Registration unfinished (audit A13-M18). The chat only offers
+    // verification after onboarding, so this is not a state to explain here.
+    if (reason === "onboarding-incomplete") return "error";
+    return "already-verified";
+  }
+  if (status === 503) return "unavailable";
+  return "error";
+}
+
 function showCloseButton(deps: HandlerDeps): void {
   const button = deps.app.MainButton;
   if (!button) return;
@@ -170,6 +191,7 @@ export type Screen =
   | "retry"
   | "success"
   | "already-verified"
+  | "photos-required"
   | "unavailable";
 
 /**
@@ -260,6 +282,9 @@ export function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): voi
     case "already-verified":
       root.innerHTML = successScreen(lang, "verifyMiniAppAlreadyVerified");
       return;
+    case "photos-required":
+      root.innerHTML = panelScreen(lang, "📷", "verifyMiniAppPhotosRequired");
+      return;
     case "unavailable":
       root.innerHTML = `
         <div class="screen">
@@ -314,6 +339,7 @@ function boot(): void {
       "error",
       "unavailable",
       "already-verified",
+      "photos-required",
     ];
     if (forced && (allowed as string[]).includes(forced)) {
       // Two review affordances for the success mark, both dev-only and both
@@ -465,17 +491,11 @@ async function bootstrap(
       await mountDetector(app, root, lang, init);
       return;
     }
-    if (err instanceof CalendarApiError) {
-      if (err.status === 409) {
-        renderScreen(root, "already-verified", lang);
-      } else if (err.status === 503) {
-        renderScreen(root, "unavailable", lang);
-      } else {
-        renderScreen(root, "error", lang);
-      }
-    } else {
-      renderScreen(root, "error", lang);
-    }
+    renderScreen(
+      root,
+      err instanceof CalendarApiError ? screenForInitError(err.status, err.reason) : "error",
+      lang,
+    );
     // Surface a Close MainButton so the user has an obvious exit when the
     // initial GET fails — nothing mounted, so they're staring at a dead screen
     // otherwise.

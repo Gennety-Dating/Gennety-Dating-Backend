@@ -52,17 +52,21 @@ vi.mock("@gennety/db", () => ({
           .map((p) => ({ ...p }));
       }),
     },
-    $executeRaw: vi.fn(
-      async (
-        _strings: TemplateStringsArray,
-        _literal: string,
-        id: string,
-        dirtyAt: Date | null,
-        psychologicalSummary: string | null,
-        partnerPreferences: string | null,
-        negativeConstraints: string | null,
-        hobbies: string[],
-      ) => {
+    $executeRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      // Two statements share this mock: the vector write (`SET embedding = …`,
+      // whose first value is the vector literal) and the nothing-to-embed clear,
+      // which carries no vector. Everything after that lines up.
+      const writesVector = strings.join("?").includes("SET embedding =");
+      const [id, dirtyAt, psychologicalSummary, partnerPreferences, negativeConstraints, hobbies] =
+        (writesVector ? values.slice(1) : values) as [
+          string,
+          Date | null,
+          string | null,
+          string | null,
+          string | null,
+          string[],
+        ];
+      {
         const row = profiles.get(id);
         if (!row || !row.embeddingDirty) return 0;
         const actual = row.embeddingDirtyAt?.getTime() ?? null;
@@ -78,10 +82,10 @@ vi.mock("@gennety/db", () => ({
         }
         row.embeddingDirty = false;
         row.embeddingDirtyAt = null;
-        row.embedding = "vector";
+        if (writesVector) row.embedding = "vector";
         return 1;
-      },
-    ),
+      }
+    }),
   },
 }));
 
@@ -90,6 +94,7 @@ const {
   refreshAllDirtyEmbeddings,
   refreshUserEmbedding,
 } = await import("./embedding-refresh.js");
+const { EmbeddingRequestError } = await import("../services/profile-analysis.js");
 const { prisma: mockedPrisma } = await import("@gennety/db");
 const findMany = mockedPrisma.profile.findMany as unknown as ReturnType<typeof vi.fn>;
 const { env: testEnv } = await import("../config.js");
@@ -337,5 +342,95 @@ describe("embeddingRefreshTick (M-2)", () => {
     } finally {
       (testEnv as { OPENAI_API_KEY: string }).OPENAI_API_KEY = previousKey;
     }
+  });
+});
+
+describe("embedding refresh — one bad row cannot fail the others (A13-M17)", () => {
+  function seedEmpty(id: string, dirtyAt: Date, embedding: string | null): ProfileRow {
+    const row = seedDirty(id, dirtyAt);
+    row.psychologicalSummary = null;
+    row.partnerPreferences = null;
+    row.negativeConstraints = null;
+    row.hobbies = [];
+    row.embedding = embedding;
+    return row;
+  }
+
+  it("never sends an empty input, and clears such a row without touching its vector", async () => {
+    seedEmpty("empty-new", new Date("2026-01-01T00:00:00Z"), null);
+    seedEmpty("empty-old", new Date("2026-01-01T00:00:01Z"), "previous-vector");
+    seedDirty("real", new Date("2026-01-01T00:00:02Z"));
+    // A client that behaves like OpenAI on "": the whole request is refused.
+    const embedMany = vi.fn(async (inputs: string[]) => {
+      if (inputs.some((input) => input.trim() === "")) {
+        throw new EmbeddingRequestError(400, "input cannot be an empty string");
+      }
+      return inputs.map(() => new Array(1536).fill(0.1));
+    });
+
+    const result = await embeddingRefreshTick({ client: { embed: vi.fn(), embedMany } });
+
+    expect(result).toEqual({ scanned: 3, refreshed: 3, failed: 0, stillDirty: 0 });
+    expect(embedMany).toHaveBeenCalledTimes(1);
+    expect(embedMany.mock.calls[0]![0]).toHaveLength(1);
+    expect(profiles.get("real")!.embedding).toBe("vector");
+    // Out of the queue either way — neither holds the head of the next tick.
+    expect(profiles.get("empty-new")!.embeddingDirty).toBe(false);
+    expect(profiles.get("empty-old")!.embeddingDirty).toBe(false);
+    // A never-embedded row stays out of candidate queries (`embedding IS NOT
+    // NULL`); one with an older vector keeps being matched on it.
+    expect(profiles.get("empty-new")!.embedding).toBeNull();
+    expect(profiles.get("empty-old")!.embedding).toBe("previous-vector");
+  });
+
+  it("leaves an empty row dirty when it was edited mid-pass", async () => {
+    const row = seedEmpty("empty-edited", new Date("2026-01-01T00:00:00Z"), null);
+    const findMany = mockedPrisma.profile.findMany as unknown as ReturnType<typeof vi.fn>;
+    findMany.mockImplementationOnce(async () => {
+      const snapshot = [{ ...row, user: null }];
+      // The user writes real text right after the read.
+      row.partnerPreferences = "kind and curious";
+      return snapshot;
+    });
+
+    const result = await embeddingRefreshTick({ client: embeddingClient({ embed: vi.fn() }) });
+
+    expect(result).toEqual({ scanned: 1, refreshed: 0, failed: 0, stillDirty: 1 });
+    expect(row.embeddingDirty).toBe(true);
+  });
+
+  it("retries a refused request row by row, so only the offending profile fails", async () => {
+    for (let index = 0; index < 5; index += 1) {
+      seedDirty(`batch-${index}`, new Date(2026, 0, 1, 0, 0, index));
+    }
+    profiles.get("batch-2")!.psychologicalSummary = "POISON";
+    const embedMany = vi.fn(async (inputs: string[]) => {
+      if (inputs.some((input) => input.includes("POISON"))) {
+        throw new EmbeddingRequestError(400, "This model's maximum context length is 8192 tokens");
+      }
+      return inputs.map(() => new Array(1536).fill(0.2));
+    });
+
+    const result = await embeddingRefreshTick({ client: { embed: vi.fn(), embedMany } });
+
+    expect(result).toEqual({ scanned: 5, refreshed: 4, failed: 1, stillDirty: 1 });
+    // One refused request of five, then one request per row.
+    expect(embedMany.mock.calls.map((call) => call[0].length)).toEqual([5, 1, 1, 1, 1, 1]);
+    expect(profiles.get("batch-2")!.embeddingDirty).toBe(true);
+    expect(profiles.get("batch-4")!.embeddingDirty).toBe(false);
+  });
+
+  it("does not multiply an outage by splitting a request every row would fail", async () => {
+    for (let index = 0; index < 4; index += 1) {
+      seedDirty(`limited-${index}`, new Date(2026, 0, 1, 0, 0, index));
+    }
+    const embedMany = vi.fn(async () => {
+      throw new EmbeddingRequestError(429, "Rate limit reached");
+    });
+
+    const result = await embeddingRefreshTick({ client: { embed: vi.fn(), embedMany } });
+
+    expect(result.failed).toBe(4);
+    expect(embedMany).toHaveBeenCalledTimes(1);
   });
 });

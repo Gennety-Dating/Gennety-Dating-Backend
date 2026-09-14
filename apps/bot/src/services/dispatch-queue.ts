@@ -1,5 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
+import { STRANDED_PROPOSAL_AFTER_MS, STRANDED_PROPOSAL_SWEEP_BATCH } from "@gennety/shared";
 import {
   sendMatchProposal,
   sendMatchWelcomeGiftPreroll,
@@ -33,6 +34,35 @@ export interface DispatchResult {
    * tell "one side got the card" from "nobody did" (§3.11, D1).
    */
   undelivered: string[];
+}
+
+/**
+ * Match ids a `dispatchMatches` call in THIS process is working through right
+ * now, counted per id (two calls may briefly hold the same one, and the first to
+ * finish must not clear the other's claim).
+ *
+ * This is what lets the stranded-proposal sweep tell "a dead dispatch left this
+ * row behind" from "a live one simply has not reached it yet" — a drop of a few
+ * hundred pairs paces its pitches over many minutes, and every row it has not
+ * reached yet looks exactly like a stranded one from the database's side.
+ */
+const ownedByLiveDispatch = new Map<string, number>();
+
+function claimForDispatch(matchIds: readonly string[]): void {
+  for (const id of matchIds) ownedByLiveDispatch.set(id, (ownedByLiveDispatch.get(id) ?? 0) + 1);
+}
+
+function releaseFromDispatch(matchIds: readonly string[]): void {
+  for (const id of matchIds) {
+    const left = (ownedByLiveDispatch.get(id) ?? 1) - 1;
+    if (left > 0) ownedByLiveDispatch.set(id, left);
+    else ownedByLiveDispatch.delete(id);
+  }
+}
+
+/** True while any `dispatchMatches` call in this process is still running. */
+export function isDispatchInProgress(): boolean {
+  return ownedByLiveDispatch.size > 0;
 }
 
 /**
@@ -127,6 +157,24 @@ export async function dispatchMatches(
   delayMs: number = DEFAULT_DISPATCH_DELAY_MS,
   maxAttempts: number = 3,
   prerollDelayMs: number = 0,
+): Promise<DispatchResult> {
+  // Claimed for the whole call — pre-roll wait included — so the stranded
+  // sweep never resumes a row this run is about to send.
+  const owned = [...matchIds];
+  claimForDispatch(owned);
+  try {
+    return await dispatchOwnedMatches(api, matchIds, delayMs, maxAttempts, prerollDelayMs);
+  } finally {
+    releaseFromDispatch(owned);
+  }
+}
+
+async function dispatchOwnedMatches(
+  api: Api<RawApi>,
+  matchIds: string[],
+  delayMs: number,
+  maxAttempts: number,
+  prerollDelayMs: number,
 ): Promise<DispatchResult> {
   let dispatched = 0;
   const errors: DispatchResult["errors"] = [];
@@ -246,4 +294,67 @@ export async function dispatchMatches(
   );
 
   return { dispatched, failed: errors.length, errors, undelivered };
+}
+
+export interface StrandedDispatchResult {
+  /** Stranded rows the sweep read. */
+  found: number;
+  /** Of those, rows a live dispatch in this process still owns — left alone. */
+  ownedByLiveDispatch: number;
+  /** The resumed dispatch, or null when there was nothing to resume. */
+  dispatch: DispatchResult | null;
+}
+
+/**
+ * Resume proposals a dead dispatch left behind (A13-H7).
+ *
+ * The drop creates every `proposed` row first and then paces the pitches out
+ * in-process for ten minutes or more. A crash or a deploy in that window left
+ * the rest with `dispatchedAt = null` — the one state every other consumer of a
+ * proposal (expiry, countdown, both nudge cadences) filters out, while the
+ * single-live-match rule keeps both people out of every later drop. Nothing
+ * ever picked such a row up again; production held one for 123 hours.
+ *
+ * A row counts as stranded once it is `STRANDED_PROPOSAL_AFTER_MS` old and no
+ * live `dispatchMatches` call in this process owns it. Resuming goes through
+ * `dispatchMatches` itself, so everything that makes a first dispatch safe holds
+ * for a second one: `sendMatchProposal` skips a side whose pitch is already on
+ * record (`pitchMessageIdA/B`), the stamp and the disposal are compare-and-set
+ * on `status: "proposed"`, and a row that reaches nobody is retired rather than
+ * left for the next sweep.
+ *
+ * The caller must not run this while a drop in this process is still creating
+ * rows it has not handed to `dispatchMatches` yet — see `index.ts`.
+ */
+export async function resumeStrandedDispatches(
+  api: Api<RawApi>,
+  now: Date = new Date(),
+  delayMs: number = DEFAULT_DISPATCH_DELAY_MS,
+): Promise<StrandedDispatchResult> {
+  const rows = await prisma.match.findMany({
+    where: {
+      status: "proposed",
+      dispatchedAt: null,
+      createdAt: { lt: new Date(now.getTime() - STRANDED_PROPOSAL_AFTER_MS) },
+    },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+    take: STRANDED_PROPOSAL_SWEEP_BATCH,
+  });
+  const resumable = rows.map((row) => row.id).filter((id) => !ownedByLiveDispatch.has(id));
+  const result: StrandedDispatchResult = {
+    found: rows.length,
+    ownedByLiveDispatch: rows.length - resumable.length,
+    dispatch: null,
+  };
+  if (resumable.length === 0) return result;
+
+  // Loud: every row here is two people who have been silently out of the pool
+  // since their dispatch died.
+  console.warn(
+    `[dispatch] resuming ${resumable.length} stranded proposal(s) left undispatched ` +
+      `for over ${Math.round(STRANDED_PROPOSAL_AFTER_MS / 60_000)} min`,
+  );
+  result.dispatch = await dispatchMatches(api, resumable, delayMs);
+  return result;
 }

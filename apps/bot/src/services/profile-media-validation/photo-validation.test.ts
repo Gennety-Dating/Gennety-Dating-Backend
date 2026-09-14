@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DetectedFace } from "./types.js";
 import {
+  checkProfileImageSafety,
   validateProfilePhoto,
   type PhotoValidationDeps,
 } from "./photo-validation.js";
@@ -383,5 +384,51 @@ describe("validateProfilePhoto", () => {
       ok: true,
       value: { identitySimilarity: 0.8 },
     });
+  });
+});
+
+describe("checkProfileImageSafety", () => {
+  const explicit = vi.fn(async () => ({
+    ok: true as const,
+    signals: [
+      {
+        provider: "aws" as const,
+        category: "Explicit Nudity",
+        score: 0.99,
+        severity: "block" as const,
+      },
+    ],
+  }));
+
+  it("applies the photo moderation policy with no face or identity rule", async () => {
+    // A poster frame may well have no face in it; only its content is judged.
+    const testDeps = deps();
+    expect(await checkProfileImageSafety(candidateJpeg, testDeps)).toEqual({
+      ok: true,
+      value: undefined,
+    });
+    expect(testDeps.detectFaces).not.toHaveBeenCalled();
+    expect(testDeps.moderateWithOpenAI).toHaveBeenCalledTimes(1);
+    expect(testDeps.moderateWithAws).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses unsafe content as a photo would, and fails closed on an outage", async () => {
+    expect(await checkProfileImageSafety(candidateJpeg, deps({ moderateWithAws: explicit }))).toEqual({
+      ok: false,
+      reason: "unsafe_content",
+      retryable: false,
+    });
+    expect(
+      await checkProfileImageSafety(
+        candidateJpeg,
+        deps({ moderateWithOpenAI: vi.fn(async () => ({ ok: false as const, error: "timeout" as const })) }),
+      ),
+    ).toEqual({ ok: false, reason: "processing_unavailable", retryable: true });
+    expect(
+      await checkProfileImageSafety(
+        candidateJpeg,
+        deps({ normalizeImage: vi.fn(async () => Promise.reject(new Error("decode"))) }),
+      ),
+    ).toEqual({ ok: false, reason: "processing_unavailable", retryable: true });
   });
 });

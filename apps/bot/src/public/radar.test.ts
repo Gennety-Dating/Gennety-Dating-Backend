@@ -42,6 +42,7 @@ const radarHandler = vi.hoisted(() => ({
 vi.mock("../handlers/onboarding/type-radar.js", () => radarHandler);
 
 const { createRadarRouter } = await import("./routes/radar.js");
+const { dispatchToChat, waitForChatQueueIdle } = await import("../chat-queue.js");
 const mutableEnv = (await import("../config.js")).env as unknown as {
   TYPE_RADAR_ENABLED: boolean;
 };
@@ -342,6 +343,34 @@ describe("POST /v1/radar/submit — chat continuation", () => {
     await vi.waitFor(() => expect(profileUpsert).toHaveBeenCalled());
     expect(radarHandler.runRadarThinkingThenResume).not.toHaveBeenCalled();
     expect(radarHandler.resumeOnboardingAfterRadar).not.toHaveBeenCalled();
+  });
+
+  // A13-M25: `patchOnboardingSession` is a read-modify-write of the session row.
+  // Outside the chat's queue it raced an update the user sent during the ~10s
+  // sequence, whose session middleware then wrote its stale copy over the patch.
+  it("waits for the chat's in-flight update before resuming and patching the session", async () => {
+    userFindUnique.mockResolvedValue({
+      id: "u1", age: 24, preference: "women", onboardingStep: "conversational",
+      profile: { typePrefTags: null, typeRadarCompletedAt: null },
+    });
+    let releaseUpdate: () => void = () => {};
+    const updateInFlight = dispatchToChat(
+      TELEGRAM_ID,
+      () => new Promise<void>((r) => {
+        releaseUpdate = r;
+      }),
+    );
+
+    const res = await submit();
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(radarHandler.runRadarThinkingThenResume).not.toHaveBeenCalled();
+
+    releaseUpdate();
+    await updateInFlight;
+    await waitForChatQueueIdle(2_000);
+    expect(radarHandler.runRadarThinkingThenResume).toHaveBeenCalledTimes(1);
+    expect(radarHandler.patchOnboardingSession).toHaveBeenCalledTimes(1);
   });
 
   it("swallows a failure in the detached continuation", async () => {

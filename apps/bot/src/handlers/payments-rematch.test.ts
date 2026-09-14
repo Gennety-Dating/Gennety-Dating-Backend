@@ -69,6 +69,7 @@ import { runRematch } from "../services/rematch.js";
 import { refundRematchPurchase } from "../services/rematch-refund.js";
 import { dispatchMatches } from "../services/dispatch-queue.js";
 import { notifyFounderPaymentStuck } from "../services/founder-notify.js";
+import { waitForChatQueueIdle } from "../chat-queue.js";
 import { handleSuccessfulPayment } from "./payments.js";
 
 const findUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>;
@@ -109,6 +110,8 @@ function payCtx() {
         telegram_payment_charge_id: "charge-1",
       },
     },
+    // No `chat`: the queue keys a private chat by the payer's id either way, and
+    // leaving it off keeps the chat-timeline recorder out of this harness.
     from: { id: 111 },
     session: { language: "ru" },
     api: {},
@@ -117,10 +120,60 @@ function payCtx() {
   return { ctx, reply };
 }
 
+/**
+ * The update, then the search it hands to the chat queue (A13-H9). Everything
+ * below the durable purchase row runs detached, so an assertion about the
+ * search, the settle or the refund has to wait for the queue, not the update.
+ */
+async function pay(ctx: Parameters<typeof handleSuccessfulPayment>[0]): Promise<void> {
+  await handleSuccessfulPayment(ctx);
+  if (!(await waitForChatQueueIdle(5_000))) throw new Error("chat queue never drained");
+}
+
+describe("the successful_payment update itself", () => {
+  // grammY's polling loop still awaits this update — it is the one the
+  // settlement relies on being redelivered after a crash. It used to carry the
+  // ten-second animation, the engine run and the dispatch, so every other
+  // user's updates (pre-checkouts included) waited behind a Rematch purchase.
+  it("resolves once the purchase is durable, without waiting for the search", async () => {
+    let resolveRun: (v: unknown) => void = () => {};
+    engine.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRun = resolve;
+      }),
+    );
+    const { ctx } = payCtx();
+
+    const outcome = await Promise.race([
+      handleSuccessfulPayment(ctx).then(() => "resolved" as const),
+      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 500)),
+    ]);
+
+    expect(outcome).toBe("resolved");
+    expect(createPurchase).toHaveBeenCalledTimes(1);
+    expect(updatePurchase).not.toHaveBeenCalled();
+
+    resolveRun({ ok: true, matchId: MATCH_ID, partnerId: "her-1", framing: "neutral" });
+    await expect(waitForChatQueueIdle(5_000)).resolves.toBe(true);
+    expect(updatePurchase).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith(ctx.api, [MATCH_ID]);
+  });
+
+  it("does not start a search for a redelivered charge", async () => {
+    createPurchase.mockRejectedValueOnce({ code: "P2002" });
+    const { ctx } = payCtx();
+
+    await pay(ctx);
+
+    expect(engine).not.toHaveBeenCalled();
+    expect(status).not.toHaveBeenCalled();
+  });
+});
+
 describe("rematch search animation", () => {
   it("always plays the full script, even when the engine answers instantly", async () => {
     const { ctx } = payCtx();
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
 
     expect(status).toHaveBeenCalledTimes(1);
     const opts = status.mock.calls[0]![3] as Record<string, unknown>;
@@ -152,12 +205,13 @@ describe("rematch search animation", () => {
 
     resolveRun({ ok: true, matchId: MATCH_ID, partnerId: "her-1", framing: "neutral" });
     await inFlight;
+    await waitForChatQueueIdle(5_000);
     expect(updatePurchase).toHaveBeenCalledTimes(1);
   });
 
   it("runs before the outcome is announced", async () => {
     const { ctx, reply } = payCtx();
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
     // A verdict landing above a shimmer still claiming to search is the exact
     // self-contradiction §1.4's outcome gate exists to prevent.
     expect(status.mock.invocationCallOrder[0]!).toBeLessThan(reply.mock.invocationCallOrder[0]!);
@@ -166,7 +220,7 @@ describe("rematch search animation", () => {
   it("plays before a refund too — the ten seconds are the proof we looked", async () => {
     engine.mockResolvedValueOnce({ ok: false, reason: "no_candidate" });
     const { ctx, reply } = payCtx();
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
 
     expect(status).toHaveBeenCalledTimes(1);
     expect(refund).toHaveBeenCalledTimes(1);
@@ -178,7 +232,7 @@ describe("rematch search animation", () => {
     status.mockRejectedValueOnce(new Error("telegram is having a day"));
     const { ctx } = payCtx();
 
-    await expect(handleSuccessfulPayment(ctx)).resolves.toBeUndefined();
+    await expect(pay(ctx)).resolves.toBeUndefined();
     expect(updatePurchase).toHaveBeenCalledTimes(1);
     expect(dispatch).toHaveBeenCalledWith(expect.anything(), [MATCH_ID]);
   });
@@ -197,7 +251,7 @@ describe("rematch search animation", () => {
     engine.mockRejectedValueOnce(new Error("db is down"));
     const { ctx } = payCtx();
 
-    await expect(handleSuccessfulPayment(ctx)).resolves.toBeUndefined();
+    await expect(pay(ctx)).resolves.toBeUndefined();
     expect(updatePurchase).not.toHaveBeenCalled();
     expect(refund).not.toHaveBeenCalled();
     expect(stuck).toHaveBeenCalledTimes(1);
@@ -211,14 +265,14 @@ describe("rematch search animation", () => {
 describe("rematch found effect", () => {
   it("ships inert — no effect when the env id is empty", async () => {
     const { ctx, reply } = payCtx();
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
     expect(reply).toHaveBeenCalledWith(expect.any(String), {});
   });
 
   it("rides the payoff line when an id is configured", async () => {
     (env as { MESSAGE_EFFECT_REMATCH_ID: string }).MESSAGE_EFFECT_REMATCH_ID = "5104841245755180586";
     const { ctx, reply } = payCtx();
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
     expect(reply).toHaveBeenCalledWith(expect.any(String), {
       message_effect_id: "5104841245755180586",
     });
@@ -228,7 +282,7 @@ describe("rematch found effect", () => {
     (env as { MESSAGE_EFFECT_REMATCH_ID: string }).MESSAGE_EFFECT_REMATCH_ID = "5104841245755180586";
     engine.mockResolvedValueOnce({ ok: false, reason: "no_candidate" });
     const { ctx, reply } = payCtx();
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
     // Celebrating a refund would be the worst possible read of the animation.
     expect(reply).toHaveBeenCalledTimes(1);
     expect(reply.mock.calls[0]![1]).toBeUndefined();
@@ -246,7 +300,7 @@ describe("a pitch that reached nobody", () => {
   it("refunds the purchase — he paid for an introduction nobody was shown", async () => {
     dispatch.mockResolvedValueOnce(undelivered);
     const { ctx, reply } = payCtx();
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
 
     expect(refund).toHaveBeenCalledTimes(1);
     // The audit row must say WHY. `refunded_no_candidate` would claim the city
@@ -264,7 +318,7 @@ describe("a pitch that reached nobody", () => {
     dispatch.mockResolvedValueOnce(undelivered);
     refund.mockResolvedValueOnce(false);
     const { ctx, reply } = payCtx();
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
 
     // The row is parked in `refund_failed` for the hourly sweep, so the copy
     // must promise the Stars are COMING, not that they are back.
@@ -282,7 +336,7 @@ describe("a pitch that reached nobody", () => {
       undelivered: [],
     });
     const { ctx, reply } = payCtx();
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
 
     expect(refund).not.toHaveBeenCalled();
     expect(reply).toHaveBeenCalledTimes(1);
@@ -293,13 +347,13 @@ describe("a pitch that reached nobody", () => {
     dispatch.mockRejectedValueOnce(new Error("queue exploded"));
     const { ctx } = payCtx();
 
-    await expect(handleSuccessfulPayment(ctx)).resolves.toBeUndefined();
+    await expect(pay(ctx)).resolves.toBeUndefined();
     expect(refund).not.toHaveBeenCalled();
   });
 
   it("does NOT refund the ordinary delivered path", async () => {
     const { ctx } = payCtx();
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
     expect(refund).not.toHaveBeenCalled();
   });
 
@@ -307,7 +361,7 @@ describe("a pitch that reached nobody", () => {
   // the stale window never records a sale over the sweep's refund.
   it("marks the purchase settled only while it is still processing", async () => {
     const { ctx } = payCtx();
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
     expect(updatePurchase).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "purchase-1", status: "processing" },
@@ -321,7 +375,7 @@ describe("a pitch that reached nobody", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const { ctx } = payCtx();
 
-    await handleSuccessfulPayment(ctx);
+    await pay(ctx);
 
     expect(dispatch).toHaveBeenCalledWith(ctx.api, [MATCH_ID]);
     expect(error).toHaveBeenCalledWith(expect.stringContaining("left processing"));

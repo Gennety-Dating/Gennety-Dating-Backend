@@ -1,6 +1,10 @@
 import rateLimit, { ipKeyGenerator, MemoryStore, type Options } from "express-rate-limit";
 import type { Request } from "express";
-import { normalizePhoneE164, PHONE_OTP_IP_HOURLY_LIMIT } from "@gennety/shared";
+import {
+  normalizePhoneE164,
+  PHONE_OTP_IP_HOURLY_LIMIT,
+  VOICE_PROMPT_UPLOADS_PER_HOUR,
+} from "@gennety/shared";
 import { env } from "../config.js";
 import { validateInitData } from "./init-data.js";
 
@@ -421,6 +425,19 @@ export const videoUploadLimiter = make({
   limit: 6,
   keyGenerator: (req): string => `video-up:${req.userId ?? ipKey(req)}`,
   message: { error: "Too many video uploads, try again later." },
+});
+
+/**
+ * Native voice-prompt commit — `VOICE_PROMPT_UPLOADS_PER_HOUR` per user (falls
+ * back to IP). Each commit is a Whisper transcription, a moderation call, a
+ * storage upload and an embedding refresh, and the route had no ceiling of its
+ * own at all — only the global per-IP floor (audit A13-L14).
+ */
+export const voicePromptUploadLimiter = make({
+  windowMs: 3_600_000,
+  limit: VOICE_PROMPT_UPLOADS_PER_HOUR,
+  keyGenerator: (req): string => `voice-up:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many voice prompt uploads, try again later." },
 });
 
 /** Mobile chat turn — 60/hour per user (falls back to IP). */

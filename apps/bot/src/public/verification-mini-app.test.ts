@@ -33,9 +33,11 @@ vi.mock("@gennety/db", () => ({
 
 const beginLivenessCheck = vi.fn();
 const completeLivenessCheck = vi.fn();
+const sendPhotosRequiredPrompt = vi.fn().mockResolvedValue(undefined);
 vi.mock("../services/liveness-flow.js", () => ({
   beginLivenessCheck,
   completeLivenessCheck,
+  sendPhotosRequiredPrompt,
 }));
 
 const runStatusSequence = vi.fn().mockResolvedValue(undefined);
@@ -99,6 +101,7 @@ beforeEach(() => {
   userFindUnique.mockReset();
   beginLivenessCheck.mockReset();
   completeLivenessCheck.mockReset();
+  sendPhotosRequiredPrompt.mockClear();
   runStatusSequence.mockClear();
   userFindUnique.mockResolvedValue({ id: "uid-1", language: "en" });
   beginLivenessCheck.mockResolvedValue({
@@ -164,6 +167,34 @@ describe("GET /v1/verification/mini-app/init", () => {
       .get("/v1/verification/mini-app/init")
       .set("Authorization", auth());
     expect(res.status).toBe(503);
+  });
+
+  // Audit A13-H11: the page can only explain and close, so the photo manager
+  // button has to be waiting in the chat the user lands back in.
+  it("returns 409 photos-required and puts the photo action in the chat", async () => {
+    beginLivenessCheck.mockResolvedValueOnce({
+      ok: false,
+      error: "photos_required",
+      language: "de",
+    });
+    const res = await request(buildApp())
+      .get("/v1/verification/mini-app/init")
+      .set("Authorization", auth());
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("photos-required");
+    expect(sendPhotosRequiredPrompt).toHaveBeenCalledWith(fakeApi, 5986970093n, "de");
+  });
+
+  it("returns 409 onboarding-incomplete without messaging anyone", async () => {
+    beginLivenessCheck.mockResolvedValueOnce({ ok: false, error: "onboarding_incomplete" });
+    const res = await request(buildApp())
+      .get("/v1/verification/mini-app/init")
+      .set("Authorization", auth());
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("onboarding-incomplete");
+    expect(sendPhotosRequiredPrompt).not.toHaveBeenCalled();
   });
 
   it("returns 409 when the user is already verified — no session is burned", async () => {

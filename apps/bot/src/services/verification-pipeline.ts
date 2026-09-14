@@ -1,11 +1,17 @@
 import { InlineKeyboard, type Api, type RawApi } from "grammy";
 import { Prisma, prisma } from "@gennety/db";
-import { MIN_PHOTOS, t, type Language } from "@gennety/shared";
+import {
+  MIN_PHOTOS,
+  VERIFICATION_PHOTO_RACE_MAX_ATTEMPTS,
+  t,
+  type Language,
+} from "@gennety/shared";
 import { env } from "../config.js";
 import { sendMainMenu } from "../handlers/menu/main.js";
 import { seedEloFromVisionDefault, type SeedEloResult } from "./elo-seed.js";
 import { tagAndPersistAppearanceDefault } from "./appearance-tags.js";
 import { compareFaces } from "./face-match.js";
+import { hasTrackVerifiedContact } from "./contact-verification.js";
 import {
   capturedSelfieSource,
   storedSelfieSource,
@@ -80,16 +86,26 @@ import { alignPhotoHashes } from "./profile-media-validation/photo-state.js";
  * matched cleanly.
  *
  * Infrastructure failures never come out as `rejected` — we don't penalise
- * users for our own outages — but they split by whether a verdict was even
- * possible:
- *   - A failure *while scoring* (Rekognition error, photo download failure)
- *     still produced per-photo evidence, so it goes to `pending_review` for an
- *     admin to look at.
- *   - A failure to get the **reference selfie at all** produces no evidence
- *     and no verdict, so it is `retry_required` (see `RetryReason`). It used
- *     to be `pending_review` too, which stranded users: that status has no
- *     button, the re-engagement stall sweep skips it, and the app gate keeps
- *     them locked — so nothing in the product could ever move them.
+ * users for our own outages — and they never come out as `pending_review`
+ * either: every one of them is `retry_required` (see `RetryReason`). That
+ * covers a missing reference selfie, a reference frame with no face in it, a
+ * photo that would not download, a Rekognition error, and a profile with no
+ * photos at all. They used to split — only the missing selfie was retryable,
+ * the rest went to `pending_review` "for an admin to look at" — which stranded
+ * users (audit A13-H11): that status has no button, the re-engagement stall
+ * sweep skips it, and the app gate keeps them locked, so nothing in the product
+ * could move them, and a zero-photo run even nulled their stored selfie on the
+ * way in. An admin rerun of such a run would only repeat our own outage; what
+ * actually moves the user is running the check again, which the retry nudge
+ * offers. `pending_review` is now reserved for what a human can genuinely
+ * adjudicate: detected faces whose scores sit between the two thresholds, or a
+ * photo set with no detected face at all (PRODUCT_SPEC §1.4 rule 3).
+ *
+ * A verdict is also only ever written for the photo set it scored (audit
+ * A13-H12). `persistOutcome` takes the same per-user row lock as every photo
+ * upload and delete, re-reads `Profile.photos`, and refuses the write when
+ * they moved; the run then re-scores the current set with the reference it
+ * already holds, bounded by `VERIFICATION_PHOTO_RACE_MAX_ATTEMPTS`.
  *
  * The pipeline is deliberately separated from the verification routes so:
  *   1. The route can fire-and-forget (it answers the client before
@@ -103,28 +119,28 @@ import { alignPhotoHashes } from "./profile-media-validation/photo-state.js";
  * stored copy enter through the same `fetchReferenceSelfie` dep.
  */
 
+/**
+ * What a human reviewer is asked to adjudicate. Only outcomes that carry real
+ * evidence about the photo set belong here — see `RetryReason` for everything
+ * that is merely our side failing to produce a verdict.
+ */
 export type PendingReviewReason =
+  /** Detected faces scored in [thresholdReview, thresholdVerify) without a pass quorum. */
   | "borderline_score"
-  | "no_source_face"
-  | "no_profile_photos"
-  | "no_detected_faces"
-  | "comparison_error"
-  | "photo_download_failed"
-  | "face_match_disabled"
-  | "photos_changed_during_run";
+  /** Every photo scored `no_face` — group shots or scenery, nothing to compare. */
+  | "no_detected_faces";
 
 /**
- * Why the run could not reach a verdict at all, because the **reference
- * selfie** — the thing every photo is compared against — was unavailable.
+ * Why the run could not reach a verdict at all.
  *
  * Deliberately NOT `PendingReviewReason`. `pending_review` means "an admin
  * adjudicates a borderline score", and it is a dead end for the user by
  * design: no button, no retry, and `re-engagement.ts` skips it. Routing our
- * own storage/retention failure there stranded users behind a card that only
- * repeated "we're double-checking your photos" forever, with nothing in the
- * product able to move them. A missing reference is not a verdict about the
- * user — it is retryable, exactly like a shaky liveness capture
- * (PRODUCT_SPEC §1.4).
+ * own storage, Rekognition or retention failures there stranded users behind a
+ * card that only repeated "we're double-checking your photos" forever, with
+ * nothing in the product able to move them (audit A13-H11). None of these is a
+ * verdict about the user — each is retryable, exactly like a shaky liveness
+ * capture (PRODUCT_SPEC §1.4).
  */
 export type RetryReason =
   /** Storage had the object but it didn't come back. Transient, our side. */
@@ -132,15 +148,30 @@ export type RetryReason =
   /** No reference selfie at all (90-day GDPR scrub ran, or one was never
    *  stored). AWS cannot re-issue it — a liveness session dies after 3
    *  minutes — so the only way forward is one more liveness check. */
-  | "reference_expired";
+  | "reference_expired"
+  /** The profile has no photos to compare the selfie against. Photos were
+   *  removed after the check started (`beginLivenessCheck` refuses to start
+   *  one without them), or a rerun followed a delete-everything redo. */
+  | "no_profile_photos"
+  /** The reference frame itself carries no detectable face, so no photo can
+   *  be compared against it. Rerunning on the same frame changes nothing; a
+   *  new liveness check produces a new one. */
+  | "no_source_face"
+  /** A profile photo would not download. Transient, our side. */
+  | "photo_download_failed"
+  /** Rekognition answered with an error or timed out. Transient, our side. */
+  | "comparison_error"
+  /** The photo set kept changing under every re-score attempt
+   *  (`VERIFICATION_PHOTO_RACE_MAX_ATTEMPTS`). */
+  | "photos_changed_during_run";
 
 /**
  * `score` is the **representative** face-match score (0..1) that drove the
  * decision, NOT necessarily the min across photos:
  *   - verified       → highest pass score (most confident match)
  *   - rejected       → lowest detected-face score (the worst offender)
- *   - pending_review → average across detected-face photos (or absent
- *                      when the route was an infra failure / no photos)
+ *   - pending_review → average across detected-face photos (absent when no
+ *                      photo carried a detected face)
  */
 export type VerificationOutcome =
   | { kind: "skipped_idempotent"; userId: string }
@@ -282,13 +313,24 @@ export interface PipelineDeps {
    */
   db: {
     findUser: (userId: string) => Promise<PipelineUserRow | null>;
-    persistOutcome: (input: PersistOutcomeInput) => Promise<void>;
     /**
-     * Write the outcome of a run that never reached a verdict because the
-     * reference selfie was unavailable. Deliberately narrower than
-     * `persistOutcome`: it touches `verificationStatus` and the idempotency
-     * marker only, and never writes `faceMatchScore`, `verifiedSelfiePath`, or
-     * per-photo scores — there is nothing new to say about any of them.
+     * Write a verdict — but only for the photo set it was computed from.
+     *
+     * MUST run under the same per-user row lock the photo upload and delete
+     * paths take, re-read `Profile.photos` inside it, and answer
+     * `photos_changed` without writing anything when they no longer equal
+     * `photosSnapshot` (audit A13-H12). Checking outside the lock is not
+     * enough: an upload committing between the check and the write would
+     * leave an unscored photo on a freshly activated profile.
+     */
+    persistOutcome: (input: PersistOutcomeInput) => Promise<PersistOutcomeResult>;
+    /**
+     * Write the outcome of a run that never reached a verdict. Deliberately
+     * narrower than `persistOutcome`: it touches `verificationStatus` and the
+     * idempotency marker, plus — only when `reference` is given — the session
+     * and selfie that run stored. It never writes `faceMatchScore` or
+     * per-photo scores, and never clears a stored selfie: there is nothing new
+     * to say about either.
      */
     persistRetryable: (input: PersistRetryableInput) => Promise<void>;
     /**
@@ -329,7 +371,25 @@ export interface PersistRetryableInput {
    * silently no-ops.
    */
   clearFaceMatchedAt: true;
+  /**
+   * The liveness session and the selfie this run uploaded, when it uploaded
+   * one. Recording them is what lets the user's next photo edit rerun against
+   * this selfie: `triggerVerificationRerun` answers `no_inquiry` for a row with
+   * no session — which is exactly the state a FIRST check is in until its
+   * verdict lands, so without this a photo uploaded mid-run was never scored.
+   *
+   * Only ever passed for a user who was not verified going into the run. For a
+   * verified user an unmatched selfie would become the reference the per-photo
+   * upload gate trusts, before any face-match had tied it to their photos.
+   */
+  reference?: { sessionId: string; verifiedSelfiePath: string };
 }
+
+/**
+ * What `persistOutcome` did. `photos_changed` means nothing was written: the
+ * profile photos no longer equal the snapshot the verdict was computed from.
+ */
+export type PersistOutcomeResult = { kind: "persisted" } | { kind: "photos_changed" };
 
 export interface PipelineUserRow {
   id: string;
@@ -343,6 +403,17 @@ export interface PipelineUserRow {
    */
   platform: string | null;
   status: string;
+  /**
+   * Activation prerequisites (audit A13-M18). A face-match pass proves who the
+   * person is, not that they finished registering: `status` flips to `active`
+   * only for a completed onboarding with a verified track contact — the same
+   * two conditions matching itself filters on.
+   */
+  onboardingStep: string;
+  registrationTrack: string | null;
+  email: string | null;
+  isEmailVerified: boolean;
+  phoneVerifiedAt: Date | null;
   gender: string | null;
   /** Drives the localized outcome DM; `en` when unset. */
   language: Language | null;
@@ -403,30 +474,84 @@ export interface PersistOutcomeInput {
    *   - `pending_review`  → average across detected-face photos (or null if
    *                         none were comparable).
    *   - `rejected`        → lowest detected-face score (the worst offender).
-   * Null when scoring didn't run (infra failures, no photos, etc.).
+   * Null when no photo carried a detected face. Runs that could not score at
+   * all never reach this write — they go through `persistRetryable`.
    */
   faceMatchScore: number | null;
   /** Per-photo scores (parallel to Profile.photos). Empty array means "leave existing scores in place". */
   photoFaceScores: number[];
   /**
-   * Snapshot of `Profile.photos` taken when scoring started. Persistence
-   * is gated on the snapshot still matching DB state — if the user added
-   * or removed photos mid-run the scores are stale and we drop them.
-   * Empty array means "no scores to write" (e.g. infra-failure path);
-   * callers MAY still persist verificationStatus via the unconditional
-   * `User` update path.
+   * Snapshot of `Profile.photos` taken when scoring started. The whole write
+   * is gated on the snapshot still matching DB state under the per-user lock —
+   * if the user added or removed photos mid-run the verdict describes a set
+   * that no longer exists, so nothing is written (`photos_changed`).
    */
   photosSnapshot: string[];
-  /** Selfie storage path (Supabase) — null if upload failed or wasn't attempted. */
+  /**
+   * Selfie storage path (Supabase). Null when the upload failed; a null never
+   * overwrites a path already on the row, which would strand the user on
+   * `reference_expired` at their next photo edit.
+   */
   verifiedSelfiePath: string | null;
   /**
-   * `true` only on the verified branch — flips `User.status` from
-   * `onboarding` → `active` (gated, so admin-moderated states survive).
+   * `true` only on the verified branch when the pipeline found the account
+   * ready for the pool — flips `User.status` from `onboarding` → `active`. The
+   * persist re-checks `onboarding` + completed onboarding + track contact under
+   * the lock, so admin-moderated states survive and a half-registered account
+   * is never activated.
    */
   shouldActivate: boolean;
 }
 
 const LOG_PREFIX = "[verification-pipeline]";
+
+/**
+ * Why a verified outcome may not flip `status` to `active` (audit A13-M18).
+ *
+ * Asked only of an account still in `onboarding`: an active user is never
+ * re-activated, and an admin-moderated one is never activated at all. Both
+ * conditions are what matching itself filters on, so an account activated
+ * without them would sit `active` yet unmatchable — while still collecting
+ * what activation pays out (the referrer's reward, event admission). Neither
+ * is reachable through a client today: `beginLivenessCheck` refuses a first
+ * check before onboarding completes, and finishing onboarding requires the
+ * track contact. This is the backstop for the edges those gates cannot see.
+ */
+export type ActivationBlocker = "onboarding_incomplete" | "contact_unverified";
+
+export function activationBlockerFor(
+  user: Pick<
+    PipelineUserRow,
+    "onboardingStep" | "registrationTrack" | "email" | "isEmailVerified" | "phoneVerifiedAt"
+  >,
+): ActivationBlocker | null {
+  if (user.onboardingStep !== "completed") return "onboarding_incomplete";
+  if (!hasTrackVerifiedContact(user)) return "contact_unverified";
+  return null;
+}
+
+/** `scorePhotoSet`'s answer when its persist found the photo set had moved. */
+const PHOTOS_CHANGED = Symbol("photos_changed");
+
+/** Everything one scoring attempt needs that does not change between attempts. */
+interface ScoringContext {
+  userId: string;
+  sessionId: string;
+  deps: PipelineDeps;
+  config: PipelineConfig;
+  options: PipelineRunOptions;
+  selfieBuffer: Buffer;
+  verifiedSelfiePath: string | null;
+  /**
+   * Park the user in the retryable state and nudge them. `recordReference:
+   * false` keeps the selfie this run stored off the row — for a frame that
+   * cannot serve as a reference at all.
+   */
+  retry: (
+    reason: RetryReason,
+    options?: { recordReference: boolean },
+  ) => Promise<VerificationOutcome>;
+}
 
 /**
  * Pure pipeline — given dependencies and config, makes the verification
@@ -454,32 +579,50 @@ export async function runFaceMatchVerification(
     return { kind: "skipped_idempotent", userId };
   }
 
-  // Pre-condition: user should have profile photos by the time they reach
-  // verification. If they don't, route to pending_review — admin should
-  // see this and investigate the upstream onboarding bug rather than
-  // either approving or rejecting silently.
-  //
-  // Snapshot the photos array at the start so we can race-detect at
-  // persist time. Any photo edit that lands while we're scoring will
-  // make `photosSnapshot` stale, and the conditional `updateMany` in
-  // production wiring will reject the write — preventing impostor
-  // photos from inheriting a `verified` status they never earned.
-  const photos = user.profile?.photos ?? [];
-  const photosSnapshot = [...photos];
-  if (photos.length === 0) {
-    console.warn(`${LOG_PREFIX} no profile photos to compare`, { userId, sessionId });
-    await deps.db.persistOutcome({
+  // `triggerVerificationRerun` flips the row to `pending` BEFORE launching
+  // us, so the row's own status no longer tells us what the user was — hence
+  // the pre-run status carried in options. A verified user whose photo edit
+  // happened to race our own outage must stay verified and stay in the match
+  // pool; only someone who was never verified gets moved to the gate.
+  const statusBeforeRun = options.previousVerificationStatus ?? user.verificationStatus;
+  const keptVerified = statusBeforeRun === "verified";
+
+  // Every no-verdict exit goes through these two, so they all agree on what a
+  // retryable state is: `pending` (or `verified` restored), the idempotency
+  // marker cleared, and — once this run has stored a selfie for a user who is
+  // not verified yet — that reference recorded, so their next photo edit can
+  // rerun against it instead of starting over.
+  let recordedReference: PersistRetryableInput["reference"];
+  const parkRetryable = async (recordReference: boolean): Promise<void> => {
+    await deps.db.persistRetryable({
       userId,
-      sessionId,
-      verificationStatus: "pending_review",
-      faceMatchScore: null,
-      photoFaceScores: [],
-      photosSnapshot,
-      verifiedSelfiePath: null,
-      shouldActivate: false,
+      verificationStatus: keptVerified ? "verified" : "pending",
+      clearFaceMatchedAt: true,
+      ...(recordReference && recordedReference ? { reference: recordedReference } : {}),
     });
-    await sendOutcomeMessage(deps, user, "pending_review");
-    return { kind: "pending_review", userId, reason: "no_profile_photos" };
+  };
+  const retry: ScoringContext["retry"] = async (reason, retryOptions) => {
+    await parkRetryable(retryOptions?.recordReference ?? true);
+    // Nudge only the user who actually has something to do. Telling a verified
+    // user to re-verify because our side hiccuped would be noise; when their
+    // reference is genuinely gone, the photo-edit handler already asks them
+    // once per upload burst via `triggerVerificationRerun`'s pre-check.
+    if (!keptVerified) {
+      await sendRetryMessage(deps, user);
+    }
+    return { kind: "retry_required", userId, reason, keptVerified };
+  };
+
+  // Nothing to compare the selfie against. `beginLivenessCheck` refuses to
+  // start a check on a profile without photos, so reaching this means they
+  // went away after the check started — or a rerun followed a delete-all redo.
+  // This used to write `pending_review` AND null the stored selfie: a dead end
+  // twice over (audit A13-H11), because that card has no button and the next
+  // photo upload then answered `reference_expired`. Retryable instead, and the
+  // selfie on file stays where it is, so adding photos reruns against it.
+  if ((user.profile?.photos ?? []).length === 0) {
+    console.warn(`${LOG_PREFIX} no profile photos to compare`, { userId, sessionId });
+    return retry("no_profile_photos");
   }
 
   // Step 1: resolve the reference selfie (fresh liveness capture, or the
@@ -498,31 +641,9 @@ export async function runFaceMatchVerification(
       sessionId,
       error: selfieResult.error,
     });
-    const reason: RetryReason =
-      selfieResult.error === "reference_expired"
-        ? "reference_expired"
-        : "selfie_fetch_failed";
-
-    // `triggerVerificationRerun` flips the row to `pending` BEFORE launching
-    // us, so the row's own status no longer tells us what the user was — hence
-    // the pre-run status carried in options. A verified user whose photo edit
-    // happened to race our storage must stay verified and stay in the match
-    // pool; only someone who was never verified gets moved to the gate.
-    const statusBeforeRun = options.previousVerificationStatus ?? user.verificationStatus;
-    const keptVerified = statusBeforeRun === "verified";
-    await deps.db.persistRetryable({
-      userId,
-      verificationStatus: keptVerified ? "verified" : "pending",
-      clearFaceMatchedAt: true,
-    });
-    // Nudge only the user who actually has something to do. Telling a verified
-    // user to re-verify because our bucket hiccuped would be noise; when their
-    // reference is genuinely gone, the photo-edit handler already asks them
-    // once per upload burst via `triggerVerificationRerun`'s pre-check.
-    if (!keptVerified) {
-      await sendRetryMessage(deps, user);
-    }
-    return { kind: "retry_required", userId, reason, keptVerified };
+    return retry(
+      selfieResult.error === "reference_expired" ? "reference_expired" : "selfie_fetch_failed",
+    );
   }
 
   const {
@@ -553,7 +674,80 @@ export async function runFaceMatchVerification(
         err,
       });
     }
+    // Only a selfie THIS run uploaded is news to the row (a rerun's path is
+    // already there), and only for a user who is not verified yet — see
+    // `PersistRetryableInput.reference`.
+    if (verifiedSelfiePath && !keptVerified) {
+      recordedReference = { sessionId, verifiedSelfiePath };
+    }
   }
+
+  const context: ScoringContext = {
+    userId,
+    sessionId,
+    deps,
+    config,
+    options,
+    selfieBuffer,
+    verifiedSelfiePath,
+    retry,
+  };
+
+  // Score — and score again whenever the persist finds the photo set moved
+  // under us (audit A13-H12), with the selfie already in memory, so a photo
+  // edit mid-run never costs the user a second liveness check.
+  let current = user;
+  for (let attempt = 1; ; attempt += 1) {
+    const outcome = await scorePhotoSet(context, current);
+    if (outcome !== PHOTOS_CHANGED) return outcome;
+
+    console.warn(`${LOG_PREFIX} photos changed during run — verdict discarded`, {
+      userId,
+      sessionId,
+      attempt,
+    });
+    if (attempt >= VERIFICATION_PHOTO_RACE_MAX_ATTEMPTS) {
+      return retry("photos_changed_during_run");
+    }
+
+    // Park in the retryable state BEFORE re-scoring, carrying the reference
+    // just stored. A first check has no session on the row until a verdict
+    // lands, so a photo edit arriving during the re-score would otherwise get
+    // `no_inquiry` from `triggerVerificationRerun` and never be looked at.
+    await parkRetryable(true);
+
+    const reread = await deps.db.findUser(userId);
+    if (!reread) return { kind: "skipped_user_missing", userId };
+    // A photo-edit rerun started from the reference parked above may already
+    // have decided this session on the newer set. That verdict stands.
+    if (reread.personaInquiryId === sessionId && reread.faceMatchedAt !== null) {
+      return { kind: "skipped_idempotent", userId };
+    }
+    if ((reread.profile?.photos ?? []).length === 0) {
+      return retry("no_profile_photos");
+    }
+    current = reread;
+  }
+}
+
+/**
+ * One scoring attempt over the photo set `user` carries: compare every photo
+ * with the reference, decide, persist, announce. Answers `PHOTOS_CHANGED`
+ * (having written and announced nothing) when the persist found the profile
+ * photos no longer equal the set that was scored.
+ */
+async function scorePhotoSet(
+  context: ScoringContext,
+  user: PipelineUserRow,
+): Promise<VerificationOutcome | typeof PHOTOS_CHANGED> {
+  const { userId, sessionId, deps, config, options, selfieBuffer, verifiedSelfiePath } = context;
+
+  // Snapshot the photos this verdict will describe. `persistOutcome` compares
+  // it with the row under the per-user lock that photo uploads and deletes
+  // take, and writes nothing when they differ — so a photo edit landing while
+  // we score can never inherit a verdict it did not earn.
+  const photos = user.profile?.photos ?? [];
+  const photosSnapshot = [...photos];
 
   // Step 3: download profile photos and compare each against the selfie.
   // We track per-photo *kind* alongside the numeric score because the
@@ -563,7 +757,8 @@ export async function runFaceMatchVerification(
   type PhotoKind = "scored" | "no_face";
   const scores: number[] = [];
   const kinds: PhotoKind[] = [];
-  let infraError: PendingReviewReason | null = null;
+  let infraError: Extract<RetryReason, "photo_download_failed" | "comparison_error"> | null =
+    null;
   let sourceFaceMissing = false;
 
   for (let i = 0; i < photos.length; i++) {
@@ -585,15 +780,13 @@ export async function runFaceMatchVerification(
     if (!result.ok) {
       if (result.error === "no_source_face") {
         // The liveness provider handed us a reference frame with no
-        // detectable face. Pipeline bug, not user bug. Bail to pending_review
-        // with a distinct reason so the admin sees this and re-runs.
+        // detectable face. Not the user's fault, and not something an admin
+        // can fix either — a rerun reads the same frame.
         console.error(`${LOG_PREFIX} no_source_face on reference selfie`, {
           userId,
           sessionId,
         });
         sourceFaceMissing = true;
-        scores.push(0);
-        kinds.push("scored");
         break;
       }
       console.warn(`${LOG_PREFIX} compareFaces error`, {
@@ -622,35 +815,19 @@ export async function runFaceMatchVerification(
   }
 
   if (sourceFaceMissing) {
-    await deps.db.persistOutcome({
-      userId,
-      sessionId,
-      verificationStatus: "pending_review",
-      faceMatchScore: null,
-      photoFaceScores: [],
-      photosSnapshot,
-      verifiedSelfiePath,
-      shouldActivate: false,
-    });
-    await sendOutcomeMessage(deps, user, "pending_review");
-    return { kind: "pending_review", userId, reason: "no_source_face" };
+    // Retryable (audit A13-H11): a new liveness check produces a new frame,
+    // which is the one thing that moves this user. The faceless frame is kept
+    // off the row — as a reference it could only repeat this outcome on every
+    // later photo edit.
+    return context.retry("no_source_face", { recordReference: false });
   }
 
   if (infraError) {
-    // Persist the partial scores so the admin dashboard surfaces which
-    // photo failed; the user lands in pending_review either way.
-    await deps.db.persistOutcome({
-      userId,
-      sessionId,
-      verificationStatus: "pending_review",
-      faceMatchScore: null,
-      photoFaceScores: scores,
-      photosSnapshot,
-      verifiedSelfiePath,
-      shouldActivate: false,
-    });
-    await sendOutcomeMessage(deps, user, "pending_review");
-    return { kind: "pending_review", userId, reason: infraError, scores };
+    // Our side failed mid-scoring. Partial scores with zeros for the photos we
+    // could not read are not a verdict, so they are neither persisted as one
+    // nor handed to an admin to adjudicate (audit A13-H11) — the failing photo
+    // is in the log line above. Running the check again is what moves the user.
+    return context.retry(infraError);
   }
 
   // Step 4: apply the quorum decision rule (see file header).
@@ -684,7 +861,7 @@ export async function runFaceMatchVerification(
       sessionId,
       scores,
     });
-    await deps.db.persistOutcome({
+    const persisted = await deps.db.persistOutcome({
       userId,
       sessionId,
       verificationStatus: "pending_review",
@@ -694,6 +871,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath,
       shouldActivate: false,
     });
+    if (persisted.kind === "photos_changed") return PHOTOS_CHANGED;
     await sendOutcomeMessage(deps, user, "pending_review");
     return {
       kind: "pending_review",
@@ -734,7 +912,7 @@ export async function runFaceMatchVerification(
       scores,
       kinds,
     });
-    await deps.db.persistOutcome({
+    const persisted = await deps.db.persistOutcome({
       userId,
       sessionId,
       verificationStatus: "rejected",
@@ -744,6 +922,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath,
       shouldActivate: false,
     });
+    if (persisted.kind === "photos_changed") return PHOTOS_CHANGED;
     await sendOutcomeMessage(deps, user, "rejected");
     return { kind: "rejected", userId, score: minDetected, scores };
   }
@@ -761,16 +940,19 @@ export async function runFaceMatchVerification(
     // floor on a live profile, and matching has no photo-count filter of its
     // own to catch it.
     //
-    // The count is PREDICTED here because ordering is forced: `persistOutcome`
-    // writes the per-photo scores gated on `photos` still equalling
-    // `photosSnapshot`, so it has to run before the drop rewrites that array.
-    // If the drop then no-ops (a concurrent photo edit moved the snapshot),
-    // the user simply stays unactivated with a full photo set — and that
-    // edit's own auto-rerun re-decides on the fresh set moments later.
+    // The count is PREDICTED from the snapshot because ordering is forced: the
+    // persist is gated on `photos` still equalling `photosSnapshot`, so it has
+    // to run before the drop rewrites that array — and that same gate is what
+    // makes the snapshot count the real count at the moment of activation. If
+    // the drop then no-ops (an edit landed between the two writes), that
+    // edit's own auto-rerun — which finds this session on the row now —
+    // re-decides on the fresh set moments later.
     const projectedPhotoCount = photos.length - failedIndexes.length;
     const meetsPhotoMinimum = projectedPhotoCount >= MIN_PHOTOS;
+    const activationBlocker =
+      user.status === "onboarding" ? activationBlockerFor(user) : null;
 
-    await deps.db.persistOutcome({
+    const persisted = await deps.db.persistOutcome({
       userId,
       sessionId,
       verificationStatus: "verified",
@@ -778,8 +960,9 @@ export async function runFaceMatchVerification(
       photoFaceScores: scores,
       photosSnapshot,
       verifiedSelfiePath,
-      shouldActivate: meetsPhotoMinimum,
+      shouldActivate: meetsPhotoMinimum && activationBlocker === null,
     });
+    if (persisted.kind === "photos_changed") return PHOTOS_CHANGED;
 
     // Drop the mismatching photos. Best-effort ON PURPOSE: the user is already
     // committed as verified above, so a storage/DB hiccup here must leave the
@@ -802,6 +985,20 @@ export async function runFaceMatchVerification(
         });
       }
     }
+
+    if (activationBlocker) {
+      // Verified — that is permanent — but not activated, and nothing that
+      // activation carries happens either: no "your profile is live" copy that
+      // would be false, no referrer reward, no event admission, no founder
+      // feed (audit A13-M18). Loud, because no client flow should reach it.
+      console.error(`${LOG_PREFIX} verified but not activated — account not ready for the pool`, {
+        userId,
+        sessionId,
+        blocker: activationBlocker,
+      });
+      return { kind: "verified", userId, score: maxDetected, scores };
+    }
+
     const keptPhotos =
       droppedCount > 0
         ? photos.filter((_, index) => !failedIndexes.includes(index))
@@ -950,7 +1147,7 @@ export async function runFaceMatchVerification(
     scores,
     kinds,
   });
-  await deps.db.persistOutcome({
+  const persisted = await deps.db.persistOutcome({
     userId,
     sessionId,
     verificationStatus: "pending_review",
@@ -960,6 +1157,7 @@ export async function runFaceMatchVerification(
     verifiedSelfiePath,
     shouldActivate: false,
   });
+  if (persisted.kind === "photos_changed") return PHOTOS_CHANGED;
   await sendOutcomeMessage(deps, user, "pending_review");
   return {
     kind: "pending_review",
@@ -1194,6 +1392,24 @@ export async function surfaceVerifiedActivationDefault(
   await pinStatusBanner(api, user.telegramId, lang);
 }
 
+/**
+ * The per-user row lock every profile-photo writer takes before its
+ * read-modify-write (`identity-consensus.ts` upload and remove,
+ * `DELETE /v1/me/photos`, `native-profile-video.ts`). The user row rather than
+ * the profile row because it exists before any profile does, so even the very
+ * first concurrent upload has something to queue on.
+ */
+async function lockUserRow(tx: Prisma.TransactionClient, userId: string): Promise<void> {
+  await tx.$queryRawUnsafe("SELECT id FROM users WHERE id = $1::uuid FOR UPDATE", userId);
+}
+
+/** Same refs in the same order — the order is what `photoFaceScores` is keyed by. */
+function samePhotoSet(current: readonly string[], snapshot: readonly string[]): boolean {
+  return (
+    current.length === snapshot.length && current.every((ref, index) => ref === snapshot[index])
+  );
+}
+
 export interface DefaultPipelineOptions extends PipelineRunOptions {
   /**
    * Bytes AWS Face Liveness just returned. Present ONLY on a fresh check —
@@ -1361,6 +1577,11 @@ export async function runFaceMatchVerificationDefault(
               // hears about this run at all (`telegram-reach.ts`).
               platform: true,
               status: true,
+              onboardingStep: true,
+              registrationTrack: true,
+              email: true,
+              isEmailVerified: true,
+              phoneVerifiedAt: true,
               gender: true,
               language: true,
               verificationStatus: true,
@@ -1371,18 +1592,26 @@ export async function runFaceMatchVerificationDefault(
           });
         },
         persistRetryable: async (input) => {
-          // Narrow on purpose: status + idempotency marker only. `verifiedAt`,
-          // `faceMatchScore`, `verifiedSelfiePath` and the per-photo scores all
-          // keep whatever they held — this run learned nothing about them.
-          // Clearing `faceMatchedAt` is what makes the state actually
-          // retryable: the guard at the top of the pipeline keys on
-          // (personaInquiryId, faceMatchedAt), so leaving it stamped would make
-          // the next attempt on the same session a silent no-op.
+          // Narrow on purpose: status + idempotency marker, plus the session and
+          // selfie this run stored when the pipeline hands them over.
+          // `verifiedAt`, `faceMatchScore` and the per-photo scores keep
+          // whatever they held — this run learned nothing about them — and a
+          // stored selfie is never cleared here. Clearing `faceMatchedAt` is
+          // what makes the state actually retryable: the guard at the top of
+          // the pipeline keys on (personaInquiryId, faceMatchedAt), so leaving
+          // it stamped would make the next attempt on the same session a
+          // silent no-op.
           await prisma.user.update({
             where: { id: input.userId },
             data: {
               verificationStatus: input.verificationStatus,
               faceMatchedAt: null,
+              ...(input.reference
+                ? {
+                    personaInquiryId: input.reference.sessionId,
+                    verifiedSelfiePath: input.reference.verifiedSelfiePath,
+                  }
+                : {}),
             },
           });
         },
@@ -1392,6 +1621,11 @@ export async function runFaceMatchVerificationDefault(
           const keep = (index: number): boolean => !drop.has(index);
 
           return await prisma.$transaction(async (tx) => {
+            // The read-modify-write below rewrites four photo arrays wholesale,
+            // so it must hold the lock every photo writer takes (audit
+            // A13-L18). Without it an upload committing between this read and
+            // the update was silently overwritten by the pre-upload arrays.
+            await lockUserRow(tx, userId);
             const profile = await tx.profile.findUnique({
               where: { userId },
               select: {
@@ -1406,10 +1640,7 @@ export async function runFaceMatchVerificationDefault(
             // Snapshot guard — the indexes are only meaningful against the
             // photo array we scored. A photo edit that landed mid-run makes
             // this a no-op; that edit's own auto-rerun re-decides.
-            const unchanged =
-              profile.photos.length === photosSnapshot.length &&
-              profile.photos.every((ref, i) => ref === photosSnapshot[i]);
-            if (!unchanged) return 0;
+            if (!samePhotoSet(profile.photos, photosSnapshot)) return 0;
 
             // Never leave photos[i] ↔ photoFaceScores[i] misaligned. If the
             // score array is not already 1:1 we decline to touch anything —
@@ -1455,83 +1686,68 @@ export async function runFaceMatchVerificationDefault(
           });
         },
         persistOutcome: async (input) => {
-          const now = new Date();
-          // Status flip is gated on `onboarding` → `active` so admin-moderated
-          // states (paused, suspended, banned) survive a verified outcome.
-          // Mirrors the original webhook handler's protection.
-          if (input.shouldActivate) {
-            const activated = await prisma.user.updateMany({
-              where: { id: input.userId, status: "onboarding" },
-              data: {
-                verificationStatus: input.verificationStatus,
-                verifiedAt: now,
-                status: "active",
-                faceMatchScore: input.faceMatchScore,
-                faceMatchedAt: now,
-                verifiedSelfiePath: input.verifiedSelfiePath,
-                personaInquiryId: input.sessionId,
+          return await prisma.$transaction(async (tx): Promise<PersistOutcomeResult> => {
+            // Same lock as every photo upload and delete, then a fresh read of
+            // the photos (audit A13-H12). The verdict — and above all the
+            // activation — is only valid for the set that was scored; checking
+            // it outside the lock would still let an upload commit between the
+            // check and the write and ride an activation it never earned.
+            await lockUserRow(tx, input.userId);
+            const row = await tx.user.findUnique({
+              where: { id: input.userId },
+              select: {
+                status: true,
+                onboardingStep: true,
+                registrationTrack: true,
+                email: true,
+                isEmailVerified: true,
+                phoneVerifiedAt: true,
+                profile: { select: { photos: true } },
               },
             });
-            if (activated.count === 0) {
-              await prisma.user.updateMany({
-                where: { id: input.userId, status: { not: "onboarding" } },
-                data: {
-                  verificationStatus: input.verificationStatus,
-                  verifiedAt: now,
-                  faceMatchScore: input.faceMatchScore,
-                  faceMatchedAt: now,
-                  verifiedSelfiePath: input.verifiedSelfiePath,
-                  personaInquiryId: input.sessionId,
-                },
-              });
+            if (!row) return { kind: "persisted" };
+            if (!samePhotoSet(row.profile?.photos ?? [], input.photosSnapshot)) {
+              return { kind: "photos_changed" };
             }
-          } else {
-            await prisma.user.update({
+
+            const now = new Date();
+            // Status flips only `onboarding` → `active`, so admin-moderated
+            // states (paused, suspended, banned) survive a verified outcome, and
+            // only for an account that finished onboarding with a verified track
+            // contact (audit A13-M18) — re-checked here under the lock rather
+            // than trusted from the pipeline's earlier read.
+            const activate =
+              input.shouldActivate &&
+              row.status === "onboarding" &&
+              activationBlockerFor(row) === null;
+            await tx.user.update({
               where: { id: input.userId },
               data: {
                 verificationStatus: input.verificationStatus,
+                ...(input.shouldActivate ? { verifiedAt: now } : {}),
+                ...(activate ? { status: "active" as const } : {}),
                 faceMatchScore: input.faceMatchScore,
                 faceMatchedAt: now,
-                verifiedSelfiePath: input.verifiedSelfiePath,
+                // Never null out a stored reference: a failed upload this run
+                // must not turn the user's next photo edit into
+                // `reference_expired` (audit A13-H11).
+                ...(input.verifiedSelfiePath
+                  ? { verifiedSelfiePath: input.verifiedSelfiePath }
+                  : {}),
                 personaInquiryId: input.sessionId,
               },
             });
-          }
 
-          // Race-protected score persistence: the score array is keyed
-          // 1:1 to the photos array we *snapshotted* at pipeline start.
-          // If the user added or removed photos while we were running,
-          // `photos` will not match `photosSnapshot` and updateMany
-          // returns 0 — we drop the stale scores rather than corrupt
-          // the index-alignment between photos[i] ↔ photoFaceScores[i].
-          //
-          // verificationStatus has already been written by the User
-          // updates above; the auto-rerun triggered by the photo-edit
-          // handler will reconcile it with the new photo set on the
-          // next pipeline tick.
-          //
-          // Skipping when the array is empty preserves prior scores
-          // from a previous run (matters when admin reruns and the
-          // fetch step fails before we recompute).
-          if (input.photoFaceScores.length > 0) {
-            const updated = await prisma.profile.updateMany({
-              where: {
-                userId: input.userId,
-                photos: { equals: input.photosSnapshot },
-              },
-              data: { photoFaceScores: input.photoFaceScores },
-            });
-            if (updated.count === 0) {
-              console.warn(
-                "[verification-pipeline] photos changed during run — scores discarded",
-                {
-                  userId: input.userId,
-                  sessionId: input.sessionId,
-                  snapshotLen: input.photosSnapshot.length,
-                },
-              );
+            // The score array is keyed 1:1 to the photos array, which the check
+            // above just proved is the one that was scored.
+            if (input.photoFaceScores.length > 0) {
+              await tx.profile.update({
+                where: { userId: input.userId },
+                data: { photoFaceScores: input.photoFaceScores },
+              });
             }
-          }
+            return { kind: "persisted" };
+          });
         },
       },
       // Last, so a caller-supplied dep wins over the default built above.
@@ -1555,7 +1771,11 @@ export async function runFaceMatchVerificationDefault(
  *
  * Behaviour:
  *   - No `personaInquiryId` (never ran a liveness check) → no-op; there is no
- *     reference selfie to compare against.
+ *     reference selfie to compare against. A first check that is still
+ *     scoring has none yet either — which is safe only because that run's own
+ *     locked persist sees the edit and re-scores, parking its session and
+ *     selfie on the row first so edits after that point rerun normally
+ *     (audit A13-H12).
  *   - No `verifiedSelfiePath` → `reference_expired`. The 90-day GDPR scrub
  *     already removed the reference and AWS cannot re-issue it (a liveness
  *     session dies after 3 minutes), so the only way forward is one more

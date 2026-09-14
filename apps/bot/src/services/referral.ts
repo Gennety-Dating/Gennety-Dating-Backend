@@ -2,6 +2,7 @@ import { prisma, type UserStatus } from "@gennety/db";
 import { REFERRAL_RELEASE_SWEEP_BATCH } from "@gennety/shared";
 import { env } from "../config.js";
 import type { ReferralLadderRung } from "../config.js";
+import { hasTrackVerifiedContact } from "./contact-verification.js";
 import { grantComplimentaryPremiumMonths } from "./premium.js";
 import { grantTickets, isUniqueViolation } from "./ticket-wallet.js";
 
@@ -274,9 +275,35 @@ export async function grantReferralRewardsForVerifiedInvitee(
 
   const invitee = await prisma.user.findUnique({
     where: { id: inviteeUserId },
-    select: { id: true, referralSource: true, referralCountedAt: true, phone: true },
+    select: {
+      id: true,
+      referralSource: true,
+      referralCountedAt: true,
+      phone: true,
+      verificationStatus: true,
+      onboardingStep: true,
+      registrationTrack: true,
+      email: true,
+      isEmailVerified: true,
+      phoneVerifiedAt: true,
+    },
   });
   if (!invitee) return null;
+
+  // An invitee counts only once they are a member matching could actually
+  // serve: liveness-verified, onboarding finished, and a verified track contact
+  // (audit A13-M18). Liveness alone proves a live face, not a registration — a
+  // farm of half-created accounts could otherwise pay a referrer rung by rung
+  // while never being matchable. Refused before the CAS below, so
+  // `referralCountedAt` stays empty and nothing is spent that a later verified
+  // run could not still settle.
+  if (
+    invitee.verificationStatus !== "verified" ||
+    invitee.onboardingStep !== "completed" ||
+    !hasTrackVerifiedContact(invitee)
+  ) {
+    return null;
+  }
 
   const referrerId = parseReferrer(invitee.referralSource);
   if (!referrerId || referrerId === invitee.id) return null;

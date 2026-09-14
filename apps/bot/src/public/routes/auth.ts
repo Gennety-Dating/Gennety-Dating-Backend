@@ -9,6 +9,8 @@ import {
   signAccessToken,
 } from "../jwt.js";
 import { otpRequestLimiter, otpVerifyLimiter, refreshLimiter } from "../rate-limit.js";
+import { requireAuth } from "../auth-middleware.js";
+import { signOutDevice } from "../../services/device-tokens.js";
 import { serializeUser } from "./serializers.js";
 
 export const authRouter: Router = Router();
@@ -105,5 +107,26 @@ authRouter.post(
       refreshToken: rotated.nextRefreshToken,
       expiresIn: accessTokenTtlSeconds(),
     });
+  },
+);
+
+/**
+ * POST /v1/auth/logout — sign this device out (audit A13-L12).
+ *
+ * There was no way to do it: an app that "logged out" only forgot its tokens
+ * locally, while the server went on pushing the account's notifications to the
+ * device and kept its 30-day refresh session alive. Clears the account's push
+ * and Live Activity tokens and revokes the refresh session the body presents,
+ * or every session when it presents none. Idempotent — signing out twice, or
+ * with a session already rotated away, still answers `ok`.
+ */
+authRouter.post(
+  "/logout",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const rawToken =
+      typeof req.body?.refreshToken === "string" ? req.body.refreshToken.trim() : "";
+    await signOutDevice(req.userId!, rawToken || null);
+    res.json({ ok: true });
   },
 );

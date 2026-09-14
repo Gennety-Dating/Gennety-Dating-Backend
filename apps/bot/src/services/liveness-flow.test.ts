@@ -41,13 +41,28 @@ const mintLivenessCredentials = vi.fn();
 vi.mock("./liveness-credentials.js", () => ({ mintLivenessCredentials }));
 
 const runFaceMatchVerificationDefault = vi.fn().mockResolvedValue({ kind: "verified" });
-vi.mock("./verification-pipeline.js", () => ({ runFaceMatchVerificationDefault }));
+// The activation prerequisites are the pipeline's real predicate, not a stub:
+// the begin gate must refuse exactly what activation would refuse.
+vi.mock("./verification-pipeline.js", () => ({
+  runFaceMatchVerificationDefault,
+  activationBlockerFor: actualPipeline.activationBlockerFor,
+}));
 
 const buildVerificationKeyboard = vi.fn().mockResolvedValue({ inline_keyboard: [] });
-vi.mock("./verification-keyboard.js", () => ({ buildVerificationKeyboard }));
+vi.mock("./verification-keyboard.js", () => ({
+  buildVerificationKeyboard,
+  VERIFY_PHOTOS_CALLBACK: "verify:photos",
+}));
 
-const { beginLivenessCheck, completeLivenessCheck, recordBiometricConsent } =
-  await import("./liveness-flow.js");
+const actualPipeline = await vi.importActual<typeof import("./verification-pipeline.js")>(
+  "./verification-pipeline.js",
+);
+const {
+  beginLivenessCheck,
+  completeLivenessCheck,
+  recordBiometricConsent,
+  sendPhotosRequiredPrompt,
+} = await import("./liveness-flow.js");
 const { createOutcomeGate } = await import("./outcome-gate.js");
 
 const SESSION_ID = "11111111-2222-3333-4444-555555555555";
@@ -60,6 +75,20 @@ const CREDENTIALS = {
 const REFERENCE = Buffer.from([0xff, 0xd8, 0xff]);
 
 const api = { sendMessage: vi.fn().mockResolvedValue({}) };
+
+/**
+ * What every account that reaches verification through a client looks like:
+ * onboarding finished, a verified general-track phone, photos on the profile.
+ * The begin gates refuse anything less, so fixtures spread this in.
+ */
+const READY_FOR_CHECK = {
+  onboardingStep: "completed",
+  registrationTrack: "general",
+  email: null,
+  isEmailVerified: false,
+  phoneVerifiedAt: new Date("2026-08-01T00:00:00Z"),
+  profile: { photos: ["u/a.jpg", "u/b.jpg", "u/c.jpg", "u/d.jpg"] },
+};
 const apiArg = api as unknown as Parameters<typeof completeLivenessCheck>[2];
 
 beforeEach(() => {
@@ -71,6 +100,7 @@ beforeEach(() => {
     telegramId: 555n,
     language: "en",
     verificationStatus: "unverified",
+    ...READY_FOR_CHECK,
     // Explicit Art. 9(2)(a) consent already on file — `beginLivenessCheck`
     // refuses to mint a session without it.
     biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
@@ -133,6 +163,7 @@ describe("beginLivenessCheck", () => {
       telegramId: 555n,
       language: "en",
       verificationStatus: "unverified",
+      ...READY_FOR_CHECK,
       biometricConsentAt: null,
       pendingLivenessSessionId: null,
     });
@@ -165,6 +196,7 @@ describe("beginLivenessCheck", () => {
       id: "user-1",
       language: "en",
       verificationStatus: "verified",
+      ...READY_FOR_CHECK,
       biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
       verifiedSelfiePath: "selfies/user-1.jpg",
     });
@@ -182,6 +214,7 @@ describe("beginLivenessCheck", () => {
       id: "user-1",
       language: "en",
       verificationStatus: "verified",
+      ...READY_FOR_CHECK,
       biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
       verifiedSelfiePath: null,
     });
@@ -200,6 +233,7 @@ describe("beginLivenessCheck", () => {
       id: "user-1",
       language: "en",
       verificationStatus: "verified",
+      ...READY_FOR_CHECK,
       biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
       verifiedSelfiePath: null,
     });
@@ -210,6 +244,81 @@ describe("beginLivenessCheck", () => {
       where: { id: "user-1" },
       data: { pendingLivenessSessionId: SESSION_ID },
     });
+  });
+
+  // Audit A13-H11: a check on a profile with no photos used to run, land in
+  // `pending_review` with the stored selfie nulled, and strand the user.
+  it("refuses a check while the profile has no photos, before consent or AWS", async () => {
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      language: "uk",
+      verificationStatus: "rejected",
+      ...READY_FOR_CHECK,
+      profile: { photos: [] },
+      // No consent yet either: the photo step comes first, so nobody reads a
+      // biometric disclosure for a check that could not run.
+      biometricConsentAt: null,
+      verifiedSelfiePath: "selfies/user-1.jpg",
+    });
+
+    const result = await beginLivenessCheck("user-1");
+
+    expect(result).toEqual({ ok: false, error: "photos_required", language: "uk" });
+    expect(createLivenessSession).not.toHaveBeenCalled();
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("still tells a verified user with an intact reference that they are verified", async () => {
+    // No check would run, so there is no photo step to ask for.
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      language: "en",
+      verificationStatus: "verified",
+      ...READY_FOR_CHECK,
+      profile: { photos: [] },
+      biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
+      verifiedSelfiePath: "selfies/user-1.jpg",
+    });
+
+    expect(await beginLivenessCheck("user-1")).toEqual({ ok: false, error: "already_verified" });
+  });
+
+  // Audit A13-M18: both clients offer verification only after onboarding; the
+  // server now holds the same order for a caller that skips the UI.
+  it.each([
+    ["onboarding unfinished", { onboardingStep: "conversational" }],
+    ["no verified track contact", { registrationTrack: "general", phoneVerifiedAt: null }],
+    ["a student without a verified email", { registrationTrack: "student", isEmailVerified: false }],
+  ])("refuses a first check with %s", async (_label, gap) => {
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      language: "en",
+      verificationStatus: "unverified",
+      ...READY_FOR_CHECK,
+      ...gap,
+      biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
+      verifiedSelfiePath: null,
+    });
+
+    const result = await beginLivenessCheck("user-1");
+
+    expect(result).toEqual({ ok: false, error: "onboarding_incomplete" });
+    expect(createLivenessSession).not.toHaveBeenCalled();
+  });
+
+  it("lets a verified user re-anchor an expired reference whatever their onboarding row says", async () => {
+    // Re-verification is not admission: the registration gate is for first checks.
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      language: "en",
+      verificationStatus: "verified",
+      ...READY_FOR_CHECK,
+      onboardingStep: "conversational",
+      biometricConsentAt: new Date("2026-08-01T00:00:00Z"),
+      verifiedSelfiePath: null,
+    });
+
+    expect(await beginLivenessCheck("user-1")).toMatchObject({ ok: true });
   });
 
   it("reports a provider failure rather than returning an empty session", async () => {
@@ -223,6 +332,29 @@ describe("beginLivenessCheck", () => {
     mintLivenessCredentials.mockResolvedValueOnce({ ok: false, error: "api" });
     const result = await beginLivenessCheck("user-1");
     expect(result).toEqual({ ok: false, error: "provider" });
+  });
+});
+
+describe("sendPhotosRequiredPrompt", () => {
+  it("DMs the ask with the photo manager as its only action", async () => {
+    await sendPhotosRequiredPrompt(apiArg, 555n, "en");
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    const [chatId, text, extra] = api.sendMessage.mock.calls[0] as [
+      number,
+      string,
+      { reply_markup: { inline_keyboard: Array<Array<{ text: string; callback_data?: string }>> } },
+    ];
+    expect(chatId).toBe(555);
+    expect(text).toContain("there aren't any yet");
+    expect(extra.reply_markup.inline_keyboard).toEqual([
+      [{ text: "📷 Add photos", callback_data: "verify:photos" }],
+    ]);
+  });
+
+  it("stays silent for an app-only account", async () => {
+    await sendPhotosRequiredPrompt(apiArg, -7n, "en");
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 });
 

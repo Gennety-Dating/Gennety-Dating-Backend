@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { timingSafeEqual } from "node:crypto";
+import type { Server } from "node:http";
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { SUPPORTED_CITY_KEYS, findMarketByCityKey } from "@gennety/shared";
@@ -1371,11 +1372,41 @@ app.patch("/admin/reports/:id/review", async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// Final error handler (A13-L17)
+// ---------------------------------------------------------------------------
+// Registered after every route above. Without it an error that escaped a route
+// (a malformed JSON body, a rejected async handler) fell through to Express's
+// default handler, which answers with an HTML page — and outside
+// NODE_ENV=production with the stack trace in it. The dashboard expects JSON,
+// and a stack names files and query shapes nobody outside needs to see.
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  const status = (err as { status?: number; statusCode?: number }).status
+    ?? (err as { statusCode?: number }).statusCode;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    res.status(status).json({ error: err.message });
+    return;
+  }
+  console.error("[admin] unhandled error:", err);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+// ---------------------------------------------------------------------------
 // Start listener (called from index.ts)
 // ---------------------------------------------------------------------------
-export function startAdminServer(api: Api<RawApi>): void {
+export function startAdminServer(api: Api<RawApi>): Server {
   setAdminBotApi(api);
-  app.listen(env.ADMIN_PORT, () => {
-    console.log(`[admin] Analytics API listening on :${env.ADMIN_PORT}`);
+  // Loopback by default (A13-L17): `trust proxy` is 1, so only Caddy may be
+  // the hop that sets `X-Forwarded-For` — the IP the admin rate limit keys on.
+  const server = app.listen(env.ADMIN_PORT, env.HTTP_BIND_HOST, (error?: Error) => {
+    if (error) return; // reported by the 'error' listener below
+    console.log(`[admin] Analytics API listening on ${env.HTTP_BIND_HOST}:${env.ADMIN_PORT}`);
   });
+  // Express 5 hands a bind failure to the listen callback instead of throwing,
+  // so it used to log "listening" on a process with no admin API. Exit so PM2
+  // restarts it and the failure is visible.
+  server.on("error", (err) => {
+    console.error(`[admin] Analytics API server error on ${env.HTTP_BIND_HOST}:${env.ADMIN_PORT}:`, err);
+    process.exit(1);
+  });
+  return server;
 }

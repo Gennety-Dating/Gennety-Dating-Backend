@@ -13,6 +13,12 @@ import { computeWaveformPeaks } from "./audio-waveform.js";
 export interface ValidatedVoicePrompt {
   transcript: string;
   waveform: number[];
+  /**
+   * Whole seconds, derived on the server: Whisper's own measurement when it
+   * reports one, otherwise the caller's figure clamped into the allowed range.
+   * What gets stored and shown — never the client's claim as such.
+   */
+  durationSeconds: number;
 }
 
 export interface VoicePromptValidationDeps {
@@ -72,8 +78,32 @@ export async function validateVoicePrompt(
   }
   if (args.audio.byteLength === 0) return reject("processing_unavailable", true);
 
-  const transcription = await transcribe(args.audio);
+  const transcription = await transcribe(args.audio, { withDuration: true });
   if (!transcription.ok) return reject("processing_unavailable", true);
+
+  // The duration checked above is what the caller SAID. On the native rail
+  // that is a client field (audit A13-L14): a 3-minute monologue that fits
+  // under the byte cap could claim 15 s and be stored — and shown on the
+  // player — as 15 s. Whisper reports what it actually decoded, so the bounds
+  // are enforced again on that, rounded the way the claim is. When it reports
+  // nothing, the claim already passed the same bounds; the clamp only states
+  // that invariant, and the byte cap is what still limits the real length.
+  const measured =
+    transcription.durationSeconds === undefined
+      ? undefined
+      : Math.round(transcription.durationSeconds);
+  if (measured !== undefined && measured < VOICE_PROMPT_MIN_DURATION_SECONDS) {
+    return reject("voice_too_short", true);
+  }
+  if (measured !== undefined && measured > VOICE_PROMPT_MAX_DURATION_SECONDS) {
+    return reject("voice_too_long", true);
+  }
+  const durationSeconds =
+    measured ??
+    Math.min(
+      VOICE_PROMPT_MAX_DURATION_SECONDS,
+      Math.max(VOICE_PROMPT_MIN_DURATION_SECONDS, Math.round(args.durationSeconds)),
+    );
 
   const transcript = transcription.text.trim();
   // An empty transcript is not silence-is-fine: the whole safety story rests on
@@ -90,7 +120,7 @@ export async function validateVoicePrompt(
   // accepted whether or not ffmpeg could draw its bars.
   const waveform = (await computePeaks(args.audio)) ?? [];
 
-  return { ok: true, value: { transcript, waveform } };
+  return { ok: true, value: { transcript, waveform, durationSeconds } };
 }
 
 function rejectWith(

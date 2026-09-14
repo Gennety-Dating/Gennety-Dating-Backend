@@ -367,6 +367,43 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /v1/auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Sign this device out
+      description: |
+        Stops every push this account sends to devices — the push token and
+        all Live Activity tokens are cleared — and revokes the refresh session
+        named by `refreshToken`. Without `refreshToken`, every refresh session
+        of the account is revoked. The bearer access token stays valid until
+        its short TTL runs out; it can no longer be renewed.
+
+        Call it before discarding tokens locally. Signing out only on the
+        device used to leave the server pushing the account's notifications
+        to a phone the next account then signed in on. A token that is not
+        the caller's own is ignored, and repeating the call still answers
+        `ok`. Presenting a signed-out refresh token to `/v1/auth/refresh`
+        afterwards is treated as token reuse (every session is revoked).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: The refresh token this device holds.
+      responses:
+        "200":
+          description: Signed out
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ok" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /v1/me:
     get:
       tags: [me]
@@ -790,6 +827,11 @@ paths:
         One token per user row; silent overwrite on re-registration.
         The native iOS client sends `platform: "apns"` (delivery is direct
         APNs; the legacy default remains `expo` for wire-compat only).
+
+        A token names a device, so registering it takes it away from any
+        other account still holding it: the account previously signed in on
+        this phone stops receiving pushes here. `POST /v1/auth/logout`
+        releases it explicitly.
       requestBody:
         required: true
         content:
@@ -820,7 +862,8 @@ paths:
       summary: Register an ActivityKit push token (start or update)
       description: |
         One registration per (user, activityType, kind) — re-registration
-        upserts in place. The server uses `update` tokens to drive the
+        upserts in place. The same token held by another account is
+        removed from it first (the token names this install). The server uses `update` tokens to drive the
         "match decision" and "date day" Live Activities via APNs.
       requestBody:
         required: true
@@ -1078,7 +1121,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            Two different situations, told apart by `code` — never by the
+            Different situations, told apart by `code` — never by the
             human-readable `error` string:
 
             - `already_verified` — no session is minted; the client shows a
@@ -1086,6 +1129,16 @@ paths:
             - `consent_required` — the user has not yet passed through
               `POST /v1/me/verification/consent`. Show the consent screen,
               record the consent, then retry this call once.
+            - `photos_required` — the profile has no photos, so a passing check
+              would have nothing to be compared against. Send the user to add
+              photos (at least `minPhotos`), then offer the check again.
+              `message` carries the ask in the user's language. Checked before
+              consent, so nobody reads the biometric disclosure for a check
+              that cannot run yet.
+            - `onboarding_incomplete` — a first check for an account that has
+              not finished registration (onboarding, or the track contact).
+              The app only offers verification after onboarding, so this is a
+              server-side backstop rather than a screen to design for.
 
             A client that treats every `409` as "verified" leaves the user
             tapping a button that silently does nothing, which is exactly what
@@ -1099,7 +1152,15 @@ paths:
                   error: { type: string }
                   code:
                     type: string
-                    enum: [already_verified, consent_required]
+                    enum: [already_verified, consent_required, photos_required, onboarding_incomplete]
+                  message:
+                    type: string
+                    description: |
+                      `photos_required` only. The ask, localized to the user's
+                      `User.language`.
+                  minPhotos:
+                    type: integer
+                    description: "`photos_required` only. The profile photo floor (`MIN_PHOTOS`)."
         "429": { $ref: "#/components/responses/RateLimited" }
         "503":
           description: Liveness not configured, or the provider is unavailable
@@ -1522,6 +1583,13 @@ paths:
         reconcile. Validation is safety-only (no identity gate, no voice
         printing): the clip is transcribed, the transcript is moderated, and
         it is refused if it hands out a way to contact the speaker off-platform.
+
+        `durationSec` is only a first filter. The duration stored and returned
+        is the one transcription measured (falling back to the sent value,
+        clamped into range, when no measurement comes back), and the length
+        bounds are enforced on that — a clip may be refused `voice_too_long`
+        whatever it claimed. Rate limit: `VOICE_PROMPT_UPLOADS_PER_HOUR` (10)
+        commits per user per hour.
       requestBody:
         required: true
         content:
@@ -1561,6 +1629,7 @@ paths:
                   error: { type: string }
                   retryable: { type: boolean }
         "404": { description: Feature disabled }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "503": { description: Storage unavailable }
     delete:
       tags: [me]
@@ -1713,7 +1782,11 @@ paths:
 
         Checked server-side exactly like a video sent to the bot: every
         sampled frame and the audio transcript are moderated; there is no
-        face or identity gate (the video is display-only). Duration is
+        face or identity gate (the video is display-only). The `thumb`
+        poster is shown to partners before playback, so it passes the same
+        content-safety check as a profile photo, first: an unsafe poster
+        refuses the whole upload with `unsafe_content`, and a moderation
+        outage with a retryable `processing_unavailable`. Duration is
         measured here, not trusted from the client. Errors use the
         `{ error, code, retryable }` body — switch on `code`.
 

@@ -1,0 +1,663 @@
+/**
+ * The Living Canvas (PRODUCT_SPEC §6.1): a full-bleed dark map with one sheet
+ * on it. Colours come from the shared theme tokens, so the canvas follows the
+ * user's own light/dark choice like every other Mini App.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#map {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+/* The map is a backdrop, not the subject: a scrim keeps the sheet legible over
+   whatever the tiles happen to show, without dimming the city to mud. */
+#scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 34%) 0%,
+    rgb(0 0 0 / 4%) 28%,
+    rgb(0 0 0 / 4%) 46%,
+    var(--bg) 100%
+  );
+}
+:root[data-theme="light"] #scrim {
+  background: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 12%) 0%,
+    rgb(0 0 0 / 0%) 28%,
+    rgb(0 0 0 / 0%) 40%,
+    var(--bg) 100%
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   The Scratch Map's fog (§Scratch Map).
+   --------------------------------------------------------------------------- */
+
+/* Sits between the map and the scrim, and never takes a tap: the city under it
+   stays pannable, because the fog is emphasis rather than a cover. */
+.fog {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Translucent on purpose. An opaque veil would turn the map into a scratch
+   card that happens to be a city, and the canvas exists to show the city:
+   under the fog the streets, the river and the shape of Kyiv all stay
+   readable, they simply stop being the thing you are looking at. */
+.fog-veil {
+  fill: rgb(3 3 3 / 62%);
+}
+:root[data-theme="light"] .fog-veil {
+  /* The light theme's map is still the dark one (the canvas's map is a scene,
+     not a surface), so the veil stays dark here too — a pale wash over dark
+     tiles reads as haze rather than as unexplored ground. */
+  fill: rgb(3 3 3 / 52%);
+}
+
+/* ---------------------------------------------------------------------------
+   The venue pin — the one thing on the map that pulses.
+   --------------------------------------------------------------------------- */
+
+.venue-pin {
+  position: relative;
+  /* The pin carries its own size. MapLibre gives a marker element none (this
+     used to come from Leaflet's `iconSize`), and the dot and the pulse are
+     both absolutely positioned against it — so without this they collapse to
+     0x0 and the pin vanishes with nothing failing anywhere. */
+  width: 22px;
+  height: 22px;
+}
+
+/* The pin is the dock's switch while a date is on (canvas.ts `dressPin`), and
+   a 22 px dot is half a thumb: the target grows to 44 px, the dot does not. */
+.venue-pin[role="button"] {
+  cursor: pointer;
+}
+
+.venue-pin[role="button"]::after {
+  content: "";
+  position: absolute;
+  inset: -11px;
+  border-radius: 50%;
+}
+
+.venue-dot,
+.venue-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.venue-dot {
+  background: var(--accent);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 45%);
+}
+
+.venue-pulse {
+  background: var(--accent);
+  opacity: 0.55;
+  animation: venue-pulse 2.4s ease-out infinite;
+}
+
+@keyframes venue-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The user's own point (change of 2026-09-12) — where the trip STARTS, drawn
+   only while the dock is holding a fix.
+
+   Deliberately not a second venue pin. The venue is the burgundy the whole
+   product spends its colour on (theme.css, "Colour = meaning"), and the two
+   ends of one line must not compete: this end is white, smaller, and does not
+   pulse, because it is the end the user already knows the location of.
+   --------------------------------------------------------------------------- */
+
+.me-pin {
+  /* Same reason as `.venue-pin`: a MapLibre marker element has no size of its
+     own, and the dot inside is positioned against this box. */
+  position: relative;
+  width: 16px;
+  height: 16px;
+}
+
+.me-dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgb(0 0 0 / 55%);
+  box-shadow: 0 1px 6px rgb(0 0 0 / 45%);
+}
+
+/* ---------------------------------------------------------------------------
+   The sheet.
+   --------------------------------------------------------------------------- */
+
+#sheet {
+  position: fixed;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Trimmed on every side (change of 2026-09-12): the sheet is the caption to
+     the map, and it had grown into the half of the screen the map is for.
+     `--tg-content-bottom` is Telegram's own reserve in fullscreen, which
+     `env(safe-area-inset-bottom)` does not include — without it the last line
+     sits under the home indicator on a fullscreen Mini App. */
+  padding: 16px 18px calc(16px + var(--tg-content-bottom, 0px) + env(safe-area-inset-bottom, 0px));
+  /* The same glass as the dock's islands rather than the opaque page colour:
+     the two are one surface family, and the map keeps showing through the
+     thing that is describing it. */
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border-top: 1px solid var(--glass-border);
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -12px 40px rgb(0 0 0 / 34%);
+  max-height: 58vh;
+  overflow-y: auto;
+  /* The sheet's height follows its content, so a state that gains a line must
+     not make the whole thing jump — the transition is on the box, not on a
+     hardcoded height. */
+  transition: box-shadow 240ms ease;
+}
+
+/* No backdrop-filter (an old WebView): an opaque pane, for the dock's reason —
+   text straight onto the streets is worse than no glass at all. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  #sheet {
+    background: var(--bg);
+  }
+}
+
+#sheet[data-tone="urgent"] {
+  box-shadow:
+    0 -12px 40px rgb(0 0 0 / 34%),
+    inset 0 2px 0 var(--accent);
+}
+
+#sheet[data-tone="warm"] {
+  box-shadow:
+    0 -12px 40px rgb(0 0 0 / 34%),
+    inset 0 2px 0 var(--accent-bright, var(--accent));
+}
+
+#sheet-title {
+  margin: 0 0 8px;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.22;
+}
+
+#sheet-body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+#sheet-note {
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+#sheet[data-tone="warm"] #sheet-note {
+  color: var(--accent-bright, var(--accent));
+  font-weight: 600;
+}
+
+#sheet-list {
+  margin: 14px 0 0;
+  padding: 0 0 0 18px;
+  display: grid;
+  gap: 9px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+#sheet-action {
+  margin-top: 14px;
+  width: 100%;
+  min-height: 50px;
+  border: 0;
+  /* Rounder, to sit inside a 28 px sheet without reading as a squarer thing
+     pasted into a softer one (change of 2026-09-12). */
+  border-radius: 20px;
+  /* Glass OVER the accent, not instead of it: the burgundy is the one colour
+     on this screen that means something, so the light is added as white and
+     black over it and the hue is untouched. Top-lit, like every other pane
+     here — a highlight that runs down the face would be a different light
+     source from the islands above it. */
+  background:
+    linear-gradient(
+      180deg,
+      rgb(255 255 255 / 20%) 0%,
+      rgb(255 255 255 / 5%) 48%,
+      rgb(0 0 0 / 10%) 100%
+    ),
+    var(--accent);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  /* The house inner-edge sheen: light held just inside the button's own
+     border rather than a travelling highlight (PRODUCT_SPEC §3.5b). */
+  box-shadow:
+    inset 0 1px 0 -0.5px rgb(255 255 255 / 46%),
+    inset 0 -1px 0 -0.5px rgb(255 255 255 / 16%),
+    0 8px 22px rgb(0 0 0 / 30%);
+}
+
+#sheet-action[hidden] {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   The Scratch Map's consent.
+
+   Deliberately quieter than `#sheet-action`: that button is whatever the date
+   lifecycle is asking for right now, and this is an optional setting about the
+   map. One loud control per screen (PRODUCT_SPEC §3.5b), and it is not this
+   one — so the toggle is a bordered glass row rather than a filled accent
+   button, and it drops to a plain text link once it is already on.
+   --------------------------------------------------------------------------- */
+#scratch {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgb(128 128 128 / 16%);
+}
+
+#scratch[hidden] {
+  display: none;
+}
+
+#scratch-copy {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+#scratch-copy[hidden] {
+  display: none;
+}
+
+#scratch-toggle {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgb(128 128 128 / 24%);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 6%);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+:root[data-theme="light"] #scratch-toggle {
+  background: rgb(0 0 0 / 4%);
+}
+
+/* Already on: there is nothing left to persuade anyone of, so the way out is
+   a quiet link rather than a second button competing with the sheet's own. */
+#scratch-toggle[data-on="1"] {
+  min-height: 0;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  text-align: left;
+}
+
+#scratch-toggle:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------------------
+   The transit dock (decision 2026-09-11) — two glass islands sitting on the
+   sheet, Bump's transit HUD in the house glass: the controls on top, the trip
+   under them. Theme tokens only, so it follows the user's theme the way the
+   sheet does; the map under it is dark in both.
+   --------------------------------------------------------------------------- */
+
+#transit-dock {
+  position: fixed;
+  z-index: 2;
+  left: 12px;
+  right: 12px;
+  /* On the sheet, whatever its height: `--sheet-h` is the sheet's measured box
+     (transit-dock.ts), which already carries the home-indicator inset. The
+     env() is the floor for the one frame before the first measurement. */
+  bottom: calc(var(--sheet-h, env(safe-area-inset-bottom, 0px)) + 10px);
+  display: grid;
+  /* minmax(0, …), not the default auto: a long venue name on the card has
+     to ellipsize inside the dock, not widen the track past the screen. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  transition:
+    opacity 220ms ease,
+    transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s linear 0s;
+}
+
+#transit-dock[data-open="0"] {
+  opacity: 0;
+  transform: translateY(12px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 160ms ease,
+    transform 200ms ease,
+    visibility 0s linear 200ms;
+}
+
+.dock-island {
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    var(--glass-shadow),
+    inset 0 1px 0 var(--glass-highlight);
+}
+
+/* No backdrop-filter (an old WebView): a solid pane, rather than a see-through
+   one that would put the text straight onto the streets. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .dock-island {
+    background: var(--bg-elevated);
+  }
+}
+
+.dock-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px;
+  border-radius: 999px;
+}
+
+.dock-modes {
+  /* One number for the chip and the two buttons it travels between; they are
+     neighbours here so they cannot drift apart unnoticed. 44 px is the target
+     floor, and the chip is exactly one button wide. */
+  --dock-mode-size: 44px;
+  position: relative;
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--fill);
+}
+
+/* Chosen reads as a raised chip, not as a colour: colour on this canvas is
+   spent on the two people and the one action (theme.css, "Colour = meaning").
+
+   It is ONE element that travels rather than a background handed from button
+   to button (change of 2026-09-12). The old switch had no middle — the state
+   simply appeared somewhere else — and a switch with no middle reads as a
+   redraw rather than as an answer to the thumb. Absolute, so the scenery can
+   never push the buttons it sits behind. */
+.dock-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 2px;
+  left: 2px;
+  width: var(--dock-mode-size);
+  height: var(--dock-mode-size);
+  border-radius: 999px;
+  background: var(--self-fill-strong);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+  /* The slight overshoot is the point: a chip that settles reads as a thing
+     with weight. Same curve and duration as the headline's swap above it, so
+     the two are one gesture instead of two events near each other. */
+  transition: transform 340ms cubic-bezier(0.34, 1.35, 0.5, 1);
+}
+
+.dock-modes[data-mode="driving"] .dock-thumb {
+  /* One button plus the gap between them. */
+  transform: translateX(calc(var(--dock-mode-size) + 2px));
+}
+
+.dock-mode {
+  position: relative;
+  /* Over the chip, which is the only reason either has a z-index. */
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: var(--dock-mode-size);
+  height: var(--dock-mode-size);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 180ms ease;
+}
+
+.dock-mode[aria-pressed="true"] {
+  color: var(--text);
+}
+
+.dock-mode-icon {
+  width: 22px;
+  height: 22px;
+}
+
+/* The set's 1.6 stroke is drawn for 13–18 px glyphs beside type; at 22 px on
+   glass the walking figure thinned to a hairline. */
+.dock-mode-icon path {
+  stroke-width: 1.9;
+}
+
+.dock-partners {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 6px;
+}
+
+.dock-partner {
+  min-width: 0;
+  min-height: 44px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease;
+}
+
+.dock-partner:active {
+  transform: scale(0.97);
+}
+
+/* Uber's own black, in both themes — the brand's colour rather than ours,
+   which is also what keeps it from out-shouting the sheet's burgundy action.
+   The hairline is what lifts it off dark glass.
+
+   It takes every pixel the row has left (change of 2026-09-12). The three
+   buttons are not three choices of equal weight: this one ends the question —
+   a car is coming, there is nothing further to decide — while the other two
+   hand the trip to another app. Width is how a row says that. */
+.dock-uber {
+  flex: 1 1 auto;
+  padding: 0 14px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  background: #000;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* The two maps apps, kept together so the gap inside the pair is smaller than
+   the gap to Uber — one group of two, not three loose buttons. */
+.dock-maps-apps {
+  display: flex;
+  flex: none;
+  gap: 5px;
+}
+
+/* Square, and the tile is the whole label: an app tile is recognised before a
+   name is read, and at this size a name could not be read anyway ("Google
+   Maps" was already ellipsizing at 360 px). The name lives on in `aria-label`
+   and in the tooltip, so nothing is lost to a screen reader. */
+.dock-maps {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  background: var(--fill-strong);
+  color: var(--text);
+}
+
+.dock-maps-mark {
+  display: block;
+  width: 27px;
+  height: 27px;
+  /* The mark is a picture with its own rounded corners; this is the shadow
+     under a tile rather than a glow on a glyph. */
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 35%));
+}
+
+.dock-status {
+  padding: 12px 16px 13px;
+  border-radius: 18px;
+}
+
+.dock-eta,
+.dock-away {
+  margin: 0;
+}
+
+/* The headline stays one line and ellipsizes: when it is the venue's name, the
+   sheet under the dock prints it in full. The line beneath it is sometimes a
+   whole instruction ("turn on location…"), and a cut instruction is useless,
+   so that one wraps. */
+.dock-eta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dock-eta {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.dock-away {
+  margin-top: 2px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+/* A phone on its side has no room for the card over a sheet. The controls are
+   what the dock is for, so they are what stays. */
+@media (max-height: 520px) {
+  .dock-status {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Boot cover. Opaque and theme-correct, so the first frame is never a flash of
+   the wrong background — the same reason every other Mini App here has one.
+   --------------------------------------------------------------------------- */
+
+#boot {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  transition: opacity 380ms ease;
+}
+
+#boot.gone {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .venue-pulse {
+    animation: none;
+    opacity: 0.32;
+  }
+  #boot {
+    transition: none;
+  }
+  /* The dock still fades — a fade is not motion — but does not travel. */
+  #transit-dock,
+  #transit-dock[data-open="0"],
+  .dock-partner:active {
+    transform: none;
+  }
+  /* The chip still MOVES — it has to, it is the answer to the tap — but it
+     arrives rather than travels. Removing the transform instead would put both
+     modes' chip in one place and leave the switch showing the wrong one. */
+  .dock-thumb {
+    transition: none;
+  }
+}

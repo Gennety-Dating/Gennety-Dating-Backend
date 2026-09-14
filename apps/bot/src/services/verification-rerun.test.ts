@@ -15,8 +15,8 @@
  *
  * The pipeline the `started` branch launches is left to run against the same
  * mocked Prisma; giving the user an empty photo array makes it short-circuit to
- * `pending_review` before any Rekognition/storage call, so the test needs no
- * network and no extra module mocks.
+ * the retryable `no_profile_photos` exit before any Rekognition/storage call,
+ * so the test needs no network and no extra module mocks.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -54,7 +54,7 @@ function fullUserRow(overrides: Record<string, unknown> = {}) {
     personaInquiryId: "inq_x",
     verifiedSelfiePath: "user-1/selfie.jpg",
     faceMatchedAt: null,
-    // Empty photos → pipeline short-circuits to pending_review offline.
+    // Empty photos → pipeline short-circuits to its retryable exit offline.
     profile: { photos: [], eloSeededAt: null },
     ...overrides,
   };
@@ -118,7 +118,7 @@ describe("triggerVerificationRerun", () => {
     });
 
     // Let the fire-and-forget pipeline settle so it doesn't leak into the
-    // next test; it runs offline (empty photos → pending_review).
+    // next test; it runs offline (empty photos → retryable exit).
     await new Promise((r) => setTimeout(r, 0));
   });
 });

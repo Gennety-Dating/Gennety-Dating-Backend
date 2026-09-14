@@ -17,6 +17,7 @@ import {
   type GenderPreference,
 } from "@gennety/shared";
 import { env } from "../../config.js";
+import { dispatchToChat } from "../../chat-queue.js";
 import { validateInitData } from "../init-data.js";
 import {
   runRadarThinkingThenResume,
@@ -290,19 +291,25 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
       // Detached: the response is already sent, so this owns its own errors —
       // an escaping rejection here would be an unhandled promise rejection,
       // which takes the whole bot process down.
-      void (async () => {
-        try {
-          const { sessionPatch } = firstCompletion
-            ? await runRadarThinkingThenResume(api, auth.telegramId, Number(auth.telegramId))
-            : await resumeOnboardingAfterRadar(api, auth.telegramId, Number(auth.telegramId));
-          await patchOnboardingSession(auth.telegramId, sessionPatch);
-        } catch (err) {
-          console.warn("[radar] onboarding resume after submit failed", {
-            telegramId: String(auth.telegramId),
-            err,
-          });
-        }
-      })();
+      //
+      // On the chat's queue (A13-M25). `patchOnboardingSession` is a
+      // read-modify-write of the `bot_sessions` row, and outside the queue it
+      // raced any Telegram update the user sent during the ~10s sequence: the
+      // update's session middleware read the row before the patch and wrote its
+      // stale copy back after it, rolling the onboarding step back. Queued, the
+      // resume and its patch run as one step between that chat's updates.
+      const chatId = Number(auth.telegramId);
+      dispatchToChat(chatId, async () => {
+        const { sessionPatch } = firstCompletion
+          ? await runRadarThinkingThenResume(api, auth.telegramId, chatId)
+          : await resumeOnboardingAfterRadar(api, auth.telegramId, chatId);
+        await patchOnboardingSession(auth.telegramId, sessionPatch);
+      }).catch((err: unknown) => {
+        console.warn("[radar] onboarding resume after submit failed", {
+          telegramId: String(auth.telegramId),
+          err,
+        });
+      });
     }
   });
 

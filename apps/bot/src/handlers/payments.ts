@@ -16,6 +16,8 @@ import {
   type PremiumPlan,
 } from "@gennety/shared";
 import { env } from "../config.js";
+import { detachOnChat } from "../chat-queue.js";
+import { handleBotError } from "../bot-error.js";
 import { grantTickets, isUniqueViolation } from "../services/ticket-wallet.js";
 import { gateStarsForScope } from "../services/ticket-payment.js";
 import { recordChatEventForChat } from "../services/chat-events.js";
@@ -311,9 +313,25 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
     });
   }
 
+  await settleAndReport(ctx, payment, () => settleSuccessfulPayment(ctx, payment));
+}
+
+/**
+ * Run one settlement and hold it to the invariant above: a throw or an
+ * uncompensated failure ends in `reportUnsettledPayment`, carrying the charge id.
+ *
+ * Shared by the update handler and by the Rematch completion that runs detached
+ * on the chat queue (A13-H9) — work nobody awaits must answer to the same rule,
+ * not to a weaker one.
+ */
+async function settleAndReport(
+  ctx: BotContext,
+  payment: StarsPayment,
+  settle: () => Promise<Settlement>,
+): Promise<void> {
   let outcome: Settlement;
   try {
-    outcome = await settleSuccessfulPayment(ctx, payment);
+    outcome = await settle();
   } catch (err) {
     console.error(
       `[stars] settlement threw payload=${payment.invoice_payload} ` +
@@ -699,14 +717,20 @@ async function handlePrimeTimeSuccessfulPayment(
  *      pre-checkout's answer is not trusted here.
  *   3. Commit the outcome: dispatch + `settled`, or refund + a refunded status.
  *      A refund that fails is parked in `refund_failed` and NOT announced.
+ *
+ * Only step 1 runs inside the `successful_payment` update (A13-H9). Steps 2–3
+ * are a ten-second search animation, an engine run and a pitch dispatch, and
+ * that update is still awaited by grammY's polling loop — so they used to hold
+ * every other user's updates, pre-checkouts included, for as long as they took.
+ * They now run detached on this chat's queue, after the update resolves, and
+ * report their own outcome through the same settlement shell. What still needs
+ * the redelivery guarantee — the durable row keyed by the charge id — is
+ * written before the update resolves; a crash after it leaves a `processing`
+ * row the hourly sweep refunds, exactly as a crash mid-run always did.
  */
 async function handleRematchSuccessfulPayment(
   ctx: BotContext,
-  payment: {
-    invoice_payload: string;
-    total_amount: number;
-    telegram_payment_charge_id: string;
-  },
+  payment: StarsPayment,
 ): Promise<Settlement> {
   const telegramId = BigInt(ctx.from!.id);
   const user = await prisma.user.findUnique({
@@ -716,15 +740,7 @@ async function handleRematchSuccessfulPayment(
   if (!user) return { ok: false, reason: "user-not-found" };
   const lang = (user.language ?? "en") as Language;
 
-  const {
-    runRematch,
-    REMATCH_PROCESSING,
-    REMATCH_SETTLED,
-    REMATCH_REFUNDED_UNDELIVERED,
-  } = await import("../services/rematch.js");
-  const { refundRematchPurchase, refundStatusForReason } = await import(
-    "../services/rematch-refund.js"
-  );
+  const { REMATCH_PROCESSING } = await import("../services/rematch.js");
 
   console.info(
     `[stars] rematch purchase user=${user.id} stars=${payment.total_amount} ` +
@@ -767,6 +783,44 @@ async function handleRematchSuccessfulPayment(
     externalPaymentId: payment.telegram_payment_charge_id,
   });
 
+  // Steps 2–3 behind this update on the chat's queue. Errors that escape the
+  // settlement shell (it catches the settlement itself) go to the same handler
+  // every other detached update uses.
+  detachOnChat(
+    ctx,
+    () =>
+      settleAndReport(ctx, payment, () =>
+        completeRematchPurchase(ctx, payment, { userId: user.id, lang, telegramId, purchase }),
+      ),
+    handleBotError,
+  );
+  // `ok` for THIS update: the charge is durably recorded and now owned by the
+  // detached completion, which answers for grant / refund / alert on its own.
+  return { ok: true };
+}
+
+/** Steps 2–3 of the Rematch settlement — see `handleRematchSuccessfulPayment`. */
+async function completeRematchPurchase(
+  ctx: BotContext,
+  payment: StarsPayment,
+  {
+    userId,
+    lang,
+    telegramId,
+    purchase,
+  }: {
+    userId: string;
+    lang: Language;
+    telegramId: bigint;
+    purchase: { id: string; externalPaymentId: string; status: string };
+  },
+): Promise<Settlement> {
+  const { runRematch, REMATCH_PROCESSING, REMATCH_SETTLED, REMATCH_REFUNDED_UNDELIVERED } =
+    await import("../services/rematch.js");
+  const { refundRematchPurchase, refundStatusForReason } = await import(
+    "../services/rematch-refund.js"
+  );
+
   // (2) Re-validate + run, covered by the §3.11 search animation.
   //
   // The engine starts FIRST and the shimmer is laid over it, so the ten seconds
@@ -782,7 +836,7 @@ async function handleRematchSuccessfulPayment(
   // The pitch carries its own rich compose stream (§3.3), so covering it too
   // would put two drafts in one chat competing for the same space, and the
   // pitch's own arrival would collapse ours instead of tearing it down cleanly.
-  const runPromise = runRematch(user.id);
+  const runPromise = runRematch(userId);
   // Mark handled so a rejection mid-animation is not an unhandledRejection. The
   // real throw is re-raised at the await below, where the existing contract
   // holds unchanged: the row stays `processing` and the hourly sweep refunds it.

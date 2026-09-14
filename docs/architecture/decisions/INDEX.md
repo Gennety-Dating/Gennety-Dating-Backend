@@ -1,12 +1,13 @@
 <!-- WHEN_TO_READ: FIRST STOP for any 'was this already decided?' question. Grep this file for your topic, then open only the dated file named in the last column. -->
 <!-- SOURCE: DECISIONS.md titles — generated 2026-09-01 -->
 
-# Decision index — all 336 entries
+# Decision index — all 337 entries
 
 Grep this file, then read the one entry you need. Protocol: [README.md](./README.md).
 
 | Date | Decision | In file |
 |---|---|---|
+| 2026-09-14 | ремедиация A13, пакеты 6–7: апдейты не ждут чужих чатов; верификация активирует только то, что сверила | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-14 | ремедиация A13, пакет 5: застрявшие матчи получают выход, площадка не бронируется на прошедшее время | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-14 | ремедиация A13, пакеты 3–4: Premium складывает, а не выбирает большее; Mini App не кладёт initData в адреса картинок | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |
 | 2026-09-14 | координаты места в блоке партнёра: инвариант 5 уточнён — «позиция» значит позицию человека, а не заведения | [2026-08-27_2026-09-01](./2026-08-27_2026-09-01.md) |

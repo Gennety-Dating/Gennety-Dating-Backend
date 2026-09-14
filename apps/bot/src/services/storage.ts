@@ -202,9 +202,9 @@ export async function uploadProfilePhoto(
  * Used by the verification pipeline to feed bytes into Rekognition without
  * the round-trip through a signed URL — service-role auth lets us pull
  * from a private bucket directly. Returns `null` on any failure (storage
- * not configured, object missing, transient error); the caller treats a
- * null as "comparison_error" for that photo, which routes the user to
- * `pending_review` rather than rejecting them for our outage.
+ * not configured, object missing, transient error); the verification
+ * pipeline treats a null as `photo_download_failed`, a retryable outcome —
+ * never a rejection, and never `pending_review` — for our own outage.
  */
 export async function downloadProfilePhoto(path: string): Promise<Buffer | null> {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -235,9 +235,8 @@ export async function downloadProfilePhoto(path: string): Promise<Buffer | null>
  * tokens with no slashes.
  *
  * Returns `null` on any failure (storage misconfigured, object missing,
- * Telegram getFile error, network blip). Caller treats null the same way
- * as the Supabase-only `downloadProfilePhoto` did — as
- * `comparison_error` → user lands in `pending_review`.
+ * Telegram getFile error, network blip). The verification pipeline treats
+ * null as `photo_download_failed` → the retryable `pending` state.
  *
  * `api` is required even when the path turns out to be Supabase, so
  * callers don't have to branch on the format themselves.

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { guardedTick } from "./guarded-tick.js";
+import {
+  guardedTick,
+  runningGuardedTicks,
+  waitForGuardedTicksIdle,
+} from "./guarded-tick.js";
 
 /**
  * Let the tick's own promise chain settle.
@@ -60,5 +64,24 @@ describe("guardedTick", () => {
 
     cb(); // flag must have been cleared in finally
     expect(task).toHaveBeenCalledTimes(2);
+  });
+
+  // A13-M21: shutdown waits for running ticks instead of killing a drop or a
+  // payment sweep mid-row, so the registry has to know what is still running.
+  it("lets a shutdown wait for the ticks still in flight", async () => {
+    let resolve!: () => void;
+    const gate = new Promise<void>((r) => {
+      resolve = r;
+    });
+    const cb = guardedTick("drain-probe", () => gate);
+
+    cb();
+    expect(runningGuardedTicks()).toContain("drain-probe");
+    await expect(waitForGuardedTicksIdle(10)).resolves.toBe(false);
+
+    const idle = waitForGuardedTicksIdle(1000);
+    resolve();
+    await expect(idle).resolves.toBe(true);
+    expect(runningGuardedTicks()).not.toContain("drain-probe");
   });
 });

@@ -1320,10 +1320,15 @@ If the PM2 process is missing:
 ```sh
 ssh root@167.172.178.229
 cd /opt/gennety
-pm2 start bash --name gennety-bot -- -c "cd /opt/gennety && ./apps/bot/node_modules/.bin/tsx apps/bot/src/index.ts"
+pm2 start bash --name gennety-bot --kill-timeout 30000 -- -c "cd /opt/gennety && ./apps/bot/node_modules/.bin/tsx apps/bot/src/index.ts"
 pm2 save
 systemctl status pm2-root --no-pager
 ```
+
+`--kill-timeout 30000` (since 2026-09-14, audit A13-M21): shutdown now drains the
+per-chat update queue, running cron ticks and open HTTP requests for up to 20 s
+before exiting; PM2's default 1.6 s would SIGKILL mid-drain. The HTTP servers bind
+`HTTP_BIND_HOST` (default `127.0.0.1`) — Caddy proxies to localhost.
 
 ## Database Operations
 

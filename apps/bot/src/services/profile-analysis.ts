@@ -305,6 +305,22 @@ export function buildEmbeddingInput(
   return parts.join("\n").slice(0, 8000);
 }
 
+/**
+ * The Embeddings API answered with a non-2xx status. Typed so a caller can
+ * tell "OpenAI refused what we sent" (a 400 for one bad input poisons the whole
+ * batch it rode in) from an outage that fails every input alike
+ * (`workers/embedding-refresh.ts`, audit A13-M17).
+ */
+export class EmbeddingRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number, body: string) {
+    super(`OpenAI embeddings failed: ${status} ${body}`);
+    this.name = "EmbeddingRequestError";
+    this.status = status;
+  }
+}
+
 export interface EmbeddingClient {
   embed(input: string): Promise<number[]>;
   /**
@@ -363,7 +379,7 @@ export function createOpenAIEmbeddingClient(apiKey: string): EmbeddingClient {
     });
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`OpenAI embeddings failed: ${res.status} ${body}`);
+      throw new EmbeddingRequestError(res.status, body);
     }
     const json = (await res.json()) as {
       data: Array<{ embedding: number[]; index?: number }>;

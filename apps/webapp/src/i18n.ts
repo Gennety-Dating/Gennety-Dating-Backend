@@ -134,6 +134,8 @@ interface Strings {
   verifyMiniAppRetry: string;
   verifyMiniAppCloseBtn: string;
   verifyMiniAppAlreadyVerified: string;
+  /** `/init` refused because the profile has no photos (audit A13-H11). */
+  verifyMiniAppPhotosRequired: string;
   verifyMiniAppNotConfigured: string;
 }
 
@@ -235,6 +237,8 @@ const dict: Record<Lang, Strings> = {
     verifyMiniAppCloseBtn: "Close",
     verifyMiniAppAlreadyVerified:
       "You're already verified — nothing to do here.",
+    verifyMiniAppPhotosRequired:
+      "Add photos of yourself first — the check compares your selfie with them. The button is waiting in the chat.",
     verifyMiniAppNotConfigured:
       "Verification isn't available right now. Try again a bit later.",
   },
@@ -335,6 +339,8 @@ const dict: Record<Lang, Strings> = {
     verifyMiniAppCloseBtn: "Закрыть",
     verifyMiniAppAlreadyVerified:
       "Ты уже верифицирован — здесь делать нечего.",
+    verifyMiniAppPhotosRequired:
+      "Сначала добавь свои фото — проверка сравнивает с ними селфи. Кнопка уже ждёт в чате.",
     verifyMiniAppNotConfigured:
       "Верификация сейчас недоступна. Попробуй позже.",
   },
@@ -435,6 +441,8 @@ const dict: Record<Lang, Strings> = {
     verifyMiniAppCloseBtn: "Закрити",
     verifyMiniAppAlreadyVerified:
       "Ти вже верифікований — тут робити нічого.",
+    verifyMiniAppPhotosRequired:
+      "Спершу додай свої фото — перевірка порівнює з ними селфі. Кнопка вже чекає в чаті.",
     verifyMiniAppNotConfigured:
       "Верифікація зараз недоступна. Спробуй пізніше.",
   },
@@ -536,6 +544,8 @@ const dict: Record<Lang, Strings> = {
     verifyMiniAppCloseBtn: "Schließen",
     verifyMiniAppAlreadyVerified:
       "Du bist bereits verifiziert - hier gibt's nichts zu tun.",
+    verifyMiniAppPhotosRequired:
+      "Füge zuerst Fotos von dir hinzu - die Prüfung vergleicht dein Selfie mit ihnen. Der Button wartet schon im Chat.",
     verifyMiniAppNotConfigured:
       "Verifizierung ist derzeit nicht verfügbar. Versuch es später noch mal.",
   },
@@ -637,6 +647,8 @@ const dict: Record<Lang, Strings> = {
     verifyMiniAppCloseBtn: "Zamknij",
     verifyMiniAppAlreadyVerified:
       "Jesteś już zweryfikowany - tu nie ma co robić.",
+    verifyMiniAppPhotosRequired:
+      "Najpierw dodaj swoje zdjęcia - kontrola porównuje z nimi selfie. Przycisk czeka już na czacie.",
     verifyMiniAppNotConfigured:
       "Weryfikacja jest teraz niedostępna. Spróbuj później.",
   },

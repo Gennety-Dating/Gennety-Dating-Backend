@@ -1,6 +1,6 @@
-import type { Api, RawApi } from "grammy";
+import { InlineKeyboard, type Api, type RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { MIN_PHOTOS, t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import {
   createLivenessSession,
@@ -9,10 +9,13 @@ import {
 } from "./face-liveness.js";
 import { mintLivenessCredentials, type LivenessCredentials } from "./liveness-credentials.js";
 import type { OutcomeGate } from "./outcome-gate.js";
-import { runFaceMatchVerificationDefault } from "./verification-pipeline.js";
+import {
+  activationBlockerFor,
+  runFaceMatchVerificationDefault,
+} from "./verification-pipeline.js";
 import { DEMO_MODE_ENABLED } from "../demo/config.js";
 import { releaseDemoLivenessSession, runDemoVerification } from "../demo/verification.js";
-import { buildVerificationKeyboard } from "./verification-keyboard.js";
+import { buildVerificationKeyboard, VERIFY_PHOTOS_CALLBACK } from "./verification-keyboard.js";
 import { livenessRetryMessage } from "./verification-messages.js";
 
 /**
@@ -52,6 +55,19 @@ export type BeginLivenessResult =
   | { ok: false; error: "already_verified" } // 409
   /** 409 — no explicit Art. 9 biometric consent on file yet. */
   | { ok: false; error: "consent_required" }
+  /**
+   * 409 — a first check for an account that has not finished registering
+   * (onboarding incomplete, or no verified track contact). Both clients only
+   * offer verification after onboarding, so this is the server holding the
+   * same order for a caller that skips the UI (audit A13-M18).
+   */
+  | { ok: false; error: "onboarding_incomplete" }
+  /**
+   * 409 — the profile has no photos, so a passing check would have nothing to
+   * be compared against (audit A13-H11). `language` lets the route answer in
+   * the user's own words.
+   */
+  | { ok: false; error: "photos_required"; language: Language }
   | { ok: false; error: "provider" }; // 503, transient
 
 /**
@@ -104,17 +120,16 @@ export async function beginLivenessCheck(
       verificationStatus: true,
       verifiedSelfiePath: true,
       biometricConsentAt: true,
+      onboardingStep: true,
+      registrationTrack: true,
+      email: true,
+      isEmailVerified: true,
+      phoneVerifiedAt: true,
+      profile: { select: { photos: true } },
     },
   });
   if (!user) return { ok: false, error: "user_not_found" };
-  // GDPR Art. 9(2)(a): biometric processing needs an EXPLICIT act of consent
-  // for this processing specifically. Tapping a "Verify" button under copy
-  // that never mentions biometrics is not one, and the general ToS tick at
-  // sign-up is not one either — so the session is refused until the dedicated
-  // consent screen has been through `recordBiometricConsent`. This is the
-  // gate, not the UI: both clients must pass it, and a client that skips its
-  // own screen gets a 409 rather than a session.
-  if (!user.biometricConsentAt) return { ok: false, error: "consent_required" };
+
   // Re-running liveness on an already-verified user would burn a check and a
   // session for no decision; the client renders a "you're verified" screen.
   //
@@ -126,7 +141,39 @@ export async function beginLivenessCheck(
   // the user was told to re-verify by the only product that could refuse it.
   const referenceExpired = !user.verifiedSelfiePath;
   const alreadyVerified = user.verificationStatus === "verified";
-  if (alreadyVerified && !referenceExpired) {
+  const checkWouldRun = !alreadyVerified || referenceExpired;
+
+  // Two things that make a check pointless, asked before the consent screen so
+  // nobody is walked through a biometric disclosure for a check that cannot
+  // run yet — and only when one would actually run, so a verified user still
+  // gets their "you're verified" answer.
+  if (checkWouldRun) {
+    // A first verification belongs after registration. Both clients already
+    // put it there; without the same order here, a direct API caller could get
+    // verified — and, before activation was gated, activated with a referral
+    // payout — without finishing onboarding or proving a track contact (audit
+    // A13-M18). A verified user re-running for an expired reference is exempt:
+    // they are not being admitted, only re-anchored.
+    if (!alreadyVerified && activationBlockerFor(user) !== null) {
+      return { ok: false, error: "onboarding_incomplete" };
+    }
+    // Nothing to compare the selfie with. Letting the check run anyway wrote
+    // `pending_review` and nulled the stored selfie, a dead end with no button
+    // (audit A13-H11); asking for photos first is the step that moves them.
+    if ((user.profile?.photos.length ?? 0) === 0) {
+      return { ok: false, error: "photos_required", language: user.language ?? "en" };
+    }
+  }
+
+  // GDPR Art. 9(2)(a): biometric processing needs an EXPLICIT act of consent
+  // for this processing specifically. Tapping a "Verify" button under copy
+  // that never mentions biometrics is not one, and the general ToS tick at
+  // sign-up is not one either — so the session is refused until the dedicated
+  // consent screen has been through `recordBiometricConsent`. This is the
+  // gate, not the UI: both clients must pass it, and a client that skips its
+  // own screen gets a 409 rather than a session.
+  if (!user.biometricConsentAt) return { ok: false, error: "consent_required" };
+  if (!checkWouldRun) {
     return { ok: false, error: "already_verified" };
   }
 
@@ -331,6 +378,37 @@ export async function completeLivenessCheck(
     .finally(() => options.outcomeGate?.finish());
 
   return { ok: true, outcome: "processing" };
+}
+
+/**
+ * The Telegram half of a `photos_required` refusal: the Mini App can only say
+ * "add photos first" and close, so the action itself — the photo manager —
+ * arrives in the chat the user is returned to. One button, not the verify
+ * keyboard: running the check again is exactly what cannot work yet.
+ */
+export async function sendPhotosRequiredPrompt(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  language: Language,
+): Promise<void> {
+  if (telegramId <= 0n) return; // mobile-only user — the app renders its own step
+  try {
+    await api.sendMessage(
+      Number(telegramId),
+      t(language, "verifyPhotosRequired", { min: MIN_PHOTOS }),
+      {
+        reply_markup: new InlineKeyboard().text(
+          t(language, "verifyBtnAddPhotos"),
+          VERIFY_PHOTOS_CALLBACK,
+        ),
+      },
+    );
+  } catch (err) {
+    console.warn(`${LOG_PREFIX} photos-required DM failed`, {
+      telegramId: String(telegramId),
+      err,
+    });
+  }
 }
 
 async function sendRetryPrompt(

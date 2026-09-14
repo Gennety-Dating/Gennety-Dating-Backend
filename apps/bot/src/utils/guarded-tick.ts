@@ -41,6 +41,57 @@ export interface GuardedTickDeps {
     state: "degraded" | "recovered",
     consecutiveFailures: number,
   ) => Promise<void>;
+  /**
+   * Consecutive failures before the job is announced as degraded (default 3).
+   *
+   * Three is right for a job that runs every few minutes, where one failure is
+   * a blip. It is wrong for a job that runs once a week (A13-M24): three
+   * failures in a row is three weeks without a drop, so those jobs pass 1 —
+   * the first failure IS the outage.
+   */
+  failureAlertThreshold?: number;
+}
+
+/**
+ * Ticks running right now, by name — what a graceful shutdown waits for
+ * (A13-M21). A count per name rather than a set: two schedules may share one.
+ */
+const runningTicks = new Map<string, number>();
+const idleWaiters = new Set<() => void>();
+
+function tickStarted(name: string): void {
+  runningTicks.set(name, (runningTicks.get(name) ?? 0) + 1);
+}
+
+function tickFinished(name: string): void {
+  const left = (runningTicks.get(name) ?? 1) - 1;
+  if (left > 0) runningTicks.set(name, left);
+  else runningTicks.delete(name);
+  if (runningTicks.size === 0) {
+    for (const resolve of idleWaiters) resolve();
+    idleWaiters.clear();
+  }
+}
+
+/** Names of the guarded ticks still in flight. */
+export function runningGuardedTicks(): string[] {
+  return [...runningTicks.keys()];
+}
+
+/** Resolves `true` once no guarded tick is running, `false` if `timeoutMs` passes first. */
+export function waitForGuardedTicksIdle(timeoutMs: number): Promise<boolean> {
+  if (runningTicks.size === 0) return Promise.resolve(true);
+  return new Promise<boolean>((resolve) => {
+    const onIdle = (): void => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    const timer = setTimeout(() => {
+      idleWaiters.delete(onIdle);
+      resolve(false);
+    }, timeoutMs);
+    idleWaiters.add(onIdle);
+  });
 }
 
 export function guardedTick(
@@ -51,6 +102,7 @@ export function guardedTick(
   let running = false;
   let consecutiveFailures = 0;
   let degradedAlertSent = false;
+  const alertThreshold = Math.max(1, deps.failureAlertThreshold ?? FAILURE_ALERT_THRESHOLD);
 
   const notifyHealth = async (
     state: "degraded" | "recovered",
@@ -74,6 +126,7 @@ export function guardedTick(
       return;
     }
     running = true;
+    tickStarted(name);
     // Invoke synchronously so the in-flight flag reflects the run immediately;
     // normalise a synchronous throw into a rejection so the chain below always
     // logs it and clears the flag in `finally`.
@@ -97,13 +150,14 @@ export function guardedTick(
       .catch(async (err) => {
         console.error(`[cron] "${name}" tick failed:`, err);
         consecutiveFailures += 1;
-        if (consecutiveFailures >= FAILURE_ALERT_THRESHOLD && !degradedAlertSent) {
+        if (consecutiveFailures >= alertThreshold && !degradedAlertSent) {
           degradedAlertSent = true;
           await notifyHealth("degraded", consecutiveFailures);
         }
       })
       .finally(() => {
         running = false;
+        tickFinished(name);
       });
   };
 }

@@ -289,6 +289,43 @@ describe("announcementFanoutTick", () => {
     );
   });
 
+  // A13-L27: a quiet-hours hold keeps the announcement `sending` all night and
+  // the tick runs every minute. Each tick used to page the WHOLE audience again
+  // to write rows that all already existed.
+  it("after one full pass, only pages people who could have joined the audience since", async () => {
+    const inboxMarks = new Map<string, Date>();
+    await announcementFanoutTick({ ...deps(true), send: sendPushToUser, inboxMarks });
+
+    const firstWhere = db.user.findMany.mock.calls[0]![0].where;
+    expect(firstWhere).toEqual(audienceWhere({ cityKeys: ["kyiv"] }));
+    expect(inboxMarks.get(ID)).toEqual(NOW);
+
+    // Second minute of the same hold.
+    db.announcement.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([deliverable]);
+    db.user.findMany.mockResolvedValueOnce([]);
+    await announcementFanoutTick({ ...deps(true), send: sendPushToUser, inboxMarks });
+
+    expect(db.user.findMany.mock.calls[1]![0].where).toEqual({
+      AND: [
+        audienceWhere({ cityKeys: ["kyiv"] }),
+        { OR: [{ updatedAt: { gte: NOW } }, { profile: { updatedAt: { gte: NOW } } }] },
+      ],
+    });
+  });
+
+  it("forgets the mark once the announcement is sent", async () => {
+    const inboxMarks = new Map<string, Date>([[ID, new Date("2026-09-13T11:00:00Z")]]);
+    db.inboxItem.findMany.mockResolvedValueOnce([]);
+    db.inboxItem.count.mockResolvedValueOnce(0).mockResolvedValueOnce(2);
+
+    await announcementFanoutTick({ ...deps(), send: sendPushToUser, inboxMarks });
+
+    expect(db.announcement.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "sent" }) }),
+    );
+    expect(inboxMarks.has(ID)).toBe(false);
+  });
+
   it("does not ring a phone about something already read in the app", async () => {
     db.inboxItem.findMany.mockResolvedValueOnce([{ id: "r1", userId: USER, readAt: NOW }]).mockResolvedValueOnce([]);
     db.inboxItem.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);

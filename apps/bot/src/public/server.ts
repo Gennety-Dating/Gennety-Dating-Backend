@@ -1,5 +1,6 @@
 import { gzip } from "node:zlib";
 import { promisify } from "node:util";
+import type { Server } from "node:http";
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -664,20 +665,24 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-export function startPublicServer(api?: Api<RawApi>): void {
+/**
+ * Bind the public API. Returns the listening server (the graceful shutdown
+ * closes it), or null when the API is disabled by configuration.
+ */
+export function startPublicServer(api?: Api<RawApi>): Server | null {
   // M-11: refuse to start the public API on a weak/empty secret. `jwt.ts`
   // also asserts at call site, but failing here keeps the listener from
   // even binding so a misconfigured deploy is impossible to miss.
   if (!env.JWT_SECRET) {
     console.log("[public] JWT_SECRET not set — public /v1/* API disabled");
-    return;
+    return null;
   }
   if (!isStrongJwtSecret(env.JWT_SECRET)) {
     console.error(
       `[public] JWT_SECRET is too short (<${JWT_SECRET_MIN_BYTES} bytes). ` +
         "Refusing to start the public API.",
     );
-    return;
+    return null;
   }
   if (api) injectedBotApi = api;
   if (!env.CARTO_API_KEY) {
@@ -686,9 +691,21 @@ export function startPublicServer(api?: Api<RawApi>): void {
         '"API KEY REQUIRED" watermark. Free key: carto.com/basemaps/apikey',
     );
   }
-  app.listen(env.PUBLIC_PORT, () => {
-    console.log(`[public] /v1/* API listening on :${env.PUBLIC_PORT}`);
+  // Loopback by default (A13-L17): `trust proxy` is 1, so only Caddy may be
+  // the hop that sets `X-Forwarded-For`.
+  const server = app.listen(env.PUBLIC_PORT, env.HTTP_BIND_HOST, (error?: Error) => {
+    if (error) return; // reported by the 'error' listener below
+    console.log(`[public] /v1/* API listening on ${env.HTTP_BIND_HOST}:${env.PUBLIC_PORT}`);
   });
+  // Express 5 hands a bind failure (port held by a stale process, bad host) to
+  // the listen callback instead of throwing — which logged "listening" and
+  // carried on: PM2 green, the bot answering, the whole iOS API gone. Exit so
+  // PM2 restarts the process and the failure is visible.
+  server.on("error", (err) => {
+    console.error(`[public] /v1/* API server error on ${env.HTTP_BIND_HOST}:${env.PUBLIC_PORT}:`, err);
+    process.exit(1);
+  });
+  return server;
 }
 
 /** Test-only: inject the bot api without starting the HTTP listener. */

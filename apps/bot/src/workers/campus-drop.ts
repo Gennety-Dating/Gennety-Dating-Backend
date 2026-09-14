@@ -25,5 +25,8 @@ export async function campusDropTick(): Promise<void> {
     }
   } catch (err) {
     console.error("[campus-drop] tick failed:", err);
+    // Rethrown (A13-M24): swallowing here meant `guardedTick` saw every tick
+    // succeed, so its failure alert could never fire for this job.
+    throw err;
   }
 }

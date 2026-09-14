@@ -3,6 +3,7 @@ import { env } from "../config.js";
 import {
   buildEmbeddingInput,
   createOpenAIEmbeddingClient,
+  EmbeddingRequestError,
   toPgVectorLiteral,
   type EmbeddingClient,
   type ParsedProfileSummary,
@@ -25,6 +26,15 @@ import {
  * succeeds if `embeddingDirtyAt` still matches — if the user edited again
  * mid-flight, `embeddingDirtyAt` advanced and the clear is a no-op, so the
  * next tick will re-pick the row and recompute against the latest input.
+ *
+ * Two kinds of row must never hold the others hostage (audit A13-M17):
+ *   - A row with NOTHING to embed (no summary, preferences, dealbreakers,
+ *     hobbies or voice transcript) is not sent at all. Its dirty flag is
+ *     cleared under the same guard and its existing vector left as it was —
+ *     see `clearNothingToEmbed` for why that, and not "stay dirty".
+ *   - A request OpenAI refuses for its CONTENT is retried one row per request,
+ *     so the single input it objected to fails alone instead of taking up to
+ *     255 other profiles out of matching with it, tick after tick.
  */
 
 export const DEFAULT_EMBEDDING_REFRESH_BATCH = 20;
@@ -42,6 +52,19 @@ export const DEFAULT_EMBEDDING_REFRESH_CONCURRENCY = 4;
  * the sooner the drop has what it needs.
  */
 export const EMBEDDING_INPUTS_PER_REQUEST = 256;
+/**
+ * Statuses with which OpenAI refuses a request's CONTENT rather than the
+ * request as such: 400 (an input it will not embed), 413 and 422. Only these
+ * are worth splitting a failed request row by row. Auth (401/403), a missing
+ * model (404), rate limits (429) and timeouts fail every input alike, and
+ * retrying them one row at a time would multiply the same failure by the size
+ * of the chunk.
+ */
+const INPUT_REJECTION_STATUSES: ReadonlySet<number> = new Set([400, 413, 422]);
+
+function isInputRejection(err: unknown): err is EmbeddingRequestError {
+  return err instanceof EmbeddingRequestError && INPUT_REJECTION_STATUSES.has(err.status);
+}
 /**
  * Rows the weekly preflight will take in one pass, and how many passes it may
  * make before it stops and says the snapshot is incomplete.
@@ -67,6 +90,11 @@ export interface EmbeddingRefreshOptions {
 
 export interface EmbeddingRefreshResult {
   scanned: number;
+  /**
+   * Rows whose dirty flag this pass cleared: a fresh vector written, or —
+   * rarely — nothing to embed at all (`clearNothingToEmbed`). Either way the
+   * row no longer waits on this worker.
+   */
   refreshed: number;
   failed: number;
   /** Scanned rows that remain dirty after this attempt (failures + CAS races). */
@@ -255,39 +283,107 @@ async function refreshDirtyEmbeddings(
     return "stale";
   };
 
+  /**
+   * Clear the dirty flag of a row with nothing to embed, under the same guard
+   * as `persist`, leaving `embedding` exactly as it is.
+   *
+   * Sending "" is what poisoned a whole batch (audit A13-M17), and leaving the
+   * row dirty is worse than it looks: rows are taken oldest-dirty first, so a
+   * handful of them would sit at the head of every tick forever, and a dirty
+   * seeker is refused by matching outright. Cleared, the row is back in the
+   * only state matching can reason about:
+   *   - with a vector from before, it keeps being matched on that — the last
+   *     real signal it had — instead of dropping out of the pool;
+   *   - with no vector ever, `embedding IS NOT NULL` keeps it out of candidate
+   *     queries, exactly as for any profile that has not been embedded yet.
+   * Not excluded for good in either case: every writer of an embedding input
+   * sets the dirty flag again, so the first real text brings the row back
+   * here to be embedded.
+   */
+  const clearNothingToEmbed = async (row: Row): Promise<"refreshed" | "stale"> => {
+    const updated = await prisma.$executeRaw`
+      UPDATE profiles
+         SET embedding_dirty = false,
+             embedding_dirty_at = NULL
+       WHERE id = ${row.id}::uuid
+         AND embedding_dirty = true
+         AND embedding_dirty_at IS NOT DISTINCT FROM ${row.embeddingDirtyAt}
+         AND psychological_summary IS NOT DISTINCT FROM ${row.psychologicalSummary}
+         AND partner_preferences IS NOT DISTINCT FROM ${row.partnerPreferences}
+         AND negative_constraints IS NOT DISTINCT FROM ${row.negativeConstraints}
+         AND hobbies IS NOT DISTINCT FROM ${row.hobbies}
+    `;
+    if (updated === 0) return "stale";
+    if (!selection.aggregateOnly) {
+      console.warn(
+        `[embedding-refresh] userId=${row.userId} has no embedding input — dirty flag cleared, vector left unchanged`,
+      );
+    }
+    return "refreshed";
+  };
+
+  const concurrency = Math.max(
+    1,
+    Math.floor(options.concurrency ?? DEFAULT_EMBEDDING_REFRESH_CONCURRENCY),
+  );
+  type Outcome = "refreshed" | "failed" | "stale";
+  interface Item {
+    row: Row;
+    input: string;
+  }
+
+  const embeddable: Item[] = [];
+  const nothingToEmbed: Row[] = [];
+  for (const row of dirty) {
+    const input = composeInput(row);
+    if (input.trim().length > 0) embeddable.push({ row, input });
+    else nothingToEmbed.push(row);
+  }
+
   // One request per CHUNK, not per profile. This is the whole point of the
   // change: the weekly preflight used to open one HTTP round-trip per dirty
   // profile at concurrency 4, so thousands of profiles became a serial wall in
   // front of the drop. A failed chunk fails only its own rows, which stay dirty
   // and are retried by the next pass.
-  const chunks: Row[][] = [];
-  for (let i = 0; i < dirty.length; i += EMBEDDING_INPUTS_PER_REQUEST) {
-    chunks.push(dirty.slice(i, i + EMBEDDING_INPUTS_PER_REQUEST));
+  const chunks: Item[][] = [];
+  for (let i = 0; i < embeddable.length; i += EMBEDDING_INPUTS_PER_REQUEST) {
+    chunks.push(embeddable.slice(i, i + EMBEDDING_INPUTS_PER_REQUEST));
   }
 
-  const refreshChunk = async (rows: Row[]): Promise<Array<"refreshed" | "failed" | "stale">> => {
+  const refreshChunk = async (items: Item[]): Promise<Outcome[]> => {
     let vectors: number[][];
     try {
-      const pending = client.embedMany(rows.map(composeInput));
+      const pending = client.embedMany(items.map((item) => item.input));
       vectors = options.timeoutMs ? await withTimeout(pending, options.timeoutMs) : await pending;
-      if (vectors.length !== rows.length) {
-        throw new Error(`asked for ${rows.length} embeddings, got ${vectors.length}`);
+      if (vectors.length !== items.length) {
+        throw new Error(`asked for ${items.length} embeddings, got ${vectors.length}`);
       }
     } catch (err) {
+      // OpenAI refused something in THIS request's content. One input can do
+      // that to all of its neighbours, so split: each row gets a request of
+      // its own, and only the one it objects to stays failed (audit A13-M17).
+      if (items.length > 1 && isInputRejection(err)) {
+        if (!selection.aggregateOnly) {
+          console.warn(
+            `[embedding-refresh] request for ${items.length} profile(s) refused (${err.status}) — retrying one by one`,
+          );
+        }
+        return (await mapWithConcurrency(items, concurrency, (item) => refreshChunk([item]))).flat();
+      }
       if (!selection.aggregateOnly) {
         console.warn(
-          `[embedding-refresh] failed for ${rows.length} profile(s):`,
+          `[embedding-refresh] failed for ${items.length} profile(s):`,
           err instanceof Error ? err.message : err,
         );
       }
-      return rows.map(() => "failed" as const);
+      return items.map(() => "failed" as const);
     }
 
     // The writes are per row and independent, so one CAS race never costs the
     // rest of the chunk its refresh.
     return await mapWithConcurrency(
-      rows.map((row, index) => ({ row, vec: vectors[index]! })),
-      Math.max(1, Math.floor(options.concurrency ?? DEFAULT_EMBEDDING_REFRESH_CONCURRENCY)),
+      items.map(({ row }, index) => ({ row, vec: vectors[index]! })),
+      concurrency,
       async ({ row, vec }) => {
         try {
           return await persist(row, vec);
@@ -304,13 +400,23 @@ async function refreshDirtyEmbeddings(
     );
   };
 
-  const outcomes = (
-    await mapWithConcurrency(
-      chunks,
-      Math.max(1, Math.floor(options.concurrency ?? DEFAULT_EMBEDDING_REFRESH_CONCURRENCY)),
-      refreshChunk,
-    )
-  ).flat();
+  const cleared = await mapWithConcurrency(nothingToEmbed, concurrency, async (row): Promise<Outcome> => {
+    try {
+      return await clearNothingToEmbed(row);
+    } catch (err) {
+      if (!selection.aggregateOnly) {
+        console.warn(
+          `[embedding-refresh] failed userId=${row.userId}:`,
+          err instanceof Error ? err.message : err,
+        );
+      }
+      return "failed";
+    }
+  });
+  const outcomes = [
+    ...cleared,
+    ...(await mapWithConcurrency(chunks, concurrency, refreshChunk)).flat(),
+  ];
   const refreshed = outcomes.filter((outcome) => outcome === "refreshed").length;
   const failed = outcomes.filter((outcome) => outcome === "failed").length;
 
